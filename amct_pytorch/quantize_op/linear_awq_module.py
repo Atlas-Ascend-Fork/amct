@@ -77,24 +77,16 @@ class LinearAWQuant(BaseQuantizeModule):
         named_linear = {self.layer_name[0]: self.ori_module}
         input_feat = {self.layer_name[0]: input_data}
         apply_scale(scale_list, named_linear, input_feat)
-
-        clip_max_list = search_clip(named_linear, input_feat, self.quant_config)
+        weight_list = {self.layer_name[0]: self.ori_module.weight.data}
 
         self.scale = 1 / scale_list[self.layer_name[0]].detach().cpu()
-        self.clip_max = clip_max_list[self.layer_name[0]].detach().cpu() \
-                         if self.layer_name[0] in clip_max_list else None
 
-        # calculate the scale of pergroup 
-        if self.quant_config.get('weights_cfg').get('quant_type') in (INT4, INT8):
-            cliped_weight = apply_clip_by_weight_granularity(clip_max_list, named_linear, \
-                self.quant_config.get('weights_cfg').get('strategy'), \
-                self.quant_config.get('weights_cfg').get("group_size"))
-            scale_group_list, offset_group_list = get_quant_scale(cliped_weight, self.quant_config)
+        scale_group_list, offset_group_list = get_quant_scale(weight_list, self.quant_config)
 
-            self.scale_w = scale_group_list[self.layer_name[0]].detach().cpu()
+        self.scale_w = scale_group_list[self.layer_name[0]].detach().cpu()
+        if not self.wts_symmetric:
+            self.offset_w = offset_group_list[self.layer_name[0]].detach().cpu()
 
-            if not self.wts_symmetric:
-                self.offset_w = offset_group_list[self.layer_name[0]].detach().cpu()
         self.calc_done = True
         LOGGER.logd("Calculate awq quant params of layer '{}' success!".format(self.layer_name), 'LinearAWQuant')
         return output
