@@ -1,0 +1,28 @@
+name: Bug-Report|缺陷反馈
+description: 如果您需要反馈代码缺陷，请使用此模板。
+title: "[Bug-Report|缺陷反馈]: "
+labels: ["bug-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sending an issue! Please fill in the following template to help quickly solve your problem.
+  - type: textarea
+    attributes:
+      label: Describe the current behavior / 问题描述 (Mandatory / 必填)
+      description: 请提供尽可能多的信息，描述产生了什么问题
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce the issue / 重现步骤 (Optional / 选填)
+      description: 请提供尽可能多的信息，描述如何重现该缺陷
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Related log / screenshot / 日志 / 截图 (Optional / 选填)
+      description: 请提供尽可能多的日志/结果信息
+    validations:
+      required: false  
