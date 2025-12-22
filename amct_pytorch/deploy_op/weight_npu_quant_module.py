@@ -37,7 +37,7 @@ class NpuWeightQuantizedLinear(nn.Module):
 
         if hasattr(quant_module, 'scale') and quant_module.scale is not None:
             scale = quant_module.scale.to(device=device)
-            weight = apply_awq_quantize_weight(weight, scale, quant_module.clip_max, self.group_size)
+            weight = apply_awq_quantize_weight(weight, scale, self.group_size)
             self.register_buffer('scale_factor', scale)
         else:
             self.scale_factor = None

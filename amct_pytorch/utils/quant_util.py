@@ -140,39 +140,22 @@ def check_scale_offset_shape(weight, scale_w, offset_w=None, group_size=None):
             " pls check quant factors from quantize model")
     
 
-def apply_awq_quantize_weight(weight_tensor, awq_scale, clip_max, group_size):
+def apply_awq_quantize_weight(weight_tensor, awq_scale, group_size):
     """
     Function: apply awq factor to scale & clamp weight
     Params:
         weight_tensor: quantized tensor from original operator
         awq_scale: scale factor of awq
-        clip_max: clip_max factor of awq
         group_size: group_size of awq
     Return:
         tensor: scale weight tensor
     """
     cin = weight_tensor.shape[1]
-    cout = weight_tensor.shape[0]
     if list(awq_scale.shape) != [1, cin]:
         raise RuntimeError("AWQ params scale.shape should be [1, {}] current shape is {}".format(
             cin, list(awq_scale.shape)))
 
     weight_tensor = weight_tensor / awq_scale
-    if clip_max is None:
-        return weight_tensor
-
-    clip_max = clip_max.to(weight_tensor.device)
-    if group_size is not None:
-        if list(clip_max.shape) != [cout, (cin + group_size - 1) // group_size, 1]:
-            raise RuntimeError("AWQ params clip_max.shape should be [{}, {}, 1] current shape is {}" .format(
-                cout, (cin + group_size - 1) // group_size, list(clip_max.shape)))
-
-        # clip_max reshape to [cout, num_groups]
-        clip_max = clip_max.squeeze(-1)
-        # repeat to [cout, num_groups * group_size], clip to [cout, cin]
-        clip_max = clip_max.repeat_interleave(group_size, -1)[:, :cin]
-
-    weight_tensor = torch.clamp(weight_tensor, -1 * clip_max, clip_max)
     return weight_tensor
 
 
