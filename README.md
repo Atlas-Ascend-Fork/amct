@@ -28,7 +28,6 @@ AMCT（Ascend Model Compression Toolkit，简称AMCT）是一款昇腾AI处理�
 
 -   [构建验证](docs/build.md)：介绍工具的完整构建、测试与样例运行流程。
 -   [样例执行](examples/README.md)：介绍如何端到端执行样例代码。
-
 ## 📖学习教程
 
 若您希望深入了解AMCT工具的使用方法，请参见介绍：
