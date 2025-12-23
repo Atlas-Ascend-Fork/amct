@@ -16,6 +16,7 @@
 import torch
 from loguru import logger
 
+
 def round_ste(x: torch.Tensor):
     """
     Implement Straight-Through Estimator for rounding operation
@@ -81,6 +82,7 @@ def set_act_quantizer_state(model, enable=True):
         if isinstance(m, ActivationQuantizer):
             m.enable = enable
     return model
+
 
 class ActivationQuantizer(torch.nn.Module):
     '''
@@ -280,7 +282,7 @@ class WeightQuantizer(torch.nn.Module):
 
                     scale1 = (xmax1 - xmin1) / self.maxq
                     zero1 = torch.round(-xmin1 / scale1)
-                    q = asym_quant_dequant(x, scale1.unsqueeze(1), zero1.unsqueeze(1),self.maxq)
+                    q = asym_quant_dequant(x, scale1.unsqueeze(1), zero1.unsqueeze(1), self.maxq)
 
                 q -= x
                 q.abs_()
@@ -306,7 +308,7 @@ class WeightQuantizer(torch.nn.Module):
         if self.enable and self.ready() and self.bits < 16:
             if self.sym:
                 return sym_quant_dequant(x, self.scale, self.maxq).to(x_dtype)
-            return asym_quant_dequant(x, self.scale, self.zero,self.maxq).to(x_dtype)
+            return asym_quant_dequant(x, self.scale, self.zero, self.maxq).to(x_dtype)
         return x
 
     def forward(self, x):

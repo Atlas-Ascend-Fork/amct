@@ -34,17 +34,18 @@ from loguru import logger
 
 logger = logging.get_logger(__name__)
 
+
 def model_forward_only_pre(
-    self,
-    input_ids: torch.LongTensor = None,
-    attention_mask: Optional[torch.Tensor] = None,
-    position_ids: Optional[torch.LongTensor] = None,
-    past_key_values: Optional[List[torch.FloatTensor]] = None,
-    inputs_embeds: Optional[torch.FloatTensor] = None,
-    use_cache: Optional[bool] = None,
-    output_attentions: Optional[bool] = None,
-    output_hidden_states: Optional[bool] = None,
-    return_dict: Optional[bool] = None,
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[List[torch.FloatTensor]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
 ) -> Union[Tuple, BaseModelOutputWithPast]:
     output_attentions = (
         output_attentions
@@ -153,7 +154,6 @@ def model_forward_only_pre(
 
         hidden_states = layer_outputs[0]
 
-
         if output_attentions:
             all_self_attns += (layer_outputs[1],)
 
@@ -166,9 +166,10 @@ def model_forward_only_pre(
         "use_cache": use_cache
     }
 
+
 def model_forward_only_post(
-    self,
-    hidden_states: torch.LongTensor = None,
+        self,
+        hidden_states: torch.LongTensor = None,
 ) -> Union[Tuple, BaseModelOutputWithPast]:
     hidden_states = self.norm(hidden_states)
     return BaseModelOutputWithPast(
@@ -177,17 +178,17 @@ def model_forward_only_post(
 
 
 def model_causal_forward_only_pre(
-    self,
-    input_ids: torch.LongTensor = None,
-    attention_mask: Optional[torch.Tensor] = None,
-    position_ids: Optional[torch.LongTensor] = None,
-    past_key_values: Optional[List[torch.FloatTensor]] = None,
-    inputs_embeds: Optional[torch.FloatTensor] = None,
-    labels: Optional[torch.LongTensor] = None,
-    use_cache: Optional[bool] = None,
-    output_attentions: Optional[bool] = None,
-    output_hidden_states: Optional[bool] = None,
-    return_dict: Optional[bool] = None,
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[List[torch.FloatTensor]] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
 ) -> Union[Tuple, CausalLMOutputWithPast]:
     output_attentions = (
         output_attentions
@@ -213,6 +214,7 @@ def model_causal_forward_only_pre(
         "output_hidden_states": output_hidden_states,
         "return_dict": return_dict,
     }
+
 
 def model_causal_forward_only_post(
         self,
@@ -249,35 +251,3 @@ def model_causal_forward_only_post(
         hidden_states=outputs.hidden_states,
         attentions=outputs.attentions,
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

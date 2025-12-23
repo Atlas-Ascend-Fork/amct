@@ -69,7 +69,6 @@ def cali_quant(args, layer, layer_idx, inps, dev, param_prefix=None):
     seq_length = fp_inps.shape[1]
     args.nsamples = fp_inps.shape[0]
 
-
     loss_func = torch.nn.MSELoss()
 
     # start training
@@ -102,10 +101,12 @@ def cali_quant(args, layer, layer_idx, inps, dev, param_prefix=None):
     trained_params, paras_name = [], []
 
     if args.lwc:
-        trained_params.append({"params": get_n_set_parameters_byname(layer, ["clip_factor_w",]), "lr": args.base_lr * 10})
+        trained_params.append(
+            {"params": get_n_set_parameters_byname(layer, ["clip_factor_w", ]), "lr": args.base_lr * 10})
         paras_name.append("clip_factor_w")
     if args.lac:
-        trained_params.append({"params": get_n_set_parameters_byname(layer, ["clip_factor_a",]), "lr": args.base_lr * 10})
+        trained_params.append(
+            {"params": get_n_set_parameters_byname(layer, ["clip_factor_a", ]), "lr": args.base_lr * 10})
         paras_name.append("clip_factor_a")
 
     for name, param in layer.named_parameters():
@@ -113,7 +114,9 @@ def cali_quant(args, layer, layer_idx, inps, dev, param_prefix=None):
             param.requires_grad = True
 
     optimizer = torch.optim.AdamW(trained_params)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * (args.nsamples // args.cali_bsz), eta_min=args.base_lr * 1e-3)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
+                                                           T_max=args.epochs * (args.nsamples // args.cali_bsz),
+                                                           eta_min=args.base_lr * 1e-3)
 
     check_params_grad(layer)
 
@@ -168,12 +171,10 @@ def cali_quant(args, layer, layer_idx, inps, dev, param_prefix=None):
         torch.save(quant_parameters, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))
         logger.info("saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
 
-
     for name, param in layer.named_parameters():
         param.requires_grad = False
         if name in dtype_dict.keys():
             param.data = param.to(dtype_dict[name])
-
 
     del inps, fp_inps, fp_outs
     gc.collect()

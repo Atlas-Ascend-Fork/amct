@@ -166,15 +166,19 @@ class QuantDSA(DeepseekV3Attention):
         else:
             q = self.q_proj(hidden_states)
             q_norm = q
-        ckv = torch.matmul(hidden_states, dkv_weight) # compressed_kv
+        ckv = torch.matmul(hidden_states, dkv_weight)  # compressed_kv
         ckv = self.kv_a_layernorm(ckv)
 
         cos, sin = self.rotary_emb(ckv, seq_len=kv_seq_len)
         if self.q_lora_rank is not None:
             # wqr
-            qr = self.qr_matmul(q, q_b_proj_r_weight.reshape(q_b_proj_inc, -1)).view(bsz, q_len, self.num_heads, self.qk_rope_head_dim).transpose(1, 2)
+            qr = self.qr_matmul(q, q_b_proj_r_weight.reshape(q_b_proj_inc, -1)).view(bsz, q_len, self.num_heads,
+                                                                                     self.qk_rope_head_dim).transpose(1,
+                                                                                                                      2)
             # wuq
-            q_nope = self.qnope_matmul(q, q_b_proj_c_weight.reshape(q_b_proj_inc, -1)).view(bsz, q_len, self.num_heads, self.qk_nope_head_dim).transpose(1, 2)
+            q_nope = self.qnope_matmul(q, q_b_proj_c_weight.reshape(q_b_proj_inc, -1)).view(bsz, q_len, self.num_heads,
+                                                                                            self.qk_nope_head_dim).transpose(
+                1, 2)
 
         else:
             q = q.view(bsz, q_len, self.num_heads, self.qk_nope_head_dim + self.qk_rope_head_dim).transpose(1, 2)

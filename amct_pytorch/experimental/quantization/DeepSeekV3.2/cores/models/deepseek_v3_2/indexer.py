@@ -21,21 +21,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from scipy.linalg import hadamard
-import numpy as np
 from dataclasses import dataclass
 from typing import Optional, Literal
+from scipy.linalg import hadamard
+import numpy as np
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 
-
-
 world_size = 1
 rank = 0
 block_size = 128
 gemm_impl: Literal["bf16", "fp8"] = "fp8"
+
 
 @dataclass
 class ModelArgs:
@@ -76,7 +75,7 @@ class ModelArgs:
     """
 
     max_batch_size: int = 1
-    max_seq_len: int = 1024*128
+    max_seq_len: int = 1024 * 128
     dtype: Literal["bf16", "fp8"] = "bf16"
     scale_fmt: Optional[str] = None
     vocab_size: int = 102400
@@ -113,7 +112,7 @@ class ModelArgs:
     index_topk: int = 2048
 
 
-def fp32_index(q: torch.Tensor, k : torch.Tensor, weights):
+def fp32_index(q: torch.Tensor, k: torch.Tensor, weights):
     # q: [b,s,n,d]
     # k: [b,s,n,d]
 
@@ -130,6 +129,7 @@ class LayerNorm(nn.Module):
     """
     Layer Normalization.
     """
+
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.dim = dim
@@ -137,7 +137,7 @@ class LayerNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
         self.bias = nn.Parameter(torch.zeros(dim))
 
-    def forward(self, x : torch.Tensor):
+    def forward(self, x: torch.Tensor):
         return F.layer_norm(x, (self.dim,), self.weight, self.bias, self.eps)
 
 
@@ -150,7 +150,7 @@ def hadamard_transform_fix(x):
     return x
 
 
-def rotate_activation(x : torch.Tensor) -> torch.Tensor:
+def rotate_activation(x: torch.Tensor) -> torch.Tensor:
     return hadamard_transform_fix(x)
 
 
@@ -171,36 +171,12 @@ class Indexer(torch.nn.Module):
         self.softmax_scale = self.head_dim ** -0.5
         self.scale_fmt = args.scale_fmt
 
-        self.register_buffer("k_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.head_dim, dtype=torch.float8_e4m3fn), persistent=False)
-        self.register_buffer("k_scale_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.head_dim // block_size),persistent=False)
+        self.register_buffer("k_cache", torch.zeros(args.max_batch_size, args.max_seq_len, self.head_dim,
+                                                    dtype=torch.float8_e4m3fn), persistent=False)
+        self.register_buffer("k_scale_cache",
+                             torch.zeros(args.max_batch_size, args.max_seq_len, self.head_dim // block_size),
+                             persistent=False)
 
-    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
+    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor,
+                mask: Optional[torch.Tensor]):
         pass
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

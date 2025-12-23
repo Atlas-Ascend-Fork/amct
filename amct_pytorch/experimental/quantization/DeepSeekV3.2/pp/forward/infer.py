@@ -14,17 +14,19 @@
 # limitations under the License.
 
 import types
+import os
 from loguru import logger
 import torch
 from torch import nn
 from tqdm import tqdm
-import os
 
 from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
 from cores.utils.utils import get_device_map, load_embed_state_dict
 from cores.quantization.utils import load_quant_params
 from cores.models.deepseek_v3_2.quant_utils import apply_quant_to_moe, get_float_block, apply_quant_to_mla
-from pp.forward.custom import model_causal_forward_only_pre, model_causal_forward_only_post, model_forward_only_post, model_forward_only_pre
+from pp.forward.custom import model_causal_forward_only_pre, model_causal_forward_only_post, model_forward_only_post, \
+    model_forward_only_pre
+
 
 def load_file(param_dir, layer_idx):
     param_path = os.path.join(param_dir, f"quant_parameters_{layer_idx}.pth")
@@ -46,7 +48,7 @@ def prepare_quant_params(args, layer_idx, param_dir=None):
     return quant_params
 
 
-def prepare_layer(args, layer, layer_idx, cls=QuantDSA): # use for quantization
+def prepare_layer(args, layer, layer_idx, cls=QuantDSA):  # use for quantization
     if layer_idx < args.start_block_idx or layer_idx > args.end_block_idx:
         logger.warning \
             (f'Layer idx {layer_idx} not in the range {args.start_block_idx}-{args.end_block_idx}, not replace quant layer.')
@@ -71,6 +73,7 @@ def prepare_layer(args, layer, layer_idx, cls=QuantDSA): # use for quantization
 
 def do_embedding_forward(args, model, layers, samples, output_dir, dtype):
     outs = []
+
     class Catcher(nn.Module):
         def __init__(self, module, dataset):
             super().__init__()
@@ -89,6 +92,7 @@ def do_embedding_forward(args, model, layers, samples, output_dir, dtype):
             if self.position_ids is None:
                 self.position_ids = kwargs['position_ids']
             raise ValueError
+
     load_embed_state_dict(model, args.model)
     layers[0] = get_float_block(args.model, 0, 'cpu', model_args=args.model_args)
     layers[0] = layers[0].bfloat16()
@@ -119,10 +123,10 @@ def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_di
         layer = prepare_layer(args, layer, layer_idx)
         logger.info(f'Dispatching {layer_idx} to all NPU.')
         layers[layer_idx] = layer.bfloat16()
-        get_device_map(layer, f'npu:{layer_idx%num_npus}', num_npus=num_npus)
+        get_device_map(layer, f'npu:{layer_idx % num_npus}', num_npus=num_npus)
 
-    device = torch.device(f'npu:{layer_idxes[0]%num_npus}')
-    inps = torch.load(os.path.join(output_dir, f'layer_{layer_idxes[0]-1}_out.pkl'),
+    device = torch.device(f'npu:{layer_idxes[0] % num_npus}')
+    inps = torch.load(os.path.join(output_dir, f'layer_{layer_idxes[0] - 1}_out.pkl'),
                       weights_only=False, map_location=device)
     attention_mask = torch.load(
         os.path.join(output_dir, 'attention_mask.pkl'), weights_only=False, map_location=device)
@@ -135,7 +139,7 @@ def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_di
         inp = inps[i]
         for layer_i, layer_idx in enumerate(layer_idxes):
             layer = layers[layer_idx]
-            device = torch.device(f'npu:{layer_idx%num_npus}')
+            device = torch.device(f'npu:{layer_idx % num_npus}')
             if layer_idx == num_layers - 1:
                 # load lm_head and norm
                 load_embed_state_dict(model, args.model)

@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch.nn as nn
 import os
+import torch.nn as nn
 from loguru import logger
 import torch
 from tqdm import tqdm
@@ -31,6 +31,7 @@ def get_wikitext2(tokenizer):
     )
     return testenc.input_ids
 
+
 def get_wiki_inputs(testenc, seq_len=4096):
     wiki_inputs = []
     nsamples = testenc.numel() // seq_len
@@ -40,7 +41,7 @@ def get_wiki_inputs(testenc, seq_len=4096):
         # Calculate end index
         j = min(i + bs, nsamples)
         # Prepare inputs and move to npu
-        inputs = testenc[:, (i * seq_len) : (j * seq_len)].cpu()
+        inputs = testenc[:, (i * seq_len): (j * seq_len)].cpu()
         inputs = inputs.reshape(j - i, seq_len)
         wiki_inputs.append(inputs)
     return wiki_inputs
@@ -52,7 +53,7 @@ def wikitext2_ppl(testenc, data_dir, seq_len=4096):
     nlls = []
     for i in tqdm(range(0, nsamples, bs), desc='Running wikitext2'):
         j = min(i + bs, nsamples)
-        inputs = testenc[:, (i * seq_len) : (j * seq_len)].cpu()
+        inputs = testenc[:, (i * seq_len): (j * seq_len)].cpu()
         inputs = inputs.reshape(j - i, seq_len)
 
         output = torch.load(os.path.join(

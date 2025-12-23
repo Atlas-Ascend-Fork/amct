@@ -15,12 +15,13 @@
 
 import os
 import json
+from copy import deepcopy
 import torch
 from loguru import logger
-from copy import deepcopy
 from transformers import AutoConfig
 from safetensors import safe_open
-from cores.models.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer, DeepseekV3MLP, _prepare_4d_causal_attention_mask
+from cores.models.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer, DeepseekV3MLP, \
+    _prepare_4d_causal_attention_mask
 from cores.quantization.node import ActivationQuantizer
 from cores.utils.utils import skip_initialization
 from cores.quantization.linear import QuantLinear
@@ -39,10 +40,10 @@ class QuantDeepseekV3MLP(torch.nn.Module):
 
         self._ori_mode = False
         self.afq_x = ActivationQuantizer(bits=args.a_bits, \
-                                        sym=not(args.a_asym), lac=True, groupsize=-1)
+                                         sym=not (args.a_asym), lac=True, groupsize=-1)
 
         self.afq_down = ActivationQuantizer(bits=args.a_bits, \
-                                        sym=not(args.a_asym), lac=True, groupsize=-1)
+                                            sym=not (args.a_asym), lac=True, groupsize=-1)
 
     def _trans_forward(self, x):
         x_ts = x
@@ -70,8 +71,6 @@ class QuantDeepseekV3MLP(torch.nn.Module):
 def apply_quant_to_moe(args, model, shared_expert_bits=None, routed_expert_bits=None):
     for name, mod in model.named_children():
         if name in ["mlp"] and hasattr(mod, "experts") is False:
-
-
             _new_args = deepcopy(args)
             _new_args.w_bits = 8
             _new_args.lwc = False
@@ -89,7 +88,6 @@ def apply_quant_to_moe(args, model, shared_expert_bits=None, routed_expert_bits=
                     new_args = _new_args
                 mod[i] = QuantDeepseekV3MLP(new_args, mod[i])
 
-
         if name in ["shared_experts"]:
             logger.info(f"{name} - replace to QuantDeepseekV3MLP")
             if shared_expert_bits is not None:
@@ -102,6 +100,7 @@ def apply_quant_to_moe(args, model, shared_expert_bits=None, routed_expert_bits=
             apply_quant_to_moe(args, mod, shared_expert_bits=shared_expert_bits, routed_expert_bits=routed_expert_bits)
 
     return model
+
 
 def apply_quant_to_mla(args, model, cls):
     skip_initialization()
@@ -140,7 +139,7 @@ def load_layer_weight(model_dir, rank, weight_map, layer_idx):
 
 
 def load_layer(model_dir, rank, config, weight_map, layer_idx, cls=DeepseekV3DecoderLayer):
-    decoder_layer = cls(config, layer_idx, is_nextn= layer_idx == 61)
+    decoder_layer = cls(config, layer_idx, is_nextn=layer_idx == 61)
 
     state_dict = load_layer_weight(model_dir, rank, weight_map, layer_idx)
     try:
@@ -149,14 +148,14 @@ def load_layer(model_dir, rank, config, weight_map, layer_idx, cls=DeepseekV3Dec
         logger.info("not find self_attn.rotary_emb.inv_freq in state_dict")
 
     decoder_layer.load_state_dict(state_dict)
-    state_dict = None # or it will be still in GPU mem
+    state_dict = None  # or it will be still in GPU mem
     decoder_layer.eval()
     return decoder_layer
 
 
 def get_float_block(model_path, idx, dev, model_args=None):
     config = AutoConfig.from_pretrained(
-            model_path, trust_remote_code=True)
+        model_path, trust_remote_code=True)
     config.model_args = model_args
     with open(f"{model_path}/model.safetensors.index.json") as f:
         weight_map = json.load(f)

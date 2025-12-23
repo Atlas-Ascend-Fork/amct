@@ -14,8 +14,8 @@
 # limitations under the License.
 
 import torch
-from loguru import logger
 import json
+from loguru import logger
 
 from cores.utils import args_utils as args_utils, utils as utils
 from cores.models.deepseek_v3_2.quant_utils import apply_quant_to_moe, get_float_block, apply_quant_to_mla
@@ -24,6 +24,7 @@ from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
 from cores.models.deepseek_v3_2.indexer import ModelArgs
 from cores.calibrator.dsv3_calib import cali_quant
 from cores.calibrator.utils import *
+
 
 def train_mla_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
     logger.info(f"train_mla_layer - {layer_idx}")
@@ -40,9 +41,11 @@ def train_mla_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
         cali_quant(args, layer.self_attn, layer_idx, inps, dev, param_prefix="self_attn")
     torch.npu.empty_cache()
 
+
 def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
     logger.info(f"train_experts_layer - {layer_idx}")
     quant_params = {}
+
     def refactor_quant_params(quant_params, prefix):
         new_params = {}
         for k, v in quant_params.items():
@@ -78,7 +81,8 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
 
                 logger.info(quant_params.keys())
                 torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))
-                logger.info("saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
+                logger.info(
+                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
 
             elif isinstance(layer.mlp, QuantDeepseekV3MLP):
                 part_params = cali_quant(args, layer.mlp, layer_idx, inps, dev)
@@ -86,7 +90,9 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
                 quant_params.update(refactor_quant_params(part_params, prefix))
                 logger.info(quant_params.keys())
                 torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))
-                logger.info("saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
+                logger.info(
+                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
+
 
 def main():
     args = args_utils.parser_gen()
@@ -107,33 +113,6 @@ def main():
         else:
             raise ValueError("train_mode must be 'mla' or 'moe'")
 
+
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

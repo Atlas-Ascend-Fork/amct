@@ -15,6 +15,7 @@
 
 from loguru import logger
 
+
 def get_init_scale(w_smax, x_smax, alpha=0.5):
     return (w_smax.pow(1 - alpha) / x_smax.pow(alpha)).clamp(min=1e-5)
 

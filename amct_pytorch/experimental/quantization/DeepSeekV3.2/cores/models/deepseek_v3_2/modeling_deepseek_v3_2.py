@@ -66,7 +66,6 @@ if is_flash_attn_2_available():
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
 
-
 # This makes `_prepare_4d_causal_attention_mask` a leaf function in the FX graph.
 # It means that the function will not be traced through and simply appear as a node in the graph.
 if is_torch_fx_available():
@@ -74,7 +73,6 @@ if is_torch_fx_available():
         import torch.fx
 
     _prepare_4d_causal_attention_mask = torch.fx.wrap(_prepare_4d_causal_attention_mask)
-
 
 logger = logging.get_logger(__name__)
 
@@ -93,8 +91,6 @@ def _get_unpad_data(attention_mask):
         cu_seqlens,
         max_seqlen_in_batch,
     )
-
-
 
 
 class DeepseekV3RMSNorm(nn.Module):
@@ -125,7 +121,7 @@ class DeepseekV3RotaryEmbedding(nn.Module):
         self.max_position_embeddings = max_position_embeddings
         self.base = base
         inv_freq = 1.0 / (
-            self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
+                self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
         )
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
@@ -165,12 +161,12 @@ class DeepseekV3LinearScalingRotaryEmbedding(DeepseekV3RotaryEmbedding):
     """DeepseekV3RotaryEmbedding extended with linear scaling. Credits to the Reddit user /u/kaiokendev"""
 
     def __init__(
-        self,
-        dim,
-        max_position_embeddings=2048,
-        base=10000,
-        device=None,
-        scaling_factor=1.0,
+            self,
+            dim,
+            max_position_embeddings=2048,
+            base=10000,
+            device=None,
+            scaling_factor=1.0,
     ):
         self.scaling_factor = scaling_factor
         super().__init__(dim, max_position_embeddings, base, device)
@@ -194,12 +190,12 @@ class DeepseekV3DynamicNTKScalingRotaryEmbedding(DeepseekV3RotaryEmbedding):
     """DeepseekV3RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
 
     def __init__(
-        self,
-        dim,
-        max_position_embeddings=2048,
-        base=10000,
-        device=None,
-        scaling_factor=1.0,
+            self,
+            dim,
+            max_position_embeddings=2048,
+            base=10000,
+            device=None,
+            scaling_factor=1.0,
     ):
         self.scaling_factor = scaling_factor
         super().__init__(dim, max_position_embeddings, base, device)
@@ -209,11 +205,11 @@ class DeepseekV3DynamicNTKScalingRotaryEmbedding(DeepseekV3RotaryEmbedding):
 
         if seq_len > self.max_position_embeddings:
             base = self.base * (
-                (self.scaling_factor * seq_len / self.max_position_embeddings)
-                - (self.scaling_factor - 1)
+                    (self.scaling_factor * seq_len / self.max_position_embeddings)
+                    - (self.scaling_factor - 1)
             ) ** (self.dim / (self.dim - 2))
             inv_freq = 1.0 / (
-                base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
+                    base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
             )
             self.register_buffer("inv_freq", inv_freq, persistent=False)
 
@@ -230,16 +226,16 @@ class DeepseekV3DynamicNTKScalingRotaryEmbedding(DeepseekV3RotaryEmbedding):
 
 # Inverse dim formula to find dim based on number of rotations
 def yarn_find_correction_dim(
-    num_rotations, dim, base=10000, max_position_embeddings=2048
+        num_rotations, dim, base=10000, max_position_embeddings=2048
 ):
     return (dim * math.log(max_position_embeddings / (num_rotations * 2 * math.pi))) / (
-        2 * math.log(base)
+            2 * math.log(base)
     )
 
 
 # Find dim range bounds based on rotations
 def yarn_find_correction_range(
-    low_rot, high_rot, dim, base=10000, max_position_embeddings=2048
+        low_rot, high_rot, dim, base=10000, max_position_embeddings=2048
 ):
     low = math.floor(
         yarn_find_correction_dim(low_rot, dim, base, max_position_embeddings)
@@ -268,17 +264,17 @@ def yarn_linear_ramp_mask(min, max, dim):
 class DeepseekV3YarnRotaryEmbedding(DeepseekV3RotaryEmbedding):
 
     def __init__(
-        self,
-        dim,
-        max_position_embeddings=2048,
-        base=10000,
-        device=None,
-        scaling_factor=1.0,
-        original_max_position_embeddings=4096,
-        beta_fast=32,
-        beta_slow=1,
-        mscale=1,
-        mscale_all_dim=0,
+            self,
+            dim,
+            max_position_embeddings=2048,
+            base=10000,
+            device=None,
+            scaling_factor=1.0,
+            original_max_position_embeddings=4096,
+            beta_fast=32,
+            beta_slow=1,
+            mscale=1,
+            mscale_all_dim=0,
     ):
         self.scaling_factor = scaling_factor
         self.original_max_position_embeddings = original_max_position_embeddings
@@ -293,13 +289,13 @@ class DeepseekV3YarnRotaryEmbedding(DeepseekV3RotaryEmbedding):
         dim = self.dim
 
         freq_extra = 1.0 / (
-            self.base
-            ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim)
+                self.base
+                ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim)
         )
         freq_inter = 1.0 / (
-            self.scaling_factor
-            * self.base
-            ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim)
+                self.scaling_factor
+                * self.base
+                ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim)
         )
 
         low, high = yarn_find_correction_range(
@@ -337,7 +333,7 @@ class DeepseekV3YarnRotaryEmbedding(DeepseekV3RotaryEmbedding):
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
-    x2 = x[..., x.shape[-1] // 2 :]
+    x2 = x[..., x.shape[-1] // 2:]
     return torch.cat((-x2, x1), dim=-1)
 
 
@@ -444,7 +440,7 @@ class MoEGate(nn.Module):
             assert not self.training
             scores_for_choice = scores.view(bsz * seq_len, -1) + self.e_score_correction_bias.unsqueeze(0)
             group_scores = (
-                scores_for_choice.view(bsz * seq_len, self.n_group, -1).topk(2, dim=-1)[0].sum(dim = -1)
+                scores_for_choice.view(bsz * seq_len, self.n_group, -1).topk(2, dim=-1)[0].sum(dim=-1)
             )  # [n, n_group]
             group_idx = torch.topk(
                 group_scores, k=self.topk_group, dim=-1, sorted=False
@@ -474,9 +470,10 @@ class MoEGate(nn.Module):
         if self.top_k > 1 and self.norm_topk_prob:
             denominator = topk_weight.sum(dim=-1, keepdim=True) + 1e-20
             topk_weight = topk_weight / denominator
-        topk_weight = topk_weight * self.routed_scaling_factor # must multiply the scaling factor
+        topk_weight = topk_weight * self.routed_scaling_factor  # must multiply the scaling factor
 
         return topk_idx, topk_weight
+
 
 class DeepseekV3MoE(nn.Module):
     """
@@ -500,7 +497,7 @@ class DeepseekV3MoE(nn.Module):
                             config, intermediate_size=config.moe_intermediate_size
                         )
                         if i >= self.ep_rank * self.experts_per_rank
-                        and i < (self.ep_rank + 1) * self.experts_per_rank
+                           and i < (self.ep_rank + 1) * self.experts_per_rank
                         else None
                     )
                     for i in range(config.n_routed_experts)
@@ -572,7 +569,7 @@ class DeepseekV3MoE(nn.Module):
             gatherd_idxs = np.zeros(shape=(gathered_tokens.shape[0],), dtype=np.int32)
             s = 0
             for i, k in enumerate(tokens_per_expert_group.cpu().numpy()):
-                gatherd_idxs[s : s + k] = i % self.experts_per_rank
+                gatherd_idxs[s: s + k] = i % self.experts_per_rank
                 s += k
             gatherd_idxs = gatherd_idxs.argsort()
             sorted_tokens = gathered_tokens[gatherd_idxs]
@@ -627,7 +624,6 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
         batch, num_key_value_heads, n_rep, slen, head_dim
     )
     return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
-
 
 
 # Copied from transformers.models.llama.modeling_llama.LlamaAttention with Llama->DeepseekV3
@@ -756,14 +752,14 @@ class DeepseekV3Attention(nn.Module):
         )
 
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_value: Optional[Cache] = None,
-        output_attentions: bool = False,
-        use_cache: bool = False,
-        **kwargs,
+            self,
+            hidden_states: torch.Tensor,
+            attention_mask: Optional[torch.Tensor] = None,
+            position_ids: Optional[torch.LongTensor] = None,
+            past_key_value: Optional[Cache] = None,
+            output_attentions: bool = False,
+            use_cache: bool = False,
+            **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         if "padding_mask" in kwargs:
             warnings.warn(
@@ -809,11 +805,11 @@ class DeepseekV3Attention(nn.Module):
 
         query_states = k_pe.new_empty(bsz, self.num_heads, q_len, self.q_head_dim)
         query_states[:, :, :, : self.qk_nope_head_dim] = q_nope
-        query_states[:, :, :, self.qk_nope_head_dim :] = q_pe
+        query_states[:, :, :, self.qk_nope_head_dim:] = q_pe
 
         key_states = k_pe.new_empty(bsz, self.num_heads, q_len, self.q_head_dim)
         key_states[:, :, :, : self.qk_nope_head_dim] = k_nope
-        key_states[:, :, :, self.qk_nope_head_dim :] = k_pe
+        key_states[:, :, :, self.qk_nope_head_dim:] = k_pe
         if past_key_value is not None:
             cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
             key_states, value_states = past_key_value.update(
@@ -821,7 +817,7 @@ class DeepseekV3Attention(nn.Module):
             )
 
         attn_weights = (
-            torch.matmul(query_states, key_states.transpose(2, 3)) * self.softmax_scale
+                torch.matmul(query_states, key_states.transpose(2, 3)) * self.softmax_scale
         )
 
         if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
@@ -881,14 +877,14 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
         self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
 
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.LongTensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_value: Optional[Cache] = None,
-        output_attentions: bool = False,
-        use_cache: bool = False,
-        **kwargs,
+            self,
+            hidden_states: torch.Tensor,
+            attention_mask: Optional[torch.LongTensor] = None,
+            position_ids: Optional[torch.LongTensor] = None,
+            past_key_value: Optional[Cache] = None,
+            output_attentions: bool = False,
+            use_cache: bool = False,
+            **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         # DeepseekV3FlashAttention2 attention does not support output_attentions
         if "padding_mask" in kwargs:
@@ -940,11 +936,11 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
 
         query_states = k_pe.new_empty(bsz, self.num_heads, q_len, self.q_head_dim)
         query_states[:, :, :, : self.qk_nope_head_dim] = q_nope
-        query_states[:, :, :, self.qk_nope_head_dim :] = q_pe
+        query_states[:, :, :, self.qk_nope_head_dim:] = q_pe
 
         key_states = k_pe.new_empty(bsz, self.num_heads, q_len, self.q_head_dim)
         key_states[:, :, :, : self.qk_nope_head_dim] = k_nope
-        key_states[:, :, :, self.qk_nope_head_dim :] = k_pe
+        key_states[:, :, :, self.qk_nope_head_dim:] = k_pe
 
         if self.q_head_dim != self.v_head_dim:
             value_states = F.pad(value_states, [0, self.q_head_dim - self.v_head_dim])
@@ -1094,9 +1090,8 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
 
         return attn_output
 
-
     def _upad_input(
-        self, query_layer, key_layer, value_layer, attention_mask, query_length
+            self, query_layer, key_layer, value_layer, attention_mask, query_length
     ):
         indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
         batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape
@@ -1162,9 +1157,9 @@ class DeepseekV3DecoderLayer(nn.Module):
         self.mlp = (
             DeepseekV3MoE(config)
             if (
-                config.n_routed_experts is not None
-                and layer_idx >= config.first_k_dense_replace
-                and layer_idx % config.moe_layer_freq == 0
+                    config.n_routed_experts is not None
+                    and layer_idx >= config.first_k_dense_replace
+                    and layer_idx % config.moe_layer_freq == 0
             )
             else DeepseekV3MLP(config)
         )
@@ -1187,18 +1182,15 @@ class DeepseekV3DecoderLayer(nn.Module):
             self.shared_head.norm = DeepseekV3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
             self.shared_head.head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
-
-
-
     def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_value: Optional[Tuple[torch.Tensor]] = None,
-        output_attentions: Optional[bool] = False,
-        use_cache: Optional[bool] = False,
-        **kwargs,
+            self,
+            hidden_states: torch.Tensor,
+            attention_mask: Optional[torch.Tensor] = None,
+            position_ids: Optional[torch.LongTensor] = None,
+            past_key_value: Optional[Tuple[torch.Tensor]] = None,
+            output_attentions: Optional[bool] = False,
+            use_cache: Optional[bool] = False,
+            **kwargs,
     ) -> Tuple[
         torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
     ]:
@@ -1266,8 +1258,6 @@ DeepseekV3_START_DOCSTRING = r"""
             load the weights associated with the model, only the configuration. Check out the
             [`~PreTrainedModel.from_pretrained`] method to load the model weights.
 """
-
-
 
 
 @add_start_docstrings(
@@ -1406,16 +1396,16 @@ class DeepseekV3Model(DeepseekV3PreTrainedModel):
 
     @add_start_docstrings_to_model_forward(DeepseekV3_INPUTS_DOCSTRING)
     def forward(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            position_ids: Optional[torch.LongTensor] = None,
+            past_key_values: Optional[List[torch.FloatTensor]] = None,
+            inputs_embeds: Optional[torch.FloatTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
     ) -> Union[Tuple, BaseModelOutputWithPast]:
         output_attentions = (
             output_attentions
@@ -1572,17 +1562,17 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
         output_type=CausalLMOutputWithPast, config_class=_CONFIG_FOR_DOC
     )
     def forward(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            position_ids: Optional[torch.LongTensor] = None,
+            past_key_values: Optional[List[torch.FloatTensor]] = None,
+            inputs_embeds: Optional[torch.FloatTensor] = None,
+            labels: Optional[torch.LongTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         r"""
         Args:
@@ -1666,12 +1656,12 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
         )
 
     def prepare_inputs_for_generation(
-        self,
-        input_ids,
-        past_key_values=None,
-        attention_mask=None,
-        inputs_embeds=None,
-        **kwargs,
+            self,
+            input_ids,
+            past_key_values=None,
+            attention_mask=None,
+            inputs_embeds=None,
+            **kwargs,
     ):
         if past_key_values is not None:
             if isinstance(past_key_values, Cache):
@@ -1687,10 +1677,10 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
             # some of the inputs are exclusivelly passed as part of the cache (e.g. when passing input_embeds as
             # input)
             if (
-                attention_mask is not None
-                and attention_mask.shape[1] > input_ids.shape[1]
+                    attention_mask is not None
+                    and attention_mask.shape[1] > input_ids.shape[1]
             ):
-                input_ids = input_ids[:, -(attention_mask.shape[1] - past_length) :]
+                input_ids = input_ids[:, -(attention_mask.shape[1] - past_length):]
             # 2 - If the past_length is smaller than input_ids', then input_ids holds all input tokens. We can discard
             # input_ids based on the past_length.
             elif past_length < input_ids.shape[1]:
@@ -1699,9 +1689,9 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
 
             # If we are about to go beyond the maximum cache length, we need to crop the input attention mask.
             if (
-                max_cache_length is not None
-                and attention_mask is not None
-                and cache_length + input_ids.shape[1] > max_cache_length
+                    max_cache_length is not None
+                    and attention_mask is not None
+                    and cache_length + input_ids.shape[1] > max_cache_length
             ):
                 attention_mask = attention_mask[:, -max_cache_length:]
 
@@ -1711,7 +1701,7 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
             if past_key_values:
-                position_ids = position_ids[:, -input_ids.shape[1] :]
+                position_ids = position_ids[:, -input_ids.shape[1]:]
 
         # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
         if inputs_embeds is not None and past_key_values is None:
@@ -1775,17 +1765,17 @@ class DeepseekV3ForSequenceClassification(DeepseekV3PreTrainedModel):
 
     @add_start_docstrings_to_model_forward(DeepseekV3_INPUTS_DOCSTRING)
     def forward(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            position_ids: Optional[torch.LongTensor] = None,
+            past_key_values: Optional[List[torch.FloatTensor]] = None,
+            inputs_embeds: Optional[torch.FloatTensor] = None,
+            labels: Optional[torch.LongTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
     ) -> Union[Tuple, SequenceClassifierOutputWithPast]:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
@@ -1825,7 +1815,7 @@ class DeepseekV3ForSequenceClassification(DeepseekV3PreTrainedModel):
         else:
             if input_ids is not None:
                 sequence_lengths = (
-                    torch.eq(input_ids, self.config.pad_token_id).int().argmax(-1) - 1
+                        torch.eq(input_ids, self.config.pad_token_id).int().argmax(-1) - 1
                 ).to(logits.device)
             else:
                 sequence_lengths = -1
@@ -1841,7 +1831,7 @@ class DeepseekV3ForSequenceClassification(DeepseekV3PreTrainedModel):
                 if self.num_labels == 1:
                     self.config.problem_type = "regression"
                 elif self.num_labels > 1 and (
-                    labels.dtype == torch.long or labels.dtype == torch.int
+                        labels.dtype == torch.long or labels.dtype == torch.int
                 ):
                     self.config.problem_type = "single_label_classification"
                 else:
@@ -1872,12 +1862,3 @@ class DeepseekV3ForSequenceClassification(DeepseekV3PreTrainedModel):
             hidden_states=transformer_outputs.hidden_states,
             attentions=transformer_outputs.attentions,
         )
-
-
-
-
-
-
-
-
-
