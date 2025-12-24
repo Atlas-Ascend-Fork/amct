@@ -22,8 +22,7 @@ import torch.nn.functional as F
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.utils.data_utils import check_linear_input_dim
-from amct_pytorch.algorithm.awq import search_scale, apply_scale, search_clip, \
-    apply_clip_by_weight_granularity, get_quant_scale
+from amct_pytorch.algorithm.awq import search_scale, apply_scale, calculate_scale_offset_by_granularity
 from amct_pytorch.utils.vars import INT4, INT8
 from amct_pytorch.utils.log import LOGGER
 
@@ -72,21 +71,11 @@ class LinearAWQuant(BaseQuantizeModule):
             return output
 
         scale_awq = search_scale(input_data, [self.ori_module], self.ori_module, self.quant_config)
+        apply_scale(scale_awq, self.ori_module, input_data)
+        self.scale = 1 / scale_awq.detach()
 
-        scale_list = {self.layer_name[0]: scale_awq}
-        named_linear = {self.layer_name[0]: self.ori_module}
-        input_feat = {self.layer_name[0]: input_data}
-        apply_scale(scale_list, named_linear, input_feat)
-        weight_list = {self.layer_name[0]: self.ori_module.weight.data}
-
-        self.scale = 1 / scale_list[self.layer_name[0]].detach().cpu()
-
-        scale_group_list, offset_group_list = get_quant_scale(weight_list, self.quant_config)
-
-        self.scale_w = scale_group_list[self.layer_name[0]].detach().cpu()
-        if not self.wts_symmetric:
-            self.offset_w = offset_group_list[self.layer_name[0]].detach().cpu()
-
+        self.scale_w, self.offset_w = \
+            calculate_scale_offset_by_granularity(self.ori_module.weight.data, self.quant_config)
         self.calc_done = True
         LOGGER.logd("Calculate awq quant params of layer '{}' success!".format(self.layer_name), 'LinearAWQuant')
         return output
