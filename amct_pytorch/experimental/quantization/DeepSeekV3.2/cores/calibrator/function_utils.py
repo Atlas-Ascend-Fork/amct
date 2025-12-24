@@ -1,5 +1,8 @@
 # coding=utf-8
+# Adapted from
+# https://github.com/ruikangliu/FlatQuant/blob/main/flatquant/function_utils.py
 # Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2024 ruikangliu. Licensed under MIT.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
