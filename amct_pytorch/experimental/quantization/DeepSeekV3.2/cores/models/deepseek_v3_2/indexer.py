@@ -3,6 +3,7 @@
 # https://huggingface.co/deepseek-ai/DeepSeek-V3/blob/main/modeling_deepseek.py
 # Copyright (c) 2025 Huawei Technologies Co., Ltd.
 # Copyright 2023 DeepSeek-AI and The HuggingFace Inc. team. All rights reserved.
+# Licensed under the MIT License.
 #
 # This code is based on EleutherAI's GPT-NeoX library and the GPT-NeoX
 # and OPT implementations in this library. It has been modified from its
