@@ -105,7 +105,7 @@ def search_scale(inputs, layers, block, quant_config, kwargs=None):
     return best_scale
 
 
-def apply_scale(scale_list, named_linears, input_feat):
+def apply_scale(scale_awq, ori_module, input_data):
     """
     Function: apply scale to weight and activation
     Args:
@@ -113,10 +113,9 @@ def apply_scale(scale_list, named_linears, input_feat):
         named_linears: dict. {name: module}
         input_feat: dict. {name: input_data}
     """
-    for name, scale in scale_list.items():
-        scale = scale.to(named_linears[name].weight.device)
-        named_linears[name].weight.data.mul_(scale)
-        input_feat[name].div_(scale)
+    scale = scale_awq.to(ori_module.weight.device)
+    ori_module.weight.data.mul_(scale)
+    input_data.div_(scale)
 
 
 def apply_clip_by_weight_granularity(clip_max_list, named_linears, weight_granularity, group_size):
@@ -293,7 +292,7 @@ def search_clip(named_linears, input_feat, quant_config):
     return clip_max_list
 
 
-def get_quant_scale(adjusted_weight, quant_config):
+def get_quant_scale(weight, quant_config):
     """
     Apply clipping to layer weights and compute scaling factors based on quantization configuration.
 
@@ -304,14 +303,9 @@ def get_quant_scale(adjusted_weight, quant_config):
     Returns:
         dict: Dictionary mapping layer names to their computed scaling factors
     """
-    scale_group_list = dict()
-    offset_group_list = dict()
+
     group_size = quant_config.get('weights_cfg').get("group_size")
-    for name in adjusted_weight:
-        weight = adjusted_weight[name]
-        scale_group, offset_group = calculate_scale_offset_by_granularity(weight, quant_config)
-        scale_group_list[name] = scale_group
-        offset_group_list[name] = offset_group
+    scale_group, offset_group = calculate_scale_offset_by_granularity(weight, quant_config)
 
     return scale_group_list, offset_group_list
 
