@@ -1,6 +1,6 @@
 # coding=utf-8
 # Adapted from
-# https://github.com/ruikangliu/FlatQuant/blob/main/flatquant/trans_utils.py
+# https://github.com/ruikangliu/FlatQuant/blob/main/flatquant/train_utils.py
 # Copyright (c) 2025 Huawei Technologies Co., Ltd.
 # Copyright (c) 2024 ruikangliu. Licensed under MIT.
 #
