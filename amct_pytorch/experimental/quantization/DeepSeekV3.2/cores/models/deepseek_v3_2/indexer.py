@@ -113,8 +113,6 @@ class ModelArgs:
 
 
 def fp32_index(q: torch.Tensor, k: torch.Tensor, weights):
-    # q: [b,s,n,d]
-    # k: [b,s,n,d]
 
     logits = (
         torch.matmul(q.transpose(1, 2).to(torch.float32), k.permute(0, 2, 3, 1).to(torch.float32))

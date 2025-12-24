@@ -84,7 +84,6 @@ def do_embedding_forward(args, model, layers, samples, output_dir, dtype):
             self.position_ids = None
 
         def forward(self, inp, **kwargs):
-            # self.dataset.update_data(self.index, inp.squeeze(0).to('cpu'))
             self.dataset.append(inp.to('cpu'))
             self.index += 1
             if self.attention_mask is None:

@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import json
+import torch
 from loguru import logger
 
 from cores.utils import args_utils as args_utils, utils as utils
