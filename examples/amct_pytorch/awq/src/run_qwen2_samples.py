@@ -14,10 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import os
-import copy
 import torch
-import torch.nn as nn
 import torch_npu
 
 from utils import get_loaders, get_qwen2, build_enc, get_calib_dataset, infer_model, test_ppl
