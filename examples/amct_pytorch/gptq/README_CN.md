@@ -1,4 +1,4 @@
-# AMCT大模型LLAMA2量化
+# AMCT大模型GPTQ量化
 
 ## 1 量化前提
 
