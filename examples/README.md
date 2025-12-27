@@ -4,7 +4,7 @@
 
 | 样例                                   | 样例链接                                                     |
 |--------------------------------------| ------------------------------------------------------------ |
-| 使用AWQ算法量化LLAMA2大模型 | [README](amct_pytorch/awq/README_CN.md) |
-| 使用GPTQ算法量化LLAMA2大模型 | [README](amct_pytorch/gptq/README_CN.md) |
-| 使用MIN-MAX算法量化LLAMA2大模型    | [README](amct_pytorch/minmax/README_CN.md) |
-| 使用SmoothQuant算法量化LLAMA2大模型 | [README](amct_pytorch/smoothquant/README_CN.md) |
+| 使用AWQ算法量化模型 | [README](amct_pytorch/awq/README_CN.md) |
+| 使用GPTQ算法量化模型 | [README](amct_pytorch/gptq/README_CN.md) |
+| 使用MIN-MAX算法量化模型    | [README](amct_pytorch/minmax/README_CN.md) |
+| 使用SmoothQuant算法量化模型 | [README](amct_pytorch/smoothquant/README_CN.md) |
