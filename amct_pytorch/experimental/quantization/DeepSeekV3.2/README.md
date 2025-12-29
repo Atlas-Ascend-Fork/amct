@@ -86,7 +86,7 @@ python3 ./eval_ppl.py \
 | 模型 | PPL    |
 | ---- |--------|
 | DeepSeek-V3.2-BF16 | 2.9987 |
-| DeepSeek-V3.2-Exp-W8A8C8 | 3.0849 |
+| DeepSeek-V3.2-Exp-W8A8C8 | 3.0304 |
 | DeepSeek-V3.2-Exp-W4A8C8 | 3.2320 |
 ### 主函数参数说明
 #### eval.py
