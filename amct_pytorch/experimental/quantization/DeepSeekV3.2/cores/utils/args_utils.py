@@ -82,7 +82,7 @@ def parser_gen():
     parser.add_argument('--data_dir', default="")
 
     # Train and Val
-    parser.add_argument("--train_mode", default="block", choices=["mla", "moe", "block"], help="Train mode.")
+    parser.add_argument("--train_mode", default="block", choices=["mla", "moe", "block", "origin"], help="Train mode.")
     parser.add_argument("--dev", type=int, default=1)
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)
