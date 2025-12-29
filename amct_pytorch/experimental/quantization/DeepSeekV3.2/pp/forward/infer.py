@@ -63,6 +63,10 @@ def prepare_layer(args, layer, layer_idx, cls=QuantDSA):  # use for quantization
     elif args.train_mode == "moe":
         layer = apply_quant_to_moe(args, layer)
         quant_params = prepare_quant_params(args, layer_idx, args.moe_param_dir)
+    elif args.train_mode == "origin":
+        logger.info(layer)
+        layer.eval()
+        return layer
     else:
         raise ValueError(f"Unknown train_mode {args.train_mode}")
     logger.info(layer)
