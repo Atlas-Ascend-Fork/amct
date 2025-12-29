@@ -61,7 +61,6 @@ class QuantIndexer(torch.nn.Module):
         q = rearrange(q, 'b s (h d) -> b s h d', d=self.head_dim)
         q_pe, q_nope = torch.split(q, [self.rope_head_dim, self.head_dim - self.rope_head_dim], dim=-1)
         cos, sin = self.rotary_emb(q, seq_len=seqlen)
-        # q = torch.cat([q_pe, q_nope], dim=-1)
         k = self.wk(x)
         k = self.k_norm(k)
         k_pe, k_nope = torch.split(k, [self.rope_head_dim, self.head_dim - self.rope_head_dim], dim=-1)
