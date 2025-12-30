@@ -43,7 +43,7 @@ if __name__ == '__main__':
             },
         },
         'algorithm': {'gptq'},
-        'skip_layers': {'lm_head', 'down_proj'}
+        'skip_layers': {'lm_head'}
     }
     amct.quantize(quant_model, cfg)
     

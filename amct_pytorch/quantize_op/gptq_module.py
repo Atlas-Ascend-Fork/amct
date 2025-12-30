@@ -56,7 +56,7 @@ class GPTQuant(BaseQuantizeModule):
         self.nsamples = 0
         self.perc_damp = 0.01
         self.block_size = 128
-        self.hessian = torch.zeros((self.weight.shape[1], self.weight.shape[1]))
+        self.hessian = None
 
 
     @torch.no_grad()
@@ -172,7 +172,8 @@ class GPTQuant(BaseQuantizeModule):
         # input_data shape is (-1, cin)
         input_data = input_data.reshape((-1, input_data.shape[-1]))
         input_data = input_data.t()
-
+        if self.hessian is None:
+            self.hessian = torch.zeros((self.weight.shape[1], self.weight.shape[1]))
         self.hessian = self.hessian.to(input_data.device)
         self.hessian *= self.nsamples / (self.nsamples + batch_size)
         self.nsamples += batch_size
