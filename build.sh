@@ -17,6 +17,7 @@
 
 set -e
 
+
 BASEPATH=$(cd "$(dirname $0)"; pwd)
 BUILD_PATH="${BASEPATH}/build/"
 
