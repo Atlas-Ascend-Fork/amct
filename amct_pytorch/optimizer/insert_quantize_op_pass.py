@@ -38,7 +38,7 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
         super().__init__()
         self.config = quant_config
         self.quant_layers = list(quant_config.keys())
-        self.quantize_op = None
+        self.quantize_ops = dict()
 
     def match_pattern(self, module, name):
         """
@@ -52,11 +52,12 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
         if name not in self.quant_layers:
             return False
         alg = self.config[name].get('algorithm')
-        alg_name, _ = get_alg_name_from_config(alg)
+        alg_names, _ = get_alg_name_from_config(alg)
+        alg_name = alg_names[0] # each module corresponds to only one algo
         if AlgorithmRegistry.algo.get(alg_name):
             ori_op = AlgorithmRegistry.algo.get(alg_name)[0]
             if type(module).__name__ == ori_op:
-                self.quantize_op = AlgorithmRegistry.algo.get(alg_name)[1]
+                self.quantize_ops[name] = AlgorithmRegistry.algo.get(alg_name)[1]
                 return True
         
         return False
@@ -70,7 +71,7 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
         Return: None
         """
         layer_config = self.config.get(object_name)
-        new_module = self.quantize_op(object_module, object_name, layer_config)
+        new_module = self.quantize_ops[object_name](object_module, object_name, layer_config)
 
         helper = ModuleHelper(model)
         helper.replace_module_by_name(model, object_name, new_module)

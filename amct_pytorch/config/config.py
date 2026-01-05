@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-''' predefined quant config '''
+''' quant config example '''
 
 INT4_AWQ_WEIGHT_QUANT_CFG = {
     'batch_num': 1,
@@ -27,6 +27,7 @@ INT4_AWQ_WEIGHT_QUANT_CFG = {
     },
     'algorithm': {'awq': {'grids_num': 20}},
     'skip_layers': {'lm_head'}
+
 }
 
 
@@ -40,6 +41,37 @@ INT4_GPTQ_WEIGHT_QUANT_CFG = {
         },
     },
     'algorithm': {'gptq'},
+    'skip_layers': {'lm_head'}
+
+}
+
+
+INT4_FLAT_QUANT_CFG = {
+    'batch_num': 4,
+    'quant_cfg': {
+        'inputs': {
+            'enable_quant': True,
+            'type': 'int4',
+            'symmetric': True,
+            'strategy': 'token'
+        },
+        'weights': {
+            'type': 'int4',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+    },
+    'algorithm': {
+        'flatquant_attn': {
+            'use_kcache_quant': False,
+            'k_bits': 16,
+            'use_vcache_quant': False,
+            'v_bits': 16,
+            'use_o_quant': False
+        },
+        'flatquant_attn_spda': {},
+        'flatquant_mlp': {}
+    },
     'skip_layers': {'lm_head'}
 }
 
@@ -60,7 +92,9 @@ INT8_SMOOTHQUANT_CFG = {
     },
     'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
     'skip_layers': {'lm_head'}
+
 }
+
 
 
 INT8_MINMAX_WEIGHT_QUANT_CFG = {

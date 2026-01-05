@@ -1,0 +1,7 @@
+torch==2.7.1
+torch_npu
+transformers
+tqdm
+accelerate
+datasets
+lm_eval>=0.4.4
