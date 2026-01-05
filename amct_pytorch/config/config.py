@@ -92,9 +92,7 @@ INT8_SMOOTHQUANT_CFG = {
     },
     'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
     'skip_layers': {'lm_head'}
-
 }
-
 
 
 INT8_MINMAX_WEIGHT_QUANT_CFG = {
