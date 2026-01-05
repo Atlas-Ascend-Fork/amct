@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-''' quant config example '''
+''' predefined quant config '''
 
 INT4_AWQ_WEIGHT_QUANT_CFG = {
     'batch_num': 1,

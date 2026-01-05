@@ -75,7 +75,6 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             raise RuntimeError(f"The deploy_op for {type(object_module).__name__} is None! "
                                "pls invoke algorithm_register to register deploy_op!")
 
-        # TODO: Need to apply diag_scale to layer norm (instead of inside the trans part; can extract layer number from object_name)
         if isinstance(object_module, MinMaxQuant):
             if object_module.scale_d:
                 npu_module = NpuQuantizationLinear(object_module)
