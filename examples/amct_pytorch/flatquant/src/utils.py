@@ -83,7 +83,7 @@ def get_wikitext2(nsamples, seed, seqlen, tokenizer, eval_mode=False):
         return trainloader
 
 
-def run_evaluation(model, tokenizer, tasks, batch_size, logger):
+def test_acc(model, tokenizer, tasks, batch_size, logger):
     hflm = HFLM(pretrained=model, tokenizer=tokenizer, batch_size=batch_size)
     logger.info(f"Evaluating {tasks}...")
     results = lm_eval.simple_evaluate(hflm, tasks=tasks)['results']
@@ -100,28 +100,25 @@ def run_evaluation(model, tokenizer, tasks, batch_size, logger):
 
 
 @torch.no_grad()
-def ppl_eval(model, testenc, dataset_name):
+def test_ppl(model, testenc, dataset_name):
     print(f'Evaluating ppl for {dataset_name}')
     model.eval()
 
     # Currently the NPU operator cannot hold more
     # TODO: remove once sufficiently large length is supported
     max_length = 128
-
-    testenc = testenc.input_ids
-    nsamples = testenc.numel() // max_length
-
     dev = next(model.parameters()).device
 
+    testenc = testenc.input_ids
     testenc = testenc.to(dev)
+    nsamples = testenc.numel() // max_length
+
     nlls = []
     for i in tqdm(range(nsamples)):
         batch = testenc[:, (i * max_length): ((i + 1) * max_length)]
         lm_logits = model(batch).logits
         shift_logits = lm_logits[:, :-1, :].contiguous()
-        shift_labels = testenc[
-            :, (i * max_length): ((i + 1) * max_length)
-        ][:, 1:].to(shift_logits.device)
+        shift_labels = testenc[:, (i * max_length): ((i + 1) * max_length)][:, 1:].to(dev)
         loss_fct = torch.nn.CrossEntropyLoss()
         loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         neg_log_likelihood = loss.float() * max_length
@@ -133,9 +130,9 @@ def ppl_eval(model, testenc, dataset_name):
 def eval_total(model, tokenizer, ppl_eval_dataset, logger):
     # Evaluate ACC
     tasks = ["piqa", "hellaswag", "arc_easy", "arc_challenge", "winogrande", "lambada_openai"]
-    run_evaluation(model, tokenizer, tasks, 16, logger)
+    test_acc(model, tokenizer, tasks, 16, logger)
 
     # Evaluate PPL
-    dataset_ppl = ppl_eval(model, ppl_eval_dataset, "wikitext2")
+    dataset_ppl = test_ppl(model, ppl_eval_dataset, "wikitext2")
     logger.info(f"PPL score: {dataset_ppl}")
     logger.info("All done!")

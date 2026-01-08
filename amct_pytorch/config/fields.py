@@ -232,7 +232,12 @@ class AlgorithmField():
     def set_value(self):
         total_alg = {}
         for alg in self.algs:
-            total_alg |= alg.get_value()
+            alg_value = alg.get_value()
+            assert len(alg_value) == 1
+            if isinstance(alg_value, set):
+                total_alg |= {next(iter(alg_value)): {}}
+            else:
+                total_alg |= alg_value
         return {'algorithm': total_alg}
     
     def get_value(self):

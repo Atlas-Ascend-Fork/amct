@@ -27,8 +27,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, required=True, help='model location')
     parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
-    parser.add_argument('--flat_matrix_path', type=str, default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location')
     parser.add_argument('--load_matrix', action='store_true', help="whether load matrix")
+    parser.add_argument('--flat_matrix_path', type=str, default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location')
     args = parser.parse_args()
 
     logger = create_logger()
