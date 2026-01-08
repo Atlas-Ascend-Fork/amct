@@ -27,7 +27,6 @@ INT4_AWQ_WEIGHT_QUANT_CFG = {
     },
     'algorithm': {'awq': {'grids_num': 20}},
     'skip_layers': {'lm_head'}
-
 }
 
 
@@ -42,7 +41,6 @@ INT4_GPTQ_WEIGHT_QUANT_CFG = {
     },
     'algorithm': {'gptq'},
     'skip_layers': {'lm_head'}
-
 }
 
 
