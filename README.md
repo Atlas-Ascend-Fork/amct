@@ -18,6 +18,7 @@ AMCT（Ascend Model Compression Toolkit，简称AMCT）是一款昇腾AI处理�
 ├── build.sh                       # 工程编译脚本
 ├── requirements.txt               # 环境搭建需要的第三方依赖包
 ├── amct_pytorch                   # 源码
+├── npu_ops                        # 算法对应的算子代码
 ├── examples                       # 端到端样例开发和调用示例
 └── tests                          # 测试工程目录
 ```
