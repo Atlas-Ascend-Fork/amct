@@ -48,9 +48,9 @@ All done!
 ```
 ACC: {'arc_challenge': 42.83, 'arc_easy': 70.88, 'hellaswag': 73.63, 'lambada_openai': 72.0, 'piqa': 77.48, 'winogrande': 67.88, 'acc_avg': 67.45}
 ```
-如下信息为perplexity（wikitext）：
+如下信息为perplexity（wikitext, max length 512）：
 ```
-PPL score: 13.224451065063477
+PPL score: 7.74946928024292
 ```
 如下信息为原始模型及真量化模型的推理速度（ms）:
 ```

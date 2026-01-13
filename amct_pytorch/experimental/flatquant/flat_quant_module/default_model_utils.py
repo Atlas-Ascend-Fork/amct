@@ -15,7 +15,6 @@ from .config_utils import InnerConfig
 
 from transformers.models.llama.modeling_llama import LlamaAttention, LlamaRotaryEmbedding, \
                                                      apply_rotary_pos_emb, repeat_kv
-# from transformers.models.qwen2.modeling_qwen2 import Qwen2MLP, Qwen2Attention, Qwen2RotaryEmbedding
 from transformers.activations import ACT2FN
 
 
@@ -48,13 +47,6 @@ class FlatQuantAttention(nn.Module):
                 max_position_embeddings=self.max_position_embeddings,
                 base=self.rope_theta,
             )
-        # for possible support for Qwen2 in the future (need transformer version higher than 4.36.0)
-        # elif isinstance(module, Qwen2Attention):
-        #     self.rotary_emb = Qwen2RotaryEmbedding(
-        #         self.head_dim,
-        #         max_position_embeddings=self.max_position_embeddings,
-        #         base=self.rope_theta,
-        #     )
         else:
             raise ValueError(f"Module of type f{type(module)} is not supported by FlatQuantAttention!")
 

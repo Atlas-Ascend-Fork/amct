@@ -104,9 +104,9 @@ def test_ppl(model, testenc, dataset_name):
     print(f'Evaluating ppl for {dataset_name}')
     model.eval()
 
-    # Currently the NPU operator cannot hold more
+    # Currently the NPU operator torch_npu.npu_kronecker_quant cannot hold more
     # TODO: remove once sufficiently large length is supported
-    max_length = 128
+    max_length = 512
     dev = next(model.parameters()).device
 
     testenc = testenc.input_ids

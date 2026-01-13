@@ -44,7 +44,7 @@ class NpuFlatQuantAttention(nn.Module):
                     past_key_value, output_attentions, use_cache, **kwargs):
         bsz, q_len, _ = hidden_states.size()
 
-        # NPU operator requires that bsz is divisible by 16, so we pad it if it does not
+        # NPU operator torch_npu.npu_kronecker_quant requires that bsz is divisible by 16, so we pad it if it is not
         # TODO: Remove if this is not required in the future
         bsz_pad_size_after = 0
         if bsz % 16:

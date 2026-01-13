@@ -69,7 +69,6 @@ def cali_flat_quant(model, dataloader, dev, logger):
     model.model.embed_tokens = model.model.embed_tokens.cpu()
     if hasattr(model.model, "rotary_emb"):
         model.model.rotary_emb = model.model.rotary_emb.cpu()
-    # raise ValueError("Only support for llama-2/Llama-3/qwen-2 now")
     torch.npu.empty_cache()
 
     # same input of first layer for fp model and quant model
