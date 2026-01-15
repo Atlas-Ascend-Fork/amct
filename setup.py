@@ -26,7 +26,7 @@ import setuptools
 tarfile.TarFile.format = tarfile.GNU_FORMAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
-print(f'current directortL {CUR_DIR}')
+print(f'current directort: {CUR_DIR}')
 
 class SetupTool():
     """ tool for setup """
@@ -87,5 +87,3 @@ if 'sdist' in sys.argv:
             CUR_DIR,
             'dist/amct_pytorch-{}-py3-none-{}.tar.gz'.format(
                 setup_tools.version, setup_tools.platform)))
-# else:
-#     shutil.rmtree(os.path.realpath(OP_TMP_DIR))
