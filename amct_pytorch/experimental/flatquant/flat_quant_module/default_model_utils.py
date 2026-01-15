@@ -4,7 +4,10 @@ import torch
 import torch_npu
 import torch.nn as nn
 import warnings
-import torch.nn.functional  as F
+
+from transformers.models.llama.modeling_llama import LlamaAttention, LlamaRotaryEmbedding, \
+                                                     apply_rotary_pos_emb, repeat_kv
+from transformers.activations import ACT2FN
 
 from .quant_utils import ActivationQuantizer
 from .function_utils import get_init_scale, get_decompose_dim
@@ -12,10 +15,6 @@ from .trans_utils import SVDSingleTransMatrix, SVDDecomposeTransMatrix
 from .flat_linear import FlatQuantizedLinear
 from .config_utils import InnerConfig
 
-
-from transformers.models.llama.modeling_llama import LlamaAttention, LlamaRotaryEmbedding, \
-                                                     apply_rotary_pos_emb, repeat_kv
-from transformers.activations import ACT2FN
 
 
 class FlatQuantAttention(nn.Module):

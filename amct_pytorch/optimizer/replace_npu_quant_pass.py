@@ -87,6 +87,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                 if not matched:
                     raise ValueError(f"object_name {object_name} not matched with required structure for self_attn")
                 layer_module = get_layer_from_submodule(model, object_name)
+                # reparameterize_ln needs to access layernorm and trans from higher level, so cannot be done within the module (same for mlp)
                 reparameterize_ln(layer_module.input_layernorm, object_module.ln_trans)
             npu_module = NpuFlatQuantAttention(object_module)
         elif isinstance(object_module, FlatQuantMLP):

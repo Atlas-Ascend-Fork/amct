@@ -15,10 +15,10 @@
 # limitations under the License.
 #
 import math
-from typing import Any, Dict, Optional, Tuple
-
 import torch
 import torch_npu
+
+from typing import Any, Dict, Optional, Tuple
 
 KRONECKER_QUANT_MAX_BATCH_SIZE = 32768
 
