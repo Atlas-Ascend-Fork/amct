@@ -44,12 +44,12 @@ class NpuFlatQuantAttention(nn.Module):
                     past_key_value, output_attentions, use_cache, **kwargs):
         bsz, q_len, _ = hidden_states.size()
 
-        # NPU operator torch_npu.npu_kronecker_quant requires that bsz is divisible by 16, so we pad it if it is not
+        # NPU operator torch_npu.npu_kronecker_quant requires that total data length (bsz * q_len) is divisible by 16, so we pad q_len if it is not
         # TODO: Remove if this is not required in the future
-        bsz_pad_size_after = 0
-        if bsz % 16:
-            bsz_pad_size_after = (bsz // 16 + 1) * 16 - bsz
-            padding = (0, 0) * (hidden_states.dim() - 1) + (0, bsz_pad_size_after)
+        q_len_pad_size_after = 0
+        if bsz % 16 and q_len % 16:
+            q_len_pad_size_after = (q_len // 16 + 1) * 16 - q_len
+            padding = (0, 0) * (hidden_states.dim() - 2) + (0, q_len_pad_size_after) + (0, 0)
             hidden_states = F.pad(hidden_states, padding, mode='constant', value=0)
 
         query_states = self.method.apply(
@@ -58,12 +58,10 @@ class NpuFlatQuantAttention(nn.Module):
              self.left_trans, self.right_trans, self.wt_k_packed, self.scale_k_proj, hidden_states)
         value_states = self.method.apply(
              self.left_trans, self.right_trans, self.wt_v_packed, self.scale_v_proj, hidden_states)
-
-        if bsz_pad_size_after:
-            query_states = query_states[:bsz]
-            key_states = key_states[:bsz]
-            value_states = value_states[:bsz]
-
+        if q_len_pad_size_after:
+            query_states = query_states[:, :q_len]
+            key_states = key_states[:, :q_len]
+            value_states = value_states[:, :q_len]
         return self.quant_module.forward_qkv(
             query_states, key_states, value_states, bsz, q_len,
             attention_mask, position_ids, past_key_value, output_attentions
@@ -107,10 +105,11 @@ class NpuFlatQuantMLP(nn.Module):
     def forward(self, x):
         # treat indivisible by 16 cases; same as the attention part
         # TODO: remove once allowed
-        bsz, bsz_pad_size_after = x.shape[0], 0
-        if bsz % 16:
-            bsz_pad_size_after = (bsz // 16 + 1) * 16 - bsz
-            padding = (0, 0) * (x.dim() - 1) + (0, bsz_pad_size_after)
+        bsz, q_len, _ = x.size()
+        q_len_pad_size_after = 0
+        if bsz % 16 and q_len % 16:
+            q_len_pad_size_after = (q_len // 16 + 1) * 16 - q_len
+            padding = (0, 0) * (x.dim() - 2) + (0, q_len_pad_size_after) + (0, 0)
             x = F.pad(x, padding, mode='constant', value=0)
 
         up_states = self.method.apply(self.ug_left_trans, self.ug_right_trans, self.wt_up_packed, self.scale_up_proj, x)
@@ -118,7 +117,7 @@ class NpuFlatQuantMLP(nn.Module):
         x_act_fn = self.quant_module.act_fn(gate_states) * up_states
         down_states = self.method.apply(self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn)
 
-        if bsz_pad_size_after:
-            down_states = down_states[:bsz]
+        if q_len_pad_size_after:
+            down_states = down_states[:, :q_len]
 
         return down_states

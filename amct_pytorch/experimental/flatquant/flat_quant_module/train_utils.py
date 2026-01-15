@@ -77,9 +77,7 @@ def cali_flat_quant(model, dataloader, dev, logger):
 
     loss_func = torch.nn.MSELoss()
     # start training
-    flat_parameters = {}
     num_train_layer = len(layers)
-    mse_dict = {}
     for i in range(num_train_layer):
         logger.info(f"========= Layer {i} =========")
         dtype_dict = {}
@@ -116,10 +114,7 @@ def cali_flat_quant(model, dataloader, dev, logger):
             paras_name.append("clip_factor_a")
 
         optimizer = torch.optim.AdamW(trained_params)
-        scheduler_main = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=InnerConfig.epochs.value * (InnerConfig.nsamples.value // InnerConfig.cali_bsz.value), eta_min=InnerConfig.flat_lr.value * 1e-3)
-        scheduler = scheduler_main
-        # check_params_grad(layer)
-        # set_quantizer_state(layer, False)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=InnerConfig.epochs.value * (InnerConfig.nsamples.value // InnerConfig.cali_bsz.value), eta_min=InnerConfig.flat_lr.value * 1e-3)
         for epoch in range(InnerConfig.epochs.value):
             mse = 0
             start_tick = time.time()
@@ -139,7 +134,6 @@ def cali_flat_quant(model, dataloader, dev, logger):
 
         fp_inps, fp_outs = fp_outs, fp_inps
         layers[i] = layer.to("cpu")
-        flat_parameters[i] = get_paras_dict_by_name(layer, required_names=paras_name)
         for name, param in layer.named_parameters():
             param.requires_grad = False
             if name in dtype_dict.keys():

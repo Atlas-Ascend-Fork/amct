@@ -50,7 +50,7 @@ ACC: {'arc_challenge': 42.83, 'arc_easy': 70.88, 'hellaswag': 73.63, 'lambada_op
 ```
 如下信息为perplexity（wikitext, max length 512）：
 ```
-PPL score: 7.74946928024292
+PPL score: 5.870388984680176
 ```
 如下信息为原始模型及真量化模型的推理速度（ms）:
 ```
