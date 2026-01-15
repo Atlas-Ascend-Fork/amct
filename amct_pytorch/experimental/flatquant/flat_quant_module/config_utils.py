@@ -11,20 +11,6 @@ class InnerConfig(Enum):
     w_groupsize = -1
     w_asym = False
 
-    # A special control for o_trans and o_proj (different from other proj)
-    use_o_quant = False
-
-    # calibration
-    epochs = 15
-    nsamples = 128
-    cali_bsz = 4
-    flat_lr = 5e-3
-    cali_trans = True
-    add_diag = True
-    lwc = True
-    lac = False
-    diag_alpha = 0.3
-
     # KV-cache quantization
     use_kcache_quant = False
     use_vcache_quant = False
@@ -32,3 +18,20 @@ class InnerConfig(Enum):
     k_asym = True
     v_bits = 16
     v_asym = True
+
+    # A special control for o_trans and o_proj (different from other proj)
+    use_o_quant = False
+
+    # Other quantization parameters
+    add_diag = True
+    lwc = True
+    lac = False
+    diag_alpha = 0.3
+
+    # Calibration
+    epochs = 15
+    nsamples = 128
+    cali_bsz = 4
+    flat_lr = 5e-3
+    cali_trans = True
+    

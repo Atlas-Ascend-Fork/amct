@@ -19,6 +19,7 @@ import amct_pytorch as amct
 
 from datetime import datetime
 from utils import get_llama, build_enc, seed_everything, get_wikitext2, create_logger, eval_total
+from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
 from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import save_flat_matrices, load_flat_matrices
 from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import cali_flat_quant
 
@@ -55,8 +56,7 @@ if __name__ == '__main__':
     logger.info(f"Time diff orig: {t_diff_orig}")
 
     # Phase1: quantize model
-    cfg = amct.INT4_FLAT_QUANT_CFG
-    amct.quantize(model, cfg)
+    amct.quantize(model, INT4_FLAT_QUANT_CFG)
     logger.info(f"Model after quantization: \n{model}")
 
     # Phase2: inference calibration model to cal quantized factors

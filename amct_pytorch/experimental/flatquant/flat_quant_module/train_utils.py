@@ -6,11 +6,16 @@ import torch_npu
 import torch.nn as nn
 import transformers
 
-from .function_utils import set_require_grad_all, get_n_set_parameters_byname, get_paras_dict_by_name
+from .function_utils import set_require_grad_all, get_n_set_parameters_byname
 from .config_utils import InnerConfig
 
 
 def cali_flat_quant(model, dataloader, dev, logger):
+    """
+    The parameters related to calibration (e.g. epochs, batch size, learning rate) can be adjusted in the "Calibration" section in the InnerConfig enum
+    """
+    # TODO: maybe standardize the configuration procedure for calibration in the future (also for other quant methods)
+
     model.eval()
     use_cache = model.config.use_cache
     model.config.use_cache = False
