@@ -32,14 +32,12 @@ SUPPORTED_QUANT_DTYPE_COMB = [
     'int8 int8',
     'NOT_QUANTIZE int8',
     'NOT_QUANTIZE int4',
-    'int4 int4'
 ]
 
 ALGORITHM_SUPPORTED_QUANT_TYPE_COMB = {
     'int8 int8': ['minmax', 'smoothquant'],
     'NOT_QUANTIZE int8': ['minmax', 'awq', 'gptq'],
     'NOT_QUANTIZE int4': ['minmax', 'awq', 'gptq'],
-    'int4 int4': ['flatquant_attn', 'flatquant_attn_spda', 'flatquant_mlp']
 }
 
 ALLOWED_WEIGHT_DTYPES = {

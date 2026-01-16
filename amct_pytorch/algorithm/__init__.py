@@ -40,4 +40,4 @@ AlgorithmRegistry.register('flatquant_attn', 'LlamaAttention', FlatQuantAttentio
 AlgorithmRegistry.register('flatquant_attn_spda', 'LlamaSdpaAttention', FlatQuantAttention, NpuFlatQuantAttention)
 AlgorithmRegistry.register('flatquant_mlp', 'LlamaMLP', FlatQuantMLP, NpuFlatQuantMLP)
 
-BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'flatquant_attn', 'flatquant_attn_spda', 'flatquant_mlp']
+BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant']
