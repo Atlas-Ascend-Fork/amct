@@ -14,21 +14,23 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import argparse
 import torch
 import torch_npu
 
-from utils import get_loaders, get_llama2, build_enc, get_calib_dataset, infer_model, test_ppl
+from utils import get_test_dataset, get_llama2, get_calib_dataset, infer_model, test_ppl
 import amct_pytorch as amct
 
 if __name__ == '__main__':
-    # Phase0: choose model && data
-    model, model_path = get_llama2('7b')
-    quant_model = model.eval().npu()
-    enc = build_enc(model_path)
+    parser = argparse.ArgumentParser(description="example")
+    parser.add_argument("--model_path", type=str, required=True, help="模型路径")
+    args = parser.parse_args()
 
-    samples = get_calib_dataset(
-        data="pileval", tokenizer=enc, n_samples=512, block_size=256
-    )
+    # Phase0: choose model && data
+    model, enc = get_llama2(args.model_path)
+    quant_model = model.eval().npu()
+
+    samples = get_calib_dataset(tokenizer=enc, n_samples=512, block_size=256)
     samples = torch.cat(samples, dim=0)[:1, :]
 
     # Phase1: quantize model
@@ -44,8 +46,6 @@ if __name__ == '__main__':
     torch_npu.npu.empty_cache()
 
     # Phase4: Test ppl result
-    testenc = get_loaders(dataset_name='wikitext2',
-                        enc=enc,
-                        seqlen=model.seqlen)
+    testenc = get_test_dataset(enc=enc, seqlen=model.seqlen)
     testenc = testenc.input_ids.npu()
     test_ppl(quant_model, testenc)
