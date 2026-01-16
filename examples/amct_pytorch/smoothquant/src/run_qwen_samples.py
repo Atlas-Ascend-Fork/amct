@@ -16,20 +16,22 @@
 
 import torch
 import torch_npu
+import argparse
 
-from utils import get_loaders, get_qwen3, build_enc, get_calib_dataset, infer_model, test_ppl
+from utils import get_loaders, get_qwen, get_calib_dataset, infer_model, test_ppl
 import amct_pytorch as amct
 
 if __name__ == '__main__':
-    # Phase0: choose model && data
-    model, model_path = get_qwen3('8b')
-    quant_model = model.eval().npu()
-    enc = build_enc(model_path)
+    parser = argparse.ArgumentParser(description="example")
+    parser.add_argument("--model_path", type=str, required=True, help="模型路径")
+    args = parser.parse_args()
 
-    samples = get_calib_dataset(
-        data="pileval", tokenizer=enc, n_samples=512, block_size=256
-    )
-    samples = torch.cat(samples, dim=0)[:128, :]
+    # Phase0: choose model && data
+    model, enc = get_qwen(args.model_path)
+    quant_model = model.eval().npu()
+
+    samples = get_calib_dataset(tokenizer=enc, n_samples=512, block_size=256)
+    samples = torch.cat(samples, dim=0)[:64, :]
 
     # Phase1: quantize model
     cfg = {
@@ -46,8 +48,8 @@ if __name__ == '__main__':
                 'strategy': 'tensor',
             },
         },
-        'algorithm': {'smoothquant': {'smooth_strength': 0.9}},
-        'skip_layers': {'lm_head'}
+        'algorithm': {'smoothquant': {'smooth_strength': 0.77}},
+        'skip_layers': {'lm_head', 'down_proj'}
     }
     amct.quantize(quant_model, cfg)
     
@@ -60,8 +62,6 @@ if __name__ == '__main__':
     torch_npu.npu.empty_cache()
 
     # Phase4: Test ppl result
-    testenc = get_loaders(dataset_name='wikitext2',
-                        enc=enc,
-                        seqlen=model.seqlen)
+    testenc = get_loaders(enc=enc, seqlen=model.seqlen)
     testenc = testenc.input_ids.npu()
     test_ppl(quant_model, testenc)
