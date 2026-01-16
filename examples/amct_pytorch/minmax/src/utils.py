@@ -28,21 +28,20 @@ def build_enc(model_path):
     return enc
 
 
-def get_llama2(model, seqlen=2048):
+def get_llama2(model_path, seqlen=2048):
     '''If model is specified from ['7b', '13b', '70b'], then we load official pretrained model;
        If you want to load checkpoints other than the official ones, please specifiy the model path,
        otherwise please choose from ['7b', '13b', '70b'] for better clarity
     '''
-    if model in ['7b', '13b', '70b']:
-        model_path = f'/data/Models/pytorch/Llama2/Llama2_{model}_hf'
-        print(f'Getting official pretrained Llama2-{model}')
-    else:
-        model_path = model
-    
+    print(f'Getting official pretrained {model_path}')
+
     model = LlamaForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, offload_folder="offload/")
 
     model.seqlen = seqlen
-    return model, model_path
+    enc = AutoTokenizer.from_pretrained(
+            model_path, use_fast=False, trust_remote_code=True
+    )
+    return model, enc
 
 
 def get_qwen2(model, seqlen=2048):
@@ -79,20 +78,18 @@ def get_qwen3(model, seqlen=2048):
     return model, model_path
 
 
-def get_loaders(dataset_name: str, enc, seqlen):
-    if dataset_name == 'wikitext2':
-        print('Loading dataset: Wikitext2')
-        testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
-        testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
+def get_loaders(enc, seqlen):
+    print('Loading dataset: Wikitext2')
+    testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+    testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
     
     return testenc
 
 
-def get_calib_dataset(data="pileval", tokenizer=None, n_samples=512, block_size=512):
-    if data == "pileval":
-        dataset = load_from_disk('/pile_val_backup')
-    else:
-        raise NotImplementedError
+def get_calib_dataset(tokenizer=None, n_samples=512, block_size=512):
+    print('Loading dataset: pileval')
+    dataset = load_dataset("mit-han-lab/pile-val-backup")
+    dataset = dataset["validation"]
     dataset = dataset.shuffle(seed=42)
     samples = []
     n_run = 0
