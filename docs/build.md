@@ -81,9 +81,8 @@ bash build.sh --pkg
 - 安装依赖
 
   ```bash
-  # 安装根目录requirements.txt依赖 
-  cd amct & pip3 install -r requirements.txt
-  pip3 install coverage
+  # 安装测试目录requirements.txt依赖 
+  cd tests && pip3 install -r requirements.txt
   ```
 
 - 执行测试用例：
