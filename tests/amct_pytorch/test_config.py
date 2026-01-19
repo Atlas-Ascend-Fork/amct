@@ -150,8 +150,8 @@ class TestConfigParse(unittest.TestCase):
             
             self.assertIn('Weights quant_dtype only support', str(e))
     
-    def test_invalid_wts_symmtric(self):
-        invalid_symmtric_cfg = {
+    def test_invalid_wts_symmetric(self):
+        invalid_symmetric_cfg = {
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {
@@ -166,7 +166,7 @@ class TestConfigParse(unittest.TestCase):
         }
 
         try:
-            detail_config = parse_config(self.test_model, invalid_symmtric_cfg, AlgorithmRegistry)
+            detail_config = parse_config(self.test_model, invalid_symmetric_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Weights symmetric only support bool [True, False], but got', str(e))

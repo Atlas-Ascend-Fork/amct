@@ -26,10 +26,10 @@ minmax算法支持仅权重量化和全量化，支持的量化类型以及量�
 |batch_num|uint32|量化使用的batch数量 |1|/|
 |skip_layers|str|跳过量化的层 |/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
 |weights.type|str|量化后权重类型|'int4'/'int8'|/|
-|weights.symmtric|bool|对称量化|TRUE/FALSE|/|
+|weights.symmetric|bool|对称量化|TRUE/FALSE|/|
 |weights.strategy|str|量化粒度|'tensor'/'channel'|/|
 |inputs.type|str|量化后权重类型|'int8'|全量化场景不支持配置权重量化类型int4|
-|inputs.symmtric|bool|对称量化|TRUE/FALSE|/|
+|inputs.symmetric|bool|对称量化|TRUE/FALSE|/|
 |inputs.strategy|str|量化粒度|'tensor'/'token'|/|
 |algorithm|dict|量化使用的算法配置|{'minmax'}|/|
 
