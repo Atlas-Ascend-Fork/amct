@@ -1,4 +1,4 @@
-# AMCT大模型LLAMA2量化
+# AMCT大模型GPTQ量化
 
 ## 1 量化前提
 
@@ -58,7 +58,7 @@ Score:  5.477707
 | 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
 | :-: | :-: | :-: | :-: | :-: |
 |LLAMA2-7B|pileval|wikitext2|5.472|5.601|
-|QWEN2-7B|pileval|wikitext2|7.137|7.208|
+|QWEN2-7B|pileval|wikitext2|7.137|7.253|
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log

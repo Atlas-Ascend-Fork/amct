@@ -1,0 +1,13 @@
+torch==2.5.1
+transformers==4.52.4
+accelerate==1.12.0
+safetensors==0.5.3
+compressed-tensors==0.10.1
+numpy==1.26.4
+scipy==1.15.2
+einops==0.8.1
+loguru==0.7.3
+tqdm==4.67.1
+datasets==2.20.0
+zipp==3.23.0
+zstandard==0.25.0

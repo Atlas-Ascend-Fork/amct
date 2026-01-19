@@ -18,11 +18,10 @@ import torch
 import tqdm
 import torch.nn as nn
 from datasets import load_dataset, load_from_disk
-from transformers import AutoTokenizer, AutoConfig, LlamaForCausalLM, AutoModelForCausalLM
+from transformers import AutoTokenizer, LlamaForCausalLM, AutoModelForCausalLM
 
 
 def build_enc(model_path):
-    config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
     enc = AutoTokenizer.from_pretrained(
             model_path, use_fast=False, trust_remote_code=True
         )

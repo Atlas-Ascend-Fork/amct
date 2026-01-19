@@ -69,7 +69,7 @@
 bash build.sh --pkg
 ```
 
-编译成功后，会在项目根目录的build_out目录下生成`cann-amct_pytorch_${version}_linux-${arch}.tar.gz`。
+编译成功后，会在项目根目录的build_out目录下生成`amct_pytorch_${version}-py3-none-linux-${arch}.tar.gz`。
 
 - ${version}表示版本号。
 - ${arch}表示表示CPU架构，如aarch64、x86_64。
@@ -103,7 +103,7 @@ bash build.sh --pkg
 - 安装[编译执行](#编译执行)环节生成的run包（如果安装用户为root，请将安装命令中的--user删除）。
 
   ```bash
-  pip3 install cann-amct_pytorch_${cann_version}_linux-${arch}.tar.gz --user
+  pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user
   ```
 
 - 卸载

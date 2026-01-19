@@ -27,6 +27,7 @@ amct:
       - docs
       - examples
       - tests
+      - amct_pytorch/experimental
 
   llt:
     ut_check:true
