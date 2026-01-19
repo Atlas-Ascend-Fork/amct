@@ -33,7 +33,7 @@ experience中存放LLM量化和推理的典型模型sample，不依赖框架，�
 
 训练阶段，根据实际需要修改`w_bits`、`a_bits`、`q_bits`、`k_bits`和`v_bits`，进行C8训练时请保证cls传入c8，否则会导致MLA部分的训练参数无梯度，训练MOE时请将cls调整至bf16
 
-测试阶段，根据实际需要修改`w_bits`、`a_bits`、`q_bits`、`k_bits`和`v_bits`，同时需要修改train_mode，根据量化MLA、MOE、均量化、不量化依次分为：`mla`、`moe`、`block`、`origin`
+测试阶段，根据实际需要修改`w_bits`、`a_bits`、`q_bits`、`k_bits`和`v_bits`，同时需要修改train_mode，根据仅量化MLA、仅量化MOE、MLA+MOE均量化、不量化依次分为：`mla`、`moe`、`block`、`origin`
 ### 数据提取
 ```
 python3 extract_calib_data.py --model $model_path --output_dir $output_dir
