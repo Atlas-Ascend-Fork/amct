@@ -14,7 +14,7 @@ def get_decompose_dim(n):
     if a * a < n:
         a += 1
     while True:
-        tmp = a*a - n
+        tmp = a * a - n
         b = int(math.sqrt(tmp))
         if b * b == tmp:
             break

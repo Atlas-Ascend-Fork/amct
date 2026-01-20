@@ -3,10 +3,8 @@ import torch.nn.functional as F
 
 from torch import nn
 from amct_pytorch.experimental.flatquant.flat_quant_module.default_model_utils import FlatQuantAttention, FlatQuantMLP
-from amct_pytorch.experimental.flatquant.flat_quant_module.quant_utils import ActivationQuantizer
-from amct_pytorch.experimental.flatquant.flat_quant_module.trans_utils import kronecker_matmul
 from .quant_utils import (
-    AscendW4A4FlatQuantDynamicLinearMethod, get_decompose_dim, pack_int4_weights)
+    AscendW4A4FlatQuantDynamicLinearMethod, pack_int4_weights)
 
 
 class NpuFlatQuantAttention(nn.Module):

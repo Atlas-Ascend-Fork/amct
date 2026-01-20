@@ -25,10 +25,8 @@ from amct_pytorch.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
-from amct_pytorch.experimental.flatquant.flat_quant_module.default_model_utils import FlatQuantAttention, FlatQuantMLP
 from amct_pytorch.deploy_op.npu_quantization_linear import NpuQuantizationLinear
 from amct_pytorch.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
-from amct_pytorch.experimental.flatquant.npu_flat_quant_module.flat_quant_module import NpuFlatQuantAttention, NpuFlatQuantMLP
 
 
 AlgorithmRegistry = Algorithm()
@@ -36,8 +34,5 @@ AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
 AlgorithmRegistry.register('awq', 'Linear', LinearAWQuant, NpuWeightQuantizedLinear)
 AlgorithmRegistry.register('smoothquant', 'Linear', SmoothQuant, NpuQuantizationLinear)
 AlgorithmRegistry.register('minmax', 'Linear', MinMaxQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
-AlgorithmRegistry.register('flatquant_attn', 'LlamaAttention', FlatQuantAttention, NpuFlatQuantAttention)
-AlgorithmRegistry.register('flatquant_attn_spda', 'LlamaSdpaAttention', FlatQuantAttention, NpuFlatQuantAttention)
-AlgorithmRegistry.register('flatquant_mlp', 'LlamaMLP', FlatQuantMLP, NpuFlatQuantMLP)
 
 BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant']

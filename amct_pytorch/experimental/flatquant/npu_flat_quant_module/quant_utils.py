@@ -31,19 +31,6 @@ def pack_int4_weights(weight_tensor: torch.Tensor) -> torch.Tensor:
     return weight_int4_packed.to(original_device)
 
 
-def get_decompose_dim(n):
-    a = int(math.sqrt(n))
-    if a * a < n:
-        a += 1
-    while True:
-        tmp = a * a - n
-        b = int(math.sqrt(tmp))
-        if b * b == tmp:
-            break
-        a += 1
-    return a - b, a + b
-
-
 # TODO: This function is a temporary workaround for the npu_kronecker_quant operator,
 # which has a limitation on the maximum batch size (dim0). This wrapper should be
 # removed once the operator supports larger inputs natively.
