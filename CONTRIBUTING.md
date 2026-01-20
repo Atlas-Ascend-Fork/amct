@@ -52,7 +52,7 @@
 - 请检查您所使用的LICENSE是否合规，建议使用Apache 2.0等协议，并按照实际情况标注版权信息。
 
 ### 目录结构参考
-如果您贡献的特性尚未经过较强的泛化性测试，建议您将特性代码合入到experimental目录下，您可以参考以下结构组织您的代码和文档：
+如果您贡献的特性尚未经过较强的泛化性测试，建议您将特性代码合入到experimental目录下（如amct_pytorch/experimental），您可以参考以下结构组织您的代码和文档：
 ```
 ├── experimental                             # 实验特性
 |  ├── sample1                               # 特性名称（如custom_defined_quantize_alg）
