@@ -17,10 +17,10 @@
 
 def get_alg_name_from_config(alg):
     if isinstance(alg, dict):
-        return list(alg.keys())[0], alg.get(list(alg.keys())[0])
+        return list(alg.keys()), [alg.get(key) for key in list(alg.keys())]
     elif isinstance(alg, set):
-        return list(alg)[0], None
+        return list(alg), [None] * len(alg)
     elif isinstance(alg, str):
-        return alg, None
+        return [alg], [None]
     else:
         raise ValueError(f'invalid algo name, pls check config')
