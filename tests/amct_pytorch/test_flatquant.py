@@ -74,7 +74,6 @@ class TestFlatQuant(unittest.TestCase):
         }
 
         config = transformers.LlamaConfig.from_pretrained(LLAMA2_7B_MODEL_PATH, attn_implementation='eager')
-        config._attn_implementation_internal = "eager"
         model = transformers.LlamaForCausalLM.from_pretrained(
             LLAMA2_7B_MODEL_PATH, torch_dtype='auto', config=config,
             use_auth_token=None, low_cpu_mem_usage=True)
