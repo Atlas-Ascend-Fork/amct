@@ -13,15 +13,17 @@
 
 import argparse
 import os
+
+from datetime import datetime
+
 import torch
 import torch_npu
 import amct_pytorch as amct
 
-from datetime import datetime
-from utils import get_llama, build_enc, seed_everything, get_wikitext2, create_logger, eval_total
 from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
 from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import save_flat_matrices, load_flat_matrices
 from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import cali_flat_quant
+from utils import get_llama, build_enc, seed_everything, get_wikitext2, create_logger, eval_total
 
 
 if __name__ == '__main__':
@@ -29,7 +31,10 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, required=True, help='model location')
     parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
     parser.add_argument('--load_matrix', action='store_true', help="whether to load matrix")
-    parser.add_argument('--flat_matrix_path', type=str, default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location')
+    parser.add_argument(
+        '--flat_matrix_path', type=str, 
+        default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location'
+    )
     parser.add_argument('--eval_fake_quant', action='store_true', help="whether to evaluate fake quant")
     args = parser.parse_args()
 

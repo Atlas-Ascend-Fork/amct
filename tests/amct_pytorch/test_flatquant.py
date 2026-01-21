@@ -13,14 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import os
 import unittest
-import sys
 import transformers
 
 from amct_pytorch import quantize, convert
 
 # Customize accordingly
 LLAMA2_7B_MODEL_PATH = "meta-llama/Llama-2-7b-hf"
+RUN_SKIPPED = os.getenv('RUN_SKIPPED_TESTS', 'False').lower() == 'true'
 
 class TestFlatQuant(unittest.TestCase):
     '''
@@ -40,6 +41,7 @@ class TestFlatQuant(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @unittest.skipIf(not RUN_SKIPPED, "Skip by default due to requiring the actual Llama model")
     def test_int4_tensor_sym_flatquant_success(self):
         cfg = {
             'batch_num': 4,

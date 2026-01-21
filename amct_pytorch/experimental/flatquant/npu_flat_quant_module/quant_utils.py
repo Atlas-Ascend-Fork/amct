@@ -14,11 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import math
+from typing import Optional, Tuple
+
 import torch
 import torch_npu
 
-from typing import Any, Dict, Optional, Tuple
 
 KRONECKER_QUANT_MAX_BATCH_SIZE = 32768
 
@@ -66,10 +66,10 @@ def tensor_int32_to_int4s_torch(tensor_int32: torch.Tensor, output_dtype) -> tor
     if tensor_int32.dtype != torch.int32:
         raise TypeError(f"Expected int32 input, got {tensor_int32.dtype}")
 
-    K, M, N = tensor_int32.shape
+    k, m, n = tensor_int32.shape
     device = tensor_int32.device
 
-    # Flatten to (K*M*N,)
+    # Flatten to (k*m*n,)
     x_flat = tensor_int32.reshape(-1)
 
     # Prepare shifts: [0, 4, 8, ..., 28] (int32, same device)
@@ -80,7 +80,7 @@ def tensor_int32_to_int4s_torch(tensor_int32: torch.Tensor, output_dtype) -> tor
     # This matches: np.where(shifted & 0x8, shifted - 16, shifted)
     signed = torch.where(nibbles & 0x8 != 0, nibbles - 16, nibbles)
 
-    out = signed.to(output_dtype).reshape(K, M, N * 8)
+    out = signed.to(output_dtype).reshape(k, m, n * 8)
     return out
 
 
@@ -97,54 +97,6 @@ class AscendW4A4FlatQuantDynamicLinearMethod:
     def __init__(self):
         self.transpose_weight = False
         self.sym = True
-
-    @staticmethod
-    def get_weight(input_size: int, output_size: int,
-                   params_dtype: torch.dtype) -> Dict[str, Any]:
-        if input_size % 8 != 0:
-            raise ValueError(
-                f"input_size ({input_size}) must be divisible by 8 for int4 packing"
-            )
-        AscendW4A4FlatQuantDynamicLinearMethod.input_size = input_size
-        params_dict = {
-            "weight": torch.empty(output_size, input_size, dtype=torch.int8)
-        }
-        return params_dict
-
-    @staticmethod
-    def get_pertensor_param(params_dtype: torch.dtype) -> Dict[str, Any]:
-        params_dict = {}
-        left_trans_dim, right_trans_dim = get_decompose_dim(
-            AscendW4A4FlatQuantDynamicLinearMethod.input_size)
-        params_dict["left_trans"] = torch.empty(left_trans_dim,
-                                                left_trans_dim,
-                                                dtype=params_dtype)
-        params_dict["right_trans"] = torch.empty(right_trans_dim,
-                                                 right_trans_dim,
-                                                 dtype=params_dtype)
-        params_dict["clip_ratio"] = torch.empty(1, dtype=torch.float32)
-        return params_dict
-
-    @staticmethod
-    def get_perchannel_param(
-        output_size: int,
-        params_dtype: torch.dtype,
-    ) -> Dict[str, Any]:
-        params_dict = {}
-        params_dict["weight_scale"] = torch.empty(output_size,
-                                                  1,
-                                                  dtype=torch.float32)
-        params_dict["weight_offset"] = torch.empty(output_size,
-                                                   1,
-                                                   dtype=torch.float32)
-        return params_dict
-
-    def get_pergroup_param(self,
-                           input_size: int,
-                           output_size: int,
-                           params_dtype: torch.dtype,
-                           layer_type: Optional[str] = None) -> Dict[str, Any]:
-        return {}
 
     @staticmethod
     def apply(

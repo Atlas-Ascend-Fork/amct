@@ -11,9 +11,10 @@
 # http://www.apache.org/licenses/LICENSE-2.0
 # ----------------------------------------------------------------------------
 
+import random
+
 import logging
 import datasets
-import random
 import torch
 import transformers
 import lm_eval
@@ -51,8 +52,8 @@ def build_enc(model_path):
 
 
 def get_llama(model_path, hf_token=None):
-    config = transformers.LlamaConfig.from_pretrained(model_path)
-    config._attn_implementation_internal = "eager"
+    config = transformers.LlamaConfig.from_pretrained(
+        model_path, attn_implementation='eager')
     model = transformers.LlamaForCausalLM.from_pretrained(
         model_path, torch_dtype='auto', config=config,
         use_auth_token=hf_token, low_cpu_mem_usage=True)
@@ -69,9 +70,8 @@ def get_wikitext2(nsamples, seed, seqlen, tokenizer, eval_mode=False):
     else:
         traindata = datasets.load_dataset('wikitext', 'wikitext-2-raw-v1')["train"]
         traindata = traindata.filter(lambda x: len(x) > 0)
-        traindata = traindata.map(lambda x : {'text': x['text'].strip()})
+        traindata = traindata.map(lambda x: {'text': x['text'].strip()})
         trainenc = tokenizer("\n\n".join(traindata['text']), return_tensors='pt')    
-        # random.seed(seed)
         trainloader = []
         for _ in range(nsamples):
             i = random.randint(0, trainenc.input_ids.shape[1] - seqlen - 1)

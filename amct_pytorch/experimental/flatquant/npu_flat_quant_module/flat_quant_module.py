@@ -23,9 +23,12 @@ class NpuFlatQuantAttention(nn.Module):
         wt_v_proj, self.scale_v_proj = quant_module.v_proj.weight_quantizer.quantize(
             quant_module.v_proj.linear.weight, quantonly=True)
         
-        self.register_parameter('wt_q_packed', torch.nn.Parameter(pack_int4_weights(wt_q_proj.data), requires_grad=False))
-        self.register_parameter('wt_k_packed', torch.nn.Parameter(pack_int4_weights(wt_k_proj.data), requires_grad=False))
-        self.register_parameter('wt_v_packed', torch.nn.Parameter(pack_int4_weights(wt_v_proj.data), requires_grad=False))
+        self.register_parameter('wt_q_packed', torch.nn.Parameter(pack_int4_weights(wt_q_proj.data),
+                                                                  requires_grad=False))
+        self.register_parameter('wt_k_packed', torch.nn.Parameter(pack_int4_weights(wt_k_proj.data),
+                                                                  requires_grad=False))
+        self.register_parameter('wt_v_packed', torch.nn.Parameter(pack_int4_weights(wt_v_proj.data),
+                                                                  requires_grad=False))
         
         self.left_trans = quant_module.ln_trans.matrix_left.T # transpose
         self.right_trans = quant_module.ln_trans.matrix_right
@@ -42,7 +45,8 @@ class NpuFlatQuantAttention(nn.Module):
                     past_key_value, output_attentions, use_cache, **kwargs):
         bsz, q_len, _ = hidden_states.size()
 
-        # NPU operator torch_npu.npu_kronecker_quant requires that total data length (bsz * q_len) is divisible by 16, so we pad q_len if it is not
+        # NPU operator torch_npu.npu_kronecker_quant requires that total data length (bsz * q_len)
+        # is divisible by 16, so we pad q_len if it is not
         # TODO: Remove if this is not required in the future
         q_len_pad_size_after = 0
         if bsz % 16 and q_len % 16:
@@ -82,9 +86,12 @@ class NpuFlatQuantMLP(nn.Module):
         wt_down_proj, self.scale_down_proj = quant_module.down_proj.weight_quantizer.quantize(
             quant_module.down_proj.linear.weight, quantonly=True)
 
-        self.register_parameter('wt_up_packed', torch.nn.Parameter(pack_int4_weights(wt_up_proj.data), requires_grad=False))
-        self.register_parameter('wt_gate_packed', torch.nn.Parameter(pack_int4_weights(wt_gate_proj.data), requires_grad=False))
-        self.register_parameter('wt_down_packed', torch.nn.Parameter(pack_int4_weights(wt_down_proj.data), requires_grad=False))
+        self.register_parameter('wt_up_packed', torch.nn.Parameter(pack_int4_weights(wt_up_proj.data),
+                                                                      requires_grad=False))
+        self.register_parameter('wt_gate_packed', torch.nn.Parameter(pack_int4_weights(wt_gate_proj.data),
+                                                                      requires_grad=False))
+        self.register_parameter('wt_down_packed', torch.nn.Parameter(pack_int4_weights(wt_down_proj.data),
+                                                                      requires_grad=False))
 
         self.ug_left_trans = quant_module.up_gate_trans.matrix_left.T
         self.ug_right_trans = quant_module.up_gate_trans.matrix_right
@@ -111,9 +118,11 @@ class NpuFlatQuantMLP(nn.Module):
             x = F.pad(x, padding, mode='constant', value=0)
 
         up_states = self.method.apply(self.ug_left_trans, self.ug_right_trans, self.wt_up_packed, self.scale_up_proj, x)
-        gate_states = self.method.apply(self.ug_left_trans, self.ug_right_trans, self.wt_gate_packed, self.scale_gate_proj, x)
+        gate_states = self.method.apply(
+            self.ug_left_trans, self.ug_right_trans, self.wt_gate_packed, self.scale_gate_proj, x)
         x_act_fn = self.quant_module.act_fn(gate_states) * up_states
-        down_states = self.method.apply(self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn)
+        down_states = self.method.apply(
+            self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn)
 
         if q_len_pad_size_after:
             down_states = down_states[:, :q_len]
