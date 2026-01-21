@@ -19,7 +19,6 @@ def kronecker_matmul(x, hadL, hadR):
 
 
 def reparameterize_ln(ln, trans):
-    # assert isinstance(ln, (LlamaRMSNorm, Qwen2RMSNorm))
     ln_weight = ln.weight.data
     ori_dtype = ln_weight.dtype
     ln_weight = ln_weight.to(torch.float64)

@@ -134,7 +134,8 @@ def get_supported_layers(model, quant_config, registed_alg):
                 continue
             if not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
                 continue
-        detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} # each module can only be assigned one algorithm 
+        # each module can only be assigned one algorithm
+        detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} 
         detail_config[name] = quant_config.batch_num.get_value() \
             | quant_config.quant_cfg.get_value() | detail_config_algo
     return detail_config

@@ -194,7 +194,6 @@ class FlatQuantAttention(nn.Module):
             attn_output = self.o_proj._ori_forward(attn_output)
         else:
             if self.o_trans is None and self.vcache_trans is not None:
-                # attn_output = self.vcache_trans(value_states)
                 init_shape = attn_output.shape
                 attn_output = attn_output.reshape(-1, self.module_config.num_attention_heads, self.module_config.hidden_size//self.module_config.num_attention_heads)
                 attn_output = torch.matmul(attn_output, self.vcache_trans.get_matrix(inv_t=True).T.to(attn_output)).reshape(init_shape)

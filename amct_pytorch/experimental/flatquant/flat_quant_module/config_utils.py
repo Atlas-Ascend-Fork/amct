@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class InnerConfig(Enum):
     # activation
     a_bits = 4

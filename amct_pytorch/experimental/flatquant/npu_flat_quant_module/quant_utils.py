@@ -89,8 +89,10 @@ class AscendW4A4FlatQuantDynamicLinearMethod:
     
     This class implements W4A4 quantization with FlatQuant approach and dynamic activation quantization.
     - Weight: 4-bit quantization (per-channel) with scale and offset, stored as int8 and packed to int32 during loading
-    - Activation: 4-bit dynamic quantization with FlatQuant transform matrices (left_trans, right_trans) for distribution smoothing
-    - Parameters: clip_ratio for controlling quantization clipping, weight_offset for asymmetric quantization, loaded from external weights
+    - Activation: 4-bit dynamic quantization with FlatQuant transform matrices (left_trans, right_trans)
+        for distribution smoothing
+    - Parameters: clip_ratio for controlling quantization clipping, weight_offset for asymmetric quantization, 
+        loaded from external weights
     """
     input_size = 0
 

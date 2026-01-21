@@ -1,5 +1,6 @@
 import torch
 
+
 def round_ste(x: torch.Tensor):
     """
     Implement Straight-Through Estimator for rounding operation.
@@ -89,10 +90,6 @@ class ActivationQuantizer(torch.nn.Module):
         xmax, xmin = reshaped_x.amax(1, keepdim=True), reshaped_x.amin(1, keepdim=True)
         tmp = torch.zeros_like(xmax)
         xmax, xmin = torch.maximum(xmax, tmp), torch.minimum(xmin, tmp)
-        # # if self.groupsize > 0:
-        # #     assert x.shape[-1] % self.groupsize == 0
-        # #     x = x.reshape((-1, self.groupsize))
-        # #     # TODO: add padding
         if self.lac:
             xmax = xmax * self.sigmoid(self.clip_factor_a_max)
             xmin = xmin * self.sigmoid(self.clip_factor_a_min)

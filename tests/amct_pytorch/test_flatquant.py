@@ -23,6 +23,7 @@ from amct_pytorch import quantize, convert
 LLAMA2_7B_MODEL_PATH = "meta-llama/Llama-2-7b-hf"
 RUN_SKIPPED = os.getenv('RUN_SKIPPED_TESTS', 'False').lower() == 'true'
 
+
 class TestFlatQuant(unittest.TestCase):
     '''
     ST FOR FLATQUANT ALGORITHM
@@ -72,7 +73,7 @@ class TestFlatQuant(unittest.TestCase):
             'skip_layers': {'lm_head'}
         }
 
-        config = transformers.LlamaConfig.from_pretrained(LLAMA2_7B_MODEL_PATH)
+        config = transformers.LlamaConfig.from_pretrained(LLAMA2_7B_MODEL_PATH, attn_implementation='eager')
         config._attn_implementation_internal = "eager"
         model = transformers.LlamaForCausalLM.from_pretrained(
             LLAMA2_7B_MODEL_PATH, torch_dtype='auto', config=config,

@@ -18,12 +18,12 @@ from datetime import datetime
 
 import torch
 import torch_npu
+from utils import get_llama, build_enc, seed_everything, get_wikitext2, create_logger, eval_total
 import amct_pytorch as amct
 
 from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
 from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import save_flat_matrices, load_flat_matrices
 from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import cali_flat_quant
-from utils import get_llama, build_enc, seed_everything, get_wikitext2, create_logger, eval_total
 
 
 if __name__ == '__main__':
