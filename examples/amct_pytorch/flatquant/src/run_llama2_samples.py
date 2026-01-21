@@ -28,8 +28,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, required=True, help='model location')
     parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
-    parser.add_argument('--load_matrix', action='store_true', help="whether load matrix")
+    parser.add_argument('--load_matrix', action='store_true', help="whether to load matrix")
     parser.add_argument('--flat_matrix_path', type=str, default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location')
+    parser.add_argument('--eval_fake_quant', action='store_true', help="whether to evaluate fake quant")
     args = parser.parse_args()
 
     logger = create_logger()
@@ -69,8 +70,9 @@ if __name__ == '__main__':
     model.to(args.device)
     torch_npu.npu.empty_cache()
 
-    # Evaluate fake quant (uncomment when needed), much slower than real quant
-    # eval_total(args.task_path, model, tokenizer, calib_dataset_eval, logger)
+    # Optionally evaluate fake quant; much slower than real quant
+    if args.eval_fake_quant:
+        eval_total(args.task_path, model, tokenizer, calib_dataset_eval, logger)
 
     # Phase3: convert deploy model
     amct.convert(model)

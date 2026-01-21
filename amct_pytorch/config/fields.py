@@ -198,7 +198,6 @@ class CustomAlgField():
 
 class AlgorithmField():
     def __init__(self, alg_cfg, alg_reg):
-        # self.check(alg_cfg)
         alg_names, alg_attrs = get_alg_name_from_config(alg_cfg)
         assert len(alg_names) == len(alg_attrs), "alg_names and alg_attrs should have the same length"
         for alg_name in alg_names:
