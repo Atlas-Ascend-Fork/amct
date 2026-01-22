@@ -15,8 +15,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import re
-
 from amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.utils.model_util import ModuleHelper
@@ -73,7 +71,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                 npu_module = NpuWeightQuantizedLinear(object_module)
         elif type(object_module).__name__ == 'FlatQuantAttention' or type(object_module).__name__ == 'FlatQuantMLP':
             # We needs to access layernorm and trans from higher level, so it cannot be done within the module
-            # TODO: eventually we need to decouple the experimental part and avoid importing from it
+            # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
             from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
             npu_module = get_replacement_module(model, type(object_module).__name__, object_name, object_module)
         else:
