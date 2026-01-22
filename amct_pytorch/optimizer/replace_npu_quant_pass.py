@@ -23,10 +23,7 @@ from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.utils.model_util import ModuleHelper
 from amct_pytorch.deploy_op import NpuQuantizationLinear
 from amct_pytorch.deploy_op import NpuWeightQuantizedLinear
-from amct_pytorch.experimental.flatquant.npu_flat_quant_module.flat_quant_module\
-     import NpuFlatQuantAttention, NpuFlatQuantMLP
 from amct_pytorch.quantize_op import MinMaxQuant
-from amct_pytorch.experimental.flatquant.flat_quant_module.default_model_utils import FlatQuantAttention, FlatQuantMLP
 from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import reparameterize_ln
 from amct_pytorch.algorithm import AlgorithmRegistry
 
@@ -74,6 +71,13 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                     object_name: name of object_module
         Return: None
         """
+
+        # TODO: eventually we need to decouple the experimental part and avoid importing from it
+        from amct_pytorch.experimental.flatquant.flat_quant_module.default_model_utils\
+             import FlatQuantAttention, FlatQuantMLP
+        from amct_pytorch.experimental.flatquant.npu_flat_quant_module.flat_quant_module\
+             import NpuFlatQuantAttention, NpuFlatQuantMLP
+
         if not AlgorithmRegistry.quant_to_deploy[type(object_module)]:
             raise RuntimeError(f"The deploy_op for {type(object_module).__name__} is None! "
                                "pls invoke algorithm_register to register deploy_op!")
