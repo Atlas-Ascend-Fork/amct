@@ -71,12 +71,6 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         Return: None
         """
 
-        # TODO: eventually we need to decouple the experimental part and avoid importing from it
-        from amct_pytorch.experimental.flatquant.flat_quant_module.default_model_utils\
-             import FlatQuantAttention, FlatQuantMLP
-        from amct_pytorch.experimental.flatquant.npu_flat_quant_module.flat_quant_module\
-             import NpuFlatQuantAttention, NpuFlatQuantMLP
-        from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import reparameterize_ln
         if not AlgorithmRegistry.quant_to_deploy[type(object_module)]:
             raise RuntimeError(f"The deploy_op for {type(object_module).__name__} is None! "
                                "pls invoke algorithm_register to register deploy_op!")
@@ -86,7 +80,12 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                 npu_module = NpuQuantizationLinear(object_module)
             else:
                 npu_module = NpuWeightQuantizedLinear(object_module)
-        elif isinstance(object_module, FlatQuantAttention):
+        elif type(object_module).__name__ == 'FlatQuantAttention':
+            # TODO: eventually we need to decouple the experimental part and avoid importing from it
+            # (same for FlatQuantMLP)
+            from amct_pytorch.experimental.flatquant.npu_flat_quant_module.flat_quant_module\
+             import NpuFlatQuantAttention
+            from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import reparameterize_ln
             object_module.reparameterize()
             if object_module.ln_trans is not None and object_module.ln_trans.add_diag:
                 matched = re.match(r".*\.layers\..*\.self_attn", object_name)
@@ -97,7 +96,10 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                 # so it cannot be done within the module (same for mlp)
                 reparameterize_ln(layer_module.input_layernorm, object_module.ln_trans)
             npu_module = NpuFlatQuantAttention(object_module)
-        elif isinstance(object_module, FlatQuantMLP):
+        elif type(object_module).__name__ == 'FlatQuantMLP':
+            from amct_pytorch.experimental.flatquant.npu_flat_quant_module.flat_quant_module\
+             import NpuFlatQuantMLP
+            from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import reparameterize_ln
             object_module.reparameterize()
             if object_module.up_gate_trans is not None and object_module.up_gate_trans.add_diag:
                 matched = re.match(r".*\.layers\..*\.mlp", object_name)
