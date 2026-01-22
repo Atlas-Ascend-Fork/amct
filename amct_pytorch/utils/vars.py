@@ -17,7 +17,7 @@
 import torch
 
 SUPPORT_WEIGHT_QUANT_DTYPE = ['int8', 'int4']
-SUPPORT_INPUT_QUANT_DTYPE = ['int8']
+SUPPORT_INPUT_QUANT_DTYPE = ['int8', 'int4']
 SUPPORT_QUANT_STRATEGY_WEIGHT = ['tensor', 'channel', 'group']
 SUPPORT_QUANT_STRATEGY_INPUT = ['tensor', 'token']
 
