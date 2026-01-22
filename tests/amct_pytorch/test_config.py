@@ -228,7 +228,7 @@ class TestConfigParse(unittest.TestCase):
                     'strategy': 'channel'
                 },
                 'inputs': {
-                    'type': 'int4',
+                    'type': 'uint4',
                     'symmetric': True,
                     'strategy': 'channel'
                 },
