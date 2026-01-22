@@ -15,7 +15,6 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-import transformers
 
 from amct_pytorch import quantize, convert
 
@@ -73,6 +72,7 @@ class TestFlatQuant(unittest.TestCase):
             'skip_layers': {'lm_head'}
         }
 
+        import transformers
         config = transformers.LlamaConfig.from_pretrained(LLAMA2_7B_MODEL_PATH, attn_implementation='eager')
         model = transformers.LlamaForCausalLM.from_pretrained(
             LLAMA2_7B_MODEL_PATH, torch_dtype='auto', config=config,

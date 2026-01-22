@@ -16,7 +16,6 @@ from .flat_linear import FlatQuantizedLinear
 from .config_utils import InnerConfig
 
 
-
 class FlatQuantAttention(nn.Module):
     def __init__(self, module: nn.Module, layer_name: str="", layer_config = None):
         super().__init__()
@@ -72,8 +71,6 @@ class FlatQuantAttention(nn.Module):
         self._ori_mode = False
         self._eval_mode = False
         self.ln_smax = torch.ones_like(self.q_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
-
-        self.layer_name = layer_name
 
     def add_fq_trans(self):
         if InnerConfig.w_bits.value < 16 or InnerConfig.a_bits.value < 16:
@@ -281,8 +278,6 @@ class FlatQuantMLP(nn.Module):
         self.up_smax = torch.ones_like(self.up_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
         self.down_smax = torch.ones_like(self.down_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
         
-        self.layer_name = layer_name
-
     def add_fq_trans(self):
         if InnerConfig.w_bits.value < 16 or InnerConfig.a_bits.value < 16:
             up_dim_left, up_dim_right = get_decompose_dim(self.up_proj.linear.weight.shape[1])
