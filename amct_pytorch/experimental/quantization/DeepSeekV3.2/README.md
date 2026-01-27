@@ -4,7 +4,7 @@
 - [2025/12] DeepSeek-V3.2已支持逐block量化推理
 
 ## 🎉概述
-experience中存放LLM量化和推理的典型模型sample，不依赖框架，通过高阶PTQ量化算法，得到接近bf16的量化模型精度
+experimental中存放LLM量化和推理的典型模型sample，不依赖框架，通过高阶PTQ量化算法，得到接近bf16的量化模型精度
 
 ## 📖目录结构说明
 ```
@@ -24,6 +24,7 @@ experience中存放LLM量化和推理的典型模型sample，不依赖框架，�
 └── eval.py                                     # wikitext精度计算
 └── extract_calib_data.py                       # dump逐block数据
 └── main.py                                     # 逐block学习
+└── deploy.py                                   # 生成量化模型
 └── README.md
 └── ...
 ```
