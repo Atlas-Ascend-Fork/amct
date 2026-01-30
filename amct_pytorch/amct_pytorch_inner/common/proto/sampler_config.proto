@@ -1,0 +1,29 @@
+syntax = "proto2";
+package AMCT;
+
+message SamplerConfig {
+    oneof sampler_platform{
+        AscendSamplerConfig ascend_sampler_config = 1;
+    }
+}
+
+message AscendSamplerConfig {
+    required string soc_version = 1;
+    required string input_shape = 2;
+    required DistributeConfig distribute_config = 4;
+    optional AtcConfig atc = 20;
+}
+
+message AtcConfig {
+    repeated MapFieldEntry options = 1;
+}
+
+message MapFieldEntry {
+    required string key = 1;
+    required string value = 2;
+}
+
+message DistributeConfig {
+    required string ip = 1;
+    required string port = 2;
+}

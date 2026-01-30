@@ -119,13 +119,40 @@ checkopts() {
 }
 
 build() {
+  echo "create build directory and build amct";
+  if [ -f "${BUILD_PATH}" ]
+  then
+    echo "${BUILD_PATH} exist, delete old path"
+    rm -rf ${BUILD_PATH}
+  fi
+  echo "create path ${BUILD_PATH}"
+  mkdir ${BUILD_PATH}
 
-  cd ${BASEPATH}/amct_pytorch && chmod 640 `find ./ -type f` && chmod 750 `find ./ -type d`
-  prex="$(uname -m)"
-  export AMCT_PYTORCH_PLATFORM="linux-${prex}"
-  cd ${BASEPATH} && python3 setup.py sdist --formats=gztar
+  cd "${BUILD_PATH}"
+  echo "----------------BUILD_PATH  "${BUILD_PATH}"  ----------------"
+  echo "----------------TOP_DIR  "${BASEPATH}"  ----------------"
+  echo "----------------CMAKE_BUILD_TYPE  "${CMAKE_BUILD_TYPE}"  ----------------"
+  echo "----------------ASCEND_HOME_PATH  "${ASCEND_HOME_PATH}"  ----------------"
+  echo "----------------CANN_3RD_LIB_PATH  "${CANN_3RD_LIB_PATH}"  ----------------"
 
-  echo "create build_out directory and build amct";
+  cmake -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+        -D TOP_DIR=${BASEPATH} \
+        -D CMAKE_VERBOSE_MAKEFILE=ON\
+        -D ASCEND_HOME_PATH=${ASCEND_HOME_PATH}\
+        -D PREX=${LOWER_PREX}\
+        ${CANN_3RD_LIB_PATH:+-D CANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}} \
+        -D BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG=ON \
+        -D CMAKE_BUILD_TYPE=${BUILD_TYPE} \
+        ..
+
+  make all ${VERBOSE} -j${THREAD_NUM}
+  if [ $? -ne 0 ]
+  then
+    echo "execute command: make ${VERBOSE} -j${THREAD_NUM}."
+    return 1
+  fi
+  echo "Build success!"
+
   if [ -d "${OUTPUT_PATH}" ];then
     echo "${OUTPUT_PATH} exist, delete old path"
     rm -rf ${OUTPUT_PATH}
@@ -133,17 +160,17 @@ build() {
   echo "create path ${OUTPUT_PATH}"
   mkdir ${OUTPUT_PATH}
 
-  cp ./dist/*.tar.gz ${OUTPUT_PATH}
-  if find ${OUTPUT_PATH} -type f -name "amct_pytorch-*-py3-none-linux-${prex}.tar.gz" | grep -q .;then
+  cp ${BASEPATH}/amct_pytorch/dist/*.tar.gz ${OUTPUT_PATH}
+  prex="$(uname -m)"
+  if find ${OUTPUT_PATH} -type f -name "amct_pytorch-*-py3-none-linux_${prex}.tar.gz" | grep -q .;then
     echo "package amct run success"
   else
     echo "package amct run failed"
     return 1
   fi
 
-  rm -rf dist
-  rm -rf *.egg-info
-
+  rm -rf ${BASEPATH}/amct_pytorch/dist
+  rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
 }
 
 assemble_cmake_args() {
