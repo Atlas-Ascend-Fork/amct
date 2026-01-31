@@ -45,6 +45,7 @@ add_custom_target(amct_pytorch_package
   COMMAND rm -rf ${AMCT_TORCH_BUILD_DIR}
   COMMAND rm -rf ${AMCT_TORCH_PROTO_DIR}/*_pb2.py
   COMMAND rm -rf ${BASE_DIR}/amct_pytorch_inner/lib/*.so
+  COMMAND rm -rf ${BASE_DIR}/../amct_pytorch.egg-info
 )
 
 add_custom_target(amct_pytorch
