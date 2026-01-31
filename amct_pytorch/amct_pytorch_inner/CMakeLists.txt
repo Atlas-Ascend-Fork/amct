@@ -36,6 +36,7 @@ endif()
 
 # compile proto
 add_custom_target(amct_pytorch_proto_compile
+  COMMAND ls -l ${PROTOC_PROGRAM}
   COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/basic_info.proto
   COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/calibration_config_pytorch.proto
   COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/scale_offset_record_pytorch.proto

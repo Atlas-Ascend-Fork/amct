@@ -157,9 +157,12 @@ setuptools.setup(
     },
     package_data={
         '': ['.version'],
-        'amct_pytorch/amct_pytorch_inner': ['amct_pytorch/proto/*.proto', 'amct_pytorch/common/proto/*.proto', 'amct_pytorch/capacity/*.csv',
-                         'lib/*.so', 'amct_pytorch/custom_op/*.so', '../*.so'],
-        'amct_pytorch/amct_pytorch_inner/custom_op': ['inc/*.h', 'src/*.cpp']
+        'amct_pytorch.amct_pytorch_inner': ['amct_pytorch/proto/*.proto',
+                         'amct_pytorch/common/proto/*.proto',
+                         'amct_pytorch/capacity/*.csv',
+                         'lib/*.so',
+                         'amct_pytorch/custom_op/*.so'],
+        'amct_pytorch.amct_pytorch_inner.custom_op': ['inc/*.h', 'src/*.cpp']
     },
     zip_safe=False,
     **setup_tools.setup_args

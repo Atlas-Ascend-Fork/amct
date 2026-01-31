@@ -64,7 +64,7 @@ target_link_options(quant_lib PRIVATE
 add_custom_target(amct_pytorch_lib
   DEPENDS quant_lib
   # copy to amct_pytorch
-  COMMAND cp libquant_lib.so ${AMCT_TORCH_OP_DIR}/libquant_lib.so
+  COMMAND mv libquant_lib.so ${AMCT_TORCH_OP_DIR}/libquant_lib.so
   # strip
   COMMAND cd ${AMCT_TORCH_OP_DIR} && strip libquant_lib.so
 )

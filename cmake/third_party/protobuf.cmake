@@ -201,54 +201,6 @@ set_target_properties(host_protoc PROPERTIES
 )
 add_dependencies(host_protoc protobuf_host_build)
 
-# if (BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG_COMMUNITY)
-#   ExternalProject_Add(protobuf_static_build
-#     DEPENDS protobuf_src
-#     SOURCE_DIR ${PROTOBUF_SRC_DIR}
-#     DOWNLOAD_COMMAND ""
-#     UPDATE_COMMAND ""
-#     CONFIGURE_COMMAND ${CMAKE_COMMAND}
-#         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER_}
-#         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER_}
-#         -DCMAKE_INSTALL_PREFIX=${PROTOBUF_STATIC_PKG_DIR}
-#         -DCMAKE_INSTALL_LIBDIR=lib
-#         -DCMAKE_INSTALL_CMAKEDIR=cmake/protobuf
-#         -Dprotobuf_BUILD_TESTS=OFF
-#         -Dprotobuf_WITH_ZLIB=OFF
-#         -DLIB_PREFIX=ascend_
-#         -DCMAKE_CXX_FLAGS=${PROTOBUF_CXXFLAGS}
-#         -DCMAKE_EXE_LINKER_FLAGS=${PROTOBUF_LDFLAGS}
-#         -DCMAKE_SHARED_LINKER_FLAGS=${PROTOBUF_LDFLAGS}
-#         <SOURCE_DIR>/cmake
-#     BUILD_COMMAND $(MAKE)
-#     INSTALL_COMMAND $(MAKE) install
-#     EXCLUDE_FROM_ALL TRUE
-#   )
-
-#   ExternalProject_Add(protobuf_host_static_build
-#     DEPENDS protobuf_src
-#     SOURCE_DIR ${PROTOBUF_SRC_DIR}
-#     DOWNLOAD_COMMAND ""
-#     UPDATE_COMMAND ""
-#     CONFIGURE_COMMAND ${CMAKE_COMMAND}
-#         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-#         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-#         -DCMAKE_INSTALL_PREFIX=${PROTOBUF_HOST_STATIC_PKG_DIR}
-#         -DCMAKE_INSTALL_LIBDIR=lib
-#         -DCMAKE_INSTALL_CMAKEDIR=cmake/protobuf
-#         -Dprotobuf_BUILD_TESTS=OFF
-#         -Dprotobuf_WITH_ZLIB=OFF
-#         -DLIB_PREFIX=host_ascend_
-#         -DCMAKE_CXX_FLAGS=${HOST_PROTOBUF_CXXFLAGS}
-#         -DCMAKE_EXE_LINKER_FLAGS=${PROTOBUF_LDFLAGS}
-#         -DCMAKE_SHARED_LINKER_FLAGS=${PROTOBUF_LDFLAGS}
-#         <SOURCE_DIR>/cmake
-#     BUILD_COMMAND $(MAKE)
-#     INSTALL_COMMAND $(MAKE) install
-#     EXCLUDE_FROM_ALL TRUE
-#   )
-# endif()
-
 add_library(ascend_protobuf_static_lib STATIC IMPORTED)
 set_target_properties(ascend_protobuf_static_lib PROPERTIES
     IMPORTED_LOCATION ${PROTOBUF_STATIC_PKG_DIR}/lib/libascend_protobuf.a
