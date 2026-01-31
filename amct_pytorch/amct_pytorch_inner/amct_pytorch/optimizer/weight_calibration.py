@@ -23,7 +23,6 @@ from amct_pytorch.configuration.configuration import Configuration
 from amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from amct_pytorch.proto import scale_offset_record_pb2
 from amct_pytorch.custom_op.arq.arq import weight_cali_tensor
-from amct_pytorch.custom_op.nuq.nuq import weight_nuq_cali_tensor
 
 from amct_pytorch.common.utils.record_file_operator import record_weights_scale_offset
 from amct_pytorch.common.utils.record_file_operator import \
@@ -279,9 +278,6 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
             calied_weight = data_tensor
         else:
             weights_len = data_tensor.numel()
-            _check_nuq_executable(wts_param, object_node, weights_len)
-            scale, offset, calied_weight = weight_nuq_cali_tensor(data_tensor,
-                                                                  wts_param)
 
         # FOR AMC Feature, weight do not need fake quant.
         if not self.weight_fakequant:
@@ -295,24 +291,4 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         record_weights_scale_offset(self.records, object_node.name, scale,
                                     offset, wts_param.get('num_bits'))
         return calied_weight
-
-
-def _check_nuq_executable(wts_param, object_node, weights_len):
-    """
-    Function: check whether nuq is supported for current object_node.
-    Inputs:
-        wts_param: weight quantization parameters.
-        object_node: 'node' in the 'graph'.
-        weights_len: length of weight's node.
-    Returns: None
-    """
-    is_supported = GraphChecker.check_nuq_graph_quantize_type(object_node)
-    object_name = object_node.name
-    if not is_supported:
-        raise RuntimeError("Layer '{}' is not supported for NUQ, but 'wts_algo' is set to 'nuq_quantize'!" \
-            .format(object_name))
-    nuq_steps = wts_param.get('num_steps')
-    if nuq_steps > weights_len:
-        raise RuntimeError("Layer '{}' is not supported for NUQ with num_steps: {} > weight length {}!" \
-            .format(object_name, nuq_steps, weights_len))
 

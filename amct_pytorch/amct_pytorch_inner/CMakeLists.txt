@@ -39,10 +39,8 @@ add_custom_target(amct_pytorch_proto_compile
   COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/basic_info.proto
   COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/calibration_config_pytorch.proto
   COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/scale_offset_record_pytorch.proto
-  COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/post_quant_record_pytorch.proto
   COMMAND cd ${AMCT_PYTORCH_INNER_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch/proto/retrain_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ distill_config_pytorch.proto
-  COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ post_quant_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ quant_calibration_config_pytorch.proto
 )
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
