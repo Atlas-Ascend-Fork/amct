@@ -1,6 +1,6 @@
 #!/bin/bash
 # ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -159,10 +159,21 @@ build() {
   fi
   echo "create path ${OUTPUT_PATH}"
   mkdir ${OUTPUT_PATH}
+  mkdir "${OUTPUT_PATH}/amct_package"
+  mkdir "${OUTPUT_PATH}/amct_package/amct_pytorch"
+  cp ${BASEPATH}/amct_pytorch/dist/*.tar.gz ${OUTPUT_PATH}/amct_package/amct_pytorch/
+  cp -r ${BASEPATH}/amctgraph/* ${OUTPUT_PATH}/amct_package/
 
-  cp ${BASEPATH}/amct_pytorch/dist/*.tar.gz ${OUTPUT_PATH}
-  prex="$(uname -m)"
-  if find ${OUTPUT_PATH} -type f -name "amct_pytorch-*-py3-none-linux_${prex}.tar.gz" | grep -q .;then
+  VERSION=$(awk -F'=' '/^Version=/ {print $2}' ../version.info)
+  echo "package ${VERSION}"
+  SYS="$(uname -s)"
+  PACKAGE_NAME="cann-amct_${VERSION}_${SYS,,}-$(uname -m).tar.gz"
+  TAR_FILE="${OUTPUT_PATH}/${PACKAGE_NAME}"
+  TARGET_DIR="${OUTPUT_PATH}/amct_package"
+  tar -czf ${TAR_FILE} -C ${TARGET_DIR} .
+  echo "tar -czf ${TAR_FILE} -C ${TARGET_DIR} ."
+
+  if [ -f ${TAR_FILE} ];then
     echo "package amct run success"
   else
     echo "package amct run failed"
@@ -171,6 +182,8 @@ build() {
 
   rm -rf ${BASEPATH}/amct_pytorch/dist
   rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
+  rm -rf ${TARGET_DIR}
+  rm -rf ${BASEPATH}/amctgraph
 }
 
 assemble_cmake_args() {
@@ -218,6 +231,7 @@ clean_build_out() {
 
 build_package() {
   echo "--------------- build package start ---------------"
+  bash install_graph.sh --cann_3rd_lib_path=${CANN_3RD_LIB_PATH}
   build || { echo "Build failed."; exit 1; }
   echo "--------------- build package end ---------------"
 }
