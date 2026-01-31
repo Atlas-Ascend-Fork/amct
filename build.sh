@@ -161,7 +161,7 @@ build() {
   mkdir ${OUTPUT_PATH}
   mkdir "${OUTPUT_PATH}/amct_package"
   mkdir "${OUTPUT_PATH}/amct_package/amct_pytorch"
-  cp ${BASEPATH}/amct_pytorch/dist/*.tar.gz ${OUTPUT_PATH}/amct_package/amct_pytorch/
+  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/amct_package/amct_pytorch/
   cp -r ${BASEPATH}/amctgraph/* ${OUTPUT_PATH}/amct_package/
 
   VERSION=$(awk -F'=' '/^Version=/ {print $2}' ../version.info)
@@ -180,7 +180,7 @@ build() {
     return 1
   fi
 
-  rm -rf ${BASEPATH}/amct_pytorch/dist
+  rm -rf ${BASEPATH}/dist
   rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
   rm -rf ${TARGET_DIR}
   rm -rf ${BASEPATH}/amctgraph
