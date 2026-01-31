@@ -21,8 +21,8 @@ set(CMAKE_VERBOSE_MAKEFILE on)
 get_filename_component(BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR} ABSOLUTE)
 get_filename_component(AMCT_DIR ${BASE_DIR}/.. ABSOLUTE)
 
-set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/amct_pytorch_inner/proto)
-set(AMCT_TORCH_TMP_DIR ${BASE_DIR}/amct_pytorch_inner/custom_op/tmp)
+set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/amct_pytorch_inner/amct_pytorch/proto)
+set(AMCT_TORCH_TMP_DIR ${BASE_DIR}/amct_pytorch_inner/custom_op/amct_pytorch/tmp)
 set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 
 add_subdirectory(amct_pytorch_inner)
@@ -34,7 +34,7 @@ set(COMMON_LIB_INC_FILES
 set(HI_PYTHON python3)
 add_custom_target(amct_pytorch_package
   DEPENDS amct_pytorch_proto_compile amct_pytorch_prepare_package tensor_decompose_install_pytorch
-  COMMAND cd ${BASE_DIR} && chmod 640 `find ./ -type f` && chmod 750 `find ./ -type d` &&
+  COMMAND cd ${BASE_DIR}/.. && chmod 640 `find ./ -type f` && chmod 750 `find ./ -type d` &&
           export AMCT_PYTORCH_PLATFORM=linux_${CMAKE_HOST_SYSTEM_PROCESSOR} &&
           export BEP_CGTLIST="$BEP_CGTLIST ${HI_PYTHON}" &&
           ${HI_PYTHON} setup.py sdist --formats=gztar

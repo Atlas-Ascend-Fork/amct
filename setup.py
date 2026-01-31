@@ -29,14 +29,14 @@ import setuptools
 tarfile.TarFile.format = tarfile.GNU_FORMAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
-OP_TMP_DIR = 'amct_pytorch_inner/custom_op/src/tmp'
-AMCT_LIB_DIR = os.path.join(CUR_DIR, "./amct_pytorch_inner/amct_pytorch/custom_op")
-UTIL_OP_PATH = 'amct_pytorch_inner/custom_op/src/util_op.cpp'
+OP_TMP_DIR = 'amct_pytorch/amct_pytorch_inner/custom_op/src/tmp'
+AMCT_LIB_DIR = os.path.join(CUR_DIR, "./amct_pytorch/amct_pytorch_inner/amct_pytorch/custom_op")
+UTIL_OP_PATH = 'amct_pytorch/amct_pytorch_inner/custom_op/src/util_op.cpp'
 SRC_FILES = [
-             ['amct_pytorch_inner/custom_op/src/nuq_op.cpp'],
-             ['amct_pytorch_inner/custom_op/src/cast_op.cpp',
+             ['amct_pytorch/amct_pytorch_inner/custom_op/src/nuq_op.cpp'],
+             ['amct_pytorch/amct_pytorch_inner/custom_op/src/cast_op.cpp',
               UTIL_OP_PATH],
-             ['amct_pytorch_inner/custom_op/src/dump_op.cpp'], ]
+             ['amct_pytorch/amct_pytorch_inner/custom_op/src/dump_op.cpp'], ]
 os.environ['SOURCE_DATE_EPOCH'] = \
     str(int(os.path.getctime(os.path.realpath(__file__))))
 
@@ -45,7 +45,7 @@ class SetupTool(): # pylint: disable=R0903
     """ tool for setup"""
     def __init__(self):
         self.packages = setuptools.find_packages()
-        self.packages.extend(['amct_pytorch_inner/custom_op'])
+        self.packages.extend(['amct_pytorch/amct_pytorch_inner/custom_op'])
         self.set_version()
         self.set_platform()
         self.setup_args = dict()
@@ -84,7 +84,7 @@ class SetupTool(): # pylint: disable=R0903
 
     def set_version(self):
         """ set version"""
-        version_file = os.path.join(CUR_DIR, '', '.version')
+        version_file = os.path.join(CUR_DIR, 'amct_pytorch', '.version')
         with open(version_file) as fid:
             version = fid.readlines()[0].strip()
             self.version = version
@@ -125,7 +125,7 @@ class SetupTool(): # pylint: disable=R0903
                 # name same with name of amct_ops.py
                 name=name,
                 sources=src_file,
-                include_dirs=[os.path.join(CUR_DIR, 'amct_pytorch_inner/custom_op/inc/')],
+                include_dirs=[os.path.join(CUR_DIR, 'amct_pytorch/amct_pytorch_inner/custom_op/inc/')],
                 extra_compile_args=extra_compile_args,
                 libraries=['quant_lib'],
                 library_dirs=[AMCT_LIB_DIR]) for name, src_file in modules_set
@@ -158,9 +158,9 @@ setuptools.setup(
     },
     package_data={
         '': ['.version'],
-        'amct_pytorch_inner': ['amct_pytorch/proto/*.proto', 'amct_pytorch/common/proto/*.proto', 'amct_pytorch/capacity/*.csv',
+        'amct_pytorch/amct_pytorch_inner': ['amct_pytorch/proto/*.proto', 'amct_pytorch/common/proto/*.proto', 'amct_pytorch/capacity/*.csv',
                          'lib/*.so', 'amct_pytorch/custom_op/*.so', '../*.so'],
-        'amct_pytorch_inner/custom_op': ['inc/*.h', 'src/*.cpp']
+        'amct_pytorch/amct_pytorch_inner/custom_op': ['inc/*.h', 'src/*.cpp']
     },
     zip_safe=False,
     **setup_tools.setup_args
