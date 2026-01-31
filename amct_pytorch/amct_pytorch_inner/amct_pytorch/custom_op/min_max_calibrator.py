@@ -19,10 +19,10 @@ import torch
 import math
 from torch import nn
 
-from amct_pytorch.custom_op.utils import convert_to_per_group_shape, calculate_scale_offset, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import convert_to_per_group_shape, calculate_scale_offset, \
     calculate_progressive_weights_scale_factor, get_weight_min_max_by_granularity
-from amct_pytorch.utils.vars import FLOAT4_E2M1, FLOAT8_E4M3FN
-from amct_pytorch.utils.data_utils import check_linear_input_dim
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLOAT4_E2M1, FLOAT8_E4M3FN
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import check_linear_input_dim
 
 
 class MinMaxCalibrator(nn.Module):

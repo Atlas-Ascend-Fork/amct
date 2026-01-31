@@ -18,7 +18,7 @@
 
 import torch
 import math
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 
 ASCNED_OPTIMIZED_VALUE = 16

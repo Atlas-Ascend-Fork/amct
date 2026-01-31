@@ -19,7 +19,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from amct_pytorch.utils.data_utils import convert_precision
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision
 
 EC_CAND = tuple(range(-5, 6))
 

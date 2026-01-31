@@ -20,28 +20,28 @@ import os
 from io import BytesIO
 import torch
 
-from amct_pytorch.ada_round.ada_round_groups import get_ada_round_groups
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.common.utils import files as files_util
-from amct_pytorch.common.utils.record_file_operator import \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups import get_ada_round_groups
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
     save_nuq_quant_layer_names
-import amct_pytorch.optimizer as opt
-from amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.configuration.retrain_config import RetrainConfig
+import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
 
-from amct_pytorch.parser.parser import Parser
-from amct_pytorch.parser.parse_record_file import RecordFileParser
-from amct_pytorch.utils.save import save_onnx_model
-from amct_pytorch.utils.save import generate_onnx_file_name
-from amct_pytorch.utils.save import split_dir_prefix
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.model_util import load_pth_file
-from amct_pytorch.utils.model_util import get_node_output_info
-from amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
-from amct_pytorch.utils.vars import NUM_BITS
-from amct_pytorch.ada_round.ada_round_optimize import optimize_alpha
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parse_record_file import RecordFileParser
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import save_onnx_model
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import generate_onnx_file_name
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import split_dir_prefix
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import load_pth_file
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import get_node_output_info
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import NUM_BITS
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_optimize import optimize_alpha
 
 @check_params(config_file=str,
               model=torch.nn.Module,

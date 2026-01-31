@@ -23,14 +23,14 @@ from collections import OrderedDict
 from enum import IntEnum, unique
 from google.protobuf import text_format
 
-from amct_pytorch.common.utils.util import find_repeated_items
-from amct_pytorch.common.utils.vars_util import INT4, INT8
-from amct_pytorch.proto import distill_config_pb2
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.vars import CHANNEL_WISE
-from amct_pytorch.utils.vars import DST_TYPE
-from amct_pytorch.utils.vars import BATCH_NUM
-from amct_pytorch.common.config.proto_config import ProtoDataType
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import find_repeated_items
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INT4, INT8
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import distill_config_pb2
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CHANNEL_WISE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DST_TYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.proto_config import ProtoDataType
 
 
 ULQ_DISTILL = 'ulq_distill'

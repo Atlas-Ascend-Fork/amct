@@ -20,13 +20,13 @@ import numpy as np
 from torch import tensor
 from torch.nn.parameter import Parameter
  
-from amct_pytorch.nn.module.quantization.qat_base import QATBase, ULQRetrainParams, WtsRetrainParams
-from amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, BATCH_NUM
-from amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQAT
-from amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
-from amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFuncQAT
-from amct_pytorch.custom_op.utils import copy_tensor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.qat_base import QATBase, ULQRetrainParams, WtsRetrainParams
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, BATCH_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQAT
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFuncQAT
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
  
 RNN_TENSOR_SEQUENCE = {
     'LSTM': ([0, 3, 1, 2], [0, 2, 3, 1]),

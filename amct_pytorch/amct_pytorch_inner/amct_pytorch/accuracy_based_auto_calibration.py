@@ -21,24 +21,24 @@ import json
 from collections import OrderedDict
 
 import torch # pylint: disable=E0401
-import amct_pytorch.quantize_tool as quantize_tool
-from amct_pytorch.quantize_tool import inner_quantize_model
-from amct_pytorch.quantize_tool import generate_fakequant_module
-from amct_pytorch.quantize_tool import inner_fuse_bn
+import amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool as quantize_tool
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import inner_quantize_model
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import generate_fakequant_module
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import inner_fuse_bn
 
-from amct_pytorch.common.utils import files as files_util
-from amct_pytorch.common.utils.struct_helper import DumpConfig
-from amct_pytorch.common.auto_calibration import SensitivityBase
-from amct_pytorch.common.auto_calibration import AutoCalibrationStrategyBase
-from amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
-from amct_pytorch.common.auto_calibration import AccuracyBasedAutoCalibrationBase
-from amct_pytorch.common.auto_calibration import BinarySearchStrategy
-from amct_pytorch.common.auto_calibration import CosineSimilaritySensitivity
-from amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.utils.auto_calibration_helper import AutoCalibrationHelper
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.struct_helper import DumpConfig
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import SensitivityBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import AutoCalibrationStrategyBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import AccuracyBasedAutoCalibrationBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import BinarySearchStrategy
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import CosineSimilaritySensitivity
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.auto_calibration_helper import AutoCalibrationHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 
 AUTO_CALI_SATISFY = 0

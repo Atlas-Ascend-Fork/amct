@@ -19,10 +19,10 @@ import torch
 import numpy as np
 import math
 
-from amct_pytorch.custom_op.utils import check_quant_data
-from amct_pytorch.custom_op.utils import process_scale
-from amct_pytorch.common.utils.vars_util import DEFAULT_NUM_BITS
-from amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import DEFAULT_NUM_BITS
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
 
 HIST_BINS = 512
 NUM_SEARCH = 20

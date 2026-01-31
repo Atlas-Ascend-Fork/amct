@@ -17,15 +17,15 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from amct_pytorch.capacity import CAPACITY
-import amct_pytorch.configuration.quant_calibration_config as config_func
-from amct_pytorch.custom_op.hfmg.hfmg import HFMG
-from amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.custom_op.kv_cache_quant import KVCacheQuant
-from amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.vars import BATCH_NUM, WITH_OFFSET, QUANT_GRANULARITY, NUM_BITS,\
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
+import amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config as config_func
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.hfmg.hfmg import HFMG
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.kv_cache_quant import KVCacheQuant
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM, WITH_OFFSET, QUANT_GRANULARITY, NUM_BITS,\
     NUM_OF_BINS, MAX_PERCENTILE, MIN_PERCENTILE, SEARCH_RANGE_START, SEARCH_RANGE_END, SEARCH_STEP
 
 

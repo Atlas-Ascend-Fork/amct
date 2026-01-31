@@ -17,19 +17,19 @@
 # ----------------------------------------------------------------------------
 from collections import OrderedDict
 
-from amct_pytorch.common.retrain_config.retrain_field import ConfigItem
-from amct_pytorch.common.retrain_config.retrain_field import Version
-from amct_pytorch.common.retrain_config.retrain_field import BatchNum
-from amct_pytorch.common.retrain_config.retrain_field import DataAlgo
-from amct_pytorch.common.retrain_config.retrain_field import ClipMax
-from amct_pytorch.common.retrain_config.retrain_field import ClipMin
-from amct_pytorch.common.retrain_config.retrain_field import FixedMin
-from amct_pytorch.common.retrain_config.retrain_field import ChannelWise
-from amct_pytorch.common.utils.vars_util import INT4, INT8
-from amct_pytorch.utils.vars import DST_TYPE
-from amct_pytorch.utils.vars import CLIP_MAX
-from amct_pytorch.utils.vars import CLIP_MIN
-from amct_pytorch.utils.vars import FIXED_MIN
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import ConfigItem
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import Version
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import BatchNum
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import DataAlgo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import ClipMax
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import ClipMin
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import FixedMin
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import ChannelWise
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INT4, INT8
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DST_TYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CLIP_MAX
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CLIP_MIN
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FIXED_MIN
 
 
 class GroupSize(ConfigItem):

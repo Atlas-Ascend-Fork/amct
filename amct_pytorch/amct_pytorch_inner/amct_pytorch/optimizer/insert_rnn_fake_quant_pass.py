@@ -16,14 +16,14 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.configuration.check import check_lstm_limit, check_gru_limit
-from amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
-from amct_pytorch.optimizer.mult_output_with_quant_optimizer import construct_anti_quant_node
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import check_lstm_limit, check_gru_limit
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.mult_output_with_quant_optimizer import construct_anti_quant_node
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
 
 
 class InsertRNNFakeQuantPass(BaseFusionPass):

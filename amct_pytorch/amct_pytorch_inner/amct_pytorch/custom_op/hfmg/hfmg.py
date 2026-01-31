@@ -19,12 +19,12 @@
 from collections import namedtuple
 from torch import nn
 import torch
-from amct_pytorch.common.utils.vars_util import PER_TENSOR_IDX, PER_CHANNEL_IDX
-from amct_pytorch.custom_op import hfmg_arq_pytorch
-from amct_pytorch.custom_op import hfmg_merge_pytorch
-from amct_pytorch.custom_op import hfmg_forward_pytorch
-from amct_pytorch.custom_op.utils import check_quant_data
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import PER_TENSOR_IDX, PER_CHANNEL_IDX
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import hfmg_arq_pytorch
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import hfmg_merge_pytorch
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import hfmg_forward_pytorch
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 QuantInfo = namedtuple('QuantInfo', ['flag', 'scale', 'offset', 'clip_max', 'clip_min'])
 

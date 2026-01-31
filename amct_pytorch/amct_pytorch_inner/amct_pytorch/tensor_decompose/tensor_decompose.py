@@ -23,10 +23,10 @@ import json
 import torch
 import torch.nn as nn
 
-from amct_pytorch.common.decomposition.decomposition import \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.decomposition.decomposition import \
     tensor_decomposition
-from amct_pytorch.common.utils.files import check_files_exist
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import check_files_exist
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 
 __all__ = ['auto_decomposition', 'decompose_network']

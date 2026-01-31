@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 
 import os
-from amct_pytorch.common.capacity.query_capacity import Capacity
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.capacity.query_capacity import Capacity
 
 __all__ = ['CAPACITY', 'POST_CAPACITY']
 

@@ -16,32 +16,32 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.common.utils.vars_util import LSTM_ATTRS_LIMIT_MAP, GRU_ATTRS_LIMIT_MAP
-from amct_pytorch.common.utils.vars_util import RNN_SEQ_LENS_INDEX, RNN_H_INDEX
-from amct_pytorch.common.utils.vars_util import LSTM_C_INDEX, LSTM_P_INDEX
-from amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.vars import ADA_ROUND_TYPES
-from amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
-from amct_pytorch.utils.vars import INT16_QUANTIZABLE_TYPES
-from amct_pytorch.utils.vars import INT16_QUANTIZABLE_ONNX_TYPES
-from amct_pytorch.utils.vars import RETRAIN_TYPES
-from amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
-from amct_pytorch.utils.vars import DISTILL_TYPES
-from amct_pytorch.utils.vars import NUQ_QUANTIZABLE_ONNX_TYPES
-from amct_pytorch.utils.vars import NUQ_QUANTIZABLE_TYPES
-from amct_pytorch.utils.vars import AMCT_OPERATIONS
-from amct_pytorch.utils.vars import PRUNABLE_TYPES
-from amct_pytorch.utils.vars import PRUNABLE_ONNX_TYPES
-from amct_pytorch.utils.vars import SELECTIVE_PRUNABLE_TYPES
-from amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.utils.vars import QUANT_LAYER_SUFFIX
-from amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
-from amct_pytorch.capacity import CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import LSTM_ATTRS_LIMIT_MAP, GRU_ATTRS_LIMIT_MAP
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_SEQ_LENS_INDEX, RNN_H_INDEX
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import LSTM_C_INDEX, LSTM_P_INDEX
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import ADA_ROUND_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import INT16_QUANTIZABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import INT16_QUANTIZABLE_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import RETRAIN_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DISTILL_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import NUQ_QUANTIZABLE_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import NUQ_QUANTIZABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import AMCT_OPERATIONS
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PRUNABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PRUNABLE_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import SELECTIVE_PRUNABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANT_LAYER_SUFFIX
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
 
 SYMMETRIC_LIMIT_TYPES = ['Conv3d']
 

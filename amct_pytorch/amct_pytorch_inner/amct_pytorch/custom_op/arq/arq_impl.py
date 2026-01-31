@@ -16,8 +16,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from amct_pytorch.custom_op.utils import calculate_scale_offset
-from amct_pytorch.custom_op.utils import apply_fake_quantize_and_anti_quantize, apply_true_quantize
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import calculate_scale_offset
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import apply_fake_quantize_and_anti_quantize, apply_true_quantize
 
 
 def arq_cali_pytorch(data,

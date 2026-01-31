@@ -26,9 +26,9 @@ import sys
 
 import torch
 
-from amct_pytorch.capacity import CAPACITY, POST_CAPACITY
-from amct_pytorch.common.utils.vars_util import INT4, INT8, INT16
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY, POST_CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INT4, INT8, INT16
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

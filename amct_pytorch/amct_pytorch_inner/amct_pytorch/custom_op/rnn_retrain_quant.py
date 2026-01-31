@@ -21,13 +21,13 @@ import torch
 from torch import nn
 from collections import namedtuple
 
-from amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.custom_op.utils import tensor
-from amct_pytorch.custom_op.utils import process_scale
-from amct_pytorch.custom_op.retrain_quant import get_quant_type
-from amct_pytorch.utils.vars import BATCH_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import tensor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.retrain_quant import get_quant_type
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM
 
 DATA_NUM_BITS = 'data_num_bits'
 WTS_NUM_BITS = 'wts_num_bits'

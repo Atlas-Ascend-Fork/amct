@@ -18,12 +18,12 @@
 import copy
 from collections import OrderedDict
 
-from amct_pytorch.common.retrain_config.retrain_field import ConfigItem
-from amct_pytorch.common.retrain_config.retrain_field import BatchNum
-from amct_pytorch.utils.vars import BATCH_NUM, HIFLOAT8, INT8, INT4, MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2
-from amct_pytorch.utils.vars import DEFAULT_GRIDS_NUM, DEFAULT_SMOOTH_STRENGTH
-from amct_pytorch.utils.vars import POST_QUANTIZE_ACT_TYPES
-from amct_pytorch.utils.vars import POST_QUANTIZE_WTS_TYPES, POST_QUANTIZE_WTS_ONLY_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import ConfigItem
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_field import BatchNum
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM, HIFLOAT8, INT8, INT4, MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DEFAULT_GRIDS_NUM, DEFAULT_SMOOTH_STRENGTH
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import POST_QUANTIZE_ACT_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import POST_QUANTIZE_WTS_TYPES, POST_QUANTIZE_WTS_ONLY_TYPES
 
 
 class GroupSize(ConfigItem):

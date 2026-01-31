@@ -19,9 +19,9 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import math
-from amct_pytorch.utils.data_utils import check_linear_input_dim, cal_shared_exponent
-from amct_pytorch.custom_op.utils import calculate_scale_offset, get_weight_min_max_by_granularity
-from amct_pytorch.utils.weight_quant_utils import quant_dequant_weight
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import check_linear_input_dim, cal_shared_exponent
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import calculate_scale_offset, get_weight_min_max_by_granularity
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_utils import quant_dequant_weight
 
 
 class GPTQuant(nn.Module):

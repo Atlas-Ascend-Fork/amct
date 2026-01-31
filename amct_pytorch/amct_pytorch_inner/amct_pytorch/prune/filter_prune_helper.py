@@ -15,23 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.common.prune.active_prune_helper_base import ActivePruneHelperBase
-from amct_pytorch.common.prune.passive_prune_helper_base import PassivePruneHelperBase
-from amct_pytorch.common.prune.eltwise_prune_helper_base import EltwisePruneHelperBase
-from amct_pytorch.common.prune.concat_prune_helper_base import ConcatPruneHelperBase
-from amct_pytorch.common.prune.disable_prune_helper_base import DisablePruneHelperBase
-from amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
-from amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.active_prune_helper_base import ActivePruneHelperBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.passive_prune_helper_base import PassivePruneHelperBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.eltwise_prune_helper_base import EltwisePruneHelperBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.concat_prune_helper_base import ConcatPruneHelperBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.disable_prune_helper_base import DisablePruneHelperBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
 
-from amct_pytorch.utils.vars import PRUNABLE_ONNX_TYPES
-from amct_pytorch.utils.vars import PASSIVE_PRUNABLE_ONNX_TYPES
-from amct_pytorch.utils.vars import ELTWISE_ONNX_TYPES
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
-from amct_pytorch.configuration.check import GraphChecker
-from amct_pytorch.configuration import retrain_config as conf
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PRUNABLE_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PASSIVE_PRUNABLE_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import ELTWISE_ONNX_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration import retrain_config as conf
 
 PASSIVE_PRUNE_RECORDS = 'passive_prune_records'
 

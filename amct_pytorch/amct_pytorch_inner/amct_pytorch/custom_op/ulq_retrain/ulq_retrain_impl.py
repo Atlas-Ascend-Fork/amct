@@ -17,9 +17,9 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.utils.vars import FLT_EPSILON
-from amct_pytorch.custom_op.utils import calculate_scale_offset
-from amct_pytorch.custom_op.utils import apply_fake_quantize_and_anti_quantize
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLT_EPSILON
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import calculate_scale_offset
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import apply_fake_quantize_and_anti_quantize
 
 
 def ulq_retrain_forward_pytorch(data,

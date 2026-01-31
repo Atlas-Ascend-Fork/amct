@@ -17,9 +17,9 @@
 # ----------------------------------------------------------------------------
 
 
-from amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.optimizer.replace_avgpool_flatten_pass import ReplaceAvgpoolFlattenPass
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.replace_avgpool_flatten_pass import ReplaceAvgpoolFlattenPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 
 class ReplaceAvgpoolReshapePass(BaseFusionPass):

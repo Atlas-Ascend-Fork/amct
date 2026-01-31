@@ -15,9 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.post_quant_calibration.calibration_helper import CalibrationHelperBase
-from amct_pytorch.post_quant_calibration.calibration_helper import DPMHelper
-from amct_pytorch.post_quant_calibration.calibration_helper import LLMHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.post_quant_calibration.calibration_helper import CalibrationHelperBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.post_quant_calibration.calibration_helper import DPMHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.post_quant_calibration.calibration_helper import LLMHelper
 
 
 __all__ = [

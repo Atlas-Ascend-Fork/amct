@@ -18,7 +18,7 @@
 import torch # pylint: disable=E0401
 import torch.nn.functional as F # pylint: disable=E0401
 
-from amct_pytorch.custom_op.comp_module.comp_module_base \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base \
     import CompModuleBase
 
 

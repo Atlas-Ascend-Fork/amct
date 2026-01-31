@@ -20,12 +20,12 @@ import functools
 import torch
 from torch import nn
 
-from amct_pytorch.algo.awq import search_scale, apply_scale, search_clip, apply_clip_by_weight_granularity, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.algo.awq import search_scale, apply_scale, search_clip, apply_clip_by_weight_granularity, \
     get_quant_scale
-from amct_pytorch.custom_op.awq.linear_awq import LinearAWQuant
-from amct_pytorch.utils.data_utils import check_data_type
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.vars import MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.awq.linear_awq import LinearAWQuant
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import check_data_type
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2
 
 
 class DecoderAWQuant(nn.Module):

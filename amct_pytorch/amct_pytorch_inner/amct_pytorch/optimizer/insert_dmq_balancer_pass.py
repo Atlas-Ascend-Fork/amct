@@ -15,13 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.custom_op.dmq_balancer.dmq_balancer import DMQBalancer
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.dmq_balancer.dmq_balancer import DMQBalancer
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
 
 
 class InsertDMQBalancerPass(BaseModuleFusionPass):

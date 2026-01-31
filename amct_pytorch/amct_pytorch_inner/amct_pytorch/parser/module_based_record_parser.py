@@ -21,13 +21,13 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.proto import post_quant_record_pb2
-from amct_pytorch.common.utils.parse_record_file import RecordFileParserBase
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.vars import POST_QUANTIZE_ACT_TYPES, POST_QUANTIZE_WTS_TYPES, POST_QUANTIZE_WTS_ONLY_TYPES
-from amct_pytorch.utils.vars import ALLOWED_ROUND_MODE_MAP, QUANT_COMBINATION_MAP
-from amct_pytorch.utils.vars import MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1, FLOAT4_E1M2, INT4, INT8
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import post_quant_record_pb2
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.parse_record_file import RecordFileParserBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import POST_QUANTIZE_ACT_TYPES, POST_QUANTIZE_WTS_TYPES, POST_QUANTIZE_WTS_ONLY_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import ALLOWED_ROUND_MODE_MAP, QUANT_COMBINATION_MAP
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1, FLOAT4_E1M2, INT4, INT8
 
 __all__ = ["ModuleBasedRecordParser"]
 

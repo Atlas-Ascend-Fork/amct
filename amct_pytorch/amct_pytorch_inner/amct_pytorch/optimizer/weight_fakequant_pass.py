@@ -17,14 +17,14 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.utils.weight_quant_api import get_deconv_group
-from amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
-from amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import get_deconv_group
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
 WTS_FAKEQUANT_NUM_BITS = (6, 7, 8)
 

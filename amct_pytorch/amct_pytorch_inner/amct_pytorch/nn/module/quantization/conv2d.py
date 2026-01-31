@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from amct_pytorch.nn.module.quantization.qat_base import QATBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.qat_base import QATBase
 
 SUPPORTED_DATA_DIMS = 4
 

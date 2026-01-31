@@ -23,20 +23,20 @@ from collections import OrderedDict
 from collections import defaultdict
 
 import torch
-from amct_pytorch.common.utils.files import save_to_json
-from amct_pytorch.common.utils.util import check_no_repeated
-from amct_pytorch.common.utils.util import find_repeated_items
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.capacity import CAPACITY
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.common.config.config_base import ConfigBase
-from amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import save_to_json
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import check_no_repeated
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import find_repeated_items
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import ConfigBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
 
-from amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_proto \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_proto \
     import QuantCalibrationProtoConfig, QUANT_METHOD_INFO_MAP
-from amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_field \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_field \
     import QuantCalibrationConfigRoot
-from amct_pytorch.utils.vars import ASYMMETRIC, SEARCH_RANGE, BATCH_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import ASYMMETRIC, SEARCH_RANGE, BATCH_NUM
 
 LAYER_CHECK_TYPE = {'kv_cache_quant_layers': CAPACITY.get_value('KV_CACHE_QUANTIZE_TYPES')}
 MODULE_NAME = 'QuantCalibrationConfigBase'

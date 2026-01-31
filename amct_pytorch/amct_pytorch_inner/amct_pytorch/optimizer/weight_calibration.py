@@ -19,23 +19,23 @@ from google.protobuf import text_format
 import torch
 import numpy as np
 
-from amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.custom_op.arq.arq import weight_cali_tensor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.arq.arq import weight_cali_tensor
 
-from amct_pytorch.common.utils.record_file_operator import record_weights_scale_offset
-from amct_pytorch.common.utils.record_file_operator import \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import record_weights_scale_offset
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
     read_activation_scale_offset
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.configuration.check import GraphChecker
-from amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
-from amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
-from amct_pytorch.ada_round.ada_round_optimize import replace_adaround_module
-from amct_pytorch.utils.module_info import ModuleInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_optimize import replace_adaround_module
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.module_info import ModuleInfo
 CONV2D = 'Conv2d'
 CONV3D = 'Conv3d'
 CONV1D = 'Conv1d'

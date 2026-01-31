@@ -18,7 +18,7 @@
 import torch
 import torch.nn.functional as F
 
-from amct_pytorch.custom_op.comp_module.comp_module_base import CompModuleBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base import CompModuleBase
 
 
 class CompModuleConv1d(CompModuleBase):

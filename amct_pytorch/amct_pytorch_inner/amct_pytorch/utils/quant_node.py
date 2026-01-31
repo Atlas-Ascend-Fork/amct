@@ -22,13 +22,13 @@ from __future__ import print_function
 
 import numpy as np
 
-from amct_pytorch.capacity import CAPACITY
-from amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.common.utils.vars_util import INT4, INT8, INT16
-from amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE, RNN_TENSOR_NUM
-from amct_pytorch.common.utils.vars_util import QUANT_INDEXES_MAP
-from amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.utils.weight_quant_api import get_deconv_group
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INT4, INT8, INT16
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE, RNN_TENSOR_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import QUANT_INDEXES_MAP
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import get_deconv_group
 
 
 class QuantOpInfo():

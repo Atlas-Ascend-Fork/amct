@@ -16,16 +16,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
-from amct_pytorch.common.rnn.gru import BasicGRUInplaceFillWindowCache
-from amct_pytorch.common.rnn.lstm import BasicLSTMInplaceFillWindowCache
-from amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.common.utils.vars_util import RNN_INPUT_ORDER_MAP
-from amct_pytorch.common.utils.vars_util import RNN_DEQ_SCALE_INDEX
-from amct_pytorch.configuration.check import check_lstm_limit, check_gru_limit
-from amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.optimizer.insert_dequant_pass import construct_dequant_param
-from amct_pytorch.optimizer.insert_dequant_pass import fuse_dequant_param
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.rnn.gru import BasicGRUInplaceFillWindowCache
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.rnn.lstm import BasicLSTMInplaceFillWindowCache
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_INPUT_ORDER_MAP
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_DEQ_SCALE_INDEX
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import check_lstm_limit, check_gru_limit
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_dequant_pass import construct_dequant_param
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_dequant_pass import fuse_dequant_param
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 
 class ReplaceRNNPass(BaseFusionPass):

@@ -18,10 +18,10 @@
 import torch
 import numpy as np
 
-from amct_pytorch.utils.data_utils import convert_precision, float_to_mxfp4e2m1, convert_dtype, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision, float_to_mxfp4e2m1, convert_dtype, \
     scale_input_by_shared_exponents
-from amct_pytorch.custom_op.utils import convert_to_per_group_shape
-from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, MXFP4_E2M1, MXFP8_E4M3FN, INT8, FLOAT8_E4M3FN, HIFLOAT8, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import convert_to_per_group_shape
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, MXFP4_E2M1, MXFP8_E4M3FN, INT8, FLOAT8_E4M3FN, HIFLOAT8, \
     FLOAT4_E2M1, FLOAT4_E1M2, INT8, INT4
 
 

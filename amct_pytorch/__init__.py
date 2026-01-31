@@ -23,3 +23,5 @@ __all__ = [
 from amct_pytorch.quantize import quantize, convert, algorithm_register
 from amct_pytorch.config import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
 from amct_pytorch.config import INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG
+
+from amct_pytorch.amct_pytorch_inner.amct_pytorch import *

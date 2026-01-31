@@ -19,13 +19,13 @@ import os
 import torch
 import numpy as np
 
-from amct_pytorch.common.utils.files import create_path
-from amct_pytorch.common.utils.files import delete_dir
-from amct_pytorch.common.utils.files import check_files_exist
-from amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.distill.distill_helper import StopFowardException
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import create_path
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import delete_dir
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import check_files_exist
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_helper import DistillHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_helper import StopFowardException
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
 
 
 TMP_PATH = 'tmp'

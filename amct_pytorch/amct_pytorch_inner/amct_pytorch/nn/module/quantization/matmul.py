@@ -21,13 +21,13 @@ from torch import tensor
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 
-from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.nn.module.quantization.qat_base import QATBase, ULQRetrainParams
-from amct_pytorch.custom_op.utils import get_distribute_config
-from amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.common.utils.vars_util import INT8
-from amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, DST_TYPE, BATCH_NUM, NUM_BITS_MAP
-from amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.qat_base import QATBase, ULQRetrainParams
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_distribute_config
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INT8
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, DST_TYPE, BATCH_NUM, NUM_BITS_MAP
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
 
 TYPE = 'type'
 SCOPE = 'scope'

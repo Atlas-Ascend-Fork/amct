@@ -19,13 +19,13 @@ import torch
 import math
 import os
 
-from amct_pytorch.utils.vars import FLT_EPSILON
-from amct_pytorch.utils.vars import BASE
-from amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
-from amct_pytorch.utils.vars import FLOAT4_E2M1, FLOAT4_E1M2, FLOAT8_E4M3FN, HIFLOAT8
-from amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
-from amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group
-from amct_pytorch.parser.module_based_record_parser import get_layer_quant_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLT_EPSILON
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BASE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLOAT4_E2M1, FLOAT4_E1M2, FLOAT8_E4M3FN, HIFLOAT8
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.module_based_record_parser import get_layer_quant_params
 
 
 def check_quant_data(data, data_type):

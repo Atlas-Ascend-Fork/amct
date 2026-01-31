@@ -17,13 +17,13 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.module.dequant_module import add_fake_dequant
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.module.dequant_module import add_fake_dequant
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 
 
 class ReplaceDequantPass(BaseFusionPass):

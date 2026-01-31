@@ -19,12 +19,12 @@ import torch
 import numpy as np
 from onnx import onnx_pb
 
-from amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
 
 LOW_TORCH_VERSION = '1.6.0'
 FLOAT = 'FLOAT'

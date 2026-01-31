@@ -20,19 +20,19 @@ import json
 
 import torch
 
-from amct_pytorch.common.utils.files import save_to_json
-from amct_pytorch.common.utils.util import check_no_repeated
-from amct_pytorch.common.utils.util import find_repeated_items
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import save_to_json
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import check_no_repeated
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import find_repeated_items
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
 
-from amct_pytorch.configuration.post_quant_config_base.post_quant_proto_config \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.post_quant_config_base.post_quant_proto_config \
     import PostQuantProtoConfig, DEFAULT_GROUP_SIZE_MAP, GROUP_SIZE_SUPPORTED_MAP, GROUP_SIZE_SUPPORTED_DTYPE
-from amct_pytorch.configuration.post_quant_config_base.post_quant_field \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.post_quant_config_base.post_quant_field \
     import RootConfig
-from amct_pytorch.utils.vars import BATCH_NUM, QUANT_COMBINATION_MAP, POST_QUANTIZE_A8W8_TYPES, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM, QUANT_COMBINATION_MAP, POST_QUANTIZE_A8W8_TYPES, \
     ALLOWED_ROUND_MODE_MAP, WTS_GRANULARITY_SUPPORT_MAP, ALLOWED_WEIGHT_DTYPES, ACT_GRANULARITY_SUPPORT_MAP
-from amct_pytorch.utils.vars import MXFP8_E4M3FN, MXFP4_E2M1, FLOAT8_E4M3FN, FLOAT4_E2M1, INT8
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MXFP8_E4M3FN, MXFP4_E2M1, FLOAT8_E4M3FN, FLOAT4_E2M1, INT8
 
 MODULE_NAME = 'PostQuantConfigurer'
 

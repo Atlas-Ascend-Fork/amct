@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.utils.data_utils import convert_mx_dtype
-from amct_pytorch.utils.vars import GROUP_SIZE, MXFP4_E2M1, MXFP8_E4M3FN
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_mx_dtype
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import GROUP_SIZE, MXFP4_E2M1, MXFP8_E4M3FN
 
 
 class NpuMXQuantizationLinear(torch.nn.Module):

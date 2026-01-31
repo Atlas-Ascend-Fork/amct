@@ -15,8 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.common.graph_base.anchor_base import InputAnchorBase
-from amct_pytorch.common.graph_base.anchor_base import OutputAnchorBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.graph_base.anchor_base import InputAnchorBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.graph_base.anchor_base import OutputAnchorBase
 
 
 class InputAnchor(InputAnchorBase):

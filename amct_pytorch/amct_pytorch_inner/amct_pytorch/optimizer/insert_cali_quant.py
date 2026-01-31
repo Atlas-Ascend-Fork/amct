@@ -17,17 +17,17 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.custom_op.cali_quant import CaliQuant
-from amct_pytorch.custom_op.cali_quant import CaliQuantHfmg
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.cali_quant import CaliQuant
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.cali_quant import CaliQuantHfmg
 
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.utils.vars import TENSOR_BALANCE_FACTOR
-from amct_pytorch.utils.vars import NUM_BITS
-from amct_pytorch.utils.vars import BATCH_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import TENSOR_BALANCE_FACTOR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import NUM_BITS
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM
 
 WITH_OFFSET = 'with_offset'
 FAKEQUANT_PRECISION_MODE = 'fakequant_precision_mode'

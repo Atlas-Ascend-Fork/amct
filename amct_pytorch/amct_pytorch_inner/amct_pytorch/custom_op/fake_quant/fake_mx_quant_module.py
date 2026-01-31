@@ -18,9 +18,9 @@
 from torch import nn
 import torch
 
-from amct_pytorch.utils.data_utils import convert_precision, cal_shared_exponent, scale_input_by_shared_exponents
-from amct_pytorch.utils.vars import MXFP4_E2M1
-from amct_pytorch.utils.weight_quant_utils import quant_dequant_weight
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision, cal_shared_exponent, scale_input_by_shared_exponents
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MXFP4_E2M1
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_utils import quant_dequant_weight
 
 
 class FakeMXQuantLinear(nn.Module):

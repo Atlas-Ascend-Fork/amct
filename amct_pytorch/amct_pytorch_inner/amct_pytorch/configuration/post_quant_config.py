@@ -17,9 +17,9 @@
 # ----------------------------------------------------------------------------
 import os
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.capacity import POST_CAPACITY
-from amct_pytorch.configuration.post_quant_config_base.post_quant_configurer \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import POST_CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.post_quant_config_base.post_quant_configurer \
     import PostQuantConfigurer
 
 

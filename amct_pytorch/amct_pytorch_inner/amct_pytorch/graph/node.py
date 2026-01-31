@@ -16,9 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from onnx import onnx_pb # pylint: disable=import-error
-from amct_pytorch.common.graph_base.node_base import NodeBase
-from amct_pytorch.graph.anchor import InputAnchor
-from amct_pytorch.graph.anchor import OutputAnchor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.graph_base.node_base import NodeBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.anchor import InputAnchor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.anchor import OutputAnchor
 
 TYPE = 'type'
 

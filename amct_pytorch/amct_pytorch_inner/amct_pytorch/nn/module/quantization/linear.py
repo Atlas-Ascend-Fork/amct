@@ -20,9 +20,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.nn.module.quantization.qat_base import QATBase
-from amct_pytorch.utils.vars import CHANNEL_WISE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.qat_base import QATBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CHANNEL_WISE
 
 RETRAIN_WEIGHT_CONFIG = 'retrain_weight_config'
 

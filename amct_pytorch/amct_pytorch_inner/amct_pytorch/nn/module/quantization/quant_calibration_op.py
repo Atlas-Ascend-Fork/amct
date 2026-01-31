@@ -22,17 +22,17 @@ from collections.abc import Iterable
 import torch
 import torch.nn as nn
 
-from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.custom_op.ifmr import ifmr
-from amct_pytorch.custom_op.hfmg import hfmg
-from amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.common.utils import files as files_util
-from amct_pytorch.common.config.field import NUM_OF_BINS_RANGE
-from amct_pytorch.utils.vars import BATCH_NUM, ASYMMETRIC, QUANT_GRANULARITY, MAX_PERCENTILE,\
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr import ifmr
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.hfmg import hfmg
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.field import NUM_OF_BINS_RANGE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM, ASYMMETRIC, QUANT_GRANULARITY, MAX_PERCENTILE,\
     MIN_PERCENTILE, SEARCH_RANGE, PER_TENSOR, PER_CHANNEL, ACT_ALGO, WITH_OFFSET, \
     NUM_BITS, SEARCH_STEP, IFMR, HFMG
-from amct_pytorch.common.utils.vars_util import DEFAULT_MAX_PERCENTILE, DEFAULT_MIN_PERCENTILE,\
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import DEFAULT_MAX_PERCENTILE, DEFAULT_MIN_PERCENTILE,\
     DEFAULT_SEARCH_RANGE_START, DEFAULT_SEARCH_RANGE_END, DEFAULT_SEARCH_STEP, DEFUALT_NUM_OF_BINS,\
     PER_TENSOR_IDX, PER_CHANNEL_IDX
 

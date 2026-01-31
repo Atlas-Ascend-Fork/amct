@@ -15,10 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.custom_op.npu_quant.npu_quantization_linear import NpuQuantizationLinear
-from amct_pytorch.custom_op.npu_quant.npu_quantization_conv2d import NpuQuantizationConv2d
-from amct_pytorch.custom_op.npu_quant.npu_mx_quantization_linear import NpuMXQuantizationLinear
-from amct_pytorch.custom_op.npu_quant.weight_npu_quant_module import NpuWeightQuantizedLinear
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.npu_quant.npu_quantization_linear import NpuQuantizationLinear
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.npu_quant.npu_quantization_conv2d import NpuQuantizationConv2d
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.npu_quant.npu_mx_quantization_linear import NpuMXQuantizationLinear
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.npu_quant.weight_npu_quant_module import NpuWeightQuantizedLinear
 
 __all__ = [
     'NpuQuantizationLinear',

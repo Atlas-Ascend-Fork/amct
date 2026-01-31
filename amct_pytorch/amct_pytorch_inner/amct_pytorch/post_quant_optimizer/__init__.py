@@ -15,10 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.post_quant_optimizer.insert_decoder_awq_pass import InsertDecoderAWQuantPass
-from amct_pytorch.post_quant_optimizer.replace_fakequant_module_pass import ReplaceFakeQuantModulePass
-from amct_pytorch.post_quant_optimizer.replace_npu_quant_pass import ReplaceNpuQuantPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.post_quant_optimizer.insert_decoder_awq_pass import InsertDecoderAWQuantPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.post_quant_optimizer.replace_fakequant_module_pass import ReplaceFakeQuantModulePass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.post_quant_optimizer.replace_npu_quant_pass import ReplaceNpuQuantPass
 
 __all__ = [
     'ModelOptimizer',

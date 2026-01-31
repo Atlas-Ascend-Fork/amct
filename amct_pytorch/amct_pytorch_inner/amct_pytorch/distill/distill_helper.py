@@ -18,11 +18,11 @@
 
 import os
 import torch
-from amct_pytorch.common.utils import files as files_util
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.configuration.distill_config import parse_distill_config
-from amct_pytorch.distill.distill_sample import ModelSingleTensorInput
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import parse_distill_config
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
 
 LR = 'lr'
 PARAMS = 'params'

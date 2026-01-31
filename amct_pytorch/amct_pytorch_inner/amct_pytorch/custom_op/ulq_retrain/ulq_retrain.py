@@ -19,10 +19,10 @@
 import torch
 from torch.autograd import Function
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.custom_op import ulq_retrain_forward_pytorch
-from amct_pytorch.custom_op import ulq_retrain_backward_pytorch
-from amct_pytorch.custom_op.utils import check_quant_data
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import ulq_retrain_forward_pytorch
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import ulq_retrain_backward_pytorch
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
 
 
 class UlqRetrainFunction(Function):

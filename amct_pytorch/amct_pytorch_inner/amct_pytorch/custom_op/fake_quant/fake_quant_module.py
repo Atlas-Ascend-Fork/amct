@@ -18,10 +18,10 @@
 from torch import nn
 import torch
 
-from amct_pytorch.utils.data_utils import convert_precision
-from amct_pytorch.custom_op.utils import get_quant_factor, apply_quantize_by_algo, get_algo_params, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_quant_factor, apply_quantize_by_algo, get_algo_params, \
         apply_progressive_quant, save_algo_params, cal_deq_scale
-from amct_pytorch.utils.vars import INT32_MAX, INT32_MIN, INT8, INT4
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import INT32_MAX, INT32_MIN, INT8, INT4
 
 
 class FakeQuantLinear(nn.Module):

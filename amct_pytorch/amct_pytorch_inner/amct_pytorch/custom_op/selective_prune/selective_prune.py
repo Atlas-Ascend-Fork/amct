@@ -23,16 +23,16 @@ import numpy as np
 from torch.autograd import Function
 from google.protobuf import text_format
 
-from amct_pytorch.custom_op import selective_mask_gen
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
-from amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
-from amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
-from amct_pytorch.common.prune.selective_prune_helper_base import SelectivePruneHelperBase
-from amct_pytorch.configuration import retrain_config as conf
-from amct_pytorch.utils.vars import SELECTIVE_PRUNABLE_TYPES
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import selective_mask_gen
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.selective_prune_helper_base import SelectivePruneHelperBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration import retrain_config as conf
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import SELECTIVE_PRUNABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
 
 SELECTIVE_PRUNE_CONFIG = { 'M4N2': (4, 2), }
 

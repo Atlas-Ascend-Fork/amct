@@ -18,8 +18,8 @@
 import os
 import importlib
 import pkg_resources
-from amct_pytorch.utils.vars import PLATFORM
-from amct_pytorch.utils.vars import OP_PY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PLATFORM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import OP_PY
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

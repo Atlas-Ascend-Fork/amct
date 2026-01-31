@@ -19,14 +19,14 @@ from collections import OrderedDict
 from enum import unique, Enum
 from google.protobuf import text_format
 
-from amct_pytorch.proto import post_quant_config_pb2
-from amct_pytorch.utils.vars import BATCH_NUM
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.utils.vars import POST_QUANTIZE_ACT_TYPES, POST_QUANTIZE_WTS_TYPES, POST_QUANTIZE_WTS_ONLY_TYPES, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import post_quant_config_pb2
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import POST_QUANTIZE_ACT_TYPES, POST_QUANTIZE_WTS_TYPES, POST_QUANTIZE_WTS_ONLY_TYPES, \
     SMOOTH_QUANT_SUPPORT_COMBINATION, ACT_GRANULARITY_SUPPORT_MAP
-from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP8_E4M3FN, INT8, INT4, FLOAT4_E2M1, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP8_E4M3FN, INT8, INT4, FLOAT4_E2M1, \
     FLOAT4_E1M2, MXFP4_E2M1
-from amct_pytorch.utils.vars import WTS_ASYMMETRIC_DTYPE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import WTS_ASYMMETRIC_DTYPE
 
 
 

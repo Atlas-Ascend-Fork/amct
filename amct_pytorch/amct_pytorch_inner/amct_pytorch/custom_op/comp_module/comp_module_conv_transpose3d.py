@@ -18,9 +18,9 @@
 import torch
 import torch.nn.functional as F
 
-from amct_pytorch.custom_op.comp_module.comp_module_base \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base \
     import CompModuleBase
-from amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
 
 
 class CompModuleConvTranspose3d(CompModuleBase):

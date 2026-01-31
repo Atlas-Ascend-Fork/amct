@@ -27,19 +27,19 @@ import onnx
 
 from onnx import onnx_pb # pylint: disable=E0401
 from onnx.onnx_pb import AttributeProto
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.graph.graph import Graph
-from amct_pytorch.configuration.check import GraphChecker
-from amct_pytorch.common.utils import files as files_util
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.custom_op.quant_identity.quant_identity import \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.quant_identity.quant_identity import \
     MarkedQuantizableModule
-from amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.utils.vars import TORCH_VERSION
-from amct_pytorch.utils.vars import PRUNABLE_TYPES
-from amct_pytorch.utils.vars import PASSIVE_PRUNABLE_TYPES
-from amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass
-from amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import TORCH_VERSION
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PRUNABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PASSIVE_PRUNABLE_TYPES
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
 
 SUPPORT_TYPES = (torch.nn.BatchNorm3d, torch.nn.BatchNorm2d, torch.nn.ReLU6, torch.nn.ReLU,
     torch.nn.LeakyReLU, torch.nn.Sigmoid, torch.nn.Tanh, torch.nn.Softmax)

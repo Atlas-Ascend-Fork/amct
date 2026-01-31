@@ -22,16 +22,16 @@ from __future__ import print_function
 import os
 import copy
 
-from amct_pytorch.graph.graph import Graph
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.configuration.check import GraphChecker
-from amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.common.retrain_config.retrain_config_base import \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.retrain_config.retrain_config_base import \
         RetrainConfigBase
-from amct_pytorch.common.config.config_base import GraphObjects
-from amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
-from amct_pytorch.capacity import CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import GraphObjects
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
 
 WEIGHT_QUANT_PARAMS = 'weight_quant_params'
 CONFIGURER = RetrainConfigBase(

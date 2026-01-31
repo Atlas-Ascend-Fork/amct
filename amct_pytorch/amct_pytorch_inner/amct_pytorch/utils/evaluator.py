@@ -16,12 +16,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
 
-from amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
-import amct_pytorch.common.cmd_line_utils.data_handler as data_handler
-import amct_pytorch.common.cmd_line_utils.arguments_handler as args_handler
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
+import amct_pytorch.amct_pytorch_inner.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
+import amct_pytorch.amct_pytorch_inner.amct_pytorch.common.cmd_line_utils.arguments_handler as args_handler
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 
 class ModelEvaluator(AutoCalibrationEvaluatorBase):

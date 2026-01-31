@@ -18,8 +18,8 @@
 import math
 import torch
 
-from amct_pytorch.utils.vars import BASE, FLT_EPSILON, MIN_BIN_RATIO, STEP_DIVISOR, HFMG_POW
-from amct_pytorch.custom_op.utils import process_scale, calculate_scale_offset
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BASE, FLT_EPSILON, MIN_BIN_RATIO, STEP_DIVISOR, HFMG_POW
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale, calculate_scale_offset
 
 BASENUM = 2
 

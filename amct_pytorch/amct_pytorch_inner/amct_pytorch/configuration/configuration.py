@@ -17,18 +17,18 @@
 # ----------------------------------------------------------------------------
 import os
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.graph.graph import Graph
-from amct_pytorch.configuration.check import GraphChecker
-from amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.common.utils.files import is_valid_name
-from amct_pytorch.common.config.config_base import ConfigBase
-from amct_pytorch.common.config.config_base import GraphObjects
-from amct_pytorch.common.config.config_base import check_config_quant_enable
-from amct_pytorch.common.config.config_base import check_config_dmq_balancer
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import is_valid_name
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import ConfigBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import GraphObjects
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import check_config_quant_enable
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import check_config_dmq_balancer
 
-from amct_pytorch.capacity import CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
 
 CONFIGURER = ConfigBase(
     GraphObjects(graph_querier=GraphQuerier, graph_checker=None), CAPACITY)

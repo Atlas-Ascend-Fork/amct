@@ -20,8 +20,8 @@ import numpy as np
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto # pylint: disable=E0401
 
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.common.utils import files as files_util
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
 
 RAW_DATA = 'raw_data'
 

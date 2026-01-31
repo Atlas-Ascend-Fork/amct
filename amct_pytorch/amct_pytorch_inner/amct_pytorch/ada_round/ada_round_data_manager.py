@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
 
 
 class StopFowardException(Exception):

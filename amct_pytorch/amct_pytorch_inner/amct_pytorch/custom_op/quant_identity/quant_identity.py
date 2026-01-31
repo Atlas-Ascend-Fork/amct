@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 import torch
 from torch.autograd import Function
-import amct_pytorch.utils as amct_utils
-from amct_pytorch.common.utils.util import version_higher_than
+import amct_pytorch.amct_pytorch_inner.amct_pytorch.utils as amct_utils
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
 
 
 VERSION = amct_utils.vars.find_torch_version()

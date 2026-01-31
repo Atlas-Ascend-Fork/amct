@@ -20,9 +20,9 @@ from torch import nn
 import torch
 import numpy as np
 
-from amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.custom_op.hfmg.hfmg import HFMG
-from amct_pytorch.custom_op.dump.dump import DUMP
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.hfmg.hfmg import HFMG
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.dump.dump import DUMP
 
 SCALE_D = 'scale_d'
 

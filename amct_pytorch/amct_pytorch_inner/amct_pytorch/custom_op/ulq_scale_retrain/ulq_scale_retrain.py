@@ -18,17 +18,17 @@
 from torch.autograd import Function
 import torch
 
-from amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
-from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.custom_op import ulq_scale_retrain_forward_pytorch
-from amct_pytorch.custom_op import ulq_scale_retrain_backward_pytorch
-from amct_pytorch.custom_op.utils import check_quant_data
-from amct_pytorch.custom_op.utils import check_group_param
-from amct_pytorch.custom_op.utils import process_tensor_shape
-from amct_pytorch.utils.vars import QUANTIZE_LINEAR
-from amct_pytorch.utils.vars import DEQUANTIZE_LINEAR
-from amct_pytorch.utils.vars import TRANSPOSE
-from amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import ulq_scale_retrain_forward_pytorch
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import ulq_scale_retrain_backward_pytorch
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_group_param
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_tensor_shape
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZE_LINEAR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DEQUANTIZE_LINEAR
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import TRANSPOSE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
 
 
 MODULE_TYPE = 'module_type'

@@ -23,7 +23,7 @@ from __future__ import print_function
 import numpy as np
 import torch
 
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 WEIGHT_PARAM_NAME = 'weight'
 

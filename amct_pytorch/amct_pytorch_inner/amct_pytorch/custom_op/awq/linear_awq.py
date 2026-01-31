@@ -19,10 +19,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from amct_pytorch.algo.awq import search_scale, apply_scale, search_clip, \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.algo.awq import search_scale, apply_scale, search_clip, \
     apply_clip_by_weight_granularity, get_quant_scale
-from amct_pytorch.utils.data_utils import check_data_type, check_linear_input_dim
-from amct_pytorch.utils.vars import MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2, INT4, INT8
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import check_data_type, check_linear_input_dim
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2, INT4, INT8
 
 
 class LinearAWQuant(nn.Module):

@@ -19,10 +19,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from amct_pytorch.utils.data_utils import check_data_type, check_linear_input_dim
-from amct_pytorch.custom_op.utils import calculate_scale_offset, calculate_progressive_weights_scale_factor
-from amct_pytorch.utils.vars import FLOAT8_E4M3FN, INT8, FLOAT4_E2M1
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import check_data_type, check_linear_input_dim
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import calculate_scale_offset, calculate_progressive_weights_scale_factor
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLOAT8_E4M3FN, INT8, FLOAT4_E2M1
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 
 
 class SmoothQuant(nn.Module):

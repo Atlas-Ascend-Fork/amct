@@ -19,10 +19,10 @@ import math
 import random
 import torch
 
-from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
-from amct_pytorch.utils.vars import LUT_QUANT_MODULE
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import LUT_QUANT_MODULE
 
 
 class CalibrationHelperBase:

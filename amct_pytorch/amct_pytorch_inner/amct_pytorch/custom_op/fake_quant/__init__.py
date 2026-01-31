@@ -15,17 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.custom_op.fake_quant.fake_dequant import FakeDeQuant
-from amct_pytorch.custom_op.fake_quant.fake_quant import FakeQuant
-from amct_pytorch.custom_op.fake_quant.fake_quantized_conv import FakeQuantizedConv
-from amct_pytorch.custom_op.fake_quant.fake_quantized_convtranspose import FakeQuantizedConvTranspose
-from amct_pytorch.custom_op.fake_quant.fake_quantized_linear import FakeQuantizedLinear
-from amct_pytorch.custom_op.fake_quant.fake_quantized_avgpool2d import FakeQuantizedAvgPool2d
-from amct_pytorch.custom_op.fake_quant.fake_quant_module import \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_dequant import FakeDeQuant
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_quant import FakeQuant
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_quantized_conv import FakeQuantizedConv
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_quantized_convtranspose import FakeQuantizedConvTranspose
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_quantized_linear import FakeQuantizedLinear
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_quantized_avgpool2d import FakeQuantizedAvgPool2d
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_quant_module import \
     FakeQuantConv2d, FakeQuantLinear
-from amct_pytorch.custom_op.fake_quant.weight_fake_quant_module import \
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.weight_fake_quant_module import \
     FakeWeightQuantizedConv2d, FakeWeightQuantizedLinear, LutFakeWeightQuantizedLinear
-from amct_pytorch.custom_op.fake_quant.fake_mx_quant_module import FakeMXQuantLinear
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.fake_mx_quant_module import FakeMXQuantLinear
 
 
 __all__ = [
