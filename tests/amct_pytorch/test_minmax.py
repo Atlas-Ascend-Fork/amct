@@ -18,12 +18,12 @@ import unittest
 import sys
 import torch
 import torch.nn as nn
-
-from amct_pytorch import quantize, convert
-from utils import TestModel
+from utils import TestModel, TestModelBias
 from mock_torch_npu import *
 from unittest.mock import MagicMock
 from unittest.mock import patch
+
+from amct_pytorch import quantize, convert
 
 torch.manual_seed(0)
 
@@ -487,3 +487,82 @@ class TestMinMax(unittest.TestCase):
         
     # int8 - int8
 # minmax
+
+ # Not Quant - float4e2m1
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
+    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
+    @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
+    def test_fp4_group_sym_minmax_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+            },
+            'algorithm': {'minmax'},
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        self.assertEqual(type(model.linear1).__name__, 'MinMaxQuant')
+        self.assertEqual(type(model.linear2).__name__, 'Linear')
+        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertIsNotNone(model.linear1.scale_w)
+        torch.Tensor.npu = mock_npu
+        convert(model)
+        quant_out = model(self.inputs.npu())
+        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
+        self.assertEqual(type(model.linear2).__name__, 'Linear')
+        self.assertEqual(type(model.linear3).__name__, 'Linear')
+
+    # float8e4m3 - float4e2m1 
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize) 
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul) 
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul) 
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack) 
+    @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast) 
+    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast) 
+    @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant) 
+    @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param) 
+    def test_fp8_fp4_group_sym_minmax_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7, mock_8): 
+        cfg = { 
+            'batch_num': 1, 
+            'quant_cfg': { 
+                'weights': { 
+                    'type': 'float4_e2m1', 
+                    'symmetric': True, 
+                    'strategy': 'group', 
+                    'group_size': 32 
+                }, 
+                'inputs': { 
+                    'type': 'float8_e4m3fn', 
+                    'symmetric': True, 
+                    'strategy': 'tensor', 
+                }, 
+            }, 
+            'algorithm': {'minmax'}, 
+        } 
+        model = copy.deepcopy(TestModelBias()).to(torch.bfloat16) 
+
+
+        quantize(model, cfg) 
+        model(self.inputs) 
+        self.assertEqual(type(model.linear1).__name__, 'Linear') 
+        self.assertEqual(type(model.linear2).__name__, 'MinMaxQuant') 
+        self.assertEqual(type(model.linear3).__name__, 'Linear') 
+        self.assertIsNotNone(model.linear2.scale_w1) 
+        self.assertIsNotNone(model.linear2.scale_d) 
+        torch.Tensor.npu = mock_npu 
+        convert(model) 
+        quant_out = model(self.inputs.npu()) 
+        self.assertEqual(type(model.linear1).__name__, 'Linear') 
+        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear') 
+        self.assertEqual(type(model.linear3).__name__, 'Linear')
