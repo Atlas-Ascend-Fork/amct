@@ -513,14 +513,7 @@ class ConfigBase():
 
         wgt_param.add_child('num_bits', WtsNumBitsField(capacity))
         self._add_wts_param(wgt_param, capacity)
-        if capacity.is_enable('NUQ'):
-            wgt_param.add_child('wts_algo', WtsAlgoField(capacity))
-            wgt_param.add_child('channel_wise', ChannelWiseField(capacity))
-            wgt_param.add_child('num_steps', NumStepsField(capacity))
-            wgt_param.add_child('num_of_iteration',
-                                NumOfIterationField(capacity))
-        else:
-            wgt_param.add_child('channel_wise', ChannelWiseField(capacity))
+        wgt_param.add_child('channel_wise', ChannelWiseField(capacity))
 
         if capacity.is_enable('TENSOR_QUANTIZE'):
             tensor_container = root.add_child(

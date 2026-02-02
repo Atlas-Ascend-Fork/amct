@@ -22,7 +22,6 @@ from torch import nn
 from pathlib import Path
 
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import post_quant_record_pb2
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
     record_activation_scale_offset
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
@@ -275,87 +274,4 @@ class Recorder(nn.Module): # pylint: disable=R0902
         LOGGER.logd(
             "Record layer '{}' data's quant factors!".format(layers_name),
             'Recorder')
-
-
-class PostQuantRecorder(nn.Module):
-    """
-    Record quant factors to record file.
-    """
-    def __init__(self, record_file):
-        """
-        Function: init function
-        Inputs:
-            record_file: a string, the file to record quant factors
-        Returns: None
-        """
-        super().__init__()
-        self.record_file = record_file
-        self.__read_over = False
-        self.records = post_quant_record_pb2.ScaleOffsetRecord()
-        self._read_record_file()
-        self.quant_result_file = str(Path(record_file).with_name(QUANT_RESULT_FILE))
-        self.quant_result_layer_names = list()
-        self.quant_result = dict()
-
-    def forward(self,
-                layers_name,
-                quant_info,
-                quant_factors=None):
-        """
-        Function: forward function
-        Inputs:
-            layers_name: a string, the file to record quant factors
-            quant_factors: a dict, include
-                scale_d: float number, data's scale
-                scale_w: float number, wts's scale
-        Returns: None
-        """
-        self._add_record_factors(layers_name, quant_info, quant_factors)
-        self._write_quant_result()
-        self._write_record_file()
-
-    def record_quant_result_layer(self, layer_name):
-        """
-        Function: record the number of quant result layers.
-        Inputs:
-            layer_name: list of string.
-        Returns: None
-        """
-        if not set(layer_name) < set(self.quant_result_layer_names):
-            self.quant_result_layer_names.extend(layer_name)
-
-    def _read_record_file(self):
-        """ read record from file"""
-        if not self.__read_over:
-            with open(self.record_file, 'r') as fid:
-                pbtxt_string = fid.read()
-                text_format.Merge(pbtxt_string, self.records)
-            self.__read_over = True
-
-    def _write_record_file(self):
-        """ write record to file"""
-        with open(self.record_file, "w") as fid:
-            fid.write(
-                text_format.MessageToString(self.records,
-                                            as_utf8=True))
-
-    def _write_quant_result(self):
-        if len(self.quant_result.keys()) == 0 or len(self.quant_result.keys()) != len(self.quant_result_layer_names):
-            return
-        self.quant_result_file = files_util.create_empty_file(self.quant_result_file, check_exist=True)
-        torch.save(self.quant_result, self.quant_result_file)
-        self.quant_result = dict()
-
-    def _add_record_factors(self, layers_name, quant_info, quant_params):
-        """ add quant factors to record """
-        if quant_params:
-            quant_info['quant_result_path'] = self.quant_result_file
-            self.quant_result.update(quant_params)
-
-        for layer_name in layers_name:
-            record_quant_factors(self.records, layer_name, quant_info)
-        LOGGER.logd(
-            "Record layer '{}' data's quant factors!".format(layers_name),
-            'Recorder')
-
     

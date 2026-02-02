@@ -35,10 +35,10 @@ endif()
 
 # compile proto
 add_custom_target(amct_pytorch_proto_compile
-  COMMAND cd ${BASE_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch_inner/amct_pytorch/proto/basic_info.proto
-  COMMAND cd ${BASE_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch_inner/amct_pytorch/proto/calibration_config_pytorch.proto
-  COMMAND cd ${BASE_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch_inner/amct_pytorch/proto/scale_offset_record_pytorch.proto
-  COMMAND cd ${BASE_DIR} && ${PROTOC_PROGRAM} -I=./ --python_out=./ amct_pytorch_inner/amct_pytorch/proto/retrain_config_pytorch.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/basic_info.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/calibration_config_pytorch.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/scale_offset_record_pytorch.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/retrain_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ distill_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ quant_calibration_config_pytorch.proto
 )
@@ -47,7 +47,7 @@ add_dependencies(amct_pytorch_proto_compile protobuf_host_build ascend_protobuf_
 endif()
 
 set(COMMON_LIB_INC_FILES
-  nuq.h util.h dump.h cast_util.h error_codes.h
+  util.h dump.h cast_util.h error_codes.h
 )
 
 add_custom_target(amct_pytorch_prepare_package
