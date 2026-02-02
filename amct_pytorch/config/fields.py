@@ -198,10 +198,11 @@ class CustomAlgField():
 
 class AlgorithmField():
     def __init__(self, alg_cfg, alg_reg):
-        self.check(alg_cfg)
-        alg_name, alg_attrs = get_alg_name_from_config(alg_cfg)
-        if alg_reg.algo.get(alg_name) is None:
-            raise ValueError(f'Not support algorithm {alg_name}, pls regiter it first')
+        alg_names, alg_attrs = get_alg_name_from_config(alg_cfg)
+        assert len(alg_names) == len(alg_attrs), "alg_names and alg_attrs should have the same length"
+        for alg_name in alg_names:
+            if alg_reg.algo.get(alg_name) is None:
+                raise ValueError(f'Not support algorithm {alg_name}, pls regiter it first')
 
         registed_algo_field = {
             'awq': AwqField,
@@ -211,13 +212,16 @@ class AlgorithmField():
             'custom': CustomAlgField
         }
 
-        if registed_algo_field.get(alg_name):
-            self.alg = registed_algo_field[alg_name](alg_attrs)
-        else:
-            self.alg = registed_algo_field['custom'](alg_name, alg_attrs)
+        self.algs = []
+        for alg_name, alg_attr in zip(alg_names, alg_attrs):
+            if registed_algo_field.get(alg_name):
+                self.algs.append(registed_algo_field[alg_name](alg_attr))
+            else:
+                self.algs.append(registed_algo_field['custom'](alg_name, alg_attr))
 
-        self.name = alg_name
+        self.names = alg_names
         self.value = self.set_value()
+
 
     @staticmethod
     def check(alg_cfg):
@@ -225,7 +229,15 @@ class AlgorithmField():
             raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
 
     def set_value(self):
-        return {'algorithm': self.alg.get_value()}
+        total_alg = {}
+        for alg in self.algs:
+            alg_value = alg.get_value()
+            assert len(alg_value) == 1
+            if isinstance(alg_value, set):
+                total_alg |= {next(iter(alg_value)): {}}
+            else:
+                total_alg |= alg_value
+        return {'algorithm': total_alg}
     
     def get_value(self):
         return self.value

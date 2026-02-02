@@ -59,15 +59,21 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                     object_name: name of object_module
         Return: None
         """
+
         if not AlgorithmRegistry.quant_to_deploy[type(object_module)]:
             raise RuntimeError(f"The deploy_op for {type(object_module).__name__} is None! "
                                "pls invoke algorithm_register to register deploy_op!")
 
         if isinstance(object_module, MinMaxQuant):
-            if object_module.scale_d is not None:
+            if object_module.scale_d:
                 npu_module = NpuQuantizationLinear(object_module)
             else:
                 npu_module = NpuWeightQuantizedLinear(object_module)
+        elif type(object_module).__name__ == 'FlatQuantAttention' or type(object_module).__name__ == 'FlatQuantMLP':
+            # We needs to access layernorm and trans from higher level, so it cannot be done within the module
+            # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
+            from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
+            npu_module = get_replacement_module(model, type(object_module).__name__, object_name, object_module)
         else:
             npu_module = AlgorithmRegistry.quant_to_deploy[type(object_module)](object_module)
         

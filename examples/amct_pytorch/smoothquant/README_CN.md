@@ -26,10 +26,10 @@ smoothquant算法仅支持全量化，支持的量化类型以及量化配置：
 |batch_num|uint32|量化使用的batch数量 |1|/|
 |skip_layers|str|跳过量化的层 |/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
 |weights.type|str|量化后权重类型|'int8'|/|
-|weights.symmtric|bool|对称量化|TRUE/FALSE|/|
+|weights.symmetric|bool|对称量化|TRUE/FALSE|/|
 |weights.strategy|str|量化粒度|'tensor'/'channel'|/|
 |inputs.type|str|量化后权重类型|'int8'|/|
-|inputs.symmtric|bool|对称量化|TRUE/FALSE|量化策略为token时，不支持非对称量化，不支持pergroup量化|
+|inputs.symmetric|bool|对称量化|TRUE/FALSE|量化策略为token时，不支持非对称量化，不支持pergroup量化|
 |inputs.strategy|str|量化粒度|'tensor'/'token'|/|
 |algorithm|dict|量化使用的算法配置|{'smoothquant'}|/|
 |algorithm.smoothquant.smooth_strength|float|smoothquant算法参数：迁移强度|0-1|不包含0/1|
