@@ -20,7 +20,8 @@ from amct_pytorch.utils.data_utils import convert_precision
 from amct_pytorch.utils.quant_util import pad_zero_by_group
 from amct_pytorch.quantize_op.utils import convert_to_dst_shape
 from amct_pytorch.quantize_op.utils import get_weight_min_max_by_granularity, calculate_scale_offset
-from amct_pytorch.utils.quant_util import convert_to_per_group_shape
+from amct_pytorch.utils.quant_util import convert_to_per_group_shape, quant_dequant_tensor
+from amct_pytorch.utils.vars import MXFP4_E2M1
 
 TOKENS_NUM = 512
 MAX_SHRINK = 0.5
@@ -40,12 +41,11 @@ def process_weights_for_layers(layers, scale_awq, quant_config):
     group_size = quant_config.get('weights_cfg').get("group_size")
     for layer in layers:
         layer.weight.data = layer.weight.data.mul(scale_awq)
-
-        scale, offset = calculate_scale_offset_by_granularity(layer.weight.data, quant_config)
-        layer.weight.data = do_quant(layer.weight.data, scale, offset, wts_granularity, group_size)
-        
-        layer.weight.data = convert_precision(layer.weight.data, wts_type)
-        layer.weight.data = do_dequant(layer.weight.data, scale, offset, wts_granularity, group_size)
+        if wts_type in (MXFP4_E2M1,):
+            layer.weight.data = quant_dequant_tensor(layer.weight.data, wts_type, group_size=group_size)
+        else:
+            scale, offset = calculate_scale_offset_by_granularity(layer.weight.data, quant_config)
+            layer.weight.data = quant_dequant_tensor(layer.weight.data, wts_type, scale, offset, group_size)
         layer.weight.data = layer.weight.data / scale_awq
 
 
@@ -117,54 +117,9 @@ def apply_scale(scale_awq, ori_module, input_data):
     ori_module.weight.data.mul_(scale)
     input_data.div_(scale)
 
-
 def calculate_scale_offset_by_granularity(weight, quant_config):
     weight_min, weight_max = get_weight_min_max_by_granularity(weight, quant_config)
     scale_w, offset_w = calculate_scale_offset(weight_max, weight_min, quant_config.get('weights_cfg').get('symmetric'), 
                                                quant_config.get('weights_cfg').get("quant_type"))
 
     return scale_w, offset_w
-
-
-def do_quant(weight, scale_w, offset_w, weight_granularity, group_size=None):
-    """
-    Scales weights to a quantization type scope based on specified group size.
-
-    Parameters:
-    weight: Original weights to be scaled
-    quant_type: Quantization type for scaling reference
-    group_size: Size of each group for quantization calculations
-
-    Returns:
-    scaled weight
-    """
-    ori_type = weight.dtype
-    ori_shape = weight.shape
-    if weight_granularity == 'group':
-        weight = convert_to_per_group_shape(weight, group_size)
-    scaled_weights = weight / scale_w 
-    if offset_w is not None:
-        scaled_weights += offset_w
-    weight = convert_to_dst_shape(scaled_weights, ori_shape)
-    return weight.to(ori_type)
-
-
-def do_dequant(weight, scale, offset, weight_granularity, group_size=None):
-    """
-    Scale the weight tensor by group factors and restore its original shape.
-
-    Parameters:
-    weight: Multi-dimensional weight tensor to be scaled.
-    scale_group: quant factor, shape is (group_num, 1).
-    group_size: Integer representing the size of each quantization group.
-
-    Returns:
-    A tensor with the same shape as the original input 'weight' after group-wise scaling.
-    """
-    ori_shape = weight.shape
-    if weight_granularity == 'group':
-        weight = convert_to_per_group_shape(weight, group_size)
-    if offset is not None:
-        weight = weight - offset
-    dequant_weights = weight * scale
-    return convert_to_dst_shape(dequant_weights, ori_shape).to(weight.dtype)

@@ -17,6 +17,8 @@
 
 from amct_pytorch.utils.vars import SUPPORT_WEIGHT_QUANT_DTYPE, SUPPORT_INPUT_QUANT_DTYPE
 from amct_pytorch.utils.vars import SUPPORT_QUANT_STRATEGY_WEIGHT, SUPPORT_QUANT_STRATEGY_INPUT
+from amct_pytorch.utils.vars import WTS_ASYMMETRIC_DTYPE, GROUP_SIZE_SUPPORTED_DTYPE
+from amct_pytorch.utils.vars import GROUP_SIZE_SUPPORTED_MAP
 from amct_pytorch.config.utils import get_alg_name_from_config
 
 
@@ -65,14 +67,30 @@ class WeightsCfgField():
                 f'but got {self.quant_type}')
         if self.symmetric not in [True, False]:
             raise ValueError(f'Weights symmetric only support bool [True, False], but got {self.symmetric}')
+        if self.symmetric == False and self.quant_type not in WTS_ASYMMETRIC_DTYPE:
+            raise ValueError(F'Weights symmetric only support to be True when '
+                f'weight quant_type is {self.quant_type}')
         if self.strategy not in SUPPORT_QUANT_STRATEGY_WEIGHT:
             raise ValueError(f'Weights strategy only support{SUPPORT_QUANT_STRATEGY_WEIGHT}, but got {self.strategy}')
         if self.group_size is not None and self.strategy != 'group':
             raise ValueError(f'Weights group_size only support strategy group, but got {self.strategy}')
         if self.group_size is None and self.strategy == 'group':
             raise ValueError(f'Weights group_size is necessary, when weights strategy is group')
-        if self.group_size is not None and (not isinstance(self.group_size, int) or self.group_size <= 0):
+        if self.group_size is not None:
+ 	        self.check_group_size()
+
+    def check_group_size(self):
+        if self.strategy != 'group':
+            raise ValueError(f'Weights group_size only support strategy group, but got {self.strategy}')
+        if not isinstance(self.group_size, int) or self.group_size <= 0:
             raise ValueError(f'group_size only support positive int, but got {self.group_size}')
+        if self.quant_type not in GROUP_SIZE_SUPPORTED_DTYPE:
+            raise ValueError(f'Weights group_size only support for '
+                f'weight dtype: {GROUP_SIZE_SUPPORTED_DTYPE}')
+        if self.quant_type in GROUP_SIZE_SUPPORTED_MAP.keys() and self.group_size not in \
+            GROUP_SIZE_SUPPORTED_MAP.get(self.quant_type):
+            raise ValueError(f'wts_type {self.quant_type} only support group_size value: '
+                            f'{GROUP_SIZE_SUPPORTED_MAP.get(self.quant_type)}')
 
 
 class InputsCfgField():
@@ -101,7 +119,9 @@ class InputsCfgField():
             raise ValueError(f'Inputs quant_dtype only support {SUPPORT_INPUT_QUANT_DTYPE}, but got {self.quant_type}')
         if self.symmetric not in [True, False]:
             raise ValueError(f'Inputs symmetric only support bool [True, False], but got {self.symmetric}')
-        if self.strategy not in SUPPORT_QUANT_STRATEGY_INPUT:
+        if self.symmetric == False and self.quant_type not in ['int8']:
+            raise ValueError(f'Inputs symmetric is unsupported to be False when Inputs quant_type is {self.quant_type}')
+        if self.strategy not in SUPPORT_QUANT_STRATEGY_INPUT and self.quant_type not in ['mxfp8_e4m3fn']:
             raise ValueError(f'Inputs strategy only support{SUPPORT_QUANT_STRATEGY_INPUT}, but got {self.strategy}')
         if self.strategy == 'token' and self.symmetric == False:
             raise ValueError(f'Inputs strategy token do not support asymmetric quantization')
@@ -188,6 +208,18 @@ class MinmaxField():
         return self.value
 
 
+class MxQuant():
+    def __init__(self, attrs):
+        self.value = self.set_value()
+    
+    @staticmethod
+    def set_value():
+        return {'mxquant'} 
+    
+    def get_value(self):
+        return self.value
+
+
 class CustomAlgField():
     def __init__(self, name, attrs):
         self.value = {name: attrs}
@@ -209,6 +241,7 @@ class AlgorithmField():
             'gptq': GptqField,
             'smoothquant': SmoothQuantField,
             'minmax': MinmaxField,
+            'mxquant': MxQuant,
             'custom': CustomAlgField
         }
 
