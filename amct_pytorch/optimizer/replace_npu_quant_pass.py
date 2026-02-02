@@ -20,7 +20,9 @@ from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.utils.model_util import ModuleHelper
 from amct_pytorch.deploy_op import NpuQuantizationLinear
 from amct_pytorch.deploy_op import NpuWeightQuantizedLinear
+from amct_pytorch.deploy_op import NpuQuantizationConv2d
 from amct_pytorch.quantize_op import MinMaxQuant
+from amct_pytorch.quantize_op import OfmrQuant
 from amct_pytorch.algorithm import AlgorithmRegistry
 
 
@@ -46,7 +48,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         Return: True: matched
                 False: mismatch
         """
-        if isinstance(module, tuple(AlgorithmRegistry.quant_op)):
+        if type(module) in AlgorithmRegistry.quant_to_deploy.keys():
             return True
 
         return False
@@ -59,12 +61,17 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                     object_name: name of object_module
         Return: None
         """
-
-        if not AlgorithmRegistry.quant_to_deploy[type(object_module)]:
+        if AlgorithmRegistry.quant_to_deploy[type(object_module)][0] is None:
             raise RuntimeError(f"The deploy_op for {type(object_module).__name__} is None! "
                                "pls invoke algorithm_register to register deploy_op!")
 
-        if isinstance(object_module, MinMaxQuant):
+        if isinstance(object_module, AlgorithmRegistry.quant_to_deploy[type(object_module)][0]):
+            LOGGER.logd(f'{type(object_module)} do not need to invoke convert')
+            return
+
+        if object_module.ori_module_type == 'Conv2d':
+            npu_module = NpuQuantizationConv2d(object_module)
+        elif type(object_module) in [MinMaxQuant, OfmrQuant]:
             if object_module.scale_d:
                 npu_module = NpuQuantizationLinear(object_module)
             else:
@@ -75,7 +82,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
             npu_module = get_replacement_module(model, type(object_module).__name__, object_name, object_module)
         else:
-            npu_module = AlgorithmRegistry.quant_to_deploy[type(object_module)](object_module)
+            npu_module = AlgorithmRegistry.quant_to_deploy[type(object_module)][0](object_module)
         
         ModuleHelper.replace_module_by_name(model, object_name, npu_module)
         LOGGER.logd("Replace npu module to '{}' success!".format(object_name), 'ReplaceNpuQuantPass')

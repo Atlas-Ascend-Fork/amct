@@ -14,13 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import torch 
 
-DATA_MAP = {
-    torch.float32: 0,
-    torch.float16: 1,
-    torch.bfloat16: 2
-}
+import torch 
 
 
 def check_linear_input_dim(input_tensor):
@@ -34,33 +29,25 @@ def check_linear_input_dim(input_tensor):
         raise RuntimeError("Linear quant only support dim from 2 to 6")
 
 
-def check_data_type(tensor_dtype, data_types):
+def float_to_fp4e2m1(tensor):
     """
-    Function: check tensor dtype in data_types
+    Function: convert float16/bfloat16 tensor to float4 by pytorch
     Args:
-        tensor_dtype: torch.dtype
-        data_types: list or tuple. torch.dtypes
-    """
-    if tensor_dtype not in data_types:
-        raise RuntimeError('Not support tensor dtype {}, support dtypes {}.'.format(tensor_dtype, data_types))
-
-
-@torch.no_grad()
-def convert_precision(ori_tensor, quant_dtype):
-    """
-    Function: convert precision to quant_dtype and back.
-    Args:
-        ori_tensor: torch.tensor
-        quant_dtype: quant type
+        tensor: torch.tensor. float16/bfloat16
     Returns:
-        torch.tensor
+        torch.tensor. float4_e2m1
     """
-    original_dtype_index = DATA_MAP.get(ori_tensor.dtype)
-    if original_dtype_index is None:
-        raise RuntimeError(
-            "dtype {} not support now, only support float32/float16/bfloat16.".format(ori_tensor.dtype))
+    sign = torch.sign(tensor)
+    absvalues = torch.abs(tensor)
 
-    quant_bits = int(quant_dtype.replace('int', ''))
-    converted_data = torch.clamp(torch.round(ori_tensor), -pow(2, quant_bits - 1), pow(2, quant_bits - 1) - 1)
-
-    return converted_data
+    fp4e2m1_tensor = torch.zeros_like(tensor)
+    fp4e2m1_tensor[absvalues <= 0.25] = 0
+    fp4e2m1_tensor[(absvalues > 0.25) & (absvalues < 0.75)] = 0.5
+    fp4e2m1_tensor[(absvalues >= 0.75) & (absvalues <= 1.25)] = 1.0
+    fp4e2m1_tensor[(absvalues > 1.25) & (absvalues < 1.75)] = 1.5
+    fp4e2m1_tensor[(absvalues >= 1.75) & (absvalues <= 2.5)] = 2.0
+    fp4e2m1_tensor[(absvalues > 2.5) & (absvalues < 3.5)] = 3.0
+    fp4e2m1_tensor[(absvalues >= 3.5) & (absvalues <= 5.0)] = 4.0
+    fp4e2m1_tensor[absvalues > 5.0] = 6.0
+    
+    return (fp4e2m1_tensor * sign)
