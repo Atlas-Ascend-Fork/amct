@@ -18,12 +18,12 @@ import unittest
 import sys
 import torch
 import torch.nn as nn
-
-from amct_pytorch import quantize, convert
-from utils import TestModel
+from utils import TestModel, TestModelBias
 from mock_torch_npu import *
 from unittest.mock import MagicMock
 from unittest.mock import patch
+
+from amct_pytorch import quantize, convert
 
 torch.manual_seed(0)
 

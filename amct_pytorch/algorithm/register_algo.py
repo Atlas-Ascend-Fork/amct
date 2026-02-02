@@ -26,10 +26,19 @@ class Algorithm:
         self.quant_op = []
 
     def register(self, name, src_op, quant_op, deploy_op):
-        if self.algo.get(name) is not None:
-            raise ValueError(f'{name} is already registered')
+        if self.algo.get(name) is None:
+            self.algo[name] = {}
+        self.algo[name][src_op] = quant_op
 
-        self.algo[name] = (src_op, quant_op)
-        self.quant_op.append(quant_op)
-        self.quant_to_deploy[quant_op] = deploy_op
+        if self.quant_to_deploy.get(quant_op) is None:
+            if isinstance(deploy_op, list):
+                self.quant_to_deploy[quant_op] = deploy_op
+            else:
+                self.quant_to_deploy[quant_op] = []
+
+        if isinstance(deploy_op, list):
+            self.quant_to_deploy[quant_op] += deploy_op
+        else:
+            self.quant_to_deploy[quant_op].append(deploy_op)
+        self.quant_to_deploy[quant_op] = list(set(self.quant_to_deploy[quant_op]))
         LOGGER.logd(f'register algorithm {name} success.')

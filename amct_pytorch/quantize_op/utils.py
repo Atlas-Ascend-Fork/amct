@@ -18,9 +18,16 @@
 import math
 import torch
 
-from amct_pytorch.utils.quant_util import pad_zero_by_group, convert_to_per_group_shape
+from amct_pytorch.utils.quant_util import quant_dequant_tensor, quant_tensor
+from amct_pytorch.utils.quant_util import convert_to_per_group_shape
+from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8
 
 FLT_EPSILON = 1.192092896e-7
+QUANT_MAX_SCOPE = {
+    FLOAT4_E2M1: 6.0,
+    FLOAT8_E4M3FN: 448.0, # 256 * 1.75
+    HIFLOAT8: 32768.0, # 2^15
+}
 
 
 def process_scale(scale, offset, symmetric, numbit=8):
@@ -85,8 +92,11 @@ def calculate_scale_offset(data_max, data_min, symmetric, data_type):
     data_max = data_max.to(torch.float32)
     data_min = data_min.to(torch.float32)
     if symmetric:
-        abs_max_is_negative = data_max.abs() < data_min.abs()
-        quant_scope = get_int_quant_scope(data_type, symmetric, abs_max_is_negative)
+        if data_type in (FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8):
+            quant_scope = get_float_quant_scope(data_type)
+        else:
+            abs_max_is_negative = data_max.abs() < data_min.abs()
+            quant_scope = get_int_quant_scope(data_type, symmetric, abs_max_is_negative)
         boundary = torch.where(abs(data_max) > abs(data_min), abs(data_max), abs(data_min))
         scale = boundary / quant_scope
         offset = None
@@ -174,3 +184,62 @@ def get_int_quant_scope(data_type, symmetric, abs_max_is_negative=False):
     # Symmetric quantization, asymmetric quantization range (-128, 127), use 127 for positive values and
     # 128 for negative values when the absolute value of the original data is the maximum. 
     return abs_max_is_negative + pow(2, quant_bits - 1) - 1
+
+
+def get_float_quant_scope(data_type):
+    """
+    Get the quantization step for float data types.
+
+    Args:
+        data_type: Type of float data (e.g., FLOAT4E2M1, FLOAT4E1M2)
+
+    Returns:
+        quantization step
+    """
+    return QUANT_MAX_SCOPE[data_type]
+
+
+def calculate_progressive_weights_scale_factor(weight, group_size=32):
+    """
+    Function: calculate two level weights's quant factor and do fakequant
+    Parameters: 
+    quant_config: configuration of quantization
+    group_size: scale w2 per group size
+    """
+    # weight per-channel to fp8_e4m3fn, per-group to fp4_e2m1
+    scale_w1, _ = calculate_scale_offset(weight.max(dim=-1).values, weight.min(dim=-1).values,
+                                            True, FLOAT8_E4M3FN)
+    weight = weight.transpose(-1, -2)
+    weight_fp8e4m3fn, _ = quant_tensor(weight, FLOAT8_E4M3FN, scale_w1)
+    weight_fp8e4m3fn = weight_fp8e4m3fn.transpose(-1, -2).reshape(-1, group_size).to(weight.dtype)
+
+    scale_w2, _ = calculate_scale_offset(weight_fp8e4m3fn.max(dim=-1).values, 
+                                            weight_fp8e4m3fn.min(dim=-1).values, True, FLOAT4_E2M1)
+    # scale_w1 [g] -> [g,1]
+    scale_w2 = scale_w2.unsqueeze(1)
+
+    return scale_w1, scale_w2
+
+
+def apply_progressive_quant(weight, scale_w1, scale_w2, group_size=32):
+    if list(scale_w1.shape) != [weight.shape[0]]:
+        raise RuntimeError("scale_w1.shape should be [{}] current shape is {}"
+                        .format(weight.shape[0], list(scale_w1.shape)))
+    group = int(weight.shape[0] * weight.shape[1] / group_size)
+    if list(scale_w2.shape) != [group, 1]:
+        raise RuntimeError("scale_w2.shape should be [{}, 1] current shape is {}".format(group, list(scale_w2.shape)))
+    
+    # weight -> n, k
+    # quantized_weight_fp8 -> k, n
+    quantized_weight_fp8, _ = \
+        quant_tensor(weight.transpose(-1, -2), FLOAT8_E4M3FN, scale_w1)
+    # quantized_weight_fp4 -> n*k/g, g
+    quantized_weight_fp4, _ = \
+        quant_tensor(quantized_weight_fp8.transpose(-1, -2).reshape(-1, group_size).to(weight.dtype),
+        FLOAT4_E2M1, scale_w2)
+    import torch_npu
+    # quantized_weight_fp4 -> n, k/2
+    quantized_weight = torch_npu.npu_dtype_cast(quantized_weight_fp4.reshape(weight.shape).npu(),
+        dtype=torch_npu.float4_e2m1fn_x2)
+
+    return quantized_weight
