@@ -69,7 +69,7 @@ int SearchNV2AccumulateError(std::vector<std::vector<T>>& currentData, std::vect
     const FloatData &deqScaleCpu, bool isBroadcast)
 {
     // data size in one channel;
-    if (currentData.size() == 0) {
+    if ((currentData.size() == 0) || (currentData[0].size() == 0)) {
         return AmctCommon::CONTAINER_EMPTY_ERROR;
     }
     size_t searchNDataChannelSize = currentData[0].size();

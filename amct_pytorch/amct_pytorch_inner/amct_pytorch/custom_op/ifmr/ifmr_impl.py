@@ -17,9 +17,9 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BASE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLT_EPSILON
+from ....amct_pytorch.custom_op.utils import process_scale
+from ....amct_pytorch.utils.vars import BASE
+from ....amct_pytorch.utils.vars import FLT_EPSILON
 
 
 def find_optimal_scale_offset(data, ifmr_param, max_value, min_value):
@@ -95,7 +95,7 @@ def find_max_and_min_value_with_percentile(data, max_percentile, min_percentile)
     length = data.numel()
     if (1.0 - max_percentile) < FLT_EPSILON:
         max_index = 1
-    else :
+    else:
         max_index = length - int(max_percentile * length)
 
     if (1.0 - min_percentile) < FLT_EPSILON:

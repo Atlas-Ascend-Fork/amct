@@ -19,25 +19,25 @@ import os
 from io import BytesIO
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import create_default_distill_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import create_distill_config_from_proto
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import parse_distill_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.log_base import LOG_FILE_DIR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
-    ScaleOffsetRecordHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_data_manager import DistillDataManager
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_sample import DistillSampleBase
 import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import _generate_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import _check_config_consistency
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parse_record_file import RecordFileParser
+from ..amct_pytorch.configuration.distill_config import create_default_distill_config
+from ..amct_pytorch.configuration.distill_config import create_distill_config_from_proto
+from ..amct_pytorch.configuration.distill_config import parse_distill_config
+from ..amct_pytorch.parser.parser import Parser
+from ..amct_pytorch.utils.log import LOGGER
+from ..amct_pytorch.common.utils.check_params import check_params
+from ..amct_pytorch.common.utils import files as files_util
+from ..amct_pytorch.common.utils.log_base import LOG_FILE_DIR
+from ..amct_pytorch.common.utils.record_file_operator import \
+    ScaleOffsetRecordHelper
+from ..amct_pytorch.utils.model_util import ModuleHelper
+from ..amct_pytorch.distill.distill_data_manager import DistillDataManager
+from ..amct_pytorch.distill.distill_helper import DistillHelper
+from ..amct_pytorch.distill.distill_sample import DistillSampleBase
+from ..amct_pytorch.quantize_tool import _generate_model
+from ..amct_pytorch.quantize_tool import _check_config_consistency
+from ..amct_pytorch.proto import scale_offset_record_pb2
+from ..amct_pytorch.parser.parse_record_file import RecordFileParser
 
 MODULE_NAME = 'Distill'
 

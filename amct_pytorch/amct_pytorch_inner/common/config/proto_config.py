@@ -31,7 +31,6 @@ from ..utils.util import check_no_repeated
 from ..utils.util import proto_float_to_python_float
 from .field import NUM_STEPS
 from .field import NUM_OF_ITERATION
-from ..nuq_parser.amct_parse_fusion_json import get_weight_compress_layers
 from ...utils.log import LOGGER # pylint: disable=relative-beyond-top-level
 from ..utils.vars_util import WINOGRAD_NUM_BITS
 
@@ -106,12 +105,6 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
             weight_params[CHANNEL_WISE] = ada_quantize.channel_wise
 
     @staticmethod
-    def _get_nuq_quantize(nuq_quantize):
-        steps = nuq_quantize.num_steps
-        iterations = nuq_quantize.num_of_iteration
-        return steps, iterations
-
-    @staticmethod
     def _get_hfmg_config(config, act_params):
         '''extract hfmg configs'''
         act_params['act_algo'] = 'hfmg'
@@ -137,16 +130,6 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         return False
 
     @staticmethod
-    def _gen_nuq_config(steps, iterations):
-        config = OrderedDict()
-        weight_params = OrderedDict()
-        config[WEIGHT_QUANT_PARAMS] = weight_params
-        weight_params['wts_algo'] = 'nuq_quantize'
-        weight_params['num_steps'] = steps
-        weight_params['num_of_iteration'] = iterations
-        return config
-
-    @staticmethod
     def _get_ifmr_config(config, act_params):
         '''extract ifmr configs'''
         ifmr_quantize = config.ifmr_quantize
@@ -167,29 +150,6 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         else:
             act_params[ASYMMETRIC] = None
 
-    def get_nuq_layer_config(self,
-                             layer_config,
-                             common_config):
-        """
-        brief:generate NUQ config for the supported layers.
-        parameters:
-            layer_config: OrderedDict, layer config
-            common_config: OrderedDict, common_config
-        return: layer config with nuq config
-        """
-        nuq_layers, steps, iterations = self._get_nuq_setting()
-        type_config = self._get_override_layer_types()
-        if len(nuq_layers) == 0:
-            LOGGER.logw("nuq_config is given, while no layer is supported for NUQ!")
-        for layer in nuq_layers:
-            if layer in layer_config:
-                continue
-            if self.layer_type.get(layer) in type_config:
-                continue
-            layer_config[layer] = self._gen_nuq_config(steps, iterations)
-            if ACTIVATION_QUANT_PARAMS in common_config.keys():
-                layer_config[layer][ACTIVATION_QUANT_PARAMS] = common_config[ACTIVATION_QUANT_PARAMS]
-        return layer_config
 
     def get_proto_config(self, enable_quant=True, enable_approximate=False):
         """parse proto config"""
@@ -199,16 +159,9 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         elif enable_quant:
             global_config = self._get_global_config()
 
-            # the priority of layer config and type config is
-            # higher than nuq config
             layer_config = self._get_override_layer_configs()
             type_config = self._get_override_layer_types()
             common_config = self._get_common_config()
-
-            if hasattr(self.proto_config, 'nuq_config'):
-                if self.proto_config.HasField('nuq_config'):
-                    layer_config = self.get_nuq_layer_config(
-                        layer_config, common_config)
 
             if not common_config and not type_config:
                 if hasattr(self.proto_config, CONV_CALIBRATION_CONFIG):
@@ -315,37 +268,6 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         check_no_repeated(repeated_layers, 'skip_fusion_layers')
         return skip_fusion_layers
 
-    def _get_nuq_layers(self, mapping_file, steps):
-        nuq_layers = []
-        if mapping_file is None:
-            return nuq_layers
-        # get compress layers
-        compress_layers, parsed_json_ops = get_weight_compress_layers(mapping_file)
-        # check whether the ops in json the ops in the original graph
-        self.graph_querier.check_op_matching(self.graph, parsed_json_ops)
-
-        nuq_quantizable_layers = self.graph_querier.get_nuq_quant_layers(self.graph)
-        for ori_layer in compress_layers:
-            if ori_layer in nuq_quantizable_layers:
-                if self.graph_querier.check_nuq_steps(self.graph, ori_layer, steps):
-                    nuq_layers.append(ori_layer)
-        return nuq_layers
-
-    def _get_nuq_setting(self):
-        mapping_file = None
-        steps = NUM_STEPS
-        iterations = NUM_OF_ITERATION
-        if self.proto_config.HasField('nuq_config'):
-            nuq_config = self.proto_config.nuq_config
-            mapping_file = nuq_config.mapping_file
-
-            if nuq_config.HasField('nuq_quantize'):
-                steps, iterations = self._get_nuq_quantize(
-                    nuq_config.nuq_quantize)
-
-        nuq_layers = self._get_nuq_layers(mapping_file, steps)
-        return nuq_layers, steps, iterations
-
     def _parser_calibration_config(self, config):
         layer_config = OrderedDict()
         act_params = OrderedDict()
@@ -357,20 +279,11 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
             self._get_hfmg_config(config, act_params)
 
         if config.HasField('arq_quantize'):
-            if self.capacity.is_enable('NUQ'):
-                weight_params['wts_algo'] = 'arq_quantize'
             arq_quantize = config.arq_quantize
             if arq_quantize.HasField(CHANNEL_WISE):
                 weight_params[CHANNEL_WISE] = arq_quantize.channel_wise
             if hasattr(arq_quantize, 'quant_bits') and arq_quantize.HasField('quant_bits'):
                 weight_params['num_bits'] = arq_quantize.quant_bits
-        elif self.capacity.is_enable('NUQ') and config.HasField(
-                'nuq_quantize'):
-            weight_params['wts_algo'] = 'nuq_quantize'
-            nuq_quantize = config.nuq_quantize
-            steps, iterations = self._get_nuq_quantize(nuq_quantize)
-            weight_params['num_steps'] = steps
-            weight_params['num_of_iteration'] = iterations
         elif hasattr(config, 'ada_quantize') and config.HasField('ada_quantize'):
             weight_params['wts_algo'] = 'ada_quantize'
             self._get_ada_quantize(config.ada_quantize, weight_params)

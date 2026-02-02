@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 
 from torch import nn
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import dump_forward
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ....amct_pytorch.custom_op import dump_forward
+from ....amct_pytorch.utils.log import LOGGER
 
 LAYER_NAME = 'layer_name'
 

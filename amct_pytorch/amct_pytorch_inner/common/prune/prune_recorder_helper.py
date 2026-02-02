@@ -254,7 +254,7 @@ class PruneRecordHelper:
         Param: del_record_list, the records to delete
         Return: None
         '''
-        del_record_dict = {id(record):record for record in del_record_list}
+        del_record_dict = {id(record): record for record in del_record_list}
         for del_record in del_record_dict.values():
             self.delete_record(del_record)
 
@@ -402,11 +402,11 @@ class PruneRecordHelper:
                 begin = 0
             output_range = [begin, begin]
             for idx, split_size in enumerate(split_info):
-                new_record = self.prune_records[records_len+idx]
+                new_record = self.prune_records[records_len + idx]
                 new_producer = new_record.producer.add()
                 new_producer.CopyFrom(producer)
                 attr_helper = AttrProtoHelper(new_producer)
-                output_range = [output_range[1], output_range[1]+split_size]
+                output_range = [output_range[1], output_range[1] + split_size]
                 attr_helper.set_attr_value(ATTR_BEGIN, 'INT', output_range[0])
                 attr_helper.set_attr_value(ATTR_END, 'INT', output_range[1])
         # copy and modify consumer info
@@ -418,11 +418,11 @@ class PruneRecordHelper:
                 begin = 0
             output_range = [begin, begin]
             for idx, split_size in enumerate(split_info):
-                new_record = self.prune_records[records_len+idx]
+                new_record = self.prune_records[records_len + idx]
                 new_consumer = new_record.consumer.add()
                 new_consumer.CopyFrom(consumer)
                 attr_helper = AttrProtoHelper(new_consumer)
-                output_range = [output_range[1], output_range[1]+split_size]
+                output_range = [output_range[1], output_range[1] + split_size]
                 attr_helper.set_attr_value(ATTR_BEGIN, 'INT', output_range[0])
                 attr_helper.set_attr_value(ATTR_END, 'INT', output_range[1])
 
@@ -433,7 +433,7 @@ def _merge_channels_by_begin_end(remain_channels_raw):
     for layer, chanels in remain_channels_raw.items():
         # sort dict items by begin value
         remain_channel = []
-        sorted_remain_channels = sorted(chanels.items(), key=lambda x:x[0][0])
+        sorted_remain_channels = sorted(chanels.items(), key=lambda x: x[0][0])
 
         # concatenate all remain channels
         for sorted_remain_channel in sorted_remain_channels:

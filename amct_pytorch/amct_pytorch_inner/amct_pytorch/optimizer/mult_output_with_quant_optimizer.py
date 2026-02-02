@@ -16,12 +16,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from onnx import onnx_pb # pylint: disable=import-error
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MULT_OUTPUT_TYPES
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
+from ...amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from ...amct_pytorch.utils.vars import MULT_OUTPUT_TYPES
 
 
 class MultQuantOptimizerPass(BaseFusionPass):

@@ -18,24 +18,25 @@
 import json
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import create_quant_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import create_quant_retrain_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import inner_fuse_bn
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import inner_quantize_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import generate_fakequant_module
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import add_dump_operations
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import struct_helper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_mixed_precision.auto_mixed_precision_search import AutoSearchMixedPrecisionBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration.sensitivity_base import SensitivityBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.net_params import ParamsHelperTorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.auto_calibration_helper import AutoCalibrationHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import FP16_BIT
+from ..amct_pytorch.quantize_tool import create_quant_config
+from ..amct_pytorch.quantize_tool import create_quant_retrain_config
+from ..amct_pytorch.quantize_tool import inner_fuse_bn
+from ..amct_pytorch.quantize_tool import inner_quantize_model
+from ..amct_pytorch.quantize_tool import generate_fakequant_module
+from ..amct_pytorch.quantize_tool import add_dump_operations
+from ..amct_pytorch.parser.parser import Parser
+from ..amct_pytorch.common.utils.check_params import check_params
+from ..amct_pytorch.common.utils import struct_helper
+from ..amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
+from ..amct_pytorch.common.auto_mixed_precision.auto_mixed_precision_search \
+    import AutoSearchMixedPrecisionBase
+from ..amct_pytorch.common.auto_calibration.sensitivity_base import SensitivityBase
+from ..amct_pytorch.configuration.check import GraphQuerier
+from ..amct_pytorch.utils.model_util import ModuleHelper
+from ..amct_pytorch.utils.net_params import ParamsHelperTorch
+from ..amct_pytorch.utils.auto_calibration_helper import AutoCalibrationHelper
+from ..amct_pytorch.utils.log import LOGGER
+from ..amct_pytorch.common.utils.vars_util import FP16_BIT
 
 
 class GraphInfo(struct_helper.GraphInfoBase):

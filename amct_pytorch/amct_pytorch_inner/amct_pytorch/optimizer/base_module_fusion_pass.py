@@ -16,7 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.model_util import ModuleHelper
 
 
 class BaseModuleFusionPass():# pylint: disable=unused-argument, no-self-use

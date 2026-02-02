@@ -19,7 +19,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.kl_divergence import find_scale_and_offset_by_kl
+from ...amct_pytorch.ada_round.kl_divergence import find_scale_and_offset_by_kl
 
 GAMMA = -0.1
 ZETA = 1.1

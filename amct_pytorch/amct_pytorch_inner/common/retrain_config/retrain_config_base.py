@@ -183,7 +183,7 @@ class RetrainConfigBase():
         supported_layers, retrain_supported_layers, prune_supported_layers \
             = self.get_support_layers(graph)
         self._check_layer_empty(retrain_supported_layers, prune_supported_layers)
-        retrain_layers = {'support_layers':supported_layers,
+        retrain_layers = {'support_layers': supported_layers,
                           'qat_layers': retrain_supported_layers,
                           'prunable_layers': prune_supported_layers
                          }

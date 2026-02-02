@@ -15,16 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv1d import Conv1dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv_transpose_1d import ConvTranspose1dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv_transpose_2d import ConvTranspose2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.linear import LinearQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.quant_calibration_op import QuantCalibrationOp
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.lstm import LSTMQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.gru import GRUQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.matmul import MatMulQAT
+
+from .....amct_pytorch.nn.module.quantization.conv1d import Conv1dQAT
+from .....amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
+from .....amct_pytorch.nn.module.quantization.conv_transpose_1d import ConvTranspose1dQAT
+from .....amct_pytorch.nn.module.quantization.conv_transpose_2d import ConvTranspose2dQAT
+from .....amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
+from .....amct_pytorch.nn.module.quantization.linear import LinearQAT
+from .....amct_pytorch.nn.module.quantization.quant_calibration_op import QuantCalibrationOp
+from .....amct_pytorch.nn.module.quantization.lstm import LSTMQAT
+from .....amct_pytorch.nn.module.quantization.gru import GRUQAT
+from .....amct_pytorch.nn.module.quantization.matmul import MatMulQAT
 
 __all__ = [Conv1dQAT, Conv2dQAT, ConvTranspose1dQAT, ConvTranspose2dQAT,
            Conv3dQAT, LinearQAT, QuantCalibrationOp, LSTMQAT, GRUQAT, MatMulQAT]

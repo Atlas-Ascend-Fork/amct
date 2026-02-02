@@ -15,14 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import math
 import torch
 import numpy as np
-import math
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import DEFAULT_NUM_BITS
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from ...amct_pytorch.custom_op.utils import check_quant_data
+from ...amct_pytorch.custom_op.utils import process_scale
+from ...amct_pytorch.common.utils.vars_util import DEFAULT_NUM_BITS
+from ...amct_pytorch.common.utils.util import version_higher_than
 
 HIST_BINS = 512
 NUM_SEARCH = 20
@@ -69,51 +69,6 @@ class KlOptimize():
         self.hist_min = 0
         self.hist_max = 0
         self.quant_bins = QUANT_BINS
-
-    def _init_histogram(self):
-        '''init histogram from tensor'''
-        # "max_cpu" not implemented for 'half' in torch 1.10.0
-        if version_higher_than(torch.__version__, '1.10.0'):
-            hist_max = self.tensor.abs().max()
-        else:
-            hist_max = self.tensor.to(torch.float32).abs().max()
-        hist_min = -hist_max
-
-        if hist_max == hist_min:
-            return False
-
-        self.histogram = torch.histc(self.tensor.to(torch.float32), bins=self.hist_bins, 
-                                     min=hist_min, max=hist_max).tolist()
-
-        self.hist_min = hist_min
-        self.hist_max = hist_max
-        return True
-    
-    def _compute_kl(self, p, q):
-        '''kl divergence Compute'''
-        p = np.asarray(p, dtype=np.float64)
-        q = np.asarray(q, dtype=np.float64)
-        p_normalized = p / np.sum(p)
-        q_normalized = q / np.sum(q)
-        kl = np.sum(p_normalized * np.log(p_normalized / q_normalized))
-        return kl
-
-    def _condition_histogram(self, hist):
-        '''adjust histogram'''
-
-        is_zero = [val == 0 for val in hist]
-        zeros_num = is_zero.count(True)
-        non_zeros_num = len(hist) - zeros_num
- 
-        eps_zeros = 0.0001
-        eps_non_zeros = eps_zeros * zeros_num / non_zeros_num
-        if eps_non_zeros >= 1:
-            # zeros_num >> non_zeros_num
-            return hist
- 
-        for i, value in enumerate(hist):
-            hist[i] = eps_zeros if value == 0 else (value + eps_non_zeros)
-        return hist
  
     def optimize_kl(self):
         '''
@@ -138,7 +93,7 @@ class KlOptimize():
             hist_win_num = hist_bin_end - hist_bin_start
 
             # saturate the left & right
-            p = self.histogram[hist_bin_start : hist_bin_end]
+            p = self.histogram[hist_bin_start: hist_bin_end]
 
             p[0] += sum(self.histogram[:hist_bin_start])
             p[-1] += sum(self.histogram[hist_bin_end:])
@@ -181,3 +136,48 @@ class KlOptimize():
                 scale = hist_min / -128
     
         return scale, offset
+    
+    def _init_histogram(self):
+        '''init histogram from tensor'''
+        # "max_cpu" not implemented for 'half' in torch 1.10.0
+        if version_higher_than(torch.__version__, '1.10.0'):
+            hist_max = self.tensor.abs().max()
+        else:
+            hist_max = self.tensor.to(torch.float32).abs().max()
+        hist_min = -hist_max
+
+        if hist_max == hist_min:
+            return False
+
+        self.histogram = torch.histc(self.tensor.to(torch.float32), bins=self.hist_bins, 
+                                     min=hist_min, max=hist_max).tolist()
+
+        self.hist_min = hist_min
+        self.hist_max = hist_max
+        return True
+
+    def _compute_kl(self, p, q):
+        '''kl divergence Compute'''
+        p = np.asarray(p, dtype=np.float64)
+        q = np.asarray(q, dtype=np.float64)
+        p_normalized = p / np.sum(p)
+        q_normalized = q / np.sum(q)
+        kl = np.sum(p_normalized * np.log(p_normalized / q_normalized))
+        return kl
+
+    def _condition_histogram(self, hist):
+        '''adjust histogram'''
+
+        is_zero = [val == 0 for val in hist]
+        zeros_num = is_zero.count(True)
+        non_zeros_num = len(hist) - zeros_num
+ 
+        eps_zeros = 0.0001
+        eps_non_zeros = eps_zeros * zeros_num / non_zeros_num
+        if eps_non_zeros >= 1:
+            # zeros_num >> non_zeros_num
+            return hist
+ 
+        for i, value in enumerate(hist):
+            hist[i] = eps_zeros if value == 0 else (value + eps_non_zeros)
+        return hist

@@ -21,6 +21,7 @@ from .rnn_base import RnnQuantOpBase
 
 LINEAR_BEFORE_RESET = 'linear_before_reset'
 
+
 class BasicGRUInplaceFillWindowCache(RnnQuantOpBase):
     """
     Function: define onnx::BasicGRUInplaceFillWindowCache op

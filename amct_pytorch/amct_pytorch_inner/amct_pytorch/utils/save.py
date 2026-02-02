@@ -15,20 +15,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+__all__ = ['save_onnx_model', 'generate_onnx_file_name', 'split_dir_prefix']
+
 import os
 import numpy as np
 import onnx
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-
-__all__ = ['save_onnx_model', 'generate_onnx_file_name', 'split_dir_prefix']
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from ...amct_pytorch.common.utils import files as files_util
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 
 
 # Limitation of model is 2GB
@@ -56,7 +55,7 @@ def convert_external_data_format(onnx_model, graph_proto, file_name, model_type)
         if initializer.data_location == 1:
             ori_tensor_external.append(index)
 
-    tensor_size.sort(key=lambda x:x[1], reverse=True)
+    tensor_size.sort(key=lambda x: x[1], reverse=True)
 
     # save external_data of input model in output path
     for index in ori_tensor_external:

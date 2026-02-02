@@ -19,10 +19,10 @@
 from collections import namedtuple
 from torch import nn # pylint: disable=E0401
 import torch # pylint: disable=E0401
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import PER_TENSOR_IDX, PER_CHANNEL_IDX
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import ifmr_forward_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ....amct_pytorch.common.utils.vars_util import PER_TENSOR_IDX, PER_CHANNEL_IDX
+from ....amct_pytorch.custom_op import ifmr_forward_pytorch
+from ....amct_pytorch.custom_op.utils import check_quant_data
+from ....amct_pytorch.utils.log import LOGGER
 
 QuantInfo = namedtuple('QuantInfo', ['flag', 'scale', 'offset', 'clip_max', 'clip_min'])
 

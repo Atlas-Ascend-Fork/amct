@@ -153,7 +153,8 @@ void TensorDecomposition::Calculation1(const double &p, const double &q, const d
     const double &xf, const double &b, double &rat, double &x, const double &tol2,
     const double &xm, const double &tol1, bool &golden)
 {
-    if ((abs(p) < abs(0.5 * q * r)) && (p > q * (a - xf)) && (p < q * (b - xf))) {  // half 0.5 paramter p and q
+    // half 0.5 paramter p and q
+    if ((abs(p) < abs(0.5 * q * r)) && (p > q * (a - xf)) && (p < q * (b - xf))) {
         rat = p / q;
         x = xf + rat;
 
@@ -399,7 +400,7 @@ TdError TensorDecomposition::EVBMF(unsigned int &resultOut, int sizeL, int sizeM
 TdError TensorDecomposition::MakeDivisible(unsigned int &newV, int rank, int divisior, int minVal)
 {
     if (TensorDecomposition::CheckScalar(rank, true) && TensorDecomposition::CheckScalar(divisior, true) &&
-        TensorDecomposition::CheckScalar(minVal, true)) {
+        TensorDecomposition::CheckScalar(minVal, true) && (divisior != 0)) {
         newV = max(minVal, (static_cast<int>(rank + divisior / 2) / divisior) * divisior);    // get new value 2
         if (newV < 0.9 * rank) {                                                            // divide rule 0.9
             newV += divisior;
@@ -430,7 +431,9 @@ TdError TensorDecomposition::EstimateRanks(unsigned int &rankResult, const Vecto
         (void)printf("[WARNING][%s][%d] Warning: estimate rank is %u, please check if pretrained weight is correct.\n",
             __FUNCTION__, __LINE__, rank);
     }
-
+    if ((divisor == 0) || ((divisor + 1) == 0)) {
+        return TdError::TD_BAD_PARAMETERS_ERR;
+    }
     rank = min(static_cast<int>(rank), static_cast<int>(sizeL / divisor));
     rank = max(static_cast<int>(rank), static_cast<int>(sizeL / (divisor + 1)));
     TD_FUNC_CHECK(MakeDivisible(rankResult, rank, channelStep, minChannel));

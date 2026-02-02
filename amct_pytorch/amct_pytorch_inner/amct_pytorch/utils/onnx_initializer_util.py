@@ -20,8 +20,8 @@ import numpy as np
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto # pylint: disable=E0401
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.common.utils import files as files_util
 
 RAW_DATA = 'raw_data'
 
@@ -61,9 +61,6 @@ class TensorProtoHelper():
         self.tensor = tensor
         self.model_path = model_path
         self.externel_data = self.check_external_data()
- 
-    def check_external_data(self):
-        return self.tensor.HasField('data_location') and self.tensor.data_location == 1
 
     @classmethod
     def map_data_location(cls, proto_value):
@@ -95,6 +92,9 @@ class TensorProtoHelper():
         else:
             np_value = np.array(value, getattr(np, tensor_np_type))
         return np_value
+
+    def check_external_data(self):
+        return self.tensor.HasField('data_location') and self.tensor.data_location == 1
 
     def get_data(self):
         '''
@@ -173,12 +173,6 @@ class TensorProtoHelper():
                 getattr(self.tensor, data_location).extend(data)
             else:
                 getattr(self.tensor, data_location).MergeFrom(data)
-
-    def _rematch_data_location(self, data_location, tensor_data_type):
-        ''' rematch data location for save data '''
-        if tensor_data_type == self.data_type.FLOAT16:
-            data_location = RAW_DATA
-        return data_location
 
     def get_external_data(self):
         '''
@@ -315,3 +309,9 @@ class TensorProtoHelper():
             LOGGER.logi("external data %s" % (external_file),\
                         'Utils')
         os.chmod(external_file, files_util.FILE_MODE)
+    
+    def _rematch_data_location(self, data_location, tensor_data_type):
+        ''' rematch data location for save data '''
+        if tensor_data_type == self.data_type.FLOAT16:
+            data_location = RAW_DATA
+        return data_location

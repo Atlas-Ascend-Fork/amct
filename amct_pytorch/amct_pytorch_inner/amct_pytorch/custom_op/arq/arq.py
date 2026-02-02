@@ -15,14 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+__all__ = ['weight_cali_tensor', 'weight_quant_np']
+
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import arq_cali_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import arq_real_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_scale_offset
-
-__all__ = ['weight_cali_tensor', 'weight_quant_np']
+from ....amct_pytorch.custom_op import arq_cali_pytorch
+from ....amct_pytorch.custom_op import arq_real_pytorch
+from ....amct_pytorch.custom_op.utils import check_quant_data
+from ....amct_pytorch.custom_op.utils import check_scale_offset
 
 
 def weight_cali_tensor(weight_tensor, wts_param):

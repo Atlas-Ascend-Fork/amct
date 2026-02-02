@@ -29,7 +29,7 @@ add_subdirectory(amct_pytorch_inner)
 
 message("-------pytorch 1-----")
 set(COMMON_LIB_INC_FILES
-  nuq.h util.h dump.h cast_util.h error_codes.h
+  util.h dump.h cast_util.h error_codes.h
 )
 set(HI_PYTHON python3)
 add_custom_target(amct_pytorch_package
@@ -59,7 +59,6 @@ add_custom_target(amct_pytorch_clean
   COMMAND cd ${BASE_DIR} && rm -f *.tar.gz
   COMMAND cd ${BASE_DIR} && rm -rf amct_pytorch.egg-info && rm -rf dist && rm -rf build
   COMMAND cd ${BASE_DIR} && rm -f amct_pytorch/proto/*_pb2.py
-  COMMAND cd ${BASE_DIR} && rm -f amct_pytorch/custom_op/nuq/*.so
   COMMAND cd ${BASE_DIR} && rm -r amct_pytorch/custom_op/dump/*.so
   COMMAND cd ${BASE_DIR} && rm -r amct_pytorch/custom_op/cast/*.so
 )
