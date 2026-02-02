@@ -20,8 +20,10 @@ from torch import nn
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.quantize_op.utils import calculate_scale_offset
+from amct_pytorch.quantize_op.utils import calculate_progressive_weights_scale_factor
 from amct_pytorch.quantize_op.utils import get_weight_min_max_by_granularity
 from amct_pytorch.utils.data_utils import check_linear_input_dim
+from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1
 from amct_pytorch.utils.log import LOGGER
 
 
@@ -42,12 +44,15 @@ class MinMaxQuant(BaseQuantizeModule):
         quant_config: calibration algorithm parameters.
         """
         super().__init__(ori_module, layer_name, quant_config)
+        self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         self.bias = ori_module.bias
         self.layer_name = layer_name
         self.cur_batch = 0
         self.weight_compress_only = True
         self.ori_module = ori_module
+        self.scale_w1 = None
+        self.scale_w2 = None
 
         self.batch_num = quant_config.get('batch_num')
         if quant_config.get('inputs_cfg').get('enable_quant') is None or \
@@ -64,7 +69,12 @@ class MinMaxQuant(BaseQuantizeModule):
         self.group_size = quant_config.get('weights_cfg').get('group_size', None)
         self.weight_granularity = quant_config.get('weights_cfg').get('strategy')
 
-        self.scale_w, self.offset_w = self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
+        if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+            self.scale_w1, self.scale_w2 = \
+                calculate_progressive_weights_scale_factor(self.ori_module.weight.data)
+        else:
+            self.scale_w, self.offset_w = \
+                self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
 
     def calculate_weights_scale_factor_and_quantize(self, weight_data, quant_config):
         """
