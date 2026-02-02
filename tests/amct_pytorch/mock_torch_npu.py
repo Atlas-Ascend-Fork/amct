@@ -86,5 +86,10 @@ def mock_npu_quantize(input, scales, zero_points=None,
 def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
     return weight
 
+def mock_npu_dynamic_mx_quant(weight):
+    shape = (weight.shape[0], int(weight.shape[1]//32), 1)
+    scale = torch.randn(shape)
+    return weight, scale
+
 def mock_npu(self):
     return self
