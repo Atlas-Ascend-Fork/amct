@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch import quantize, convert
-from utils import TestModel
+from utils import TestModel, TestModelBias
 from mock_torch_npu import *
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -154,3 +154,40 @@ class TestSmoothQuant(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
         self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear')
         self.assertEqual(type(model.linear3).__name__, 'NpuQuantizationLinear')
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    def test_fp8_fp4_group_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        model = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        torch.Tensor.npu = mock_npu
+        self.assertEqual(type(model.linear1).__name__, 'Linear')
+        self.assertEqual(type(model.linear2).__name__, 'SmoothQuant')
+        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertIsNotNone(model.linear2.scale_w1)
+        self.assertIsNotNone(model.linear2.scale_d)
+        convert(model)
+        quant_out = model(self.inputs.npu())
+        self.assertEqual(type(model.linear1).__name__, 'Linear')
+        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear')
+        self.assertEqual(type(model.linear3).__name__, 'Linear')
