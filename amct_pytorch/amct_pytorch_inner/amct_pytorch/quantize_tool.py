@@ -24,8 +24,6 @@ from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups imp
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
-    save_nuq_quant_layer_names
 import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
@@ -335,11 +333,6 @@ def save_model(modfied_onnx_file, record_file, save_path):
             "ensure calibration is finished by checking information!")
     records, _ = record_parser.parse()
 
-    # save nuq quant layer names
-    nuq_config = Configuration().get_nuq_quant_config()
-    file_name = save_nuq_quant_layer_names(nuq_config, save_path)
-    if file_name:
-        LOGGER.logi('Non uniform quant layer record is saved in {}.'.format(file_name))
     Parser.write_node_attrs_extracted_from_onnx(graph, modfied_onnx_file, ['op_data_type'])
     quant_config = Configuration().get_quant_config()
     _generate_model(graph, records, save_path)

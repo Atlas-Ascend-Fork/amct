@@ -40,8 +40,10 @@ from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import TORCH_VERSIO
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune import create_selective_prune_record
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune import restore_selective_prune_record
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune \
+    import create_selective_prune_record
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune \
+    import restore_selective_prune_record
 
 
 @check_params(model=torch.nn.Module,

@@ -22,7 +22,6 @@ import torch
 
 
 __all__ = [
-    'nuq_cali',
     'bcp',
     'dump_forward',
     'selective_mask_gen',
@@ -65,7 +64,6 @@ __load_quant_lib()
 from .bcp import bcp
 from .selective_mask_gen import selective_mask_gen
 from .dmq_balancer.dmq_balancer_func import dmq_balancer_forward
-from .nuq.amct_pytorch_op_nuq import nuq_cali
 from .dump.amct_pytorch_op_dump import dump_forward
 
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr_impl import ifmr_forward_pytorch

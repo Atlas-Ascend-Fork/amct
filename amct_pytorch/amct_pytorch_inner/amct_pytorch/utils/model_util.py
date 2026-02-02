@@ -22,7 +22,6 @@ import torch
 
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import AMCT_OPERATIONS
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import AMCT_POST_OPERATIONS
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import AMCT_RETRAIN_OPERATIONS
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import AMCT_DISTILL_OPERATIONS
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration

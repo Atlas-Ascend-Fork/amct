@@ -19,8 +19,7 @@
 import os
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.capacity.query_capacity import Capacity
 
-__all__ = ['CAPACITY', 'POST_CAPACITY']
+__all__ = ['CAPACITY']
 
 _CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 CAPACITY = Capacity(os.path.join(_CUR_DIR, 'capacity_config.csv'))
-POST_CAPACITY = Capacity(os.path.join(_CUR_DIR, 'capacity_post_config.csv'))

@@ -25,7 +25,8 @@ from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params impo
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config import inner_create_quant_calibration_config
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config \
+    import inner_create_quant_calibration_config
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config import parse_cali_quant_config
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
 import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
