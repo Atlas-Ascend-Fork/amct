@@ -74,3 +74,73 @@ INT8_MINMAX_WEIGHT_QUANT_CFG = {
     },
     'algorithm': {'minmax'},
 }
+
+
+HIFP8_OFMR_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'ofmr'},
+    'skip_layers': {'lm_head'}
+}
+
+FP8_OFMR_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'float8_e4m3fn',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+        'inputs': {
+            'type': 'float8_e4m3fn',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'ofmr'},
+    'skip_layers': {'lm_head'}
+}
+
+MXFP8_QUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'mxfp8_e4m3fn',
+            'symmetric': True,
+            'strategy': 'group',
+            'group_size': 32,
+        },
+        'inputs': {
+            'type': 'mxfp8_e4m3fn',
+            'symmetric': True,
+            'strategy': 'group',
+        },
+    },
+    'algorithm': {'mxquant'},
+    'skip_layers': {'lm_head'}
+}
+
+MXFP4_AWQ_WEIGHT_QUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'mxfp4_e2m1',
+            'symmetric': True,
+            'strategy': 'group'
+        },
+    },
+    'algorithm': {'awq': {'grids_num': 20}},
+    'skip_layers': {'lm_head'}
+
+}
