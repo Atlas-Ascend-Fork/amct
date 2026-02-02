@@ -20,6 +20,8 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.utils.data_utils import check_linear_input_dim
 from amct_pytorch.quantize_op.utils import calculate_scale_offset
+from amct_pytorch.quantize_op.utils import calculate_progressive_weights_scale_factor
+from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1
 from amct_pytorch.utils.log import LOGGER
 
 
@@ -40,6 +42,7 @@ class SmoothQuant(BaseQuantizeModule):
         quant_config: calibration algorithm parameters.
         """
         super().__init__(ori_module, layer_name, quant_config)
+        self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         self.bias = ori_module.bias
         self.layer_name = layer_name
@@ -52,6 +55,7 @@ class SmoothQuant(BaseQuantizeModule):
         self.wts_symmetric = quant_config.get('weights_cfg').get('symmetric')
         self.act_type = quant_config.get('inputs_cfg').get('quant_type')
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
+        self.group_size = quant_config.get('weights_cfg').get('group_size', None)
         self.cur_batch = 0
         self.device = ori_module.weight.device
 
@@ -60,7 +64,8 @@ class SmoothQuant(BaseQuantizeModule):
         self.data_min = torch.ones((1, self.weight.shape[-1]), device=self.weight.device, \
             dtype=self.weight.dtype) * torch.inf
         self.batch_input = None
-        
+        self.scale_w1 = None
+        self.scale_w2 = None
 
     @torch.no_grad()
     def forward(self, inputs):
@@ -95,8 +100,13 @@ class SmoothQuant(BaseQuantizeModule):
             smooth_factor = self.calculate_smooth(act_max)
             weight = self.weight * smooth_factor
 
-            self.scale_w, self.offset_w = self.calculate_weights_scale_factor(weight, \
-                self.quant_config.get('weights_cfg').get('strategy'))
+            # only FP8 * FP4 do progressive scale
+            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                self.scale_w1, self.scale_w2 = calculate_progressive_weights_scale_factor(
+                    weight.data, group_size=self.group_size)
+            else:
+                self.scale_w, self.offset_w = self.calculate_weights_scale_factor(weight, \
+                    self.quant_config.get('weights_cfg').get('strategy'))
 
             if self.act_granularity == 'tensor':
                 scale_d, offset_d = self._calculate_per_tensor_params(smooth_factor)
