@@ -17,7 +17,9 @@
 import math
 import torch
 
-from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4
+from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4, CONVERT_DTYPE_MAP
+from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
+from amct_pytorch.utils.data_utils import float_to_fp4e2m1
 
 
 def pad_zero_by_group(tensor, group_size):
@@ -85,12 +87,14 @@ def quant_weight(tensor, wts_type, scale, offset=None, group_size=None):
     Returns:
         torch.tensor
     """
-    if group_size:
-        tensor = convert_to_per_group_shape(tensor, group_size)
-    tensor = tensor / scale
-    if offset is not None:
-        tensor = tensor + offset
-    return convert_dtype(tensor, wts_type)
+    if not group_size:
+        tensor = tensor.transpose(-1, -2).contiguous()
+        scale = scale.reshape(-1)
+        offset = offset.reshape(-1) if offset is not None else None
+        quantized_tensor, _ = quant_tensor(tensor, wts_type, scale, offset)
+        return quantized_tensor.transpose(-1, -2).contiguous()
+    quantized_tensor, _ = quant_tensor(tensor, wts_type, scale, offset, group_size)
+    return quantized_tensor
 
 
 def apply_smooth_weight(smooth_factor, ori_weight):
@@ -159,30 +163,94 @@ def apply_awq_quantize_weight(weight_tensor, awq_scale, group_size):
     return weight_tensor
 
 
-def quant_dequant_weight(tensor, quant_params=None, scale=None, offset=None):
+@torch.no_grad()
+def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
     """
-    Function: do tensor quantize
-    Params:
-        tensor: quantized tensor from original operator
-        scale: scale in quant factors
-    Return:
-        tensor: quantized tensor
+    Function: quantize tensor to dst_dtype
+    Args:
+        tensor: torch.tensor
+        dst_dtype: str. quant type
+        scale: torch.tensor scale
+        offset: torch.tensor offset
+    Returns:
+        torch.tensor
     """
-    wts_dtype = quant_params.get('weights_cfg').get('quant_type')
-    group_size = quant_params.get('weights_cfg').get('group_size')
-    ori_dtype = tensor.dtype
+    import torch_npu
+    shared_exponent = None
 
+
+    if dst_dtype == HIFLOAT8:
+        quantized_tensor = torch_npu.npu_quantize(tensor.npu(), scale.npu(), None, dtype=torch_npu.hifloat8)
+    elif dst_dtype == FLOAT8_E4M3FN:
+        quantized_tensor = torch_npu.npu_quantize(tensor.npu(), scale.npu(), None, dtype=torch.float8_e4m3fn)
+    elif dst_dtype == MXFP4_E2M1:
+        quantized_tensor, shared_exponent = \
+            torch_npu.npu_dynamic_mx_quant(tensor.npu(), axis=-1, round_mode='rint',
+                dst_type=torch_npu.float4_e2m1fn_x2, block_size=32)
+    elif dst_dtype == MXFP8_E4M3FN:
+        quantized_tensor, shared_exponent = \
+            torch_npu.npu_dynamic_mx_quant(tensor.npu(), axis=-1, round_mode='rint',
+                dst_type=torch.float8_e4m3fn, block_size=32)
+    else:
+        ori_shape = tensor.shape
+        if group_size is not None:
+            tensor = convert_to_per_group_shape(tensor, group_size)
+        quantized_tensor = tensor / scale.to(tensor.device)
+        quantized_tensor = quantized_tensor if offset is None else quantized_tensor + offset.to(tensor.device)
+        if dst_dtype == FLOAT4_E2M1:
+            # npu op pack4 need dtype float32 but value within [-6.0~6.0]
+            quantized_tensor = float_to_fp4e2m1(tensor).to(torch.float32)
+        elif dst_dtype == INT8:
+            quantized_tensor = quantized_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
+        elif dst_dtype == INT4:
+            quantized_tensor = quantized_tensor.round().clamp(INT4_MIN, INT4_MAX).to(torch.int32)
+        quantized_tensor = quantized_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+    return quantized_tensor, shared_exponent
+
+
+@torch.no_grad()
+def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
+    """
+    Function: quantize tensor to dst_dtype and dequantize to ori_tensor
+    Args:
+        tensor: torch.tensor
+        dst_stype: str. quant type
+        scale: torch.tensor scale
+        offset: torch.tensor offset
+    Returns:
+        torch.tensor
+    """
+    import torch_npu    
+    ori_dtype = tensor.dtype
     ori_shape = tensor.shape
-    if group_size:
-        tensor = convert_to_per_group_shape(tensor, group_size)
-    tensor = tensor / scale
-    quant_bits = int(wts_dtype.replace('int', ''))
-    if offset is not None:
-        tensor = tensor + offset
-    tensor = torch.clamp(torch.round(
-        tensor), -pow(2, quant_bits - 1), pow(2, quant_bits - 1) - 1)
-    if offset is not None:
-        tensor = tensor - offset
-    tensor = (tensor) * scale
-    tensor = tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]].to(ori_dtype)
-    return tensor
+    quantized_tensor, shared_exponent = quant_tensor(tensor, dst_dtype, scale, offset, group_size)
+    scale = shared_exponent if scale is None else scale.to(quantized_tensor.device)
+
+    if dst_dtype == HIFLOAT8:
+        quantized_tensor = torch_npu.npu_dtype_cast(quantized_tensor, ori_dtype, input_dtype=torch_npu.hifloat8)
+        dequantize_tensor = quantized_tensor * scale
+    elif dst_dtype == FLOAT8_E4M3FN:
+        quantized_tensor = quantized_tensor.to(scale.dtype)
+        dequantize_tensor = quantized_tensor * scale
+    elif dst_dtype == MXFP4_E2M1:
+        quantized_tensor = torch_npu.npu_dtype_cast(quantized_tensor, ori_dtype, input_dtype=torch_npu.float4_e2m1fn_x2)
+        quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
+        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
+        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
+        dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+    elif dst_dtype == MXFP8_E4M3FN:
+        quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
+        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
+        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
+        dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+    else:
+        # int4\int8\float4
+        # only int8、int4 support assymetric quant
+        ori_shape = tensor.shape
+        if group_size is not None:
+            quantized_tensor = convert_to_per_group_shape(quantized_tensor, group_size)
+        quantized_tensor = quantized_tensor.to(scale.dtype)
+        dequantize_tensor = quantized_tensor if offset is None else quantized_tensor - offset
+        dequantize_tensor = dequantize_tensor * scale
+        dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+    return dequantize_tensor.to(ori_dtype)
