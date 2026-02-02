@@ -15,10 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import numpy as np
-
-
 __all__ = ['check_dtype', 'check_diff_dtype', 'reshape_params']
+
+import numpy as np
 
 SUPPORTED_DTYPE = [np.float16, np.float32, np.float64]
 
@@ -69,45 +68,6 @@ class FuseConvBnBase():
     """Function: The implement of ARQ quantize algorithm
        APIs: preprocess_params, quantize_data
     """
-    @classmethod
-    def _check_params(cls, conv_params, bn_params, channel_axis=0):
-        """check the input conv bn params
-
-        Arguments:
-            conv_params {list} -- list of conv_weights, conv_bias
-            bn_params {list} -- list bn_mean, bn_variance,
-                                bn_scale_factor, bn_epsilon
-            channel_axis -- axis of conv channel
-
-        Raises:
-            RuntimeError: the dtype not support
-        """
-        conv_weight = conv_params[0]
-        conv_bias = conv_params[1]
-        bn_mean = bn_params[0]
-        bn_variance = bn_params[1]
-
-        check_dtype(conv_weight)
-        if conv_bias is not None:
-            check_dtype(conv_bias)
-        check_dtype(bn_mean)
-        check_dtype(bn_variance)
-
-        check_diff_dtype(conv_weight, conv_bias)
-        check_diff_dtype(conv_weight, bn_mean)
-        check_diff_dtype(conv_weight, bn_variance)
-
-        if len(conv_weight.shape) not in (3, 4, 5):
-            raise RuntimeError('conv weight is not 3, 4 or 5 dimension')
-        channels = conv_weight.shape[channel_axis]
-        if bn_mean.shape[0] != channels:
-            raise RuntimeError(
-                'mean shape {} not equal to channels {}'.format(
-                    bn_mean.shape[0], channels))
-        if bn_variance.shape[0] != channels:
-            raise RuntimeError(
-                'variance shape {} not equal to channels {}'.format(
-                    bn_variance.shape[0], channels))
 
     @classmethod
     def get_conv_bn_param(cls, conv_params, bn_params):
@@ -227,3 +187,43 @@ class FuseConvBnBase():
         else:
             fused_bias = conv_bias - bias_item
         return fused_bias
+    
+    @classmethod
+    def _check_params(cls, conv_params, bn_params, channel_axis=0):
+        """check the input conv bn params
+
+        Arguments:
+            conv_params {list} -- list of conv_weights, conv_bias
+            bn_params {list} -- list bn_mean, bn_variance,
+                                bn_scale_factor, bn_epsilon
+            channel_axis -- axis of conv channel
+
+        Raises:
+            RuntimeError: the dtype not support
+        """
+        conv_weight = conv_params[0]
+        conv_bias = conv_params[1]
+        bn_mean = bn_params[0]
+        bn_variance = bn_params[1]
+
+        check_dtype(conv_weight)
+        if conv_bias is not None:
+            check_dtype(conv_bias)
+        check_dtype(bn_mean)
+        check_dtype(bn_variance)
+
+        check_diff_dtype(conv_weight, conv_bias)
+        check_diff_dtype(conv_weight, bn_mean)
+        check_diff_dtype(conv_weight, bn_variance)
+
+        if len(conv_weight.shape) not in (3, 4, 5):
+            raise RuntimeError('conv weight is not 3, 4 or 5 dimension')
+        channels = conv_weight.shape[channel_axis]
+        if bn_mean.shape[0] != channels:
+            raise RuntimeError(
+                'mean shape {} not equal to channels {}'.format(
+                    bn_mean.shape[0], channels))
+        if bn_variance.shape[0] != channels:
+            raise RuntimeError(
+                'variance shape {} not equal to channels {}'.format(
+                    bn_variance.shape[0], channels))

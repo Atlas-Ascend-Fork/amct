@@ -19,8 +19,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.net_params import ParamsHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.common.utils.net_params import ParamsHelper
+from ...amct_pytorch.utils.model_util import ModuleHelper
 
 
 class ParamsHelperTorch:

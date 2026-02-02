@@ -402,11 +402,11 @@ class PruneRecordHelper:
                 begin = 0
             output_range = [begin, begin]
             for idx, split_size in enumerate(split_info):
-                new_record = self.prune_records[records_len+idx]
+                new_record = self.prune_records[records_len + idx]
                 new_producer = new_record.producer.add()
                 new_producer.CopyFrom(producer)
                 attr_helper = AttrProtoHelper(new_producer)
-                output_range = [output_range[1], output_range[1]+split_size]
+                output_range = [output_range[1], output_range[1] + split_size]
                 attr_helper.set_attr_value(ATTR_BEGIN, 'INT', output_range[0])
                 attr_helper.set_attr_value(ATTR_END, 'INT', output_range[1])
         # copy and modify consumer info
@@ -418,11 +418,11 @@ class PruneRecordHelper:
                 begin = 0
             output_range = [begin, begin]
             for idx, split_size in enumerate(split_info):
-                new_record = self.prune_records[records_len+idx]
+                new_record = self.prune_records[records_len + idx]
                 new_consumer = new_record.consumer.add()
                 new_consumer.CopyFrom(consumer)
                 attr_helper = AttrProtoHelper(new_consumer)
-                output_range = [output_range[1], output_range[1]+split_size]
+                output_range = [output_range[1], output_range[1] + split_size]
                 attr_helper.set_attr_value(ATTR_BEGIN, 'INT', output_range[0])
                 attr_helper.set_attr_value(ATTR_END, 'INT', output_range[1])
 

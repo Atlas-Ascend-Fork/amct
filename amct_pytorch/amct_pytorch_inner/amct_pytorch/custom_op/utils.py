@@ -15,17 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import torch
 import math
 import os
+import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLT_EPSILON
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BASE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLOAT4_E2M1, FLOAT4_E1M2, FLOAT8_E4M3FN, HIFLOAT8
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.module_based_record_parser import get_layer_quant_params
+from ...amct_pytorch.utils.vars import FLT_EPSILON
+from ...amct_pytorch.utils.vars import BASE
+from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
+from ...amct_pytorch.utils.vars import FLOAT4_E2M1, FLOAT4_E1M2, FLOAT8_E4M3FN, HIFLOAT8
+from ...amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
+from ...amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group
+from ...amct_pytorch.parser.module_based_record_parser import get_layer_quant_params
 
 
 def check_quant_data(data, data_type):
@@ -245,14 +245,14 @@ def get_float_quant_scope(data_type):
     Returns:
         quantization step
     """
-    QUANT_MAX_SCOPE = {
+    quant_max_scope = {
         FLOAT4_E2M1: 6.0,
         FLOAT4_E1M2: 1.75,
         FLOAT8_E4M3FN: 448.0, # 256 * 1.75
         HIFLOAT8: 32768.0, # 2^15
     }
 
-    return QUANT_MAX_SCOPE[data_type]
+    return quant_max_scope[data_type]
 
 
 def get_int_quant_scope(data_type, asymmetric, abs_max_is_negative=False):

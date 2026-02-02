@@ -22,25 +22,27 @@ import copy
 from io import BytesIO
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_channel_prune.auto_channel_prune_search_base import AutoChannelPruneSearchBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_channel_prune.search_channel_base import SearchChannelBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_channel_prune.sensitivity_base import SensitivityBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.net_params import ParamsHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.prune.pruner_helper import PruneHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import check_kernel_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.module_info import ModuleInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.output_shape import OutputShape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_channel_prune.search_channel_base import GreedySearch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
+from ..amct_pytorch.utils.log import LOGGER
+from ..amct_pytorch.utils.model_util import ModuleHelper
+from ..amct_pytorch.parser.parser import Parser
+from ..amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper \
+    import AutoChannelPruneConfigHelper
+from ..amct_pytorch.common.utils.check_params import check_params
+from ..amct_pytorch.common.auto_channel_prune.auto_channel_prune_search_base \
+    import AutoChannelPruneSearchBase
+from ..amct_pytorch.common.auto_channel_prune.search_channel_base import SearchChannelBase
+from ..amct_pytorch.common.auto_channel_prune.sensitivity_base import SensitivityBase
+from ..amct_pytorch.common.utils.net_params import ParamsHelper
+from ..amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from ..amct_pytorch.configuration.retrain_config import RetrainConfig
+from ..amct_pytorch.configuration.check import GraphQuerier
+from ..amct_pytorch.capacity import CAPACITY
+from ..amct_pytorch.prune.pruner_helper import PruneHelper
+from ..amct_pytorch.configuration.check import check_kernel_shape
+from ..amct_pytorch.utils.module_info import ModuleInfo
+from ..amct_pytorch.utils.output_shape import OutputShape
+from ..amct_pytorch.common.auto_channel_prune.search_channel_base import GreedySearch
+from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 
 
 class AutoChannelPruneSearch(AutoChannelPruneSearchBase):
@@ -189,7 +191,7 @@ class TaylorLossSensitivity(SensitivityBase):
         ch_axis = cin_axis if is_consumer else cout_axis
         sum_dims = [_ for _ in range(len(self.weights.get(layer_name).shape)) if _ != ch_axis]
         taylor_arr = taylor.norm(p=1, dim=sum_dims).cpu()
-        taylor_arr = taylor_arr if is_consumer else taylor_arr[ch_info.get('begin') : ch_info.get('end')]
+        taylor_arr = taylor_arr if is_consumer else taylor_arr[ch_info.get('begin'): ch_info.get('end')]
         return taylor_arr
 
     def get_backward_grad(self, input_data, test_iteration, batch_num=1):
@@ -208,8 +210,8 @@ class TaylorLossSensitivity(SensitivityBase):
         self.graph.model.eval()
         x_data, y_label = input_data
         for i in range(test_iteration):
-            y_pred = self.graph.model(x_data[i * batch_num : (i + 1) * batch_num])
-            loss = self.loss_func(y_pred, y_label[i * batch_num : (i + 1) * batch_num].to(device))
+            y_pred = self.graph.model(x_data[i * batch_num: (i + 1) * batch_num])
+            loss = self.loss_func(y_pred, y_label[i * batch_num: (i + 1) * batch_num].to(device))
             loss.backward()
             # reduce and clear grads
             for layer_name in self.graph_info.keys():

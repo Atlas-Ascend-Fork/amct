@@ -13,7 +13,6 @@ message AMCTConfig {
     repeated string skip_layers = 10;
     repeated string skip_layer_types = 11;
 
-    optional NuqConfig nuq_config = 4;
     optional FakequantPrecisionMode fakequant_precision_mode = 21;
     optional CalibrationConfig common_config = 50;
     repeated OverrideLayerType override_layer_types = 51;
@@ -21,11 +20,6 @@ message AMCTConfig {
 
     optional bool do_fusion = 200 [default = true];
     repeated string skip_fusion_layers = 201;
-}
-
-message NuqConfig {
-    required string mapping_file = 2;
-    optional NUQuantize nuq_quantize = 3;
 }
 
 message OverrideLayerType {
@@ -41,7 +35,6 @@ message OverrideLayer {
 message CalibrationConfig {
     oneof wts_quant_algo{
         ARQuantize arq_quantize = 13;
-        NUQuantize nuq_quantize = 14;
         ADAquantize ada_quantize  = 15;
     }
 
@@ -99,13 +92,4 @@ message HFMGQuantize {
         INT16 = 2;
     }
     optional CalibrationDataType dst_type = 10 [default = INT8];
-}
-
-message NUQuantize {
-    // number of steps in non uniform quantization algorithm,
-    // now only surpport setting 16 and 32
-    optional uint32 num_steps = 1 [default = 32];
-    // number of iteration in non uniform quantization algorithm,
-    // 0 means no iteration, now only surpport [0,1,2,3,4,5]
-    optional uint32 num_of_iteration = 2 [default = 1];
 }

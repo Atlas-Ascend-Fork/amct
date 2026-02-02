@@ -79,7 +79,7 @@ class ConcatPruneHelperBase(PruneHelperBase):
             prune_records.extend(in_prune_records)
             for in_prune_record in in_prune_records:
                 cout_len = record_helper.get_record_cout(in_prune_record)
-                output_ranges.append([last_end, last_end+cout_len])
+                output_ranges.append([last_end, last_end + cout_len])
                 last_end += cout_len
 
         # Step2: process for concat op

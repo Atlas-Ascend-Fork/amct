@@ -19,29 +19,31 @@ import os
 from io import BytesIO
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from ..amct_pytorch.common.utils.check_params import check_params
+from ..amct_pytorch.common.utils import files as files_util
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parse_record_file import RecordFileParser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.prune.pruner_helper import PruneHelper
+from ..amct_pytorch.configuration.retrain_config import RetrainConfig
+from ..amct_pytorch.parser.parser import Parser
+from ..amct_pytorch.parser.parse_record_file import RecordFileParser
+from ..amct_pytorch.utils.model_util import ModuleHelper
+from ..amct_pytorch.utils.log import LOGGER
+from ..amct_pytorch.prune.pruner_helper import PruneHelper
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import _generate_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import _preprocess_retrain_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import _copy_modified_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import _modify_original_model_to_quant
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import load_pth_file
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import split_dir_prefix
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import generate_onnx_file_name
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import TORCH_VERSION
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
+from ..amct_pytorch.quantize_tool import _generate_model
+from ..amct_pytorch.quantize_tool import _preprocess_retrain_model
+from ..amct_pytorch.quantize_tool import _copy_modified_model
+from ..amct_pytorch.quantize_tool import _modify_original_model_to_quant
+from ..amct_pytorch.utils.model_util import load_pth_file
+from ..amct_pytorch.utils.save import split_dir_prefix
+from ..amct_pytorch.utils.save import generate_onnx_file_name
+from ..amct_pytorch.utils.vars import TORCH_VERSION
+from ..amct_pytorch.common.utils.util import version_higher_than
+from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune import create_selective_prune_record
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune import restore_selective_prune_record
+from ..amct_pytorch.custom_op.selective_prune.selective_prune \
+    import create_selective_prune_record
+from ..amct_pytorch.custom_op.selective_prune.selective_prune \
+    import restore_selective_prune_record
 
 
 @check_params(model=torch.nn.Module,

@@ -86,32 +86,6 @@ class AutoSearchMixedPrecisionBase:
         return best_path
 
     @staticmethod
-    def _add_info_for_union(union_name, to_union_names, search_range, acc_decay, computes_ops):
-        """ Add search info(search_range, acc_decay, computes_ops) for one union.
-
-        Args:
-            union_name (string): new 'layer' to represent several layers.
-            to_union_names (list of string): layers to be represented.
-            search_range (dict): key is layer and value is its search_range.
-            acc_decay (dict): key is layer and value is its acc decay in different bit.
-            computes_ops (dict): key is layer and value is its computes_ops(like bitops)) in different bit.
-        """
-        # add search range for union_name and delete search for layer to union.
-        search_range[union_name] = search_range[to_union_names[0]]
-        for key in to_union_names:
-            del search_range[key]
-        # add acc decay for union_name, use add operation considerating all layers are added.
-        acc_decay[union_name] = copy.deepcopy(acc_decay[to_union_names[0]])
-        for name in to_union_names[1:]:
-            for choice in acc_decay[name]:
-                acc_decay[union_name][choice] += acc_decay[name][choice]
-        # add computes ops for union_name, use add operation considerating gropu_conv is such.
-        computes_ops[union_name] = copy.deepcopy(computes_ops[to_union_names[0]])
-        for name in to_union_names[1:]:
-            for choice in computes_ops[name]:
-                computes_ops[union_name][choice] += computes_ops[name][choice]
-
-    @staticmethod
     def sort_dict(order_keys, dict_to_sort):
         """ Sort a dict according a sequence.
 
@@ -155,6 +129,32 @@ class AutoSearchMixedPrecisionBase:
 
         modifier = QatConfigProtoModifier(qat_cfg_file, override_qat_cfg_file, simple_bit_config, layer_types)
         modifier.process()
+
+    @staticmethod
+    def _add_info_for_union(union_name, to_union_names, search_range, acc_decay, computes_ops):
+        """ Add search info(search_range, acc_decay, computes_ops) for one union.
+
+        Args:
+            union_name (string): new 'layer' to represent several layers.
+            to_union_names (list of string): layers to be represented.
+            search_range (dict): key is layer and value is its search_range.
+            acc_decay (dict): key is layer and value is its acc decay in different bit.
+            computes_ops (dict): key is layer and value is its computes_ops(like bitops)) in different bit.
+        """
+        # add search range for union_name and delete search for layer to union.
+        search_range[union_name] = search_range[to_union_names[0]]
+        for key in to_union_names:
+            del search_range[key]
+        # add acc decay for union_name, use add operation considerating all layers are added.
+        acc_decay[union_name] = copy.deepcopy(acc_decay[to_union_names[0]])
+        for name in to_union_names[1:]:
+            for choice in acc_decay[name]:
+                acc_decay[union_name][choice] += acc_decay[name][choice]
+        # add computes ops for union_name, use add operation considerating gropu_conv is such.
+        computes_ops[union_name] = copy.deepcopy(computes_ops[to_union_names[0]])
+        for name in to_union_names[1:]:
+            for choice in computes_ops[name]:
+                computes_ops[union_name][choice] += computes_ops[name][choice]
 
     def cal_node_bitops(self):
         """ Calculate bitops of quantizable layers in graph.
