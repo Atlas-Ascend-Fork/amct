@@ -15,19 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+from collections import namedtuple
 import numpy as np
 import torch
 from torch import nn
-from collections import namedtuple
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.retrain_quant import get_quant_type
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM
+from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from ...amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from ...amct_pytorch.custom_op.utils import copy_tensor
+from ...amct_pytorch.custom_op.utils import tensor
+from ...amct_pytorch.custom_op.utils import process_scale
+from ...amct_pytorch.custom_op.retrain_quant import get_quant_type
+from ...amct_pytorch.utils.vars import BATCH_NUM
 
 DATA_NUM_BITS = 'data_num_bits'
 WTS_NUM_BITS = 'wts_num_bits'
@@ -154,6 +153,66 @@ class RNNRetrainQuant(nn.Module):
         reorganized_quant_factor = np.concatenate(temp_list, axis=0)
         return reorganized_quant_factor.tolist()
 
+    def forward(self, inputs, hx=None):
+        """
+        Function: forward function
+        Inputs:
+            inputs: a torch.tensor, activations.
+            hx: a torch.tensor, initial_h
+        Returns:
+            outputs: a torch.tensor, quantized output data.
+        """
+        layers_name = self.common_config.get(LAYERS_NAME)
+        if not isinstance(inputs, torch.Tensor):
+            raise ValueError("Only support input type \'torch.Tensor\'.")
+        if len(inputs.shape) != 3:
+            raise ValueError("Layer {} input data only support 3-D shape.".format(layers_name))
+        if self.quant_module_type in RNN_LAYER_TYPE:
+            if self.quant_module.replaced_module.batch_first:
+                sequence_length = inputs.shape[1]
+            else:
+                sequence_length = inputs.shape[0]
+            if sequence_length != 1:
+                raise ValueError("Layer {} sequence length only support 1, actually is {}.".format(
+                    layers_name, sequence_length))
+        if hx is None:
+            raise ValueError("Layer {} except second input, bu got None.".format(layers_name))
+
+        if self.do_init:
+            self._acts_quant_init(inputs, hx)
+        outputs = self.quant_module(inputs, hx)
+
+        if not self.training and not self.do_init:
+            self.cur_batch += 1
+            if self.cur_batch == 1:
+                self._update_quant_factor()
+
+            if not self.write_done_flag:
+                self.record_module(
+                    layers_name, 'ifmr',
+                    {'scale_d': self.scale_d.cpu().tolist(),
+                     'scale_h': self.scale_h.cpu().tolist(),
+                     'offset_d': int(self.offset_d.cpu().tolist()),
+                     'offset_h': int(self.offset_h.cpu().tolist()),
+                     'num_bits': self.quant_module.act_config.get(NUM_BITS)})
+                self.record_module(
+                    layers_name, 'arq',
+                    {'scale_w': self._reorganize_rnn_quant_factor(
+                        self.scale_w.cpu().numpy(), layers_name[0], self.quant_module_type),
+                     'scale_r': self._reorganize_rnn_quant_factor(
+                        self.scale_r.cpu().numpy(), layers_name[0], self.quant_module_type),
+                     'offset_w': self._reorganize_rnn_quant_factor(
+                        self.offset_w.cpu().numpy().astype(np.int32), layers_name[0], self.quant_module_type),
+                     'offset_r': self._reorganize_rnn_quant_factor(
+                        self.offset_r.cpu().numpy().astype(np.int32), layers_name[0], self.quant_module_type),
+                     'num_bits': self.quant_module.wts_config.get(NUM_BITS)})
+                self.write_done_flag = True
+        else:
+            self.cur_batch = 0
+            self.record_module.record_quant_layer(layers_name)
+
+        return outputs
+
     def _update_quant_factor(self):
         """
         Function: update quant factor function.
@@ -235,63 +294,3 @@ class RNNRetrainQuant(nn.Module):
                 copy_tensor(self.quant_module.acts_h_clip_min_pre, act_h_retrain_params.clip_min_pre)
 
         self.do_init = not is_init
-
-    def forward(self, inputs, hx=None):
-        """
-        Function: forward function
-        Inputs:
-            inputs: a torch.tensor, activations.
-            hx: a torch.tensor, initial_h
-        Returns:
-            outputs: a torch.tensor, quantized output data.
-        """
-        layers_name = self.common_config.get(LAYERS_NAME)
-        if not isinstance(inputs, torch.Tensor):
-            raise ValueError("Only support input type \'torch.Tensor\'.")
-        if len(inputs.shape) != 3:
-            raise ValueError("Layer {} input data only support 3-D shape.".format(layers_name))
-        if self.quant_module_type in RNN_LAYER_TYPE:
-            if self.quant_module.replaced_module.batch_first:
-                sequence_length = inputs.shape[1]
-            else:
-                sequence_length = inputs.shape[0]
-            if sequence_length != 1:
-                raise ValueError("Layer {} sequence length only support 1, actually is {}.".format(
-                    layers_name, sequence_length))
-        if hx is None:
-            raise ValueError("Layer {} except second input, bu got None.".format(layers_name))
-
-        if self.do_init:
-            self._acts_quant_init(inputs, hx)
-        outputs = self.quant_module(inputs, hx)
-
-        if not self.training and not self.do_init:
-            self.cur_batch += 1
-            if self.cur_batch == 1:
-                self._update_quant_factor()
-
-            if not self.write_done_flag:
-                self.record_module(
-                    layers_name, 'ifmr',
-                    {'scale_d': self.scale_d.cpu().tolist(),
-                     'scale_h': self.scale_h.cpu().tolist(),
-                     'offset_d': int(self.offset_d.cpu().tolist()),
-                     'offset_h': int(self.offset_h.cpu().tolist()),
-                     'num_bits': self.quant_module.act_config.get(NUM_BITS)})
-                self.record_module(
-                    layers_name, 'arq',
-                    {'scale_w': self._reorganize_rnn_quant_factor(
-                        self.scale_w.cpu().numpy(), layers_name[0], self.quant_module_type),
-                     'scale_r': self._reorganize_rnn_quant_factor(
-                        self.scale_r.cpu().numpy(), layers_name[0], self.quant_module_type),
-                     'offset_w': self._reorganize_rnn_quant_factor(
-                        self.offset_w.cpu().numpy().astype(np.int32), layers_name[0], self.quant_module_type),
-                     'offset_r': self._reorganize_rnn_quant_factor(
-                        self.offset_r.cpu().numpy().astype(np.int32), layers_name[0], self.quant_module_type),
-                     'num_bits': self.quant_module.wts_config.get(NUM_BITS)})
-                self.write_done_flag = True
-        else:
-            self.cur_batch = 0
-            self.record_module.record_quant_layer(layers_name)
-
-        return outputs

@@ -15,7 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+__all__ = ['AccuracyBasedAutoCalibrationBase',
+           'AutoCalibrationEvaluatorBase',
+           'AutoCalibrationStrategyBase',
+           'SensitivityBase',
+           'BinarySearchStrategy',
+           'CosineSimilaritySensitivity']
 
 from .accuracy_based_auto_calibration_base import AccuracyBasedAutoCalibrationBase
 from .auto_calibration_evaluator_base import AutoCalibrationEvaluatorBase
@@ -23,11 +28,3 @@ from .auto_calibration_strategy_base import AutoCalibrationStrategyBase
 from .sensitivity_base import SensitivityBase
 from .binary_search_strategy import BinarySearchStrategy
 from .cosine_similarity_sensitivity import CosineSimilaritySensitivity
-
-
-__all__ = ['AccuracyBasedAutoCalibrationBase',
-           'AutoCalibrationEvaluatorBase',
-           'AutoCalibrationStrategyBase',
-           'SensitivityBase',
-           'BinarySearchStrategy',
-           'CosineSimilaritySensitivity']

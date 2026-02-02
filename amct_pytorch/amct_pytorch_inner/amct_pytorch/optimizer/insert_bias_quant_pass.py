@@ -18,14 +18,14 @@
 import numpy as np
 from onnx import onnx_pb # pylint: disable=import-error
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANT_BIAS_BITS
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BASE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.utils.vars import QUANT_BIAS_BITS
+from ...amct_pytorch.utils.vars import BASE
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
 
 class InsertBiasQuantPass(BaseFusionPass):
@@ -52,8 +52,8 @@ class InsertBiasQuantPass(BaseFusionPass):
         Returns:
             quant_bias, np.array with type int32, quantized bias
         '''
-        left_bound = -pow(1.0*BASE, QUANT_BIAS_BITS - 1)
-        right_bound = pow(1.0*BASE, QUANT_BIAS_BITS - 1) - 1
+        left_bound = -pow(1.0 * BASE, QUANT_BIAS_BITS - 1)
+        right_bound = pow(1.0 * BASE, QUANT_BIAS_BITS - 1) - 1
         deq_scale = np.multiply(scale_w, scale_d).reshape([-1])
         quant_bias = np.round(np.true_divide(bias, deq_scale))
         # check the quant_bias in range of int32

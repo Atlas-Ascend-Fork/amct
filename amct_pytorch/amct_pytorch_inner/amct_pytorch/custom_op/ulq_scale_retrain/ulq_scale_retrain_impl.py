@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import calculate_scale_offset, calculate_scale_by_group_size, \
+from ....amct_pytorch.custom_op.utils import calculate_scale_offset, calculate_scale_by_group_size, \
     convert_to_per_group_shape, apply_fake_quantize_and_anti_quantize
 
 

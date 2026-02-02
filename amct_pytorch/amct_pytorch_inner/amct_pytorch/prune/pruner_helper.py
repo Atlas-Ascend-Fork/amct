@@ -21,20 +21,20 @@ import threading
 
 from google.protobuf import text_format
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.optimizer.delete_pass_through_node import DeletePassThroughNodePass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parse_record_file import RecordFileParser
+from ...amct_pytorch.common.optimizer.delete_pass_through_node import DeletePassThroughNodePass
+from ...amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
+from ...amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from ...amct_pytorch.parser.parse_record_file import RecordFileParser
 
 import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.prune.filter_prune_helper import create_filter_prune_helper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.prune.regular_prune_model import RegularModelPruner
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.prune.find_prune_index import PuneIndexHelper
+from ...amct_pytorch.prune.filter_prune_helper import create_filter_prune_helper
+from ...amct_pytorch.prune.regular_prune_model import RegularModelPruner
+from ...amct_pytorch.prune.find_prune_index import PuneIndexHelper
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CHANNEL_UNRELATED_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.vars import CHANNEL_UNRELATED_ONNX_TYPES
+from ...amct_pytorch.utils.log import LOGGER
 
 
 class PruneHelper:

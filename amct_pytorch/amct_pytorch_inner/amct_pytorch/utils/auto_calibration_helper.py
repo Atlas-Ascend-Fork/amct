@@ -21,9 +21,9 @@ from collections import OrderedDict
 import numpy as np
 
 from torch import Tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.common.utils import files as files_util
 
 
 class AutoCalibrationHelper:

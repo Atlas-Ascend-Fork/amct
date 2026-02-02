@@ -15,35 +15,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.field import DEFAULT_NUM_BITS
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig as \
+from ...amct_pytorch.common.config.field import DEFAULT_NUM_BITS
+from ...amct_pytorch.configuration.retrain_config import RetrainConfig as \
     Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv1d \
-    import CompModuleConv1d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv2d \
-    import CompModuleConv2d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv3d \
-    import CompModuleConv3d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_linear \
-    import CompModuleLinear
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv_transpose1d \
-    import CompModuleConvTranspose1d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv_transpose2d \
-    import CompModuleConvTranspose2d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv_transpose3d \
-    import CompModuleConvTranspose3d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.module_info import ModuleInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_QUANT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FIXED_MIN, H_FIXED_MIN
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import NUM_BITS, NUM_BITS_MAP
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INITIAL_H_INDEX
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.custom_op.comp_module.comp_module_conv1d import CompModuleConv1d
+from ...amct_pytorch.custom_op.comp_module.comp_module_conv2d import CompModuleConv2d
+from ...amct_pytorch.custom_op.comp_module.comp_module_conv3d import CompModuleConv3d
+from ...amct_pytorch.custom_op.comp_module.comp_module_linear import CompModuleLinear
+from ...amct_pytorch.custom_op.comp_module.comp_module_conv_transpose1d import CompModuleConvTranspose1d
+from ...amct_pytorch.custom_op.comp_module.comp_module_conv_transpose2d import CompModuleConvTranspose2d
+from ...amct_pytorch.custom_op.comp_module.comp_module_conv_transpose3d import CompModuleConvTranspose3d
+from ...amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.module_info import ModuleInfo
+from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_QUANT
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from ...amct_pytorch.utils.vars import FIXED_MIN, H_FIXED_MIN
+from ...amct_pytorch.utils.vars import NUM_BITS, NUM_BITS_MAP
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.common.utils.vars_util import INITIAL_H_INDEX
 
 REPLACE_DICT = {
     'Conv1d': CompModuleConv1d,
@@ -87,34 +80,6 @@ class InsertRetrainPass(BaseFusionPass):
             return False
 
         return True
-
-    def _get_act_config(self, object_node):
-        """
-        Function: Get the config of activation.
-        """
-        act_config = self.conf.get_retrain_config(
-            object_node.name)['retrain_data_config']
-        act_config['ifmr_init'] = False
-        if act_config.get('clip_min') is None or \
-            act_config.get('clip_max') is None:
-            act_config['ifmr_init'] = True
-        pre_node = object_node.get_input_anchor(0).get_peer_output_anchor().node
-        h_index = QuantOpInfo.get_quant_index(object_node).get(INITIAL_H_INDEX)
-        h_pre_node = object_node.get_input_anchor(h_index).get_peer_output_anchor().node \
-            if h_index is not None else None
-        act_config[H_FIXED_MIN] = act_config.get(FIXED_MIN)
-        if act_config.get(FIXED_MIN) is None:
-            if pre_node.type == 'Relu':
-                act_config[FIXED_MIN] = True
-            else:
-                act_config[FIXED_MIN] = False
-            if h_pre_node is not None and h_pre_node.type == 'Relu':
-                act_config[H_FIXED_MIN] = True
-            else:
-                act_config[H_FIXED_MIN] = False
-        act_config[NUM_BITS] = NUM_BITS_MAP.get(act_config.get('dst_type'), DEFAULT_NUM_BITS)
-
-        return act_config
 
     def do_pass(self, graph, object_node, model=None):
         """
@@ -177,6 +142,34 @@ class InsertRetrainPass(BaseFusionPass):
             setattr(parent_module, object_node_name.split('.')[-1], act_wts_qat_module)
             LOGGER.logd("Insert ActivationQAT and WeightQAT module to "
                 "'{}' success!".format(object_node.name), 'InsertRetrainPass')
+
+    def _get_act_config(self, object_node):
+        """
+        Function: Get the config of activation.
+        """
+        act_config = self.conf.get_retrain_config(
+            object_node.name)['retrain_data_config']
+        act_config['ifmr_init'] = False
+        if act_config.get('clip_min') is None or \
+            act_config.get('clip_max') is None:
+            act_config['ifmr_init'] = True
+        pre_node = object_node.get_input_anchor(0).get_peer_output_anchor().node
+        h_index = QuantOpInfo.get_quant_index(object_node).get(INITIAL_H_INDEX)
+        h_pre_node = object_node.get_input_anchor(h_index).get_peer_output_anchor().node \
+            if h_index is not None else None
+        act_config[H_FIXED_MIN] = act_config.get(FIXED_MIN)
+        if act_config.get(FIXED_MIN) is None:
+            if pre_node.type == 'Relu':
+                act_config[FIXED_MIN] = True
+            else:
+                act_config[FIXED_MIN] = False
+            if h_pre_node is not None and h_pre_node.type == 'Relu':
+                act_config[H_FIXED_MIN] = True
+            else:
+                act_config[H_FIXED_MIN] = False
+        act_config[NUM_BITS] = NUM_BITS_MAP.get(act_config.get('dst_type'), DEFAULT_NUM_BITS)
+
+        return act_config
 
 
 def get_node_onnx_type(node):

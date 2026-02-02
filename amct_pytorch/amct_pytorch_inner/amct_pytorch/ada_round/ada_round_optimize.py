@@ -19,12 +19,12 @@ import torch
 import numpy as np
 
 import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ada_round_quant import AdaRoundQuant
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ada_round_quant import GAMMA, ZETA, ANNEAL_COEFFICIENT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_data_manager import AdaRoundDataManager
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.custom_op.ada_round_quant import AdaRoundQuant
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.configuration.configuration import Configuration
+from ...amct_pytorch.custom_op.ada_round_quant import GAMMA, ZETA, ANNEAL_COEFFICIENT
+from ...amct_pytorch.ada_round.ada_round_data_manager import AdaRoundDataManager
 
 
 def replace_adaround_module(object_module_name, model, data_tensor, tensor_balance_factor):

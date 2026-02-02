@@ -49,8 +49,6 @@ from .field import WgtQuantParamsField
 from .field import WtsAlgoField
 from .field import ActAlgoField
 from .field import ChannelWiseField
-from .field import NumStepsField
-from .field import NumOfIterationField
 from .field import NumOfBinsField
 from .field import TensorQuantizeField
 from .field import LayerNameField
@@ -86,6 +84,7 @@ ASYMMETRIC = 'asymmetric'
 BETA_RANGE = 'beta_range'
 FAKEQUANT_PRECISION_MODE = 'fakequant_precision_mode'
 
+
 class ConfigBase():
     """
     Function:
@@ -112,28 +111,6 @@ class ConfigBase():
         self.approximate_type = capacity.get_value('OP_APPROXIMATION_TYPES')
         self.graph_querier = graph_objects.graph_querier
         self.graph_checker = graph_objects.graph_checker
-
-    @staticmethod
-    def _add_act_param(container, capacity):
-        act_param = \
-            container.add_child(ACTIVATION_QUANT_PARAMS,
-                                ActQuantParamsField(capacity))
-        act_param.add_child('num_bits', ActNumBitsField(capacity))
-        act_param.add_child('max_percentile', MaxPercentileField(capacity))
-        act_param.add_child('min_percentile', MinPercentileField(capacity))
-        act_param.add_child(SEARCH_RANGE, SearchRangeField(capacity))
-        act_param.add_child('search_step', SearchStepField(capacity))
-        act_param.add_child('act_algo', ActAlgoField(capacity))
-        act_param.add_child(ASYMMETRIC, LayerActOffsetField(capacity))
-        if capacity.is_enable('HFMG'):
-            act_param.add_child('num_of_bins', NumOfBinsField(capacity))
-
-    @staticmethod
-    def _add_wts_param(wts_param, capacity):
-        wts_param.add_child('reg_param', RegParamField(capacity))
-        wts_param.add_child('warm_start', WarmStartField(capacity))
-        wts_param.add_child('num_iteration', NumIterationField(capacity))
-        wts_param.add_child(BETA_RANGE, BetaRangeField(capacity))
 
     @staticmethod
     def get_common_activation_quant_config(common_config):
@@ -191,6 +168,28 @@ class ConfigBase():
                     weight_config["num_bits"] = num_bits
                 if wts_algo is not None:
                     weight_config["wts_algo"] = wts_algo
+
+    @staticmethod
+    def _add_act_param(container, capacity):
+        act_param = \
+            container.add_child(ACTIVATION_QUANT_PARAMS,
+                                ActQuantParamsField(capacity))
+        act_param.add_child('num_bits', ActNumBitsField(capacity))
+        act_param.add_child('max_percentile', MaxPercentileField(capacity))
+        act_param.add_child('min_percentile', MinPercentileField(capacity))
+        act_param.add_child(SEARCH_RANGE, SearchRangeField(capacity))
+        act_param.add_child('search_step', SearchStepField(capacity))
+        act_param.add_child('act_algo', ActAlgoField(capacity))
+        act_param.add_child(ASYMMETRIC, LayerActOffsetField(capacity))
+        if capacity.is_enable('HFMG'):
+            act_param.add_child('num_of_bins', NumOfBinsField(capacity))
+
+    @staticmethod
+    def _add_wts_param(wts_param, capacity):
+        wts_param.add_child('reg_param', RegParamField(capacity))
+        wts_param.add_child('warm_start', WarmStartField(capacity))
+        wts_param.add_child('num_iteration', NumIterationField(capacity))
+        wts_param.add_child(BETA_RANGE, BetaRangeField(capacity))
 
     def create_config_from_proto(self, config_file, graph, config_defination):
         '''
@@ -513,14 +512,7 @@ class ConfigBase():
 
         wgt_param.add_child('num_bits', WtsNumBitsField(capacity))
         self._add_wts_param(wgt_param, capacity)
-        if capacity.is_enable('NUQ'):
-            wgt_param.add_child('wts_algo', WtsAlgoField(capacity))
-            wgt_param.add_child('channel_wise', ChannelWiseField(capacity))
-            wgt_param.add_child('num_steps', NumStepsField(capacity))
-            wgt_param.add_child('num_of_iteration',
-                                NumOfIterationField(capacity))
-        else:
-            wgt_param.add_child('channel_wise', ChannelWiseField(capacity))
+        wgt_param.add_child('channel_wise', ChannelWiseField(capacity))
 
         if capacity.is_enable('TENSOR_QUANTIZE'):
             tensor_container = root.add_child(

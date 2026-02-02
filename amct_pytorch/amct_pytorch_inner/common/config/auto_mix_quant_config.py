@@ -86,33 +86,6 @@ class AutoMixedPrecisionConfigHelper:
             return None
         return os.path.realpath(config_defination)
 
-    @classmethod
-    def read_file(cls, config_file):
-        """ Read one file to parse AutoMixedPrecisionConfig.
-
-        Args:
-            config_file (string): file to read and parse.
-
-        Raises:
-            RuntimeError: content in file doesn't match AutoMixedPrecisionConfig.
-
-        Returns:
-            AutoMixedPrecisionConfig: proto parsed.
-        """
-        config_file = os.path.realpath(config_file)
-        config_proto = AutoMixedPrecisionConfig()
-        with open(config_file, 'r') as fid:
-            pbtxt_string = fid.read()
-            try:
-                text_format.Merge(pbtxt_string, config_proto)
-            except text_format.ParseError as e:
-                raise RuntimeError(
-                    "the config_file{%s} cannot be parsered, please ensure "\
-                    "it matches with AutoMixedPrecisionConfig!"
-                    % (config_file)) from e
-
-        return config_proto
-
     @staticmethod
     def _check_compress_ratio(value):
         """ Check compress_ratio in proto(AutoMixedPrecisionConfig).
@@ -156,6 +129,33 @@ class AutoMixedPrecisionConfigHelper:
             if quant_layer2type.get(layer) in ['AvgPool', 'AvgPool2d'] and \
                 str(vars_util.INT4_BIT) in search_limit.get(layer):
                 raise ValueError('{} with type {} cannot quant to 4 bit.'.format(layer, quant_layer2type.get(layer)))
+
+    @classmethod
+    def read_file(cls, config_file):
+        """ Read one file to parse AutoMixedPrecisionConfig.
+
+        Args:
+            config_file (string): file to read and parse.
+
+        Raises:
+            RuntimeError: content in file doesn't match AutoMixedPrecisionConfig.
+
+        Returns:
+            AutoMixedPrecisionConfig: proto parsed.
+        """
+        config_file = os.path.realpath(config_file)
+        config_proto = AutoMixedPrecisionConfig()
+        with open(config_file, 'r') as fid:
+            pbtxt_string = fid.read()
+            try:
+                text_format.Merge(pbtxt_string, config_proto)
+            except text_format.ParseError as e:
+                raise RuntimeError(
+                    "the config_file{%s} cannot be parsered, please ensure "\
+                    "it matches with AutoMixedPrecisionConfig!"
+                    % (config_file)) from e
+
+        return config_proto
 
     def parse(self):
         """ check the content in config_proto. """

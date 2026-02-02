@@ -25,25 +25,25 @@ import torch.nn.functional as F
 from torch import nn, tensor
 from torch.nn.parameter import Parameter
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INT8, INT16
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_distribute_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFuncQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, DST_TYPE, BATCH_NUM, NUM_BITS_MAP
+from .....amct_pytorch.utils.log import LOGGER
+from .....amct_pytorch.common.utils.check_params import check_params
+from .....amct_pytorch.common.utils.vars_util import INT8, INT16
+from .....amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
+from .....amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from .....amct_pytorch.custom_op.utils import copy_tensor
+from .....amct_pytorch.custom_op.utils import get_distribute_config
+from .....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQAT
+from .....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
+from .....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFuncQAT
+from .....amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, DST_TYPE, BATCH_NUM, NUM_BITS_MAP
 
 TYPE = 'type'
 SCOPE = 'scope'
 DEFAULT_VALUE = 'default'
 BIAS = 'bias'
 SUPPORT_RETRAIN_ACT_WTS_TYPE_MAP = {
-    INT8 : INT8,
-    INT16 : INT8
+    INT8: INT8,
+    INT16: INT8
 }
 
 ULQRetrainParams = namedtuple('ULQRetrainParams',
@@ -103,219 +103,6 @@ class QATBase(metaclass=ABCMeta):
         self.init_module = IFMR(layers_name=self.layer_type,
                                 num_bits=self.act_num_bits,
                                 batch_num=self.retrain_data_config.get(BATCH_NUM, 1))
-
-    @classmethod
-    def _get_ori_op_params(cls, mod):
-        """
-        extract parameters from torch origin op.
-        Args:
-            mod (torch.nn.Module): a float module, either produced by torch.quantization utilities or directly from user
-        """
-        ori_op_params = {}
-        err_params = list()
-        for param in cls._required_params:
-            if not hasattr(mod, param):
-                err_params.append(param)
-                continue
-            ori_op_params[param] = getattr(mod, param)
-
-        if err_params:
-            raise RuntimeError(f'The following parameters are not found in the torch operator. {err_params}'\
-                ' Check the _required_params parameter of the QAT operator.')
-        return ori_op_params
-
-    @classmethod
-    def from_float(cls,
-                   mod,
-                   config=None):
-        """turn a torch.nn.Module to custom qat operator
-
-        Args:
-            mod (torch.nn.module): a float module, either produced by torch.quantization utilities or directly from user
-            config (dict, optional): config used in wts quant and act quant. Defaults to DEFAULT_QAT_CONF.
-
-        Returns:
-            torch.nn.Module: qat operator constructed based on mod input
-        """
-        if type(mod) != cls._float_module:
-            raise TypeError(
-                f'{cls.__name__}.from_float can only works for '
-                f'{cls._float_module.__name__}')
-        ori_op_params = cls._get_ori_op_params(mod)
-        if BIAS in ori_op_params:
-            ori_op_params[BIAS] = ori_op_params.get(BIAS) is not None
-        qat_op = cls(config=config, **ori_op_params)
-        setattr(qat_op, 'weight', mod.weight)
-        setattr(qat_op, BIAS, mod.bias)
-        qat_op.to(mod.weight.device)
-        LOGGER.logi(
-            f'Convert {cls._float_module.__name__} to QAT op successfully.')
-        return qat_op
-
-    @staticmethod
-    def _register_qat_params(module):
-        """Register quantitative parameters
-        """
-        module.register_buffer('cur_batch', tensor(0))
-        module.register_parameter('acts_clip_max',
-                                  Parameter(tensor(module.retrain_data_config.get(CLIP_MAX, 1.0),
-                                                   device=module.quant_device),
-                                            requires_grad=True))
-        module.register_parameter('acts_clip_min',
-                                  Parameter(tensor(module.retrain_data_config.get(CLIP_MIN, -1.0),
-                                                   device=module.quant_device),
-                                            requires_grad=True))
-        module.register_buffer('acts_clip_max_pre',
-                               tensor(np.nan, device=module.quant_device))
-        module.register_buffer('acts_clip_min_pre',
-                               tensor(np.nan, device=module.quant_device))
-        module.register_buffer('acts_scale',
-                               tensor([np.nan], device=module.quant_device))
-        module.register_buffer('acts_offset_deploy',
-                               tensor([0], dtype=module.offset_dtype, device=module.quant_device))
-        if module.retrain_weight_config.get('channel_wise', True):
-            num_channel = module.out_channels
-        else:
-            num_channel = module.wts_group_num
-        module.register_parameter('wts_scales',
-                                  Parameter(tensor([np.nan]*num_channel,
-                                                   device=module.quant_device),
-                                            requires_grad=False))
-        module.register_parameter('wts_offsets',
-                                  Parameter(tensor([np.nan]*num_channel,
-                                                   device=module.quant_device),
-                                            requires_grad=False))
-        module.register_buffer('wts_offsets_deploy',
-                               tensor([0]*num_channel, dtype=torch.int8,
-                                      device=module.quant_device))
-        module.register_buffer('s_rec_flag',
-                               tensor(module.retrain_weight_config.get('s_rec_flag', False),
-                                      device=module.quant_device))
-
-    @abstractmethod
-    def check_quantifiable(self):
-        """Check whether the ori op support quant on its params
-        """
-        pass
-
-    @abstractmethod
-    def forward(self):
-        pass
-
-    def _check_qat_config(self):
-        """
-        Check if the QAT configuration meets the requirements.
-        """
-        # check params for activation
-        if not self.retrain_data_config.get(DST_TYPE, INT8) in [INT8, INT16]:
-            raise ValueError("dst_type for activation should be in range ['INT8', 'INT16'], "
-                             "but your input is {}".format(self.retrain_data_config.get(DST_TYPE)))
-        
-        batch_num = self.retrain_data_config.get(BATCH_NUM, 1)
-        if not isinstance(batch_num, int) or batch_num <= 0:
-            raise ValueError("batch_num should be a int bigger than 0, but your input is {}".format(batch_num))
-        
-        if not isinstance(self.retrain_data_config.get(FIXED_MIN, False), bool):
-            raise ValueError("fixed_min should be a bool value, but your input is {}".format(
-                type(self.retrain_data_config.get(FIXED_MIN))))
-
-        clip_min = self.retrain_data_config.get(CLIP_MIN, -1.0)
-        clip_max = self.retrain_data_config.get(CLIP_MAX, 1.0)
-
-        if not isinstance(clip_min, float) or clip_min >= 0.0:
-            raise ValueError('clip_min should be a float smaller than zero, but your input is {}.'.format(clip_min))
-        if not isinstance(clip_max, float) or clip_max <= 0.0:
-            raise ValueError('clip_max should a float be bigger than zero, but your input is {}.'.format(clip_max))
-
-        # check params for weights
-        if not self.retrain_weight_config.get(DST_TYPE, INT8) in [INT8]:
-            raise ValueError("dst_type for weight should be in range ['INT8'], "
-                             "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE)))
-
-        if not self.retrain_weight_config.get('weight_retrain_algo', 'arq_retrain') in ['arq_retrain', 'ulq_retrain']:
-            raise ValueError("weight_retrain_algo should be in range ['arq_retrain', 'ulq_retrain'], "
-                             "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE)))
-
-        if not isinstance(self.retrain_weight_config.get('channel_wise', True), bool):
-            raise ValueError("channel_wise should be a bool value, but your input is {}".format(
-                type(self.retrain_weight_config.get('channel_wise'))))
-
-    def forward_qat(self, inputs):
-        if inputs.dtype is not torch.float32:
-            raise ValueError('Only support dtype torch.float32, but your input dtype is {}'.format(inputs.dtype))
-        if self.retrain_enable:
-            if self.do_init:
-                self.acts_quant_init(inputs)
-                quantized_acts = inputs
-            else:
-                quantized_acts = self.acts_quant(inputs)
-            quantized_weights = self.wts_quant()
-            if self.cur < 100:
-                self.cur += 1
-                self.cur_batch += 1
-        else:
-            quantized_acts, quantized_weights = inputs, self.weight
-        return quantized_acts, quantized_weights
-
-    def wts_quant(self):
-        """do weight quant using arq or ulq algo based on config
-        """
-        wts_quant_dict = {
-            'arq_retrain': self.wts_quant_arq,
-            'ulq_retrain': self.wts_quant_ulq
-        }
-        weights_retrain_algo = self.retrain_weight_config.get('weights_retrain_algo', 'arq_retrain')
-        wts_quant_params = WtsRetrainParams(self.wts_scales,
-                                            self.wts_offsets,
-                                            self.wts_offsets_deploy,
-                                            self.wts_group_num)
-        quantized_weight, scales, offsets = \
-            wts_quant_dict.get(weights_retrain_algo)(self.weight, wts_quant_params)
-
-        with torch.no_grad():
-            copy_tensor(self.weight, quantized_weight)
-            copy_tensor(self.wts_scales, scales)
-            copy_tensor(self.wts_offsets, offsets)
-            copy_tensor(self.wts_offsets_deploy, offsets.to(torch.int8))
-        return quantized_weight
-
-    def wts_quant_arq(self, wts, wts_retrain_params):
-        """do weight quant using arq algo
-        """
-        wts_param = {
-            'num_bits': self.wts_num_bits,
-            'channel_wise': self.retrain_weight_config.get('channel_wise', True),
-            'with_offset': False,
-            'module_type': self.layer_type,
-            'module': self
-        }
-        quantized_weight, scale, offset = ArqRetrainFuncQAT.apply(wts,
-                                                                  wts_retrain_params.scale,
-                                                                  wts_retrain_params.offset,
-                                                                  wts_param,
-                                                                  wts_retrain_params.offset_deploy,)
-        return quantized_weight, scale, offset
-
-    def wts_quant_ulq(self, wts, wts_retrain_params):
-        """do weight quant using ulq algo
-        """
-        wts_param = {
-            'num_bits': self.wts_num_bits,
-            'channel_wise': self.retrain_weight_config.get('channel_wise', True),
-            'with_offset': False,
-            'module_type': self.layer_type,
-            's_rec_flag': self.retrain_weight_config.get('s_rec_flag', False),
-            'arq_init': True,
-            'module': self
-        }
-        quantized_weight, scale, offset = UlqScaleRetrainFuncQAT.apply(wts,
-                                                                       wts_retrain_params.scale,
-                                                                       wts_retrain_params.offset,
-                                                                       wts_param,
-                                                                       self.cur_batch,
-                                                                       wts_retrain_params.offset_deploy,
-                                                                       wts_retrain_params.wts_group_num)
-        return quantized_weight, scale, offset
 
     @staticmethod
     def do_ifmr(inputs, ifmr_module, distribute_config):
@@ -412,3 +199,216 @@ class QATBase(metaclass=ABCMeta):
                 distribute_config.get('world_size')
             )
         return outputs, ULQRetrainParams(scale, offset, clip_max, clip_min, None, None)
+    
+    @staticmethod
+    def _register_qat_params(module):
+        """Register quantitative parameters
+        """
+        module.register_buffer('cur_batch', tensor(0))
+        module.register_parameter('acts_clip_max',
+                                  Parameter(tensor(module.retrain_data_config.get(CLIP_MAX, 1.0),
+                                                   device=module.quant_device),
+                                            requires_grad=True))
+        module.register_parameter('acts_clip_min',
+                                  Parameter(tensor(module.retrain_data_config.get(CLIP_MIN, -1.0),
+                                                   device=module.quant_device),
+                                            requires_grad=True))
+        module.register_buffer('acts_clip_max_pre',
+                               tensor(np.nan, device=module.quant_device))
+        module.register_buffer('acts_clip_min_pre',
+                               tensor(np.nan, device=module.quant_device))
+        module.register_buffer('acts_scale',
+                               tensor([np.nan], device=module.quant_device))
+        module.register_buffer('acts_offset_deploy',
+                               tensor([0], dtype=module.offset_dtype, device=module.quant_device))
+        if module.retrain_weight_config.get('channel_wise', True):
+            num_channel = module.out_channels
+        else:
+            num_channel = module.wts_group_num
+        module.register_parameter('wts_scales',
+                                  Parameter(tensor([np.nan] * num_channel,
+                                                   device=module.quant_device),
+                                            requires_grad=False))
+        module.register_parameter('wts_offsets',
+                                  Parameter(tensor([np.nan] * num_channel,
+                                                   device=module.quant_device),
+                                            requires_grad=False))
+        module.register_buffer('wts_offsets_deploy',
+                               tensor([0] * num_channel, dtype=torch.int8,
+                                      device=module.quant_device))
+        module.register_buffer('s_rec_flag',
+                               tensor(module.retrain_weight_config.get('s_rec_flag', False),
+                                      device=module.quant_device))
+
+    @classmethod
+    def _get_ori_op_params(cls, mod):
+        """
+        extract parameters from torch origin op.
+        Args:
+            mod (torch.nn.Module): a float module, either produced by torch.quantization utilities or directly from user
+        """
+        ori_op_params = {}
+        err_params = list()
+        for param in cls._required_params:
+            if not hasattr(mod, param):
+                err_params.append(param)
+                continue
+            ori_op_params[param] = getattr(mod, param)
+
+        if err_params:
+            raise RuntimeError(f'The following parameters are not found in the torch operator. {err_params}'\
+                ' Check the _required_params parameter of the QAT operator.')
+        return ori_op_params
+
+    @classmethod
+    def from_float(cls,
+                   mod,
+                   config=None):
+        """turn a torch.nn.Module to custom qat operator
+
+        Args:
+            mod (torch.nn.module): a float module, either produced by torch.quantization utilities or directly from user
+            config (dict, optional): config used in wts quant and act quant. Defaults to DEFAULT_QAT_CONF.
+
+        Returns:
+            torch.nn.Module: qat operator constructed based on mod input
+        """
+        if type(mod) != cls._float_module:
+            raise TypeError(
+                f'{cls.__name__}.from_float can only works for '
+                f'{cls._float_module.__name__}')
+        ori_op_params = cls._get_ori_op_params(mod)
+        if BIAS in ori_op_params:
+            ori_op_params[BIAS] = ori_op_params.get(BIAS) is not None
+        qat_op = cls(config=config, **ori_op_params)
+        setattr(qat_op, 'weight', mod.weight)
+        setattr(qat_op, BIAS, mod.bias)
+        qat_op.to(mod.weight.device)
+        LOGGER.logi(
+            f'Convert {cls._float_module.__name__} to QAT op successfully.')
+        return qat_op
+
+    @abstractmethod
+    def check_quantifiable(self):
+        """Check whether the ori op support quant on its params
+        """
+        pass
+
+    @abstractmethod
+    def forward(self):
+        pass
+
+    def forward_qat(self, inputs):
+        if inputs.dtype is not torch.float32:
+            raise ValueError('Only support dtype torch.float32, but your input dtype is {}'.format(inputs.dtype))
+        if self.retrain_enable:
+            if self.do_init:
+                self.acts_quant_init(inputs)
+                quantized_acts = inputs
+            else:
+                quantized_acts = self.acts_quant(inputs)
+            quantized_weights = self.wts_quant()
+            if self.cur < 100:
+                self.cur += 1
+                self.cur_batch += 1
+        else:
+            quantized_acts, quantized_weights = inputs, self.weight
+        return quantized_acts, quantized_weights
+
+    def wts_quant(self):
+        """do weight quant using arq or ulq algo based on config
+        """
+        wts_quant_dict = {
+            'arq_retrain': self.wts_quant_arq,
+            'ulq_retrain': self.wts_quant_ulq
+        }
+        weights_retrain_algo = self.retrain_weight_config.get('weights_retrain_algo', 'arq_retrain')
+        wts_quant_params = WtsRetrainParams(self.wts_scales,
+                                            self.wts_offsets,
+                                            self.wts_offsets_deploy,
+                                            self.wts_group_num)
+        quantized_weight, scales, offsets = \
+            wts_quant_dict.get(weights_retrain_algo)(self.weight, wts_quant_params)
+
+        with torch.no_grad():
+            copy_tensor(self.weight, quantized_weight)
+            copy_tensor(self.wts_scales, scales)
+            copy_tensor(self.wts_offsets, offsets)
+            copy_tensor(self.wts_offsets_deploy, offsets.to(torch.int8))
+        return quantized_weight
+
+    def wts_quant_arq(self, wts, wts_retrain_params):
+        """do weight quant using arq algo
+        """
+        wts_param = {
+            'num_bits': self.wts_num_bits,
+            'channel_wise': self.retrain_weight_config.get('channel_wise', True),
+            'with_offset': False,
+            'module_type': self.layer_type,
+            'module': self
+        }
+        quantized_weight, scale, offset = ArqRetrainFuncQAT.apply(wts,
+                                                                  wts_retrain_params.scale,
+                                                                  wts_retrain_params.offset,
+                                                                  wts_param,
+                                                                  wts_retrain_params.offset_deploy,)
+        return quantized_weight, scale, offset
+
+    def wts_quant_ulq(self, wts, wts_retrain_params):
+        """do weight quant using ulq algo
+        """
+        wts_param = {
+            'num_bits': self.wts_num_bits,
+            'channel_wise': self.retrain_weight_config.get('channel_wise', True),
+            'with_offset': False,
+            'module_type': self.layer_type,
+            's_rec_flag': self.retrain_weight_config.get('s_rec_flag', False),
+            'arq_init': True,
+            'module': self
+        }
+        quantized_weight, scale, offset = UlqScaleRetrainFuncQAT.apply(wts,
+                                                                       wts_retrain_params.scale,
+                                                                       wts_retrain_params.offset,
+                                                                       wts_param,
+                                                                       self.cur_batch,
+                                                                       wts_retrain_params.offset_deploy,
+                                                                       wts_retrain_params.wts_group_num)
+        return quantized_weight, scale, offset
+
+    def _check_qat_config(self):
+        """
+        Check if the QAT configuration meets the requirements.
+        """
+        # check params for activation
+        if not self.retrain_data_config.get(DST_TYPE, INT8) in [INT8, INT16]:
+            raise ValueError("dst_type for activation should be in range ['INT8', 'INT16'], "
+                             "but your input is {}".format(self.retrain_data_config.get(DST_TYPE)))
+        
+        batch_num = self.retrain_data_config.get(BATCH_NUM, 1)
+        if not isinstance(batch_num, int) or batch_num <= 0:
+            raise ValueError("batch_num should be a int bigger than 0, but your input is {}".format(batch_num))
+        
+        if not isinstance(self.retrain_data_config.get(FIXED_MIN, False), bool):
+            raise ValueError("fixed_min should be a bool value, but your input is {}".format(
+                type(self.retrain_data_config.get(FIXED_MIN))))
+
+        clip_min = self.retrain_data_config.get(CLIP_MIN, -1.0)
+        clip_max = self.retrain_data_config.get(CLIP_MAX, 1.0)
+
+        if not isinstance(clip_min, float) or clip_min >= 0.0:
+            raise ValueError('clip_min should be a float smaller than zero, but your input is {}.'.format(clip_min))
+        if not isinstance(clip_max, float) or clip_max <= 0.0:
+            raise ValueError('clip_max should a float be bigger than zero, but your input is {}.'.format(clip_max))
+
+        # check params for weights
+        if not self.retrain_weight_config.get(DST_TYPE, INT8) in [INT8]:
+            raise ValueError("dst_type for weight should be in range ['INT8'], "
+                             "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE)))
+
+        if not self.retrain_weight_config.get('weight_retrain_algo', 'arq_retrain') in ['arq_retrain', 'ulq_retrain']:
+            raise ValueError("weight_retrain_algo should be in range ['arq_retrain', 'ulq_retrain'], "
+                             "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE)))
+
+        if not isinstance(self.retrain_weight_config.get('channel_wise', True), bool):
+            raise ValueError("channel_wise should be a bool value, but your input is {}".format(
+                type(self.retrain_weight_config.get('channel_wise'))))

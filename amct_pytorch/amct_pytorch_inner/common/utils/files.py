@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+__all__ = ['create_path', 'create_empty_file', 'is_valid_name', 'split_save_path', 'concat_name',
+           'is_valid_save_prefix', 'create_file_path', 'delete_dir', 'check_files_exist']
 
 import os
 import shutil
@@ -27,9 +29,6 @@ from ...utils.log import LOGGER
 
 FILE_NAME_PATTERN = "^[^/]{1,254}$"
 SAVE_PREFIX_PATTERN = "^[^/]{0,241}$"
-
-__all__ = ['create_path', 'create_empty_file', 'is_valid_name', 'split_save_path', 'concat_name',
-           'is_valid_save_prefix', 'create_file_path', 'delete_dir', 'check_files_exist']
 
 
 def create_path(file_path, mode=DIR_MODE):
@@ -207,15 +206,15 @@ def parse_dump_data(file_path, with_type=False):
     if with_type:
         type_info = int(np.frombuffer(dump_data[0:4], np.float32)[0])
         dim_info = int(np.frombuffer(dump_data[4:8], np.float32)[0])
-        shape_info = list(np.frombuffer(dump_data[8:8+dim_info*4], np.float32))
+        shape_info = list(np.frombuffer(dump_data[8:8 + dim_info * 4], np.float32))
         shape = list(map(int, shape_info))
-        info_length = 8+dim_info*4
+        info_length = 8 + dim_info*4
     else:
         type_info = 0
         dim_info = int(np.frombuffer(dump_data[0:4], np.float32)[0])
-        shape_info = list(np.frombuffer(dump_data[4:4+dim_info*4], np.float32))
+        shape_info = list(np.frombuffer(dump_data[4: 4 + dim_info * 4], np.float32))
         shape = list(map(int, shape_info))
-        info_length = 4+dim_info*4
+        info_length = 4 + dim_info * 4
     # 1) keep same with c++; 2) each amct shoule be same if use this function
     type_mappint = {'0': np.float32, '1': np.double, '2': np.int32, '3': np.float16}
     data_info = np.frombuffer(dump_data[info_length:], type_mappint.get(str(type_info)))

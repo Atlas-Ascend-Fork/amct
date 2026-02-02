@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.qat_base import QATBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from .....amct_pytorch.nn.module.quantization.qat_base import QATBase
+from .....amct_pytorch.common.utils.util import version_higher_than
 
 SUPPORTED_DATA_DIMS = 3
 

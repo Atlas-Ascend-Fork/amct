@@ -78,7 +78,7 @@ class SoftmaxCalibrator():
             a, b, clip_value = candidate.get(key)
             temp = accurate_result - self._exp_approximation(self.cali_data, a, b, clip_value)
             loss_dict[key] = np.linalg.norm(temp.astype(float), ord=2)
-        min_key = min(loss_dict.keys(), key=(lambda x : loss_dict.get(x)))
+        min_key = min(loss_dict.keys(), key=(lambda x: loss_dict.get(x)))
         LOGGER.logd('choose approximate coef {} for layer {}'.format(candidate.get(min_key), self.prefix))
         return candidate.get(min_key)
 

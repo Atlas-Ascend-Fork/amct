@@ -29,6 +29,15 @@ class PruneHelperBase:
         """
         self.node = node
 
+    @staticmethod
+    def match_pattern(node):
+        """
+        Function: Match pattern of prune for node in graph
+        Param: None
+        Return: bool, matched or not
+        """
+        return False
+    
     @classmethod
     def get_producer_record(cls, node, in_idx):
         """
@@ -54,15 +63,6 @@ class PruneHelperBase:
                 return None
             prune_records = pre_node.get_attr('passive_prune_records{}'.format(tail))
         return prune_records
-
-    @staticmethod
-    def match_pattern(node):
-        """
-        Function: Match pattern of prune for node in graph
-        Param: None
-        Return: bool, matched or not
-        """
-        return False
 
     def process(self, record_helper):
         """

@@ -50,7 +50,7 @@ def check_level(level, name):
 
 def split_str_by_length(string, length):
     ''' split string on given length '''
-    return [string[i:i+length].strip() for i in range(0, len(string), length)]
+    return [string[i : i + length].strip() for i in range(0, len(string), length)]
 
 
 def log_split_deco(length=500):

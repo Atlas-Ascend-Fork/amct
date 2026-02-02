@@ -32,7 +32,6 @@ OP_TMP_DIR = 'amct_pytorch/amct_pytorch_inner/custom_op/src/tmp'
 AMCT_LIB_DIR = os.path.join(CUR_DIR, "./amct_pytorch/amct_pytorch_inner/amct_pytorch/custom_op")
 UTIL_OP_PATH = 'amct_pytorch/amct_pytorch_inner/custom_op/src/util_op.cpp'
 SRC_FILES = [
-             ['amct_pytorch/amct_pytorch_inner/custom_op/src/nuq_op.cpp'],
              ['amct_pytorch/amct_pytorch_inner/custom_op/src/cast_op.cpp',
               UTIL_OP_PATH],
              ['amct_pytorch/amct_pytorch_inner/custom_op/src/dump_op.cpp'], ]
@@ -54,10 +53,11 @@ class SetupTool(): # pylint: disable=R0903
     def get_modules_set(cls):
         '''get setting for ext_modules'''
         op_tmp_dir = OP_TMP_DIR
+        print("CUR_DIR:{CUR_DIR}")
 
         compile_files = []
         if not os.path.exists(os.path.realpath(op_tmp_dir)):
-            os.mkdir(os.path.realpath(op_tmp_dir))
+            os.makedirs(os.path.realpath(op_tmp_dir))
         for task in SRC_FILES:
             compile_task = []
             op_path = os.path.split(task[0])[-1]
@@ -74,8 +74,7 @@ class SetupTool(): # pylint: disable=R0903
 
         prefix = 'amct_pytorch_op'
         
-        module_name = ['{}_nuq'.format(prefix),
-                       '{}_cast'.format(prefix),
+        module_name = ['{}_cast'.format(prefix),
                        '{}_dump'.format(prefix), ]
 
         modules_set = zip(module_name, compile_files)
@@ -162,7 +161,7 @@ setuptools.setup(
                          'amct_pytorch/capacity/*.csv',
                          'lib/*.so',
                          'amct_pytorch/custom_op/*.so'],
-        'amct_pytorch.amct_pytorch_inner.custom_op': ['inc/*.h', 'src/*.cpp']
+        'amct_pytorch/amct_pytorch_inner/custom_op': ['inc/*.h', 'src/*.cpp']
     },
     zip_safe=False,
     **setup_tools.setup_args

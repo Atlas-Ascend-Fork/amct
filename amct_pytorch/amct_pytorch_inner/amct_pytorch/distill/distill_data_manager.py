@@ -19,13 +19,13 @@ import os
 import torch
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import create_path
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import delete_dir
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import check_files_exist
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_helper import StopFowardException
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.common.utils.files import create_path
+from ...amct_pytorch.common.utils.files import delete_dir
+from ...amct_pytorch.common.utils.files import check_files_exist
+from ...amct_pytorch.distill.distill_helper import DistillHelper
+from ...amct_pytorch.distill.distill_helper import StopFowardException
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.model_util import ModuleHelper
 
 
 TMP_PATH = 'tmp'
@@ -283,7 +283,7 @@ class DistillDataManager():
         '''generate dump file path'''
         dump_suffix = f'{layer_name}_{epoch}_{step}_{self.device_name}.npy'
         if is_in:
-            file_name =  DATA_DUMP_INPUT_PREFIX + dump_suffix
+            file_name = DATA_DUMP_INPUT_PREFIX + dump_suffix
         else:
             file_name = DATA_DUMP_OUTPUT_PREFIX + dump_suffix
 

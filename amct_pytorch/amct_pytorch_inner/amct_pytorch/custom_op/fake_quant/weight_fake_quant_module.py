@@ -16,18 +16,17 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
-
+import math
 from torch import nn
 import torch
 import numpy as np
-import math
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_utils import quant_dequant_weight
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_quant_factor, get_optimized_weight, check_scale_offset_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import apply_quantize_by_algo, get_algo_params, save_algo_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import LUT_DEFAULT_GROUP_SIZE, NUM_BITS_MAP
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import cal_shared_exponent
+from ....amct_pytorch.utils.weight_quant_utils import quant_dequant_weight
+from ....amct_pytorch.custom_op.utils import get_quant_factor, get_optimized_weight, check_scale_offset_shape
+from ....amct_pytorch.custom_op.utils import apply_quantize_by_algo, get_algo_params, save_algo_params
+from ....amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
+from ....amct_pytorch.utils.vars import LUT_DEFAULT_GROUP_SIZE, NUM_BITS_MAP
+from ....amct_pytorch.utils.data_utils import cal_shared_exponent
 
 
 class FakeWeightQuantizedConv2d(nn.Module):

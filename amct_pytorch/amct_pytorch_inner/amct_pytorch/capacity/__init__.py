@@ -15,12 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+__all__ = ['CAPACITY']
 
 import os
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.capacity.query_capacity import Capacity
-
-__all__ = ['CAPACITY', 'POST_CAPACITY']
+from ...amct_pytorch.common.capacity.query_capacity import Capacity
 
 _CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 CAPACITY = Capacity(os.path.join(_CUR_DIR, 'capacity_config.csv'))
-POST_CAPACITY = Capacity(os.path.join(_CUR_DIR, 'capacity_post_config.csv'))

@@ -19,10 +19,10 @@ import numpy as np
 from torch import Tensor # pylint: disable=E0401
 from torch.nn.parameter import Parameter # pylint: disable=E0401
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant import FAKE_MODULES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_bias_quant_pass import InsertBiasQuantPass
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from ...amct_pytorch.custom_op.fake_quant import FAKE_MODULES
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.optimizer.insert_bias_quant_pass import InsertBiasQuantPass
 
 
 class BiasFakequantModulePass(BaseModuleFusionPass):
