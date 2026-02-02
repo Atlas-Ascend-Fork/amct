@@ -18,8 +18,8 @@
 from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.config.fields import QuantConfig
 from amct_pytorch.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
-from amct_pytorch.utils.vars import SUPPORTED_QUANT_DTYPE_COMB
 from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
+from amct_pytorch.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
 from amct_pytorch.algorithm import BUILT_IN_ALGORITHM
 
 
@@ -58,14 +58,24 @@ def check_config(quant_data_comb, quant_config, algo):
     algo: quantization algorithm
     Return: bool, Indicates whether config is supported to quantization
     """
-    if quant_data_comb not in SUPPORTED_QUANT_DTYPE_COMB:
+    if quant_data_comb not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB.keys():
         raise ValueError(f'Do not support combination {quant_data_comb} of act and weight quant dtype.')
     if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB[quant_data_comb]:
         raise ValueError(f'Algorithm {algo} do not support act and weight quant dtype {quant_data_comb}')
 
-    if quant_data_comb in ['int8 int8']:
-        if quant_config.quant_cfg.weights_cfg.strategy == 'group':
-            raise ValueError(f'act_dtype and wts dtype {quant_data_comb} do not support weight quant strategy group')
+    weight_strategy = quant_config.quant_cfg.weights_cfg.strategy
+    if quant_data_comb not in WTS_GRANULARITY_SUPPORT_MAP.get(weight_strategy):
+        raise ValueError(f'act_dtype and wts_dtype {quant_data_comb} do not support weight '
+            f'quant strategy {weight_strategy}')
+
+    if quant_config.quant_cfg.inputs_cfg.quant_input:
+        act_strategy = quant_config.quant_cfg.inputs_cfg.strategy
+        act_dtype = quant_config.quant_cfg.inputs_cfg.quant_type
+        if act_dtype not in ['mxfp8_e4m3fn'] and quant_data_comb not in ACT_GRANULARITY_SUPPORT_MAP.get(act_strategy):
+            raise ValueError(f'act_dtype and wts_dtype {quant_data_comb} do not support '
+                f'activation quant strategy {act_strategy}')
+        if act_dtype in ['mxfp8_e4m3fn'] and act_strategy != 'group':
+            raise ValueError(f'act_dtype and wts_dtype {quant_data_comb} only support activation quant strategy group')
     
     if quant_config.quant_cfg.weights_cfg.group_size is not None:
         group_size = quant_config.quant_cfg.weights_cfg.group_size
@@ -83,8 +93,36 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     quant_config: quant parameters
     Return: bool, Indicates whether the current layer is supported to quantization
     """
-    if quant_data_comb not in ['NOT_QUANTIZE int4', 'NOT_QUANTIZE int8']:
+    mod_type = type(mod).__name__
+    if mod_type != 'Linear':
         return True
+
+    # npu op check cin length be integer multiple of 64
+    support_quant_dtype_comb = ['float8_e4m3fn float4_e2m1']
+    if quant_data_comb in support_quant_dtype_comb and mod.weight.shape[1] % 64 != 0:
+        LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement '
+                    'cin length should be integer multiple of 64'.format(layer_name, quant_data_comb))
+        return False
+    # npu op check no bias
+    if quant_data_comb in support_quant_dtype_comb and mod.bias is not None:
+        LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement '
+            'bias is not supported'.format(layer_name, quant_data_comb))
+        return False
+
+    # npu op check cin length ceildiv(cin, 32) must be even number
+    check_mxfp8_mxfp8_dtype = 'mxfp8_e4m3fn mxfp8_e4m3fn'
+    if quant_data_comb == 'mxfp8_e4m3fn mxfp8_e4m3fn' and ((mod.weight.shape[1] + 31) // 32) % 2 != 0:
+        LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement '
+            'cin length ceildiv(cin, 32) must be even number'.format(layer_name, quant_data_comb))
+        return False
+
+    # npu op check cin length be integer multiple of 32b
+    if quant_data_comb in ['NOT_QUANTIZE mxfp4_e2m1', 'NOT_QUANTIZE float4_e2m1']:
+        if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
+            LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement'
+                'cin and cout length should be integer multiple of 64'.format(layer_name, quant_data_comb))
+            return False
+
     if quant_data_comb == 'NOT_QUANTIZE int4':
         if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
             LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement'
@@ -107,8 +145,9 @@ def get_supported_layers(model, quant_config, registed_alg):
     algos = quant_config.algorithm.names
     layer_types = dict()
     for algo in algos:
-        layer_types[registed_alg.algo.get(algo)[0]] = algo
-
+        src_ops = registed_alg.algo.get(algo).keys()
+        for src_op in src_ops:
+            layer_types[src_op] = algo
         if algo not in BUILT_IN_ALGORITHM:
             LOGGER.logd("Customized Algorithm {} is used fot quant".format(algo))
         else:
@@ -120,7 +159,11 @@ def get_supported_layers(model, quant_config, registed_alg):
 
     detail_config = dict()
     for name, mod in model.named_modules():
-        if type(mod) not in layer_types and type(mod).__name__ not in layer_types:
+        if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
+            continue
+        if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
+            LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has requirement '
+                        'on padding_mode of conv2d, padding_mode should be zero.'.format(name, quant_type_comb))
             continue
         if check_skip_layer(name, quant_config.skip_layers.skip_layers):
             LOGGER.logd('layer:{} is skipped'.format(name))
