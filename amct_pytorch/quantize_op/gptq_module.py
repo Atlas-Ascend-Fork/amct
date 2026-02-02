@@ -22,7 +22,8 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.utils.data_utils import check_linear_input_dim
 from amct_pytorch.quantize_op.utils import calculate_scale_offset, get_weight_min_max_by_granularity
-from amct_pytorch.utils.quant_util import quant_dequant_weight
+from amct_pytorch.utils.quant_util import quant_dequant_tensor
+from amct_pytorch.utils.vars import MXFP4_E2M1, FLOAT8_E4M3FN, HIFLOAT8
 from amct_pytorch.utils.log import LOGGER
 
 
@@ -43,6 +44,7 @@ class GPTQuant(BaseQuantizeModule):
         quant_config: quantization parameters.
         """
         super().__init__(ori_module, layer_name, quant_config)
+        self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         if not torch.isfinite(self.weight.data).all():
             raise ValueError(
@@ -57,6 +59,8 @@ class GPTQuant(BaseQuantizeModule):
         self.perc_damp = 0.01
         self.block_size = 128
         self.hessian = None
+        self.group_size = self.quant_config.get('weights_cfg').get('group_size')
+        self.wts_type = self.quant_config.get('weights_cfg').get('quant_type')
 
 
     @torch.no_grad()
@@ -91,9 +95,8 @@ class GPTQuant(BaseQuantizeModule):
         tuple: Optimized weights, scale and offset for quantization.
         """
         columns = self.weight.shape[1]
-        self.group_size = self.quant_config.get('weights_cfg').get('group_size')
-        self.wts_type = self.quant_config.get('weights_cfg').get('quant_type')
-        weight = self.weight.clone().float() # Do not alter the original weights
+        # Do not alter the original weights
+        weight = self.weight.clone().float() if self.wts_type != MXFP4_E2M1 else self.weight.clone()
 
         self.hessian = self.hessian.to(weight.device)
         dead = torch.diag(self.hessian) == 0
@@ -104,26 +107,19 @@ class GPTQuant(BaseQuantizeModule):
         invperm = torch.argsort(perm)
 
         # 0 calculate quantization factors
-        weight_min, weight_max = get_weight_min_max_by_granularity(weight, self.quant_config)
-
-        scale_w, offset_w = calculate_scale_offset(weight_max, weight_min, \
-            self.quant_config.get('weights_cfg').get('symmetric'), self.wts_type)
+        scale_w, offset_w = self.cal_scale_offset_static(weight)
 
         # 1 Sort based on the size of the diagonal elements of the Hessian matrix.
         weight_column_sorted = weight[:, perm]
         hessian_sorted = self.hessian[perm][:, perm]
 
         # 2 Calculate the inverse of the Hessian matrix
-        damp = self.perc_damp * torch.mean(torch.diag(hessian_sorted))
-        diag = torch.arange(columns, device=self.weight.device)
-        hessian_sorted[diag, diag] += damp
-        hessian_sorted = torch.linalg.cholesky(hessian_sorted)
-        hessian_sorted = torch.cholesky_inverse(hessian_sorted)
-        hessian_inverse = torch.linalg.cholesky(hessian_sorted, upper=True)
+        hessian_inverse = self.cal_hessian_inverse(hessian_sorted, columns)
         del hessian_sorted, self.hessian
         import torch_npu
         if torch_npu.npu.is_available():
             torch_npu.npu.empty_cache()
+
         # 3 Optimize weights according to the granularity of blocks.
         for i1 in range(0, columns, self.block_size):
             i2 = min(i1 + self.block_size, columns)
@@ -137,15 +133,8 @@ class GPTQuant(BaseQuantizeModule):
                 # Each column shares the value of a Hessian matrix.
                 w = weight_block[:, i]
                 d = hessian_inverse_block[i, i]
-
-                if self.group_size:
-                    column_index = perm[i1 + i]
-                    scale = scale_w[:, column_index // self.group_size].unsqueeze(-1) if scale_w is not None else None
-                    offset = offset_w[:, column_index // self.group_size].unsqueeze(-1) \
-                        if offset_w is not None else None
-                    w_q = quant_dequant_weight(w.unsqueeze(-1), self.quant_config, scale, offset).reshape(-1)
-                else:
-                    w_q = quant_dequant_weight(w.reshape(-1, 1), self.quant_config, scale_w, offset_w).reshape(-1)
+                column_index = perm[i1 + i]
+                w_q = self.cal_quant_weight(w, column_index, scale_w, offset_w)
                 err = (w - w_q) / d
                 weight_block[:, i:] -= err.unsqueeze(1).matmul(hessian_inverse_block[i, i:].unsqueeze(0))
                 err_block[:, i] = err
@@ -156,6 +145,45 @@ class GPTQuant(BaseQuantizeModule):
         weight = weight_column_sorted[:, invperm].to(self.weight.dtype)
 
         return weight, scale_w, offset_w
+
+    def cal_quant_weight(self, w, column_index, scale_w, offset_w):
+        if self.group_size:
+            scale = None if scale_w is None else scale_w[:, column_index // self.group_size].unsqueeze(-1)
+            offset = None if offset_w is None else offset_w[:, column_index // self.group_size].unsqueeze(-1)
+            w_q = quant_dequant_tensor(
+                w.unsqueeze(-1).repeat(1, 2), self.wts_type, scale, offset, self.group_size)[:, 0]
+        else:
+            if self.wts_type in (FLOAT8_E4M3FN, HIFLOAT8):
+                w_q = quant_dequant_tensor(w.reshape(1, -1), self.wts_type, scale_w.reshape(-1), 
+                    offset_w).reshape(-1)
+            else:
+                w_q = quant_dequant_tensor(w.reshape(-1, 1), self.wts_type, scale_w, offset_w).reshape(-1)
+
+        return w_q
+
+
+    def cal_hessian_inverse(self, hessian_sorted, columns):
+        damp = self.perc_damp * torch.mean(torch.diag(hessian_sorted))
+        diag = torch.arange(columns, device=self.weight.device)
+        hessian_sorted[diag, diag] += damp
+        # npu unspport torch.linalg
+        hessian_sorted = hessian_sorted.cpu()
+        hessian_sorted = torch.linalg.cholesky(hessian_sorted)
+        hessian_sorted = torch.cholesky_inverse(hessian_sorted)
+        hessian_inverse = torch.linalg.cholesky(hessian_sorted, upper=True)
+        hessian_inverse = hessian_inverse.to(self.weight.device)
+        return hessian_inverse
+
+
+    def cal_scale_offset_static(self, weight):
+        if self.wts_type in (MXFP4_E2M1,):
+            return None, None
+
+        weight_min, weight_max = get_weight_min_max_by_granularity(weight, self.quant_config)
+
+        scale_w, offset_w = calculate_scale_offset(weight_max, weight_min, \
+            self.quant_config.get('weights_cfg').get('symmetric'), self.wts_type)
+        return scale_w, offset_w
 
 
     def update_hessian(self, input_data):
