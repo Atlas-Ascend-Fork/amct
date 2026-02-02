@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.utils.data_utils import check_linear_input_dim
 from amct_pytorch.algorithm.awq import search_scale, apply_scale, calculate_scale_offset_by_granularity
-from amct_pytorch.utils.vars import INT4, INT8
+from amct_pytorch.utils.vars import INT4, INT8, FLOAT4_E2M1, MXFP4_E2M1
 from amct_pytorch.utils.log import LOGGER
 
 
@@ -44,6 +44,7 @@ class LinearAWQuant(BaseQuantizeModule):
         quant_config: calibration algorithm parameters.
         """
         super().__init__(ori_module, layer_name, quant_config)
+        self.ori_module_type = type(ori_module).__name__
         self.weight = copy.deepcopy(ori_module.weight)
         self.bias = ori_module.bias
         self.layer_name = layer_name
@@ -74,8 +75,9 @@ class LinearAWQuant(BaseQuantizeModule):
         apply_scale(scale_awq, self.ori_module, input_data)
         self.scale = 1 / scale_awq.detach()
 
-        self.scale_w, self.offset_w = \
-            calculate_scale_offset_by_granularity(self.ori_module.weight.data, self.quant_config)
+        if self.quant_config.get('weights_cfg').get('quant_type') in (INT4, INT8, FLOAT4_E2M1):
+            self.scale_w, self.offset_w = \
+                calculate_scale_offset_by_granularity(self.ori_module.weight.data, self.quant_config)
         self.calc_done = True
         LOGGER.logd("Calculate awq quant params of layer '{}' success!".format(self.layer_name), 'LinearAWQuant')
         return output
