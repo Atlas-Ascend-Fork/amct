@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 
 
 class QuantFusionPass(BaseFusionPass):

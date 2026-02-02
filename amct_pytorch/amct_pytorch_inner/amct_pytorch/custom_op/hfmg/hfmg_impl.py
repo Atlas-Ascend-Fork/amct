@@ -18,8 +18,8 @@
 import math
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BASE, FLT_EPSILON, MIN_BIN_RATIO, STEP_DIVISOR, HFMG_POW
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale, calculate_scale_offset
+from ....amct_pytorch.utils.vars import BASE, FLT_EPSILON, MIN_BIN_RATIO, STEP_DIVISOR, HFMG_POW
+from ....amct_pytorch.custom_op.utils import process_scale, calculate_scale_offset
 
 BASENUM = 2
 
@@ -243,7 +243,7 @@ def hfmg_compute(data_bins, num_bits, with_offset):
     clip_min = (data_min + best_left * bin_width).to(l2_loss.device)
     clip_max = (data_min + (best_right + 1) * bin_width).to(l2_loss.device)
     
-    scale, offset = calculate_scale_offset(clip_max, clip_min, with_offset, "INT"+str(num_bits))
+    scale, offset = calculate_scale_offset(clip_max, clip_min, with_offset, "INT" + str(num_bits))
     
     return scale, offset
 
@@ -292,7 +292,7 @@ def hfmg_arq_pytorch(min_tensor, max_tensor, num_bits, with_offset):
         scale (torch.Tensor): Quant factor to do scaling
         offset (torch.Tensor): Quant factor to do offseting
     """
-    scale, offset = calculate_scale_offset(max_tensor, min_tensor, with_offset, "INT"+str(num_bits))
+    scale, offset = calculate_scale_offset(max_tensor, min_tensor, with_offset, "INT" + str(num_bits))
     scale, offset = process_scale(scale, offset, with_offset, num_bits)
     
     return scale, offset

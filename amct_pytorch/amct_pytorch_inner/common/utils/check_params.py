@@ -15,10 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+__all__ = ['check_params']
+
 from inspect import signature
 from functools import wraps
-
-__all__ = ['check_params']
 
 
 def check_params(*type_args, **type_kwargs):

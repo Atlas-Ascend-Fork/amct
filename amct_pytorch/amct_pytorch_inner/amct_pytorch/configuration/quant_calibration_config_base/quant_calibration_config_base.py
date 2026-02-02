@@ -23,20 +23,20 @@ from collections import OrderedDict
 from collections import defaultdict
 
 import torch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import save_to_json
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import check_no_repeated
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import find_repeated_items
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import ConfigBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
+from ....amct_pytorch.common.utils.files import save_to_json
+from ....amct_pytorch.common.utils.util import check_no_repeated
+from ....amct_pytorch.common.utils.util import find_repeated_items
+from ....amct_pytorch.utils.log import LOGGER
+from ....amct_pytorch.capacity import CAPACITY
+from ....amct_pytorch.utils.model_util import ModuleHelper
+from ....amct_pytorch.common.config.config_base import ConfigBase
+from ....amct_pytorch.common.utils.check_params import check_params
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_proto \
+from ....amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_proto \
     import QuantCalibrationProtoConfig, QUANT_METHOD_INFO_MAP
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_field \
+from ....amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_field \
     import QuantCalibrationConfigRoot
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import ASYMMETRIC, SEARCH_RANGE, BATCH_NUM
+from ....amct_pytorch.utils.vars import ASYMMETRIC, SEARCH_RANGE, BATCH_NUM
 
 LAYER_CHECK_TYPE = {'kv_cache_quant_layers': CAPACITY.get_value('KV_CACHE_QUANTIZE_TYPES')}
 MODULE_NAME = 'QuantCalibrationConfigBase'
@@ -48,21 +48,6 @@ class QuantCalibrationConfigBase():
     def __init__(self):
         ''' inner method '''
         self.config_root = QuantCalibrationConfigRoot(ModuleHelper, CAPACITY)
-
-    def _clear_config_tree(self):
-        ''' inner method '''
-        self.config_root = QuantCalibrationConfigRoot(ModuleHelper, CAPACITY)
-
-    @staticmethod
-    def _del_reduant_config(ordered_config):
-        ''' del no-key config '''
-        check_list = list(ordered_config.keys())
-        for key in check_list:
-            if isinstance(ordered_config[key], dict):
-                QuantCalibrationConfigBase._del_reduant_config(
-                    ordered_config[key])
-            if ordered_config[key] is None:
-                del ordered_config[key]
 
     @staticmethod
     def check_quant_layers(model, quant_layers):
@@ -138,6 +123,17 @@ class QuantCalibrationConfigBase():
                 quant_layer_type_map[quant_method][layer] = layer_type_map.get(
                     layer)
         return quant_layer_type_map
+    
+    @staticmethod
+    def _del_reduant_config(ordered_config):
+        ''' del no-key config '''
+        check_list = list(ordered_config.keys())
+        for key in check_list:
+            if isinstance(ordered_config[key], dict):
+                QuantCalibrationConfigBase._del_reduant_config(
+                    ordered_config[key])
+            if ordered_config[key] is None:
+                del ordered_config[key]
 
     @staticmethod
     def _generate_layer_config(model, proto):
@@ -329,3 +325,7 @@ class QuantCalibrationConfigBase():
                 continue
             quant_layers.append(key)
         return quant_layers
+
+    def _clear_config_tree(self):
+        ''' inner method '''
+        self.config_root = QuantCalibrationConfigRoot(ModuleHelper, CAPACITY)

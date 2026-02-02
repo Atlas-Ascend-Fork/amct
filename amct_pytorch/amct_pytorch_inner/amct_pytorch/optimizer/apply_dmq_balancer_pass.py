@@ -18,14 +18,14 @@
 import numpy as np
 from onnx import onnx_pb
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import get_deconv_group
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
+from ...amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
 
 RAW_DATA_TYPE_SET = (np.float16, )
 TENSOR_BALANCE_FACTOR = 'tensor_balance_factor'
@@ -50,6 +50,40 @@ class ApplyDMQBalancerPass(BaseFusionPass):
         """
         BaseFusionPass.__init__(self)
         self.records = records
+
+    @staticmethod
+    def _construct_factor_node(layer_name, tensor_balance_factor, factor_data_type, reshape_size):
+        ''' construct tensor_balance_factor op'''
+        node_proto = onnx_pb.NodeProto()
+        node_proto.name = '.'.join([layer_name, TENSOR_BALANCE_FACTOR])
+        node_proto.op_type = 'Constant'
+        node_proto.doc_string = TENSOR_BALANCE_FACTOR
+        node_proto.output.extend(
+            ['.'.join([layer_name, TENSOR_BALANCE_FACTOR, 'output0'])])
+
+        AttributeProtoHelper(node_proto).set_attr_value('value', 'TENSOR', None)
+        attr = node_proto.attribute[0]
+        if factor_data_type == 'FLOAT16':
+            tensor_balance_factor = tensor_balance_factor.astype(np.float16)
+        TensorProtoHelper(attr.t).set_data(tensor_balance_factor, factor_data_type, reshape_size)
+
+        return node_proto
+
+    @staticmethod
+    def _construct_mul_node(layer_name):
+        ''' construct mul op'''
+        node_proto = onnx_pb.NodeProto()
+        node_proto.name = '.'.join([layer_name, MUL])
+        node_proto.op_type = 'Mul'
+        node_proto.doc_string = 'mul of the dmq_balancer'
+        node_proto.input.extend([
+            '.'.join([layer_name, MUL, 'input0']),
+            '.'.join([layer_name, TENSOR_BALANCE_FACTOR, 'input1'])
+        ])
+        node_proto.output.extend(
+            ['.'.join([layer_name, MUL, 'output0'])])
+
+        return node_proto
 
     def match_pattern(self, node):
         """
@@ -120,37 +154,3 @@ class ApplyDMQBalancerPass(BaseFusionPass):
         LOGGER.logd("Insert dmq_balancer layer '{}' before '{}' " \
             "success!".format(mul_node.name, object_name), \
                               'ApplyDMQBalancerPass')
-
-    @staticmethod
-    def _construct_factor_node(layer_name, tensor_balance_factor, factor_data_type, reshape_size):
-        ''' construct tensor_balance_factor op'''
-        node_proto = onnx_pb.NodeProto()
-        node_proto.name = '.'.join([layer_name, TENSOR_BALANCE_FACTOR])
-        node_proto.op_type = 'Constant'
-        node_proto.doc_string = TENSOR_BALANCE_FACTOR
-        node_proto.output.extend(
-            ['.'.join([layer_name, TENSOR_BALANCE_FACTOR, 'output0'])])
-
-        AttributeProtoHelper(node_proto).set_attr_value('value', 'TENSOR', None)
-        attr = node_proto.attribute[0]
-        if factor_data_type == 'FLOAT16':
-            tensor_balance_factor = tensor_balance_factor.astype(np.float16)
-        TensorProtoHelper(attr.t).set_data(tensor_balance_factor, factor_data_type, reshape_size)
-
-        return node_proto
-
-    @staticmethod
-    def _construct_mul_node(layer_name):
-        ''' construct mul op'''
-        node_proto = onnx_pb.NodeProto()
-        node_proto.name = '.'.join([layer_name, MUL])
-        node_proto.op_type = 'Mul'
-        node_proto.doc_string = 'mul of the dmq_balancer'
-        node_proto.input.extend([
-            '.'.join([layer_name, MUL, 'input0']),
-            '.'.join([layer_name, TENSOR_BALANCE_FACTOR, 'input1'])
-        ])
-        node_proto.output.extend(
-            ['.'.join([layer_name, MUL, 'output0'])])
-
-        return node_proto

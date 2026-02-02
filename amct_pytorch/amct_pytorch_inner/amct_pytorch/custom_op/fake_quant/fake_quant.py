@@ -19,6 +19,7 @@
 from torch import nn # pylint: disable=E0401
 import torch # pylint: disable=E0401
 
+
 class FakeQuant(nn.Module): # pylint: disable=R0903, R0902
     """
     Function: Customized torch.nn.Module of the fake quant operator.

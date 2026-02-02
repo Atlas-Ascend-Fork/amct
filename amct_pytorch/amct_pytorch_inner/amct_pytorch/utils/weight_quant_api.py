@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import torch
 import numpy as np
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 
 
 def get_deconv_group(node_deconv):
@@ -99,7 +99,7 @@ def apply_lut_quantize_weight(weight, lut, group_size=256):
 
     # weight get nearest center from all the 16 lut
     for idx in range(lut.shape[1]):
-        cur_lut = lut_[:, idx :: lut.shape[1]].repeat_interleave(group_size, dim=1)
+        cur_lut = lut_[:, idx:: lut.shape[1]].repeat_interleave(group_size, dim=1)
         cur_lut = cur_lut[:, : weight.shape[1]]
         cur_err = torch.abs(weight - cur_lut)
         mask = (cur_err < err)

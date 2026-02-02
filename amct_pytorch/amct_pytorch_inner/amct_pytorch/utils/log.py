@@ -22,9 +22,9 @@ from __future__ import print_function
 
 import os
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.log_base import LoggerBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.log_base import LOG_FILE_DIR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.log_base import check_level
+from ...amct_pytorch.common.utils.log_base import LoggerBase
+from ...amct_pytorch.common.utils.log_base import LOG_FILE_DIR
+from ...amct_pytorch.common.utils.log_base import check_level
 
 LOG_SET_ENV = 'AMCT_LOG_LEVEL'
 LOG_FILE_SET_ENV = 'AMCT_LOG_FILE_LEVEL'

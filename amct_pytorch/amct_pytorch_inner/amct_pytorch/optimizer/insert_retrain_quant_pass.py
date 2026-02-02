@@ -17,15 +17,14 @@
 # ----------------------------------------------------------------------------
 import torch # pylint: disable=E0401
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig as \
-    Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.retrain_quant import RetrainQuant
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.rnn_retrain_quant import RNNRetrainQuant
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from ...amct_pytorch.configuration.retrain_config import RetrainConfig as Configuration
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.custom_op.retrain_quant import RetrainQuant
+from ...amct_pytorch.custom_op.rnn_retrain_quant import RNNRetrainQuant
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
+from ...amct_pytorch.utils.log import LOGGER
 
 
 class InsertRetrainQuantPass(BaseFusionPass):

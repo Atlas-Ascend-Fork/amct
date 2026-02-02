@@ -46,7 +46,6 @@ SEARCH_STEP = 0.01
 NUM_BINS = 128
 
 # layer's weights quant parameters
-NUQ_WITH_OFFSET = False
 NUM_STEPS = 32
 NUM_STEPS_RANGE = [16, 32]
 NUM_OF_ITERATION = 1
@@ -73,6 +72,7 @@ def _check_type(name, variable, typeinfo):
     if not isinstance(variable, typeinfo):
         raise TypeError("Type of %s should be %s, but is %s" \
                         % (name, typeinfo, type(variable)))
+
 
 @unique
 class FakequantPrecisionMode(Enum):
@@ -536,7 +536,7 @@ class ActQuantParamsField(ContainerField):
 class AdaAlgField(LeafField):
     '''a base object for ada field'''
     def has_default(self):
-        if PARAM_POOL.get_wts_algo() == 'arq_quantize' or 'nuq_quantize':
+        if PARAM_POOL.get_wts_algo() == 'arq_quantize':
             return False
         return True
 
@@ -585,6 +585,7 @@ class RegParamField(AdaAlgField):
     def check(self, name, value):
         if value >= 1 or value <= 0:
             raise ValueError("%s must be less than 1 and larger than 0" % (name))
+
 
 class MaxPercentileField(LeafField):
     '''an object for max_percentile field'''
@@ -659,7 +660,6 @@ class WgtQuantParamsField(ContainerField):
     @staticmethod
     def _check_params(config):
         param_map = {"arq_quantize": ['channel_wise'], 
-                     "nuq_quantize": ['num_steps', 'num_of_iteration'],
                      "ada_quantize": ['num_iteration', 'reg_param', 'warm_start', 'beta_range', 'channel_wise']}
         wts_algo = config.get(WTS_ALGO, 'arq_quantize')
         for item in config:
@@ -687,8 +687,6 @@ class WgtQuantParamsField(ContainerField):
 class ChannelWiseField(LeafField):
     '''an object for channel_wise field'''
     def has_default(self):
-        if PARAM_POOL.get_wts_algo() == 'nuq_quantize':
-            return False
         return True
 
     def default_value(self):
@@ -713,8 +711,8 @@ class WtsAlgoField(LeafField):
         return PARAM_POOL.get_wts_algo()
 
     def check(self, name, value):
-        if value not in ('arq_quantize', 'nuq_quantize', 'ada_quantize'):
-            raise ValueError('wts_algo must be arq_quantize or nuq_quantize or ada_quantize')
+        if value not in ('arq_quantize', 'ada_quantize'):
+            raise ValueError('wts_algo must be arq_quantize or ada_quantize')
 
 
 class ActAlgoField(LeafField):
@@ -755,36 +753,6 @@ class NumOfBinsField(HfmgField):
         if value not in NUM_OF_BINS_RANGE:
             raise ValueError("num_of_bins {} must be in {}".format(
                 value, NUM_OF_BINS_RANGE))
-
-
-class NuqAlgField(LeafField):
-    '''a base object for nuq field'''
-    def has_default(self):
-        if PARAM_POOL.get_wts_algo() == 'arq_quantize' or 'ada_quantize':
-            return False
-        return True
-
-class NumStepsField(NuqAlgField):
-    '''an object for num_steps field'''
-    def default_value(self):
-        return NUM_STEPS
-
-    def check(self, name, value):
-        _check_type(name, value, int)
-        if value not in NUM_STEPS_RANGE:
-            raise ValueError('num_steps {} must be 16 or 32'.format(value))
-
-
-class NumOfIterationField(NuqAlgField):
-    '''an object for num_of_iteration field'''
-    def default_value(self):
-        return NUM_OF_ITERATION
-
-    def check(self, name, value):
-        _check_type(name, value, int)
-        if value not in NUM_OF_ITERATION_RANGE:
-            raise ValueError("num_of_iteration {} must be in {}".format(
-                value, NUM_OF_ITERATION_RANGE))
 
 
 class TensorQuantizeField(ContainerField):

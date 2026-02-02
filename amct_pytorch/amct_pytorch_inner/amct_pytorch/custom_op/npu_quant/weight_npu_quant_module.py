@@ -18,10 +18,10 @@
 from torch import nn
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, INT4
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_quant_factor, get_algo_params, \
+from ....amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, INT4
+from ....amct_pytorch.custom_op.utils import get_quant_factor, get_algo_params, \
     apply_quantize_by_algo, get_optimized_weight, check_scale_offset_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_utils import quant_weight
+from ....amct_pytorch.utils.weight_quant_utils import quant_weight
 
 
 class NpuWeightQuantizedLinear(nn.Module):

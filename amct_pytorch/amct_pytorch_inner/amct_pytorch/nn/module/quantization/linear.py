@@ -20,9 +20,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.qat_base import QATBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CHANNEL_WISE
+from .....amct_pytorch.utils.log import LOGGER
+from .....amct_pytorch.nn.module.quantization.qat_base import QATBase
+from .....amct_pytorch.utils.vars import CHANNEL_WISE
 
 RETRAIN_WEIGHT_CONFIG = 'retrain_weight_config'
 
@@ -66,7 +66,7 @@ class LinearQAT(nn.Linear, QATBase):
         Create a qat module from a float module
         Args: `mod` a float module, 'config' amct op quant config
         """
-        if type(mod) != cls._float_module:
+        if isinstance(mod, cls._float_module):
             raise RuntimeError(f'{cls.__name__}.from_float can only works for '
                                f'{cls._float_module.__name__}')
 

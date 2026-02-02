@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_dtype
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_quant_factor
+from ....amct_pytorch.utils.data_utils import convert_dtype
+from ....amct_pytorch.custom_op.utils import get_quant_factor
 
 
 class NpuQuantizationConv2d(torch.nn.Module):

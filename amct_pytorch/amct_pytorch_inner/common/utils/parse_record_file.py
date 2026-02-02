@@ -20,6 +20,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+__all__ = ["RecordFileParserBase", "RecordManager"]
+
 import os
 import collections
 import numpy as np
@@ -49,9 +51,6 @@ GRAPH_CHECKER = 'graph_checker'
 OP_DATA_TYPE = 'op_data_type'
 DATA_SCALE = 'data_scale'
 INT4 = 'INT4'
-
-
-__all__ = ["RecordFileParserBase", "RecordManager"]
 
 
 RecordFileParsedResult = collections.namedtuple('RecordFileParsedResult',
@@ -297,53 +296,6 @@ class RecordManager():
                         }
         return dst_type_dict.get(dst_type, DATA_OFFSET_RANGE)
 
-    @classmethod
-    def check_layer_params_range(cls, layer_params, layer_name):
-        ''' Check the range of value in layers_params from record_file.'''
-        # offset_d
-        data_offset_range = RecordManager.get_range(layer_params['act_type'])
-        if is_invalid(layer_params.get(DATA_OFFSET)) or \
-            not RecordManager.is_in_range(layer_params.get(DATA_OFFSET),
-                            data_offset_range[0],
-                            data_offset_range[1]):
-            raise ValueError("offset_d's value should be in %s in layer %s." %
-                             (data_offset_range, layer_name))
-        # offset_w
-        if is_invalid(layer_params.get(WEIGHT_OFFSET)) or \
-            not RecordManager.is_in_range(layer_params.get(WEIGHT_OFFSET),
-                            WEIGHT_OFFSET_RANGE[0],
-                            WEIGHT_OFFSET_RANGE[1]):
-            raise ValueError("offset_w's value should be 0 in layer %s." %
-                             (layer_name))
-        # scale_d
-        if is_invalid(layer_params.get(DATA_SCALE)) or \
-            not RecordManager.is_in_range(layer_params.get(DATA_SCALE),
-                            SCALE_RANGE[0],
-                            SCALE_RANGE[1],
-                            included=False):
-            raise ValueError("scale_d's value shoule be in positivate range "
-                             "of float32 in layer %s." % (layer_name))
-        # scale_w
-        if is_invalid(layer_params.get(WEIGHT_SCALE)) or \
-            not RecordManager.is_in_range(layer_params.get(WEIGHT_SCALE),
-                            SCALE_RANGE[0],
-                            SCALE_RANGE[1],
-                            included=False):
-            raise ValueError("scale_w's value shoule be in positivate range "
-                             "of float32 in layer %s" % (layer_name))
-
-        # shift_bit
-        def _is_shift_n_in_range(shift_bit):
-            if RecordManager.is_in_range(shift_bit, 0, 0) or RecordManager.is_in_range(
-                    shift_bit, SHIFT_N_RANGE[0], SHIFT_N_RANGE[1]):
-                return True
-            return False
-
-        if is_invalid(layer_params.get(SHIFT_N)) or \
-            not _is_shift_n_in_range(layer_params.get(SHIFT_N)):
-            raise ValueError("shift_bit's value shoule be in %s or all be 0 "
-                             "in layer %s" % (SHIFT_N_RANGE, layer_name))
-
     @staticmethod
     def check_rnn_layer_params_range(layer_params, layer_name):
         '''
@@ -391,6 +343,53 @@ class RecordManager():
         for value in cluster_center_array:
             if value < CLUSTER_CENTER_RANGE[0] or value > CLUSTER_CENTER_RANGE[1]:
                 raise ValueError("Cluster center should between [-128, 127], but is {}".format(value))
+
+    @classmethod
+    def check_layer_params_range(cls, layer_params, layer_name):
+        ''' Check the range of value in layers_params from record_file.'''
+        # offset_d
+        data_offset_range = RecordManager.get_range(layer_params['act_type'])
+        if is_invalid(layer_params.get(DATA_OFFSET)) or \
+            not RecordManager.is_in_range(layer_params.get(DATA_OFFSET),
+                            data_offset_range[0],
+                            data_offset_range[1]):
+            raise ValueError("offset_d's value should be in %s in layer %s." %
+                             (data_offset_range, layer_name))
+        # offset_w
+        if is_invalid(layer_params.get(WEIGHT_OFFSET)) or \
+            not RecordManager.is_in_range(layer_params.get(WEIGHT_OFFSET),
+                            WEIGHT_OFFSET_RANGE[0],
+                            WEIGHT_OFFSET_RANGE[1]):
+            raise ValueError("offset_w's value should be 0 in layer %s." %
+                             (layer_name))
+        # scale_d
+        if is_invalid(layer_params.get(DATA_SCALE)) or \
+            not RecordManager.is_in_range(layer_params.get(DATA_SCALE),
+                            SCALE_RANGE[0],
+                            SCALE_RANGE[1],
+                            included=False):
+            raise ValueError("scale_d's value shoule be in positivate range "
+                             "of float32 in layer %s." % (layer_name))
+        # scale_w
+        if is_invalid(layer_params.get(WEIGHT_SCALE)) or \
+            not RecordManager.is_in_range(layer_params.get(WEIGHT_SCALE),
+                            SCALE_RANGE[0],
+                            SCALE_RANGE[1],
+                            included=False):
+            raise ValueError("scale_w's value shoule be in positivate range "
+                             "of float32 in layer %s" % (layer_name))
+
+        # shift_bit
+        def _is_shift_n_in_range(shift_bit):
+            if RecordManager.is_in_range(shift_bit, 0, 0) or RecordManager.is_in_range(
+                    shift_bit, SHIFT_N_RANGE[0], SHIFT_N_RANGE[1]):
+                return True
+            return False
+
+        if is_invalid(layer_params.get(SHIFT_N)) or \
+            not _is_shift_n_in_range(layer_params.get(SHIFT_N)):
+            raise ValueError("shift_bit's value shoule be in %s or all be 0 "
+                             "in layer %s" % (SHIFT_N_RANGE, layer_name))
 
     def get_key(self):
         ''' get key '''

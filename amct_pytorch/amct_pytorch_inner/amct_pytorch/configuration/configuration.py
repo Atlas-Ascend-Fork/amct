@@ -17,18 +17,18 @@
 # ----------------------------------------------------------------------------
 import os
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.files import is_valid_name
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import ConfigBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import GraphObjects
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import check_config_quant_enable
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.config_base import check_config_dmq_balancer
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.graph.graph import Graph
+from ...amct_pytorch.configuration.check import GraphChecker
+from ...amct_pytorch.configuration.check import GraphQuerier
+from ...amct_pytorch.common.utils.check_params import check_params
+from ...amct_pytorch.common.utils.files import is_valid_name
+from ...amct_pytorch.common.config.config_base import ConfigBase
+from ...amct_pytorch.common.config.config_base import GraphObjects
+from ...amct_pytorch.common.config.config_base import check_config_quant_enable
+from ...amct_pytorch.common.config.config_base import check_config_dmq_balancer
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
+from ...amct_pytorch.capacity import CAPACITY
 
 CONFIGURER = ConfigBase(
     GraphObjects(graph_querier=GraphQuerier, graph_checker=None), CAPACITY)
@@ -52,7 +52,6 @@ class Configuration:
     def __init__(self):
         if not self.__is_init:
             self.__quant_config = None
-            self.__nuq_config = None
             self.__record_file_path = None
             self.__skip_fusion_layers = None
             self.__initialized = False
@@ -120,14 +119,7 @@ class Configuration:
         quant_config_torch = CONFIGURER.parse_config_file(file_path, graph)
         check_config_quant_enable(quant_config_torch)
         Configuration.add_global_to_layer(quant_config_torch)
-        nuq_config = {}
-        for item in quant_config_torch:
-            if not isinstance(quant_config_torch[item], dict):
-                continue
-            if quant_config_torch[item]['weight_quant_params'][
-                    'wts_algo'] == 'nuq_quantize':
-                nuq_config[item] = quant_config_torch[item]
-        return quant_config_torch, nuq_config
+        return quant_config_torch
 
     @staticmethod
     def check_quant_config_dmq_balancer(quant_config):
@@ -164,7 +156,7 @@ class Configuration:
             graph: IR Graph
         Returns: None
         """
-        self.__quant_config, self.__nuq_config = self.parse_quant_config(
+        self.__quant_config = self.parse_quant_config(
             os.path.realpath(config_file), graph)
         self.__record_file_path = os.path.realpath(record_file)
         self.__skip_fusion_layers = \
@@ -184,14 +176,6 @@ class Configuration:
         if not self.__initialized:
             raise RuntimeError('Must init Configuration before access it.')
         return self.__quant_config
-
-    def get_nuq_quant_config(self):
-        """
-        Function: get quant config.
-        """
-        if not self.__initialized:
-            raise RuntimeError('Must init Configuration before access it.')
-        return self.__nuq_config
 
     def get_layer_config(self, layer_name):
         """

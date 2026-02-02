@@ -17,9 +17,9 @@
 # ----------------------------------------------------------------------------
 
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.replace_avgpool_flatten_pass import ReplaceAvgpoolFlattenPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.optimizer.replace_avgpool_flatten_pass import ReplaceAvgpoolFlattenPass
+from ...amct_pytorch.utils.log import LOGGER
 
 
 class ReplaceAvgpoolReshapePass(BaseFusionPass):
@@ -46,7 +46,7 @@ class ReplaceAvgpoolReshapePass(BaseFusionPass):
             return False
 
         consumers, in_idxs = node.get_consumers(0)
-        if len(consumers) != 1 or consumers[0].type != 'Reshape' :
+        if len(consumers) != 1 or consumers[0].type != 'Reshape':
             LOGGER.logd("node {} match_pattern fail for it must have only one consumer Reshape.".format(node.name),
                         'ReplaceAvgpoolReshapePass')
             return False

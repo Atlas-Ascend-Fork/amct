@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import calculate_scale_offset, calculate_scale_by_group_size, \
+from ....amct_pytorch.custom_op.utils import calculate_scale_offset, calculate_scale_by_group_size, \
     convert_to_per_group_shape, apply_fake_quantize_and_anti_quantize
 
 
@@ -97,20 +97,20 @@ def ulq_scale_retrain_forward_pytorch(input_tensor, scale, offset, num_bits, cha
     
     
     
-def ulq_scale_retrain_backward_pytorch(input_tensor, gradOutputs, scale, numBits, sRecFlag, group, axis):
+def ulq_scale_retrain_backward_pytorch(input_tensor, grad_outputs, scale, num_bits, srec_flag, group, axis):
     """
     Function: Perform backward pass for ULQ scale retraining
     Inputs:
         input_tensor: torch.Tensor - Input tensor
-        gradOutputs: torch.Tensor - Gradient of the loss with respect to the output tensor
+        grad_outputs: torch.Tensor - Gradient of the loss with respect to the output tensor
         scale: torch.Tensor - Scale factor for quantization
-        numBits: int - Number of bits for quantization
-        sRecFlag: bool - Whether to use reciprocal of scale
+        num_bits: int - Number of bits for quantization
+        srec_flag: bool - Whether to use reciprocal of scale
         group: int - Number of groups for group-wise quantization
         axis: int - Axis for channel-wise quantization
     Outputs:
-        gradOutputs: torch.Tensor - Gradient of the loss with respect to the input tensor
-        gradScales: torch.Tensor - Gradient of the loss with respect to the scale
+        grad_outputs: torch.Tensor - Gradient of the loss with respect to the input tensor
+        grad_scales: torch.Tensor - Gradient of the loss with respect to the scale
     """
     if input_tensor.size(0) % group != 0:
         raise ValueError("Input tensor size must be divisible by the number of groups")
@@ -119,66 +119,66 @@ def ulq_scale_retrain_backward_pytorch(input_tensor, gradOutputs, scale, numBits
     
     if len(sizes) == 4:
         input_tensor = input_tensor.view(sizes[0], -1)
-        gradOutputs = gradOutputs.view(sizes[0], -1)
+        grad_outputs = grad_outputs.view(sizes[0], -1)
     
     if scale.numel() > 1:
         input_tensor = input_tensor.view(sizes[axis], -1)
-        gradOutputs = gradOutputs.view(sizes[axis], -1)
+        grad_outputs = grad_outputs.view(sizes[axis], -1)
     
     if group > 1:
-        scaleProcess = scale.repeat_interleave(input_tensor.size(axis) // group)
+        scale_process = scale.repeat_interleave(input_tensor.size(axis) // group)
     else:
-        scaleProcess = scale
+        scale_process = scale
     
-    if sRecFlag:
-        scaleProcess = 1 / scaleProcess
+    if srec_flag:
+        scale_process = 1 / scale_process
     
-    gradScales = calc_scale_gradient(input_tensor, scaleProcess, gradOutputs, numBits, sRecFlag)
+    grad_scales = calc_scale_gradient(input_tensor, scale_process, grad_outputs, num_bits, srec_flag)
 
-    if sRecFlag:
-        scaleProcess = 1 / scaleProcess
+    if srec_flag:
+        scale_process = 1 / scale_process
     
     if group > 1:
-        gradScales = gradScales.view(group, -1).mean(dim=1)
+        grad_scales = grad_scales.view(group, -1).mean(dim=1)
     
     if len(sizes) == 4:
-        gradOutputs = gradOutputs.view(sizes[0], sizes[1], sizes[2], sizes[3])
+        grad_outputs = grad_outputs.view(sizes[0], sizes[1], sizes[2], sizes[3])
     
-    return gradOutputs, gradScales
+    return grad_outputs, grad_scales
 
 
-def calc_scale_gradient(input_tensor, scaleProcess, gradOutputs, numBits, sRecFlag):
+def calc_scale_gradient(input_tensor, scale_process, grad_outputs, num_bits, srec_flag):
     """
     Function: Calculate the gradient of the loss with respect to the scale
     Inputs:
         input_tensor: torch.Tensor - Input tensor
-        scaleProcess: torch.Tensor - Processed scale factor
-        gradOutputs: torch.Tensor - Gradient of the loss with respect to the output tensor
-        numBits: int - Number of bits for quantization
-        sRecFlag: bool - Whether to use reciprocal of scale
+        scale_process: torch.Tensor - Processed scale factor
+        grad_outputs: torch.Tensor - Gradient of the loss with respect to the output tensor
+        num_bits: int - Number of bits for quantization
+        srec_flag: bool - Whether to use reciprocal of scale
     Outputs:
-        gradScales: torch.Tensor - Gradient of the loss with respect to the scale
+        grad_scales: torch.Tensor - Gradient of the loss with respect to the scale
     """
-    halfStage = 2 ** (numBits - 1)
+    half_stage = 2 ** (num_bits - 1)
     
-    upperMask = (input_tensor > scaleProcess.unsqueeze(1) * (halfStage - 1)).float()
-    lowerMask = (input_tensor < -scaleProcess.unsqueeze(1) * halfStage).float()
-    innerMask = 1 - (upperMask + lowerMask)
+    upper_mask = (input_tensor > scale_process.unsqueeze(1) * (half_stage - 1)).float()
+    lower_mask = (input_tensor < -scale_process.unsqueeze(1) * half_stage).float()
+    inner_mask = 1 - (upper_mask + lower_mask)
     
-    notRoundTensor = input_tensor / scaleProcess.unsqueeze(1)
-    roundTensor = notRoundTensor.round()
-    gradScales = (roundTensor - notRoundTensor) * innerMask + \
-        (-halfStage * lowerMask) + ((halfStage - 1) * upperMask)
+    not_round_tensor = input_tensor / scale_process.unsqueeze(1)
+    round_tensor = not_round_tensor.round()
+    grad_scales = (round_tensor - not_round_tensor) * inner_mask + \
+        (-half_stage * lower_mask) + ((half_stage - 1) * upper_mask)
     
-    if sRecFlag:
-        gradScales = -gradScales * (scaleProcess ** 2).unsqueeze(1)
+    if srec_flag:
+        grad_scales = -grad_scales * (scale_process ** 2).unsqueeze(1)
     
-    gradScales = gradScales * (torch.sqrt(torch.tensor(input_tensor.size(1) * (halfStage - 1))).reciprocal())
+    grad_scales = grad_scales * (torch.sqrt(torch.tensor(input_tensor.size(1) * (half_stage - 1))).reciprocal())
     
-    if scaleProcess.size(0) > 1:
-        gradScales = (gradScales * gradOutputs).sum(1)
+    if scale_process.size(0) > 1:
+        grad_scales = (grad_scales * grad_outputs).sum(1)
     else:
-        gradScales = (gradScales * gradOutputs).sum()
-        gradScales = gradScales.unsqueeze(0)
+        grad_scales = (grad_scales * grad_outputs).sum()
+        grad_scales = grad_scales.unsqueeze(0)
     
-    return gradScales
+    return grad_scales

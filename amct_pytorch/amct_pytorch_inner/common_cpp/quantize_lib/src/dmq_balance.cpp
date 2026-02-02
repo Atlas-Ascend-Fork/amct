@@ -109,6 +109,10 @@ Status CheckDMQBParam(const FloatData &act, const FloatData &wts, float migratio
 
 static Status FindMaxValue(const FloatData &data, uint32_t channelNum, uint32_t channelIdx, float &maxValue)
 {
+    if (channelNum == 0U) {
+        LOG_ERROR("channelNum[%u] max value is illegal!\n", channelNum);
+        return AmctCommon::BAD_PARAMETERS_ERROR;
+    }
     uint32_t dataNum = data.length / channelNum;
     for (uint32_t dataIdx = channelIdx * dataNum; dataIdx < (channelIdx + 1) * dataNum; dataIdx++) {
         if (fabs(data.data[dataIdx]) > maxValue) {

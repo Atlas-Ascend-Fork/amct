@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.model_util import ModuleHelper
 
 
 class StopFowardException(Exception):
@@ -34,20 +34,6 @@ class AdaRoundDataManager:
     '''
     def __init__(self, model):
         self.model = model
-
-    def _register_input_hook(self, input_data, name):
-        ''' hooker for cache layer's input data'''
-        def hook(module, inputs, outputs):
-            input_data.append(inputs[0].detach())
-            raise StopFowardException(name)
-        return hook
-
-    def _register_output_hook(self, output_data, name):
-        ''' hooker for cache layer's output data'''
-        def hook(module, inputs, outputs):
-            output_data.append(outputs.detach())
-            raise StopFowardException(name)
-        return hook
 
     def get_input_data(self, model_input, module_name):
         '''
@@ -96,3 +82,17 @@ class AdaRoundDataManager:
         hook.remove()
         module_output = output_data[0]
         return module_output
+    
+    def _register_input_hook(self, input_data, name):
+        ''' hooker for cache layer's input data'''
+        def hook(module, inputs, outputs):
+            input_data.append(inputs[0].detach())
+            raise StopFowardException(name)
+        return hook
+    
+    def _register_output_hook(self, output_data, name):
+        ''' hooker for cache layer's output data'''
+        def hook(module, inputs, outputs):
+            output_data.append(outputs.detach())
+            raise StopFowardException(name)
+        return hook

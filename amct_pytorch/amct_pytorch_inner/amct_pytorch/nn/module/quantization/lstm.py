@@ -15,17 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from collections.abc import Iterable
 import torch
 from torch import _C
 import torch.nn as nn
 from torch.nn.parameter import Parameter
-from collections.abc import Iterable
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.rnn_qat_base import RnnQatBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from .....amct_pytorch.utils.log import LOGGER
+from .....amct_pytorch.common.utils.check_params import check_params
+from .....amct_pytorch.nn.module.quantization.rnn_qat_base import RnnQatBase
+from .....amct_pytorch.custom_op.utils import copy_tensor
+from .....amct_pytorch.common.utils.util import version_higher_than
 
 OPTIONAL_CONSTANT = 'prim::Constant'  # input that can be none in onnx
 LSTM_TENSOR_NUM = 4
@@ -85,7 +85,7 @@ class LSTMQAT(nn.LSTM, RnnQatBase):
         Create a qat module from a float module
         Args: `mod` a float module, 'config' amct op quant config
         """
-        if type(mod) != cls._float_module:
+        if isinstance(mod, cls._float_module):
             raise RuntimeError('{}.from_float can only works for {}'.format(
                 cls.__name__, cls._float_module.__name__))
         proj_size = 0

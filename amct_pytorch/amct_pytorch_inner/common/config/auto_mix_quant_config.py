@@ -86,6 +86,50 @@ class AutoMixedPrecisionConfigHelper:
             return None
         return os.path.realpath(config_defination)
 
+    @staticmethod
+    def check_search_limit(search_limit, quant_layer2type, mode):
+        """ check search_limit with giving quant_layer2type and quant mode.
+
+        Args:
+            search_limit (dict): key is layer and value is list of support quant bit.
+            quant_layer2type (dict): key is layer and value is type.
+            mode (string): how to do quant, ptq or qat.
+
+        Raises:
+            RuntimeError: layer in search_limit cannot do quant for it not in quant_layer2type.
+            ValueError: layer cannot do quant in some bit.
+        """
+        for layer in search_limit:
+            if layer not in quant_layer2type:
+                raise RuntimeError('cannot search layer {} for it not in graph/model or cannot do quant ' \
+                                   'in mode of {}.'.format(layer, mode))
+            # AvgPool cannot support 4 bit.
+            if quant_layer2type.get(layer) in ['AvgPool', 'AvgPool2d'] and \
+                str(vars_util.INT4_BIT) in search_limit.get(layer):
+                raise ValueError('{} with type {} cannot quant to 4 bit.'.format(layer, quant_layer2type.get(layer)))
+    
+    @staticmethod
+    def _check_compress_ratio(value):
+        """ Check compress_ratio in proto(AutoMixedPrecisionConfig).
+
+        Args:
+            value (float): compress_ratio's value
+
+        Raises:
+            ValueError: value is invalid.
+        """
+        if value <= COMPRESSION_RATION_RANGE[0] or value > COMPRESSION_RATION_RANGE[1]:
+            raise ValueError("Can not support compression_ratio not in ({}, {}]"
+                             .format(COMPRESSION_RATION_RANGE[0], COMPRESSION_RATION_RANGE[1]))
+
+    @staticmethod
+    def _check_file(file_name, item_name):
+        """ check file from proto. """
+        file_name = os.path.realpath(file_name)
+        if not os.path.exists(file_name):
+            raise ValueError("The {} ({} in AutoMixedPrecisionConfig) does not exist, please check the file path."
+                             .format(file_name, item_name))
+
     @classmethod
     def read_file(cls, config_file):
         """ Read one file to parse AutoMixedPrecisionConfig.
@@ -112,50 +156,6 @@ class AutoMixedPrecisionConfigHelper:
                     % (config_file)) from e
 
         return config_proto
-
-    @staticmethod
-    def _check_compress_ratio(value):
-        """ Check compress_ratio in proto(AutoMixedPrecisionConfig).
-
-        Args:
-            value (float): compress_ratio's value
-
-        Raises:
-            ValueError: value is invalid.
-        """
-        if value <= COMPRESSION_RATION_RANGE[0] or value > COMPRESSION_RATION_RANGE[1]:
-            raise ValueError("Can not support compression_ratio not in ({}, {}]"
-                             .format(COMPRESSION_RATION_RANGE[0], COMPRESSION_RATION_RANGE[1]))
-
-    @staticmethod
-    def _check_file(file_name, item_name):
-        """ check file from proto. """
-        file_name = os.path.realpath(file_name)
-        if not os.path.exists(file_name):
-            raise ValueError("The {} ({} in AutoMixedPrecisionConfig) does not exist, please check the file path."
-                             .format(file_name, item_name))
-
-    @staticmethod
-    def check_search_limit(search_limit, quant_layer2type, mode):
-        """ check search_limit with giving quant_layer2type and quant mode.
-
-        Args:
-            search_limit (dict): key is layer and value is list of support quant bit.
-            quant_layer2type (dict): key is layer and value is type.
-            mode (string): how to do quant, ptq or qat.
-
-        Raises:
-            RuntimeError: layer in search_limit cannot do quant for it not in quant_layer2type.
-            ValueError: layer cannot do quant in some bit.
-        """
-        for layer in search_limit:
-            if layer not in quant_layer2type:
-                raise RuntimeError('cannot search layer {} for it not in graph/model or cannot do quant ' \
-                                   'in mode of {}.'.format(layer, mode))
-            # AvgPool cannot support 4 bit.
-            if quant_layer2type.get(layer) in ['AvgPool', 'AvgPool2d'] and \
-                str(vars_util.INT4_BIT) in search_limit.get(layer):
-                raise ValueError('{} with type {} cannot quant to 4 bit.'.format(layer, quant_layer2type.get(layer)))
 
     def parse(self):
         """ check the content in config_proto. """

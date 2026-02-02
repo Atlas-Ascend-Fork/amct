@@ -16,13 +16,13 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass \
+from ...amct_pytorch.optimizer.base_module_fusion_pass \
     import BaseModuleFusionPass
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_PRUNE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_QUANT
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_PRUNE
+from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_QUANT
 
 
 class DeleteRetrainPrunePass(BaseModuleFusionPass):
@@ -78,5 +78,5 @@ class DeleteRetrainPrunePass(BaseModuleFusionPass):
             setattr(parent_node, object_name.split('.')[-1],
                     object_module.replaced_module)
 
-        LOGGER.logd( "Retrain pruned weights "
+        LOGGER.logd("Retrain pruned weights "
             "of '{}' success!".format(object_name), 'DeleteRetrainPrunePass')

@@ -20,7 +20,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from ...capacity import CAPACITY
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
 
 INT4_BIT = 4
 INT8_BIT = 8
@@ -67,7 +67,7 @@ GRU_ATTRS_LIMIT_MAP = {
     'layout': 0
 }
 RNN_INPUT_ORDER_MAP = {
-    'LSTM':{
+    'LSTM': {
         0: 0, # X
         1: 1, # W
         2: 2, # R

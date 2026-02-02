@@ -15,9 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.bcp.bcp_op import bcp
-
-
 __all__ = [
     'bcp',
 ]
+
+from ....amct_pytorch.custom_op.bcp.bcp_op import bcp

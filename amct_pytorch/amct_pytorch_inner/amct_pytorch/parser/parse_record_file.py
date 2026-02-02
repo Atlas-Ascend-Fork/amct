@@ -15,18 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2  # pylint: disable=E0611
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.parse_record_file import RecordFileParserBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
-
 __all__ = ["RecordFileParser"]
+
+from ...amct_pytorch.proto import scale_offset_record_pb2  # pylint: disable=E0611
+from ...amct_pytorch.capacity import CAPACITY
+from ...amct_pytorch.common.utils.parse_record_file import RecordFileParserBase
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.configuration.check import GraphQuerier
 
 
 class RecordFileParser(RecordFileParserBase):

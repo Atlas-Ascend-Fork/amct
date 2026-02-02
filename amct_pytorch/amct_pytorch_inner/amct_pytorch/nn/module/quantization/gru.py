@@ -20,10 +20,10 @@ from torch import _C
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.rnn_qat_base import RnnQatBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
+from .....amct_pytorch.common.utils.check_params import check_params
+from .....amct_pytorch.utils.log import LOGGER
+from .....amct_pytorch.nn.module.quantization.rnn_qat_base import RnnQatBase
+from .....amct_pytorch.custom_op.utils import copy_tensor
 
 OPTIONAL_CONSTANT = 'prim::Constant'  # input that can be none in onnx
 GRU_TENSOR_NUM = 3
@@ -73,7 +73,7 @@ class GRUQAT(nn.GRU, RnnQatBase):
         Create a qat module from a float module
         Args: `mod` a float module, 'config' amct op quant config
         """
-        if type(mod) != cls._float_module:
+        if isinstance(mod, cls._float_module):
             raise RuntimeError('{}.from_float can only works for {}'.format(
                 cls.__name__, cls._float_module.__name__))
         if not config:
