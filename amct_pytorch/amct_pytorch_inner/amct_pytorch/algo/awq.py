@@ -19,9 +19,12 @@ import torch
 
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group, \
     cal_shared_exponent, scale_input_by_shared_exponents
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import GRIDS_NUM, FLOAT4_E2M1, FLOAT4_E1M2, INT8, INT4, MXFP4_E2M1
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import convert_to_per_group_shape, convert_to_dst_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_weight_min_max_by_granularity, calculate_scale_offset
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import GRIDS_NUM, FLOAT4_E2M1, FLOAT4_E1M2, \
+    INT8, INT4, MXFP4_E2M1
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import convert_to_per_group_shape, \
+    convert_to_dst_shape
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_weight_min_max_by_granularity, \
+    calculate_scale_offset
 
 TOKENS_NUM = 512
 MAX_SHRINK = 0.5

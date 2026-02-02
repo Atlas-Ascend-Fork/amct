@@ -762,19 +762,3 @@ class ScaleOffsetRecordHelper():
         with open(record_file, "w") as record_write_file:
             record_write_file.write(text_format.MessageToString(
                 self._records, as_utf8=True))
-
-
-def save_nuq_quant_layer_names(nuq_config, save_path):
-    """ save non uniform layer name record file"""
-    save_dir, save_prefix = os.path.split(save_path)
-    save_dir = '.' if save_dir == '' else save_dir
-    nuq_quant_layers = list(nuq_config.keys())
-    if len(nuq_quant_layers) == 0:
-        return None
-
-    file_name = os.path.join(save_dir, save_prefix + '_nuq_layer_record.txt')
-    file_name = create_empty_file(file_name, check_exist=True)
-    line = functools.reduce(lambda x, y: x + ';' + y, nuq_quant_layers)
-    with open(file_name, 'w') as nuq_record_file:
-        nuq_record_file.write(line)
-    return file_name

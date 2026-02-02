@@ -43,7 +43,7 @@ class WtsPtqBase():
 
     def weight_calibration_np(self, numpy_data, wts_param, wts_ptq_algo):
         """
-        Function: warpper of arq_quant_np and nuq_quant_np
+        Function: warpper of arq_quant_np
         Parameter: numpy_data: data to be quantized as numpy array
                 wts_param: weight quantize algorithm parameter
         Return: scale: scale of input data

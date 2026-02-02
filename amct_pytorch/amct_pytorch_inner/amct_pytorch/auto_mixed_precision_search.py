@@ -28,7 +28,8 @@ from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.check_params import check_params
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import struct_helper
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_mixed_precision.auto_mixed_precision_search import AutoSearchMixedPrecisionBase
+from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_mixed_precision.auto_mixed_precision_search \
+    import AutoSearchMixedPrecisionBase
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration.sensitivity_base import SensitivityBase
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
 from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
