@@ -16,32 +16,30 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import LSTM_ATTRS_LIMIT_MAP, GRU_ATTRS_LIMIT_MAP
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_SEQ_LENS_INDEX, RNN_H_INDEX
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import LSTM_C_INDEX, LSTM_P_INDEX
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import ADA_ROUND_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import INT16_QUANTIZABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import INT16_QUANTIZABLE_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import RETRAIN_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DISTILL_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import NUQ_QUANTIZABLE_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import NUQ_QUANTIZABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import AMCT_OPERATIONS
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PRUNABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PRUNABLE_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import SELECTIVE_PRUNABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANT_LAYER_SUFFIX
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
+from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from ...amct_pytorch.common.utils.vars_util import LSTM_ATTRS_LIMIT_MAP, GRU_ATTRS_LIMIT_MAP
+from ...amct_pytorch.common.utils.vars_util import RNN_SEQ_LENS_INDEX, RNN_H_INDEX
+from ...amct_pytorch.common.utils.vars_util import LSTM_C_INDEX, LSTM_P_INDEX
+from ...amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.vars import ADA_ROUND_TYPES
+from ...amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from ...amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
+from ...amct_pytorch.utils.vars import INT16_QUANTIZABLE_TYPES
+from ...amct_pytorch.utils.vars import INT16_QUANTIZABLE_ONNX_TYPES
+from ...amct_pytorch.utils.vars import RETRAIN_TYPES
+from ...amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
+from ...amct_pytorch.utils.vars import DISTILL_TYPES
+from ...amct_pytorch.utils.vars import AMCT_OPERATIONS
+from ...amct_pytorch.utils.vars import PRUNABLE_TYPES
+from ...amct_pytorch.utils.vars import PRUNABLE_ONNX_TYPES
+from ...amct_pytorch.utils.vars import SELECTIVE_PRUNABLE_TYPES
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from ...amct_pytorch.utils.vars import QUANT_LAYER_SUFFIX
+from ...amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
+from ...amct_pytorch.capacity import CAPACITY
 
 SYMMETRIC_LIMIT_TYPES = ['Conv3d']
 
@@ -116,25 +114,6 @@ class GraphQuerier():
         return layer2type
 
     @staticmethod
-    def get_nuq_quant_layers(graph):
-        '''get nuq quant layers'''
-        layers = []
-        if graph.model is None:
-            for node in graph.nodes:
-                if GraphChecker.check_nuq_graph_quantize_type(node):
-                    layers.append(node.name)
-            LOGGER.logd("get nuq support layer from graph",
-                        module_name="Configuration")
-        else:
-            for name, mod in graph.model.named_modules():
-                if GraphChecker.check_nuq_quantize_type(name, mod, graph):
-                    layers.append(name)
-            LOGGER.logd("get support nuq modules from model",
-                        module_name="Configuration")
-
-        return layers
-
-    @staticmethod
     def get_ada_quant_layers(graph):
         '''get ada quant layers'''
         layers = []
@@ -143,19 +122,6 @@ class GraphQuerier():
             if mod_type in ADA_ROUND_TYPES and GraphChecker.check_shared_type(mod_type, name, mod, graph):
                 layers.append(name)
         return layers
-
-    @staticmethod
-    def check_nuq_steps(graph, layer_name, nuq_steps):
-        '''
-        Function: check if nuq steps is bigger than weight length
-        '''
-        node = graph.get_node_by_name(layer_name)
-        weight_node = QuantOpInfo.get_weight_node(node)
-        weight_length = TensorProtoHelper(weight_node.proto, weight_node.model_path).get_data().size
-
-        if weight_length < nuq_steps:
-            return False
-        return True
 
     @staticmethod
     def get_support_quant_layers(graph):
@@ -568,56 +534,6 @@ class GraphChecker():
 
         return True
 
-    @staticmethod
-    def check_nuq_graph_quantize_type(node):
-        """ check if node in graph can be quantized or not."""
-        # only stable layers which are quantizable
-        if not GraphChecker.check_graph_quantize_type(node):
-            return False
-        # check type
-        if node.type not in NUQ_QUANTIZABLE_ONNX_TYPES:
-            return False
-
-        if node.type in ['Conv', ]:
-            # not support group > 1
-            if not _check_group(node, 1):
-                return False
-            # conv2D
-            if not check_kernel_shape(node, [2]):
-                return False
-
-        return GraphChecker.check_special_limit(node)
-
-    @staticmethod
-    def check_nuq_quantize_type(mod_name, mod, graph=None):
-        """
-        Function: check if mod in model can be quantized or not.
-        """
-        # only stable layers which are quantizable
-        if not GraphChecker.check_quantize_type(mod_name, mod, graph):
-            return False
-
-        mod_type = type(mod).__name__
-        # check type
-        if mod_type not in NUQ_QUANTIZABLE_TYPES:
-            return False
-
-        if mod_type in ['Conv2d', 'Conv3d']:
-            if mod.groups > 1:
-                LOGGER.logd(
-                    f"Layer {mod_name}'s groups are {mod.dilation}.",
-                    module_name="Configuration")
-                return False
-
-        if mod_type in ['Linear']:
-            if mod.bias is None:
-                return False
-
-            for node in graph.nodes:
-                if mod_name == node.name and node.type not in NUQ_QUANTIZABLE_ONNX_TYPES:
-                    return False
-
-        return True
 
     @staticmethod
     def check_quant_behaviours(graph):

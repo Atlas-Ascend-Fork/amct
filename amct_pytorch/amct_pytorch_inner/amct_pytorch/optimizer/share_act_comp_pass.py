@@ -16,14 +16,14 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig as \
+from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
+from ...amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
+from ...amct_pytorch.configuration.retrain_config import RetrainConfig as \
     Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
+from ...amct_pytorch.utils.log import LOGGER
 
 MEMBERS = 'members'
 

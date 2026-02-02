@@ -426,7 +426,7 @@ class PruneType(ConfigItem):
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type('PruneType', val, str, extra[0])
-        if val not in self.support_algos :
+        if val not in self.support_algos:
             raise ValueError(
                 'PruneType only supports %s for layer %s' \
                 % (self.support_algos, extra[0]))
@@ -455,7 +455,7 @@ class RegularPruneAlgo(ConfigItem):
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type('RegularPruneAlgo', val, str, extra[0])
-        if val not in self.support_algos :
+        if val not in self.support_algos:
             raise ValueError(
                 'RegularPruneAlgo only supports %s for layer %s' \
                 % (self.support_algos, extra[0]))

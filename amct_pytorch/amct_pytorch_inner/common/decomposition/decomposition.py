@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+__all__ = ['DecomposeMode', 'tensor_decomposition']
 
 import os
 import ctypes
@@ -23,7 +24,6 @@ from enum import unique
 import numpy as np
 from ... import lib # pylint: disable=E0402
 
-__all__ = ['DecomposeMode', 'tensor_decomposition']
 FIRST = 'first'
 LAST = 'last'
 
@@ -232,7 +232,7 @@ def tensor_decomposition(tensor, stride=1, group=1, dilation=1): # pylint: disab
         tensor = tensor.transpose(0, 1, 3, 2)
 
     shape = tensor.shape
-    tensor = tensor.reshape(shape[0], shape[1]*shape[2], shape[3])
+    tensor = tensor.reshape(shape[0], shape[1] * shape[2], shape[3])
     _, singular_value, _ = np.linalg.svd(unfold(tensor, 1))
     singular_value = singular_value.astype(np.float64)
     rank = get_rank(singular_value, info)

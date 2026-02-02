@@ -27,6 +27,46 @@ class FuseConvScaleBase():
     """Function: The implement of ARQ quantize algorithm
        APIs: preprocess_params, quantize_data
     """
+
+    @staticmethod
+    def _check_params(conv_weight, conv_bias, scale, beta, channel_axis=0):
+        """check the input conv scale params
+
+        Arguments:
+            conv_weight: a np.array, the weight to be fused.
+            conv_bias: a np.array, the bias to be fused.
+            beta: a np.array, the beta of Scale layer.
+            scale: a np.array, the scale of Scale layer.
+        """
+
+        if conv_weight is None:
+            raise RuntimeError("conv_weight can not be none")
+        if scale is None:
+            raise RuntimeError("scale can not be none")
+
+        check_dtype(conv_bias)
+        check_dtype(conv_weight)
+        check_dtype(scale)
+        check_dtype(beta)
+
+        check_diff_dtype(conv_weight, conv_bias)
+        check_diff_dtype(conv_weight, scale)
+        check_diff_dtype(conv_weight, beta)
+
+        if conv_weight.ndim not in SUPPORT_DIMENSION:
+            raise RuntimeError("conv_weight support ndim is {}".format(SUPPORT_DIMENSION))
+        if scale.ndim != 1:
+            raise RuntimeError("scale only support ndim is 1")
+        if conv_weight.shape[channel_axis] != scale.shape[0]:
+            raise RuntimeError(
+                "weight channel:{} must be same with scale shape:{}" \
+                .format(conv_weight.shape[channel_axis], scale.shape[0]))
+        if beta is not None and \
+            conv_weight.shape[channel_axis] != beta.shape[0]:
+            raise RuntimeError(
+                "weight channel:{} must be same with beta shape:{}" \
+                .format(conv_weight.shape[channel_axis], beta.shape[0]))
+    
     @classmethod
     def fuse_conv_scale(cls, conv_weight, conv_bias, scale, beta):
         ''' the func to fuse conv + Scale
@@ -108,42 +148,3 @@ class FuseConvScaleBase():
             else:
                 fused_bias += conv_bias
         return fused_bias
-
-    @staticmethod
-    def _check_params(conv_weight, conv_bias, scale, beta, channel_axis=0):
-        """check the input conv scale params
-
-        Arguments:
-            conv_weight: a np.array, the weight to be fused.
-            conv_bias: a np.array, the bias to be fused.
-            beta: a np.array, the beta of Scale layer.
-            scale: a np.array, the scale of Scale layer.
-        """
-
-        if conv_weight is None:
-            raise RuntimeError("conv_weight can not be none")
-        if scale is None:
-            raise RuntimeError("scale can not be none")
-
-        check_dtype(conv_bias)
-        check_dtype(conv_weight)
-        check_dtype(scale)
-        check_dtype(beta)
-
-        check_diff_dtype(conv_weight, conv_bias)
-        check_diff_dtype(conv_weight, scale)
-        check_diff_dtype(conv_weight, beta)
-
-        if conv_weight.ndim not in SUPPORT_DIMENSION:
-            raise RuntimeError("conv_weight support ndim is {}".format(SUPPORT_DIMENSION))
-        if scale.ndim != 1:
-            raise RuntimeError("scale only support ndim is 1")
-        if conv_weight.shape[channel_axis] != scale.shape[0]:
-            raise RuntimeError(
-                "weight channel:{} must be same with scale shape:{}" \
-                .format(conv_weight.shape[channel_axis], scale.shape[0]))
-        if beta is not None and \
-            conv_weight.shape[channel_axis] != beta.shape[0]:
-            raise RuntimeError(
-                "weight channel:{} must be same with beta shape:{}" \
-                .format(conv_weight.shape[channel_axis], beta.shape[0]))

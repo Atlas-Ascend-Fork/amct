@@ -19,14 +19,14 @@ from collections import OrderedDict, defaultdict, namedtuple
 from enum import IntEnum, unique
 from google.protobuf import text_format
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import check_no_repeated
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import find_repeated_items
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import proto_float_to_python_float
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import quant_calibration_config_pb2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.proto_config import ProtoDataType
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.config.proto_config import ProtoConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import ASYMMETRIC, BATCH_NUM, ACTIVATION_OFFSET,\
+from ....amct_pytorch.common.utils.util import check_no_repeated
+from ....amct_pytorch.common.utils.util import find_repeated_items
+from ....amct_pytorch.common.utils.util import proto_float_to_python_float
+from ....amct_pytorch.proto import quant_calibration_config_pb2
+from ....amct_pytorch.utils.log import LOGGER
+from ....amct_pytorch.common.config.proto_config import ProtoDataType
+from ....amct_pytorch.common.config.proto_config import ProtoConfig
+from ....amct_pytorch.utils.vars import ASYMMETRIC, BATCH_NUM, ACTIVATION_OFFSET,\
     QUANT_GRANULARITY, MAX_PERCENTILE, MIN_PERCENTILE, SEARCH_RANGE, NUM_OF_BINS, IFMR, HFMG, SEARCH_STEP
 
 QuantKeywordInfo = namedtuple('QuantKeywordInfo', ['layer_key', 'common_config_key', 'config_key'])

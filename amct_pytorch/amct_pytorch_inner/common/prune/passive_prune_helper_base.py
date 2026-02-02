@@ -59,7 +59,7 @@ class PassivePruneHelperBase(PruneHelperBase):
             consumer_record.name = node.name
 
             cout_len = record_helper.get_record_cout(prune_record)
-            output_ranges = [output_ranges[1], output_ranges[1]+cout_len]
+            output_ranges = [output_ranges[1], output_ranges[1] + cout_len]
             attr_helper = AttrProtoHelper(consumer_record)
             attr_helper.set_attr_value('type', 'STRING', node.type)
             attr_helper.set_attr_value('begin', 'INT', output_ranges[0])

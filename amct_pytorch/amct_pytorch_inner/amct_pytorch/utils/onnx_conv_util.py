@@ -15,8 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
 
 
 class OnnxConvUtil:
@@ -88,5 +88,5 @@ class OnnxConvUtil:
         if filter_shape[0] % group != 0:
             raise RuntimeError('unexpected depthwise node {}, filter_shape is {} and group is {}.'
                                .format(self.node.name, filter_shape, group))
-        multiplier =  filter_shape[0] // group
+        multiplier = filter_shape[0] // group
         return multiplier

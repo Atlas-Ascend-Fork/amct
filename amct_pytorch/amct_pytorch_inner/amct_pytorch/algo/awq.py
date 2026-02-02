@@ -17,11 +17,11 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group, \
+from ...amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group, \
     cal_shared_exponent, scale_input_by_shared_exponents
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import GRIDS_NUM, FLOAT4_E2M1, FLOAT4_E1M2, INT8, INT4, MXFP4_E2M1
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import convert_to_per_group_shape, convert_to_dst_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_weight_min_max_by_granularity, calculate_scale_offset
+from ...amct_pytorch.utils.vars import GRIDS_NUM, FLOAT4_E2M1, FLOAT4_E1M2, INT8, INT4, MXFP4_E2M1
+from ...amct_pytorch.custom_op.utils import convert_to_per_group_shape, convert_to_dst_shape
+from ...amct_pytorch.custom_op.utils import get_weight_min_max_by_granularity, calculate_scale_offset
 
 TOKENS_NUM = 512
 MAX_SHRINK = 0.5
@@ -201,7 +201,7 @@ def reshape_input_weight(input_data, weight, weight_granularity, group_size):
         input_data = input_data.view(-1, input_data.shape[-1])
         input_data = input_data.reshape(1, input_data.shape[0], -1, group_size)
         if input_data.shape[1] > TOKENS_NUM:
-            input_data = input_data[:, 0 :: input_data.shape[1] // TOKENS_NUM]
+            input_data = input_data[:, 0:: input_data.shape[1] // TOKENS_NUM]
     else:
         weight_all = weight.reshape(weight.shape[0], 1, -1)
         input_data = input_data.reshape(1, -1, input_data.shape[-1])
@@ -240,7 +240,7 @@ def search_clip(named_linears, input_feat, quant_config):
 
         best_clip_max_all = list()
         for batch_num in range(weight_all.shape[0] // batch_size):
-            weight = weight_all[batch_num * batch_size : (batch_num + 1) * batch_size]
+            weight = weight_all[batch_num * batch_size: (batch_num + 1) * batch_size]
             ori_out = input_data * weight
             if weight_granularity != 'PER_TENSOR':
                 ori_out = ori_out.sum(dim=-1)

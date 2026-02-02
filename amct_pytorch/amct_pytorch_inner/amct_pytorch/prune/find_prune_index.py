@@ -16,11 +16,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.module_info import ModuleInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import bcp
+from ...amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from ...amct_pytorch.configuration.retrain_config import RetrainConfig
+from ...amct_pytorch.utils.module_info import ModuleInfo
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.custom_op import bcp
 
 
 PRUNE_RATIO = 'prune_ratio'

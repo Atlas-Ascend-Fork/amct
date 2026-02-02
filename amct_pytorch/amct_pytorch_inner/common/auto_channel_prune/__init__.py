@@ -15,7 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+__all__ = ['AutoChannelPruneConfigHelper',
+           'AutoChannelPruneSearchBase',
+           'SearchChannelBase',
+           'GreedySearch',
+           'SensitivityBase']
 
 from .auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
 from .auto_channel_prune_search_base import AutoChannelPruneSearchBase
@@ -23,9 +27,3 @@ from .search_channel_base import SearchChannelBase
 from .search_channel_base import GreedySearch
 from .sensitivity_base import SensitivityBase
 
-
-__all__ = ['AutoChannelPruneConfigHelper',
-           'AutoChannelPruneSearchBase',
-           'SearchChannelBase',
-           'GreedySearch',
-           'SensitivityBase']
