@@ -21,6 +21,7 @@ import torch.nn as nn
 class BaseQuantizeModule(nn.Module):
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__()
+        self.ori_module_type = None
         self.act_type = None
         self.wts_type = None
         self.scale_w = None
