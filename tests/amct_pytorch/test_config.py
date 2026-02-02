@@ -18,7 +18,7 @@ import unittest
 import torch
 import torch.nn as nn
 
-from utils import TestModel
+from utils import TestModel, TestModelBias, TestModelConv2d
 
 from amct_pytorch import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
 from amct_pytorch import INT8_MINMAX_WEIGHT_QUANT_CFG, INT8_SMOOTHQUANT_CFG
@@ -573,4 +573,440 @@ class TestConfigParse(unittest.TestCase):
             detail_config = parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
     
-            self.assertIn('Inputs strategy token do not support asymmetric quantization', str(e))    
+            self.assertIn('Inputs strategy token do not support asymmetric quantization', str(e))
+
+    def test_int8_int8_token_asymmetric_invalid_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': False,
+                    'strategy': 'tensor'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': False,
+                    'strategy': 'token',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.8}}
+        }
+        model = self.test_model.to(torch.bfloat16)
+        try:
+            detail_config = parse_config(model, cfg, AlgorithmRegistry)
+        except Exception as e:
+            self.assertIn('Inputs strategy token do not support asymmetric quantization', str(e))
+
+    def test_float8_float4_smooth_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        model_bfloat16 = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+        detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
+
+        self.assertEqual(len(detail_config.keys()), 1)
+        self.assertEqual(detail_config.get('linear2').get('batch_num'), 1)
+        self.assertEqual(detail_config.get('linear2').get('weights_cfg').get('quant_type'), 'float4_e2m1')
+        self.assertEqual(detail_config.get('linear2').get('weights_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear2').get('weights_cfg').get('strategy'), 'group')
+        self.assertEqual(detail_config.get('linear2').get('inputs_cfg').get('quant_type'), 'float8_e4m3fn')
+        self.assertEqual(detail_config.get('linear2').get('inputs_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear2').get('inputs_cfg').get('strategy'), 'tensor')
+        self.assertEqual(len(detail_config.get('linear2').get('algorithm')), 1)
+        self.assertEqual(detail_config.get('linear2').get('algorithm').get('smoothquant').get('smooth_strength'), 0.5)
+
+    def test_float8_float4_minmax_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'minmax'}
+        }
+        model_bfloat16 = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+        detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
+
+        self.assertEqual(len(detail_config.keys()), 1)
+        self.assertEqual(detail_config.get('linear2').get('batch_num'), 1)
+        self.assertEqual(detail_config.get('linear2').get('weights_cfg').get('quant_type'), 'float4_e2m1')
+        self.assertEqual(detail_config.get('linear2').get('weights_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear2').get('weights_cfg').get('strategy'), 'group')
+        self.assertEqual(detail_config.get('linear2').get('inputs_cfg').get('quant_type'), 'float8_e4m3fn')
+        self.assertEqual(detail_config.get('linear2').get('inputs_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear2').get('inputs_cfg').get('strategy'), 'tensor')
+        self.assertEqual(len(detail_config.get('linear2').get('algorithm')), 1)
+        self.assertEqual(list(detail_config.get('linear2').get('algorithm'))[0], 'minmax')
+
+    def test_float8_float4_conv2d_invalid_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'minmax'}
+        }
+        model_bfloat16 = copy.deepcopy(TestModelConv2d()).to(torch.bfloat16)
+
+        detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
+        self.assertEqual(len(detail_config.keys()), 0)
+
+    def test_float8_float4_symmetric_invalid_cfg(self):
+        cfg_weights_asymmetric = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': False,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        cfg_inputs_asymmetric = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': False,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        model_bfloat16 = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+        try:
+            detail_config = parse_config(model_bfloat16, cfg_weights_asymmetric, AlgorithmRegistry)
+            self.assertEqual(len(detail_config.keys()), 0)
+        except Exception as e:
+            self.assertIn('Weights symmetric only support to be True when weight quant_type is float4_e2m1', str(e))
+
+        try:
+            detail_config = parse_config(model_bfloat16, cfg_inputs_asymmetric, AlgorithmRegistry)
+            self.assertEqual(len(detail_config.keys()), 0)
+        except Exception as e:
+            self.assertIn('Inputs symmetric is unsupported to be False when Inputs quant_type is float8_e4m3fn', str(e))
+
+    def test_float8_float4_strategy_invalid_cfg(self):
+        cfg_weights_tensor = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        cfg_weights_channel = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        cfg_inputs_token = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'token',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+
+        model_bfloat16 = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+        try:
+            detail_config = parse_config(model_bfloat16, cfg_weights_tensor, AlgorithmRegistry)
+            self.assertEqual(len(detail_config.keys()), 0)
+        except Exception as e:
+            self.assertIn('act_dtype and wts_dtype float8_e4m3fn float4_e2m1 do not support '
+                'weight quant strategy tensor', str(e))
+
+        try:
+            detail_config = parse_config(model_bfloat16, cfg_weights_channel, AlgorithmRegistry)
+            self.assertEqual(len(detail_config.keys()), 0)
+        except Exception as e:
+            self.assertIn('act_dtype and wts_dtype float8_e4m3fn float4_e2m1 do not support '
+                'weight quant strategy channel', str(e))
+
+        try:
+            detail_config = parse_config(model_bfloat16, cfg_inputs_token, AlgorithmRegistry)
+            self.assertEqual(len(detail_config.keys()), 0)
+        except Exception as e:
+            self.assertIn('act_dtype and wts_dtype float8_e4m3fn float4_e2m1 do not support '
+                'activation quant strategy token', str(e))
+
+    def test_float8_float4_groupsize_invalid_cfg(self):
+        cfg_weights_tensor_groupsize = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        cfg_weights_without_groupsize = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        cfg_inputs_groupsize = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                    'group_size': 32
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+
+        model_bfloat16 = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+        try:
+            detail_config = parse_config(model_bfloat16, cfg_weights_tensor_groupsize, AlgorithmRegistry)
+            self.assertEqual(len(detail_config.keys()), 0)
+        except Exception as e:
+            self.assertIn('Weights group_size only support strategy group, but got tensor', str(e))
+
+        try:
+            detail_config = parse_config(model_bfloat16, cfg_weights_without_groupsize, AlgorithmRegistry)
+            self.assertEqual(len(detail_config.keys()), 0)
+        except Exception as e:
+            self.assertIn('Weights group_size is necessary, when weights strategy is group', str(e))
+
+    def test_float8_float4_algorithm_invalid_cfg(self):
+        algorithm_not_support = {'gptq', 'ofmr'}
+        for algorithm in algorithm_not_support:
+            cfg_algorithm = {
+                'batch_num': 1,
+                'quant_cfg': {
+                    'weights': {
+                        'type': 'float4_e2m1',
+                        'symmetric': True,
+                        'strategy': 'group',
+                        'group_size': 32
+                    },
+                    'inputs': {
+                        'type': 'float8_e4m3fn',
+                        'symmetric': True,
+                        'strategy': 'tensor',
+                    },
+                },
+                'algorithm': f"{algorithm}"
+            }
+            model_bfloat16 = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+            try:
+                detail_config = parse_config(model_bfloat16, cfg_algorithm, AlgorithmRegistry)
+                self.assertEqual(len(detail_config.keys()), 0)
+            except Exception as e:
+                self.assertIn(f'Algorithm {algorithm} do not support act and weight quant dtype '
+                    'float8_e4m3fn float4_e2m1', str(e))
+
+            cfg_algorithm_awq = {
+                'batch_num': 1,
+                'quant_cfg': {
+                    'weights': {
+                        'type': 'float4_e2m1',
+                        'symmetric': True,
+                        'strategy': 'group',
+                        'group_size': 32
+                    },
+                    'inputs': {
+                        'type': 'float8_e4m3fn',
+                        'symmetric': True,
+                        'strategy': 'tensor',
+                    },
+                },
+                'algorithm': {'awq': {'grids_num': 20}},
+            }
+            try:
+                detail_config = parse_config(model_bfloat16, cfg_algorithm_awq, AlgorithmRegistry)
+                self.assertEqual(len(detail_config.keys()), 0)
+            except Exception as e:
+                self.assertIn(f'Algorithm awq do not support act and weight quant dtype '
+                    'float8_e4m3fn float4_e2m1', str(e))
+
+    def test_hifloat8_hifloat8_cfg(self):
+        weights_strategy_support = {'tensor', 'channel'}
+        for weights_strategy in weights_strategy_support:
+            cfg = {
+                'batch_num': 1,
+                'quant_cfg': {
+                    'weights': {
+                        'type': 'hifloat8',
+                        'symmetric': True,
+                        'strategy': f"{weights_strategy}",
+                    },
+                    'inputs': {
+                        'type': 'hifloat8',
+                        'symmetric': True,
+                        'strategy': 'tensor',
+                    },
+                },
+                'algorithm': {'ofmr'}
+            }
+            model_bfloat16 = copy.deepcopy(TestModel()).to(torch.bfloat16)
+            detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
+
+            self.assertEqual(len(detail_config.keys()), 3)
+            self.assertEqual(detail_config.get('linear1').get('batch_num'), 1)
+            self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('quant_type'), 'hifloat8')
+            self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('symmetric'), True)
+            self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('strategy'), f"{weights_strategy}")
+            self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('quant_type'), 'hifloat8')
+            self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('symmetric'), True)
+            self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('strategy'), 'tensor')
+            self.assertEqual(len(detail_config.get('linear1').get('algorithm')), 1)
+            self.assertEqual(list(detail_config.get('linear1').get('algorithm'))[0], 'ofmr')
+
+    def test_hifloat8_hifloat8_conv2d_cfg(self):
+        weights_strategy_support = {'tensor', 'channel'}
+        for weights_strategy in weights_strategy_support:
+            cfg = {
+                'batch_num': 1,
+                'quant_cfg': {
+                    'weights': {
+                        'type': 'hifloat8',
+                        'symmetric': True,
+                        'strategy': f"{weights_strategy}",
+                    },
+                    'inputs': {
+                        'type': 'hifloat8',
+                        'symmetric': True,
+                        'strategy': 'tensor',
+                    },
+                },
+                'algorithm': {'ofmr'}
+            }
+            model_bfloat16 = copy.deepcopy(TestModelConv2d()).to(torch.bfloat16)
+            detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
+
+            self.assertEqual(len(detail_config.keys()), 3)
+            self.assertEqual(detail_config.get('conv2d1').get('batch_num'), 1)
+            self.assertEqual(detail_config.get('conv2d1').get('weights_cfg').get('quant_type'), 'hifloat8')
+            self.assertEqual(detail_config.get('conv2d1').get('weights_cfg').get('symmetric'), True)
+            self.assertEqual(detail_config.get('conv2d1').get('weights_cfg').get('strategy'), f"{weights_strategy}")
+            self.assertEqual(detail_config.get('conv2d1').get('inputs_cfg').get('quant_type'), 'hifloat8')
+            self.assertEqual(detail_config.get('conv2d1').get('inputs_cfg').get('symmetric'), True)
+            self.assertEqual(detail_config.get('conv2d1').get('inputs_cfg').get('strategy'), 'tensor')
+            self.assertEqual(len(detail_config.get('conv2d1').get('algorithm')), 1)
+            self.assertEqual(list(detail_config.get('conv2d1').get('algorithm'))[0], 'ofmr')
+
+    def test_multi_algo_fail_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                }
+            },
+            'algorithm': {
+                'minmax',
+                'gptq'
+            }
+        }
+        model_bfloat16 = copy.deepcopy(TestModel()).to(torch.bfloat16)
+        try:
+            detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
+        except Exception as e:
+            self.assertIn(f'One src_op only support one algorithm, current algo', str(e))
