@@ -1,0 +1,56 @@
+prune_record {
+  producer {
+    name: "layer1.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 64
+    }
+  }
+  consumer {
+    name: "layer1.1"
+    attr {
+      name: "type"
+      type: STRING
+      s: "BatchNormalization"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 64
+    }
+  }
+  consumer {
+    name: "layer2.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 64
+    }
+  }
+}

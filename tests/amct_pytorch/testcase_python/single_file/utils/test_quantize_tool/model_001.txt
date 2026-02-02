@@ -1,0 +1,277 @@
+record {
+  key: "layer1.0"
+  value {
+    scale_d: 0.029414946
+    offset_d: -4
+    scale_w: 0.001794414
+    scale_w: 0.0017783239
+    scale_w: 0.0018029043
+    scale_w: 0.0018360961
+    scale_w: 0.0017178543
+    scale_w: 0.0018231655
+    scale_w: 0.0018489694
+    scale_w: 0.0017292114
+    scale_w: 0.0018100062
+    scale_w: 0.0017328609
+    scale_w: 0.0018084425
+    scale_w: 0.0016873843
+    scale_w: 0.0018553135
+    scale_w: 0.0018249165
+    scale_w: 0.0017857823
+    scale_w: 0.0018147647
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "layer2.0"
+  value {
+    scale_d: 0.018655276
+    offset_d: -2
+    scale_w: 0.00065557065
+    scale_w: 0.00064881088
+    scale_w: 0.00064649654
+    scale_w: 0.00064940553
+    scale_w: 0.00064746675
+    scale_w: 0.00064639992
+    scale_w: 0.0006554639
+    scale_w: 0.00064921862
+    scale_w: 0.00065340084
+    scale_w: 0.0006559575
+    scale_w: 0.0006340596
+    scale_w: 0.00065464189
+    scale_w: 0.00064368825
+    scale_w: 0.00065614394
+    scale_w: 0.00064579322
+    scale_w: 0.00065173412
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "layer3.0"
+  value {
+    scale_d: 0.0051879627
+    offset_d: -128
+    scale_w: 0.0020817404
+    scale_w: 0.0025923555
+    scale_w: 0.0021863931
+    scale_w: 0.0025985236
+    scale_w: 0.0022516814
+    scale_w: 0.0013635535
+    scale_w: 0.0025714042
+    scale_w: 0.0025430024
+    scale_w: 0.0024241074
+    scale_w: 0.0024721571
+    scale_w: 0.0022300254
+    scale_w: 0.002589328
+    scale_w: 0.0023532419
+    scale_w: 0.0020363887
+    scale_w: 0.0024887503
+    scale_w: 0.0023976907
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "layer4.0"
+  value {
+    scale_d: 0.0062582418
+    offset_d: -3
+    scale_w: 0.0025905902
+    scale_w: 0.0025827792
+    scale_w: 0.0025146813
+    scale_w: 0.0024727939
+    scale_w: 0.0020982416
+    scale_w: 0.0018867974
+    scale_w: 0.0020198517
+    scale_w: 0.0020266173
+    scale_w: 0.0025515424
+    scale_w: 0.0024695953
+    scale_w: 0.0025617692
+    scale_w: 0.0025329855
+    scale_w: 0.0013365259
+    scale_w: 0.00237347
+    scale_w: 0.002458194
+    scale_w: 0.0024140663
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "layer5.0"
+  value {
+    scale_d: 0.001901289
+    offset_d: -128
+    scale_w: 0.0013001633
+    scale_w: 0.0012965527
+    scale_w: 0.0012761272
+    scale_w: 0.0012736859
+    scale_w: 0.0012681499
+    scale_w: 0.0012981596
+    scale_w: 0.0012623334
+    scale_w: 0.0012287664
+    scale_w: 0.0012636371
+    scale_w: 0.0012976446
+    scale_w: 0.0012863487
+    scale_w: 0.0012836548
+    scale_w: 0.0012941896
+    scale_w: 0.0012678902
+    scale_w: 0.0012813684
+    scale_w: 0.0012544189
+    scale_w: 0.0012306515
+    scale_w: 0.0013019157
+    scale_w: 0.0011900979
+    scale_w: 0.0012855239
+    scale_w: 0.0012871958
+    scale_w: 0.0012420961
+    scale_w: 0.0012831641
+    scale_w: 0.0012568773
+    scale_w: 0.0012661109
+    scale_w: 0.0013002816
+    scale_w: 0.0013049509
+    scale_w: 0.0013120415
+    scale_w: 0.0012920337
+    scale_w: 0.0012992581
+    scale_w: 0.0012982299
+    scale_w: 0.001273394
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "layer6.0"
+  value {
+    scale_d: 0.0028123467
+    offset_d: -6
+    scale_w: 0.0012391807
+    scale_w: 0.0012348229
+    scale_w: 0.001306518
+    scale_w: 0.0013046153
+    scale_w: 0.001290865
+    scale_w: 0.0012843972
+    scale_w: 0.0012675062
+    scale_w: 0.0012513518
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "fc.0"
+  value {
+    scale_d: 0.0011813636
+    offset_d: -128
+    scale_w: 0.00017263349
+    offset_w: 0
+  }
+}
+record {
+  key: "fc.2"
+  value {
+    scale_d: 0.0014638474
+    offset_d: -5
+    scale_w: 0.00024606203
+    offset_w: 0
+  }
+}
+record {
+  key: "fc.5"
+  value {
+    scale_d: 0.00033170165
+    offset_d: -128
+    scale_w: 0.00069018255
+    offset_w: 0
+  }
+}

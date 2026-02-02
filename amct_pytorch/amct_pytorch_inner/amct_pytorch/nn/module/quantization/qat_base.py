@@ -217,7 +217,7 @@ class QATBase(metaclass=ABCMeta):
         Returns:
             torch.nn.Module: qat operator constructed based on mod input
         """
-        if isinstance(mod, cls._float_module):
+        if not isinstance(mod, cls._float_module):
             raise TypeError(
                 f'{cls.__name__}.from_float can only works for '
                 f'{cls._float_module.__name__}')

@@ -73,7 +73,7 @@ class GRUQAT(nn.GRU, RnnQatBase):
         Create a qat module from a float module
         Args: `mod` a float module, 'config' amct op quant config
         """
-        if isinstance(mod, cls._float_module):
+        if not isinstance(mod, cls._float_module):
             raise RuntimeError('{}.from_float can only works for {}'.format(
                 cls.__name__, cls._float_module.__name__))
         if not config:

@@ -244,7 +244,7 @@ build_package() {
 build_ut() {
   echo $dotted_line
   echo "Start to build ut"
-  clean_build
+  # clean_build
 
   git submodule init && git submodule update
   if [ ! -d "${BUILD_PATH}" ]; then

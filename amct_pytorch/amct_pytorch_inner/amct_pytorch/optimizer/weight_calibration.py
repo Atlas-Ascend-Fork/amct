@@ -247,6 +247,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         Notes, `auto_mixed_precision_search` is original weight. NOT FAKE.
         """
         data_tensor = object_module.weight.data
+        calied_weight = data_tensor
         tensor_balance_factor = None
         # broadcast tensor_balance_factor to weight shape and apply to weight
         if dmq_param:
@@ -264,7 +265,8 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         if type(object_module).__name__ in ('ConvTranspose1d', 'ConvTranspose2d', 'ConvTranspose3d'):
             group = object_module.groups
             data_tensor = adjust_deconv_weight_shape(group, data_tensor)
-
+        scale = [1.0]
+        offset = [0]
         if wts_param.get('wts_algo') == 'arq_quantize':
             scale, offset, calied_weight = weight_cali_tensor(data_tensor,
                                                               wts_param)

@@ -66,7 +66,7 @@ class LinearQAT(nn.Linear, QATBase):
         Create a qat module from a float module
         Args: `mod` a float module, 'config' amct op quant config
         """
-        if isinstance(mod, cls._float_module):
+        if not isinstance(mod, cls._float_module):
             raise RuntimeError(f'{cls.__name__}.from_float can only works for '
                                f'{cls._float_module.__name__}')
 
