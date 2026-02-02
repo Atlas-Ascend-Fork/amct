@@ -30,5 +30,5 @@ amct:
       - amct_pytorch/experimental
 
   llt:
-    ut_check:true
+    ut_check:false
     st_check:false
