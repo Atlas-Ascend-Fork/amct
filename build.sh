@@ -19,6 +19,8 @@ set -e
 
 BASEPATH=$(cd "$(dirname $0)"; pwd)
 BUILD_PATH="${BASEPATH}/build/"
+UT_TARGETS=("amct_utest")
+TMP_PATH="${BASEPATH}/tmp/"
 
 # print usage message
 usage() {
@@ -221,6 +223,9 @@ clean_build() {
   if [ -d "${BUILD_PATH}" ]; then
     rm -rf ${BUILD_PATH}/*
   fi
+  if [ -d "${TMP_PATH}" ]; then
+    rm -rf ${TMP_PATH}/*
+  fi
 }
 
 clean_build_out() {
@@ -240,15 +245,18 @@ build_ut() {
   echo $dotted_line
   echo "Start to build ut"
   clean_build
+
+  git submodule init && git submodule update
   if [ ! -d "${BUILD_PATH}" ]; then
     mkdir -p "${BUILD_PATH}"
   fi
 
-  if [[ "$ENABLE_COVERAGE" == "TRUE" ]]; then
-    cd "${BUILD_PATH}" && PYTHONPATH=${BASEPATH}:${PYTHONPATH} coverage run -m unittest discover ${BASEPATH}/tests/amct_pytorch/ && coverage report && coverage html
-  else
-    cd "${BUILD_PATH}" && PYTHONPATH=${BASEPATH}:${PYTHONPATH} coverage run -m unittest discover ${BASEPATH}/tests/amct_pytorch/
+  if [ ! -d "${TMP_PATH}" ]; then
+    mkdir -p "${TMP_PATH}"
   fi
+
+  cd "${BUILD_PATH}" && cmake ${CMAKE_ARGS} ..
+  cmake --build . --target ${UT_TARGETS[@]} -- ${VERBOSE} -j $THREAD_NUM
 }
 
 main() {
