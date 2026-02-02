@@ -55,10 +55,11 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
         alg_names, _ = get_alg_name_from_config(alg)
         alg_name = alg_names[0] # each module corresponds to only one algo
         if AlgorithmRegistry.algo.get(alg_name):
-            ori_op = AlgorithmRegistry.algo.get(alg_name)[0]
-            if type(module).__name__ == ori_op:
-                self.quantize_ops[name] = AlgorithmRegistry.algo.get(alg_name)[1]
-                return True
+            ori_ops = AlgorithmRegistry.algo.get(alg_name).keys()
+            for ori_op in ori_ops:
+                if type(module).__name__ == ori_op:
+                    self.quantize_ops[name] = AlgorithmRegistry.algo.get(alg_name).get(ori_op)
+                    return True
         
         return False
 

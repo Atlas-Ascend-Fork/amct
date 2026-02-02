@@ -76,8 +76,8 @@ class TestCustomizedAlgo(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         algorithm_register('AA', 'Linear', CustomQuant, CustomDeployQuant)
-        self.assertEqual(AlgorithmRegistry.algo['AA'][1], CustomQuant)
-        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], CustomDeployQuant)
+        self.assertEqual(AlgorithmRegistry.algo['AA']['Linear'], CustomQuant)
+        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], [CustomDeployQuant])
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         self.assertEqual(type(model.linear1).__name__, 'CustomQuant')
@@ -114,8 +114,8 @@ class TestCustomizedAlgo(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         AlgorithmRegistry.register('BB', 'Linear', CustomQuant, None)
-        self.assertEqual(AlgorithmRegistry.algo['BB'][1], CustomQuant)
-        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], None)
+        self.assertEqual(AlgorithmRegistry.algo['BB']['Linear'], CustomQuant)
+        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], [None])
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         self.assertEqual(type(model.linear1).__name__, 'CustomQuant')
