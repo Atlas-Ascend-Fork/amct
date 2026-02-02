@@ -18,17 +18,17 @@
 from torch.autograd import Function
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import ulq_scale_retrain_forward_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import ulq_scale_retrain_backward_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_quant_data
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import check_group_param
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_tensor_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZE_LINEAR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DEQUANTIZE_LINEAR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import TRANSPOSE
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
+from ....amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
+from ....amct_pytorch.utils.log import LOGGER
+from ....amct_pytorch.custom_op import ulq_scale_retrain_forward_pytorch
+from ....amct_pytorch.custom_op import ulq_scale_retrain_backward_pytorch
+from ....amct_pytorch.custom_op.utils import check_quant_data
+from ....amct_pytorch.custom_op.utils import check_group_param
+from ....amct_pytorch.custom_op.utils import process_tensor_shape
+from ....amct_pytorch.utils.vars import QUANTIZE_LINEAR
+from ....amct_pytorch.utils.vars import DEQUANTIZE_LINEAR
+from ....amct_pytorch.utils.vars import TRANSPOSE
+from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
 
 
 MODULE_TYPE = 'module_type'
@@ -141,7 +141,7 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
         elif module_type in RNN_TENSOR_NUM:
             shape = g.op('Constant',
-                         value_t=torch.tensor([1, RNN_TENSOR_NUM.get(module_type)*inputs[3]['module'].hidden_size, -1],
+                         value_t = torch.tensor([1, RNN_TENSOR_NUM.get(module_type) * inputs[3]['module'].hidden_size, -1],
                                               dtype=torch.int64))
             reshape = g.op('Reshape', inputs[0], shape)
             quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[5])

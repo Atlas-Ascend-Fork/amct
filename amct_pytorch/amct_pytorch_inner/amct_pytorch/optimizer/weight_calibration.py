@@ -19,23 +19,23 @@ from google.protobuf import text_format
 import torch
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.arq.arq import weight_cali_tensor
+from ...amct_pytorch.configuration.configuration import Configuration
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from ...amct_pytorch.proto import scale_offset_record_pb2
+from ...amct_pytorch.custom_op.arq.arq import weight_cali_tensor
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import record_weights_scale_offset
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
+from ...amct_pytorch.common.utils.record_file_operator import record_weights_scale_offset
+from ...amct_pytorch.common.utils.record_file_operator import \
     read_activation_scale_offset
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_optimize import replace_adaround_module
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.module_info import ModuleInfo
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from ...amct_pytorch.configuration.check import GraphChecker
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
+from ...amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
+from ...amct_pytorch.ada_round.ada_round_optimize import replace_adaround_module
+from ...amct_pytorch.utils.module_info import ModuleInfo
 CONV2D = 'Conv2d'
 CONV3D = 'Conv3d'
 CONV1D = 'Conv1d'
@@ -62,42 +62,6 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         self.record_file_path = self.conf.get_record_file_path()
         self.weight_fakequant = weight_fakequant
         self.record_dict = {} if record_dict is None else record_dict
-
-    @staticmethod
-    def _graph_weight_set_process(object_node, object_module, weight):
-        """
-        Function: set weight data to graph.
-
-        Args:
-        object_node: graph object node.
-        object_module: module to process.
-        weight: new weigh to set into the graph.
-
-        Return:
-        None.
-        """
-        weight_param = QuantOpInfo.get_weight_node(object_node)
-        weight_helper = TensorProtoHelper(weight_param.proto, weight_param.model_path)
-
-        calied_weight_raw = weight
-        # transpose torch.nn.Linear.weight in (Cout, Cin) to ONNX (Cin, Cout).
-        if object_node.type == 'MatMul' and type(object_module).__name__ == 'Linear':
-            need_transpose = True
-            # Trans op may already be inserted in exported ONNX model
-            if object_node.has_attr('with_weights_trans'):
-                if object_node.get_attr('with_weights_trans'):
-                    need_transpose = False
-            if need_transpose:
-                calied_weight_raw = calied_weight_raw.transpose(1, 0)
-
-        calied_weight_raw = calied_weight_raw.flatten().cpu().numpy()
-        if weight.dtype is torch.float16:
-            set_data_type = 'FLOAT16'
-        else:
-            set_data_type = 'FLOAT'
-
-        weight_helper.clear_data()
-        weight_helper.set_data(calied_weight_raw, set_data_type)
 
     @staticmethod
     def apply_balance_scale_to_weight(object_module, object_node, tensor_balance_factor, weight_tensor):
@@ -136,6 +100,42 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
             weight_tensor = weight_tensor.transpose(0, 1)
             weight_tensor = adjust_conv_weight_shape(group, weight_tensor)
         return weight_tensor.to(device)
+    
+    @staticmethod
+    def _graph_weight_set_process(object_node, object_module, weight):
+        """
+        Function: set weight data to graph.
+
+        Args:
+        object_node: graph object node.
+        object_module: module to process.
+        weight: new weigh to set into the graph.
+
+        Return:
+        None.
+        """
+        weight_param = QuantOpInfo.get_weight_node(object_node)
+        weight_helper = TensorProtoHelper(weight_param.proto, weight_param.model_path)
+
+        calied_weight_raw = weight
+        # transpose torch.nn.Linear.weight in (Cout, Cin) to ONNX (Cin, Cout).
+        if object_node.type == 'MatMul' and type(object_module).__name__ == 'Linear':
+            need_transpose = True
+            # Trans op may already be inserted in exported ONNX model
+            if object_node.has_attr('with_weights_trans'):
+                if object_node.get_attr('with_weights_trans'):
+                    need_transpose = False
+            if need_transpose:
+                calied_weight_raw = calied_weight_raw.transpose(1, 0)
+
+        calied_weight_raw = calied_weight_raw.flatten().cpu().numpy()
+        if weight.dtype is torch.float16:
+            set_data_type = 'FLOAT16'
+        else:
+            set_data_type = 'FLOAT'
+
+        weight_helper.clear_data()
+        weight_helper.set_data(calied_weight_raw, set_data_type)
 
     def set_up(self):
         """

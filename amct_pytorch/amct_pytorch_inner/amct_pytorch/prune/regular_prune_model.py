@@ -18,14 +18,14 @@
 import copy
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from ...amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
+from ...amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.module_info import create_prune_helper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.module_info import ModulePruneHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import PASSIVE_PRUNABLE_ONNX_TYPES
+from ...amct_pytorch.utils.module_info import create_prune_helper
+from ...amct_pytorch.utils.module_info import ModulePruneHelper
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.vars import PASSIVE_PRUNABLE_ONNX_TYPES
 
 ACTIVE_PRUNE_SPLIT = 'active_prune_split'
 PASSIVE_PRUNE_SPLIT = 'passive_prune_split'
@@ -58,7 +58,7 @@ class RegularModelPruner:
             param:left, int number
             param:right, int number
             """
-            if right - left <= 0 :
+            if right - left <= 0:
                 return
             success = self.prune_by_several_records(uncertain_index[left:right])
             if success:
@@ -68,7 +68,7 @@ class RegularModelPruner:
                 delete_records.extend(self.record.prune_record[left:right])
                 return
             # if prune is fail, do prune in smaller range
-            bound = (left+right)//2
+            bound = (left + right) // 2
             prune_by_index(left, bound)
             prune_by_index(bound, right)
 

@@ -19,7 +19,7 @@
 import threading
 from functools import wraps
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from ...amct_pytorch.proto import scale_offset_record_pb2
 
 
 def singleton(cls):

@@ -20,14 +20,14 @@ import numpy as np
 import torch
 from torch import nn
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base import CompModuleBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import process_scale
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import BATCH_NUM
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import DEFAULT, FORCE_FP16_QUANT
+from ...amct_pytorch.custom_op.comp_module.comp_module_base import CompModuleBase
+from ...amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
+from ...amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from ...amct_pytorch.custom_op.utils import copy_tensor
+from ...amct_pytorch.custom_op.utils import tensor
+from ...amct_pytorch.custom_op.utils import process_scale
+from ...amct_pytorch.utils.vars import BATCH_NUM
+from ...amct_pytorch.common.utils.vars_util import DEFAULT, FORCE_FP16_QUANT
 
 LAYERS_NAME = 'layers_name'
 DEVICE = 'device'
@@ -36,6 +36,7 @@ SCALE_W = 'scale_w'
 DATA_NUM_BITS = 'data_num_bits'
 WTS_NUM_BITS = 'wts_num_bits'
 NUM_BITS = 'num_bits'
+
 
 class RetrainQuant(nn.Module):
     """

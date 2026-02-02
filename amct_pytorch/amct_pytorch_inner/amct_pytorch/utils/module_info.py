@@ -23,7 +23,7 @@ from __future__ import print_function
 import numpy as np
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.log import LOGGER
 
 WEIGHT_PARAM_NAME = 'weight'
 
@@ -108,18 +108,6 @@ class ModulePruneHelper:
         self.cin_prune_list = None
         self.cout_prune_list = None
 
-    @classmethod
-    def match_pattern(cls, module):
-        """
-        Function: Match pattern of module to do prune
-        Parameter: None
-        Return: bool, matched or not
-        """
-        mod_type = type(module).__name__
-        if mod_type not in cls.support_type:
-            return False
-        return True
-
     @staticmethod
     def restore(module, backup, module_name):
         """
@@ -135,6 +123,18 @@ class ModulePruneHelper:
                 ModuleInfo.set_param_tensor(module, name, value)
             else:
                 setattr(module, name, value)
+    
+    @classmethod
+    def match_pattern(cls, module):
+        """
+        Function: Match pattern of module to do prune
+        Parameter: None
+        Return: bool, matched or not
+        """
+        mod_type = type(module).__name__
+        if mod_type not in cls.support_type:
+            return False
+        return True
 
     def do_prune(self, cin_prune_list, cout_prune_list):
         """do prune """

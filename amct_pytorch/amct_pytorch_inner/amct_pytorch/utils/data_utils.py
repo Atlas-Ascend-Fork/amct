@@ -17,10 +17,10 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.cast.amct_pytorch_op_cast import float_to_hifp8, hifp8_to_float, float_to_fp8e4m3fn, \
+from ...amct_pytorch.custom_op.cast.amct_pytorch_op_cast import float_to_hifp8, hifp8_to_float, float_to_fp8e4m3fn, \
     fp8e4m3fn_to_float, float_to_fp4e2m1, fp4e2m1_to_float, float_to_fp4e1m2, fp4e1m2_to_float
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP8_E4M3FN, MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MAX, INT4_MIN
+from ...amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP8_E4M3FN, MXFP4_E2M1, FLOAT4_E2M1, FLOAT4_E1M2
+from ...amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MAX, INT4_MIN
 
 
 DATA_MAP = {
@@ -217,6 +217,7 @@ def cal_shared_exponent(input_tensor, mx_dtype, block_size=32):
     shared_exponents[invalid_mask] = torch.nan
     shared_exponents = shared_exponents.reshape(ori_shape[:-1] + ((ori_shape[-1] + block_size - 1) // block_size,))
     return shared_exponents
+
 
 def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=32):
     """

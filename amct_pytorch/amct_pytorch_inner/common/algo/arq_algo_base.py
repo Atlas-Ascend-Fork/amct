@@ -55,6 +55,36 @@ class ArqAlgoBase(BaseQuantizeAlgorithm):
         ArqAlgoBase._lib_loader = lib_loader
         ArqAlgoBase._enable_gpu = enable_gpu
 
+    @staticmethod
+    def preprocess_params(data, shape, args):
+        """Extract and check input parameters, then convert them to cTypes's
+           data type.
+        """
+        ArqAlgoBase.check_paramters(data, shape, args)
+        arq_params = {}
+        arq_params['data_length'] = ArqAlgoBase.get_data_length(shape)
+        arq_params[CHANNEL_WISE] = ArqAlgoBase.extract_quant_param(
+            args, CHANNEL_WISE, bool)
+        arq_params['with_offset'] = ArqAlgoBase.extract_quant_param(
+            args, 'with_offset', bool)
+        arq_params['num_bits'] = ArqAlgoBase.extract_quant_param(
+            args, 'num_bits', int)
+
+        if arq_params.get(CHANNEL_WISE):
+            scale_size = shape[0]
+        else:
+            scale_size = 1
+        arq_params['scale_size'] = scale_size
+        scale_offset_size = [(ctypes.c_float * scale_size)(),
+                             (ctypes.c_int * scale_size)()]
+        scale_offset_data = \
+            [FloatData(scale_size, scale_offset_size[0]),
+             IntData(scale_size, scale_offset_size[1])]
+
+        data_p = ctypes.cast(data.buffer_info()[0],
+                             ctypes.POINTER(ctypes.c_double))
+        return ArqProcessedParams(data_p, arq_params, scale_offset_size, scale_offset_data)
+    
     @classmethod
     def quantize_data(cls, data, shape, args, mode='CPU'):
         """Do arq quantize.
@@ -96,33 +126,3 @@ class ArqAlgoBase(BaseQuantizeAlgorithm):
         offset = [scale_offset_size[1][i] for i in range(scale_size)]
 
         return scale, offset
-
-    @staticmethod
-    def preprocess_params(data, shape, args):
-        """Extract and check input parameters, then convert them to cTypes's
-           data type.
-        """
-        ArqAlgoBase.check_paramters(data, shape, args)
-        arq_params = {}
-        arq_params['data_length'] = ArqAlgoBase.get_data_length(shape)
-        arq_params[CHANNEL_WISE] = ArqAlgoBase.extract_quant_param(
-            args, CHANNEL_WISE, bool)
-        arq_params['with_offset'] = ArqAlgoBase.extract_quant_param(
-            args, 'with_offset', bool)
-        arq_params['num_bits'] = ArqAlgoBase.extract_quant_param(
-            args, 'num_bits', int)
-
-        if arq_params.get(CHANNEL_WISE):
-            scale_size = shape[0]
-        else:
-            scale_size = 1
-        arq_params['scale_size'] = scale_size
-        scale_offset_size = [(ctypes.c_float * scale_size)(),
-                             (ctypes.c_int * scale_size)()]
-        scale_offset_data = \
-            [FloatData(scale_size, scale_offset_size[0]),
-             IntData(scale_size, scale_offset_size[1])]
-
-        data_p = ctypes.cast(data.buffer_info()[0],
-                             ctypes.POINTER(ctypes.c_double))
-        return ArqProcessedParams(data_p, arq_params, scale_offset_size, scale_offset_data)

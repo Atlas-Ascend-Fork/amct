@@ -19,12 +19,12 @@ import torch
 import numpy as np
 from onnx import onnx_pb
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.quant_node import QuantOpInfo
+from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from ...amct_pytorch.common.utils.util import version_higher_than
 
 LOW_TORCH_VERSION = '1.6.0'
 FLOAT = 'FLOAT'
@@ -113,29 +113,6 @@ class ConvBnFusionPass(BaseModuleFusionPass):
             bias_helper.clear_data()
             bias_helper.set_data(fused_bias_raw, data_type)
 
-    def _update_record_for_fusion(self, conv_node, bn_module):
-        """
-        Function: update quant factor function for conv_bn fusion
-        Parameters:
-            conv_node: conv node
-            bn_module: bn module
-        Return: None
-        """
-        scale_w, offset_w = self.record_helper.read_weights_scale_offset(conv_node.name)
-        if len(scale_w) != len(offset_w):
-            raise RuntimeError('scale_w must be same length with offset_w.')
-        # if channel-wise False & BN. scale_w and offset_w expand.
-        if len(scale_w) == 1:
-            scale_w = np.ones((bn_module.num_features), np.float32) * scale_w[0]
-            offset_w = np.ones((bn_module.num_features), np.int8) * offset_w[0]
-        scale_w = torch.tensor(scale_w, requires_grad=False)
-
-        bn_var_rsqrt = torch.rsqrt(bn_module.running_var + bn_module.eps)
-        scale = bn_module.weight * bn_var_rsqrt
-        fused_scale_w = scale_w.to(scale.device).abs() * abs(scale).detach()
-        self.record_helper.record_weights_scale_offset(
-            conv_node.name, fused_scale_w.cpu().tolist(), offset_w)
-
     def match_pattern(self, module, name, graph=None):
         """
         Function:Match the bn module to be fused in model
@@ -151,7 +128,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
             return False
         if isinstance(module, (torch.nn.BatchNorm3d, torch.nn.BatchNorm1d)) and \
             torch.__version__ != LOW_TORCH_VERSION and \
-            not version_higher_than(torch.__version__ , LOW_TORCH_VERSION):
+            not version_higher_than(torch.__version__, LOW_TORCH_VERSION):
             return False
         if not module.affine or not module.track_running_stats:
             LOGGER.logd(
@@ -242,6 +219,29 @@ class ConvBnFusionPass(BaseModuleFusionPass):
 
         LOGGER.logd(
             'Do conv:\'{}\' + bn:\'{}\' fuison success!'.format(conv_name, object_name), 'ConvBnFusionPass')
+
+    def _update_record_for_fusion(self, conv_node, bn_module):
+        """
+        Function: update quant factor function for conv_bn fusion
+        Parameters:
+            conv_node: conv node
+            bn_module: bn module
+        Return: None
+        """
+        scale_w, offset_w = self.record_helper.read_weights_scale_offset(conv_node.name)
+        if len(scale_w) != len(offset_w):
+            raise RuntimeError('scale_w must be same length with offset_w.')
+        # if channel-wise False & BN. scale_w and offset_w expand.
+        if len(scale_w) == 1:
+            scale_w = np.ones((bn_module.num_features), np.float32) * scale_w[0]
+            offset_w = np.ones((bn_module.num_features), np.int8) * offset_w[0]
+        scale_w = torch.tensor(scale_w, requires_grad=False)
+
+        bn_var_rsqrt = torch.rsqrt(bn_module.running_var + bn_module.eps)
+        scale = bn_module.weight * bn_var_rsqrt
+        fused_scale_w = scale_w.to(scale.device).abs() * abs(scale).detach()
+        self.record_helper.record_weights_scale_offset(
+            conv_node.name, fused_scale_w.cpu().tolist(), offset_w)
 
 
 def _delete_bn_from_graph(graph, conv_name, bn_name):

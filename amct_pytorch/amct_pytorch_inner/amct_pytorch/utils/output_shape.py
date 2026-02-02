@@ -56,7 +56,7 @@ class OutputShape(object):
         if not isinstance(self.module, nn.Module):
             return self._func(*args, **kwargs)
 
-        is_bound_method  = hasattr(self._func, '__func__') and getattr(self._func, '__func__', None) is not None
+        is_bound_method = hasattr(self._func, '__func__') and getattr(self._func, '__func__', None) is not None
         is_bound_method |= hasattr(self._func, 'im_func') and getattr(self._func, 'im_func', None) is not None
         if is_bound_method:
             return self._func(*args, **kwargs)
@@ -74,8 +74,8 @@ class OutputShape(object):
         stride = module.stride
         dilation = module.dilation
         kernel_size = module.kernel_size
-        h_out = math_module.floor((h_in  + 2 * padding[0] - dilation[0] * (kernel_size[0] - 1) - 1) / stride[0] + 1)
-        w_out = math_module.floor((w_in  + 2 * padding[1] - dilation[1] * (kernel_size[1] - 1) - 1) / stride[1] + 1)
+        h_out = math_module.floor((h_in + 2 * padding[0] - dilation[0] * (kernel_size[0] - 1) - 1) / stride[0] + 1)
+        w_out = math_module.floor((w_in + 2 * padding[1] - dilation[1] * (kernel_size[1] - 1) - 1) / stride[1] + 1)
         output_shape = (n, c_out, h_out, w_out)
         return output_shape
 

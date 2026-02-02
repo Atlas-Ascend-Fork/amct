@@ -20,8 +20,8 @@ from __future__ import division
 from __future__ import print_function
 
 from collections import OrderedDict
-from google.protobuf import text_format
 from enum import unique, Enum
+from google.protobuf import text_format
 
 from ...proto import retrain_config_pb2
 from ..utils.util import proto_float_to_python_float

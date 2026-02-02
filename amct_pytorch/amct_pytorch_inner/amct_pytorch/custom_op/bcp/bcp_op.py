@@ -15,10 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
-import torch
 import math
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+import torch
+from ....amct_pytorch.utils.log import LOGGER
 
 
 ASCNED_OPTIMIZED_VALUE = 16

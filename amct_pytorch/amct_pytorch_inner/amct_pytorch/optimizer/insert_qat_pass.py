@@ -15,14 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import get_enable_quant_layers
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import get_quant_layer_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.linear import LinearQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DISTILL_TYPES
+from ...amct_pytorch.configuration.distill_config import get_enable_quant_layers
+from ...amct_pytorch.configuration.distill_config import get_quant_layer_config
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from ...amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
+from ...amct_pytorch.nn.module.quantization.linear import LinearQAT
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.utils.vars import DISTILL_TYPES
 
 
 REPLACE_DICT = {

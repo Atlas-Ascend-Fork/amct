@@ -77,7 +77,7 @@ class SplitPruneHelperBase(PruneHelperBase):
             consumer_record = new_prune_records[idx].consumer.add()
             consumer_record.name = self.node.name
             attr_helper = AttrProtoHelper(consumer_record)
-            output_range = [output_range[1], output_range[1]+split_size]
+            output_range = [output_range[1], output_range[1] + split_size]
             attr_helper.set_attr_value('type', 'STRING', self.node.type)
             attr_helper.set_attr_value('begin', 'INT', output_range[0])
             attr_helper.set_attr_value('end', 'INT', output_range[1])

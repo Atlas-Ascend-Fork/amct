@@ -16,11 +16,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant import FakeQuantizedLinear
+from ...amct_pytorch.utils.model_util import ModuleHelper
+from ...amct_pytorch.utils.log import LOGGER
+from ...amct_pytorch.custom_op.fake_quant import FakeQuantizedLinear
 
 
 class InsertFakequantLinearPass(BaseModuleFusionPass):

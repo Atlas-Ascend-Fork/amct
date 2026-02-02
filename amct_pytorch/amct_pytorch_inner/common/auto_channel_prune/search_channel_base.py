@@ -118,7 +118,7 @@ class GreedySearch(SearchChannelBase):
             attr_helper = AttrProtoHelper(record.producer[0])
             record_sensitivity = attr_helper.get_attr_value('sensitivity')
             record_sensitivity_idx = np.argsort(record_sensitivity)[::-1]
-            record_sensitivity.sort(reverse = True)
+            record_sensitivity.sort(reverse=True)
 
             for producer in record.producer:
                 attr_helper = AttrProtoHelper(producer)

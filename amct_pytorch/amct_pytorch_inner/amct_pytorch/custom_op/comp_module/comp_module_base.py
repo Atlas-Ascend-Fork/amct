@@ -22,15 +22,15 @@ import torch # pylint: disable=E0401
 import torch.nn as nn # pylint: disable=E0401
 from torch.nn.parameter import Parameter # pylint: disable=E0401
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFunction
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFunction
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFunction
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune import SelectivePruneFunction
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.selective_prune.selective_prune import add_mask_to_record, get_mask_from_record
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import FLT_EPSILON
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
+from ....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFunction
+from ....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFunction
+from ....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFunction
+from ....amct_pytorch.custom_op.selective_prune.selective_prune import SelectivePruneFunction
+from ....amct_pytorch.custom_op.selective_prune.selective_prune import add_mask_to_record, get_mask_from_record
+from ....amct_pytorch.custom_op.utils import copy_tensor
+from ....amct_pytorch.custom_op.utils import tensor
+from ....amct_pytorch.utils.vars import FLT_EPSILON
+from ....amct_pytorch.utils.log import LOGGER
 
 COMP_ALG_PRUNE = 'prune'
 COMP_ALG_QUANT = 'quant'
@@ -39,6 +39,7 @@ DEVICE = 'device'
 S_REC_FLAG = 's_rec_flag'
 
 ActsQuantInfo = namedtuple('ActsQuantInfo', ['outputs', 'scale', 'offset', 'clip_max', 'clip_min'])
+
 
 class CompModuleBase(nn.Module):
     """
@@ -165,10 +166,10 @@ class CompModuleBase(nn.Module):
 
         self.register_parameter('wts_scales',
                                 Parameter(tensor([np.nan] * self.num_scales,
-                                          requires_grad=True,  device=self.common_config.get(DEVICE))))
+                                          requires_grad=True, device=self.common_config.get(DEVICE))))
         self.register_parameter('wts_offsets',
                                 Parameter(tensor([np.nan] * self.num_scales,
-                                          requires_grad=True,  device=self.common_config.get(DEVICE))))
+                                          requires_grad=True, device=self.common_config.get(DEVICE))))
         self.register_buffer(S_REC_FLAG,
             tensor(False if self.wts_config.get(S_REC_FLAG) is None else self.wts_config.get(S_REC_FLAG),
             device=self.common_config.get(DEVICE)))

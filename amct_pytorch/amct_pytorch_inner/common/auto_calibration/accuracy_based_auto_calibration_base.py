@@ -198,7 +198,7 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
                 METRIC_EVAL: metric_eval
             }
 
-            LOGGER.logi("{} fine search step {} {}".format('*'*20, fine_search_step, '*'*20))
+            LOGGER.logi("{} fine search step {} {}".format('*' * 20, fine_search_step, '*' * 20))
             AccuracyBasedAutoCalibrationBase.show_record_info(record)
             self.history_records.append(record)
             self.final_config = copy.deepcopy(strategy_result[ROLL_BACK_CONFIG])
@@ -273,7 +273,7 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
             # copy quant config when node is anonymous
             if key not in quant_config:
                 LOGGER.logi("Node {} is an anonymous node, its quant config is copied on its type")
-                anonymous_node_name  = self.original_graph.get_node_by_name(key).type + '::common'
+                anonymous_node_name = self.original_graph.get_node_by_name(key).type + '::common'
                 quant_config[key] = quant_config.get(anonymous_node_name)
             quant_config[key]['quant_enable'] = value
         with open(final_config_file, 'w') as dump_file:

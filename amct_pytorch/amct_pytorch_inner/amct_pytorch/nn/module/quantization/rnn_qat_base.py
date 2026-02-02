@@ -20,13 +20,13 @@ import numpy as np
 from torch import tensor
 from torch.nn.parameter import Parameter
  
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.qat_base import QATBase, ULQRetrainParams, WtsRetrainParams
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, BATCH_NUM
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFuncQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
+from .....amct_pytorch.nn.module.quantization.qat_base import QATBase, ULQRetrainParams, WtsRetrainParams
+from .....amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from .....amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, BATCH_NUM
+from .....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQAT
+from .....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
+from .....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFuncQAT
+from .....amct_pytorch.custom_op.utils import copy_tensor
  
 RNN_TENSOR_SEQUENCE = {
     'LSTM': ([0, 3, 1, 2], [0, 2, 3, 1]),
@@ -98,40 +98,6 @@ class RnnQatBase(QATBase):
                                RnnQatBase.reorganize_tensor(recurrence_bias.detach(), layer_type)]).reshape(1, -1))
         else:
             setattr(qat_op, 'bias_value', None)
- 
-    def _register_rnn_qat_params(self):
-        """
-        Register quantitative parameters for rnn
-        """
-        self.register_parameter('h_clip_max',
-                                Parameter(tensor(self.retrain_data_config.get(CLIP_MAX, 1.0),
-                                                 device=self.quant_device),
-                                          requires_grad=True))
-        self.register_parameter('h_clip_min',
-                                Parameter(tensor(self.retrain_data_config.get(CLIP_MIN, -1.0),
-                                                 device=self.quant_device),
-                                          requires_grad=True))
-        self.register_buffer('h_clip_max_pre',
-                             tensor(np.nan, device=self.quant_device))
-        self.register_buffer('h_clip_min_pre',
-                             tensor(np.nan, device=self.quant_device))
-        self.register_buffer('h_scale',
-                             tensor([np.nan], device=self.quant_device))
-        self.register_buffer('h_offset_deploy',
-                             tensor([0], dtype=self.offset_dtype, device=self.quant_device))
-        if self.retrain_weight_config.get('channel_wise', True):
-            num_channel = self.out_channels
-        else:
-            num_channel = self.wts_group_num
-        self.register_parameter('recurrence_wts_scales',
-                                Parameter(tensor([np.nan]*num_channel,
-                                                 device=self.quant_device)))
-        self.register_parameter('recurrence_wts_offsets',
-                                Parameter(tensor([np.nan]*num_channel,
-                                                 device=self.quant_device)))
-        self.register_buffer('recurrence_wts_offsets_deploy',
-                             tensor([0]*num_channel, dtype=torch.int8,
-                                    device=self.quant_device))
 
     def check_quantifiable(self):
         """check qat config for rnn qat op"""
@@ -165,7 +131,28 @@ class RnnQatBase(QATBase):
         if len(inputs.shape) != RNN_INPUT_DIM:
             raise RuntimeError("{} quantize only support input dim 3,"\
                                " but your input dim is {}".format(self.layer_type, len(inputs.shape)))        
-
+ 
+    def forward_qat(self, inputs, initial_h):
+        if self.retrain_enable:
+            if self.h_do_init:
+                self.acts_quant_init(inputs)
+                self._h_quant_init(initial_h)
+                quantized_acts = inputs
+                quantized_h = initial_h
+            else:
+                quantized_acts = self.acts_quant(inputs)
+                quantized_h = self._h_quant(initial_h)
+            quantized_weights = self.wts_quant()
+            quantized_recurrence_weights = self._recurrence_wts_quant()
+            if self.cur < 100:
+                self.cur += 1
+                self.cur_batch += 1
+        else:
+            quantized_acts, quantized_weights = inputs, self.weight
+            quantized_h, quantized_recurrence_weights = initial_h, self.recurrence_weight
+        ret = (quantized_acts, quantized_h, quantized_weights, quantized_recurrence_weights)
+        return ret
+    
     def _h_quant_init(self, initial_h):
         """do activations quant in the first batch
         """
@@ -223,24 +210,37 @@ class RnnQatBase(QATBase):
             copy_tensor(self.recurrence_wts_offsets, offsets)
             copy_tensor(self.recurrence_wts_offsets_deploy, offsets.to(torch.int8))
         return quantized_recurrence_weight
- 
-    def forward_qat(self, inputs, initial_h):
-        if self.retrain_enable:
-            if self.h_do_init:
-                self.acts_quant_init(inputs)
-                self._h_quant_init(initial_h)
-                quantized_acts = inputs
-                quantized_h = initial_h
-            else:
-                quantized_acts = self.acts_quant(inputs)
-                quantized_h = self._h_quant(initial_h)
-            quantized_weights = self.wts_quant()
-            quantized_recurrence_weights = self._recurrence_wts_quant()
-            if self.cur < 100:
-                self.cur += 1
-                self.cur_batch += 1
+
+    def _register_rnn_qat_params(self):
+        """
+        Register quantitative parameters for rnn
+        """
+        self.register_parameter('h_clip_max',
+                                Parameter(tensor(self.retrain_data_config.get(CLIP_MAX, 1.0),
+                                                 device=self.quant_device),
+                                          requires_grad=True))
+        self.register_parameter('h_clip_min',
+                                Parameter(tensor(self.retrain_data_config.get(CLIP_MIN, -1.0),
+                                                 device=self.quant_device),
+                                          requires_grad=True))
+        self.register_buffer('h_clip_max_pre',
+                             tensor(np.nan, device=self.quant_device))
+        self.register_buffer('h_clip_min_pre',
+                             tensor(np.nan, device=self.quant_device))
+        self.register_buffer('h_scale',
+                             tensor([np.nan], device=self.quant_device))
+        self.register_buffer('h_offset_deploy',
+                             tensor([0], dtype=self.offset_dtype, device=self.quant_device))
+        if self.retrain_weight_config.get('channel_wise', True):
+            num_channel = self.out_channels
         else:
-            quantized_acts, quantized_weights = inputs, self.weight
-            quantized_h, quantized_recurrence_weights = initial_h, self.recurrence_weight
-        ret = (quantized_acts, quantized_h, quantized_weights, quantized_recurrence_weights)
-        return ret
+            num_channel = self.wts_group_num
+        self.register_parameter('recurrence_wts_scales',
+                                Parameter(tensor([np.nan] * num_channel,
+                                                 device=self.quant_device)))
+        self.register_parameter('recurrence_wts_offsets',
+                                Parameter(tensor([np.nan] * num_channel,
+                                                 device=self.quant_device)))
+        self.register_buffer('recurrence_wts_offsets_deploy',
+                             tensor([0] * num_channel, dtype=torch.int8,
+                                    device=self.quant_device))
