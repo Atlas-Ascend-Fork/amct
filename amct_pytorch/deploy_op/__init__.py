@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +18,11 @@
 __all__ = [
     'NpuQuantizationLinear',
     'NpuWeightQuantizedLinear',
+    'NpuQuantizationConv2d',
+    'NpuMXQuantizationLinear'
 ]
 
 from amct_pytorch.deploy_op.npu_quantization_linear import NpuQuantizationLinear
 from amct_pytorch.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
-
+from amct_pytorch.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
+from amct_pytorch.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear

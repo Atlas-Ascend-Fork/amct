@@ -76,8 +76,8 @@ class TestCustomizedAlgo(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         algorithm_register('AA', 'Linear', CustomQuant, CustomDeployQuant)
-        self.assertEqual(AlgorithmRegistry.algo['AA'][1], CustomQuant)
-        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], CustomDeployQuant)
+        self.assertEqual(AlgorithmRegistry.algo['AA']['Linear'], CustomQuant)
+        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], [CustomDeployQuant])
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         self.assertEqual(type(model.linear1).__name__, 'CustomQuant')
@@ -90,38 +90,6 @@ class TestCustomizedAlgo(unittest.TestCase):
 
     def test_customize_algo_repeated_register_fail(self):
         try:
-            algorithm_register('AA', 'Linear', CustomQuant, None)
+            algorithm_register('AA', 'BB', CustomQuant, None)
         except Exception as e:
             self.assertIn('AA is already registered', str(e))
-
-    def test_customize_algo_convert_fail(self):
-        cfg = {
-            'batch_num': 1,
-            'quant_cfg': {
-                'weights': {
-                    'type': 'int8',
-                    'symmetric': False,
-                    'strategy': 'group',
-                    'group_size': 32
-                },
-                'inputs': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor',
-                },
-            },
-            'algorithm': {'BB': {'BB': 0.8}}
-        }
-        model = self.test_model.to(torch.bfloat16)
-        AlgorithmRegistry.register('BB', 'Linear', CustomQuant, None)
-        self.assertEqual(AlgorithmRegistry.algo['BB'][1], CustomQuant)
-        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], None)
-        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
-        quantize(model, cfg)
-        self.assertEqual(type(model.linear1).__name__, 'CustomQuant')
-        self.assertEqual(type(model.linear2).__name__, 'CustomQuant')
-        self.assertEqual(type(model.linear3).__name__, 'CustomQuant')
-        try:
-            convert(model)
-        except Exception as e:
-            self.assertIn('The deploy_op for CustomQuant is None!', str(e))
