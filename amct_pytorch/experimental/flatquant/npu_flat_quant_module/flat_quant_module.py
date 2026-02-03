@@ -41,8 +41,8 @@ class NpuFlatQuantAttention(nn.Module):
         del wt_q_proj, wt_k_proj, wt_v_proj
 
 
-    def forward(self, hidden_states, attention_mask, position_ids,
-                    past_key_value, output_attentions, use_cache, **kwargs):
+    def forward(self, hidden_states, position_embeddings, attention_mask,
+                    past_key_value, cache_position, **kwargs):
         bsz, q_len, _ = hidden_states.size()
 
         # NPU operator torch_npu.npu_kronecker_quant requires that total data length (bsz * q_len)
@@ -64,9 +64,10 @@ class NpuFlatQuantAttention(nn.Module):
             query_states = query_states[:, :q_len]
             key_states = key_states[:, :q_len]
             value_states = value_states[:, :q_len]
+        
         return self.quant_module.forward_qkv(
             query_states, key_states, value_states, bsz, q_len,
-            attention_mask, position_ids, past_key_value, output_attentions
+            position_embeddings, cache_position, attention_mask, past_key_value, **kwargs
         )
 
 

@@ -1,13 +1,9 @@
-import math
-
 import torch
-import torch_npu
 import torch.nn as nn
-import warnings
 
-from transformers.models.llama.modeling_llama import LlamaAttention, LlamaRotaryEmbedding, \
-                                                     apply_rotary_pos_emb, repeat_kv
-from transformers.activations import ACT2FN
+from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb, eager_attention_forward
+from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+from typing import Callable, Optional, Tuple
 
 from .quant_utils import ActivationQuantizer
 from .function_utils import get_init_scale, get_decompose_dim
@@ -21,32 +17,20 @@ class FlatQuantAttention(nn.Module):
         super().__init__()
         self.module_config = module.config
         self.layer_idx = module.layer_idx
-        if self.layer_idx is None:
-            warnings.warn(
-                f"Instantiating {self.__class__.__name__} without passing a `layer_idx` is not recommended and will "
-                "lead to errors during the forward call if caching is used. Please make sure to provide a `layer_idx` "
-                "when creating this class."
-            )
-
-        self.attention_dropout = module.config.attention_dropout
-        self.hidden_size = module.config.hidden_size
-        self.num_heads = module.config.num_attention_heads
-        # fixed as self.hidden_size // self.num_heads in qwen
-        self.head_dim = getattr(module.config, "head_dim", self.hidden_size // self.num_heads)
-        self.num_key_value_heads = module.config.num_key_value_heads
-        self.num_key_value_groups = self.num_heads // self.num_key_value_heads
-        self.max_position_embeddings = module.config.max_position_embeddings
-        self.rope_theta = module.config.rope_theta
+        self.head_dim = module.head_dim
+        self.num_key_value_groups = module.num_key_value_groups
+        self.scaling = module.scaling
+        self.attention_dropout = module.attention_dropout
         self.is_causal = True
 
-        if isinstance(module, LlamaAttention):
-            self.rotary_emb = LlamaRotaryEmbedding(
-                self.head_dim,
-                max_position_embeddings=self.max_position_embeddings,
-                base=self.rope_theta,
-            )
-        else:
-            raise ValueError(f"Module of type f{type(module)} is not supported by FlatQuantAttention!")
+        self.q_norm = module.q_norm if hasattr(module, 'q_norm') else None
+        self.k_norm = module.k_norm if hasattr(module, 'k_norm') else None
+        if hasattr(module, 'sliding_window'):
+            self.sliding_window = module.sliding_window
+
+        quant_config = layer_config.get('quant_cfg')
+        self.a_bit = int(quant_config.get('inputs').get('type').replace('int', ''))
+        self.w_bit = int(quant_config.get('weights').get('type').replace('int', ''))
 
         flatquant_attn_config = layer_config.get('algorithm').get('flatquant_attn')
         self.use_kcache_quant = flatquant_attn_config.get('use_kcache_quant', InnerConfig.use_kcache_quant.value)
@@ -73,7 +57,10 @@ class FlatQuantAttention(nn.Module):
         self.ln_smax = torch.ones_like(self.q_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
 
     def add_fq_trans(self):
-        if InnerConfig.w_bits.value < 16 or InnerConfig.a_bits.value < 16:
+        '''
+        addd the low rank trans matrix before the ln
+        '''
+        if self.a_bit < 16 or self.w_bit < 16:
             ln_dim_left, ln_dim_right = get_decompose_dim(self.q_proj.linear.weight.shape[1])
             self.ln_trans = SVDDecomposeTransMatrix(ln_dim_left, ln_dim_right, add_diag=InnerConfig.add_diag.value)
             if InnerConfig.use_o_quant.value:
@@ -129,24 +116,22 @@ class FlatQuantAttention(nn.Module):
 
     def forward_qkv(
             self, query_states, key_states, value_states, bsz, q_len,
-            attention_mask, position_ids, past_key_value, output_attentions
+            position_embeddings, cache_position, attention_mask, past_key_value, **kwargs
         ):
-        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        hidden_shape = (bsz, q_len, -1, self.head_dim)
 
-        kv_seq_len = key_states.shape[-2]
-        if past_key_value is not None:
-            if self.layer_idx is None:
-                raise ValueError(
-                    f"The cache structure has changed since version v4.36. If you are using {self.__class__.__name__} "
-                    "for auto-regressive decoding with k/v caching, please make sure to initialize the attention class "
-                    "with a layer index."
-                )
-            kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
-        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
-        # ---- here do the quantization ----
+        if self.q_norm is None or self.k_norm is None:
+            query_states = query_states.view(hidden_shape).transpose(1, 2)
+            key_states = key_states.view(hidden_shape).transpose(1, 2)
+        else:
+            query_states = self.q_norm(query_states.view(hidden_shape)).transpose(1, 2)
+            key_states = self.k_norm(key_states.view(hidden_shape)).transpose(1, 2)
+        value_states = value_states.view(hidden_shape).transpose(1, 2)
+
+        cos, sin = position_embeddings
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+
+        # ---- here do the kv cache quantization ----
         if not self._ori_mode:
             if self.use_kcache_quant:
                 query_states, key_states = self.quant_kcache(query_states, key_states)
@@ -154,50 +139,45 @@ class FlatQuantAttention(nn.Module):
                 value_states = self.quant_vcache(value_states)
 
         if past_key_value is not None:
-            cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
+            cache_kwargs = {"sin": sin, "cos": cos, 'cache_position': cache_position}
             key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
-        key_states = repeat_kv(key_states, self.num_key_value_groups)
-        value_states = repeat_kv(value_states, self.num_key_value_groups) # bnsh
-        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
-
-        if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
-            raise ValueError(
-                f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
-                f" {attn_weights.size()}"
-            )
-
-        if attention_mask is not None:
-            if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
-                raise ValueError(
-                    f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+        attention_interface: Callable = eager_attention_forward
+        if self.module_config._attn_implementation != 'eager':
+            if self.module_config._attn_implementation == 'sdpa' and kwargs.get('output_attentions', False):
+                print(
+                    "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
+                    'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
                 )
-            attn_weights = attn_weights + attention_mask
+            else:
+                attention_interface = ALL_ATTENTION_FUNCTIONS[self.module_config._attn_implementation]
 
-        # upcast attention to fp32
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
-        attn_weights = nn.functional.dropout(attn_weights, p=self.attention_dropout, training=self.training)
-        attn_output = torch.matmul(attn_weights, value_states)
+        if hasattr(self, 'sliding_window'):
+            kwargs['sliding_window'] = self.sliding_window
 
-        if attn_output.size() != (bsz, self.num_heads, q_len, self.head_dim):
-            raise ValueError(
-                f"`attn_output` should be of size {(bsz, self.num_heads, q_len, self.head_dim)}, but is"
-                f" {attn_output.size()}"
-            )
+        attn_output, attn_weights = attention_interface(
+            self,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            dropout=0.0 if not self.training else self.attention_dropout,
+            scaling=self.scaling,
+            **kwargs,
+        )
 
-        attn_output = attn_output.transpose(1, 2).contiguous()
-        attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+        attn_output = attn_output.reshape(bsz, q_len, -1).contiguous()
+
         if self._ori_mode or (self.o_trans is None and self.vcache_trans is None):
             attn_output = self.o_proj._ori_forward(attn_output)
         else:
+            init_shape = attn_output.shape
+            attn_shape = [-1, self.module_config.num_attention_heads, self.module_config.hidden_size//self.module_config.num_attention_heads]
+            attn_output = attn_output.reshape(attn_shape)
             if self.o_trans is None and self.vcache_trans is not None:
-                init_shape = attn_output.shape
-                attn_output = attn_output.reshape(-1, self.module_config.num_attention_heads, self.module_config.hidden_size//self.module_config.num_attention_heads)
                 attn_output = torch.matmul(attn_output, self.vcache_trans.get_matrix(inv_t=True).T.to(attn_output)).reshape(init_shape)
                 attn_output = self.o_proj(attn_output)
             else:
-                init_shape = attn_output.shape
-                attn_output = attn_output.reshape(-1, self.module_config.num_attention_heads, self.module_config.hidden_size//self.module_config.num_attention_heads)
                 attn_output = torch.matmul(self.o_trans.get_matrix().T.to(attn_output), attn_output).reshape(init_shape)
                 if not self._eval_mode:
                     attn_o_og_it = self.o_trans.get_matrix(inv_t=True)
@@ -206,20 +186,20 @@ class FlatQuantAttention(nn.Module):
                 else:
                     attn_output = self.o_proj(attn_output)
 
-        if not output_attentions:
-            attn_weights = None
-        return attn_output, attn_weights, past_key_value
+        return attn_output, attn_weights
 
-    def forward(self, hidden_states, attention_mask, position_ids,
-                    past_key_value, output_attentions, use_cache, **kwargs):
+    def forward(self, hidden_states, position_embeddings, attention_mask,
+                    past_key_value, cache_position, **kwargs):
         bsz, q_len, _ = hidden_states.size()
+        
         if self._ori_mode:
             query_states, key_states, value_states = self._ori_forward_after_ln(hidden_states)
         else:
             query_states, key_states, value_states = self._trans_forward_after_ln(hidden_states)
+        
         attn_res = self.forward_qkv(
             query_states, key_states, value_states, bsz, q_len,
-            attention_mask, position_ids, past_key_value, output_attentions,
+            position_embeddings, cache_position, attention_mask, past_key_value, **kwargs
         )
         return attn_res
 
@@ -264,10 +244,7 @@ class FlatQuantMLP(nn.Module):
         super().__init__()
         self.hidden_size = module.config.hidden_size
         self.intermediate_size = module.config.intermediate_size
-        if hasattr(module, 'act_fn'):
-            self.act_fn = module.act_fn
-        else:
-            self.act_fn = ACT2FN[module.config.hidden_act]
+        self.act_fn = module.act_fn if hasattr(module, 'act_fn') else None
 
         self.up_proj = FlatQuantizedLinear(module.up_proj, module.up_proj.weight.shape[0])
         self.gate_proj = FlatQuantizedLinear(module.gate_proj, module.gate_proj.weight.shape[0])
