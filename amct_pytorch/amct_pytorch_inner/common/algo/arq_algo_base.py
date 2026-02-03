@@ -108,18 +108,9 @@ class ArqAlgoBase(BaseQuantizeAlgorithm):
                          arq_params.get(CHANNEL_WISE),
                          arq_params.get('with_offset')), scale_offset_data[0],
                 scale_offset_data[1])
-        else:
-            if not cls._enable_gpu:
-                raise RuntimeError("mode {} is not supported!".format(mode))
-            ret = cls._lib_loader.lib.ArqQuantDoublePythonGPU(
-                data_p, arq_params.get('data_length'),
-                ArqParam(arq_params.get('num_bits'),
-                         arq_params.get(CHANNEL_WISE),
-                         arq_params.get('with_offset')), scale_offset_data[0],
-                scale_offset_data[1])
-        if ret != 0:
-            raise RuntimeError(
-                "Do ArqQuant failed, error code: {}".format(ret))
+            if ret != 0:
+                raise RuntimeError(
+                    "Do ArqQuant failed, error code: {}".format(ret))
 
         scale_size = arq_params.get('scale_size')
         scale = [scale_offset_size[0][i] for i in range(scale_size)]
