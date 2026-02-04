@@ -16,9 +16,9 @@
 # 开启debug
 set(CMAKE_VERBOSE_MAKEFILE on)
 
-set(AMCT_PYTORCH_INNER_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-set(AMCT_TORCH_PROTO_DIR ${AMCT_PYTORCH_INNER_DIR}/amct_pytorch/proto)
-set(AMCT_TORCH_OP_DIR ${AMCT_PYTORCH_INNER_DIR}/amct_pytorch/custom_op)
+set(graph_based_compression_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(AMCT_TORCH_PROTO_DIR ${graph_based_compression_DIR}/amct_pytorch/proto)
+set(AMCT_TORCH_OP_DIR ${graph_based_compression_DIR}/amct_pytorch/custom_op)
 set(PYTHON_INCLUDE ${HI_PYTHON_INC})
 set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 
@@ -35,10 +35,10 @@ endif()
 
 # compile proto
 add_custom_target(amct_pytorch_proto_compile
-  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/basic_info.proto
-  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/calibration_config_pytorch.proto
-  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/scale_offset_record_pytorch.proto
-  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/retrain_config_pytorch.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/basic_info.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/calibration_config_pytorch.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/scale_offset_record_pytorch.proto
+  COMMAND cd ${BASE_DIR}/../ && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/retrain_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ distill_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ quant_calibration_config_pytorch.proto
 )
@@ -53,5 +53,5 @@ set(COMMON_LIB_INC_FILES
 add_custom_target(amct_pytorch_prepare_package
   DEPENDS amct_pytorch_lib
   # add common header files
-  COMMAND cd ${AMCT_PYTORCH_INNER_DIR}/common_cpp/quantize_lib/inc/ && cp ${COMMON_LIB_INC_FILES} ${AMCT_PYTORCH_INNER_DIR}/custom_op/inc
+  COMMAND cd ${graph_based_compression_DIR}/common_cpp/quantize_lib/inc/ && cp ${COMMON_LIB_INC_FILES} ${graph_based_compression_DIR}/custom_op/inc
 )

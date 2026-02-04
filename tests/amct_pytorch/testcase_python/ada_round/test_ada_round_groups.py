@@ -20,15 +20,15 @@ import unittest
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups import get_ada_round_groups
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups import _is_weight_ada_round
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups import _match_gelu_subgraph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups import _match_gelu_tanh_subgraph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups import _match_rrelu_subgraph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.ada_round.ada_round_groups import _get_other_activation
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.graph_based_compression.amct_pytorch.ada_round.ada_round_groups import get_ada_round_groups
+from amct_pytorch.graph_based_compression.amct_pytorch.ada_round.ada_round_groups import _is_weight_ada_round
+from amct_pytorch.graph_based_compression.amct_pytorch.ada_round.ada_round_groups import _match_gelu_subgraph
+from amct_pytorch.graph_based_compression.amct_pytorch.ada_round.ada_round_groups import _match_gelu_tanh_subgraph
+from amct_pytorch.graph_based_compression.amct_pytorch.ada_round.ada_round_groups import _match_rrelu_subgraph
+from amct_pytorch.graph_based_compression.amct_pytorch.ada_round.ada_round_groups import _get_other_activation
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

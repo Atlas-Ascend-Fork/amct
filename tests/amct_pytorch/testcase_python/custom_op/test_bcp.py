@@ -26,7 +26,7 @@ import math
 
 
 DEVICE = 'cuda:0'
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import bcp
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op import bcp
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

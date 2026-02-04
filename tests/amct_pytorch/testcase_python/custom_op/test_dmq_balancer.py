@@ -20,9 +20,9 @@ import unittest
 from unittest.mock import patch
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.dmq_balancer.dmq_balancer import DMQBalancer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.dmq_balancer.dmq_balancer_func import DMQBalancerFunction
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.dmq_balancer.dmq_balancer import DMQBalancer
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.dmq_balancer.dmq_balancer_func import DMQBalancerFunction
 
 
 DEVICE = torch.device('cpu')

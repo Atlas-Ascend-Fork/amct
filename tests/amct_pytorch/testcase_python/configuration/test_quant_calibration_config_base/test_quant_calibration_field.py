@@ -17,9 +17,9 @@
 # ----------------------------------------------------------------------------
 import unittest
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config_base import quant_calibration_field as field
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config_base import quant_calibration_field as field
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
 
 
 

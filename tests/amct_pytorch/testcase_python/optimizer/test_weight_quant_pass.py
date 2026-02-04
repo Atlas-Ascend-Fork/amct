@@ -26,15 +26,15 @@ import torch
 
 from .utils import models
 from .utils import record_file_utils
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 from google.protobuf import text_format
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_weight_quant_pass import InsertWeightQuantPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_weight_quant_pass import InsertWeightQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
@@ -81,7 +81,7 @@ class TestWeightQuantPass(unittest.TestCase):
         self.assertEqual(weight_dtype, 'int8')
 
     def test_quant_weight_int4(self):
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
             passer = InsertWeightQuantPass(self.records)
             before_nodes= len(self.graph.nodes)
             optimizer = GraphOptimizer()

@@ -25,8 +25,8 @@ from .utils import models
 from .utils import record_utils
 
 DEVICE = 'cpu'
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.prune.pruner_helper import PruneHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.prune.pruner_helper import PruneHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

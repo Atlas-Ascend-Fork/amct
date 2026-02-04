@@ -26,17 +26,17 @@ import torch
 import copy
 
 from .utils import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.record_file_operator import \
     ScaleOffsetRecordHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

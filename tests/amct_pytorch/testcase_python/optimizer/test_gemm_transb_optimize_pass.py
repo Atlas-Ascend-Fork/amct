@@ -25,9 +25,9 @@ import numpy as np
 import torch
 
 from onnx import onnx_pb
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.gemm_transb_optimize_pass import \
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.gemm_transb_optimize_pass import \
     GemmTransBOptimizePass
 
 

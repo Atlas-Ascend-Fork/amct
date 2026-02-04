@@ -25,13 +25,13 @@ import torch.nn as nn
 import copy
 
 from .utils import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.record_file_operator import \
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.record_file_operator import \
     ScaleOffsetRecordHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.delete_qat_pass import DeleteQatPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.delete_qat_pass import DeleteQatPass
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

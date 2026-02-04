@@ -61,4 +61,4 @@ class Logger(LoggerBase):
         self.set_debug_level(console_level_pytorch, file_level_pytorch)
 
 
-LOGGER = Logger(os.path.join(os.getcwd(), LOG_FILE_DIR), 'amct_pytorch.amct_pytorch_inner.amct_pytorch.log')
+LOGGER = Logger(os.path.join(os.getcwd(), LOG_FILE_DIR), 'amct_pytorch.graph_based_compression.amct_pytorch.log')

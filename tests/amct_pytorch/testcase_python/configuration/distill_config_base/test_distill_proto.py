@@ -26,10 +26,10 @@ from collections import OrderedDict
 
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import distill_config_pb2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_proto import DistillProtoConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.vars_util import INT4, INT8
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import distill_config_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_proto import DistillProtoConfig
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.vars_util import INT4, INT8
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
@@ -109,7 +109,7 @@ class TestDistillProto(unittest.TestCase):
         self.assertEqual(weight_config, {'algo':'arq_distill','channel_wise':True,'dst_type':'INT8'})
 
     def test_check_distill_data_type_not_enable_int4(self):
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.common.capacity.query_capacity.Capacity.get_value', return_value=False):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.common.capacity.query_capacity.Capacity.get_value', return_value=False):
             with self.assertRaises(ValueError):
                 self.distill_proto_config._check_distill_data_type(INT4)
 

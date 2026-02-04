@@ -20,8 +20,8 @@ import torch
 from unittest import mock
 from unittest.mock import patch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_precision, cal_shared_exponent
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MXFP4_E2M1
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.data_utils import convert_precision, cal_shared_exponent
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import MXFP4_E2M1
 
 def fake_abs(tensor):
     return torch.ones_like(tensor).to(tensor.dtype)

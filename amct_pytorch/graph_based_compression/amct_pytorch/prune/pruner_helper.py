@@ -21,7 +21,7 @@ import threading
 
 from google.protobuf import text_format
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
+import amct_pytorch.graph_based_compression.amct_pytorch.optimizer as opt
 from ...amct_pytorch.common.optimizer.delete_pass_through_node import DeletePassThroughNodePass
 from ...amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
 from ...amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper

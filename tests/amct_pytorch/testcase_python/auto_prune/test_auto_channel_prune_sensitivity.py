@@ -23,15 +23,15 @@ import torch.nn.functional as F
 from io import BytesIO
 
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.auto_channel_prune_search import AutoChannelPruneSearch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.auto_channel_prune_search import TaylorLossSensitivity
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.auto_channel_prune_search import auto_channel_prune_search
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.auto_channel_prune_search import AutoChannelPruneSearch
+from amct_pytorch.graph_based_compression.amct_pytorch.auto_channel_prune_search import TaylorLossSensitivity
+from amct_pytorch.graph_based_compression.amct_pytorch.auto_channel_prune_search import auto_channel_prune_search
+from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphQuerier
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

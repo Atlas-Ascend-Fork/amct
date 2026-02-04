@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config as config_func
+import amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config as config_func
 from ...amct_pytorch.capacity import CAPACITY
 from ...amct_pytorch.custom_op.hfmg.hfmg import HFMG
 from ...amct_pytorch.custom_op.ifmr.ifmr import IFMR

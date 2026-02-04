@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import convert_dtype
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.data_utils import float_to_mxfp8e4m3fn, mxfp8_convert_to_float, mxfp4_convert_to_float
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.data_utils import convert_dtype
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.data_utils import float_to_mxfp8e4m3fn, mxfp8_convert_to_float, mxfp4_convert_to_float
 
 DATA_MAP = {
     torch.float32: 0,

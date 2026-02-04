@@ -22,8 +22,8 @@ from unittest.mock import patch
 from onnx import onnx_pb
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

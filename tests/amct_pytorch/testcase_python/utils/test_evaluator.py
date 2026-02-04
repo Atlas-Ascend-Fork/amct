@@ -22,8 +22,8 @@ import torch.nn as nn
 from unittest import mock
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.evaluator import ModelEvaluator
-import amct_pytorch.amct_pytorch_inner.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.evaluator import ModelEvaluator
+import amct_pytorch.graph_based_compression.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
 
 
 class TestEvaluatorHelper(unittest.TestCase):
@@ -62,7 +62,7 @@ class TestEvaluatorHelper(unittest.TestCase):
             "input1": np.random.rand(1, 3, 10, 10).astype('f'),
             "input2": np.random.rand(1, 3, 20, 20).astype('f')
         }]
-        with mock.patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.common.cmd_line_utils.data_handler.load_data',
+        with mock.patch('amct_pytorch.graph_based_compression.amct_pytorch.common.cmd_line_utils.data_handler.load_data',
             return_value=data_map):
             self.assertIsNone(self.evaluator_helper.calibration(modified_model=modified_model, batch_num=1))
 
@@ -75,7 +75,7 @@ class TestEvaluatorHelper(unittest.TestCase):
             "input1": np.random.rand(1, 3, 10, 10).astype('f'),
             "input2": np.random.rand(1, 3, 20, 20).astype('f')
         }]
-        with mock.patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.common.cmd_line_utils.data_handler.load_data',
+        with mock.patch('amct_pytorch.graph_based_compression.amct_pytorch.common.cmd_line_utils.data_handler.load_data',
             return_value=data_map):
             self.assertIsNone(self.evaluator_helper.evaluate(modified_model=modified_model, iterations=1))
 

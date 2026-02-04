@@ -21,11 +21,11 @@ set(CMAKE_VERBOSE_MAKEFILE on)
 get_filename_component(BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR} ABSOLUTE)
 get_filename_component(AMCT_DIR ${BASE_DIR}/.. ABSOLUTE)
 
-set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/amct_pytorch_inner/amct_pytorch/proto)
-set(AMCT_TORCH_CUSTOM_DIR ${BASE_DIR}/amct_pytorch_inner/amct_pytorch/custom_op)
+set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/graph_based_compression/amct_pytorch/proto)
+set(AMCT_TORCH_CUSTOM_DIR ${BASE_DIR}/graph_based_compression/amct_pytorch/custom_op)
 set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 
-add_subdirectory(amct_pytorch_inner)
+add_subdirectory(graph_based_compression)
 
 message("-------pytorch 1-----")
 set(COMMON_LIB_INC_FILES
@@ -39,12 +39,12 @@ add_custom_target(amct_pytorch_package
           export BEP_CGTLIST="$BEP_CGTLIST ${HI_PYTHON}" &&
           ${HI_PYTHON} setup.py sdist --formats=gztar
   # delete common header files
-  COMMAND cd ${BASE_DIR}/amct_pytorch_inner/custom_op/inc && rm ${COMMON_LIB_INC_FILES}
+  COMMAND cd ${BASE_DIR}/graph_based_compression/custom_op/inc && rm ${COMMON_LIB_INC_FILES}
   COMMAND rm -rf ${AMCT_TORCH_CUSTOM_DIR}/*.so
   # delete tmp files
   COMMAND rm -rf ${AMCT_TORCH_BUILD_DIR}
   COMMAND rm -rf ${AMCT_TORCH_PROTO_DIR}/*_pb2.py
-  COMMAND rm -rf ${BASE_DIR}/amct_pytorch_inner/lib/*.so
+  COMMAND rm -rf ${BASE_DIR}/graph_based_compression/lib/*.so
   COMMAND rm -rf ${BASE_DIR}/../amct_pytorch.egg-info
 )
 

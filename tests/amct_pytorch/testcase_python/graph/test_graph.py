@@ -26,8 +26,8 @@ import torch
 
 from onnx import onnx_pb
 from onnx import helper, TensorProto, ValueInfoProto
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.node import Node
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
 
 class TestGraph(unittest.TestCase):
     @classmethod

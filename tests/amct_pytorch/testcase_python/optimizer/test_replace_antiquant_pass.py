@@ -23,24 +23,24 @@ from unittest.mock import patch
 import numpy as np
 from copy import deepcopy
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch as amct
+import amct_pytorch.graph_based_compression.amct_pytorch as amct
 from .util import models
 from .util import record_file
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 from onnx import onnx_pb
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.replace_anti_quant_pass import ReplaceAntiQuantPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.mult_output_with_quant_optimizer import construct_anti_quant_node
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.mult_output_with_quant_optimizer import \
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.replace_anti_quant_pass import ReplaceAntiQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.mult_output_with_quant_optimizer import construct_anti_quant_node
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.mult_output_with_quant_optimizer import \
     MultQuantOptimizerPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parse_record_file import RecordFileParser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parse_record_file import RecordFileParser
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 from google.protobuf import text_format
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

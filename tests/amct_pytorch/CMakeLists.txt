@@ -14,13 +14,13 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 set(AMCT_PYTORCH_PATH ${AMCT_TOP_DIR}/amct_pytorch)
-set(AMCT_PYTORCH_INNER_PATH ${AMCT_TOP_DIR}/amct_pytorch/amct_pytorch_inner)
+set(graph_based_compression_PATH ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression)
 set(TEST_FILES_DIR ${AMCT_TOP_DIR}/tests/amct_pytorch)
 
 # compile proto
 set(CMAKE_VERBOSE_MAKEFILE on)
 set(PROTOC_PROGRAM ${AMCT_TOP_DIR}/build/protobuf_host/bin/protoc)
-set(AMCT_TORCH_PROTO_DIR ${AMCT_TOP_DIR}/amct_pytorch/amct_pytorch_inner/amct_pytorch/proto)
+set(AMCT_TORCH_PROTO_DIR ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/proto)
 
 execute_process(COMMAND ${Python3_EXECUTABLE} -c "import torch;print(torch.__path__[0])"  OUTPUT_VARIABLE TORCH_PATH)
 # 删除path中的换行符
@@ -28,21 +28,21 @@ string(STRIP "${TORCH_PATH}" PYTORCH_PATH)
 
 add_custom_target(amct_pytorch_proto_compile
   DEPENDS protobuf_host_build ascend_protobuf_static
-  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/basic_info.proto
-  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/calibration_config_pytorch.proto
-  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/scale_offset_record_pytorch.proto
-  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/ --python_out=./ amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/retrain_config_pytorch.proto
+  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/basic_info.proto
+  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/calibration_config_pytorch.proto
+  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/scale_offset_record_pytorch.proto
+  COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/retrain_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ distill_config_pytorch.proto
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ quant_calibration_config_pytorch.proto
 )
 
 # =============================compile quant_lib===============================
-set(AMCT_TORCH_OP_DIR ${AMCT_TOP_DIR}/amct_pytorch/amct_pytorch_inner/amct_pytorch/custom_op)
+set(AMCT_TORCH_OP_DIR ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/custom_op)
 set(COMMON_ALGRITHEMN_CPU
-    ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/src/arq.cpp
-    ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/src/util.cpp
-    ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/src/dump.cpp
-    ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/src/cast_util.cpp
+    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/arq.cpp
+    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/util.cpp
+    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/dump.cpp
+    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/cast_util.cpp
 )
 
 set_source_files_properties(
@@ -60,8 +60,8 @@ add_dependencies(quant_lib
 
 target_include_directories(quant_lib PRIVATE
     ${PYTORCH_OP_COMPILE_INCLUDE}
-    ${AMCT_PYTORCH_INNER_PATH}/custom_op/inc
-    ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/inc
+    ${graph_based_compression_PATH}/custom_op/inc
+    ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
 )
 
 target_compile_definitions(quant_lib PRIVATE
@@ -147,11 +147,11 @@ endif()
 set(PYTORCH_STUB_SOS c10 torch torch_cpu torch_python)
 foreach(PYTORCH_STUB_SO ${PYTORCH_STUB_SOS})
   add_library(${PYTORCH_STUB_SO} SHARED
-      ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/src/util.cpp
+      ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/util.cpp
   )
   target_include_directories(${PYTORCH_STUB_SO} PRIVATE
-      ${AMCT_PYTORCH_INNER_PATH}/custom_op/inc/
-      ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/inc
+      ${graph_based_compression_PATH}/custom_op/inc/
+      ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
   )
   target_compile_options(${PYTORCH_STUB_SO} PRIVATE
     -Wall -fstack-protector-strong
@@ -215,10 +215,10 @@ foreach(PYTORCH_OP ${PYTORCH_OPS})
     # set src file for different op
     if ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_cast")
         set(OP_SRC_FILE 
-          ${AMCT_PYTORCH_INNER_PATH}/custom_op/src/cast_op.cpp
-          ${AMCT_PYTORCH_INNER_PATH}/custom_op/src/util_op.cpp)
+          ${graph_based_compression_PATH}/custom_op/src/cast_op.cpp
+          ${graph_based_compression_PATH}/custom_op/src/util_op.cpp)
     elseif ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_dump")
-        set(OP_SRC_FILE ${AMCT_PYTORCH_INNER_PATH}/custom_op/src/dump_op.cpp)
+        set(OP_SRC_FILE ${graph_based_compression_PATH}/custom_op/src/dump_op.cpp)
     else()
         message(ERROR " please set src file for op")
     endif()
@@ -234,8 +234,8 @@ foreach(PYTORCH_OP ${PYTORCH_OPS})
 
     target_include_directories(${PYTORCH_OP} PRIVATE
         ${PYTORCH_OP_COMPILE_INCLUDE}
-        ${AMCT_PYTORCH_INNER_PATH}/custom_op/inc
-        ${AMCT_PYTORCH_INNER_PATH}/common_cpp/quantize_lib/inc
+        ${graph_based_compression_PATH}/custom_op/inc
+        ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
     )
 
     target_compile_options(${PYTORCH_OP} PRIVATE
@@ -282,7 +282,7 @@ add_custom_target(amct_pytorch_python_utest
 
 add_custom_target(amct_pytorch_utest
     DEPENDS amct_pytorch_python_utest
-    COMMAND rm -rf ${AMCT_TOP_DIR}/amct_pytorch/amct_pytorch_inner/amct_pytorch/proto/*_pb2.py
+    COMMAND rm -rf ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/proto/*_pb2.py
     COMMAND rm -rf ${AMCT_TOP_DIR}/amct_pytorch_op*.so
     COMMAND rm ${AMCT_TORCH_OP_DIR}/*.so
     COMMENT "run all amct pytorch utest"

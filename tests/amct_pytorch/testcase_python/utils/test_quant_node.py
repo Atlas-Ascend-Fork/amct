@@ -22,8 +22,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node import QuantOpInfo
 
 
 class TestQuantOpInfo(unittest.TestCase):

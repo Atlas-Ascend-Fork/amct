@@ -18,7 +18,7 @@
 import torch
 import unittest
 from unittest import mock
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import utils
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op import utils
 
 
 DEVICE = torch.device('cpu')

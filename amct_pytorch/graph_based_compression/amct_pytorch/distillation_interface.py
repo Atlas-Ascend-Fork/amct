@@ -19,7 +19,7 @@ import os
 from io import BytesIO
 import torch
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
+import amct_pytorch.graph_based_compression.amct_pytorch.optimizer as opt
 from ..amct_pytorch.configuration.distill_config import create_default_distill_config
 from ..amct_pytorch.configuration.distill_config import create_distill_config_from_proto
 from ..amct_pytorch.configuration.distill_config import parse_distill_config

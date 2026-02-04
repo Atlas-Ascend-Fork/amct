@@ -23,11 +23,11 @@ import torch
 from unittest.mock import patch
 import stat
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import _export_to_onnx
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import _write_node_info, delete_customized_attr
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import _export_to_onnx
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import _write_node_info, delete_customized_attr
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

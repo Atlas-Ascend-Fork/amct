@@ -25,16 +25,16 @@ import torch
 from .utils import models
 from .utils import record_file_utils
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import create_quant_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import quantize_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import save_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import _check_config_consistency
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_config
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import quantize_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import _check_config_consistency
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import add_dump_operations
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import struct_helper
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import add_dump_operations
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils import struct_helper
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

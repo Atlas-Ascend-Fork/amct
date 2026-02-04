@@ -27,15 +27,15 @@ import numpy as np
 import onnx
 import onnxruntime as ort
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv1d import Conv1dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv_transpose_2d import ConvTranspose2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv_transpose_1d import ConvTranspose1dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.linear import LinearQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.matmul import MatMulQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.utils import copy_tensor
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv1d import Conv1dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv_transpose_2d import ConvTranspose2dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv_transpose_1d import ConvTranspose1dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.linear import LinearQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.matmul import MatMulQAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -133,9 +133,9 @@ class TestQatOp(unittest.TestCase):
         pass
 
     def setUp(self):
-        if os.path.exists('./amct_log/amct_pytorch.amct_pytorch_inner.amct_pytorch.log'):
-            os.remove('./amct_log/amct_pytorch.amct_pytorch_inner.amct_pytorch.log')
-            LOGGER.logi('amct_pytorch.amct_pytorch_inner.amct_pytorch.log is initialized successfully.')
+        if os.path.exists('./amct_log/amct_pytorch.graph_based_compression.amct_pytorch.log'):
+            os.remove('./amct_log/amct_pytorch.graph_based_compression.amct_pytorch.log')
+            LOGGER.logi('amct_pytorch.graph_based_compression.amct_pytorch.log is initialized successfully.')
 
     def testDown(self):
         pass
@@ -172,11 +172,11 @@ class TestQatOp(unittest.TestCase):
         }
         with self.assertRaises(ValueError) as cm:
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
-            with open('./amct_log/amct_pytorch.amct_pytorch_inner.amct_pytorch.log', 'r') as f:
+            with open('./amct_log/amct_pytorch.graph_based_compression.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
                 for item in wrong_quant_conf.get('retrain_data_config').keys():
                     self.assertIn(item, log_content)
-            with open('./amct_log/amct_pytorch.amct_pytorch_inner.amct_pytorch.log', 'r') as f:
+            with open('./amct_log/amct_pytorch.graph_based_compression.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
                 for item in wrong_quant_conf.get('retrain_weight_config').keys():
                     self.assertIn(item, log_content)
@@ -201,11 +201,11 @@ class TestQatOp(unittest.TestCase):
         }
         with self.assertRaises(ValueError) as cm:
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
-            with open('./amct_log/amct_pytorch.amct_pytorch_inner.amct_pytorch.log', 'r') as f:
+            with open('./amct_log/amct_pytorch.graph_based_compression.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
                 for item in wrong_quant_conf.get('retrain_data_config').keys():
                     self.assertIn(item, log_content)
-            with open('./amct_log/amct_pytorch.amct_pytorch_inner.amct_pytorch.log', 'r') as f:
+            with open('./amct_log/amct_pytorch.graph_based_compression.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
                 for item in wrong_quant_conf.get('retrain_weight_config').keys():
                     self.assertIn(item, log_content)

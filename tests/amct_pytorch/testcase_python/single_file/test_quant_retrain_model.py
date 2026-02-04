@@ -27,17 +27,17 @@ from unittest import mock
 
 from .utils import models
 from .utils import record_file_utils
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 from google.protobuf import text_format
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import create_quant_retrain_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import create_quant_retrain_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import restore_quant_retrain_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import save_quant_retrain_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils import vars
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_retrain_config
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_retrain_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import restore_quant_retrain_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_quant_retrain_model
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.utils import vars
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

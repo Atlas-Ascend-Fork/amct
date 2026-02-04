@@ -21,8 +21,8 @@ import os
 import numpy as np
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import get_enable_quant_layers
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import get_quant_layer_config
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config import get_enable_quant_layers
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config import get_quant_layer_config
 
 from .utils import models
 

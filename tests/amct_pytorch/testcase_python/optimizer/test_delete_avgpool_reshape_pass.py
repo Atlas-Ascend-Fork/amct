@@ -20,8 +20,8 @@ import unittest
 import torch
 
 from .util import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer import ReplaceAvgpoolReshapePass
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer import ReplaceAvgpoolReshapePass
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

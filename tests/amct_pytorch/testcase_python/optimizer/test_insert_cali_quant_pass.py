@@ -28,16 +28,16 @@ from unittest import mock
 from unittest.mock import patch, mock_open
 
 from .utils import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_cali_quant import InsertCaliQuantPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.hfmg.hfmg import HFMG
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_cali_quant import InsertCaliQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.hfmg.hfmg import HFMG
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

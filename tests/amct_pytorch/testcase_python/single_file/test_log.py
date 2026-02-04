@@ -22,9 +22,9 @@ import json
 import numpy as np
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOG_SET_ENV
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOG_FILE_SET_ENV
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import Logger
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOG_SET_ENV
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOG_FILE_SET_ENV
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import Logger
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

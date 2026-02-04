@@ -22,14 +22,14 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch
-import amct_pytorch.amct_pytorch_inner.amct_pytorch as amct
-from amct_pytorch.amct_pytorch_inner.amct_pytorch import accuracy_based_auto_calibration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import generate_fakequant_module
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_tool import save_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
+import amct_pytorch.graph_based_compression.amct_pytorch
+import amct_pytorch.graph_based_compression.amct_pytorch as amct
+from amct_pytorch.graph_based_compression.amct_pytorch import accuracy_based_auto_calibration
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import generate_fakequant_module
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_model
+from amct_pytorch.graph_based_compression.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
 from .utils import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DATASETS_DIR = os.path.realpath(os.path.join(CUR_DIR, '../../../../../../../../build/bin/llt/toolchain/dmct_datasets'))
@@ -107,7 +107,7 @@ def do_calibration(model, args_shape, temp_folder):
     input_data = tuple([torch.randn(input_shape) for input_shape in args_shape])
 
     batch_num = 1
-    amct_pytorch.amct_pytorch_inner.amct_pytorch.create_quant_config(
+    amct_pytorch.graph_based_compression.amct_pytorch.create_quant_config(
         config_file=config_file,
         model=model,
         input_data=input_data,
@@ -116,7 +116,7 @@ def do_calibration(model, args_shape, temp_folder):
         activation_offset=True,
         config_defination=None)
 
-    new_model = amct_pytorch.amct_pytorch_inner.amct_pytorch.quantize_model(
+    new_model = amct_pytorch.graph_based_compression.amct_pytorch.quantize_model(
         config_file=config_file,
         model=model,
         input_data=input_data,
@@ -133,7 +133,7 @@ def do_calibration(model, args_shape, temp_folder):
         record_file=record_file)
 
     # save
-    amct_pytorch.amct_pytorch_inner.amct_pytorch.save_model(
+    amct_pytorch.graph_based_compression.amct_pytorch.save_model(
         modfied_onnx_file=modfied_onnx_file,
         record_file=record_file,
         save_path=save_model_path)

@@ -28,9 +28,9 @@ from google.protobuf import text_format
 import torch
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.quant_calibration_op import QuantCalibrationOp
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.quant_calibration_op import QuantCalibrationOp
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

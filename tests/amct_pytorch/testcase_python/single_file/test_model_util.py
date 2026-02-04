@@ -25,12 +25,12 @@ import torch
 
 from .utils import models
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import get_node_output_info
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import get_node_output_info
+import amct_pytorch.graph_based_compression.amct_pytorch
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import get_node_output_info
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import get_node_output_info
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -46,7 +46,7 @@ class TestModelHelper(unittest.TestCase):
         if not os.path.exists(cls.temp_dir):
             os.makedirs(cls.temp_dir)
         cls.config_file = os.path.join(cls.temp_dir, 'config.json')
-        amct_pytorch.amct_pytorch_inner.amct_pytorch.create_quant_config(cls.config_file, cls.model_001, torch.randn((1, 2, 28, 28)))
+        amct_pytorch.graph_based_compression.amct_pytorch.create_quant_config(cls.config_file, cls.model_001, torch.randn((1, 2, 28, 28)))
 
         cls.args = torch.randn(16, 2, 28, 28)
         cls.onnx_file = os.path.join(cls.temp_dir, 'net_001.onnx')
