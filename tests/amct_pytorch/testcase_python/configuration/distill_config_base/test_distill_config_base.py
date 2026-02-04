@@ -27,14 +27,14 @@ from collections import OrderedDict
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_config_base import DistillConfigBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_config_base import GraphObjects
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_proto import DistillProtoConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.node import Node
+from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_config_base import DistillConfigBase
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_config_base import GraphObjects
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_proto import DistillProtoConfig
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphQuerier
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
 
 from .utils import models
 
@@ -132,7 +132,7 @@ class TestDistillConfigBase(unittest.TestCase):
         node2.set_module_name(node_proto2.name)
 
         distill_unit = [[node_proto1.name], [node_proto2.name]]
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.common.graph_base.node_base.NodeBase.get_consumers') as mock_get_consumers:
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.common.graph_base.node_base.NodeBase.get_consumers') as mock_get_consumers:
             mock_get_consumers.return_value = [[node2], []]
             cascade_unit = self.distill_config_base.get_cascade_unit(
                 graph, distill_unit, 2, node1, [])
@@ -293,7 +293,7 @@ class TestDistillConfigBase(unittest.TestCase):
             self.distill_config_base.parse_distill_config(config_file, self.graph.model)
 
     def test_get_supported_layers_empty(self):
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check.GraphQuerier.get_support_distill_layer2type', return_value=[]):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.check.GraphQuerier.get_support_distill_layer2type', return_value=[]):
             with self.assertRaises(ValueError):
                 self.distill_config_base._get_supported_layers(self.graph.model)
 
@@ -306,7 +306,7 @@ class TestDistillConfigBase(unittest.TestCase):
         skip_layers = ['layer1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_quant_skip_layers',
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_quant_skip_layers',
             return_value=skip_layers):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
@@ -316,7 +316,7 @@ class TestDistillConfigBase(unittest.TestCase):
         skip_types = ['type1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_quant_skip_layer_types',
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_quant_skip_layer_types',
             return_value=skip_types):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
@@ -326,7 +326,7 @@ class TestDistillConfigBase(unittest.TestCase):
         override_layers = ['layer1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_override_layers',
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_override_layers',
             return_value=override_layers):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
@@ -336,7 +336,7 @@ class TestDistillConfigBase(unittest.TestCase):
         override_types = ['type1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_override_layer_types',
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_override_layer_types',
             return_value=override_types):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)

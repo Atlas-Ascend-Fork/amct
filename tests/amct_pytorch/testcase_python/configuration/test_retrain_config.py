@@ -21,9 +21,9 @@ import os
 import numpy as np
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import CONFIGURER
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import CONFIGURER
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
 
 from .utils import models
 

@@ -18,7 +18,7 @@
 import torch
 import numpy as np
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
+import amct_pytorch.graph_based_compression.amct_pytorch.optimizer as opt
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.custom_op.ada_round_quant import AdaRoundQuant
 from ...amct_pytorch.utils.model_util import ModuleHelper

@@ -25,15 +25,15 @@ from unittest.mock import patch
 
 from .utils import models
 from .utils import record_file_utils
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from google.protobuf import text_format
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_bias_quant_pass import InsertBiasQuantPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.replace_bias_quant_pass import ReplaceBiasQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_bias_quant_pass import InsertBiasQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.replace_bias_quant_pass import ReplaceBiasQuantPass
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
@@ -78,7 +78,7 @@ class TestInsertBiasQuantPass(unittest.TestCase):
     def test_quant_bias_int4(self):
         optimizer = GraphOptimizer()
         before_nodes = len(self.graph.nodes)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
             optimizer.add_pass(InsertBiasQuantPass(self.records))
             optimizer.do_optimizer(self.graph, None)
             after_nodes = len(self.graph.nodes)
@@ -87,7 +87,7 @@ class TestInsertBiasQuantPass(unittest.TestCase):
     def test_replace_bias_quant_int4(self):
         optimizer = GraphOptimizer()
         before_nodes = len(self.graph.nodes)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
             optimizer.add_pass(ReplaceBiasQuantPass(self.records))
             optimizer.do_optimizer(self.graph, None)
             after_nodes = len(self.graph.nodes)

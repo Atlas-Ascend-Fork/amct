@@ -26,10 +26,10 @@ import torch
 from .util import models
 
 from onnx import onnx_pb
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer import DeleteResizePass
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer import DeleteResizePass
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 class TestDeleteResizePass(unittest.TestCase):

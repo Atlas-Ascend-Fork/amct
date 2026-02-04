@@ -23,27 +23,27 @@ import torch
 from unittest.mock import patch
 import numpy as np
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch as amct
+import amct_pytorch.graph_based_compression.amct_pytorch as amct
 from .util import models
 from .util import record_file
 from onnx import onnx_pb
 from copy import deepcopy
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.weight_fakequant_pass import WeightFakequantPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_weight_quant_pass import InsertWeightQuantPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.replace_weight_quant_pass import ReplaceWeightQuantPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parse_record_file import RecordFileParser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.weight_fakequant_pass import WeightFakequantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_weight_quant_pass import InsertWeightQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.replace_weight_quant_pass import ReplaceWeightQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parse_record_file import RecordFileParser
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from google.protobuf import text_format
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 
 def conv_sub_with_trans(graph, conv_name, inputs, outputs, quant_attrs):
     # Add Ascend Quant
@@ -245,8 +245,8 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         print("[UNITTEST END replace_quant_pass.py]")
 
     def test_do_pass_int4_success(self):
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
-            with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+            with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
                 records = {'conv1': {
                         'data_scale': 1.0,
                         'data_offset': 0,
@@ -263,8 +263,8 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 self.assertEqual(TensorProtoHelper(graph.nodes[0].proto).get_data().dtype, 'float32')
 
     def test_do_pass_int4_trans_success(self):
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
-            with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+            with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
                 records = {'conv3': {
                         'data_scale': 1.0,
                         'data_offset': 0,
@@ -282,8 +282,8 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 
 
     def test_do_pass_int4_deconv_success(self):
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
-            with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+            with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
                 records = {'deconv1': {
                         'data_scale': 1.0,
                         'data_offset': 0,

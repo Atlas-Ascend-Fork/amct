@@ -20,10 +20,10 @@ import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import AttributeProto
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.replace_rnn_pass import ReplaceRNNPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.replace_rnn_pass import ReplaceRNNPass
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 
 
 class TestReplaceRNNPass(unittest.TestCase):

@@ -23,24 +23,24 @@ import numpy as np
 import torch
 
 from .utils import models
-import amct_pytorch.amct_pytorch_inner.amct_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
+import amct_pytorch.graph_based_compression.amct_pytorch
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_retrain_pass import InsertRetrainPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv1d \
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_retrain_pass import InsertRetrainPass
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_conv1d \
     import CompModuleConv1d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv2d \
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_conv2d \
     import CompModuleConv2d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_conv3d \
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_conv3d \
     import CompModuleConv3d
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_linear \
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_linear \
     import CompModuleLinear
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_base \
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_base \
     import CompModuleBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.share_act_comp_pass import \
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.share_act_comp_pass import \
     ShareActCompPass
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

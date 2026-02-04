@@ -25,9 +25,9 @@ import numpy as np
 import torch
 
 from onnx import onnx_pb
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_quant_pass import InsertQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_quant_pass import InsertQuantPass
 
 class TestInsertQuantPass(unittest.TestCase):
     @classmethod

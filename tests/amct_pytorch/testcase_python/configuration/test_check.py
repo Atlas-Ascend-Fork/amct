@@ -18,7 +18,7 @@
 import os
 from io import BytesIO
 import sys
-sys.path.append("~/amct/llt/asl/aoetools/amct/amct_pytorch.amct_pytorch_inner.amct_pytorch/ut/testcase_python/configuration")
+sys.path.append("~/amct/llt/asl/aoetools/amct/amct_pytorch.graph_based_compression.amct_pytorch/ut/testcase_python/configuration")
 
 import unittest
 import torch
@@ -26,17 +26,17 @@ import torch.nn.functional as F
 from onnx import onnx_pb
 
 from .utils import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphChecker
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphQuerier
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphChecker
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

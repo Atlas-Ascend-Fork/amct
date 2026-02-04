@@ -25,10 +25,10 @@ import numpy as np
 import torch
 import math
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.dump.dump import DUMP
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import struct_helper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.auto_calibration_helper import AutoCalibrationHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.dump.dump import DUMP
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils import struct_helper
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils import files as files_util
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.auto_calibration_helper import AutoCalibrationHelper
 
 
 

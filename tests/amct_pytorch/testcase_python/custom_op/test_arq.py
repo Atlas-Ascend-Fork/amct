@@ -19,8 +19,8 @@ import os
 import unittest
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import arq_cali_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op import arq_real_pytorch
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op import arq_cali_pytorch
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op import arq_real_pytorch
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DEVICE = torch.device('cpu')

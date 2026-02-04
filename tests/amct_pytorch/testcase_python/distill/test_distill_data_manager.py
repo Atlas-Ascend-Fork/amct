@@ -23,9 +23,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_data_manager import DistillDataManager
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
+from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_data_manager import DistillDataManager
+from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_helper import DistillHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

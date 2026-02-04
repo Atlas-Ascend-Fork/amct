@@ -25,11 +25,11 @@ import numpy as np
 import torch
 
 from onnx import onnx_pb
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import MULT_OUTPUT_TYPES
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.mult_output_with_quant_optimizer import MultQuantOptimizerPass
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import MULT_OUTPUT_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.mult_output_with_quant_optimizer import MultQuantOptimizerPass
 
 class TestQuantFusionPass(unittest.TestCase):
     @classmethod

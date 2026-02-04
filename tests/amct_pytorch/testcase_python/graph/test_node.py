@@ -25,7 +25,7 @@ import numpy as np
 import torch
 
 from onnx import onnx_pb
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.node import Node
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

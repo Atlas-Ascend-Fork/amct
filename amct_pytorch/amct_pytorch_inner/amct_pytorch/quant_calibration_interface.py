@@ -20,7 +20,7 @@ import os
 import torch
 from torch import nn
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer as opt
+import amct_pytorch.graph_based_compression.amct_pytorch.optimizer as opt
 from ..amct_pytorch.utils.log import LOGGER
 from ..amct_pytorch.common.utils.check_params import check_params
 from ..amct_pytorch.common.utils import files as files_util

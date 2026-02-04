@@ -22,10 +22,10 @@ import numpy as np
 from torch.nn.utils.rnn import pack_sequence
 from unittest.mock import patch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.rnn_retrain_quant import RNNRetrainQuant
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.rnn_retrain_quant import RNNRetrainQuant
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -115,5 +115,5 @@ class TestRNNRetrainQuant(unittest.TestCase):
         self.assertEqual(reorganized_quant_factor, [1, 0, 2])
 
     def test_update_quant_factor(self):
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils.process_scale'):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.custom_op.utils.process_scale'):
             self.retrain_quant._update_quant_factor()

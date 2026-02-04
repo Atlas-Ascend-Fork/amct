@@ -23,10 +23,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_sample import DistillSampleBase
+from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_helper import DistillHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
+from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_sample import DistillSampleBase
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

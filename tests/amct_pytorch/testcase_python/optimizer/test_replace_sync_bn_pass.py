@@ -25,12 +25,12 @@ import torch.nn as nn
 
 from .utils import models
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.retrain_config import RetrainConfig
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.replace_sync_bn_pass import \
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.replace_sync_bn_pass import \
     RepalceSyncBNPass
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

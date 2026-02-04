@@ -22,7 +22,7 @@ import torch
 import numpy as np
 from unittest import mock
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.weight_quant_api import \
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.weight_quant_api import \
     adjust_conv_weight_shape, adjust_axis_for_group_wise, adjust_deconv_weight_shape
 
 class TestNetParams(unittest.TestCase):

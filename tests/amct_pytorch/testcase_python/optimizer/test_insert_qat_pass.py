@@ -26,16 +26,16 @@ import copy
 from collections import OrderedDict
 
 from .utils import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import parse_distill_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config import get_enable_quant_layers
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config import parse_distill_config
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config import get_enable_quant_layers
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_qat_pass import InsertQatPass
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.linear import LinearQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_qat_pass import InsertQatPass
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.linear import LinearQAT
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.vars import DISTILL_TYPES
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import DISTILL_TYPES
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

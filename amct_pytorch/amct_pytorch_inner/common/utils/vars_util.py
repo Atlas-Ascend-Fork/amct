@@ -20,7 +20,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
 
 INT4_BIT = 4
 INT8_BIT = 8

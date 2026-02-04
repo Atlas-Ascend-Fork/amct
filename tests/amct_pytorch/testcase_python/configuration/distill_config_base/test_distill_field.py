@@ -26,9 +26,9 @@ from collections import OrderedDict
 
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.distill_config_base import distill_field
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.check import GraphQuerier
+from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config_base import distill_field
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphQuerier
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

@@ -24,7 +24,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.common.utils.util import version_higher_than
+from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
     """ save onnx """

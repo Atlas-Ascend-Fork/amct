@@ -22,8 +22,8 @@ import torch
 
 from .utils import models
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.optimizer.insert_kv_cache_quant_pass import InsertKVCacheQuantPass
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_kv_cache_quant_pass import InsertKVCacheQuantPass
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -58,13 +58,13 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
 
     def test_match_pattern_not_quant(self):
         module = torch.nn.Linear(4, 8)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config.get_kv_cache_quant_layers', return_value=['linear1']):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config.get_kv_cache_quant_layers', return_value=['linear1']):
             ret = self.insert_kv_cache_quant_pass.match_pattern(module, 'not_quant_layer')
             self.assertFalse(ret)
 
     def test_match_pattern_success(self):
         module = torch.nn.Linear(4, 8)
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config.get_kv_cache_quant_layers', return_value=['linear1']):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config.get_kv_cache_quant_layers', return_value=['linear1']):
             insert_kv_cache_quant_pass = InsertKVCacheQuantPass(self.record_module, {})
             ret = insert_kv_cache_quant_pass.match_pattern(module, 'linear1')
             self.assertTrue(ret)
@@ -84,7 +84,7 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
                 'quant_granularity': 1
             }
         }
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config.get_quant_layer_config', return_value=config):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config.get_quant_layer_config', return_value=config):
             self.insert_kv_cache_quant_pass.do_pass(self.model, self.model.layer3, 'layer3')
 
     def test_do_pass_hfmg(self):
@@ -98,5 +98,5 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
                 'quant_granularity': 1
             }
         }
-        with patch('amct_pytorch.amct_pytorch_inner.amct_pytorch.configuration.quant_calibration_config.get_quant_layer_config', return_value=config):
+        with patch('amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config.get_quant_layer_config', return_value=config):
             self.insert_kv_cache_quant_pass.do_pass(self.model, self.model.layer3, 'layer3')

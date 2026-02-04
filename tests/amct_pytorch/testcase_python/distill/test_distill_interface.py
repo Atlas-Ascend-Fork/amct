@@ -24,14 +24,14 @@ import torch
 import torch.nn as nn
 from unittest.mock import patch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distillation_interface import create_distill_config
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distillation_interface import create_distill_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distillation_interface import distill
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distillation_interface import save_distill_model
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.distill.distill_sample import DistillSampleBase
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.nn.module.quantization.linear import LinearQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.distillation_interface import create_distill_config
+from amct_pytorch.graph_based_compression.amct_pytorch.distillation_interface import create_distill_model
+from amct_pytorch.graph_based_compression.amct_pytorch.distillation_interface import distill
+from amct_pytorch.graph_based_compression.amct_pytorch.distillation_interface import save_distill_model
+from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_sample import DistillSampleBase
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.linear import LinearQAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

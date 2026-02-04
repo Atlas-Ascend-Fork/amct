@@ -20,8 +20,8 @@ import unittest
 import torch
 import numpy as np
 
-import amct_pytorch.amct_pytorch_inner.amct_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant import FakeQuant
+import amct_pytorch.graph_based_compression.amct_pytorch
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant import FakeQuant
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DEVICE = torch.device('cpu')

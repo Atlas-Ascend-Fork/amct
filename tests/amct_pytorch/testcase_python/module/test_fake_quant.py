@@ -24,10 +24,10 @@ import torch
 from onnx import onnx_pb, AttributeProto
 
 from .utils import models
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.module import quant_module
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.graph import Graph
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.graph.node import Node
+from amct_pytorch.graph_based_compression.amct_pytorch.module import quant_module
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

@@ -25,10 +25,10 @@ import stat
 import numpy as np
 import torch
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import generate_onnx_file_name
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import split_dir_prefix
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.save import _write_node_info, delete_customized_attr
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import generate_onnx_file_name
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import split_dir_prefix
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import _write_node_info, delete_customized_attr
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

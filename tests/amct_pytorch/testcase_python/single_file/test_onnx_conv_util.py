@@ -22,8 +22,8 @@ import unittest
 import torch
 import torch.nn.functional as F
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.parser.parser import Parser
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

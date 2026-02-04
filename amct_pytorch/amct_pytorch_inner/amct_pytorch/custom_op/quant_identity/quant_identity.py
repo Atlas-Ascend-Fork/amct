@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import torch
 from torch.autograd import Function
-import amct_pytorch.amct_pytorch_inner.amct_pytorch.utils as amct_utils
+import amct_pytorch.graph_based_compression.amct_pytorch.utils as amct_utils
 from ....amct_pytorch.common.utils.util import version_higher_than
 
 

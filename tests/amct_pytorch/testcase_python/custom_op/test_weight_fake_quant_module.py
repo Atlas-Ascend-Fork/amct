@@ -22,10 +22,10 @@ from unittest.mock import patch
 import torch
 import numpy as np
 import torch.nn as nn
-import amct_pytorch.amct_pytorch_inner.amct_pytorch
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.weight_fake_quant_module import \
+import amct_pytorch.graph_based_compression.amct_pytorch
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant.weight_fake_quant_module import \
     FakeWeightQuantizedLinear, LutFakeWeightQuantizedLinear
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.utils import get_algo_params, get_quant_factor, apply_awq_quantize_weight
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.utils import get_algo_params, get_quant_factor, apply_awq_quantize_weight
 from collections import OrderedDict
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DEVICE = torch.device('cpu')

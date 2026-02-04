@@ -30,7 +30,7 @@ else()
 endif()
 
 # 定义常量
-set(AMCT_PYTORCH_LIB_DIR ${BASE_DIR}/amct_pytorch_inner/lib)
+set(AMCT_PYTORCH_LIB_DIR ${BASE_DIR}/graph_based_compression/lib)
 
 # 设置编译选项
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fstack-protector-strong -O3 -std=c++11")

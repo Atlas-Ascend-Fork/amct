@@ -26,9 +26,9 @@ from unittest.mock import patch
 import copy
 import numpy as np
 
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.custom_op.fake_quant.weight_fake_quant_module import \
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant.weight_fake_quant_module import \
     FakeWeightQuantizedConv2d, FakeWeightQuantizedLinear
-from amct_pytorch.amct_pytorch_inner.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
