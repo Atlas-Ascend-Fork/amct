@@ -60,6 +60,7 @@ def check_config(quant_data_comb, quant_config, algo):
     """
     if quant_data_comb not in SUPPORTED_QUANT_DTYPE_COMB:
         raise ValueError(f'Do not support combination {quant_data_comb} of act and weight quant dtype.')
+    
     if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB[quant_data_comb]:
         raise ValueError(f'Algorithm {algo} do not support act and weight quant dtype {quant_data_comb}')
 
@@ -104,38 +105,40 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
 
 def get_supported_layers(model, quant_config, registed_alg):
     '''get supported layers based on quant config and registed algorithm'''
-    algos = quant_config.algorithm.names
+    algo_name = quant_config.algorithm.names[0]
     layer_types = dict()
-    for algo in algos:
-        layer_types[registed_alg.algo.get(algo)[0]] = algo
+    for src_op in registed_alg.algo.get(algo_name).keys():
+        layer_types[src_op] = algo_name
 
-        if algo not in BUILT_IN_ALGORITHM:
-            LOGGER.logd("Customized Algorithm {} is used fot quant".format(algo))
-        else:
-            act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
-                        quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
-            wts_type = quant_config.quant_cfg.weights_cfg.quant_type
-            quant_type_comb = act_type + ' ' + wts_type
-            check_config(quant_type_comb, quant_config, algo)
+    if algo_name not in BUILT_IN_ALGORITHM:
+        LOGGER.logd("Customized Algorithm {} is used fot quant".format(algo_name))
+    else:
+        act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
+                    quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
+        wts_type = quant_config.quant_cfg.weights_cfg.quant_type
+        quant_type_comb = act_type + ' ' + wts_type
+        check_config(quant_type_comb, quant_config, algo_name)
 
     detail_config = dict()
     for name, mod in model.named_modules():
         if type(mod) not in layer_types and type(mod).__name__ not in layer_types:
             continue
+
         if check_skip_layer(name, quant_config.skip_layers.skip_layers):
             LOGGER.logd('layer:{} is skipped'.format(name))
             continue
-        algo = layer_types[type(mod).__name__]
-        if algo in BUILT_IN_ALGORITHM:
+        
+        if algo_name in BUILT_IN_ALGORITHM:
             if hasattr(mod, 'weight') and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
                 LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} only support ori dtype {} '
-                'but got {}'.format(name, quant_type_comb, ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
-                mod.weight.dtype))
+                    'but got {}'.format(name, quant_type_comb, ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
+                    mod.weight.dtype))
                 continue
             if not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
                 continue
+
         # each module can only be assigned one algorithm
-        detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} 
+        detail_config_algo = {'algorithm': {algo_name: quant_config.algorithm.get_value()['algorithm'][algo_name]}} 
         detail_config[name] = quant_config.batch_num.get_value() \
             | quant_config.quant_cfg.get_value() | detail_config_algo
     return detail_config

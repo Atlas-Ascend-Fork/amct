@@ -30,7 +30,6 @@ if __name__ == '__main__':
     parser.add_argument('--flat_matrix_path', type=str, 
         default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location'
     )
-    # parser.add_argument('--eval_fake_quant', action='store_true', help="whether to evaluate fake quant")
     args = parser.parse_args()
 
     logger = create_logger()
@@ -68,7 +67,7 @@ if __name__ == '__main__':
         model = load_flat_matrices(model, args.flat_matrix_path)
         logger.info(f"Model after loading matrices: \n{model}")
     else:
-        cali_flat_quant(model, calib_dataset, args.device, logger)
+        cali_flat_quant(model, calib_dataset, args.device)
         save_flat_matrices(model, args.flat_matrix_path)
     model.to(args.device)
 

@@ -3,14 +3,12 @@ import gc
 import functools
 import torch
 import torch_npu
-import torch.nn as nn
-import transformers
 
 from .function_utils import set_require_grad_all, get_n_set_parameters_byname
 from .config_utils import InnerConfig
 
 
-def cali_flat_quant(model, dataloader, dev, logger):
+def cali_flat_quant(model, dataloader, dev):
     """
     The parameters related to calibration (e.g. epochs, batch size, learning rate) can be adjusted in the "Calibration" section in the InnerConfig enum
     """
@@ -40,7 +38,7 @@ def cali_flat_quant(model, dataloader, dev, logger):
     inps = []
     layer_kwargs = {}
     def layer_input_data_hook(module, args, kwargs):
-        inps.append(args[0])
+        inps.append(args[0].squeeze(0))
         layer_kwargs.update(kwargs)
         raise ValueError('early exit to break later interface')
 
@@ -75,7 +73,7 @@ def cali_flat_quant(model, dataloader, dev, logger):
     # start training
     num_train_layer = len(layers)
     for i in range(num_train_layer):
-        logger.info(f"========= Layer {i} =========")
+        print(f"========= Layer {i} =========")
         dtype_dict = {}
         layer = layers[i].to(dev)
         for name, param in layer.named_parameters():
@@ -84,17 +82,23 @@ def cali_flat_quant(model, dataloader, dev, logger):
             layer.float()
 
         # original forward to get output data & ln data
-        layer.self_attn._ori_mode = True
-        layer.mlp._ori_mode = True
+        if hasattr(layer.self_attn, '_ori_mode'):
+            layer.self_attn._ori_mode = True
+        if hasattr(layer.mlp, '_ori_mode'):
+            layer.mlp._ori_mode = True
         with torch.no_grad():
             for j in range(InnerConfig.nsamples.value):
                 fp_outs[j] = layer(fp_inps[j].unsqueeze(0), **layer_kwargs)[0]
-        layer.self_attn._ori_mode = False
-        layer.mlp._ori_mode = False
+        if hasattr(layer.self_attn, '_ori_mode'):
+            layer.self_attn._ori_mode = False
+        if hasattr(layer.mlp, '_ori_mode'):
+            layer.mlp._ori_mode = False
 
         # init diag scale with ln data
-        layer.self_attn.init_diag_scale(alpha=InnerConfig.diag_alpha.value)
-        layer.mlp.init_diag_scale(alpha=InnerConfig.diag_alpha.value)
+        if hasattr(layer.self_attn, 'init_diag_scale'):
+            layer.self_attn.init_diag_scale(alpha=InnerConfig.diag_alpha.value)
+        if hasattr(layer.mlp, 'init_diag_scale'):
+            layer.mlp.init_diag_scale(alpha=InnerConfig.diag_alpha.value)
 
         set_require_grad_all(layer, False)
         trained_params, paras_name = [], []
@@ -131,7 +135,7 @@ def cali_flat_quant(model, dataloader, dev, logger):
                     optimizer.step()
                     scheduler.step()
             cur_lr = optimizer.state_dict()['param_groups'][0]['lr']
-            logger.info(f"layer {i} lwc lac iter {epoch}, lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}" )
+            print(f"layer {i} lwc lac iter {epoch}, lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}" )
 
         fp_inps, fp_outs = fp_outs, fp_inps
         layers[i] = layer.to("cpu")

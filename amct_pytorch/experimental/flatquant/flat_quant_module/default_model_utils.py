@@ -15,6 +15,19 @@ from .config_utils import InnerConfig
 class FlatQuantAttention(nn.Module):
     def __init__(self, module: nn.Module, layer_name: str="", layer_config = None):
         super().__init__()
+
+        # quant config
+        self.a_bit = int(layer_config.get('inputs_cfg').get('quant_type').replace('int', ''))
+        self.w_bit = int(layer_config.get('weights_cfg').get('quant_type').replace('int', ''))
+
+        flatquant_attn_config = layer_config.get('algorithm').get('flatquant')
+        self.use_kcache_quant = flatquant_attn_config.get('use_kcache_quant', InnerConfig.use_kcache_quant.value)
+        self.k_bits = flatquant_attn_config.get('k_bits', InnerConfig.k_bits.value)
+        self.use_vcache_quant = flatquant_attn_config.get('use_vcache_quant', InnerConfig.use_vcache_quant.value)
+        self.v_bits = flatquant_attn_config.get('v_bits', InnerConfig.v_bits.value)
+        self.use_o_quant = flatquant_attn_config.get('use_o_quant', InnerConfig.use_o_quant.value)
+
+        # module
         self.module_config = module.config
         self.layer_idx = module.layer_idx
         self.head_dim = module.head_dim
@@ -27,17 +40,6 @@ class FlatQuantAttention(nn.Module):
         self.k_norm = module.k_norm if hasattr(module, 'k_norm') else None
         if hasattr(module, 'sliding_window'):
             self.sliding_window = module.sliding_window
-
-        quant_config = layer_config.get('quant_cfg')
-        self.a_bit = int(quant_config.get('inputs').get('type').replace('int', ''))
-        self.w_bit = int(quant_config.get('weights').get('type').replace('int', ''))
-
-        flatquant_attn_config = layer_config.get('algorithm').get('flatquant_attn')
-        self.use_kcache_quant = flatquant_attn_config.get('use_kcache_quant', InnerConfig.use_kcache_quant.value)
-        self.k_bits = flatquant_attn_config.get('k_bits', InnerConfig.k_bits.value)
-        self.use_vcache_quant = flatquant_attn_config.get('use_vcache_quant', InnerConfig.use_vcache_quant.value)
-        self.v_bits = flatquant_attn_config.get('v_bits', InnerConfig.v_bits.value)
-        self.use_o_quant = flatquant_attn_config.get('use_o_quant', InnerConfig.use_o_quant.value)
 
         self.q_proj = FlatQuantizedLinear(module.q_proj, module.q_proj.weight.shape[0])
         self.k_proj = FlatQuantizedLinear(module.k_proj, module.k_proj.weight.shape[0])
@@ -242,6 +244,12 @@ class FlatQuantAttention(nn.Module):
 class FlatQuantMLP(nn.Module):
     def __init__(self, module: nn.Module, layer_name: str="", layer_config = None):
         super().__init__()
+
+        # quant config
+        self.a_bit = int(layer_config.get('inputs_cfg').get('quant_type').replace('int', ''))
+        self.w_bit = int(layer_config.get('weights_cfg').get('quant_type').replace('int', ''))
+
+        # quant module
         self.hidden_size = module.config.hidden_size
         self.intermediate_size = module.config.intermediate_size
         self.act_fn = module.act_fn if hasattr(module, 'act_fn') else None
@@ -254,11 +262,13 @@ class FlatQuantMLP(nn.Module):
         self._ori_mode = False
         self.up_smax = torch.ones_like(self.up_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
         self.down_smax = torch.ones_like(self.down_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
+
         
     def add_fq_trans(self):
-        if InnerConfig.w_bits.value < 16 or InnerConfig.a_bits.value < 16:
+        if self.a_bit < 16 or self.w_bit < 16:
             up_dim_left, up_dim_right = get_decompose_dim(self.up_proj.linear.weight.shape[1])
             self.up_gate_trans = SVDDecomposeTransMatrix(up_dim_left, up_dim_right, add_diag=InnerConfig.add_diag.value)
+            
             down_dim_left, down_dim_right = get_decompose_dim(self.down_proj.linear.weight.shape[1])
             self.down_trans = SVDDecomposeTransMatrix(down_dim_left, down_dim_right, add_diag=InnerConfig.add_diag.value)
         else:
@@ -295,6 +305,7 @@ class FlatQuantMLP(nn.Module):
     def reparameterize(self):
         if self.up_gate_trans is not None:
             self.up_gate_trans.to_eval_mode()
+        if self.down_trans is not None:
             self.down_trans.to_eval_mode()
         self.gate_proj.reparameterize(qa_trans=self.up_gate_trans)
         self.up_proj.reparameterize(qa_trans=self.up_gate_trans)
@@ -317,9 +328,12 @@ class FlatQuantMLP(nn.Module):
             self.up_gate_trans.diag_scale.data = get_init_scale(upw_smax, self.up_smax, alpha)
         if self.down_trans is not None:
             self.down_trans.diag_scale.data = get_init_scale(downw_smax, self.down_smax, alpha)
-        del self.up_smax, self.down_smax
+        if hasattr(self, "down_smax"):
+            del self.down_smax
+        del self.up_smax
 
     def rep_matrix_only(self, ):
         if self.up_gate_trans is not None:
             self.up_gate_trans.to_eval_mode()
+        if self.down_trans is not None:
             self.down_trans.to_eval_mode()

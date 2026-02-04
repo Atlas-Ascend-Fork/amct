@@ -25,11 +25,13 @@ class Algorithm:
         self.quant_to_deploy = dict()
         self.quant_op = []
 
+    # algo--src_op_0--quant_op_0--deploy_op_0
+    #    \--src_op_1--quant_op_1--deploy_op_1
+    #     \-src_op_2--quant_op_2--deploy_op_2
     def register(self, name, src_op, quant_op, deploy_op):
-        if self.algo.get(name) is not None:
-            raise ValueError(f'{name} is already registered')
+        if self.algo.get(name) is None:
+            self.algo[name] = {}
 
-        self.algo[name] = (src_op, quant_op)
-        self.quant_op.append(quant_op)
+        self.algo[name][src_op] = quant_op
         self.quant_to_deploy[quant_op] = deploy_op
         LOGGER.logd(f'register algorithm {name} success.')
