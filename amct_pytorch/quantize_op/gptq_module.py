@@ -128,6 +128,9 @@ class GPTQuant(BaseQuantizeModule):
             weight_block = weight_column_sorted[:, i1:i2]
             err_block = torch.zeros_like(weight_block)
             hessian_inverse_block = hessian_inverse[i1:i2, i1:i2]
+            if self.wts_type == MXFP4_E2M1:
+                hessian_inverse_block = hessian_inverse_block.to(self.weight.dtype)
+                hessian_inverse = hessian_inverse.to(self.weight.dtype)
 
             for i in range(count):
                 # Each column shares the value of a Hessian matrix.
