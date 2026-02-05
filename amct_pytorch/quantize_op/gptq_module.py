@@ -115,6 +115,8 @@ class GPTQuant(BaseQuantizeModule):
 
         # 2 Calculate the inverse of the Hessian matrix
         hessian_inverse = self.cal_hessian_inverse(hessian_sorted, columns)
+        if self.wts_type == MXFP4_E2M1:
+            hessian_inverse = hessian_inverse.to(self.weight.dtype)
         del hessian_sorted, self.hessian
         import torch_npu
         if torch_npu.npu.is_available():
