@@ -1,0 +1,95 @@
+syntax = "proto2";
+package AMCTPytorchProto;
+
+
+enum FakequantPrecisionMode {
+    FORCE_FP16_QUANT = 1;
+}
+
+message AMCTConfig {
+
+    optional uint32 batch_num = 1 [default = 1];
+    optional bool activation_offset = 2 [default = true];
+    repeated string skip_layers = 10;
+    repeated string skip_layer_types = 11;
+
+    optional FakequantPrecisionMode fakequant_precision_mode = 21;
+    optional CalibrationConfig common_config = 50;
+    repeated OverrideLayerType override_layer_types = 51;
+    repeated OverrideLayer override_layer_configs = 100;
+
+    optional bool do_fusion = 200 [default = true];
+    repeated string skip_fusion_layers = 201;
+}
+
+message OverrideLayerType {
+    required string layer_type = 1;
+    required CalibrationConfig calibration_config = 2;
+}
+
+message OverrideLayer {
+    required string layer_name = 1;
+    required CalibrationConfig calibration_config = 2;
+}
+
+message CalibrationConfig {
+    oneof wts_quant_algo{
+        ARQuantize arq_quantize = 13;
+        ADAquantize ada_quantize  = 15;
+    }
+
+    oneof acts_quant_algo {
+        FMRQuantize ifmr_quantize = 100;
+        HFMGQuantize hfmg_quantize = 101;
+    }
+
+    oneof tensor_balancer {
+        DMQBalancer dmq_balancer = 200;
+    }
+}
+
+message ARQuantize {
+    optional bool channel_wise = 1;
+    optional uint32 quant_bits = 10;
+}
+
+message ADAquantize {
+    optional uint32 num_iteration = 1 [default = 10000];
+    optional float reg_param = 2 [default = 0.01];
+    optional float beta_range_start = 3 [default = 20];
+    optional float beta_range_end = 4 [default = 2];
+    optional float warm_start = 5 [default = 0.2];
+    optional bool channel_wise = 10;
+}
+
+message DMQBalancer {
+    optional float migration_strength = 1 [default = 0.5];
+}
+
+message FMRQuantize {
+    optional float search_range_start = 1 [default = 0.7];
+    optional float search_range_end = 2 [default = 1.3];
+    optional float search_step = 3 [default = 0.01];
+    optional float max_percentile = 4 [default = 0.999999];
+    optional float min_percentile = 5 [default = 0.999999];
+    optional bool asymmetric = 6;
+
+    enum CalibrationDataType {
+        INT8 = 1;
+        INT16 = 2;
+    }
+    optional CalibrationDataType dst_type = 10 [default = INT8];
+}
+
+message HFMGQuantize {
+    // number of bins of HFMG activation calibration algorithm
+    // now support value in [1024, 2048, 4096, 8192]
+    optional uint32 num_of_bins = 1 [default = 4096];
+    optional bool asymmetric = 2;
+
+    enum CalibrationDataType {
+        INT8 = 1;
+        INT16 = 2;
+    }
+    optional CalibrationDataType dst_type = 10 [default = INT8];
+}

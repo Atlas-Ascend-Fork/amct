@@ -1,0 +1,3 @@
+Version=9.0.0
+version_dir=cann
+required_package_runtime_version="9.0"

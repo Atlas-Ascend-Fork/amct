@@ -1,0 +1,55 @@
+syntax = "proto2";
+package AMCTProto;
+
+message AutoMixedPrecisionConfig {
+  optional float compress_ratio = 1;
+  repeated QuantBitLimit quant_bit_limit = 2;
+  optional string ptq_cfg = 3;
+  optional int64 test_iteration = 4;
+
+  optional string override_qat_cfg = 10;
+}
+
+message AutoChannelPruneConfig {
+  required float compress_ratio = 1;
+  optional bool ascend_optimized = 2 [default = true];
+  optional float max_prune_ratio = 3 [default = 1.0];
+  optional int64 test_iteration = 4 [default = 1];
+
+  optional string override_prune_cfg = 10;
+}
+
+message QuantBitLimit {
+  enum DataType {
+    FLOAT = 0;
+    INT8 = 1;
+    INT4 = 2;
+  }
+
+  optional string layer_name = 1;
+  repeated DataType data_range = 2;
+}
+
+message AttrProto {
+  enum AttrType {
+    UNDEFINED = 0;
+    FLOAT = 1;
+    INT = 2;
+    STRING = 3;
+
+    FLOATS = 4;
+    INTS = 5;
+    STRINGS = 6;
+  }
+
+  optional string name = 1;
+  optional AttrType type = 2;
+
+  optional float f = 3;
+  optional int64 i = 4;
+  optional bytes s = 5;
+
+  repeated float floats = 6;
+  repeated int64 ints = 7;
+  repeated bytes strings = 8;
+}
