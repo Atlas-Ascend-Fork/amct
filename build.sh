@@ -1,6 +1,6 @@
 #!/bin/bash
 # ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ set -e
 
 BASEPATH=$(cd "$(dirname $0)"; pwd)
 BUILD_PATH="${BASEPATH}/build/"
+UT_TARGETS=("amct_utest")
+TMP_PATH="${BASEPATH}/tmp/"
 
 # print usage message
 usage() {
@@ -119,31 +121,71 @@ checkopts() {
 }
 
 build() {
+  echo "create build directory and build amct";
+  if [ -f "${BUILD_PATH}" ]
+  then
+    echo "${BUILD_PATH} exist, delete old path"
+    rm -rf ${BUILD_PATH}
+  fi
+  echo "create path ${BUILD_PATH}"
+  mkdir ${BUILD_PATH}
 
-  cd ${BASEPATH}/amct_pytorch && chmod 640 `find ./ -type f` && chmod 750 `find ./ -type d`
-  prex="$(uname -m)"
-  export AMCT_PYTORCH_PLATFORM="linux-${prex}"
-  cd ${BASEPATH} && python3 setup.py sdist --formats=gztar
+  cd "${BUILD_PATH}"
+  echo "----------------BUILD_PATH  "${BUILD_PATH}"  ----------------"
+  echo "----------------TOP_DIR  "${BASEPATH}"  ----------------"
+  echo "----------------CMAKE_BUILD_TYPE  "${CMAKE_BUILD_TYPE}"  ----------------"
+  echo "----------------ASCEND_HOME_PATH  "${ASCEND_HOME_PATH}"  ----------------"
+  echo "----------------CANN_3RD_LIB_PATH  "${CANN_3RD_LIB_PATH}"  ----------------"
 
-  echo "create build_out directory and build amct";
+  cmake -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+        -D TOP_DIR=${BASEPATH} \
+        -D CMAKE_VERBOSE_MAKEFILE=ON\
+        -D ASCEND_HOME_PATH=${ASCEND_HOME_PATH}\
+        -D PREX=${LOWER_PREX}\
+        ${CANN_3RD_LIB_PATH:+-D CANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}} \
+        -D BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG=ON \
+        -D CMAKE_BUILD_TYPE=${BUILD_TYPE} \
+        ..
+
+  make all ${VERBOSE} -j${THREAD_NUM}
+  if [ $? -ne 0 ]
+  then
+    echo "execute command: make ${VERBOSE} -j${THREAD_NUM}."
+    return 1
+  fi
+  echo "Build success!"
+
   if [ -d "${OUTPUT_PATH}" ];then
     echo "${OUTPUT_PATH} exist, delete old path"
     rm -rf ${OUTPUT_PATH}
   fi
   echo "create path ${OUTPUT_PATH}"
   mkdir ${OUTPUT_PATH}
+  mkdir "${OUTPUT_PATH}/amct_package"
+  mkdir "${OUTPUT_PATH}/amct_package/amct_pytorch"
+  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/amct_package/amct_pytorch/
+  cp -r ${BASEPATH}/amctgraph/* ${OUTPUT_PATH}/amct_package/
 
-  cp ./dist/*.tar.gz ${OUTPUT_PATH}
-  if find ${OUTPUT_PATH} -type f -name "amct_pytorch-*-py3-none-linux-${prex}.tar.gz" | grep -q .;then
+  VERSION=$(awk -F'=' '/^Version=/ {print $2}' ../version.info)
+  echo "package ${VERSION}"
+  SYS="$(uname -s)"
+  PACKAGE_NAME="cann-amct_${VERSION}_${SYS,,}-$(uname -m).tar.gz"
+  TAR_FILE="${OUTPUT_PATH}/${PACKAGE_NAME}"
+  TARGET_DIR="${OUTPUT_PATH}/amct_package"
+  tar -czf ${TAR_FILE} -C ${TARGET_DIR} .
+  echo "tar -czf ${TAR_FILE} -C ${TARGET_DIR} ."
+
+  if [ -f ${TAR_FILE} ];then
     echo "package amct run success"
   else
     echo "package amct run failed"
     return 1
   fi
 
-  rm -rf dist
-  rm -rf *.egg-info
-
+  rm -rf ${BASEPATH}/dist
+  rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
+  rm -rf ${TARGET_DIR}
+  rm -rf ${BASEPATH}/amctgraph
 }
 
 assemble_cmake_args() {
@@ -181,6 +223,9 @@ clean_build() {
   if [ -d "${BUILD_PATH}" ]; then
     rm -rf ${BUILD_PATH}/*
   fi
+  if [ -d "${TMP_PATH}" ]; then
+    rm -rf ${TMP_PATH}/*
+  fi
 }
 
 clean_build_out() {
@@ -191,6 +236,7 @@ clean_build_out() {
 
 build_package() {
   echo "--------------- build package start ---------------"
+  bash install_graph.sh --cann_3rd_lib_path=${CANN_3RD_LIB_PATH}
   build || { echo "Build failed."; exit 1; }
   echo "--------------- build package end ---------------"
 }
@@ -198,16 +244,19 @@ build_package() {
 build_ut() {
   echo $dotted_line
   echo "Start to build ut"
-  clean_build
+  # clean_build
+
+  git submodule init && git submodule update
   if [ ! -d "${BUILD_PATH}" ]; then
     mkdir -p "${BUILD_PATH}"
   fi
 
-  if [[ "$ENABLE_COVERAGE" == "TRUE" ]]; then
-    cd "${BUILD_PATH}" && PYTHONPATH=${BASEPATH}:${PYTHONPATH} coverage run -m unittest discover ${BASEPATH}/tests/amct_pytorch/ && coverage report && coverage html
-  else
-    cd "${BUILD_PATH}" && PYTHONPATH=${BASEPATH}:${PYTHONPATH} coverage run -m unittest discover ${BASEPATH}/tests/amct_pytorch/
+  if [ ! -d "${TMP_PATH}" ]; then
+    mkdir -p "${TMP_PATH}"
   fi
+
+  cd "${BUILD_PATH}" && cmake ${CMAKE_ARGS} ..
+  cmake --build . --target ${UT_TARGETS[@]} -- ${VERBOSE} -j $THREAD_NUM
 }
 
 main() {

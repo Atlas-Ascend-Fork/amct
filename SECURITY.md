@@ -21,6 +21,13 @@
 - AMCT运行异常时会退出进程并打印报错信息，建议根据报错提示定位具体错误原因，包括设定查看日志文件等方式。
 - AMCT通过[PyTorch](https://gitcode.com/Ascend/pytorch)方式调用时，可能会因为版本不匹配导致运行错误，具体请参考[PyTorch安全声明](https://gitcode.com/Ascend/pytorch#%E5%AE%89%E5%85%A8%E5%A3%B0%E6%98%8E)。
 
+## 公网地址声明
+本项目代码中包含的公网地址声明如下所示：
+
+|      类型      |                                           开源代码地址                                           |                            文件名                             |             公网IP地址/公网URL地址/域名/邮箱地址/压缩文件地址             |                   用途说明                    |
+| :------------: |:------------------------------------------------------------------------------------------:|:----------------------------------------------------------| :---------------------------------------------------------- |:-----------------------------------------|
+|  依赖  | 不涉及  | cmake/protobuf.cmake | https://gitcode.com/cann-src-third-party/protobuf/releases/download/v3.13.0/protobuf-3.13.0.tar.gz | 从gitcode下载protobuf源码，作用编译依赖 |
+|  依赖  | 不涉及  | cmake/protobuf.cmake | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1/abseil-cpp-20230802.1.tar.gz | 从gitcode下载abseil源码，作用编译依赖 |
 ---
 
 ## 漏洞机制说明
