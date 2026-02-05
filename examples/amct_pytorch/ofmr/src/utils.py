@@ -1,14 +1,17 @@
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
 #
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the Apache License Version 2.0.You may not use this file except in compliance with the License.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# Apache License for more details at
-# http://www.apache.org/licenses/LICENSE-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # ----------------------------------------------------------------------------
 import time
 import torch
@@ -26,30 +29,30 @@ def build_enc(model_path):
 
 
 def get_llama2(model_path, seqlen=2048):
-    '''If model is specified from ['7b', '13b', '70b'], then we load official pretrained model;
-       If you want to load checkpoints other than the official ones, please specifiy the model path,
-       otherwise please choose from ['7b', '13b', '70b'] for better clarity
-    '''
     print(f'Getting official pretrained {model_path}')
+
     model = LlamaForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, offload_folder="offload/")
+
     model.seqlen = seqlen
-    enc = build_enc(model_path)
+    enc = AutoTokenizer.from_pretrained(
+            model_path, use_fast=False, trust_remote_code=True
+    )
     return model, enc
 
 
 def get_qwen(model_path, seqlen=2048):
-    '''If model is specified from ['0.5b', '1.5b', '7b'], then we load official pretrained model;
-       If you want to load checkpoints other than the official ones, please specifiy the model path,
-       otherwise please choose from ['0.5b', '1.5b', '7b'] for better clarity
-    '''
     print(f'Getting official pretrained {model_path}')
+
     model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.float16)
+    
     model.seqlen = seqlen
-    enc = build_enc(model_path)
+    enc = AutoTokenizer.from_pretrained(
+            model_path, use_fast=False, trust_remote_code=True
+    )
     return model, enc
 
 
-def get_loaders(enc, seqlen):
+def get_test_dataset(enc, seqlen):
     print('Loading dataset: Wikitext2')
     testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
     testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
@@ -57,7 +60,7 @@ def get_loaders(enc, seqlen):
     return testenc
 
 
-def get_calib_dataset(data="pileval", tokenizer=None, n_samples=512, block_size=512):
+def get_calib_dataset(tokenizer=None, n_samples=512, block_size=512):
     print('Loading dataset: pileval')
     dataset = load_dataset("mit-han-lab/pile-val-backup")
     dataset = dataset["validation"]

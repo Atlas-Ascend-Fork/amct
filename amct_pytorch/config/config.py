@@ -82,7 +82,7 @@ HIFP8_OFMR_CFG = {
         'weights': {
             'type': 'hifloat8',
             'symmetric': True,
-            'strategy': 'tensor',
+            'strategy': 'channel',
         },
         'inputs': {
             'type': 'hifloat8',
@@ -90,9 +90,9 @@ HIFP8_OFMR_CFG = {
             'strategy': 'tensor',
         },
     },
-    'algorithm': {'ofmr'},
-    'skip_layers': {'lm_head'}
+    'algorithm': {'ofmr'}
 }
+
 
 FP8_OFMR_CFG = {
     'batch_num': 1,
@@ -112,6 +112,7 @@ FP8_OFMR_CFG = {
     'skip_layers': {'lm_head'}
 }
 
+
 MXFP8_QUANT_CFG = {
     'batch_num': 1,
     'quant_cfg': {
@@ -130,6 +131,7 @@ MXFP8_QUANT_CFG = {
     'algorithm': {'mxquant'},
     'skip_layers': {'lm_head'}
 }
+
 
 MXFP4_AWQ_WEIGHT_QUANT_CFG = {
     'batch_num': 1,

@@ -16,7 +16,7 @@
 ### 1.3 简易量化配置
 本sample中使用的量化配置已经内置在工具中，可以通过下述方式获取并使用：
 
-`from amct_pytorch import HIF8_OFMR_WEIGHT_QUANT_CFG`
+`from amct_pytorch import HIFP8_OFMR_CFG`
 
 如果需要修改详细配置，请参考资料构造需要的量化配置dict。
 
@@ -64,7 +64,7 @@ Score:  5.477707
 
 | 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
 | :-: | :-: | :-: | :-: | :-: |
-|LLAMA2-7B|pileval|wikitext2|5.472|5.503|
+|LLAMA2-7B|pileval|wikitext2|5.472|5.505|
 |QWEN2-7B|pileval|wikitext2|7.137|7.194|
 |QWEN3-8B|pileval|wikitext2|9.715|9.775|
 
