@@ -1,0 +1,306 @@
+prune_record {
+  producer {
+    name: "layer1.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "prune_axis"
+      type: INT
+      i: 1
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+    attr {
+      name: "prune_group"
+      type: INT
+      i: 2
+    }
+  }
+  producer {
+    name: "layer2.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "prune_axis"
+      type: INT
+      i: 1
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+    attr {
+      name: "prune_group"
+      type: INT
+      i: 2
+    }
+  }
+  producer {
+    name: "layer3.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "prune_axis"
+      type: INT
+      i: 1
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+    attr {
+      name: "prune_group"
+      type: INT
+      i: 2
+    }
+  }
+  producer {
+    name: "layer4.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "prune_axis"
+      type: INT
+      i: 1
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+    attr {
+      name: "prune_group"
+      type: INT
+      i: 2
+    }
+  }
+  consumer {
+    name: "layer1.1"
+    attr {
+      name: "type"
+      type: STRING
+      s: "BatchNormalization"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "layer2.1"
+    attr {
+      name: "type"
+      type: STRING
+      s: "BatchNormalization"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "Add_8"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Add"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "layer3.1"
+    attr {
+      name: "type"
+      type: STRING
+      s: "BatchNormalization"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "Add_13"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Add"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "layer4.1"
+    attr {
+      name: "type"
+      type: STRING
+      s: "BatchNormalization"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "Add_18"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Add"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "layer5.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+  }
+  consumer {
+    name: "layer6.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+  }
+}
