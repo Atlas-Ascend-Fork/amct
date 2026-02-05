@@ -1,0 +1,337 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the Apache License Version 2.0.You may not use this file except in compliance with the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# Apache License for more details at
+# http://www.apache.org/licenses/LICENSE-2.0
+# ----------------------------------------------------------------------------
+# HOST侧依赖的开源软件
+set(HOST_COMPILER_FWKACLLIB_MODULE_OPENSRC securec jpeg protoc ascend_protobuf_static ascend_protobuf_shared openssl json protoc_grpc grpc rdma-core tinyxml2 symengine boost cce_aicore)
+
+# HOST侧依赖的模块
+set(HOST_COMPILER_FWKACLLIB_MODULE)
+
+set(HOST_COMPILER_FWKACLLIB_DIRS
+    atc/opcompiler/ascendc_compiler/api
+    atc/opcompiler/ascendc_compiler/framework
+    ace/npuruntime/tdt
+    ace/execfwk/tprt
+    ace/execfwk/cpu_schedule/tsd
+    ace/execfwk/aicpu_device/queue_schedule
+    asl/aoetools/opat/auto_tune
+    asl/aoetools/aoe
+    metadef
+    parser
+    ace/npuruntime/acl
+    ace/npuruntime/runtime
+    atc/opcompiler/opc
+    atc/opcompiler/ascendc_compiler/framework/tools/build/asc_opc
+    atc/opcompiler/op_compile_tool
+    atc/opcompiler/te_fusion/source
+    asl/aoetools/sgat/graph_tuner
+    abl/platform
+    ace/npuruntime/runtime/platform
+    abl/platform/compress
+    ace/comop/hccl/whole/hccl
+    ace/comop/hccl/orion
+    ace/comop/hccl/whole/operator/vector_reduce_ascend310p3
+    ace/comop/hccl/whole/operator/vector_reduce_ascend910
+    ace/comop/hccl/whole/operator/vector_reduce_ascend910B
+    ace/comop/hccl/whole/hcom_graph_adaptor/
+    ace/comop/hccl/open_source
+    ace/hiva/fwk/udf
+    ace/hiva/fwk/udf/toolchain
+    ace/hiva/fwk/hicaid
+    ace/comop/hccl/whole/python
+    ace/comop/cce
+    abl/libkmc
+    abl/ascend_hal/user_space/inc/stub
+    abl/msprof
+    abl/mmpa
+    abl/atrace
+    abl/slog/liblog
+    asl/aoetools/opat/schedule_search
+    abl/licctrl
+    abl/adump
+    asl/ops/cann
+    asl/ops/ops_adv
+    drivers/network/hccp/
+    drivers/network/common/
+    drivers/network/inc
+    asl/hss
+    asl/aoetools/nca
+    abl/libkmc
+    asl/aoetools/amct
+    abl/qos/qosmng
+    atc/dataflow_python
+    asl/ops/ops
+    asl/devtools/ascgen
+    air
+    #atc/opcompiler/ascend_tensor
+)
+set(HOST_COMPILER_FWKACLLIB_TARGETS
+    # tdt
+    datatransfer indextransform tsdclient
+    opc_tool-0.1.0-py3-none-any.whl
+    asc_opc_tool-0.1.0-py3-none-any.whl
+    op_compile_tool-0.1.0-py3-none-any.whl
+    ge_runner
+    jit_exe
+    host_cpu_engine
+    cpu_compiler
+    data_flow_base
+    udf_compiler
+    fmk_parser
+    fmk_onnx_parser
+    parser_common
+    ge_local_engine
+    _caffe_parser
+    # fusion pass
+    ops_fusion_pass_aicore
+    ops_fusion_pass_vectorcore
+    # ge_memory
+    fwk_atc.bin
+    engine
+    ge_common
+    ge_common_base
+    aihac_codegen
+    aihac_autofusion
+    graph
+    graph_base
+    flow_graph
+    flow_func
+    udf_profiling
+    reader_writer
+    fwk_stub_graph
+    fmk_parser_stub
+    fmk_onnx_parser_stub
+    error_manager
+    opp_registry
+    register
+    ascir_generate
+    aihac_symbolizer
+    aihac_ir
+    aihac_ir_register
+    static_mmpa
+    fwk_stub_ge_runner
+    ascendcl
+    ge_local_opskernel_builder
+    host_cpu_opskernel_builder
+    stub_ascendcl
+    acl_dvpp
+    stub_acl_dvpp
+    acl_cblas
+    stub_acl_cblas
+    acl_tdt_queue
+    stub_acl_tdt_queue
+    acl_op_compiler
+    stub_acl_op_compiler
+    acl_tdt_channel
+    stub_acl_tdt_channel
+    runtime
+    rts_engine
+    te_fusion
+    fe
+    slice
+    graph_tuner
+    sgat_plugin
+    ascend_sch_policy_pass
+    auto_deploy
+    compress
+    platform
+    aicore_utils
+    opskernel
+    ffts.ini
+    fe.ini
+    window_size_config.json
+    lxfusion_config.json
+    ascend310p1_l2cache.json
+    ascend310p3_l2cache.json
+    ascend310b1_l2cache.json
+    ascend310b2_l2cache.json
+    ascend310b3_l2cache.json
+    ascend310b4_l2cache.json
+    as31xm1x_l2cache.json
+    ascend610_l2cache.json
+    ascend610lite_l2cache.json
+    bs9sx1aa_l2cache.json
+    bs9sx1ab_l2cache.json
+    bs9sx1ac_l2cache.json
+    ascend910_l2cache.json
+    ascend910a_l2cache.json
+    ascend910b_l2cache.json
+    ascend910premiuma_l2cache.json
+    ascend910proa_l2cache.json
+    ascend910prob_l2cache.json
+    ascend910b1_l2cache.json
+    ascend910b2_l2cache.json
+    ascend910b2c_l2cache.json
+    ascend910b3_l2cache.json
+    ascend910b4_l2cache.json
+    ascend910b4_1_l2cache.json
+    mc61am21aa_l2cache.json
+    mc61am21ab_l2cache.json
+    bs9sx2aa_l2cache.json
+    bs9sx2ab_l2cache.json
+    ascend910_9391_l2cache.json
+    ascend910_9381_l2cache.json
+    ascend910_9392_l2cache.json
+    ascend910_9382_l2cache.json
+    ascend910_9372_l2cache.json
+    ascend910_9362_l2cache.json
+    hi3796cv300cs_l1fusion.json
+    hi3796cv300es_l1fusion.json
+    sd3403_l1fusion.json
+    ascend910b1_24_aicore_sgt_whitelist.json
+    ascend910b4_20_aicore_sgt_whitelist.json
+    ascend910b2_aicore_sgt_whitelist.json
+     tiling
+     cce
+     cce_tools
+    auto_tune-0.1.0-py3-none-any.whl
+    auto_deploy_utils-0.1.0-py3-none-any.whl
+    schedule_search
+    engine_conf.json
+    optimizer_priority.pbtxt
+    adump_server
+    aicpu_ascend_engine
+    aicpu_engine_common
+    dvpp_engine
+    aicpu_tf_engine
+    cpu_kernels_context_static
+    msprofiler_fwk_share
+    stub_msprofiler
+    slog
+    opt_feature
+    ge_executor_shared
+    davinci_executor
+    hybrid_executor
+    ffts
+    aoe_executor
+    aoe_compiler
+    aoe_runner
+    nca
+    amctacl
+    amct_inner_graph_build
+    exe_graph
+    exe_graph_static
+    metadef
+    metadef_static
+    lowering
+    lowering_static
+    gert
+    dataflow_python
+    llm_datadist_python
+    llm_datadist_python_v1
+    ascendc_pack_kernel
+    ascendc_runtime
+    gen_kernel_tiling
+    ascendc_kernel_cmake
+    #tile_fwk_interface
+    #tile_fwk_codegen
+    #tile_fwk_passes
+    #tile_fwk_runtime
+    ops_host_cpu
+    cpu_kernels_static
+    aicpu_const_folding
+    eager_style_graph_builder_base_static
+    gen_esb
+)
+
+set(HOST_CCEC_COMPILER_FWKACLLIB_DIRS
+    ace/comop/cce
+    ace/comop/hccl/whole/operator/vector_reduce_ascend310p3
+    ace/comop/hccl/whole/operator/vector_reduce_ascend910
+    ace/comop/hccl/whole/operator/vector_reduce_ascend910B
+    ace/comop/hccl/whole/hccl
+    ace/comop/hccl/whole/hcom_graph_adaptor/
+    ace/npuruntime/runtime
+)
+
+set(HOST_CCEC_COMPILER_FWKACLLIB_TARGETS cce_aicpudev_online switch_by_index)
+
+set(HOST_COMPILER_FWKACLLIB_DEPPRJS host host_ccec)
+
+set(HOST_COMPILER_FWKACLLIB_STUBS
+    nnopbase
+    profapi
+    ascendalog
+    unified_npu_log
+    mmpa
+    platform
+    cce
+    graph
+    graph_base
+    flow_graph
+    flow_func
+    udf_profiling
+    reader_writer
+    opp_registry
+    register
+    metadef
+    runtime
+    compress
+    error_manager
+    aicore_utils
+    device_kernel
+    ascend_hal
+    msprofiler_fwk_share
+    riscv_l1fw_cdr.bin
+    qos_manager
+    drv_seclib_host
+    ascend_urd
+    ascend_uda
+    ascend_dms_dtm
+    ascend_soc_resmng
+    ascend_dms_mng
+    ascend_dms_smf
+    drv_devmng_host
+    drv_devdrv_host
+    drv_svm_peermem
+    drv_tsdrv_platform_host
+    acl_dvpp_mpi
+    gRPC::grpc
+    gRPC::grpc++
+)
+
+# DEVICE侧依赖的开源软件
+set(DEVICE_COMPILER_FWKACLLIB_MODULE_OPENSRC securec protoc ascend_protobuf_static ascend_protobuf_shared json symengine boost)
+set(DEVICE_COMPILER_FWKACLLIB_DIRS
+    metadef
+    abl/hiperf
+    abl/mmpa
+    abl/platform
+    ace/npuruntime/runtime/platform
+    abl/slog/liblog
+    manager/resmgr/iam
+    manager/resmgr/iam/xshmem
+    asl/ops/cann
+    atc/opcompiler/ascendc_compiler/api
+    atc/opcompiler/ascendc_compiler/framework
+)
+set(DEVICE_COMPILER_FWKACLLIB_TARGETS
+    alog
+    unified_npu_log
+    exe_meta_device
+    atc_stub_graph
+    stub_exe_graph
+    stub_metadef
+    stub_lowering
+    stub_opp_registry
+    stub_register
+    stub_error_manager
+    platform
+    device_register
+)
+set(DEVICE_COMPILER_FWKACLLIB_DEPPRJS device)
+set(DEVICE_COMPILER_FWKACLLIB_STUBS
+    device_dtb
+    device_kernel
+    unified_timer
+    yaml
+)

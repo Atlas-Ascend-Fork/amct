@@ -1,0 +1,39 @@
+WEIGHT_OFFSET, bool, False
+JOINT_QUANT, bool, False
+HFMG, bool, True
+BATCH_NUM, bool, True
+INT4_RETRAIN, bool, False
+INT4_DISTILL, bool, True
+MATMUL_DEQUANT_AFTER_ADD, bool, True
+QUANTIZABLE_TYPES, list,Conv2d,Conv3d,Linear,ConvTranspose2d,AvgPool2d,Conv1d,ConvTranspose1d
+QUANTIZABLE_ONNX_TYPES,list,Conv,Gemm,MatMul,ConvTranspose,AveragePool
+INT16_QUANTIZABLE_TYPES, list,Conv2d,Linear,ConvTranspose2d,Conv1d,ConvTranspose1d
+INT16_QUANTIZABLE_ONNX_TYPES,list,Conv,Gemm,ConvTranspose
+CHANNEL_WISE_TYPES, list,Conv2d,Conv3d,ConvTranspose2d,Conv1d,LSTM,GRU,ConvTranspose1d
+CHANNEL_WISE_ONNX_TYPES,list,Conv,ConvTranspose,LSTM,GRU
+FUSE_TYPES, list,Conv2d,Conv3d,Conv1d
+FUSE_ONNX_TYPES,list,Conv
+AMCT_OPERATIONS, list,IFMR,HFMG,Recorder,AscendQuant,AscendDeQuant,RetrainQuant,RNNRetrainQuant,MarkedQuantizableModule,QuantIdentity,SelectiveMaskGen,DMQBalancer,Conv2dQAT,LinearQAT,LSTMQAT,GRUQAT,OFMRQuant,FakeQuantConv2d,FakeQuantLinear,ConvTranspose1dQAT
+AMCT_RETRAIN_OPERATIONS, list,RetrainQuant,RNNRetrainQuant
+RETRAIN_TYPES, list, Conv1d,Conv2d,Conv3d,Linear,ConvTranspose2d,LSTM,GRU,ConvTranspose1d
+RETRAIN_ONNX_TYPES, list, Conv, Gemm, MatMul, ConvTranspose,LSTM,GRU
+RETRAIN_DATA_TYPES, list, INT4, INT8, INT16
+RETRAIN_ACT_WTS_TYPES, list, A4W4, A8W8, A16W8
+MULT_OUTPUT_TYPES, list,
+DISTILL_TYPES, list, Conv2d,Linear
+DISTILL_BN_TYPES, list, BatchNorm2d
+DISTILL_BN_ONNX_TYPES, list, BatchNormalization
+DISTILL_ACTIVATION_ONNX_TYPES, list, Relu,LeakyRelu,Sigmoid,Tanh,Softmax
+DISTILL_MODULE_TYPES, list, Conv2d,Linear,BatchNorm2d,ReLU,LeakyReLU,Sigmoid,Tanh,Softmax
+AMCT_DISTILL_OPERATIONS, list,Conv2dQAT,LinearQAT
+KV_CACHE_QUANTIZE_TYPES, list, Linear
+ADA_ROUND_TYPES, list, Conv2d, ConvTranspose2d, Linear
+
+PRUNABLE_TYPES,list,Conv2d,Linear
+SELECTIVE_PRUNABLE_TYPES,list,Conv2d,Linear,ConvTranspose2d
+PRUNABLE_ONNX_TYPES,list,Conv,Gemm,MatMul
+PASSIVE_PRUNABLE_TYPES,list,Conv2d,Linear,ConvTranspose2d,BatchNorm2d,BatchNorm1d
+PASSIVE_PRUNABLE_ONNX_TYPES,list,Conv,Gemm,MatMul,ConvTranspose,BatchNormalization
+CHANNEL_UNRELATED_ONNX_TYPES_P1,list,MaxPool,AveragePool,GlobalAveragePool,Pad,Relu,LeakyRelu,LogSoftmax,Softmax
+CHANNEL_UNRELATED_ONNX_TYPES_P2,list,Abs,Acos,Acosh,Asin,Asinh,Atan,Atanh,Bernoulli,Ceil,Celu,Clip,Cast,CastLike,Cos,Cosh,Dropout,Identity,Round,Pow
+ELTWISE_ONNX_TYPES,list,Add

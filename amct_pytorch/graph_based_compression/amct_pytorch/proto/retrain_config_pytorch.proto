@@ -1,0 +1,109 @@
+syntax = "proto2";
+package AMCTPytorchProto;
+
+message AMCTRetrainConfig {
+    enum FakequantPrecisionMode {
+    FORCE_FP16_QUANT = 1;
+    }
+    repeated string skip_layers = 4;
+    repeated string skip_layer_types = 6;
+    repeated RetrainOverrideLayer override_layer_configs = 5;
+    repeated RetrainOverrideLayerType override_layer_types = 7;
+
+    optional uint32 batch_num = 1 [default = 1];
+    optional RetrainDataQuantConfig retrain_data_quant_config = 2;
+    optional RetrainWeightQuantConfig retrain_weight_quant_config = 3;
+    repeated string quant_skip_layers = 11;
+    repeated string quant_skip_types = 12;
+
+    optional PruneConfig prune_config = 8;
+    repeated string regular_prune_skip_layers = 9;
+    repeated string regular_prune_skip_types = 10;
+    optional FakequantPrecisionMode fakequant_precision_mode = 21;
+}
+
+enum DataType {
+    INT4 = 0;
+    INT8 = 1;
+    INT16 = 2;
+}
+
+message RetrainDataQuantConfig {
+    oneof data_retrain_algo{
+        ActULQquantize ulq_quantize = 13;
+    }
+}
+
+message ActULQquantize {
+    optional ClipMaxMin clip_max_min = 1;
+    optional bool fixed_min = 2;
+    optional DataType dst_type = 3 [default = INT8];
+}
+
+message ClipMaxMin{
+    required float clip_max = 3;
+    required float clip_min = 5;
+}
+
+message RetrainWeightQuantConfig {
+    oneof weights_retrain_algo{
+        ARQRetrain arq_retrain = 1;
+        WtsULQRetrain ulq_retrain = 2;
+    }
+}
+
+message ARQRetrain {
+    optional DataType dst_type = 1 [default = INT8];
+    optional bool channel_wise = 2;
+}
+
+message WtsULQRetrain {
+    optional DataType dst_type = 1 [default = INT8];
+    optional bool channel_wise = 2;
+}
+
+message RetrainOverrideLayer {
+    required string layer_name = 1;
+    optional RetrainDataQuantConfig retrain_data_quant_config = 2;
+    optional RetrainWeightQuantConfig retrain_weight_quant_config  = 3;
+    optional PruneConfig prune_config = 4;
+}
+
+message RetrainOverrideLayerType {
+    required string layer_type = 1;
+    optional RetrainDataQuantConfig retrain_data_quant_config = 2;
+    optional RetrainWeightQuantConfig retrain_weight_quant_config  = 3;
+    optional PruneConfig prune_config = 4;
+}
+
+message PruneConfig {
+    oneof regular_prune_strategy {
+        FilterPruner filter_pruner = 1;
+        NOutOfMPruner n_out_of_m_pruner = 2;
+    }
+}
+
+message FilterPruner {
+    oneof filter_pruner_algo {
+        BalancedL2NormFilterPruner balanced_l2_norm_filter_prune = 1;
+    }
+}
+message BalancedL2NormFilterPruner {
+    required float prune_ratio = 1;
+    optional bool ascend_optimized = 2 [default = true];
+}
+
+message NOutOfMPruner {
+    oneof n_out_of_m_pruner_algo {
+        L1SelectivePruner l1_selective_prune = 1;
+    }
+}
+
+enum NOutOfMType{
+    M4N2 = 0;
+}
+
+message L1SelectivePruner {
+    optional NOutOfMType n_out_of_m_type = 1 [default = M4N2];
+    optional uint32 update_freq = 2 [default = 0];
+}

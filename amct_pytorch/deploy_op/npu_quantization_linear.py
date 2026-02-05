@@ -48,10 +48,10 @@ class NpuQuantizationLinear(torch.nn.Module):
                              offset_d_tensor.reshape(-1).to(device=device).to(self.output_dtype))
 
         weight = quant_module.weight.data
+        self.scale_w_tensor = None
         if quant_module.scale is not None:
             weight = apply_smooth_weight(quant_module.scale, weight)
             self.register_buffer('scale_factor', (1 / quant_module.scale).to(device=device))
-        self.register_buffer('scale_w_tensor', quant_module.scale_w.to(device=device))
         weight_tensor = self._get_quantize_wts(quant_module, weight, device)
         self.register_buffer('quantized_weight', weight_tensor)
         self.offset_bias = None

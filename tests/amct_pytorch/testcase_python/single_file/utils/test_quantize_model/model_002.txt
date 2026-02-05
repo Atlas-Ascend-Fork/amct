@@ -1,0 +1,27 @@
+record {
+  key: "fc.0"
+  value {
+    scale_d: 0.029839706
+    offset_d: 3
+    scale_w: 0.0014879737
+    offset_w: 0
+  }
+}
+record {
+  key: "fc.1"
+  value {
+    scale_d: 0.019382268
+    offset_d: 5
+    scale_w: 0.00024606253
+    offset_w: 0
+  }
+}
+record {
+  key: "fc.3"
+  value {
+    scale_d: 0.0052221795
+    offset_d: -128
+    scale_w: 0.0006949439
+    offset_w: 0
+  }
+}
