@@ -15,7 +15,7 @@ import argparse
 import torch
 import torch_npu
 
-from utils import get_loaders, get_llama2, get_calib_dataset, infer_model, test_ppl
+from utils import get_test_dataset, get_llama2, get_calib_dataset, infer_model, test_ppl
 import amct_pytorch as amct
 
 if __name__ == '__main__':
@@ -31,22 +31,7 @@ if __name__ == '__main__':
     samples = torch.cat(samples, dim=0)[:1, :]
 
     # Phase1: quantize model
-    cfg = {
-        'batch_num': 1,
-        'quant_cfg': {
-            'weights': {
-                'type': 'float8_e4m3fn',
-                'symmetric': True,
-                'strategy': 'channel',
-            },
-            'inputs': {
-                'type': 'float8_e4m3fn',
-                'symmetric': True,
-                'strategy': 'tensor',
-            },
-        },
-        'algorithm': {'ofmr'}
-    }
+    cfg = amct.HIFP8_OFMR_CFG
     amct.quantize(quant_model, cfg)
     
     # Phase2: inference calibration model to cal quantized factors
@@ -58,6 +43,6 @@ if __name__ == '__main__':
     torch_npu.npu.empty_cache()
 
     # Phase4: Test ppl result
-    testenc = get_loaders(enc=enc, seqlen=model.seqlen)
+    testenc = get_test_dataset(enc=enc, seqlen=model.seqlen)
     testenc = testenc.input_ids.npu()
     test_ppl(quant_model, testenc)
