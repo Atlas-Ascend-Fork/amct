@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import math
 import torch
 
 from amct_pytorch.utils.quant_util import convert_dtype
@@ -69,10 +70,11 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
     out = torch.nn.functional.linear(x_fp32, weight_fp32, bias_fp32)
     out = out.to(ori_dtype)
     return out
- 
+
 
 def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None, output_dtype=torch.float32,
-    x1_dtype=None, x2_dtype=None, group_sizes=None, y_scale=None):
+    x1_dtype=None, x2_dtype=None, group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
+    scale_dtype=None):
     x = x.to(torch.float32)
     weight = weight.to(torch.float32)
     if bias is not None:
@@ -88,6 +90,8 @@ def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None, output_dt
     out = torch.nn.functional.linear(x, weight, bias)
     if y_scale is not None:
         out *= y_scale
+    elif scale_dtype is not None and 'float8_e8m0fnu' in str(scale_dtype):
+        out = (out.reshape(-1, 32) * scale.reshape(-1, 1)).reshape(out.shape)
     else:
         out *= scale.reshape(1, -1)
     out = out.to(output_dtype)
@@ -118,7 +122,7 @@ def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
 
 def mock_npu_dynamic_mx_quant(weight, axis=None, round_mode=None, 
         dst_type=None, block_size=None):
-    shape = (weight.shape[0], int(weight.shape[1] // 32), 1)
+    shape = (weight.shape[0], math.ceil(weight.shape[1] / 64), 2)
     scale = torch.randn(shape)
     if dst_type != torch.float8_e4m3fn:
         weight = weight[:, :int(weight.shape[1] // 2)]

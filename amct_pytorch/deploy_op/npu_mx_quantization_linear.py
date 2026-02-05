@@ -47,9 +47,10 @@ class NpuMXQuantizationLinear(torch.nn.Module):
         elif self.wts_type == MXFP8_E4M3FN:
             weight_tensor, shared_exponent_w = torch_npu.npu_dynamic_mx_quant(
                 self.weight, axis=-1, round_mode='rint', dst_type=torch.float8_e4m3fn, block_size=32)
+            shared_exponent_w = shared_exponent_w.transpose(0, 1)
             self.group_sizes = [1, 1, 32]
         
-        weight_tensor = weight_tensor.npu().transpose(1, 0)
+        weight_tensor = weight_tensor.transpose(1, 0)
         self.register_buffer('quantized_weight', weight_tensor)
         self.register_buffer('scale_w', shared_exponent_w)
 

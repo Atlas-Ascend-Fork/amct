@@ -185,11 +185,11 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
         quantized_tensor = torch_npu.npu_quantize(tensor.npu(), scale.npu(), None, dtype=torch.float8_e4m3fn)
     elif dst_dtype == MXFP4_E2M1:
         quantized_tensor, shared_exponent = \
-            torch_npu.npu_dynamic_mx_quant(tensor.npu(), axis=-1, round_mode='rint',
+            torch_npu.npu_dynamic_mx_quant(tensor.to(torch.float16).npu(), axis=-1, round_mode='rint',
                 dst_type=torch_npu.float4_e2m1fn_x2, block_size=32)
     elif dst_dtype == MXFP8_E4M3FN:
         quantized_tensor, shared_exponent = \
-            torch_npu.npu_dynamic_mx_quant(tensor.npu(), axis=-1, round_mode='rint',
+            torch_npu.npu_dynamic_mx_quant(tensor.to(torch.float16).npu(), axis=-1, round_mode='rint',
                 dst_type=torch.float8_e4m3fn, block_size=32)
     else:
         ori_shape = tensor.shape

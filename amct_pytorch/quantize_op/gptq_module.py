@@ -96,7 +96,7 @@ class GPTQuant(BaseQuantizeModule):
         """
         columns = self.weight.shape[1]
         # Do not alter the original weights
-        weight = self.weight.clone().float() if self.wts_type != MXFP4_E2M1 else self.weight.clone()
+        weight = self.weight.clone().float()
 
         self.hessian = self.hessian.to(weight.device)
         dead = torch.diag(self.hessian) == 0
