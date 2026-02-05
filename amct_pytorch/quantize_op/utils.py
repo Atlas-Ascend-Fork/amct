@@ -241,5 +241,5 @@ def apply_progressive_quant(weight, scale_w1, scale_w2, group_size=32):
     # quantized_weight_fp4 -> n, k/2
     quantized_weight = torch_npu.npu_dtype_cast(quantized_weight_fp4.reshape(weight.shape).npu(),
         dtype=torch_npu.float4_e2m1fn_x2)
-
-    return quantized_weight
+    # npu_op need quantized_weight.t for fp8*fp4
+    return quantized_weight.transpose(-1, -2)
