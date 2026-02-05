@@ -1,0 +1,50 @@
+syntax = "proto2";
+package AMCTPytorchQuantCaliProto;
+
+message AMCTQuantCaliConfig {
+    optional uint32 batch_num = 1 [default = 1];
+    optional bool activation_offset = 2 [default = true];
+    optional CommonCalibrationConfig kv_cache_quant_config = 10;
+    repeated OverrideLayer override_layers_configs = 110;
+}
+
+message CommonCalibrationConfig {
+    repeated string quant_layers = 1;
+    optional CalibrationConfig calibration_config = 2;
+}
+
+message OverrideLayer {
+    required string layer_name = 1;
+    optional CalibrationConfig kv_data_quant_config = 2;
+}
+
+message CalibrationConfig {
+    oneof acts_quant_algo {
+        FMRQuantize ifmr_quantize = 1;
+        HFMGQuantize hfmg_quantize = 2;
+    }
+}
+
+enum QuantGranularity {
+    per_tensor = 0;
+    per_channel = 1;
+}
+
+message FMRQuantize {
+    optional float search_range_start = 1 [default = 0.7];
+    optional float search_range_end = 2 [default = 1.3];
+    optional float search_step = 3 [default = 0.01];
+    optional float max_percentile = 4 [default = 0.999999];
+    optional float min_percentile = 5 [default = 0.999999];
+    optional bool asymmetric = 6;
+    optional QuantGranularity quant_granularity = 11 [default = per_tensor];
+}
+
+message HFMGQuantize {
+    // number of bins of HFMG activation calibration algorithm
+    // now support value in [1024, 2048, 4096, 8192]
+    optional uint32 num_of_bins = 1 [default = 4096];
+    optional bool asymmetric = 2;
+
+    optional QuantGranularity quant_granularity = 11 [default = per_tensor];
+}

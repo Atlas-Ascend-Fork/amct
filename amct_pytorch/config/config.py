@@ -82,7 +82,7 @@ HIFP8_OFMR_CFG = {
         'weights': {
             'type': 'hifloat8',
             'symmetric': True,
-            'strategy': 'channel',
+            'strategy': 'tensor',
         },
         'inputs': {
             'type': 'hifloat8',

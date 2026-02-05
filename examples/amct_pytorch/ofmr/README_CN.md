@@ -65,7 +65,7 @@ Score:  5.477707
 | 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
 | :-: | :-: | :-: | :-: | :-: |
 |LLAMA2-7B|pileval|wikitext2|5.472|5.505|
-|QWEN2-7B|pileval|wikitext2|7.137|7.200|
-|QWEN3-8B|pileval|wikitext2|9.715|9.806|
+|QWEN2-7B|pileval|wikitext2|7.137|7.196|
+|QWEN3-8B|pileval|wikitext2|9.715|9.808|
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
