@@ -23,7 +23,7 @@ ARCH="$(uname -m)"
 BASE_NAME="cann-amct-graph"
 SOURCE_URL="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260131_newest/${BASE_NAME}_9.0.0_linux-${ARCH}.tar.gz"
 BUNDLE_DIR="${WORKING_DIR}/amctgraph"
-OUTPUT_FILE="${BASE_NAME}_9.0.0_linux-${ARCH}.tar.gz"
+OUTPUT_FILE="${BASE_NAME}_.*_linux-${ARCH}.tar.gz"
 AMCT_GRAPH_PATH="${WORKING_DIR}/build"
 
 # Display current directory
