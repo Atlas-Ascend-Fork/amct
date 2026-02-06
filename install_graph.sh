@@ -26,7 +26,7 @@ ARCH="$(uname -m)"
 BASE_NAME="cann-amct-graph"
 SOURCE_URL="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260131_newest/${BASE_NAME}_9.0.0_linux-${ARCH}.tar.gz"
 BUNDLE_DIR="${WORKING_DIR}/amctgraph"
-OUTPUT_FILE="${BASE_NAME}_.*_linux-${ARCH}.tar.gz"
+OUTPUT_FILE="${BASE_NAME}_*_linux-${ARCH}.tar.gz"
 AMCT_GRAPH_PATH="${WORKING_DIR}/build"
 
 # Display current directory
@@ -38,7 +38,7 @@ echo ""
 echo "Creating directories..."
 mkdir -p "$BUNDLE_DIR"
 
-if [ -f "${AMCT_GRAPH_PATH}/${OUTPUT_FILE}" ]; then
+if find "${AMCT_GRAPH_PATH}" -name "${OUTPUT_FILE}" | grep -q '.'; then
     echo "${OUTPUT_FILE} exist."
     cp ${AMCT_GRAPH_PATH}/${OUTPUT_FILE} .
 # Download package
