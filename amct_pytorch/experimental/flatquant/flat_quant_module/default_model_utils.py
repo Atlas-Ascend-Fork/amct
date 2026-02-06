@@ -3,29 +3,51 @@ import torch.nn as nn
 
 from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb, eager_attention_forward
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
-from typing import Callable, Optional, Tuple
+from typing import Callable
 
 from .quant_utils import ActivationQuantizer
 from .function_utils import get_init_scale, get_decompose_dim
 from .trans_utils import SVDSingleTransMatrix, SVDDecomposeTransMatrix
 from .flat_linear import FlatQuantizedLinear
-from .config_utils import InnerConfig
+from .config_utils import FlatConfig
+
+
+def flat_config_parser(layer_config):
+    flatquant_config = layer_config.get('algorithm').get('flatquant')
+
+    flat_config = FlatConfig()
+    # quant config
+    flat_config.a_bits = int(layer_config.get('inputs_cfg').get('quant_type').replace('int', ''))
+    flat_config.w_bits = int(layer_config.get('weights_cfg').get('quant_type').replace('int', ''))
+    flat_config.a_sym = layer_config.get('inputs_cfg').get('symmetric')
+    flat_config.w_sym = layer_config.get('weights_cfg').get('symmetric')
+    flat_config.lac = flatquant_config.get('lac', FlatConfig.lac)
+    flat_config.lwc = flatquant_config.get('lwc', FlatConfig.lwc)
+    flat_config.use_o_quant = flatquant_config.get('use_o_quant', FlatConfig.use_o_quant)
+
+    # kv config
+    flat_config.use_kcache_quant = flatquant_config.get('use_kcache_quant', FlatConfig.use_kcache_quant)
+    flat_config.k_bits = flatquant_config.get('k_bits', FlatConfig.k_bits)
+    flat_config.k_sym = flatquant_config.get('k_sym', FlatConfig.k_sym)
+    flat_config.use_vcache_quant = flatquant_config.get('use_vcache_quant', FlatConfig.use_vcache_quant)
+    flat_config.v_bits = flatquant_config.get('v_bits', FlatConfig.v_bits)
+    flat_config.v_sym = flatquant_config.get('v_sym', FlatConfig.v_sym)
+    
+    # cali config
+    flat_config.add_diag = flatquant_config.get('add_diag', FlatConfig.add_diag)
+    flat_config.epochs = flatquant_config.get('epochs', FlatConfig.epochs)
+    flat_config.cali_bsz = flatquant_config.get('cali_bsz', FlatConfig.cali_bsz)
+    flat_config.flat_lr = flatquant_config.get('flat_lr', FlatConfig.flat_lr)
+    flat_config.cali_trans = flatquant_config.get('cali_trans', FlatConfig.cali_trans)
+
+    return flat_config
 
 
 class FlatQuantAttention(nn.Module):
     def __init__(self, module: nn.Module, layer_name: str="", layer_config = None):
         super().__init__()
 
-        # quant config
-        self.a_bit = int(layer_config.get('inputs_cfg').get('quant_type').replace('int', ''))
-        self.w_bit = int(layer_config.get('weights_cfg').get('quant_type').replace('int', ''))
-
-        flatquant_attn_config = layer_config.get('algorithm').get('flatquant')
-        self.use_kcache_quant = flatquant_attn_config.get('use_kcache_quant', InnerConfig.use_kcache_quant.value)
-        self.k_bits = flatquant_attn_config.get('k_bits', InnerConfig.k_bits.value)
-        self.use_vcache_quant = flatquant_attn_config.get('use_vcache_quant', InnerConfig.use_vcache_quant.value)
-        self.v_bits = flatquant_attn_config.get('v_bits', InnerConfig.v_bits.value)
-        self.use_o_quant = flatquant_attn_config.get('use_o_quant', InnerConfig.use_o_quant.value)
+        self.flat_config = flat_config_parser(layer_config)
 
         # module
         self.module_config = module.config
@@ -41,18 +63,18 @@ class FlatQuantAttention(nn.Module):
         if hasattr(module, 'sliding_window'):
             self.sliding_window = module.sliding_window
 
-        self.q_proj = FlatQuantizedLinear(module.q_proj, module.q_proj.weight.shape[0])
-        self.k_proj = FlatQuantizedLinear(module.k_proj, module.k_proj.weight.shape[0])
-        self.v_proj = FlatQuantizedLinear(module.v_proj, module.v_proj.weight.shape[0])
-        self.o_proj = FlatQuantizedLinear(module.o_proj, module.o_proj.weight.shape[0])
+        self.q_proj = FlatQuantizedLinear(module.q_proj, self.flat_config)
+        self.k_proj = FlatQuantizedLinear(module.k_proj, self.flat_config)
+        self.v_proj = FlatQuantizedLinear(module.v_proj, self.flat_config)
+        self.o_proj = FlatQuantizedLinear(module.o_proj, self.flat_config)
         self.add_fq_trans()
 
-        if self.use_kcache_quant and self.k_bits < 16:
-            self.k_cache_quantizer = ActivationQuantizer(bits=InnerConfig.k_bits.value, \
-                                        sym=not(InnerConfig.k_asym.value), lac=InnerConfig.lac, groupsize=-1, )
-        if self.use_vcache_quant and self.v_bits < 16:
-            self.v_cache_quantizer = ActivationQuantizer(bits=InnerConfig.v_bits.value, \
-                                        sym=not(InnerConfig.v_asym.value), lac=InnerConfig.lac.value, groupsize=-1, )
+        if self.flat_config.use_kcache_quant and self.flat_config.k_bits < 16:
+            self.k_cache_quantizer = ActivationQuantizer(bits=self.flat_config.k_bits,
+                sym=self.flat_config.k_sym, lac=self.flat_config.lac, groupsize=-1, )
+        if self.flat_config.use_vcache_quant and self.flat_config.v_bits < 16:
+            self.v_cache_quantizer = ActivationQuantizer(bits=self.flat_config.v_bits,
+                sym=self.flat_config.v_sym, lac=self.flat_config.lac, groupsize=-1, )
 
         self._ori_mode = False
         self._eval_mode = False
@@ -62,10 +84,10 @@ class FlatQuantAttention(nn.Module):
         '''
         addd the low rank trans matrix before the ln
         '''
-        if self.a_bit < 16 or self.w_bit < 16:
+        if self.flat_config.a_bits < 16 or self.flat_config.w_bits < 16:
             ln_dim_left, ln_dim_right = get_decompose_dim(self.q_proj.linear.weight.shape[1])
-            self.ln_trans = SVDDecomposeTransMatrix(ln_dim_left, ln_dim_right, add_diag=InnerConfig.add_diag.value)
-            if InnerConfig.use_o_quant.value:
+            self.ln_trans = SVDDecomposeTransMatrix(ln_dim_left, ln_dim_right, add_diag=self.flat_config.add_diag)
+            if self.flat_config.use_o_quant:
                 self.o_trans = SVDSingleTransMatrix(self.module_config.num_attention_heads)
             else:
                 self.o_trans = None
@@ -73,11 +95,11 @@ class FlatQuantAttention(nn.Module):
             self.ln_trans, self.o_trans = None, None
 
         head_dim = self.module_config.hidden_size // self.module_config.num_attention_heads
-        if self.use_kcache_quant and self.k_bits < 16:
+        if self.flat_config.use_kcache_quant and self.flat_config.k_bits < 16:
             self.kcache_trans = SVDSingleTransMatrix(head_dim)
         else:
             self.kcache_trans = None
-        if self.use_vcache_quant and (self.v_bits < 16 or InnerConfig.w_bits.value < 16 or InnerConfig.a_bits.value < 16):
+        if self.flat_config.use_vcache_quant and (self.flat_config.v_bits < 16 or self.flat_config.w_bits < 16 or self.flat_config.a_bits < 16):
             self.vcache_trans = SVDSingleTransMatrix(head_dim)
         else:
             self.vcache_trans = None
@@ -100,19 +122,19 @@ class FlatQuantAttention(nn.Module):
         return query_states, key_states, value_states
 
     def quant_vcache(self, value_states):
-        if InnerConfig.v_bits.value < 16:
+        if self.v_bits < 16:
             value_states = self.v_cache_quantizer(value_states)
         return value_states
 
     def quant_kcache(self, q, k):
-        if not InnerConfig.k_bits.value < 16:
+        if not self.flat_config.k_bits < 16:
             return q, k
         # Q/K transform
         if self.kcache_trans is not None:
             q = self.kcache_trans(q, inv_t=True)
             k = self.kcache_trans(k)
         # TODO: by default do the per-head quantizaion for k-v-cache
-        if InnerConfig.k_bits.value < 16:
+        if self.flat_config.k_bits < 16:
             k = self.k_cache_quantizer(k).to(q)
         return q, k
 
@@ -135,9 +157,9 @@ class FlatQuantAttention(nn.Module):
 
         # ---- here do the kv cache quantization ----
         if not self._ori_mode:
-            if self.use_kcache_quant:
+            if self.flat_config.use_kcache_quant:
                 query_states, key_states = self.quant_kcache(query_states, key_states)
-            if self.use_vcache_quant:
+            if self.flat_config.use_vcache_quant:
                 value_states = self.quant_vcache(value_states)
 
         if past_key_value is not None:
@@ -245,18 +267,16 @@ class FlatQuantMLP(nn.Module):
     def __init__(self, module: nn.Module, layer_name: str="", layer_config = None):
         super().__init__()
 
-        # quant config
-        self.a_bit = int(layer_config.get('inputs_cfg').get('quant_type').replace('int', ''))
-        self.w_bit = int(layer_config.get('weights_cfg').get('quant_type').replace('int', ''))
+        self.flat_config = flat_config_parser(layer_config)
 
         # quant module
         self.hidden_size = module.config.hidden_size
         self.intermediate_size = module.config.intermediate_size
         self.act_fn = module.act_fn if hasattr(module, 'act_fn') else None
 
-        self.up_proj = FlatQuantizedLinear(module.up_proj, module.up_proj.weight.shape[0])
-        self.gate_proj = FlatQuantizedLinear(module.gate_proj, module.gate_proj.weight.shape[0])
-        self.down_proj = FlatQuantizedLinear(module.down_proj, module.down_proj.weight.shape[0])
+        self.up_proj = FlatQuantizedLinear(module.up_proj, self.flat_config)
+        self.gate_proj = FlatQuantizedLinear(module.gate_proj, self.flat_config)
+        self.down_proj = FlatQuantizedLinear(module.down_proj, self.flat_config)
         self.add_fq_trans()
 
         self._ori_mode = False
@@ -265,12 +285,12 @@ class FlatQuantMLP(nn.Module):
 
         
     def add_fq_trans(self):
-        if self.a_bit < 16 or self.w_bit < 16:
+        if self.flat_config.a_bits < 16 or self.flat_config.w_bits < 16:
             up_dim_left, up_dim_right = get_decompose_dim(self.up_proj.linear.weight.shape[1])
-            self.up_gate_trans = SVDDecomposeTransMatrix(up_dim_left, up_dim_right, add_diag=InnerConfig.add_diag.value)
+            self.up_gate_trans = SVDDecomposeTransMatrix(up_dim_left, up_dim_right, add_diag=self.flat_config.add_diag)
             
             down_dim_left, down_dim_right = get_decompose_dim(self.down_proj.linear.weight.shape[1])
-            self.down_trans = SVDDecomposeTransMatrix(down_dim_left, down_dim_right, add_diag=InnerConfig.add_diag.value)
+            self.down_trans = SVDDecomposeTransMatrix(down_dim_left, down_dim_right, add_diag=self.flat_config.add_diag)
         else:
             self.up_gate_trans, self.down_trans = None, None
 

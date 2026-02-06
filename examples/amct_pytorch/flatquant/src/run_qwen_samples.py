@@ -17,33 +17,53 @@ import os
 from utils import get_qwen, build_enc, seed_everything, get_wikitext2, create_logger
 import amct_pytorch as amct
 
-from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
+# from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
 from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import save_flat_matrices, load_flat_matrices
 from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import cali_flat_quant
 
+INT4_FLAT_QUANT_CFG = {
+    'quant_cfg': {
+        'inputs': {
+            'type': 'int4',
+            'symmetric': True,
+            'strategy': 'token'
+        },
+        'weights': {
+            'type': 'int4',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+    },
+    'algorithm': {
+        'flatquant': {
+            # KV-cache quantization
+            'use_kcache_quant': False,
+            'k_bits': 16,
+            'k_sym': False,
+            'use_vcache_quant': False,
+            'v_bits': 16,
+            'v_sym': False,
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str, required=True, help='model location')
-    parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
-    parser.add_argument('--load_matrix', action='store_true', help="whether to load matrix")
-    parser.add_argument('--flat_matrix_path', type=str, 
-        default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location'
-    )
-    args = parser.parse_args()
+            # A special control for o_trans and o_proj (different from other proj)
+            'use_o_quant': False,
 
-    logger = create_logger()
-    seed_everything()
-    os.makedirs(os.path.dirname(args.flat_matrix_path), exist_ok=True)
+            # Other quantization parameters
+            'lac': False,
+            'lwc': True,
+            'diag_alpha': 0.8,
 
-    # Phase0: choose model && data
-    model = get_qwen(args.model_path)
-    model.to(args.device)
-    tokenizer = build_enc(args.model_path)
-    calib_dataset = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer)
-    calib_dataset_eval = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer, eval_mode=True)
+            # Calibration
+            'epochs': 15,
+            'cali_bsz': 4,
+            'flat_lr': 3e-3,
+            'cali_trans': True,
+        },
+    },
+    'skip_layers': {'lm_head', 'layers.16','layers.17','layers.18','layers.19', 'layers.20',
+                    'layers.21','layers.22','layers.23', 'layers.24','layers.25','layers.26','layers.27'}
+}
 
-    # Prompt to test
+def content_generate(model, tokenizer):
     prompt = "Give me a short introduction to the Ascend Model Compression Toolkit(AMCT). /no_think"
     messages = [{'role': 'user', 'content': prompt}]
     text = tokenizer.apply_chat_template(
@@ -59,6 +79,31 @@ if __name__ == '__main__':
     content = tokenizer.decode(output_ids, skip_special_tokens=True)
     print(f'content: {content}')
 
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model_path', type=str, required=True, help='model location')
+    parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
+    parser.add_argument('--load_matrix', action='store_true', help="whether to load matrix")
+    parser.add_argument('--flat_matrix_path', type=str, 
+        default="./outputs/qwen/flat_matrices.pth", help='flat matrix location'
+    )
+    args = parser.parse_args()
+
+    logger = create_logger()
+    seed_everything()
+    os.makedirs(os.path.dirname(args.flat_matrix_path), exist_ok=True)
+
+    # Phase0: choose model && data
+    model = get_qwen(args.model_path)
+    model.to(args.device)
+    tokenizer = build_enc(args.model_path)
+    calib_dataset = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer)
+    calib_dataset_eval = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer, eval_mode=True)
+
+    # original content generate
+    content_generate(model, tokenizer)
+
     # quantize & calibration
     amct.quantize(model, INT4_FLAT_QUANT_CFG)
     print(f'model after quantization: \n{model}')
@@ -71,10 +116,7 @@ if __name__ == '__main__':
         save_flat_matrices(model, args.flat_matrix_path)
     model.to(args.device)
 
-    # quatized model generation
-    generated_ids = model.generate(**model_inputs, max_new_tokens=16384)
-    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
-    content = tokenizer.decode(output_ids, skip_special_tokens=True)
-    print(f'quantized content: {content}')
+    # quatized model content generate
+    content_generate(model, tokenizer)
 
     print('All done!')

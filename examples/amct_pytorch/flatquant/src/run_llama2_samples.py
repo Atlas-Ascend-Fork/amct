@@ -31,8 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, required=True, help='model location')
     parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
     parser.add_argument('--load_matrix', action='store_true', help="whether to load matrix")
-    parser.add_argument(
-        '--flat_matrix_path', type=str, 
+    parser.add_argument('--flat_matrix_path', type=str, 
         default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location'
     )
     parser.add_argument('--eval_fake_quant', action='store_true', help="whether to evaluate fake quant")
@@ -46,6 +45,7 @@ if __name__ == '__main__':
     model = get_llama(args.model_path)
     model.to(args.device)
     tokenizer = build_enc(args.model_path)
+
     calib_dataset = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer)
     calib_dataset_eval = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer, eval_mode=True)
 

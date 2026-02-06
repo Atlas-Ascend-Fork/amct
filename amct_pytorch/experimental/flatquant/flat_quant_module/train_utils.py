@@ -5,12 +5,12 @@ import torch
 import torch_npu
 
 from .function_utils import set_require_grad_all, get_n_set_parameters_byname
-from .config_utils import InnerConfig
+from .default_model_utils import FlatQuantAttention, FlatQuantMLP
 
 
 def cali_flat_quant(model, dataloader, dev):
     """
-    The parameters related to calibration (e.g. epochs, batch size, learning rate) can be adjusted in the "Calibration" section in the InnerConfig enum
+    The parameters related to calibration (e.g. epochs, batch size, learning rate) 
     """
     # TODO: maybe standardize the configuration procedure for calibration in the future (also for other quant methods)
     model.eval()
@@ -22,10 +22,6 @@ def cali_flat_quant(model, dataloader, dev):
     # set trainable parameters
     for name, param in model.named_parameters():
         param.requires_grad = False
-
-    # activate AMP
-    dtype = torch.bfloat16
-    traincast = functools.partial(torch_npu.npu.amp.autocast, dtype=dtype)
 
     # move embedding layer and first layer to target device
     layers = model.model.layers
@@ -43,10 +39,10 @@ def cali_flat_quant(model, dataloader, dev):
         raise ValueError('early exit to break later interface')
 
     handle = layers[0].register_forward_pre_hook(layer_input_data_hook, with_kwargs=True)
+
+    n_samples = len(dataloader)
     with torch.no_grad():
-        for i, batch in enumerate(dataloader):
-            if i >= InnerConfig.nsamples.value:
-                break
+        for batch in dataloader:
             try:
                 sample = batch[0]
                 model(sample.to(dev))
@@ -54,10 +50,6 @@ def cali_flat_quant(model, dataloader, dev):
                 pass
     handle.remove()
 
-    batch_kwargs = layer_kwargs.copy()
-    if batch_kwargs['attention_mask'] is not None:
-        batch_kwargs['attention_mask'] = batch_kwargs['attention_mask'].repeat(InnerConfig.cali_bsz.value, 1, 1, 1).float()
-    
     # move embedding layer and first layer to cpu
     layers[0] = layers[0].cpu()
     model.model.embed_tokens = model.model.embed_tokens.cpu()
@@ -69,10 +61,8 @@ def cali_flat_quant(model, dataloader, dev):
     fp_inps = torch.stack(inps)
     fp_outs = torch.zeros_like(fp_inps)
 
-    loss_func = torch.nn.MSELoss()
     # start training
-    num_train_layer = len(layers)
-    for i in range(num_train_layer):
+    for i in range(len(layers)):
         print(f"========= Layer {i} =========")
         dtype_dict = {}
         layer = layers[i].to(dev)
@@ -81,61 +71,24 @@ def cali_flat_quant(model, dataloader, dev):
         with torch.no_grad():
             layer.float()
 
-        # original forward to get output data & ln data
-        if hasattr(layer.self_attn, '_ori_mode'):
+        training_flag = False
+        if isinstance(layer.self_attn, FlatQuantAttention) or isinstance(layer.mlp, FlatQuantMLP):
+            training_flag = True
+
+        # origin forward
+        if training_flag:
             layer.self_attn._ori_mode = True
-        if hasattr(layer.mlp, '_ori_mode'):
             layer.mlp._ori_mode = True
+
         with torch.no_grad():
-            for j in range(InnerConfig.nsamples.value):
+            for j in range(n_samples):
                 fp_outs[j] = layer(fp_inps[j].unsqueeze(0), **layer_kwargs)[0]
-        if hasattr(layer.self_attn, '_ori_mode'):
+        
+        # calibration layer by layer
+        if training_flag:
             layer.self_attn._ori_mode = False
-        if hasattr(layer.mlp, '_ori_mode'):
             layer.mlp._ori_mode = False
-
-        # init diag scale with ln data
-        if hasattr(layer.self_attn, 'init_diag_scale'):
-            layer.self_attn.init_diag_scale(alpha=InnerConfig.diag_alpha.value)
-        if hasattr(layer.mlp, 'init_diag_scale'):
-            layer.mlp.init_diag_scale(alpha=InnerConfig.diag_alpha.value)
-
-        set_require_grad_all(layer, False)
-        trained_params, paras_name = [], []
-        if InnerConfig.cali_trans.value:
-            trained_params.append({"params": get_n_set_parameters_byname(layer, ["trans.linear", ]), "lr": InnerConfig.flat_lr.value})
-            paras_name.append("trans.linear")
-        if InnerConfig.add_diag.value:
-            trained_params.append({"params": get_n_set_parameters_byname(layer, ["trans.diag_scale", ]), "lr": InnerConfig.flat_lr.value})
-            paras_name.append("trans.diag_scale")
-        if InnerConfig.lwc.value:
-            trained_params.append({"params": get_n_set_parameters_byname(layer, ["clip_factor_w", ]), "lr": InnerConfig.flat_lr.value * 10})
-            paras_name.append("clip_factor_w")
-        if InnerConfig.lac.value:
-            trained_params.append({"params": get_n_set_parameters_byname(layer, ["clip_factor_a", ]), "lr": InnerConfig.flat_lr.value * 10})
-            paras_name.append("clip_factor_a")
-
-        optimizer = torch.optim.AdamW(trained_params)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
-            T_max=InnerConfig.epochs.value * (InnerConfig.nsamples.value // InnerConfig.cali_bsz.value),
-            eta_min=InnerConfig.flat_lr.value * 1e-3)
-
-        for epoch in range(InnerConfig.epochs.value):
-            mse = 0
-            start_tick = time.time()
-            with traincast():
-                for j in range(InnerConfig.nsamples.value // InnerConfig.cali_bsz.value):
-                    index = j * InnerConfig.cali_bsz.value
-                    quant_out = layer(fp_inps[index:index+InnerConfig.cali_bsz.value,], **batch_kwargs)[0]
-                    loss = loss_func(fp_outs[index:index+InnerConfig.cali_bsz.value,], quant_out)
-                    mse += loss.detach().cpu()
-                    loss = loss / loss.clone().detach()
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-                    scheduler.step()
-            cur_lr = optimizer.state_dict()['param_groups'][0]['lr']
-            print(f"layer {i} lwc lac iter {epoch}, lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}" )
+            cali_layer(layer, fp_inps, fp_outs, layer_kwargs)
 
         fp_inps, fp_outs = fp_outs, fp_inps
         layers[i] = layer.to("cpu")
@@ -151,3 +104,65 @@ def cali_flat_quant(model, dataloader, dev):
     torch.npu.empty_cache()
     model.config.use_cache = use_cache
     return model
+
+
+def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
+    n_samples = len(fp_inps)
+
+    # activate AMP
+    dtype = torch.bfloat16
+    traincast = functools.partial(torch_npu.npu.amp.autocast, dtype=dtype)
+    loss_func = torch.nn.MSELoss()
+
+    # init diag scale with ln data
+    if hasattr(layer.self_attn, 'init_diag_scale'):
+        layer.self_attn.init_diag_scale(alpha=layer.self_attn.flat_config.diag_alpha)
+    if hasattr(layer.mlp, 'init_diag_scale'):
+        layer.mlp.init_diag_scale(alpha=layer.self_attn.flat_config.diag_alpha)
+
+    set_require_grad_all(layer, False)
+    trained_params, paras_name = [], []
+    if layer.self_attn.flat_config.cali_trans:
+        trained_params.append(
+            {"params": get_n_set_parameters_byname(layer, ["trans.linear", ]), "lr": layer.self_attn.flat_config.flat_lr})
+        paras_name.append("trans.linear")
+    if layer.self_attn.flat_config.add_diag:
+        trained_params.append(
+            {"params": get_n_set_parameters_byname(layer, ["trans.diag_scale", ]), "lr": layer.self_attn.flat_config.flat_lr})
+        paras_name.append("trans.diag_scale")
+    if layer.self_attn.flat_config.lwc:
+        trained_params.append(
+            {"params": get_n_set_parameters_byname(layer, ["clip_factor_w", ]), "lr": layer.self_attn.flat_config.flat_lr * 10})
+        paras_name.append("clip_factor_w")
+    if layer.self_attn.flat_config.lac:
+        trained_params.append(
+            {"params": get_n_set_parameters_byname(layer, ["clip_factor_a", ]), "lr": layer.self_attn.flat_config.flat_lr * 10})
+        paras_name.append("clip_factor_a")
+
+    bsz = layer.self_attn.flat_config.cali_bsz
+    batch_kwargs = layer_kwargs.copy()
+    if batch_kwargs['attention_mask'] is not None:
+        batch_kwargs['attention_mask'] = batch_kwargs['attention_mask'].repeat(bsz, 1, 1, 1).float()
+
+    optimizer = torch.optim.AdamW(trained_params)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=layer.self_attn.flat_config.epochs * (n_samples // bsz), 
+        eta_min=layer.self_attn.flat_config.flat_lr * 1e-3)
+
+    for epoch in range(layer.self_attn.flat_config.epochs):
+        mse = 0
+        start_tick = time.time()
+        with traincast():
+            for j in range(n_samples // bsz):
+                index = j * bsz
+                quant_out = layer(fp_inps[index : index+bsz, ], **batch_kwargs)[0]
+                loss = loss_func(fp_outs[index : index+bsz, ], quant_out)
+                mse += loss.detach().cpu()
+                loss = loss / loss.clone().detach()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
+        cur_lr = optimizer.state_dict()['param_groups'][0]['lr']
+        print(f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}" )
