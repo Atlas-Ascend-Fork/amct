@@ -184,7 +184,7 @@ build() {
 
   rm -rf ${BASEPATH}/dist
   rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
-  rm -rf ${TARGET_DIR}
+  [ -n "${TARGET_DIR}" ] && rm -rf ${TARGET_DIR}
   rm -rf ${BASEPATH}/amctgraph
 }
 

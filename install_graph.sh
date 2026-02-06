@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+
+set -e
+
 # 获取当前工作目录
 WORKING_DIR=$(pwd)
 echo "工作目录: $WORKING_DIR"
@@ -44,7 +47,7 @@ else
     wget -O "$OUTPUT_FILE" "$SOURCE_URL" --no-check-certificate
     if [ $? -ne 0 ]; then
         echo "Error: Failed to download Ascend CANN Toolkit"
-        rm -rf "$BUNDLE_DIR"
+        [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
         exit 1
     fi
 fi
