@@ -50,7 +50,7 @@ else
     fi
 fi
 
-tar -zxvf "$OUTPUT_FILE" -C "$BUNDLE_DIR"> /dev/null 2>&1
+tar -zxvf "$OUTPUT_FILE" -C "$BUNDLE_DIR"
 
 if [ $? -eq 0 ]; then
     echo "Package verification successful"
