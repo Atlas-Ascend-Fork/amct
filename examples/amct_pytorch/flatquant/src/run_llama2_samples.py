@@ -31,8 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, required=True, help='model location')
     parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
     parser.add_argument('--load_matrix', action='store_true', help="whether to load matrix")
-    parser.add_argument(
-        '--flat_matrix_path', type=str, 
+    parser.add_argument('--flat_matrix_path', type=str, 
         default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location'
     )
     parser.add_argument('--eval_fake_quant', action='store_true', help="whether to evaluate fake quant")
@@ -77,7 +76,7 @@ if __name__ == '__main__':
 
     # Optionally evaluate fake quant; much slower than real quant
     if args.eval_fake_quant:
-        eval_total(args.task_path, model, tokenizer, calib_dataset_eval, logger)
+        eval_total(model, tokenizer, calib_dataset_eval, logger)
 
     # Phase3: convert deploy model
     amct.convert(model)

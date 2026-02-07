@@ -13,10 +13,12 @@ def get_layer_from_submodule(model: nn.Module, object_name: str):
     return layer_module
 
 
-def get_replacement_module(model, object_type_name, object_name, object_module):
-    if object_type_name != 'FlatQuantAttention' and object_type_name != 'FlatQuantMLP':
-        raise ValueError(f'object_type_name {object_type_name} is invalid')
-    if object_type_name == 'FlatQuantAttention':
+def get_replacement_module(model, object_name, object_module):
+    object_type = type(object_module).__name__
+    if object_type != 'FlatQuantAttention' and object_type != 'FlatQuantMLP':
+        raise ValueError(f'object_type_name {object_type} is invalid')
+
+    if object_type == 'FlatQuantAttention':
         matched = re.match(r".*\.layers\..*\.self_attn", object_name)
         if not matched:
             raise ValueError(f"object_name {object_name} not matched with required structure for self_attn")
@@ -28,7 +30,7 @@ def get_replacement_module(model, object_type_name, object_name, object_module):
     object_module.reparameterize()
     layer_module = get_layer_from_submodule(model, object_name)
 
-    if object_type_name == 'FlatQuantAttention':
+    if object_type == 'FlatQuantAttention':
         if object_module.ln_trans is not None and object_module.ln_trans.add_diag:
             reparameterize_ln(layer_module.input_layernorm, object_module.ln_trans)
         npu_module = NpuFlatQuantAttention(object_module)

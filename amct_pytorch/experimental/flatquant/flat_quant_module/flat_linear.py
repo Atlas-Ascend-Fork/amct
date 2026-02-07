@@ -4,18 +4,18 @@ import torch.nn.functional as F
 
 from .quant_utils import WeightQuantizer, ActivationQuantizer
 from .flat_utils import kronecker_matmul
-from .config_utils import InnerConfig
 
 class FlatQuantizedLinear(nn.Module):
-    def __init__(self, linear: nn.Linear, quantizer_size: int=4096):
+    def __init__(self, linear: nn.Linear, quant_config):
         super(FlatQuantizedLinear, self).__init__()
         self.linear = linear
 
+        quantizer_size = linear.weight.shape[0]
         self.weight_quantizer = WeightQuantizer(shape=(quantizer_size, 1))
-        self.weight_quantizer.configure(InnerConfig.w_bits.value, perchannel=True, sym=not(InnerConfig.w_asym.value), mse=False)
-        self.act_quantizer = ActivationQuantizer(bits=InnerConfig.a_bits.value, sym=not(InnerConfig.a_asym.value), lac=InnerConfig.lac.value)
+        self.weight_quantizer.configure(quant_config.w_bits, perchannel=True, sym=quant_config.w_sym, mse=False)
+        self.act_quantizer = ActivationQuantizer(quant_config.a_bits, sym=quant_config.a_sym, lac=quant_config.lac)
 
-        self.lwc = InnerConfig.lwc.value
+        self.lwc = quant_config.lwc
         if self.lwc:
             lwc_dim = self.linear.weight.shape[0] if self.lwc else -1
             init_value = 4.
