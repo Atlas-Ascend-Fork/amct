@@ -17,7 +17,6 @@ import os
 from utils import get_qwen, build_enc, seed_everything, get_wikitext2
 import amct_pytorch as amct
 
-# from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
 from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import save_flat_matrices, load_flat_matrices
 from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import cali_flat_quant
 
