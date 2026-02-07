@@ -25,6 +25,7 @@ BASE_NAME="cann-amct-graph"
 SOURCE_URL="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260131_newest/${BASE_NAME}_9.0.0_linux-${ARCH}.tar.gz"
 BUNDLE_DIR="${WORKING_DIR}/amctgraph"
 OUTPUT_FILE="${BASE_NAME}_*_linux-${ARCH}.tar.gz"
+AMCT_GRAPH_FILE="${BASE_NAME}_linux-${ARCH}.tar.gz"
 AMCT_GRAPH_PATH="${WORKING_DIR}/build"
 
 # Display current directory
@@ -37,12 +38,12 @@ echo "Creating directories..."
 mkdir -p "$BUNDLE_DIR"
 
 if find "${AMCT_GRAPH_PATH}" -name "${OUTPUT_FILE}" | grep -q '.'; then
-    echo "${OUTPUT_FILE} exist."
-    cp ${AMCT_GRAPH_PATH}/${OUTPUT_FILE} .
+    echo "${OUTPUT_FILE} exist, copy ${OUTPUT_FILE} to ${AMCT_GRAPH_FILE}."
+    cp ${AMCT_GRAPH_PATH}/${OUTPUT_FILE} ${AMCT_GRAPH_FILE}
 # Download package
 else
     echo "Downloading Ascend CANN Toolkit..."
-    wget -O "$OUTPUT_FILE" "$SOURCE_URL" --no-check-certificate
+    wget -O "${AMCT_GRAPH_FILE}" "$SOURCE_URL" --no-check-certificate
     if [ $? -ne 0 ]; then
         echo "Error: Failed to download Ascend CANN Toolkit"
         [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
@@ -57,12 +58,12 @@ ls $BUNDLE_DIR
 echo "ls dir $AMCT_GRAPH_PATH"
 ls $AMCT_GRAPH_PATH
 
-echo "tar -zxvf $OUTPUT_FILE -C $BUNDLE_DIR"
-tar -zxvf "$OUTPUT_FILE" -C "$BUNDLE_DIR"
+echo "tar -zxvf ${AMCT_GRAPH_FILE} -C $BUNDLE_DIR"
+tar -zxvf "${AMCT_GRAPH_FILE}" -C "$BUNDLE_DIR"
 
 if [ $? -eq 0 ]; then
     echo "Package verification successful"
-    echo "Extracted to: $OUTPUT_FILE"
+    echo "Extracted to: ${AMCT_GRAPH_FILE}"
 
     # 显示解压后的文件结构
     echo "Extracted directory structure:"
@@ -74,7 +75,7 @@ fi
 
 # Remove the downloaded installer
 echo "Removing downloaded installer..."
-rm -f "$OUTPUT_FILE"
+rm -f "${AMCT_GRAPH_FILE}"
 
 echo ""
 echo "=============================================="
