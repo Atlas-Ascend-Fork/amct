@@ -46,7 +46,8 @@ INT4_FLAT_QUANT_CFG = {
 
             # special control for o_proj & down_proj
             'use_o_quant': False,
-            'use_down_quant': False,
+            'use_down_quant': False,    # we choose to skip dowm_proj quantization, 
+                                        # for qwen3 model '/no_think' prompt is sensitive to quantization
 
             # Other quantization parameters
             'lac': False,
@@ -94,31 +95,29 @@ if __name__ == '__main__':
     seed_everything()
     os.makedirs(os.path.dirname(args.flat_matrix_path), exist_ok=True)
 
-    # Phase0: choose model && data
+    # prepare model
     model = get_qwen(args.model_path)
     model.to(args.device)
     tokenizer = build_enc(args.model_path)
-    calib_dataset = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer)
 
     # original content generate
     ori_content = content_generate(model, tokenizer)
 
     # quantize & calibration
     amct.quantize(model, INT4_FLAT_QUANT_CFG)
-    print(f'model after quantization: \n{model}')
-
     if args.load_matrix:
         model = load_flat_matrices(model, args.flat_matrix_path)
-        print(f"Model after loading matrices: \n{model}")
     else:
+        calib_dataset = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer)
         cali_flat_quant(model, calib_dataset, args.device)
         save_flat_matrices(model, args.flat_matrix_path)
+
     model.to(args.device)
+    amct.convert(model)
+    print(f'quantize model to W4A4 with FlatQuant success.')
 
+    # test quantize model
+    print(f'original model content: \n{ori_content}\n')
     # quatized model content generate
-    content_generate(model, tokenizer)
-
-    print('All done!')
-
-
-
+    quant_content = content_generate(model, tokenizer)
+    print(f'quantized model content: \n{quant_content}\n')
