@@ -124,19 +124,23 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
     trained_params, paras_name = [], []
     if layer.self_attn.flat_config.cali_trans:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["trans.linear", ]), "lr": layer.self_attn.flat_config.flat_lr})
+            {"params": get_n_set_parameters_byname(layer, ["trans.linear", ]), 
+            "lr": layer.self_attn.flat_config.flat_lr})
         paras_name.append("trans.linear")
     if layer.self_attn.flat_config.add_diag:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["trans.diag_scale", ]), "lr": layer.self_attn.flat_config.flat_lr})
+            {"params": get_n_set_parameters_byname(layer, ["trans.diag_scale", ]), 
+            "lr": layer.self_attn.flat_config.flat_lr})
         paras_name.append("trans.diag_scale")
     if layer.self_attn.flat_config.lwc:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["clip_factor_w", ]), "lr": layer.self_attn.flat_config.flat_lr * 10})
+            {"params": get_n_set_parameters_byname(layer, ["clip_factor_w", ]), 
+            "lr": layer.self_attn.flat_config.flat_lr * 10})
         paras_name.append("clip_factor_w")
     if layer.self_attn.flat_config.lac:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["clip_factor_a", ]), "lr": layer.self_attn.flat_config.flat_lr * 10})
+            {"params": get_n_set_parameters_byname(layer, ["clip_factor_a", ]), 
+            "lr": layer.self_attn.flat_config.flat_lr * 10})
         paras_name.append("clip_factor_a")
 
     bsz = layer.self_attn.flat_config.cali_bsz
@@ -156,8 +160,8 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
         with traincast():
             for j in range(n_samples // bsz):
                 index = j * bsz
-                quant_out = layer(fp_inps[index : index+bsz, ], **batch_kwargs)[0]
-                loss = loss_func(fp_outs[index : index+bsz, ], quant_out)
+                quant_out = layer(fp_inps[index : index + bsz, ], **batch_kwargs)[0]
+                loss = loss_func(fp_outs[index : index + bsz, ], quant_out)
                 mse += loss.detach().cpu()
                 loss = loss / loss.clone().detach()
                 optimizer.zero_grad()
@@ -165,4 +169,5 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
                 optimizer.step()
                 scheduler.step()
         cur_lr = optimizer.state_dict()['param_groups'][0]['lr']
-        print(f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}" )
+        print(f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, \
+            lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}" )

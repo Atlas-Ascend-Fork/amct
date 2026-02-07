@@ -1,9 +1,10 @@
+from typing import Callable
 import torch
 import torch.nn as nn
 
 from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb, eager_attention_forward
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
-from typing import Callable
+
 
 from .quant_utils import ActivationQuantizer
 from .function_utils import get_init_scale, get_decompose_dim
@@ -101,7 +102,8 @@ class FlatQuantAttention(nn.Module):
         else:
             self.kcache_trans = None
 
-        if self.flat_config.use_vcache_quant and (self.flat_config.v_bits < 16 or self.flat_config.w_bits < 16 or self.flat_config.a_bits < 16):
+        if self.flat_config.use_vcache_quant and \
+            (self.flat_config.v_bits < 16 or self.flat_config.w_bits < 16 or self.flat_config.a_bits < 16):
             self.vcache_trans = SVDSingleTransMatrix(head_dim)
         else:
             self.vcache_trans = None
@@ -198,7 +200,8 @@ class FlatQuantAttention(nn.Module):
             attn_output = self.o_proj._ori_forward(attn_output)
         else:
             init_shape = attn_output.shape
-            attn_shape = [-1, self.module_config.num_attention_heads, self.module_config.hidden_size//self.module_config.num_attention_heads]
+            head_dim = self.module_config.hidden_size // self.module_config.num_attention_heads
+            attn_shape = [-1, self.module_config.num_attention_heads, head_dim]
             attn_output = attn_output.reshape(attn_shape)
             if self.o_trans is None and self.vcache_trans is not None:
                 attn_output = torch.matmul(attn_output, self.vcache_trans.get_matrix(inv_t=True).T.to(attn_output)).reshape(init_shape)
@@ -249,7 +252,8 @@ class FlatQuantAttention(nn.Module):
 
     def init_diag_scale(self, alpha=0.5):
         assert hasattr(self, "ln_smax")
-        qkvw_smax = torch.cat([self.q_proj.linear.weight, self.k_proj.linear.weight, self.v_proj.linear.weight], dim=0).abs().max(dim=0)[0]
+        qkvw_smax = torch.cat([self.q_proj.linear.weight, self.k_proj.linear.weight,
+                                self.v_proj.linear.weight], dim=0).abs().max(dim=0)[0]
         if self.ln_trans is not None:
             self.ln_trans.diag_scale.data = get_init_scale(qkvw_smax, self.ln_smax, alpha)
         del self.ln_smax
@@ -288,11 +292,13 @@ class FlatQuantMLP(nn.Module):
     def add_fq_trans(self):
         if self.flat_config.a_bits < 16 or self.flat_config.w_bits < 16:
             up_dim_left, up_dim_right = get_decompose_dim(self.up_proj.linear.weight.shape[1])
-            self.up_gate_trans = SVDDecomposeTransMatrix(up_dim_left, up_dim_right, add_diag=self.flat_config.add_diag)
+            self.up_gate_trans = SVDDecomposeTransMatrix(up_dim_left, up_dim_right, 
+                                                        add_diag=self.flat_config.add_diag)
             
             if self.flat_config.use_down_quant:
                 down_dim_left, down_dim_right = get_decompose_dim(self.down_proj.linear.weight.shape[1])
-                self.down_trans = SVDDecomposeTransMatrix(down_dim_left, down_dim_right, add_diag=self.flat_config.add_diag)
+                self.down_trans = SVDDecomposeTransMatrix(down_dim_left,
+                                                        down_dim_right, add_diag=self.flat_config.add_diag)
             else:
                 self.down_trans = None
         else:
