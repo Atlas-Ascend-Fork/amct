@@ -14,7 +14,7 @@
 import argparse
 import os
 
-from utils import get_qwen, build_enc, seed_everything, get_wikitext2, create_logger
+from utils import get_qwen, build_enc, seed_everything, get_wikitext2
 import amct_pytorch as amct
 
 # from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
@@ -63,6 +63,7 @@ INT4_FLAT_QUANT_CFG = {
     'skip_layers': {'lm_head'}
 }
 
+
 def content_generate(model, tokenizer):
     prompt = "Give me a short introduction to the Ascend Model Compression Toolkit(AMCT). /no_think"
     messages = [{'role': 'user', 'content': prompt}]
@@ -77,7 +78,7 @@ def content_generate(model, tokenizer):
     generated_ids = model.generate(**model_inputs, max_new_tokens=16384)
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
     content = tokenizer.decode(output_ids, skip_special_tokens=True)
-    print(f'content: {content}')
+    return content
 
 
 if __name__ == '__main__':
@@ -90,7 +91,6 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
-    logger = create_logger()
     seed_everything()
     os.makedirs(os.path.dirname(args.flat_matrix_path), exist_ok=True)
 
@@ -99,10 +99,9 @@ if __name__ == '__main__':
     model.to(args.device)
     tokenizer = build_enc(args.model_path)
     calib_dataset = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer)
-    calib_dataset_eval = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer, eval_mode=True)
 
     # original content generate
-    content_generate(model, tokenizer)
+    ori_content = content_generate(model, tokenizer)
 
     # quantize & calibration
     amct.quantize(model, INT4_FLAT_QUANT_CFG)
@@ -110,7 +109,7 @@ if __name__ == '__main__':
 
     if args.load_matrix:
         model = load_flat_matrices(model, args.flat_matrix_path)
-        logger.info(f"Model after loading matrices: \n{model}")
+        print(f"Model after loading matrices: \n{model}")
     else:
         cali_flat_quant(model, calib_dataset, args.device)
         save_flat_matrices(model, args.flat_matrix_path)
@@ -120,3 +119,6 @@ if __name__ == '__main__':
     content_generate(model, tokenizer)
 
     print('All done!')
+
+
+

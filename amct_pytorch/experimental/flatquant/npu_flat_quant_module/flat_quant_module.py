@@ -76,6 +76,10 @@ class NpuFlatQuantMLP(nn.Module):
         super().__init__()
         self.quant_module = quant_module
 
+        # if down_proj not quant, use original down_proj linear
+        if not quant_module.flat_config.use_down_quant:
+            self.down_proj = quant_module.down_proj.linear
+
         quant_module.up_proj.weight_quantizer.find_params(quant_module.up_proj.linear.weight)
         quant_module.gate_proj.weight_quantizer.find_params(quant_module.gate_proj.linear.weight)
         quant_module.down_proj.weight_quantizer.find_params(quant_module.down_proj.linear.weight)
@@ -84,20 +88,24 @@ class NpuFlatQuantMLP(nn.Module):
             quant_module.up_proj.linear.weight, quantonly=True)
         wt_gate_proj, self.scale_gate_proj = quant_module.gate_proj.weight_quantizer.quantize(
             quant_module.gate_proj.linear.weight, quantonly=True)
-        wt_down_proj, self.scale_down_proj = quant_module.down_proj.weight_quantizer.quantize(
-            quant_module.down_proj.linear.weight, quantonly=True)
+        if not self.down_proj:
+            wt_down_proj, self.scale_down_proj = quant_module.down_proj.weight_quantizer.quantize(
+                quant_module.down_proj.linear.weight, quantonly=True)
 
         self.register_parameter('wt_up_packed', torch.nn.Parameter(pack_int4_weights(wt_up_proj.data),
                                                                       requires_grad=False))
         self.register_parameter('wt_gate_packed', torch.nn.Parameter(pack_int4_weights(wt_gate_proj.data),
                                                                       requires_grad=False))
-        self.register_parameter('wt_down_packed', torch.nn.Parameter(pack_int4_weights(wt_down_proj.data),
+        if not self.down_proj:
+            self.register_parameter('wt_down_packed', torch.nn.Parameter(pack_int4_weights(wt_down_proj.data),
                                                                       requires_grad=False))
+            del wt_down_proj
 
         self.ug_left_trans = quant_module.up_gate_trans.matrix_left.T
         self.ug_right_trans = quant_module.up_gate_trans.matrix_right
-        self.down_left_trans = quant_module.down_trans.matrix_left.T
-        self.down_right_trans = quant_module.down_trans.matrix_right
+        if not self.down_proj:
+            self.down_left_trans = quant_module.down_trans.matrix_left.T
+            self.down_right_trans = quant_module.down_trans.matrix_right
         self.method = AscendW4A4FlatQuantDynamicLinearMethod()
 
         del self.quant_module.up_proj
@@ -105,7 +113,7 @@ class NpuFlatQuantMLP(nn.Module):
         del self.quant_module.up_gate_trans
         del self.quant_module.down_proj
         del self.quant_module.down_trans
-        del wt_up_proj, wt_gate_proj, wt_down_proj
+        del wt_up_proj, wt_gate_proj
 
 
     def forward(self, x):
@@ -122,8 +130,12 @@ class NpuFlatQuantMLP(nn.Module):
         gate_states = self.method.apply(
             self.ug_left_trans, self.ug_right_trans, self.wt_gate_packed, self.scale_gate_proj, x)
         x_act_fn = self.quant_module.act_fn(gate_states) * up_states
-        down_states = self.method.apply(
-            self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn)
+
+        if not self.down_proj:
+            down_states = self.method.apply(
+                self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn)
+        else:
+            down_states = self.down_proj(x_act_fn)
 
         if q_len_pad_size_after:
             down_states = down_states[:, :q_len]

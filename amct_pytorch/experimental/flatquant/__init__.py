@@ -6,3 +6,6 @@ from amct_pytorch.algorithm import AlgorithmRegistry
 
 AlgorithmRegistry.register('flatquant', 'LlamaAttention', FlatQuantAttention, NpuFlatQuantAttention)
 AlgorithmRegistry.register('flatquant', 'LlamaMLP', FlatQuantMLP, NpuFlatQuantMLP)
+
+AlgorithmRegistry.register('flatquant', 'Qwen3Attention', FlatQuantAttention, NpuFlatQuantAttention)
+AlgorithmRegistry.register('flatquant', 'Qwen3MLP', FlatQuantMLP, NpuFlatQuantMLP)

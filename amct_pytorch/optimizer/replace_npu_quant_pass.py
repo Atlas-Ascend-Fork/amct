@@ -69,9 +69,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             LOGGER.logd(f'{type(object_module)} do not need to invoke convert')
             return
 
-        if object_module.ori_module_type == 'Conv2d':
-            npu_module = NpuQuantizationConv2d(object_module)
-        elif type(object_module) in [MinMaxQuant, OfmrQuant]:
+        if type(object_module) in [MinMaxQuant, OfmrQuant]:
             if object_module.scale_d:
                 npu_module = NpuQuantizationLinear(object_module)
             else:
@@ -81,6 +79,8 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
             from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
             npu_module = get_replacement_module(model, object_name, object_module)
+        elif object_module.ori_module_type == 'Conv2d':
+            npu_module = NpuQuantizationConv2d(object_module)
         else:
             npu_module = AlgorithmRegistry.quant_to_deploy[type(object_module)][0](object_module)
         
