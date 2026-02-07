@@ -160,8 +160,8 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
         with traincast():
             for j in range(n_samples // bsz):
                 index = j * bsz
-                quant_out = layer(fp_inps[index : index + bsz, ], **batch_kwargs)[0]
-                loss = loss_func(fp_outs[index : index + bsz, ], quant_out)
+                quant_out = layer(fp_inps[index: index + bsz, ], **batch_kwargs)[0]
+                loss = loss_func(fp_outs[index: index + bsz, ], quant_out)
                 mse += loss.detach().cpu()
                 loss = loss / loss.clone().detach()
                 optimizer.zero_grad()
@@ -170,4 +170,4 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
                 scheduler.step()
         cur_lr = optimizer.state_dict()['param_groups'][0]['lr']
         print(f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, \
-            lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}" )
+            lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}")

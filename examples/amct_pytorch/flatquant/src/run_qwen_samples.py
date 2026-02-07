@@ -49,7 +49,7 @@ INT4_FLAT_QUANT_CFG = {
                                         # for qwen3 model '/no_think' prompt is sensitive to quantization
 
             # Other quantization parameters
-            'lac': False,
+            'lac': True,
             'lwc': True,
             'diag_alpha': 0.8,
 
