@@ -51,13 +51,6 @@ else
     fi
 fi
 
-echo "ls current dir $pwd"
-ls $pwd
-echo "ls dir $BUNDLE_DIR"
-ls $BUNDLE_DIR
-echo "ls dir $AMCT_GRAPH_PATH"
-ls $AMCT_GRAPH_PATH
-
 echo "tar -zxvf ${AMCT_GRAPH_FILE} -C $BUNDLE_DIR"
 tar -zxvf "${AMCT_GRAPH_FILE}" -C "$BUNDLE_DIR"
 
