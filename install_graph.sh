@@ -50,6 +50,11 @@ else
     fi
 fi
 
+echo "ls current dir $pwd"
+ls $pwd
+echo "ls dir $BUNDLE_DIR"
+ls $BUNDLE_DIR
+echo "tar -zxvf $OUTPUT_FILE -C $BUNDLE_DIR"
 tar -zxvf "$OUTPUT_FILE" -C "$BUNDLE_DIR"
 
 if [ $? -eq 0 ]; then
