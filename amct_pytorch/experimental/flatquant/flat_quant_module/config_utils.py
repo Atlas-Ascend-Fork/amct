@@ -1,6 +1,5 @@
-from enum import Enum
 
-class FlatConfig(Enum):
+class FlatConfig():
     # activation
     a_bits = 4
     a_groupsize = -1
@@ -21,6 +20,7 @@ class FlatConfig(Enum):
 
     # A special control for o_trans and o_proj (different from other proj)
     use_o_quant = False
+    use_down_quant = True
 
     # Other quantization parameters
     add_diag = True

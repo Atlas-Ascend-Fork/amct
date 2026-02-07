@@ -99,6 +99,7 @@ class FlatQuantAttention(nn.Module):
             self.kcache_trans = SVDSingleTransMatrix(head_dim)
         else:
             self.kcache_trans = None
+
         if self.flat_config.use_vcache_quant and (self.flat_config.v_bits < 16 or self.flat_config.w_bits < 16 or self.flat_config.a_bits < 16):
             self.vcache_trans = SVDSingleTransMatrix(head_dim)
         else:
@@ -282,31 +283,33 @@ class FlatQuantMLP(nn.Module):
         self._ori_mode = False
         self.up_smax = torch.ones_like(self.up_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
         self.down_smax = torch.ones_like(self.down_proj.linear.weight.abs().max(dim=0)[0]).npu() * 1e-5
-
         
     def add_fq_trans(self):
         if self.flat_config.a_bits < 16 or self.flat_config.w_bits < 16:
             up_dim_left, up_dim_right = get_decompose_dim(self.up_proj.linear.weight.shape[1])
             self.up_gate_trans = SVDDecomposeTransMatrix(up_dim_left, up_dim_right, add_diag=self.flat_config.add_diag)
             
-            down_dim_left, down_dim_right = get_decompose_dim(self.down_proj.linear.weight.shape[1])
-            self.down_trans = SVDDecomposeTransMatrix(down_dim_left, down_dim_right, add_diag=self.flat_config.add_diag)
+            if self.flat_config.use_down_quant:
+                down_dim_left, down_dim_right = get_decompose_dim(self.down_proj.linear.weight.shape[1])
+                self.down_trans = SVDDecomposeTransMatrix(down_dim_left, down_dim_right, add_diag=self.flat_config.add_diag)
+            else:
+                self.down_trans = None
         else:
             self.up_gate_trans, self.down_trans = None, None
 
     def _trans_forward(self, x):
-        if self.up_gate_trans is not None:
-            x_ts = self.up_gate_trans(x)
-        else:
-            x_ts = x
+        # up & gate trans quant
+        x_ts = self.up_gate_trans(x) if self.up_gate_trans is not None else x
         up_states = self.up_proj(x_ts, qa_trans=self.up_gate_trans)
         gate_states = self.gate_proj(x_ts, qa_trans=self.up_gate_trans)
-
         x_act_fn = self.act_fn(gate_states) * up_states
-        if self.down_trans is not None:
-            x_ts_2 = self.down_trans(x_act_fn)
-        else:
-            x_ts_2 = x_act_fn
+
+        # not quantize down_proj
+        if not self.flat_config.use_down_quant:
+            return self.down_proj._ori_forward(x_act_fn)
+
+        # down_proj trans quant
+        x_ts_2 = self.down_trans(x_act_fn) if self.down_trans is not None else x_act_fn
         down_states = self.down_proj(x_ts_2, qa_trans=self.down_trans)
         return down_states
 
@@ -329,7 +332,8 @@ class FlatQuantMLP(nn.Module):
             self.down_trans.to_eval_mode()
         self.gate_proj.reparameterize(qa_trans=self.up_gate_trans)
         self.up_proj.reparameterize(qa_trans=self.up_gate_trans)
-        self.down_proj.reparameterize(qa_trans=self.down_trans)
+        if self.flat_config.use_down_quant:
+            self.down_proj.reparameterize(qa_trans=self.down_trans)
         if self.up_gate_trans is not None:
             self.up_gate_trans.use_diag = False
         # merge trans's diag scale
@@ -348,8 +352,7 @@ class FlatQuantMLP(nn.Module):
             self.up_gate_trans.diag_scale.data = get_init_scale(upw_smax, self.up_smax, alpha)
         if self.down_trans is not None:
             self.down_trans.diag_scale.data = get_init_scale(downw_smax, self.down_smax, alpha)
-        if hasattr(self, "down_smax"):
-            del self.down_smax
+        del self.down_smax
         del self.up_smax
 
     def rep_matrix_only(self, ):

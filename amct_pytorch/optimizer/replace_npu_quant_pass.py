@@ -73,7 +73,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             # We needs to access layernorm and trans from higher level, so it cannot be done within the module
             # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
             from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
-            npu_module = get_replacement_module(model, type(object_module).__name__, object_name, object_module)
+            npu_module = get_replacement_module(model, object_name, object_module)
         else:
             npu_module = AlgorithmRegistry.quant_to_deploy[type(object_module)](object_module)
         
