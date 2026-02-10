@@ -79,6 +79,8 @@ class NpuFlatQuantMLP(nn.Module):
         # if down_proj not quant, use original down_proj linear
         if not quant_module.flat_config.use_down_quant:
             self.down_proj = quant_module.down_proj.linear
+        else:
+            self.down_proj = None
 
         quant_module.up_proj.weight_quantizer.find_params(quant_module.up_proj.linear.weight)
         quant_module.gate_proj.weight_quantizer.find_params(quant_module.gate_proj.linear.weight)
