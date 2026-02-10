@@ -169,5 +169,5 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
                 optimizer.step()
                 scheduler.step()
         cur_lr = optimizer.state_dict()['param_groups'][0]['lr']
-        print(f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, \
-            lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}")
+        print(f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, "
+            f"lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}")
