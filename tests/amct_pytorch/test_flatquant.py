@@ -59,15 +59,13 @@ class TestFlatQuant(unittest.TestCase):
                 },
             },
             'algorithm': {
-                'flatquant_attn': {
+                'flatquant': {
                     'use_kcache_quant': False,
                     'k_bits': 16,
                     'use_vcache_quant': False,
                     'v_bits': 16,
                     'use_o_quant': False
                 },
-                'flatquant_attn_spda': {},
-                'flatquant_mlp': {}
             },
             'skip_layers': {'lm_head'}
         }
