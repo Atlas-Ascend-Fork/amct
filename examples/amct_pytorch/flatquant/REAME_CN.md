@@ -17,6 +17,7 @@
 
 `from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG`
 
+我们在量化配置中增加了'use_down_quant'配置，用来控制down_proj是否进行量化，对于down_proj量化敏感的模型，可以跳过down_proj的量化。
 如果需要修改详细配置，请参考资料构造需要的量化配置dict。
 
 flatquant算法支持如下部分的量化：
@@ -85,12 +86,12 @@ prompt = "Give me a short introduction to the Ascend Model Compression Toolkit(A
 ```
 content: <think>
 <>
-The Ascend Model Compression Toolkit (AMCT) is a powerful tool developed by Huawei for optimizing and compressing deep learning models, ...
+The Ascend Model Compression Toolkit (AMCT) is a powerful tool designed to ...
 ```
 
 量化后的生成结果为：
 ```
 content: <think>
 <>
-The Ascend Model Compression Toolkit (AMCT) is a powerful tool developed by Huawei for optimizing and compressing deep learning models, ...
+The Ascend Model Compression Toolkit (AMCT) is a powerful tool designed to ...
 ```
