@@ -1,4 +1,4 @@
-# AMCT大模型对于LLAMA2的FlatQuant量化
+# AMCT大模型对于LLAMA2/Qwen3的FlatQuant量化
 
 ## 1 量化前提
 
