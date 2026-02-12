@@ -132,8 +132,7 @@ class AscendW4A4FlatQuantDynamicLinearMethod:
         pertoken_scale = activation_scale.view(-1).to(torch.float32)
         output = torch_npu.npu_quant_matmul(x_quantized_reshaped,
                                             weight_packed.t(),
-                                            weight_scale.view(-1).to(
-                                                torch.float32),
+                                            weight_scale.view(-1).to(torch.float32),
                                             pertoken_scale=pertoken_scale,
                                             bias=None,
                                             output_dtype=original_dtype)
