@@ -31,7 +31,7 @@ def build_enc(model_path):
 def get_llama2(model_path, seqlen=2048):
     print(f'Getting official pretrained {model_path}')
 
-    model = LlamaForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, offload_folder="offload/")
+    model = LlamaForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16, offload_folder="offload/")
 
     model.seqlen = seqlen
     enc = AutoTokenizer.from_pretrained(
@@ -43,7 +43,7 @@ def get_llama2(model_path, seqlen=2048):
 def get_qwen(model_path, seqlen=2048):
     print(f'Getting official pretrained {model_path}')
 
-    model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.float16)
+    model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.bfloat16)
     
     model.seqlen = seqlen
     enc = AutoTokenizer.from_pretrained(
