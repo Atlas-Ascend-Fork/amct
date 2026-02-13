@@ -19,7 +19,7 @@ import torch
 
 from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4, CONVERT_DTYPE_MAP
 from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
-from amct_pytorch.utils.data_utils import float_to_fp4e2m1
+from amct_pytorch.utils.data_utils import float_to_fp4e2m1, cal_shared_exponent, scale_input_by_shared_exponents
 
 
 def pad_zero_by_group(tensor, group_size):
@@ -178,15 +178,14 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
     import torch_npu
     shared_exponent = None
 
-
     if dst_dtype == HIFLOAT8:
         quantized_tensor = torch_npu.npu_quantize(tensor.npu(), scale.npu(), None, dtype=torch_npu.hifloat8)
     elif dst_dtype == FLOAT8_E4M3FN:
         quantized_tensor = torch_npu.npu_quantize(tensor.npu(), scale.npu(), None, dtype=torch.float8_e4m3fn)
     elif dst_dtype == MXFP4_E2M1:
-        quantized_tensor, shared_exponent = \
-            torch_npu.npu_dynamic_mx_quant(tensor.to(torch.float16).npu(), axis=-1, round_mode='rint',
-                dst_type=torch_npu.float4_e2m1fn_x2, block_size=32)
+        shared_exponent = cal_shared_exponent(tensor)
+        quantized_tensor = scale_input_by_shared_exponents(tensor, -1 * shared_exponent.to(tensor.dtype))
+        quantized_tensor = float_to_fp4e2m1(quantized_tensor).to(torch.float32)
     elif dst_dtype == MXFP8_E4M3FN:
         quantized_tensor, shared_exponent = \
             torch_npu.npu_dynamic_mx_quant(tensor.to(torch.float16).npu(), axis=-1, round_mode='rint',
@@ -199,7 +198,7 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
         quantized_tensor = quantized_tensor if offset is None else quantized_tensor + offset.to(tensor.device)
         if dst_dtype == FLOAT4_E2M1:
             # npu op pack4 need dtype float32 but value within [-6.0~6.0]
-            quantized_tensor = float_to_fp4e2m1(tensor).to(torch.float32)
+            quantized_tensor = float_to_fp4e2m1(quantized_tensor).to(torch.float32)
         elif dst_dtype == INT8:
             quantized_tensor = quantized_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
         elif dst_dtype == INT4:
@@ -233,15 +232,11 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
         quantized_tensor = quantized_tensor.to(scale.dtype)
         dequantize_tensor = quantized_tensor * scale
     elif dst_dtype == MXFP4_E2M1:
-        quantized_tensor = torch_npu.npu_dtype_cast(quantized_tensor, ori_dtype, input_dtype=torch_npu.float4_e2m1fn_x2)
-        quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
-        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
-        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
-        dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+        quantized_tensor = quantized_tensor.to(scale.dtype)
+        dequantize_tensor = scale_input_by_shared_exponents(quantized_tensor, scale)
     elif dst_dtype == MXFP8_E4M3FN:
         quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
-        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
-        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
+        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale.shape[0], -1, 1)
         dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     else:
         # int4\int8\float4

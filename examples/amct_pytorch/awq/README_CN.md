@@ -53,10 +53,11 @@ Score:  5.477707
 ```
 其中Score为量化模型PPL，具体数值参考下表：
 
-| 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
-| :-: | :-: | :-: | :-: | :-: |
-|LLAMA2-7B|pileval|wikitext2|5.472|5.550|
-|QWEN2-7B|pileval|wikitext2|7.137|7.268|
+| 模型 | 校准集 | 数据集 | 量化前PPL | INT4 | FP4 | MXFP4| 
+| :-: | :-: | :-: | :-: | :-: | :-: | :-: |
+|LLAMA2-7B|pileval|wikitext2|5.472|5.550|5.601|5.823
+|QWEN2-7B|pileval|wikitext2|7.137|7.268|7.310|7.520
 
-
+qwen2-7b fp4 7.248 7.310(不跳down_proj) mxfp4 7.520
+llama2-7b fp4 5.601 mxfp4 5.823
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
