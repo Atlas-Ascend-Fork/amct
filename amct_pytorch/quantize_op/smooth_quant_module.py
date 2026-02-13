@@ -47,7 +47,6 @@ class SmoothQuant(BaseQuantizeModule):
         self.bias = ori_module.bias
         self.layer_name = layer_name
         self.quant_config = quant_config
-        self.group_size = quant_config.get('group_size')
         self.batch_num = quant_config.get('batch_num')
         self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
         self.wts_granularity = quant_config.get('weights_cfg').get('strategy')
