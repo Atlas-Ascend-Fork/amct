@@ -87,6 +87,9 @@ class NpuQuantizationLinear(torch.nn.Module):
         inputs: input data in torch.tensor.
         """
         import torch_npu
+        if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+            ori_shape = x.shape
+            x = x.reshape(-1, x.shape[-1])
         if hasattr(self, 'scale_factor'):
             x = x * self.scale_factor
         quant_x = torch_npu.npu_quantize(x, self.act_scale, self.act_offset, dtype=self.npu_quantize_act_type,
@@ -96,6 +99,8 @@ class NpuQuantizationLinear(torch.nn.Module):
             bias=self.bias, output_dtype=self.output_dtype,
             x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
             group_sizes=self.group_sizes, y_scale=self.y_scale)
+        if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+            output = output.reshape(*ori_shape[:-1], -1)
         return output
 
     def _init_npu_quantize_type(self):

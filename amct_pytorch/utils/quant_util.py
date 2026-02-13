@@ -21,6 +21,8 @@ from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8
 from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
 from amct_pytorch.utils.data_utils import float_to_fp4e2m1
 
+FP4E2M1_MAX_EXP = 2
+
 
 def pad_zero_by_group(tensor, group_size):
     """
@@ -53,6 +55,56 @@ def convert_to_per_group_shape(input_tensor, group_size):
     input_tensor_pad = pad_zero_by_group(input_tensor, group_size)
 
     return input_tensor_pad.reshape(input_tensor_pad.shape[0], input_tensor_pad.shape[1] // group_size, group_size)
+
+
+def cal_shared_exponent(input_tensor, block_size=32):
+    """
+    Function: cal shared exponent for MXFP4
+    Args:
+        input_tensor: weight tensor
+        mx_dtype: MXFP4_E2M1
+        block_size: block size of calculate shared exponent
+    Returns:
+        shared_exponent: torch.tensor
+    """
+    ori_shape = input_tensor.shape
+    reshape_input_tensor = input_tensor.reshape(-1, ori_shape[-1])
+    first_dim, _ = reshape_input_tensor.shape
+    # fill 0 if the number of data is not divisible by 32
+    reshape_input_tensor = pad_zero_by_group(reshape_input_tensor, block_size)
+    # reshape to [first_dim, block_size]
+    reshaped_tensor = reshape_input_tensor.view(first_dim, -1, block_size)
+    max_values = torch.max(torch.abs(reshaped_tensor), dim=-1).values
+    zero_mask = (max_values == 0)
+    invalid_mask = ~torch.isfinite(max_values)
+
+    non_zero_max_vals = torch.where(zero_mask, torch.ones_like(max_values), max_values)
+
+    exponents = torch.floor(torch.log2(non_zero_max_vals))
+    mantissas = non_zero_max_vals / torch.pow(2, exponents)
+    # exp add 1 if mantissas larger than 1.75;
+    shared_exponents = torch.where(mantissas > 1.75, exponents + 1, exponents) - FP4E2M1_MAX_EXP
+
+    shared_exponents[zero_mask] = 0
+    shared_exponents[invalid_mask] = torch.nan
+    shared_exponents = shared_exponents.reshape(ori_shape[:-1] + ((ori_shape[-1] + block_size - 1) // block_size,))
+    return shared_exponents
+
+
+def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=32):
+    """
+    Function: scale input by shared exponents
+    Args:
+        input_tensor: torch.tensor
+        shared_exponents: torch.tensor
+        block_size: block size of calculate shared exponent
+    Return:
+        torch.tensor, shape is same with input_tensor
+    """
+    n = input_tensor.shape[-1]
+    expanded_tensor = torch.repeat_interleave(torch.pow(2, shared_exponents), repeats=block_size, dim=-1)[..., :n]
+    result = input_tensor * expanded_tensor
+    return result
 
 
 @torch.no_grad()
@@ -178,15 +230,14 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
     import torch_npu
     shared_exponent = None
 
-
     if dst_dtype == HIFLOAT8:
         quantized_tensor = torch_npu.npu_quantize(tensor.npu(), scale.npu(), None, dtype=torch_npu.hifloat8)
     elif dst_dtype == FLOAT8_E4M3FN:
         quantized_tensor = torch_npu.npu_quantize(tensor.npu(), scale.npu(), None, dtype=torch.float8_e4m3fn)
     elif dst_dtype == MXFP4_E2M1:
-        quantized_tensor, shared_exponent = \
-            torch_npu.npu_dynamic_mx_quant(tensor.to(torch.float16).npu(), axis=-1, round_mode='rint',
-                dst_type=torch_npu.float4_e2m1fn_x2, block_size=32)
+        shared_exponent = cal_shared_exponent(tensor)
+        quantized_tensor = scale_input_by_shared_exponents(tensor, -1 * shared_exponent.to(tensor.dtype))
+        quantized_tensor = float_to_fp4e2m1(quantized_tensor).to(torch.float32)
     elif dst_dtype == MXFP8_E4M3FN:
         quantized_tensor, shared_exponent = \
             torch_npu.npu_dynamic_mx_quant(tensor.to(torch.float16).npu(), axis=-1, round_mode='rint',
@@ -199,7 +250,7 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
         quantized_tensor = quantized_tensor if offset is None else quantized_tensor + offset.to(tensor.device)
         if dst_dtype == FLOAT4_E2M1:
             # npu op pack4 need dtype float32 but value within [-6.0~6.0]
-            quantized_tensor = float_to_fp4e2m1(tensor).to(torch.float32)
+            quantized_tensor = float_to_fp4e2m1(quantized_tensor).to(torch.float32)
         elif dst_dtype == INT8:
             quantized_tensor = quantized_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
         elif dst_dtype == INT4:
@@ -233,15 +284,11 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
         quantized_tensor = quantized_tensor.to(scale.dtype)
         dequantize_tensor = quantized_tensor * scale
     elif dst_dtype == MXFP4_E2M1:
-        quantized_tensor = torch_npu.npu_dtype_cast(quantized_tensor, ori_dtype, input_dtype=torch_npu.float4_e2m1fn_x2)
-        quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
-        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
-        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
-        dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+        quantized_tensor = quantized_tensor.to(scale.dtype)
+        dequantize_tensor = scale_input_by_shared_exponents(quantized_tensor, scale)
     elif dst_dtype == MXFP8_E4M3FN:
         quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
-        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
-        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
+        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale.shape[0], -1, 1)
         dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     else:
         # int4\int8\float4
