@@ -18,6 +18,7 @@ import torch
 from amct_pytorch.utils.quant_util import quant_weight, apply_smooth_weight
 from amct_pytorch.quantize_op.utils import apply_progressive_quant
 from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, FLOAT4_E2M1
+from amct_pytorch.utils.check_params import check_parameters_in_schema
 
 
 class NpuQuantizationLinear(torch.nn.Module):
@@ -87,19 +88,34 @@ class NpuQuantizationLinear(torch.nn.Module):
         inputs: input data in torch.tensor.
         """
         import torch_npu
+
         if hasattr(self, 'scale_factor'):
             x = x * self.scale_factor
         quant_x = torch_npu.npu_quantize(x, self.act_scale, self.act_offset, dtype=self.npu_quantize_act_type,
             axis=self.quantize_axis, div_mode=False)
-        output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-            scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-            bias=self.bias, output_dtype=self.output_dtype,
-            x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-            group_sizes=self.group_sizes, y_scale=self.y_scale)
+        if self.is_new_torch_npu:
+            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                ori_shape = x.shape
+                x = x.reshape(-1, x.shape[-1])
+            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                bias=self.bias, output_dtype=self.output_dtype,
+                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
+                group_sizes=self.group_sizes, y_scale=self.y_scale)
+            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                output = output.reshape(*ori_shape[:-1], -1)
+        else:
+            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                bias=self.bias, output_dtype=self.output_dtype)
+
         return output
 
     def _init_npu_quantize_type(self):
         import torch_npu
+        self.is_new_torch_npu = False
+        if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype'):
+            self.is_new_torch_npu = True
         self.x1_dtype = None
         self.x2_dtype = None
         if self.act_type == HIFLOAT8:

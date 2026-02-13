@@ -20,6 +20,8 @@ import torch
 from amct_pytorch.utils.quant_util import quant_weight, check_scale_offset_shape
 from amct_pytorch.utils.quant_util import apply_awq_quantize_weight
 from amct_pytorch.utils.vars import INT8, INT4, HIFLOAT8, FLOAT8_E4M3FN, FLOAT4_E2M1, MXFP4_E2M1
+from amct_pytorch.utils.quant_util import quant_tensor
+from amct_pytorch.utils.check_params import check_parameters_in_schema
 
 
 class NpuWeightQuantizedLinear(nn.Module):
@@ -67,6 +69,10 @@ class NpuWeightQuantizedLinear(nn.Module):
         else:
             self.bias = None
 
+        self.is_new_torch_npu = False
+        if check_parameters_in_schema(torch_npu.npu_weight_quant_batchmatmul, 'weight_dtype'):
+            self.is_new_torch_npu = True
+
     def get_quantize_weight(self, weight, quant_module, device):
         """
         Function: get quantize weight & quanize factor
@@ -80,13 +86,11 @@ class NpuWeightQuantizedLinear(nn.Module):
         import torch_npu
         offset_w = quant_module.offset_w
         if self.wts_type == MXFP4_E2M1:
-            weight_tensor, shared_exponent_w = torch_npu.npu_dynamic_mx_quant(
-                weight, axis=-1, round_mode='rint', dst_type=torch_npu.float4_e2m1fn_x2, block_size=self.group_size)
-            weight_tensor = torch_npu.npu_dtype_cast(
-                weight_tensor.npu(), dtype=torch.float32, input_dtype=torch_npu.float4_e2m1fn_x2)
+            weight_tensor, shared_exponent_w = quant_tensor(weight, self.wts_type)
             weight_tensor = torch_npu.npu_convert_weight_to_int4pack(weight_tensor.npu()).to(device=device)
-            scale_w = shared_exponent_w.reshape(shared_exponent_w.shape[0], -1).transpose(-1, -2)
             weight_tensor = weight_tensor.npu().transpose(1, 0)
+            shared_exponent_w = (shared_exponent_w + 127).to(torch.uint8)
+            scale_w = shared_exponent_w.transpose(-1, -2)
         else:
             scale_w = quant_module.scale_w.to(device)
             offset_w = offset_w.to(device) if offset_w is not None else None
@@ -96,7 +100,7 @@ class NpuWeightQuantizedLinear(nn.Module):
                 weight_tensor, scale_w, offset_w, self.ori_weight_shape)
             weight_tensor = weight_tensor.transpose(-1, -2).contiguous().to(device=device)
             if self.wts_type == FLOAT4_E2M1:
-                weight_tensor = torch_npu.npu_format_cast(weight_tensor, 29)
+                weight_tensor = torch_npu.npu_format_cast(weight_tensor, 29, weight.dtype)
             if self.wts_type in (INT4, FLOAT4_E2M1):
                 weight_tensor = torch_npu.npu_convert_weight_to_int4pack(
                     weight_tensor.contiguous().npu()).to(device=device)
@@ -144,8 +148,13 @@ class NpuWeightQuantizedLinear(nn.Module):
         if self.scale_factor is not None:
             inputs = torch.mul(inputs, self.scale_factor)
 
-        output = torch_npu.npu_weight_quant_batchmatmul(inputs, self.quantized_weight, self.scale_w,
-                antiquant_offset=self.offset_w, bias=self.bias, antiquant_group_size=self.group_size)
+        if self.is_new_torch_npu:
+            output = torch_npu.npu_weight_quant_batchmatmul(inputs, self.quantized_weight, self.scale_w,
+                    antiquant_offset=self.offset_w, bias=self.bias, antiquant_group_size=self.group_size,
+                    weight_dtype=self.weight_dtype)
+        else:
+            output = torch_npu.npu_weight_quant_batchmatmul(inputs, self.quantized_weight, self.scale_w,
+                    antiquant_offset=self.offset_w, bias=self.bias, antiquant_group_size=self.group_size,)
 
         output = output.reshape(*ori_shape[:-1], -1)
 

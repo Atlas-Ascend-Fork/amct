@@ -31,7 +31,7 @@ if __name__ == '__main__':
     quant_model = model.eval().npu()
 
     samples = get_calib_dataset(tokenizer=enc, n_samples=512, block_size=256)
-    samples = torch.cat(samples, dim=0)[:1, :]
+    samples = torch.cat(samples, dim=0)[:64, :]
 
     # Phase1: quantize model
     cfg = {
@@ -48,7 +48,7 @@ if __name__ == '__main__':
                 'strategy': 'tensor',
             },
         },
-        'algorithm': {'smoothquant': {'smooth_strength': 0.85}},
+        'algorithm': {'smoothquant': {'smooth_strength': 0.77}},
         'skip_layers': {'lm_head'}
     }
     amct.quantize(quant_model, cfg)
