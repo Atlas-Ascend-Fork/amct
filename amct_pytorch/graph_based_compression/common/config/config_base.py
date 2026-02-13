@@ -513,6 +513,7 @@ class ConfigBase():
         wgt_param.add_child('num_bits', WtsNumBitsField(capacity))
         self._add_wts_param(wgt_param, capacity)
         wgt_param.add_child('channel_wise', ChannelWiseField(capacity))
+        wgt_param.add_child('wts_algo', WtsAlgoField(capacity))
 
         if capacity.is_enable('TENSOR_QUANTIZE'):
             tensor_container = root.add_child(
