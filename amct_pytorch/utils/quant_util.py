@@ -199,7 +199,7 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
         quantized_tensor = quantized_tensor if offset is None else quantized_tensor + offset.to(tensor.device)
         if dst_dtype == FLOAT4_E2M1:
             # npu op pack4 need dtype float32 but value within [-6.0~6.0]
-            quantized_tensor = float_to_fp4e2m1(tensor).to(torch.float32)
+            quantized_tensor = float_to_fp4e2m1(quantized_tensor).to(torch.float32)
         elif dst_dtype == INT8:
             quantized_tensor = quantized_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
         elif dst_dtype == INT4:
@@ -235,13 +235,12 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
     elif dst_dtype == MXFP4_E2M1:
         quantized_tensor = torch_npu.npu_dtype_cast(quantized_tensor, ori_dtype, input_dtype=torch_npu.float4_e2m1fn_x2)
         quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
-        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
-        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
+        scale = scale.cpu().view(torch.float8_e8m0fnu).to(ori_dtype).to(tensor.device)
+        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale.shape[0], -1, 1)
         dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     elif dst_dtype == MXFP8_E4M3FN:
         quantized_tensor = convert_to_per_group_shape(quantized_tensor, 32)
-        scale_shape = scale.shape[0], scale.shape[-1], scale.shape[1]
-        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale_shape)
+        dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale.shape[0], -1, 1)
         dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     else:
         # int4\int8\float4
