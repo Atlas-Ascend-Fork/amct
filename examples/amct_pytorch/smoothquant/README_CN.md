@@ -12,10 +12,34 @@
 
 本sample以Llama2-7b，qwen2-7b，qwen3-8b模型，pileval数据，wikitext2数据集为示例, 数据为在线加载，模型需要用户自己下载并在执行脚本时指定模型路径。
 
+注意：量化数据类型组合float8_e4m3fn * float4_e2m1只支持量化原始数据类型为torch.bfloat16，请注意修改src/utils.py文件中获取模型的数据类型。
+
 ### 1.3 简易量化配置
 本sample中使用的量化配置已经内置在工具中，可以通过下述方式获取并使用：
 
+量化数据类型组合int8 * int8的配置：
 `from amct_pytorch import INT8_SMOOTHQUANT_CFG`
+量化数据类型组合float8_e4m3fn * float4_e2m1的配置：
+```python
+cfg = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'float4_e2m1',
+            'symmetric': True,
+            'strategy': 'group',
+            'group_size': 32
+        },
+        'inputs': {
+            'type': 'float8_e4m3fn',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'smoothquant': {'smooth_strength': 0.77}},
+    'skip_layers': {'lm_head', 'down_proj'}
+}
+```
 
 如果需要修改详细配置，请参考资料构造需要的量化配置dict。
 
@@ -25,12 +49,12 @@ smoothquant算法仅支持全量化，支持的量化类型以及量化配置：
 |:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|量化使用的batch数量 |1|/|
 |skip_layers|str|跳过量化的层 |/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
-|weights.type|str|量化后权重类型|'int8'|/|
-|weights.symmetric|bool|对称量化|TRUE/FALSE|/|
-|weights.strategy|str|量化粒度|'tensor'/'channel'|/|
-|inputs.type|str|量化后权重类型|'int8'|/|
-|inputs.symmetric|bool|对称量化|TRUE/FALSE|量化策略为token时，不支持非对称量化，不支持pergroup量化|
-|inputs.strategy|str|量化粒度|'tensor'/'token'|/|
+|weights.type|str|量化后权重类型|'int8'/'float4_e2m1'|/|
+|weights.symmetric|bool|对称量化|TRUE/FALSE|量化数据类型为float4_e2m1时，只支持对称量化|
+|weights.strategy|str|量化粒度|'tensor'/'channel'/'group'|量化策略为group时，只支持量化数据类型为float4_e2m1，且float4_e2m1只支持配group|
+|inputs.type|str|量化后激活类型|'int8'/'float8_e4m3fn'|/|
+|inputs.symmetric|bool|对称量化|TRUE/FALSE|量化策略为token时，不支持非对称量化，不支持pergroup量化；量化数据类型为float8_e4m3fn时，只支持对称量化|
+|inputs.strategy|str|量化粒度|'tensor'/'token'|量化数据类型为float8_e4m3fn时，只支持量化策略为tensor|
 |algorithm|dict|量化使用的算法配置|{'smoothquant'}|/|
 |algorithm.smoothquant.smooth_strength|float|smoothquant算法参数：迁移强度|0-1|不包含0/1|
 
@@ -62,11 +86,11 @@ Score:  5.477707
 ```
 其中Score为量化模型PPL，具体数值参考下表：
 
-| 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
-| :-: | :-: | :-: | :-: | :-: |
-|LLAMA2-7B|pileval|wikitext2|5.472|5.673|
-|QWEN2-7B|pileval|wikitext2|7.137|7.155|
-|QWEN3-8B|pileval|wikitext2|9.715|9.861|
+| 模型 | 校准集 | 数据集 | 量化前PPL | int8*int8量化后PPL | float8_e4m3fn*float4_e2m1量化后PPL | 
+| :-: | :-: | :-: | :-: | :-: | :-: |
+|LLAMA2-7B|pileval|wikitext2|5.472|5.673|5.589|
+|QWEN2-7B|pileval|wikitext2|7.137|7.155|7.252|
+|QWEN3-8B|pileval|wikitext2|9.715|9.861|9.931|
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
