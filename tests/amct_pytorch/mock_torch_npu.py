@@ -140,7 +140,7 @@ def mock_npu_dtype_cast(weight, dtype, input_dtype=None):
     return weight
 
 
-def mock_npu_format_cast(weight, dst):
+def mock_npu_format_cast(weight, dst, ori_type):
     return weight
 
 
