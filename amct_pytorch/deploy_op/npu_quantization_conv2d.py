@@ -116,7 +116,7 @@ class NpuQuantizationConv2d(torch.nn.Module):
         # weight quant
         if scale_w_tensor.shape[0] > 1:
             scale_w_tensor = scale_w_tensor.reshape(-1, 1, 1, 1)
-            res, _ = quant_tensor(weight, wts_type, scale_w_tensor)
+        res, _ = quant_tensor(weight, wts_type, scale_w_tensor)
         return res
 
     def init_dtype(self, act_type, wts_type):
