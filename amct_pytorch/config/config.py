@@ -139,7 +139,8 @@ MXFP4_AWQ_WEIGHT_QUANT_CFG = {
         'weights': {
             'type': 'mxfp4_e2m1',
             'symmetric': True,
-            'strategy': 'group'
+            'strategy': 'group',
+            'group_size': 32
         },
     },
     'algorithm': {'awq': {'grids_num': 20}},
