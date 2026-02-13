@@ -137,15 +137,7 @@ build() {
   echo "----------------ASCEND_HOME_PATH  "${ASCEND_HOME_PATH}"  ----------------"
   echo "----------------CANN_3RD_LIB_PATH  "${CANN_3RD_LIB_PATH}"  ----------------"
 
-  cmake -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-        -D TOP_DIR=${BASEPATH} \
-        -D CMAKE_VERBOSE_MAKEFILE=ON\
-        -D ASCEND_HOME_PATH=${ASCEND_HOME_PATH}\
-        -D PREX=${LOWER_PREX}\
-        ${CANN_3RD_LIB_PATH:+-D CANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}} \
-        -D BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG=ON \
-        -D CMAKE_BUILD_TYPE=${BUILD_TYPE} \
-        ..
+  cmake ${CMAKE_ARGS} ..
 
   make all ${VERBOSE} -j${THREAD_NUM}
   if [ $? -ne 0 ]
