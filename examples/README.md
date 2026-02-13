@@ -8,3 +8,4 @@
 | 使用GPTQ算法量化模型 | [README](amct_pytorch/gptq/README_CN.md) |
 | 使用MIN-MAX算法量化模型    | [README](amct_pytorch/minmax/README_CN.md) |
 | 使用SmoothQuant算法量化模型 | [README](amct_pytorch/smoothquant/README_CN.md) |
+| 使用ofmr算法量化模型 | [README](amct_pytorch/ofmr/README_CN.md) |
