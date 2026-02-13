@@ -14,6 +14,7 @@
 import torch
 
 from amct_pytorch.utils.vars import MXFP4_E2M1, MXFP8_E4M3FN
+from amct_pytorch.utils.quant_util import quant_tensor
 
 
 class NpuMXQuantizationLinear(torch.nn.Module):
@@ -37,13 +38,10 @@ class NpuMXQuantizationLinear(torch.nn.Module):
             self.weight_compress_only = False
 
         if self.wts_type == MXFP4_E2M1:
-            weight_tensor, shared_exponent_w = torch_npu.npu_dynamic_mx_quant(
-                self.weight, axis=-1, round_mode='rint', dst_type=torch_npu.float4_e2m1fn_x2, block_size=32)
-            weight_tensor = torch_npu.npu_dtype_cast(
-                weight_tensor.npu(), dtype=torch.float32, input_dtype=torch_npu.float4_e2m1fn_x2)
-            weight_tensor = \
-                torch_npu.npu_convert_weight_to_int4pack(weight_tensor.npu()).to(device=device)
-            shared_exponent_w = shared_exponent_w.reshape(shared_exponent_w.shape[0], -1).transpose(-1, -2)
+            weight_tensor, shared_exponent_w = quant_tensor(self.weight, self.wts_type)
+            weight_tensor = torch_npu.npu_convert_weight_to_int4pack(weight_tensor.npu()).to(device=device)
+            shared_exponent_w = (shared_exponent_w + 127).to(torch.uint8)
+            shared_exponent_w = shared_exponent_w.transpose(-1, -2)
         elif self.wts_type == MXFP8_E4M3FN:
             weight_tensor, shared_exponent_w = torch_npu.npu_dynamic_mx_quant(
                 self.weight, axis=-1, round_mode='rint', dst_type=torch.float8_e4m3fn, block_size=32)
