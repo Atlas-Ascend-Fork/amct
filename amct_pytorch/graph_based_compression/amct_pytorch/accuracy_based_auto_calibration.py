@@ -23,6 +23,7 @@ import json
 from collections import OrderedDict
 
 import torch # pylint: disable=E0401
+from ..amct_pytorch import quantize_tool
 from ..amct_pytorch.quantize_tool import inner_quantize_model
 from ..amct_pytorch.quantize_tool import generate_fakequant_module
 from ..amct_pytorch.quantize_tool import inner_fuse_bn
@@ -148,7 +149,7 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
             weight_fakequant=True)
         # activation calibration process
         self.evaluator.calibration(modified_module)
-        quantize_tool.save_model(
+        save_model(
             self.modified_onnx_file, self.record_file, self.save_dir)
 
         # evaluate the generated fake quant model
