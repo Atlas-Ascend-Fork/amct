@@ -74,7 +74,6 @@ class NpuFlatQuantAttention(torch.nn.Module):
         flat_attn.q_norm = quant_module.q_norm if hasattr(quant_module, 'q_norm') else None
         flat_attn.k_norm = quant_module.k_norm if hasattr(quant_module, 'k_norm') else None
 
-        # use_kcache_quant = quant_module.flat_config
         quant_module.q_proj.weight_quantizer.find_params(quant_module.q_proj.linear.weight)
         quant_module.k_proj.weight_quantizer.find_params(quant_module.k_proj.linear.weight)
         quant_module.v_proj.weight_quantizer.find_params(quant_module.v_proj.linear.weight)

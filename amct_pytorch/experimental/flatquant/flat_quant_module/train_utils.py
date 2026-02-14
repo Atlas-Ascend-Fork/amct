@@ -160,8 +160,7 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
             for j in range(n_samples // bsz):
                 index = j * bsz
                 quant_out = layer(fp_inps[index: index + bsz, ], **batch_kwargs)
-                if isinstance(quant_out, tuple):
-                    quant_out = quant_out[0]
+                quant_out = quant_out[0] if isinstance(quant_out, tuple) else quant_out
                 loss = loss_func(fp_outs[index: index + bsz, ], quant_out)
                 mse += loss.detach().cpu()
                 loss = loss / loss.clone().detach()
