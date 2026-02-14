@@ -143,8 +143,7 @@ class FlatQuantAttention(nn.Module):
         return q, k
 
     def forward_qkv(
-            self, query_states, key_states, value_states, bsz, q_len,
-            position_embeddings, cache_position, attention_mask, past_key_value, **kwargs
+            self, query_states, key_states, value_states, bsz, q_len, **kwargs
         ):
         hidden_shape = (bsz, q_len, -1, self.head_dim)
 
@@ -156,7 +155,7 @@ class FlatQuantAttention(nn.Module):
             key_states = self.k_norm(key_states.view(hidden_shape)).transpose(1, 2)
         value_states = value_states.view(hidden_shape).transpose(1, 2)
 
-        cos, sin = position_embeddings
+        cos, sin = kwargs.pop('position_embeddings')
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
         # ---- here do the kv cache quantization ----
@@ -166,9 +165,14 @@ class FlatQuantAttention(nn.Module):
             if self.flat_config.use_vcache_quant:
                 value_states = self.quant_vcache(value_states)
 
-        if past_key_value is not None:
-            cache_kwargs = {"sin": sin, "cos": cos, 'cache_position': cache_position}
-            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
+        past_key_values = None
+        if kwargs.get('past_key_value') is not None:
+            past_key_values = kwargs.pop('past_key_value')
+        if kwargs.get('past_key_values') is not None:
+            past_key_values = kwargs.pop('past_key_values')
+        if past_key_values is not None:
+            cache_kwargs = {"sin": sin, "cos": cos, 'cache_position': kwargs.pop('cache_position')}
+            key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
         attention_interface: Callable = eager_attention_forward
         if self.module_config._attn_implementation != 'eager':
@@ -182,7 +186,7 @@ class FlatQuantAttention(nn.Module):
 
         if hasattr(self, 'sliding_window'):
             kwargs['sliding_window'] = self.sliding_window
-
+        attention_mask = kwargs.pop('attention_mask')
         attn_output, attn_weights = attention_interface(
             self,
             query_states,
@@ -217,8 +221,7 @@ class FlatQuantAttention(nn.Module):
 
         return attn_output, attn_weights
 
-    def forward(self, hidden_states, position_embeddings, attention_mask,
-                    past_key_value, cache_position, **kwargs):
+    def forward(self, hidden_states, **kwargs):
         bsz, q_len, _ = hidden_states.size()
         
         if self._ori_mode:
@@ -226,10 +229,7 @@ class FlatQuantAttention(nn.Module):
         else:
             query_states, key_states, value_states = self._trans_forward_after_ln(hidden_states)
         
-        attn_res = self.forward_qkv(
-            query_states, key_states, value_states, bsz, q_len,
-            position_embeddings, cache_position, attention_mask, past_key_value, **kwargs
-        )
+        attn_res = self.forward_qkv(query_states, key_states, value_states, bsz, q_len, **kwargs)
         return attn_res
 
     def reparameterize(self):
@@ -274,6 +274,7 @@ class FlatQuantMLP(nn.Module):
         super().__init__()
 
         self.flat_config = flat_config_parser(layer_config)
+        self.module_config = module.config
 
         # quant module
         self.hidden_size = module.config.hidden_size

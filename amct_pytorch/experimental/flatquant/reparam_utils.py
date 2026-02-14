@@ -31,10 +31,11 @@ def get_replacement_module(model, object_type_name, object_name, object_module):
     if object_type_name == 'FlatQuantAttention':
         if object_module.ln_trans is not None and object_module.ln_trans.add_diag:
             reparameterize_ln(layer_module.input_layernorm, object_module.ln_trans)
-        npu_module = NpuFlatQuantAttention(object_module)
+        npu_module = NpuFlatQuantAttention.from_quant_module(object_module)
+
     else:
         if object_module.up_gate_trans is not None and object_module.up_gate_trans.add_diag:
             reparameterize_ln(layer_module.post_attention_layernorm, object_module.up_gate_trans)
-        npu_module = NpuFlatQuantMLP(object_module)
+        npu_module = NpuFlatQuantMLP.from_quant_module(object_module)
 
     return npu_module
