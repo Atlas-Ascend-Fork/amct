@@ -4,4 +4,6 @@ makeself:
 protobuf:
    version: 25.1
    type: build
-   
+abseil-cpp:
+   version: 20230802.1
+   type: build
