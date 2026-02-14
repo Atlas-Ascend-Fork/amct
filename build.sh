@@ -41,6 +41,7 @@ usage() {
   echo "                      Set output path, default ./build_out"
   echo "    -u, --utest       Build and run all unit tests"
   echo "    --cov             Enable coverage"
+  echo "    --asan            Enable AddressSanitizer"
   echo ""
 }
 
@@ -54,7 +55,7 @@ checkopts() {
   OUTPUT_PATH="${BASEPATH}/build_out/"
 
   # Process the options
-  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,utest,cov,build-type:,cann_3rd_lib_path:,output_path:, -- "$@") || {
+  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path:, -- "$@") || {
     usage
     exit 1
   }
@@ -107,6 +108,10 @@ checkopts() {
         ENABLE_COVERAGE=TRUE
         shift
         ;;
+      --asan)
+        ENABLE_ASAN=TRUE
+        shift
+        ;;
       --)
         shift
         break
@@ -137,15 +142,7 @@ build() {
   echo "----------------ASCEND_HOME_PATH  "${ASCEND_HOME_PATH}"  ----------------"
   echo "----------------CANN_3RD_LIB_PATH  "${CANN_3RD_LIB_PATH}"  ----------------"
 
-  cmake -D CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-        -D TOP_DIR=${BASEPATH} \
-        -D CMAKE_VERBOSE_MAKEFILE=ON\
-        -D ASCEND_HOME_PATH=${ASCEND_HOME_PATH}\
-        -D PREX=${LOWER_PREX}\
-        ${CANN_3RD_LIB_PATH:+-D CANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}} \
-        -D BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG=ON \
-        -D CMAKE_BUILD_TYPE=${BUILD_TYPE} \
-        ..
+  cmake ${CMAKE_ARGS} ..
 
   make all ${VERBOSE} -j${THREAD_NUM}
   if [ $? -ne 0 ]

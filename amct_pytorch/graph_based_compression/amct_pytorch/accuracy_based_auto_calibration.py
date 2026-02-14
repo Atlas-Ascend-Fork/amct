@@ -23,6 +23,7 @@ import json
 from collections import OrderedDict
 
 import torch # pylint: disable=E0401
+from ..amct_pytorch import quantize_tool
 from ..amct_pytorch.quantize_tool import inner_quantize_model
 from ..amct_pytorch.quantize_tool import generate_fakequant_module
 from ..amct_pytorch.quantize_tool import inner_fuse_bn
