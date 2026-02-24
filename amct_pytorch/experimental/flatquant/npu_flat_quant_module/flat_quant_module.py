@@ -57,7 +57,7 @@ class NpuFlatQuantAttention(torch.nn.Module):
         self.method = AscendW4A4FlatQuantDynamicLinearMethod()
 
     @classmethod
-    def from_quant_module(cls, quant_module):
+    def from_quant_module(cls, quant_module) -> 'NpuFlatQuantAttention':
         '''
         construct npu attention for flatquant from quantified calibration module
         '''
@@ -95,6 +95,15 @@ class NpuFlatQuantAttention(torch.nn.Module):
         return flat_attn
 
     def forward(self, hidden_states, **kwargs):
+        '''
+        hidden_states: torch.Tensor
+        kwargs:
+            position_embeddings: tuple[torch.Tensor, torch.Tensor]
+            attention_mask: Optional[torch.Tensor]
+            past_key_values/past_key_value: Optional, past_key_value is deprecated in transformers 4.58
+            cache_position: Optional
+            other from TransformerKwargs/FlashAttentionKwargs
+        '''
         bsz, q_len, _ = hidden_states.size()
 
         # NPU operator torch_npu.npu_kronecker_quant requires that total data length (bsz * q_len)
@@ -209,7 +218,7 @@ class NpuFlatQuantMLP(torch.nn.Module):
         self.method = AscendW4A4FlatQuantDynamicLinearMethod()
 
     @classmethod
-    def from_quant_module(cls, quant_module):
+    def from_quant_module(cls, quant_module) -> 'NpuFlatQuantMLP':
         '''
         construct npu mlp for flatquant from quantified calibration module
         '''
