@@ -5,7 +5,6 @@ import torch
 import torch_npu
 
 from .function_utils import set_require_grad_all, get_n_set_parameters_byname
-from .default_model_utils import FlatQuantAttention, FlatQuantMLP
 
 
 def cali_flat_quant(model, dataloader, dev):
@@ -72,7 +71,7 @@ def cali_flat_quant(model, dataloader, dev):
             layer.float()
 
         training_flag = False
-        if isinstance(layer.self_attn, FlatQuantAttention) or isinstance(layer.mlp, FlatQuantMLP):
+        if type(layer.self_attn).__name__ == 'FlatQuantAttention' or type(layer.mlp).__name__ == 'FlatQuantMLP':
             training_flag = True
 
         # origin forward
@@ -160,7 +159,8 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
         with traincast():
             for j in range(n_samples // bsz):
                 index = j * bsz
-                quant_out = layer(fp_inps[index: index + bsz, ], **batch_kwargs)[0]
+                quant_out = layer(fp_inps[index: index + bsz, ], **batch_kwargs)
+                quant_out = quant_out[0] if isinstance(quant_out, tuple) else quant_out
                 loss = loss_func(fp_outs[index: index + bsz, ], quant_out)
                 mse += loss.detach().cpu()
                 loss = loss / loss.clone().detach()
