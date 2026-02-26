@@ -99,6 +99,8 @@ bash build.sh --pkg
 
 ## 安装与卸载
 
+  工具安装及快速入门请参考[《模型压缩AMCT工具》](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/800alpha001/devaids/devtools/amct/atlasamct_16_0001.html)。
+
 - 安装[编译执行](#编译执行)环节生成的run包（如果安装用户为root，请将安装命令中的--user删除）。
 
   ```bash
