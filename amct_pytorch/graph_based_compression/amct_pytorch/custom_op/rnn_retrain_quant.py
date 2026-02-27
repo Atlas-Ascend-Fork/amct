@@ -172,11 +172,8 @@ class RNNRetrainQuant(nn.Module):
                 sequence_length = inputs.shape[1]
             else:
                 sequence_length = inputs.shape[0]
-            if sequence_length != 1:
-                raise ValueError("Layer {} sequence length only support 1, actually is {}.".format(
-                    layers_name, sequence_length))
         if hx is None:
-            raise ValueError("Layer {} except second input, bu got None.".format(layers_name))
+            raise ValueError("Layer {} except second input, but got None.".format(layers_name))
 
         if self.do_init:
             self._acts_quant_init(inputs, hx)
