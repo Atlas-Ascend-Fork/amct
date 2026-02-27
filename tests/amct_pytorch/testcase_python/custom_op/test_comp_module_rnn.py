@@ -31,7 +31,7 @@ class TestCompModuleRNN(unittest.TestCase):
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
-        cls.module = torch.nn.LSTM(10, 20, 1)
+        cls.module = torch.nn.LSTM(10, 20, 1, batch_first=True)
         cls.input = torch.randn(1, 1, 10)
         cls.h0 = torch.randn(1, 1, 20)
         cls.c0 = torch.randn(1, 1, 20)
@@ -73,3 +73,9 @@ class TestCompModuleRNN(unittest.TestCase):
         comp_module = CompModuleRNN(**self.comp_args)
         comp_module.comp_algs.append('quant')
         comp_module.forward(self.input, (self.h0, self.c0))
+    
+    def test_forward_seq_n_success(self):
+        comp_module = CompModuleRNN(**self.comp_args)
+        comp_module.comp_algs.append('quant')
+        inputs = torch.randn(1, 10, 10)
+        comp_module.forward(inputs, (self.h0, self.c0))
