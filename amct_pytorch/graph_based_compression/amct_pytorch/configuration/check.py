@@ -768,10 +768,6 @@ def _check_lstm_input_limit(node):
                     'for its initial_h is not linked to graph input'.format(node.name))
         return False
 
-    if node_input_anchors[RNN_SEQ_LENS_INDEX].get_peer_output_anchor() is not None:
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for it has sequence_lens input'.format(node.name))
-        return False
     if len(node_input_anchors) > LSTM_P_INDEX and \
         node_input_anchors[LSTM_P_INDEX].get_peer_output_anchor() is not None:
         LOGGER.logd('Node {} cannot be quantized for it has P input'.format(node.name))
@@ -860,11 +856,6 @@ def _check_gru_input_limit(node):
         node_input_anchors[RNN_H_INDEX].get_peer_output_anchor() is None:
         LOGGER.logd('Node {} cannot be quantized '
                     'for it has no initial_h input'.format(node.name))
-        return False
-
-    if node_input_anchors[RNN_SEQ_LENS_INDEX].get_peer_output_anchor() is not None:
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for it has sequence_lens input'.format(node.name))
         return False
 
     initial_h = node_input_anchors[RNN_H_INDEX].get_peer_output_anchor().node
