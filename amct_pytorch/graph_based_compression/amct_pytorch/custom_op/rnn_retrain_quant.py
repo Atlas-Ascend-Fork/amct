@@ -71,6 +71,8 @@ class RNNRetrainQuant(nn.Module):
         self.record_module = record_module
         self.cur_batch = 0
         self.type = 'RNNRetrainQuant'
+        self.sequence_length = 0
+        self.device = quant_module.comp_module.weight_ih_l0.device
 
         self.scale_d = 1.0
         self.scale_h = 1.0
@@ -153,6 +155,35 @@ class RNNRetrainQuant(nn.Module):
         reorganized_quant_factor = np.concatenate(temp_list, axis=0)
         return reorganized_quant_factor.tolist()
 
+    @staticmethod
+    def quant_dequant_tensor(self, tensor, scale, offset, num_bits, device):
+        temp_data = torch.add(torch.round(
+            torch.mul(tensor, (1 / scale.to(device)))), offset.to(device))
+        clamp_min = torch.tensor(-2**(num_bits - 1), requires_grad=False)
+        clamp_max = torch.tensor(2**(num_bits - 1) - 1, requires_grad=False)
+        clamped_data = torch.clamp(temp_data, clamp_min.to(device), clamp_max.to(device))
+        quantized_data = torch.sub(clamped_data, offset.to(device))
+        quantized_data = torch.round(torch.mul(tensor, scale.to(device)))
+        return quantized_data 
+
+    @staticmethod
+    def for_loop_rnncell_forward(self, inputs, hx):
+        quantized_input = self.quant_dequant_tensor(inputs, self.scale_d, self.offset_d, 8, self.device)
+        h_next = hx
+        rnn_cell= nn.GRUCell(inputs.shape[-1], hx.shape[-1])
+        rnn_cell.weight_ih=self.quant_module.comp_module.weight_ih_l0
+        rnn_cell.weight_hh=self.quant_module.comp_module.weight_hh_l0
+        rnn_cell.bias_ih=self.quant_module.comp_module.bias_ih_l0
+        rnn_cell.bias_hh=self.quant_module.comp_module.bias_hh_l0
+        output_cell=[]
+        for i in range(0, self.sequence_length):
+            hi = self.quant_dequant_tensor(h_next, self.scale_h, self.offset_h, 8, self.device)
+            xi = inputs[:, i, :]
+            h_next = rnn_cell(xi, hi)
+            output_cell.append(h_next)
+        full_output = torch.stack(output_cell, dim=1)
+        return full_output
+
     def forward(self, inputs, hx=None):
         """
         Function: forward function
@@ -169,18 +200,19 @@ class RNNRetrainQuant(nn.Module):
             raise ValueError("Layer {} input data only support 3-D shape.".format(layers_name))
         if self.quant_module_type in RNN_LAYER_TYPE:
             if self.quant_module.replaced_module.batch_first:
-                sequence_length = inputs.shape[1]
+                self.sequence_length = inputs.shape[1]
             else:
-                sequence_length = inputs.shape[0]
-            if sequence_length != 1:
-                raise ValueError("Layer {} sequence length only support 1, actually is {}.".format(
-                    layers_name, sequence_length))
+                self.sequence_length = inputs.shape[0]
         if hx is None:
-            raise ValueError("Layer {} except second input, bu got None.".format(layers_name))
+            raise ValueError("Layer {} except second input, but got None.".format(layers_name))
 
         if self.do_init:
             self._acts_quant_init(inputs, hx)
-        outputs = self.quant_module(inputs, hx)
+        
+        if self.sequence_length > 1:
+            outputs = self.for_loop_rnncell_forward(inputs, hx)
+        else:
+            outputs = self.quant_module(inputs, hx)
 
         if not self.training and not self.do_init:
             self.cur_batch += 1
@@ -273,6 +305,11 @@ class RNNRetrainQuant(nn.Module):
             initial_h = hx[0]
         else:
             initial_h = hx
+            
+        if self.sequence_length > 1:
+            outputs = self.quant_module.comp_module.forward(inputs, hx)[1]
+            initial_h = outputs[1]
+
         is_init_h, act_h_retrain_params = self._do_ifmr(initial_h, self.init_module_h)
         if is_init_h:
             del self.init_module_h

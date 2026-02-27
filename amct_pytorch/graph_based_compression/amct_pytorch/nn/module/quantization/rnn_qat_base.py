@@ -121,13 +121,6 @@ class RnnQatBase(QATBase):
             raise RuntimeError('{}QAT op only support tensor input, but your input type is {}'.format(
                 self.layer_type, type(input)))
 
-        if self.batch_first:
-            sequence_length = inputs.shape[1]
-        else:
-            sequence_length = inputs.shape[0]
-        if sequence_length != 1:
-            raise RuntimeError(
-                '{} only support sequence_length 1 but your input is {}'.format(self.layer_type, sequence_length))
         if len(inputs.shape) != RNN_INPUT_DIM:
             raise RuntimeError("{} quantize only support input dim 3,"\
                                " but your input dim is {}".format(self.layer_type, len(inputs.shape)))        
