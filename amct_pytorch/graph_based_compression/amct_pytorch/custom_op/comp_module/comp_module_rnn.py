@@ -59,6 +59,7 @@ class CompModuleRNN(nn.Module):
         else:
             self.num_scales = RNN_TENSOR_NUM.get(self.replaced_module_type)
         self._init_output()
+        self.sequence_length = 0
 
     def forward(self, inputs, hx=None):
         """
@@ -66,6 +67,12 @@ class CompModuleRNN(nn.Module):
         """
         if inputs.abs().max() <= FLT_EPSILON:
             LOGGER.logw('The input tensor is all zeros')
+
+        if self.replaced_module.batch_first:
+            self.sequence_length = inputs.shape[1]
+        else:
+            self.sequence_length = inputs.shape[0]
+
         compressed_inputs, compressed_weights = self._comp_act_wts(inputs, hx)
 
         with torch.enable_grad():
@@ -74,7 +81,12 @@ class CompModuleRNN(nn.Module):
             if self.replaced_module_type == 'LSTM':
                 output = self.comp_module(compressed_inputs[0], (compressed_inputs[1], hx[1]))
             else:
-                output = self.comp_module(compressed_inputs[0], compressed_inputs[1])
+                if self.sequence_length > 1:
+                    output = self.for_loop_rnncell_forward(compressed_inputs[0], 
+                                                           compressed_inputs[1], 
+                                                           self.act_config.get(NUM_BITS))
+                else:
+                    output = self.comp_module(compressed_inputs[0], compressed_inputs[1])
 
         return output
 
@@ -144,6 +156,36 @@ class CompModuleRNN(nn.Module):
         self.register_buffer(S_REC_FLAG,
             tensor(False if self.wts_config.get(S_REC_FLAG) is None else self.wts_config.get(S_REC_FLAG),
             device=device))
+
+    @staticmethod
+    def quant_dequant_tensor(tensor, scale, offset, num_bits):
+        temp_data = torch.add(torch.round(
+            torch.mul(tensor, (1 / scale))), offset)
+        clamp_min = torch.tensor(-2**(num_bits - 1), requires_grad=False)
+        clamp_max = torch.tensor(2**(num_bits - 1) - 1, requires_grad=False)
+        clamped_data = torch.clamp(temp_data, clamp_min, clamp_max)
+        quantized_data = torch.sub(clamped_data, offset)
+        quantized_data = torch.round(torch.mul(tensor, scale))
+        return quantized_data 
+
+    def for_loop_rnncell_forward(self, inputs, hx, num_bits):
+        h_next = hx
+        rnn_cell = nn.GRUCell(inputs.shape[-1], hx.shape[-1])
+        rnn_cell.weight_ih = self.comp_module.weight_ih_l0
+        rnn_cell.weight_hh = self.comp_module.weight_hh_l0
+        rnn_cell.bias_ih = self.comp_module.bias_ih_l0
+        rnn_cell.bias_hh = self.comp_module.bias_hh_l0
+        output_cell = []
+        if h_next.dim() == 3:
+            h_next = hx.squeeze(0)
+        for i in range(0, self.sequence_length):
+            xi = inputs[:, i, :]
+            h_next = rnn_cell(xi, h_next)
+            output_cell.append(h_next)
+            h_next = self.quant_dequant_tensor(h_next, self.acts_h_scale, self.acts_h_offset, num_bits)
+
+        full_output = torch.stack(output_cell, dim=1)
+        return full_output, h_next
 
     def _acts_comp_quant(self, inputs, hx):
         """
