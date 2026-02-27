@@ -105,12 +105,13 @@ class GRUQAT(nn.GRU, RnnQatBase):
             raise RuntimeError("GRU quantize only support input hx dim 3,"\
                                " but your input dim is {}".format(len(hx.shape)))
         if self.batch_first:
-            batch_size = int(inputs.shape[0])
+            seq_len = int(inputs.shape[1])
         else:
-            batch_size = int(inputs.shape[1])
+            seq_len = int(inputs.shape[0])
+
  
         quantized_acts, quantized_h_x, quantized_wts, quantized_recurrence_weight = \
-            self.forward_qat(inputs, hx)
+            self.forward_qat(inputs, hx, seq_len)
         if self.bias_value is None:
             bias_ih_l0, bias_hh_l0 = None, None
         else:
@@ -123,7 +124,7 @@ class GRUQAT(nn.GRU, RnnQatBase):
                                          self.bias_value,
                                          self.hidden_size,
                                          self.input_size,
-                                         batch_size,
+                                         seq_len,
                                          self.batch_first,
                                          bias_ih_l0,
                                          bias_hh_l0)
@@ -132,7 +133,7 @@ class GRUQAT(nn.GRU, RnnQatBase):
 
 class GRUMiddleWare(torch.autograd.Function):
     @staticmethod
-    def symbolic(g, x, h, w, r, bias, hidden_size, input_size, batch_size,
+    def symbolic(g, x, h, w, r, bias, hidden_size, input_size, seq_len,
                  batch_first, bias_ih_l0, bias_hh_l0):
         """ define the structure of exported onnx model for gruqat """
         if batch_first:
@@ -144,14 +145,14 @@ class GRUMiddleWare(torch.autograd.Function):
         sequence_length.setType(_C.OptionalType.ofTensor())
         gru = g.op('GRU', x, w, r, bias, sequence_length, h,
                    hidden_size_i=hidden_size, linear_before_reset_i=1, outputs=2)
-        shape = g.op('Constant', value_t=torch.tensor([1, batch_size, hidden_size], dtype=torch.int64))
+        shape = g.op('Constant', value_t=torch.tensor([1, seq_len, hidden_size], dtype=torch.int64))
         out_node = g.op('Reshape', gru[0], shape)
         if batch_first:
             out_node = g.op('Transpose', out_node, perm_i=list([1, 0, 2]))
         return out_node, gru[1]
 
     @staticmethod
-    def forward(ctx, x, h, w, r, bias, hidden_size, input_size, batch_size,
+    def forward(ctx, x, h, w, r, bias, hidden_size, input_size, seq_len,
                 batch_first, bias_ih_l0, bias_hh_l0):
         """ gru forward """
         mod = torch.nn.GRU(input_size, hidden_size, batch_first=batch_first, bias=bias_ih_l0 is not None)
