@@ -31,7 +31,8 @@ class TestCompModuleRNN(unittest.TestCase):
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
-        cls.module = torch.nn.LSTM(10, 20, 1)
+        cls.module = torch.nn.LSTM(10, 20, 1, batch_first=True)
+        cls.gru_module = torch.nn.GRU(10, 20, 1, batch_first=True)
         cls.input = torch.randn(1, 1, 10)
         cls.h0 = torch.randn(1, 1, 20)
         cls.c0 = torch.randn(1, 1, 20)
@@ -56,12 +57,29 @@ class TestCompModuleRNN(unittest.TestCase):
             'layers_name': ['lstm'],
             'batch_num': 1
         }
+        
+        cls.gru_common_config = {
+            'device': 'cpu',
+            'need_sync': False,
+            'process_group': None,
+            'world_size': 1,
+            'layers_name': ['gru'],
+            'batch_num': 1
+        }
 
         cls.comp_args = {
             'module': cls.module,
             'act_config': cls.act_config,
             'wts_config': cls.wts_config,
             'common_config': cls.common_config,
+            'acts_comp_reuse': False
+        }
+        
+        cls.gru_comp_args = {
+            'module': cls.gru_module,
+            'act_config': cls.act_config,
+            'wts_config': cls.wts_config,
+            'common_config': cls.gru_common_config,
             'acts_comp_reuse': False
         }
 
@@ -73,3 +91,14 @@ class TestCompModuleRNN(unittest.TestCase):
         comp_module = CompModuleRNN(**self.comp_args)
         comp_module.comp_algs.append('quant')
         comp_module.forward(self.input, (self.h0, self.c0))
+    
+    def test_forward_seq_n_success(self):
+        comp_module = CompModuleRNN(**self.comp_args)
+        comp_module.comp_algs.append('quant')
+        inputs = torch.randn(1, 10, 10)
+        comp_module.forward(inputs, (self.h0, self.c0))
+        
+        comp_module = CompModuleRNN(**self.gru_comp_args)
+        comp_module.comp_algs.append('quant')
+        inputs = torch.randn(1, 10, 10)
+        comp_module.forward(inputs, self.h0)
