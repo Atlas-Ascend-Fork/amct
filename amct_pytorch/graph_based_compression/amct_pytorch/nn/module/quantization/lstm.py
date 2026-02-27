@@ -132,11 +132,13 @@ class LSTMQAT(nn.LSTM, RnnQatBase):
                                " but your input dim is {}".format(len(hx[0].shape)))
         if self.batch_first:
             batch_size = int(inputs.shape[0])
+            seq_len = int(inputs.shape[1])
         else:
             batch_size = int(inputs.shape[1])
+            seq_len = int(inputs.shape[0])
 
         quantized_acts, quantized_h_x, quantized_wts, quantized_recurrence_weight = \
-            self.forward_qat(inputs, hx[0])
+            self.forward_qat(inputs, hx, seq_len)
         if self.bias_value is None:
             bias_ih_l0, bias_hh_l0 = None, None
         else:
