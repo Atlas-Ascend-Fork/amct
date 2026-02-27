@@ -121,19 +121,61 @@ class RnnQatBase(QATBase):
             raise RuntimeError('{}QAT op only support tensor input, but your input type is {}'.format(
                 self.layer_type, type(input)))
 
-        if self.batch_first:
-            sequence_length = inputs.shape[1]
-        else:
-            sequence_length = inputs.shape[0]
-        if sequence_length != 1:
-            raise RuntimeError(
-                '{} only support sequence_length 1 but your input is {}'.format(self.layer_type, sequence_length))
         if len(inputs.shape) != RNN_INPUT_DIM:
             raise RuntimeError("{} quantize only support input dim 3,"\
-                               " but your input dim is {}".format(self.layer_type, len(inputs.shape)))        
- 
-    def forward_qat(self, inputs, initial_h):
+                               " but your input dim is {}".format(self.layer_type, len(inputs.shape)))
+
+    def quant_dequant_tensor(self, ori_tensor, scale, offset):
+        temp_data = torch.add(torch.round(
+            torch.mul(ori_tensor, (1 / scale))), offset)
+        clamp_min = torch.tensor(-2**(self.act_num_bits - 1), requires_grad=False)
+        clamp_max = torch.tensor(2**(self.act_num_bits - 1) - 1, requires_grad=False)
+        clamped_data = torch.clamp(temp_data, clamp_min, clamp_max)
+        quantized_data = torch.sub(clamped_data, offset)
+        quantized_data = torch.round(torch.mul(quantized_data, scale))
+        return quantized_data
+
+    def for_loop_rnncell_forward(self, inputs, hx, module_type, params):
+        h_next = hx
+        c_next = None
+        seq_len, w, r, bw, br = params
+        if module_type == "GRU":
+            h_next = h_next.squeeze(0) if h_next.dim() == 3 else h_next
+            rnn_cell = torch.nn.GRUCell(inputs.shape[-1], h_next.shape[-1])
+        else:
+            h_next, c_next = hx
+            h_next = h_next.squeeze(0) if h_next.dim() == 3 else h_next
+            c_next = c_next.squeeze(0) if c_next.dim() == 3 else c_next
+            rnn_cell = torch.nn.LSTMCell(inputs.shape[-1], h_next.shape[-1])
+        rnn_cell.weight_ih = w
+        rnn_cell.weight_hh = r
+        rnn_cell.bias_ih = bw
+        rnn_cell.bias_hh = br
+        output_cell = []
+        current_state = None
+        for i in range(0, seq_len):
+            h_next = self.quant_dequant_tensor(h_next, self.h_scale, self.h_offset_deploy)
+            xi = inputs[:, i, :]
+            if module_type == "GRU":
+                h_next = rnn_cell(xi, h_next)
+                output_cell.append(h_next)
+                current_state = h_next
+            else:
+                h_next, c_next = rnn_cell(xi, (h_next, c_next))
+                output_cell.append(h_next)
+                current_state = (h_next, c_next)
+
+        full_output = torch.stack(output_cell, dim=1)
+        return full_output, current_state 
+    
+    def forward_qat(self, inputs, hx, seq_len):
+        if self.layer_type == "LSTM":
+            initial_h, _ = hx
+        else:
+            initial_h = hx
         if self.retrain_enable:
+            quantized_weights = self.wts_quant()
+            quantized_recurrence_weights = self._recurrence_wts_quant()
             if self.h_do_init:
                 self.acts_quant_init(inputs)
                 self._h_quant_init(initial_h)
@@ -141,9 +183,14 @@ class RnnQatBase(QATBase):
                 quantized_h = initial_h
             else:
                 quantized_acts = self.acts_quant(inputs)
+                if seq_len > 1:
+                    params = (seq_len, self.weight, self.recurrence_weight,
+                              self.bias_ih_l0, self.bias_hh_l0)
+                    initial_h, _ = self.for_loop_rnncell_forward(inputs, hx, 
+                                                                 self.layer_type, params)
                 quantized_h = self._h_quant(initial_h)
-            quantized_weights = self.wts_quant()
-            quantized_recurrence_weights = self._recurrence_wts_quant()
+                if seq_len > 1:
+                    quantized_h = quantized_h[:, 1, :]
             if self.cur < 100:
                 self.cur += 1
                 self.cur_batch += 1
