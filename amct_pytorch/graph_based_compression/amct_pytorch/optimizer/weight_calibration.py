@@ -27,6 +27,7 @@ from ...amct_pytorch.custom_op.arq.arq import weight_cali_tensor
 from ...amct_pytorch.common.utils.record_file_operator import record_weights_scale_offset
 from ...amct_pytorch.common.utils.record_file_operator import \
     read_activation_scale_offset
+from ...amct_pytorch.custom_op.utils import tensor
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 from ...amct_pytorch.configuration.check import GraphChecker
@@ -39,6 +40,10 @@ from ...amct_pytorch.utils.module_info import ModuleInfo
 CONV2D = 'Conv2d'
 CONV3D = 'Conv3d'
 CONV1D = 'Conv1d'
+RNN_TENSOR_SEQUENCE = {
+    'LSTM': [0, 3, 1, 2],
+    'GRU': [1, 0, 2]
+}
 
 
 class WeightsCalibrationPass(BaseModuleFusionPass):
@@ -136,6 +141,23 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
 
         weight_helper.clear_data()
         weight_helper.set_data(calied_weight_raw, set_data_type)
+    
+    @staticmethod
+    def _reorganize_rnn_quant_factor(quant_factor, module_name, module_type):
+        '''
+        Reorganize the rnn weight quant factor from torch order to onnx order.
+        '''
+        length = len(quant_factor)
+        tensor_sequence = RNN_TENSOR_SEQUENCE.get(module_type)
+        if length % len(tensor_sequence) != 0:
+            raise RuntimeError(
+                'Layer\'s quant factor length {} is not suitable mutiple of {}'.format(length, module_name))
+        splited_quant_factor = np.split(quant_factor, len(tensor_sequence))
+        temp_list = list()
+        for idx in tensor_sequence:
+            temp_list.append(splited_quant_factor[idx])
+        reorganized_quant_factor = np.concatenate(temp_list, axis=0)
+        return reorganized_quant_factor.tolist()
 
     def set_up(self):
         """
@@ -183,6 +205,12 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         layer_config = self.conf.get_layer_config(object_name)
         wts_param = layer_config.get('weight_quant_params')
         dmq_param = layer_config.get('dmq_balancer_param')
+        
+        # rnn weight has multi weight
+        if type(object_module).__name__ in ("GRU", "LSTM"):
+            self._rnn_process(object_name, object_module, object_node, wts_param)
+            return
+
         calied_weight = self._weight_calibration_process(
             object_module=object_module,
             object_node=object_node,
@@ -212,6 +240,13 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
             record_write_file.write(
                 text_format.MessageToString(self.records, as_utf8=True))
 
+    def rearrange_torch2onnx(self, weight, mode_type):
+        if mode_type == "GRU":
+            r, z, n = torch.chunk(weight, 3, dim=0)
+            return torch.cat([z, r, n], dim=0)
+        i, f, g, o = torch.chunk(weight, 4, dim=0)
+        return torch.cat([i, o, f, g], dim=0)
+
     def _averagegpool_process(self, object_name):
         """
         Function: process average pool. write weight scale and offset.
@@ -224,6 +259,58 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         offset = [0]
         record_weights_scale_offset(self.records, object_name, scale,
                                     offset)
+        LOGGER.logd(
+            'Do layer:\'{}\' weights calibration success!'.format(
+                object_name), 'WeightsCalibrationPass')
+
+    def _rnn_process(self, object_name, object_module, object_node, wts_param):
+        """
+        Function: process rnn weight. write weight scale and offset.
+        AveragePool do not need weight calibration.
+
+        Args:
+        object_name: name of object_module.
+        """
+        scale = [1.0]
+        offset = [0]
+        scale_r = [1.0]
+        offset_r = [0]
+        scale, offset, calied_weight = weight_cali_tensor(object_module.weight_ih_l0.data,
+                                                            wts_param)
+        scale_r, offset_r, calied_weight_r = weight_cali_tensor(object_module.weight_hh_l0.data,
+                                                            wts_param)
+        
+        record_weights_scale_offset(self.records, object_name, 
+                                    self._reorganize_rnn_quant_factor(tensor(scale), object_name,
+                                                                      type(object_module).__name__),
+                                    self._reorganize_rnn_quant_factor(tensor(offset, dtype=torch.int32), object_name,
+                                                                      type(object_module).__name__),
+                                    scale_r=self._reorganize_rnn_quant_factor(tensor(scale_r), object_name,
+                                                                            type(object_module).__name__),
+                                    offset_r=self._reorganize_rnn_quant_factor(tensor(offset_r, dtype=torch.int32),
+                                                                            object_name, type(object_module).__name__))
+        
+        calied_weight = self.rearrange_torch2onnx(calied_weight, type(object_module).__name__)
+        calied_weight_r = self.rearrange_torch2onnx(calied_weight_r, type(object_module).__name__)
+
+        weight_node = QuantOpInfo.get_weight_node(object_node)
+        weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+        
+        recurrence_weights_node = QuantOpInfo.get_recurrence_weight_node(object_node)
+        recurrence_weight_helper = TensorProtoHelper(recurrence_weights_node.proto, recurrence_weights_node.model_path)
+
+        calied_weight_raw = calied_weight.flatten().cpu().numpy()
+        calied_weight_r_raw = calied_weight_r.flatten().cpu().numpy()
+        if object_module.weight_ih_l0.dtype is torch.float16:
+            set_data_type = 'FLOAT16'
+        else:
+            set_data_type = 'FLOAT'
+
+        weight_helper.clear_data()
+        weight_helper.set_data(calied_weight_raw, set_data_type)
+        recurrence_weight_helper.clear_data()
+        recurrence_weight_helper.set_data(calied_weight_r_raw, set_data_type)
+        
         LOGGER.logd(
             'Do layer:\'{}\' weights calibration success!'.format(
                 object_name), 'WeightsCalibrationPass')
