@@ -104,6 +104,10 @@ class TestRNNRetrainQuant(unittest.TestCase):
 
     def test_forward_success(self):
         self.retrain_quant.forward(self.input, (self.h0, self.c0))
+    
+    def test_forward_success(self):
+        inputs = torch.randn(1, 10, 10)
+        self.retrain_quant.forward(inputs, (self.h0, self.c0))
 
     def test_reorganize_rnn_quant_factor(self):
         quant_factor = np.array([0, 1, 2, 3])
