@@ -177,6 +177,9 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         if object_node.type == 'AveragePool':
             self._averagegpool_process(object_name)
             return
+        if type(object_module).__name__ in ("GRU", "LSTM"):
+            self._rnn_process(object_module, wts_param)
+            return
 
         # Step1: do weight calibration by algo
         # get weights' information for quantization
@@ -224,6 +227,29 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         offset = [0]
         record_weights_scale_offset(self.records, object_name, scale,
                                     offset)
+        LOGGER.logd(
+            'Do layer:\'{}\' weights calibration success!'.format(
+                object_name), 'WeightsCalibrationPass')
+        
+    def _rnn_process(self, object_name, object_module, wts_param):
+        """
+        Function: process rnn weight. write weight scale and offset.
+        AveragePool do not need weight calibration.
+
+        Args:
+        object_name: name of object_module.
+        """
+        scale = [1.0]
+        offset = [0]
+        scale_r = [1.0]
+        offset_r = [0]
+        scale, offset, calied_weight = weight_cali_tensor(object_module.weight_ih_l0.data,
+                                                            wts_param)
+        scale_r, offset_r, calied_weight_r = weight_cali_tensor(object_module.weight_hh_l0.data,
+                                                            wts_param)
+        record_weights_scale_offset(self.records, object_name, scale,
+                                offset, scale_r=scale_r, offset_r=offset_r)
+        
         LOGGER.logd(
             'Do layer:\'{}\' weights calibration success!'.format(
                 object_name), 'WeightsCalibrationPass')
