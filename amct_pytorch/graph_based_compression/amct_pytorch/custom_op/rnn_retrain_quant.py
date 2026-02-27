@@ -71,6 +71,8 @@ class RNNRetrainQuant(nn.Module):
         self.record_module = record_module
         self.cur_batch = 0
         self.type = 'RNNRetrainQuant'
+        self.sequence_length = 0
+        self.device = quant_module.comp_module.weight_ih_l0.device
 
         self.scale_d = 1.0
         self.scale_h = 1.0
@@ -169,17 +171,15 @@ class RNNRetrainQuant(nn.Module):
             raise ValueError("Layer {} input data only support 3-D shape.".format(layers_name))
         if self.quant_module_type in RNN_LAYER_TYPE:
             if self.quant_module.replaced_module.batch_first:
-                sequence_length = inputs.shape[1]
+                self.sequence_length = inputs.shape[1]
             else:
-                sequence_length = inputs.shape[0]
-            if sequence_length != 1:
-                raise ValueError("Layer {} sequence length only support 1, actually is {}.".format(
-                    layers_name, sequence_length))
+                self.sequence_length = inputs.shape[0]
         if hx is None:
-            raise ValueError("Layer {} except second input, bu got None.".format(layers_name))
+            raise ValueError("Layer {} except second input, but got None.".format(layers_name))
 
         if self.do_init:
             self._acts_quant_init(inputs, hx)
+        
         outputs = self.quant_module(inputs, hx)
 
         if not self.training and not self.do_init:
@@ -273,6 +273,11 @@ class RNNRetrainQuant(nn.Module):
             initial_h = hx[0]
         else:
             initial_h = hx
+            
+        if self.sequence_length > 1:
+            outputs = self.quant_module.replaced_module.forward(inputs, hx)
+            initial_h = outputs[1]
+
         is_init_h, act_h_retrain_params = self._do_ifmr(initial_h, self.init_module_h)
         if is_init_h:
             del self.init_module_h
