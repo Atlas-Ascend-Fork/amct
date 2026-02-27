@@ -73,3 +73,9 @@ class TestCompModuleRNN(unittest.TestCase):
         comp_module = CompModuleRNN(**self.comp_args)
         comp_module.comp_algs.append('quant')
         comp_module.forward(self.input, (self.h0, self.c0))
+    
+    def test_forward_seq_n_success(self):
+        comp_module = CompModuleRNN(**self.comp_args)
+        comp_module.comp_algs.append('quant')
+        inputs = torch.randn(1, 10, 10)
+        comp_module.forward(inputs, (self.h0, self.c0))
