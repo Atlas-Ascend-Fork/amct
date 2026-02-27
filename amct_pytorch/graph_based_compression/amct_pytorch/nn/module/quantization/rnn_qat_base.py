@@ -121,19 +121,32 @@ class RnnQatBase(QATBase):
             raise RuntimeError('{}QAT op only support tensor input, but your input type is {}'.format(
                 self.layer_type, type(input)))
 
-        if self.batch_first:
-            sequence_length = inputs.shape[1]
-        else:
-            sequence_length = inputs.shape[0]
-        if sequence_length != 1:
-            raise RuntimeError(
-                '{} only support sequence_length 1 but your input is {}'.format(self.layer_type, sequence_length))
         if len(inputs.shape) != RNN_INPUT_DIM:
             raise RuntimeError("{} quantize only support input dim 3,"\
-                               " but your input dim is {}".format(self.layer_type, len(inputs.shape)))        
- 
-    def forward_qat(self, inputs, initial_h):
+                               " but your input dim is {}".format(self.layer_type, len(inputs.shape)))
+    
+    def for_loop_rnncell_forward(self, inputs, hx, w, r, bw, br, num_bits):
+        h_next = hx
+        rnn_cell = torch.nn.GRUCell(inputs.shape[-1], hx.shape[-1])
+        rnn_cell.weight_ih = w
+        rnn_cell.weight_hh = r
+        rnn_cell.bias_ih = bw
+        rnn_cell.bias_hh = br
+        output_cell = []
+        if h_next.dim() == 3:
+            h_next = hx.squeeze(0)
+        for i in range(0, self.sequence_length):
+            xi = inputs[:, i, :]
+            h_next = rnn_cell(xi, h_next)
+            output_cell.append(h_next)
+            h_next = self.quant_dequant_tensor(h_next, self.acts_h_scale, self.acts_h_offset, num_bits)
+        full_output = torch.stack(output_cell, dim=1)
+        return full_output, h_next
+    
+    def forward_qat(self, inputs, initial_h, seq_len):
         if self.retrain_enable:
+            quantized_weights = self.wts_quant()
+            quantized_recurrence_weights = self._recurrence_wts_quant()
             if self.h_do_init:
                 self.acts_quant_init(inputs)
                 self._h_quant_init(initial_h)
@@ -141,9 +154,9 @@ class RnnQatBase(QATBase):
                 quantized_h = initial_h
             else:
                 quantized_acts = self.acts_quant(inputs)
+                if seq_len > 1:
+                    initial_h, _ = self.for_loop_rnncell_forward(inputs, initial_h, quantized_weights, quantized_recurrence_weights, num_bits)
                 quantized_h = self._h_quant(initial_h)
-            quantized_weights = self.wts_quant()
-            quantized_recurrence_weights = self._recurrence_wts_quant()
             if self.cur < 100:
                 self.cur += 1
                 self.cur_batch += 1

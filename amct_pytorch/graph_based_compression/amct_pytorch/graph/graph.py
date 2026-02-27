@@ -97,6 +97,29 @@ class Graph(GraphBase): # pylint: disable=no-member
         consumer.set_attr('input_dimension_reduction', True)
         return consumer
 
+    @staticmethod
+    def _parse_gru_nodes(quant_identity_node):
+        """
+        Function: apply bfs to find the conv layer from the circular_padding_nodes
+        Parameter: quant_identity_node: root nodes quant_identity
+        Return: consumer the conv nodes found
+        """
+        # apply bfs to search conv node
+        root = quant_identity_node
+        search_queue = []
+        search_queue.append(root)
+        while search_queue:
+            current = search_queue.pop(0)
+            if current.type == 'GRU':
+                consumer = current
+                break
+
+            next_nodes, _ = current.get_consumers(0)
+            for next_node in next_nodes:
+                search_queue.append(next_node)
+        return consumer
+
+
     def add_node(self, node_proto, index=None):
         """
         Function: Add node that constructed from node_proto to graph
@@ -334,6 +357,10 @@ class Graph(GraphBase): # pylint: disable=no-member
                                  encoding="utf-8")
                 consumers, _ = node.get_consumers(0)
                 consumer = consumers[0]
+                
+                if layer_module_type == "GRU" and consumer.type != "GRU":
+                    consumer = Graph._parse_gru_nodes(node)
+
                 if consumer.type == 'Pad':
                     set_name_node(consumer, '%s_pad' % (layer_name))
                     consumer_output = consumer.get_output_anchor(0)
