@@ -183,6 +183,12 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         layer_config = self.conf.get_layer_config(object_name)
         wts_param = layer_config.get('weight_quant_params')
         dmq_param = layer_config.get('dmq_balancer_param')
+        
+        # rnn weight has multi weight
+        if type(object_module).__name__ in ("GRU", "LSTM"):
+            self._rnn_process(object_name, object_module, object_node, wts_param)
+            return
+
         calied_weight = self._weight_calibration_process(
             object_module=object_module,
             object_node=object_node,
@@ -224,6 +230,49 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         offset = [0]
         record_weights_scale_offset(self.records, object_name, scale,
                                     offset)
+        LOGGER.logd(
+            'Do layer:\'{}\' weights calibration success!'.format(
+                object_name), 'WeightsCalibrationPass')
+        
+    def _rnn_process(self, object_name, object_module, object_node, wts_param):
+        """
+        Function: process rnn weight. write weight scale and offset.
+        AveragePool do not need weight calibration.
+
+        Args:
+        object_name: name of object_module.
+        """
+        scale = [1.0]
+        offset = [0]
+        scale_r = [1.0]
+        offset_r = [0]
+        scale, offset, calied_weight = weight_cali_tensor(object_module.weight_ih_l0.data,
+                                                            wts_param)
+        scale_r, offset_r, calied_weight_r = weight_cali_tensor(object_module.weight_hh_l0.data,
+                                                            wts_param)
+        record_weights_scale_offset(self.records, object_name, scale,
+                                offset, scale_r=scale_r, offset_r=offset_r)
+        object_module.weight_ih_l0.data = calied_weight
+        object_module.weight_hh_l0.data = calied_weight_r
+        
+        weight_node = QuantOpInfo.get_weight_node(object_node)
+        weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+        
+        recurrence_weights_node = QuantOpInfo.get_recurrence_weight_node(object_node)
+        recurrence_weight_helper = TensorProtoHelper(recurrence_weights_node.proto, recurrence_weights_node.model_path)
+
+        calied_weight_raw = calied_weight.flatten().cpu().numpy()
+        calied_weight_r_raw = calied_weight_r.flatten().cpu().numpy()
+        if object_module.weight_ih_l0.dtype is torch.float16:
+            set_data_type = 'FLOAT16'
+        else:
+            set_data_type = 'FLOAT'
+
+        weight_helper.clear_data()
+        weight_helper.set_data(calied_weight_raw, set_data_type)
+        recurrence_weight_helper.clear_data()
+        recurrence_weight_helper.set_data(calied_weight_r_raw, set_data_type)
+        
         LOGGER.logd(
             'Do layer:\'{}\' weights calibration success!'.format(
                 object_name), 'WeightsCalibrationPass')
