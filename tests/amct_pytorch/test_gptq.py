@@ -53,6 +53,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int8_tensor_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -87,6 +88,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int8_tensor_asym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -121,6 +123,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int8_channel_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -151,6 +154,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int8_channel_asym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -181,6 +185,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int8_group_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -212,6 +217,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int8_group_asym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -243,6 +249,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int4_tensor_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -272,6 +279,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int4_tensor_asym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -301,6 +309,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int4_channel_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -331,6 +340,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int4_channel_asym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -360,6 +370,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int4_group_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -390,6 +401,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_int4_group_asym_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -423,6 +435,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_fp4_group_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
@@ -457,6 +470,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_hifp8_tensor_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
@@ -490,6 +504,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_fp8_tensor_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
@@ -523,6 +538,7 @@ class TestGptq(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_mxfp4_group_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
