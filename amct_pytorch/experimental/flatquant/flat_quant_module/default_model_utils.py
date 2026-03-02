@@ -89,22 +89,16 @@ class FlatQuantAttention(nn.Module):
         if self.flat_config.a_bits < 16 or self.flat_config.w_bits < 16:
             ln_dim_left, ln_dim_right = get_decompose_dim(self.q_proj.linear.weight.shape[1])
             self.ln_trans = SVDDecomposeTransMatrix(ln_dim_left, ln_dim_right, add_diag=self.flat_config.add_diag)
-            if self.flat_config.use_o_quant:
-                self.o_trans = SVDSingleTransMatrix(self.module_config.num_attention_heads)
-            else:
-                self.o_trans = None
+            self.o_trans = SVDSingleTransMatrix(self.module_config.num_attention_heads)
         else:
             self.ln_trans, self.o_trans = None, None
 
-        head_dim = self.module_config.hidden_size // self.module_config.num_attention_heads
         if self.flat_config.use_kcache_quant and self.flat_config.k_bits < 16:
-            self.kcache_trans = SVDSingleTransMatrix(head_dim)
+            self.kcache_trans = SVDSingleTransMatrix(self.head_dim)
         else:
             self.kcache_trans = None
-
-        if self.flat_config.use_vcache_quant and \
-            (self.flat_config.v_bits < 16 or self.flat_config.w_bits < 16 or self.flat_config.a_bits < 16):
-            self.vcache_trans = SVDSingleTransMatrix(head_dim)
+        if self.flat_config.v_bits < 16 or self.flat_config.w_bits < 16 or self.flat_config.a_bits < 16:
+            self.vcache_trans = SVDSingleTransMatrix(self.head_dim)
         else:
             self.vcache_trans = None
 
@@ -126,7 +120,7 @@ class FlatQuantAttention(nn.Module):
         return query_states, key_states, value_states
 
     def quant_vcache(self, value_states):
-        if self.v_bits < 16:
+        if self.flat_config.v_bits < 16:
             value_states = self.v_cache_quantizer(value_states)
         return value_states
 
@@ -204,8 +198,7 @@ class FlatQuantAttention(nn.Module):
             attn_output = self.o_proj._ori_forward(attn_output)
         else:
             init_shape = attn_output.shape
-            head_dim = self.module_config.hidden_size // self.module_config.num_attention_heads
-            attn_shape = [-1, self.module_config.num_attention_heads, head_dim]
+            attn_shape = [-1, self.module_config.num_attention_heads, self.head_dim]
             attn_output = attn_output.reshape(attn_shape)
             if self.o_trans is None and self.vcache_trans is not None:
                 attn_output = torch.matmul(attn_output, self.vcache_trans.get_matrix(inv_t=True).T.to(attn_output)).reshape(init_shape)

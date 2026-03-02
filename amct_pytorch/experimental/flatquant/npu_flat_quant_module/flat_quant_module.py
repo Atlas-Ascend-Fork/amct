@@ -6,7 +6,7 @@ from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb, eager
 from transformers.activations import ACT2FN
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 
-from .quant_utils import AscendW4A4FlatQuantDynamicLinearMethod, pack_int4_weights
+from .quant_utils import AscendW4A4FlatQuantDynamicLinearMethod, pack_int4_weights, dynamic_w4a4
 
 
 class NpuFlatQuantAttention(torch.nn.Module):
@@ -36,23 +36,26 @@ class NpuFlatQuantAttention(torch.nn.Module):
                 self.sliding_window = None
 
         # o_proj not quantize for now
-        self.o_proj = torch.nn.Linear(
-            config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
-        )
+        # self.o_proj = torch.nn.Linear(
+        #     config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
+        # )
 
         # kv-cache flatquant params, not support for now
 
-        # qkv proj flatquant params
+        # qkvo proj flatquant params
         self.register_parameter('scale_q_proj', torch.nn.Parameter(requires_grad=False))
         self.register_parameter('scale_k_proj', torch.nn.Parameter(requires_grad=False))
         self.register_parameter('scale_v_proj', torch.nn.Parameter(requires_grad=False))
+        self.register_parameter('scale_o_proj', torch.nn.Parameter(requires_grad=False))
 
         self.register_parameter('wt_q_packed', torch.nn.Parameter(requires_grad=False))
         self.register_parameter('wt_k_packed', torch.nn.Parameter(requires_grad=False))
         self.register_parameter('wt_v_packed', torch.nn.Parameter(requires_grad=False))
+        self.register_parameter('wt_o_packed', torch.nn.Parameter(requires_grad=False))
 
         self.register_parameter('left_trans', torch.nn.Parameter(requires_grad=False))
         self.register_parameter('right_trans', torch.nn.Parameter(requires_grad=False))
+        self.register_parameter('o_trans', torch.nn.Parameter(requires_grad=False))
 
         self.method = AscendW4A4FlatQuantDynamicLinearMethod()
 
@@ -70,13 +73,14 @@ class NpuFlatQuantAttention(torch.nn.Module):
 
         if hasattr(quant_module, 'sliding_window'):
             flat_attn.sliding_window = quant_module.sliding_window
-        flat_attn.o_proj = quant_module.o_proj.linear
+        # flat_attn.o_proj = quant_module.o_proj.linear
         flat_attn.q_norm = quant_module.q_norm if hasattr(quant_module, 'q_norm') else None
         flat_attn.k_norm = quant_module.k_norm if hasattr(quant_module, 'k_norm') else None
 
         quant_module.q_proj.weight_quantizer.find_params(quant_module.q_proj.linear.weight)
         quant_module.k_proj.weight_quantizer.find_params(quant_module.k_proj.linear.weight)
         quant_module.v_proj.weight_quantizer.find_params(quant_module.v_proj.linear.weight)
+        quant_module.o_proj.weight_quantizer.find_params(quant_module.o_proj.linear.weight)
 
         wt_q_proj, scale_q_proj = quant_module.q_proj.weight_quantizer.quantize(
             quant_module.q_proj.linear.weight, quantonly=True)
@@ -84,14 +88,19 @@ class NpuFlatQuantAttention(torch.nn.Module):
             quant_module.k_proj.linear.weight, quantonly=True)
         wt_v_proj, scale_v_proj = quant_module.v_proj.weight_quantizer.quantize(
             quant_module.v_proj.linear.weight, quantonly=True)
+        wt_o_proj, scale_o_proj = quant_module.o_proj.weight_quantizer.quantize(
+            quant_module.o_proj.linear.weight, quantonly=True)
         flat_attn.scale_q_proj = torch.nn.Parameter(scale_q_proj, requires_grad=False)
         flat_attn.scale_k_proj = torch.nn.Parameter(scale_k_proj, requires_grad=False)
         flat_attn.scale_v_proj = torch.nn.Parameter(scale_v_proj, requires_grad=False)
+        flat_attn.scale_o_proj = torch.nn.Parameter(scale_o_proj, requires_grad=False)
         flat_attn.wt_q_packed = torch.nn.Parameter(pack_int4_weights(wt_q_proj.data), requires_grad=False)
         flat_attn.wt_k_packed = torch.nn.Parameter(pack_int4_weights(wt_k_proj.data), requires_grad=False)
         flat_attn.wt_v_packed = torch.nn.Parameter(pack_int4_weights(wt_v_proj.data), requires_grad=False)
+        flat_attn.wt_o_packed = torch.nn.Parameter(pack_int4_weights(wt_o_proj.data), requires_grad=False)
         flat_attn.left_trans = torch.nn.Parameter(quant_module.ln_trans.matrix_left.T, requires_grad=False)
         flat_attn.right_trans = torch.nn.Parameter(quant_module.ln_trans.matrix_right, requires_grad=False)
+        flat_attn.o_trans = torch.nn.Parameter(quant_module.o_trans.get_matrix().T, requires_grad=False)
         return flat_attn
 
     def forward(self, hidden_states, **kwargs):
@@ -178,8 +187,8 @@ class NpuFlatQuantAttention(torch.nn.Module):
         )
 
         attn_output = attn_output.reshape(bsz, q_len, -1).contiguous()
-        # o_proj is not quantized fow now
-        attn_output = self.o_proj(attn_output)
+        attn_output = torch.matmul(self.o_trans.to(attn_output), attn_output)
+        attn_output = dynamic_w4a4(attn_output, self.wt_o_packed, self.scale_o_proj)
 
         return attn_output, attn_weights
 
