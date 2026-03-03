@@ -86,21 +86,20 @@ class FlatQuantAttention(nn.Module):
         '''
         addd the low rank trans matrix before the ln
         '''
+        self.ln_trans, self.o_trans = None, None
+        self.vcache_trans, self.kcache_trans = None, None
         if self.flat_config.a_bits < 16 or self.flat_config.w_bits < 16:
             ln_dim_left, ln_dim_right = get_decompose_dim(self.q_proj.linear.weight.shape[1])
             self.ln_trans = SVDDecomposeTransMatrix(ln_dim_left, ln_dim_right, add_diag=self.flat_config.add_diag)
+        if self.flat_config.use_o_quant and (self.flat_config.a_bits < 16 or self.flat_config.w_bits < 16):
             self.o_trans = SVDSingleTransMatrix(self.module_config.num_attention_heads)
-        else:
-            self.ln_trans, self.o_trans = None, None
+            # use vtrans to get better performance
+            self.vcache_trans = SVDSingleTransMatrix(self.head_dim)
 
         if self.flat_config.use_kcache_quant and self.flat_config.k_bits < 16:
             self.kcache_trans = SVDSingleTransMatrix(self.head_dim)
-        else:
-            self.kcache_trans = None
-        if self.flat_config.v_bits < 16 or self.flat_config.w_bits < 16 or self.flat_config.a_bits < 16:
+        if self.flat_config.use_vcache_quant and self.flat_config.v_bits < 16 and self.vcache_trans is None:
             self.vcache_trans = SVDSingleTransMatrix(self.head_dim)
-        else:
-            self.vcache_trans = None
 
     def _trans_forward_after_ln(self, hidden_states):
         if self.ln_trans is not None:
