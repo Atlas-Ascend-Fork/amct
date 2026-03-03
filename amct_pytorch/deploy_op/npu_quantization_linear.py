@@ -95,8 +95,8 @@ class NpuQuantizationLinear(torch.nn.Module):
             axis=self.quantize_axis, div_mode=False)
         if self.is_new_torch_npu:
             if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                ori_shape = x.shape
-                x = x.reshape(-1, x.shape[-1])
+                ori_shape = quant_x.shape
+                quant_x = quant_x.reshape(-1, x.shape[-1])
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
                 bias=self.bias, output_dtype=self.output_dtype,
