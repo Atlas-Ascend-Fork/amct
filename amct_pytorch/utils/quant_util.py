@@ -140,11 +140,11 @@ def quant_weight(tensor, wts_type, scale, offset=None, group_size=None):
         torch.tensor
     """
     if not group_size:
-        tensor = tensor.transpose(-1, -2).contiguous()
+        tensor = tensor.transpose(0, 1).contiguous()
         scale = scale.reshape(-1)
         offset = offset.reshape(-1) if offset is not None else None
         quantized_tensor, _ = quant_tensor(tensor, wts_type, scale, offset)
-        return quantized_tensor.transpose(-1, -2).contiguous()
+        return quantized_tensor.transpose(0, 1).contiguous()
     quantized_tensor, _ = quant_tensor(tensor, wts_type, scale, offset, group_size)
     return quantized_tensor
 
