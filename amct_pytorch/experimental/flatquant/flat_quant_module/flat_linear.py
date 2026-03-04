@@ -21,8 +21,8 @@ class FlatQuantizedLinear(nn.Module):
             init_value = 4.
             dev = self.linear.weight.device
 
-            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev)*init_value, requires_grad=True)
-            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev)*init_value, requires_grad=True)
+            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True)
+            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True)
 
             self.sigmoid = nn.Sigmoid()
 
