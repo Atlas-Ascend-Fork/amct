@@ -305,7 +305,7 @@ class NpuFlatQuantMLP(torch.nn.Module):
         if self.quant_config.use_down_quant:
             down_states = self.method.apply(
                 self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn,
-                self.down_lac.data())
+                self.down_lac.data)
         else:
             down_states = self.down_proj(x_act_fn)
 
