@@ -60,7 +60,9 @@ class NpuFlatQuantAttention(torch.nn.Module):
             self.register_parameter('wt_o_packed', torch.nn.Parameter(requires_grad=False))
             self.register_parameter('o_trans', torch.nn.Parameter(requires_grad=False))
         else:
-            self.o_proj = torch.nn.Linear(self.hidden_size, self.hidden_size, bias=self.config.attention_bias)
+            self.o_proj = torch.nn.Linear(
+                self.config.hidden_size, self.config.hidden_size, bias=self.config.attention_bias
+                )
         self.method = AscendW4A4FlatQuantDynamicLinearMethod()
 
     @classmethod
@@ -95,6 +97,9 @@ class NpuFlatQuantAttention(torch.nn.Module):
         flat_attn.wt_q_packed = torch.nn.Parameter(pack_int4_weights(wt_q_proj.data), requires_grad=False)
         flat_attn.wt_k_packed = torch.nn.Parameter(pack_int4_weights(wt_k_proj.data), requires_grad=False)
         flat_attn.wt_v_packed = torch.nn.Parameter(pack_int4_weights(wt_v_proj.data), requires_grad=False)
+        flat_attn.q_lac = torch.nn.Parameter(quant_module.q_proj.lac_ratio, requires_grad=False)
+        flat_attn.k_lac = torch.nn.Parameter(quant_module.k_proj.lac_ratio, requires_grad=False)
+        flat_attn.v_lac = torch.nn.Parameter(quant_module.v_proj.lac_ratio, requires_grad=False)
         flat_attn.left_trans = torch.nn.Parameter(quant_module.ln_trans.matrix_left.T, requires_grad=False)
         flat_attn.right_trans = torch.nn.Parameter(quant_module.ln_trans.matrix_right, requires_grad=False)
 
@@ -132,11 +137,11 @@ class NpuFlatQuantAttention(torch.nn.Module):
             hidden_states = F.pad(hidden_states, padding, mode='constant', value=0)
 
         query_states = self.method.apply(
-            self.left_trans, self.right_trans, self.wt_q_packed, self.scale_q_proj, hidden_states)
+            self.left_trans, self.right_trans, self.wt_q_packed, self.scale_q_proj, hidden_states, self.q_lac)
         key_states = self.method.apply(
-             self.left_trans, self.right_trans, self.wt_k_packed, self.scale_k_proj, hidden_states)
+             self.left_trans, self.right_trans, self.wt_k_packed, self.scale_k_proj, hidden_states, self.k_lac)
         value_states = self.method.apply(
-             self.left_trans, self.right_trans, self.wt_v_packed, self.scale_v_proj, hidden_states)
+             self.left_trans, self.right_trans, self.wt_v_packed, self.scale_v_proj, hidden_states, self.v_lac)
         if q_len_pad_size_after:
             query_states = query_states[:, :q_len]
             key_states = key_states[:, :q_len]
@@ -265,6 +270,8 @@ class NpuFlatQuantMLP(torch.nn.Module):
         flat_mlp.scale_gate_proj = torch.nn.Parameter(scale_gate_proj, requires_grad=False)
         flat_mlp.ug_left_trans = torch.nn.Parameter(quant_module.up_gate_trans.matrix_left.T, requires_grad=False)
         flat_mlp.ug_right_trans = torch.nn.Parameter(quant_module.up_gate_trans.matrix_right, requires_grad=False)
+        flat_mlp.up_lac = torch.nn.Parameter(quant_module.up_proj.lac_ratio, requires_grad=False)
+        flat_mlp.gate_lac = torch.nn.Parameter(quant_module.gate_proj.lac_ratio, requires_grad=False)
 
         if flat_mlp.quant_config.use_down_quant:
             quant_module.down_proj.weight_quantizer.find_params(quant_module.down_proj.linear.weight)
@@ -274,6 +281,7 @@ class NpuFlatQuantMLP(torch.nn.Module):
             flat_mlp.scale_down_proj = torch.nn.Parameter(scale_down_proj, requires_grad=False)
             flat_mlp.down_left_trans = torch.nn.Parameter(quant_module.down_trans.matrix_left.T, requires_grad=False)
             flat_mlp.down_right_trans = torch.nn.Parameter(quant_module.down_trans.matrix_right, requires_grad=False)
+            flat_mlp.down_lac = torch.nn.Parameter(quant_module.down_proj.lac_ratio, requires_grad=False)
         else:
             flat_mlp.down_proj = quant_module.down_proj.linear
 
@@ -289,13 +297,15 @@ class NpuFlatQuantMLP(torch.nn.Module):
             padding = (0, 0) * (x.dim() - 2) + (0, q_len_pad_size_after) + (0, 0)
             x = F.pad(x, padding, mode='constant', value=0)
 
-        up_states = self.method.apply(self.ug_left_trans, self.ug_right_trans, self.wt_up_packed, self.scale_up_proj, x)
+        up_states = self.method.apply(
+            self.ug_left_trans, self.ug_right_trans, self.wt_up_packed, self.scale_up_proj, x, self.up_lac)
         gate_states = self.method.apply(
-            self.ug_left_trans, self.ug_right_trans, self.wt_gate_packed, self.scale_gate_proj, x)
+            self.ug_left_trans, self.ug_right_trans, self.wt_gate_packed, self.scale_gate_proj, x, self.gate_lac)
         x_act_fn = self.act_fn(gate_states) * up_states
         if self.quant_config.use_down_quant:
             down_states = self.method.apply(
-                self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn)
+                self.down_left_trans, self.down_right_trans, self.wt_down_packed, self.scale_down_proj, x_act_fn,
+                self.down_lac.data())
         else:
             down_states = self.down_proj(x_act_fn)
 

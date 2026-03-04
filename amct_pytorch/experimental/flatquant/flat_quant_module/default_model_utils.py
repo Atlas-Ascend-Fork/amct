@@ -65,18 +65,18 @@ class FlatQuantAttention(nn.Module):
         if hasattr(module, 'sliding_window'):
             self.sliding_window = module.sliding_window
 
-        self.q_proj = FlatQuantizedLinear(module.q_proj, self.flat_config)
-        self.k_proj = FlatQuantizedLinear(module.k_proj, self.flat_config)
-        self.v_proj = FlatQuantizedLinear(module.v_proj, self.flat_config)
-        self.o_proj = FlatQuantizedLinear(module.o_proj, self.flat_config)
+        self.q_proj = FlatQuantizedLinear(module.q_proj, self.flat_config, self.flat_config.lac)
+        self.k_proj = FlatQuantizedLinear(module.k_proj, self.flat_config, self.flat_config.lac)
+        self.v_proj = FlatQuantizedLinear(module.v_proj, self.flat_config, self.flat_config.lac)
+        self.o_proj = FlatQuantizedLinear(module.o_proj, self.flat_config, False)
         self.add_fq_trans()
 
         if self.flat_config.use_kcache_quant and self.flat_config.k_bits < 16:
             self.k_cache_quantizer = ActivationQuantizer(bits=self.flat_config.k_bits,
-                sym=self.flat_config.k_sym, lac=self.flat_config.lac, groupsize=-1, )
+                sym=self.flat_config.k_sym, lac=self.flat_config.lac)
         if self.flat_config.use_vcache_quant and self.flat_config.v_bits < 16:
             self.v_cache_quantizer = ActivationQuantizer(bits=self.flat_config.v_bits,
-                sym=self.flat_config.v_sym, lac=self.flat_config.lac, groupsize=-1, )
+                sym=self.flat_config.v_sym, lac=self.flat_config.lac)
 
         self._ori_mode = False
         self._eval_mode = False
@@ -273,9 +273,9 @@ class FlatQuantMLP(nn.Module):
         self.intermediate_size = module.config.intermediate_size
         self.act_fn = module.act_fn if hasattr(module, 'act_fn') else None
 
-        self.up_proj = FlatQuantizedLinear(module.up_proj, self.flat_config)
-        self.gate_proj = FlatQuantizedLinear(module.gate_proj, self.flat_config)
-        self.down_proj = FlatQuantizedLinear(module.down_proj, self.flat_config)
+        self.up_proj = FlatQuantizedLinear(module.up_proj, self.flat_config, self.flat_config.lac)
+        self.gate_proj = FlatQuantizedLinear(module.gate_proj, self.flat_config, self.flat_config.lac)
+        self.down_proj = FlatQuantizedLinear(module.down_proj, self.flat_config, self.flat_config.lac)
         self.add_fq_trans()
 
         self._ori_mode = False

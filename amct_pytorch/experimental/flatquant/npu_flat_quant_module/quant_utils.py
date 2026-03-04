@@ -109,7 +109,6 @@ class AscendW4A4FlatQuantDynamicLinearMethod:
         x: torch.Tensor,
         aclnn_clip_ratio: float = 1.0,
         bias: Optional[torch.Tensor] = None,
-        tp_rank: Optional[int] = 0,
     ) -> torch.Tensor:
         original_dtype = x.dtype
         input_shape = x.shape
