@@ -14,7 +14,7 @@
 import torch
 
 from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN
-from amct_pytorch.utils.quant_util import quant_tensor
+from amct_pytorch.utils.quant_util import quant_weight
 
 
 class NpuQuantizationConv2d(torch.nn.Module):
@@ -113,10 +113,7 @@ class NpuQuantizationConv2d(torch.nn.Module):
 
     @staticmethod
     def quant_wts(weight, scale_w_tensor, wts_type):
-        # weight quant
-        if scale_w_tensor.shape[0] > 1:
-            scale_w_tensor = scale_w_tensor.reshape(-1, 1, 1, 1)
-        res, _ = quant_tensor(weight, wts_type, scale_w_tensor)
+        res = quant_weight(weight, wts_type, scale_w_tensor)
         return res
 
     def init_dtype(self, act_type, wts_type):

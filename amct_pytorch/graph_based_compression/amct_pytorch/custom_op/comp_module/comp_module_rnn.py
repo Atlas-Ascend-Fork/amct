@@ -22,6 +22,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 
 from ....amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
+from ....amct_pytorch.common.utils.util import quant_dequant_tensor
 from ....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFunction
 from ....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFunction
 from ....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFunction
@@ -46,7 +47,7 @@ class CompModuleRNN(nn.Module):
                  common_config=None,
                  acts_comp_reuse=None):
         super().__init__()
-        self.replaced_module = module
+        self.replaced_module = module # ori_module
         self.replaced_module_type = module._get_name()
         self.act_config = act_config
         self.wts_config = wts_config
@@ -59,6 +60,42 @@ class CompModuleRNN(nn.Module):
         else:
             self.num_scales = RNN_TENSOR_NUM.get(self.replaced_module_type)
         self._init_output()
+        self.sequence_length = 0
+
+    def for_loop_rnncell_forward(self, inputs, hx):
+        if self.replaced_module_type == "GRU":
+            h_next = hx
+            h_next = h_next.squeeze(0) if h_next.dim() == 3 else h_next
+            rnn_cell = nn.GRUCell(inputs.shape[-1], h_next.shape[-1])
+        else:
+            h_next, c_next = hx
+            h_next = h_next.squeeze(0) if h_next.dim() == 3 else h_next
+            c_next = c_next.squeeze(0) if c_next.dim() == 3 else c_next
+            rnn_cell = nn.LSTMCell(inputs.shape[-1], h_next.shape[-1])
+        rnn_cell.bias_ih = self.comp_module.bias_ih_l0
+        rnn_cell.bias_hh = self.comp_module.bias_hh_l0
+        output_cell = []
+        current_state = None
+        for i in range(0, self.sequence_length):
+            xi = inputs[:, i:+1, :] if self.replaced_module.batch_first else inputs[1:1+1, :, :]
+            acts_comp_func = self.acts_comp_reuse._acts_comp_quant if self.acts_comp_reuse else self._acts_comp_quant
+            shape = xi.shape
+            xi = xi.reshape(shape[0] * shape[1], shape[-1])
+            xi. h_next = acts_comp_func(xi, h_next)
+            compressed_weights = self._wts_quant(self.replaced_module.weight_ih_l0, self.replaced_module.weight_hh_l0)
+            rnn_cell.weight_ih.data = compressed_weights[0].data
+            rnn_cell.weight_hh.data = compressed_weights[1].data
+            if self.replaced_module_type == "GRU":
+                h_next = rnn_cell(xi, h_next)
+                output_cell.append(h_next)
+                current_state = h_next
+            else:
+                h_next, c_next = rnn_cell(xi, (h_next, c_next))
+                output_cell.append(h_next)
+                current_state = (h_next, c_next)
+        axis = 1 if self.replaced_module.batch_first else 0
+        full_output = torch.stack(output_cell, dim=axis)
+        return full_output, current_state 
 
     def forward(self, inputs, hx=None):
         """
@@ -66,22 +103,12 @@ class CompModuleRNN(nn.Module):
         """
         if inputs.abs().max() <= FLT_EPSILON:
             LOGGER.logw('The input tensor is all zeros')
-        compressed_inputs, compressed_weights = self._comp_act_wts(inputs, hx)
 
-        with torch.enable_grad():
-            self.comp_module.weight_ih_l0.data = compressed_weights[0].data
-            self.comp_module.weight_hh_l0.data = compressed_weights[1].data
-            if self.replaced_module_type == 'LSTM':
-                output = self.comp_module(compressed_inputs[0], (compressed_inputs[1], hx[1]))
-            else:
-                output = self.comp_module(compressed_inputs[0], compressed_inputs[1])
+        if self.replaced_module.batch_first:
+            self.sequence_length = inputs.shape[1]
+        else:
+            self.sequence_length = inputs.shape[0]
 
-        return output
-
-    def _comp_act_wts(self, inputs, hx):
-        """
-        compress activations and weights
-        """
         process_group = torch.distributed.group.WORLD
         try:
             world_size = torch.distributed.get_world_size(process_group)
@@ -94,17 +121,14 @@ class CompModuleRNN(nn.Module):
         self.common_config['process_group'] = process_group
         self.common_config['world_size'] = world_size
 
-        # Compress activations.
-        acts_comp_func = self.acts_comp_reuse._acts_comp_quant if self.acts_comp_reuse else self._acts_comp_quant
-        compressed_inputs = acts_comp_func(inputs, hx)
-
-        # Compress weights.
-        compressed_weights = self._wts_quant(self.replaced_module.weight_ih_l0, self.replaced_module.weight_hh_l0)
-
         if self.cur_batch < 100:
             self.cur_batch += 1
-        return compressed_inputs, compressed_weights
+            
+        with torch.enable_grad():
+            output = self.for_loop_rnncell_forward(inputs, hx)
 
+        return output
+            
     def _init_output(self):
         device = self.common_config.get('device')
         # Register quantitative parameters.
@@ -169,10 +193,7 @@ class CompModuleRNN(nn.Module):
             FIXED_MIN: self.act_config.get(H_FIXED_MIN),
         }
         # forward with fake-quantized initial_h
-        if self.replaced_module_type == 'LSTM':
-            initial_h = hx[0]
-        else:
-            initial_h = hx
+
         quant_initial_h, scale_h, offset_h, clip_max_h, clip_min_h = \
             UlqRetrainFunction.apply(
                 initial_h, self.acts_h_clip_max, self.acts_h_clip_min,
@@ -195,6 +216,7 @@ class CompModuleRNN(nn.Module):
             copy_tensor(self.acts_h_clip_min, clip_min_h)
             copy_tensor(self.acts_h_clip_max_pre, clip_max_h)
             copy_tensor(self.acts_h_clip_min_pre, clip_min_h)
+
         return quant_inputs, quant_initial_h
 
     def _wts_quant(self, weights, rec_weights):
