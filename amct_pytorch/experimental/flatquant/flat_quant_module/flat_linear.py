@@ -6,23 +6,23 @@ from .quant_utils import WeightQuantizer, ActivationQuantizer
 from .flat_utils import kronecker_matmul
 
 class FlatQuantizedLinear(nn.Module):
-    def __init__(self, linear: nn.Linear, quant_config):
+    def __init__(self, linear: nn.Linear, quant_config, lac):
         super(FlatQuantizedLinear, self).__init__()
         self.linear = linear
 
         quantizer_size = linear.weight.shape[0]
         self.weight_quantizer = WeightQuantizer(shape=(quantizer_size, 1))
         self.weight_quantizer.configure(quant_config.w_bits, perchannel=True, sym=quant_config.w_sym, mse=False)
-        self.act_quantizer = ActivationQuantizer(quant_config.a_bits, sym=quant_config.a_sym, lac=quant_config.lac)
+        self.act_quantizer = ActivationQuantizer(quant_config.a_bits, sym=quant_config.a_sym, lac=lac)
 
         self.lwc = quant_config.lwc
         if self.lwc:
-            lwc_dim = self.linear.weight.shape[0] if self.lwc else -1
+            lwc_dim = self.linear.weight.shape[0]
             init_value = 4.
-            linear_device = self.linear.weight.device
+            dev = self.linear.weight.device
 
-            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1)).to(linear_device)*init_value, requires_grad=True)
-            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1)).to(linear_device)*init_value, requires_grad=True)
+            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True)
+            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True)
 
             self.sigmoid = nn.Sigmoid()
 
@@ -106,4 +106,5 @@ class FlatQuantizedLinear(nn.Module):
             self.linear.bias.data = out_trans(self.linear.bias.data)
         
         self.linear.weight.data = weight.to(ori_dtype)
+        self.lac_ratio = self.act_quantizer.clip_factor_a
         self._eval_mode = True

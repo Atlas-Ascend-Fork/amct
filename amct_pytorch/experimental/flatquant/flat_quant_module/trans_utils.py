@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from .flat_utils import kronecker_matmul
-from .function_utils import get_init_weight, get_inverse
+from .function_utils import get_init_weight
 
 # ---------- transformation version of singular value decomposition ----------
 class SVDSingleTransMatrix(nn.Module):

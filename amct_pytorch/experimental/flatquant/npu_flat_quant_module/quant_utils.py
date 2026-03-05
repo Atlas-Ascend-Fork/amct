@@ -109,7 +109,6 @@ class AscendW4A4FlatQuantDynamicLinearMethod:
         x: torch.Tensor,
         aclnn_clip_ratio: float = 1.0,
         bias: Optional[torch.Tensor] = None,
-        tp_rank: Optional[int] = 0,
     ) -> torch.Tensor:
         original_dtype = x.dtype
         input_shape = x.shape
@@ -158,3 +157,15 @@ class AscendW4A4FlatQuantDynamicLinearMethod:
         layer.clip_ratio = torch.nn.Parameter(
             layer.clip_ratio.data.to(torch.float32))
         layer.aclnn_clip_ratio = layer.clip_ratio.item()
+
+
+def dynamic_w4a4(x, w_packed, w_scale, bias=None):
+    output_dtype = x.dtype
+    x_quantized, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=torch.quint4x2)
+    output = torch_npu.npu_quant_matmul(x_quantized,
+                                        w_packed.t(),
+                                        w_scale.view(-1).to(torch.float32),
+                                        pertoken_scale=pertoken_scale.view(-1).to(torch.float32),
+                                        bias=bias,
+                                        output_dtype=output_dtype)
+    return output
