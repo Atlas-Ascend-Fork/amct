@@ -106,5 +106,5 @@ class FlatQuantizedLinear(nn.Module):
             self.linear.bias.data = out_trans(self.linear.bias.data)
         
         self.linear.weight.data = weight.to(ori_dtype)
-        self.lac_ratio = self.act_quantizer.clip_ratio
+        self.lac_ratio = self.act_quantizer.clip_factor_a
         self._eval_mode = True

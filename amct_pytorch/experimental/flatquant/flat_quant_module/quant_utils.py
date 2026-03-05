@@ -56,7 +56,7 @@ class ActivationQuantizer(torch.nn.Module):
         self.bits = bits
         self.q_max, self.q_min = get_qmin_qmax(bits, sym)
         self.sym = sym
-        self.clip_ratio = torch.nn.Parameter(torch.ones((1, )), requires_grad=True)
+        self.clip_factor_a = torch.nn.Parameter(torch.ones((1, )), requires_grad=True)
         self.lac = lac
         self.enable = True
 
@@ -83,8 +83,8 @@ class ActivationQuantizer(torch.nn.Module):
         xmax, xmin = torch.maximum(xmax, tmp), torch.minimum(xmin, tmp)
 
         if self.lac:
-            xmax = xmax * self.clip_ratio
-            xmin = xmin * self.clip_ratio
+            xmax = xmax * self.clip_factor_a
+            xmin = xmin * self.clip_factor_a
         if self.sym:
             xmax = torch.maximum(torch.abs(xmin), xmax)
             tmp = xmax == 0
