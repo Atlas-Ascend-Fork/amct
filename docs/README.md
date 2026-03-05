@@ -937,8 +937,6 @@ KV Cache量化接口调用流程如下图所示。
       1.  校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
       2.  前向推理的次数为batch\_num，如果次数不够，后续过程会失败。
 
-      校准过程中如果提示\[IFMR\]: Do layer xxx data calibration failed!错误信息，则请参见[校准执行过程中提示“\[IFMR\]: Do layer xxx data calibration failed!”](zh-cn_topic_0000002548668601.md)解决。
-
       ```python
       user_do_inference_torch(calibration_model, calibration_data, batch_num)
       ```
