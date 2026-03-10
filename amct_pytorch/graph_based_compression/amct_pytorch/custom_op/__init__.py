@@ -45,7 +45,7 @@ __all__ = [
 
 import os
 import ctypes
-import pkg_resources
+import importlib_resources
 import torch
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
