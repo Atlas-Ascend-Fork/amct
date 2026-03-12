@@ -128,8 +128,9 @@ class RnnQatBase(QATBase):
     def quant_dequant_tensor(self, ori_tensor, scale, offset):
         temp_data = torch.add(torch.round(
             torch.mul(ori_tensor, (1 / scale))), offset)
-        clamp_min = torch.tensor(-2**(self.act_num_bits - 1), requires_grad=False)
-        clamp_max = torch.tensor(2**(self.act_num_bits - 1) - 1, requires_grad=False)
+        device = ori_tensor.device
+        clamp_min = torch.tensor(-2**(self.act_num_bits - 1), requires_grad=False, device=device)
+        clamp_max = torch.tensor(2**(self.act_num_bits - 1) - 1, requires_grad=False, device=device)
         clamped_data = torch.clamp(temp_data, clamp_min, clamp_max)
         quantized_data = torch.sub(clamped_data, offset)
         quantized_data = torch.round(torch.mul(quantized_data, scale))
@@ -172,7 +173,7 @@ class RnnQatBase(QATBase):
         if self.layer_type == "LSTM":
             initial_h, _ = hx
         else:
-            initial_h = hx
+            initial_h = hx # 1, B, H
         if self.retrain_enable:
             quantized_weights = self.wts_quant()
             quantized_recurrence_weights = self._recurrence_wts_quant()
@@ -190,7 +191,7 @@ class RnnQatBase(QATBase):
                                                                  self.layer_type, params)
                 quantized_h = self._h_quant(initial_h)
                 if seq_len > 1:
-                    quantized_h = quantized_h[:, 1, :]
+                    quantized_h = quantized_h[:, 0:1, :]
             if self.cur < 100:
                 self.cur += 1
                 self.cur_batch += 1

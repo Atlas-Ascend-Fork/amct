@@ -54,7 +54,7 @@ class RNNRetrainQuant(nn.Module):
         """
         super().__init__()
         self.common_config = quant_module.common_config
-        self.quant_module = quant_module
+        self.quant_module = quant_module # comp_module
         self.quant_module_type = get_quant_type(quant_module)
         self.do_init = quant_module.act_config.get('ifmr_init')
         self.init_module = None
@@ -272,15 +272,15 @@ class RNNRetrainQuant(nn.Module):
         if self.quant_module_type == 'LSTM':
             initial_h = hx[0]
         else:
-            initial_h = hx
+            initial_h = hx # 1, B, H
             
         if self.sequence_length > 1:
             # cal quant factors with all hx
             outputs = self.quant_module.replaced_module.forward(inputs, hx)
-            h_all = outputs[0][:, :-1, :]
-            if self.quant_module.replaced_module.batch_first:
-                h_all = h_all.permute(1, 0, 2)
-            initial_h = torch.cat((initial_h, h_all), dim=0)
+            h_all = outputs[0]
+            if self.quant_module.replaced_module.batch_first: 
+                h_all = h_all.permute(1, 0, 2) # B, T, H -> T, B, H
+            initial_h = torch.cat((initial_h, h_all[:-1, :, :]), dim=0)
 
         is_init_h, act_h_retrain_params = self._do_ifmr(initial_h, self.init_module_h)
         if is_init_h:
