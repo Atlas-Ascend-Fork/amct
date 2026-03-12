@@ -65,8 +65,9 @@ class CompModuleRNN(nn.Module):
     def quant_dequant_tensor(ori_tensor, scale, offset, num_bits):
         temp_data = torch.add(torch.round(
             torch.mul(ori_tensor, (1 / scale))), offset)
-        clamp_min = torch.tensor(-2**(num_bits - 1), requires_grad=False)
-        clamp_max = torch.tensor(2**(num_bits - 1) - 1, requires_grad=False)
+        device = ori_tensor.device
+        clamp_min = torch.tensor(-2**(num_bits - 1), requires_grad=False, device=device)
+        clamp_max = torch.tensor(2**(num_bits - 1) - 1, requires_grad=False, device=device)
         clamped_data = torch.clamp(temp_data, clamp_min, clamp_max)
         quantized_data = torch.sub(clamped_data, offset)
         quantized_data = torch.round(torch.mul(quantized_data, scale))
