@@ -221,6 +221,18 @@ class MxQuant():
         return self.value
 
 
+class CastField():
+    def __init__(self, attrs):
+        self.value = self.set_value()
+    
+    @staticmethod
+    def set_value():
+        return {'cast'} 
+    
+    def get_value(self):
+        return self.value
+
+
 class CustomAlgField():
     def __init__(self, name, attrs):
         self.value = {name: attrs}
@@ -243,6 +255,7 @@ class AlgorithmField():
             'smoothquant': SmoothQuantField,
             'minmax': MinmaxField,
             'mxquant': MxQuant,
+            'cast': CastField,
             'custom': CustomAlgField
         }
 
