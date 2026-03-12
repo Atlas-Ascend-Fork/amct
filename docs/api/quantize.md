@@ -67,7 +67,7 @@ quantize(model, config)
 </th>
 <th class="cellrowborder" valign="top" width="20.09%" id="mcps1.2.5.1.2"><p id="p27472162329"><a name="p27472162329"></a><a name="p27472162329"></a>原始数据类型</p>
 </th>
-<th class="cellrowborder" valign="top" width="32.01%" id="mcps1.2.5.1.3"><p id="p10685452175710"><a name="p10685452175710"></a><a name="p10685452175710"></a>支持的量化数据类型组合</p>
+<th class="cellrowborder" valign="top" width="32.01%" id="mcps1.2.5.1.3"><p id="p10685452175710"><a name="p10685452175710"></a><a name="p10685452175710"></a>支持的量化类型组合</p>
 </th>
 <th class="cellrowborder" valign="top" width="37.269999999999996%" id="mcps1.2.5.1.4"><p id="p122141822101318"><a name="p122141822101318"></a><a name="p122141822101318"></a>约束</p>
 </th>
