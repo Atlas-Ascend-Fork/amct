@@ -54,7 +54,7 @@ class NpuQuantizationLinear(torch.nn.Module):
             weight = apply_smooth_weight(quant_module.scale, weight)
             self.register_buffer('scale_factor', (1 / quant_module.scale).to(device=device))
         weight_tensor = self._get_quantize_wts(quant_module, weight, device)
-        self.register_buffer('quantized_weight', weight_tensor)
+        self.register_buffer('quantized_weight', weight_tensor.contiguous())
         self.offset_bias = None
         if quant_module.offset_d is not None:
             offset_reshape = quant_module.offset_d.float().repeat(1, quant_module.weight.shape[-1])

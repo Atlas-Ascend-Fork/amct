@@ -54,7 +54,7 @@ class NpuWeightQuantizedLinear(nn.Module):
 
         # npu op support scale & offset's shape is (K,N)
         weight_tensor, scale_w, offset_w = self.get_quantize_weight(weight, quant_module, device)
-        self.register_buffer('quantized_weight', weight_tensor, device)
+        self.register_buffer('quantized_weight', weight_tensor.contiguous(), device)
         self.register_buffer('scale_w', scale_w)
         if offset_w is not None:
             self.register_buffer('offset_w', (offset_w * -1).to(
