@@ -24,6 +24,7 @@ __all__ = [
     'FP8_OFMR_CFG',
     'MXFP8_QUANT_CFG',
     'MXFP4_AWQ_WEIGHT_QUANT_CFG',
+    'HIFP8_CAST_CFG',
     'set_default_config',
     'parse_config',
 ]
