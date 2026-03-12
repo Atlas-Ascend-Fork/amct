@@ -22,11 +22,9 @@ from torch.nn.parameter import Parameter
  
 from .....amct_pytorch.nn.module.quantization.qat_base import QATBase, ULQRetrainParams, WtsRetrainParams
 from .....amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from .....amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, FIXED_MIN, BATCH_NUM
-from .....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFuncQAT
-from .....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFuncQAT
-from .....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFuncQAT
+from .....amct_pytorch.utils.vars import CLIP_MAX, CLIP_MIN, BATCH_NUM
 from .....amct_pytorch.custom_op.utils import copy_tensor
+from .....amct_pytorch.common.utils.util import quant_dequant_tensor
  
 RNN_TENSOR_SEQUENCE = {
     'LSTM': ([0, 3, 1, 2], [0, 2, 3, 1]),
@@ -125,16 +123,6 @@ class RnnQatBase(QATBase):
             raise RuntimeError("{} quantize only support input dim 3,"\
                                " but your input dim is {}".format(self.layer_type, len(inputs.shape)))
 
-    def quant_dequant_tensor(self, ori_tensor, scale, offset):
-        temp_data = torch.add(torch.round(
-            torch.mul(ori_tensor, (1 / scale))), offset)
-        clamp_min = torch.tensor(-2**(self.act_num_bits - 1), requires_grad=False)
-        clamp_max = torch.tensor(2**(self.act_num_bits - 1) - 1, requires_grad=False)
-        clamped_data = torch.clamp(temp_data, clamp_min, clamp_max)
-        quantized_data = torch.sub(clamped_data, offset)
-        quantized_data = torch.round(torch.mul(quantized_data, scale))
-        return quantized_data
-
     def for_loop_rnncell_forward(self, inputs, hx, module_type, params):
         h_next = hx
         c_next = None
@@ -154,7 +142,7 @@ class RnnQatBase(QATBase):
         output_cell = []
         current_state = None
         for i in range(0, seq_len):
-            h_next = self.quant_dequant_tensor(h_next, self.h_scale, self.h_offset_deploy)
+            h_next = quant_dequant_tensor(h_next, self.h_scale, self.h_offset_deploy, self.act_num_bits)
             xi = inputs[:, i, :]
             if module_type == "GRU":
                 h_next = rnn_cell(xi, h_next)
@@ -172,7 +160,7 @@ class RnnQatBase(QATBase):
         if self.layer_type == "LSTM":
             initial_h, _ = hx
         else:
-            initial_h = hx
+            initial_h = hx # 1, B, H
         if self.retrain_enable:
             quantized_weights = self.wts_quant()
             quantized_recurrence_weights = self._recurrence_wts_quant()
@@ -190,7 +178,7 @@ class RnnQatBase(QATBase):
                                                                  self.layer_type, params)
                 quantized_h = self._h_quant(initial_h)
                 if seq_len > 1:
-                    quantized_h = quantized_h[:, 1, :]
+                    quantized_h = quantized_h[:, 0:1, :]
             if self.cur < 100:
                 self.cur += 1
                 self.cur_batch += 1

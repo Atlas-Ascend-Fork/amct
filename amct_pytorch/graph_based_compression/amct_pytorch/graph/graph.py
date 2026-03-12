@@ -103,9 +103,9 @@ class Graph(GraphBase): # pylint: disable=no-member
         """
         Function: apply bfs to find the rnn layer
         Parameter: quant_identity_node: root nodes quant_identity
-        Return: consumer the conv nodes found
+        Return: consumer the rnn nodes found
         """
-        # apply bfs to search conv node
+        # apply bfs to search rnn node
         root = quant_identity_node
         search_queue = []
         search_queue.append(root)
