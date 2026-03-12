@@ -55,7 +55,7 @@ class NpuQuantizationConv2d(torch.nn.Module):
             deq_scale_tensor = deq_scale_tensor.expand(quant_module.weight.shape[0])
         weight_tensor = NpuQuantizationConv2d.quant_wts(quant_module.weight.data, scale_w_tensor, wts_type)
         self.register_buffer('deq_scale', deq_scale_tensor)
-        self.register_buffer('quantized_weight', weight_tensor)
+        self.register_buffer('quantized_weight', weight_tensor.contiguous())
         if quant_module.bias is not None:
             bias_tensor = quant_module.bias.data / (scale_d_tensor * scale_w_tensor)
             if wts_type not in [HIFLOAT8, FLOAT8_E4M3FN]:
