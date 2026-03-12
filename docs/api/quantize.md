@@ -44,7 +44,7 @@ quantize(model, config)
 <td class="cellrowborder" valign="top" width="10.05%" headers="mcps1.1.4.1.2 "><p id="zh-cn_topic_0240188739_p46121659184520"><a name="zh-cn_topic_0240188739_p46121659184520"></a><a name="zh-cn_topic_0240188739_p46121659184520"></a>输入</p>
 </td>
 <td class="cellrowborder" valign="top" width="81.19%" headers="mcps1.1.4.1.3 "><p id="p129452810402"><a name="p129452810402"></a><a name="p129452810402"></a><span>含义：量化配置。</span></p>
-<p id="p334514515403"><a name="p334514515403"></a><a name="p334514515403"></a><span>数据类型：自定义dict，其中包含weight/input/algorithm/skip_layers的配置，详细配置参数请参见</span><a href="https://gitcode.com/cann/amct/blob/master/docs/API/quantize.md#config详细配置" target="_blank" rel="noopener noreferrer">config详细配置</a><span>。</span></p>
+<p id="p334514515403"><a name="p334514515403"></a><a name="p334514515403"></a><span>数据类型：自定义dict，其中包含weight/input/algorithm/skip_layers的配置，详细配置参数请参见</span><a href="#section1536112219183" target="_blank" rel="noopener noreferrer">config详细配置</a><span>。</span></p>
 </td>
 </tr>
 </tbody>
@@ -73,7 +73,7 @@ quantize(model, config)
 </th>
 </tr>
 </thead>
-<tbody><tr id="row7214182271318"><td class="cellrowborder" rowspan="5" valign="top" width="10.63%" headers="mcps1.2.5.1.1 "><p id="p32146222139"><a name="p32146222139"></a><a name="p32146222139"></a>torch.nn.Linear</p>
+<tbody><tr id="row7214182271318"><td class="cellrowborder" rowspan="4" valign="top" width="10.63%" headers="mcps1.2.5.1.1 "><p id="p32146222139"><a name="p32146222139"></a><a name="p32146222139"></a>torch.nn.Linear</p>
 <p id="p20540182234618"><a name="p20540182234618"></a><a name="p20540182234618"></a></p>
 <p id="p85010423713"><a name="p85010423713"></a><a name="p85010423713"></a></p>
 </td>
@@ -82,8 +82,8 @@ quantize(model, config)
 <td class="cellrowborder" valign="top" width="32.01%" headers="mcps1.2.5.1.3 "><p id="p641017541626"><a name="p641017541626"></a><a name="p641017541626"></a>act_type: HIFLOAT8  wts_type: HIFLOAT8</p>
 <p id="p6410054727"><a name="p6410054727"></a><a name="p6410054727"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN</p>
 </td>
-<td class="cellrowborder" valign="top" width="37.269999999999996%" headers="mcps1.2.5.1.4 "><p id="p187277572518"><a name="p187277572518"></a><a name="p187277572518"></a>激活（数据）支持PER_TENSOR量化，权重支持PER_TENSOR/PER_CHANNEL量化</p>
-<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>量化算法为OFMR（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>ofmr</span>选项）</p>
+<td class="cellrowborder" valign="top" width="37.269999999999996%" headers="mcps1.2.5.1.4 "><p id="p134301428434"><a name="p134301428434"></a><a name="p134301428434"></a>激活（数据）支持PER_TENSOR量化，权重支持PER_TENSOR/PER_CHANNEL量化</p>
+<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>量化算法为OFMR，<a href="#section1536112219183">config详细配置</a>中必须配置ofmr选项</p>
 </td>
 </tr>
 <tr id="row3281122665615"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p1711435320187"><a name="p1711435320187"></a><a name="p1711435320187"></a>bfloat16（bf16）</p>
@@ -91,7 +91,7 @@ quantize(model, config)
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p172641614579"><a name="p172641614579"></a><a name="p172641614579"></a>act_type: MXFP8_E4M3FN  wts_type: MXFP8_E4M3FN</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><p id="p142815266561"><a name="p142815266561"></a><a name="p142815266561"></a>支持2~6维数据输入、PER_GROUP量化、舍入模式为RINT、支持对称量化、cin长度除以32向上取整后是2的整数倍</p>
-<p id="p6287164525916"><a name="p6287164525916"></a><a name="p6287164525916"></a>不使用量化算法（即只做mx数据类型转换，config详细配置</a>中必须配置<span>mxquant）</span>选项</p>
+<p id="p6287164525916"><a name="p6287164525916"></a><a name="p6287164525916"></a>不使用量化算法，即只做mx数据类型转换，<a href="#section1536112219183">config详细配置</a>中必须配置mxquant选项</p>
 </td>
 </tr>
 <tr id="row65391422154618"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p145409227465"><a name="p145409227465"></a><a name="p145409227465"></a>bfloat16（bf16）</p>
@@ -102,14 +102,14 @@ quantize(model, config)
 <p id="p103822021171315"><a name="p103822021171315"></a><a name="p103822021171315"></a>激活（数据）支持shape为(m,k)，权重支持shape为(n,k)，其中k是64整数倍</p>
 <p id="p12540182214619"><a name="p12540182214619"></a><a name="p12540182214619"></a>激活（数据）支持PER_TENSOR量化，权重支持PER_GROUP量化</p>
 <p id="p844695365417"><a name="p844695365417"></a><a name="p844695365417"></a>激活和权重都仅支持对称量化</p>
-<p id="p1877817173019"><a name="p1877817173019"></a><a name="p1877817173019"></a>支持MIN-MAX量化算法，SmoothQuant算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>smoothquant</span>选项）</p>
+<p id="p1877817173019"><a name="p1877817173019"></a><a name="p1877817173019"></a>支持MIN-MAX量化算法，SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant选项</p>
 </td>
 </tr>
 <tr id="row9500144213717"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p175010422712"><a name="p175010422712"></a><a name="p175010422712"></a>float16（fp16）、bfloat16（bf16）</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p650118423714"><a name="p650118423714"></a><a name="p650118423714"></a>act_type: INT8  wts_type: INT8</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul178665278918"></a><a name="ul178665278918"></a><ul id="ul178665278918"><li>支持2~6维数据输入，舍入模式为RINT</li><li>激活（数据）支持PER_TENSOR量化，支持对称非对称量化，bias量化为INT32；权重支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>激活（数据）支持PER-TOKEN对称量化，bias不量化，k是16的倍数，n是8的倍数；权重支持PER_TENSOR/PER_CHANNEL对称量化</li><li>支持MIN-MAX量化算法、SmoothQuant算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>smoothquant</span>选项）</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul178665278918"></a><a name="ul178665278918"></a><ul id="ul178665278918"><li>支持2~6维数据输入，舍入模式为RINT</li><li>激活（数据）支持PER_TENSOR量化，支持对称非对称量化，bias量化为INT32；权重支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>激活（数据）支持PER-TOKEN对称量化，bias不量化，k是16的倍数，n是8的倍数；权重支持PER_TENSOR/PER_CHANNEL对称量化</li><li>支持MIN-MAX量化算法、SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant选项</li></ul>
 </td>
 </tr>
 <tr id="row1521462251317"><td class="cellrowborder" valign="top" width="10.63%" headers="mcps1.2.5.1.1 "><p id="p1021414226138"><a name="p1021414226138"></a><a name="p1021414226138"></a>torch.nn.Conv2d</p>
@@ -120,13 +120,13 @@ quantize(model, config)
 <p id="p14749418315"><a name="p14749418315"></a><a name="p14749418315"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN</p>
 </td>
 <td class="cellrowborder" valign="top" width="37.269999999999996%" headers="mcps1.2.5.1.4 "><p id="p1885141034514"><a name="p1885141034514"></a><a name="p1885141034514"></a>padding_mode为zeros、支持PER_TENSOR/PER_CHANNEL量化</p>
-<p id="p1274062255916"><a name="p1274062255916"></a><a name="p1274062255916"></a>量化算法为OFMR（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>ofmr</span>选项）</p>
+<p id="p1274062255916"><a name="p1274062255916"></a><a name="p1274062255916"></a>量化算法为OFMR，<a href="#section1536112219183">config详细配置</a>中必须配置ofmr选项</p>
 </td>
 </tr>
 </tbody>
 </table>
 
-注：act\_type和wts\_type参数分别指[config详细配置](quantize.md#section1536112219183)中的数据（activation）和权重（weight）量化类型。
+注：act\_type和wts\_type参数分别指[config详细配置](#section1536112219183)中的数据（activation）和权重（weight）量化类型。
 
 ## 仅权重量化支持的层<a name="section831519712409"></a>
 
@@ -162,29 +162,29 @@ quantize(model, config)
 <td class="cellrowborder" valign="top" width="22%" headers="mcps1.2.5.1.3 "><p id="p1032617312478"><a name="p1032617312478"></a><a name="p1032617312478"></a>wts_type: HIFLOAT8</p>
 <p id="p1978123313505"><a name="p1978123313505"></a><a name="p1978123313505"></a>wts_type: FLOAT8_E4M3FN</p>
 </td>
-<td class="cellrowborder" valign="top" width="47.73%" headers="mcps1.2.5.1.4 "><a name="ul1681123611612"></a><a name="ul1681123611612"></a><ul id="ul1681123611612"><li>支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>支持2~6维数据输入</li><li>支持OFMR量化算法、GPTQ量化算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>ofmr</span>、<span>gptq</span>选项）</li></ul>
+<td class="cellrowborder" valign="top" width="47.73%" headers="mcps1.2.5.1.4 "><a name="ul1681123611612"></a><a name="ul1681123611612"></a><ul id="ul1681123611612"><li>支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>支持2~6维数据输入</li><li>支持OFMR量化算法、GPTQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>ofmr</span>、<span>gptq</span>选项）</li></ul>
 </td>
 </tr>
 <tr id="row1326719415381"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p278010227380"><a name="p278010227380"></a><a name="p278010227380"></a>wts_type: MXFP4_E2M1</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul9303114315395"></a><a name="ul9303114315395"></a><ul id="ul9303114315395"><li>支持PER_GROUP量化，舍入模式为RINT，支持对称量化</li><li>支持2~6维数据输入</li><li>支持不配置量化算法（即<a href="quantize.md#section1536112219183">config详细配置</a>中配置<span>mxquant</span>选项）、GPTQ量化算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>gptq</span>选项）、AWQ量化算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>awq</span>选项）</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul9303114315395"></a><a name="ul9303114315395"></a><ul id="ul9303114315395"><li>支持PER_GROUP量化，舍入模式为RINT，支持对称量化</li><li>支持2~6维数据输入</li><li>支持不配置量化算法（即<a href="#section1536112219183">config详细配置</a>中配置<span>mxquant</span>选项）、GPTQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>gptq</span>选项）、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>awq</span>选项）</li></ul>
 </td>
 </tr>
 <tr id="row131281133204815"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p1812833324819"><a name="p1812833324819"></a><a name="p1812833324819"></a>wts_type: FLOAT4_E2M1</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul185841815118"></a><a name="ul185841815118"></a><ul id="ul185841815118"><li>支持PER_GROUP量化，舍入模式为RINT，支持对称量化</li><li>支持2~6维数据输入</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul185841815118"></a><a name="ul185841815118"></a><ul id="ul185841815118"><li>支持PER_GROUP量化，舍入模式为RINT，支持对称量化</li><li>支持2~6维数据输入</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li></ul>
 </td>
 </tr>
 <tr id="row1219111249"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p20219811048"><a name="p20219811048"></a><a name="p20219811048"></a>wts_type: INT8</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul06850346713"></a><a name="ul06850346713"></a><ul id="ul06850346713"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，舍入模式为RINT，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT8时，原始模型weight需要K,N轴32元素对齐；wts_type为INT4时，需要K,N轴64元素对齐</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul06850346713"></a><a name="ul06850346713"></a><ul id="ul06850346713"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，舍入模式为RINT，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT8时，原始模型weight需要K,N轴32元素对齐；wts_type为INT4时，需要K,N轴64元素对齐</li></ul>
 </td>
 </tr>
 <tr id="row1184114561578"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p284185625716"><a name="p284185625716"></a><a name="p284185625716"></a>float32（fp32）、float16（fp16）、bfloat16（bf16）</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p58415569572"><a name="p58415569572"></a><a name="p58415569572"></a>wts_type: INT4</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul15592626145816"></a><a name="ul15592626145816"></a><ul id="ul15592626145816"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，舍入模式为RINT，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="quantize.md#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT4时，原始模型weight需要K,N轴64元素对齐</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul15592626145816"></a><a name="ul15592626145816"></a><ul id="ul15592626145816"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，舍入模式为RINT，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT4时，原始模型weight需要K,N轴64元素对齐</li></ul>
 </td>
 </tr>
 </tbody>
@@ -218,7 +218,7 @@ cfg = {
 quantize(model, cfg)
 ```
 
-## config详细配置
+## config详细配置<a name="section1536112219183"></a>
 
 <a name="table9577255181816"></a>
 <table><thead align="left"><tr id="row176031155111812"><th class="cellrowborder" valign="top" width="11.04%" id="mcps1.1.5.1.1"><p id="p86039551189"><a name="p86039551189"></a><a name="p86039551189"></a>key</p>
@@ -286,7 +286,7 @@ quantize(model, cfg)
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p13604125511814"><a name="p13604125511814"></a><a name="p13604125511814"></a>string类型，权重量化粒度。</p>
 <a name="ul8259163310191"></a><a name="ul8259163310191"></a><ul id="ul8259163310191"><li>tensor，对应per-tensor。</li><li>channel，对应per-channel。</li><li>group，对应per-group。</li></ul>
-<p id="p10604115511810"><a name="p10604115511810"></a><a name="p10604115511810"></a>量化粒度介绍请参见<a href="https://gitcode.com/cann/amct/blob/master/docs/量化概念.md" target="_blank" rel="noopener noreferrer">量化基础介绍</a>。</p>
+<p id="p10604115511810"><a name="p10604115511810"></a><a name="p10604115511810"></a>量化粒度介绍请参见<a href="../压缩概念.md" target="_blank" rel="noopener noreferrer">压缩概念</a>。</p>
 </td>
 </tr>
 <tr id="row1460485515186"><td class="cellrowborder" valign="top" width="11.04%" headers="mcps1.1.5.1.1 "><p id="p1260495514181"><a name="p1260495514181"></a><a name="p1260495514181"></a>-</p>
