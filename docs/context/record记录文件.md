@@ -140,7 +140,7 @@ message PruneNode {
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="p17405151834211"><a name="p17405151834211"></a><a name="p17405151834211"></a>dst_type</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p20405018164210"><a name="p20405018164210"></a><a name="p20405018164210"></a>量化位宽，包括INT8和INT4两种量化类型。<strong id="b274541410473"><a name="b274541410473"></a><a name="b274541410473"></a>该字段仅量化感知训练场景使用。</strong></p>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="p20405018164210"><a name="p20405018164210"></a><a name="p20405018164210"></a>量化位宽，包括INT8和INT4两种量化类型。<strong id="b274541410473"><a name="b274541410473"></a><a name="b274541410473"></a>该字段仅量化感知训练场景使用，且当前仅支持INT8量化。</strong></p>
 </td>
 </tr>
 <tr id="row01735569514"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="p107512024112318"><a name="p107512024112318"></a><a name="p107512024112318"></a>repeated</p>
@@ -366,7 +366,7 @@ message PruneNode {
         scale_w: 0.00104224426
         offset_w: 0
         offset_w: 0
-        dst_type: "INT4"
+        dst_type: "INT8"
       }
     }
     ```
