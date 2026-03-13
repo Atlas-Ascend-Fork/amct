@@ -15,9 +15,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
+import torch.nn.functional as F
 
 from amct_pytorch.utils.vars import HIFLOAT8
 from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.utils.quant_util import convert_dtype
 
 
 class NpuHIF8CastLinear(torch.nn.Module):
@@ -53,8 +55,7 @@ class NpuHIF8CastLinear(torch.nn.Module):
             quant_config.get('inputs_cfg').get('enable_quant') == True:
             self.weight_compress_only = False
         if self.wts_type == HIFLOAT8:
-            import torch_npu
-            cast_weight = torch_npu.npu_dtype_cast(self.weight, self.wts_type).to(self.device)
+            cast_weight = convert_dtype(self.weight, self.wts_type).to(self.device)
         self.register_buffer('quantized_weight', cast_weight)
 
     @torch.no_grad()
@@ -67,8 +68,7 @@ class NpuHIF8CastLinear(torch.nn.Module):
             torch.tensor. Output after activation cast and original module forward.
         """
         if not self.weight_compress_only: 
-            import torch_npu
-            x = torch_npu.npu_dtype_cast(x, self.act_quant_type)
+            x = convert_dtype(x, self.act_quant_type)
             LOGGER.logd(f"Cast activation of layer '{self.layer_name}' to {self.act_quant_type} success",
                 'NpuHIF8CastLinear')
         return F.linear(x, self.quantized_weight, None)
