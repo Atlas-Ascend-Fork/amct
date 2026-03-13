@@ -90,7 +90,7 @@ quantize(model, config)
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p172641614579"><a name="p172641614579"></a><a name="p172641614579"></a>act_type: MXFP8_E4M3FN  wts_type: MXFP8_E4M3FN</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><p id="p142815266561"><a name="p142815266561"></a><a name="p142815266561"></a>支持2~6维数据输入、PER_GROUP量化、舍入模式为RINT、支持对称量化、cin长度除以32向上取整后是2的整数倍</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><p id="p142815266561"><a name="p142815266561"></a><a name="p142815266561"></a>支持2~6维数据输入、PER_GROUP量化、支持对称量化、cin长度除以32向上取整后是2的整数倍</p>
 <p id="p6287164525916"><a name="p6287164525916"></a><a name="p6287164525916"></a>不使用量化算法，即只做mx数据类型转换，<a href="#section1536112219183">config详细配置</a>中必须配置mxquant选项</p>
 </td>
 </tr>
@@ -98,7 +98,7 @@ quantize(model, config)
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p16851142184618"><a name="p16851142184618"></a><a name="p16851142184618"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT4_E2M1</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><p id="p1183219292620"><a name="p1183219292620"></a><a name="p1183219292620"></a>支持2~6维数据输入、舍入模式为RINT、bias为false</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><p id="p1183219292620"><a name="p1183219292620"></a><a name="p1183219292620"></a>支持2~6维数据输入、bias为false</p>
 <p id="p103822021171315"><a name="p103822021171315"></a><a name="p103822021171315"></a>激活（数据）支持shape为(m,k)，权重支持shape为(n,k)，其中k是64整数倍</p>
 <p id="p12540182214619"><a name="p12540182214619"></a><a name="p12540182214619"></a>激活（数据）支持PER_TENSOR量化，权重支持PER_GROUP量化</p>
 <p id="p844695365417"><a name="p844695365417"></a><a name="p844695365417"></a>激活和权重都仅支持对称量化</p>
@@ -109,7 +109,7 @@ quantize(model, config)
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p650118423714"><a name="p650118423714"></a><a name="p650118423714"></a>act_type: INT8  wts_type: INT8</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul178665278918"></a><a name="ul178665278918"></a><ul id="ul178665278918"><li>支持2~6维数据输入，舍入模式为RINT</li><li>激活（数据）支持PER_TENSOR量化，支持对称非对称量化，bias量化为INT32；权重支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>激活（数据）支持PER-TOKEN对称量化，bias不量化，k是16的倍数，n是8的倍数；权重支持PER_TENSOR/PER_CHANNEL对称量化</li><li>支持MIN-MAX量化算法、SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant选项</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul178665278918"></a><a name="ul178665278918"></a><ul id="ul178665278918"><li>支持2~6维数据输入</li><li>激活（数据）支持PER_TENSOR量化，支持对称非对称量化，bias量化为INT32；权重支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>激活（数据）支持PER-TOKEN对称量化，bias不量化，k是16的倍数，n是8的倍数；权重支持PER_TENSOR/PER_CHANNEL对称量化</li><li>支持MIN-MAX量化算法、SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置minmax、smoothquant选项</li></ul>
 </td>
 </tr>
 <tr id="row1521462251317"><td class="cellrowborder" valign="top" width="10.63%" headers="mcps1.2.5.1.1 "><p id="p1021414226138"><a name="p1021414226138"></a><a name="p1021414226138"></a>torch.nn.Conv2d</p>
@@ -167,24 +167,24 @@ quantize(model, config)
 </tr>
 <tr id="row1326719415381"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p278010227380"><a name="p278010227380"></a><a name="p278010227380"></a>wts_type: MXFP4_E2M1</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul9303114315395"></a><a name="ul9303114315395"></a><ul id="ul9303114315395"><li>支持PER_GROUP量化，舍入模式为RINT，支持对称量化</li><li>支持2~6维数据输入</li><li>支持不配置量化算法（即<a href="#section1536112219183">config详细配置</a>中配置<span>mxquant</span>选项）、GPTQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>gptq</span>选项）、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>awq</span>选项）</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul9303114315395"></a><a name="ul9303114315395"></a><ul id="ul9303114315395"><li>支持PER_GROUP量化，支持对称量化</li><li>支持2~6维数据输入</li><li>支持不配置量化算法（即<a href="#section1536112219183">config详细配置</a>中配置<span>mxquant</span>选项）、GPTQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>gptq</span>选项）、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>awq</span>选项）</li></ul>
 </td>
 </tr>
 <tr id="row131281133204815"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p1812833324819"><a name="p1812833324819"></a><a name="p1812833324819"></a>wts_type: FLOAT4_E2M1</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul185841815118"></a><a name="ul185841815118"></a><ul id="ul185841815118"><li>支持PER_GROUP量化，舍入模式为RINT，支持对称量化</li><li>支持2~6维数据输入</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul185841815118"></a><a name="ul185841815118"></a><ul id="ul185841815118"><li>支持PER_GROUP量化，支持对称量化</li><li>支持2~6维数据输入</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li></ul>
 </td>
 </tr>
 <tr id="row1219111249"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p20219811048"><a name="p20219811048"></a><a name="p20219811048"></a>wts_type: INT8</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul06850346713"></a><a name="ul06850346713"></a><ul id="ul06850346713"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，舍入模式为RINT，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT8时，原始模型weight需要K,N轴32元素对齐；wts_type为INT4时，需要K,N轴64元素对齐</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><a name="ul06850346713"></a><a name="ul06850346713"></a><ul id="ul06850346713"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT8时，原始模型weight需要K,N轴32元素对齐；wts_type为INT4时，需要K,N轴64元素对齐</li></ul>
 </td>
 </tr>
 <tr id="row1184114561578"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p284185625716"><a name="p284185625716"></a><a name="p284185625716"></a>float32（fp32）、float16（fp16）、bfloat16（bf16）</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p58415569572"><a name="p58415569572"></a><a name="p58415569572"></a>wts_type: INT4</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul15592626145816"></a><a name="ul15592626145816"></a><ul id="ul15592626145816"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，舍入模式为RINT，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT4时，原始模型weight需要K,N轴64元素对齐</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul15592626145816"></a><a name="ul15592626145816"></a><ul id="ul15592626145816"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT4时，原始模型weight需要K,N轴64元素对齐</li></ul>
 </td>
 </tr>
 </tbody>
@@ -345,7 +345,7 @@ quantize(model, cfg)
 <td class="cellrowborder" valign="top" width="11.07%" headers="mcps1.1.5.1.3 "><p id="p1060425541813"><a name="p1060425541813"></a><a name="p1060425541813"></a>-</p>
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p66040553184"><a name="p66040553184"></a><a name="p66040553184"></a>string类型，量化算法，支持如下配置：</p>
-<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量。AWQ算法求解量化参数的过程中，对候选值做网格划分，grids_num越大，搜索粒度越大，量化误差越小，但计算耗时增加。默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，代表将activation数据上的量化难度迁移至weight权重的程度。默认值0.5，数据分布的离群值越大迁移强度应设置较小。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li></ul>
+<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li></ul>
 <p id="p4604195517184"><a name="p4604195517184"></a><a name="p4604195517184"></a>具体请参见<a href="../算法介绍.md" target="_blank" rel="noopener noreferrer">量化算法介绍</a>。</p>
 </td>
 </tr>
