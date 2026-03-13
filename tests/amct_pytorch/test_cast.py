@@ -93,7 +93,7 @@ class TestCast(unittest.TestCase):
         quant_out = model(self.inputs.npu())
     
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
-    def test_hif8_tensor_sym_cast_success(self, mock_1):
+    def test_hif8_tensor_tensor_sym_cast_success(self, mock_1):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -134,6 +134,62 @@ class TestCast(unittest.TestCase):
                     'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'cast'},
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs.to(torch.bfloat16))
+        torch.Tensor.npu = mock_npu
+        self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
+        convert(model)
+        quant_out = model(self.inputs.npu())
+
+        @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
+    def test_hif8_tensor_token_sym_cast_success(self, mock_1):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+                'inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'token',
+                },
+            },
+            'algorithm': {'cast'},
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs.to(torch.bfloat16))
+        torch.Tensor.npu = mock_npu
+        self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
+        convert(model)
+        quant_out = model(self.inputs.npu())
+    
+    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
+    def test_hif8_channel_tocken_sym_cast_success(self, mock_1):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tocken',
                 },
             },
             'algorithm': {'cast'},

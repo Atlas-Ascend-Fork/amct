@@ -19,7 +19,8 @@ import torch
 
 from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4, CONVERT_DTYPE_MAP
 from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
-from amct_pytorch.utils.vars import HIF8_SIGN_SHIFT, HIF8_MIN_EXP_NO_BIAS, HIF8_MAX_EXP_NO_BIAS, HIF8_MAX_VALUE, HIF8_MIN_VALUE, HIF8_INF_VALUE, HIF8_NAN_VALUE
+from amct_pytorch.utils.vars import HIF8_SIGN_SHIFT, HIF8_MIN_EXP_NO_BIAS, HIF8_MAX_EXP_NO_BIAS, \
+    HIF8_MAX_VALUE, HIF8_MIN_VALUE, HIF8_INF_VALUE, HIF8_NAN_VALUE
 from amct_pytorch.utils.data_utils import float_to_fp4e2m1
 
 FP4E2M1_MAX_EXP = 2
@@ -157,7 +158,6 @@ def clamp_to_hifloat8(ori_tensor):
         param tensor: Input tensor (torch.float16/torch.bfloat16, any shape, CPU/NPU/GPU)
         return: Clamped HiF8 tensor (torch.uint8, same shape as input)
     """
-    outData = 0
     exp_bits, frac_bits = get_float_bit_widths(ori_tensor.dtype)
     device = ori_tensor.device
 
@@ -172,10 +172,10 @@ def clamp_to_hifloat8(ori_tensor):
     # Parse exponent bits
     exp_shift = frac_bits
     exp_mask = ((1 << exp_bits) - 1) << exp_shift
-    exp_fpN = (tensor_int32 & exp_mask) >> exp_shift
+    exp_fpn = (tensor_int32 & exp_mask) >> exp_shift
     # Parse fraction bits
     frac_mask = (1 << frac_bits) - 1
-    frac_fpN = tensor_int32 & frac_mask
+    frac_fpn = tensor_int32 & frac_mask
 
     # Initialize output HiF8 tensor
     out_tensor = torch.zeros_like(ori_tensor, dtype=torch.uint8, device=device)
@@ -184,7 +184,7 @@ def clamp_to_hifloat8(ori_tensor):
     # Detect Infinity: torch.isinf() is most reliable
     is_inf = torch.isinf(ori_tensor)
     # Detect NaN: exponent all ones + fraction non-zero OR torch.isnan()
-    is_nan = torch.isnan(ori_tensor) | ((exp_fpN == ((1 << exp_bits) - 1)) & (frac_fpN > 0))
+    is_nan = torch.isnan(ori_tensor) | ((exp_fpn == ((1 << exp_bits) - 1)) & (frac_fpn > 0))
     
     # Handle NaN values (always output 0x80 regardless of sign)
     out_tensor = torch.where(is_nan, torch.tensor(HIF8_NAN_VALUE, dtype=torch.uint8, device=device), out_tensor)
@@ -197,7 +197,7 @@ def clamp_to_hifloat8(ori_tensor):
     if torch.any(normal_mask):
         # Calculate unbiased exponent
         exp_bias = (1 << (exp_bits - 1)) - 1
-        exp_no_bias = exp_fpN[normal_mask].to(torch.int32) - exp_bias
+        exp_no_bias = exp_fpn[normal_mask].to(torch.int32) - exp_bias
 
         # Initialize output for normal values
         normal_out = torch.zeros_like(exp_no_bias, dtype=torch.uint8, device=device)
