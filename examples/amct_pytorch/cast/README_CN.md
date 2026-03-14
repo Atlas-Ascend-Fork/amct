@@ -64,7 +64,7 @@ Score:  5.477707
 
 | 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
 | :-: | :-: | :-: | :-: | :-: |
-|LLAMA2-7B|pileval|wikitext2|5.472||
+|LLAMA2-7B|pileval|wikitext2|5.472|5.572|
 |QWEN2-7B|pileval|wikitext2|7.137||
 |QWEN3-8B|pileval|wikitext2|9.715||
 
