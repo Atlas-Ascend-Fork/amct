@@ -127,7 +127,7 @@ def convert_dtype(ori_tensor, quant_dtype):
     elif quant_dtype == HIFLOAT8:
         import torch_npu
         converted_tensor = clamp_to_hifloat8(ori_tensor)
-        converted_tensor = torch_npu.npu_dtype_cast(ori_tensor, quant_dtype)
+        converted_tensor = torch_npu.npu_dtype_cast(ori_tensor, torch_npu.hifloat8)
     else:
         raise ValueError('Not supported quant_dtype {}'.format(quant_dtype))
     return converted_tensor

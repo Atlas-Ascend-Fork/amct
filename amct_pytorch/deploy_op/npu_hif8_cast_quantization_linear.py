@@ -44,9 +44,10 @@ class NpuHIF8CastLinear(torch.nn.Module):
         super().__init__()
         self.ori_module_type = type(ori_module).__name__
         self.ori_dtype = ori_module.weight.dtype
-        self.weight = ori_module.weight
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
         self.device = ori_module.weight.device
+        self.weight = ori_module.weight
+        self.bias = ori_module.bias
         self.layer_name = layer_name
         self.ori_module = ori_module
         self.act_quant_type = quant_config.get('inputs_cfg').get('quant_type')
@@ -55,8 +56,11 @@ class NpuHIF8CastLinear(torch.nn.Module):
             quant_config.get('inputs_cfg').get('enable_quant') == True:
             self.weight_compress_only = False
         if self.wts_type == HIFLOAT8:
-            cast_weight = convert_dtype(self.weight, self.wts_type).to(self.device)
-        self.register_buffer('quantized_weight', cast_weight)
+            weight = convert_dtype(self.weight, self.wts_type).to(self.device)
+        else:
+            weight = self.weight
+        weight_tensor = weight.transpose(1, 0)
+        self.register_buffer('quantized_weight', weight_tensor)
 
     @torch.no_grad()
     def forward(self, x):
@@ -67,8 +71,16 @@ class NpuHIF8CastLinear(torch.nn.Module):
         Return:
             torch.tensor. Output after activation cast and original module forward.
         """
-        if not self.weight_compress_only: 
+        import torch_npu
+        if self.weight_compress_only:
+            output = torch_npu.npu_weight_quant_batchmatmul(x, self.quantized_weight,
+                torch.tensor([1.0], dtype=torch.float32).to(self.device),
+                weight_dtype=torch_npu.hifloat8)
+        else: 
             x = convert_dtype(x, self.act_quant_type)
+            output = torch_npu.npu_quant_matmul(x, self.quantized_weight,
+                torch.tensor([1.0], dtype=torch.float32).to(self.device),
+                x1_dtype=torch_npu.hifloat8, x2_dtype=torch_npu.hifloat8, output_dtype=torch.float16)
             LOGGER.logd(f"Cast activation of layer '{self.layer_name}' to {self.act_quant_type} success",
                 'NpuHIF8CastLinear')
-        return F.linear(x, self.quantized_weight, None)
+        return output
