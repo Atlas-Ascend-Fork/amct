@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 from utils import TestModel, TestModelBias
 from mock_torch_npu import mock_npu_dtype_cast, mock_npu, mock_npu_quant_matmul, mock_npu_weight_quant_batchmatmul
+from mock_torch_npu import mock_npu_quantize
 
 from amct_pytorch import quantize, convert
 
@@ -53,7 +54,8 @@ class TestCast(unittest.TestCase):
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    def test_hif8_weights_tensor_sym_cast_success(self, mock_1, mock_2, mock_3):
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    def test_hif8_weights_tensor_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -65,18 +67,19 @@ class TestCast(unittest.TestCase):
             },
             'algorithm': {'cast'},
         }
+        torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
         self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
-        torch.Tensor.npu = mock_npu
         convert(model)
         quant_out = model(self.inputs.npu())
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    def test_hif8_weights_channel_sym_cast_success(self, mock_1, mock_2, mock_3):
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    def test_hif8_weights_channel_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -88,18 +91,19 @@ class TestCast(unittest.TestCase):
             },
             'algorithm': {'cast'},
         }
+        torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
         self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
-        torch.Tensor.npu = mock_npu
         convert(model)
         quant_out = model(self.inputs.npu())
     
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    def test_hif8_tensor_tensor_sym_cast_success(self, mock_1, mock_2, mock_3):
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    def test_hif8_tensor_tensor_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -116,10 +120,10 @@ class TestCast(unittest.TestCase):
             },
             'algorithm': {'cast'},
         }
+        torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
-        torch.Tensor.npu = mock_npu
         self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
@@ -129,7 +133,8 @@ class TestCast(unittest.TestCase):
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    def test_hif8_channel_tensor_sym_cast_success(self, mock_1, mock_2, mock_3):
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    def test_hif8_channel_tensor_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -146,10 +151,10 @@ class TestCast(unittest.TestCase):
             },
             'algorithm': {'cast'},
         }
+        torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
-        torch.Tensor.npu = mock_npu
         self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
@@ -159,7 +164,8 @@ class TestCast(unittest.TestCase):
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    def test_hif8_tensor_token_sym_cast_success(self, mock_1, mock_2, mock_3):
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    def test_hif8_tensor_token_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -176,10 +182,10 @@ class TestCast(unittest.TestCase):
             },
             'algorithm': {'cast'},
         }
+        torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
-        torch.Tensor.npu = mock_npu
         self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
@@ -189,7 +195,8 @@ class TestCast(unittest.TestCase):
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    def test_hif8_channel_tocken_sym_cast_success(self, mock_1, mock_2, mock_3):
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    def test_hif8_channel_tocken_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -206,10 +213,10 @@ class TestCast(unittest.TestCase):
             },
             'algorithm': {'cast'},
         }
+        torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
-        torch.Tensor.npu = mock_npu
         self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
         self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')

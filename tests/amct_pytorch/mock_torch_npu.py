@@ -72,7 +72,7 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
     return out
 
 
-def mock_npu_quant_matmul(x, weight, scale, pertoken_scale=None, bias=None, output_dtype=torch.float32,
+def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None, output_dtype=torch.float32,
     x1_dtype=None, x2_dtype=None, group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
     scale_dtype=None):
     x = x.to(torch.float32)
