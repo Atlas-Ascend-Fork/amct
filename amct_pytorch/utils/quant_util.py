@@ -19,8 +19,7 @@ import torch
 
 from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4, CONVERT_DTYPE_MAP
 from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
-from amct_pytorch.utils.vars import HIF8_SIGN_SHIFT, HIF8_MIN_EXP_NO_BIAS, HIF8_MAX_EXP_NO_BIAS, \
-    HIF8_MAX_VALUE, HIF8_MIN_VALUE, HIF8_INF_VALUE, HIF8_NAN_VALUE
+from amct_pytorch.utils.vars import HIF8_MAX_VALUE, HIF8_MIN_VALUE
 from amct_pytorch.utils.data_utils import float_to_fp4e2m1
 
 FP4E2M1_MAX_EXP = 2
@@ -133,88 +132,15 @@ def convert_dtype(ori_tensor, quant_dtype):
     return converted_tensor
 
 
-def get_float_bit_widths(dtype):
-    """
-    Retrieve exponent and fraction bit widths for torch.float16/torch.bfloat16
-    :param dtype: torch.dtype (must be torch.float16 or torch.bfloat16)
-    :return: Tuple (exp_bits, frac_bits) - exponent bit width, fraction bit width
-    :raises ValueError: If unsupported dtype is provided
-    """
-    if dtype == torch.float16:
-        return 5, 10  # FP16: 5 exponent bits, 10 fraction bits (IEEE 754)
-    elif dtype == torch.bfloat16:
-        return 8, 7   # BF16: 8 exponent bits, 7 fraction bits (IEEE 754)
-    else:
-        raise ValueError(f"Unsupported dtype: {dtype}. Only torch.float16/torch.bfloat16 are supported.")
-
-
 def clamp_to_hifloat8(ori_tensor):
-    """
-    Convert BF16/FP16 torch.Tensor to HiFloat8 Tensor with boundary clamp logic
-    - Unbiased exponent < -22 → output 0
-    - Unbiased exponent ≥ 15 → output HiF8 maximum value
-    - NaN → output 0x80, Inf → output sign-corresponding HiF8 Inf value
-    Parameters:
-        param tensor: Input tensor (torch.float16/torch.bfloat16, any shape, CPU/NPU/GPU)
-        return: Clamped HiF8 tensor (torch.uint8, same shape as input)
-    """
-    exp_bits, frac_bits = get_float_bit_widths(ori_tensor.dtype)
-    device = ori_tensor.device
-
-    # Convert float tensor to 16-bit integer representation
-    tensor_int16 = ori_tensor.view(torch.int16)
-    # Convert to int32 to avoid overflow during shift operations
-    tensor_int32 = tensor_int16.to(torch.int32)
-
-    # Parse sign bit
-    sign_mask = 1 << 15
-    sign = (tensor_int32 & sign_mask) >> 15
-    # Parse exponent bits
-    exp_shift = frac_bits
-    exp_mask = ((1 << exp_bits) - 1) << exp_shift
-    exp_fpn = (tensor_int32 & exp_mask) >> exp_shift
-    # Parse fraction bits
-    frac_mask = (1 << frac_bits) - 1
-    frac_fpn = tensor_int32 & frac_mask
-
-    # Initialize output HiF8 tensor
-    out_tensor = torch.zeros_like(ori_tensor, dtype=torch.uint8, device=device)
-
-    # Handle special values (NaN/Inf) using vectorized operations
-    # Detect Infinity: torch.isinf() is most reliable
     is_inf = torch.isinf(ori_tensor)
-    # Detect NaN: exponent all ones + fraction non-zero OR torch.isnan()
-    is_nan = torch.isnan(ori_tensor) | ((exp_fpn == ((1 << exp_bits) - 1)) & (frac_fpn > 0))
-    
-    # Handle NaN values (always output 0x80 regardless of sign)
-    out_tensor = torch.where(is_nan, torch.tensor(HIF8_NAN_VALUE, dtype=torch.uint8, device=device), out_tensor)
-    # Handle Infinity values (sign bit << 7 | 0x6F)
-    inf_value = (sign << HIF8_SIGN_SHIFT) | HIF8_INF_VALUE
-    out_tensor = torch.where(is_inf, inf_value.to(torch.uint8), out_tensor)
+    is_nan = torch.isnan(ori_tensor)
+    out_tensor = ori_tensor.clone()
 
-    # Handle normal values (neither NaN nor Inf)
     normal_mask = ~(is_nan | is_inf)
     if torch.any(normal_mask):
-        # Calculate unbiased exponent
-        exp_bias = (1 << (exp_bits - 1)) - 1
-        exp_no_bias = exp_fpn[normal_mask].to(torch.int32) - exp_bias
-
-        # Initialize output for normal values
-        normal_out = torch.zeros_like(exp_no_bias, dtype=torch.uint8, device=device)
-        # Underflow - exponent < -22 → output 0
-        underflow_mask = exp_no_bias < HIF8_MIN_EXP_NO_BIAS
-        normal_out[underflow_mask] = HIF8_MIN_VALUE
-        # Overflow - exponent ≥ 15 → output max value with sign
-        overflow_mask = exp_no_bias >= HIF8_MAX_EXP_NO_BIAS
-        overflow_value = (sign[normal_mask][overflow_mask] << HIF8_SIGN_SHIFT) | HIF8_MAX_VALUE
-        normal_out[overflow_mask] = overflow_value.to(torch.uint8)
-        # Normal range - only preserve sign bit (simplified conversion)
-        normal_range_mask = ~(underflow_mask | overflow_mask)
-        normal_out[normal_range_mask] = (sign[normal_mask][normal_range_mask] << HIF8_SIGN_SHIFT).to(torch.uint8)
-
-        # Assign results back to output tensor
-        out_tensor[normal_mask] = normal_out
-
+        clamped_normal = torch.clamp(ori_tensor[normal_mask], min=HIF8_MIN_VALUE, max=HIF8_MAX_VALUE)
+        out_tensor[normal_mask] = clamped_normal
     return out_tensor
 
 

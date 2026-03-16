@@ -21,6 +21,7 @@ import torch
 from amct_pytorch.utils.quant_util import quant_dequant_tensor, quant_tensor
 from amct_pytorch.utils.quant_util import convert_to_per_group_shape
 from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8
+from amct_pytorch.utils.log import LOGGER
 
 FLT_EPSILON = 1.192092896e-7
 QUANT_MAX_SCOPE = {
@@ -131,8 +132,10 @@ def get_weight_min_max_by_granularity(weight_data, quant_config):
     tuple: A tuple containing the minimum and maximum values of the weights
     """
     if quant_config.get('weights_cfg').get('strategy') == 'channel':
+        LOGGER.logi(f"111weight_data.shape='{weight_data.shape}'")
         weight_max = weight_data.max(dim=1, keepdim=True).values
         weight_min = weight_data.min(dim=1, keepdim=True).values
+        LOGGER.logi(f"111weight_max.shape='{weight_max.shape}'")
     elif quant_config.get('weights_cfg').get('strategy') == 'tensor':
         weight_max = weight_data.max().reshape(1, 1)
         weight_min = weight_data.min().reshape(1, 1)
