@@ -10,7 +10,7 @@
 
 ### 1.2 模型和数据集准备
 
-本sample以Llama2-7b，qwen2-7b，qwen3-8b模型，pileval数据，wikitext2数据集为示例。
+本sample以Llama2-7b，qwen3-8b模型，pileval数据，wikitext2数据集为示例。
 模型请用户自行下载，并传模型路径到脚本，数据集为在线加载。
 
 ### 1.3 简易量化配置
@@ -45,10 +45,6 @@ python3 src/run_llama2_samples.py --model_path=/data/Llama2_7b_hf/
 ```
 
 ```python
-python3 src/run_qwen_samples.py --model_path=/data/Qwen2-7b/
-```
-
-```python
 python3 src/run_qwen_samples.py --model_path=/data/Qwen3-8B/
 ```
 
@@ -65,7 +61,6 @@ Score:  5.477707
 | 模型 | 校准集 | 数据集 | 量化前PPL | 量化后PPL | 
 | :-: | :-: | :-: | :-: | :-: |
 |LLAMA2-7B|pileval|wikitext2|5.472|5.572|
-|QWEN2-7B|pileval|wikitext2|7.137||
-|QWEN3-8B|pileval|wikitext2|9.715||
+|QWEN3-8B|pileval|wikitext2|9.715|9.704|
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
