@@ -21,6 +21,7 @@ import stat
 import re
 import struct
 import numpy as np
+import torch
 
 
 # mode is 640
@@ -126,3 +127,15 @@ def cast_fp16_precision(data):
     else:
         ret = data.astype(np.half).astype(np.float32)
     return float(ret)
+
+
+def quant_dequant_tensor(ori_tensor, scale, offset, num_bits):
+    temp_data = torch.add(torch.round(
+        torch.mul(ori_tensor, (1 / scale))), offset)
+    device = ori_tensor.device
+    clamp_min = torch.tensor(-2**(num_bits - 1), requires_grad=False, device=device)
+    clamp_max = torch.tensor(2**(num_bits - 1) - 1, requires_grad=False, device=device)
+    clamped_data = torch.clamp(temp_data, clamp_min, clamp_max)
+    quantized_data = torch.sub(clamped_data, offset)
+    dequantized_data = torch.mul(quantized_data, scale)
+    return dequantized_data

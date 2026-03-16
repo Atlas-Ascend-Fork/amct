@@ -24,6 +24,7 @@ from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
 MODULE_NAME = 'Graph'
+RNN_LAYER_TYPE = ["GRU", "LSTM"]
 
 
 class Graph(GraphBase): # pylint: disable=no-member
@@ -96,6 +97,29 @@ class Graph(GraphBase): # pylint: disable=no-member
 
         consumer.set_attr('input_dimension_reduction', True)
         return consumer
+
+    @staticmethod
+    def _parse_rnn_nodes(quant_identity_node, type_string):
+        """
+        Function: apply bfs to find the rnn layer
+        Parameter: quant_identity_node: root nodes quant_identity
+        Return: consumer the rnn nodes found
+        """
+        # apply bfs to search rnn node
+        root = quant_identity_node
+        search_queue = []
+        search_queue.append(root)
+        while search_queue:
+            current = search_queue.pop(0)
+            if current.type == type_string:
+                consumer = current
+                break
+
+            next_nodes, _ = current.get_consumers(0)
+            for next_node in next_nodes:
+                search_queue.append(next_node)
+        return consumer
+
 
     def add_node(self, node_proto, index=None):
         """
@@ -334,6 +358,10 @@ class Graph(GraphBase): # pylint: disable=no-member
                                  encoding="utf-8")
                 consumers, _ = node.get_consumers(0)
                 consumer = consumers[0]
+                
+                if layer_module_type in RNN_LAYER_TYPE and consumer.type not in RNN_LAYER_TYPE:
+                    consumer = Graph._parse_rnn_nodes(node, layer_module_type)
+
                 if consumer.type == 'Pad':
                     set_name_node(consumer, '%s_pad' % (layer_name))
                     consumer_output = consumer.get_output_anchor(0)
