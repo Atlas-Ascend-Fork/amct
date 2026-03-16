@@ -77,7 +77,6 @@ INT8_MINMAX_WEIGHT_QUANT_CFG = {
 
 
 HIFP8_OFMR_CFG = {
-    'batch_num': 1,
     'quant_cfg': {
         'weights': {
             'type': 'hifloat8',
@@ -148,12 +147,11 @@ MXFP4_AWQ_WEIGHT_QUANT_CFG = {
 }
 
 HIFP8_CAST_CFG = {
-    'batch_num': 1,
     'quant_cfg': {
         'weights': {
             'type': 'hifloat8',
             'symmetric': True,
-            'strategy': 'tensor',
+            'strategy': 'channel',
         },
         'inputs': {
             'type': 'hifloat8',
@@ -161,5 +159,6 @@ HIFP8_CAST_CFG = {
             'strategy': 'tensor',
         },
     },
-    'algorithm': {'cast'}
+    'algorithm': {'cast'},
+    'skip_layers': {'lm_head'}
 }
