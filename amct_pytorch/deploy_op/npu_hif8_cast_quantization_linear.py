@@ -72,14 +72,16 @@ class NpuHIF8CastLinear(torch.nn.Module):
         """
         import torch_npu
         if self.weight_compress_only:
+            # input shape reshape to 2d for npu op
+            x = x.reshape(-1, x.shape[-1]).to(self.device)
             output = torch_npu.npu_weight_quant_batchmatmul(x, self.quantized_weight,
-                torch.tensor([1.0], dtype=torch.float32).to(self.device),
+                torch.tensor([1.0], dtype=x.dtype).to(self.device),
                 weight_dtype=torch_npu.hifloat8)
         else: 
-            x = convert_dtype(x, self.act_quant_type)
-            output = torch_npu.npu_quant_matmul(x, self.quantized_weight,
+            quantized_x = convert_dtype(x, self.act_quant_type).to(self.device)
+            output = torch_npu.npu_quant_matmul(quantized_x, self.quantized_weight,
                 torch.tensor([1.0], dtype=torch.float32).to(self.device),
-                x1_dtype=torch_npu.hifloat8, x2_dtype=torch_npu.hifloat8, output_dtype=torch.float16)
+                x1_dtype=torch_npu.hifloat8, x2_dtype=torch_npu.hifloat8, output_dtype=x.dtype)
             LOGGER.logd(f"Cast activation of layer '{self.layer_name}' to {self.act_quant_type} success",
                 'NpuHIF8CastLinear')
         return output
