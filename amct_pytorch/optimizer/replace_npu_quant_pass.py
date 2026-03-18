@@ -21,8 +21,10 @@ from amct_pytorch.utils.model_util import ModuleHelper
 from amct_pytorch.deploy_op import NpuQuantizationLinear
 from amct_pytorch.deploy_op import NpuWeightQuantizedLinear
 from amct_pytorch.deploy_op import NpuQuantizationConv2d
+from amct_pytorch.deploy_op import HIF8CastLinear
 from amct_pytorch.quantize_op import MinMaxQuant
 from amct_pytorch.quantize_op import OfmrQuant
+from amct_pytorch.quantize_op import HIF8CastQuant
 from amct_pytorch.algorithm import AlgorithmRegistry
 
 

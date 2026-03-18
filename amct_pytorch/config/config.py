@@ -146,3 +146,21 @@ MXFP4_AWQ_WEIGHT_QUANT_CFG = {
     'skip_layers': {'lm_head'}
 
 }
+
+
+HIF8_CAST_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'cast'}
+}

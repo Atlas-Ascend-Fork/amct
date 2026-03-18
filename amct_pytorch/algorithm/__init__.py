@@ -26,10 +26,12 @@ from amct_pytorch.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
 from amct_pytorch.quantize_op.ofmr_quant_module import OfmrQuant
+from amct_pytorch.quantize_op.hif8_cast_quant import HIF8CastQuant
 from amct_pytorch.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear
 from amct_pytorch.deploy_op.npu_quantization_linear import NpuQuantizationLinear
 from amct_pytorch.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
 from amct_pytorch.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
+from amct_pytorch.deploy_op.hif8_cast_linear import HIF8CastLinear
 
 AlgorithmRegistry = Algorithm()
 AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
@@ -39,5 +41,6 @@ AlgorithmRegistry.register('minmax', 'Linear', MinMaxQuant, [NpuWeightQuantizedL
 AlgorithmRegistry.register('mxquant', 'Linear', NpuMXQuantizationLinear, NpuMXQuantizationLinear)
 AlgorithmRegistry.register('ofmr', 'Linear', OfmrQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
 AlgorithmRegistry.register('ofmr', 'Conv2d', OfmrQuant, NpuQuantizationConv2d)
+AlgorithmRegistry.register('cast', 'Linear', HIF8CastQuant, HIF8CastLinear)
 
-BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr']
+BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast']

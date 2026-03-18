@@ -21,7 +21,8 @@ __all__ = [
     'LinearAWQuant',
     'SmoothQuant',
     'MinMaxQuant',
-    'OfmrQuant'
+    'OfmrQuant',
+    'HIF8CastQuant'
 ]
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
@@ -30,3 +31,4 @@ from amct_pytorch.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
 from amct_pytorch.quantize_op.ofmr_quant_module import OfmrQuant
+from amct_pytorch.quantize_op.hif8_cast_quant import HIF8CastQuant

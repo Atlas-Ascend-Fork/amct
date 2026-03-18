@@ -49,9 +49,23 @@ def convert(model):
     """
     Function: Convert quantized calibration model to quantized deployment model
     Parameter: model: quantized calibration model instance of Torch.nn.Module
-               config: simply config dict from user to set
+                config: simply config dict from user to set
     Return: None
     """
+    from amct_pytorch.utils.log import LOGGER
+    from amct_pytorch.quantize_op import HIF8CastQuant
+    
+    has_cast_module = False
+    for name, module in model.named_modules():
+        if isinstance(module, HIF8CastQuant):
+            has_cast_module = True
+            break
+    
+    if has_cast_module:
+        LOGGER.logi('The source network is already a deployment model with HIF8CastLinear, '
+                    'no additional conversion required for cast algorithm.')
+        return
+    
     optimizer = ModelOptimizer()
     optimizer.add_pass(ReplaceNpuQuantModulePass())
     optimizer.do_optimizer(model)
