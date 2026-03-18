@@ -63,6 +63,14 @@ def check_config(quant_data_comb, quant_config, algo):
     if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB[quant_data_comb]:
         raise ValueError(f'Algorithm {algo} do not support act and weight quant dtype {quant_data_comb}')
 
+    if algo == 'sinq':
+        if quant_config.quant_cfg.inputs_cfg.quant_input:
+            raise ValueError('SINQ only supports weight-only quantization')
+        if quant_config.quant_cfg.weights_cfg.strategy != 'group':
+            raise ValueError('SINQ only supports group weight quantization')
+        if quant_config.quant_cfg.weights_cfg.quant_type not in ['int4', 'int8']:
+            raise ValueError('SINQ only supports int4 and int8 in AMCT')
+
     weight_strategy = quant_config.quant_cfg.weights_cfg.strategy
     if quant_data_comb not in WTS_GRANULARITY_SUPPORT_MAP.get(weight_strategy):
         raise ValueError(f'act_dtype and wts_dtype {quant_data_comb} do not support weight '

@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import torch
 from torch import nn
 
 from amct_pytorch.algorithm import AlgorithmRegistry
@@ -55,6 +56,26 @@ def convert(model):
     optimizer = ModelOptimizer()
     optimizer.add_pass(ReplaceNpuQuantModulePass())
     optimizer.do_optimizer(model)
+
+
+@check_params(model=nn.Module)
+def prepare_sinq(model, inputs):
+    """
+    Function: Enable optional activation-assisted SINQ before convert().
+    Parameter: model: quantized calibration model instance of Torch.nn.Module
+               inputs: representative calibration inputs for a forward pass
+    Return: None
+    """
+    enabled = False
+    for module in model.modules():
+        if type(module).__name__ == 'LinearSINQQuant':
+            module.calibration_enabled = True
+            module.calibration_applied = False
+            enabled = True
+    if not enabled:
+        return
+    with torch.no_grad():
+        _ = model(inputs)
 
 
 @check_params(name=str,
