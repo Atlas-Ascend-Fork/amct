@@ -122,6 +122,9 @@ def convert_dtype(ori_tensor, quant_dtype):
         converted_tensor = ori_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
     elif quant_dtype == INT4:
         converted_tensor = ori_tensor.round().clamp(INT4_MIN, INT4_MAX).to(torch.int32)
+    elif quant_dtype == HIFLOAT8:
+        import torch_npu
+        converted_tensor = torch_npu.npu_dtype_cast(ori_tensor, torch_npu.hifloat8)
     else:
         raise ValueError('Not supported quant_dtype {}'.format(quant_dtype))
     return converted_tensor
