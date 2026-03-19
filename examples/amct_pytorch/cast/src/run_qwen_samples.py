@@ -20,25 +20,20 @@ import amct_pytorch as amct
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='example')
-    parser.add_argument("--model_path", type=str, required=True, help="模型路径")
+    parser.add_argument("--model_path", type=str, required=True, help="path to the model")
     args = parser.parse_args()
 
-    # Phase0: choose model && data
+    # Phase0: choose model
     model, enc = get_qwen(args.model_path)
     quant_model = model.eval().npu()
-
-    samples = get_calib_dataset(tokenizer=enc, n_samples=512, block_size=256)
-    samples = torch.cat(samples, dim=0)[:1, :]
 
     # Phase1: quantize model
     cfg = amct.HIFP8_CAST_CFG
     amct.quantize(quant_model, cfg)
 
-    # Phase2: convert deploy model
-    amct.convert(quant_model)
-    torch_npu.npu.empty_cache()
+    # The quantized model is already a deployment model, no need to convert
 
-    # Phase3: Test ppl result
+    # Phase2: Test ppl result
     testenc = get_test_dataset(enc=enc, seqlen=model.seqlen)
     testenc = testenc.input_ids.npu()
     test_ppl(quant_model, testenc)
