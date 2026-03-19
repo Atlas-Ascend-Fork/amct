@@ -19,7 +19,6 @@ import torch
 
 from amct_pytorch.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4, CONVERT_DTYPE_MAP
 from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
-from amct_pytorch.utils.vars import HIF8_MAX_VALUE, HIF8_MIN_VALUE
 from amct_pytorch.utils.data_utils import float_to_fp4e2m1
 
 FP4E2M1_MAX_EXP = 2
@@ -125,8 +124,7 @@ def convert_dtype(ori_tensor, quant_dtype):
         converted_tensor = ori_tensor.round().clamp(INT4_MIN, INT4_MAX).to(torch.int32)
     elif quant_dtype == HIFLOAT8:
         import torch_npu
-        converted_tensor = torch.clamp(torch.nan_to_num(ori_tensor), min=HIF8_MIN_VALUE, max=HIF8_MAX_VALUE)
-        converted_tensor = torch_npu.npu_dtype_cast(converted_tensor, torch_npu.hifloat8)
+        converted_tensor = torch_npu.npu_dtype_cast(ori_tensor, torch_npu.hifloat8)
     else:
         raise ValueError('Not supported quant_dtype {}'.format(quant_dtype))
     return converted_tensor

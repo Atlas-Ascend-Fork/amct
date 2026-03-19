@@ -49,14 +49,6 @@ class NpuHIF8CastLinear(torch.nn.Module):
         self.weight = ori_module.weight
         self.layer_name = layer_name
         self.act_quant_type = quant_config.get('inputs_cfg').get('quant_type')
-        if ori_module.bias is not None:
-            bias = ori_module.bias
-            if self.act_quant_type == HIFLOAT8:
-                bias = bias.to(torch.float32)
-            self.register_buffer('bias', bias)
-        else:
-            self.bias = None
-
         self.weight_compress_only = True
         if quant_config.get('inputs_cfg').get('enable_quant') is None or \
             quant_config.get('inputs_cfg').get('enable_quant') == True:
@@ -71,6 +63,14 @@ class NpuHIF8CastLinear(torch.nn.Module):
         weight, _ = quant_tensor(self.weight.transpose(1, 0), self.wts_type, scale=scale_w)
         self.register_buffer('quantized_weight', weight.to(self.device))
         self.register_buffer('scale_w', scale_w)
+
+        if ori_module.bias is not None:
+            bias = ori_module.bias
+            if self.act_quant_type == HIFLOAT8:
+                bias = bias.to(torch.float32) / scale_w
+            self.register_buffer('bias', bias)
+        else:
+            self.bias = None
 
     @torch.no_grad()
     def forward(self, x):
