@@ -19,6 +19,7 @@ from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.config.fields import QuantConfig
 from amct_pytorch.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
 from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
+from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE
 from amct_pytorch.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
 from amct_pytorch.algorithm import BUILT_IN_ALGORITHM
 
@@ -47,6 +48,14 @@ def check_skip_layer(layer_name, skip_layers):
             return True
 
     return False
+
+
+def check_kv_config(quant_config, algo):
+    quant_type = quant_config.quant_cfg.kv_cache_cfg.quant_type
+    if quant_type not in ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE.keys():
+        raise ValueError(f'Do not support {quant_type} of kvcache quant dtype.')
+    if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE[quant_type]:
+        raise ValueError(f'Algorithm {algo} do not support kvcache quant dtype {quant_type}')
 
 
 def check_config(quant_data_comb, quant_config, algo):
@@ -151,6 +160,8 @@ def get_supported_layers(model, quant_config, registed_alg):
         if algo not in BUILT_IN_ALGORITHM:
             LOGGER.logd("Customized Algorithm {} is used fot quant".format(algo))
         else:
+            if quant_config.quant_cfg.kvcache_cfg.quant_dtype:
+                check_kv_config(quant_config, algo)
             act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
                         quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
             wts_type = quant_config.quant_cfg.weights_cfg.quant_type

@@ -26,3 +26,4 @@ from amct_pytorch.deploy_op.npu_quantization_linear import NpuQuantizationLinear
 from amct_pytorch.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
 from amct_pytorch.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
 from amct_pytorch.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear
+from amct_pytorch.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
