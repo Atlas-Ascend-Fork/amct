@@ -33,16 +33,12 @@ if __name__ == '__main__':
     # Phase1: quantize model
     cfg = amct.HIFP8_CAST_CFG
     amct.quantize(quant_model, cfg)
-    
-    # Phase2: inference calibration model to cal quantized factors
-    infer_model(quant_model, samples)
-    torch_npu.npu.empty_cache()
 
-    # Phase3: convert deploy model
+    # Phase2: convert deploy model
     amct.convert(quant_model)
     torch_npu.npu.empty_cache()
 
-    # Phase4: Test ppl result
+    # Phase3: Test ppl result
     testenc = get_test_dataset(enc=enc, seqlen=model.seqlen)
     testenc = testenc.input_ids.npu()
     test_ppl(quant_model, testenc)
