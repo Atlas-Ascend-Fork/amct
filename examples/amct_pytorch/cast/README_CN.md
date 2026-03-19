@@ -10,7 +10,7 @@
 
 ### 1.2 模型和数据集准备
 
-本sample以Llama2-7b，qwen2-7b，qwen3-8b模型，pileval数据，wikitext2数据集为示例。
+本sample以Llama2-7b，qwen2-7b，qwen3-8b模型，wikitext2数据集为示例。
 模型请用户自行下载，并传模型路径到脚本，数据集为在线加载。
 
 ### 1.3 简易量化配置
