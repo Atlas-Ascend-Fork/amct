@@ -44,6 +44,36 @@ INT4_GPTQ_WEIGHT_QUANT_CFG = {
 }
 
 
+INT4_SINQ_WEIGHT_QUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'int4',
+            'symmetric': False,
+            'strategy': 'group',
+            'group_size': 64,
+        },
+    },
+    'algorithm': {'sinq': {'order': 16}},
+    'skip_layers': {'lm_head'}
+}
+
+
+INT8_SINQ_WEIGHT_QUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'int8',
+            'symmetric': False,
+            'strategy': 'group',
+            'group_size': 64,
+        },
+    },
+    'algorithm': {'sinq': {'order': 16}},
+    'skip_layers': {'lm_head'}
+}
+
+
 INT8_SMOOTHQUANT_CFG = {
     'batch_num': 1,
     'quant_cfg': {

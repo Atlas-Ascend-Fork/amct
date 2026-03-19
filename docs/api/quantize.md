@@ -130,7 +130,7 @@ quantize(model, config)
 
 ## 仅权重量化支持的层<a name="section831519712409"></a>
 
-本章节介绍仅权重量化特性，以及对应的优化算法：AWQ、GPTQ等权重量化算法。
+本章节介绍仅权重量化特性，以及对应的优化算法：SINQ、AWQ、GPTQ等权重量化算法。
 
 原始模型中数据类型为float16（fp16）、bfloat16（bf16）时，可以通过本节介绍的内容，仅权重量化后转换为HIFloat8（HiF8）、float8（fp8）、MXFP4、float4数据格式，通过对权重的压缩，实现模型轻量化。
 
@@ -184,7 +184,7 @@ quantize(model, config)
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.5.1.2 "><p id="p58415569572"><a name="p58415569572"></a><a name="p58415569572"></a>wts_type: INT4</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul15592626145816"></a><a name="ul15592626145816"></a><ul id="ul15592626145816"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT4时，原始模型weight需要K,N轴64元素对齐</li></ul>
+<td class="cellrowborder" valign="top" headers="mcps1.2.5.1.3 "><a name="ul15592626145816"></a><a name="ul15592626145816"></a><ul id="ul15592626145816"><li>支持PER_TENSOR/PER_CHANNEL/PER_GROUP量化，支持对称量化/非对称量化</li><li>支持MIN-MAX量化算法、SINQ量化算法、GPTQ量化算法、AWQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>minmax</span>、<span>sinq</span>、<span>gptq</span>、<span>awq</span>选项）</li><li>wts_type为INT4时，原始模型weight需要K,N轴64元素对齐；SINQ当前仅支持PER_GROUP量化</li></ul>
 </td>
 </tr>
 </tbody>
@@ -345,7 +345,7 @@ quantize(model, cfg)
 <td class="cellrowborder" valign="top" width="11.07%" headers="mcps1.1.5.1.3 "><p id="p1060425541813"><a name="p1060425541813"></a><a name="p1060425541813"></a>-</p>
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p66040553184"><a name="p66040553184"></a><a name="p66040553184"></a>string类型，量化算法，支持如下配置：</p>
-<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li></ul>
+<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>sinq：order，uint32类型，Sinkhorn迭代次数，默认为16。</li><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li></ul>
 <p id="p4604195517184"><a name="p4604195517184"></a><a name="p4604195517184"></a>具体请参见<a href="../算法介绍.md" target="_blank" rel="noopener noreferrer">量化算法介绍</a>。</p>
 </td>
 </tr>
@@ -360,5 +360,3 @@ quantize(model, cfg)
 </tr>
 </tbody>
 </table>
-
-
