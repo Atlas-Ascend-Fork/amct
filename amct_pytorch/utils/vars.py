@@ -83,7 +83,7 @@ WTS_PER_GROUP_SUPPORT_COMBINATION = ['mxfp8_e4m3fn mxfp8_e4m3fn', 'float8_e4m3fn
 
 ACT_PER_TENSOR_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'float8_e4m3fn float8_e4m3fn', 
                                 'int8 int8', 'float8_e4m3fn float4_e2m1']
-ACT_PER_TOKEN_SUPPORT_COMBINATION = ['int8 int8', 'hifloat8 hifloat8']
+ACT_PER_TOKEN_SUPPORT_COMBINATION = ["int8 int8"]
 
 # Quantization bit width combinations supported by different quantization granularities
 WTS_GRANULARITY_SUPPORT_MAP = {
