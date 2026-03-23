@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from onnx import onnx_pb, AttributeProto # pylint: disable=E0401
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.module.quant_module import construct_fake_quant_dequant_cast_op
@@ -57,6 +56,7 @@ def add_fake_dequant(graph, layer_name, dqscale):
 
 def _construct_fake_dequant_pow(layer_name):
     '''construct pow op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'pow'])
     node_proto.op_type = 'Pow'
@@ -73,6 +73,7 @@ def _construct_fake_dequant_pow(layer_name):
 
 def _construct_fake_dequant_div(layer_name):
     '''construct div op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'div'])
     node_proto.op_type = 'Div'
@@ -89,6 +90,7 @@ def _construct_fake_dequant_div(layer_name):
 
 def _construct_fake_dequant_floor(layer_name):
     '''construct floor op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'floor'])
     node_proto.op_type = 'Floor'
@@ -103,6 +105,7 @@ def _construct_fake_dequant_floor(layer_name):
 
 def _construct_fake_dequant_clip(layer_name):
     '''construct clip op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'clip'])
     node_proto.op_type = 'Clip'
@@ -120,6 +123,7 @@ def _construct_fake_dequant_clip(layer_name):
 
 def _construct_fake_dequant_mul(layer_name):
     '''construct mul op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'mul'])
     node_proto.op_type = 'Mul'
@@ -136,6 +140,7 @@ def _construct_fake_dequant_mul(layer_name):
 
 def _construct_fake_dequant_dqscale(layer_name, dqscale):
     '''construct dqscale op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'dqscale'])
     node_proto.op_type = 'Constant'
@@ -153,6 +158,7 @@ def _construct_fake_dequant_dqscale(layer_name, dqscale):
 
 def _construct_fake_dequant_clip_min(layer_name, clip_min):
     '''construct clip's min op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.doc_string = 'clip min of the Fake dequant'
     node_proto.name = '.'.join([layer_name, 'min_val'])
@@ -169,6 +175,7 @@ def _construct_fake_dequant_clip_min(layer_name, clip_min):
 
 def _construct_fake_dequant_clip_max(layer_name, clip_max):
     '''construct clip's max op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.doc_string = 'clip max of the Fakequant'
     node_proto.name = '.'.join([layer_name, 'max_val'])
@@ -185,6 +192,7 @@ def _construct_fake_dequant_clip_max(layer_name, clip_max):
 
 def _construct_fake_dequant_pow_base(layer_name, pow_base):
     '''construct pow's base op '''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'pow_base'])
     node_proto.op_type = 'Constant'

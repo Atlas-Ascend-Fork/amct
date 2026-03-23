@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb # pylint: disable=import-error
 from ...amct_pytorch.common.graph_base.node_base import NodeBase
 from ...amct_pytorch.graph.anchor import InputAnchor
 from ...amct_pytorch.graph.anchor import OutputAnchor
@@ -37,6 +36,7 @@ class Node(NodeBase): # pylint: disable=no-member
         Parameter: None
         Return: None
         """
+        from onnx import onnx_pb
         if isinstance(node_proto, onnx_pb.SparseTensorProto):
             if node_proto.HasField('values'):
                 node_id = node_proto.values.name
@@ -125,6 +125,7 @@ class Node(NodeBase): # pylint: disable=no-member
         """
         Function: Dump current node to onnx_pb.NodeProto format
         """
+        from onnx import onnx_pb
         # update node
         if isinstance(self._node_proto, onnx_pb.NodeProto):
             return self.__update_node_proto()
@@ -161,6 +162,7 @@ class Node(NodeBase): # pylint: disable=no-member
     def _init(self):
         """Parse node from onnx_pb proto define
         """
+        from onnx import onnx_pb
         if isinstance(self._node_proto, onnx_pb.NodeProto):
             # init input anchors
             for index, input_name in enumerate(self._node_proto.input):
@@ -178,6 +180,7 @@ class Node(NodeBase): # pylint: disable=no-member
     def _trans_type(self):
         """translate node type to unique
         """
+        from onnx import onnx_pb
         if isinstance(self._node_proto, onnx_pb.NodeProto):
             self._basic_info[TYPE] = self._node_proto.op_type
         elif isinstance(self._node_proto, onnx_pb.ValueInfoProto):
@@ -193,6 +196,7 @@ class Node(NodeBase): # pylint: disable=no-member
         """
         Function: update onnx_pb.NodeProto
         """
+        from onnx import onnx_pb
         node_proto = onnx_pb.NodeProto()
         node_proto.CopyFrom(self._node_proto)
         node_proto.name = self.name

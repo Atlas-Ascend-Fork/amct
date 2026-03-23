@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb
 
 from ..utils.onnx_node_util import AttributeProtoHelper
 from ..utils.vars_util import INT8, INT16
@@ -53,6 +52,7 @@ class RnnQuantOpBase:
         Return:
             node_proto: proto of rnn quantized op
         """
+        from onnx import onnx_pb
         node_proto = onnx_pb.NodeProto()
         node_proto.name = ori_proto.name
         node_proto.op_type = cls.__name__

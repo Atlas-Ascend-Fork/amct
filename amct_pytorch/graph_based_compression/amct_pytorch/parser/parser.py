@@ -23,10 +23,6 @@ from io import BytesIO
 import pathlib
 
 import torch # pylint: disable=E0401
-import onnx
-
-from onnx import onnx_pb # pylint: disable=E0401
-from onnx.onnx_pb import AttributeProto
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.graph.graph import Graph
 from ...amct_pytorch.configuration.check import GraphChecker
@@ -56,6 +52,7 @@ class Parser:
     @staticmethod
     def parse_proto(proto_file):
         """ parse the onnx pb pb file to """
+        from onnx import onnx_pb
         if isinstance(proto_file, str):
             with open(proto_file, 'rb') as onnx_pb_file:
                 onnx_pb_str = onnx_pb_file.read()
@@ -159,6 +156,7 @@ class Parser:
                 proto_file: str, onnx file path
                 attr_names: list, attribute names read from onnx model to graph
         """
+        from onnx import onnx_pb
         with open(proto_file, 'rb') as onnx_pb_file:
             onnx_pb_str = onnx_pb_file.read()
             proto_data = onnx_pb.ModelProto()
@@ -221,6 +219,7 @@ def _write_attr_to_node_proto(node_proto, attr):
     Inputs: node_proto: onnx.AttributeProto
             attr: str, attribute need to be written to node proto
     """
+    from onnx.onnx_pb, AttributeProto
     attr_value = getattr(attr,
                     AttrProtoHelper.map_value_location(attr.type))
     if attr.type == AttributeProto.AttributeType.STRINGS:

@@ -18,7 +18,6 @@
 import os
 import numpy as np
 from google.protobuf.internal import api_implementation
-from onnx.onnx_pb import TensorProto # pylint: disable=E0401
 
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.common.utils import files as files_util
@@ -30,27 +29,6 @@ class TensorProtoHelper():
     """ Help cope with onnx.TensorProto
     APIs: map_data_location, map_np_type, get_data, clear_data, set_data
     """
-    data_type = TensorProto.DataType # pylint: disable=E1101
-    data_type_maps = {
-        # DataType: proto_value, data_location, np.type
-        'UNDEFINED': [data_type.UNDEFINED, RAW_DATA, None],
-        'FLOAT': [data_type.FLOAT, 'float_data', 'float32'],
-        'UINT8': [data_type.UINT8, 'int32_data', 'uint8'],
-        'INT8': [data_type.INT8, RAW_DATA, 'int8'],
-        'UINT16': [data_type.UINT16, 'int32_data', 'uint16'],
-        'INT16': [data_type.INT16, 'int32_data', 'int16'],
-        'INT32': [data_type.INT32, 'int32_data', 'int32'],
-        'INT64': [data_type.INT64, 'int64_data', 'int64'],
-        'STRING': [data_type.STRING, 'string_data', 'str'],
-        'BOOL': [data_type.BOOL, 'int32_data', 'bool_'],
-        'FLOAT16': [data_type.FLOAT16, 'int32_data', 'float16'],
-        'DOUBLE': [data_type.DOUBLE, 'double_data', 'float64'],
-        'UINT32': [data_type.UINT32, 'uint64_data', 'uint32'],
-        'UINT64': [data_type.UINT64, 'uint64_data', 'uint64'],
-        'COMPLEX64': [data_type.COMPLEX64, 'float_data', 'complex64'],
-        'COMPLEX128': [data_type.COMPLEX128, 'double_data', 'complex128'],
-        'BFLOAT16': [data_type.BFLOAT16, RAW_DATA, 'float32'],
-    }
     proto_value_id = 0
     data_location_id = 1
     np_type_id = 2
@@ -61,26 +39,53 @@ class TensorProtoHelper():
         self.tensor = tensor
         self.model_path = model_path
         self.externel_data = self.check_external_data()
+    
+    @classmethod
+    def get_data_type(self):
+        from onnx.onnx_pb import TensorProto
+        data_type = TensorProto.DataType # pylint: disable=E1101
+        data_type_maps = {
+            # DataType: proto_value, data_location, np.type
+            'UNDEFINED': [data_type.UNDEFINED, RAW_DATA, None],
+            'FLOAT': [data_type.FLOAT, 'float_data', 'float32'],
+            'UINT8': [data_type.UINT8, 'int32_data', 'uint8'],
+            'INT8': [data_type.INT8, RAW_DATA, 'int8'],
+            'UINT16': [data_type.UINT16, 'int32_data', 'uint16'],
+            'INT16': [data_type.INT16, 'int32_data', 'int16'],
+            'INT32': [data_type.INT32, 'int32_data', 'int32'],
+            'INT64': [data_type.INT64, 'int64_data', 'int64'],
+            'STRING': [data_type.STRING, 'string_data', 'str'],
+            'BOOL': [data_type.BOOL, 'int32_data', 'bool_'],
+            'FLOAT16': [data_type.FLOAT16, 'int32_data', 'float16'],
+            'DOUBLE': [data_type.DOUBLE, 'double_data', 'float64'],
+            'UINT32': [data_type.UINT32, 'uint64_data', 'uint32'],
+            'UINT64': [data_type.UINT64, 'uint64_data', 'uint64'],
+            'COMPLEX64': [data_type.COMPLEX64, 'float_data', 'complex64'],
+            'COMPLEX128': [data_type.COMPLEX128, 'double_data', 'complex128'],
+            'BFLOAT16': [data_type.BFLOAT16, RAW_DATA, 'float32'],
+        }
+        return data_type_maps
+
+    @classmethod
+    def get_data_type_by_value(self, proto_value):
+        type_maps = self.get_data_type()
+        for key in type_maps:
+            value = type_maps[key]
+            if proto_value == value[self.proto_value_id]:
+                return value
+        raise ValueError(f'The data_type{{proto_value}} is UNEXCEPTED')
 
     @classmethod
     def map_data_location(cls, proto_value):
         ''' find data_location according to TensorProto.data_type'''
-        for key in cls.data_type_maps:
-            value = cls.data_type_maps[key]
-            if proto_value == value[cls.proto_value_id]:
-                return value[cls.data_location_id]
-
-        raise ValueError(f'The data_type{{proto_value}} is UNEXCEPTED')
+        value = cls.get_data_type_by_value(proto_value)
+        return value[cls.data_location_id]
 
     @classmethod
     def map_np_type(cls, proto_value):
         ''' find np's dtype according to TensorProto.data_type'''
-        for key in cls.data_type_maps:
-            value = cls.data_type_maps[key]
-            if proto_value == value[cls.proto_value_id]:
-                return value[cls.np_type_id]
-
-        raise ValueError(f'The data_type{{proto_value}} is UNEXCEPTED')
+        value = cls.get_data_type_by_value(proto_value)
+        return value[cls.np_type_id]
 
     @classmethod
     def cast_ori_data(cls, value, tensor_np_type):
@@ -111,7 +116,7 @@ class TensorProtoHelper():
         byte_value = self.tensor.raw_data
 
         if tensor_data_type == \
-            self.data_type_maps['UNDEFINED'][self.proto_value_id]:
+            self.get_data_type()['UNDEFINED'][self.proto_value_id]:
             return byte_value
 
         np_type = self.map_np_type(tensor_data_type)
@@ -152,7 +157,7 @@ class TensorProtoHelper():
         Return: None
         '''
         if type_string is not None:
-            data_type = self.data_type_maps[type_string][self.proto_value_id]
+            data_type = self.get_data_type()[type_string][self.proto_value_id]
             self.tensor.data_type = data_type
         if dims is not None:
             self.tensor.ClearField('dims')

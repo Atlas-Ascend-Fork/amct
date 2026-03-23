@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from onnx import onnx_pb, AttributeProto # pylint: disable=E0401
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 
@@ -95,6 +94,7 @@ def add_fake_antiquant(graph, layer_name, scale):
 
 def _construct_fakequant_scale(layer_name, scale):
     ''' construct scale op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'scale'])
     node_proto.op_type = 'Constant'
@@ -111,6 +111,7 @@ def _construct_fakequant_scale(layer_name, scale):
 
 def _construct_fakequant_offset(layer_name, offset):
     ''' construct offset op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'offset'])
     node_proto.op_type = 'Constant'
@@ -127,6 +128,7 @@ def _construct_fakequant_offset(layer_name, offset):
 
 def _construct_fakequant_clip_min(layer_name, clip_min):
     ''' construct clip's min op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'min_val'])
     node_proto.op_type = 'Constant'
@@ -143,6 +145,7 @@ def _construct_fakequant_clip_min(layer_name, clip_min):
 
 def _construct_fakequant_clip_max(layer_name, clip_max):
     ''' construct clip's max op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'max_val'])
     node_proto.op_type = 'Constant'
@@ -159,6 +162,7 @@ def _construct_fakequant_clip_max(layer_name, clip_max):
 
 def _construct_fakequant_mul(layer_name):
     ''' construct mul op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, MUL])
     node_proto.op_type = 'Mul'
@@ -175,6 +179,7 @@ def _construct_fakequant_mul(layer_name):
 
 def _construct_fakequant_round(layer_name):
     ''' construct round op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'round'])
     node_proto.op_type = 'Round'
@@ -189,6 +194,7 @@ def _construct_fakequant_round(layer_name):
 
 def _construct_fakequant_add(layer_name):
     ''' construct add op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'add'])
     node_proto.op_type = 'Add'
@@ -205,6 +211,7 @@ def _construct_fakequant_add(layer_name):
 
 def _construct_fakequant_clip(layer_name):
     ''' construct clip op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, 'clip'])
     node_proto.op_type = 'Clip'
@@ -222,6 +229,7 @@ def _construct_fakequant_clip(layer_name):
 
 def _construct_fakequant_sub(layer_name):
     ''' construct sub op'''
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, SUB])
     node_proto.op_type = 'Sub'
@@ -237,6 +245,7 @@ def _construct_fakequant_sub(layer_name):
 
 
 def construct_fake_quant_dequant_cast_op(layer_name, to_dtype):
+    from onnx import onnx_pb, AttributeProto
     node_proto = onnx_pb.NodeProto()
     node_proto.name = '.'.join([layer_name, CAST])
     node_proto.op_type = 'Cast'

@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from onnx import onnx_pb # pylint: disable=import-error
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 
 from ...amct_pytorch.utils.log import LOGGER
@@ -163,6 +162,7 @@ def construct_dequant_param(dequant_param, # pylint: disable=no-member
                             layer_name):
     """ Construct a initializer for dequant_param
     """
+    from onnx import onnx_pb
     initializer_proto = onnx_pb.TensorProto()
     initializer_proto.name = layer_name + '.dequant.param'
     tensor_helper = TensorProtoHelper(initializer_proto)
@@ -183,6 +183,7 @@ def construct_dequant_node(inputs, # pylint: disable=no-member
         quantize_layer: a string, layer to be quantized
     Return: node_proto: AscendDequant's onnx_pb.NodeProto
     """
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
 
     node_proto.name = layer_name + '.dequant'
