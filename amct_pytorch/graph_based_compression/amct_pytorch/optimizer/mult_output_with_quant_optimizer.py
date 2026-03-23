@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb # pylint: disable=import-error
+
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
@@ -177,6 +177,7 @@ def construct_anti_quant_node(inputs, # pylint: disable=no-member
         dst_type: a string
         quantize_layer: a string, layer to be quantized
     """
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
 
     node_proto.name = layer_name + '.anti_quant'

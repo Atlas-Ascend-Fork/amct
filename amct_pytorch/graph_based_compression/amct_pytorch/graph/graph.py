@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb # pylint: disable=import-error
 
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.common.graph_base.graph_base import GraphBase
@@ -103,6 +102,7 @@ class Graph(GraphBase): # pylint: disable=no-member
         Parameter: None
         Return: Node that be added
         """
+        from onnx import onnx_pb
         # Set node_id to be unique by decorate_node_name function
         if isinstance(node_proto, onnx_pb.SparseTensorProto):
             if node_proto.HasField('values'):
@@ -133,6 +133,7 @@ class Graph(GraphBase): # pylint: disable=no-member
         remove_done = False
         for index, node in enumerate(self._nodes + self._in_out_nodes):
             if node == delete_node:
+                from onnx import onnx_pb
                 if isinstance(node.proto, onnx_pb.ValueInfoProto):
                     raise RuntimeError('Cannot remove ValueInfoProto node ' \
                         '{} from graph.'.format(node.name))
@@ -153,7 +154,7 @@ class Graph(GraphBase): # pylint: disable=no-member
         """
         LOGGER.logi('Doing whole model dump...', module_name=MODULE_NAME)
         self.topologic_sort()
-
+        from onnx import onnx_pb
         net = onnx_pb.ModelProto()
         net.CopyFrom(self._net)
         graph = net.graph # pylint: disable=E1101
@@ -184,6 +185,7 @@ class Graph(GraphBase): # pylint: disable=no-member
         is_removed = False
         for index, node in enumerate(self._nodes):
             if node == delete_node:
+                from onnx import onnx_pb
                 if not isinstance(node.proto, onnx_pb.TensorProto):
                     raise RuntimeError('Cannot only remove initializer node ' \
                         'from graph by this api. "%s" is "%s"' % (node.name, \

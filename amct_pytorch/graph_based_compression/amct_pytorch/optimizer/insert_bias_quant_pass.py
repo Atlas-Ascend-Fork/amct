@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
-from onnx import onnx_pb # pylint: disable=import-error
 
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
@@ -187,6 +186,7 @@ def construct_bias_quant_node(inputs,
             dst_type: a string
         quantize_layer: a string, layer to be quantized
     """
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
 
     node_proto.name = '.'.join([layer_name, 'bias_quant'])

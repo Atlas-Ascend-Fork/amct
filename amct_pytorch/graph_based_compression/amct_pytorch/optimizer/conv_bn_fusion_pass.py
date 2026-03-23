@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import torch
 import numpy as np
-from onnx import onnx_pb
 
 from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from ...amct_pytorch.utils.log import LOGGER
@@ -97,6 +96,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
         bias_index = QuantOpInfo.get_quant_index(conv_node).get('bias_index')
         if len(conv_node.input_anchors) <= bias_index:
             # bias is None
+            from onnx import onnx_pb
             bias_tensor = onnx_pb.TensorProto()
             bias_tensor.name = f'{conv_node.name}.bias'
             bias_helper = TensorProtoHelper(bias_tensor)

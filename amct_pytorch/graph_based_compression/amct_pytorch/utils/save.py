@@ -23,7 +23,6 @@ __all__ = ['save_onnx_model', 'generate_onnx_file_name', 'split_dir_prefix']
 
 import os
 import numpy as np
-import onnx
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.common.utils import files as files_util

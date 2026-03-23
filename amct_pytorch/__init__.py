@@ -28,4 +28,3 @@ from amct_pytorch.config import HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG
 from amct_pytorch.config import MXFP4_AWQ_WEIGHT_QUANT_CFG
 
 from amct_pytorch.graph_based_compression.amct_pytorch import *
-
