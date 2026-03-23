@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
-from onnx import onnx_pb
 
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
@@ -54,6 +53,7 @@ class ApplyDMQBalancerPass(BaseFusionPass):
     @staticmethod
     def _construct_factor_node(layer_name, tensor_balance_factor, factor_data_type, reshape_size):
         ''' construct tensor_balance_factor op'''
+        from onnx import onnx_pb
         node_proto = onnx_pb.NodeProto()
         node_proto.name = '.'.join([layer_name, TENSOR_BALANCE_FACTOR])
         node_proto.op_type = 'Constant'
@@ -72,6 +72,7 @@ class ApplyDMQBalancerPass(BaseFusionPass):
     @staticmethod
     def _construct_mul_node(layer_name):
         ''' construct mul op'''
+        from onnx import onnx_pb
         node_proto = onnx_pb.NodeProto()
         node_proto.name = '.'.join([layer_name, MUL])
         node_proto.op_type = 'Mul'

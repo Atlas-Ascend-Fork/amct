@@ -15,28 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx.onnx_pb import AttributeProto
-
 
 class AttributeProtoHelper():
     """docstring for AttributeProtoHelper"""
-    attribute_type = AttributeProto.AttributeType
-    attribute_type_map = {
-        # type_string ,type_proto_value, location
-        'FLOAT': [attribute_type.FLOAT, 'f'],
-        'INT': [attribute_type.INT, 'i'],
-        'STRING': [attribute_type.STRING, 's'],
-        'TENSOR': [attribute_type.TENSOR, 't'],
-        'FLOATS': [attribute_type.FLOATS, 'floats'],
-        'INTS': [attribute_type.INTS, 'ints'],
-        'STRINGS': [attribute_type.STRINGS, 'strings'],
-        'TENSORS': [attribute_type.TENSORS, 'tensors'],
-        'GRAPH': [attribute_type.GRAPH, 'g'],
-        'GRAPHS': [attribute_type.GRAPHS, 'graphs'],
-        'SPARSE_TENSOR': [attribute_type.SPARSE_TENSOR, 'sparse_tensor'],
-        'SPARSE_TENSORS': [attribute_type.SPARSE_TENSORS, 'sparse_tensors'],
-        'UNDEFINED': [attribute_type.UNDEFINED, None],
-    }
     value_location_id = 1
     proto_value_id = 0
     ge_dtype_map = {'FLOAT32': 0, 'FLOAT16': 1}
@@ -50,6 +31,28 @@ class AttributeProtoHelper():
         """
         super().__init__()
         self.node_proto = node_proto
+
+    @classmethod
+    def get_attribute_type(type_string):
+        from onnx.onnx_pb import AttributeProto
+        attribute_type = AttributeProto.AttributeType
+        attribute_type_map = {
+            # type_string ,type_proto_value, location
+            'FLOAT': [attribute_type.FLOAT, 'f'],
+            'INT': [attribute_type.INT, 'i'],
+            'STRING': [attribute_type.STRING, 's'],
+            'TENSOR': [attribute_type.TENSOR, 't'],
+            'FLOATS': [attribute_type.FLOATS, 'floats'],
+            'INTS': [attribute_type.INTS, 'ints'],
+            'STRINGS': [attribute_type.STRINGS, 'strings'],
+            'TENSORS': [attribute_type.TENSORS, 'tensors'],
+            'GRAPH': [attribute_type.GRAPH, 'g'],
+            'GRAPHS': [attribute_type.GRAPHS, 'graphs'],
+            'SPARSE_TENSOR': [attribute_type.SPARSE_TENSOR, 'sparse_tensor'],
+            'SPARSE_TENSORS': [attribute_type.SPARSE_TENSORS, 'sparse_tensors'],
+            'UNDEFINED': [attribute_type.UNDEFINED, None],
+        }
+        return attribute_type_map[type_string][value_id]
 
     @classmethod
     def map_value_location(cls, proto_value):
@@ -107,7 +110,7 @@ class AttributeProtoHelper():
         Returns:
             None
         """
-        attr_type = self.attribute_type_map[type_string][self.proto_value_id]
+        attr_type = self.get_attribute_type[type_string][self.proto_value_id]
         target_attribute = None
         for attr in self.node_proto.attribute:
             if attr.name == attr_name:

@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from onnx import onnx_pb # pylint: disable=import-error
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.custom_op.arq.arq import weight_quant_np
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
@@ -170,6 +169,7 @@ def construct_weight_quant_node(inputs, # pylint: disable=no-member
             dst_type: a string
         quantize_layer: a string, layer to be quantized
     """
+    from onnx import onnx_pb
     node_proto = onnx_pb.NodeProto()
 
     node_proto.name = '.'.join([layer_name, WEIGHT_QUANT])

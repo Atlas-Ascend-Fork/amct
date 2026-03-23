@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb
 
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.utils.log import LOGGER
@@ -96,6 +95,7 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
         param:layer_name: name for node
         return:node_proto, onnx_pb.NodeProto
         """
+        from onnx import onnx_pb
         node_proto = onnx_pb.NodeProto()
         node_proto.name = layer_name
         node_proto.op_type = 'D4toD2'

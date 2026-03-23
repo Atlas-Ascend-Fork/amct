@@ -32,9 +32,8 @@ __all__ = [
     'create_distill_config', 'create_distill_model', 'distill', 'save_distill_model',
     'create_quant_cali_config', 'create_quant_cali_model',
     ]
-
 import os
-
+from amct_pytorch.utils.log import LOGGER
 from ..amct_pytorch.quantize_tool import create_quant_config
 from ..amct_pytorch.quantize_tool import quantize_preprocess
 from ..amct_pytorch.quantize_tool import quantize_model
