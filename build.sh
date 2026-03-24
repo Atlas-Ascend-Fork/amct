@@ -254,6 +254,9 @@ build_ut() {
 
   cd "${BUILD_PATH}" && cmake ${CMAKE_ARGS} ..
   cmake --build . --target ${UT_TARGETS[@]} -- ${VERBOSE} -j $THREAD_NUM
+  find "${BASEPATH}/" -name __pycache__ -exec rm -rf {} +
+  rm -rf ${BASEPATH}/tmp/
+  rm -rf ${BASEPATH}/tests/amct_pytorch/amct_log/
 }
 
 main() {
