@@ -15,16 +15,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from copy import deepcopy
 
 from torch import nn
 import torch
 import numpy as np
 
+from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 from ...amct_pytorch.custom_op.ifmr.ifmr import IFMR
 from ...amct_pytorch.custom_op.hfmg.hfmg import HFMG
 from ...amct_pytorch.custom_op.dump.dump import DUMP
 
 SCALE_D = 'scale_d'
+SCALE_H = 'scale_h'
 
 
 class CaliQuantBase(nn.Module):
@@ -70,6 +73,7 @@ class CaliQuantBase(nn.Module):
         self.mode = mode
         self.tensor_balance_factor = tensor_balance_factor
         self.fakequant_precision_mode = fakequant_precision_mode
+        self.module_type = type(sub_module).__name__
 
         self.cur_batch = 0
 
@@ -78,14 +82,19 @@ class CaliQuantBase(nn.Module):
 
         self.scale_d = None
 
-    def forward(self, inputs):
+    def forward(self, inputs, hx=None):
         """
         Function: IFMR / HFMG foward funtion.
 
         Args:
         inputs: data used for calibration in torch.tensor.
         """
+        if hx is None and self.module_type in RNN_LAYER_TYPE:
+            raise ValueError(f"hx is necessary input params of RNN op {self.module_type}")
+        if hx is not None and self.module_type not in RNN_LAYER_TYPE:
+            raise ValueError(f"hx is invalid input params of op {self.module_type}")
         # step 0. cali / dump / cali_dump
+        h_inputs = None
         with torch.no_grad():
             if 'dump' in self.mode and self.dump_config is not None:
                 # directly pass the inputs.
@@ -96,7 +105,12 @@ class CaliQuantBase(nn.Module):
                 inputs = inputs.cpu()
                 inputs = inputs / self.tensor_balance_factor
                 inputs = inputs.to(dtype=input_dtype).to(device)
-            sub_out = self.sub_module(inputs)
+            if self.module_type in RNN_LAYER_TYPE:
+                sub_out = self.sub_module(inputs, hx)
+                h0 = hx if self.module_type == "GRU" else hx[0]
+                h_inputs = torch.cat((h0, sub_out[0][:, :-1, :]), dim=1)
+            else:
+                sub_out = self.sub_module(inputs)
 
             if 'cali' not in self.mode:
                 return sub_out
@@ -104,11 +118,11 @@ class CaliQuantBase(nn.Module):
             # step 1. ifmr / hfmg
             self.cur_batch += 1
             if self.cur_batch <= self.cali_algo_param.get('batch_num'):
-                self.cali_process(inputs)
+                self.cali_process(inputs, h_inputs)
 
             return sub_out
 
-    def cali_process(self, inputs):
+    def cali_process(self, inputs, hx=None):
         """
         Function: data cali process.
 
@@ -123,12 +137,20 @@ class CaliQuantBase(nn.Module):
         self.scale_d = scale_d
         if self.fakequant_precision_mode == 'FORCE_FP16_QUANT':
             self.record_module.fakequant_precision_mode = 'FORCE_FP16_QUANT'
+        if hx is not None:
+            quant_info_h = self.cali_quant_module_h.forward(hx)
+            scale_h = quant_info_h.scale[0]
+            offset_h = quant_info_h.offset[0]
+            self.scale_h = scale_h
         if calibration_flag:
-            # save scale_d and offset_d to record_module
-            self.record_module(self.layers_name, self.cali_algo_name,
-                               {SCALE_D: scale_d.cpu().tolist(),
-                                'offset_d': int(offset_d.cpu().tolist()),
-                                'num_bits': self.cali_algo_param['num_bits']})
+            # save scale_d offset_d scale_h and offset_h to record_module
+            records = {SCALE_D: scale_d.cpu().tolist(),
+                'offset_d': int(offset_d.cpu().tolist()),
+                'num_bits': self.cali_algo_param['num_bits']}
+            if hx is not None:
+                records[SCALE_H] = scale_h.cpu().tolist()
+                records['offset_h'] = int(offset_h.cpu().tolist())
+            self.record_module(self.layers_name, self.cali_algo_name, records)
 
     def _init_dump_mode(self):
         """
@@ -204,6 +226,7 @@ class CaliQuant(CaliQuantBase):
         self.cali_algo_param['search_step'] = search_step
         # IFMR module init.
         self.cali_quant_module = IFMR(**self.cali_algo_param)
+        self.cali_quant_module_h = IFMR(**self.cali_algo_param)
         # algo name and search name
         self.cali_algo_name = 'ifmr'
 
@@ -247,5 +270,6 @@ class CaliQuantHfmg(CaliQuantBase):
         self.cali_algo_param['nbins'] = nbins
         # HFMG module init.
         self.cali_quant_module = HFMG(**self.cali_algo_param)
+        self.cali_quant_module_h = HFMG(**self.cali_algo_param)
         # algo name and search name
         self.cali_algo_name = 'hfmg'

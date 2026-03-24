@@ -37,10 +37,35 @@ class TestRNNRetrainQuant(unittest.TestCase):
             os.makedirs(cls.temp_folder)
 
         cls.module = torch.nn.LSTM(10, 20, 1, batch_first=True)
+        cls.gru_module = torch.nn.GRU(10, 20, 1, batch_first=True)
         cls.input = torch.randn(1, 1, 10)
         cls.h0 = torch.randn(1, 1, 20)
         cls.c0 = torch.randn(1, 1, 20)
+        cls.set_config()
 
+        # lstm
+        cls.quant_module = CompModuleRNN(**cls.comp_args)
+        cls.quant_module.comp_algs.append('quant')
+        cls.record_file = os.path.join(cls.temp_folder, 'record.txt')
+        if not os.path.exists(cls.record_file):
+            with open(cls.record_file, 'w') as f:
+                f.write('')
+        cls.record_module = Recorder(cls.record_file)
+        cls.retrain_quant = RNNRetrainQuant(cls.quant_module, cls.record_module)
+        
+        # gru
+        cls.quant_module_gru = CompModuleRNN(**cls.gru_comp_args)
+        cls.quant_module_gru.comp_algs.append('quant')
+        
+        cls.record_file_gru = os.path.join(cls.temp_folder, 'record_gru.txt')
+        if not os.path.exists(cls.record_file):
+            with open(cls.record_file_gru, 'w') as f:
+                f.write('')
+        cls.record_module_gru = Recorder(cls.record_file_gru)
+        cls.retrain_quant_gru = RNNRetrainQuant(cls.quant_module_gru, cls.record_module_gru)
+
+    @classmethod
+    def set_config(cls):
         cls.act_config = {
             'num_bits': 8,
             'clip_max': 1.0,
@@ -59,6 +84,14 @@ class TestRNNRetrainQuant(unittest.TestCase):
             'layers_name': ['lstm'],
             'batch_num': 1
         }
+        cls.gru_comp_common_config = {
+            'device': 'cpu',
+            'need_sync': False,
+            'process_group': None,
+            'world_size': 1,
+            'layers_name': ['lstm'],
+            'batch_num': 1
+        }
         cls.comp_args = {
             'module': cls.module,
             'act_config': cls.act_config,
@@ -66,23 +99,19 @@ class TestRNNRetrainQuant(unittest.TestCase):
             'common_config': cls.comp_common_config,
             'acts_comp_reuse': False
         }
-        cls.quant_module = CompModuleRNN(**cls.comp_args)
-        cls.quant_module.comp_algs.append('quant')
-
-        # recorder
-        cls.record_file = os.path.join(cls.temp_folder, 'record.txt')
-        if not os.path.exists(cls.record_file):
-            with open(cls.record_file, 'w') as f:
-                f.write('')
-        cls.record_module = Recorder(cls.record_file)
-
+        cls.gru_comp_args = {
+            'module': cls.gru_module,
+            'act_config': cls.act_config,
+            'wts_config': cls.wts_config,
+            'common_config': cls.gru_comp_common_config,
+            'acts_comp_reuse': False
+        }
         cls.common_config = {
             'data_num_bits': 8,
             'wts_num_bits': 8,
             'layers_name': ['lstm'],
             'batch_num': 1
         }
-        cls.retrain_quant = RNNRetrainQuant(cls.quant_module, cls.record_module)
 
     @classmethod
     def tearDownClass(cls):
@@ -104,6 +133,12 @@ class TestRNNRetrainQuant(unittest.TestCase):
 
     def test_forward_success(self):
         self.retrain_quant.forward(self.input, (self.h0, self.c0))
+        self.retrain_quant_gru.forward(self.input, self.h0)
+    
+    def test_forward_seq_n_success(self):
+        inputs = torch.randn(1, 10, 10)
+        self.retrain_quant.forward(inputs, (self.h0, self.c0))
+        self.retrain_quant_gru.forward(self.input, self.h0)
 
     def test_reorganize_rnn_quant_factor(self):
         quant_factor = np.array([0, 1, 2, 3])

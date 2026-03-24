@@ -51,22 +51,13 @@ class ActivationQuantizer(torch.nn.Module):
         A class for quantizing the activations. We only support (both sym. and asym.) per-token quantization
         for the activations.
     '''
-    def __init__(self, bits, sym=False, lac=False, groupsize=-1, clip_ratio=None, ):
+    def __init__(self, bits, sym=False, lac=False):
         super(ActivationQuantizer, self).__init__()
         self.bits = bits
         self.q_max, self.q_min = get_qmin_qmax(bits, sym)
         self.sym = sym
-        self.groupsize = groupsize
-        if self.groupsize > 0:
-            raise NotImplementedError("Not support per-group quantization for activation yet.")
+        self.clip_factor_a = torch.nn.Parameter(torch.ones((1, )), requires_grad=True)
         self.lac = lac
-        self._clip_ratio = clip_ratio
-        if self.lac:
-            init_value = 4.
-            self.sigmoid = torch.nn.Sigmoid()
-            self.clip_factor_a_max = torch.nn.Parameter(torch.ones((1, ))*init_value, requires_grad=True)
-            self.clip_factor_a_min = torch.nn.Parameter(torch.ones((1, ))*init_value, requires_grad=True)
-        
         self.enable = True
 
     def forward(self, x):
@@ -90,12 +81,10 @@ class ActivationQuantizer(torch.nn.Module):
         xmax, xmin = reshaped_x.amax(1, keepdim=True), reshaped_x.amin(1, keepdim=True)
         tmp = torch.zeros_like(xmax)
         xmax, xmin = torch.maximum(xmax, tmp), torch.minimum(xmin, tmp)
+
         if self.lac:
-            xmax = xmax * self.sigmoid(self.clip_factor_a_max)
-            xmin = xmin * self.sigmoid(self.clip_factor_a_min)
-        elif self._clip_ratio is not None:
-            xmax = xmax * self._clip_ratio
-            xmin = xmin * self._clip_ratio
+            xmax = xmax * self.clip_factor_a
+            xmin = xmin * self.clip_factor_a
         if self.sym:
             xmax = torch.maximum(torch.abs(xmin), xmax)
             tmp = xmax == 0
@@ -198,7 +187,6 @@ class WeightQuantizer(torch.nn.Module):
                     self.scale[tmp] = scale1[tmp]
                     self.zero[tmp] = zero1[tmp]
         if not self.perchannel:
-
             tmp = shape[0]
             self.scale = self.scale.repeat(tmp)
             self.zero = self.zero.repeat(tmp)

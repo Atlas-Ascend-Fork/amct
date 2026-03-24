@@ -28,6 +28,7 @@
 | :------------: |:------------------------------------------------------------------------------------------:|:----------------------------------------------------------| :---------------------------------------------------------- |:-----------------------------------------|
 |  依赖  | 不涉及  | cmake/protobuf.cmake | https://gitcode.com/cann-src-third-party/protobuf/releases/download/v3.13.0/protobuf-3.13.0.tar.gz | 从gitcode下载protobuf源码，作用编译依赖 |
 |  依赖  | 不涉及  | cmake/protobuf.cmake | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1/abseil-cpp-20230802.1.tar.gz | 从gitcode下载abseil源码，作用编译依赖 |
+|  依赖  | 不涉及  | cmake/makeself-fetch.cmake | https://gitcode.com/cann-src-third-party/makeself/releases/download/release-2.5.0-patch1.0/makeself-release-2.5.0-patch1.tar.gz | 从gitcode下载makeself源码，作用编译依赖 |
 ---
 
 ## 漏洞机制说明

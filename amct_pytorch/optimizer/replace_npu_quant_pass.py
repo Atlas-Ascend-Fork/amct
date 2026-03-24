@@ -69,7 +69,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             LOGGER.logd(f'{type(object_module)} do not need to invoke convert')
             return
 
-        if object_module.ori_module_type == 'Conv2d':
+        if hasattr(object_module, 'ori_module_type') and object_module.ori_module_type == 'Conv2d':
             npu_module = NpuQuantizationConv2d(object_module)
         elif type(object_module) in [MinMaxQuant, OfmrQuant]:
             if object_module.scale_d:
