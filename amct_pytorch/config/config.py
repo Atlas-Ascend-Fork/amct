@@ -163,3 +163,17 @@ HIFP8_CAST_CFG = {
     'algorithm': {'cast'},
     'skip_layers': {'lm_head'}
 }
+
+
+KVCACHE_QUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'kvcache': {
+            'type': 'hif8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'minmax'},
+    'skip_layers': {'lm_head'}
+}
