@@ -139,7 +139,7 @@ setuptools.setup(
     name='amct_pytorch',
     version=setup_tools.version,
     description='Ascend Model Compression Toolkit for PyTorch',
-    url='',
+    url='https://gitcode.com/cann/amct',
     packages=setup_tools.packages,
     classifiers=[
         'Development Status :: 5 - Production/Stable',
