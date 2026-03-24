@@ -29,7 +29,7 @@ tarfile.TarFile.format = tarfile.GNU_FORMAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 OP_TMP_DIR = 'amct_pytorch/graph_based_compression/custom_op/src/tmp'
-AMCT_LIB_DIR = os.path.join(CUR_DIR, "./build/amct_pytorch/graph_based_compression/custom_op")
+AMCT_LIB_DIR = os.path.join(CUR_DIR, "./amct_pytorch/graph_based_compression/amct_pytorch/custom_op")
 UTIL_OP_PATH = 'amct_pytorch/graph_based_compression/custom_op/src/util_op.cpp'
 SRC_FILES = [
              ['amct_pytorch/graph_based_compression/custom_op/src/cast_op.cpp',
@@ -123,8 +123,7 @@ class SetupTool(): # pylint: disable=R0903
                 # name same with name of amct_ops.py
                 name=name,
                 sources=src_file,
-                include_dirs=[os.path.join(CUR_DIR, 'amct_pytorch/graph_based_compression/custom_op/inc/'),
-                    os.path.join(CUR_DIR, 'amct_pytorch/graph_based_compression/common_cpp/quantize_lib/inc')],
+                include_dirs=[os.path.join(CUR_DIR, 'amct_pytorch/graph_based_compression/custom_op/inc/')],
                 extra_compile_args=extra_compile_args,
                 libraries=['quant_lib'],
                 library_dirs=[AMCT_LIB_DIR]) for name, src_file in modules_set
