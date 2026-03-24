@@ -464,12 +464,12 @@ class GraphChecker():
         if node.type not in INT16_QUANTIZABLE_ONNX_TYPES:
             return False
         if node.type in ['Conv']:
-            # only conv2d and conv1d support int16
-            if not check_kernel_shape(node, [1, 2]):
+            # only conv2d support int16
+            if not check_kernel_shape(node, [2]):
                 return False
         elif node.type in ['ConvTranspose']:
-            # convtranspose1d and convtranspose2d support int16
-            if not check_kernel_shape(node, [1, 2]):
+            # convtranspose2d support int16
+            if not check_kernel_shape(node, [2]):
                 return False
 
         return GraphChecker.check_graph_shared_type(node)
@@ -480,12 +480,12 @@ class GraphChecker():
         Function: check common, if node in graph can be quant / retrain.
         """
         if node.type in ['Conv']:
-            # conv1d & conv2d & conv3d
-            if not check_kernel_shape(node, [1, 2, 3]):
+            # conv2d & conv3d
+            if not check_kernel_shape(node, [2, 3]):
                 return False
         elif node.type in ['ConvTranspose']:
-            # convtranspose1d & convtranspose2d & convtranspose3d
-            if not check_kernel_shape(node, [1, 2, 3]):
+            # convtranspose2d & convtranspose3d
+            if not check_kernel_shape(node, [2, 3]):
                 return False
         elif node.type == 'LSTM':
             if not check_lstm_limit(node):
