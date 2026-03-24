@@ -76,7 +76,6 @@ message FMRQuantize {
 
     enum CalibrationDataType {
         INT8 = 1;
-        INT16 = 2;
     }
     optional CalibrationDataType dst_type = 10 [default = INT8];
 }
@@ -89,7 +88,6 @@ message HFMGQuantize {
 
     enum CalibrationDataType {
         INT8 = 1;
-        INT16 = 2;
     }
     optional CalibrationDataType dst_type = 10 [default = INT8];
 }
