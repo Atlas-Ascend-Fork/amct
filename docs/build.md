@@ -80,6 +80,13 @@ bash build.sh --pkg
 
 利用tests路径下的测试用例进行本地验证：
 
+- 安装依赖
+
+  ```bash
+  # 安装测试框架依赖 
+  pip3 install coverage
+  ```
+
 - 执行测试用例：
 
   ```bash
