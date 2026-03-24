@@ -106,6 +106,8 @@ bash build.sh --pkg
   cd amct_pytorch && pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user
   ```
 
+**注意：** 
+
 - 卸载
 
   ```bash
