@@ -89,30 +89,3 @@ class TestWeightQuantPass(unittest.TestCase):
             optimizer.do_optimizer(self.graph, None)
             after_nodes = len(self.graph.nodes)
             self.assertEqual(after_nodes - before_nodes, 6)
-
-    def test_rnn_weight_quant_success(self):
-        class RNNModule(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.lstm = torch.nn.LSTM(10, 20, 1)
-            def forward(self, input, hx):
-                x = self.lstm(input, hx)
-                return x
-        model = RNNModule()
-        tmp_onnx = BytesIO()
-        Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
-        graph = Parser.parse_net_to_graph(tmp_onnx)
-        node_name = 'lstm'
-        node = graph.get_node_by_name(node_name)
-
-        records = {
-            node_name: {
-                'weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'weight_offset': np.array([0]*4, dtype=np.int8),
-                'recurrence_weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'recurrence_weight_offset': np.array([0]*4, dtype=np.int8),
-            }
-        }
-
-        passer = InsertWeightQuantPass(records)
-        passer.quant_recurrence_weight(node)

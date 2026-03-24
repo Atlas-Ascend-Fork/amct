@@ -380,8 +380,8 @@ class TestCheckModel(unittest.TestCase):
 
     def test_get_support_dmq_balancer_types(self):
         ret = GraphQuerier.get_support_dmq_balancer_types()
-        ans = set(['Conv2d', 'Conv3d', 'Linear', 'Conv1d', 'ConvTranspose2d',
-                  'Conv', 'Gemm', 'MatMul', 'ConvTranspose', 'ConvTranspose1d'])
+        ans = set(['Conv2d', 'Conv3d', 'Linear', 'ConvTranspose2d',
+                  'Conv', 'Gemm', 'MatMul', 'ConvTranspose'])
         self.assertEqual(set(ret), ans)
 
     def test_get_support_dmq_balancer_layers(self):

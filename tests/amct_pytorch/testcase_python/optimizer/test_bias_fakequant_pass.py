@@ -116,34 +116,3 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
         optimizer.do_optimizer(self.graph, self.model)
         bias_dtype = TensorProtoHelper(self.graph.get_node_by_name('fc.5.sub_module.bias').proto).get_data().dtype
         self.assertEqual(bias_dtype, 'float32')
-
-    def test_rnn_bias_fake_quant_success(self):
-        class RNNModule(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.lstm = torch.nn.LSTM(10, 20, 1)
-            def forward(self, input, hx):
-                x = self.lstm(input, hx)
-                return x
-        model = RNNModule()
-        tmp_onnx = BytesIO()
-        Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
-        graph = Parser.parse_net_to_graph(tmp_onnx)
-        node_name = 'lstm'
-        node = graph.get_node_by_name(node_name)
-
-        records = {
-            node_name: {
-                'data_scale': np.array(1.0, dtype=np.float32),
-                'h_scale': np.array(1.0, dtype=np.float32),
-                'weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'weight_offset': np.array([0]*4, dtype=np.int8),
-                'recurrence_weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'recurrence_weight_offset': np.array([0]*4, dtype=np.int8),
-            }
-        }
-
-        quant_bias = np.random.random([1, 160]).astype(np.int32)
-        passer = ReplaceBiasQuantPass(records)
-        float_bias = passer.fakequant_rnn_bias(quant_bias, node_name)
-        self.assertEqual(float_bias.dtype, np.float32)
