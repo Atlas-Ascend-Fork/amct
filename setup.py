@@ -151,9 +151,7 @@ setuptools.setup(
     ],
     author='Huawei Technologies Co., Ltd.',
     license='Apache 2.0',
-    extras_require={
-        "pytorch": ["1.5"]
-    },
+
     package_data={
         '': ['.version'],
         'amct_pytorch.graph_based_compression': ['amct_pytorch/proto/*.proto',
