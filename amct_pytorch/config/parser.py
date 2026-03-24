@@ -144,6 +144,8 @@ def get_supported_layers(model, quant_config, registed_alg):
     '''get supported layers based on quant config and registed algorithm'''
     algos = quant_config.algorithm.names
     layer_types = dict()
+    is_kvcache = hasattr(quant_config.quant_cfg, 'kvcache_cfg') and quant_config.quant_cfg.kvcache_cfg is not None
+    quant_type_comb = 'NOT_QUANTIZE NOT_QUANTIZE'
     for algo in algos:
         src_ops = registed_alg.algo.get(algo).keys()
         for src_op in src_ops:
@@ -151,10 +153,13 @@ def get_supported_layers(model, quant_config, registed_alg):
         if algo not in BUILT_IN_ALGORITHM:
             LOGGER.logd("Customized Algorithm {} is used fot quant".format(algo))
         else:
-            act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
-                        quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
-            wts_type = quant_config.quant_cfg.weights_cfg.quant_type
-            quant_type_comb = act_type + ' ' + wts_type
+            if is_kvcache:
+                quant_type_comb = 'NOT_QUANTIZE NOT_QUANTIZE'
+            else:
+                act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
+                            quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
+                wts_type = quant_config.quant_cfg.weights_cfg.quant_type
+                quant_type_comb = act_type + ' ' + wts_type
             check_config(quant_type_comb, quant_config, algo)
 
     detail_config = dict()
@@ -170,12 +175,14 @@ def get_supported_layers(model, quant_config, registed_alg):
             continue
         algo = layer_types[type(mod).__name__]
         if algo in BUILT_IN_ALGORITHM:
-            if hasattr(mod, 'weight') and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
+            if is_kvcache:
+                pass
+            elif hasattr(mod, 'weight') and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
                 LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} only support ori dtype {} '
                 'but got {}'.format(name, quant_type_comb, ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
                 mod.weight.dtype))
                 continue
-            if not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
+            elif not is_kvcache and not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
                 continue
         # each module can only be assigned one algorithm
         detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} 

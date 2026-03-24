@@ -128,16 +128,47 @@ class InputsCfgField():
             raise ValueError(f'Inputs strategy token do not support asymmetric quantization')
 
 
+class KvcacheCfgField():
+    def __init__(self, config):
+        self.quant_type = config.get('type')
+        self.symmetric = config.get('symmetric')
+        self.strategy = config.get('strategy')
+        self.check()
+        self.value = self.set_value()
+    
+    def set_value(self):
+        return {'quant_type': self.quant_type,
+                'symmetric': self.symmetric,
+                'strategy': self.strategy}
+    
+    def get_value(self):
+        return self.value
+
+    def check(self):
+        if self.quant_type not in ['hif8', 'int8']:
+            raise ValueError(f'Kvcache quant_dtype only support hif8, int8, but got {self.quant_type}')
+        if self.symmetric not in [True, False]:
+            raise ValueError(f'Kvcache symmetric only support bool [True, False], but got {self.symmetric}')
+        if self.strategy not in ['tensor']:
+            raise ValueError(f'Kvcache strategy only support tensor, but got {self.strategy}')
+
+
 class QuantCfgField():
     def __init__(self, config):
         self.weights_cfg = WeightsCfgField(config.get('weights', {}))
         self.inputs_cfg = InputsCfgField(config.get('inputs', {'enable_quant': False}))
+        self.kvcache_cfg = None
+        if 'kvcache' in config:
+            self.kvcache_cfg = KvcacheCfgField(config.get('kvcache'))
         
         self.value = self.set_value()
     
     def set_value(self):
-        return {'weights_cfg': self.weights_cfg.get_value(),
-                'inputs_cfg': self.inputs_cfg.get_value()}
+        result = {'weights_cfg': self.weights_cfg.get_value(),
+                  'inputs_cfg': self.inputs_cfg.get_value()}
+        if self.kvcache_cfg is not None:
+            result['kvcache_cfg'] = self.kvcache_cfg.get_value()
+        return result
     
     def get_value(self):
         return self.value
