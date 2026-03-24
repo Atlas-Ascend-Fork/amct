@@ -48,17 +48,19 @@
    source ${install_path}/cann/set_env.sh
    ```
 
-6. **安装后配置**
-   CANN包安装完成后，需安装业务运行时依赖的Python第三方库（如果使用root用户安装，请将命令中的--user删除）。
-   ```bash
-   pip3 install attrs cython 'numpy>=1.19.2,<=1.24.0' decorator sympy cffi pyyaml pathlib2 psutil protobuf==3.20.0 scipy requests absl-py --user
-   ```
 
-7. **源码下载**
+6. **源码下载**
 
    ```bash
    # 下载项目源码，以master分支为例 
    git clone https://gitcode.com/cann/amct.git 
+   ```
+
+
+7. **安装依赖**
+   需安装业务运行时依赖的Python第三方库。
+   ```bash
+   pip3 install -r requirements.txt
    ```
 
 ## 编译执行
@@ -77,13 +79,6 @@ bash build.sh --pkg
 ## 本地验证
 
 利用tests路径下的测试用例进行本地验证：
-
-- 安装依赖
-
-  ```bash
-  # 安装测试目录requirements.txt依赖 
-  cd tests && pip3 install -r requirements.txt
-  ```
 
 - 执行测试用例：
 
