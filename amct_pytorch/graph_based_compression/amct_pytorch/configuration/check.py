@@ -464,12 +464,12 @@ class GraphChecker():
         if node.type not in INT16_QUANTIZABLE_ONNX_TYPES:
             return False
         if node.type in ['Conv']:
-            # only conv2d and conv1d support int16
-            if not check_kernel_shape(node, [1, 2]):
+            # only conv2dupport int16
+            if not check_kernel_shape(node, [2]):
                 return False
         elif node.type in ['ConvTranspose']:
-            # convtranspose1d and convtranspose2d support int16
-            if not check_kernel_shape(node, [1, 2]):
+            # convtranspose2d support int16
+            if not check_kernel_shape(node, [2]):
                 return False
 
         return GraphChecker.check_graph_shared_type(node)
