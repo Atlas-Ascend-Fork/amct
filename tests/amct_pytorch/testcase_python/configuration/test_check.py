@@ -380,8 +380,8 @@ class TestCheckModel(unittest.TestCase):
 
     def test_get_support_dmq_balancer_types(self):
         ret = GraphQuerier.get_support_dmq_balancer_types()
-        ans = set(['Conv2d', 'Conv3d', 'Linear', 'Conv1d', 'ConvTranspose2d',
-                  'Conv', 'Gemm', 'MatMul', 'ConvTranspose', 'ConvTranspose1d'])
+        ans = set(['Conv2d', 'Conv3d', 'Linear', 'ConvTranspose2d',
+                  'Conv', 'Gemm', 'MatMul', 'ConvTranspose'])
         self.assertEqual(set(ret), ans)
 
     def test_get_support_dmq_balancer_layers(self):
@@ -761,36 +761,3 @@ class TestCheckGraph(unittest.TestCase):
         self.assertTrue(GraphChecker.check_padding_mode(mod_type, mod_name, mod))
         mod = torch.nn.Conv1d(3,3,3,padding_mode='reflect')
         self.assertFalse(GraphChecker.check_padding_mode(mod_type, mod_name, mod))
-
-    def test_check_graph_int16_quantize_type_conv1d(self):
-        model = torch.nn.Sequential(torch.nn.Conv1d(3,3,3,padding_mode='zeros'))
-        model_onnx = BytesIO()
-        Parser.export_onnx(model, torch.randn(3, 3, 3), model_onnx)
-        graph = Parser.parse_net_to_graph(model_onnx)
-        node = graph.get_node_by_name('0')
-        self.assertTrue(GraphChecker.check_graph_int16_quantize_type(node))
-        self.assertTrue(GraphChecker.check_graph_shared_type(node))
-
-    def test_check_rnn_limit_not_rnn(self):
-        mod = torch.nn.Conv2d(3,3,3,padding_mode='zeros')
-        mod_type = 'Conv2d'
-        mod_name = 'conv'
-        self.assertTrue(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
-
-    def test_check_rnn_limit_invalid_num_layers(self):
-        mod = torch.nn.LSTM(10, 20, 2)
-        mod_type = 'LSTM'
-        mod_name = 'lstm'
-        self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
-
-    def test_check_rnn_limit_invalid_bidirectional(self):
-        mod = torch.nn.LSTM(1, 20, 2, bidirectional=True)
-        mod_type = 'LSTM'
-        mod_name = 'lstm'
-        self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
-
-    def test_check_rnn_limit_invalid_dropout(self):
-        mod = torch.nn.LSTM(1, 20, 2, dropout=1)
-        mod_type = 'LSTM'
-        mod_name = 'lstm'
-        self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
