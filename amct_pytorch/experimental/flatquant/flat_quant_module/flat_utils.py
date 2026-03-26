@@ -4,6 +4,7 @@ import logging
 
 from .function_utils import get_paras_dict_by_name
 
+
 def kronecker_matmul(x, hadL, hadR):
     """equivalent to
     
@@ -28,24 +29,30 @@ def reparameterize_ln(ln, trans):
 
 
 def save_flat_matrices(model, matrices_path):
+    from .default_model_utils import FlatQuantAttention, FlatQuantMLP
     flat_matrices = {}
     for i in range(len(model.model.layers)):
         layer = model.model.layers[i]
-        layer.self_attn.rep_matrix_only()
-        layer.mlp.rep_matrix_only()
-        paras_name = ["trans.matrix", "trans.diag_scale", "clip_factor_w", "clip_factor_a"]
-        flat_matrices[i] = get_paras_dict_by_name(layer, required_names=paras_name)
+        if isinstance(layer.self_attn, FlatQuantAttention) and isinstance(layer.mlp, FlatQuantMLP):
+            layer.self_attn.rep_matrix_only()
+            layer.mlp.rep_matrix_only()
+            paras_name = ["trans.matrix", "trans.diag_scale", "clip_factor_w", "clip_factor_a"]
+            flat_matrices[i] = get_paras_dict_by_name(layer, required_names=paras_name)
     torch.save(flat_matrices, matrices_path)
     logging.info("saved paramaters at {}".format(matrices_path))
 
 
 def load_flat_matrices(model, matrix_path):
+    from .default_model_utils import FlatQuantAttention, FlatQuantMLP
     flat_parameters = torch.load(matrix_path)
     layers = model.model.layers
     
     for i in range(len(flat_parameters.keys())):
-        flat_param = flat_parameters[i]
-        layers[i].self_attn.rep_matrix_only()
-        layers[i].mlp.rep_matrix_only()
-        layers[i].load_state_dict(flat_param, strict=False)
+        if isinstance(layers[i].self_attn, FlatQuantAttention) and isinstance(layers[i].mlp, FlatQuantMLP):
+            flat_param = flat_parameters[i]
+            layers[i].self_attn.rep_matrix_only()
+            layers[i].mlp.rep_matrix_only()
+            layers[i].load_state_dict(flat_param, strict=False)
+        else:
+            print(f'not flatquant layer {i}')
     return model

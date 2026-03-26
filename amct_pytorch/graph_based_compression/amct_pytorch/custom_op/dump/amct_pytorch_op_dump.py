@@ -18,7 +18,6 @@
 import os
 import importlib.util
 import sys
-import pkg_resources
 from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import PLATFORM
 from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import OP_PY
 
@@ -29,8 +28,9 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 def __bootstrap():
     name = 'amct_pytorch_op_dump'
     lib_name = '../../../../../{}.cpython-{}-{}-linux-gnu.so'.format(name, OP_PY, PLATFORM)
-    files = pkg_resources.resource_filename(__name__, lib_name)
-    spec = importlib.util.spec_from_file_location(__name__, files)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    lib_abs_path = os.path.abspath(os.path.join(current_dir, lib_name))
+    spec = importlib.util.spec_from_file_location(__name__, lib_abs_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[__name__] = module
     spec.loader.exec_module(module)
