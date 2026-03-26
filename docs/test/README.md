@@ -16,3 +16,36 @@
 1. 用户首先构造PyTorch的原始模型（请确保原始模型可以正常推理）和量化配置，然后调用[quantize](./api/quantize.md)接口对原始模型进行修改，生成量化校准模型；修改过程中，使用的数据类别不同，量化算法不同。
 
 2. 用户调用[convert](./api/convert.md)接口，将量化校准算子转换为NPU对应的量化部署算子，并输出量化部署模型（类型为torch.nn.Module）。
+
+## 调用示例
+
+以下是关键步骤的代码示例，不能直接拷贝编译运行，仅供参考。
+
+```python
+# 1.导入AMCT包
+import amct_pytorch as amct
+
+# 2.调用AMCT，量化模型
+# 2.1 生成量化校准模型
+# 建立待进行量化的网络图结构
+ori_model = build_model()
+model = copy.deepcopy(ori_model)
+# 量化配置
+cfg = {
+        'batch_num': 1,
+        'quant_cfg': {
+            'weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor',
+            },
+        },
+        'algorithm': {'minmax'},
+      }
+# 调用量化接口生成量化校准模型
+amct.quantize(model, cfg)
+
+# 2.2 生成量化部署模型
+# 调用接口将量化校准模型转换为量化部署模型
+amct.convert(model)
+```
