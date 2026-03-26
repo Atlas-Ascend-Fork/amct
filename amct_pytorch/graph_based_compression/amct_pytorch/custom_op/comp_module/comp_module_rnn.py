@@ -81,7 +81,8 @@ class CompModuleRNN(nn.Module):
         current_state = None
         for i in range(0, self.sequence_length):
             h_next = quant_dequant_tensor(h_next, self.acts_h_scale, self.acts_h_offset, num_bits)
-            xi = inputs[:, i, :]
+            xi = inputs[:, i, :] if self.replaced_module.batch_first else inputs[i, :, :]
+            xi = quant_dequant_tensor(xi, self.acts_scale, self.acts_offset, num_bits)
             if module_type == "GRU":
                 h_next = rnn_cell(xi, h_next)
                 output_cell.append(h_next)
@@ -219,7 +220,7 @@ class CompModuleRNN(nn.Module):
             initial_h = hx # 1, B, H
         
         if self.sequence_length > 1:
-            h_out, _ = self.comp_module(inputs, hx) 
+            h_out, _ = self.comp_module(quant_inputs, hx) 
             if self.replaced_module.batch_first:
                 h_out = h_out.permute(1, 0, 2) # B, T, H -> T, B, H
             initial_h = torch.cat((initial_h, h_out[:-1, :, :]), dim=0)
