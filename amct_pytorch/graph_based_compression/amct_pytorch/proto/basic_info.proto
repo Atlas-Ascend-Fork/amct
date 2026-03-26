@@ -11,7 +11,7 @@ message AutoMixedPrecisionConfig {
 }
 
 message AutoChannelPruneConfig {
-  required float compress_ratio = 1;
+required float compress_ratio = 1;
   optional bool ascend_optimized = 2 [default = true];
   optional float max_prune_ratio = 3 [default = 1.0];
   optional int64 test_iteration = 4 [default = 1];

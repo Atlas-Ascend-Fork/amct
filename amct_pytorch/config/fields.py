@@ -314,6 +314,26 @@ class SkipLayersField():
                 raise ValueError(f'Skip layers must be str')
 
 
+class OverrideLayerConfigsField():
+    def __init__(self, override_configs):
+        self.override_configs = override_configs if override_configs else {}
+        self.check()
+        self.value = self.set_value()
+    
+    def set_value(self):
+        return {'override_layer_configs': self.override_configs}
+    
+    def get_value(self):
+        return self.value
+
+    def check(self):
+        for layer_name, config in self.override_configs.items():
+            if not isinstance(layer_name, str):
+                raise ValueError(f'Override layer name must be str, got {type(layer_name)}')
+            if not isinstance(config, dict):
+                raise ValueError(f'Override config for layer {layer_name} must be dict, got {type(config)}')
+
+
 
 class QuantConfig:
     def __init__(self, config, registed_alg):
@@ -321,3 +341,4 @@ class QuantConfig:
         self.quant_cfg = QuantCfgField(config.get('quant_cfg', {}))
         self.algorithm = AlgorithmField(config.get('algorithm', {}), registed_alg)
         self.skip_layers = SkipLayersField(config.get('skip_layers', []))
+        self.override_layer_configs = OverrideLayerConfigsField(config.get('override_layer_configs', {}))
