@@ -16,3 +16,36 @@ The blue part is implemented by the user, and the gray part is implemented by th
 1. The user first constructs the original PyTorch model (please ensure that the original model can perform normal inference) and quantization configuration, then calls the [quantize](../api/quantize.md) interface to modify the original model and generate a quantized calibration model. During the modification process, different data categories are used and different quantization algorithms are applied.
 
 2. The user calls the [convert](../api/convert.md) interface to convert the quantized calibration operators to the corresponding NPU quantized deployment operators, and outputs the quantized deployment model (type is torch.nn.Module).
+
+## Call Example
+
+The following is a code example of key steps, which cannot be directly copied, compiled and run, and is for reference only.
+
+```python
+# 1. Import AMCT package
+import amct_pytorch as amct
+
+# 2. Call AMCT to quantize the model
+# 2.1 Generate quantized calibration model
+# Build the network graph structure to be quantized
+ori_model = build_model()
+model = copy.deepcopy(ori_model)
+# Quantization configuration
+cfg = {
+        'batch_num': 1,
+        'quant_cfg': {
+            'weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor',
+            },
+        },
+        'algorithm': {'minmax'},
+      }
+# Call the quantization interface to generate the quantized calibration model
+amct.quantize(model, cfg)
+
+# 2.2 Generate quantized deployment model
+# Call the interface to convert the quantized calibration model to the quantized deployment model
+amct.convert(model)
+```
