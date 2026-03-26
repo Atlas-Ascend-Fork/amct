@@ -19,7 +19,20 @@ Taking PyTorch 2.7.1 as an example, install the Python third-party libraries req
 pip3 install -r requirements.txt
 ```
 
-### Software Installation
+### Method 1: Install Using WebIDE
+
+For users without an environment, you can directly use the WebIDE development platform, which is the "**One-stop Operator Development Platform**". This platform provides you with an online Ascend environment that can run directly, with essential software packages already installed, so no manual installation is required. For more information about the development platform, please refer to [LINK](https://gitcode.com/org/cann/discussions/54).
+
+1. Enter the open source project and click the "`Cloud Development`" button to log in with your authenticated Huawei Cloud account. If you have not registered or authenticated, please follow the page prompts to register and authenticate.
+
+   <img src="./figures/cloudIDE.png" alt="Cloud Platform"  width="750px" height="90px">
+
+2. Create and start the cloud development environment according to the page prompts, click "`Connect > WebIDE`" to enter the one-stop operator development platform. The open source project resources are located in the `/mnt/workspace` directory by default.
+
+   <img src="./figures/webIDE.png" alt="Cloud Platform"  width="1000px" height="150px">
+
+
+### Method 2: Manually Install Software Packages
 
 1. **Install Drivers and Firmware**
 
