@@ -163,3 +163,145 @@ HIFP8_CAST_CFG = {
     'algorithm': {'cast'},
     'skip_layers': {'lm_head'}
 }
+
+
+HIFP8_PERCENTILE_WEIGHT_ONLY_TENSOR_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
+
+
+HIFP8_PERCENTILE_WEIGHT_ONLY_CHANNEL_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
+
+
+HIFP8_PERCENTILE_ACT_TENSOR_WEIGHT_TENSOR_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
+
+
+HIFP8_PERCENTILE_ACT_TENSOR_WEIGHT_CHANNEL_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
+
+
+HIFP8_PERCENTILE_ACT_TOKEN_STATIC_WEIGHT_TENSOR_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'token',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
+
+
+HIFP8_PERCENTILE_ACT_TOKEN_STATIC_WEIGHT_CHANNEL_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'token',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
+
+
+HIFP8_PERCENTILE_ACT_TOKEN_DYNAMIC_WEIGHT_TENSOR_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'token',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
+
+
+HIFP8_PERCENTILE_ACT_TOKEN_DYNAMIC_WEIGHT_CHANNEL_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'token',
+        },
+    },
+    'algorithm': {'percentile'},
+    'skip_layers': {'lm_head'}
+}
