@@ -44,17 +44,17 @@ GROUP_SIZE_SUPPORTED_MAP = {
 }
 
 ALGORITHM_SUPPORTED_QUANT_TYPE_COMB = {
-    'int8 int8': ['minmax', 'smoothquant'],
-    'NOT_QUANTIZE int8': ['minmax', 'awq', 'gptq'],
-    'NOT_QUANTIZE int4': ['minmax', 'awq', 'gptq'],
-    'hifloat8 hifloat8': ['ofmr', 'cast'],
-    'float8_e4m3fn float8_e4m3fn': ['ofmr'],
+    'int8 int8': ['minmax', 'smoothquant', 'quantile'],
+    'NOT_QUANTIZE int8': ['minmax', 'awq', 'gptq', 'quantile'],
+    'NOT_QUANTIZE int4': ['minmax', 'awq', 'gptq', 'quantile'],
+    'hifloat8 hifloat8': ['ofmr', 'cast', 'quantile'],
+    'float8_e4m3fn float8_e4m3fn': ['ofmr', 'quantile'],
     'mxfp8_e4m3fn mxfp8_e4m3fn': ['mxquant'],
-    'float8_e4m3fn float4_e2m1': ['minmax', 'smoothquant'],
-    'NOT_QUANTIZE hifloat8': ['ofmr', 'gptq', 'cast'],
-    'NOT_QUANTIZE float8_e4m3fn': ['ofmr', 'gptq'],
+    'float8_e4m3fn float4_e2m1': ['minmax', 'smoothquant', 'quantile'],
+    'NOT_QUANTIZE hifloat8': ['ofmr', 'gptq', 'cast', 'quantile'],
+    'NOT_QUANTIZE float8_e4m3fn': ['ofmr', 'gptq', 'quantile'],
     'NOT_QUANTIZE mxfp4_e2m1': ['awq', 'gptq', 'mxquant'],
-    'NOT_QUANTIZE float4_e2m1': ['minmax', 'awq', 'gptq'],
+    'NOT_QUANTIZE float4_e2m1': ['minmax', 'awq', 'gptq', 'quantile'],
 }
 
 ALLOWED_WEIGHT_DTYPES = {
