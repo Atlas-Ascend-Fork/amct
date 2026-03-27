@@ -36,6 +36,7 @@ class BuildExtensionAcc(cpp_extension.BuildExtension):
             self.parallel = num_jobs
         super().build_extensions()
 
+
 def setup():
     extra_compile_args = ['-fopenmp', '-O3']
     extra_link_args = ['-fopenmp']
