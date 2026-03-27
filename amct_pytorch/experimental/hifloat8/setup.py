@@ -22,6 +22,7 @@ import setuptools
 import torch
 from torch.utils import cpp_extension
 
+
 class BuildExtensionAcc(cpp_extension.BuildExtension):
     '''set parallel of BuildExtension to accelerate '''
     def __init__(self, *args, **kwargs):

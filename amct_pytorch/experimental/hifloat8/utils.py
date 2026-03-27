@@ -5,24 +5,23 @@ import torch.nn as nn
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-import amct_pytorch as amct
 
 def get_qwen(model_path, seqlen=2048):
     print(f'Getting official pretrained {model_path}')
-
     model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.float16)
-    
     model.seqlen = seqlen
     tokenizer = AutoTokenizer.from_pretrained(
             model_path, use_fast=False, trust_remote_code=True
     )
     return model, tokenizer
 
+
 def get_test_dataset(enc):
     print('Loading dataset: Wikitext2')
     testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
     testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
     return testenc
+
 
 def test_ppl(model, testenc):
     nlls = []

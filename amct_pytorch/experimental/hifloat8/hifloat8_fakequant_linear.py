@@ -19,9 +19,10 @@ import torch.nn.functional as F
 
 try:
     import hifloat8_cast
-except:
-    print(f'no module named "hifloat8_cast", please install it in advance')
+except ImportError as e:
+    print(f'{e}, please check it')
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
+
 
 class Hifloat8FakequantLinear(BaseQuantizeModule):
     '''
