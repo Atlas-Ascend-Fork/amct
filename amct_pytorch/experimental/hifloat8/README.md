@@ -94,9 +94,9 @@ amct.algorithm_register('hifloat8_fakequant', 'Linear', Hifloat8FakequantLinear,
 4. **数据集加载**：加载 Wikitext-2 测试数据集
 5. **性能评估**：计算量化后模型的困惑度
 
-## 5、完整使用流程
+### 5、完整使用流程
 
-### 5.1 准备环境
+#### 5.1 准备环境
 1. 安装amct工具，参考[工具构建](../../../docs/build.md)
 2. 安装其他依赖
 ```bash
@@ -108,7 +108,7 @@ cd amct_pytorch/experimental/hifloat8
 ./build.sh
 ```
 
-### 5.2 运行测试
+#### 5.2 运行测试
 ```bash
 # 运行测试脚本
 python test.py --model_path /path/to/qwen/model
