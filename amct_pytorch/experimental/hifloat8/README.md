@@ -4,14 +4,17 @@
 
 ## 文件说明
 
-- `hifloat8_cast.cpp` - HiFloat8 与 FP32/FP16/BF16 格式转换的 C++ 实现
-- `setup.py` - Python 编译脚本
-- `build.sh` - Shell 编译脚本
-- `hifloat8_fakequant_linear.py` - HiFloat8 伪量化线性模块
-- `test.py` - 测试脚本
-- `utils.py` - 工具函数
+```
+├── hifloat8_cast.cpp               # HiFloat8 与 FP32/FP16/BF16 格式转换的 C++ 实现
+├── setup.py                        # Python 编译脚本
+├── build.sh                        # Shell 编译脚本
+├── hifloat8_fakequant_linear.py    # HiFloat8 伪量化线性模块
+├── test.py                         # 测试脚本
+├── utils.py                        # 工具函数
+└── README.md
+```
 
-## 一、HiFloat8 格式转换
+## 1、HiFloat8 格式转换
 
 ### 1.1 性能说明
 
@@ -60,7 +63,7 @@ float16_tensor = hifloat8_cast.hifloat8_to_float16(hifloat8_tensor)
 bfloat16_tensor = hifloat8_cast.hifloat8_to_bfloat16(hifloat8_tensor)
 ```
 
-## 二、算法注册机制
+## 2、算法注册机制
 
 ### 2.1 算法注册概述
 
@@ -182,7 +185,7 @@ amct.quantize(model, hifloat8_fakequant_cfg)
 }
 ```
 
-## 三、测试脚本
+## 3、测试脚本
 
 ### 3.1 测试脚本说明
 
@@ -215,7 +218,7 @@ python test.py --model_path /path/to/model
 - `get_test_dataset(enc)` - 加载测试数据集
 - `test_ppl(model, testenc)` - 计算模型困惑度
 
-## 四、完整使用流程
+## 4、完整使用流程
 
 ### 4.1 准备环境
 
@@ -235,7 +238,7 @@ cd amct_pytorch/experimental/hifloat8
 python test.py --model_path /path/to/qwen/model
 ```
 
-## 五、技术细节
+## 5、技术细节
 
 ### 5.1 HiFloat8 格式特点
 
@@ -262,7 +265,7 @@ python test.py --model_path /path/to/qwen/model
 - 动态位分配优化了不同数值范围的表示
 - 适合大语言模型等对精度要求较高的场景
 
-## 六、注意事项
+## 6、注意事项
 
 1. **性能考虑**：HiFloat8 转换基于 CPU 实现，相比 NPU 硬件加速性能较慢，适合精度验证和调试
 2. 确保已正确编译 C++ 扩展模块
@@ -270,7 +273,7 @@ python test.py --model_path /path/to/qwen/model
 4. 模型路径需要指向正确的预训练模型
 5. 量化过程可能需要较多内存，建议使用 NPU
 
-## 七、依赖项
+## 7、依赖项
 
 - Python 3.x
 - PyTorch
