@@ -57,10 +57,31 @@ def match_fuzzy_pattern(layer_name, pattern):
 
 def find_matching_pattern(layer_name, patterns):
     """
-    Find the first matching pattern for a given layer name
-    Returns the pattern that matches, or None if no match found
+    Find first matching pattern for a given layer name
+    Returns: pattern that matches, or None if no match found
     """
     for pattern in patterns:
         if match_fuzzy_pattern(layer_name, pattern):
             return pattern
     return None
+
+
+def parse_fuzzy_pattern_config_key(pattern):
+    """
+    Parse fuzzy pattern config key to extract suffix and config type
+    Example: "*down_proj.weights" -> ("down_proj", "weights")
+             "*down_proj.inputs" -> ("down_proj", "inputs")
+             "*down_proj" -> ("down_proj", None)
+    Returns: (suffix, config_type) tuple
+    """
+    if not is_fuzzy_pattern(pattern):
+        return (pattern, None)
+    
+    suffix = get_fuzzy_suffix(pattern)
+    
+    if '.' in suffix:
+        parts = suffix.rsplit('.', 1)
+        if len(parts) == 2 and parts[1] in ['weights', 'inputs']:
+            return (parts[0], parts[1])
+    
+    return (suffix, None)

@@ -16,8 +16,9 @@
 # ----------------------------------------------------------------------------
 
 from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.config.fields import QuantConfig, OverrideLayerConfigsField
+from amct_pytorch.config.fields import QuantConfig
 from amct_pytorch.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
+from amct_pytorch.config.utils import merge_layer_config_with_fuzzy_patterns, parse_fuzzy_pattern_config_key
 from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
 from amct_pytorch.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
 from amct_pytorch.algorithm import BUILT_IN_ALGORITHM
@@ -54,6 +55,37 @@ def merge_layer_config(base_config, override_config):
     """
     Merge override config into base config
     Override config takes precedence over base config
+    """
+    merged = base_config.copy()
+    
+    if not override_config:
+        return merged
+    
+    for key, value in override_config.items():
+        if key == 'batch_num':
+            merged['batch_num'] = value
+        elif key == 'quant_cfg':
+            if 'quant_cfg' not in merged:
+                merged['quant_cfg'] = {}
+            for quant_key, quant_value in value.items():
+                if quant_key == 'weights':
+                    if 'weights' not in merged['quant_cfg']:
+                        merged['quant_cfg']['weights'] = {}
+                    merged['quant_cfg']['weights'].update(quant_value)
+                elif quant_key == 'inputs':
+                    if 'inputs' not in merged['quant_cfg']:
+                        merged['quant_cfg']['inputs'] = {}
+                    merged['quant_cfg']['inputs'].update(quant_value)
+        elif key == 'algorithm':
+            merged['algorithm'] = value
+    
+    return merged
+
+
+def merge_layer_config_with_fuzzy_patterns(base_config, override_config):
+    """
+    Merge override config into base config with fuzzy pattern support
+    Supports patterns like '*down_proj.weights' and '*down_proj.inputs'
     """
     merged = base_config.copy()
     
@@ -204,7 +236,7 @@ def get_supported_layers(model, quant_config, registed_alg):
         if check_skip_layer(name, quant_config.skip_layers.skip_layers):
             LOGGER.logd('layer:{} is skipped'.format(name))
             continue
-        algo = layer_types[type(mod).__name__]
+        algo = layer_types[type(mod).__name__] if type(mod).__name__ in layer_types.keys() else layer_types[type(mod)]
         if algo in BUILT_IN_ALGORITHM and quant_type_comb is not None:
             if hasattr(mod, 'weight') and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
                 LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} only support ori dtype {} '
@@ -223,7 +255,7 @@ def get_supported_layers(model, quant_config, registed_alg):
         if matching_pattern:
             override_config = override_configs[matching_pattern]
             LOGGER.logi(f'Layer {name} matches fuzzy pattern {matching_pattern}, applying override config')
-            base_layer_config = merge_layer_config(base_layer_config, override_config)
+            base_layer_config = merge_layer_config_with_fuzzy_patterns(base_layer_config, override_config)
         
         detail_config[name] = base_layer_config
     return detail_config
