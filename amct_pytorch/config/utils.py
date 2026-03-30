@@ -24,3 +24,64 @@ def get_alg_name_from_config(alg):
         return [alg], [None]
     else:
         raise ValueError(f'invalid algo name, pls check config')
+
+
+def is_fuzzy_pattern(pattern):
+    """
+    Check if a pattern is a fuzzy matching pattern (starts with *)
+    """
+    return isinstance(pattern, str) and pattern.startswith('*')
+
+
+def get_fuzzy_suffix(pattern):
+    """
+    Extract suffix from fuzzy pattern
+    Example: "*self.atten.q_proj" -> "self.atten.q_proj"
+    """
+    if not is_fuzzy_pattern(pattern):
+        return None
+    return pattern[1:]
+
+
+def match_fuzzy_pattern(layer_name, pattern):
+    """
+    Check if layer_name matches fuzzy pattern
+    Example: "model.layers.0.self.atten.q_proj" matches "*self.atten.q_proj"
+    """
+    if not is_fuzzy_pattern(pattern):
+        return layer_name == pattern
+    
+    suffix = get_fuzzy_suffix(pattern)
+    return layer_name.endswith(suffix)
+
+
+def find_matching_pattern(layer_name, patterns):
+    """
+    Find first matching pattern for a given layer name
+    Returns: pattern that matches, or None if no match found
+    """
+    for pattern in patterns:
+        if match_fuzzy_pattern(layer_name, pattern):
+            return pattern
+    return None
+
+
+def parse_fuzzy_pattern_config_key(pattern):
+    """
+    Parse fuzzy pattern config key to extract suffix and config type
+    Example: "*down_proj.weights" -> ("down_proj", "weights")
+             "*down_proj.inputs" -> ("down_proj", "inputs")
+             "*down_proj" -> ("down_proj", None)
+    Returns: (suffix, config_type) tuple
+    """
+    if not is_fuzzy_pattern(pattern):
+        return (pattern, None)
+    
+    suffix = get_fuzzy_suffix(pattern)
+    
+    if '.' in suffix:
+        parts = suffix.rsplit('.', 1)
+        if len(parts) == 2 and parts[1] in ['weights', 'inputs', 'kvcache']:
+            return (parts[0], parts[1])
+    
+    return (suffix, None)

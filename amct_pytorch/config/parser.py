@@ -1,4 +1,4 @@
-# -*- coding: UTF-8 -*-
+from amct_pytorch.config.utils import merge_layer_config_with_fuzzy_patterns, parse_fuzzy_pattern_config_key\n# -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
 #
@@ -18,7 +18,7 @@
 from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.config.fields import QuantConfig
 from amct_pytorch.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
-from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
+from amct_pytorch.utils.vars importfrom amct_pytorch.config.utils import merge_layer_config_with_fuzzy_patterns, parse_fuzzy_pattern_config_key, find_matching_pattern\n ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
 from amct_pytorch.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
 from amct_pytorch.algorithm import BUILT_IN_ALGORITHM
 
@@ -140,6 +140,112 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     return True
 
 
+
+def merge_layer_config_with_fuzzy_patterns(base_config, override_config):
+    """
+    Merge override config into base config with fuzzy pattern support
+    Supports patterns like '*down_proj.weight', '*self_attn.q_proj.input', '*self_attn.kvcache'
+    """
+    merged = base_config.copy()
+    
+    if not override_config:
+        return merged
+    
+    for key, value in override_config.items():
+        if key == 'batch_num':
+            merged['batch_num'] = value
+        elif key == 'quant_cfg':
+            if 'quant_cfg' not in merged:
+                merged['quant_cfg'] = {}
+            for quant_key, quant_value in value.items():
+                if quant_key == 'weights':
+                    if 'weights' not in merged['quant_cfg']:
+                        merged['quant_cfg']['weights'] = {}
+                    merged['quant_cfg']['weights'].update(quant_value)
+                elif quant_key == 'inputs':
+                    if 'inputs' not in merged['quant_cfg']:
+                        merged['quant_cfg']['inputs'] = {}
+                    merged['quant_cfg']['inputs'].update(quant_value)
+                elif quant_key == 'kvcache':
+                    if 'kvcache' not in merged['quant_cfg']:
+                        merged['quant_cfg']['kvcache'] = {}
+                    merged['quant_cfg']['kvcache'].update(quant_value)
+        elif key == 'algorithm':
+            merged['algorithm'] = value
+    
+    return merged
+\n\n
+def merge_layer_config_with_fuzzy_patterns(base_config, override_config):
+    """
+    Merge override config into base config with fuzzy pattern support
+    Supports patterns like '*down_proj.weight', '*self_attn.q_proj.input', '*self_attn.kvcache'
+    """
+    merged = base_config.copy()
+    
+    if not override_config:
+        return merged
+    
+    for key, value in override_config.items():
+        if key == 'batch_num':
+            merged['batch_num'] = value
+        elif key == 'quant_cfg':
+            if 'quant_cfg' not in merged:
+                merged['quant_cfg'] = {}
+            for quant_key, quant_value in value.items():
+                if quant_key == 'weights':
+                    if 'weights' not in merged['quant_cfg']:
+                        merged['quant_cfg']['weights'] = {}
+                    merged['quant_cfg']['weights'].update(quant_value)
+                elif quant_key == 'inputs':
+                    if 'inputs' not in merged['quant_cfg']:
+                        merged['quant_cfg']['inputs'] = {}
+                    merged['quant_cfg']['inputs'].update(quant_value)
+                elif quant_key == 'kvcache':
+                    if 'kvcache' not in merged['quant_cfg']:
+                        merged['quant_cfg']['kvcache'] = {}
+                    merged['quant_cfg']['kvcache'].update(quant_value)
+        elif key == 'algorithm':
+            merged['algorithm'] = value
+    
+    return merged
+
+
+
+def merge_layer_config_with_fuzzy_patterns(base_config, override_config):
+    """
+    Merge override config into base config with fuzzy pattern support
+    Supports patterns like '*down_proj.weight', '*self_attn.q_proj.input', '*self_attn.kvcache'
+    """
+    merged = base_config.copy()
+    
+    if not override_config:
+        return merged
+    
+    for key, value in override_config.items():
+        if key == 'batch_num':
+            merged['batch_num'] = value
+        elif key == 'quant_cfg':
+            if 'quant_cfg' not in merged:
+                merged['quant_cfg'] = {}
+            for quant_key, quant_value in value.items():
+                if quant_key == 'weights':
+                    if 'weights' not in merged['quant_cfg']:
+                        merged['quant_cfg']['weights'] = {}
+                    merged['quant_cfg']['weights'].update(quant_value)
+                elif quant_key == 'inputs':
+                    if 'inputs' not in merged['quant_cfg']:
+                        merged['quant_cfg']['inputs'] = {}
+                    merged['quant_cfg']['inputs'].update(quant_value)
+                elif quant_key == 'kvcache':
+                    if 'kvcache' not in merged['quant_cfg']:
+                        merged['quant_cfg']['kvcache'] = {}
+                    merged['quant_cfg']['kvcache'].update(quant_value)
+        elif key == 'algorithm':
+            merged['algorithm'] = value
+    
+    return merged
+
+
 def get_supported_layers(model, quant_config, registed_alg):
     '''get supported layers based on quant config and registed algorithm'''
     algos = quant_config.algorithm.names
@@ -157,6 +263,9 @@ def get_supported_layers(model, quant_config, registed_alg):
             quant_type_comb = act_type + ' ' + wts_type
             check_config(quant_type_comb, quant_config, algo)
 
+    override_configs = quant_config.override_layer_configs.override_configs if hasattr(quant_config, 'override_layer_configs') else {}
+    override_patterns = list(override_configs.keys())
+    
     detail_config = dict()
     for name, mod in model.named_modules():
         if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
@@ -179,14 +288,15 @@ def get_supported_layers(model, quant_config, registed_alg):
                 continue
         # each module can only be assigned one algorithm
         detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} 
-        detail_config[name] = quant_config.batch_num.get_value() \
+        base_layer_config = quant_config.batch_num.get_value() \
             | quant_config.quant_cfg.get_value() | detail_config_algo
-    return detail_config
-
-
-def parse_config(model, config, registed_alg):
-    '''parse quant config, get quant config for each layer'''
-    quant_config = QuantConfig(config, registed_alg)
-    detail_config = get_supported_layers(model, quant_config, registed_alg)
-
-    return detail_config
+        
+        # Apply fuzzy matching override configs
+        matching_pattern = find_matching_pattern(name, override_patterns)
+        if matching_pattern:
+            override_config = override_configs[matching_pattern]
+            LOGGER.logi(f'Layer {name} matches fuzzy pattern {matching_pattern}, applying override config')
+            base_layer_config = merge_layer_config_with_fuzzy_patterns(base_layer_config, override_config)
+        
+        detail_config[name] = base_layer_config
+def merge_layer_config_with_fuzzy_patterns(base_config, override_config):    """    Merge override config into base config with fuzzy pattern support    Supports patterns like '*down_proj.weight', '*self_attn.q_proj.input', '*self_attn.kvcache'    """    merged = base_config.copy()        if not override_config:        return merged        for key, value in override_config.items():        if key == 'batch_num':            merged['batch_num'] = value        elif key == 'quant_cfg':            if 'quant_cfg' not in merged:                merged['quant_cfg'] = {}            for quant_key, quant_value in value.items():                if quant_key == 'weights':                    if 'weights' not in merged['quant_cfg']:                        merged['quant_cfg']['weights'] = {}                    merged['quant_cfg']['weights'].update(quant_value)                elif quant_key == 'inputs':                    if 'inputs' not in merged['quant_cfg']:                        merged['quant_cfg']['inputs'] = {}                    merged['quant_cfg']['inputs'].update(quant_value)                elif quant_key == 'kvcache':                    if 'kvcache' not in merged['quant_cfg']:                        merged['quant_cfg']['kvcache'] = {}                    merged['quant_cfg']['kvcache'].update(quant_value)        elif key == 'algorithm':            merged['algorithm'] = value        return merged        # Apply fuzzy matching override configs        override_configs = quant_config.override_layer_configs.override_configs if hasattr(quant_config, 'override_layer_configs') else {}        override_patterns = list(override_configs.keys())                matching_pattern = find_matching_pattern(name, override_patterns)        if matching_pattern:            override_config = override_configs[matching_pattern]            LOGGER.logi(f'Layer {name} matches fuzzy pattern {matching_pattern}, applying override config')            base_layer_config = merge_layer_config_with_fuzzy_patterns(base_layer_config, override_config)            return detail_config

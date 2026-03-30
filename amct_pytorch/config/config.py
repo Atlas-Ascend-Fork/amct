@@ -163,3 +163,50 @@ HIFP8_CAST_CFG = {
     'algorithm': {'cast'},
     'skip_layers': {'lm_head'}
 }
+
+
+HIFP8_FUZZY_CAST_CFG = {
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'override_layer_configs': {
+        '*self_attn.q_proj.input': {
+            'quant_cfg': {
+                'inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                }
+            }
+        },
+        '*down_proj.weight': {
+            'quant_cfg': {
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                }
+            }
+        },
+        '*self_attn.kvcache': {
+            'quant_cfg': {
+                'kvcache': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                }
+            }
+        },
+    },
+    'algorithm': {'cast'},
+    'skip_layers': {'lm_head'}
+}
