@@ -275,7 +275,7 @@ add_custom_target(amct_pytorch_llt_lib
 
 add_custom_target(amct_pytorch_python_utest
     DEPENDS amct_pytorch_llt_lib
-    COMMAND PYTHONPATH=${AMCT_TOP_DIR}:${PYTHONPATH} ${Python3_EXECUTABLE} -m coverage run -m unittest discover .
+    COMMAND LD_PRELOAD=/lib/aarch64-linux-gnu/libgomp.so.1 PYTHONPATH=${AMCT_TOP_DIR}:${PYTHONPATH} ${Python3_EXECUTABLE} -m coverage run -m unittest discover .
     WORKING_DIRECTORY ${TEST_FILES_DIR}
     COMMENT "run all pytorch python utest"
 )
