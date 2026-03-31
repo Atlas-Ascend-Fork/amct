@@ -134,6 +134,7 @@ class QuantileQuant(BaseQuantizeModule):
                 self.scale_d = self.calculate_hif8_scale(self.scale_d)
                 self.offset_d = None
             
-            LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name), 'QuantileQuant')
+            LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
+                'QuantileQuant')
         
         return fp_out
