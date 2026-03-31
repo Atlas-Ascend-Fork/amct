@@ -64,9 +64,6 @@ class QuantileQuant(BaseQuantizeModule):
             self.previous_max = None
         
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
-        self.wts_symmetric = quant_config.get('weights_cfg').get('symmetric')
-        self.weight_granularity = quant_config.get('weights_cfg').get('strategy')
-        
         self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
     
     def calculate_weights_scale_factor_and_quantize(self, weight_data, quant_config):
@@ -77,15 +74,8 @@ class QuantileQuant(BaseQuantizeModule):
         weight_min, weight_max = get_weight_min_max_by_granularity(weight_data, quant_config)
         
         if self.wts_type == HIFLOAT8:
-            scale_w = self.calculate_hif8_scale(weight_max)
-            self.scale_w = scale_w
+            self.scale_w = self.calculate_hif8_scale(weight_max)
             self.offset_w = None
-        else:
-            scale_w, offset_w = self.calculate_scale_offset(weight_max, weight_min, 
-                                                          self.wts_symmetric, self.wts_type)
-            self.scale_w = scale_w
-            self.offset_w = offset_w
-        
         LOGGER.logd("Calculate quantile quant params of layer '{}' success!".format(self.layer_name), 'QuantileQuant')
     
     def calculate_hif8_scale(self, weight_max):
@@ -98,29 +88,6 @@ class QuantileQuant(BaseQuantizeModule):
         """
         scale = (weight_max / 16.0).to(torch.float32)
         return scale
-    
-    def calculate_scale_offset(self, max_val, min_val, symmetric, quant_type):
-        """
-        Function: calculate scale and offset for quantization
-        Args:
-            max_val: max value
-            min_val: min value
-            symmetric: whether symmetric quantization
-            quant_type: quantization data type
-        Returns:
-            scale, offset
-        """
-        if symmetric:
-            if abs(max_val) > abs(min_val):
-                scale = abs(max_val) / 127.0
-            else:
-                scale = abs(max_val) / 128.0
-            offset = 0
-        else:
-            scale = (max_val - min_val) / 255.0
-            offset = -128.0 - min_val / scale
-        
-        return scale, offset
     
     @torch.no_grad()
     def forward(self, inputs):
@@ -156,20 +123,16 @@ class QuantileQuant(BaseQuantizeModule):
         self.data_min = batch_min if self.data_min is None else self.data_min
         
         if self.act_type == HIFLOAT8:
-            if self.previous_max is None:
-                self.previous_max = batch_max
+            if self.scale_d is None:
+                self.scale_d = self.data_max
             else:
-                self.previous_max = batch_max
+                self.scale_d = 0.99 * self.scale_d + 0.01 * self.previous_max
+            self.previous_max = self.data_max
         
         if self.cur_batch == self.batch_num:
             if self.act_type == HIFLOAT8:
-                current_max = self.data_max
-                quantile_max = 0.99 * current_max + 0.01 * self.previous_max
-                self.scale_d = self.calculate_hif8_scale(quantile_max)
+                self.scale_d = self.calculate_hif8_scale(self.scale_d)
                 self.offset_d = None
-            else:
-                self.scale_d, self.offset_d = self.calculate_scale_offset(
-                    self.data_max, self.data_min, self.act_symmetric, self.act_type)
             
             LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name), 'QuantileQuant')
         

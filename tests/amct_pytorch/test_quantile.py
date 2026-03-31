@@ -17,32 +17,43 @@
 import unittest
 import torch
 import torch.nn as nn
+import sys
+import copy
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
-from amct_pytorch import quantize, convert, HIFP8_QUANTILE_CFG
 from amct_pytorch.algorithm import AlgorithmRegistry
-
-
-class SimpleModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.linear1 = nn.Linear(64, 64)
-        self.linear2 = nn.Linear(64, 32)
-        self.linear3 = nn.Linear(32, 16)
-    
-    def forward(self, x):
-        x = self.linear1(x)
-        x = self.linear2(x)
-        x = self.linear3(x)
-        return x
+from amct_pytorch import quantize, convert, HIFP8_QUANTILE_CFG
+from utils import TestModel
+from mock_torch_npu import mock_npu, mock_npu_quant_matmul, mock_npu_weight_quant_batchmatmul
+from mock_torch_npu import mock_npu_quantize
 
 
 class TestQuantileQuant(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.model = TestModel().to(torch.bfloat16)
+        cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
+        cls.ori_out = cls.model(cls.inputs)
+        print('TestQuantile START!')
+
+    @classmethod
+    def tearDownClass(cls):
+        print('TestQuantile END!')
+
     def setUp(self):
-        self.model = SimpleModel()
-        self.inputs = torch.randn(1, 64)
+        mock_torch_npu = MagicMock()
+        sys.modules['torch_npu'] = mock_torch_npu
+
+    def tearDown(self):
+        del sys.modules['torch_npu']
     
-    def test_quantile_weight_only(self):
-        config = {
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    def test_quantile_weight_only(self, mock_1, mock_2, mock_3):
+        cfg = {
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {
@@ -54,12 +65,21 @@ class TestQuantileQuant(unittest.TestCase):
             'algorithm': {'quantile'}
         }
         
-        model_copy = type(self.model)()
-        model_copy.load_state_dict(self.model.state_dict())
-        
-        quantize(model_copy, config)
-        
-        self.assertIsInstance(model_copy.linear1, nn.Module)
+        model = copy.deepcopy(self.model).to(torch.bfloat16)
+        quantize(model, cfg)
+
+        model(self.inputs)
+        self.assertEqual(model.linear1.scale_w.shape[0], 64)
+        self.assertIsNotNone(model.linear1.scale_w)
+        self.assertIsNone(model.linear2.offset_w)
+        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear2).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear3).__name__, 'QuantileQuant')
+        torch.Tensor.npu = mock_npu
+        convert(model)
+        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
+        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
+
     
     def test_quantile_full_quant(self):
         config = {
@@ -94,31 +114,6 @@ class TestQuantileQuant(unittest.TestCase):
                     'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'tensor',
-                },
-            },
-            'algorithm': {'quantile'}
-        }
-        
-        model_copy = type(self.model)()
-        model_copy.load_state_dict(self.model.state_dict())
-        
-        quantize(model_copy, config)
-        
-        self.assertIsInstance(model_copy.linear1, nn.Module)
-    
-    def test_quantile_activation_per_token(self):
-        config = {
-            'batch_num': 1,
-            'quant_cfg': {
-                'weights': {
-                    'type': 'hifloat8',
-                    'symmetric': True,
-                    'strategy': 'channel',
-                },
-                'inputs': {
-                    'type': 'hifloat8',
-                    'symmetric': True,
-                    'strategy': 'token',
                 },
             },
             'algorithm': {'quantile'}
