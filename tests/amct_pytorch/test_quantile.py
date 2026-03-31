@@ -15,18 +15,18 @@
 # ----------------------------------------------------------------------------
 
 import unittest
-import torch
-import torch.nn as nn
 import sys
 import copy
 from unittest.mock import MagicMock
 from unittest.mock import patch
+import torch
+import torch.nn as nn
 
-from amct_pytorch.algorithm import AlgorithmRegistry
-from amct_pytorch import quantize, convert, HIFP8_QUANTILE_CFG
 from utils import TestModel
 from mock_torch_npu import mock_npu, mock_npu_quant_matmul, mock_npu_weight_quant_batchmatmul
 from mock_torch_npu import mock_npu_quantize
+from amct_pytorch.algorithm import AlgorithmRegistry
+from amct_pytorch import quantize, convert, HIFP8_QUANTILE_CFG
 
 
 class TestQuantileQuant(unittest.TestCase):
