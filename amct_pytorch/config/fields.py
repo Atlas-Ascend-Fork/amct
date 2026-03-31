@@ -69,7 +69,7 @@ class WeightsCfgField():
         if self.symmetric not in [True, False]:
             raise ValueError(f'Weights symmetric only support bool [True, False], but got {self.symmetric}')
         if self.symmetric == False and self.quant_type not in WTS_ASYMMETRIC_DTYPE:
-            raise ValueError(f'Weights symmetric only support to be True when '
+            raise ValueError(f'Weights symmetric only support to be False when '
                 f'weight quant_type is {self.quant_type}')
         if self.strategy not in SUPPORT_QUANT_STRATEGY_WEIGHT:
             raise ValueError(f'Weights strategy only support{SUPPORT_QUANT_STRATEGY_WEIGHT}, but got {self.strategy}')
