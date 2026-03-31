@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 
 from amct_pytorch.utils.log import LOGGER
-from amct_pytorch.config.fields import QuantConfig
+from amct_pytorch.config.fields import QuantConfig, WeightsCfgField, InputsCfgField
 from amct_pytorch.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
 from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
 from amct_pytorch.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
@@ -144,6 +144,7 @@ def get_supported_layers(model, quant_config, registed_alg):
     '''get supported layers based on quant config and registed algorithm'''
     algos = quant_config.algorithm.names
     layer_types = dict()
+    quant_type_comb = None
     for algo in algos:
         src_ops = registed_alg.algo.get(algo).keys()
         for src_op in src_ops:
@@ -177,11 +178,36 @@ def get_supported_layers(model, quant_config, registed_alg):
                 continue
             if not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
                 continue
-        # each module can only be assigned one algorithm
+        
+        layer_quant_cfg = _get_layer_quant_config(name, quant_config)
+        
         detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} 
         detail_config[name] = quant_config.batch_num.get_value() \
-            | quant_config.quant_cfg.get_value() | detail_config_algo
+            | layer_quant_cfg | detail_config_algo
     return detail_config
+
+
+def _get_layer_quant_config(layer_name, quant_config):
+    """
+    Get quant config for a specific layer, considering fuzzy matching
+    Params:
+        layer_name: str, the layer name
+        quant_config: QuantConfig object
+    Return: dict, the quant config for this layer
+    """
+    quant_cfg = quant_config.quant_cfg.get_value().copy()
+    
+    fuzzy_weights_cfg = quant_config.quant_cfg.get_fuzzy_config(layer_name, 'weights')
+    if fuzzy_weights_cfg:
+        weights_cfg = WeightsCfgField(fuzzy_weights_cfg)
+        quant_cfg['weights_cfg'] = weights_cfg.get_value()
+    
+    fuzzy_inputs_cfg = quant_config.quant_cfg.get_fuzzy_config(layer_name, 'inputs')
+    if fuzzy_inputs_cfg:
+        inputs_cfg = InputsCfgField(fuzzy_inputs_cfg)
+        quant_cfg['inputs_cfg'] = inputs_cfg.get_value()
+    
+    return quant_cfg
 
 
 def parse_config(model, config, registed_alg):

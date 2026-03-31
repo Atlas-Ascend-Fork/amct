@@ -163,3 +163,31 @@ HIFP8_CAST_CFG = {
     'algorithm': {'cast'},
     'skip_layers': {'lm_head'}
 }
+
+HIFP8_MINMAX_FUZZY_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        '*down_proj.weights': {
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+        'weights': {
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        '*self_attn.q_proj.inputs': {
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'minmax'},
+    'skip_layers': {'lm_head'}
+}

@@ -15,6 +15,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import fnmatch
+
+
 def get_alg_name_from_config(alg):
     if isinstance(alg, dict):
         return list(alg.keys()), [alg.get(key) for key in list(alg.keys())]
@@ -24,3 +27,28 @@ def get_alg_name_from_config(alg):
         return [alg], [None]
     else:
         raise ValueError(f'invalid algo name, pls check config')
+
+
+def match_fuzzy_pattern(layer_name, pattern):
+    """
+    Match layer name with pattern supporting wildcard '*'
+    Params:
+        layer_name: str, the full layer name (e.g., 'model.layers.0.self_attn.q_proj')
+        pattern: str, the pattern to match (e.g., '*self_attn.q_proj.weights')
+    Return: bool, True if pattern matches layer_name
+    """
+    if '*' not in pattern:
+        return layer_name == pattern
+    
+    suffix = None
+    if pattern.endswith('.weights'):
+        suffix = '.weights'
+        pattern = pattern[:-8]
+    elif pattern.endswith('.inputs'):
+        suffix = '.inputs'
+        pattern = pattern[:-7]
+    
+    if suffix and layer_name.endswith(suffix):
+        layer_name = layer_name[:-len(suffix)]
+    
+    return fnmatch.fnmatch(layer_name, pattern)
