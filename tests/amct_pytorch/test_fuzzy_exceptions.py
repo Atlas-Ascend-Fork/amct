@@ -12,14 +12,16 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
+
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import unittest
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import fnmatch
+
 import torch
 import torch.nn as nn
 
@@ -45,6 +47,38 @@ def match_fuzzy_pattern(layer_name, pattern):
     return fnmatch.fnmatch(layer_name, pattern)
 
 
+def _extract_fuzzy_configs(config):
+    """
+    Extract fuzzy matching configs from quant_cfg
+    """
+    fuzzy_configs = {'weights': [], 'inputs': []}
+    
+    for key, value in config.items():
+        if '*' in key:
+            if key.endswith('.weights'):
+                fuzzy_configs['weights'].append({
+                    'pattern': key,
+                    'config': value
+                })
+            elif key.endswith('.inputs'):
+                fuzzy_configs['inputs'].append({
+                    'pattern': key,
+                    'config': value
+                })
+    
+    return fuzzy_configs
+
+
+def get_fuzzy_config(layer_name, fuzzy_configs, config_type):
+    """
+    Get matching fuzzy config for a layer
+    """
+    for fuzzy_cfg in fuzzy_configs[config_type]:
+        if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
+            return fuzzy_cfg['config']
+    return None
+
+
 class TestFuzzyModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -56,7 +90,7 @@ class TestFuzzyModel(nn.Module):
                     'v_proj': nn.Linear(64, 64),
                 }),
                 'mlp': nn.ModuleDict({
-                    'up_proj': nn.Linear(64, 64),
+                'up_proj': nn.Linear(64, 64),
                     'down_proj': nn.Linear(64, 64),
                 })
             })
@@ -146,6 +180,82 @@ class TestFuzzyPatternExceptions(unittest.TestCase):
         self.assertFalse(result)
 
 
+class TestFuzzyConfigConflicts(unittest.TestCase):
+    """测试配置冲突和优先级"""
+    
+    def test_multiple_patterns_same_layer(self):
+        """CF-001: 测试多个模式匹配同一层"""
+        config = {
+            '*layer.weights': {'type': 'int8', 'strategy': 'tensor'},
+            '*specific.weights': {'type': 'int4', 'strategy': 'channel'},
+            'weights': {'type': 'int8', 'strategy': 'channel'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证提取了两个模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 2)
+        
+        # 验证第一个匹配的模式被使用
+        result = get_fuzzy_config('specific.layer', fuzzy_configs, 'weights')
+        self.assertEqual(result['type'], 'int8')
+        self.assertEqual(result['strategy'], 'tensor')
+    
+    def test_weights_and_inputs_patterns(self):
+        """CF-002: 测试权重和输入模式同时匹配"""
+        config = {
+            '*layer.weights': {'type': 'int8', 'strategy': 'tensor'},
+            '*layer.inputs': {'type': 'int8', 'strategy': 'channel'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证分别提取了权重和输入配置
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        self.assertEqual(len(fuzzy_configs['inputs']), 1)
+        
+        # 验证权重配置
+        weights_result = get_fuzzy_config('model.layer', fuzzy_configs, 'weights')
+        self.assertEqual(weights_result['strategy'], 'tensor')
+        
+        # 验证输入配置
+        inputs_result = get_fuzzy_config('model.layer', fuzzy_configs, 'inputs')
+        self.assertEqual(inputs_result['strategy'], 'channel')
+    
+    def test_fuzzy_vs_default_priority(self):
+        """CF-003: 测试模糊配置优先级高于默认配置"""
+        config = {
+            '*down_proj.weights': {'type': 'int8', 'strategy': 'tensor'},
+            'weights': {'type': 'int8', 'strategy': 'channel'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证down_proj使用模糊配置
+        result = get_fuzzy_config('model.down_proj', fuzzy_configs, 'weights')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['strategy'], 'tensor')
+        
+        # 验证其他层使用默认配置（模糊配置不匹配）
+        result = get_fuzzy_config('model.other', fuzzy_configs, 'weights')
+        self.assertIsNone(result)
+    
+    def test_exact_vs_fuzzy_priority(self):
+        """CF-004: 测试精确配置优先级高于模糊配置"""
+        # 注意：精确配置（不含通配符）不会被提取到fuzzy_configs中
+        # 只有模糊配置（含通配符）才会被提取
+        config = {
+            'exact.weights': {'type': 'int4', 'strategy': 'channel'},
+            '*exact.weights': {'type': 'int8', 'strategy': 'tensor'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证只提取了模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        
+        # 验证使用模糊配置（因为精确配置不在fuzzy_configs中）
+        result = get_fuzzy_config('exact', fuzzy_configs, 'weights')
+        self.assertEqual(result['type'], 'int8')
+        self.assertEqual(result['strategy'], 'tensor')
+
+
 class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
     """测试边界条件"""
     
@@ -176,6 +286,57 @@ class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
         """LN-005: 测试层名称包含点号"""
         result = match_fuzzy_pattern('model.layer.name', '*name')
         self.assertTrue(result)
+    
+    def test_empty_quant_cfg(self):
+        """BC-001: 测试空的quant_cfg"""
+        config = {}
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证没有模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 0)
+        self.assertEqual(len(fuzzy_configs['inputs']), 0)
+    
+    def test_none_quant_cfg(self):
+        """BC-002: 测试None的quant_cfg"""
+        config = None
+        if config is None:
+            fuzzy_configs = _extract_fuzzy_configs({})
+        else:
+            fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证没有模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 0)
+        self.assertEqual(len(fuzzy_configs['inputs']), 0)
+    
+    def test_empty_fuzzy_config_value(self):
+        """BC-003: 测试空的模糊配置值"""
+        config = {
+            '*layer.weights': {},
+            'weights': {'type': 'int8', 'strategy': 'channel'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证提取了模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        
+        # 验证返回空配置
+        result = get_fuzzy_config('model.layer', fuzzy_configs, 'weights')
+        self.assertEqual(result, {})
+    
+    def test_none_fuzzy_config_value(self):
+        """BC-004: 测试None的模糊配置值"""
+        config = {
+            '*layer.weights': None,
+            'weights': {'type': 'int8', 'strategy': 'channel'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证提取了模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        
+        # 验证返回None
+        result = get_fuzzy_config('model.layer', fuzzy_configs, 'weights')
+        self.assertIsNone(result)
 
 
 class TestFuzzyConfigSpecialCharacters(unittest.TestCase):
@@ -199,6 +360,11 @@ class TestFuzzyConfigSpecialCharacters(unittest.TestCase):
     def test_layer_name_with_unicode(self):
         """SC-004: 测试Unicode字符"""
         result = match_fuzzy_pattern('layerαβγ', '*αβγ')
+        self.assertTrue(result)
+    
+    def test_layer_name_with_escape(self):
+        """SC-005: 测试转义字符"""
+        result = match_fuzzy_pattern('layer\nname', '*name')
         self.assertTrue(result)
 
 
@@ -238,6 +404,97 @@ class TestFuzzyConfigPerformance(unittest.TestCase):
         elapsed_time = time.time() - start_time
         
         self.assertLess(elapsed_time, 0.1)  # 100ms
+
+
+class TestFuzzyConfigIntegration(unittest.TestCase):
+    """测试集成场景"""
+    
+    def test_fuzzy_config_with_real_model(self):
+        """测试模糊配置与真实模型的集成"""
+        model = TestFuzzyModel()
+        
+        config = {
+            '*down_proj.weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor',
+            },
+            '*self_attn.q_proj.inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'channel',
+            },
+            'weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'channel',
+            },
+            'inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor',
+            },
+        }
+        
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证提取了正确的模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        self.assertEqual(len(fuzzy_configs['inputs']), 1)
+        
+        # 验证down_proj层匹配
+        down_proj_layers = [name for name, _ in model.named_modules() if 'down_proj' in name]
+        for layer_name in down_proj_layers:
+            result = get_fuzzy_config(layer_name, fuzzy_configs, 'weights')
+            self.assertIsNotNone(result)
+            self.assertEqual(result['strategy'], 'tensor')
+        
+        # 验证q_proj层匹配
+        q_proj_layers = [name for name, _ in model.named_modules() if 'q_proj' in name]
+        for layer_name in q_proj_layers:
+            result = get_fuzzy_config(layer_name, fuzzy_configs, 'inputs')
+            self.assertIsNotNone(result)
+            self.assertEqual(result['strategy'], 'channel')
+    
+    def test_fuzzy_config_mixed_with_exact_config(self):
+        """测试模糊配置与精确配置混合使用"""
+        config = {
+            '*layer.weights': {'type': 'int8', 'strategy': 'tensor'},
+            'exact.weights': {'type': 'int4', 'strategy': 'channel'},
+            'weights': {'type': 'int8', 'strategy': 'channel'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证只提取了模糊配置
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        
+        # 验证模糊配置用于匹配的层
+        result = get_fuzzy_config('model.layer', fuzzy_configs, 'weights')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['type'], 'int8')
+        
+        # 验证精确配置不在fuzzy_configs中
+        result = get_fuzzy_config('exact', fuzzy_configs, 'weights')
+        self.assertIsNone(result)
+    
+    def test_fuzzy_config_with_complex_patterns(self):
+        """测试复杂的模糊配置模式"""
+        config = {
+            '*self_attn.*_proj.weights': {'type': 'int8', 'strategy': 'channel'},
+            '*mlp.*.weights': {'type': 'int8', 'strategy': 'tensor'},
+            'weights': {'type': 'int8', 'strategy': 'channel'},
+        }
+        fuzzy_configs = _extract_fuzzy_configs(config)
+        
+        # 验证self_attn模式匹配
+        result = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['strategy'], 'channel')
+        
+        # 验证mlp模式匹配
+        result = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['strategy'], 'tensor')
 
 
 if __name__ == '__main__':
