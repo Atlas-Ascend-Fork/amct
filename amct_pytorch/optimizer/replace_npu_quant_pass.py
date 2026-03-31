@@ -91,14 +91,12 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
         
         if isinstance(deploy_ops, list):
-            LOGGER.logi("deploy_ops is list", '_get_deploy_module')
             for deploy_op in deploy_ops:
                 if self._should_use_deploy_op(object_module, deploy_op):
                     return deploy_op(object_module)
             else:
                 return deploy_ops[0](object_module)
         else:
-            LOGGER.logi("deploy_ops is not list", '_get_deploy_module')
             return deploy_ops(object_module)
     
     def _should_use_deploy_op(self, object_module, deploy_op):
