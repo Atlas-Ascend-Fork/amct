@@ -583,3 +583,64 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, 'Linear') 
         self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear') 
         self.assertEqual(type(model.linear3).__name__, 'Linear')
+
+
+        # float8e4m3 - float4e2m1 
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize) 
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul) 
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul) 
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack) 
+    @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast) 
+    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast) 
+    @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant) 
+    @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param) 
+    @patch('amct_pytorch.deploy_op.npu_quantization_linear.check_parameters_in_schema', MagicMock(return_value=True))
+    def test_fp8_fp4_group_sym_minmax_success_config(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7, mock_8): 
+        cfg = {
+ 	        'batch_num': 1,
+ 	        'quant_cfg': {
+ 	            '*linear1.weights': {
+ 	                'type': 'int8',
+ 	                'symmetric': True,
+ 	                'strategy': 'tensor',
+ 	            },
+ 	            'weights': {
+ 	                'type': 'int8',
+ 	                'symmetric': True,
+ 	                'strategy': 'channel',
+ 	            },
+ 	            '*linear1.inputs': {
+ 	                'type': 'int8',
+ 	                'symmetric': False,
+ 	                'strategy': 'tensor',
+ 	            },
+ 	            'inputs': {
+ 	                'type': 'int8',
+ 	                'symmetric': True,
+ 	                'strategy': 'tensor',
+ 	            },
+ 	        },
+ 	        'algorithm': {'minmax'},
+ 	        'skip_layers': {'lm_head'}
+ 	    }
+        model = copy.deepcopy(TestModelBias()).to(torch.bfloat16) 
+
+
+        quantize(model, cfg) 
+        model(self.inputs) 
+        self.assertEqual(type(model.linear1).__name__, 'MinMaxQuant') 
+        self.assertEqual(type(model.linear2).__name__, 'MinMaxQuant') 
+        self.assertEqual(type(model.linear3).__name__, 'MinMaxQuant') 
+        self.assertIsNotNone(model.linear2.scale_w) 
+        self.assertIsNotNone(model.linear2.scale_d)
+        self.assertIsNotNone(model.linear1.offset_d) 
+        self.assertEqual(model.linear1.scale_w.shape[0], 1)
+        self.assertEqual(model.linear1.scale_d.shape[0], 1)
+        self.assertEqual(model.linear2.scale_w.shape[0], 32)
+        self.assertEqual(model.linear2.scale_d.shape[0], 1)
+        torch.Tensor.npu = mock_npu 
+        convert(model) 
+        quant_out = model(self.inputs.npu()) 
+        self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear') 
+        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear') 
+        self.assertEqual(type(model.linear3).__name__, 'NpuQuantizationLinear')
