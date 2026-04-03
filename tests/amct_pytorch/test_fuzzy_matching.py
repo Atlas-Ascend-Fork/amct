@@ -450,7 +450,7 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
             },
             'weights': {
                 'type': 'int8',
-                'symmetric': True,
+                'symmetry': True,
                 'strategy': 'channel',
             },
             'inputs': {
@@ -556,10 +556,190 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         self.assertEqual(inputs_cfg['strategy'], 'channel')
         
         weights_cfg = get_fuzzy_config('model.linear2', fuzzy_configs, 'weights')
-        self.assertIsNone(weights_cfg)
+        self.assertIsNone(weights_cfg, "weights_cfg should be None")
         
         inputs_cfg = get_fuzzy_config('model.linear2', fuzzy_configs, 'inputs')
         self.assertIsNone(inputs_cfg)
+    
+    def test_int8_int4_awq_fuzzy_config(self):
+        """测试 INT8 INT4 AWQ 模糊配置"""
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*q_proj.weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                '*k_proj.weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                '*v_proj.weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'awq': {'grids_num': 20}},
+            'skip_layers': {'lm_head'}
+        }
+        
+        fuzzy_configs = _extract_fuzzy_configs(cfg['quant_cfg'])
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 3)
+        
+        for layer_name in ['model.layers.0.self_attn.q_proj', 
+                          'model.layers.0.self_attn.k_proj',
+                          'model.layers.0.self_attn.v_proj']:
+            weights_cfg = get_fuzzy_config(layer_name, fuzzy_configs, 'weights')
+            self.assertIsNotNone(weights_cfg)
+            self.assertEqual(weights_cfg['type'], 'int4')
+            self.assertEqual(weights_cfg['strategy'], 'channel')
+    
+    def test_int8_smoothquant_fuzzy_config(self):
+        """测试 INT8 SmoothQuant 模糊配置"""
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*self_attn.*.weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                '*mlp.*.weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+            'skip_layers': {'lm_head'}
+        }
+        
+        fuzzy_configs = _extract_fuzzy_configs(cfg['quant_cfg'])
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 2)
+        
+        weights_cfg = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
+        self.assertIsNotNone(weights_cfg)
+        self.assertEqual(weights_cfg['strategy'], 'channel')
+        
+        weights_cfg = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
+        self.assertIsNotNone(weights_cfg)
+        self.assertEqual(weights_cfg['strategy'], 'tensor')
+    
+    def test_hifp8_ofmr_fuzzy_config(self):
+        """测试 HIFP8 OFMR 模糊配置"""
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*layers.*.weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+                '*layers.*.inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+                'inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'ofmr'},
+            'skip_layers': {'lm_head'}
+        }
+        
+        fuzzy_configs = _extract_fuzzy_configs(cfg['quant_cfg'])
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        self.assertEqual(len(fuzzy_configs['inputs']), 1)
+        
+        weights_cfg = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
+        self.assertIsNotNone(weights_cfg)
+        self.assertEqual(weights_cfg['type'], 'hifloat8')
+        
+        inputs_cfg = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'inputs')
+        self.assertIsNotNone(inputs_cfg)
+        self.assertEqual(inputs_cfg['type'], 'hifloat8')
+    
+    def test_mxfp8_quant_fuzzy_config(self):
+        """测试 MXFP8 Quant 模糊配置"""
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*mlp.*.weights': {
+                    'type': 'mxfp8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32,
+                },
+                '*mlp.*.inputs': {
+                    'type': 'mxfp8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'group',
+                },
+                'weights': {
+                    'type': 'mxfp8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32,
+                },
+                'inputs': {
+                    'type': 'mxfp8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'group',
+                },
+            },
+            'algorithm': {'mxquant'},
+            'skip_layers': {'lm_head'}
+        }
+        
+        fuzzy_configs = _extract_fuzzy_configs(cfg['quant_cfg'])
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        self.assertEqual(len(fuzzy_configs['inputs']), 1)
+        
+        weights_cfg = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
+        self.assertIsNotNone(weights_cfg)
+        self.assertEqual(weights_cfg['type'], 'mxfp8_e4m3fn')
+        self.assertEqual(weights_cfg['strategy'], 'group')
+        self.assertEqual(weights_cfg['group_size'], 32)
+        
+        inputs_cfg = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'inputs')
+        self.assertIsNotNone(inputs_cfg)
+        self.assertEqual(inputs_cfg['type'], 'mxfp8_e4m3fn')
+        self.assertEqual(inputs_cfg['strategy'], 'group')
 
 
 if __name__ == '__main__':
