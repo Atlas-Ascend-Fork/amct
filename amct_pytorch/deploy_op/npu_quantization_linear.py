@@ -37,10 +37,11 @@ class NpuQuantizationLinear(torch.nn.Module):
         self._init_npu_quantize_type()
         self.act_granularity = 'PER_TENSOR'
         self.quantize_axis = -1
+        self.dynamic = getattr(quant_module, 'dynamic', None)
         scale_d_tensor = quant_module.scale_d.to(device=device)
         offset_d_tensor = quant_module.offset_d if quant_module.offset_d is not None else torch.tensor([0])
         offset_d_tensor = offset_d_tensor.repeat(scale_d_tensor.shape)
-        if self.act_type == INT8 and scale_d_tensor.dim() > 1:
+        if (self.act_type == INT8 or self.act_type == HIFLOAT8) and scale_d_tensor.dim() > 1:
             self.act_granularity = 'PER_TOKEN'
             self.quantize_axis = -2
         self.register_buffer('act_scale', 
@@ -91,23 +92,30 @@ class NpuQuantizationLinear(torch.nn.Module):
 
         if hasattr(self, 'scale_factor'):
             x = x * self.scale_factor
-        quant_x = torch_npu.npu_quantize(x, self.act_scale, self.act_offset, dtype=self.npu_quantize_act_type,
-            axis=self.quantize_axis, div_mode=False)
-        if self.is_new_torch_npu:
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                ori_shape = quant_x.shape
-                quant_x = quant_x.reshape(-1, x.shape[-1])
-            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+        
+        if self.act_granularity == 'PER_TOKEN' and self.dynamic is True and self.act_type == HIFLOAT8:
+            output = torch_npu.npu_dynamic_quant(x, self.quantized_weight,
+                scale_d=self.act_scale, scale_w=self.scale_w_tensor,
                 bias=self.bias, output_dtype=self.output_dtype,
-                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-                group_sizes=self.group_sizes, y_scale=self.y_scale)
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                output = output.reshape(*ori_shape[:-1], -1)
+                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype)
         else:
-            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                bias=self.bias, output_dtype=self.output_dtype)
+            quant_x = torch_npu.npu_quantize(x, self.act_scale, self.act_offset, dtype=self.npu_quantize_act_type,
+                axis=self.quantize_axis, div_mode=False)
+            if self.is_new_torch_npu:
+                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                    ori_shape = quant_x.shape
+                    quant_x = quant_x.reshape(-1, x.shape[-1])
+                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                    bias=self.bias, output_dtype=self.output_dtype,
+                    x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
+                    group_sizes=self.group_sizes, y_scale=self.y_scale)
+                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                    output = output.reshape(*ori_shape[:-1], -1)
+            else:
+                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                    bias=self.bias, output_dtype=self.output_dtype)
 
         return output
 

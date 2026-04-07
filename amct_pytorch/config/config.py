@@ -176,7 +176,8 @@ HIFP8_QUANTILE_CFG = {
         'inputs': {
             'type': 'hifloat8',
             'symmetric': True,
-            'strategy': 'tensor',
+            'strategy': 'token',
+            'dynamic': True,
         },
     },
     'algorithm': {'quantile'},

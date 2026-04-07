@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-from amct_pytorch.quantize_op.utils import get_weight_min_max_by_granularity
+from amct_pytorch.quantize_op.utils import get_weight_min_max_by_granularity, calculate_quantile_ema_scale
 from amct_pytorch.utils.data_utils import check_linear_input_dim
 from amct_pytorch.utils.vars import HIFLOAT8
 from amct_pytorch.utils.log import LOGGER
@@ -59,11 +59,25 @@ class QuantileQuant(BaseQuantizeModule):
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
+            self.dynamic = quant_config.get('inputs_cfg').get('dynamic', None)
+            
+            if self.dynamic is not None and self.act_granularity != 'token':
+                raise ValueError("The 'dynamic' field can only be enabled when strategy is 'token'")
+            
             self.data_max = None
             self.data_min = None
             self.previous_max = None
+            self.batch_input = None
+            self.dynamic_per_token_scales = []
         
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
+        
+        if self.wts_type != HIFLOAT8:
+            raise ValueError("Quantile algorithm only supports hifloat8 type for weights")
+        
+        if not self.weight_compress_only and self.act_type != HIFLOAT8:
+            raise ValueError("Quantile algorithm only supports hifloat8 type for activation")
+        
         self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
     
     def calculate_weights_scale_factor_and_quantize(self, weight_data, quant_config):
@@ -118,20 +132,50 @@ class QuantileQuant(BaseQuantizeModule):
             axis = tuple(axis_list)
             batch_max = torch.amax(inputs, dim=axis, keepdim=True)
             batch_min = torch.amin(inputs, dim=axis, keepdim=True)
+            
+            if self.dynamic is False:
+                if self.batch_input is None:
+                    self.batch_input = inputs.cpu()
+                else:
+                    self.batch_input = torch.cat((self.batch_input, inputs.cpu()), dim=-2)
+            elif self.dynamic is True:
+                self.dynamic_per_token_scales.append(batch_max.cpu())
+        else:
+            batch_max = None
+            batch_min = None
         
-        self.data_max = batch_max if self.data_max is None else self.data_max
-        self.data_min = batch_min if self.data_min is None else self.data_min
-        
-        if self.act_type == HIFLOAT8:
-            if self.scale_d is None:
-                self.scale_d = self.data_max
-            else:
-                self.scale_d = 0.99 * self.scale_d + 0.01 * self.previous_max
-            self.previous_max = self.data_max
+        if self.act_granularity == 'tensor':
+            self.data_max = batch_max if self.data_max is None else self.data_max
+            self.data_min = batch_min if self.data_min is None else self.data_min
+            
+            if self.act_type == HIFLOAT8:
+                if self.scale_d is None:
+                    self.scale_d = self.data_max
+                else:
+                    self.scale_d = calculate_quantile_ema_scale(self.scale_d, self.previous_max)
+                self.previous_max = self.data_max
         
         if self.cur_batch == self.batch_num:
             if self.act_type == HIFLOAT8:
-                self.scale_d = self.calculate_hif8_scale(self.scale_d)
+                if self.act_granularity == 'tensor':
+                    self.scale_d = self.calculate_hif8_scale(self.scale_d)
+                elif self.act_granularity == 'token':
+                    if self.dynamic is False:
+                        if self.batch_input is not None:
+                            cout_axis = -2
+                            axis_list = list(range(0, self.batch_input.dim()))
+                            axis_list.pop(cout_axis)
+                            axis = tuple(axis_list)
+                            per_token_max = torch.amax(self.batch_input, dim=axis, keepdim=True)
+                            self.scale_d = self.calculate_hif8_scale(per_token_max)
+                    elif self.dynamic is True:
+                        if len(self.dynamic_per_token_scales) > 0:
+                            self.dynamic_per_token_scales = torch.stack(self.dynamic_per_token_scales, dim=0)
+                            self.scale_d = self.calculate_hif8_scale(self.dynamic_per_token_scales)
+                    else:
+                        if batch_max is not None:
+                            per_token_max = batch_max
+                            self.scale_d = self.calculate_hif8_scale(per_token_max)
                 self.offset_d = None
             
             LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
