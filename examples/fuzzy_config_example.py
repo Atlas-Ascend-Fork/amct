@@ -50,9 +50,9 @@ class TransformerModel(nn.Module):
 
 def example_fuzzy_config():
     """
-    Example using HIFP8_MINMAX_FUZZY_CFG configuration
+    Example using fuzzy matching configuration
     """
-    from amct_pytorch import HIFP8_MINMAX_FUZZY_CFG, quantize
+    from amct_pytorch import quantize
     
     model = TransformerModel(num_layers=2, hidden_size=64)
     
@@ -61,7 +61,7 @@ def example_fuzzy_config():
         if 'q_proj' in name or 'down_proj' in name:
             print(f"  {name}")
     
-    print("\nApplying HIFP8_MINMAX_FUZZY_CFG configuration...")
+    print("\nApplying fuzzy matching configuration...")
     print("Configuration includes:")
     print("  - '*down_proj.weights': tensor strategy (matches all down_proj layers)")
     print("  - '*self_attn.q_proj.inputs': channel strategy (matches all q_proj layers)")
@@ -69,7 +69,7 @@ def example_fuzzy_config():
     print("  - Default inputs: tensor strategy")
     
     # Apply quantization with fuzzy matching
-    # quantize(model, HIFP8_MINMAX_FUZZY_CFG)
+    # quantize(model, custom_fuzzy_config)
     
     print("\nQuantization configuration applied successfully!")
     print("All 'down_proj' layers will use tensor strategy for weights")
@@ -136,6 +136,6 @@ if __name__ == '__main__':
     
     print("\n" + "=" * 70)
     print("For more information, see:")
-    print("  - amct_pytorch/config/config.py: HIFP8_MINMAX_FUZZY_CFG")
+    print("  - amct_pytorch/config/config.py: Custom fuzzy config examples")
     print("  - amct_pytorch/config/utils.py: match_fuzzy_pattern()")
     print("=" * 70)
