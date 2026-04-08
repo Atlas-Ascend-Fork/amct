@@ -97,30 +97,29 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
     fuzzy_inputs = quant_config.quant_cfg.fuzzy_configs['inputs']
     skip_layers = quant_config.skip_layers.skip_layers
     
+    if not fuzzy_weights and not fuzzy_inputs:
+        return
+    
+    if not skip_layers:
+        skip_layers_set = set()
+    else:
+        skip_layers_set = set(skip_layers)
+    
+    all_fuzzy_patterns = fuzzy_weights + fuzzy_inputs
+    all_fuzzy_pattern_strs = [cfg['pattern'] for cfg in all_fuzzy_patterns]
+    
     matched_fuzzy_layers = set()
     
-    for fuzzy_cfg in fuzzy_weights:
+    for fuzzy_cfg in all_fuzzy_patterns:
         pattern = fuzzy_cfg['pattern']
         for layer_name in all_layer_names:
             if match_fuzzy_pattern(layer_name, pattern):
                 matched_fuzzy_layers.add(layer_name)
-                for skip_layer in skip_layers:
-                    if skip_layer in layer_name:
-                        LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
-                                   f'quantization will be skipped', 'ConfigParser')
+                if layer_name in skip_layers_set:
+                    LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
+                               f'quantization will be skipped', 'ConfigParser')
     
-    for fuzzy_cfg in fuzzy_inputs:
-        pattern = fuzzy_cfg['pattern']
-        for layer_name in all_layer_names:
-            if match_fuzzy_pattern(layer_name, pattern):
-                matched_fuzzy_layers.add(layer_name)
-                for skip_layer in skip_layers:
-                    if skip_layer in layer_name:
-                        LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
-                                   f'quantization will be skipped', 'ConfigParser')
-    
-    all_fuzzy_patterns = [cfg['pattern'] for cfg in fuzzy_weights + fuzzy_inputs]
-    for pattern in all_fuzzy_patterns:
+    for pattern in all_fuzzy_pattern_strs:
         has_match = False
         for layer_name in all_layer_names:
             if match_fuzzy_pattern(layer_name, pattern):
