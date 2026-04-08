@@ -84,6 +84,52 @@ def check_config(quant_data_comb, quant_config, algo):
                 f'integer multiple of 32, current is {group_size}')
 
 
+def _check_fuzzy_config_warnings(all_layer_names, quant_config):
+    """
+    Check for warnings related to fuzzy matching configuration
+    Params:
+        all_layer_names: list, all layer names in the model
+        quant_config: QuantConfig object
+    """
+    from amct_pytorch.config.utils import match_fuzzy_pattern
+    
+    fuzzy_weights = quant_config.quant_cfg.fuzzy_configs['weights']
+    fuzzy_inputs = quant_config.quant_cfg.fuzzy_configs['inputs']
+    skip_layers = quant_config.skip_layers.skip_layers
+    
+    matched_fuzzy_layers = set()
+    
+    for fuzzy_cfg in fuzzy_weights:
+        pattern = fuzzy_cfg['pattern']
+        for layer_name in all_layer_names:
+            if match_fuzzy_pattern(layer_name, pattern):
+                matched_fuzzy_layers.add(layer_name)
+                for skip_layer in skip_layers:
+                    if skip_layer in layer_name:
+                        LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
+                                   f'quantization will be skipped', 'ConfigParser')
+    
+    for fuzzy_cfg in fuzzy_inputs:
+        pattern = fuzzy_cfg['pattern']
+        for layer_name in all_layer_names:
+            if match_fuzzy_pattern(layer_name, pattern):
+                matched_fuzzy_layers.add(layer_name)
+                for skip_layer in skip_layers:
+                    if skip_layer in layer_name:
+                        LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
+                                   f'quantization will be skipped', 'ConfigParser')
+    
+    all_fuzzy_patterns = [cfg['pattern'] for cfg in fuzzy_weights + fuzzy_inputs]
+    for pattern in all_fuzzy_patterns:
+        has_match = False
+        for layer_name in all_layer_names:
+            if match_fuzzy_pattern(layer_name, pattern):
+                has_match = True
+                break
+        if not has_match:
+            LOGGER.logw(f'Fuzzy pattern {pattern} does not match any layer in the model', 'ConfigParser')
+
+
 def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     """
     Check whether the current layer fits requirements of deploy op 
@@ -159,6 +205,11 @@ def get_supported_layers(model, quant_config, registed_alg):
             check_config(quant_type_comb, quant_config, algo)
 
     detail_config = dict()
+    all_layer_names = [name for name, mod in model.named_modules()
+                       if type(mod) in layer_types.keys() or type(mod).__name__ in layer_types.keys()]
+    
+    _check_fuzzy_config_warnings(all_layer_names, quant_config)
+
     for name, mod in model.named_modules():
         if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
             continue
@@ -171,15 +222,18 @@ def get_supported_layers(model, quant_config, registed_alg):
             continue
         algo = layer_types[type(mod).__name__]
         if algo in BUILT_IN_ALGORITHM:
-            if hasattr(mod, 'weight') and mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
+            if quant_type_comb is not None and hasattr(mod, 'weight') and \
+               mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
                 LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} only support ori dtype {} '
                 'but got {}'.format(name, quant_type_comb, ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
                 mod.weight.dtype))
                 continue
-            if not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
+            if quant_type_comb is not None and not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
                 continue
         
         layer_quant_cfg = _get_layer_quant_config(name, quant_config)
+        if layer_quant_cfg is None:
+            continue
         
         detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} 
         detail_config[name] = quant_config.batch_num.get_value() \
@@ -201,11 +255,15 @@ def _get_layer_quant_config(layer_name, quant_config):
     if fuzzy_weights_cfg:
         weights_cfg = WeightsCfgField(fuzzy_weights_cfg)
         quant_cfg['weights_cfg'] = weights_cfg.get_value()
+    elif quant_cfg['weights_cfg'] is None:
+        return None
     
     fuzzy_inputs_cfg = quant_config.quant_cfg.get_fuzzy_config(layer_name, 'inputs')
     if fuzzy_inputs_cfg:
         inputs_cfg = InputsCfgField(fuzzy_inputs_cfg)
         quant_cfg['inputs_cfg'] = inputs_cfg.get_value()
+    elif quant_cfg['inputs_cfg'] is None:
+        quant_cfg['inputs_cfg'] = {'enable_quant': False}
     
     return quant_cfg
 

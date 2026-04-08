@@ -46,10 +46,13 @@ class WeightsCfgField():
         self.symmetric = config.get('symmetric')
         self.strategy = config.get('strategy')
         self.group_size = config.get('group_size', None)
-        self.check()
+        if self.quant_type is not None:
+            self.check()
         self.value = self.set_value()
     
     def set_value(self):
+        if self.quant_type is None:
+            return None
         if self.group_size is None:
             return {'quant_type': self.quant_type,
                     'symmetric': self.symmetric,
@@ -101,16 +104,18 @@ class InputsCfgField():
             self.quant_type = config.get('type')
             self.symmetric = config.get('symmetric')
             self.strategy = config.get('strategy')
-            self.check()
+            if self.quant_type is not None:
+                self.check()
         self.value = self.set_value()
     
     def set_value(self):
-        if self.quant_input:
-            return {'quant_type': self.quant_type,
-                    'symmetric': self.symmetric,
-                    'strategy': self.strategy}
-        else:
+        if not self.quant_input:
             return {'enable_quant': False}
+        if self.quant_type is None:
+            return None
+        return {'quant_type': self.quant_type,
+                'symmetric': self.symmetric,
+                'strategy': self.strategy}
     
     def get_value(self):
         return self.value
