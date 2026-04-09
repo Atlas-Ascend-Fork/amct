@@ -55,7 +55,8 @@ class NpuQuantizationLinear(torch.nn.Module):
             x = x * self.scale_factor
         
         if self.act_granularity == 'token' and self.dynamic is True and self.act_type == HIFLOAT8:
-            quant_x, self.pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=torch_npu.hifloat8)
+            quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=self.npu_quantize_act_type)
+            self.pertoken_scale = pertoken_scale.view(-1)
         else:
             quant_x = torch_npu.npu_quantize(x, self.act_scale, self.act_offset, dtype=self.npu_quantize_act_type,
                 axis=self.quantize_axis, div_mode=False)
@@ -81,7 +82,7 @@ class NpuQuantizationLinear(torch.nn.Module):
         scale_d_tensor = quant_module.scale_d.to(device=device)
         offset_d_tensor = quant_module.offset_d if quant_module.offset_d is not None else torch.tensor([0])
         offset_d_tensor = offset_d_tensor.repeat(scale_d_tensor.shape)
-        if (self.act_type == INT8 or self.act_type == HIFLOAT8) and scale_d_tensor.dim() > 1:
+        if self.act_type == INT8 and scale_d_tensor.dim() > 1:
             self.act_granularity = 'token'
             self.quantize_axis = -2
         self.register_buffer('act_scale',
