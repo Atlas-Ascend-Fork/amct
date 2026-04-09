@@ -177,7 +177,7 @@ HIFP8_QUANTILE_CFG = {
             'type': 'hifloat8',
             'symmetric': True,
             'strategy': 'token',
-            'dynamic': True,
+            'dynamic': False,
         },
     },
     'algorithm': {'quantile'},
