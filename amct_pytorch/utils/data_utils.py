@@ -15,7 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import torch 
+import torch
 
 
 def check_linear_input_dim(input_tensor):
@@ -51,3 +51,4 @@ def float_to_fp4e2m1(tensor):
     fp4e2m1_tensor[absvalues > 5.0] = 6.0
     
     return (fp4e2m1_tensor * sign)
+

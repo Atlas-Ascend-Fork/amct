@@ -55,3 +55,24 @@ def check_param_types(name, value, need_param_types, func):
             raise TypeError('Func {} argument {} must be {}'. \
                 format(func.__name__, name,
                     need_param_types[name]))
+
+
+def check_parameters_in_schema(func, *param_names):
+    '''
+    检查指定参数是否存在于函数的第一个schema中
+    
+    args:
+        func: 要检查的函数，必须包含非空的_schemas属性
+        *param_names: 参数名称，可传入多个字符串或一个list/tuple
+    '''
+    if len(param_names) == 1 and isinstance(param_names[0], (list, tuple)):
+        param_names = param_names[0]
+    schemas_dict = func._schemas
+    schema = next(iter(schemas_dict.values()))
+    schema_param_names = [arg.name for arg in schema.arguments]
+
+    for param_name in param_names:
+        if param_name not in schema_param_names:
+            return False
+        
+    return True

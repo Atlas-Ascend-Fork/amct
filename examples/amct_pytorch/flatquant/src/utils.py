@@ -52,9 +52,18 @@ def build_enc(model_path):
 
 
 def get_llama(model_path, hf_token=None):
-    config = transformers.LlamaConfig.from_pretrained(
-        model_path, attn_implementation='eager')
+    config = transformers.LlamaConfig.from_pretrained(model_path, attn_implementation='eager')
     model = transformers.LlamaForCausalLM.from_pretrained(
+        model_path, torch_dtype='auto', config=config,
+        use_auth_token=hf_token, low_cpu_mem_usage=True)
+    model.seqlen = 2048
+    print(f'---> Loading {model_path} Model with seq_len: {model.seqlen}')
+    return model
+
+
+def get_qwen(model_path, hf_token=None):
+    config = transformers.AutoConfig.from_pretrained(model_path, attn_implementation='eager')
+    model = transformers.AutoModelForCausalLM.from_pretrained(
         model_path, torch_dtype='auto', config=config,
         use_auth_token=hf_token, low_cpu_mem_usage=True)
     model.seqlen = 2048
