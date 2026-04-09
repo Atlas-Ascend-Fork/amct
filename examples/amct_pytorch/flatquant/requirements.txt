@@ -1,6 +1,6 @@
 torch==2.7.1
 torch_npu
-transformers==4.36.0 # for llama 2
+transformers==4.51.0 # for qwen3
 tqdm
 accelerate
 datasets

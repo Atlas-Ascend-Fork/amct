@@ -1,3 +1,8 @@
 torch==2.7.1
 torch_npu
 setuptools
+onnx==1.16.1
+onnxruntime==1.20.0
+protobuf==3.20.3
+numpy>=1.19.2,<=1.24.0
+pyyaml

@@ -77,7 +77,7 @@ class CompModuleRNN(nn.Module):
         output_cell = []
         current_state = None
         for i in range(0, self.sequence_length):
-            xi = inputs[:, i:+1, :] if self.replaced_module.batch_first else inputs[1:1+1, :, :]
+            xi = inputs[:, i:i+1, :] if self.replaced_module.batch_first else inputs[1:i+1, :, :]
             acts_comp_func = self.acts_comp_reuse._acts_comp_quant if self.acts_comp_reuse else self._acts_comp_quant
             shape = xi.shape
             xi = xi.reshape(shape[0] * shape[1], shape[-1])
@@ -196,7 +196,7 @@ class CompModuleRNN(nn.Module):
 
         quant_initial_h, scale_h, offset_h, clip_max_h, clip_min_h = \
             UlqRetrainFunction.apply(
-                initial_h, self.acts_h_clip_max, self.acts_h_clip_min,
+                hx, self.acts_h_clip_max, self.acts_h_clip_min,
                 self.acts_h_clip_max_pre, self.acts_h_clip_min_pre, act_h_qat_param,
                 self.cur_batch,
                 self.common_config.get('need_sync'), self.common_config.get('process_group'),
