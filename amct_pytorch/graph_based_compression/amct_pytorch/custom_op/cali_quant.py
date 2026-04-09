@@ -108,7 +108,8 @@ class CaliQuantBase(nn.Module):
             if self.module_type in RNN_LAYER_TYPE:
                 sub_out = self.sub_module(inputs, hx)
                 h0 = hx if self.module_type == "GRU" else hx[0]
-                h_inputs = torch.cat((h0, sub_out[0][:, :-1, :]), dim=1)
+                h0 = h0.permute(1, 0, 2) if self.sub_module.batch_first else h0
+                h_inputs = torch.cat((h0, sub_out[0][:, :-1, :]), dim=1)     
             else:
                 sub_out = self.sub_module(inputs)
 
