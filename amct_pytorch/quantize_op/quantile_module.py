@@ -45,7 +45,6 @@ class QuantileQuant(BaseQuantizeModule):
         super().__init__(ori_module, layer_name, quant_config)
         self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
-        self.bias = ori_module.bias
         self.layer_name = layer_name
         self.cur_batch = 0
         self.weight_compress_only = True
@@ -60,9 +59,6 @@ class QuantileQuant(BaseQuantizeModule):
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
             self.dynamic = quant_config.get('inputs_cfg').get('dynamic', None)
-            
-            if self.dynamic is not None and self.act_granularity != 'token':
-                raise ValueError("The 'dynamic' field can only be enabled when strategy is 'token'")
             
             self.data_max = None
             self.data_min = None
@@ -79,6 +75,7 @@ class QuantileQuant(BaseQuantizeModule):
             raise ValueError("Quantile algorithm only supports hifloat8 type for activation")
         
         self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
+        self.bias = ori_module.bias
     
     def calculate_weights_scale_factor_and_quantize(self, weight_data, quant_config):
         """
@@ -107,7 +104,7 @@ class QuantileQuant(BaseQuantizeModule):
         if self.act_granularity == 'tensor':
             return torch.max(inputs).reshape(-1), torch.min(inputs).reshape(-1)
         elif self.act_granularity == 'token':
-            cout_axis = -2
+            cout_axis = -1
             axis_list = list(range(0, inputs.dim()))
             axis_list.pop(cout_axis)
             axis = tuple(axis_list)
@@ -118,13 +115,13 @@ class QuantileQuant(BaseQuantizeModule):
         return None, None
 
     def _handle_token_batch_input(self, inputs, batch_max):
-        if self.dynamic is False:
+        if self.dynamic is True:
+            self.dynamic_per_token_scales.append(batch_max.cpu())
+        else:
             if self.batch_input is None:
                 self.batch_input = inputs.cpu()
             else:
                 self.batch_input = torch.cat((self.batch_input, inputs.cpu()), dim=-2)
-        elif self.dynamic is True:
-            self.dynamic_per_token_scales.append(batch_max.cpu())
 
     def _update_act_scale_tensor(self, batch_max, batch_min):
         self.data_max = batch_max if self.data_max is None else self.data_max
@@ -139,16 +136,19 @@ class QuantileQuant(BaseQuantizeModule):
     def _finalize_calibration(self):
         if self.act_type != HIFLOAT8:
             return
-        if self.act_granularity == 'tensor':
-            self.scale_d = self.calculate_hif8_scale(self.scale_d)
-        elif self.act_granularity == 'token':
+        self.scale_d = self.calculate_hif8_scale(self.scale_d)
+        if self.act_granularity == 'token':
             self._finalize_token_calibration()
         self.offset_d = None
         LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
             'QuantileQuant')
 
     def _finalize_token_calibration(self):
-        if self.dynamic is False:
+        if self.dynamic is True:
+            if len(self.dynamic_per_token_scales) > 0:
+                self.dynamic_per_token_scales = torch.stack(self.dynamic_per_token_scales, dim=0)
+                self.scale_d = self.calculate_hif8_scale(self.dynamic_per_token_scales)
+        else:
             if self.batch_input is not None:
                 cout_axis = -2
                 axis_list = list(range(0, self.batch_input.dim()))
@@ -156,10 +156,6 @@ class QuantileQuant(BaseQuantizeModule):
                 axis = tuple(axis_list)
                 per_token_max = torch.amax(self.batch_input, dim=axis, keepdim=True)
                 self.scale_d = self.calculate_hif8_scale(per_token_max)
-        elif self.dynamic is True:
-            if len(self.dynamic_per_token_scales) > 0:
-                self.dynamic_per_token_scales = torch.stack(self.dynamic_per_token_scales, dim=0)
-                self.scale_d = self.calculate_hif8_scale(self.dynamic_per_token_scales)
 
     @torch.no_grad()
     def forward(self, inputs):
@@ -171,8 +167,7 @@ class QuantileQuant(BaseQuantizeModule):
         if self.cur_batch > self.batch_num:
             return fp_out
         batch_max, batch_min = self._compute_batch_min_max(inputs)
-        if self.act_granularity == 'tensor':
-            self._update_act_scale_tensor(batch_max, batch_min)
+        self._update_act_scale_tensor(batch_max, batch_min)
         if self.cur_batch == self.batch_num:
             self._finalize_calibration()
         return fp_out

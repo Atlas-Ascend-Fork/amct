@@ -140,8 +140,8 @@ class InputsCfgField():
         if self.strategy == 'token' and self.symmetric == False:
             raise ValueError(f'Inputs strategy token do not support asymmetric quantization')
         if self.dynamic is not None and self.strategy not in SUPPORT_QUANT_DYNAMIC_INPUT:
-            raise ValueError(f'Inputs dynamic only support strategy {SUPPORT_QUANT_DYNAMIC_INPUT}, \
-                but got {self.strategy}')
+            raise ValueError(f'Inputs dynamic only support strategy {SUPPORT_QUANT_DYNAMIC_INPUT}, '
+                f'but got {self.strategy}')
 
 
 class QuantCfgField():

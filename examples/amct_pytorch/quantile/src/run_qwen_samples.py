@@ -30,7 +30,7 @@ if __name__ == '__main__':
     model, enc = get_qwen(args.model_path)
     quant_model = model.eval().npu()
 
-    samples = get_calib_dataset(tokenizer=enc, n_samples=512, block_size=256)
+    samples = get_calib_dataset(tokenizer=enc, n_samples=512, block_size=model.seqlen)
     samples = torch.cat(samples, dim=0)[:1, :]
 
     # Phase1: quantize model using Quantile algorithm
