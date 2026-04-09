@@ -35,14 +35,14 @@ class NpuQuantizationLinear(torch.nn.Module):
         self.act_type = quant_module.act_type
         self.wts_type = quant_module.wts_type
         self._init_npu_quantize_type()
-        self.act_granularity = 'PER_TENSOR'
+        self.act_granularity = getattr(quant_module, 'act_granularity', 'tensor')
         self.quantize_axis = -1
         self.dynamic = getattr(quant_module, 'dynamic', None)
         scale_d_tensor = quant_module.scale_d.to(device=device)
         offset_d_tensor = quant_module.offset_d if quant_module.offset_d is not None else torch.tensor([0])
         offset_d_tensor = offset_d_tensor.repeat(scale_d_tensor.shape)
         if (self.act_type == INT8 or self.act_type == HIFLOAT8) and scale_d_tensor.dim() > 1:
-            self.act_granularity = 'PER_TOKEN'
+            self.act_granularity = 'token'
             self.quantize_axis = -2
         self.register_buffer('act_scale', 
                              (1 / scale_d_tensor).reshape(-1).to(device=device).to(self.output_dtype))
@@ -62,7 +62,7 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.offset_bias = offset_reshape.float() @ weight_tensor.float()
             self.offset_bias = -1 * self.offset_bias.round().to(torch.int32).reshape(-1)
 
-        if self.act_granularity == 'PER_TOKEN':
+        if self.act_granularity == 'token':
             self.register_buffer('deq_scale', self.scale_w_tensor)
             self.register_buffer('pertoken_scale',
                 quant_module.scale_d.reshape(-1).to(torch.float32).to(device=device))
@@ -93,7 +93,7 @@ class NpuQuantizationLinear(torch.nn.Module):
         if hasattr(self, 'scale_factor'):
             x = x * self.scale_factor
         
-        if self.act_granularity == 'PER_TOKEN' and self.dynamic is True and self.act_type == HIFLOAT8:
+        if self.act_granularity == 'token' and self.dynamic is True and self.act_type == HIFLOAT8:
             output = torch_npu.npu_dynamic_quant(x, self.quantized_weight,
                 scale_d=self.act_scale, scale_w=self.scale_w_tensor,
                 bias=self.bias, output_dtype=self.output_dtype,
@@ -153,12 +153,12 @@ class NpuQuantizationLinear(torch.nn.Module):
         """
         if module.bias is not None:
             bias = module.bias
-            if self.act_granularity == 'PER_TENSOR':
+            if self.act_granularity == 'tensor':
                 bias_tensor = bias.data / (scale_d_tensor * scale_w_tensor)
                 if self.act_type == INT8:
                     bias_tensor = bias.round().to(torch.int32)
                 self.register_buffer('bias', bias_tensor)
-            elif self.act_granularity == 'PER_TOKEN':
+            elif self.act_granularity == 'token':
                 self.register_buffer('bias', bias)
 
             if self.offset_bias is not None:

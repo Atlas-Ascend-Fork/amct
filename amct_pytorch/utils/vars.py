@@ -20,6 +20,7 @@ SUPPORT_WEIGHT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp
 SUPPORT_INPUT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp8_e4m3fn']
 SUPPORT_QUANT_STRATEGY_WEIGHT = ['tensor', 'channel', 'group']
 SUPPORT_QUANT_STRATEGY_INPUT = ['tensor', 'token']
+SUPPORT_QUANT_DYNAMIC_INPUT = ['token']
 
 INT8_MAX = torch.iinfo(torch.int8).max
 INT8_MIN = torch.iinfo(torch.int8).min
@@ -37,10 +38,7 @@ FLOAT16 = 'float16'
 QUANTILE_EMA_ALPHA = 0.99
 QUANTILE_EMA_BETA = 0.01
 
-
-
-
- = [INT8, INT4]
+WTS_ASYMMETRIC_DTYPE = [INT8, INT4]
 GROUP_SIZE_SUPPORTED_DTYPE = [INT4, INT8, FLOAT4_E2M1, MXFP4_E2M1, MXFP8_E4M3FN]
 
 GROUP_SIZE_SUPPORTED_MAP = {
@@ -89,7 +87,7 @@ WTS_PER_GROUP_SUPPORT_COMBINATION = ['mxfp8_e4m3fn mxfp8_e4m3fn', 'float8_e4m3fn
 
 ACT_PER_TENSOR_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'float8_e4m3fn float8_e4m3fn', 
                                 'int8 int8', 'float8_e4m3fn float4_e2m1']
-ACT_PER_TOKEN_SUPPORT_COMBINATION = ["int8 int8"]
+ACT_PER_TOKEN_SUPPORT_COMBINATION = ['int8 int8', 'hifloat8 hifloat8']
 
 # Quantization bit width combinations supported by different quantization granularities
 WTS_GRANULARITY_SUPPORT_MAP = {

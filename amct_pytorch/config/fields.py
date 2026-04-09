@@ -101,6 +101,7 @@ class InputsCfgField():
             self.quant_type = config.get('type')
             self.symmetric = config.get('symmetric')
             self.strategy = config.get('strategy')
+            self.dynamic = config.get('dynamic', None)
             self.check()
         self.value = self.set_value()
     
@@ -108,7 +109,8 @@ class InputsCfgField():
         if self.quant_input:
             return {'quant_type': self.quant_type,
                     'symmetric': self.symmetric,
-                    'strategy': self.strategy}
+                    'strategy': self.strategy,
+                    'dynamic': self.dynamic}
         else:
             return {'enable_quant': False}
     
@@ -126,6 +128,9 @@ class InputsCfgField():
             raise ValueError(f'Inputs strategy only support{SUPPORT_QUANT_STRATEGY_INPUT}, but got {self.strategy}')
         if self.strategy == 'token' and self.symmetric == False:
             raise ValueError(f'Inputs strategy token do not support asymmetric quantization')
+        if self.dynamic is not None and self.strategy not in SUPPORT_QUANT_DYNAMIC_INPUT
+            raise ValueError(f'Inputs dynamic only support strategy {SUPPORT_QUANT_DYNAMIC_INPUT}, \
+                but got {self.strategy}')
 
 
 class QuantCfgField():
