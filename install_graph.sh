@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+set -e
 # 获取当前工作目录
 WORKING_DIR=$(pwd)
 echo "工作目录: $WORKING_DIR"

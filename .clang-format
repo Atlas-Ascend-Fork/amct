@@ -1,0 +1,635 @@
+# Language, this format style is targeted at.
+# LK_Cpp(in configuration: Cpp) Should be used for C, C++, ObjectiveC, ObjectiveC++.
+# 参数可取值
+#   None, Cpp, Java, JavaScript, Proto
+Language: Cpp
+
+# The style used for all options not specifically set in the configuration
+# 该配置文件没有指定的，将使用该配置的 Coding Style 进行格式化。
+# 参数可取值
+#   None, LLVM, Google, Chromium, Mozilla, WebKit
+BasedOnStyle: Google
+
+# The extra indent or outdent of access modifiers, e.g. public:.
+# 访问限制关键字缩进，如 public、private 等。-4 即顶行首。
+AccessModifierOffset: -4
+
+# If true, horizontally aligns arguments after an open an open bracket.
+# 水平对齐跨行括号内参数。适用于用圆括号、尖括号和方括号。
+# Align: someLongFunction(argument1,
+#                         argument2);
+# DontAlign: someLongFunction(argument1,
+#                 argument2);
+# AlwaysBreak: someLongFunction(
+#                 argument1, argument2);
+# BlockIndent: someLongFunction(
+#                 argument1, argument2
+#              );
+AlignAfterOpenBracket: DontAlign
+
+# If true, aligns consecutive C/C++ preprocessor macros.
+# This will align C/C++ preprocessor macros of consecutive lines. 
+# 对齐预处理宏定义
+AlignConsecutiveMacros: false
+
+# 对齐连续行的位域分隔符
+# int aaaa : 1;
+# int b    : 12;
+# int ccc  : 8;
+AlignConsecutiveBitFields: Consecutive
+
+# If true, aligns consecutive assignments.
+# 对齐连续行的赋值运算符。
+# int aaaa = 12;
+# int b    = 23;
+# int ccc  = 23;
+AlignConsecutiveAssignments: false
+
+# If true, aligns consecutive declarations.
+# This will align the declaration names of consecutive lines. This will result in formattings like
+# int         aaaa = 12;
+# float       b = 23;
+# std::string ccc = 23;
+# 对齐声明的变量名
+AlignConsecutiveDeclarations: false
+
+# Options for aligning backslashes in escaped newlines.
+# DontAlign: Don’t align escaped newlines.
+# Left: Align escaped newlines as far left as possible.
+# Right: Align escaped newlines in the right-most column.
+# 在转义的换行符中反斜杠对齐的选项。
+# DontAlign: 不对齐
+# Left： 左对齐
+# Right: 右对齐
+AlignEscapedNewlines: Left
+
+# If true, horizontally align operands of binary and ternary expressions.
+# 水平对齐二元表达式和三元表达式的操作数。
+AlignOperands: true
+
+# If true, aligns trailing comments.
+# 对齐行尾注释
+AlignTrailingComments: true
+
+# 对齐数组列
+# struct test demo[] =
+# {
+#     {56,    23, "hello"},
+#     {-1, 93463, "world"},
+#     { 7,     5,    "!!"}
+# };
+AlignArrayOfStructures: Right
+
+# If a function call or braced initializer list doesn’t fit on a line, allow putting all arguments onto the next line, even if BinPackArguments is false.
+# 如果一个函数的参数一行放不下， 即使BinPackArguments设置为false，也允许把所有的参数放在下一行
+# true:
+# callFunction(
+#     a, b, c, d);
+
+# false:
+# callFunction(a,
+#              b,
+#              c,
+#              d);
+AllowAllArgumentsOnNextLine: true
+
+# If a constructor definition with a member initializer list doesn’t fit on a single line, 
+# allow putting all member initializers onto the next line, if `ConstructorInitializerAllOnOneLineOrOnePerLine` is true. Note that this parameter has no effect if `ConstructorInitializerAllOnOneLineOrOnePerLine` is false.
+# true:
+# MyClass::MyClass() :
+#     member0(0), member1(2) {}
+
+# false:
+# MyClass::MyClass() :
+#     member0(0),
+#     member1(2) {}
+AllowAllConstructorInitializersOnNextLine: true
+
+# Allow putting all parameters of a function declaration onto the next line even if BinPackParameters is false.
+# 即使 BinPackParameters 设置为 false，也允许把函数声明的所有参数放到下一行。
+AllowAllParametersOfDeclarationOnNextLine: false
+
+# Allows contracting simple braced statements to a single line.
+# E.g., this allows if (a) { return; } to be put on a single line.
+# 允许短的代码块在一行内。如：if (a) { return; }
+AllowShortBlocksOnASingleLine: Never
+
+# If true, short case labels will be contracted to a single line.
+# 允许短的 case 分支在一行内。
+AllowShortCaseLabelsOnASingleLine: true
+
+# 允许在单行上使用短枚举。
+# true:
+# enum { A, B } myEnum;
+#
+# false:
+# enum {
+#   A,
+#   B
+# } myEnum;
+AllowShortEnumsOnASingleLine: true
+
+# Dependent on the value, int f() { return 0; } can be put on a single line.
+# 允许如 int f() { return 0; } 这样的短函数放在一行内。
+# 参数可取值
+#   None: 从不
+#   Empty: 只适用于空函数
+#   Inline: 适用于定义在 class 内部的函数。包括 Empty。
+#   All: 适用于所有可以放在一行内的函数
+AllowShortFunctionsOnASingleLine: Inline
+
+# Dependent on the value, auto lambda []() { return 0; } can be put on a single line.
+AllowShortLambdasOnASingleLine: All
+
+# If true, if (a) return; can be put on a single line.
+# Never: Never put short ifs on the same line.
+# WithoutElse: Without else put short ifs on the same line only if the else is not a compound statement.
+# Always: Always put short ifs on the same line if the else is not a compound statement or not.
+# 允许如 if (a) return; 这样短的 if 语句在一行内。
+AllowShortIfStatementsOnASingleLine: Never
+
+# If true, while (true) continue; can be put on a single line.
+# 允许如 while (true) continue; 这样短的循环语句在一行内。
+AllowShortLoopsOnASingleLine: false
+
+# The function definition return type breaking style to use.
+# 函数返回类型换行风格。
+# 参数可取值
+#   None: 返回类型之后自动换行。PenaltyReturnTypeOnItsOwnLine 考虑在内。
+#   All: 返回类型之后总是断开。
+#   TopLevel: 只是在 Top Level 函数的返回类型之后断开
+# 实测参数可取值为 true 和 false。
+AlwaysBreakAfterDefinitionReturnType: None
+
+# The function declaration return type breaking style to use.
+# None: Break after return type automatically
+# All: Always break after the return type.
+# TopLevel: Always break after the return types of top-level functions. without class method
+# AllDefinitions: Always break after the return type of function definitions. with class method
+# TopLevelDefinitions: Always break after the return type of top-level definitions.
+# 总是在返回类型后换行: 
+#   None, All, TopLevel(顶级函数，不包括在类中的函数), 
+#   AllDefinitions(所有的定义，不包括声明),
+#   TopLevelDefinitions(所有的顶级函数的定义)
+AlwaysBreakAfterReturnType: None
+
+# If true, always break before multiline string literals.
+# This flag is mean to make cases where there are multiple multiline strings in a file look more consistent. 
+# Thus, it will only take effect if wrapping the string at that point leads to it being indented ContinuationIndentWidth spaces from the start of the line.
+
+# 如果为true，则始终在多行字符串文字之前断行。
+# 此标志的意思是使文件中有多个多行字符串的情况看起来更一致。
+# 因此，只有在该点处将字符串换行导致其从行首开始缩进ContinuationIndentWidth空格时，此选项才会生效。
+# true:                                  false:
+# aaaa =                         vs.     aaaa = "bbbb"
+#     "bbbb"                                    "cccc";
+#     "cccc";
+AlwaysBreakBeforeMultilineStrings: false
+
+# If true, always break after the template<...> of a template declaration.
+# 允许模板声明 template<...>之后总是断行
+# No: Do not force break before declaration. PenaltyBreakTemplateDeclaration is taken into account.
+# 在声明前不强制换行。 PenaltyBreakTemplateDeclaration 被考虑在内。
+# MultiLine: Force break after template declaration only when the following declaration spans multiple lines.
+# 仅当以下声明跨越多行时，才在模板声明后强制换行。
+# Yes: Always break after template declaration. 总是在模板声明后换行
+AlwaysBreakTemplateDeclarations: Yes
+
+# If false, a function call’s arguments will either be all on the same line or will have one line each.
+# 如果设置为 false，函数调用的参数要么所有都在同一行，要么每个独自占一行。各家都是 true。
+BinPackArguments: true
+
+# If false, a function declaration’s or function definition’s parameters will either all be on the same line or will have one line each.
+# 如果设置为 false，函数声明或函数声明的参数要么都在同一行，要么每个独占一行。
+BinPackParameters: true
+
+# AfterFunction true 规则【3.3.1】
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterObjCDeclaration: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+
+# The way to wrap binary operators.
+# 二元表达式操作数之前换行。
+# 参数可取值 None, NonAssignment, All
+# WebKit 设置为 All，其他家设置为 None
+BreakBeforeBinaryOperators: None
+
+# The brace breaking style to use.
+# 大括号断行方式。
+# 参数可取值
+#   Attach: Always attach braces to surrounding context. 总是连接括号，使其包围上下文。
+#   Linux: Like Attach, but break before braces on function, namespace and class definitions. 类似 Attach，但是在函数、命名空间和类定义的大括号前断行。
+#   Stroustrup: Like Attach, but break before function definitions, and ‘else’.类似 Attach，但是在函数和 else 的大括号前断行。
+#   Allman: Always break before braces. 总是在大括号前断行。
+#   GNU: Always break before braces and add an extra level of indentation to braces of control statements, not to those of class, function or other definitions. 总是在大括号前断行，并额外加一级缩进以控制语句（类和函数等的定义除外）。
+# WebKit 是 Stroustrup，其他家都是 Attach。
+BreakBeforeBraces: Custom
+
+# If true, in the class inheritance expression clang-format will break before : and , if there is multiple inheritance.
+# true:                                  false:
+#  class MyClass                  vs.     class MyClass : public X, public Y {
+#     : public X                         };
+#     , public Y {
+# };
+# 如果有多重继承，继承类表达式会换行 ":" ","
+BreakBeforeInheritanceComma: false
+
+#The inheritance list style to use.
+# BeforeColon: Break inheritance list before the colon and after the commas.
+# class Foo
+#     : Base1,
+#       Base2
+# {};
+# BeforeComma: Break inheritance list before the colon and commas, and align the commas with the colon.
+# class Foo
+#     : Base1
+#     , Base2
+# {};
+# AfterColon: Break inheritance list after the colon and commas.
+# class Foo :
+#     Base1,
+#     Base2
+# {};
+# AfterComma: Break inheritance list only after the commas.
+# class Foo : Base1,
+#             Base2
+# {};
+BreakInheritanceList: BeforeColon
+
+# If true, ternary operators will be placed after line breaks.
+# 三元表达式操作数之前换行
+# 各家都是 true。
+BreakBeforeTernaryOperators: false
+
+# Always break constructor initializers before commas and align the commas with the colon.
+# 总是在构造函数初始化之前的逗号断行，并将逗号和冒号对齐。
+BreakConstructorInitializersBeforeComma: false
+
+# The constructor initializers style to use.
+# BeforeColon: Break constructor initializers before the colon and after the commas.
+# BeforeComma: Break constructor initializers before the colon and commas, and align the commas with the colon.
+# AfterColon: Break constructor initializers after the colon and commas.
+# 构造函数初始化列表风格
+# BeforeColon：在冒号在前，逗号在后换行
+# BeforeComma： 在冒号、逗号前换行，用冒号对齐逗号
+# AfterColon：在冒号后，逗号前换行
+BreakConstructorInitializers: BeforeColon
+
+# Break after each annotation on a field in Java files.
+BreakAfterJavaFieldAnnotations: false
+
+# Allow breaking string literals when formatting.
+# 逐字符串换行
+BreakStringLiterals: true
+
+# The column limit.
+# A column limit of 0 means that there is no column limit. In this case, clang-format will respect the input’s line breaking decisions within statements unless they contradict other rules.
+# 设置为 0，表示无限制。这种情况下，clang-format 保留用户输入时的换行，除非和其他规则冲突。
+ColumnLimit: 120
+
+# A regular expression that describes comments with special meaning, which should not be split into lines or otherwise changed.
+# 表示具有特殊含义的注释内容，该注释内容不允许分成多行或者以其他方式改变。各家设置都是这样的。
+CommentPragmas: '^lint'
+
+# If true, consecutive namespace declarations will be on the same line. If false, each namespace is declared on a new line.
+# false: 每个命名空间一行
+CompactNamespaces: false
+
+# If the constructor initializers don’t fit on a line, put each initializer on its own line.
+# 如果构造函数初始化一行内放不下，就把每个初始化值独立放在一行。
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+
+# The number of characters to use for indentation of constructor initializer lists.
+# 构造函数初始值列表缩进值。各家都是4.
+ConstructorInitializerIndentWidth: 4
+
+# Indent width for line continuations.
+# 行延续的缩进宽度。各家都是4.
+ContinuationIndentWidth: 4
+
+# If true, format braced lists as best suited for C++11 braced lists.
+# Important differences: - No spaces inside the braced list. - No line break before the closing brace. - Indentation with the continuation indent, not with the block indent.
+# Fundamentally, C++11 braced lists are formatted exactly like function calls would be formatted in their place. If the braced list follows a name (e.g. a type or variable name), clang-format formats as if the {} were the parentheses of a function call with that name. If there is no name, a zero-length name is assumed.
+# 如果设置为 true，格式化大括号为 C++11 的大括号风格
+# 重要差异：大括号中没有空格，右括号之前没有断行。根据续行的缩进而不是块缩进来缩进。
+# 从根本上说，C++11 的大括号格式化和函数调用在自己的位置被格式化完全一致。如果大括号后面有一个类型名或变量名，clang-format 将把 {} 当做这个变量名或类型名的函数调用的括号。如果没有类型名或变量名，将假设这儿有一个 0 长度的类型名或变量名（来进行格式化）。
+# Mozilla 和 WebKit 是 false，其余是 true。
+Cpp11BracedListStyle: true
+
+# If true, analyze the formatted file for the most common alignment of & and *. PointerAlignment is then used only as fallback.
+# 分析将要格式化的文件中最通用的 & 和 * 的对齐方式。PointerAlignment 参数的设置仅作为一种后备方案。仅 Google 和 Mozilla 设置为 true。
+DerivePointerAlignment: false
+
+# Disables formatting completely.
+# 完全禁用代码格式化
+DisableFormat: false
+
+# If true, clang-format detects whether function calls and definitions are formatted with one parameter per line.
+# Each call can be bin-packed, one-per-line or inconclusive. If it is inconclusive, e.g. completely on one line, but a decision needs to be made, clang-format analyzes whether there are other bin-packed cases in the input file and act accordingly.
+# NOTE: This is an experimental flag, that might go away or be renamed. Do not use this in config files, etc. Use at your own risk.
+# 如果设置为 true，clang-format 将会检测函数调用和声明时是否格式化为了每个参数独占一行。
+# 每个函数调用都可以格式化为 bin-packed(集装优化，见 Wikipedia 词条 Bin packing problem)，也可以格式化为每个参数独占一行，或者二者均可。如果不确定，假如完全在一行，clang-format 将分析欲格式化的文件中类似场景的格式化方式并作相同的处理。
+# 注意：这是一个实验性的设置项。该设置项可能会去掉或者重命名，除非你愿意自担风险，否则不要使用该设置项。
+ExperimentalAutoDetectBinPacking: false
+
+# If true, clang-format adds missing namespace end comments and fixes invalid existing ones.
+# 增加或修复命名空间注释
+FixNamespaceComments: true
+
+# A vector of macros that should be interpreted as foreach loops instead of as function calls.
+# These are expected to be macros of the form: FOREACH(<variable-declaration>, ...) <loop-body>
+# For example: BOOST_FOREACH.
+# 应该被解释为 foreach 循环而不是函数调用的宏
+# 形式如 FOREACH(<variable-declaration>, ...) <loop-body> 的宏
+# 例如：BOOST_FOREACH。各家都是这样设置的。
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+  - BOOST_FOREACH
+
+IncludeBlocks: Regroup
+
+IncludeCategories:
+  - Regex: '^<ext/.*\.h>'
+    Priority: 2
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^<.*'
+    Priority: 2
+  - Regex: '.*'
+    Priority: 3
+
+IncludeIsMainRegex: '(Test)?$'
+
+# Indent case labels one level from the switch statement.
+# When false, use the same indentation level as for the switch statement. Switch statement body is always indented one level more than case labels.
+# 相比 switch，对 case 缩进一级。
+# 当设置为 false 是，对 case 和 switch 使用相同的缩进级别。Switch 语句的内容总是比 case 多缩进一个级别。
+IndentCaseLabels: true
+
+IndentPPDirectives: None
+
+# The number of columns to use for indentation.
+# 缩进宽度
+IndentWidth: 4
+
+# Indent if a function definition or declaration is wrapped after the type.
+# 对在返回类型之后换行的函数定义或声明进行缩进。各家都是 false。
+IndentWrappedFunctionNames: false
+
+JavaScriptQuotes: Leave
+JavaScriptWrapImports: true
+
+# If true, empty lines at the start of blocks are kept.
+# 保留代码块之前的空行。只有 Google 家的是false。
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+MacroBlockBegin: "\
+^ *PROG *$|\
+^ *PROC *$|\
+CATCH_ALL_ERROR.*$"
+MacroBlockEnd: "\
+^ *END_PROG *$|\
+^ *END_PROC *$|\
+END_CATCH_ERROR$"
+
+# The maximum number of consecutive empty lines to keep.
+# 保留的最大连续空行数
+MaxEmptyLinesToKeep: 1
+
+# The indentation used for namespaces.
+# 命名空间缩进
+# 参数可取值
+#   None: 不缩进
+#   Inner: 只对内部命名空间
+#   All
+# 只有 WebKit 设置为 Inner，其他家都是 None。
+NamespaceIndentation: None
+
+# Controls bin-packing Objective-C protocol conformance list items into as few lines as possible when they go over ColumnLimit.
+# BPS_Auto (in configuration: Auto) Automatically determine parameter bin-packing behavior.
+# BPS_Always (in configuration: Always) Always bin-pack parameters.
+# BPS_Never (in configuration: Never) Never bin-pack parameters.
+ObjCBinPackProtocolList: Never
+
+# The number of characters to use for indentation of ObjC blocks.
+# Objc blocks 缩进。
+ObjCBlockIndentWidth: 4
+
+# Add a space after @property in Objective-C, i.e. use @property (readonly) instead of @property(readonly).
+# Objective-C 语言 @property 后面加一个空格。形如 @property (readonly) 而非 @property(readonly)。
+ObjCSpaceAfterProperty: false
+
+# Add a space in front of an Objective-C protocol list, i.e. use Foo <Protocol> instead of Foo<Protocol>.
+# 为 Objective-C 语言 protocol 列表之前加一个空格。形如 Foo <Protocol> 而非 Foo<Protocol>。
+ObjCSpaceBeforeProtocolList: true
+
+# The penalty for breaking around an assignment operator.
+PenaltyBreakAssignment: 2
+
+# The penalty for breaking a function call after “call(”.
+# 函数调用 call( 断行之后的惩罚（补偿？啥意思不明白）。Google家是 1，其他家都是 19。
+PenaltyBreakBeforeFirstCallParameter: 1
+
+# The penalty for each line break introduced inside a comment.
+# 注释内部断行之后的惩罚。各家都是 300。
+PenaltyBreakComment: 300
+
+# The penalty for breaking before the first <<.
+# << 断行之前的惩罚。各家都是 120。
+PenaltyBreakFirstLessLess: 120
+
+# The penalty for each line break introduced inside a string literal.
+# 字符串内部断行之后的惩罚。各家都是 1000。
+PenaltyBreakString: 1000
+
+# The penalty for breaking after template declaration.
+PenaltyBreakTemplateDeclaration: 10
+
+# The penalty for each character outside of the column limit.
+# 对每个超出行限制的字符的惩罚。各家都是 1,000,000。
+PenaltyExcessCharacter: 1000000
+
+# Penalty for putting the return type of a function onto its own line.
+# 对把返回类型放置在自己行内惩罚。WebKit 和 LLVM 是 60，其他家都是 200。
+PenaltyReturnTypeOnItsOwnLine: 200
+
+# Pointer and reference alignment style.
+# 指针和引用的对齐方式。
+# 参数可取值 Left, Right, Middle。火狐和 Google 家都在左边。
+PointerAlignment: Right
+
+# Defines hints for detecting supported languages code blocks in raw strings.
+# Defines hints for detecting supported languages code blocks in raw strings.
+# A raw string with a matching delimiter or a matching enclosing function name will be reformatted assuming the specified 
+# language based on the style for that language defined in the .clang-format file. If no style has been defined in the 
+# .clang-format file for the specific language, a predefined style given by ‘BasedOnStyle’ is used. 
+# If ‘BasedOnStyle’ is not found, the formatting is based on llvm style. A matching delimiter takes precedence over a matching
+# enclosing function name for determining the language of the raw string contents.
+# If a canonical delimiter is specified, occurrences of other delimiters for the same language will be updated to the canonical if possible.
+# There should be at most one specification per language and each delimiter and enclosing function should not occur in multiple specifications.
+# To configure this in the .clang-format file, use:
+
+# 定义用于检测原始字符串中支持的语言代码块的提示。
+# 将根据.clang格式文件中定义的指定语言，使用指定的语言重新格式化具有匹配的定界符或包含的封闭函数名称的原始字符串。
+# 如果在.clang格式的文件中未为特定语言定义任何样式，则使用“ BasedOnStyle”给出的预定义样式。如果未找到“ BasedOnStyle”，
+# 则格式基于llvm样式。匹配的定界符优先于匹配的包围函数名称，用于确定原始字符串内容的语言。
+# 如果指定了规范定界符，则在可能的情况下，针对相同语言的其他定界符的出现将更新为规范。
+# 每种语言最多应有一个规范，并且每个分隔符和封闭函数不应出现在多个规范中。
+# 要在.clang格式的文件中进行配置，请使用：
+
+RawStringFormats:
+  - Language: Cpp
+    Delimiters:
+      - cc
+      - CC
+      - cpp
+      - Cpp
+      - CPP
+      - 'c++'
+      - 'C++'
+    CanonicalDelimiter: ''
+    BasedOnStyle: google
+  - Language: TextProto
+    Delimiters:
+      - pb
+      - PB
+      - proto
+      - PROTO
+    EnclosingFunctions:
+      - EqualsProto
+      - EquivToProto
+      - PARSE_PARTIAL_TEXT_PROTO
+      - PARSE_TEST_PROTO
+      - PARSE_TEXT_PROTO
+      - ParseTextOrDie
+      - ParseTextProtoOrDie
+    CanonicalDelimiter: ''
+    BasedOnStyle: google
+
+# If true, clang-format will attempt to re-flow comments.
+# 允许重新排版注释
+ReflowComments: true
+
+# If true, clang-format will sort #includes.
+# 允许排序#include
+SortIncludes: Never
+
+# If true, clang-format will sort using declarations.
+# 允许排序using声明
+SortUsingDeclarations: true
+
+# If true, a space may be inserted after C style casts.
+# C 风格的类型转换后面插入一个空格。
+# 各家都是 false。
+SpaceAfterCStyleCast: false
+
+# If true, a space is inserted after the logical not operator (!).
+# true: 在逻辑非前面插入一个空格
+SpaceAfterLogicalNot: false
+
+# If true, a space will be inserted after the ‘template’ keyword.
+# true： 在template关键字后面插入一个空格
+SpaceAfterTemplateKeyword: true
+
+# If false, spaces will be removed before assignment operators.
+# 如果设置为 false，赋值运算符前面的空格将会被删除。
+SpaceBeforeAssignmentOperators: true
+
+# If true, a space will be inserted before a C++11 braced list used to initialize an object (after the preceding identifier or type).
+# 如果为true，将在用于初始化对象的C ++ 11括号列表之前（前面的标识符或类型之后）插入一个空格。
+SpaceBeforeCpp11BracedList: false
+
+# If false, spaces will be removed before constructor initializer colon.
+# 如果为false，则将在构造函数初始化程序冒号之前删除空格。
+SpaceBeforeCtorInitializerColon: true
+
+# If false, spaces will be removed before inheritance colon.
+# 如果为false，则在继承冒号之前将删除空格。
+SpaceBeforeInheritanceColon: true
+
+# Defines in which cases to put a space before opening parentheses.
+# 定义开括号前加空格的风格。
+# 可取参数值
+#   Never 从不
+#   ControlStatements 只对 for, if, while 这样的控制语句的关键字后加。
+#   Always 除非语法规则禁止或者其他 clang-format 归档已经定义了，不然总是在开括号前加空格。
+# 这个没啥好争议的，各家都设置为 ControlStatements。
+SpaceBeforeParens: ControlStatements
+
+# If false, spaces will be removed before range-based for loop colon.
+# 如果为false，则会在基于范围的循环冒号之前删除空格。
+SpaceBeforeRangeBasedForLoopColon: true
+
+# If true, spaces may be inserted into ‘()’.
+# 空括号 () 中插入一个空格。
+# 各家都没开。
+SpaceInEmptyParentheses: false
+
+# The number of spaces before trailing line comments (// - comments).
+# This does not affect trailing block comments (/**/ - comments) as those commonly have different usage patterns and a number of special cases.
+# 行尾注释前的空格数。
+# 仅对 // 生效，对行尾的注释块 /**/ 以及那些常用的具有不同使用模式和一系列特殊场景不生效。
+SpacesBeforeTrailingComments: 1
+
+# If true, spaces will be inserted after ‘<’ and before ‘>’ in template argument lists
+# 尖括号内部列表前加空格。
+SpacesInAngles: false
+
+# If true, spaces are inserted inside container literals (e.g. ObjC and Javascript array and dict literals).
+# 容器内的文字插入空格。如 Objc 和 Javascript 的数组和字典。形如 @[ @"a", @"b" ]
+# true:                                  false:
+# var arr = [ 1, 2, 3 ];         vs.     var arr = [1, 2, 3];
+# f({a : 1, b : 2, c : 3});              f({a: 1, b: 2, c: 3});
+SpacesInContainerLiterals: false
+
+# If true, spaces may be inserted into C style casts.
+# C 风格类型转换括号内插入空格。形如float fffff = ( float )aaa;
+SpacesInCStyleCastParentheses: false
+
+
+# If true, spaces will be inserted after ‘(‘ and before ‘)’.
+# 圆括号内加空格。
+SpacesInParentheses: false
+
+# If true, spaces will be inserted after ‘[‘ and before ‘]’.
+# 方括号内加空格。
+SpacesInSquareBrackets: false
+
+# Format compatible with this standard, e.g. use A<A<int> > instead of A<A<int>> for LS_Cpp03.
+# 代码格式化兼容标准。如 Cpp03 中 A<A<int> > 而不是 A<A<int>>。
+# 参数可取值
+# LS_Cpp03 (in configuration: c++03) Parse and format as C++03. Cpp03 is a deprecated alias for c++03
+# LS_Cpp11 (in configuration: c++11) Parse and format as C++11.
+# LS_Cpp14 (in configuration: c++14) Parse and format as C++14.
+# LS_Cpp17 (in configuration: c++17) Parse and format as C++17.
+# LS_Cpp20 (in configuration: c++20) Parse and format as C++20.
+# LS_Latest (in configuration: Latest) Parse and format using the latest supported language version. Cpp11 is a deprecated alias for Latest
+# LS_Auto (in configuration: Auto) Automatic detection based on the input.
+Standard: Latest
+
+# The number of columns used for tab stops.
+# Tab 宽度。各家都是 8，但是各家都 Never UseTab。
+TabWidth: 4
+
+# The way to use tab characters in the resulting file.
+# tab 字符使用情况。
+# 参数可取值
+#   Never, ForIndentation, Always
+UseTab: Never
+...
+
