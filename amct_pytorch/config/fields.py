@@ -181,6 +181,13 @@ class QuantCfgField():
                 'a "weights" field or a fuzzy matching pattern like "*.weights"'
             )
 
+    def set_value(self):
+        return {'weights_cfg': self.weights_cfg.get_value(),
+                'inputs_cfg': self.inputs_cfg.get_value()}
+
+    def get_value(self):
+        return self.value
+
     def get_fuzzy_config(self, layer_name, config_type):
         """
         Get matching fuzzy config for a layer
@@ -195,13 +202,6 @@ class QuantCfgField():
             if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
                 return fuzzy_cfg['config']
         return None
-
-    def get_value(self):
-        return self.value
-
-    def set_value(self):
-        return {'weights_cfg': self.weights_cfg.get_value(),
-                'inputs_cfg': self.inputs_cfg.get_value()}
 
 
 class AwqField():
