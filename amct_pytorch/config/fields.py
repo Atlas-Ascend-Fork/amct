@@ -143,43 +143,7 @@ class QuantCfgField():
         self._validate_weights_config()
         
         self.value = self.set_value()
-    
-    def set_value(self):
-        return {'weights_cfg': self.weights_cfg.get_value(),
-                'inputs_cfg': self.inputs_cfg.get_value()}
-    
-    def get_value(self):
-        return self.value
-    
-    def get_fuzzy_config(self, layer_name, config_type):
-        """
-        Get matching fuzzy config for a layer
-        Params:
-            layer_name: str, the layer name
-            config_type: str, 'weights' or 'inputs'
-        Return: dict or None, the matching config or None
-        """
-        from amct_pytorch.config.utils import match_fuzzy_pattern
-        
-        for fuzzy_cfg in self.fuzzy_configs[config_type]:
-            if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
-                return fuzzy_cfg['config']
-        return None
-    
-    def _validate_weights_config(self):
-        """
-        验证至少有一个 weights 相关配置
-        要么有精确的 weights 配置，要么有模糊匹配的 *.weights 配置
-        """
-        has_weights_config = self.weights_cfg.get_value() is not None
-        has_fuzzy_weights_config = len(self.fuzzy_configs['weights']) > 0
-        
-        if not has_weights_config and not has_fuzzy_weights_config:
-            raise ValueError(
-                'Configuration must include at least one weights configuration: either '
-                'a "weights" field or a fuzzy matching pattern like "*.weights"'
-            )
-    
+
     @staticmethod
     def _extract_fuzzy_configs(config):
         """
@@ -202,6 +166,42 @@ class QuantCfgField():
                     })
         
         return fuzzy_configs
+
+    def _validate_weights_config(self):
+        """
+        验证至少有一个 weights 相关配置
+        要么有精确的 weights 配置，要么有模糊匹配的 *.weights 配置
+        """
+        has_weights_config = self.weights_cfg.get_value() is not None
+        has_fuzzy_weights_config = len(self.fuzzy_configs['weights']) > 0
+        
+        if not has_weights_config and not has_fuzzy_weights_config:
+            raise ValueError(
+                'Configuration must include at least one weights configuration: either '
+                'a "weights" field or a fuzzy matching pattern like "*.weights"'
+            )
+
+    def get_fuzzy_config(self, layer_name, config_type):
+        """
+        Get matching fuzzy config for a layer
+        Params:
+            layer_name: str, the layer name
+            config_type: str, 'weights' or 'inputs'
+        Return: dict or None, the matching config or None
+        """
+        from amct_pytorch.config.utils import match_fuzzy_pattern
+        
+        for fuzzy_cfg in self.fuzzy_configs[config_type]:
+            if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
+                return fuzzy_cfg['config']
+        return None
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self):
+        return {'weights_cfg': self.weights_cfg.get_value(),
+                'inputs_cfg': self.inputs_cfg.get_value()}
 
 
 class AwqField():
@@ -336,6 +336,14 @@ class AlgorithmField():
         self.names = alg_names
         self.value = self.set_value()
 
+    def get_value(self):
+        return self.value
+
+    @staticmethod
+    def check(alg_cfg):
+        if not isinstance(alg_cfg, str) and len(alg_cfg) != 1:
+            raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
+
     def set_value(self):
         total_alg = {}
         for alg in self.algs:
@@ -346,14 +354,6 @@ class AlgorithmField():
             else:
                 total_alg |= alg_value
         return {'algorithm': total_alg}
-    
-    def get_value(self):
-        return self.value
-
-    @staticmethod
-    def check(alg_cfg):
-        if not isinstance(alg_cfg, str) and len(alg_cfg) != 1:
-            raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
 
 
 class SkipLayersField():
