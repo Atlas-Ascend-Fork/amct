@@ -167,20 +167,6 @@ class QuantCfgField():
         
         return fuzzy_configs
 
-    def _validate_weights_config(self):
-        """
-        验证至少有一个 weights 相关配置
-        要么有精确的 weights 配置，要么有模糊匹配的 *.weights 配置
-        """
-        has_weights_config = self.weights_cfg.get_value() is not None
-        has_fuzzy_weights_config = len(self.fuzzy_configs['weights']) > 0
-        
-        if not has_weights_config and not has_fuzzy_weights_config:
-            raise ValueError(
-                'Configuration must include at least one weights configuration: either '
-                'a "weights" field or a fuzzy matching pattern like "*.weights"'
-            )
-
     def set_value(self):
         return {'weights_cfg': self.weights_cfg.get_value(),
                 'inputs_cfg': self.inputs_cfg.get_value()}
@@ -202,6 +188,20 @@ class QuantCfgField():
             if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
                 return fuzzy_cfg['config']
         return None
+
+    def _validate_weights_config(self):
+        """
+        验证至少有一个 weights 相关配置
+        要么有精确的 weights 配置，要么有模糊匹配的 *.weights 配置
+        """
+        has_weights_config = self.weights_cfg.get_value() is not None
+        has_fuzzy_weights_config = len(self.fuzzy_configs['weights']) > 0
+        
+        if not has_weights_config and not has_fuzzy_weights_config:
+            raise ValueError(
+                'Configuration must include at least one weights configuration: either '
+                'a "weights" field or a fuzzy matching pattern like "*.weights"'
+            )
 
 
 class AwqField():
@@ -336,13 +336,13 @@ class AlgorithmField():
         self.names = alg_names
         self.value = self.set_value()
 
-    def get_value(self):
-        return self.value
-
     @staticmethod
     def check(alg_cfg):
         if not isinstance(alg_cfg, str) and len(alg_cfg) != 1:
             raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
+
+    def get_value(self):
+        return self.value
 
     def set_value(self):
         total_alg = {}
