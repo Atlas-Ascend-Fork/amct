@@ -77,6 +77,21 @@ class QuantileQuant(BaseQuantizeModule):
         self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
         self.bias = ori_module.bias
     
+    @torch.no_grad()
+    def forward(self, inputs):
+        check_linear_input_dim(inputs)
+        fp_out = self.ori_module(inputs)
+        if self.weight_compress_only:
+            return fp_out
+        self.cur_batch += 1
+        if self.cur_batch > self.batch_num:
+            return fp_out
+        batch_max, batch_min = self._compute_batch_min_max(inputs)
+        self._update_act_scale_tensor(batch_max, batch_min)
+        if self.cur_batch == self.batch_num:
+            self._finalize_calibration()
+        return fp_out
+
     def calculate_weights_scale_factor_and_quantize(self, weight_data, quant_config):
         """
         Function: calculate weights's quant factor using quantile algo
@@ -99,7 +114,7 @@ class QuantileQuant(BaseQuantizeModule):
         """
         scale = (weight_max / 16.0).to(torch.float32)
         return scale
-    
+
     def _compute_batch_min_max(self, inputs):
         if self.act_granularity == 'tensor':
             return torch.max(inputs).reshape(-1), torch.min(inputs).reshape(-1)
@@ -156,18 +171,3 @@ class QuantileQuant(BaseQuantizeModule):
                 axis = tuple(axis_list)
                 per_token_max = torch.amax(self.batch_input, dim=axis, keepdim=True)
                 self.scale_d = self.calculate_hif8_scale(per_token_max)
-
-    @torch.no_grad()
-    def forward(self, inputs):
-        check_linear_input_dim(inputs)
-        fp_out = self.ori_module(inputs)
-        if self.weight_compress_only:
-            return fp_out
-        self.cur_batch += 1
-        if self.cur_batch > self.batch_num:
-            return fp_out
-        batch_max, batch_min = self._compute_batch_min_max(inputs)
-        self._update_act_scale_tensor(batch_max, batch_min)
-        if self.cur_batch == self.batch_num:
-            self._finalize_calibration()
-        return fp_out
