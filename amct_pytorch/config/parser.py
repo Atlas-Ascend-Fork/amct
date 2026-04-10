@@ -106,26 +106,20 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
         skip_layers_set = set(skip_layers)
     
     all_fuzzy_patterns = fuzzy_weights + fuzzy_inputs
-    all_fuzzy_pattern_strs = [cfg['pattern'] for cfg in all_fuzzy_patterns]
-    
-    matched_fuzzy_layers = set()
+    pattern_match_count = {cfg['pattern']: 0 for cfg in all_fuzzy_patterns}
     
     for fuzzy_cfg in all_fuzzy_patterns:
         pattern = fuzzy_cfg['pattern']
         for layer_name in all_layer_names:
-            if match_fuzzy_pattern(layer_name, pattern):
-                matched_fuzzy_layers.add(layer_name)
-                if layer_name in skip_layers_set:
-                    LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
-                               f'quantization will be skipped', 'ConfigParser')
+            if not match_fuzzy_pattern(layer_name, pattern):
+                continue
+            pattern_match_count[pattern] += 1
+            if layer_name in skip_layers_set:
+                LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
+                           f'quantization will be skipped', 'ConfigParser')
     
-    for pattern in all_fuzzy_pattern_strs:
-        has_match = False
-        for layer_name in all_layer_names:
-            if match_fuzzy_pattern(layer_name, pattern):
-                has_match = True
-                break
-        if not has_match:
+    for pattern, match_count in pattern_match_count.items():
+        if match_count == 0:
             LOGGER.logw(f'Fuzzy pattern {pattern} does not match any layer in the model', 'ConfigParser')
 
 
@@ -185,8 +179,8 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     return True
 
 
-def get_supported_layers(model, quant_config, registed_alg):
-    '''get supported layers based on quant config and registed algorithm'''
+def _build_layer_types_and_quant_type(quant_config, registed_alg):
+    '''Build layer types mapping and get quant type combination'''
     algos = quant_config.algorithm.names
     layer_types = dict()
     quant_type_comb = None
@@ -202,6 +196,41 @@ def get_supported_layers(model, quant_config, registed_alg):
             wts_type = quant_config.quant_cfg.weights_cfg.quant_type
             quant_type_comb = act_type + ' ' + wts_type
             check_config(quant_type_comb, quant_config, algo)
+    return layer_types, quant_type_comb
+
+
+def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
+    '''Check if layer is supported for quantization'''
+    if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
+        return False
+    if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
+        LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has requirement '
+                    'on padding_mode of conv2d, padding_mode should be zero.'.format(name, quant_type_comb))
+        return False
+    if check_skip_layer(name, quant_config.skip_layers.skip_layers):
+        LOGGER.logd('layer:{} is skipped'.format(name))
+        return False
+    return True
+
+
+def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
+    '''Check layer constraints for built-in algorithms'''
+    if algo not in BUILT_IN_ALGORITHM:
+        return True
+    if quant_type_comb is not None and hasattr(mod, 'weight') and \
+       mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
+        LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} only support ori dtype {} '
+        'but got {}'.format(name, quant_type_comb, ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
+        mod.weight.dtype))
+        return False
+    if quant_type_comb is not None and not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
+        return False
+    return True
+
+
+def get_supported_layers(model, quant_config, registed_alg):
+    '''get supported layers based on quant config and registed algorithm'''
+    layer_types, quant_type_comb = _build_layer_types_and_quant_type(quant_config, registed_alg)
 
     detail_config = dict()
     all_layer_names = [name for name, mod in model.named_modules()
@@ -210,25 +239,12 @@ def get_supported_layers(model, quant_config, registed_alg):
     _check_fuzzy_config_warnings(all_layer_names, quant_config)
 
     for name, mod in model.named_modules():
-        if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
+        if not _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
             continue
-        if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
-            LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has requirement '
-                        'on padding_mode of conv2d, padding_mode should be zero.'.format(name, quant_type_comb))
-            continue
-        if check_skip_layer(name, quant_config.skip_layers.skip_layers):
-            LOGGER.logd('layer:{} is skipped'.format(name))
-            continue
+        
         algo = layer_types[type(mod).__name__]
-        if algo in BUILT_IN_ALGORITHM:
-            if quant_type_comb is not None and hasattr(mod, 'weight') and \
-               mod.weight.dtype not in ALLOWED_WEIGHT_DTYPES.get(quant_type_comb):
-                LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} only support ori dtype {} '
-                'but got {}'.format(name, quant_type_comb, ALLOWED_WEIGHT_DTYPES.get(quant_type_comb),
-                mod.weight.dtype))
-                continue
-            if quant_type_comb is not None and not check_quant_op_constraint(mod, name, quant_type_comb, quant_config):
-                continue
+        if not _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
+            continue
         
         layer_quant_cfg = _get_layer_quant_config(name, quant_config)
         if layer_quant_cfg is None:

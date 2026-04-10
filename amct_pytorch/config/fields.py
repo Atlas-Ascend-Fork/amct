@@ -144,6 +144,28 @@ class QuantCfgField():
         
         self.value = self.set_value()
     
+    def set_value(self):
+        return {'weights_cfg': self.weights_cfg.get_value(),
+                'inputs_cfg': self.inputs_cfg.get_value()}
+    
+    def get_value(self):
+        return self.value
+    
+    def get_fuzzy_config(self, layer_name, config_type):
+        """
+        Get matching fuzzy config for a layer
+        Params:
+            layer_name: str, the layer name
+            config_type: str, 'weights' or 'inputs'
+        Return: dict or None, the matching config or None
+        """
+        from amct_pytorch.config.utils import match_fuzzy_pattern
+        
+        for fuzzy_cfg in self.fuzzy_configs[config_type]:
+            if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
+                return fuzzy_cfg['config']
+        return None
+    
     def _validate_weights_config(self):
         """
         验证至少有一个 weights 相关配置
@@ -158,7 +180,8 @@ class QuantCfgField():
                 'a "weights" field or a fuzzy matching pattern like "*.weights"'
             )
     
-    def _extract_fuzzy_configs(self, config):
+    @staticmethod
+    def _extract_fuzzy_configs(config):
         """
         Extract fuzzy matching configs from quant_cfg
         Patterns like '*down_proj.weights' or '*self_attn.q_proj.inputs'
@@ -179,28 +202,6 @@ class QuantCfgField():
                     })
         
         return fuzzy_configs
-    
-    def get_fuzzy_config(self, layer_name, config_type):
-        """
-        Get matching fuzzy config for a layer
-        Params:
-            layer_name: str, the layer name
-            config_type: str, 'weights' or 'inputs'
-        Return: dict or None, the matching config or None
-        """
-        from amct_pytorch.config.utils import match_fuzzy_pattern
-        
-        for fuzzy_cfg in self.fuzzy_configs[config_type]:
-            if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
-                return fuzzy_cfg['config']
-        return None
-    
-    def set_value(self):
-        return {'weights_cfg': self.weights_cfg.get_value(),
-                'inputs_cfg': self.inputs_cfg.get_value()}
-    
-    def get_value(self):
-        return self.value
 
 
 class AwqField():
@@ -335,12 +336,6 @@ class AlgorithmField():
         self.names = alg_names
         self.value = self.set_value()
 
-
-    @staticmethod
-    def check(alg_cfg):
-        if not isinstance(alg_cfg, str) and len(alg_cfg) != 1:
-            raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
-
     def set_value(self):
         total_alg = {}
         for alg in self.algs:
@@ -354,6 +349,11 @@ class AlgorithmField():
     
     def get_value(self):
         return self.value
+
+    @staticmethod
+    def check(alg_cfg):
+        if not isinstance(alg_cfg, str) and len(alg_cfg) != 1:
+            raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
 
 
 class SkipLayersField():
