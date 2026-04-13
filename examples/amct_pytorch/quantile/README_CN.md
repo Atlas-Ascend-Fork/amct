@@ -43,11 +43,12 @@ Quantile算法支持仅权重量化和全量化，支持的量化类型以及量
 | batch_num　　　　 | uint32 | 量化使用的batch数量 | 1　　　　　　　　　| /　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
 | skip_layers　　　 | str　　| 跳过量化的层　　　　| /　　　　　　　　　| 跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母 |
 | weights.type　　　| str　　| 量化后权重类型　　　| 'hifloat8'　　　　 | Quantile算法主要针对HIF8数据类型优化　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
-| weights.symmetric | bool　 | 对称量化　　　　　　| TRUE/FALSE　　　　 | HIF8数据类型支持对称量化和非对称量化　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| weights.symmetric | bool　 | 对称量化　　　　　　| True/False　　　　 | HIF8数据类型支持对称量化和非对称量化　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
 | weights.strategy　| str　　| 量化粒度　　　　　　| 'tensor'/'channel' | 支持per-tensor和per-channel　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
 | inputs.type　　　 | str　　| 量化后激活类型　　　| 'hifloat8'　　　　 | 全量化场景需要配置　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
-| inputs.symmetric　| bool　 | 对称量化　　　　　　| TRUE/FALSE　　　　 | HIF8数据类型支持对称量化和非对称量化　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| inputs.symmetric　| bool　 | 对称量化　　　　　　| True/False　　　　 | HIF8数据类型支持对称量化和非对称量化　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
 | inputs.strategy　 | str　　| 量化粒度　　　　　　| 'tensor'/'token'　 | 支持per-tensor和per-token（静态/动态）　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| inputs.dynamic　　| bool　 | 量化模式　　　　　　| True/False　　　　 | inputs.strategy配置了per-token情况下支持静态和动态　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
 | algorithm　　　　 | dict　 | 量化使用的算法配置　| {'quantile'}　　　 | /　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　|
 
 ## 2 量化示例
@@ -80,10 +81,10 @@ Score:  5.477707
 其中Score为量化模型PPL，具体数值参考下表：
 
 | 模型　　　| 校准集　| 数据集　　| 量化前PPL | 量化后PPL |
-| :---------:| :-------:| :---------:| :---------:| :-------------:|
-| LLAMA2-7B | pileval | wikitext2 | 5.472　　 | 5.514　　　　 |
-| QWEN2-7B　| pileval | wikitext2 | 7.137　　 | 7.175　　　　 |
-| QWEN3-8B　| pileval | wikitext2 | 9.715　　 | 9.759　　　　 |
+| :---------:| :-------:| :---------:| :---------:| :---------:|
+| LLAMA2-7B | pileval | wikitext2 | 5.472　　 | 5.538　　 |
+| QWEN2-7B　| pileval | wikitext2 | 7.137　　 | 7.186　　 |
+| QWEN3-8B　| pileval | wikitext2 | 9.715　　 | 9.766　　 |
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log
