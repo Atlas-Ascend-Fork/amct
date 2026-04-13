@@ -119,7 +119,7 @@ class QuantileQuant(BaseQuantizeModule):
         if self.act_granularity == 'tensor':
             return torch.max(inputs).reshape(-1), torch.min(inputs).reshape(-1)
         elif self.act_granularity == 'token':
-            cout_axis = -1
+            cout_axis = -2
             axis_list = list(range(0, inputs.dim()))
             axis_list.pop(cout_axis)
             axis = tuple(axis_list)
