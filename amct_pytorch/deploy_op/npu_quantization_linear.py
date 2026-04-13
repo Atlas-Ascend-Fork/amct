@@ -162,7 +162,6 @@ class NpuQuantizationLinear(torch.nn.Module):
         if module.bias is not None:
             bias = module.bias
             if self.act_granularity == 'tensor':
-                bias_tensor = bias.data / (scale_d_tensor * scale_w_tensor)
                 if self.act_type == INT8:
                     bias_tensor = bias.round().to(torch.int32)
                 self.register_buffer('bias', bias_tensor)
