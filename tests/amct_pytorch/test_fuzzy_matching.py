@@ -110,75 +110,75 @@ class TestFuzzyModel(nn.Module):
 
 
 class TestFuzzyPatternMatching(unittest.TestCase):
-    """测试模糊模式匹配功能"""
+    """Test fuzzy pattern matching functionality"""
     
     def test_exact_match(self):
-        """测试精确匹配"""
+        """Test exact matching"""
         self.assertTrue(match_fuzzy_pattern('layer1', 'layer1'))
         self.assertFalse(match_fuzzy_pattern('layer1', 'layer2'))
     
     def test_wildcard_prefix(self):
-        """测试前缀通配符"""
+        """Test prefix wildcard"""
         self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', '*down_proj'))
         self.assertTrue(match_fuzzy_pattern('model.layers.1.down_proj', '*down_proj'))
         self.assertFalse(match_fuzzy_pattern('model.layers.0.up_proj', '*down_proj'))
     
     def test_wildcard_suffix(self):
-        """测试后缀通配符"""
+        """Test suffix wildcard"""
         self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', 'model.layers.*'))
         self.assertTrue(match_fuzzy_pattern('model.layers.1.down_proj', 'model.layers.*'))
     
     def test_wildcard_middle(self):
-        """测试中间通配符"""
+        """Test middle wildcard"""
         self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', 'model.*.down_proj'))
         self.assertTrue(match_fuzzy_pattern('model.layers.1.down_proj', 'model.*.down_proj'))
         self.assertFalse(match_fuzzy_pattern('model.layers.0.up_proj', 'model.*.down_proj'))
     
     def test_wildcard_with_weights_suffix(self):
-        """测试通配符加.weights后缀"""
+        """Test wildcard with .weights suffix"""
         self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', '*down_proj.weights'))
         self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj.weights', '*down_proj.weights'))
         self.assertFalse(match_fuzzy_pattern('model.layers.0.down_proj.inputs', '*down_proj.weights'))
     
     def test_wildcard_with_inputs_suffix(self):
-        """测试通配符加.inputs后缀"""
+        """Test wildcard with .inputs suffix"""
         self.assertTrue(match_fuzzy_pattern('model.layers.0.q_proj', '*q_proj.inputs'))
         self.assertTrue(match_fuzzy_pattern('model.layers.0.q_proj.inputs', '*q_proj.inputs'))
         self.assertFalse(match_fuzzy_pattern('model.layers.0.q_proj.weights', '*q_proj.inputs'))
     
     def test_complex_pattern(self):
-        """测试复杂模式"""
+        """Test complex pattern"""
         self.assertTrue(match_fuzzy_pattern('model.layers.0.self_attn.q_proj', '*self_attn.q_proj.inputs'))
         self.assertFalse(match_fuzzy_pattern('model.layers.0.self_attn.k_proj', '*self_attn.q_proj.inputs'))
 
 
 class TestFuzzyPatternExceptions(unittest.TestCase):
-    """测试通配符模式异常场景"""
+    """Test wildcard pattern exception scenarios"""
     
     def test_empty_pattern(self):
-        """WC-001: 测试空模式"""
+        """WC-001: Test empty pattern"""
         result = (match_fuzzy_pattern('layer1', ''))
         self.assertFalse(result)
     
     def test_wildcard_only(self):
-        """WC-002: 测试只有通配符"""
+        """WC-002: Test wildcard only"""
         result = match_fuzzy_pattern('any.layer.name', '*')
         self.assertTrue(result)
     
     def test_multiple_wildcards(self):
-        """WC-003: 测试多个连续通配符"""
+        """WC-003: Test multiple consecutive wildcards"""
         result = match_fuzzy_pattern('layer', '**')
         self.assertTrue(result)
     
     def test_wildcard_at_start(self):
-        """WC-004: 测试通配符在开头"""
+        """WC-004: Test wildcard at start"""
         result = match_fuzzy_pattern('model.layer.layer', '*layer')
         self.assertTrue(result)
         result = match_fuzzy_pattern('model.other', '*layer')
         self.assertFalse(result)
     
     def test_wildcard_in_middle(self):
-        """WC-005: 测试通配符在中间"""
+        """WC-005: Test wildcard in middle"""
         result = match_fuzzy_pattern('model.layer.name', 'model*name')
         self.assertTrue(result)
         result = match_fuzzy_pattern('model.other.name', 'model*name')
@@ -187,57 +187,57 @@ class TestFuzzyPatternExceptions(unittest.TestCase):
         self.assertFalse(result)
     
     def test_wildcard_at_end(self):
-        """WC-006: 测试通配符在结尾"""
+        """WC-006: Test wildcard at end"""
         result = match_fuzzy_pattern('model.layer.name', 'model*')
         self.assertTrue(result)
         result = match_fuzzy_pattern('other.layer.name', 'model*')
         self.assertFalse(result)
     
     def test_multiple_wildcards_combination(self):
-        """WC-007: 测试多个通配符组合"""
+        """WC-007: Test multiple wildcards combination"""
         result = match_fuzzy_pattern('model.layer.name', '*layer*')
         self.assertTrue(result)
         result = match_fuzzy_pattern('model.other.name', '*layer*')
         self.assertFalse(result)
     
     def test_special_characters_with_wildcard(self):
-        """WC-008: 测试特殊字符与通配符"""
+        """WC-008: Test special characters with wildcard"""
         result = match_fuzzy_pattern('model@layer@name', '*layer@name')
         self.assertTrue(result)
     
     def test_suffix_only(self):
-        """SF-001: 测试只有后缀"""
+        """SF-001: Test suffix only"""
         result = match_fuzzy_pattern('layer', '.weights')
         self.assertFalse(result)
     
     def test_wildcard_with_suffix(self):
-        """SF-002: 测试通配符加后缀"""
+        """SF-002: Test wildcard with suffix"""
         result = match_fuzzy_pattern('model.layer1', '*.weights')
         self.assertTrue(result)
         result = match_fuzzy_pattern('model.layer1.weights', '*.weights')
         self.assertTrue(result)
     
     def test_multiple_suffixes(self):
-        """SF-003: 测试多个后缀"""
+        """SF-003: Test multiple suffixes"""
         result = match_fuzzy_pattern('model.layer', '*layer.weights.weights')
         self.assertFalse(result)
     
     def test_suffix_case_sensitive(self):
-        """SF-004: 测试后缀大小写"""
+        """SF-004: Test suffix case sensitivity"""
         result = match_fuzzy_pattern('model.layer', '*.Weights')
         self.assertFalse(result)
     
     def test_invalid_suffix(self):
-        """SF-005: 测试无效后缀"""
+        """SF-005: Test invalid suffix"""
         result = match_fuzzy_pattern('model.layer', '*.invalid')
         self.assertFalse(result)
 
 
 class TestFuzzyConfigConflicts(unittest.TestCase):
-    """测试配置冲突和优先级"""
+    """Test configuration conflicts and priority"""
     
     def test_multiple_patterns_same_layer(self):
-        """CF-001: 测试多个模式匹配同一层"""
+        """CF-001: Test multiple patterns matching same layer"""
         config = {
             '*layer.weights': {'type': 'int8', 'strategy': 'tensor'},
             '*specific.weights': {'type': 'int4', 'strategy': 'channel'},
@@ -252,7 +252,7 @@ class TestFuzzyConfigConflicts(unittest.TestCase):
         self.assertEqual(result['strategy'], 'tensor')
     
     def test_weights_and_inputs_patterns(self):
-        """CF-002: 测试权重和输入模式同时匹配"""
+        """CF-002: Test weights and inputs patterns matching simultaneously"""
         config = {
             '*layer.weights': {'type': 'int8', 'strategy': 'tensor'},
             '*layer.inputs': {'type': 'int8', 'strategy': 'channel'},
@@ -269,7 +269,7 @@ class TestFuzzyConfigConflicts(unittest.TestCase):
         self.assertEqual(inputs_result['strategy'], 'channel')
     
     def test_fuzzy_vs_default_priority(self):
-        """CF-003: 测试模糊配置优先级高于默认配置"""
+        """CF-003: Test fuzzy config priority higher than default config"""
         config = {
             '*down_proj.weights': {'type': 'int8', 'strategy': 'tensor'},
             'weights': {'type': 'int8', 'strategy': 'channel'},
@@ -284,7 +284,7 @@ class TestFuzzyConfigConflicts(unittest.TestCase):
         self.assertIsNone(result)
     
     def test_exact_vs_fuzzy_priority(self):
-        """CF-004: 测试精确配置优先级高于模糊配置"""
+        """CF-004: Test exact config priority higher than fuzzy config"""
         config = {
             'exact.weights': {'type': 'int4', 'strategy': 'channel'},
             '*exact.weights': {'type': 'int8', 'strategy': 'tensor'},
@@ -299,38 +299,38 @@ class TestFuzzyConfigConflicts(unittest.TestCase):
 
 
 class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
-    """测试边界条件"""
+    """Test boundary conditions"""
     
     def test_empty_layer_name(self):
-        """LN-001: 测试空层名称"""
+        """LN-001: Test empty layer name"""
         result = match_fuzzy_pattern('', '*layer')
         self.assertFalse(result)
     
     def test_long_layer_name(self):
-        """LN-002: 测试非常长的层名称"""
+        """LN-002: Test very long layer name"""
         long_name = 'a.' * 100 + 'layer'
         result = match_fuzzy_pattern(long_name, '*layer')
         self.assertTrue(result)
     
     def test_layer_name_with_numbers(self):
-        """LN-003: 测试层名称包含数字"""
+        """LN-003: Test layer name with numbers"""
         result = match_fuzzy_pattern('layer0', 'layer*')
         self.assertTrue(result)
         result = match_fuzzy_pattern('layer1', 'layer*')
         self.assertTrue(result)
     
     def test_layer_name_with_underscore(self):
-        """LN-004: 测试层名称包含下划线"""
+        """LN-004: Test layer name with underscore"""
         result = match_fuzzy_pattern('layer_name', '*name')
         self.assertTrue(result)
     
     def test_layer_name_with_dots(self):
-        """LN-005: 测试层名称包含点号"""
+        """LN-005: Test layer name with dots"""
         result = match_fuzzy_pattern('model.layer.name', '*name')
         self.assertTrue(result)
     
     def test_empty_quant_cfg(self):
-        """BC-001: 测试空的quant_cfg"""
+        """BC-001: Test empty quant_cfg"""
         config = {}
         fuzzy_configs = _extract_fuzzy_configs(config)
         
@@ -338,7 +338,7 @@ class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
         self.assertEqual(len(fuzzy_configs['inputs']), 0)
     
     def test_empty_fuzzy_config_value(self):
-        """BC-003: 测试空的模糊配置值"""
+        """BC-003: Test empty fuzzy config value"""
         config = {
             '*layer.weights': {},
             'weights': {'type': 'int8', 'strategy': 'channel'},
@@ -351,7 +351,7 @@ class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
         self.assertEqual(result, {})
     
     def test_none_fuzzy_config_value(self):
-        """BC-004: 测试None的模糊配置值"""
+        """BC-004: Test None fuzzy config value"""
         config = {
             '*layer.weights': None,
             'weights': {'type': 'int8', 'strategy': 'channel'},
@@ -365,39 +365,39 @@ class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
 
 
 class TestFuzzyConfigSpecialCharacters(unittest.TestCase):
-    """测试特殊字符处理"""
+    """Test special character handling"""
     
     def test_layer_name_with_spaces(self):
-        """SC-001: 测试空格字符"""
+        """SC-001: Test space characters"""
         result = match_fuzzy_pattern('layer name', '*name')
         self.assertTrue(result)
     
     def test_layer_name_with_chinese(self):
-        """SC-002: 测试中文字符"""
+        """SC-002: Test Chinese characters"""
         result = match_fuzzy_pattern('层名称', '*名称')
         self.assertTrue(result)
     
     def test_layer_name_with_special_symbols(self):
-        """SC-003: 测试特殊符号"""
+        """SC-003: Test special symbols"""
         result = match_fuzzy_pattern('layer@#$', '*@#$')
         self.assertTrue(result)
     
     def test_layer_name_with_unicode(self):
-        """SC-004: 测试Unicode字符"""
+        """SC-004: Test Unicode characters"""
         result = match_fuzzy_pattern('layerαβγ', '*αβγ')
         self.assertTrue(result)
     
     def test_layer_name_with_escape(self):
-        """SC-005: 测试转义字符"""
+        """SC-005: Test escape characters"""
         result = match_fuzzy_pattern('layer\nname', '*name')
         self.assertTrue(result)
 
 
 class TestFuzzyConfigPerformance(unittest.TestCase):
-    """测试性能"""
+    """Test performance"""
     
     def test_fuzzy_pattern_performance(self):
-        """测试模糊匹配性能"""
+        """Test fuzzy matching performance"""
         import time
         
         pattern = '*layer.weights'
@@ -411,12 +411,12 @@ class TestFuzzyConfigPerformance(unittest.TestCase):
         self.assertLess(elapsed_time, 0.1)
     
     def test_complex_pattern_performance(self):
-        """测试复杂模式性能"""
+        """Test complex pattern performance"""
         import time
         
         pattern = '*self_attn.*_proj.weights'
         layer_names = [
-            f'model.layers.{i}.self_attn.q_proj' for i in range(100)
+            f'model.layers.{i}.self_attnn.q_proj' for i in range(100)
         ] + [
             f'model.layers.{i}.self_attn.k_proj' for i in range(100)
         ] + [
@@ -432,10 +432,10 @@ class TestFuzzyConfigPerformance(unittest.TestCase):
 
 
 class TestFuzzyConfigIntegration(unittest.TestCase):
-    """测试集成场景"""
+    """Test integration scenarios"""
     
     def test_fuzzy_config_with_real_model(self):
-        """测试模糊配置与真实模型的集成"""
+        """Test fuzzy config integration with real model"""
         model = TestFuzzyModel()
         
         config = {
@@ -479,7 +479,7 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
             self.assertEqual(result['strategy'], 'channel')
     
     def test_fuzzy_config_mixed_with_exact_config(self):
-        """测试模糊配置与精确配置混合使用"""
+        """Test fuzzy config mixed with exact config"""
         config = {
             '*layer.weights': {'type': 'int8', 'strategy': 'tensor'},
             'exact.weights': {'type': 'int4', 'strategy': 'channel'},
@@ -497,7 +497,7 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         self.assertIsNone(result)
     
     def test_fuzzy_config_with_complex_patterns(self):
-        """测试复杂的模糊配置模式"""
+        """Test complex fuzzy config patterns"""
         config = {
             '*self_attn.*_proj.weights': {'type': 'int8', 'strategy': 'channel'},
             '*mlp.*.weights': {'type': 'int8', 'strategy': 'tensor'},
@@ -505,16 +505,16 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         }
         fuzzy_configs = _extract_fuzzy_configs(config)
         
-        result = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
+        result = get_fuzzy_config('model.layers.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
         self.assertIsNotNone(result)
         self.assertEqual(result['strategy'], 'channel')
         
-        result = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
+        result = get_fuzzy_config('model.layers.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
         self.assertIsNotNone(result)
         self.assertEqual(result['strategy'], 'tensor')
     
     def test_fp8_fp4_group_sym_minmax_config(self):
-        """测试 FP8 FP4 Group Sym Minmax 模糊配置"""
+        """Test FP8 FP4 Group Sym Minmax fuzzy config"""
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -563,7 +563,7 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         self.assertIsNone(inputs_cfg)
     
     def test_int8_int4_awq_fuzzy_config(self):
-        """测试 INT8 INT4 AWQ 模糊配置"""
+        """Test INT8 INT4 AWQ fuzzy config"""
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -601,16 +601,16 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         
         self.assertEqual(len(fuzzy_configs['weights']), 3)
         
-        for layer_name in ['model.layers.0.self_attn.q_proj', 
-                          'model.layers.0.self_attn.k_proj',
-                          'model.layers.0.self_attn.v_proj']:
+        for layer_name in ['model.layers.layers.0.self_attn.q_proj', 
+                          'model.layers.layers.0.self_attn.k_proj',
+                          'model.layers.layers.0.self_attn.v_proj']:
             weights_cfg = get_fuzzy_config(layer_name, fuzzy_configs, 'weights')
             self.assertIsNotNone(weights_cfg)
             self.assertEqual(weights_cfg['type'], 'int4')
             self.assertEqual(weights_cfg['strategy'], 'channel')
     
     def test_int8_smoothquant_fuzzy_config(self):
-        """测试 INT8 SmoothQuant 模糊配置"""
+        """Test INT8 SmoothQuant fuzzy config"""
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -643,16 +643,16 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         
         self.assertEqual(len(fuzzy_configs['weights']), 2)
         
-        weights_cfg = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
+        weights_cfg = get_fuzzy_config('model.layers.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
         self.assertIsNotNone(weights_cfg)
         self.assertEqual(weights_cfg['strategy'], 'channel')
         
-        weights_cfg = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
+        weights_cfg = get_fuzzy_config('model.layers.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
         self.assertIsNotNone(weights_cfg)
         self.assertEqual(weights_cfg['strategy'], 'tensor')
     
     def test_hifp8_ofmr_fuzzy_config(self):
-        """测试 HIFP8 OFMR 模糊配置"""
+        """Test HIFP8 OFMR fuzzy config"""
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -686,16 +686,16 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         self.assertEqual(len(fuzzy_configs['weights']), 1)
         self.assertEqual(len(fuzzy_configs['inputs']), 1)
         
-        weights_cfg = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
+        weights_cfg = get_fuzzy_config('model.layers.layers.0.self_attn.q_proj', fuzzy_configs, 'weights')
         self.assertIsNotNone(weights_cfg)
         self.assertEqual(weights_cfg['type'], 'hifloat8')
         
-        inputs_cfg = get_fuzzy_config('model.layers.0.self_attn.q_proj', fuzzy_configs, 'inputs')
+        inputs_cfg = get_fuzzy_config('model.layers.layers.0.self_attn.q_proj', fuzzy_configs, 'inputs')
         self.assertIsNotNone(inputs_cfg)
         self.assertEqual(inputs_cfg['type'], 'hifloat8')
     
     def test_mxfp8_quant_fuzzy_config(self):
-        """测试 MXFP8 Quant 模糊配置"""
+        """Test MXFP8 Quant fuzzy config"""
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -731,23 +731,23 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         self.assertEqual(len(fuzzy_configs['weights']), 1)
         self.assertEqual(len(fuzzy_configs['inputs']), 1)
         
-        weights_cfg = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
+        weights_cfg = get_fuzzy_config('model.layers.layers.0.mlp.down_proj', fuzzy_configs, 'weights')
         self.assertIsNotNone(weights_cfg)
         self.assertEqual(weights_cfg['type'], 'mxfp8_e4m3fn')
         self.assertEqual(weights_cfg['strategy'], 'group')
         self.assertEqual(weights_cfg['group_size'], 32)
         
-        inputs_cfg = get_fuzzy_config('model.layers.0.mlp.down_proj', fuzzy_configs, 'inputs')
+        inputs_cfg = get_fuzzy_config('model.layers.layers.0.mlp.down_proj', fuzzy_configs, 'inputs')
         self.assertIsNotNone(inputs_cfg)
         self.assertEqual(inputs_cfg['type'], 'mxfp8_e4m3fn')
         self.assertEqual(inputs_cfg['strategy'], 'group')
 
 
 class TestWeightsCfgFieldAdditional(unittest.TestCase):
-    """测试 WeightsCfgField 类的新增代码"""
+    """Test WeightsCfgField class new code"""
     
     def test_weights_cfg_with_none_quant_type(self):
-        """测试 quant_type 为 None 的情况"""
+        """Test quant_type is None"""
         from amct_pytorch.config.fields import WeightsCfgField
         
         config = {}
@@ -755,7 +755,7 @@ class TestWeightsCfgFieldAdditional(unittest.TestCase):
         self.assertIsNone(field.get_value())
     
     def test_weights_cfg_with_group_size(self):
-        """测试带 group_size 的配置"""
+        """Test config with group_size"""
         from amct_pytorch.config.fields import WeightsCfgField
         
         config = {
@@ -770,7 +770,7 @@ class TestWeightsCfgFieldAdditional(unittest.TestCase):
         self.assertEqual(value['group_size'], 32)
     
     def test_weights_cfg_without_group_size(self):
-        """测试不带 group_size 的配置"""
+        """Test config without group_size"""
         from amct_pytorch.config.fields import WeightsCfgField
         
         config = {
@@ -785,10 +785,10 @@ class TestWeightsCfgFieldAdditional(unittest.TestCase):
 
 
 class TestInputsCfgFieldAdditional(unittest.TestCase):
-    """测试 InputsCfgField 类的新增代码"""
+    """Test InputsCfgField class new code"""
     
     def test_inputs_cfg_with_none_quant_type(self):
-        """测试 quant_type 为 None 的情况"""
+        """Test quant_type is None"""
         from amct_pytorch.config.fields import InputsCfgField
         
         config = {}
@@ -796,7 +796,7 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
         self.assertIsNone(field.get_value())
     
     def test_inputs_cfg_enable_quant_false(self):
-        """测试 enable_quant 为 False 的情况"""
+        """Test enable_quant is False"""
         from amct_pytorch.config.fields import InputsCfgField
         
         config = {'enable_quant': False}
@@ -805,11 +805,11 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
         self.assertFalse(value['enable_quant'])
     
     def test_inputs_cfg_enable_quant_true(self):
-        """测试 enable_quant 为 True 的情况"""
+        """Test enable_quant is True"""
         from amct_pytorch.config.fields import InputsCfgField
         
         config = {
-            'enable_quant': True,
+            'enable': True,
             'type': 'int8',
             'symmetric': True,
             'strategy': 'tensor'
@@ -820,7 +820,7 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
         self.assertEqual(value['strategy'], 'tensor')
     
     def test_get_fuzzy_config_weights(self):
-        """测试获取 weights 模糊配置"""
+        """Test getting weights fuzzy config"""
         from amct_pytorch.config.fields import QuantCfgField
         
         config = {
@@ -845,7 +845,7 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
         self.assertIsNone(result)
     
     def test_get_fuzzy_config_inputs(self):
-        """测试获取 inputs 模糊配置"""
+        """Test getting inputs fuzzy config"""
         from amct_pytorch.config.fields import QuantCfgField
         
         config = {
@@ -866,7 +866,7 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
             assert 'Configuration must include at least one weights configuration' in str(e)
     
     def test_validate_weights_config_with_weights(self):
-        """测试有 weights 配置时的验证"""
+        """Test validation with weights config"""
         from amct_pytorch.config.fields import QuantCfgField
         
         config = {
@@ -880,7 +880,7 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
         self.assertIsNotNone(field.get_value())
     
     def test_validate_weights_config_with_fuzzy_weights(self):
-        """测试有模糊 weights 配置时的验证"""
+        """Test validation with fuzzy weights config"""
         from amct_pytorch.config.fields import QuantCfgField
         
         config = {
@@ -894,7 +894,7 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
         self.assertIsNotNone(field.get_value())
     
     def test_validate_weights_config_without_weights(self):
-        """测试没有 weights 配置时的验证"""
+        """Test validation without weights config"""
         from amct_pytorch.config.fields import QuantCfgField
         
         config = {
@@ -908,10 +908,10 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
 
 
 class TestAlgorithmFieldAdditional(unittest.TestCase):
-    """测试 AlgorithmField 类的新增代码"""
+    """Test AlgorithmField class new code"""
     
     def test_algorithm_field_get_value(self):
-        """测试 AlgorithmField.get_value() 方法"""
+        """Test AlgorithmField.get_value() method"""
         from amct_pytorch.config.fields import AlgorithmField
         
         registed_alg = Mock()
@@ -926,10 +926,10 @@ class TestAlgorithmFieldAdditional(unittest.TestCase):
 
 
 class TestParserFunctionsAdditional(unittest.TestCase):
-    """测试 parser 模块的新增辅助函数"""
+    """Test parser module new helper functions"""
     
     def test_check_fuzzy_config_warnings_no_fuzzy(self):
-        """测试没有模糊配置时的警告检查"""
+        """Test warning check without fuzzy config"""
         from amct_pytorch.config.parser import _check_fuzzy_config_warnings
         from amct_pytorch.config.fields import QuantConfig
         
@@ -951,7 +951,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
     
     def test_check_fuzzy_config_warnings_with_fuzzy(self):
-        """测试有模糊配置时的警告检查"""
+        """Test warning check with fuzzy config"""
         from amct_pytorch.config.parser import _check_fuzzy_config_warnings
         from amct_pytorch.config.fields import QuantConfig
         
@@ -979,7 +979,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
     
     def test_check_fuzzy_config_warnings_no_match(self):
-        """测试模糊配置没有匹配任何层时的警告"""
+        """Test warning when fuzzy config matches no layer"""
         from amct_pytorch.config.parser import _check_fuzzy_config_warnings
         from amct_pytorch.config.fields import QuantConfig
         
@@ -1006,7 +1006,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
     
     def test_build_layer_types_and_quant_type(self):
-        """测试构建层类型和量化类型"""
+        """Test building layer types and quant type"""
         from amct_pytorch.config.parser import _build_layer_types_and_quant_type
         from amct_pytorch.config.fields import QuantConfig
         
@@ -1036,7 +1036,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         self.assertEqual(quant_type_comb, 'int8 int8')
     
     def test_is_layer_supported_conv2d_padding_mode(self):
-        """测试 Conv2d padding_mode 检查"""
+        """Test Conv2d padding_mode check"""
         from amct_pytorch.config.parser import _is_layer_supported
         from amct_pytorch.config.fields import QuantConfig
         
@@ -1061,7 +1061,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         self.assertFalse(is_supported)
     
     def test_get_layer_quant_config_with_fuzzy_weights(self):
-        """测试获取带模糊权重配置的层配置"""
+        """Test getting layer config with fuzzy weights"""
         from amct_pytorch.config.parser import _get_layer_quant_config
         from amct_pytorch.config.fields import QuantConfig
         
@@ -1089,7 +1089,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         self.assertEqual(layer_config['weights_cfg']['strategy'], 'tensor')
     
     def test_get_layer_quant_config_with_fuzzy_inputs(self):
-        """测试获取带模糊输入配置的层配置"""
+        """Test getting layer config with fuzzy inputs"""
         from amct_pytorch.config.parser import _get_layer_quant_config
         from amct_pytorch.config.fields import QuantConfig
         
@@ -1121,7 +1121,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         self.assertEqual(layer_config['inputs_cfg']['strategy'], 'tensor')
     
     def test_get_layer_quant_config_without_fuzzy_match(self):
-        """测试没有模糊匹配时的层配置"""
+        """Test layer config without fuzzy match"""
         from amct_pytorch.config.parser import _get_layer_quant_config
         from amct_pytorch.config.fields import QuantConfig
         
@@ -1144,7 +1144,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
         self.assertEqual(layer_config['weights_cfg']['strategy'], 'channel')
     
     def test_get_layer_quant_config_no_weights_config(self):
-        """测试没有权重配置时的层配置"""
+        """Test layer config without weights config"""
         from amct_pytorch.config.parser import _get_layer_quant_config
         from amct_pytorch.config.fields import QuantConfig
         
@@ -1157,7 +1157,7 @@ class TestParserFunctionsAdditional(unittest.TestCase):
                     'strategy': 'tensor'
                 },
                 'algorithm': {'minmax'}
-        }
+            }
         }
         quant_config = QuantConfig(config, Mock())
         

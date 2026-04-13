@@ -139,7 +139,6 @@ class QuantCfgField():
         self.inputs_cfg = InputsCfgField(config.get('inputs', {'enable_quant': False}))
         self.fuzzy_configs = self._extract_fuzzy_configs(config)
         
-        # 验证至少有一个 weights 相关配置
         self._validate_weights_config()
         
         self.value = self.set_value()
@@ -191,8 +190,8 @@ class QuantCfgField():
 
     def _validate_weights_config(self):
         """
-        验证至少有一个 weights 相关配置
-        要么有精确的 weights 配置，要么有模糊匹配的 *.weights 配置
+        Validate that at least one weights configuration exists
+        Either a precise weights configuration or a fuzzy matching *.weights configuration
         """
         has_weights_config = self.weights_cfg.get_value() is not None
         has_fuzzy_weights_config = len(self.fuzzy_configs['weights']) > 0
