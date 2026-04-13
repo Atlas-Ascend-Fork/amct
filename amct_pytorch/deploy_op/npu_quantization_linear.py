@@ -66,11 +66,13 @@ class NpuQuantizationLinear(torch.nn.Module):
                 quant_x = quant_x.reshape(-1, x.shape[-1])
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                bias=self.bias, output_dtype=self.output_dtype,
+                output_dtype=self.output_dtype,
                 x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
                 group_sizes=self.group_sizes, y_scale=self.y_scale)
             if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
                 output = output.reshape(*ori_shape[:-1], -1)
+            if self.bias is not None:
+                output = output + self.bias
         else:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
@@ -165,11 +167,7 @@ class NpuQuantizationLinear(torch.nn.Module):
                     bias_tensor = bias.round().to(torch.int32)
                 self.register_buffer('bias', bias_tensor)
             elif self.act_granularity == 'token':
-                if self.act_type == HIFLOAT8:
-                    bias_tensor = bias.data / scale_w_tensor
-                    self.register_buffer('bias', bias_tensor)
-                else:
-                    self.register_buffer('bias', bias)
+                self.register_buffer('bias', bias)
 
             if self.offset_bias is not None:
                 self.bias = self.bias + self.offset_bias
