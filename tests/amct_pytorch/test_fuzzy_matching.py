@@ -742,5 +742,579 @@ class TestFuzzyConfigIntegration(unittest.TestCase):
         self.assertEqual(inputs_cfg['strategy'], 'group')
 
 
+class TestWeightsCfgFieldAdditional(unittest.TestCase):
+    """测试 WeightsCfgField 类的新增代码"""
+    
+    def test_weights_cfg_with_none_quant_type(self):
+        """测试 quant_type 为 None 的情况"""
+        from amct_pytorch.config.fields import WeightsCfgField
+        
+        config = {}
+        field = WeightsCfgField(config)
+        self.assertIsNone(field.get_value())
+    
+    def test_weights_cfg_with_group_size(self):
+        """测试带 group_size 的配置"""
+        from amct_pytorch.config.fields import WeightsCfgField
+        
+        config = {
+            'type': 'int4',
+            'symmetric': True,
+            'strategy': 'group',
+            'group_size': 32
+        }
+        field = WeightsCfgField(config)
+        value = field.get_value()
+        self.assertEqual(value['quant_type'], 'int4')
+        self.assertEqual(value['group_size'], 32)
+    
+    def test_weights_cfg_without_group_size(self):
+        """测试不带 group_size 的配置"""
+        from amct_pytorch.config.fields import WeightsCfgField
+        
+        config = {
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'channel'
+        }
+        field = WeightsCfgField(config(config)
+        value = field.get_value()
+        self.assertEqual(value['quant_type'], 'int8')
+        self.assertIsNone(value.get('group_size'))
+
+
+class TestInputsCfgFieldAdditional(unittest.TestCase):
+    """测试 InputsCfgField 类的新增代码"""
+    
+    def test_inputs_cfg_with_none_quant_type(self):
+        """测试 quant_type 为 None 的情况"""
+        from amct_pytorch.config.fields import InputsCfgField
+        
+        config = {}
+        field = InputsCfgField(config)
+        self.assertIsNone(field.get_value())
+    
+    def test_inputs_cfg_enable_quant_false(self):
+        """测试 enable_quant 为 False 的情况"""
+        from amct_pytorch.config.fields import InputsCfgField
+        
+        config = {'enable_quant': False}
+        field = InputsCfgField(config)
+        value = field.get_value()
+        self.assertFalse(value['enable_quant'])
+    
+    def test_inputs_cfg_enable_quant_true(self):
+        """测试 enable_quant 为 True 的情况"""
+        from amct_pytorch.config.fields import InputsCfgField
+        
+        config = {
+            'enable_quant': True,
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'tensor'
+        }
+        field = InputsCfgField(config)
+        value = field.get_value()
+        self.assertEqual(value['quant_type'], 'int8')
+        self.assertEqual(value['strategy'], 'tensor')
+
+
+class TestQuantCfgFieldAdditional(unittest.TestCase):
+    """测试 QuantCfgField 类的新增代码"""
+    
+    def test_extract_fuzzy_configs_weights(self):
+        """测试提取 weights 模糊配置"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            '*down_proj.weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            },
+            'weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'channel'
+            }
+        }
+        fuzzy_configs = QuantCfgField._extract_fuzzy_configs(config)
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 1)
+        self.assertEqual(fuzzy_configs['weights'][0]['pattern'], '*down_proj.weights')
+        self.assertEqual(len(fuzzy_configs['inputs']), 0)
+    
+    def test_extract_fuzzy_configs_inputs(self):
+        """测试提取 inputs 模糊配置"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            '*q_proj.inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            },
+            'inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            }
+        }
+        fuzzy_configs = QuantCfgField._extract_fuzzy_configs(config)
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 0)
+        self.assertEqual(len(fuzzy_configs['inputs']), 1)
+        self.assertEqual(fuzzy_configs['inputs'][0]['pattern'], '*q_proj.inputs')
+    
+    def test_extract_fuzzy_configs_multiple(self):
+        """测试提取多个模糊配置"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            '*q_proj.weights': {
+                'type': 'int4',
+                'symmetric': True,
+                'strategy': 'channel'
+            },
+            '*k_proj.weights': {
+                'type': 'int4',
+                'symmetric': True,
+                'strategy': 'channel'
+            },
+            '*v_proj.weights': {
+                'type': 'int4',
+                'symmetric': True,
+                'strategy': 'channel'
+            },
+            '*q_proj.inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            }
+        }
+        fuzzy_configs = QuantCfgField._extract_fuzzy_configs(config)
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 3)
+        self.assertEqual(len(fuzzy_configs['inputs']), 1)
+    
+    def test_extract_fuzzy_configs_empty(self):
+        """测试空配置"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {}
+        fuzzy_configs = QuantCfgField._extract_fuzzy_configs(config)
+        
+        self.assertEqual(len(fuzzy_configs['weights']), 0)
+        self.assertEqual(len(fuzzy_configs['inputs']), 0)
+    
+    def test_get_fuzzy_config_weights(self):
+        """测试获取 weights 模糊配置"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            '*down_proj.weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            },
+            'weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'channel'
+            }
+        }
+        field = QuantCfgField(config)
+        
+        result = field.get_fuzzy_config('model.layers.0.down_proj', 'weights')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['strategy'], 'tensor')
+        
+        result = field.get_fuzzy_config('model.layers.0.up_proj', 'weights')
+        self.assertIsNone(result)
+    
+    def test_get_fuzzy_config_inputs(self):
+        """测试获取 inputs 模糊配置"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            '*q_proj.inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            },
+            'inputs': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            }
+        }
+        field = QuantCfgField(config)
+        
+        result = field.get_fuzzy_config('model.layers.0.self_attn.q_proj', 'inputs')
+        self.assertIsNotNone(result)
+        self.assertEqual(result['strategy'], 'tensor')
+        
+        result = field.get_fuzzy_config('model.layers.0.self_attn.k_proj', 'inputs')
+        self.assertIsNone(result)
+    
+    def test_validate_weights_config_with_weights(self):
+        """测试有 weights 配置时的验证"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            'weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'channel'
+            }
+        }
+        field = QuantCfgField(config)
+        self.assertIsNotNone(field.get_value())
+    
+    def test_validate_weights_config_with_fuzzy_weights(self):
+        """测试有模糊 weights 配置时的验证"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            '*down_proj.weights': {
+                'type': 'int8',
+                'symmetric': True,
+                'strategy': 'tensor'
+            }
+        }
+        field = QuantCfgField(config)
+        self.assertIsNotNone(field.get_value())
+    
+    def test_validate_weights_config_without_weights(self):
+        """测试没有 weights 配置时的验证"""
+        from amct_pytorch.config.fields import QuantCfgField
+        
+        config = {
+            'inputs': {'enable_quant': False}
+        }
+        
+        with self.assertRaises(ValueError) as context:
+            QuantCfgField(config)
+        
+        self.assertIn('weights configuration', str(context.exception))
+
+
+class TestAlgorithmFieldAdditional(unittest.TestCase):
+    """测试 AlgorithmField 类的新增代码"""
+    
+    def test_algorithm_field_get_value(self):
+        """测试 AlgorithmField.get_value() 方法"""
+        from amct_pytorch.config.fields import AlgorithmField
+        
+        registed_alg = Mock()
+        registed_alg.algo = {'minmax': {'Linear': None}}
+        
+        config = {'minmax': {}}
+        field = AlgorithmField(config, registed_alg)
+        
+        value = field.get_value()
+        self.assertIsNotNone(value)
+        self.assertEqual(value['algorithm'], {'minmax': {}})
+
+
+class TestParserFunctionsAdditional(unittest.TestCase):
+    """测试 parser 模块的新增辅助函数"""
+    
+    def test_check_fuzzy_config_warnings_no_fuzzy(self):
+        """测试没有模糊配置时的警告检查"""
+        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'minmax'}
+        }
+        }
+        quant_config = QuantConfig(config, Mock())
+        all_layer_names = ['layer1', 'layer2']
+        
+        _check_fuzzy_config_warnings(all_layer_names, quant_config)
+    
+    def test_check_fuzzy_config_warnings_with_fuzzy(self):
+        """测试有模糊配置时的警告检查"""
+        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*down_proj.weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                },
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'minmax'},
+            'skip_layers': ['model.layers.0.down_proj']
+        }
+        quant_config = QuantConfig(config, Mock())
+        all_layer_names = ['model.layers.0.down_proj', 'model.layers.1.down_proj']
+        
+        _check_fuzzy_config_warnings(all_layer_names, quant_config)
+    
+    def test_check_fuzzy_config_warnings_no_match(self):
+        """测试模糊配置没有匹配任何层时的警告"""
+        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*nonexistent.weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                },
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'minmax'}
+        }
+        quant_config = QuantConfig(config, Mock())
+        all_layer_names = ['layer1', 'layer2']
+        
+        _check_fuzzy_config_warnings(all_layer_names, quant_config)
+    
+    def test_build_layer_types_and_quant_type(self):
+        """测试构建层类型和量化类型"""
+        from amct_pytorch.config.parser import _build_layer_types_and_quant_type
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                }
+            },
+            'algorithm': {'minmax'}
+        }
+        }
+        quant_config = QuantConfig(config, Mock())
+        registed_alg = Mock()
+        registed_alg.algo = {'minmax': {'Linear': None}}
+        
+        layer_types, quant_type_comb = _build_layer_types_and_quant_type(quant_config, registed_alg)
+        
+        self.assertIn('Linear', layer_types)
+        self.assertEqual(quant_type_comb, 'int8 int8')
+    
+    def test_is_layer_supported(self):
+        """测试层是否支持量化"""
+        from amct_pytorch.config.parser import _is_layer_supported
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'minmax'}
+        }
+        }
+        quant_config = QuantConfig(config, Mock())
+        layer_types = {'Linear': 'minmax', 'Conv2d': 'minmax'}
+        quant_type_comb = 'int8 int8'
+        
+        mod = nn.Linear(64, 64)
+        is_supported = _is_layer_supported(mod, 'layer1', layer_types, quant_type_comb, quant_config)
+        self.assertTrue(is_supported)
+        
+        is_supported = _is_layer_supported(mod, 'skip_layer', layer_types, quant_type_comb, quant_config)
+        self.assertFalse(is_supported)
+    
+    def test_is_layer_supported_conv2d_padding_mode(self):
+        """测试 Conv2d padding_mode 检查"""
+        from amct_pytorch.config.parser import _is_layer_supported
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'minmax'}
+        }
+        }
+        quant_config = QuantConfig(config, Mock())
+        layer_types = {'Conv2d': 'minmax'}
+        quant_type_comb = 'int8 int8'
+        
+        mod = nn.Conv2d(3, 64, 3, padding_mode='reflect')
+        is_supported = _is_layer_supported(mod, 'conv1', layer_types, quant_type_comb, quant_config)
+        self.assertFalse(is_supported)
+    
+    def test_check_layer_constraints_custom_algorithm(self):
+        """测试自定义算法的约束检查"""
+        from amct_pytorch.config.parser import _check_layer_constraints
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'custom_algo'}
+        }
+        }
+        quant_config = QuantConfig(config, Mock())
+        layer_types = {'Linear': 'custom_algo'}
+        quant_type_comb = None
+        
+        mod = nn.Linear(64, 64)
+        is_valid = _check_layer_constraints(mod, 'layer1', 'custom_algo', None, quant_config)
+        self.assertTrue(is_valid)
+    
+    def test_get_layer_quant_config_with_fuzzy_weights(self):
+        """测试获取带模糊权重配置的层配置"""
+        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*down_proj.weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                },
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'minmax'}
+        }
+        }
+        quant_config = QuantConfig(config, Mock())
+        
+        layer_config = _get_layer_quant_config('model.layers.0.down_proj', quant_config)
+        self.assertIsNotNone(layer_config)
+        self.assertEqual(layer_config['weights_cfg']['strategy'], 'tensor')
+    
+    def test_get_layer_quant_config_with_fuzzy_inputs(self):
+        """测试获取带模糊输入配置的层配置"""
+        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                '*q_proj.inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                }
+            },
+            'algorithm': {'minmax'}
+        }
+        quant_config = QuantConfig(config, Mock())
+        
+        layer_config = _get_layer_quant_config('model.layers.0.self_attn.q_proj', quant_config)
+        self.assertIsNotNone(layer_config)
+        self.assertEqual(layer_config['inputs_cfg']['strategy'], 'tensor')
+    
+    def test_get_layer_quant_config_without_fuzzy_match(self):
+        """测试没有模糊匹配时的层配置"""
+        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {'enable_quant': False}
+            },
+            'algorithm': {'minmax'}
+        }
+        quant_config = QuantConfig(config, Mock())
+        
+        layer_config = _get_layer_quant_config('layer1', quant_config)
+        self.assertIsNotNone(layer_config)
+        self.assertEqual(layer_config['weights_cfg']['strategy'], 'channel')
+    
+    def test_get_layer_quant_config_no_weights_config(self):
+        """测试没有权重配置时的层配置"""
+        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import QuantConfig
+        
+        config = {
+            'batch_num': 1,
+            'quant_cfg': {
+                '*down_proj.weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                },
+                'algorithm': {'minmax'}
+        }
+        }
+        quant_config = QuantConfig(config, Mock())
+        
+        layer_config = _get_layer_quant_config('model.layers.0.up_proj', quant_config)
+        self.assertIsNone(layer_config)
+
+
 if __name__ == '__main__':
     unittest.main()
