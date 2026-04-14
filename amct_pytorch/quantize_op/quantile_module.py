@@ -146,6 +146,7 @@ class QuantileQuant(BaseQuantizeModule):
                 self.previous_max = calculate_quantile_ema_scale(self.previous_max, self.data_max)
 
     def _finalize_calibration(self):
+        self.scale_d = self.calculate_hif8_scale(self.previous_max)
         if self.dynamic is None or self.dynamic is False:
             if self.batch_input is not None:
                 cout_axis = -2
