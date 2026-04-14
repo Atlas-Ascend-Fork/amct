@@ -307,7 +307,6 @@ class TestOFMRConv2d(unittest.TestCase):
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
     @patch('torch_npu.npu_quant_conv2d', wraps=mocked_npu_quant_conv2d)
     @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_hif8_sym_ofmr_conv2d_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7, mock_8, mock_9):
         cfg = {
             'batch_num': 1,

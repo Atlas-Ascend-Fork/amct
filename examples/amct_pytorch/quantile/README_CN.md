@@ -18,7 +18,6 @@
 HIF8全量化配置：
 `from amct_pytorch import HIFP8_QUANTILE_CFG`
 
-仅权重量化配置：
 ```python
 cfg = {
     'batch_num': 1,
@@ -26,7 +25,13 @@ cfg = {
         'weights': {
             'type': 'hifloat8',
             'symmetric': True,
-            'strategy': 'channel'
+            'strategy': 'tensor',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'token',
+            'dynamic': True,
         },
     },
     'algorithm': {'quantile'},
@@ -82,9 +87,9 @@ Score:  5.477707
 
 | 模型　　　| 校准集　| 数据集　　| 量化前PPL | 量化后PPL |
 | :---------:| :-------:| :---------:| :---------:| :---------:|
-| LLAMA2-7B | pileval | wikitext2 | 5.472　　 | 5.538　　 |
-| QWEN2-7B　| pileval | wikitext2 | 7.137　　 | 7.186　　 |
-| QWEN3-8B　| pileval | wikitext2 | 9.715　　 | 9.766　　 |
+| LLAMA2-7B | pileval | wikitext2 | 5.472　　 | 5.499　　 |
+| QWEN2-7B　| pileval | wikitext2 | 7.137　　 | 7.162　　 |
+| QWEN3-8B　| pileval | wikitext2 | 9.715　　 | 9.754　　 |
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log

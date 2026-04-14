@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 import torch
 from torch import nn
-
+import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.quantize_op.utils import get_weight_min_max_by_granularity, calculate_quantile_ema_scale
 from amct_pytorch.utils.data_utils import check_linear_input_dim
@@ -48,7 +48,6 @@ class QuantileQuant(BaseQuantizeModule):
         self.layer_name = layer_name
         self.cur_batch = 0
         self.weight_compress_only = True
-        self.ori_module = ori_module
         
         self.batch_num = quant_config.get('batch_num')
         
@@ -58,10 +57,9 @@ class QuantileQuant(BaseQuantizeModule):
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
-            self.dynamic = quant_config.get('inputs_cfg').get('dynamic', None)
+            self.dynamic = quant_config.get('inputs_cfg').get('dynamic', False)
             
             self.data_max = None
-            self.data_min = None
             self.previous_max = None
             self.batch_input = None
             self.dynamic_per_token_scales = []
@@ -80,7 +78,8 @@ class QuantileQuant(BaseQuantizeModule):
     @torch.no_grad()
     def forward(self, inputs):
         check_linear_input_dim(inputs)
-        fp_out = self.ori_module(inputs)
+        inputs = inputs.to(self.weight.device)
+        fp_out = F.linear(inputs, self.weight, self.bias)
         if self.weight_compress_only:
             return fp_out
         self.cur_batch += 1
@@ -98,27 +97,25 @@ class QuantileQuant(BaseQuantizeModule):
         Parameters: quant_config: configuration of quantization
         """
         weight_min, weight_max = get_weight_min_max_by_granularity(weight_data, quant_config)
-        
-        if self.wts_type == HIFLOAT8:
-            self.scale_w = self.calculate_hif8_scale(weight_max)
-            self.offset_w = None
+        self.scale_w = self.calculate_hif8_scale(weight_max)
+        self.offset_w = None
         LOGGER.logd("Calculate quantile quant params of layer '{}' success!".format(self.layer_name), 'QuantileQuant')
     
-    def calculate_hif8_scale(self, weight_max):
+    def calculate_hif8_scale(self, tensor_max):
         """
-        Function: calculate HIF8 scale by scaling weight max to 16
+        Function: calculate HIF8 scale by scaling tensor max to 16
         Args:
-            weight_max: max value of weights
+            tensor_max: max value of tensor (weights or activations)
         Returns:
             scale: HIF8 scale factor
         """
-        scale = (weight_max / 16.0).to(torch.float32)
+        scale = (tensor_max / 16.0).to(torch.float32)
         return scale
 
     def _compute_batch_min_max(self, inputs):
         if self.act_granularity == 'tensor':
             return torch.max(inputs).reshape(-1), torch.min(inputs).reshape(-1)
-        elif self.act_granularity == 'token':
+        elif self.act_granularity == 'token' and self.dynamic is False:
             cout_axis = -2
             axis_list = list(range(0, inputs.dim()))
             axis_list.pop(cout_axis)
@@ -140,18 +137,16 @@ class QuantileQuant(BaseQuantizeModule):
 
     def _update_act_scale_tensor(self, batch_max, batch_min):
         self.data_max = batch_max if self.data_max is None else self.data_max
-        self.data_min = batch_min if self.data_min is None else self.data_min
         if self.act_type == HIFLOAT8:
-            if self.scale_d is None:
-                self.scale_d = self.data_max
+            if self.previous_max is None:
+                self.previous_max = self.data_max
             else:
-                self.scale_d = calculate_quantile_ema_scale(self.scale_d, self.previous_max)
-            self.previous_max = self.data_max
+                self.previous_max = calculate_quantile_ema_scale(self.previous_max, self.data_max)
 
     def _finalize_calibration(self):
         if self.act_type != HIFLOAT8:
             return
-        self.scale_d = self.calculate_hif8_scale(self.scale_d)
+        self.scale_d = self.calculate_hif8_scale(self.previous_max)
         if self.act_granularity == 'token':
             self._finalize_token_calibration()
         self.offset_d = None
