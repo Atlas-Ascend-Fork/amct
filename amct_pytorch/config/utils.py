@@ -40,15 +40,11 @@ def match_fuzzy_pattern(layer_name, pattern):
     if '*' not in pattern:
         return layer_name == pattern
     
-    suffix = None
-    if pattern.endswith('.weights'):
-        suffix = '.weights'
-        pattern = pattern[:-8]
-    elif pattern.endswith('.inputs'):
-        suffix = '.inputs'
-        pattern = pattern[:-7]
+    if fnmatch.fnmatch(layer_name, pattern):
+        return True
     
-    if suffix and layer_name.endswith(suffix):
-        layer_name = layer_name[:-len(suffix)]
+    for suffix in ['.weights', '.inputs']:
+        if fnmatch.fnmatch(layer_name + suffix, pattern):
+            return True
     
-    return fnmatch.fnmatch(layer_name, pattern)
+    return False

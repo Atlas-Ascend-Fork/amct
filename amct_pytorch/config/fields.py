@@ -137,14 +137,14 @@ class QuantCfgField():
     def __init__(self, config):
         self.weights_cfg = WeightsCfgField(config.get('weights', {}))
         self.inputs_cfg = InputsCfgField(config.get('inputs', {'enable_quant': False}))
-        self.fuzzy_configs = self._extract_fuzzy_configs(config)
+        self.fuzzy_configs = QuantCfgField.extract_fuzzy_configs(config)
         
         self._validate_weights_config()
         
         self.value = self.set_value()
 
     @staticmethod
-    def _extract_fuzzy_configs(config):
+    def extract_fuzzy_configs(config):
         """
         Extract fuzzy matching configs from quant_cfg
         Patterns like '*down_proj.weights' or '*self_attn.q_proj.inputs'
