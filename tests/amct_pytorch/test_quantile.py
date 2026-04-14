@@ -148,6 +148,39 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('amct_pytorch.deploy_op.npu_quantization_linear.check_parameters_in_schema', MagicMock(return_value=True))
+    def test_quantile_with_token(self, mock_1, mock_2, mock_3):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+                'inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'token',
+                },
+            },
+            'algorithm': {'quantile'},
+            'skip_layers': {'lm_head'}
+        }
+        
+        model = copy.deepcopy(self.model).to(torch.bfloat16)
+        quantize(model, cfg)
+
+        model(self.inputs)
+        self.assertIsNotNone(model.linear1.scale_w)
+        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        torch.Tensor.npu = mock_npu
+        convert(model)
+        self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
     def test_quantile_calibration(self, mock_1, mock_2, mock_3):
         cfg = {
