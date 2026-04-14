@@ -245,15 +245,15 @@ def apply_progressive_quant(weight, scale_w1, scale_w2, group_size=32):
     return quantized_weight.transpose(-1, -2)
 
 
-def calculate_quantile_ema_scale(current_scale, previous_scale, alpha=QUANTILE_EMA_ALPHA, beta=QUANTILE_EMA_BETA):
+def calculate_quantile_ema_scale(previous_scale, current_scale, alpha=QUANTILE_EMA_ALPHA, beta=QUANTILE_EMA_BETA):
     """
     Function: calculate exponential moving average scale for quantile quantization
     Args:
-        current_scale: current scale value
         previous_scale: previous scale value
-        alpha: weight for current scale (default 0.99)
-        beta: weight for previous scale (default 0.01)
+        current_scale: current scale value
+        alpha: weight for previous scale (default 0.99)
+        beta: weight for current scale (default 0.01)
     Returns:
         ema_scale: exponential moving average scale
     """
-    return alpha * current_scale + beta * previous_scale
+    return alpha * previous_scale + beta * current_scale

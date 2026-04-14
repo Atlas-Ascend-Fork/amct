@@ -27,6 +27,11 @@ class NpuQuantizationLinear(torch.nn.Module):
     APIs: forward
     """
     def __init__(self, quant_module):
+        """
+        Function: Initialize NPU quantized linear operator
+        Args:
+            quant_module: quantization module containing quantization parameters
+        """
         super().__init__()
         import torch_npu
         self.output_dtype = quant_module.weight.dtype
@@ -39,9 +44,9 @@ class NpuQuantizationLinear(torch.nn.Module):
         self.quantize_axis = -1
         self.dynamic = getattr(quant_module, 'dynamic', None)
         scale_d_tensor = self._init_act_quant_params(quant_module, device)
-        weight_tensor = self._init_weight_quant(quant_module, device)
-        self._init_deq_scale(quant_module, device, scale_d_tensor)
-        self._init_bias(quant_module, scale_d_tensor, self.scale_w_tensor)
+        self._init_weight_quant(quant_module, device)
+        self._init_deq_scale(quant_module, device)
+        self._init_bias(quant_module)
 
     def forward(self, x):
         """
@@ -82,11 +87,18 @@ class NpuQuantizationLinear(torch.nn.Module):
         return output
 
     def _init_act_quant_params(self, quant_module, device):
+        """
+        Function: Initialize activation quantization parameters
+        Args:
+            quant_module: quantization module containing quantization parameters
+            device: device to place tensors on
+        Returns:
+            scale_d_tensor: activation scale tensor
+        """
         scale_d_tensor = quant_module.scale_d.to(device=device)
         offset_d_tensor = quant_module.offset_d if quant_module.offset_d is not None else torch.tensor([0])
         offset_d_tensor = offset_d_tensor.repeat(scale_d_tensor.shape)
-        if self.act_type in [INT8, HIFLOAT8] and scale_d_tensor.dim() > 1:
-            self.act_granularity = 'token'
+        if self.act_granularity == 'token':
             self.quantize_axis = -2
         self.register_buffer('act_scale',
                              (1 / scale_d_tensor).reshape(-1).to(device=device).to(self.output_dtype))
@@ -95,6 +107,12 @@ class NpuQuantizationLinear(torch.nn.Module):
         return scale_d_tensor
 
     def _init_weight_quant(self, quant_module, device):
+        """
+        Function: Initialize weight quantization
+        Args:
+            quant_module: quantization module containing quantization parameters
+            device: device to place tensors on
+        """
         weight = quant_module.weight.data
         self.scale_w_tensor = None
         if quant_module.scale is not None:
@@ -107,9 +125,14 @@ class NpuQuantizationLinear(torch.nn.Module):
             offset_reshape = quant_module.offset_d.float().repeat(1, quant_module.weight.shape[-1])
             self.offset_bias = offset_reshape.float() @ weight_tensor.float()
             self.offset_bias = -1 * self.offset_bias.round().to(torch.int32).reshape(-1)
-        return weight_tensor
 
-    def _init_deq_scale(self, quant_module, device, scale_d_tensor):
+    def _init_deq_scale(self, quant_module, device):
+        """
+        Function: Initialize dequantization scale parameters
+        Args:
+            quant_module: quantization module containing quantization parameters
+            device: device to place tensors on
+        """
         if self.act_granularity == 'token':
             self.register_buffer('deq_scale', self.scale_w_tensor)
             self.register_buffer('pertoken_scale',
@@ -129,6 +152,9 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.group_sizes = None
 
     def _init_npu_quantize_type(self):
+        """
+        Function: Initialize NPU quantization type and check torch_npu version
+        """
         import torch_npu
         self.is_new_torch_npu = False
         if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype'):
@@ -150,15 +176,11 @@ class NpuQuantizationLinear(torch.nn.Module):
         elif self.wts_type == FLOAT4_E2M1:
             self.x2_dtype = torch_npu.float4_e2m1fn_x2
 
-    def _init_bias(self, module, scale_d_tensor, scale_w_tensor):
+    def _init_bias(self, module):
         """
         Function: init bias for npu op
         Args:
             module: quant module 
-            scale_d_tensor: torch.tensor, scale factor for activation
-            scale_w_tensor: torch.tensor, scale factor for weight
-        Returns:
-            torch.tensor
         """
         if module.bias is not None:
             bias = module.bias
