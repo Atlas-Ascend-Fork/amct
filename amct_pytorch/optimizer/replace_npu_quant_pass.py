@@ -74,18 +74,16 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             LOGGER.logd(f'{module_type.__name__} do not need to invoke convert')
             return
         
-        npu_module = self._get_deploy_module(object_module, module_type, model, object_name)
+        npu_module = self._get_deploy_module(object_module, module_type)
         
         ModuleHelper.replace_module_by_name(model, object_name, npu_module)
         LOGGER.logd("Replace npu module to '{}' success!".format(object_name), 'ReplaceNpuQuantPass')
     
-    def _get_deploy_module(self, object_module, module_type, model, object_name):
+    def _get_deploy_module(self, object_module, module_type):
         """
         Function: Get deploy module based on object type
         Parameters: object_module: module to process
                     module_type: type of object_module
-                    model: model to be modified
-                    object_name: name of object_module
         Return: deploy module
         """
         deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
@@ -94,8 +92,8 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             for deploy_op in deploy_ops:
                 if self._should_use_deploy_op(object_module, deploy_op):
                     return deploy_op(object_module)
-            else:
-                return deploy_ops[0](object_module)
+                else:
+                    return deploy_ops[0](object_module)
         else:
             return deploy_ops(object_module)
     
