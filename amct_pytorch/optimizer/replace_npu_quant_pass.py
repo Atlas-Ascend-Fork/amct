@@ -110,8 +110,10 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         """
         if hasattr(object_module, 'ori_module_type') and object_module.ori_module_type == 'Conv2d':
             return deploy_op in [NpuQuantizationConv2d]
-        elif deploy_op == NpuQuantizationLinear:
-            return hasattr(object_module, 'scale_d') and object_module.scale_d is not None
-        elif deploy_op == NpuWeightQuantizedLinear:
-            return not hasattr(object_module, 'scale_d') or object_module.scale_d is None
+        elif hasattr(object_module, 'dynamic') and object_module.dynamic is True:
+            return deploy_op == NpuQuantizationLinear
+        elif hasattr(object_module, 'scale_d') and object_module.scale_d is not None:
+            return deploy_op == NpuQuantizationLinear
+        elif not hasattr(object_module, 'scale_d') or object_module.scale_d is None:
+            return deploy_op == NpuWeightQuantizedLinear
         return False
