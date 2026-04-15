@@ -62,7 +62,6 @@ class QuantileQuant(BaseQuantizeModule):
             self.data_max = None
             self.previous_max = None
             self.batch_input = None
-            self.dynamic_per_token_scales = []
         
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
         
@@ -129,9 +128,7 @@ class QuantileQuant(BaseQuantizeModule):
         return None, None
 
     def _handle_token_batch_input(self, inputs, batch_max):
-        if self.dynamic is True:
-            self.dynamic_per_token_scales.append(batch_max.cpu())
-        else:
+        if self.dynamic is None or self.dynamic is False:
             if self.batch_input is None:
                 self.batch_input = inputs.cpu()
             else:
