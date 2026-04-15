@@ -194,8 +194,11 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
             act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
                         quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
             wts_type = quant_config.quant_cfg.weights_cfg.quant_type
-            quant_type_comb = act_type + ' ' + wts_type
-            check_config(quant_type_comb, quant_config, algo)
+            if wts_type is None:
+                quant_type_comb = None
+            else:
+                quant_type_comb = act_type + ' ' + wts_type
+                check_config(quant_type_comb, quant_config, algo)
     return layer_types, quant_type_comb
 
 

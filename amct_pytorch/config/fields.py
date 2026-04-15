@@ -42,12 +42,17 @@ class BatchNumField():
 
 class WeightsCfgField():
     def __init__(self, config):
-        self.quant_type = config.get('type')
-        self.symmetric = config.get('symmetric')
-        self.strategy = config.get('strategy')
-        self.group_size = config.get('group_size', None)
-        if self.quant_type is not None:
+        if config:
+            self.quant_type = config.get('type')
+            self.symmetric = config.get('symmetric')
+            self.strategy = config.get('strategy')
+            self.group_size = config.get('group_size', None)
             self.check()
+        else:
+            self.quant_type = None
+            self.symmetric = None
+            self.strategy = None
+            self.group_size = None
         self.value = self.set_value()
     
     def set_value(self):

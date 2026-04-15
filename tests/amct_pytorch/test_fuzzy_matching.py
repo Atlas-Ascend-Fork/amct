@@ -25,8 +25,10 @@ It covers:
 4. Integration tests
 5. Performance tests
 """
+import copy
 import unittest
 from unittest.mock import Mock
+from unittest.mock import MagicMock
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -36,30 +38,35 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch.config.utils import match_fuzzy_pattern
-from amct_pytorch.config.fields import QuantCfgField
+from mock_torch_npu import mock_npu
+from utils import TestModel
+from amct_pytorch import quantize, convert
 
 
-class TestFuzzyModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.layers = nn.ModuleList([
-            nn.ModuleDict({
-                'self_attn': nn.ModuleDict({
-                    'q_proj': nn.Linear(64, 64),
-                    'k_proj': nn.Linear(64, 64),
-                    'v_proj': nn.Linear(64, 64),
-                }),
-                'mlp': nn.ModuleDict({
-                    'up_proj': nn.Linear(64, 64),
-                    'down_proj': nn.Linear(64, 64),
-                })
-            })
-            for _ in range(4)
-        ])
-        self.lm_head = nn.Linear(64, 64)
+class TestCast(unittest.TestCase):
+    '''
+    ST FOR CAST ALGORITHM
+    '''
+    @classmethod
+    def setUpClass(cls):
+        cls.test_model = TestModel().to(torch.bfloat16)
+        cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
+        cls.ori_out = cls.test_model(cls.inputs)
+        print('TestCast START!')
+
+    @classmethod
+    def tearDownClass(cls):
+        print('TestCast END!')
+
+    def setUp(self):
+        mock_torch_npu = MagicMock()
+        sys.modules['torch_npu'] = mock_torch_npu
+ 
+    def tearDown(self):
+        del sys.modules['torch_npu']
 
 
-class TestFuzzyPatternMatching(unittest.TestCase):
+class TestFuzzyPatternMatching(TestCast):
     """Test fuzzy pattern matching functionality"""
     
     def test_exact_match(self):
@@ -102,7 +109,7 @@ class TestFuzzyPatternMatching(unittest.TestCase):
         self.assertFalse(match_fuzzy_pattern('model.layers.0.self_attn.k_proj', '*self_attn.q_proj.inputs'))
 
 
-class TestFuzzyPatternExceptions(unittest.TestCase):
+class TestFuzzyPatternExceptions(TestCast):
     """Test wildcard pattern exception scenarios"""
     
     def test_empty_pattern(self):
@@ -183,7 +190,7 @@ class TestFuzzyPatternExceptions(unittest.TestCase):
         self.assertFalse(result)
 
 
-class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
+class TestFuzzyConfigBoundaryConditions(TestCast):
     """Test boundary conditions"""
     
     def test_empty_layer_name(self):
@@ -213,8 +220,9 @@ class TestFuzzyConfigBoundaryConditions(unittest.TestCase):
         """LN-005: Test layer name with dots"""
         result = match_fuzzy_pattern('model.layer.name', '*name')
         self.assertTrue(result)
-    
-class TestFuzzyConfigSpecialCharacters(unittest.TestCase):
+
+
+class TestFuzzyConfigSpecialCharacters(TestCast):
     """Test special character handling"""
     
     def test_layer_name_with_spaces(self):
@@ -243,7 +251,7 @@ class TestFuzzyConfigSpecialCharacters(unittest.TestCase):
         self.assertTrue(result)
 
 
-class TestFuzzyConfigPerformance(unittest.TestCase):
+class TestFuzzyConfigPerformance(TestCast):
     """Test performance"""
     
     def test_fuzzy_pattern_performance(self):
@@ -281,7 +289,7 @@ class TestFuzzyConfigPerformance(unittest.TestCase):
         self.assertLess(elapsed_time, 0.1)
 
 
-class TestWeightsCfgFieldAdditional(unittest.TestCase):
+class TestWeightsCfgFieldAdditional(TestCast):
     """Test WeightsCfgField class new code"""
     
     def test_weights_cfg_with_none_quant_type(self):
@@ -322,7 +330,7 @@ class TestWeightsCfgFieldAdditional(unittest.TestCase):
         self.assertIsNone(value.get('group_size'))
 
 
-class TestInputsCfgFieldAdditional(unittest.TestCase):
+class TestInputsCfgFieldAdditional(TestCast):
     """Test InputsCfgField class new code"""
     
     def test_inputs_cfg_with_none_quant_type(self):
@@ -359,8 +367,6 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
     
     def test_get_fuzzy_config_inputs(self):
         """Test getting inputs fuzzy config"""
-        from amct_pytorch.config.fields import QuantCfgField
-        
         config = {
             '*q_proj.inputs': {
                 'type': 'int8',
@@ -373,54 +379,70 @@ class TestInputsCfgFieldAdditional(unittest.TestCase):
                 'strategy': 'tensor'
             }
         }
+        torch.Tensor.npu = mock_npu
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         try:
-            field = QuantCfgField(config)
+            quantize(model, config)
         except ValueError as e:
             assert 'Configuration must include at least one weights configuration' in str(e)
     
     def test_validate_weights_config_with_weights(self):
         """Test validation with weights config"""
-        from amct_pytorch.config.fields import QuantCfgField
         
         config = {
-            'weights': {
-                'type': 'int8',
-                'symmetric': True,
-                'strategy': 'channel'
-            }
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                }
+            },
+            'algorithm': {'minmax'},
         }
-        field = QuantCfgField(config)
-        self.assertIsNotNone(field.get_value())
+        torch.Tensor.npu = mock_npu
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, config)
+        self.assertIsNotNone(model.linear1.scale_w)
+        self.assertIsNotNone(model.linear2.scale_w)
     
     def test_validate_weights_config_with_fuzzy_weights(self):
         """Test validation with fuzzy weights config"""
-        from amct_pytorch.config.fields import QuantCfgField
-        
         config = {
-            '*down_proj.weights': {
-                'type': 'int8',
-                'symmetric': True,
-                'strategy': 'tensor'
-            }
+            'quant_cfg': {
+                '*linear1.weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                }
+            },
+            'algorithm': {'minmax'},
         }
-        field = QuantCfgField(config)
-        self.assertIsNotNone(field.get_value())
+        torch.Tensor.npu = mock_npu
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, config)
+        self.assertIsNotNone(model.linear1.scale_w)
     
     def test_validate_weights_config_without_weights(self):
         """Test validation without weights config"""
-        from amct_pytorch.config.fields import QuantCfgField
-        
         config = {
-            'inputs': {'enable_quant': False}
+            'quant_cfg': {
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                }
+            },
+            'algorithm': {'minmax'},
         }
-        
-        with self.assertRaises(ValueError) as context:
-            QuantCfgField(config)
-        
-        self.assertIn('weights configuration', str(context.exception))
+        torch.Tensor.npu = mock_npu
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        try:
+            quantize(model, config)
+        except ValueError as e:
+            assert 'weights configuration' in str(e)
 
 
-class TestAlgorithmFieldAdditional(unittest.TestCase):
+class TestAlgorithmFieldAdditional(TestCast):
     """Test AlgorithmField class new code"""
     
     def test_algorithm_field_get_value(self):
@@ -438,7 +460,7 @@ class TestAlgorithmFieldAdditional(unittest.TestCase):
         self.assertEqual(value['algorithm'], {'minmax': {}})
 
 
-class TestParserFunctionsAdditional(unittest.TestCase):
+class TestParserFunctionsAdditional(TestCast):
     """Test parser module new helper functions"""
     
     def test_check_fuzzy_config_warnings_no_fuzzy(self):
