@@ -34,7 +34,7 @@ if __name__ == '__main__':
     samples = torch.cat(samples, dim=0)[:1, :]
 
     # Phase1: quantize model using Quantile algorithm
-    cfg = amct.HIFP8_DYNAMIC_QUANTILE_CFG
+    cfg = amct.HIFP8_QUANTILE_CFG
     amct.quantize(quant_model, cfg)
     
     # Phase2: inference calibration model to cal quantized factors
