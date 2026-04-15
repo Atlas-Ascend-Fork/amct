@@ -100,10 +100,7 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
     if not fuzzy_weights and not fuzzy_inputs:
         return
     
-    if not skip_layers:
-        skip_layers_set = set()
-    else:
-        skip_layers_set = set(skip_layers)
+    skip_layers_set = set(skip_layers or [])
     
     all_fuzzy_patterns = fuzzy_weights + fuzzy_inputs
     pattern_match_count = {cfg['pattern']: 0 for cfg in all_fuzzy_patterns}
