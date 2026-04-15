@@ -26,7 +26,7 @@ from utils import TestModel
 from mock_torch_npu import mock_npu, mock_npu_quant_matmul, mock_npu_weight_quant_batchmatmul
 from mock_torch_npu import mock_npu_quantize
 from amct_pytorch.algorithm import AlgorithmRegistry
-from amct_pytorch import quantize, convert, HIFP8_QUANTILE_CFG
+from amct_pytorch import quantize, convert, HIFP8_DYNAMIC_QUANTILE_CFG
 
 
 class TestQuantileQuant(unittest.TestCase):
@@ -214,7 +214,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('amct_pytorch.deploy_op.npu_quantization_linear.check_parameters_in_schema', MagicMock(return_value=True))
     def test_quantile_with_config_object(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.model).to(torch.bfloat16)
-        quantize(model, HIFP8_QUANTILE_CFG)
+        quantize(model, HIFP8_DYNAMIC_QUANTILE_CFG)
 
         for _ in range(4):
             inputs = torch.randn(64, 64).to(torch.bfloat16)

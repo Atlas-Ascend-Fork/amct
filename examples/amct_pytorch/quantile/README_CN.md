@@ -16,7 +16,7 @@
 本sample中使用的量化配置已经内置在工具中，可以通过下述方式获取并使用：
 
 HIF8全量化配置：
-`from amct_pytorch import HIFP8_QUANTILE_CFG`
+`from amct_pytorch import HIFP8_DYNAMIC_QUANTILE_CFG`
 
 ```python
 cfg = {
