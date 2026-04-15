@@ -596,7 +596,7 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_get_layer_quant_config_with_fuzzy_weights(self):
         """Test getting layer config with fuzzy weights"""
-        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import get_layer_config
         from amct_pytorch.config.fields import QuantConfig
         
         config = {
@@ -618,13 +618,13 @@ class TestParserFunctionsAdditional(TestCast):
         }
         quant_config = QuantConfig(config, Mock())
         
-        layer_config = _get_layer_quant_config('model.layers.0.down_proj', quant_config)
+        layer_config = get_layer_config('model.layers.0.down_proj', quant_config)
         self.assertIsNotNone(layer_config)
         self.assertEqual(layer_config['weights_cfg']['strategy'], 'tensor')
     
     def test_get_layer_quant_config_with_fuzzy_inputs(self):
         """Test getting layer config with fuzzy inputs"""
-        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import get_layer_config
         from amct_pytorch.config.fields import QuantConfig
         
         config = {
@@ -650,13 +650,13 @@ class TestParserFunctionsAdditional(TestCast):
         }
         quant_config = QuantConfig(config, Mock())
         
-        layer_config = _get_layer_quant_config('model.layers.0.self_attn.q_proj', quant_config)
+        layer_config = get_layer_config('model.layers.0.self_attn.q_proj', quant_config)
         self.assertIsNotNone(layer_config)
         self.assertEqual(layer_config['inputs_cfg']['strategy'], 'tensor')
     
     def test_get_layer_quant_config_without_fuzzy_match(self):
         """Test layer config without fuzzy match"""
-        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import get_layer_config
         from amct_pytorch.config.fields import QuantConfig
         
         config = {
@@ -673,13 +673,13 @@ class TestParserFunctionsAdditional(TestCast):
         }
         quant_config = QuantConfig(config, Mock())
         
-        layer_config = _get_layer_quant_config('layer1', quant_config)
+        layer_config = get_layer_config('layer1', quant_config)
         self.assertIsNotNone(layer_config)
         self.assertEqual(layer_config['weights_cfg']['strategy'], 'channel')
     
     def test_get_layer_quant_config_no_weights_config(self):
         """Test layer config without weights config"""
-        from amct_pytorch.config.parser import _get_layer_quant_config
+        from amct_pytorch.config.fields import get_layer_config
         from amct_pytorch.config.fields import QuantConfig
         
         config = {
@@ -695,7 +695,7 @@ class TestParserFunctionsAdditional(TestCast):
         }
         quant_config = QuantConfig(config, Mock())
         
-        layer_config = _get_layer_quant_config('model.layers.0.up_proj', quant_config)
+        layer_config = get_layer_config('model.layers.0.up_proj', quant_config)
         self.assertIsNone(layer_config)
 
 
