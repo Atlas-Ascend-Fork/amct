@@ -103,12 +103,12 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                     deploy_op: deploy op function
         Return: bool
         """
-        if deploy_op == NpuQuantizationLinear:
-            return hasattr(object_module, 'scale_d') and object_module.scale_d is not None
-        elif deploy_op == NpuWeightQuantizedLinear:
-            return not hasattr(object_module, 'scale_d') or object_module.scale_d is None
-        elif deploy_op in [NpuQuantizationConv2d]:
+        if deploy_op in [NpuQuantizationConv2d]:
             return hasattr(object_module, 'ori_module_type') and object_module.ori_module_type == 'Conv2d'
         elif deploy_op.__name__ in ['get_replacement_module']:
             return module_type.__name__ in ['FlatQuantAttention', 'FlatQuantMLP']
+        elif deploy_op == NpuQuantizationLinear:
+            return hasattr(object_module, 'scale_d') and object_module.scale_d is not None
+        elif deploy_op == NpuWeightQuantizedLinear:
+            return not hasattr(object_module, 'scale_d') or object_module.scale_d is None
         return False
