@@ -246,7 +246,7 @@ def get_supported_layers(model, quant_config, registed_alg):
         if not _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
             continue
         
-        layer_quant_cfg = _get_layer_quant_config(name, quant_config)
+        layer_quant_cfg = quant_config.get_layer_config(name)
         if layer_quant_cfg is None:
             continue
         
@@ -254,33 +254,6 @@ def get_supported_layers(model, quant_config, registed_alg):
         detail_config[name] = quant_config.batch_num.get_value() \
             | layer_quant_cfg | detail_config_algo
     return detail_config
-
-
-def _get_layer_quant_config(layer_name, quant_config):
-    """
-    Get quant config for a specific layer, considering fuzzy matching
-    Params:
-        layer_name: str, the layer name
-        quant_config: QuantConfig object
-    Return: dict, the quant config for this layer
-    """
-    quant_cfg = quant_config.quant_cfg.get_value().copy()
-    
-    fuzzy_weights_cfg = quant_config.quant_cfg.get_fuzzy_config(layer_name, 'weights')
-    if fuzzy_weights_cfg:
-        weights_cfg = WeightsCfgField(fuzzy_weights_cfg)
-        quant_cfg['weights_cfg'] = weights_cfg.get_value()
-    elif quant_cfg['weights_cfg'] is None:
-        return None
-    
-    fuzzy_inputs_cfg = quant_config.quant_cfg.get_fuzzy_config(layer_name, 'inputs')
-    if fuzzy_inputs_cfg:
-        inputs_cfg = InputsCfgField(fuzzy_inputs_cfg)
-        quant_cfg['inputs_cfg'] = inputs_cfg.get_value()
-    elif quant_cfg['inputs_cfg'] is None:
-        quant_cfg['inputs_cfg'] = {'enable_quant': False}
-    
-    return quant_cfg
 
 
 def parse_config(model, config, registed_alg):

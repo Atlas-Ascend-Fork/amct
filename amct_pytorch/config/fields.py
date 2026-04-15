@@ -385,3 +385,34 @@ class QuantConfig:
         self.quant_cfg = QuantCfgField(config.get('quant_cfg', {}))
         self.algorithm = AlgorithmField(config.get('algorithm', {}), registed_alg)
         self.skip_layers = SkipLayersField(config.get('skip_layers', []))
+        self._layer_config_cache = {}
+
+    def get_layer_config(self, layer_name):
+        """
+        Get quant config for a specific layer, with caching
+        Params:
+            layer_name: str, layer name
+        Return: dict or None, quant config for this layer
+        """
+        if layer_name in self._layer_config_cache:
+            return self._layer_config_cache[layer_name]
+        
+        quant_cfg = self.quant_cfg.get_value().copy()
+        
+        fuzzy_weights_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'weights')
+        if fuzzy_weights_cfg:
+            weights_cfg = WeightsCfgField(fuzzy_weights_cfg)
+            quant_cfg['weights_cfg'] = weights_cfg.get_value()
+        elif quant_cfg['weights_cfg'] is None:
+            self._layer_config_cache[layer_name] = None
+            return None
+        
+        fuzzy_inputs_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'inputs')
+        if fuzzy_inputs_cfg:
+            inputs_cfg = InputsCfgField(fuzzy_inputs_cfg)
+            quant_cfg['inputs_cfg'] = inputs_cfg.get_value()
+        elif quant_cfg['inputs_cfg'] is None:
+            quant_cfg['inputs_cfg'] = {'enable_quant': False}
+        
+        self._layer_config_cache[layer_name] = quant_cfg
+        return quant_cfg
