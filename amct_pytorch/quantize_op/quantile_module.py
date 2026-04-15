@@ -119,13 +119,8 @@ class QuantileQuant(BaseQuantizeModule):
             axis_list = list(range(0, inputs.dim()))
             axis_list.pop(cout_axis)
             axis = tuple(axis_list)
-            batch_max = torch.amax(torch.abs(inputs), dim=axis, keepdim=True)
-            self._handle_token_batch_input(inputs, batch_max)
-            return batch_max
+            return torch.amax(torch.abs(inputs), dim=axis, keepdim=True)
         return None
-
-    def _handle_token_batch_input(self, inputs, batch_max):
-        pass
 
     def _update_act_scale_tensor(self, batch_max):
         if self.previous_max is None:
