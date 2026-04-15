@@ -49,7 +49,7 @@ class NpuMXQuantizationLinear(torch.nn.Module):
             self.group_sizes = [1, 1, 32]
         
         weight_tensor = weight_tensor.transpose(1, 0)
-        self.register_buffer('quantized_weight', weight_tensor)
+        self.register_buffer('quantized_weight', weight_tensor.contiguous())
         self.register_buffer('scale_w', shared_exponent_w)
 
         if ori_module.bias is not None:

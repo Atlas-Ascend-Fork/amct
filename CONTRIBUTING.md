@@ -11,9 +11,21 @@
 3. 请使用`pre-commit`工具确保代码满足基本要求，安装后会在git commit时自动检查当前提交的代码规范问题。
 
    ```shell
-   pip install pre-commit
-   pre-commit install
+    步骤 1: 安装 pre-commit 框架
+    # 使用 pip（推荐）
+    pip install pre-commit
+    # 验证安装
+    pre-commit --version
+    # 输出: pre-commit x.x.x
+
+    步骤 2: 进入项目目录
+    cd /cann/amct
+
+    步骤 3: 安装 Git Hooks
+    # 在项目根目录运行
+    pre-commit install
    ```
+   详细可参考https://gitcode.com/cann/infrastructure/blob/main/docs/SC/pre-commit/pre-commit%E9%85%8D%E7%BD%AE%E6%8C%87%E5%AF%BC%E4%B9%A6.md
 
 
 开发者贡献场景主要包括：
