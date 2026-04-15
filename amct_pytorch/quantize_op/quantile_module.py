@@ -58,8 +58,6 @@ class QuantileQuant(BaseQuantizeModule):
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
             self.dynamic = quant_config.get('inputs_cfg').get('dynamic')
-            
-            self.data_max = None
             self.previous_max = None
             self.batch_input = None
         
@@ -79,13 +77,13 @@ class QuantileQuant(BaseQuantizeModule):
         check_linear_input_dim(inputs)
         inputs = inputs.to(self.weight.device)
         fp_out = F.linear(inputs, self.weight, self.bias)
-        if self.weight_compress_only:
+        if self.weight_compress_only or self.dynamic is True:
             return fp_out
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
             return fp_out
-        batch_max, batch_min = self._compute_batch_min_max(inputs)
-        self._update_act_scale_tensor(batch_max, batch_min)
+        batch_max = self._compute_batch_max(inputs)
+        self._update_act_scale_tensor(batch_max)
         if self.cur_batch == self.batch_num:
             self._finalize_calibration()
         return fp_out
@@ -113,47 +111,30 @@ class QuantileQuant(BaseQuantizeModule):
         else:
             return tensor_max
 
-    def _compute_batch_min_max(self, inputs):
+    def _compute_batch_max(self, inputs):
         if self.act_granularity == 'tensor':
-            return torch.max(inputs).reshape(-1), torch.min(inputs).reshape(-1)
+            return torch.max(torch.abs(inputs)).reshape(-1)
         elif self.act_granularity == 'token':
             cout_axis = -2
             axis_list = list(range(0, inputs.dim()))
             axis_list.pop(cout_axis)
             axis = tuple(axis_list)
-            batch_max = torch.amax(inputs, dim=axis, keepdim=True)
-            batch_min = torch.amin(inputs, dim=axis, keepdim=True)
+            batch_max = torch.amax(torch.abs(inputs), dim=axis, keepdim=True)
             self._handle_token_batch_input(inputs, batch_max)
-            return batch_max, batch_min
-        return None, None
+            return batch_max
+        return None
 
     def _handle_token_batch_input(self, inputs, batch_max):
-        if self.dynamic is None or self.dynamic is False:
-            if self.batch_input is None:
-                self.batch_input = inputs.cpu()
-            else:
-                self.batch_input = torch.cat((self.batch_input, inputs.cpu()), dim=-2)
+        pass
 
-    def _update_act_scale_tensor(self, batch_max, batch_min):
-        self.data_max = batch_max if self.data_max is None else self.data_max
-        if self.act_type == HIFLOAT8:
-            if self.previous_max is None:
-                self.previous_max = self.data_max
-            else:
-                self.previous_max = calculate_quantile_ema_scale(self.previous_max, self.data_max)
+    def _update_act_scale_tensor(self, batch_max):
+        if self.previous_max is None:
+            self.previous_max = batch_max
+        else:
+            self.previous_max = calculate_quantile_ema_scale(self.previous_max, batch_max)
 
     def _finalize_calibration(self):
         self.scale_d = self.calculate_hif8_scale(self.previous_max)
-        if self.dynamic is None or self.dynamic is False:
-            if self.batch_input is not None:
-                cout_axis = -2
-                axis_list = list(range(0, self.batch_input.dim()))
-                axis_list.pop(cout_axis)
-                axis = tuple(axis_list)
-                per_token_max = torch.amax(self.batch_input, dim=axis, keepdim=True)
-                self.scale_d = self.calculate_hif8_scale(per_token_max)
-            else:
-                self.scale_d = self.calculate_hif8_scale(self.previous_max)
         self.offset_d = None
         LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
             'QuantileQuant')

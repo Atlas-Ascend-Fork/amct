@@ -221,7 +221,7 @@ class TestQuantileQuant(unittest.TestCase):
             model(inputs)
         
         self.assertIsNotNone(model.linear1.scale_w)
-        self.assertIsNotNone(model.linear1.scale_d)
+        self.assertIsNone(model.linear1.scale_d)
         self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
         torch.Tensor.npu = mock_npu
         convert(model)

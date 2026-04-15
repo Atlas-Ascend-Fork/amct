@@ -43,10 +43,12 @@ class NpuQuantizationLinear(torch.nn.Module):
         self.act_granularity = getattr(quant_module, 'act_granularity', 'tensor')
         self.quantize_axis = -1
         self.dynamic = getattr(quant_module, 'dynamic', None)
-        scale_d_tensor = self._init_act_quant_params(quant_module, device)
         self._init_weight_quant(quant_module, device)
-        self._init_deq_scale(quant_module, device)
+        self._init_deq_weight_scale(quant_module, device)
         self._init_bias(quant_module)
+        if self.dynamic is None or self.dynamic is False:
+            self._init_act_quant_params(quant_module, device)
+            self._init_deq_act_scale(quant_module, device)
 
     def forward(self, x):
         """
@@ -104,7 +106,6 @@ class NpuQuantizationLinear(torch.nn.Module):
                              (1 / scale_d_tensor).reshape(-1).to(device=device).to(self.output_dtype))
         self.register_buffer('act_offset',
                              offset_d_tensor.reshape(-1).to(device=device).to(self.output_dtype))
-        return scale_d_tensor
 
     def _init_weight_quant(self, quant_module, device):
         """
@@ -126,7 +127,7 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.offset_bias = offset_reshape.float() @ weight_tensor.float()
             self.offset_bias = -1 * self.offset_bias.round().to(torch.int32).reshape(-1)
 
-    def _init_deq_scale(self, quant_module, device):
+    def _init_deq_act_scale(self, quant_module, device):
         """
         Function: Initialize dequantization scale parameters
         Args:
@@ -134,13 +135,11 @@ class NpuQuantizationLinear(torch.nn.Module):
             device: device to place tensors on
         """
         if self.act_granularity == 'token':
-            self.register_buffer('deq_scale', self.scale_w_tensor)
             self.register_buffer('pertoken_scale',
                 quant_module.scale_d.reshape(-1).to(torch.float32).to(device=device))
             self.y_scale = None
             self.group_sizes = None
         elif self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-            self.register_buffer('deq_scale', self.scale_w2)
             self.pertoken_scale = None
             self.register_buffer('y_scale', self.y_scale_tensor)
             self.group_sizes = [0, 0, 32]
@@ -150,6 +149,21 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.pertoken_scale = None
             self.y_scale = None
             self.group_sizes = None
+    
+    def _init_deq_weight_scale(self, quant_module, device):
+        """
+        Function: Initialize dequantization scale parameters
+        Args:
+            quant_module: quantization module containing quantization parameters
+            device: device to place tensors on
+        """
+        if self.act_granularity == 'token':
+            self.register_buffer('deq_scale', self.scale_w_tensor)
+        elif self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+            self.register_buffer('deq_scale', self.scale_w2)
+        else:
+            deq_scale_tensor = quant_module.scale_d.to(device=device) * self.scale_w_tensor
+            self.register_buffer('deq_scale', deq_scale_tensor)
 
     def _init_npu_quantize_type(self):
         """
