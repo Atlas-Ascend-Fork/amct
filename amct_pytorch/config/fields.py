@@ -17,6 +17,7 @@
 
 from amct_pytorch.utils.vars import SUPPORT_WEIGHT_QUANT_DTYPE, SUPPORT_INPUT_QUANT_DTYPE
 from amct_pytorch.utils.vars import SUPPORT_QUANT_STRATEGY_WEIGHT, SUPPORT_QUANT_STRATEGY_INPUT
+from amct_pytorch.utils.vars import SUPPORT_QUANT_DYNAMIC_INPUT
 from amct_pytorch.utils.vars import WTS_ASYMMETRIC_DTYPE, GROUP_SIZE_SUPPORTED_DTYPE
 from amct_pytorch.utils.vars import GROUP_SIZE_SUPPORTED_MAP
 from amct_pytorch.config.utils import get_alg_name_from_config
@@ -109,6 +110,7 @@ class InputsCfgField():
             self.quant_type = config.get('type')
             self.symmetric = config.get('symmetric')
             self.strategy = config.get('strategy')
+            self.dynamic = config.get('dynamic', None)
             if self.quant_type is not None:
                 self.check()
         self.value = self.set_value()
@@ -120,7 +122,8 @@ class InputsCfgField():
             return None
         return {'quant_type': self.quant_type,
                 'symmetric': self.symmetric,
-                'strategy': self.strategy}
+                'strategy': self.strategy,
+                'dynamic': self.dynamic}
     
     def get_value(self):
         return self.value
@@ -136,6 +139,9 @@ class InputsCfgField():
             raise ValueError(f'Inputs strategy only support{SUPPORT_QUANT_STRATEGY_INPUT}, but got {self.strategy}')
         if self.strategy == 'token' and self.symmetric == False:
             raise ValueError(f'Inputs strategy token do not support asymmetric quantization')
+        if self.dynamic is not None and self.strategy not in SUPPORT_QUANT_DYNAMIC_INPUT:
+            raise ValueError(f'Inputs dynamic only support strategy {SUPPORT_QUANT_DYNAMIC_INPUT}, '
+                f'but got {self.strategy}')
 
 
 class QuantCfgField():

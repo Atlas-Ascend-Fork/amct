@@ -20,7 +20,7 @@ import torch
 
 from amct_pytorch.utils.quant_util import quant_dequant_tensor, quant_tensor
 from amct_pytorch.utils.quant_util import convert_to_per_group_shape
-from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8
+from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8, QUANTILE_EMA_ALPHA, QUANTILE_EMA_BETA
 
 FLT_EPSILON = 1.192092896e-7
 QUANT_MAX_SCOPE = {
@@ -243,3 +243,17 @@ def apply_progressive_quant(weight, scale_w1, scale_w2, group_size=32):
         dtype=torch_npu.float4_e2m1fn_x2)
     # npu_op need quantized_weight.t for fp8*fp4
     return quantized_weight.transpose(-1, -2)
+
+
+def calculate_quantile_ema_scale(previous_scale, current_scale, alpha=QUANTILE_EMA_ALPHA, beta=QUANTILE_EMA_BETA):
+    """
+    Function: calculate exponential moving average scale for quantile quantization
+    Args:
+        previous_scale: previous scale value
+        current_scale: current scale value
+        alpha: weight for previous scale (default 0.99)
+        beta: weight for current scale (default 0.01)
+    Returns:
+        ema_scale: exponential moving average scale
+    """
+    return alpha * previous_scale + beta * current_scale
