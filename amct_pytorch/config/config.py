@@ -165,7 +165,7 @@ HIFP8_CAST_CFG = {
 }
 
 
-HIFP8_DYNAMIC_QUANTILE_CFG = {
+HIFP8_QUANTILE_CFG = {
     'batch_num': 1,
     'quant_cfg': {
         'weights': {
@@ -176,8 +176,7 @@ HIFP8_DYNAMIC_QUANTILE_CFG = {
         'inputs': {
             'type': 'hifloat8',
             'symmetric': True,
-            'strategy': 'token',
-            'dynamic': True,
+            'strategy': 'tensor',
         },
     },
     'algorithm': {'quantile'},
