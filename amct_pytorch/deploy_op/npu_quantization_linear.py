@@ -42,6 +42,9 @@ class NpuQuantizationLinear(torch.nn.Module):
         self._init_npu_quantize_type()
         self.act_granularity = getattr(quant_module, 'act_granularity', 'tensor')
         self.quantize_axis = -1
+        self.pertoken_scale = None
+        self.y_scale = None
+        self.group_sizes = None
         self.dynamic = getattr(quant_module, 'dynamic', None)
         self._init_weight_quant(quant_module, device)
         self._init_deq_weight_scale(quant_module, device)
