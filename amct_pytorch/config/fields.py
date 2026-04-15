@@ -42,14 +42,22 @@ class BatchNumField():
 
 class WeightsCfgField():
     def __init__(self, config):
-        self.quant_type = config.get('type')
-        self.symmetric = config.get('symmetric')
-        self.strategy = config.get('strategy')
-        self.group_size = config.get('group_size', None)
-        self.check()
+        if config:
+            self.quant_type = config.get('type')
+            self.symmetric = config.get('symmetric')
+            self.strategy = config.get('strategy')
+            self.group_size = config.get('group_size', None)
+            self.check()
+        else:
+            self.quant_type = None
+            self.symmetric = None
+            self.strategy = None
+            self.group_size = None
         self.value = self.set_value()
     
     def set_value(self):
+        if self.quant_type is None:
+            return None
         if self.group_size is None:
             return {'quant_type': self.quant_type,
                     'symmetric': self.symmetric,
@@ -101,16 +109,18 @@ class InputsCfgField():
             self.quant_type = config.get('type')
             self.symmetric = config.get('symmetric')
             self.strategy = config.get('strategy')
-            self.check()
+            if self.quant_type is not None:
+                self.check()
         self.value = self.set_value()
     
     def set_value(self):
-        if self.quant_input:
-            return {'quant_type': self.quant_type,
-                    'symmetric': self.symmetric,
-                    'strategy': self.strategy}
-        else:
+        if not self.quant_input:
             return {'enable_quant': False}
+        if self.quant_type is None:
+            return None
+        return {'quant_type': self.quant_type,
+                'symmetric': self.symmetric,
+                'strategy': self.strategy}
     
     def get_value(self):
         return self.value
@@ -132,15 +142,70 @@ class QuantCfgField():
     def __init__(self, config):
         self.weights_cfg = WeightsCfgField(config.get('weights', {}))
         self.inputs_cfg = InputsCfgField(config.get('inputs', {'enable_quant': False}))
+        self.fuzzy_configs = QuantCfgField.extract_fuzzy_configs(config)
+        
+        self._validate_weights_config()
         
         self.value = self.set_value()
-    
+
+    @staticmethod
+    def extract_fuzzy_configs(config):
+        """
+        Extract fuzzy matching configs from quant_cfg
+        Patterns like '*down_proj.weights' or '*self_attn.q_proj.inputs'
+        """
+        fuzzy_configs = {'weights': [], 'inputs': []}
+        
+        for key, value in config.items():
+            if '*' in key:
+                if key.endswith('.weights'):
+                    fuzzy_configs['weights'].append({
+                        'pattern': key,
+                        'config': value
+                    })
+                elif key.endswith('.inputs'):
+                    fuzzy_configs['inputs'].append({
+                        'pattern': key,
+                        'config': value
+                    })
+        
+        return fuzzy_configs
+
     def set_value(self):
         return {'weights_cfg': self.weights_cfg.get_value(),
                 'inputs_cfg': self.inputs_cfg.get_value()}
-    
+
     def get_value(self):
         return self.value
+
+    def get_fuzzy_config(self, layer_name, config_type):
+        """
+        Get matching fuzzy config for a layer
+        Params:
+            layer_name: str, the layer name
+            config_type: str, 'weights' or 'inputs'
+        Return: dict or None, the matching config or None
+        """
+        from amct_pytorch.config.utils import match_fuzzy_pattern
+        
+        for fuzzy_cfg in self.fuzzy_configs[config_type]:
+            if match_fuzzy_pattern(layer_name, fuzzy_cfg['pattern']):
+                return fuzzy_cfg['config']
+        return None
+
+    def _validate_weights_config(self):
+        """
+        Validate that at least one weights configuration exists
+        Either a precise weights configuration or a fuzzy matching *.weights configuration
+        """
+        has_weights_config = self.weights_cfg.get_value() is not None
+        has_fuzzy_weights_config = len(self.fuzzy_configs['weights']) > 0
+        
+        if not has_weights_config and not has_fuzzy_weights_config:
+            raise ValueError(
+                'Configuration must include at least one weights configuration: either '
+                'a "weights" field or a fuzzy matching pattern like "*.weights"'
+            )
 
 
 class AwqField():
@@ -275,11 +340,13 @@ class AlgorithmField():
         self.names = alg_names
         self.value = self.set_value()
 
-
     @staticmethod
     def check(alg_cfg):
         if not isinstance(alg_cfg, str) and len(alg_cfg) != 1:
             raise ValueError(f'Algorithm only support 1 str, but got {alg_cfg}')
+
+    def get_value(self):
+        return self.value
 
     def set_value(self):
         total_alg = {}
@@ -291,9 +358,6 @@ class AlgorithmField():
             else:
                 total_alg |= alg_value
         return {'algorithm': total_alg}
-    
-    def get_value(self):
-        return self.value
 
 
 class SkipLayersField():
@@ -321,3 +385,34 @@ class QuantConfig:
         self.quant_cfg = QuantCfgField(config.get('quant_cfg', {}))
         self.algorithm = AlgorithmField(config.get('algorithm', {}), registed_alg)
         self.skip_layers = SkipLayersField(config.get('skip_layers', []))
+        self._layer_config_cache = {}
+
+    def get_layer_config(self, layer_name):
+        """
+        Get quant config for a specific layer, with caching
+        Params:
+            layer_name: str, layer name
+        Return: dict or None, quant config for this layer
+        """
+        if layer_name in self._layer_config_cache:
+            return self._layer_config_cache[layer_name]
+        
+        quant_cfg = self.quant_cfg.get_value().copy()
+        
+        fuzzy_weights_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'weights')
+        if fuzzy_weights_cfg:
+            weights_cfg = WeightsCfgField(fuzzy_weights_cfg)
+            quant_cfg['weights_cfg'] = weights_cfg.get_value()
+        elif quant_cfg['weights_cfg'] is None:
+            self._layer_config_cache[layer_name] = None
+            return None
+        
+        fuzzy_inputs_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'inputs')
+        if fuzzy_inputs_cfg:
+            inputs_cfg = InputsCfgField(fuzzy_inputs_cfg)
+            quant_cfg['inputs_cfg'] = inputs_cfg.get_value()
+        elif quant_cfg['inputs_cfg'] is None:
+            quant_cfg['inputs_cfg'] = {'enable_quant': False}
+        
+        self._layer_config_cache[layer_name] = quant_cfg
+        return quant_cfg
