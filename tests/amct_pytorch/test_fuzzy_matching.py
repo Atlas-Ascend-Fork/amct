@@ -36,10 +36,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 import fnmatch
 import torch
 import torch.nn as nn
-
-from amct_pytorch.config.utils import match_fuzzy_pattern
 from mock_torch_npu import mock_npu
 from utils import TestModel
+from amct_pytorch.config.utils import match_fuzzy_pattern
 from amct_pytorch import quantize, convert
 
 
