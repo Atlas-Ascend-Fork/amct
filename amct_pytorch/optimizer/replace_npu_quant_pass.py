@@ -73,8 +73,14 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         if isinstance(object_module, deploy_ops[0]):
             LOGGER.logd(f'{module_type.__name__} do not need to invoke convert')
             return
-        
-        npu_module = self._get_deploy_module(object_module, module_type)
+
+        if type(object_module).__name__ == 'FlatQuantAttention' or type(object_module).__name__ == 'FlatQuantMLP':
+            # We needs to access layernorm and trans from higher level, so it cannot be done within the module
+            # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
+            from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
+            npu_module = get_replacement_module(model, type(object_module).__name__, object_name, object_module)
+        else:
+            npu_module = self._get_deploy_module(object_module, module_type)
         
         ModuleHelper.replace_module_by_name(model, object_name, npu_module)
         LOGGER.logd("Replace npu module to '{}' success!".format(object_name), 'ReplaceNpuQuantPass')
@@ -87,7 +93,6 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         Return: deploy module
         """
         deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
-        
         if isinstance(deploy_ops, list):
             for deploy_op in deploy_ops:
                 if self._should_use_deploy_op(object_module, deploy_op):
@@ -103,10 +108,8 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                     deploy_op: deploy op function
         Return: bool
         """
-        if deploy_op in [NpuQuantizationConv2d]:
-            return hasattr(object_module, 'ori_module_type') and object_module.ori_module_type == 'Conv2d'
-        elif deploy_op.__name__ in ['get_replacement_module']:
-            return module_type.__name__ in ['FlatQuantAttention', 'FlatQuantMLP']
+        if hasattr(object_module, 'ori_module_type') and object_module.ori_module_type == 'Conv2d':
+            return deploy_op in [NpuQuantizationConv2d]
         elif deploy_op == NpuQuantizationLinear:
             return hasattr(object_module, 'scale_d') and object_module.scale_d is not None
         elif deploy_op == NpuWeightQuantizedLinear:
