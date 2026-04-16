@@ -47,7 +47,7 @@ add_dependencies(amct_pytorch_proto_compile protobuf_host_build ascend_protobuf_
 endif()
 
 set(COMMON_LIB_INC_FILES
-  util.h dump.h cast_util.h error_codes.h
+  util.h dump.h error_codes.h
 )
 
 add_custom_target(amct_pytorch_prepare_package
