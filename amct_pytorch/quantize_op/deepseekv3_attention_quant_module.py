@@ -18,9 +18,10 @@ import math
 import torch
 from torch import nn
 import torch.nn.functional as F
-import transfermer
+from transformer.cache_utils import DynamicCache
 from amct_pytorch.utils.vars import HIFLOAT8
 from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.quantize_op.utils import calculate_quantile_ema_scale
 
 
 class DeepseekV3AttentionQuant(BaseQuantizeModule):
@@ -40,101 +41,75 @@ class DeepseekV3AttentionQuant(BaseQuantizeModule):
         quant_config: quantization parameters.
         """
         super().__init__(ori_module, layer_name, quant_config)
-        self.config = ori_module.config
-        self.layer_idx = ori_module.layer_idx
-        self.num_key_value_groups = ori_module.num_key_value_groups
-        self.attention_dropout = ori_module.attention_dropout
-        self.num_heads = ori_module.num_heads
-
-        self.q_lora_rank = ori_module.q_lora_rank
-        self.qk_rope_head_dim = ori_module.qk_rope_head_dim
-        self.kv_lora_rank = ori_module.kv_lora_rank
-        self.v_head_dim = ori_module.v_head_dim
-        self.qk_nope_head_dim = ori_module.qk_nope_head_dim
-        self.qk_head_dim = ori_module.qk_head_dim
-
-        self.is_causal = ori_module.is_causal
-
-        self.q_proj = ori_module.q_proj if ori_module.q_proj else None
-        self.q_a_proj = ori_module.q_a_proj if ori_module.q_a_proj else None
-        self.q_a_layernorm = ori_module.q_a_layernorm if ori_module.q_a_layernorm else None
-        self.q_b_proj = ori_module.q_b_proj if ori_module.q_b_proj else None
-
-        self.kv_a_proj_with_mqa = ori_module.kv_a_proj_with_mqa
-        self.kv_a_layernorm = ori_module.kv_a_layernorm
-        self.kv_b_proj = ori_module.kv_b_proj
-        
-        self.o_proj = ori_module.o_proj
-
-        self.scaling = ori_module.scaling
+        self.ori_module = ori_module
+        self.kvcache_enable = quant_config.get('kvcache_cfg').get('enable_quant', False)
+        if self.kvcache_enable:
+            self.quant_type = quant_config.get('kvcache_cfg').get('quant_type')
+            self.symmetric = quant_config.get('kvcache_cfg').get('symmetric')
+            self.granularity = quant_config.get('kvcache_cfg').get('strategy')
+            self.batch_num = quant_config.get('kvcache_cfg').get('batch_num')
+            self.cur_batch = 0
+            self.previous_max_k = None
+            self.previous_max_v = None
+            self.scale_k= None
+            self.scale_v = None
+            self.offset_k = None
+            self.offset_v = None
 
     @torch.no_grad()
-    def forward(
-            self,
-            hidden_states,
-            position_embeddings,
-            attention_mask,
-            past_key_values,
-            cu_seq_lens_q,
-            cu_seq_lens_k,
-            max_length_q,
-            max_length_k,
-        ):
-        batch_size, seq_length = hidden_states.shape[:-1]
-        query_shape = (batch_size, seq_length, -1, self.qk_head_dim)
-        key_shape = (batch_size, seq_length, -1, self.qk_nope_head_dim + self.v_head_dim)
+    def forward(self, hidden_states, position_embeddings, attention_mask, past_key_values, **kwargs):
+        """
+        Function: DeepseekV3AttentionQuant forward function.
+        Args:
+        inputs: data used for calibration in torch.tensor.
+        """
+        past_key_values = DynamicCache()
+        kv_states = self._hook_kv_states(past_key_values)
+        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, past_key_values=past_key_values, **kwargs)
+        
+        self.cur_batch += 1
+        if self.cur_batch > self.batch_num:
+            return fp_out
+        batch_max_k, batch_max_v = self._compute_batch_max(kv_states)
+        self._update_scale_tensor(batch_max_k, batch_max_v)
+        if self.cur_batch == self.batch_num:
+            self._finalize_calibration()
+        return fp_out
 
-        if self.q_lora_rank is None:
-            q_states = self.q_proj(hidden_states)
+    def _hook_kv_states(past_key_value):
+        update_function = past_key_value.update
+        capture_data = {}
+        def hook_update(key_states, value_states, layer_idx, **kwargs):
+            capture_data[layer_idx] = {
+                'k' : torch.max(torch.abs(key_states)).reshape(-1),
+                'v' : torch.max(torch.abs(value_states)).reshape(-1)
+            }
+            return update_function(key_states, value_states, layer_idx, **kwargs)
+        
+        past_key_value.update = hook_update
+        
+        return capture_data
+
+    
+    def _compute_batch_max(self, kv_states):
+        if self.act_granularity == 'tensor':
+            k_max = torch.max(torch.abs(kv_states.get('k'))).reshape(-1)
+            v_max = torch.max(torch.abs(kv_states.get('v'))).reshape(-1)
+        return k_max, v_max
+
+    def _update_scale_tensor(self, batch_max_k, batch_max_v):
+        if self.previous_max_k is None:
+            self.previous_max_k = batch_max_k
         else:
-            q_states = self.q_b_proj(self.q_a_layernorm(self.q_a_proj(hidden_states)))
-        q_states = q_states.view(query_shape).transpose(1, 2)
-        q_pass, q_rot = torch.split(q_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
-
-        compressed_kv = self.kv_a_proj_with_mqa(hidden_states)
-        k_pass, k_rot = torch.split(compressed_kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
-
-        k_pass = self.kv_b_proj(self.kv_a_layernorm(k_pass)).view(key_shape).transpose(1, 2)
-        k_pass, value_states = torch.split(k_pass, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
-
-        k_rot = k_rot.view(batch_size, 1, seq_length, self.qk_rope_head_dim)
-
-        cos, sin = position_embeddings
-        if self.config.rope_interleave:  # support using interleaved weights for efficiency
-            q_rot, k_rot = apply_rotary_pos_emb_interleave(q_rot, k_rot, cos, sin)
+            self.previous_max_k = calculate_quantile_ema_scale(self.previous_max_k, batch_max_k)
+        
+        if self.previous_max_v is None:
+            self.previous_max_v = batch_max_v
         else:
-            q_rot, k_rot = apply_rotary_pos_emb(q_rot, k_rot, cos, sin)
-        k_rot = k_rot.expand(*k_pass.shape[:-1], -1)
+            self.previous_max_v = calculate_quantile_ema_scale(self.previous_max_v, batch_max_v)
 
-        query_states = torch.cat((q_pass, q_rot), dim=-1)
-        key_states = torch.cat((k_pass, k_rot), dim=-1)
-
-        if past_key_values is not None:
-            quantized_key = 
-            quantized_value = 
-            key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx)
-
-        if is_flash_attention_requested(self.config) and self.qk_head_dim != self.v_head_dim:
-            value_states = F.pad(value_states, [0, self.qk_head_dim - self.v_head_dim])
-
-        attention_interface: Callable = ALL_ATTENTION_FUNCTIONS.get_interface(
-            self.config._attn_implementation, eager_attention_forward
-        )
-
-        attn_output, attn_weights = attention_interface(
-            self,
-            query_states,
-            key_states,
-            value_states,
-            attention_mask,
-            dropout=0.0 if not self.training else self.attention_dropout,
-            scaling=self.scaling,
-            **kwargs,
-        )
-
-        if is_flash_attention_requested(self.config) and self.qk_head_dim != self.v_head_dim:
-            attn_output = attn_output[:, :, :, : self.v_head_dim]
-
-        attn_output = attn_output.reshape(batch_size, seq_length, -1).contiguous()
-        attn_output = self.o_proj(attn_output)
-        return attn_output, attn_weights
+    def _finalize_calibration(self):
+        self.scale_k = self.calculate_hif8_scale(self.previous_max_k)
+        self.scale_v = self.calculate_hif8_scale(self.previous_max_v)
+        LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
+            'QuantileQuant')
