@@ -42,7 +42,7 @@ from ....amct_pytorch.custom_op.utils import tensor
 from ....amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 from ....amct_pytorch.common.utils.vars_util import DEFAULT
 from ....amct_pytorch.common.utils.util import cast_fp16_precision
-from ....amct_pytorch.utils.vars import QUANT_RESULT_FILE
+# from ....amct_pytorch.utils.vars import QUANT_RESULT_FILE
 
 LAYERS_NUM = 'layers_num'
 

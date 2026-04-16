@@ -600,25 +600,25 @@ namespace util {
         return outData;
     }
 
-    template <typename T>
-    struct DataCastToFloat32Functor<util::CPUDevice, T> {
-        void operator()(const T* in, float* out, int length) const
-        {
-            for (auto i = 0; i < length; i++) {
-                out[i] = Fp16ToFp32(in[i]);
-            }
-        }
-    };
+    // template <typename T>
+    // struct DataCastToFloat32Functor<util::CPUDevice, T> {
+    //     void operator()(const T* in, float* out, int length) const
+    //     {
+    //         for (auto i = 0; i < length; i++) {
+    //             out[i] = Fp16ToFp32(in[i]);
+    //         }
+    //     }
+    // };
 
-    template <typename T>
-    struct DataCastToFloat16Functor<util::CPUDevice, T> {
-        void operator()(const T* in, uint16_t* out, int length) const
-        {
-            for (auto i = 0; i < length; i++) {
-                out[i] = Fp32ToFp16(in[i]);
-            }
-        }
-    };
+    // template <typename T>
+    // struct DataCastToFloat16Functor<util::CPUDevice, T> {
+    //     void operator()(const T* in, uint16_t* out, int length) const
+    //     {
+    //         for (auto i = 0; i < length; i++) {
+    //             out[i] = Fp32ToFp16(in[i]);
+    //         }
+    //     }
+    // };
 
     template <typename T>
     struct DataCastToHiF8Fp8Functor<util::CPUDevice, T> {
@@ -694,8 +694,8 @@ namespace util {
         }
     };
 
-template struct DataCastToFloat32Functor<util::CPUDevice, uint16_t>;
-template struct DataCastToFloat16Functor<util::CPUDevice, float>;
+// template struct DataCastToFloat32Functor<util::CPUDevice, uint16_t>;
+// template struct DataCastToFloat16Functor<util::CPUDevice, float>;
 template struct DataCastToHiF8Fp8Functor<util::CPUDevice, uint32_t>;
 template struct DataCastToHiF8Fp8Functor<util::CPUDevice, uint16_t>;
 template struct HiF8Fp8CastToFpNFunctor<util::CPUDevice, uint32_t>;

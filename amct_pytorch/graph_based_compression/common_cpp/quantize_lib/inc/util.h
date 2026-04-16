@@ -185,10 +185,10 @@ enum WeightFormat {
     KH_KW_CI_CO = 1,
 };
 
-const std::vector<std::string> FAKE_QUANT_PRECISION_MODES = {
-    "DEFAULT",
-    "FORCE_FP16_QUANT"
-};
+// const std::vector<std::string> FAKE_QUANT_PRECISION_MODES = {
+//     "DEFAULT",
+//     "FORCE_FP16_QUANT"
+// };
 
 // CPUDevice and GPUDevice
 struct ThreadPoolDevice {
@@ -198,29 +198,29 @@ struct GpuDevice {
 };
 
 using CPUDevice = ThreadPoolDevice;
-using GPUDevice = GpuDevice;
+// using GPUDevice = GpuDevice;
 
 Status ProcessScale(float& currentScale);
 Status ProcessScale(double& currentScale);
-Status GetLengthByDim(const std::vector<int>& dims, int64_t& dataSize);
-Status CheckBalanceFactor(const float* balanceFactor, unsigned int channelNum);
+// Status GetLengthByDim(const std::vector<int>& dims, int64_t& dataSize);
+// Status CheckBalanceFactor(const float* balanceFactor, unsigned int channelNum);
 
 
-    /**
-    * @ingroup quantize lib
-    * @brief: record scale offset Function.
-    * @param [in] fileName: record file name.
-    * @param [in] layerName: target layer name.
-    * @param [in|out] recordData: to record data.
-    * @return succ/fail
-    */
-    template <typename T>
-    Status RecordScaleOffset(const std::string &fileName, const std::string &layerName,
-        const RecordData<T> &recordData);
+    // /**
+    // * @ingroup quantize lib
+    // * @brief: record scale offset Function.
+    // * @param [in] fileName: record file name.
+    // * @param [in] layerName: target layer name.
+    // * @param [in|out] recordData: to record data.
+    // * @return succ/fail
+    // */
+    // template <typename T>
+    // Status RecordScaleOffset(const std::string &fileName, const std::string &layerName,
+    //     const RecordData<T> &recordData);
 
-    template <typename T>
-    Status RecordRepeatData(const std::string &fileName, const std::string &layerName, const std::vector<T> &data,
-        const std::string &dataType);
+    // template <typename T>
+    // Status RecordRepeatData(const std::string &fileName, const std::string &layerName, const std::vector<T> &data,
+    //     const std::string &dataType);
 }
 
 #endif /* UTIL_H */

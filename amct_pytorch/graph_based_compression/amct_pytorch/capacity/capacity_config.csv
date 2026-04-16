@@ -13,7 +13,7 @@ CHANNEL_WISE_TYPES, list,Conv2d,Conv3d,ConvTranspose2d,Conv1d,LSTM,GRU,ConvTrans
 CHANNEL_WISE_ONNX_TYPES,list,Conv,ConvTranspose,LSTM,GRU
 FUSE_TYPES, list,Conv2d,Conv3d,Conv1d
 FUSE_ONNX_TYPES,list,Conv
-AMCT_OPERATIONS, list,IFMR,HFMG,Recorder,AscendQuant,AscendDeQuant,RetrainQuant,RNNRetrainQuant,MarkedQuantizableModule,QuantIdentity,SelectiveMaskGen,DMQBalancer,Conv2dQAT,LinearQAT,LSTMQAT,GRUQAT,OFMRQuant,FakeQuantConv2d,FakeQuantLinear,ConvTranspose1dQAT
+AMCT_OPERATIONS, list,IFMR,HFMG,Recorder,AscendQuant,AscendDeQuant,RetrainQuant,RNNRetrainQuant,MarkedQuantizableModule,QuantIdentity,SelectiveMaskGen,DMQBalancer,Conv2dQAT,LinearQAT,LSTMQAT,GRUQAT,OFMRQuant,ConvTranspose1dQAT
 AMCT_RETRAIN_OPERATIONS, list,RetrainQuant,RNNRetrainQuant
 RETRAIN_TYPES, list, Conv1d,Conv2d,Conv3d,Linear,ConvTranspose2d,LSTM,GRU,ConvTranspose1d
 RETRAIN_ONNX_TYPES, list, Conv, Gemm, MatMul, ConvTranspose,LSTM,GRU

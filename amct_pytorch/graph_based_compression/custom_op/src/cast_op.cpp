@@ -38,19 +38,19 @@ using namespace util;
     #define OUTPUT_DTYPE torch::kUInt8
 #endif
 
-template <typename T>
-void FloatCastToHiF8Fp8(torch::Tensor& input, torch::Tensor& output, int roundMode, int dstType)
-{
-    int dataType = FP32;
-    auto inputPtr = reinterpret_cast<T*>(input.data_ptr());
-    if (input.dtype() == torch::kFloat16) {
-        dataType = FP16;
-    } else if (input.dtype() == torch::kBFloat16) {
-        dataType = BF16;
-    }
-    DataCastToHiF8Fp8Functor<util::CPUDevice, T>()(inputPtr,
-        reinterpret_cast<uint8_t*>(output.data_ptr()), input.numel(), dataType, dstType, roundMode);
-}
+// template <typename T>
+// void FloatCastToHiF8Fp8(torch::Tensor& input, torch::Tensor& output, int roundMode, int dstType)
+// {
+//     int dataType = FP32;
+//     auto inputPtr = reinterpret_cast<T*>(input.data_ptr());
+//     if (input.dtype() == torch::kFloat16) {
+//         dataType = FP16;
+//     } else if (input.dtype() == torch::kBFloat16) {
+//         dataType = BF16;
+//     }
+//     DataCastToHiF8Fp8Functor<util::CPUDevice, T>()(inputPtr,
+//         reinterpret_cast<uint8_t*>(output.data_ptr()), input.numel(), dataType, dstType, roundMode);
+// }
 
 template <typename T>
 void HiF8Fp8CastToFloat(torch::Tensor& input, torch::Tensor& output, int dataType, int srcType)

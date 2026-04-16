@@ -128,84 +128,9 @@ TRANSPOSE = 'Transpose'
 
 QUANT_LAYER_SUFFIX = ('.quant', '.dequant', '.anti_quant')
 
-HIFLOAT8 = 'HIFLOAT8'
-FLOAT8_E4M3FN = 'FLOAT8_E4M3FN'
-FLOAT4_E2M1 = 'FLOAT4_E2M1'
-FLOAT4_E1M2 = 'FLOAT4_E1M2'
 FLOAT16 = 'FLOAT16'
 INT8 = 'INT8'
 INT4 = 'INT4'
-MXFP4_E2M1 = 'MXFP4_E2M1'
-MXFP8_E4M3FN = 'MXFP8_E4M3FN'
-
-# AWQ algorithm parameters
-GROUP_SIZE = 32
-GRIDS_NUM = "grids_num"
-DEFAULT_GRIDS_NUM = 20
-
-LUT_DEFAULT_GROUP_SIZE = 256
-LUT_ALGO = 'lut_algo'
-
-QUANT_RESULT_FILE = 'quant_result.pt'
-
-DEFAULT_SMOOTH_STRENGTH = 0.5
-WTS_ASYMMETRIC_DTYPE = [INT8, INT4]
-
-WTS_PER_TENSOR_SUPPORT_COMBINATION = ['HIFLOAT8 HIFLOAT8', 'FLOAT8_E4M3FN FLOAT8_E4M3FN', 
-                                  'INT8 INT8', 'INT8 INT4', 'NOT_QUANTIZE INT8', 'NOT_QUANTIZE INT4',
-                                  'NOT_QUANTIZE HIFLOAT8', 'NOT_QUANTIZE FLOAT8_E4M3FN']
-WTS_PER_CHANNEL_SUPPORT_COMBINATION = ['HIFLOAT8 HIFLOAT8', 'FLOAT8_E4M3FN FLOAT8_E4M3FN', 
-                                  'INT8 INT8', 'INT8 INT4', 'NOT_QUANTIZE INT8', 'NOT_QUANTIZE INT4',
-                                  'NOT_QUANTIZE HIFLOAT8', 'NOT_QUANTIZE FLOAT8_E4M3FN']
-WTS_PER_GROUP_SUPPORT_COMBINATION = ['NOT_QUANTIZE MXFP4_E2M1', 'MXFP8_E4M3FN MXFP4_E2M1', 
-                                 'MXFP8_E4M3FN MXFP8_E4M3FN', 'NOT_QUANTIZE INT4',
-                                 'NOT_QUANTIZE FLOAT4_E1M2', 'NOT_QUANTIZE FLOAT4_E2M1',
-                                 'FLOAT8_E4M3FN FLOAT4_E2M1', 'NOT_QUANTIZE INT8']
-
-ACT_PER_TENSOR_SUPPORT_COMBINATION = ['HIFLOAT8 HIFLOAT8', 'FLOAT8_E4M3FN FLOAT8_E4M3FN', 
-                                  'INT8 INT8', 'INT8 INT4', 'FLOAT8_E4M3FN FLOAT4_E2M1']
-ACT_PER_TOKEN_SUPPORT_COMBINATION = ["INT8 INT8"]
-
-# Quantization bit width combinations supported by different quantization granularities
-WTS_GRANULARITY_SUPPORT_MAP = {
-    'PER_TENSOR': WTS_PER_TENSOR_SUPPORT_COMBINATION,
-    'PER_CHANNEL': WTS_PER_CHANNEL_SUPPORT_COMBINATION,
-    'PER_GROUP': WTS_PER_GROUP_SUPPORT_COMBINATION
-}
-
-ACT_GRANULARITY_SUPPORT_MAP = {
-    'PER_TENSOR': ACT_PER_TENSOR_SUPPORT_COMBINATION,
-    'PER_TOKEN': ACT_PER_TOKEN_SUPPORT_COMBINATION
-}
-
-SMOOTH_QUANT_SUPPORT_COMBINATION = ['INT8 INT8', 'FLOAT8_E4M3FN FLOAT4_E2M1']
-
-# Model weight data types supported by quantization bit width combinations
-ALLOWED_WEIGHT_DTYPES = {
-    'HIFLOAT8 HIFLOAT8': [torch.float32, torch.float16, torch.bfloat16],
-    'FLOAT8_E4M3FN FLOAT8_E4M3FN': [torch.float32, torch.float16, torch.bfloat16],
-    'NOT_QUANTIZE MXFP4_E2M1': [torch.bfloat16, torch.float16],
-    'NOT_QUANTIZE FLOAT8_E4M3FN': [torch.bfloat16, torch.float16],
-    'NOT_QUANTIZE HIFLOAT8': [torch.bfloat16, torch.float16],
-    'MXFP8_E4M3FN MXFP4_E2M1': [torch.bfloat16],
-    'MXFP8_E4M3FN MXFP8_E4M3FN': [torch.bfloat16],
-    'NOT_QUANTIZE INT4': [torch.float32, torch.bfloat16, torch.float16],
-    'NOT_QUANTIZE INT8': [torch.bfloat16, torch.float16],
-    'NOT_QUANTIZE FLOAT4_E1M2': [torch.bfloat16, torch.float16], 
-    'NOT_QUANTIZE FLOAT4_E2M1': [torch.bfloat16, torch.float16],
-    'FLOAT8_E4M3FN FLOAT4_E2M1': [torch.bfloat16],
-}
-
-ALLOWED_ROUND_MODE_MAP = {
-    HIFLOAT8: ['ROUND', 'HYBRID'],
-    FLOAT8_E4M3FN: ['RINT'],
-    INT8: ['RINT'],
-    INT4: ['RINT'],
-    MXFP4_E2M1: ['RINT'],
-    MXFP8_E4M3FN: ['RINT'],
-    FLOAT4_E1M2: ['RINT'],
-    FLOAT4_E2M1: ['RINT']
-}
 
 INT8_MAX = torch.iinfo(torch.int8).max
 INT8_MIN = torch.iinfo(torch.int8).min
@@ -215,7 +140,6 @@ INT4_MIN = -8
 
 INT32_MAX = torch.iinfo(torch.int32).max
 INT32_MIN = torch.iinfo(torch.int32).min
-
 
 LUT_DEFAULT_GROUP_SIZE = 256
 

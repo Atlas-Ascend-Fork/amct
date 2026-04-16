@@ -75,20 +75,20 @@ float CastToFP16PrecisionCPU(float inputData);
 float CastToS19CPU(float data);
 float FakeFp16PrecisionDataCPU(float data);
 
-template <typename Device, typename T>
-struct DataCastToFloat32Functor {
-    void operator()(const T* in, float* out, int length) const;
-};
+// template <typename Device, typename T>
+// struct DataCastToFloat32Functor {
+//     void operator()(const T* in, float* out, int length) const;
+// };
 
-template <typename Device, typename T>
-struct DataCastToFloat16Functor {
-    void operator()(const T* in, uint16_t* out, int length) const;
-};
+// template <typename Device, typename T>
+// struct DataCastToFloat16Functor {
+//     void operator()(const T* in, uint16_t* out, int length) const;
+// };
 
-template <typename Device, typename T>
-struct DataCastToFp16Precision {
-    void operator()(const T* in, float* out, int length) const;
-};
+// template <typename Device, typename T>
+// struct DataCastToFp16Precision {
+//     void operator()(const T* in, float* out, int length) const;
+// };
 
 template <typename Device, typename T>
 struct DataCastToHiF8Fp8Functor {

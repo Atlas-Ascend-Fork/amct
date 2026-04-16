@@ -22,7 +22,6 @@ import torch
 from ...amct_pytorch.utils.vars import FLT_EPSILON
 from ...amct_pytorch.utils.vars import BASE
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
-from ...amct_pytorch.utils.vars import FLOAT4_E2M1, FLOAT4_E1M2, FLOAT8_E4M3FN, HIFLOAT8
 from ...amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
 from ...amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group
 from ...amct_pytorch.parser.module_based_record_parser import get_layer_quant_params
@@ -235,26 +234,6 @@ def convert_to_dst_shape(input_tensor, dst_shape):
     return out_tensor
 
 
-def get_float_quant_scope(data_type):
-    """
-    Get the quantization step for float data types.
-
-    Args:
-        data_type: Type of integer data (e.g., FLOAT4E2M1, FLOAT4E1M2)
-
-    Returns:
-        quantization step
-    """
-    quant_max_scope = {
-        FLOAT4_E2M1: 6.0,
-        FLOAT4_E1M2: 1.75,
-        FLOAT8_E4M3FN: 448.0, # 256 * 1.75
-        HIFLOAT8: 32768.0, # 2^15
-    }
-
-    return quant_max_scope[data_type]
-
-
 def get_int_quant_scope(data_type, asymmetric, abs_max_is_negative=False):
     """
     Get the quantization step for integer data types.
@@ -330,11 +309,8 @@ def calculate_scale_offset(data_max, data_min, asymmetric, data_type):
             torch.tensor(-math.ceil(quant_scope / 2), dtype=data_max.dtype, device=data_max.device))
     # symmetric quant
     else:
-        if data_type in (FLOAT8_E4M3FN, FLOAT4_E2M1, FLOAT4_E1M2, HIFLOAT8):
-            quant_scope = get_float_quant_scope(data_type)
-        else:
-            abs_max_is_negative = data_max.abs() < data_min.abs()
-            quant_scope = get_int_quant_scope(data_type, asymmetric, abs_max_is_negative)
+        abs_max_is_negative = data_max.abs() < data_min.abs()
+        quant_scope = get_int_quant_scope(data_type, asymmetric, abs_max_is_negative)
         boundary = torch.where(abs(data_max) > abs(data_min), abs(data_max), abs(data_min))
         scale = boundary / quant_scope
         offset = torch.zeros_like(scale)
@@ -522,50 +498,6 @@ def apply_quantize_by_algo(weight, group_size, algo, algo_param):
     elif algo == 'lut_quantize':
         quantized_weight = apply_lut_quantize_weight(weight, algo_param, group_size)
     return quantized_weight
-
-
-def apply_progressive_quant(weight, quant_factors, round_mode, group_size):
-    scale_w1 = quant_factors.get('scale_w1').to(device=weight.device)
-    scale_w2 = quant_factors.get('scale_w2').to(device=weight.device)
-    scale_d = quant_factors.get('scale_d').to(device=weight.device)
-    if list(scale_w1.shape) != [weight.shape[0], 1]:
-        raise RuntimeError("scale_w1.shape should be [{}, 1] current shape is {}"
-                           .format(weight.shape[0], list(scale_w1.shape)))
-    group = int(weight.shape[0] * weight.shape[1] / group_size)
-    if list(scale_w2.shape) != [group, 1]:
-        raise RuntimeError("scale_w2.shape should be [{}, 1] current shape is {}".format(group, list(scale_w2.shape)))
-    
-    quantized_weight_fp8 = \
-        convert_precision(weight / scale_w1, "FLOAT8_E4M3FN", round_mode)
-    quantized_weight_fp4 = \
-        convert_precision((quantized_weight_fp8.reshape(-1, group_size) / scale_w2), "FLOAT4_E2M1", round_mode)
-    quantized_weight = \
-        (convert_precision(quantized_weight_fp4, "FLOAT8_E4M3FN", round_mode) * scale_w2).reshape(weight.shape)
-    deq_scale = scale_w1 * scale_d
-    return quantized_weight, deq_scale.transpose(0, 1)
-
-
-def calculate_progressive_weights_scale_factor(weight, group_size=32):
-    """
-    Function: calculate two level weights's quant factor and do fakequant
-    Parameters: 
-    quant_config: configuration of quantization
-    group_size: scale w2 per group size
-    """
-    # weight per-channel to fp8_e4m3fn, per-group to fp4_e2m1
-    scale_w1, _ = calculate_scale_offset(weight.max(dim=-1).values, weight.min(dim=-1).values,
-                                            False, FLOAT8_E4M3FN)
-    # scale_w1 [n] -> [n,1]
-    scale_w1 = scale_w1.unsqueeze(1)
-    weight_fp8e4m3fn = convert_precision(weight / scale_w1, FLOAT8_E4M3FN, 'RINT')
-    weight_fp8e4m3fn = weight_fp8e4m3fn.reshape(-1, group_size)
-
-    scale_w2, _ = calculate_scale_offset(weight_fp8e4m3fn.max(dim=-1).values, 
-                                            weight_fp8e4m3fn.min(dim=-1).values, False, FLOAT4_E2M1)
-    # scale_w1 [g] -> [g,1]
-    scale_w2 = scale_w2.unsqueeze(1)
-
-    return scale_w1, scale_w2
 
 
 def check_module_device(model, quantize_layers):
