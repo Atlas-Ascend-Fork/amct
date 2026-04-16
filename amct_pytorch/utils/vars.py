@@ -18,6 +18,7 @@ import torch
 
 SUPPORT_WEIGHT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp4_e2m1', 'float4_e2m1', 'mxfp8_e4m3fn']
 SUPPORT_INPUT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp8_e4m3fn']
+SUPPORT_KVCACHE_QUANT_DTYPE = ['hifloat8']
 SUPPORT_QUANT_STRATEGY_WEIGHT = ['tensor', 'channel', 'group']
 SUPPORT_QUANT_STRATEGY_INPUT = ['tensor', 'token']
 SUPPORT_QUANT_DYNAMIC_INPUT = ['token']
@@ -109,4 +110,8 @@ CONVERT_DTYPE_MAP = {
     MXFP4_E2M1: [torch.bfloat16, torch.float16],
     MXFP8_E4M3FN: [torch.bfloat16, torch.float16],
     FLOAT4_E2M1: [torch.bfloat16, torch.float16],
+}
+
+ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE = {
+    'hifloat8': ['quantile']
 }
