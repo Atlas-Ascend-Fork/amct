@@ -52,8 +52,8 @@ add_library(quant_lib SHARED
     ${COMMON_ALGRITHEMN_CPU}
 )
 
-add_dependencies(quant_lib
-    amct_pytorch_prepare_stub)
+# add_dependencies(quant_lib
+#     amct_pytorch_prepare_stub)
 
 target_include_directories(quant_lib PRIVATE
     ${PYTORCH_OP_COMPILE_INCLUDE}
@@ -221,7 +221,7 @@ foreach(PYTORCH_OP ${PYTORCH_OPS})
 
     add_dependencies(${PYTORCH_OP}
         amct_pytorch_lib_prepare
-        amct_pytorch_prepare_stub
+        # amct_pytorch_prepare_stub
     )
 
     target_include_directories(${PYTORCH_OP} PRIVATE
