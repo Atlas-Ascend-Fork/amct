@@ -70,8 +70,7 @@ class SetupTool(): # pylint: disable=R0903
 
         prefix = 'amct_pytorch_op'
         
-        module_name = ['{}_cast'.format(prefix),
-                       '{}_dump'.format(prefix), ]
+        module_name = ['{}_dump'.format(prefix), ]
 
         modules_set = zip(module_name, compile_files)
         return modules_set

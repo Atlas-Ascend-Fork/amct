@@ -39,10 +39,7 @@ add_custom_target(amct_pytorch_proto_compile
 # =============================compile quant_lib===============================
 set(AMCT_TORCH_OP_DIR ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/custom_op)
 set(COMMON_ALGRITHEMN_CPU
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/arq.cpp
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/util.cpp
     ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/dump.cpp
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/cast_util.cpp
 )
 
 set_source_files_properties(
@@ -146,9 +143,6 @@ endif()
 # loop to generate *so
 set(PYTORCH_STUB_SOS c10 torch torch_cpu torch_python)
 foreach(PYTORCH_STUB_SO ${PYTORCH_STUB_SOS})
-  add_library(${PYTORCH_STUB_SO} SHARED
-      ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/util.cpp
-  )
   target_include_directories(${PYTORCH_STUB_SO} PRIVATE
       ${graph_based_compression_PATH}/custom_op/inc/
       ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
