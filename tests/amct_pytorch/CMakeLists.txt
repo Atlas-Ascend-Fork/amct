@@ -141,29 +141,29 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # loop to generate *so
-set(PYTORCH_STUB_SOS c10 torch torch_cpu torch_python)
-foreach(PYTORCH_STUB_SO ${PYTORCH_STUB_SOS})
-  target_include_directories(${PYTORCH_STUB_SO} PRIVATE
-      ${graph_based_compression_PATH}/custom_op/inc/
-      ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
-  )
-  target_compile_options(${PYTORCH_STUB_SO} PRIVATE
-    -Wall -fstack-protector-strong
-    -fno-common -fno-strict-aliasing -pipe
-  )
-  target_compile_definitions(${PYTORCH_STUB_SO} PRIVATE
-      _GLIBCXX_USE_CXX11_ABI=0
-  )
-endforeach(${PYTORCH_STUB_SO})
+# set(PYTORCH_STUB_SOS c10 torch torch_cpu torch_python)
+# foreach(PYTORCH_STUB_SO ${PYTORCH_STUB_SOS})
+#   target_include_directories(${PYTORCH_STUB_SO} PRIVATE
+#       ${graph_based_compression_PATH}/custom_op/inc/
+#       ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
+#   )
+#   target_compile_options(${PYTORCH_STUB_SO} PRIVATE
+#     -Wall -fstack-protector-strong
+#     -fno-common -fno-strict-aliasing -pipe
+#   )
+#   target_compile_definitions(${PYTORCH_STUB_SO} PRIVATE
+#       _GLIBCXX_USE_CXX11_ABI=0
+#   )
+# endforeach(${PYTORCH_STUB_SO})
 # cp fakeso to a path
-add_custom_target(amct_pytorch_prepare_stub
-    DEPENDS c10 torch torch_cpu torch_python
-    # install to python whl
-    COMMAND cp libc10.so ${AMCT_TOP_DIR}/tmp/
-    COMMAND cp libtorch.so ${AMCT_TOP_DIR}/tmp/
-    COMMAND cp libtorch_cpu.so ${AMCT_TOP_DIR}/tmp/
-    COMMAND cp libtorch_python.so ${AMCT_TOP_DIR}/tmp/
-)
+# add_custom_target(amct_pytorch_prepare_stub
+#     # DEPENDS c10 torch torch_cpu torch_python
+#     # install to python whl
+#     COMMAND cp libc10.so ${AMCT_TOP_DIR}/tmp/
+#     COMMAND cp libtorch.so ${AMCT_TOP_DIR}/tmp/
+#     COMMAND cp libtorch_cpu.so ${AMCT_TOP_DIR}/tmp/
+#     COMMAND cp libtorch_python.so ${AMCT_TOP_DIR}/tmp/
+# )
 
 # -----------------------compile op's .so for torch1.5.0-----------------------
 message(STATUS "Python 3 include directories: ${Python3_INCLUDE_DIRS}")
@@ -195,7 +195,7 @@ set(PYTORCH_OP_LINK_OPTIONS
 
 set(PYTORCH_OP_LINK_LIBRARIES
     -Wl,--no-as-needed
-    -lc10 -ltorch -ltorch_cpu -ltorch_python
+    # -lc10 -ltorch -ltorch_cpu -ltorch_python
     -Wl,--as-needed
 )
 
