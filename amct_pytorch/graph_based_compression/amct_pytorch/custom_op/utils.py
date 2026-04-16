@@ -16,13 +16,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import math
-import os
 import torch
 
 from ...amct_pytorch.utils.vars import FLT_EPSILON
-from ...amct_pytorch.utils.vars import BASE
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
-from ...amct_pytorch.utils.weight_quant_api import apply_lut_quantize_weight
 from ...amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group
 from ...amct_pytorch.parser.module_based_record_parser import get_layer_quant_params
 
@@ -215,25 +212,6 @@ def convert_to_per_group_shape(input_tensor, group_size):
     return input_tensor_pad.reshape(input_tensor_pad.shape[0], input_tensor_pad.shape[1] // group_size, group_size)
 
 
-def convert_to_dst_shape(input_tensor, dst_shape):
-    """
-    Converts a flattened tensor back to its destination 2D shape by truncating excess elements.
- 
-    Parameters:
-        input_tensor (Tensor): Input tensor to be reshaped (can be padded or extended)
-        dst_shape (tuple): destination 2D shape (rows, columns) to restore
- 
-    Returns:
-        Tensor: Reshaped tensor matching the destination dimensions
-    """
-    if input_tensor.shape == dst_shape:
-        return input_tensor
-
-    out_tensor = input_tensor.reshape(input_tensor.shape[0], \
-        input_tensor.shape[1] * input_tensor.shape[2])[:dst_shape[0], :dst_shape[1]]
-    return out_tensor
-
-
 def get_int_quant_scope(data_type, asymmetric, abs_max_is_negative=False):
     """
     Get the quantization step for integer data types.
@@ -253,34 +231,6 @@ def get_int_quant_scope(data_type, asymmetric, abs_max_is_negative=False):
     # Symmetric quantization, asymmetric quantization range (-128, 127), use 127 for positive values and
     # 128 for negative values when the absolute value of the original data is the maximum. 
     return abs_max_is_negative + pow(2, quant_bits - 1) - 1
-
-
-def get_weight_min_max_by_granularity(weight_data, quant_config):
-    """
-    Calculate the minimum and maximum values of weights based on the module type and weight data.
-    The calculation method depends on the granularity setting in the quantization configuration.
-
-    Parameters:
-    weight_data (Tensor): Weight data
-    quant_config (dict): Quantization configuration
-
-    Returns:
-    tuple: A tuple containing the minimum and maximum values of the weights
-    """
-    if quant_config.get('weight_granularity') == 'PER_CHANNEL':
-        weight_max = weight_data.max(dim=1, keepdim=True).values
-        weight_min = weight_data.min(dim=1, keepdim=True).values
-    elif quant_config.get('weight_granularity') == 'PER_TENSOR':
-        weight_max = weight_data.max().reshape(1, 1)
-        weight_min = weight_data.min().reshape(1, 1)
-    else:
-        # weight: [n, k] -> [cout, cin//group_size, group_size]
-        group_size = quant_config.get("group_size", 128)
-        weight_all = convert_to_per_group_shape(weight_data, group_size)
-        weight_max = weight_all.max(dim=-1, keepdim=True).values  # [cout, cin//group_size, 1]
-        weight_min = weight_all.min(dim=-1, keepdim=True).values  # [cout, cin//group_size, 1]
- 
-    return weight_min, weight_max
 
 
 def calculate_scale_offset(data_max, data_min, asymmetric, data_type):
@@ -408,126 +358,3 @@ def calculate_scale_by_group_size(input_tensor, wts_type, group_size, is_padded=
     weight_min = input_tensor.min(dim=-1, keepdim=True).values  # [group_num, 1]
     scale, offset = calculate_scale_offset(weight_max, weight_min, asymmetric, wts_type)
     return scale.reshape(weight_max.shape), offset.reshape(weight_max.shape)
-
-
-def get_optimized_weight(records, layer_name):
-    layer_quant_param = get_layer_quant_params(records, layer_name)
-    optimized_weight = layer_quant_param.get('optimized_weight')
-    return optimized_weight
-
-
-def get_quant_factor(records, layer_name):
-    layer_quant_param = get_layer_quant_params(records, layer_name)
-    quant_factors = layer_quant_param.get('quant_factors')
-    return quant_factors
-
-
-def get_algo_params(records, layer_name, algo):
-    layer_quant_param = get_layer_quant_params(records, layer_name)
-    algo_params = layer_quant_param.get(algo)
-    return algo_params
-
-
-def save_algo_params(algo, algo_param, algo_param_dict):
-    if algo == 'smooth_quantize':
-        algo_param_dict['smooth_factor'] = algo_param.get('smooth_factor')
-    if algo == 'awq_quantize':
-        algo_param_dict['awq_scale'] = algo_param.get('awq_scale')
-
-
-def cal_deq_scale(scale_w, scale_d, module_type):
-    if module_type == 'Linear':
-        deq_scale = scale_w.reshape(-1) * scale_d
-        scale_w = scale_w.reshape(-1, 1)
-    if module_type == 'Conv2d':
-        scale_w = scale_w.reshape(-1, 1, 1, 1)
-        deq_scale = (scale_w * scale_d).reshape(1, -1, 1, 1)
-    if module_type == 'ConvTranspose2d':
-        scale_w = scale_w.reshape(1, -1, 1, 1)
-        deq_scale = (scale_w * scale_d).reshape(1, -1, 1, 1)
-    return scale_w, deq_scale
-
-
-def apply_smooth_weight(smooth_params, ori_weight):
-    if smooth_params.get('smooth_factor') is None:
-        raise RuntimeError("smooth_factor is None!")
-    smooth_factor = smooth_params.get('smooth_factor').to(device=ori_weight.device, dtype=ori_weight.dtype)
-    ori_weight_shape = ori_weight.shape
-    if list(smooth_factor.shape) != [1, ori_weight_shape[1]]:
-        raise RuntimeError("smooth_factor shape should be {} current shape is {}"
-                        .format([1, ori_weight_shape[1]], list(smooth_factor.shape)))
-    weight = ori_weight * smooth_factor.to(device=ori_weight.device)
-    return weight
-
-
-def apply_awq_quantize_weight(weight_tensor, awq_param, group_size):
-    if awq_param.get('scale') is None:
-        raise RuntimeError("AWQ params scale is None!")
-    scale = awq_param.get('scale').to(weight_tensor.device)
-    cin = weight_tensor.shape[1]
-    cout = weight_tensor.shape[0]
-    if list(scale.shape) != [1, cin]:
-        raise RuntimeError("AWQ params scale.shape should be [1, {}] current shape is {}".format(
-            cin, list(scale.shape)))
-
-    weight_tensor = weight_tensor / scale
-    if awq_param.get('clip_max') is None:
-        return weight_tensor
-
-    clip_max = awq_param.get('clip_max')
-    clip_max = clip_max.to(weight_tensor.device)
-    if group_size is not None:
-        if list(clip_max.shape) != [cout, (cin + group_size - 1) // group_size, 1]:
-            raise RuntimeError("AWQ params clip_max.shape should be [{}, {}, 1] current shape is {}" .format(
-                cout, (cin + group_size - 1) // group_size, list(clip_max.shape)))
-
-        # clip_max reshape to [cout, num_groups]
-        clip_max = clip_max.squeeze(-1)
-        # repeat to [cout, num_groups * group_size], clip to [cout, cin]
-        clip_max = clip_max.repeat_interleave(group_size, -1)[:, :cin]
-
-    weight_tensor = torch.clamp(weight_tensor, -1 * clip_max, clip_max)
-    return weight_tensor
-
-
-def apply_quantize_by_algo(weight, group_size, algo, algo_param):
-    if algo == 'smooth_quantize':
-        quantized_weight = apply_smooth_weight(algo_param, weight)
-    elif algo == 'awq_quantize':
-        quantized_weight = apply_awq_quantize_weight(weight, algo_param, group_size)
-    elif algo == 'lut_quantize':
-        quantized_weight = apply_lut_quantize_weight(weight, algo_param, group_size)
-    return quantized_weight
-
-
-def check_module_device(model, quantize_layers):
-    """
-    Function: check not support device to do quantize, such as meta device
-    Parameters: 
-    model: pytorch model
-    quantize_layers: list, layer name to do quantize
-    """
-    for name, mod in model.named_modules():
-        if name in quantize_layers and mod.weight.device == torch.device('meta'):
-            raise RuntimeError(
-                "quantifiable module not support meta device, please check {} layer's device in model".format(name))
-
-
-def check_scale_offset_shape(weight, scale_w, offset_w=None, group_size=None):
-    if group_size is None:
-        if scale_w.shape[0] == 1:
-            return
-        if scale_w.shape[0] == weight.shape[0]:
-            return
-        else:
-            raise RuntimeError("scale.shape should be equal to 1 or cout. current is {}, "
-                               "pls check quant factors from file".format(scale_w.shape[0]))
-    if list(scale_w.shape) != [weight.shape[0], math.ceil(weight.shape[1] / group_size), 1]:
-        raise RuntimeError(
-            "scale.shape should be [{}] current shape is {}, please check quant factors from file.".format(
-            (weight.shape[0], math.ceil(weight.shape[1] / group_size), 1), list(scale_w.shape)))
-
-    if offset_w is None:
-        return
-    if scale_w.shape != offset_w.shape:
-        raise RuntimeError("offset_w.shape should be equal to scale_w.shape, pls check quant factors from file")

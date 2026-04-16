@@ -146,25 +146,6 @@ def get_weight_min_max_by_granularity(weight_data, quant_config):
     return weight_min, weight_max
 
 
-def convert_to_dst_shape(input_tensor, dst_shape):
-    """
-    Converts a flattened tensor back to its destination 2D shape by truncating excess elements.
- 
-    Parameters:
-        input_tensor (Tensor): Input tensor to be reshaped (can be padded or extended)
-        dst_shape (tuple): destination 2D shape (rows, columns) to restore
- 
-    Returns:
-        Tensor: Reshaped tensor matching the destination dimensions
-    """
-    if input_tensor.shape == dst_shape:
-        return input_tensor
-
-    out_tensor = input_tensor.reshape(input_tensor.shape[0], \
-        input_tensor.shape[1] * input_tensor.shape[2])[:dst_shape[0], :dst_shape[1]]
-    return out_tensor
-
-
 def get_int_quant_scope(data_type, symmetric, abs_max_is_negative=False):
     """
     Get the quantization step for integer data types.

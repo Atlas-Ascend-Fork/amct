@@ -81,29 +81,3 @@ def adjust_conv_weight_shape(group, weight):
     new_shape = tuple([-1] + list(weight_shape)[2:])
     weight = weight.reshape(new_shape)
     return weight
-
-
-def apply_lut_quantize_weight(weight, lut, group_size=256):
-    """
-    Function: quantize weight tensor with lut to introduce error 
-    Parameter: weight: a torch.tensor, original weight (cout, cin)
-               lut: a torch.tensor mapping index and quantized value (ceil(cin/group_size)*cout, 16)
-               group_size: a integer by which weight is grouped on axis 1
-    Return: weightq: a torch.tensor Quantized weight (cout, cin)
-    """
-    if lut is None:
-        raise RuntimeError("lut table is None!")
-    err = torch.full_like(weight, torch.inf)
-    weightq = torch.zeros_like(weight)
-    lut_ = lut.reshape(weight.shape[0], -1).to(weight.device)
-
-    # weight get nearest center from all the 16 lut
-    for idx in range(lut.shape[1]):
-        cur_lut = lut_[:, idx:: lut.shape[1]].repeat_interleave(group_size, dim=1)
-        cur_lut = cur_lut[:, : weight.shape[1]]
-        cur_err = torch.abs(weight - cur_lut)
-        mask = (cur_err < err)
-        err[mask] = cur_err[mask]
-        weightq[mask] = cur_lut[mask]
-
-    return weightq
