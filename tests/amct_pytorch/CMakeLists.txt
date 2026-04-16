@@ -207,17 +207,12 @@ set(PYTORCH_OP_LINK_LIBRARIES
 
 # compile several op.so, please prefix is amct_pytorch_op
 set(PYTORCH_OPS
-    amct_pytorch_op_cast
     amct_pytorch_op_dump
 )
 message(INFO PYTORCH_OPS: ${PYTORCH_OPS})
 foreach(PYTORCH_OP ${PYTORCH_OPS})
     # set src file for different op
-    if ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_cast")
-        set(OP_SRC_FILE 
-          ${graph_based_compression_PATH}/custom_op/src/cast_op.cpp
-          ${graph_based_compression_PATH}/custom_op/src/util_op.cpp)
-    elseif ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_dump")
+    if ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_dump")
         set(OP_SRC_FILE ${graph_based_compression_PATH}/custom_op/src/dump_op.cpp)
     else()
         message(ERROR " please set src file for op")
@@ -260,9 +255,8 @@ endforeach(${PYTORCH_OP})
 
 # packages
 add_custom_target(amct_pytorch_ops
-    DEPENDS amct_pytorch_op_dump amct_pytorch_op_cast
+    DEPENDS amct_pytorch_op_dump
     # copy to amct_pytorch
-    COMMAND mv libamct_pytorch_op_cast.so ${AMCT_TOP_DIR}/amct_pytorch_op_cast.cpython-${OP_PY}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so
     COMMAND mv libamct_pytorch_op_dump.so ${AMCT_TOP_DIR}/amct_pytorch_op_dump.cpython-${OP_PY}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so
 )
 
