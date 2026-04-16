@@ -47,10 +47,8 @@ Status amct_pytorch::DumpForward
     struct AmctCommon::DumpParam commonParam = {fileName, dumpParam.inputShape, dumpParam.inputShapeLength};
     // clone the input.
     auto inputClone = input.clone();
-    // ONLY support CPU, and GPU is not required actually.
-    if (inputClone.is_cuda()) {
-        inputClone = inputClone.cpu();
-    }
+    // ONLY support CPU
+    inputClone = inputClone.cpu();
     // memory continuity.
     inputClone = inputClone.contiguous();
     // now only support float and double and int, and can be extended.
