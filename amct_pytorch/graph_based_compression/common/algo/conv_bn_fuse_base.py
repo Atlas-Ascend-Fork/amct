@@ -66,7 +66,7 @@ def reshape_params(params, conv_weight, with_trans=False):
 
 class FuseConvBnBase():
     """Function: The implement of ARQ quantize algorithm
-       APIs: preprocess_params, quantize_data
+       APIs: fuse_conv_bn, fuse_weight, fuse_bias, fuse_bn_conv, bn_conv_fuse_weight, bn_conv_fuse_bias
     """
 
     @classmethod

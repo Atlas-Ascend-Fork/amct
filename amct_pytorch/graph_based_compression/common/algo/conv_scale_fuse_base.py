@@ -24,8 +24,8 @@ SUPPORT_DIMENSION = (3, 4, 5)
 
 
 class FuseConvScaleBase():
-    """Function: The implement of ARQ quantize algorithm
-       APIs: preprocess_params, quantize_data
+    """Function: The implement of fuse conv scale
+       APIs: fuse_conv_scale
     """
 
     @staticmethod

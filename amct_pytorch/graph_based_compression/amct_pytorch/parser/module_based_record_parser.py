@@ -16,9 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
-# from collections import OrderedDict
-
-# import numpy as np
 import torch
 
 from ...amct_pytorch.common.utils.util import version_higher_than
