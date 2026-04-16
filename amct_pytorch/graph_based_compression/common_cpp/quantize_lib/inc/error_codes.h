@@ -33,3 +33,5 @@ constexpr int BAD_PARAMETERS_ERROR = -65530; // 0xFFFF0006
 constexpr int NOT_SUPPORT_ERROR = -65519; // 0xFFFF0011
 constexpr int RECORD_FACTOR_ERROR = -65528; // 0xFFFF0008;
 }
+
+#endif

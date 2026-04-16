@@ -30,7 +30,9 @@ tarfile.TarFile.format = tarfile.GNU_FORMAT
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 OP_TMP_DIR = 'amct_pytorch/graph_based_compression/custom_op/src/tmp'
 AMCT_LIB_DIR = os.path.join(CUR_DIR, "./amct_pytorch/graph_based_compression/amct_pytorch/custom_op")
-SRC_FILES = [['amct_pytorch/graph_based_compression/custom_op/src/dump_op.cpp'], ]
+SRC_FILES = [
+    ['amct_pytorch/graph_based_compression/custom_op/src/dump_op.cpp'], 
+    ]
 os.environ['SOURCE_DATE_EPOCH'] = \
     str(int(os.path.getctime(os.path.realpath(__file__))))
 
