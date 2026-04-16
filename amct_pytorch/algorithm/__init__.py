@@ -34,8 +34,8 @@ from amct_pytorch.deploy_op.npu_quantization_linear import NpuQuantizationLinear
 from amct_pytorch.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
 from amct_pytorch.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
 from amct_pytorch.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
-from amct_pytorch.quantize_op.npu_quantization_deepseekv3_attention import DeepseekV3AttentionQuant
-from amct_pytorch.quantize_op.npu_quantization_longcat_flashmla import LongcatFlashMLAQuant
+from amct_pytorch.quantize_op.npu_quantization_deepseekv3_attention import NpuDeepseekV3AttentionQuant
+from amct_pytorch.quantize_op.npu_quantization_longcat_flashmla import NpuLongcatFlashMLA
 
 AlgorithmRegistry = Algorithm()
 AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
