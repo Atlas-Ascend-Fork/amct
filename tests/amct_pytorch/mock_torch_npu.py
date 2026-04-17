@@ -115,6 +115,11 @@ def mock_npu_quantize(input, scales, zero_points=None,
 
     return out
 
+def mock_npu_anti_quantize(input, scales, zero_points=None,
+    dtype=torch.qint8, axis=1, div_mode=True):
+    out = input * scales
+    return out
+
 
 def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
     return weight

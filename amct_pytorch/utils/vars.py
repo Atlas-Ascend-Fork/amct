@@ -115,3 +115,5 @@ CONVERT_DTYPE_MAP = {
 ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE = {
     'hifloat8': ['quantile']
 }
+
+KVCACHE_OPS = ['DeepseekV3Attention', 'LongcatFlashMLA']

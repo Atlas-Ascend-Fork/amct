@@ -18,7 +18,8 @@ import math
 import torch
 from torch import nn
 import torch.nn.functional as F
-from transformer.cache_utils import DynamicCache
+from transformers.cache_utils import DynamicCache
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.utils.vars import HIFLOAT8
 from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.quantize_op.utils import calculate_quantile_ema_scale
@@ -63,7 +64,6 @@ class DeepseekV3AttentionQuant(BaseQuantizeModule):
         Args:
         inputs: data used for calibration in torch.tensor.
         """
-        past_key_values = DynamicCache()
         kv_states = self._hook_kv_states(past_key_values)
         fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, past_key_values=past_key_values, **kwargs)
         

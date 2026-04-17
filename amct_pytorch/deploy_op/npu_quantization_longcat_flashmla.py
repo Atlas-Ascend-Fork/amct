@@ -18,7 +18,7 @@ import math
 import torch
 from torch import nn
 import torch.nn.functional as F
-from transformer.cache_utils import DynamicCache
+from transformers.cache_utils import DynamicCache
 from amct_pytorch.utils.vars import HIFLOAT8
 from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.quantize_op.utils import calculate_quantile_ema_scale
