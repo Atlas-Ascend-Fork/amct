@@ -175,7 +175,8 @@ class TestGRUQAT(unittest.TestCase):
         
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.new_model.parameters(), lr=self.learning_rate)
-        label = torch.randint(0, self.num_class, (self.batch_size,))
+        device = next(self.new_model.parameters()).device
+        label = torch.randint(0, self.num_class, (self.batch_size,)).to(device)
 
         self.assertIsNotNone(self.new_model)
         output, _ = self.new_model(self.input, self.h0)
