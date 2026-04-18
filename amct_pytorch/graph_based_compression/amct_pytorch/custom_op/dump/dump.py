@@ -44,6 +44,25 @@ class DUMP(nn.Module):
         self.batch_num = dump_config.batch_num
         self.cur_batch = 0
 
+    def forward(self, inputs):
+        """
+        Dump input tensor and return it unchanged.
+
+        Args:
+            inputs: Tensor to dump (float32/float64/int32).
+
+        Returns:
+            Input tensor unchanged.
+        """
+        self.cur_batch += 1
+        if self.batch_num != -1 and self.cur_batch > self.batch_num:
+            return inputs
+
+        self._dump(inputs)
+        LOGGER.logi(f"[{self.layer_name}] dump {self.cur_batch}/{self.batch_num}", 'DUMP')
+
+        return inputs
+
     def _dump(self, tensor):
         """
         Dump tensor to binary file.
@@ -69,22 +88,3 @@ class DUMP(nn.Module):
         with open(path, 'wb') as f:
             f.write(np.array(header, dtype=np.float32).tobytes())
             f.write(data.numpy().tobytes())
-
-    def forward(self, inputs):
-        """
-        Dump input tensor and return it unchanged.
-
-        Args:
-            inputs: Tensor to dump (float32/float64/int32).
-
-        Returns:
-            Input tensor unchanged.
-        """
-        self.cur_batch += 1
-        if self.batch_num != -1 and self.cur_batch > self.batch_num:
-            return inputs
-
-        self._dump(inputs)
-        LOGGER.logi(f"[{self.layer_name}] dump {self.cur_batch}/{self.batch_num}", 'DUMP')
-
-        return inputs
