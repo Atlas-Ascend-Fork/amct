@@ -39,7 +39,6 @@ class SetupTool(): # pylint: disable=R0903
         self.set_version()
         self.set_platform()
         self.setup_args = dict()
-        self.add_ops_modules()
 
     def set_version(self):
         """ set version"""
@@ -73,7 +72,7 @@ setuptools.setup(
     author='Huawei Technologies Co., Ltd.',
     license='Apache 2.0',
     extras_require={
-        "pytorch": ["1.5"]
+        "pytorch": ["2.1"]
     },
     package_data={
         '': ['.version'],
