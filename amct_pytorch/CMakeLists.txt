@@ -31,6 +31,7 @@ message("-------pytorch 1-----")
 # set(COMMON_LIB_INC_FILES
 #   util.h dump.h cast_util.h error_codes.h
 # )
+
 set(HI_PYTHON python3)
 add_custom_target(amct_pytorch_package
   DEPENDS amct_pytorch_proto_compile tensor_decompose_install_pytorch

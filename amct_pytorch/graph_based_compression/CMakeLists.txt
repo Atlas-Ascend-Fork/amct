@@ -46,9 +46,15 @@ if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
 add_dependencies(amct_pytorch_proto_compile protobuf_host_build ascend_protobuf_static)
 endif()
 
+<<<<<<< HEAD
 # set(COMMON_LIB_INC_FILES
 #   util.h dump.h cast_util.h error_codes.h
 # )
+=======
+set(COMMON_LIB_INC_FILES
+  util.h dump.h error_codes.h
+)
+>>>>>>> origin/master
 
 # add_custom_target(amct_pytorch_prepare_package
 #   DEPENDS amct_pytorch_lib

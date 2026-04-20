@@ -46,7 +46,7 @@ class DistillDataManager():
             is_dump: dump data or not, bool
             delete_dump_path: need delete tmp path or not, bool
             dump_files: dump file path
-            device: cpu/gpu, torch.device
+            device: torch.device
             device_name: device name
         '''
         self.is_dump = False
