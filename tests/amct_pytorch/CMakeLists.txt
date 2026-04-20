@@ -35,17 +35,8 @@ add_custom_target(amct_pytorch_proto_compile
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ quant_calibration_config_pytorch.proto
 )
 
-# =============================compile ops=====================================
-# ------------------------compile fake torch related .so-----------------------
-
 message(STATUS "Python3_VERSION_MAJOR: ${Python3_VERSION_MAJOR}")
 message(STATUS "Python3_VERSION_MINOR: ${Python3_VERSION_MINOR}")
-set(OP_PY ${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR})
-if(${OP_PY} STREQUAL 37)
-    set(OP_PY 37m)
-endif()
-message(STATUS "Detected OP_PY: ${OP_PY}")
-
 if(Python3_VERSION_MAJOR EQUAL 3)
     if(Python3_VERSION_MINOR VERSION_LESS 5)
         # Python 3.0-3.4: C++11
