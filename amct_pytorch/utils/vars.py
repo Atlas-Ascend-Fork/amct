@@ -100,13 +100,3 @@ ACT_GRANULARITY_SUPPORT_MAP = {
     'tensor': ACT_PER_TENSOR_SUPPORT_COMBINATION,
     'token': ACT_PER_TOKEN_SUPPORT_COMBINATION
 }
-
-CONVERT_DTYPE_MAP = {
-    INT4: [torch.float32, torch.bfloat16, torch.float16],
-    INT8: [torch.float32, torch.bfloat16, torch.float16],
-    HIFLOAT8: [torch.float32, torch.bfloat16, torch.float16],
-    FLOAT8_E4M3FN: [torch.float32, torch.bfloat16, torch.float16],
-    MXFP4_E2M1: [torch.bfloat16, torch.float16],
-    MXFP8_E4M3FN: [torch.bfloat16, torch.float16],
-    FLOAT4_E2M1: [torch.bfloat16, torch.float16],
-}

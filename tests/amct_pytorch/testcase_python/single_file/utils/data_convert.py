@@ -37,7 +37,6 @@ DATA_TYPE = torch.bfloat16
 
 SCOP_MAP = {
     "FLOAT4_E2M1": 6,
-    "FLOAT4_E1M2": 1.75,
 }
 
 FLT_EPSILON = 1.192092896e-7
@@ -64,10 +63,7 @@ def golden_float4(weight, quant_type, group_size):
     # scaled_weights shape: (-1, group_size)
     scaled_weights = convert_to_per_group_shape(weight, group_size) / scale_group
 
-    if quant_type == "FLOAT4_E1M2":
-        quant_weight = float_cast_to_float4e1m2(scaled_weights).to(device)
-    else:
-        quant_weight = float_cast_to_float4e2m1(scaled_weights).to(device)
+    quant_weight = float_cast_to_float4e2m1(scaled_weights).to(device)
     quant_weight = (quant_weight * scale_group).to(ori_type)
 
     quant_weight = convert_to_ori_shape(quant_weight, ori_shape)
@@ -650,51 +646,6 @@ def _fp16_ssr_round_to_hif8(fraction16_int, hif8_bits_num, exponent):
     else:
         return False, hif8_value
 
-def float_to_float4e2m1(values: np.ndarray) -> np.ndarray:
-    """
-    Function: convert float to mxfp4
-    Args:
-        values: np.ndarray, support dtype:np.float16 or ml_dtypes.bfloat16
-    Returns:
-        output_tensor: np.ndarray, dtype is same with values (np.float16 or ml_dtypes.bfloat16)
-    """
-    shared_exponents = cal_shared_exponent(values)
-    actual_exponents = shared_exponents.astype(np.int8) - 127
-    fp4e2m1_values = scale_input_by_shared_exponents(values, 2**(-actual_exponents.astype(values.dtype)))
-    # convert to fp4e2m1 and convert back
-    fp4e2m1_values = fp4e2m1_values.astype(values.dtype)
-    float_values = scale_input_by_shared_exponents(fp4e2m1_values, 2**(actual_exponents.astype(values.dtype)))
-    return float_values
-
-
-def cal_shared_exponent(input_array, block_size=32):
-    """
-    Function: cal shared exponent for MXFP4
-    Args:
-        input_array: weight tensor
-        block_size: block size of calculate shared exponent
-    Returns:
-        shared_exponent: numpy array
-    """
-    ori_shape = input_array.shape
-    reshape_input_array = input_array.reshape(-1, ori_shape[-1])
-    first_dim, last_dim = reshape_input_array.shape
-    # fill 0 if the number of data is not divisible by 32
-    pad = (block_size - (last_dim % block_size)) % block_size
-    reshape_input_array = np.pad(reshape_input_array, ((0, 0), (0, pad)), 'constant')
-    # reshape to [first_dim, block_size]
-    reshaped_array = reshape_input_array.reshape(first_dim, -1, block_size)
-    max_values = np.abs(reshaped_array).max(axis=-1)
-    zero_mask = (max_values == 0)
-    non_zero_max_vals = np.where(zero_mask, np.ones_like(max_values), max_values)
-    exponents = np.floor(np.log2(non_zero_max_vals))
-    mantissas = non_zero_max_vals / (2 ** exponents)
-    shared_exponents = np.where(mantissas > 1.75, exponents + 1, exponents).astype(np.uint8)
-
-    shared_exponents[zero_mask] = 0
-    shared_exponents = shared_exponents + 127
-    return shared_exponents.reshape(ori_shape[:-1] + ((ori_shape[-1] + block_size - 1) // block_size,))
-
 
 def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=32):
     """
@@ -715,12 +666,8 @@ def convert_golden_inverse_conversion(input_tensor, quant_type):
     #return input_tensor
     dtype = input_tensor.dtype
 
-    # if quant_type == 'MXFP4_E2M1':
-    #     input_tensor = torch.from_numpy(float_to_float4e2m1(input_tensor.to('cpu').numpy()))
-    if quant_type in ('FLOAT4_E2M1', 'FLOAT4_E1M2'):
+    if quant_type in ('FLOAT4_E2M1'):
         input_tensor = golden_float4(input_tensor, quant_type, 128)
-    # if quant_type == 'HIFLOAT8':
-    #     input_tensor = golden_hifloat8(input_tensor)
 
     return input_tensor.to(dtype)
 

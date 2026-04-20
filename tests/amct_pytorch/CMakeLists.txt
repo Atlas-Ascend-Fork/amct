@@ -39,10 +39,7 @@ add_custom_target(amct_pytorch_proto_compile
 # =============================compile quant_lib===============================
 set(AMCT_TORCH_OP_DIR ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/custom_op)
 set(COMMON_ALGRITHEMN_CPU
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/arq.cpp
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/util.cpp
     ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/dump.cpp
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/cast_util.cpp
 )
 
 set_source_files_properties(
@@ -54,9 +51,6 @@ set_source_files_properties(
 add_library(quant_lib SHARED
     ${COMMON_ALGRITHEMN_CPU}
 )
-
-add_dependencies(quant_lib
-    amct_pytorch_prepare_stub)
 
 target_include_directories(quant_lib PRIVATE
     ${PYTORCH_OP_COMPILE_INCLUDE}
@@ -143,34 +137,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 endif()
 
-# loop to generate *so
-set(PYTORCH_STUB_SOS c10 torch torch_cpu torch_python)
-foreach(PYTORCH_STUB_SO ${PYTORCH_STUB_SOS})
-  add_library(${PYTORCH_STUB_SO} SHARED
-      ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/util.cpp
-  )
-  target_include_directories(${PYTORCH_STUB_SO} PRIVATE
-      ${graph_based_compression_PATH}/custom_op/inc/
-      ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
-  )
-  target_compile_options(${PYTORCH_STUB_SO} PRIVATE
-    -Wall -fstack-protector-strong
-    -fno-common -fno-strict-aliasing -pipe
-  )
-  target_compile_definitions(${PYTORCH_STUB_SO} PRIVATE
-      _GLIBCXX_USE_CXX11_ABI=0
-  )
-endforeach(${PYTORCH_STUB_SO})
-# cp fakeso to a path
-add_custom_target(amct_pytorch_prepare_stub
-    DEPENDS c10 torch torch_cpu torch_python
-    # install to python whl
-    COMMAND cp libc10.so ${AMCT_TOP_DIR}/tmp/
-    COMMAND cp libtorch.so ${AMCT_TOP_DIR}/tmp/
-    COMMAND cp libtorch_cpu.so ${AMCT_TOP_DIR}/tmp/
-    COMMAND cp libtorch_python.so ${AMCT_TOP_DIR}/tmp/
-)
-
 # -----------------------compile op's .so for torch1.5.0-----------------------
 message(STATUS "Python 3 include directories: ${Python3_INCLUDE_DIRS}")
 message(STATUS "PYTORCH_PATH include directories: ${PYTORCH_PATH}")
@@ -196,7 +162,7 @@ set(PYTORCH_OP_COMPILE_DEFINITION
 set(PYTORCH_OP_LINK_OPTIONS
     -Wl,-z,relro,-z,now
     -Wl,-z,noexecstack
-    -pthread -L${AMCT_TORCH_OP_DIR} -L${TOP_DIR}/tmp/
+    -pthread -L${AMCT_TORCH_OP_DIR} -L${PYTORCH_PATH}/lib/
 )
 
 set(PYTORCH_OP_LINK_LIBRARIES
@@ -207,17 +173,12 @@ set(PYTORCH_OP_LINK_LIBRARIES
 
 # compile several op.so, please prefix is amct_pytorch_op
 set(PYTORCH_OPS
-    amct_pytorch_op_cast
     amct_pytorch_op_dump
 )
 message(INFO PYTORCH_OPS: ${PYTORCH_OPS})
 foreach(PYTORCH_OP ${PYTORCH_OPS})
     # set src file for different op
-    if ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_cast")
-        set(OP_SRC_FILE 
-          ${graph_based_compression_PATH}/custom_op/src/cast_op.cpp
-          ${graph_based_compression_PATH}/custom_op/src/util_op.cpp)
-    elseif ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_dump")
+    if ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_dump")
         set(OP_SRC_FILE ${graph_based_compression_PATH}/custom_op/src/dump_op.cpp)
     else()
         message(ERROR " please set src file for op")
@@ -229,7 +190,6 @@ foreach(PYTORCH_OP ${PYTORCH_OPS})
 
     add_dependencies(${PYTORCH_OP}
         amct_pytorch_lib_prepare
-        amct_pytorch_prepare_stub
     )
 
     target_include_directories(${PYTORCH_OP} PRIVATE
@@ -260,9 +220,8 @@ endforeach(${PYTORCH_OP})
 
 # packages
 add_custom_target(amct_pytorch_ops
-    DEPENDS amct_pytorch_op_dump amct_pytorch_op_cast
+    DEPENDS amct_pytorch_op_dump
     # copy to amct_pytorch
-    COMMAND mv libamct_pytorch_op_cast.so ${AMCT_TOP_DIR}/amct_pytorch_op_cast.cpython-${OP_PY}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so
     COMMAND mv libamct_pytorch_op_dump.so ${AMCT_TOP_DIR}/amct_pytorch_op_dump.cpython-${OP_PY}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so
 )
 

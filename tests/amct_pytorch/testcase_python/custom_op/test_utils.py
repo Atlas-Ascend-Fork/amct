@@ -62,17 +62,9 @@ class TestUtils(unittest.TestCase):
         input_data = torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)
         utils.check_quant_data(input_data, "weight")
 
-    # def test_check_quant_data_float16(self):
-    #     input_data = torch.tensor([0.1, 0.2, 0.3], dtype=torch.float16, device='cuda:0')
-    #     utils.check_quant_data(input_data, "weight")
-
     def test_check_quant_data_float32(self):
         input_data = torch.tensor([0.1, 0.2, 0.3], dtype=torch.float64)
         self.assertRaises(TypeError, utils.check_quant_data, input_data, "weight")
-
-    def test_check_module_device(self):
-        model = CustomizedModel().to('meta')
-        self.assertRaises(RuntimeError, utils.check_module_device, model, ['matmul_1'])
 
 
 if __name__ == "__main__":

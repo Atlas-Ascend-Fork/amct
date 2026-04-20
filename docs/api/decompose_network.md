@@ -36,7 +36,7 @@ model, changes = decompose_network(model, decompose_info_path)
 </td>
 <td class="cellrowborder" valign="top" width="7.53%" headers="mcps1.1.4.1.2 "><p id="p16326936194620"><a name="p16326936194620"></a><a name="p16326936194620"></a>输入</p>
 </td>
-<td class="cellrowborder" valign="top" width="78.64999999999999%" headers="mcps1.1.4.1.3 "><p id="p196581825114215"><a name="p196581825114215"></a><a name="p196581825114215"></a>含义：待分解的PyTorch模型对象。在调用该接口时建议将模型放置于CPU而不是GPU上，以防分解时显存不足。</p>
+<td class="cellrowborder" valign="top" width="78.64999999999999%" headers="mcps1.1.4.1.3 "><p id="p196581825114215"><a name="p196581825114215"></a><a name="p196581825114215"></a>含义：待分解的PyTorch模型对象。在调用该接口时建议将模型放置于CPU上，以防分解时显存不足。</p>
 <p id="zh-cn_topic_0240188739_p11225740182619"><a name="zh-cn_topic_0240188739_p11225740182619"></a><a name="zh-cn_topic_0240188739_p11225740182619"></a>数据类型：torch.nn.Module</p>
 </td>
 </tr>
