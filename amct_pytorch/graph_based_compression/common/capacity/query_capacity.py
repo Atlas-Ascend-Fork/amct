@@ -108,17 +108,3 @@ class Capacity():
     def _parser_string(self, item, values):
         value = values[0]
         self.capacity[item] = value.strip()
-
-
-def switch_capacity(capacity, capacity_type):
-    """ decorate function to switch capacity to not default type"""
-    def decorate(func):
-        def wrapper(*args, **kw):
-            try:
-                capacity.set_capacity_type(capacity_type)
-                ret = func(*args, **kw)
-                return ret
-            finally:
-                capacity.set_capacity_type(DEFAULT_CAPACITY_TYPE)
-        return wrapper
-    return decorate
