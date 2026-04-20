@@ -190,7 +190,6 @@ foreach(PYTORCH_OP ${PYTORCH_OPS})
 
     add_dependencies(${PYTORCH_OP}
         amct_pytorch_lib_prepare
-        # amct_pytorch_prepare_stub
     )
 
     target_include_directories(${PYTORCH_OP} PRIVATE
