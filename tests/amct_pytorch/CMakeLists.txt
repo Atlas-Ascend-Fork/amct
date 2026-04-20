@@ -13,8 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-set(AMCT_PYTORCH_PATH ${AMCT_TOP_DIR}/amct_pytorch)
-set(graph_based_compression_PATH ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression)
+
 set(TEST_FILES_DIR ${AMCT_TOP_DIR}/tests/amct_pytorch)
 
 # compile proto
@@ -36,61 +35,8 @@ add_custom_target(amct_pytorch_proto_compile
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ quant_calibration_config_pytorch.proto
 )
 
-# =============================compile quant_lib===============================
-set(AMCT_TORCH_OP_DIR ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/custom_op)
-set(COMMON_ALGRITHEMN_CPU
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/src/dump.cpp
-)
-
-set_source_files_properties(
-    ${COMMON_ALGRITHEMN_CPU}
-    PROPERTIES COMPILE_FLAGS -fopenmp
-)
-
-# compile torch_op.so
-add_library(quant_lib SHARED
-    ${COMMON_ALGRITHEMN_CPU}
-)
-
-target_include_directories(quant_lib PRIVATE
-    ${PYTORCH_OP_COMPILE_INCLUDE}
-    ${graph_based_compression_PATH}/custom_op/inc
-    ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
-)
-
-target_compile_definitions(quant_lib PRIVATE
-    _GLIBCXX_USE_CXX11_ABI=0
-)
-
-target_link_libraries(quant_lib PRIVATE
-    -Wl,-Bsymbolic -rdynamic -Wl,--no-undefined
-)
-
-target_link_options(quant_lib PRIVATE
-    -Wl,-z,relro,-z,now
-    -Wl,-z,noexecstack
-    -pthread -fopenmp
-)
-
-# cp to path
-add_custom_target(amct_pytorch_lib_prepare
-  DEPENDS quant_lib
-  # copy to amct_pytorch
-  COMMAND mv libquant_lib.so ${AMCT_TORCH_OP_DIR}/libquant_lib.so
-  # strip
-  COMMAND cd ${AMCT_TORCH_OP_DIR} && strip libquant_lib.so
-)
-# =============================compile ops=====================================
-# ------------------------compile fake torch related .so-----------------------
-
 message(STATUS "Python3_VERSION_MAJOR: ${Python3_VERSION_MAJOR}")
 message(STATUS "Python3_VERSION_MINOR: ${Python3_VERSION_MINOR}")
-set(OP_PY ${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR})
-if(${OP_PY} STREQUAL 37)
-    set(OP_PY 37m)
-endif()
-message(STATUS "Detected OP_PY: ${OP_PY}")
-
 if(Python3_VERSION_MAJOR EQUAL 3)
     if(Python3_VERSION_MINOR VERSION_LESS 5)
         # Python 3.0-3.4: C++11
@@ -137,99 +83,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 endif()
 
-# -----------------------compile op's .so for torch1.5.0-----------------------
-message(STATUS "Python 3 include directories: ${Python3_INCLUDE_DIRS}")
-message(STATUS "PYTORCH_PATH include directories: ${PYTORCH_PATH}")
-set(PYTORCH_OP_COMPILE_INCLUDE
-    ${PYTORCH_PATH}/include
-    ${PYTORCH_PATH}/include/torch/csrc/api/include
-    ${PYTORCH_PATH}/include/TH
-    ${PYTORCH_PATH}/include/THC
-    ${Python3_INCLUDE_DIRS}
-)
-
-set(PYTORCH_OP_COMPILE_OPTIONS
-    -pthread -Wno-unused-result -Wsign-compare -DNDEBUG
-    -fwrapv -O3 -Wall -fPIC -fno-common -fno-strict-aliasing
-    -pipe -fopenmp
-)
-
-set(PYTORCH_OP_COMPILE_DEFINITION
-    TORCH_API_INCLUDE_EXTENSION_H
-    _GLIBCXX_USE_CXX11_ABI=0
-)
-
-set(PYTORCH_OP_LINK_OPTIONS
-    -Wl,-z,relro,-z,now
-    -Wl,-z,noexecstack
-    -pthread -L${AMCT_TORCH_OP_DIR} -L${PYTORCH_PATH}/lib/
-)
-
-set(PYTORCH_OP_LINK_LIBRARIES
-    -Wl,--no-as-needed
-    -lc10 -ltorch -ltorch_cpu -ltorch_python
-    -Wl,--as-needed
-)
-
-# compile several op.so, please prefix is amct_pytorch_op
-set(PYTORCH_OPS
-    amct_pytorch_op_dump
-)
-message(INFO PYTORCH_OPS: ${PYTORCH_OPS})
-foreach(PYTORCH_OP ${PYTORCH_OPS})
-    # set src file for different op
-    if ("${PYTORCH_OP}" STREQUAL "amct_pytorch_op_dump")
-        set(OP_SRC_FILE ${graph_based_compression_PATH}/custom_op/src/dump_op.cpp)
-    else()
-        message(ERROR " please set src file for op")
-    endif()
-
-    add_library(${PYTORCH_OP} SHARED
-        ${OP_SRC_FILE}
-    )
-
-    add_dependencies(${PYTORCH_OP}
-        amct_pytorch_lib_prepare
-    )
-
-    target_include_directories(${PYTORCH_OP} PRIVATE
-        ${PYTORCH_OP_COMPILE_INCLUDE}
-        ${graph_based_compression_PATH}/custom_op/inc
-        ${graph_based_compression_PATH}/common_cpp/quantize_lib/inc
-    )
-
-    target_compile_options(${PYTORCH_OP} PRIVATE
-        ${PYTORCH_OP_COMPILE_OPTIONS}
-    )
-
-    target_compile_definitions(${PYTORCH_OP} PRIVATE
-        ${PYTORCH_OP_COMPILE_DEFINITION}
-        TORCH_EXTENSION_NAME=${PYTORCH_OP}
-    )
-
-    target_link_libraries(${PYTORCH_OP} PRIVATE
-        ${PYTORCH_OP_LINK_LIBRARIES}
-        -lquant_lib
-    )
-
-    target_link_options(${PYTORCH_OP} PRIVATE
-        ${PYTORCH_OP_LINK_OPTIONS}
-    )
-
-endforeach(${PYTORCH_OP})
-
-# packages
-add_custom_target(amct_pytorch_ops
-    DEPENDS amct_pytorch_op_dump
-    # copy to amct_pytorch
-    COMMAND mv libamct_pytorch_op_dump.so ${AMCT_TOP_DIR}/amct_pytorch_op_dump.cpython-${OP_PY}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so
-)
-
 add_custom_target(amct_pytorch_llt_lib
-  DEPENDS amct_pytorch_ops amct_pytorch_proto_compile
-  # strip
-  COMMAND cd ${AMCT_TORCH_OP_DIR} && strip libquant_lib.so
-  COMMAND cd ${AMCT_TOP_DIR} && strip amct_pytorch_op*.so
+  DEPENDS amct_pytorch_proto_compile
 )
 
 add_custom_target(amct_pytorch_python_utest
@@ -242,7 +97,5 @@ add_custom_target(amct_pytorch_python_utest
 add_custom_target(amct_pytorch_utest
     DEPENDS amct_pytorch_python_utest
     COMMAND rm -rf ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/proto/*_pb2.py
-    COMMAND rm -rf ${AMCT_TOP_DIR}/amct_pytorch_op*.so
-    COMMAND rm ${AMCT_TORCH_OP_DIR}/*.so
     COMMENT "run all amct pytorch utest"
 )

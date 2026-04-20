@@ -18,12 +18,10 @@ set(CMAKE_VERBOSE_MAKEFILE on)
 
 set(graph_based_compression_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(AMCT_TORCH_PROTO_DIR ${graph_based_compression_DIR}/amct_pytorch/proto)
-set(AMCT_TORCH_OP_DIR ${graph_based_compression_DIR}/amct_pytorch/custom_op)
 set(PYTHON_INCLUDE ${HI_PYTHON_INC})
 set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 
 # compile op
-add_subdirectory(custom_op)
 add_subdirectory(amct_tensor_decompose)
 
 message("-------pytorch -----")
@@ -45,13 +43,3 @@ add_custom_target(amct_pytorch_proto_compile
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
 add_dependencies(amct_pytorch_proto_compile protobuf_host_build ascend_protobuf_static)
 endif()
-
-set(COMMON_LIB_INC_FILES
-  util.h dump.h error_codes.h
-)
-
-add_custom_target(amct_pytorch_prepare_package
-  DEPENDS amct_pytorch_lib
-  # add common header files
-  COMMAND cd ${graph_based_compression_DIR}/common_cpp/quantize_lib/inc/ && cp ${COMMON_LIB_INC_FILES} ${graph_based_compression_DIR}/custom_op/inc
-)

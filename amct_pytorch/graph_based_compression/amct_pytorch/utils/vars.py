@@ -156,29 +156,5 @@ def find_torch_version():
     return version
 
 
-def find_platform():
-    """
-    Function: find hardware platform for load op.
-    """
-    support_platforms = ['x86_64', 'aarch64']
-    hardware_platform = platform.platform()
-    for arch in support_platforms:
-        if arch in hardware_platform:
-            return arch
-    raise RuntimeError("Unsupport platform {}".format(hardware_platform))
-
-
-def find_op_py():
-    """
-    Function: obtain python version for loading op.
-    """
-    python_version = sys.version_info
-    op_py = '{}{}'.format(python_version.major, python_version.minor)
-    if op_py in ['37']:
-        op_py = '{}m'.format(op_py)
-    return op_py
-
 SUPPORT_TORCH_VERSIONS = ['1.5.0', '1.8.0', '1.10.0', '2.1.0', '2.7.1']
 TORCH_VERSION = find_torch_version()
-PLATFORM = find_platform()
-OP_PY = find_op_py()
