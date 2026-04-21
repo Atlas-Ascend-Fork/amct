@@ -42,63 +42,32 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
         """
         super().__init__(ori_module, layer_name, quant_config)
         self.config = ori_module.config
-        self.layer_idx = ori_module.layer_idx
-        self.num_key_value_groups = ori_module.num_key_value_groups
-        self.attention_dropout = ori_module.attention_dropout
-        self.num_heads = ori_module.num_heads
-
-        self.q_lora_rank = ori_module.q_lora_rank
-        self.qk_rope_head_dim = ori_module.qk_rope_head_dim
-        self.kv_lora_rank = ori_module.kv_lora_rank
-        self.v_head_dim = ori_module.v_head_dim
-        self.qk_nope_head_dim = ori_module.qk_nope_head_dim
-        self.qk_head_dim = ori_module.qk_head_dim
-
-        self.is_causal = ori_module.is_causal
-
-        self.q_proj = ori_module.q_proj if ori_module.q_proj else None
-        self.q_a_proj = ori_module.q_a_proj if ori_module.q_a_proj else None
-        self.q_a_layernorm = ori_module.q_a_layernorm if ori_module.q_a_layernorm else None
-        self.q_b_proj = ori_module.q_b_proj if ori_module.q_b_proj else None
-
-        self.kv_a_proj_with_mqa = ori_module.kv_a_proj_with_mqa
-        self.kv_a_layernorm = ori_module.kv_a_layernorm
-        self.kv_b_proj = ori_module.kv_b_proj
-        
-        self.o_proj = ori_module.o_proj
-
-        self.scaling = ori_module.scaling
-        
-        self.padding_idx = ori_module.padding_idx
-        self.vocab_size = ori_module.vocab_size
-
-        # longcat param
-        self.mla_scale_q_lora = ori_module.mla_scale_q_lora
-        self.mla_scale_kv_lora = ori_module.mla_scale_kv_lora
-        
         self.kvcache_enable = quant_config.get('kvcache_cfg').get('enable_quant', False)
-        if self.kvcache_enable:
-            self.quant_type = quant_config.get('kvcache_cfg').get('quant_type')
-            self.symmetric = quant_config.get('kvcache_cfg').get('symmetric')
-            self.granularity = quant_config.get('kvcache_cfg').get('strategy')
-            self.batch_num = quant_config.get('kvcache_cfg').get('batch_num')
-            self.cur_batch = 0
-            self.previous_max_k = None
-            self.previous_max_v = None
-            self.scale_k= None
-            self.scale_v = None
-            self.offset_k = None
-            self.offset_v = None
+        self.layer_name = layer_name
+        if not self.kvcache_enable:
+            LOGGER.logd("kvcache is not enable of layer '{}'!".format(self.layer_name), 'LongcatFlashMLAQuant')
+
+        self.quant_type = quant_config.get('kvcache_cfg').get('quant_type')
+        self.symmetric = quant_config.get('kvcache_cfg').get('symmetric')
+        self.granularity = quant_config.get('kvcache_cfg').get('strategy')
+        self.batch_num = quant_config.get('kvcache_cfg').get('batch_num')
+        self.cur_batch = 0
+        self.previous_max_k = None
+        self.previous_max_v = None
+        self.scale_k= None
+        self.scale_v = None
+        self.offset_k = None
+        self.offset_v = None
 
     @torch.no_grad()
-    def forward(self, inputs):
+    def forward(self, hidden_states, position_embeddings, attention_mask, past_key_values, **kwargs):
         """
         Function: LongcatFlashMLAQuant forward function.
         Args:
         inputs: data used for calibration in torch.tensor.
         """
-        kv_states = self._hook_kv_states(past_key_value)
-        fp_out = self.ori_module(inputs, past_key_value=past_key_value)
+        kv_states = self._hook_kv_states(past_key_values)
+        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, past_key_values=past_key_values, **kwargs)
         
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
@@ -109,24 +78,19 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
             self._finalize_calibration()
         return fp_out
 
-    def _hook_kv_states(past_key_value):
+    def _hook_kv_states(self, past_key_value):
         update_function = past_key_value.update
         capture_data = {}
         def hook_update(key_states, value_states, layer_idx, **kwargs):
-            capture_data[layer_idx] = {
-                'k' : torch.max(torch.abs(key_states)).reshape(-1),
-                'v' : torch.max(torch.abs(value_states)).reshape(-1)
-            }
+            capture_data['k'] = torch.max(torch.abs(key_states)).reshape(-1)
+            capture_data['v'] = torch.max(torch.abs(value_states)).reshape(-1)
             return update_function(key_states, value_states, layer_idx, **kwargs)
-        
         past_key_value.update = hook_update
-        
         return capture_data
 
     def _compute_batch_max(self, kv_states):
-        if self.act_granularity == 'tensor':
-            k_max = torch.max(torch.abs(kv_states.get('k'))).reshape(-1)
-            v_max = torch.max(torch.abs(kv_states.get('v'))).reshape(-1)
+        k_max = torch.max(torch.abs(kv_states.get('k'))).reshape(-1)
+        v_max = torch.max(torch.abs(kv_states.get('v'))).reshape(-1)
         return k_max, v_max
 
     def _update_scale_tensor(self, batch_max_k, batch_max_v):
@@ -139,6 +103,19 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
             self.previous_max_v = batch_max_v
         else:
             self.previous_max_v = calculate_quantile_ema_scale(self.previous_max_v, batch_max_v)
+            
+    def calculate_hif8_scale(self, tensor_max):
+        """
+        Function: calculate HIF8 scale by scaling tensor max to 16
+        Args:
+            tensor_max: max value of tensor (weights or activations)
+        Returns:
+            scale: HIF8 scale factor
+        """
+        if tensor_max is not None:
+            return (tensor_max / 16.0).to(torch.float32)
+        else:
+            return tensor_max
 
     def _finalize_calibration(self):
         self.scale_k = self.calculate_hif8_scale(self.previous_max_k)

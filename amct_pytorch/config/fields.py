@@ -460,7 +460,6 @@ class QuantConfig:
             quant_cfg['weights_cfg'] = weights_cfg.get_value()
         elif quant_cfg['weights_cfg'] is None:
             self._layer_config_cache[layer_name] = None
-            return None
         
         fuzzy_inputs_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'inputs')
         if fuzzy_inputs_cfg:

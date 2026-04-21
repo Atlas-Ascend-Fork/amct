@@ -217,7 +217,7 @@ def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
     '''Check if layer is supported for quantization'''
     if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
         return False
-    if not quant_type_comb and type(mod) not in KVCACHE_OPS:
+    if not quant_type_comb and type(mod).__name__ not in KVCACHE_OPS:
         return False
     if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
         LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has requirement '

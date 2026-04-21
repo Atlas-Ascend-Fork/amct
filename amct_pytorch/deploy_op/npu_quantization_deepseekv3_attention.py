@@ -40,10 +40,11 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
         quant_config: quantization parameters.
         """
         super().__init__()
-        self.output_dtype = quant_module.q_proj.dtype
-        self.device = quant_module.weight.device
-        self.scale_k = quant_module.scale_k
-        self.scale_v = quant_module.scale_v
+        self.output_dtype = quant_module.ori_module.q_a_proj.weight.dtype
+        self.device = quant_module.ori_module.q_a_proj.weight.device
+        self.ori_module = quant_module.ori_module
+        self.scale_k = quant_module.scale_k.to(self.device).to(self.output_dtype)
+        self.scale_v = quant_module.scale_v.to(self.device).to(self.output_dtype)
 
 
     @torch.no_grad()
@@ -62,11 +63,11 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
     def _hook_kv_states(self, past_key_values):
         update_function = past_key_values.update
         def hook_update(key_states, value_states, layer_idx, **kwargs):
-            quantized_key_states = torch_npu.npu_quantize(key_states, self.scale_k, dtype=HIFLOAT8, div_mode=False)
-            quantized_value_states = torch_npu.npu_quantize(value_states, self.scale_v, dtype=HIFLOAT8, div_mode=False)
+            quantized_key_states = torch_npu.npu_quantize(key_states, self.scale_k, None, dtype=torch_npu.hifloat8, div_mode=False)
+            quantized_value_states = torch_npu.npu_quantize(value_states, self.scale_v, None, dtype=torch_npu.hifloat8, div_mode=False)
             key_states, value_states = update_function(quantized_key_states, quantized_value_states, layer_idx, **kwargs)
-            dequantized_key_states = torch_npu.npu_anti_quantize(key_states, self.scale_k, dtype=HIFLOAT8, div_mode=False)
-            dequantized_value_states = torch_npu.npu_anti_quantize(value_states, self.scale_v, dtype=HIFLOAT8, div_mode=False)
+            dequantized_key_states = torch_npu.npu_anti_quant(key_states, self.scale_k, None, src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
+            dequantized_value_states = torch_npu.npu_anti_quant(value_states, self.scale_v, None, src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
             
             return dequantized_key_states, dequantized_value_states
         
