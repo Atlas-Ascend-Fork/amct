@@ -1,6 +1,3 @@
-makeself:
-   version: release-2.5.0-patch1
-   type: build
 protobuf:
    version: 25.1
    type: build
