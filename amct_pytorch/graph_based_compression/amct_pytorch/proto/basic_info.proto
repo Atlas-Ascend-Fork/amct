@@ -1,15 +1,6 @@
 syntax = "proto2";
 package AMCTProto;
 
-message AutoMixedPrecisionConfig {
-  optional float compress_ratio = 1;
-  repeated QuantBitLimit quant_bit_limit = 2;
-  optional string ptq_cfg = 3;
-  optional int64 test_iteration = 4;
-
-  optional string override_qat_cfg = 10;
-}
-
 message AutoChannelPruneConfig {
   required float compress_ratio = 1;
   optional bool ascend_optimized = 2 [default = true];
