@@ -30,11 +30,9 @@ tarfile.TarFile.format = tarfile.GNU_FORMAT
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 OP_TMP_DIR = 'amct_pytorch/graph_based_compression/custom_op/src/tmp'
 AMCT_LIB_DIR = os.path.join(CUR_DIR, "./amct_pytorch/graph_based_compression/amct_pytorch/custom_op")
-UTIL_OP_PATH = 'amct_pytorch/graph_based_compression/custom_op/src/util_op.cpp'
 SRC_FILES = [
-             ['amct_pytorch/graph_based_compression/custom_op/src/cast_op.cpp',
-              UTIL_OP_PATH],
-             ['amct_pytorch/graph_based_compression/custom_op/src/dump_op.cpp'], ]
+    ['amct_pytorch/graph_based_compression/custom_op/src/dump_op.cpp'], 
+    ]
 os.environ['SOURCE_DATE_EPOCH'] = \
     str(int(os.path.getctime(os.path.realpath(__file__))))
 
@@ -74,8 +72,7 @@ class SetupTool(): # pylint: disable=R0903
 
         prefix = 'amct_pytorch_op'
         
-        module_name = ['{}_cast'.format(prefix),
-                       '{}_dump'.format(prefix), ]
+        module_name = ['{}_dump'.format(prefix), ]
 
         modules_set = zip(module_name, compile_files)
         return modules_set

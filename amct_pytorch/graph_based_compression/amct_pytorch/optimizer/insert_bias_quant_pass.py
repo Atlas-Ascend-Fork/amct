@@ -31,7 +31,7 @@ from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 class InsertBiasQuantPass(BaseFusionPass):
     """
     Function: Quant weight from float32 to int8
-    APIs: match_pattern, do_pass, quant_weight
+    APIs: match_pattern, do_pass
     """
     def __init__(self, records):
         """

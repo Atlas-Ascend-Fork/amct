@@ -257,6 +257,9 @@ build_ut() {
   find "${BASEPATH}/" -name __pycache__ -exec rm -rf {} +
   rm -rf ${BASEPATH}/tmp/
   rm -rf ${BASEPATH}/tests/amct_pytorch/amct_log/
+  if [[ ${ENABLE_COVERAGE} == "TRUE" ]]; then
+    cd ${BASEPATH}/tests/amct_pytorch/; python3 -m coverage report
+  fi
 }
 
 main() {

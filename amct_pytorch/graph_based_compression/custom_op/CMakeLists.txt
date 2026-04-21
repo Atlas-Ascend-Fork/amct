@@ -22,9 +22,6 @@ add_custom_command(TARGET amct_pytorch_mkdir_tmp
 )
 
 set(COMMON_ALGRITHEMN_CPU
-  ${CMAKE_CURRENT_SOURCE_DIR}/../common_cpp/quantize_lib/src/arq.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../common_cpp/quantize_lib/src/util.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../common_cpp/quantize_lib/src/cast_util.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../common_cpp/quantize_lib/src/dump.cpp
 )
 

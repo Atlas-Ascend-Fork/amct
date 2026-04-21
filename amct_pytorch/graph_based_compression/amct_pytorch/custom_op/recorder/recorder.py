@@ -15,12 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from pathlib import Path
-import torch
 from google.protobuf import text_format
 from torch import nn
 
-from ....amct_pytorch.common.utils import files as files_util
 from ....amct_pytorch.common.utils.record_file_operator import \
     record_activation_scale_offset
 from ....amct_pytorch.common.utils.record_file_operator import \
@@ -42,7 +39,6 @@ from ....amct_pytorch.custom_op.utils import tensor
 from ....amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 from ....amct_pytorch.common.utils.vars_util import DEFAULT
 from ....amct_pytorch.common.utils.util import cast_fp16_precision
-from ....amct_pytorch.utils.vars import QUANT_RESULT_FILE
 
 LAYERS_NUM = 'layers_num'
 
