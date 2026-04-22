@@ -62,6 +62,8 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
 
     def _hook_kv_states(self, past_key_values):
         update_function = past_key_values.update
+        if hasattr(past_key_values, "_is_hooked") and past_key_values._is_hooked:
+            return
         def hook_update(key_states, value_states, layer_idx, **kwargs):
             quantized_key_states = torch_npu.npu_quantize(key_states, self.scale_k, None, dtype=torch_npu.hifloat8, div_mode=False)
             quantized_value_states = torch_npu.npu_quantize(value_states, self.scale_v, None, dtype=torch_npu.hifloat8, div_mode=False)
@@ -72,6 +74,7 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
             return dequantized_key_states, dequantized_value_states
         
         past_key_values.update = hook_update
+        past_key_values._is_hooked = True
 
 
 
