@@ -24,24 +24,30 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from amct_pytorch import quantize, convert
-import transformers.models.deepseek_v3.configuration_deepseek_v3 as DeepseekV3Config
+from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
+from transformers.cache_utils import DynamicCache
+
 torch.manual_seed(0)
 
 class TestDeepseekV3Attention(unittest.TestCase):
     '''
-    ST FOR MINMAX ALGORITHM
+    ST FOR KVCACHE 
     '''
     @classmethod
     def setUpClass(cls):
         config = DeepseekV3Config()
-        cls.test_model = TestModelDeepseekV3Attention(config)
-        cls.hidden_states = torch.randn(1, 16, config.hidden_size)
-        cls.ori_out = cls.test_model(cls.hidden_states)
-        print('TestMinMax START!')
+        cls.test_model = TestModelDeepseekV3Attention(config).to(torch.bfloat16)
+        cls.hidden_states = torch.randn(1, 16, config.hidden_size).to(torch.bfloat16)
+        cls.kvcache_ori = DynamicCache()
+        cls.kvcache_quant = DynamicCache()
+        cls.kvcache = DynamicCache()
+        for i in range(5):
+            cls.ori_out = cls.test_model(cls.hidden_states, past_key_values=cls.kvcache_ori)
+        print('TestDeepseekV3Attention START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestMinMax END!')
+        print('TestDeepseekV3Attention END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -66,7 +72,13 @@ class TestDeepseekV3Attention(unittest.TestCase):
         }
         model = copy.deepcopy(self.test_model)
         quantize(model, cfg)
-        model(self.hidden_states)
+        model(self.hidden_states, past_key_values=self.kvcache_quant)
+        self.assertEqual(type(model.attn).__name__, 'DeepseekV3AttentionQuant')
+        self.assertIsNotNone(model.attn.scale_k)
+        self.assertIsNotNone(model.attn.scale_v)
         torch.Tensor.npu = mock_npu
+        model = model.npu()
         convert(model)
-        quant_out = model(self.hidden_states.npu())
+        self.assertEqual(type(model.attn).__name__, 'NpuDeepseekV3AttentionQuant')
+        for i in range(5):
+            quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)
