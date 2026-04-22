@@ -252,6 +252,7 @@ build_ut() {
     mkdir -p "${TMP_PATH}"
   fi
 
+  export TORCH_DEVICE_BACKEND_AUTOLOAD=0
   cd "${BUILD_PATH}" && cmake ${CMAKE_ARGS} ..
   cmake --build . --target ${UT_TARGETS[@]} -- ${VERBOSE} -j $THREAD_NUM
   find "${BASEPATH}/" -name __pycache__ -exec rm -rf {} +
