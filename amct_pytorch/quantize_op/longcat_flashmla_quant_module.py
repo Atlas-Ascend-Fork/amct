@@ -46,7 +46,6 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
         self.layer_name = layer_name
         if not self.kvcache_enable:
             LOGGER.logd("kvcache is not enable of layer '{}'!".format(self.layer_name), 'LongcatFlashMLAQuant')
-
         self.quant_type = quant_config.get('kvcache_cfg').get('quant_type')
         self.symmetric = quant_config.get('kvcache_cfg').get('symmetric')
         self.granularity = quant_config.get('kvcache_cfg').get('strategy')
@@ -72,10 +71,18 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
             return fp_out
-        batch_max_k, batch_max_v = self._compute_batch_max(kv_states)
-        self._update_scale_tensor(batch_max_k, batch_max_v)
+
+        batch_max_k = torch.max(torch.abs(kv_states.get('k'))).reshape(-1)
+        batch_max_v = torch.max(torch.abs(kv_states.get('v'))).reshape(-1)
+        self.previous_max_k = batch_max_k if self.previous_max_k is None else \
+            calculate_quantile_ema_scale(self.previous_max_k, batch_max_k)
+        self.previous_max_v = batch_max_v if self.previous_max_v is None else \
+            calculate_quantile_ema_scale(self.previous_max_v, batch_max_v)
         if self.cur_batch == self.batch_num:
-            self._finalize_calibration()
+            self.scale_k = (self.previous_max_k / 16.0).to(torch.float32)
+            self.scale_v = (self.previous_max_v / 16.0).to(torch.float32)
+            LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
+            'LongcatFlashMLAQuant')
         return fp_out
 
     def _hook_kv_states(self, past_key_value):
@@ -84,41 +91,10 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
         def hook_update(key_states, value_states, layer_idx, **kwargs):
             capture_data['k'] = torch.max(torch.abs(key_states)).reshape(-1)
             capture_data['v'] = torch.max(torch.abs(value_states)).reshape(-1)
+            LOGGER.logd("Capture data from layer '{}' success!".format(self.layer_name),
+            'LongcatFlashMLAQuant')
             return update_function(key_states, value_states, layer_idx, **kwargs)
-        past_key_value.update = hook_update
-        return capture_data
-
-    def _compute_batch_max(self, kv_states):
-        k_max = torch.max(torch.abs(kv_states.get('k'))).reshape(-1)
-        v_max = torch.max(torch.abs(kv_states.get('v'))).reshape(-1)
-        return k_max, v_max
-
-    def _update_scale_tensor(self, batch_max_k, batch_max_v):
-        if self.previous_max_k is None:
-            self.previous_max_k = batch_max_k
-        else:
-            self.previous_max_k = calculate_quantile_ema_scale(self.previous_max_k, batch_max_k)
         
-        if self.previous_max_v is None:
-            self.previous_max_v = batch_max_v
-        else:
-            self.previous_max_v = calculate_quantile_ema_scale(self.previous_max_v, batch_max_v)
-            
-    def calculate_hif8_scale(self, tensor_max):
-        """
-        Function: calculate HIF8 scale by scaling tensor max to 16
-        Args:
-            tensor_max: max value of tensor (weights or activations)
-        Returns:
-            scale: HIF8 scale factor
-        """
-        if tensor_max is not None:
-            return (tensor_max / 16.0).to(torch.float32)
-        else:
-            return tensor_max
-
-    def _finalize_calibration(self):
-        self.scale_k = self.calculate_hif8_scale(self.previous_max_k)
-        self.scale_v = self.calculate_hif8_scale(self.previous_max_v)
-        LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
-            'QuantileQuant')
+        past_key_value.update = hook_update
+        
+        return capture_data

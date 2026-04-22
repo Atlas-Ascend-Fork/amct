@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch.nn as nn
-import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
+from transformers.models.deepseek_v3.modeling_deepseek_v3 import DeepseekV3Config as deepseek_module
 import torch
 
 class TestModel(nn.Module):
@@ -64,14 +64,14 @@ class TestModelDeepseekV3Attention(nn.Module):
         super().__init__()
         self.config = config
         self.attn = deepseek_module(config, layer_idx=0)
-        self.register_buffer("cos", torch.ones(2038, config.qk_rope_head_dim // 2))
-        self.register_buffer("sin", torch.zeros(2038, config.qk_rope_head_dim // 2))
+        self.register_buffer("cos", torch.ones(4096, config.qk_rope_head_dim))
+        self.register_buffer("sin", torch.zeros(4096, config.qk_rope_head_dim))
 
     def forward(self, hidden_states, attention_mask=None, past_key_value=None, **kwargs):
         batch, seq_len, _ = hidden_states.shape
-        cos_sin = (self.cos[:seq_len], self.sin[:seq_len])
+        cos_sin = (self.cos[:seq_len].unsqueeze(0), self.sin[:seq_len].unsqueeze(0))
         
-        attn_out, _, _ = self.attn(
+        attn_out, attn_weight = self.attn(
             hidden_states=hidden_states,
             position_embeddings=cos_sin,
             attention_mask=attention_mask,

@@ -28,7 +28,7 @@ import torch_npu
 
 class NpuLongcatFlashMLA(torch.nn.Module):
     """
-    Function: Customized torch.nn.Module of the GPTQuant class.
+    Function: Customized torch.nn.Module of the NpuLongcatFlashMLA class.
     APIs: forward.
     """
     def __init__(self, quant_module):
@@ -49,7 +49,7 @@ class NpuLongcatFlashMLA(torch.nn.Module):
     @torch.no_grad()
     def forward(self, hidden_states, position_embeddings, attention_mask, past_key_values, **kwargs):
         """
-        Function: NpuDeepseekV3AttentionQuant forward function.
+        Function: NpuLongcatFlashMLA forward function.
         Args:
         inputs: data used for calibration in torch.tensor.
         """
