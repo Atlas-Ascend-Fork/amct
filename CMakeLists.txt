@@ -14,7 +14,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.16)
+include(cmake/fetch_cann_cmake.cmake)
 project(amct VERSION 1.0.0)
+init_cann_project()
 include(CMakePrintHelpers)
 
 message("CMAKE_SOURCE_DIR === ${CMAKE_SOURCE_DIR}")
