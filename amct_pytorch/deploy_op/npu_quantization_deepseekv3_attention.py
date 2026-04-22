@@ -28,7 +28,7 @@ import torch_npu
 
 class NpuDeepseekV3AttentionQuant(torch.nn.Module):
     """
-    Function: Customized torch.nn.Module of the GPTQuant class.
+    Function: Customized torch.nn.Module of the NpuDeepseekV3AttentionQuant class.
     APIs: forward.
     """
     def __init__(self, quant_module):
@@ -62,16 +62,19 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
 
     def _hook_kv_states(self, past_key_values):
         update_function = past_key_values.update
+        if hasattr(past_key_values, "_is_hooked") and past_key_values._is_hooked:
+            return
         def hook_update(key_states, value_states, layer_idx, **kwargs):
             quantized_key_states = torch_npu.npu_quantize(key_states, self.scale_k, None, dtype=torch_npu.hifloat8, div_mode=False)
             quantized_value_states = torch_npu.npu_quantize(value_states, self.scale_v, None, dtype=torch_npu.hifloat8, div_mode=False)
             key_states, value_states = update_function(quantized_key_states, quantized_value_states, layer_idx, **kwargs)
-            dequantized_key_states = torch_npu.npu_anti_quant(key_states, self.scale_k, None, src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
-            dequantized_value_states = torch_npu.npu_anti_quant(value_states, self.scale_v, None, src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
+            dequantized_key_states = torch_npu.npu_anti_quant(key_states, self.scale_k.to(torch.float32), src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
+            dequantized_value_states = torch_npu.npu_anti_quant(value_states, self.scale_v.to(torch.float32), src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
             
             return dequantized_key_states, dequantized_value_states
         
         past_key_values.update = hook_update
+        past_key_values._is_hooked = True
 
 
 
