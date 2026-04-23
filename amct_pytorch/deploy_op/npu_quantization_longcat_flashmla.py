@@ -19,11 +19,11 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from transformers.cache_utils import DynamicCache
+import torch_npu
+
 from amct_pytorch.utils.vars import HIFLOAT8
 from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.quantize_op.utils import calculate_quantile_ema_scale
-
-import torch_npu
 
 
 class NpuLongcatFlashMLA(torch.nn.Module):
@@ -56,7 +56,8 @@ class NpuLongcatFlashMLA(torch.nn.Module):
         if past_key_values is None:
             past_key_values = DynamicCache()
         kv_states = self._hook_kv_states(past_key_values)
-        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, past_key_values=past_key_values, **kwargs)
+        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, 
+                                past_key_values=past_key_values, **kwargs)
         return fp_out
 
     def _hook_kv_states(self, past_key_values):
@@ -64,11 +65,20 @@ class NpuLongcatFlashMLA(torch.nn.Module):
         if hasattr(past_key_values, "_is_hooked") and past_key_values._is_hooked:
             return
         def hook_update(key_states, value_states, layer_idx, **kwargs):
-            quantized_key_states = torch_npu.npu_quantize(key_states, self.scale_k, None, dtype=torch_npu.hifloat8, div_mode=False)
-            quantized_value_states = torch_npu.npu_quantize(value_states, self.scale_v, None, dtype=torch_npu.hifloat8, div_mode=False)
-            key_states, value_states = update_function(quantized_key_states, quantized_value_states, layer_idx, **kwargs)
-            dequantized_key_states = torch_npu.npu_anti_quant(key_states, self.scale_k.to(torch.float32), src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
-            dequantized_value_states = torch_npu.npu_anti_quant(value_states, self.scale_v.to(torch.float32), src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
+            quantized_key_states = \
+                torch_npu.npu_quantize(key_states, self.scale_k, None, dtype=torch_npu.hifloat8,
+                                       div_mode=False)
+            quantized_value_states = \
+                torch_npu.npu_quantize(value_states, self.scale_v, None, dtype=torch_npu.hifloat8,
+                                       div_mode=False)
+            key_states, value_states = \
+                update_function(quantized_key_states, quantized_value_states, layer_idx, **kwargs)
+            dequantized_key_states = \
+                torch_npu.npu_anti_quant(key_states, self.scale_k.to(torch.float32),
+                                         src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
+            dequantized_value_states = \
+                torch_npu.npu_anti_quant(value_states, self.scale_v.to(torch.float32),
+                                         src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
             
             return dequantized_key_states, dequantized_value_states
         

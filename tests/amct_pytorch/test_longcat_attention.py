@@ -16,18 +16,19 @@
 import copy
 import unittest
 import sys
+from unittest.mock import MagicMock
+from unittest.mock import patch
 import torch
 import torch.nn as nn
 from utils import TestModelLongcatFlashMLA
 from mock_torch_npu import *
-from unittest.mock import MagicMock
-from unittest.mock import patch
 
-from amct_pytorch import quantize, convert
 from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
 from transformers.cache_utils import DynamicCache
+from amct_pytorch import quantize, convert
 
 torch.manual_seed(0)
+
 
 class TestLongcatFlashMLA(unittest.TestCase):
     '''

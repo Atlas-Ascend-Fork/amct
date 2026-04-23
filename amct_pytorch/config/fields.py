@@ -169,7 +169,8 @@ class KvcacheCfgField():
 
     def check(self):
         if self.quant_type not in SUPPORT_KVCACHE_QUANT_DTYPE:
-            raise ValueError(f'Kvcache quant_dtype only support {SUPPORT_KVCACHE_QUANT_DTYPE}, but got {self.quant_type}')
+            raise ValueError(f'Kvcache quant_dtype only support {SUPPORT_KVCACHE_QUANT_DTYPE}, " \
+                             "but got {self.quant_type}')
         if self.symmetric not in [True]:
             raise ValueError(f'Kvcache symmetric only support bool [True], but got {self.symmetric}')
         if self.strategy != 'tensor':

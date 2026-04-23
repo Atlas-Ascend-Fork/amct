@@ -54,7 +54,7 @@ class DeepseekV3AttentionQuant(BaseQuantizeModule):
         self.cur_batch = 0
         self.previous_max_k = None
         self.previous_max_v = None
-        self.scale_k= None
+        self.scale_k = None
         self.scale_v = None
         self.offset_k = None
         self.offset_v = None
@@ -67,7 +67,8 @@ class DeepseekV3AttentionQuant(BaseQuantizeModule):
         inputs: data used for calibration in torch.tensor.
         """
         kv_states = self._hook_kv_states(past_key_values)
-        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, past_key_values=past_key_values, **kwargs)
+        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask,
+                                past_key_values=past_key_values, **kwargs)
         
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:

@@ -18,6 +18,7 @@ from transformers.models.deepseek_v3.modeling_deepseek_v3 import DeepseekVAttent
 from transformers.models.longcat_flash.modular_longcat_flash import LongcatFlashMLA as longcat_module
 import torch
 
+
 class TestModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -81,7 +82,8 @@ class TestModelDeepseekV3Attention(nn.Module):
         )
         return attn_out
     
-class  TestModelLongcatFlashMLA(nn.Module):
+    
+class TestModelLongcatFlashMLA(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config

@@ -24,6 +24,7 @@ from amct_pytorch.utils.log import LOGGER
 from amct_pytorch.quantize_op.utils import calculate_quantile_ema_scale
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
+
 class LongcatFlashMLAQuant(BaseQuantizeModule):
     """
     Function: Customized torch.nn.Module of the LongcatFlashMLAQuant class.
@@ -53,7 +54,7 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
         self.cur_batch = 0
         self.previous_max_k = None
         self.previous_max_v = None
-        self.scale_k= None
+        self.scale_k = None
         self.scale_v = None
         self.offset_k = None
         self.offset_v = None
@@ -66,7 +67,8 @@ class LongcatFlashMLAQuant(BaseQuantizeModule):
         inputs: data used for calibration in torch.tensor.
         """
         kv_states = self._hook_kv_states(past_key_values)
-        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, past_key_values=past_key_values, **kwargs)
+        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask,
+                                past_key_values=past_key_values, **kwargs)
         
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
