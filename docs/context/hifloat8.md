@@ -158,12 +158,12 @@ Quantile 算法考虑模型数值分布特征，通过分位数统计动态调�
 
 $$
 \begin{align*}
-&q_{max0} = batch_{max0} \\
-&q_{max1} = 0.99 \times q_{max0} + 0.01 \times batch_{max1} \\
-&q_{max2} = 0.99 \times q_{max1} + 0.01 \times batch_{max2} \\
-&... \\
-&q_{max511} = 0.99 \times q_{max510} + 0.01 \times batch_{max511} \\
-&scale_d = q_{max511} / 16 \\
+&q_{max0} = batch_{max0} \\ 
+&q_{max1} = 0.99 \times q_{max0} + 0.01 \times batch_{max1} \\ 
+&q_{max2} = 0.99 \times q_{max1} + 0.01 \times batch_{max2} \\ 
+&... \\ 
+&q_{max511} = 0.99 \times q_{max510} + 0.01 \times batch_{max511} \\ 
+&scale_d = q_{max511} / 16 \\ 
 &scale_w = max(weight) / 16
 \end{align*}
 $$
