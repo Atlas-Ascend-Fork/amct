@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 import torch
 
-import amct_pytorch.graph_based_compression.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
-import amct_pytorch.graph_based_compression.amct_pytorch.common.cmd_line_utils.arguments_handler as args_handler
+import amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
+import amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.cmd_line_utils.arguments_handler as args_handler
 from ...amct_pytorch.common.utils.check_params import check_params
 
 from ...amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
