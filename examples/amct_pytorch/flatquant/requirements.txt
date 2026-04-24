@@ -1,7 +1,0 @@
-torch==2.7.1
-torch_npu
-transformers==4.51.0 # for qwen3
-tqdm
-accelerate
-datasets
-lm_eval>=0.4.4
