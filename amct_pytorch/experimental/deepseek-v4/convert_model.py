@@ -193,7 +193,7 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
     torch.set_default_dtype(torch.bfloat16)
     os.makedirs(output_path, exist_ok=True)
     assert quant_type in [
-        "bfloat16", "w8a8-int",  "w8a8-mx", "w4a8-mx"], f"Unsupported quant_type: {quant_type}"
+        "bfloat16", "w8a8-int", "w8a8-mx", "w4a8-mx"], f"Unsupported quant_type: {quant_type}"
     model_index_file = os.path.join(fp8_path, "model.safetensors.index.json")
     config_file = os.path.join(fp8_path, 'config.json')
     with open(model_index_file, "r") as f:

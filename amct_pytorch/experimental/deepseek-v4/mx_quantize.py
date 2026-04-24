@@ -61,7 +61,7 @@ def round_to_decimal(x):
     abs_x = torch.abs(x)
     exponent = torch.floor(torch.log2(abs_x))
     mantissa = abs_x / (2**exponent)
-    exponent = torch.where(mantissa > 1.75, exponent+1, exponent)
+    exponent = torch.where(mantissa > 1.75, exponent + 1, exponent)
     return exponent
 
 
@@ -104,8 +104,7 @@ def _shared_exponents(A, method="max", axes=None, ebits=0, shared_exp_round_meth
 
     # Restrict to [-emax, emax] range
     if ebits > 0:
-        emax = 2**(ebits-1) - 1
-        #shared_exp = torch.clamp(shared_exp, -emax, emax)
+        emax = 2**(ebits - 1) - 1
         # Overflow to Inf
         shared_exp[shared_exp > emax] = float("NaN")
         # Underflows are set to -127 which causes them to be
@@ -202,7 +201,6 @@ def _safe_rshift(x, bits, exp):
         return x / (2**bits)
     else:
         return x / (2**bits) * (2 ** exp)
-
 
 
 def _get_min_norm(ebits):

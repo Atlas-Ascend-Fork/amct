@@ -23,6 +23,7 @@ from argparse import ArgumentParser
 NUM_BITS_4 = 4
 NUM_BITS_8 = 8
 
+
 def generate_ignore_item(num_layers, compress_ratios, is_fp=False):
     """
     Generate a list of layer names to be ignored during quantization.
