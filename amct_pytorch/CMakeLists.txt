@@ -43,7 +43,7 @@ add_custom_target(amct_pytorch
   DEPENDS amct_pytorch_package
 )
 
-install(DIRECTORY ${BASE_DIR}/dist/ DESTINATION lib OPTIONAL)
+install(DIRECTORY ${BASE_DIR}/dist/ DESTINATION lib)
 
 # clear temp files
 add_custom_target(amct_pytorch_clean

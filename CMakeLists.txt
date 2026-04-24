@@ -14,22 +14,13 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.16)
+include(cmake/fetch_cann_cmake.cmake)
 project(amct VERSION 1.0.0)
+init_cann_project()
 include(CMakePrintHelpers)
 
 message("CMAKE_SOURCE_DIR === ${CMAKE_SOURCE_DIR}")
 message("PROJECT_SOURCE_DIR === ${PROJECT_SOURCE_DIR}")
-
-if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
-    find_program(SYSTEM_CCACHE_PROGRAM ccache)
-    if (SYSTEM_CCACHE_PROGRAM)
-        set(CMAKE_C_COMPILER_LAUNCHER ${SYSTEM_CCACHE_PROGRAM} CACHE PATH "cache Compiler")
-        set(CMAKE_CXX_COMPILER_LAUNCHER ${SYSTEM_CCACHE_PROGRAM} CACHE PATH "cache Compiler")
-    endif()
-    
-    set(CMAKE_C_FLAGS_RELEASE "")
-    set(CMAKE_CXX_FLAGS_RELEASE "")
-endif()
 
 include(cmake/config.cmake)
 
