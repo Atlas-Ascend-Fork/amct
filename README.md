@@ -2,6 +2,9 @@
 
 ## 🔥Latest News
 
+-   [2025/4/17] 支持HiFloat8分位量化（quantile）算法。
+-   [2025/3/2] 支持HiFloat8数据直转（cast）算法。
+-   [2025/2/2] 支持HiFloat8/FP8/FP4数据量化。
 -   [2025/12/22] AMCT项目首次上线。
 
 ## 🚀概述

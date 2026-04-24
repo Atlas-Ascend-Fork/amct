@@ -4,4 +4,4 @@ transformers
 tqdm
 accelerate
 datasets
-sentencepiec
+sentencepiece

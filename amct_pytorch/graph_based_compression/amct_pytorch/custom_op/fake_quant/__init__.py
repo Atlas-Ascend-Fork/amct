@@ -22,12 +22,6 @@ __all__ = [
     'FakeQuantizedConvTranspose',
     'FakeQuantizedLinear',
     'FakeQuantizedAvgPool2d',
-    'FakeQuantConv2d',
-    'FakeQuantLinear',
-    'FakeMXQuantLinear',
-    'FakeWeightQuantizedConv2d',
-    'FakeWeightQuantizedLinear',
-    'LutFakeWeightQuantizedLinear'
     ]
 
 from ....amct_pytorch.custom_op.fake_quant.fake_dequant import FakeDeQuant
@@ -36,11 +30,6 @@ from ....amct_pytorch.custom_op.fake_quant.fake_quantized_conv import FakeQuanti
 from ....amct_pytorch.custom_op.fake_quant.fake_quantized_convtranspose import FakeQuantizedConvTranspose
 from ....amct_pytorch.custom_op.fake_quant.fake_quantized_linear import FakeQuantizedLinear
 from ....amct_pytorch.custom_op.fake_quant.fake_quantized_avgpool2d import FakeQuantizedAvgPool2d
-from ....amct_pytorch.custom_op.fake_quant.fake_quant_module import \
-    FakeQuantConv2d, FakeQuantLinear
-from ....amct_pytorch.custom_op.fake_quant.weight_fake_quant_module import \
-    FakeWeightQuantizedConv2d, FakeWeightQuantizedLinear, LutFakeWeightQuantizedLinear
-from ....amct_pytorch.custom_op.fake_quant.fake_mx_quant_module import FakeMXQuantLinear
 
 
 FAKE_CONV_TRANSPOSE = "FakeQuantizedConvTranspose"

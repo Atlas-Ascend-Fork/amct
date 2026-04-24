@@ -16,10 +16,8 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.utils.quant_util import pad_zero_by_group
-from amct_pytorch.quantize_op.utils import convert_to_dst_shape
 from amct_pytorch.quantize_op.utils import get_weight_min_max_by_granularity, calculate_scale_offset
-from amct_pytorch.utils.quant_util import convert_to_per_group_shape, quant_dequant_tensor
+from amct_pytorch.utils.quant_util import quant_dequant_tensor
 from amct_pytorch.utils.vars import MXFP4_E2M1
 
 TOKENS_NUM = 512
