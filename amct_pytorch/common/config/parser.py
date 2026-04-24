@@ -20,6 +20,7 @@ from amct_pytorch.common.config.fields import QuantConfig, WeightsCfgField, Inpu
 from amct_pytorch.common.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
 from amct_pytorch.common.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
 from amct_pytorch.common.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
+from amct_pytorch.common.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE, KVCACHE_OPS
 from amct_pytorch.algorithms import BUILT_IN_ALGORITHM
 
 

@@ -17,7 +17,7 @@
 
 from amct_pytorch.common.utils.vars import SUPPORT_WEIGHT_QUANT_DTYPE, SUPPORT_INPUT_QUANT_DTYPE
 from amct_pytorch.common.utils.vars import SUPPORT_QUANT_STRATEGY_WEIGHT, SUPPORT_QUANT_STRATEGY_INPUT
-from amct_pytorch.common.utils.vars import SUPPORT_QUANT_DYNAMIC_INPUT
+from amct_pytorch.common.utils.vars import SUPPORT_QUANT_DYNAMIC_INPUT, SUPPORT_KVCACHE_QUANT_DTYPE
 from amct_pytorch.common.utils.vars import WTS_ASYMMETRIC_DTYPE, GROUP_SIZE_SUPPORTED_DTYPE
 from amct_pytorch.common.utils.vars import GROUP_SIZE_SUPPORTED_MAP
 from amct_pytorch.common.config.utils import get_alg_name_from_config
