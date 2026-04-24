@@ -1,6 +1,8 @@
 # Model Quantization Converter
 
-FP8 模型量化转换工具。
+deepseekv4模型attention模块采用FP8数据类型，moe模块采用MXFP4数据类型，Atlas A2、Atlas A3系列产品不支持FP8/MXFP4
+本特性将FP8/MXFP4转换为int8数据类型，支撑开发者在Atlas A2、Atlas A3系列产品上体验deepseekv4模型的推理效果
+
 
 ## 使用方法
 
@@ -17,7 +19,7 @@ python convert_model.py \
     --quant_type <量化类型>
 ```
 4. 得到目标类型(e.g. int8)权重和量化参数
-5. 基于A2/A3加速平台进行推理验证
+5. 基于Atlas A2、Atlas A3系列产品进行推理验证
 
 ### 参数说明
 
@@ -40,7 +42,7 @@ python convert_model.py \
 
 ```
 <output_hf_path>/
-├── model-00001-of-000xx.safetensors  # 量化后权重
+├── model-00001-of-000xx.safetensors   # 量化后权重
 ├── model.safetensors.index.json       # 权重索引
 ├── config.json                        # 模型配置（含量化参数）
 └── *.py / *.json / *.jinja            # 原目录文件复制

@@ -2,6 +2,7 @@
 
 ## 🔥Latest News
 
+-   [2025/4/24] 支持将[deepseekv4](./amct_pytorch/experimental/deepseek-v4/README.md)模型量化为int8。
 -   [2025/4/17] 支持HiFloat8分位量化（quantile）算法。
 -   [2025/3/2] 支持HiFloat8数据直转（cast）算法。
 -   [2025/2/2] 支持HiFloat8/FP8/FP4数据量化。
