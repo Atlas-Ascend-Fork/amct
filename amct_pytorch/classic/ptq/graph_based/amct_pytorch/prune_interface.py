@@ -19,7 +19,7 @@ import os
 from io import BytesIO
 import torch
 
-import amct_pytorch.graph_based_compression.amct_pytorch.optimizer as opt
+import amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer as opt
 from ..amct_pytorch.common.utils.check_params import check_params
 from ..amct_pytorch.common.utils import files as files_util
 
