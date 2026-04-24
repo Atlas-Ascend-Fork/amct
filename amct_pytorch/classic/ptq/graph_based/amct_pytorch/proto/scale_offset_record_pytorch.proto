@@ -1,5 +1,5 @@
 syntax = "proto2";
-import "amct_pytorch/graph_based_compression/amct_pytorch/proto/basic_info.proto";
+import "amct_pytorch/classic/ptq/graph_based/amct_pytorch/proto/basic_info.proto";
 package AMCTPytorchProto;
 
 message SingleLayerRecord {

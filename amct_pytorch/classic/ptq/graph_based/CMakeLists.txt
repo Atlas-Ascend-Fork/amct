@@ -16,8 +16,8 @@
 # 开启debug
 set(CMAKE_VERBOSE_MAKEFILE on)
 
-set(graph_based_compression_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-set(AMCT_TORCH_PROTO_DIR ${graph_based_compression_DIR}/amct_pytorch/proto)
+set(graph_based_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(AMCT_TORCH_PROTO_DIR ${graph_based_DIR}/amct_pytorch/proto)
 set(PYTHON_INCLUDE ${HI_PYTHON_INC})
 set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 
