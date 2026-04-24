@@ -2,20 +2,22 @@
 
 FP8 模型量化转换工具。
 
-## 依赖安装
+## 使用方法
 
+1. 下载deepseekv4模型到本地
+2. 依赖安装
 ```bash
 pip install -r requirements.txt
 ```
-
-## 使用方法
-
+3. 执行模型转换脚本
 ```bash
 python convert_model.py \
     --input_fp8_hf_path <FP8模型路径> \
     --output_hf_path <输出路径> \
     --quant_type <量化类型>
 ```
+4. 得到目标类型(e.g. int8)权重和量化参数
+5. 基于A2/A3加速平台进行推理验证
 
 ### 参数说明
 
