@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch.nn as nn
-from transformers.models.deepseek_v3.modeling_deepseek_v3 import DeepseekVAttention as deepseek_module
+from transformers.models.deepseek_v3.modeling_deepseek_v3 import DeepseekV3Attention as deepseek_module
 from transformers.models.longcat_flash.modular_longcat_flash import LongcatFlashMLA as longcat_module
 import torch
 
