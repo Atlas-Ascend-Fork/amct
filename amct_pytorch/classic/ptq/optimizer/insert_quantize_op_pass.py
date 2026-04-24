@@ -20,7 +20,7 @@ from amct_pytorch.classic.ptq.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.config.utils import get_alg_name_from_config
 from amct_pytorch.common.utils.model_util import ModuleHelper
-from amct_pytorch.algorithm import AlgorithmRegistry
+from amct_pytorch.algorithms import AlgorithmRegistry
 
 
 class InsertQuantizeModulePass(BaseModuleFusionPass):

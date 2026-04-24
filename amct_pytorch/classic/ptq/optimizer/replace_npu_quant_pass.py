@@ -23,7 +23,7 @@ from amct_pytorch.classic.ptq.deploy_op import NpuWeightQuantizedLinear
 from amct_pytorch.classic.ptq.deploy_op import NpuQuantizationConv2d
 from amct_pytorch.classic.ptq.quantize_op import MinMaxQuant
 from amct_pytorch.classic.ptq.quantize_op import OfmrQuant
-from amct_pytorch.algorithm import AlgorithmRegistry
+from amct_pytorch.algorithms import AlgorithmRegistry
 
 
 class ReplaceNpuQuantModulePass(BaseModuleFusionPass):

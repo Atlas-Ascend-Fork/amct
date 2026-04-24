@@ -21,7 +21,7 @@ from amct_pytorch.common.utils.vars import SUPPORT_QUANT_DYNAMIC_INPUT
 from amct_pytorch.common.utils.vars import WTS_ASYMMETRIC_DTYPE, GROUP_SIZE_SUPPORTED_DTYPE
 from amct_pytorch.common.utils.vars import GROUP_SIZE_SUPPORTED_MAP
 from amct_pytorch.common.config.utils import get_alg_name_from_config
-from amct_pytorch.algorithm import AlgorithmRegistry
+from amct_pytorch.algorithms import AlgorithmRegistry
 
 
 class BatchNumField():
