@@ -15,20 +15,14 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-__all__ = [
-    'quantize', 'convert', 'algorithm_register', 
-    'INT4_AWQ_WEIGHT_QUANT_CFG', 'INT4_GPTQ_WEIGHT_QUANT_CFG', 'INT8_SMOOTHQUANT_CFG',
-    'INT8_MINMAX_WEIGHT_QUANT_CFG',
-    'HIFP8_OFMR_CFG', 'FP8_OFMR_CFG', 'MXFP8_QUANT_CFG', 'MXFP4_AWQ_WEIGHT_QUANT_CFG', 'HIFP8_CAST_CFG',
-    'HIFP8_QUANTILE_CFG',
-    ]
+__all__ = ['Registry', 'RegistryItem', 'ClassicAdapterRegistry', 'get_adapter', 'register_adapter', 'BaseModelAdapter', 'ModelRegistry', 'QUANT_ALGO_REGISTRY', 'ALGO_REGISTRY', 'register_quant_algo', 'register_all_algorithms', 'BaseDataProvider', 'CalibrationDataProvider', 'BaseEvaluator', 'quantize', 'convert', 'algorithm_register', 'INT4_AWQ_WEIGHT_QUANT_CFG', 'INT4_GPTQ_WEIGHT_QUANT_CFG', 'INT8_SMOOTHQUANT_CFG', 'INT8_MINMAX_WEIGHT_QUANT_CFG', 'HIFP8_OFMR_CFG', 'FP8_OFMR_CFG', 'MXFP8_QUANT_CFG', 'MXFP4_AWQ_WEIGHT_QUANT_CFG', 'HIFP8_CAST_CFG', 'HIFP8_QUANTILE_CFG']
 
-from amct_pytorch.quantize import quantize, convert, algorithm_register
-from amct_pytorch.config import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
-from amct_pytorch.config import INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG
-from amct_pytorch.config import HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG, HIFP8_CAST_CFG
-from amct_pytorch.config import HIFP8_QUANTILE_CFG
-from amct_pytorch.config import MXFP4_AWQ_WEIGHT_QUANT_CFG
-
-from amct_pytorch.graph_based_compression.amct_pytorch import *
+from amct_pytorch.common.utils.registry_factory import Registry, RegistryItem
+from amct_pytorch.common.models import BaseModelAdapter, ModelRegistry, ClassicAdapterRegistry, get_adapter, register_adapter
+from amct_pytorch.algorithms.registry_factory import QUANT_ALGO_REGISTRY, ALGO_REGISTRY, register_quant_algo, register_all_algorithms
+from amct_pytorch.common.datasets import BaseDataProvider, CalibrationDataProvider
+from amct_pytorch.common.evaluate import BaseEvaluator
+from amct_pytorch.classic import quantize, convert, algorithm_register
+from amct_pytorch.common.config import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG, INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG, HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG, MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch import *
 
