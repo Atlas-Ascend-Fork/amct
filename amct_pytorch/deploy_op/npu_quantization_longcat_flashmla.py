@@ -62,7 +62,7 @@ class NpuLongcatFlashMLA(torch.nn.Module):
 
     def _hook_kv_states(self, past_key_values):
         update_function = past_key_values.update
-        if hasattr(past_key_values, "_is_hooked") and past_key_values._is_hooked:
+        if hasattr(past_key_values, "is_hooked") and past_key_values.is_hooked:
             return
         def hook_update(key_states, value_states, layer_idx, **kwargs):
             quantized_key_states = \
@@ -83,6 +83,6 @@ class NpuLongcatFlashMLA(torch.nn.Module):
             return dequantized_key_states, dequantized_value_states
         
         past_key_values.update = hook_update
-        past_key_values._is_hooked = True
+        past_key_values.is_hooked = True
 
 
