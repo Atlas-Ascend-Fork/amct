@@ -1,7 +1,0 @@
-[run]
-omit =
-    */proto*
-    *pb2*.py
-    */tmp/*
-    *_remote_module_non_scriptable*
-    */site-packages/*

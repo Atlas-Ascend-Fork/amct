@@ -76,11 +76,11 @@ setuptools.setup(
     },
     package_data={
         '': ['.version'],
-        'amct_pytorch.graph_based_compression': ['amct_pytorch/proto/*.proto',
-                         'amct_pytorch/common/proto/*.proto',
-                         'amct_pytorch/capacity/*.csv',
-                         'lib/*.so',
+        'amct_pytorch.classic.ptq.graph_based.amct_pytorch': ['proto/*.proto',
+                         'common/proto/*.proto',
+                         'capacity/*.csv',
                          ],
+        'amct_pytorch.classic.ptq.graph_based': ['lib/*.so'],
     },
     zip_safe=False,
     **setup_tools.setup_args
