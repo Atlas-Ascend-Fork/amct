@@ -60,4 +60,3 @@ deploy_op = CustomizedDeployOp
 # 注册自定义算法
 algorithm_register(name, src_op, quant_op, deploy_op)
 ```
-
