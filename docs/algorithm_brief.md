@@ -28,7 +28,7 @@ ARQ （Adaptive Range Quantization）算法是对权重直接量化的算法。�
 ADA权重量化算法用于PTQ流程，由于量化后的权重舍入模式会影响模型精度，ADA主要是对舍入模式进行微调，针对每个量化数据自适应向上或向下舍入模式，需要未标记的数据进行训练调优以确定不同的舍入模式。整体流程如下图所示，先将权重用KL散度算法计算weight初始量化因子scale和offset，然后使用无标签的数据进行训练，调整weight的舍入模式。
 
 **图 1**  ADA权重量化算法<a name="fig432315576612"></a>  
-![](./figures/ADAquant.png "ADA权重量化算法")
+![](./figures/adaquant.png "ADA权重量化算法")
 
 量化后的weight计算公式如下：
 
@@ -105,7 +105,7 @@ create\_quant\_config接口量化默认使用的为IFMR数据量化算法，如�
 IFMR（Input Feature Map Reconstruction）算法在某个数据分布下，通过搜索的方式确定最佳量化方式。该算法用于训练后量化场景，量化原理图如下所示：
 
 **图 1**  IFMR数据量化算法<a name="fig11850413154412"></a>  
-![](./figures/IFMRquant.png "IFMR数据量化算法")
+![](./figures/ifmrquant.png "IFMR数据量化算法")
 
 上图中序号\[1,3\]代表\[clip\_min\_start, clip\_min\_end\]、2代表clip\_min、 \[4,6\]代表\[clip\_max\_start, clip\_max\_end\]、5代表clip\_max。
 
@@ -162,7 +162,7 @@ OFMR（Output FeatureMap Reconstruct）算法在某个数据分布下，通过�
 3. 比较量化输出与原始输出的误差，选取误差最小的量化因子。
 
 **图 1**  OFMR算法原理<a name="fig1393075517419"></a>  
-![](./figures/OFMRquant.png "OFMR算法原理")
+![](./figures/ofmrquant.png "OFMR算法原理")
 
 ### SmoothQuant
 
