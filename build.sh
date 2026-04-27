@@ -15,6 +15,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+#test
+
 set -e
 
 BASEPATH=$(cd "$(dirname $0)"; pwd)
