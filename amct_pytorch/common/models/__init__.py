@@ -1,3 +1,5 @@
-__all__ = ['BaseModelAdapter', 'ModelRegistry', 'get_adapter', 'register_adapter', 'ClassicAdapterRegistry']
-from .base_adapter import BaseModelAdapter
-from .model_registry import ModelRegistry, get_adapter, register_adapter, ClassicAdapterRegistry
+from amct_pytorch.common.utils.registry_factory import Registry
+
+MODEL_REGISTRY = Registry("model")
+
+__all__ = ["MODEL_REGISTRY"]
