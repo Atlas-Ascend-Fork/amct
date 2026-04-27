@@ -12,7 +12,11 @@ def register_dtype():
 
     from .mxfp import QuantDequantMx  # noqa: F401
     from .int import QuantDequantInt
-    from .hifx import QuantDequantHifp
+    try:
+        from .hifx import QuantDequantHifp
+    except ImportError as exc:
+        from loguru import logger
+        logger.warning(f"Skip hifp dtype registration: {exc}")
 
     _REGISTERED = True
 
