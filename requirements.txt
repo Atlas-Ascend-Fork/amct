@@ -7,3 +7,11 @@ protobuf==3.20.3
 numpy>=1.19.2,<=1.24.0
 pyyaml
 transformers==5.5.4
+loguru
+datasets
+accelerate
+compressed_tensors
+scipy
+torchao
+einops
+sentencepiece
