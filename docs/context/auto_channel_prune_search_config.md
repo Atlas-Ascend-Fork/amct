@@ -72,7 +72,7 @@
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p88961317102012"><a name="zh-cn_topic_0000002517028726_p88961317102012"></a><a name="zh-cn_topic_0000002517028726_p88961317102012"></a>用户配置的指定通道稀疏简易配置文件，仅允许包含skip与override配置，配置的层将沿用指定的配置，不会被自动通道稀疏搜索接口重写。</p>
 </td>
 </tr>
-<tr id="zh-cn_topic_0000002517028726_row1280415861711"><td class="cellrowborder" rowspan="4" valign="top" width="15.818418158184183%" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p11804458141710"><a name="zh-cn_topic_0000002517028726_p11804458141710"></a><a name="zh-cn_topic_0000002517028726_p11804458141710"></a>DataType</p>
+<tr id="zh-cn_topic_0000002517028726_row1280415861711"><td class="cellrowborder" rowspan="17" valign="top" width="15.818418158184183%" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p11804458141710"><a name="zh-cn_topic_0000002517028726_p11804458141710"></a><a name="zh-cn_topic_0000002517028726_p11804458141710"></a>AttrProto</p>
 </td>
 <td class="cellrowborder" valign="top" width="8.729127087291271%" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p12805125881715"><a name="zh-cn_topic_0000002517028726_p12805125881715"></a><a name="zh-cn_topic_0000002517028726_p12805125881715"></a>-</p>
 </td>
@@ -80,38 +80,158 @@
 </td>
 <td class="cellrowborder" valign="top" width="13.338666133386662%" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p1280575861710"><a name="zh-cn_topic_0000002517028726_p1280575861710"></a><a name="zh-cn_topic_0000002517028726_p1280575861710"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="53.314668533146694%" headers="mcps1.1.6.1.5 "><p id="zh-cn_topic_0000002517028726_p98051358141716"><a name="zh-cn_topic_0000002517028726_p98051358141716"></a><a name="zh-cn_topic_0000002517028726_p98051358141716"></a>量化位宽范围，枚举类型。当前版本仅支持INT8量化。</p>
+<td class="cellrowborder" valign="top" width="53.314668533146694%" headers="mcps1.1.6.1.5 "><p id="zh-cn_topic_0000002517028726_p98051358141716"><a name="zh-cn_topic_0000002517028726_p98051358141716"></a><a name="zh-cn_topic_0000002517028726_p98051358141716"></a>通用的属性定义消息，用于存储不同类型的属性值。</p>
 </td>
 </tr>
-<tr id="zh-cn_topic_0000002517028726_row39403711911"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p4941337101910"><a name="zh-cn_topic_0000002517028726_p4941337101910"></a><a name="zh-cn_topic_0000002517028726_p4941337101910"></a>-</p>
+<tr id="zh-cn_topic_0000002517028726_row39403711911"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p4941337101910"><a name="zh-cn_topic_0000002517028726_p4941337101910"></a><a name="zh-cn_topic_0000002517028726_p4941337101910"></a>AttrType</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p1594203761910"><a name="zh-cn_topic_0000002517028726_p1594203761910"></a><a name="zh-cn_topic_0000002517028726_p1594203761910"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p139413379190"><a name="zh-cn_topic_0000002517028726_p139413379190"></a><a name="zh-cn_topic_0000002517028726_p139413379190"></a>FLOAT</p>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p139413379190"><a name="zh-cn_topic_0000002517028726_p139413379190"></a><a name="zh-cn_topic_0000002517028726_p139413379190"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p8945378196"><a name="zh-cn_topic_0000002517028726_p8945378196"></a><a name="zh-cn_topic_0000002517028726_p8945378196"></a>浮点，不量化。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p8945378196"><a name="zh-cn_topic_0000002517028726_p8945378196"></a><a name="zh-cn_topic_0000002517028726_p8945378196"></a>属性类型枚举，决定使用哪个字段存储值。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0000002517028726_row119454031916"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p169494017191"><a name="zh-cn_topic_0000002517028726_p169494017191"></a><a name="zh-cn_topic_0000002517028726_p169494017191"></a>-</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p394140101910"><a name="zh-cn_topic_0000002517028726_p394140101910"></a><a name="zh-cn_topic_0000002517028726_p394140101910"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p109484091918"><a name="zh-cn_topic_0000002517028726_p109484091918"></a><a name="zh-cn_topic_0000002517028726_p109484091918"></a>INT8</p>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p109484091918"><a name="zh-cn_topic_0000002517028726_p109484091918"></a><a name="zh-cn_topic_0000002517028726_p109484091918"></a>UNDEFINED</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p1894640121914"><a name="zh-cn_topic_0000002517028726_p1894640121914"></a><a name="zh-cn_topic_0000002517028726_p1894640121914"></a>INT8量化。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p1894640121914"><a name="zh-cn_topic_0000002517028726_p1894640121914"></a><a name="zh-cn_topic_0000002517028726_p1894640121914"></a>未定义类型。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0000002517028726_row922215429192"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p112224421193"><a name="zh-cn_topic_0000002517028726_p112224421193"></a><a name="zh-cn_topic_0000002517028726_p112224421193"></a>-</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p2022244211917"><a name="zh-cn_topic_0000002517028726_p2022244211917"></a><a name="zh-cn_topic_0000002517028726_p2022244211917"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p822224213193"><a name="zh-cn_topic_0000002517028726_p822224213193"></a><a name="zh-cn_topic_0000002517028726_p822224213193"></a>INT4</p>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p822224213193"><a name="zh-cn_topic_0000002517028726_p822224213193"></a><a name="zh-cn_topic_0000002517028726_p822224213193"></a>FLOAT</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p15222942131911"><a name="zh-cn_topic_0000002517028726_p15222942131911"></a><a name="zh-cn_topic_0000002517028726_p15222942131911"></a>INT4量化。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p15222942131911"><a name="zh-cn_topic_0000002517028726_p15222942131911"></a><a name="zh-cn_topic_0000002517028726_p15222942131911"></a>单个浮点数。</p>
+
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new1"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new1"><a name="zh-cn_topic_0000002517028726_p_new1"></a><a name="zh-cn_topic_0000002517028726_p_new1"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new2"><a name="zh-cn_topic_0000002517028726_p_new2"></a><a name="zh-cn_topic_0000002517028726_p_new2"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new3"><a name="zh-cn_topic_0000002517028726_p_new3"></a><a name="zh-cn_topic_0000002517028726_p_new3"></a>INT</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new4"><a name="zh-cn_topic_0000002517028726_p_new4"></a><a name="zh-cn_topic_0000002517028726_p_new4"></a>单个整数。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new5"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new5"><a name="zh-cn_topic_0000002517028726_p_new5"></a><a name="zh-cn_topic_0000002517028726_p_new5"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new6"><a name="zh-cn_topic_0000002517028726_p_new6"></a><a name="zh-cn_topic_0000002517028726_p_new6"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new7"><a name="zh-cn_topic_0000002517028726_p_new7"></a><a name="zh-cn_topic_0000002517028726_p_new7"></a>STRING</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new8"><a name="zh-cn_topic_0000002517028726_p_new8"></a><a name="zh-cn_topic_0000002517028726_p_new8"></a>单个字符串。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new9"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new9"><a name="zh-cn_topic_0000002517028726_p_new9"></a><a name="zh-cn_topic_0000002517028726_p_new9"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new10"><a name="zh-cn_topic_0000002517028726_p_new10"></a><a name="zh-cn_topic_0000002517028726_p_new10"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new11"><a name="zh-cn_topic_0000002517028726_p_new11"></a><a name="zh-cn_topic_0000002517028726_p_new11"></a>FLOATS</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new12"><a name="zh-cn_topic_0000002517028726_p_new12"></a><a name="zh-cn_topic_0000002517028726_p_new12"></a>浮点数数组。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new13"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new13"><a name="zh-cn_topic_0000002517028726_p_new13"></a><a name="zh-cn_topic_0000002517028726_p_new13"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new14"><a name="zh-cn_topic_0000002517028726_p_new14"></a><a name="zh-cn_topic_0000002517028726_p_new14"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new15"><a name="zh-cn_topic_0000002517028726_p_new15"></a><a name="zh-cn_topic_0000002517028726_p_new15"></a>INTS</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new16"><a name="zh-cn_topic_0000002517028726_p_new16"></a><a name="zh-cn_topic_0000002517028726_p_new16"></a>整数数组。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new17"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new17"><a name="zh-cn_topic_0000002517028726_p_new17"></a><a name="zh-cn_topic_0000002517028726_p_new17"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new18"><a name="zh-cn_topic_0000002517028726_p_new18"></a><a name="zh-cn_topic_0000002517028726_p_new18"></a>-</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new19"><a name="zh-cn_topic_0000002517028726_p_new19"></a><a name="zh-cn_topic_0000002517028726_p_new19"></a>STRINGS</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new20"><a name="zh-cn_topic_0000002517028726_p_new20"></a><a name="zh-cn_topic_0000002517028726_p_new20"></a>字符串数组。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new21"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new21"><a name="zh-cn_topic_0000002517028726_p_new21"></a><a name="zh-cn_topic_0000002517028726_p_new21"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new22"><a name="zh-cn_topic_0000002517028726_p_new22"></a><a name="zh-cn_topic_0000002517028726_p_new22"></a>string</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new23"><a name="zh-cn_topic_0000002517028726_p_new23"></a><a name="zh-cn_topic_0000002517028726_p_new23"></a>name</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new24"><a name="zh-cn_topic_0000002517028726_p_new24"></a><a name="zh-cn_topic_0000002517028726_p_new24"></a>属性名。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new25"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new25"><a name="zh-cn_topic_0000002517028726_p_new25"></a><a name="zh-cn_topic_0000002517028726_p_new25"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new26"><a name="zh-cn_topic_0000002517028726_p_new26"></a><a name="zh-cn_topic_0000002517028726_p_new26"></a>AttrType</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new27"><a name="zh-cn_topic_0000002517028726_p_new27"></a><a name="zh-cn_topic_0000002517028726_p_new27"></a>type</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new28"><a name="zh-cn_topic_0000002517028726_p_new28"></a><a name="zh-cn_topic_0000002517028726_p_new28"></a>属性类型（使用AttrType枚举）。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new29"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new29"><a name="zh-cn_topic_0000002517028726_p_new29"></a><a name="zh-cn_topic_0000002517028726_p_new29"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new30"><a name="zh-cn_topic_0000002517028726_p_new30"></a><a name="zh-cn_topic_0000002517028726_p_new30"></a>float</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new31"><a name="zh-cn_topic_0000002517028726_p_new31"></a><a name="zh-cn_topic_0000002517028726_p_new31"></a>f</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new32"><a name="zh-cn_topic_0000002517028726_p_new32"></a><a name="zh-cn_topic_0000002517028726_p_new32"></a>浮点数值（当type为FLOAT时使用）。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new33"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new33"><a name="zh-cn_topic_0000002517028726_p_new33"></a><a name="zh-cn_topic_0000002517028726_p_new33"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new34"><a name="zh-cn_topic_0000002517028726_p_new34"></a><a name="zh-cn_topic_0000002517028726_p_new34"></a>int64</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new35"><a name="zh-cn_topic_0000002517028726_p_new35"></a><a name="zh-cn_topic_0000002517028726_p_new35"></a>i</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new36"><a name="zh-cn_topic_0000002517028726_p_new36"></a><a name="zh-cn_topic_0000002517028726_p_new36"></a>整数值（当type为INT时使用）。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new37"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new37"><a name="zh-cn_topic_0000002517028726_p_new37"></a><a name="zh-cn_topic_0000002517028726_p_new37"></a>optional</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new38"><a name="zh-cn_topic_0000002517028726_p_new38"></a><a name="zh-cn_topic_0000002517028726_p_new38"></a>bytes</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new39"><a name="zh-cn_topic_0000002517028726_p_new39"></a><a name="zh-cn_topic_0000002517028726_p_new39"></a>s</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new40"><a name="zh-cn_topic_0000002517028726_p_new40"></a><a name="zh-cn_topic_0000002517028726_p_new40"></a>字符串值（当type为STRING时使用）。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new41"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new41"><a name="zh-cn_topic_0000002517028726_p_new41"></a><a name="zh-cn_topic_0000002517028726_p_new41"></a>repeated</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new42"><a name="zh-cn_topic_0000002517028726_p_new42"></a><a name="zh-cn_topic_0000002517028726_p_new42"></a>float</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new43"><a name="zh-cn_topic_0000002517028726_p_new43"></a><a name="zh-cn_topic_0000002517028726_p_new43"></a>floats</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new44"><a name="zh-cn_topic_0000002517028726_p_new44"></a><a name="zh-cn_topic_0000002517028726_p_new44"></a>浮点数数组（当type为FLOATS时使用）。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new45"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new45"><a name="zh-cn_topic_0000002517028726_p_new45"></a><a name="zh-cn_topic_0000002517028726_p_new45"></a>repeated</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new46"><a name="zh-cn_topic_0000002517028726_p_new46"></a><a name="zh-cn_topic_0000002517028726_p_new46"></a>int64</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new47"><a name="zh-cn_topic_0000002517028726_p_new47"></a><a name="zh-cn_topic_0000002517028726_p_new47"></a>ints</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new48"><a name="zh-cn_topic_0000002517028726_p_new48"></a><a name="zh-cn_topic_0000002517028726_p_new48"></a>整数数组（当type为INTS时使用）。</p>
+</td>
+</tr>
+<tr id="zh-cn_topic_0000002517028726_row_new49"><td class="cellrowborder" valign="top" headers="mcps1.1.6.1.1 "><p id="zh-cn_topic_0000002517028726_p_new49"><a name="zh-cn_topic_0000002517028726_p_new49"></a><a name="zh-cn_topic_0000002517028726_p_new49"></a>repeated</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.2 "><p id="zh-cn_topic_0000002517028726_p_new50"><a name="zh-cn_topic_0000002517028726_p_new50"></a><a name="zh-cn_topic_0000002517028726_p_new50"></a>bytes</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.3 "><p id="zh-cn_topic_0000002517028726_p_new51"><a name="zh-cn_topic_0000002517028726_p_new51"></a><a name="zh-cn_topic_0000002517028726_p_new51"></a>strings</p>
+</td>
+<td class="cellrowborder" valign="top" headers="mcps1.1.6.1.4 "><p id="zh-cn_topic_0000002517028726_p_new52"><a name="zh-cn_topic_0000002517028726_p_new52"></a><a name="zh-cn_topic_0000002517028726_p_new52"></a>整数数组（当type为STRINGS时使用）。</p>
 </td>
 </tr>
 </tbody>
 </table>
+
+
 
 基于该文件构造的**自动通道稀疏简易配置文件**_amc_.cfg样例如下所示：
 
