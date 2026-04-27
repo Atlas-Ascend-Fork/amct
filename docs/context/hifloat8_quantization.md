@@ -1,4 +1,4 @@
-# HiFloat8 数据格式
+# HiFloat8 数据格式&量化算法介绍
 
 ## 1. 格式简介
 
@@ -35,7 +35,7 @@ HiFloat8 由 **符号（Sign）**、**点位（Dot）**、**阶码（Exponent）
 
 ### Normal 编码模式
 
-![Normal编码模式](../figures/hifloat8_normal编码模式.png)
+![Normal编码模式](../figures/hifloat8_normal_encoding.png)
 
 Normal（规格化）编码模式确保不同位宽阶码对应的指数范围互不重叠，实现**无冗余编码**。HiFloat8 采用 Sign-Magnitude 编码方案，将幅值最高位设为隐含位，不占用存储空间。
 
@@ -61,7 +61,7 @@ HiFloat8 采用大位宽 Dot 域匹配小位宽阶码域的设计，实现尾数
 
 ### Denormal 编码模式
 
-![Denormal编码模式](../figures/hifloat8_denormal编码.png)
+![Denormal编码模式](../figures/hifloat8_denormal_encoding.png)
 
 为支持更大动态范围，HiFloat8 采用不同于 IEEE 754 风格的 Denormal 方案。
 
@@ -94,7 +94,7 @@ HiFloat8 专为大模型（LLM）训推设计，具有三大核心优势：
 
 传统 FP8（E4M3/E5M2）因阶码位宽固定，难以同时兼顾动态范围与精度。考虑到神经网络参数与激活值呈类高斯分布，HiFloat8 采用锥形精度分布，将更高精度集中在高频数值区间。
 
-![精度模式](../figures/hifloat8精度模式.png)
+![精度模式](../figures/hifloat8_precision.png)
 
 **精度分段：**
 
@@ -111,7 +111,7 @@ HiFloat8 专为大模型（LLM）训推设计，具有三大核心优势：
 
 #### 大动态范围
 
-![典型值对比](../figures/hifloat8典型值.png)
+![典型值对比](../figures/hifloat8_values.png)
 
 HiFloat8 在 8-bit 限制下，通过锥形精度特性匹配数据分布，在保证训练与推理精度的前提下显著扩大动态范围，提供能力更全面的 8-bit 单格式。
 
