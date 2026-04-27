@@ -16,6 +16,7 @@ class OmniQuant(nn.Module):
         self.dim = ctx.dim_size
         self.log_scale = torch.nn.Parameter(torch.zeros((1, self.dim)), requires_grad=True)
         # TODO most LLM linear bias is None
+        # self.shift = torch.nn.Parameter(torch.zeros((self.dim, 1)), requires_grad=True)
         self.is_observe = False
 
     def transform(self):
@@ -26,7 +27,7 @@ class OmniQuant(nn.Module):
         scale = scale.clamp(min=1e-4, max=1e4)
         return scale.to(device=device, dtype=dtype)
 
-    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str=None) -> torch.Tensor:
         dtype = x.dtype
         if self.is_observe:
             hidden_dim = x.shape[-1]

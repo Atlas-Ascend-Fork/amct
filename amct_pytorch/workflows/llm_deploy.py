@@ -5,20 +5,17 @@ import os
 import shutil
 from collections import defaultdict
 from pathlib import Path
-
-import torch
+from tqdm import tqdm
 from loguru import logger
 from safetensors import safe_open
 from safetensors.torch import save_file
-from tqdm import tqdm
 
+from amct_pytorch.common.models.llm import register_llm_models
+from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.quantization.dtypes import register_dtype
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
 class LlmDeployWorkflow:
@@ -48,8 +45,6 @@ class LlmDeployWorkflow:
         sink_id = self.setup()
         if self.granularity == "block":
             results = self._run_blockwise()
-        elif self.granularity == "tensor":
-            results = self._run_tensorwise()
         else:
             raise ValueError(
                 f"Unsupported granularity '{self.granularity}' for deploy."
@@ -195,80 +190,6 @@ class LlmDeployWorkflow:
         new_config_file = os.path.join(self.output_dir, "config.json")
         with open(new_config_file, "w") as f:
             json.dump(config, f, indent=2)
-
-    def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
-        if self.quant_dtype == "bf16":
-            return tensor.to(torch.bfloat16)
-        raise NotImplementedError(
-            f"tensor granularity does not support quant_dtype '{self.quant_dtype}' yet"
-        )
-
-    def _refresh_config_tensor(self):
-        config_file = os.path.join(self.output_dir, "config.json")
-        with open(config_file, "r") as f:
-            config = json.load(f)
-        if self.quant_dtype == "bf16":
-            config["torch_dtype"] = "bfloat16"
-            config.pop("quantization_config", None)
-        with open(config_file, "w") as f:
-            json.dump(config, f, indent=2)
-
-    def _run_tensorwise(self):
-        self._copy_support_files()
-        original_index = self._load_weight_index()
-        original_weight_map = dict(original_index.get("weight_map", {}))
-
-        weights_by_file = defaultdict(list)
-        for weight_name, file_name in original_weight_map.items():
-            weights_by_file[file_name].append(weight_name)
-
-        updated_weight_map = {}
-        model_dir = Path(self.model_path)
-        loaded_files = {}
-        for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
-            source_path = model_dir / source_file
-            current_state_dict = load_file(source_path, device="cpu")
-            loaded_files[source_file] = current_state_dict
-
-            new_state_dict = {}
-            for weight_name, weight in current_state_dict.items():
-                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
-                if weight_name.endswith(scale_prefix):
-                    continue
-                elif weight.element_size() == 1:
-                    # FP8 weight
-                    try:
-                        # Get scale_inv from the correct file
-                        file_name = original_weight_map[scale_inv_name]
-                        if file_name not in loaded_files:
-                            file_path = model_dir / file_name
-                            loaded_files[file_name] = load_file(file_path, device="cpu")
-                        scale_inv = loaded_files[file_name][scale_inv_name]
-                        if weight.dtype == torch.int8:
-                            weight = weight_dequant(weight, scale_inv, block_size=32, is_mx=True, is_packed=True)
-                        else:
-                            weight = weight_dequant(weight, scale_inv)
-                    except KeyError:
-                        print(
-                            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
-                    new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
-                else:
-                    new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
-
-            self._write_safetensor_file(source_file, new_state_dict)
-            for weight_name in new_state_dict:
-                updated_weight_map[weight_name] = source_file
-
-        index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config_tensor()
-        logger.info("Exported tensor-converted model to {}", self.output_dir)
-        logger.info("Refreshed weight index at {}", index_path)
-        return {
-            "index_path": index_path,
-            "num_output_files": len(set(updated_weight_map.values())),
-        }
 
     def _run_blockwise(self):
         self._copy_support_files()

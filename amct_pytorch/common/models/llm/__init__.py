@@ -7,9 +7,9 @@ def register_llm_models():
         return
 
     from .deepseek.deepseek_v3_2.deepseekv3_2 import DeepseekV32  # noqa: F401
-    from .deepseek.deepseek_v4.deepseekv4 import DeepseekV4  # noqa: F401
     from .longcat.longcat_lite.longcat_lite import LongcatLite  # noqa: F401
     from .longcat.longcat_next.longcat_next import LongcatNext  # noqa: F401
+    from .pangu.pangu_7b.pangu_7b import Pangu7B  # noqa: F401
     from .qwen.qwen3_5.qwen3_5 import Qwen3_5  # noqa: F401
     from .qwen.qwen3_5.qwen3_5_moe import Qwen3_5Moe  # noqa: F401
     from .qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe  # noqa: F401

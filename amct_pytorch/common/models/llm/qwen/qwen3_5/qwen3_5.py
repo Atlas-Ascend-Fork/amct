@@ -10,9 +10,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     apply_quant_to_attn,
     apply_quant_to_moe_mlp,
 )
-from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
-    QuantQwen35Attn, QuantQwen35LinearAttn, QuantQwen35MLP,
-)
+from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import QuantQwen35LinearAttn, QuantQwen35Attn, QuantQwen35MLP
 
 
 # for reference, qwen3.5-4b ppl is 9.5375
@@ -95,9 +93,13 @@ class Qwen3_5(BaseModel):
         return apply_quant_to_attn(self.args, decoder_layer, attn_cls)
 
     def apply_quant_moe_mlp(self, decoder_layer):
+        shared_expert_bits = getattr(self.args, "shared_expert_bits", 8)
+        routed_expert_bits = getattr(self.args, "routed_expert_bits", None)
         return apply_quant_to_moe_mlp(
             self.args,
             decoder_layer,
+            shared_expert_bits=shared_expert_bits,
+            routed_expert_bits=routed_expert_bits,
             cls=QuantQwen35MLP,
         )
 

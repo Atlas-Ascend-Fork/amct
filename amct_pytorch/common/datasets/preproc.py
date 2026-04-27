@@ -61,7 +61,9 @@ def get_wiki_inputs(tokenizer, seq_len=4096):
     bs = 1
 
     for i in tqdm(range(0, nsamples, bs), desc='Chunking wikitext2'):
+        # Calculate end index
         j = min(i + bs, nsamples)
+        # Prepare inputs and move to npu
         inputs = testenc[:, (i * seq_len): (j * seq_len)].cpu()
         inputs = inputs.reshape(j - i, seq_len)
         wiki_inputs.append(inputs)

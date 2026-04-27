@@ -12,7 +12,7 @@ from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
 from amct_pytorch.common.models.llm.common.moe_unpack import find_moe_module
 from amct_pytorch.common.models.llm.common.quant_apply import (
     apply_quant_to_attn,
-    build_no_algo_args,
+    build_direct_quant_args,
 )
 from amct_pytorch.common.models.llm.qwen.moe_common import (
     QuantGatedExperts,
@@ -21,9 +21,7 @@ from amct_pytorch.common.models.llm.qwen.moe_common import (
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.qwen.qwen3_next.quant_module import (
-    QuantQwen3NextAttn, QuantQwen3NextLinearAttn, QuantQwen3NextMLP,
-)
+from amct_pytorch.common.models.llm.qwen.qwen3_next.quant_module import QuantQwen3NextMLP, QuantQwen3NextLinearAttn, QuantQwen3NextAttn
 
 
 @MODEL_REGISTRY.register(
@@ -87,6 +85,7 @@ class Qwen3Next(BaseModel):
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
+        shared_expert_args = build_direct_quant_args(self.args, bits=8)
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             self.apply_quant_attn(decoder_layer)
 
@@ -95,11 +94,10 @@ class Qwen3Next(BaseModel):
             if quant_moe is not None:
                 experts = getattr(quant_moe, "experts", None)
                 if experts is not None and is_packed_experts(experts):
-                    quant_moe.experts = QuantGatedExperts(self.args, experts, group="moe.routed")
+                    quant_moe.experts = QuantGatedExperts(self.args, experts)
                 shared_expert = getattr(quant_moe, "shared_expert", None)
                 if shared_expert is not None and not isinstance(shared_expert, QuantQwen3NextMLP):
-                    shared_expert_args = build_no_algo_args(self.args)
-                    quant_moe.shared_expert = QuantQwen3NextMLP(shared_expert_args, shared_expert, group="moe.shared")
+                    quant_moe.shared_expert = QuantQwen3NextMLP(shared_expert_args, shared_expert)
         return decoder_layer
 
     def apply_quant_attn(self, decoder_layer):

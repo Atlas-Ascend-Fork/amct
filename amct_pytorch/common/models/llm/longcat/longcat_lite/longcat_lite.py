@@ -28,7 +28,7 @@ def _save_tensor(path: str, tensors: list[torch.Tensor]):
 
 
 @MODEL_REGISTRY.register(
-    name="longcat_lite",
+    name="longcat-lite",
     task="llm",
     family="longcat",
     description="LongCat-Flash-Lite model adapter",

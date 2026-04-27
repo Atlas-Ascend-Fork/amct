@@ -2,6 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger
+
+from amct_pytorch.common.models.llm.common.base import BaseModel
+from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, make_ptq_unit
+from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP
+from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts, is_packed_experts, pack_gated_expert_weights
+from amct_pytorch.algorithms.quant import AlgoBuildContext
+from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.common.models import MODEL_REGISTRY
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     ALL_ATTENTION_FUNCTIONS,
     GlmMoeDsaAttention,
@@ -10,20 +19,6 @@ from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     eager_attention_forward,
     is_flash_attention_requested,
 )
-
-from amct_pytorch.algorithms.quant import AlgoBuildContext
-from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.common.base import BaseModel
-from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, make_ptq_unit
-from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP
-from amct_pytorch.common.models.llm.qwen.moe_common import (
-    QuantGatedExperts,
-    is_packed_experts,
-    pack_gated_expert_weights,
-)
-from amct_pytorch.quantization.bit_policy import ensure_bit_policy
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
-from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def _linear_with_structure(hidden_states, linear, structure_transform=None, name=None):
@@ -36,7 +31,6 @@ def _linear_with_structure(hidden_states, linear, structure_transform=None, name
 class QuantGLM5Indexer(nn.Module):
     def __init__(self, args, module):
         super().__init__()
-        ensure_bit_policy(args)
         self.config = module.config
         self.layer_idx = module.layer_idx
         self.hidden_size = self.config.hidden_size
@@ -45,7 +39,7 @@ class QuantGLM5Indexer(nn.Module):
         self.qk_rope_head_dim = self.config.qk_rope_head_dim
         self.index_topk = self.config.index_topk
         self.q_lora_rank = self.config.q_lora_rank
-        self.wq_b = QuantLinear(args, module.wq_b, w_bits=args.bit_policy["attn-linear"]["wq_b"].w, name="wq_b")
+        self.wq_b = QuantLinear(args, module.wq_b, name="wq_b")
         self.wk = module.wk
         self.k_norm = module.k_norm
         self.weights_proj = module.weights_proj
@@ -53,8 +47,7 @@ class QuantGLM5Indexer(nn.Module):
         self._cached_keys = None
 
     @torch.no_grad()
-    def forward(self, hidden_states, q_resid, position_embeddings,
-                attention_mask, use_cache=False, structure_transform=None):
+    def forward(self, hidden_states, q_resid, position_embeddings, attention_mask, use_cache=False, structure_transform=None):
         batch_size, seq_len, _ = hidden_states.shape
         cos, sin = position_embeddings
 
@@ -64,12 +57,7 @@ class QuantGLM5Indexer(nn.Module):
         q_pe = apply_rotary_pos_emb(q_pe, cos, sin, unsqueeze_dim=2)
         q = torch.cat([q_pe, q_nope], dim=-1)
 
-        k = self.k_norm(
-    _linear_with_structure(
-        hidden_states,
-        self.wk,
-        structure_transform=structure_transform,
-         name="wk"))
+        k = self.k_norm(_linear_with_structure(hidden_states, self.wk, structure_transform=structure_transform, name="wk"))
         k_pe, k_nope = torch.split(k, [self.qk_rope_head_dim, self.head_dim - self.qk_rope_head_dim], dim=-1)
         k_pe = apply_rotary_pos_emb(k_pe.unsqueeze(2), cos, sin, unsqueeze_dim=2).squeeze(2)
         k = torch.cat([k_pe, k_nope], dim=-1)
@@ -107,32 +95,27 @@ class QuantGLM5Attn(GlmMoeDsaAttention):
     def __init__(self, args, module: GlmMoeDsaAttention):
         super().__init__(module.config, module.layer_idx)
         self.quant_args = args
-        ensure_bit_policy(args)
         self.enable_attn_linear = "attn-linear" in args.quant_target
         self.hidden_size = getattr(module, "hidden_size", module.config.hidden_size)
-        bits = args.bit_policy["attn-linear"]
-        kv_a, kv_b, o = bits["kv_a_proj_with_mqa"], bits["kv_b_proj"], bits["o_proj"]
         if self.q_lora_rank is None:
-            q = bits["q_proj"]
-            self.q_proj = QuantLinear(args, module.q_proj, w_bits=q.w, name="q_proj")
+            self.q_proj = QuantLinear(args, module.q_proj, name="q_proj")
         else:
-            q_a, q_b = bits["q_a_proj"], bits["q_b_proj"]
-            self.q_a_proj = QuantLinear(args, module.q_a_proj, w_bits=q_a.w, name="q_a_proj")
+            self.q_a_proj = QuantLinear(args, module.q_a_proj, name="q_a_proj")
             self.q_a_layernorm = module.q_a_layernorm
-            self.q_b_proj = QuantLinear(args, module.q_b_proj, w_bits=q_b.w, name="q_b_proj")
+            self.q_b_proj = QuantLinear(args, module.q_b_proj, name="q_b_proj")
 
-        self.kv_a_proj_with_mqa = QuantLinear(args, module.kv_a_proj_with_mqa, w_bits=kv_a.w, name="kv_a_proj_with_mqa")
+        self.kv_a_proj_with_mqa = QuantLinear(args, module.kv_a_proj_with_mqa, name="kv_a_proj_with_mqa")
         self.kv_a_layernorm = module.kv_a_layernorm
-        self.kv_b_proj = QuantLinear(args, module.kv_b_proj, w_bits=kv_b.w, name="kv_b_proj")
-        self.o_proj = QuantLinear(args, module.o_proj, w_bits=o.w, name="o_proj")
+        self.kv_b_proj = QuantLinear(args, module.kv_b_proj, name="kv_b_proj")
+        self.o_proj = QuantLinear(args, module.o_proj, name="o_proj")
         self.scaling = module.scaling
         self.indexer = QuantGLM5Indexer(args, module.indexer)
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.inp_afq = ActivationQuantizer(args, bits=kv_a.a)
-            self.o_proj_afq = ActivationQuantizer(args, bits=o.a)
+            self.inp_afq = ActivationQuantizer(args, bits=args.a_bits)
+            self.o_proj_afq = ActivationQuantizer(args, bits=args.a_bits)
         else:
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
@@ -140,7 +123,7 @@ class QuantGLM5Attn(GlmMoeDsaAttention):
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.num_heads * self.v_head_dim)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
     def forward(
@@ -273,13 +256,7 @@ class GLM5(BaseModel):
         self.num_layers = self.config.num_hidden_layers
 
     def float_model(self):
-        from transformers import AutoModelForCausalLM
-        return AutoModelForCausalLM.from_pretrained(
-            self.model_path,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16,
-            attn_implementation="eager",
-        )
+        return super().float_model()
 
     def empty_weights_model(self):
         return super().empty_weights_model()
@@ -293,8 +270,6 @@ class GLM5(BaseModel):
         return layer_idx >= first_dense and ((layer_idx - first_dense) % moe_freq == 0)
 
     def _ensure_glm5_config(self):
-        self.config._attn_implementation = "eager"
-
         if getattr(self.config, "mlp_layer_types", None):
             return
 
@@ -389,10 +364,6 @@ class GLM5(BaseModel):
                 items=experts.expert_modules,
                 metadata_fn=lambda expert_idx, _: {"expert_idx": expert_idx},
             )
-            if "mlp" in self.quant_target:
-                shared_experts = getattr(mlp, "shared_experts", None)
-                if shared_experts is not None:
-                    yield make_ptq_unit("mlp", "shared_experts", layer_idx, shared_experts)
             return
 
         if "mlp" in self.quant_target:

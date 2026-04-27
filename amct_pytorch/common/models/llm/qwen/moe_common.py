@@ -13,39 +13,27 @@ class QuantGatedExperts(nn.Module):
         args,
         experts_module,
         view_cls=GatedExpertView,
-        group: str = "moe.routed",
     ):
         super().__init__()
         self.args = args
         self.packed_experts = experts_module
         self.num_experts = experts_module.num_experts
         self.view_cls = view_cls
-        self.group = group
         self.expert_modules = nn.ModuleList(
             [
-                QuantGatedMLP(
-    args,
-    self.view_cls(
-        self.packed_experts,
-        expert_idx,
-        hidden_attr="hidden_dim",
-        intermediate_attr="intermediate_dim",
-        materialize=False),
-         group=group)
+                QuantGatedMLP(args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=False))
                 for expert_idx in range(self.num_experts)
             ]
         )
 
     def build_ptq_expert_module(self, expert_idx: int):
-        return QuantGatedMLP(self.args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim",
-                             intermediate_attr="intermediate_dim", materialize=True), group=self.group)
+        return QuantGatedMLP(self.args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=True))
 
     def iter_ptq_expert_modules(self):
         for expert_idx in range(self.num_experts):
             yield self.build_ptq_expert_module(expert_idx)
 
-    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor,
-                top_k_weights: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor, top_k_weights: torch.Tensor) -> torch.Tensor:
         final_hidden_states = torch.zeros_like(hidden_states)
         if top_k_index.numel() == 0:
             return final_hidden_states

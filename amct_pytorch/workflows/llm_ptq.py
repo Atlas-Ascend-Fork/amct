@@ -149,13 +149,7 @@ class LlmPtqWorkflow:
 
     def _run_blockwise(self, solver_cls):
         results = {}
-        end_block_idx = min(self.args.end_block_idx, self.pipeline.num_layers)
-        if end_block_idx < self.args.end_block_idx:
-            logger.warning(
-                f"end_block_idx {self.args.end_block_idx} exceeds model num layers "
-                f"{self.pipeline.num_layers}; clamped to {end_block_idx}"
-            )
-        for layer_idx in range(self.args.start_block_idx, end_block_idx):
+        for layer_idx in range(self.args.start_block_idx, self.args.end_block_idx):
             logger.info("PTQ block {}", layer_idx)
             block = self.pipeline.build_quant_block(layer_idx)
             units = list(self.pipeline.iter_ptq_units(layer_idx, block))
@@ -166,12 +160,6 @@ class LlmPtqWorkflow:
 
             layer_results = {}
             for unit in units:
-                if self._unit_result_path(unit) and os.path.exists(self._unit_result_path(unit)):
-                    logger.info(
-                        f"Skip PTQ unit '{unit.name}' in layer {layer_idx}: "
-                        f"params already exist at {self._unit_result_path(unit)}"
-                    )
-                    continue
                 unit_batch = self._prepare_unit_batch(unit)
                 solver = self._build_block_solver(solver_cls, layer_idx, unit.module)
                 logger.info(f"PTQ unit '{unit.name}' ({unit.kind}) in layer {layer_idx}")
@@ -181,14 +169,11 @@ class LlmPtqWorkflow:
                 layer_results[unit.name] = unit_result
                 self._save_unit_result(unit, unit_result)
 
-                unit.module.to("cpu")
-                del unit_batch, solver, unit_result
-                torch.npu.empty_cache()
-
             results[layer_idx] = layer_results
         return results
 
     def _run_modelwise(self, solver_cls):
+        # TODO ptq for model
         pass
 
     def _build_block_solver(self, solver_cls, layer_idx: int, block):
@@ -217,16 +202,11 @@ class LlmPtqWorkflow:
             return batch[0]
         return batch
 
-    def _unit_result_path(self, unit: PtqUnit) -> str | None:
-        if not self.args.quant_param_dir:
-            return None
+    def _save_unit_result(self, unit: PtqUnit, result: Any):
         if unit.layer_idx is None:
             file_name = f"{unit.save_name}.pt"
         else:
             file_name = f"layer_{unit.layer_idx}_{unit.save_name}.pt"
-        return os.path.join(self.args.quant_param_dir, file_name)
-
-    def _save_unit_result(self, unit: PtqUnit, result: Any):
-        save_path = self._unit_result_path(unit)
+        save_path = os.path.join(self.args.quant_param_dir, file_name)
         torch.save(result, save_path)
         logger.info("Saved PTQ params for layer {} unit '{}' to {}", unit.layer_idx, unit.name, save_path)
