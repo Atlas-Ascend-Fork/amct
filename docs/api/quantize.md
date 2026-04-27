@@ -282,7 +282,7 @@ quantize(model, cfg)
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p13604125511814"><a name="p13604125511814"></a><a name="p13604125511814"></a>string类型，权重量化粒度。</p>
 <a name="ul8259163310191"></a><a name="ul8259163310191"></a><ul id="ul8259163310191"><li>tensor，对应per-tensor。</li><li>channel，对应per-channel。</li><li>group，对应per-group。</li></ul>
-<p id="p10604115511810"><a name="p10604115511810"></a><a name="p10604115511810"></a>量化粒度介绍请参见<a href="../compression_concept.md" target="_blank" rel="noopener noreferrer">压缩概念</a>。</p>
+<p id="p10604115511810"><a name="p10604115511810"></a><a name="p10604115511810"></a>量化粒度介绍请参见<a href="../compression_concepts.md" target="_blank" rel="noopener noreferrer">压缩概念</a>。</p>
 </td>
 </tr>
 <tr id="row1460485515186"><td class="cellrowborder" valign="top" width="11.04%" headers="mcps1.1.5.1.1 "><p id="p1260495514181"><a name="p1260495514181"></a><a name="p1260495514181"></a>-</p>

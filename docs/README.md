@@ -4,7 +4,7 @@
 模型压缩的核心的方法包括量化、剪枝、知识蒸馏和低秩分解等。
 
 量化，是将FP32/FP16/BF16等高精度数据转为INT8/FP8/INT4/FP4等低精度数据，通过减少每个参数的比特数，降低存储占用与内存带宽，同时利用硬件低精度计算单元实现推理加速。
-根据优化对象的不同，可以将量化分为权重量化、激活量化和KV-cache量化。上述关于压缩特性的概念解释请参见[压缩概念](./compression_concept.md)。
+根据优化对象的不同，可以将量化分为权重量化、激活量化和KV-cache量化。上述关于压缩特性的概念解释请参见[压缩概念](./compression_concepts.md)。
 
 ## AMCT量化流程
 
@@ -180,7 +180,7 @@ amct.accuracy_based_auto_calibration(
 
 训练后量化接口调用流程如下图所示：
 
-![](./figures/PTQ_interface.png "训练后量化接口调用流程")
+![](./figures/ptq_interface.png "训练后量化接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，工具使用分为如下场景：
 
@@ -330,7 +330,7 @@ amct.accuracy_based_auto_calibration(
 
 量化感知训练接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理。量化感知训练使用的量化算法请参见[算法介绍](algorithm_brief.md)。
 
-![](./figures/QAT_interface.png "接口调用流程-0")
+![](./figures/qat_interface.png "接口调用流程-0")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 

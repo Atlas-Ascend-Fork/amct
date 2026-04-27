@@ -38,7 +38,7 @@ AMCT（Ascend Model Compression Toolkit，简称AMCT）是一款昇腾AI处理�
 
 若您希望深入了解AMCT工具的使用方法，请参见介绍：
 
-- [压缩概念介绍](docs/compression_concept.md)：介绍压缩特性相关的概念，比如什么是量化，什么是稀疏等。
+- [压缩概念介绍](docs/compression_concepts.md)：介绍压缩特性相关的概念，比如什么是量化，什么是稀疏等。
 - [压缩特性介绍](docs/README.md)：介绍AMCT工具支持的压缩特性。
 - [压缩接口介绍](docs/api/README.md)：介绍使用的压缩接口。
 - [压缩算法介绍](docs/algorithm_brief.md)：介绍AMCT压缩过程中使用的算法，比如AWQ、GPTQ等。
