@@ -77,7 +77,7 @@ create_quant_retrain_config(config_file, model, input_data, config_defination=No
 <td class="cellrowborder" valign="top" width="7.290000000000001%" headers="mcps1.1.4.1.2 "><p id="p1027410568437"><a name="p1027410568437"></a><a name="p1027410568437"></a>输入</p>
 </td>
 <td class="cellrowborder" valign="top" width="80.34%" headers="mcps1.1.4.1.3 "><p id="p17143647122018"><a name="p17143647122018"></a><a name="p17143647122018"></a>含义：简易配置文件。</p>
-<p id="p827435611439"><a name="p827435611439"></a><a name="p827435611439"></a>基于retrain_config_pytorch.proto文件生成的简易配置文件quant.cfg，*.proto文件所在路径为：<em id="i12274856104314"><a name="i12274856104314"></a><a name="i12274856104314"></a><span id="ph244511481409"><a name="ph244511481409"></a><a name="ph244511481409"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。*.proto文件参数解释以及生成的<em id="i1127455694315"><a name="i1127455694315"></a><a name="i1127455694315"></a>quant</em>.cfg简易量化配置文件样例请参见<a href="../context/量化感知训练简易配置文件.md">量化感知训练简易配置文件</a>。</p>
+<p id="p827435611439"><a name="p827435611439"></a><a name="p827435611439"></a>基于retrain_config_pytorch.proto文件生成的简易配置文件quant.cfg，*.proto文件所在路径为：<em id="i12274856104314"><a name="i12274856104314"></a><a name="i12274856104314"></a><span id="ph244511481409"><a name="ph244511481409"></a><a name="ph244511481409"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。*.proto文件参数解释以及生成的<em id="i1127455694315"><a name="i1127455694315"></a><a name="i1127455694315"></a>quant</em>.cfg简易量化配置文件样例请参见<a href="../context/qat_config.md">量化感知训练简易配置文件</a>。</p>
 <p id="p1275756114320"><a name="p1275756114320"></a><a name="p1275756114320"></a>默认值：None。</p>
 <p id="p3275175644316"><a name="p3275175644316"></a><a name="p3275175644316"></a>数据类型：string</p>
 </td>
@@ -140,7 +140,7 @@ amct.create_quant_retrain_config(config_file="./configs/config.json",
                             input_data=input_data)
 ```
 
-落盘文件说明：生成JSON格式的量化感知训练配置文件，样例如下（重新执行量化感知训练时，该接口输出的配置文件将会被覆盖），参数解释请参见[量化感知训练配置参数](../context/量化感知训练配置参数.md)。
+落盘文件说明：生成JSON格式的量化感知训练配置文件，样例如下（重新执行量化感知训练时，该接口输出的配置文件将会被覆盖），参数解释请参见[量化感知训练配置参数](../context/qat_config_param.md)。
 
 ```json
 {

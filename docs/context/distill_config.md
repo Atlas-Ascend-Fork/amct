@@ -176,7 +176,7 @@ distill\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" width="17.20827917208279%" headers="mcps1.2.6.1.4 "><p id="p5443722123810"><a name="p5443722123810"></a><a name="p5443722123810"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="49.14508549145086%" headers="mcps1.2.6.1.5 "><p id="p6442152212388"><a name="p6442152212388"></a><a name="p6442152212388"></a>ULQ数据量化算法配置。算法介绍请参见<a href="../算法介绍.md">ULQ数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="49.14508549145086%" headers="mcps1.2.6.1.5 "><p id="p6442152212388"><a name="p6442152212388"></a><a name="p6442152212388"></a>ULQ数据量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">ULQ数据量化算法</a>。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0240188735_row10956202614283"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p2442102217388"><a name="p2442102217388"></a><a name="p2442102217388"></a>optional</p>
@@ -274,7 +274,7 @@ distill\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" width="17.20827917208279%" headers="mcps1.2.6.1.4 "><p id="p95101128153814"><a name="p95101128153814"></a><a name="p95101128153814"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="49.14508549145086%" headers="mcps1.2.6.1.5 "><p id="p185096281385"><a name="p185096281385"></a><a name="p185096281385"></a>ARQ权重量化算法配置。算法介绍请参见<a href="../算法介绍.md">ARQ权重量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="49.14508549145086%" headers="mcps1.2.6.1.5 "><p id="p185096281385"><a name="p185096281385"></a><a name="p185096281385"></a>ARQ权重量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">ARQ权重量化算法</a>。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0240188735_row8300152716336"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p12509142812387"><a name="p12509142812387"></a><a name="p12509142812387"></a>optional</p>
@@ -303,7 +303,7 @@ distill\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" width="17.20827917208279%" headers="mcps1.2.6.1.4 "><p id="p15001528133810"><a name="p15001528133810"></a><a name="p15001528133810"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="49.14508549145086%" headers="mcps1.2.6.1.5 "><p id="p150072810380"><a name="p150072810380"></a><a name="p150072810380"></a>ULQ权重量化算法配置。算法介绍请参见<a href="../算法介绍.md">ULQ数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="49.14508549145086%" headers="mcps1.2.6.1.5 "><p id="p150072810380"><a name="p150072810380"></a><a name="p150072810380"></a>ULQ权重量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">ULQ数据量化算法</a>。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0240188735_row1710933263612"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p44991328163811"><a name="p44991328163811"></a><a name="p44991328163811"></a>optional</p>

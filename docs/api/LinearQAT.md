@@ -87,7 +87,7 @@
 </td>
 <td class="cellrowborder" valign="top" width="8.25%" headers="mcps1.2.4.1.2 "><p id="zh-cn_topic_0000001511339104_p1892951920388"><a name="zh-cn_topic_0000001511339104_p1892951920388"></a><a name="zh-cn_topic_0000001511339104_p1892951920388"></a>输入</p>
 </td>
-<td class="cellrowborder" valign="top" width="79.84%" headers="mcps1.2.4.1.3 "><p id="p8612203016312"><a name="p8612203016312"></a><a name="p8612203016312"></a>含义：量化配置，配置参考样例如下，量化配置参数的具体说明请参见<a href="../context/单算子模式量化配置参数.md">量化配置参数说明</a>。</p>
+<td class="cellrowborder" valign="top" width="79.84%" headers="mcps1.2.4.1.3 "><p id="p8612203016312"><a name="p8612203016312"></a><a name="p8612203016312"></a>含义：量化配置，配置参考样例如下，量化配置参数的具体说明请参见<a href="../context/singleop_config.md">量化配置参数说明</a>。</p>
 <pre class="screen" id="zh-cn_topic_0000001511339104_screen168684451264"><a name="zh-cn_topic_0000001511339104_screen168684451264"></a><a name="zh-cn_topic_0000001511339104_screen168684451264"></a>config = {
     "retrain_enable":true,
     "retrain_data_config": {
@@ -133,7 +133,7 @@
 </td>
 <td class="cellrowborder" valign="top" width="8.21%" headers="mcps1.2.4.1.2 "><p id="p385255363313"><a name="p385255363313"></a><a name="p385255363313"></a>输入</p>
 </td>
-<td class="cellrowborder" valign="top" width="79.91%" headers="mcps1.2.4.1.3 "><p id="p7788541163313"><a name="p7788541163313"></a><a name="p7788541163313"></a>含义：量化配置。配置参考样例如下，量化配置参数的具体说明请参见<a href="../context/单算子模式量化配置参数.md">量化配置参数说明</a>。</p>
+<td class="cellrowborder" valign="top" width="79.91%" headers="mcps1.2.4.1.3 "><p id="p7788541163313"><a name="p7788541163313"></a><a name="p7788541163313"></a>含义：量化配置。配置参考样例如下，量化配置参数的具体说明请参见<a href="../context/singleop_config.md">量化配置参数说明</a>。</p>
 <pre class="screen" id="screen178520531333"><a name="screen178520531333"></a><a name="screen178520531333"></a>config = {
     "retrain_enable":true,
     "retrain_data_config": {

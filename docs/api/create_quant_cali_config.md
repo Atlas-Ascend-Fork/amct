@@ -83,7 +83,7 @@ create_quant_cali_config(config_file,model,quant_layers=None,config_defination=N
 <td class="cellrowborder" valign="top" width="8.18918108189181%" headers="mcps1.1.4.1.2 "><p id="p1027410568437"><a name="p1027410568437"></a><a name="p1027410568437"></a>输入</p>
 </td>
 <td class="cellrowborder" valign="top" width="78.91210878912109%" headers="mcps1.1.4.1.3 "><p id="p55493456496"><a name="p55493456496"></a><a name="p55493456496"></a>含义：量化简易配置文件。</p>
-<p id="p827435611439"><a name="p827435611439"></a><a name="p827435611439"></a>基于quant_calibration_config_pytorch.proto生成的简易配置文件quant.cfg，*.proto文件所在路径为：<em id="i12274856104314"><a name="i12274856104314"></a><a name="i12274856104314"></a><span id="ph244511481409"><a name="ph244511481409"></a><a name="ph244511481409"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。*.proto文件参数解释以及生成的quant.cfg简易量化配置文件样例请参见<a href="../context/KV-Cache量化简易配置文件.md">KV Cache量化简易配置文件</a>。</p>
+<p id="p827435611439"><a name="p827435611439"></a><a name="p827435611439"></a>基于quant_calibration_config_pytorch.proto生成的简易配置文件quant.cfg，*.proto文件所在路径为：<em id="i12274856104314"><a name="i12274856104314"></a><a name="i12274856104314"></a><span id="ph244511481409"><a name="ph244511481409"></a><a name="ph244511481409"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。*.proto文件参数解释以及生成的quant.cfg简易量化配置文件样例请参见<a href="../context/kv_cache_config.md">KV Cache量化简易配置文件</a>。</p>
 <p id="p1275756114320"><a name="p1275756114320"></a><a name="p1275756114320"></a>默认值：None</p>
 <p id="p3275175644316"><a name="p3275175644316"></a><a name="p3275175644316"></a>数据类型：string</p>
 </td>
