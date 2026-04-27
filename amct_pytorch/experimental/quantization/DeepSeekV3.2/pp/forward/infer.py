@@ -130,11 +130,11 @@ def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_di
 
     device = torch.device(f'npu:{layer_idxes[0] % num_npus}')
     inps = torch.load(os.path.join(output_dir, f'layer_{layer_idxes[0] - 1}_out.pkl'),
-                      weights_only=False, map_location=device)
+                      weights_only=True, map_location=device)
     attention_mask = torch.load(
-        os.path.join(output_dir, 'attention_mask.pkl'), weights_only=False, map_location=device)
+        os.path.join(output_dir, 'attention_mask.pkl'), weights_only=True, map_location=device)
     position_ids = torch.load(
-        os.path.join(output_dir, 'position_ids.pkl'), weights_only=False, map_location=device)
+        os.path.join(output_dir, 'position_ids.pkl'), weights_only=True, map_location=device)
 
     outs = [[] for _ in range(len(layer_idxes))]
 
