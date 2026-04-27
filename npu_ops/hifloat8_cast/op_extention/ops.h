@@ -14,8 +14,7 @@
 // limitations under the License.
 // ----------------------------------------------------------------------------
 
-#ifndef OPS_H
-#define OPS_H
+#pragma once
 
 #include <torch/extension.h>
 
@@ -24,5 +23,3 @@ namespace ascend_kernel {
 at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode);
 
 }
-
-#endif
