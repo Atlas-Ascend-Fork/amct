@@ -28,21 +28,44 @@ __all__ = [
 ]
 
 from amct_pytorch.common.utils.registry_factory import Registry, RegistryItem
-from amct_pytorch.common.models import (
-    BaseModelAdapter, ModelRegistry, ClassicAdapterRegistry,
-    get_adapter, register_adapter
-)
-from amct_pytorch.algorithms.registry_factory import (
-    QUANT_ALGO_REGISTRY, ALGO_REGISTRY,
-    register_quant_algo, register_all_algorithms
-)
-from amct_pytorch.common.datasets import BaseDataProvider, CalibrationDataProvider
-from amct_pytorch.common.evaluate import BaseEvaluator
-from amct_pytorch.classic import quantize, convert, algorithm_register
-from amct_pytorch.common.config import (
-    INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG,
-    INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG,
-    HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG,
-    MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch import *
+try:
+    from amct_pytorch.common.models import (
+        BaseModelAdapter, ModelRegistry, ClassicAdapterRegistry,
+        get_adapter, register_adapter
+    )
+except ImportError:
+    BaseModelAdapter = ModelRegistry = ClassicAdapterRegistry = None
+    get_adapter = register_adapter = None
+try:
+    from amct_pytorch.algorithms.registry_factory import (
+        QUANT_ALGO_REGISTRY, ALGO_REGISTRY,
+        register_quant_algo, register_all_algorithms
+    )
+except ImportError:
+    QUANT_ALGO_REGISTRY = ALGO_REGISTRY = None
+    register_quant_algo = register_all_algorithms = None
+try:
+    from amct_pytorch.common.datasets import BaseDataProvider, CalibrationDataProvider
+except ImportError:
+    BaseDataProvider = CalibrationDataProvider = None
+try:
+    from amct_pytorch.common.evaluate import BaseEvaluator
+except ImportError:
+    BaseEvaluator = None
+try:
+    from amct_pytorch.classic import quantize, convert, algorithm_register
+except ImportError:
+    quantize = convert = algorithm_register = None
+try:
+    from amct_pytorch.common.config import (
+        INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG,
+        INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG,
+        HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG,
+        MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG
+    )
+except ImportError:
+    pass
+try:
+    from amct_pytorch.classic.ptq.graph_based.amct_pytorch import *
+except ImportError:
+    pass
