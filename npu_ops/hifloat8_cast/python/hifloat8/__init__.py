@@ -1,20 +1,27 @@
-"""
-HiFloat8 编解码接口
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
 
-提供简洁的 Python 接口，自动推断数据类型。
-
-使用示例:
-    from hifloat8 import encode_to_hifloat8, decode_from_hifloat8
-    
-    y = encode_to_hifloat8(x_fp32)  # 自动识别 FP32→HiF8
-    z = decode_from_hifloat8(y)     # 默认输出 FP32
-"""
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 
 import os
 import torch
 import torch_npu
 
-_lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "build", "libhifloat8_cast_ops.so")
+_lib_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), \
+    "build", "libhifloat8_cast_ops.so")
 if not os.path.exists(_lib_path):
     _lib_path = os.path.join(os.getcwd(), "build", "libhifloat8_cast_ops.so")
 
