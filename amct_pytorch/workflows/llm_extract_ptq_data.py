@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+from tqdm import tqdm
+from loguru import logger
+
+from amct_pytorch.common.datasets.preproc import get_pileval
+from amct_pytorch.common.models.llm import register_llm_models
+from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+
+
+class LlmExtractPtqDataWorkflow:
+
+    def __init__(self, args):
+        self.args = args
+        self.seq_len = args.seq_len
+        self.nsamples = args.nsamples
+        if len(args.quant_target) != 1:
+            raise ValueError("extract_ptq_data only supports a single quant_target.")
+        self.quant_target = args.quant_target[0]
+        self.device = args.device
+        self.pipeline = None
+        self.data_provider = None
+        self.model_name = self.args.model_name
+
+    def setup(self):
+        ensure_log_dir(self.args)
+        self._register_components()
+        self.pipeline = self._build_pipeline()
+        sink_id, _ = setup_run_logging(self.args, "extract_ptq_data")
+        return sink_id
+
+    def run(self):
+        sink_id = self.setup()
+        results = self._run_blockwise()
+        logger.remove(sink_id)
+        return results
+
+    def _register_components(self):
+        register_llm_models()
+
+    def _build_pipeline(self):
+        model_cls = MODEL_REGISTRY.get(self.model_name)
+        return model_cls(self.args)
+
+    def _run_blockwise(self):
+        tokenizer = self.pipeline.tokenizer
+        hook_name = (
+            "input_layernorm"
+            if self.quant_target in ("attn", "attn-linear", "attn-cache")
+            else "post_attention_layernorm"
+        )
+        samples = get_pileval(tokenizer, self.nsamples, seq_len=self.seq_len)
+        logger.info(
+            "Loaded {} calibration samples for extract_ptq_data with hook_name={}.",
+            len(samples),
+            hook_name,
+        )
+        inter_io = self.pipeline.do_embedding_forward(samples, hook_name=hook_name)
+        for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):
+            inter_io = self.pipeline.do_block_forward(layer_idx, inter_io, hook_name=hook_name)
