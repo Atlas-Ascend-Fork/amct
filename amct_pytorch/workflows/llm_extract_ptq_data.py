@@ -45,17 +45,16 @@ class LlmExtractPtqDataWorkflow:
 
     def _run_blockwise(self):
         tokenizer = self.pipeline.tokenizer
-        attn_hook_name = getattr(self.pipeline, "attn_norm_name", "input_layernorm")
-        ffn_hook_name = getattr(self.pipeline, "ffn_norm_name", "post_attention_layernorm")
         hook_name = (
-            attn_hook_name
+            "input_layernorm"
             if self.quant_target in ("attn", "attn-linear", "attn-cache")
-            else ffn_hook_name
+            else "post_attention_layernorm"
         )
         samples = get_pileval(tokenizer, self.nsamples, seq_len=self.seq_len)
         logger.info(
-            "Loaded {} calibration samples for extract_ptq_data.",
+            "Loaded {} calibration samples for extract_ptq_data with hook_name={}.",
             len(samples),
+            hook_name,
         )
         inter_io = self.pipeline.do_embedding_forward(samples, hook_name=hook_name)
         for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):

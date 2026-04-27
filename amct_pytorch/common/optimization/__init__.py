@@ -1,5 +1,3 @@
-__all__ = ["register_solvers", "SOLVER_REGISTRY"]
-
 from amct_pytorch.common.utils.registry_factory import Registry
 
 SOLVER_REGISTRY = Registry("solver")
@@ -15,3 +13,6 @@ def register_solvers():
     from .blockwise_solver import BlockwiseSolver  # noqa: F401
 
     _REGISTERED = True
+
+
+__all__ = ["register_solvers", "SOLVER_REGISTRY"]

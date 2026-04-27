@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from amct_pytorch.common.models.llm.common.base import PtqUnit
 
-
 @dataclass
 class BlockPtqBatch:
     layer_idx: int
@@ -68,6 +67,7 @@ class LlmPtqDataProvider:
                 if isinstance(gt, (tuple, list)):
                     gt = gt[0]
                 gts.append(gt.detach())
+        # ori_module.to("cpu")
         torch.npu.empty_cache()
         return torch.cat(gts, dim=0)
 

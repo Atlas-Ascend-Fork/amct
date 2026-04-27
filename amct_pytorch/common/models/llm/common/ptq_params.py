@@ -96,7 +96,7 @@ class PtqParamStore:
             if strict:
                 raise FileNotFoundError(f"PTQ params not found for unit '{unit.name}': {param_path}")
             return False
-        params = torch.load(param_path, weight_only=True, map_location="cpu")
+        params = torch.load(param_path, map_location="cpu")
         self.ptq_param_handler.load_unit(unit, params)
         return True
 

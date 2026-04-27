@@ -9,7 +9,7 @@ from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
     targets=("weight",),
 )
 class LWC(torch.nn.Module):
-    def __init__(self, args, w_bits=None):
+    def __init__(self, args):
         super().__init__()
         self.args = args
         self.w_size = args.w_size

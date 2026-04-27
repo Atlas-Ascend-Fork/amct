@@ -1,15 +1,14 @@
-from typing import Optional
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Optional
+
 from transformers.models.longcat_flash.modeling_longcat_flash import (
     LongcatFlashDecoderLayer,
     LongcatFlashMLA,
     LongcatFlashMLP,
     apply_rotary_pos_emb_interleave,
 )
-
 try:
     from transformers.models.longcat_flash.modeling_longcat_flash import is_flash_attention_requested
 except ImportError:
@@ -17,24 +16,23 @@ except ImportError:
         return getattr(config, "_attn_implementation", None) == "flash_attention_2"
 
 from amct_pytorch.algorithms.quant import AlgoBuildContext
-from amct_pytorch.common.models.llm.common.attention_forward import scaled_dot_product_attention
-from amct_pytorch.common.models.llm.common.quant_apply import (
-    PlainLinear,
-    QuantGatedMLP,
-)
-from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
+from amct_pytorch.common.models.llm.common.attention_forward import scaled_dot_product_attention
+from amct_pytorch.common.models.llm.common.quant_apply import (
+    QuantGatedMLP,
+    PlainLinear,
+)
 
 
 class QuantLongcatMLP(QuantGatedMLP):
-    pass
+    def __init__(self, quant_args, mlp_module: LongcatFlashMLP):
+        super().__init__(quant_args, mlp_module)
 
 
 class LongcatPackedExpertLinearView:
-    def __init__(self, experts_module, expert_idx: int, weight_name: str,
-                 start: int | None = None, end: int | None = None):
+    def __init__(self, experts_module, expert_idx: int, weight_name: str, start: int | None = None, end: int | None = None):
         super().__init__()
         self.experts_module = experts_module
         self.expert_idx = expert_idx
@@ -81,6 +79,8 @@ class LongcatPackedExpertView(nn.Module):
 class LongcatUnpackedExperts(nn.Module):
     def __init__(self, args, experts_module):
         super().__init__()
+        # Keep the packed expert container registered so block.to(device)
+        # moves the underlying expert weights together with the unpacked views.
         self.packed_experts = experts_module
         self.num_routed_experts = experts_module.num_routed_experts
         self.total_experts = experts_module.total_experts
@@ -91,8 +91,7 @@ class LongcatUnpackedExperts(nn.Module):
         expert_modules.extend(nn.Identity() for _ in range(self.total_experts - self.num_routed_experts))
         self.expert_modules = nn.ModuleList(expert_modules)
 
-    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor,
-                top_k_weights: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor, top_k_weights: torch.Tensor) -> torch.Tensor:
         final_hidden_states = torch.zeros_like(hidden_states)
         if top_k_index.numel() == 0:
             return final_hidden_states
@@ -118,73 +117,47 @@ class QuantLongcatMLA(LongcatFlashMLA):
     def __init__(self, quant_args, attn_module: LongcatFlashMLA):
         super().__init__(attn_module.config, attn_module.layer_idx)
         self.quant_args = quant_args
-        ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
         self.hidden_size = attn_module.config.hidden_size
         self.value_dim = attn_module.num_heads * attn_module.v_head_dim
 
-        bits = quant_args.bit_policy["attn-linear"]
-        kv_a, kv_b, o = bits["kv_a_proj_with_mqa"], bits["kv_b_proj"], bits["o_proj"]
         if hasattr(attn_module, "q_proj"):
-            q = bits["q_proj"]
-            self.q_proj = QuantLinear(
-    quant_args,
-    attn_module.q_proj,
-    w_bits=q.w,
-    name="q_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_proj)
+            self.q_proj = QuantLinear(quant_args, attn_module.q_proj, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
         else:
-            q_a, q_b = bits["q_a_proj"], bits["q_b_proj"]
-            self.q_a_proj = QuantLinear(
-    quant_args,
-    attn_module.q_a_proj,
-    w_bits=q_a.w,
-    name="q_a_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_a_proj)
+            self.q_a_proj = QuantLinear(quant_args, attn_module.q_a_proj, name="q_a_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_a_proj)
             self.q_a_layernorm = attn_module.q_a_layernorm
-            self.q_b_proj = QuantLinear(
-    quant_args,
-    attn_module.q_b_proj,
-    w_bits=q_b.w,
-    name="q_b_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_b_proj)
+            self.q_b_proj = QuantLinear(quant_args, attn_module.q_b_proj, name="q_b_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_b_proj)
 
         self.kv_a_proj_with_mqa = (
-            QuantLinear(quant_args, attn_module.kv_a_proj_with_mqa, w_bits=kv_a.w, name="kv_a_proj_with_mqa")
+            QuantLinear(
+                quant_args,
+                attn_module.kv_a_proj_with_mqa,
+                name="kv_a_proj_with_mqa",
+            )
             if self.enable_attn_linear else PlainLinear(attn_module.kv_a_proj_with_mqa)
         )
         self.kv_a_layernorm = attn_module.kv_a_layernorm
-        self.kv_b_proj = QuantLinear(
-    quant_args,
-    attn_module.kv_b_proj,
-    w_bits=kv_b.w,
-    name="kv_b_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.kv_b_proj)
-        self.o_proj = QuantLinear(
-    quant_args,
-    attn_module.o_proj,
-    w_bits=o.w,
-    name="o_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.o_proj)
+        self.kv_b_proj = QuantLinear(quant_args, attn_module.kv_b_proj, name="kv_b_proj") if self.enable_attn_linear else PlainLinear(attn_module.kv_b_proj)
+        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
         self.qk_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.bit_policy.cache_bits("q"),
-            r_bits=quant_args.bit_policy.cache_bits("k"),
+            l_bits=quant_args.q_bits,
+            r_bits=quant_args.k_bits,
             left_dim=self.qk_head_dim,
             right_dim=self.qk_head_dim,
         )
         self.pv_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.bit_policy.cache_bits("p"),
-            r_bits=quant_args.bit_policy.cache_bits("v"),
+            l_bits=quant_args.p_bits,
+            r_bits=quant_args.v_bits,
             right_dim=self.v_head_dim,
         )
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.inp_afq = ActivationQuantizer(quant_args, kv_a.a)
-            self.o_proj_afq = ActivationQuantizer(quant_args, o.a)
+            self.inp_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
+            self.o_proj_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
         else:
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
@@ -212,17 +185,9 @@ class QuantLongcatMLA(LongcatFlashMLA):
         hidden_states = self.inp_afq(hidden_states)
 
         if hasattr(self, "q_proj"):
-            q_states = self.q_proj(
-    hidden_states,
-    structure_transform=self.input_transform).view(query_shape).transpose(
-        1,
-         2)
+            q_states = self.q_proj(hidden_states, structure_transform=self.input_transform).view(query_shape).transpose(1, 2)
         else:
-            q_states = self.q_b_proj(
-    self.q_a_layernorm(
-        self.q_a_proj(
-            hidden_states,
-             structure_transform=self.input_transform)))
+            q_states = self.q_b_proj(self.q_a_layernorm(self.q_a_proj(hidden_states, structure_transform=self.input_transform)))
             q_states = q_states.view(query_shape).transpose(1, 2)
 
         q_pass, q_rot = torch.split(q_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)

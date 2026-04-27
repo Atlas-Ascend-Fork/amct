@@ -19,7 +19,6 @@ import torch.nn as nn
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 
-
 class QuantizedMatmul(nn.Module):
     def __init__(self, quant_args, l_bits=8, r_bits=8, left_dim=None, right_dim=None):
         super(QuantizedMatmul, self).__init__()

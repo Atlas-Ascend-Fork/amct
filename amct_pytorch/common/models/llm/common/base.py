@@ -1,33 +1,27 @@
 import os
-from abc import ABCMeta
-
 import torch
-from accelerate import init_empty_weights
-from compressed_tensors.utils.safetensors_load import get_weight_mappings
-from loguru import logger
-from safetensors import safe_open
+from abc import ABCMeta
 from tqdm import tqdm
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-
-from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, save_ptq_kwargs
+from accelerate import init_empty_weights
+from loguru import logger
+from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM
+from safetensors import safe_open
+from compressed_tensors.utils.safetensors_load import get_weight_mappings
+from amct_pytorch.common.datasets.ptq_io import save_ptq_inps, save_ptq_kwargs, load_ptq_inps
 from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
-from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
+from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, make_ptq_unit, PtqUnit
+
+
 
 
 class BaseModel(metaclass=ABCMeta):
-    # Names of the pre-attn / pre-ffn norms on a single decoder block.
-    # HuggingFace convention; adapters with different naming override these.
-    attn_norm_name = "input_layernorm"
-    ffn_norm_name = "post_attention_layernorm"
-
     def __init__(self, args):
         self.args = args
         self.quant_target = args.quant_target
         self.position_ids = None
         self.attention_mask = None
         self.position_embeddings = None
-        self.input_ids = None
         self.model_path = self.args.model
         self.config = AutoConfig.from_pretrained(
             self.model_path, trust_remote_code=True)
@@ -79,8 +73,8 @@ class BaseModel(metaclass=ABCMeta):
         lm_head_prefix = f"{base}embed_tokens." if tie else "lm_head."
         return [
             (self.model.model.embed_tokens, f"{base}embed_tokens."),
-            (self.model.model.norm, f"{base}norm."),
-            (self.model.lm_head, lm_head_prefix),
+            (self.model.model.norm,         f"{base}norm."),
+            (self.model.lm_head,            lm_head_prefix),
         ]
 
     def load_embed_state_dict(self):
@@ -93,18 +87,22 @@ class BaseModel(metaclass=ABCMeta):
         weight_map = getattr(self, "_weight_map", None)
         if weight_map is None:
             weight_map = get_weight_mappings(self.model_path)
+        # Find files containing this layer's weights
         file_list = set()
         for weight_name, file_name in weight_map.items():
             if weight_name.startswith(prefix):
                 file_list.add(file_name)
+        # Load weights from files
         state_dict = {}
         for file_path in file_list:
             full_path = os.path.join(self.model_path, file_path)
             with safe_open(full_path, framework="pt", device="cpu") as f:
                 for key in f.keys():
                     if key.startswith(prefix):
+                        # Remove prefix from key
                         new_key = key[len(prefix):]
                         state_dict[new_key] = f.get_tensor(key)
+        # Remove rotary_emb.inv_freq if present (not needed for inference)
         state_dict.pop('self_attn.rotary_emb.inv_freq', None)
         return state_dict
 
@@ -159,6 +157,7 @@ class BaseModel(metaclass=ABCMeta):
         layers[0] = layers[0].bfloat16()
         layers[0] = Catcher(layers[0], outs)
         with torch.no_grad():
+            # Loop through each batch
             for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc=f"Embedding Processing..."):
                 try:
                     self.model(inputs)
@@ -187,22 +186,16 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
-    def _dispatch_block(self, module):
-        return module.to(self.args.device)
-
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
         block = self._build_block_for_forward(layer_idx, use_quant_block=use_quant_block)
         if use_quant_block:
-            from amct_pytorch.common.models.llm.common.quant_apply import (
-                set_model_act_quant_state,
-                set_model_weight_quant_state,
-            )
+            from amct_pytorch.common.models.llm.common.quant_apply import set_model_act_quant_state, set_model_weight_quant_state
             set_model_weight_quant_state(block, enable_quant)
             set_model_act_quant_state(block, enable_quant)
 
-        block = self._dispatch_block(block).eval()
+        block = block.to(self.args.device).eval()
         if use_quant_block and hook_name is None:
             from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
@@ -213,14 +206,10 @@ class BaseModel(metaclass=ABCMeta):
             self.register_block_forward_hooks(block, hook_name, hooks, act_stat)
 
         block_kwargs = self.get_block_forward_kwargs()
-        input_ids_list = self.input_ids if self.input_ids is not None else [None] * len(samples)
         with torch.no_grad():
-            for sample, ids in zip(samples, input_ids_list):
+            for sample in samples:
                 sample = sample.to(self.args.device)
-                call_kwargs = dict(block_kwargs)
-                if ids is not None:
-                    call_kwargs["input_ids"] = ids.to(self.args.device)
-                out = block(sample, **call_kwargs)
+                out = block(sample, **block_kwargs)
                 out = out[0] if isinstance(out, (tuple, list)) else out
                 outs.append(out.to("cpu"))
 
@@ -228,19 +217,7 @@ class BaseModel(metaclass=ABCMeta):
             for hook in hooks:
                 hook.remove()
             self.save_block_hook_inputs(act_stat, hook_name, layer_idx)
-        try:
-            from accelerate.hooks import remove_hook_from_module
-            remove_hook_from_module(block, recurse=True)
-        except Exception:
-            pass
-        block = None
-        self._release_block_caches()
         return outs
-
-    def _release_block_caches(self):
-        import gc
-        gc.collect()
-        torch.npu.empty_cache()
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         pass
@@ -307,9 +284,8 @@ class BaseModel(metaclass=ABCMeta):
         try:
             for target_name, param_dir in target_specs:
                 if not param_dir:
-                    logger.debug(
-                        "No PTQ param dir specified for target '{}' at layer {}; "
-                        "fallback to direct quant for this target.",
+                    logger.warning(
+                        "No PTQ param dir specified for target '{}' at layer {}; fallback to direct quant for this target.",
                         target_name,
                         layer_idx,
                     )
@@ -321,7 +297,7 @@ class BaseModel(metaclass=ABCMeta):
                 results[target_name] = result
 
                 if result["loaded"] and result["missing"]:
-                    logger.debug(
+                    logger.warning(
                         "Partially loaded PTQ params for layer {} target '{}' from '{}'; missing units: {}.",
                         layer_idx,
                         target_name,
@@ -329,9 +305,8 @@ class BaseModel(metaclass=ABCMeta):
                         ", ".join(result["missing"]),
                     )
                 elif not result["loaded"]:
-                    logger.debug(
-                        "No PTQ params loaded for layer {} target '{}' from '{}'; "
-                        "fallback to direct quant for this target.",
+                    logger.warning(
+                        "No PTQ params loaded for layer {} target '{}' from '{}'; fallback to direct quant for this target.",
                         layer_idx,
                         target_name,
                         param_dir,

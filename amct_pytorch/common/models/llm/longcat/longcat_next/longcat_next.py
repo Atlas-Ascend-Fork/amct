@@ -10,7 +10,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 
 
 @MODEL_REGISTRY.register(
-    name="longcat_next",
+    name="longcat-next",
     task="llm",
     family="longcat",
     description="LongCat-Next model adapter",

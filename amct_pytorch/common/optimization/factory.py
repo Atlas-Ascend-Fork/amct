@@ -67,7 +67,7 @@ def build_lr_scheduler(args: Any, optimizer):
         return torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=t_max,
-            eta_min=base_lr * 1e-3,
+            eta_min=base_lr*1e-3,
         )
 
     if scheduler_name == "step":

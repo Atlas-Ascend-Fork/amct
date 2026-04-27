@@ -28,7 +28,7 @@ def _save_tensor(path: str, tensors: list[torch.Tensor]):
 
 
 @MODEL_REGISTRY.register(
-    name="longcat_lite",
+    name="longcat-lite",
     task="llm",
     family="longcat",
     description="LongCat-Flash-Lite model adapter",
@@ -270,5 +270,5 @@ class LongcatLite(BaseModel):
         path = Path(data_dir) / f"block_{unit.layer_idx}_{input_name}_in.pkl"
         if not path.exists():
             raise FileNotFoundError(f"PTQ inputs not found for unit '{unit.name}': {path}")
-        cached_inps = torch.load(path, weight_only=True)
+        cached_inps = torch.load(path)
         return cached_inps, kwargs

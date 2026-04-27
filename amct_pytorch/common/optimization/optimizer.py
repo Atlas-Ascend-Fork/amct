@@ -5,8 +5,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-# This code is originally from:
-# https://github.com/JunLi-Galios/Optimization-on-Stiefel-Manifold-via-Cayley-Transform/blob/master/stiefel_optimizer.py
+# This code is originally from: https://github.com/JunLi-Galios/Optimization-on-Stiefel-Manifold-via-Cayley-Transform/blob/master/stiefel_optimizer.py
 
 import random
 
@@ -167,6 +166,7 @@ class SGDG(Optimizer):
 
                     p_new = Cayley_loop(unity.t(), W, V, alpha)
                     V_new = torch.mm(W, unity.t())  # n-by-p
+                    #                     check_identity(p_new.t())
                     p.data.copy_(p_new.view(p.size()))
                     V.copy_(V_new)
 
