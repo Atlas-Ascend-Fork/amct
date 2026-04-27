@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp -rv /data2/l00968832/AMCT-Q/src/quantization/dtypes/. /data2/l00968832/amct_llm/amct_pytorch/quantization/dtypes/)",
+      "Bash(cp -rv /data2/l00968832/AMCT-Q/src/quantization/modules/. /data2/l00968832/amct_llm/amct_pytorch/quantization/modules/)",
+      "Bash(cp -rv /data2/l00968832/AMCT-Q/src/workflows /data2/l00968832/amct_llm/amct_pytorch/workflows)",
+      "Bash(rm -rf /data2/l00968832/amct_llm/amct_pytorch/workflows/__pycache__)",
+      "Bash(rm -rf /data2/l00968832/amct_llm/amct_pytorch/algorithms/workflow)"
+    ]
+  }
+}
