@@ -24,11 +24,11 @@
 ## 公网地址声明
 本项目代码中包含的公网地址声明如下所示：
 
-|      类型      |                                           开源代码地址                                           |                            文件名                             |             公网IP地址/公网URL地址/域名/邮箱地址/压缩文件地址             |                   用途说明                    |
-| :------------: |:------------------------------------------------------------------------------------------:|:----------------------------------------------------------| :---------------------------------------------------------- |:-----------------------------------------|
-|  依赖  | 不涉及  | cmake/protobuf.cmake | https://gitcode.com/cann-src-third-party/protobuf/releases/download/v3.13.0/protobuf-3.13.0.tar.gz | 从gitcode下载protobuf源码，作用编译依赖 |
-|  依赖  | 不涉及  | cmake/protobuf.cmake | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1/abseil-cpp-20230802.1.tar.gz | 从gitcode下载abseil源码，作用编译依赖 |
-|  依赖  | 不涉及  | cmake/makeself-fetch.cmake | https://gitcode.com/cann-src-third-party/makeself/releases/download/release-2.5.0-patch1.0/makeself-release-2.5.0-patch1.tar.gz | 从gitcode下载makeself源码，作用编译依赖 |
+| 类型 | 开源代码地址 | 文件名　　　　　　　　　　　　　 | 公网IP地址/公网URL地址/域名/邮箱地址/压缩文件地址　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 | 用途说明　　　　　　　　　　　　　　　　　|
+| :----:| :------------:| :---------------------------------| :--------------------------------------------------------------------------------------------------------------| :------------------------------------------|
+| 依赖 | 不涉及　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/protobuf/releases/download/v3.13.0/protobuf-3.13.0.tar.gz　　　　　　| 从gitcode下载protobuf源码，作用编译依赖　 |
+| 依赖 | 不涉及　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1/abseil-cpp-20230802.1.tar.gz | 从gitcode下载abseil源码，作用编译依赖　　 |
+| 依赖 | 不涉及　　　 | cmake/fetch_cann_cmake.cmake　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-002.tar.gz　　　　　　　　　　　　　　　 | 从gitcode下载cann cmake源码，作用编译依赖 |
 ---
 
 ## 漏洞机制说明
@@ -38,22 +38,22 @@
 
 ### A-文件（夹）各场景权限管控推荐最大值
 
-| 类型           | Linux权限参考最大值 |
-| -------------- | ---------------  |
-| 用户主目录                        |   750（rwxr-x---）            |
-| 程序文件(含脚本文件、库文件等)       |   550（r-xr-x---）             |
-| 程序文件目录                      |   550（r-xr-x---）            |
-| 配置文件                          |  640（rw-r-----）             |
-| 配置文件目录                      |   750（rwxr-x---）            |
-| 日志文件(记录完毕或者已经归档)        |  440（r--r-----）             |
-| 日志文件(正在记录)                |    640（rw-r-----）           |
-| 日志文件目录                      |   750（rwxr-x---）            |
-| Debug文件                         |  640（rw-r-----）         |
-| Debug文件目录                     |   750（rwxr-x---）  |
-| 临时文件目录                      |   750（rwxr-x---）   |
-| 维护升级文件目录                  |   770（rwxrwx---）    |
-| 业务数据文件                      |   640（rw-r-----）    |
-| 业务数据文件目录                  |   750（rwxr-x---）      |
-| 密钥组件、私钥、证书、密文文件目录    |  700（rwx—----）      |
-| 密钥组件、私钥、证书、加密密文        | 600（rw-------）      |
-| 加解密接口、加解密脚本            |   500（r-x------）        |
+| 类型 | Linux权限参考最大值 |
+| --- | --- |
+| 用户主目录 | 750（rwxr-x---） |
+| 程序文件(含脚本文件、库文件等) | 550（r-xr-x---） |
+| 程序文件目录 | 550（r-xr-x---） |
+| 配置文件 | 640（rw-r-----） |
+| 配置文件目录 | 750（rwxr-x---） |
+| 日志文件(记录完毕或者已经归档) | 440（r--r-----） |
+| 日志文件(正在记录) | 640（rw-r-----） |
+| 日志文件目录 | 750（rwxr-x---） |
+| Debug文件 | 640（rw-r-----） |
+| Debug文件目录 | 750（rwxr-x---） |
+| 临时文件目录 | 750（rwxr-x---） |
+| 维护升级文件目录 | 770（rwxrwx---） |
+| 业务数据文件 | 640（rw-r-----） |
+| 业务数据文件目录 | 750（rwxr-x---） |
+| 密钥组件、私钥、证书、密文文件目录 | 700（rwx---） |
+| 密钥组件、私钥、证书、加密密文 | 600（rw-------） |
+| 加解密接口、加解密脚本 | 500（r-x------） |

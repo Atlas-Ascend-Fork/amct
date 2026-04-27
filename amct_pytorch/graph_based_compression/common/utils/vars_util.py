@@ -24,9 +24,7 @@ from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
 
 INT4_BIT = 4
 INT8_BIT = 8
-INT16_BIT = 16
 FP16_BIT = 16
-FEATURE_LIST = ['approximate', 'ptq']
 # ge::DataType value
 DT_INT8 = 2
 DT_INT16 = 6
@@ -39,7 +37,6 @@ DATA_OFFSET_RANGE_INT16 = [-32768, 32767]
 
 SUPPORT_ACT_ALGO = ('ifmr', 'hfmg')
 DEFAULT_NUM_BITS = 8
-KV_QUANT_SUPPORT_NUM_BITS = (8,)
 
 # RNN constant
 RNN_LAYER_TYPE = ('LSTM', 'GRU')

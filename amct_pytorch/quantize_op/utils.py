@@ -20,7 +20,7 @@ import torch
 
 from amct_pytorch.utils.quant_util import quant_dequant_tensor, quant_tensor
 from amct_pytorch.utils.quant_util import convert_to_per_group_shape
-from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8
+from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8, QUANTILE_EMA_ALPHA, QUANTILE_EMA_BETA
 
 FLT_EPSILON = 1.192092896e-7
 QUANT_MAX_SCOPE = {
@@ -146,25 +146,6 @@ def get_weight_min_max_by_granularity(weight_data, quant_config):
     return weight_min, weight_max
 
 
-def convert_to_dst_shape(input_tensor, dst_shape):
-    """
-    Converts a flattened tensor back to its destination 2D shape by truncating excess elements.
- 
-    Parameters:
-        input_tensor (Tensor): Input tensor to be reshaped (can be padded or extended)
-        dst_shape (tuple): destination 2D shape (rows, columns) to restore
- 
-    Returns:
-        Tensor: Reshaped tensor matching the destination dimensions
-    """
-    if input_tensor.shape == dst_shape:
-        return input_tensor
-
-    out_tensor = input_tensor.reshape(input_tensor.shape[0], \
-        input_tensor.shape[1] * input_tensor.shape[2])[:dst_shape[0], :dst_shape[1]]
-    return out_tensor
-
-
 def get_int_quant_scope(data_type, symmetric, abs_max_is_negative=False):
     """
     Get the quantization step for integer data types.
@@ -243,3 +224,17 @@ def apply_progressive_quant(weight, scale_w1, scale_w2, group_size=32):
         dtype=torch_npu.float4_e2m1fn_x2)
     # npu_op need quantized_weight.t for fp8*fp4
     return quantized_weight.transpose(-1, -2)
+
+
+def calculate_quantile_ema_scale(previous_scale, current_scale, alpha=QUANTILE_EMA_ALPHA, beta=QUANTILE_EMA_BETA):
+    """
+    Function: calculate exponential moving average scale for quantile quantization
+    Args:
+        previous_scale: previous scale value
+        current_scale: current scale value
+        alpha: weight for previous scale (default 0.99)
+        beta: weight for current scale (default 0.01)
+    Returns:
+        ema_scale: exponential moving average scale
+    """
+    return alpha * previous_scale + beta * current_scale

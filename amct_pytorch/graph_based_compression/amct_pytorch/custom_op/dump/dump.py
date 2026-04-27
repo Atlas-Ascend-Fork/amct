@@ -15,65 +15,76 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+"""
+Dump tensor data to binary files.
+"""
 
+import os
+import numpy as np
+import torch
 from torch import nn
-from ....amct_pytorch.custom_op import dump_forward
 from ....amct_pytorch.utils.log import LOGGER
-
-LAYER_NAME = 'layer_name'
 
 
 class DUMP(nn.Module):
-    """
-    The class to dump the inputs data. and directly pass the inputs.
-    """
+    """Dump tensor data to binary files and pass through inputs."""
+    _DTYPE_INDEX = {torch.float32: 0, torch.float64: 1, torch.int32: 2}
+
     def __init__(self, layers_name, dump_config):
         """
-        Function: Init Function.
+        Initialize DUMP module.
 
         Args:
-        layers_name: list of string, length 1. The name of dump data's prefix.
-        dump_config: DumpConfig class, contains `dump_dir` and `batch_num`.
+            layers_name: List of layer names (only first element used).
+            dump_config: Config with dump_dir and batch_num attributes.
         """
         super().__init__()
-        self.params = {}
-        self.params['dump_dir'] = dump_config.dump_dir
-        self.params['layer_name'] = layers_name[0]
-
+        self.dump_dir = dump_config.dump_dir
+        self.layer_name = layers_name[0]
         self.batch_num = dump_config.batch_num
-
         self.cur_batch = 0
 
     def forward(self, inputs):
         """
-        Function: DUMP foward funtion.
+        Dump input tensor and return it unchanged.
 
         Args:
-        inputs: tensor. Dump support float and double and int,
-                kFloat32/kFloat64/kInt32 in C++.
+            inputs: Tensor to dump (float32/float64/int32).
 
-        Return:
-        inputs: tensor, do not process, just dump.
+        Returns:
+            Input tensor unchanged.
         """
         self.cur_batch += 1
+        if self.batch_num != -1 and self.cur_batch > self.batch_num:
+            return inputs
 
-        if self.batch_num == -1 or \
-            self.cur_batch <= self.batch_num:
-
-            dump_param = self.params
-
-            name_prefix = "{}_activation".format(dump_param.get(LAYER_NAME))
-            status = dump_forward(inputs,
-                        dump_param.get('dump_dir'),
-                        name_prefix,
-                        self.cur_batch)
-            if status == 0:
-                LOGGER.logi("Do layer [{}] data dump {} / {} succeeded!"
-                    .format(self.params.get(LAYER_NAME), self.cur_batch, self.batch_num), 'DUMP')
-            elif status == -65519:
-                raise RuntimeError("NOT SUPPORT THE DATA TYPE!")
-            else:
-                raise RuntimeError("Do layer {} data dump {} / {} failed!"
-                .format(self.params.get(LAYER_NAME), self.cur_batch, self.batch_num))
+        self._dump(inputs)
+        LOGGER.logi(f"[{self.layer_name}] dump {self.cur_batch}/{self.batch_num}", 'DUMP')
 
         return inputs
+
+    def _dump(self, tensor):
+        """
+        Dump tensor to binary file.
+
+        Binary format: type_index(float32) + dim_count(float32) + shape(float32*) + data
+        Type mapping: 0=float32, 1=float64, 2=int32
+
+        Args:
+            tensor: Tensor to dump (float32/float64/int32).
+
+        Raises:
+            RuntimeError: If dtype is unsupported.
+        """
+        if tensor.dtype not in self._DTYPE_INDEX:
+            raise RuntimeError("Unsupported dtype!")
+
+        data = tensor.clone().cpu().contiguous()
+        header = [self._DTYPE_INDEX[tensor.dtype], len(data.shape), *data.shape]
+
+        os.makedirs(self.dump_dir, exist_ok=True)
+        path = os.path.join(self.dump_dir, f"{self.layer_name}_activation_batch{self.cur_batch}.bin")
+
+        with open(path, 'wb') as f:
+            f.write(np.array(header, dtype=np.float32).tobytes())
+            f.write(data.numpy().tobytes())

@@ -273,14 +273,6 @@ class RNNRetrainQuant(nn.Module):
             initial_h = hx[0]
         else:
             initial_h = hx # 1, B, H
-            
-        if self.sequence_length > 1:
-            # cal quant factors with all hx
-            outputs = self.quant_module.replaced_module.forward(inputs, hx)
-            h_all = outputs[0]
-            if self.quant_module.replaced_module.batch_first: 
-                h_all = h_all.permute(1, 0, 2) # B, T, H -> T, B, H
-            initial_h = torch.cat((initial_h, h_all[:-1, :, :]), dim=0)
 
         is_init_h, act_h_retrain_params = self._do_ifmr(initial_h, self.init_module_h)
         if is_init_h:

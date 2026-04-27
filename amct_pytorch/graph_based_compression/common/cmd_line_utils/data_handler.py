@@ -90,23 +90,3 @@ def load_bin_data(data_file_name, data_types, data_shapes):
         raise TypeError('Unsupported data type[{}]!'.format(data_types))
 
     return np.fromfile(data_file_name, np_type_mapping.get(data_types)).reshape(data_shapes)
-
-
-def tmp_dir():
-    '''
-    Function: get tmp dir name
-    Return: name
-    '''
-    now = datetime.now(tz=timezone(offset=timedelta(hours=8)))
-    secret_generator = secrets.SystemRandom()
-    return str(secret_generator.randint(10000, 99999)) + '_' + now.strftime("%Y%m%d%H%M%S")
-
-
-def delete_tmp_dir(tmp):
-    '''
-    Function: delete tmp dir
-    Return: name
-    '''
-    level = os.environ.get('AMCT_LOG_LEVEL')
-    if level is None or level.upper() != 'DEBUG':
-        delete_dir(tmp)
