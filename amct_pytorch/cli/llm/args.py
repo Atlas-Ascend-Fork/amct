@@ -67,10 +67,11 @@ def parser_gen(command=None):
     parser = argparse.ArgumentParser()
 
     # General Arguments
-    parser.add_argument('--model', type=str, default='deepseek-ai/DeepSeek-V3.2',
-                        help='Model to load.')
-    parser.add_argument('--model_name', type=str, default='deepseek-ai/DeepSeek-V3.2',
-                        help='Model to load.')
+    parser.add_argument('--model', type=str, required=True,
+                        help='Path or HuggingFace repo id of the model to load.')
+    parser.add_argument('--model_name', type=str, required=True,
+                        help='Registry key used to dispatch the model adapter '
+                             '(e.g. qwen3, qwen3_moe, deepseek-v3.2, glm5).')
     parser.add_argument('--device', type=str, default='npu:0',
                         help='Device to use.') # granularity
     parser.add_argument('--granularity', type=str, default='model',
