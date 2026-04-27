@@ -1,20 +1,19 @@
 [tool.pytest.ini_options]
-testpaths = ["tests/unit_test", "tests/amct_pytorch"]
+testpaths = ["amct_pytorch/unit_test"]
 markers = [
     "cpu: tests that run on CPU only and are fast (default)",
     "npu: tests that require an Ascend NPU",
     "slow: tests that take more than a few seconds",
 ]
 addopts = "-ra"
-env = [
-    "TORCH_DEVICE_BACKEND_AUTOLOAD=0",
-]
 
 [tool.coverage.run]
 source = ["amct_pytorch"]
 omit = [
+    "*/classic/*",
     "*/experimental/*",
     "*/cli/*",
+    "*/unit_test/*",
     "**/__init__.py",
     "*/common/models/llm/deepseek/*",
 ]
