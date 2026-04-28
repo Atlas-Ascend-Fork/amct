@@ -19,6 +19,12 @@ import os
 import torch
 import torch_npu
 
+
+__all__ = [
+    'encode_to_hifloat8',
+    'decode_from_hifloat8',
+]
+
 _lib_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), \
     "build", "libhifloat8_cast_ops.so")
@@ -114,9 +120,3 @@ def decode_from_hifloat8(
     
     cast_mode = dtype_to_castmode[dtype]
     return torch.ops.npu.hifloat8_cast(x, cast_mode)
-
-
-__all__ = [
-    'encode_to_hifloat8',
-    'decode_from_hifloat8',
-]
