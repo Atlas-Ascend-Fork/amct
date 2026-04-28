@@ -18,7 +18,7 @@ import torch
 from amct_pytorch.utils.check_params import check_parameters_in_schema
 
 
-class NpuQuantizationLinear(torch.nn.Module):
+class NpuHIF8Linear(torch.nn.Module):
     """
     Function: Customized torch.nn.Module of the npu quantized linear operator.
     APIs: forward
@@ -37,10 +37,11 @@ class NpuQuantizationLinear(torch.nn.Module):
         self.npu_quantize_act_type = torch_npu.hifloat8
         self.x2_dtype = torch_npu.hifloat8
         
-        self._init_weight_quant(quant_module, device)
+        self._init_weight_quant(quant_module)
         if quant_module.bias is None:
             self.bias = None
-        self.register_buffer('bias', quant_module.bias)
+        else:
+            self.register_buffer('bias', quant_module.bias)
         self.is_new_torch_npu = True if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype') else False
         
     def _init_weight_quant(self, quant_module):
@@ -51,7 +52,7 @@ class NpuQuantizationLinear(torch.nn.Module):
         scale = (weight_max / 16.0).to(torch.float32)
         self.register_buffer('deq_scale', scale)
         import torch_npu
-        hif8_quantized_tensor = torch_npu.npu_quantize(dequant_weight, scale, None, dtype=torch_npu.hifloat8)
+        hif8_quantized_tensor = torch_npu.npu_quantize(dequant_weight, scale.flatten(), None, dtype=torch_npu.hifloat8)
         self.register_buffer('quantized_weight', hif8_quantized_tensor)
 
     def forward(self, x):
