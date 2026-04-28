@@ -1,24 +1,25 @@
 # DeepSeek-V4 模型量化转换工具
 
-deepseekv4模型attention模块采用FP8数据类型，moe模块采用MXFP4数据类型，Atlas A2、Atlas A3系列产品不支持FP8/MXFP4
-本特性将FP8/MXFP4转换为int8数据类型，支撑开发者在Atlas A2、Atlas A3系列产品上体验deepseekv4模型的推理效果
+deepseekv4模型attention模块采用FP8数据类型，moe模块采用MXFP4数据类型，Atlas A2、Atlas A3系列产品不支持FP8/MXFP4。
+
+本特性将FP8/MXFP4转换为int8数据类型，支撑开发者在Atlas A2、Atlas A3系列产品上体验deepseekv4模型的推理效果。
 
 ## 使用方法
 
-1. 下载deepseekv4模型到本地
-2. 依赖安装
-```bash
-pip install -r requirements.txt
-```
-3. 执行模型转换脚本
-```bash
-python convert_model.py \
-    --input_fp8_hf_path <FP8模型路径> \
-    --output_hf_path <输出路径> \
-    --quant_type <量化类型>
-```
-4. 得到目标类型(e.g. int8)权重和量化参数
-5. 基于Atlas A2、Atlas A3系列产品进行推理验证
+1. 下载deepseekv4模型到本地。
+2. 依赖安装。
+    ```bash
+    pip install -r requirements.txt
+    ```
+3. 执行模型转换脚本。
+    ```bash
+    python convert_model.py \
+        --input_fp8_hf_path <FP8模型路径> \
+        --output_hf_path <输出路径> \
+        --quant_type <量化类型>
+    ```
+4. 得到目标类型(e.g. int8)权重和量化参数。
+5. 基于Atlas A2、Atlas A3系列产品进行推理验证。
 
 ### 参数说明
 
@@ -67,7 +68,7 @@ python convert_model.py \
 | `weight_block_size` | 权重块大小（MX 格式） |
 
 
-## 说明
+## 量化说明
 
 ### 量化层
 
