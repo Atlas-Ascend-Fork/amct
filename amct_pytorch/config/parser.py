@@ -201,7 +201,7 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
             act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
                         quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
             wts_type = quant_config.quant_cfg.weights_cfg.quant_type
-            if quant_config.quant_cfg.kvcache_cfg.quant_type:
+            if quant_config.quant_cfg.kvcache_cfg.quant_kv:
                 check_kv_config(quant_config, algo)
             kvcache_type = quant_config.quant_cfg.kvcache_cfg.quant_type if \
                         quant_config.quant_cfg.kvcache_cfg.quant_input else 'NOT_QUANTIZE'

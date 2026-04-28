@@ -146,8 +146,8 @@ class InputsCfgField():
 
 class KvcacheCfgField():
     def __init__(self, config):
-        self.quant_input = config.get('enable_quant', True)
-        if self.quant_input:
+        self.quant_kv = config.get('enable_quant', True)
+        if self.quant_kv:
             self.quant_type = config.get('type')
             self.symmetric = config.get('symmetric')
             self.strategy = config.get('strategy')
@@ -156,7 +156,7 @@ class KvcacheCfgField():
         self.value = self.set_value()
     
     def set_value(self):
-        if not self.quant_input:
+        if not self.quant_kv:
             return {'enable_quant': False}
         if self.quant_type is None:
             return None
