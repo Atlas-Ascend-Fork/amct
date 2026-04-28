@@ -63,6 +63,44 @@ INT8_SMOOTHQUANT_CFG = {
 }
 
 
+INT8_INT4_MINMAX_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'int4',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'minmax'},
+    'skip_layers': {'lm_head'}
+}
+
+
+INT8_INT4_SMOOTHQUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'int4',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'int8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+    'skip_layers': {'lm_head'}
+}
+
+
 INT8_MINMAX_WEIGHT_QUANT_CFG = {
     'batch_num': 1,
     'quant_cfg': {

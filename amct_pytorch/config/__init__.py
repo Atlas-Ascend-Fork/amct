@@ -19,6 +19,8 @@ __all__ = [
     'INT4_AWQ_WEIGHT_QUANT_CFG',
     'INT4_GPTQ_WEIGHT_QUANT_CFG',
     'INT8_SMOOTHQUANT_CFG',
+    'INT8_INT4_MINMAX_CFG',
+    'INT8_INT4_SMOOTHQUANT_CFG',
     'INT8_MINMAX_WEIGHT_QUANT_CFG',
     'HIFP8_OFMR_CFG',
     'FP8_OFMR_CFG',
@@ -31,7 +33,8 @@ __all__ = [
 ]
 
 from amct_pytorch.config.config import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
-from amct_pytorch.config.config import INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG
+from amct_pytorch.config.config import INT8_SMOOTHQUANT_CFG, INT8_INT4_MINMAX_CFG
+from amct_pytorch.config.config import INT8_INT4_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG
 from amct_pytorch.config.config import HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG
 from amct_pytorch.config.config import HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG
 from amct_pytorch.config.config import MXFP4_AWQ_WEIGHT_QUANT_CFG
