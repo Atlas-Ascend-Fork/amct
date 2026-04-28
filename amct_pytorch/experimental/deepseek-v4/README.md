@@ -68,7 +68,7 @@ deepseekv4模型attention模块采用FP8数据类型，moe模块采用MXFP4数�
 | `weight_block_size` | 权重块大小（MX 格式） |
 
 
-## 量化说明
+## 转换说明
 
 ### 量化层
 
@@ -104,18 +104,18 @@ deepseekv4模型attention模块采用FP8数据类型，moe模块采用MXFP4数�
 ### 权重转换
 
 原始模型权重格式：
-- Attention: FP8，每 128×128 权重块共享一个 scale
-- MoE: MXFP4，两个 4bit 值打包存储于一个 uint8，每 32 元素（按列）共享一个 scale
+- Attention: FP8，每 128×128 权重块共享一个 scale。
+- MoE: MXFP4，两个 4bit 值打包存储于一个 uint8，每 32 元素（按列）共享一个 scale。
 
 遍历 safetensor 文件中的权重张量：
 
-1. **缩放因子**（`.scale` 后缀）：遍历时跳过，处理对应权重时按需读取
+1. **缩放因子**（`.scale` 后缀）：遍历时跳过，处理对应权重时按需读取。
 
 2. **FP8/MXFP4 权重**（`.weight` 后缀）：
-   - FP8: dtype 为浮点类型，直接读取
-   - MXFP4: dtype=int8，需解包（提取低/高4位，映射到 E2M1 浮点值），元素数量翻倍
-   - 读取对应的 scale，扩展至与 weight 相同维度，逐元素相乘得到 BF16
-   - 若需要量化且层名在量化列表中，重新量化
+   - FP8: dtype 为浮点类型，直接读取。
+   - MXFP4: dtype=int8，需解包（提取低/高4位，映射到 E2M1 浮点值），元素数量翻倍。
+   - 读取对应的 scale，扩展至与 weight 相同维度，逐元素相乘得到 BF16。
+   - 若需要量化且层名在量化列表中，重新量化。
 
-3. **其他权重**：转换为 BF16
+3. **其他权重**：转换为 BF16。
 
