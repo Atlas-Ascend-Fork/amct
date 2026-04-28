@@ -34,7 +34,7 @@ import os
 import torch
 import torch_npu
 
-_lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "build", "libhifloat8_cast_ops.so")
+_lib_path = os.path.join((os.path.dirname(__file__)), "../../../build/libhifloat8_cast_ops.so")
 if not os.path.exists(_lib_path):
     _lib_path = os.path.join(os.getcwd(), "build", "libhifloat8_cast_ops.so")
 
