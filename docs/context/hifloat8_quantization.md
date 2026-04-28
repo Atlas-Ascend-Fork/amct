@@ -125,8 +125,8 @@ Cast 是最简单的量化算法，无需校准数据，直接将高精度浮点
 
 **转换流程：**
 
-1. 激活数据，从float16/bfloat16直转到hifloat8。
-2. 权重数据，离线统计weight最大值，缩放到hifloat8高精度表示范围内。
+1. 激活数据，从 Float16/BFloat16 直转到 HiFloat8 。
+2. 权重数据，离线统计weight最大值，缩放到 HiFloat8 高精度表示范围内。
 
 **适用场景：**
 
@@ -194,6 +194,7 @@ OFMR（Output FeatureMap Reconstruct）是一种基于输出误差最小化的�
 2. **候选搜索**：遍历候选量化因子集合，对每个候选因子执行量化推理。
 3. **误差评估**：计算量化输出与原始输出的误差（如 MSE、余弦相似度等）。
 4. **最优选择**：选取误差最小的量化因子作为最终参数。
+   ![OFMR算法原理](../figures/OFMRquant.png)
 
 **适用场景：**
 
@@ -211,5 +212,3 @@ OFMR（Output FeatureMap Reconstruct）是一种基于输出误差最小化的�
 
 - 需要校准数据集，计算成本较高。
 - 搜索空间较大时，耗时较长。
-
-![OFMR算法原理](../figures/OFMRquant.png)
