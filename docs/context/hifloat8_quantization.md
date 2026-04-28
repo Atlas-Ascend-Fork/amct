@@ -194,7 +194,8 @@ OFMR（Output FeatureMap Reconstruct）是一种基于输出误差最小化的�
 2. **候选搜索**：遍历候选量化因子集合，对每个候选因子执行量化推理。
 3. **误差评估**：计算量化输出与原始输出的误差（如 MSE、余弦相似度等）。
 4. **最优选择**：选取误差最小的量化因子作为最终参数。
-   ![OFMR算法原理](../figures/OFMRquant.png)
+
+    ![OFMR算法原理](../figures/OFMRquant.png)
 
 **适用场景：**
 
