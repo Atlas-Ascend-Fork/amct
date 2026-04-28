@@ -4,9 +4,9 @@ HiFloat8 数据类型转换算子，支持 FP32/FP16/BF16 ↔ HiFloat8 双向转
 
 ## 功能
 
-支持 6 种转换：
+支持 6 种转换模式：
 
-| 功能 | 说明 |
+| 模式 | 说明 |
 |------|------|
 | FP32 → HiFloat8 | 32-bit 浮点压缩为 8-bit |
 | FP16 → HiFloat8 | 16-bit 浮点压缩为 8-bit |
@@ -47,28 +47,28 @@ y = encode_to_hifloat8(x_fp32)  # 自动识别类型
 
 **示例**：
 ```python
-z = decode_from_hifloat8(y)                  # 默认 FP32
-z = decode_from_hifloat8(y, torch.float16)   # 输出 FP16
+z = decode_from_hifloat8(y)                  # 默认输出 FP32
+z = decode_from_hifloat8(y, torch.float16)   # 指定输出 FP16
 ```
 
 ## 文件结构
 
 ```
+hifloat8_cast/
 ├── op_kernel/
+│   ├── hifloat8_cast_impl.h      核心算法 + KernelHiFloat8Cast 类
 │   ├── hifloat8_cast_tiling.h    Tiling 常量 + 结构体
-│   ├── hifloat8_cast_kernel.asc  Kernel 实现
-│   └── hifloat8_cast_wrapper.asc Kernel + Torch binding
+│   ├── hifloat8_cast_kernel.asc  Kernel 入口（直调）
+│   └── hifloat8_cast_wrapper.asc Kernel 入口 + Torch binding
 ├── op_extension/
-│   ├── register.cpp              TORCH_LIBRARY 注册
-│   └── ops.h                     函数声明
+│   ├── ops.h                     PyTorch C++ 扩展函数声明
+│   └── register.cpp              TORCH_LIBRARY 注册
 ├── python/
 │   └── hifloat8/
 │       └── __init__.py           Python 接口
 ├── scripts/
 │   └── test_python_api.py        Python 接口测试
-├── docs/perf/
-│   └ summary.md                  性能报告
-├── CMakeLists.txt                构建
+├── CMakeLists.txt                构建配置
 └── README.md                     本文档
 ```
 
@@ -116,4 +116,4 @@ python3 scripts/test_python_api.py
 测试内容：
 - 自动类型推断
 - 类型验证
-- 编码-解码精度 100%
+- 编码-解码精度验证
