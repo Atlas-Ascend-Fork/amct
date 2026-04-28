@@ -149,7 +149,7 @@ def mock_npu(self):
 
 
 def mock_npu_trans_quant_param(scale, offset=None):
-    if not offset:
+    if offset is None:
         return scale
     return scale, offset
 
