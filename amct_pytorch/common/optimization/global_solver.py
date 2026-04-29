@@ -1,3 +1,11 @@
+from typing import Callable
+
+from torch import nn
+
+from .base_solver import BaseSolver
+from . import SOLVER_REGISTRY
+
+
 @SOLVER_REGISTRY.register(name="global", description="Global calibration solver")
 class GlobalSolver(BaseSolver):
     def __init__(
