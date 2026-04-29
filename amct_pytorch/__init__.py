@@ -38,12 +38,3 @@ from amct_pytorch.common.config import (
     HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG,
     MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
 )
-
-# graph_based PTQ entry points depend on protobuf modules generated at build
-# time (amct_pytorch_proto_compile target). In a pure source checkout the
-# *_pb2.py files are absent, so a source-tree import deliberately swallows the
-# ImportError and lets the rest of the package load.
-try:
-    from amct_pytorch.classic.ptq.graph_based.amct_pytorch import *  # noqa: F401,F403
-except ImportError:
-    pass
