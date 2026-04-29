@@ -1,0 +1,99 @@
+record {
+  key: "conv1"
+  value {
+    scale_d: 0.021255575
+    offset_d: 11
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv2"
+  value {
+    scale_d: 0.003921569
+    offset_d: -128
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv3"
+  value {
+    scale_d: 0.0
+    offset_d: 2147483520
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv4"
+  value {
+    scale_d: 0.014483824
+    offset_d: -128
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv5"
+  value {
+    scale_d: 0.011587059
+    offset_d: 127
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv6"
+  value {
+    scale_d: 0.023084594
+    offset_d: 0
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv7"
+  value {
+    scale_d: 0.003921569
+    offset_d: -128
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv8"
+  value {
+    scale_d: 0.0
+    offset_d: 2147483520
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv9"
+  value {
+    scale_d: 0.014483824
+    offset_d: -128
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "conv10"
+  value {
+    scale_d: 0.011587059
+    offset_d: 127
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
+record {
+  key: "Test_inf_identity"
+  value {
+    scale_d: 0.011587059
+    offset_d: 127
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}

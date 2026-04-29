@@ -1,0 +1,9 @@
+record {
+  key: "conv1"
+  value {
+    scale_d: 0.021255575
+    offset_d: 11
+    scale_w: 0.0025009443
+    offset_w: 0
+  }
+}
