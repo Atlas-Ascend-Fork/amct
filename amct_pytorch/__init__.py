@@ -16,9 +16,6 @@
 # ----------------------------------------------------------------------------
 
 __all__ = [
-    'Registry', 'RegistryItem',
-    'QUANT_ALGO_REGISTRY', 'ALGO_REGISTRY',
-    'register_quant_algo', 'register_all_algorithms',
     'quantize', 'convert', 'algorithm_register',
     'INT4_AWQ_WEIGHT_QUANT_CFG', 'INT4_GPTQ_WEIGHT_QUANT_CFG',
     'INT8_SMOOTHQUANT_CFG', 'INT8_MINMAX_WEIGHT_QUANT_CFG',
@@ -26,11 +23,6 @@ __all__ = [
     'MXFP4_AWQ_WEIGHT_QUANT_CFG', 'HIFP8_CAST_CFG', 'HIFP8_QUANTILE_CFG',
 ]
 
-from amct_pytorch.common.utils.registry_factory import Registry, RegistryItem
-from amct_pytorch.algorithms.registry_factory import (
-    QUANT_ALGO_REGISTRY, ALGO_REGISTRY,
-    register_quant_algo, register_all_algorithms,
-)
 from amct_pytorch.classic import quantize, convert, algorithm_register
 from amct_pytorch.common.config import (
     INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG,
