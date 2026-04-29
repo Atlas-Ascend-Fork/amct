@@ -1,6 +1,12 @@
-__all__ = []
-from amct_pytorch.algorithms.registry_factory import QUANT_ALGO_REGISTRY
-from amct_pytorch.common.optimization.global_solver import GlobalSolver
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -8,18 +14,20 @@ from amct_pytorch.common.optimization.global_solver import GlobalSolver
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-__all__ = ['quantize', 'convert', 'algorithm_register']
-
 from torch import nn
 
 from amct_pytorch.algorithms import AlgorithmRegistry
-from amct_pytorch.classic.ptq.optimizer import (InsertQuantizeModulePass,
-                                                ModelOptimizer,
-                                                ReplaceNpuQuantModulePass)
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import \
-    BaseQuantizeModule
-from amct_pytorch.common.config import parse_config, set_default_config
+from amct_pytorch.common.config import set_default_config, parse_config
 from amct_pytorch.common.utils.check_params import check_params
+from amct_pytorch.classic.ptq.optimizer import (
+    InsertQuantizeModulePass,
+    ModelOptimizer,
+    ReplaceNpuQuantModulePass,
+)
+from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+
+
+__all__ = ['quantize', 'convert', 'algorithm_register']
 
 
 @check_params(model=nn.Module,
