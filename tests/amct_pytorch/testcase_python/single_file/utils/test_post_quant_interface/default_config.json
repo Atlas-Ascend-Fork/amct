@@ -1,0 +1,16 @@
+
+{
+    "batch_num":1,
+    "conv2d":{
+        "act_type":"HIFLOAT8",
+        "wts_type":"HIFLOAT8",
+        "weight_granularity":"PER_TENSOR",
+        "round_mode":"ROUND"
+    },
+    "linear":{
+        "act_type":"HIFLOAT8",
+        "wts_type":"HIFLOAT8",
+        "weight_granularity":"PER_TENSOR",
+        "round_mode":"ROUND"
+    }
+}
