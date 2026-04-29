@@ -76,13 +76,12 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         if isinstance(object_module, deploy_ops[0]):
             LOGGER.logd(f'{module_type.__name__} do not need to invoke convert')
             return
-        if module_type.__name__ == 'FP8Linear':
-            npu_module = deploy_ops[0](object_module)
-        elif type(object_module).__name__ == 'FlatQuantAttention' or type(object_module).__name__ == 'FlatQuantMLP':
-            # We needs to access layernorm and trans from higher level, so it cannot be done within the module
-            # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
-            from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
-            npu_module = get_replacement_module(model, type(object_module).__name__, object_name, object_module)
+
+        deploy_factory = AlgorithmRegistry.deploy_factories.get(module_type)
+        if deploy_factory is not None:
+            # Modules that need access to outer-layer state (e.g. layernorm/trans
+            # for FlatQuant) register a custom factory; classic stays decoupled.
+            npu_module = deploy_factory(model, type(object_module).__name__, object_name, object_module)
         else:
             npu_module = self._get_deploy_module(object_module, module_type)
         

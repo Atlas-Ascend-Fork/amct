@@ -49,5 +49,5 @@ install(DIRECTORY ${BASE_DIR}/dist/ DESTINATION lib)
 add_custom_target(amct_pytorch_clean
   COMMAND cd ${BASE_DIR} && rm -f *.tar.gz
   COMMAND cd ${BASE_DIR} && rm -rf amct_pytorch.egg-info && rm -rf dist && rm -rf build
-  COMMAND cd ${BASE_DIR} && rm -f amct_pytorch/proto/*_pb2.py
+  COMMAND rm -f ${AMCT_TORCH_PROTO_DIR}/*_pb2.py
 )
