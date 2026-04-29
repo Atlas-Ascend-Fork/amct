@@ -14,31 +14,20 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import logging
-import sys
 import unittest
-from unittest.mock import MagicMock, patch
-
+import sys
+from unittest.mock import MagicMock
+from unittest.mock import patch
 import torch
 import torch.nn as nn
-from mock_torch_npu import (
-    mock_npu,
-    mock_npu_dtype_cast,
-    mock_npu_quant_matmul,
-    mock_npu_quantize,
-    mock_npu_weight_quant_batchmatmul,
-)
 from utils import TestModel, TestModelBias
+from mock_torch_npu import mock_npu_dtype_cast, mock_npu, mock_npu_quant_matmul, mock_npu_weight_quant_batchmatmul
+from mock_torch_npu import mock_npu_quantize
 
-from amct_pytorch import convert, quantize
-
-NPU_HIF8_CAST_LINEAR = 'NpuHIF8CastLinear'
-HIFLOAT8 = 'hifloat8'
-CAST_ALGO = 'cast'
+from amct_pytorch import quantize, convert
 
 torch.manual_seed(0)
 
-logger = logging.getLogger(__name__)
 
 class TestCast(unittest.TestCase):
     '''
@@ -49,11 +38,11 @@ class TestCast(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        logger.info('TestCast START!')
+        print('TestCast START!')
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestCast END!')
+        print('TestCast END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -71,18 +60,18 @@ class TestCast(unittest.TestCase):
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {
-                    'type': HIFLOAT8,
+                    'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {CAST_ALGO},
+            'algorithm': {'cast'},
         }
         torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
-        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
         convert(model)
         quant_out = model(self.inputs.npu())
 
@@ -95,18 +84,18 @@ class TestCast(unittest.TestCase):
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {
-                    'type': HIFLOAT8,
+                    'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'channel',
                 },
             },
-            'algorithm': {CAST_ALGO},
+            'algorithm': {'cast'},
         }
         torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
-        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
         convert(model)
         quant_out = model(self.inputs.npu())
     
@@ -119,25 +108,25 @@ class TestCast(unittest.TestCase):
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {
-                    'type': HIFLOAT8,
+                    'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'tensor',
                 },
                 'inputs': {
-                    'type': HIFLOAT8,
+                    'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {CAST_ALGO},
+            'algorithm': {'cast'},
         }
         torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
-        self.assertEqual(type(model.linear1).__name__, NPU_HIF8_CAST_LINEAR)
-        self.assertEqual(type(model.linear2).__name__, NPU_HIF8_CAST_LINEAR)
-        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
+        self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
         convert(model)
         quant_out = model(self.inputs.npu())
     
@@ -150,24 +139,24 @@ class TestCast(unittest.TestCase):
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {
-                    'type': HIFLOAT8,
+                    'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'channel',
                 },
                 'inputs': {
-                    'type': HIFLOAT8,
+                    'type': 'hifloat8',
                     'symmetric': True,
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {CAST_ALGO},
+            'algorithm': {'cast'},
         }
         torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
-        self.assertEqual(type(model.linear1).__name__, NPU_HIF8_CAST_LINEAR)
-        self.assertEqual(type(model.linear2).__name__, NPU_HIF8_CAST_LINEAR)
-        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
+        self.assertEqual(type(model.linear1).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear2).__name__, 'NpuHIF8CastLinear')
+        self.assertEqual(type(model.linear3).__name__, 'NpuHIF8CastLinear')
         convert(model)
         quant_out = model(self.inputs.npu())

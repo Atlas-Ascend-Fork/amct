@@ -18,29 +18,19 @@
 import os
 import unittest
 from unittest import mock
-
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.prune.prune_recorder_helper import (
-    PruneRecordHelper,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration import (
-    retrain_config,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pytorch_pb2,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.prune.filter_prune_helper import (
-    create_filter_prune_helper,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
-    ModuleHelper,
-)
 
-from .utils import models, record_utils
+from .utils import models
+from .utils import record_utils
 
 DEVICE = 'cpu'
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.prune.filter_prune_helper import create_filter_prune_helper
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pytorch_pb2
+from amct_pytorch.graph_based_compression.amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration import retrain_config
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -203,7 +193,6 @@ class FakeRetrainConfig:
 
     def __init__(self):
         super(FakeRetrainConfig, self).__init__()
-        self.prune_layers = None
 
     def set_prune_layers(self, prune_layers):
         self.prune_layers = prune_layers

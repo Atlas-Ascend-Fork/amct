@@ -15,17 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import unittest
 import json
 import os
-import unittest
-
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config import (
-    get_enable_quant_layers,
-    get_quant_layer_config,
-)
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config import get_enable_quant_layers
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.distill_config import get_quant_layer_config
 
 from .utils import models
 

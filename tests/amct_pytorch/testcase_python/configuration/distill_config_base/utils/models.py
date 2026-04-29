@@ -19,16 +19,13 @@
 Generate model for ut.
 """
 from __future__ import print_function
-
 import argparse  #Python 命令行解析工具
-import copy
-
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
+import numpy as np
+import copy
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
     """ save onnx """
@@ -76,7 +73,7 @@ class Net001(nn.Module):
     conv + bn + relu
     """
     def __init__(self):
-        super(Net001, self).__init__()
+        super(Net001,self).__init__()
         # conv + bn
         self.conv1 = nn.Conv2d(2, 16, kernel_size=3, bias=False)
         self.bn1 = nn.BatchNorm2d(16)

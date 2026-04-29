@@ -1,25 +1,19 @@
-import copy
-import os
-import shutil
 import unittest
+import os
+import copy
+import shutil
 from collections import defaultdict
 
+import torch
+from torch import nn
 import numpy as np
 import onnx
 import onnxruntime as ort
-import torch
-from torch import nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.utils import (
-    copy_tensor,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.gru import (
-    GRUQAT,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.lstm import (
-    LSTMQAT,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.utils import copy_tensor
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.gru import GRUQAT
+from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.lstm import LSTMQAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -68,7 +62,7 @@ class TestGRUQAT(unittest.TestCase):
                 qat_module = GRUQAT.from_float(
                     module)
                 set_module(net_gru, name, qat_module)
-        for _ in range(5):
+        for i in range(5):
             ret = net_gru.forward(torch.rand(1, 1, 10))
             self.assertIsNotNone(ret)
 
@@ -79,7 +73,7 @@ class TestGRUQAT(unittest.TestCase):
                 qat_module = GRUQAT.from_float(
                     module)
                 set_module(net_gru, name, qat_module)
-        for _ in range(5):
+        for i in range(5):
             ret = net_gru.forward(torch.rand(1, 2, 10))
             self.assertIsNotNone(ret)
 
@@ -103,7 +97,7 @@ class TestLSTMQAT(unittest.TestCase):
                 qat_module = LSTMQAT.from_float(
                     module)
                 set_module(net_lstm, name, qat_module)
-        for _ in range(5):
+        for i in range(5):
             ret = net_lstm.forward(torch.rand(1, 1, 10))
             self.assertIsNotNone(ret)
     
@@ -114,7 +108,7 @@ class TestLSTMQAT(unittest.TestCase):
                 qat_module = LSTMQAT.from_float(
                     module)
                 set_module(net_lstm, name, qat_module)
-        for _ in range(5):
+        for i in range(5):
             ret = net_lstm.forward(torch.rand(1, 5, 10))
             self.assertIsNotNone(ret)
 

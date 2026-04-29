@@ -15,25 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import logging
 import os
-import shutil
 import sys
 import unittest
+import shutil
+import json
 
 import torch
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
-    ModuleHelper,
-)
-
-logger = logging.getLogger(__name__)
+import amct_pytorch.graph_based_compression.amct_pytorch
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
-
-MATMUL1 = 'matmul1'
 
 class CustomizedModel(torch.nn.Module):
     def __init__(self):
@@ -51,53 +44,50 @@ class CustomizedModel(torch.nn.Module):
 class TestQuantCalibrationInterface(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        logger.info('TestQuantCalibrationInterface start!')
+        print('TestQuantCalibrationInterface start!')
         cls.temp_dir = os.path.join(CUR_DIR, 'temp')
         if not os.path.exists(cls.temp_dir):
             os.mkdir(cls.temp_dir)
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestQuantCalibrationInterface end!')
+        print('TestQuantCalibrationInterface end!')
         if os.path.exists(cls.temp_dir):
             shutil.rmtree(cls.temp_dir)
 
     def test_create_default_config(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {'kv_cache_quant_layers': [MATMUL1, 'matmul2']}
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_config(config_file, model, quant_layers)
+        quant_layers = {'kv_cache_quant_layers': ['matmul1', 'matmul2']}
+        amct_pytorch.graph_based_compression.amct_pytorch.create_quant_cali_config(config_file, model, quant_layers)
 
         with open(config_file) as f:
             config = json.load(f)
-            self.assertIn(MATMUL1, config)
+            self.assertIn('matmul1', config)
             self.assertIn('matmul2', config)
 
     def test_create_config_from_proto(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {'kv_cache_quant_layers': [MATMUL1, 'matmul2']}
+        quant_layers = {'kv_cache_quant_layers': ['matmul1', 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_config(
-            config_file, model, quant_layers, config_proto)
+        amct_pytorch.graph_based_compression.amct_pytorch.create_quant_cali_config(config_file, model, quant_layers, config_proto)
 
         with open(config_file) as f:
             config = json.load(f)
-            self.assertIn(MATMUL1, config)
+            self.assertIn('matmul1', config)
             self.assertIn('matmul2', config)
             self.assertIn('matmul3', config)
 
-            self.assertEqual('hfmg', config.get(MATMUL1).get('kv_data_quant_config').get('act_algo'))
+            self.assertEqual('hfmg', config.get('matmul1').get('kv_data_quant_config').get('act_algo'))
             self.assertEqual('ifmr', config.get('matmul3').get('kv_data_quant_config').get('act_algo'))
 
     def test_create_quant_cali_model(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {'kv_cache_quant_layers': [MATMUL1, 'matmul2']}
+        quant_layers = {'kv_cache_quant_layers': ['matmul1', 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
         record_file = os.path.join(self.temp_dir, 'record.txt')
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_config(
-            config_file, model, quant_layers, config_proto)
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_model(config_file, record_file, model)
+        amct_pytorch.graph_based_compression.amct_pytorch.create_quant_cali_config(config_file, model, quant_layers, config_proto)
+        amct_pytorch.graph_based_compression.amct_pytorch.create_quant_cali_model(config_file, record_file, model)
         self.assertRaises(RuntimeError, ModuleHelper(model).check_amct_op)
-

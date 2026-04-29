@@ -17,16 +17,11 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.kv_cache_quant import (
-    KVCacheQuant,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
-    Recorder,
-)
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.kv_cache_quant import KVCacheQuant
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

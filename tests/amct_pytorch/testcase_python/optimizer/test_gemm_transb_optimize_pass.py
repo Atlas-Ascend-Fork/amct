@@ -15,22 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
 import sys
+import os
 import unittest
 from copy import deepcopy
 
+import json
 import numpy as np
 import torch
+
 from onnx import onnx_pb
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.gemm_transb_optimize_pass import (
-    GemmTransBOptimizePass,
-)
+from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.gemm_transb_optimize_pass import \
+    GemmTransBOptimizePass
 
-FC0 = 'fc0'
 
 class TestInsertQuantPass(unittest.TestCase):
     @classmethod
@@ -55,10 +54,10 @@ class TestInsertQuantPass(unittest.TestCase):
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add fc0
         fc0 = self.graph.node.add()
-        fc0.name = FC0
+        fc0.name = 'fc0'
         fc0.op_type = 'Gemm'
         fc0.input[:] = ['data0', 'fc0.weights', 'fc0.bias']
-        fc0.output[:] = [FC0]
+        fc0.output[:] = ['fc0']
         # add attribute "kernel_shape"
         attr_transb = fc0.attribute.add()
         attr_transb.name = 'transB'
@@ -80,7 +79,7 @@ class TestInsertQuantPass(unittest.TestCase):
         relu1 = self.graph.node.add()
         relu1.name = 'relu1'
         relu1.op_type = 'Relu'
-        relu1.input[:] = [FC0]
+        relu1.input[:] = ['fc0']
         relu1.output[:] = ['output']
         # add output
         graph_output = self.graph.output.add()
@@ -94,13 +93,13 @@ class TestInsertQuantPass(unittest.TestCase):
 
     def test_match_pattern_success(self):
         records = {
-            FC0: {
+            'fc0': {
                 'scale': 1,
                 'offset': 0
             }
         }
         test_model = deepcopy(self.model_proto)
-        fc_node = Graph(test_model).get_node_by_name(FC0)
+        fc_node = Graph(test_model).get_node_by_name('fc0')
         self.assertTrue(GemmTransBOptimizePass(records).match_pattern(fc_node))
 
     def test_match_pattern_not_in_records(self):
@@ -111,31 +110,31 @@ class TestInsertQuantPass(unittest.TestCase):
             }
         }
         test_model = deepcopy(self.model_proto)
-        fc_node = Graph(test_model).get_node_by_name(FC0)
+        fc_node = Graph(test_model).get_node_by_name('fc0')
         self.assertFalse(GemmTransBOptimizePass(records).match_pattern(fc_node))
 
     def test_match_pattern_transb_false(self):
         records = {
-            FC0: {
+            'fc0': {
                 'scale': 1,
                 'offset': 0
             }
         }
         test_model = deepcopy(self.model_proto)
         test_model.graph.node[0].attribute[0].i = 0
-        fc_node = Graph(test_model).get_node_by_name(FC0)
+        fc_node = Graph(test_model).get_node_by_name('fc0')
         self.assertFalse(GemmTransBOptimizePass(records).match_pattern(fc_node))
 
     def test_do_pass_success(self):
         records = {
-            FC0: {
+            'fc0': {
                 'scale': 1,
                 'offset': 0
             }
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        fc_node = graph.get_node_by_name(FC0)
+        fc_node = graph.get_node_by_name('fc0')
         GemmTransBOptimizePass(records).do_pass(graph, fc_node)
         self.assertEqual(fc_node.proto.attribute[0].i, 0)
         weights = graph.get_node_by_name('fc0.weights')
@@ -144,7 +143,7 @@ class TestInsertQuantPass(unittest.TestCase):
 
     def test_do_pass_without_weights(self):
         records = {
-            FC0: {
+            'fc0': {
                 'scale': 1,
                 'offset': 0
             }
@@ -152,7 +151,7 @@ class TestInsertQuantPass(unittest.TestCase):
         test_model = deepcopy(self.model_proto)
         test_model.graph.node[0].input[:] = ['data0']
         graph = Graph(test_model)
-        fc_node = graph.get_node_by_name(FC0)
+        fc_node = graph.get_node_by_name('fc0')
         GemmTransBOptimizePass(records).do_pass(graph, fc_node)
         self.assertEqual(fc_node.proto.attribute[0].i, 1)
         weights = graph.get_node_by_name('fc0.weights')
@@ -161,7 +160,7 @@ class TestInsertQuantPass(unittest.TestCase):
 
     def test_do_pass_with_illegal_weights(self):
         records = {
-            FC0: {
+            'fc0': {
                 'scale': 1,
                 'offset': 0
             }
@@ -169,11 +168,10 @@ class TestInsertQuantPass(unittest.TestCase):
         test_model = deepcopy(self.model_proto)
         test_model.graph.initializer[0].dims[:] = [1, 2, 3]
         graph = Graph(test_model)
-        fc_node = graph.get_node_by_name(FC0)
+        fc_node = graph.get_node_by_name('fc0')
         self.assertRaises(
             RuntimeError,
             GemmTransBOptimizePass.do_pass,
             GemmTransBOptimizePass(records),
             graph,
             fc_node)
-

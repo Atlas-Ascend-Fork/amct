@@ -15,17 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import logging
 import os
 import unittest
 
-import numpy as np
 import torch
+import numpy as np
+import amct_pytorch.graph_based_compression.amct_pytorch
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.fake_quant import (
-    FakeDeQuant,
-)
+from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant import FakeDeQuant
 
 np.random.seed(0)
 
@@ -34,12 +31,10 @@ DEVICE = torch.device('cpu')
 S16_BASE = 16
 S32_BASE = 32
 
-logger = logging.getLogger(__name__)
-
 def compare_ndarray(ndarray1, ndarray2, name):
     if not (ndarray1 - ndarray2 < 1e-5).all():
-        logger.info(ndarray1)
-        logger.info(ndarray2)
+        print(ndarray1)
+        print(ndarray2)
         raise ValueError('{} not equal'.format(name))
 
 def dequant_compute(inputs, scale_d, scale_w, deq_shape):

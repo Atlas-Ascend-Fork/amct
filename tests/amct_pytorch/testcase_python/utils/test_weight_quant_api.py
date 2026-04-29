@@ -15,22 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import logging
 import os
 import unittest
+
+import torch
+import numpy as np
 from unittest import mock
 
-import numpy as np
-import torch
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.weight_quant_api import (
-    adjust_axis_for_group_wise,
-    adjust_conv_weight_shape,
-    adjust_deconv_weight_shape,
-)
-
-logger = logging.getLogger(__name__)
-
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.weight_quant_api import \
+    adjust_conv_weight_shape, adjust_axis_for_group_wise, adjust_deconv_weight_shape
 
 class TestNetParams(unittest.TestCase):
     """
@@ -38,11 +31,11 @@ class TestNetParams(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        logger.info("Test ParamsHelperTorch start!")
+        print("Test ParamsHelperTorch start!")
 
     @classmethod
     def tearDownClass(cls):
-        logger.info("Test ParamsHelperTorch end!")
+        print("Test ParamsHelperTorch end!")
 
     def setUp(self):
         pass
@@ -77,22 +70,22 @@ class TestNetParams(unittest.TestCase):
         self.assertEqual(adjusted_weight.shape, (6, 2, 16))
 
     def test_adjust_axis_for_group_wise(self):
-        tensor = torch.randn(1, 2, 3, 4)
+        tensor = torch.randn(1,2,3,4)
         ret = adjust_axis_for_group_wise(axis=2, input_tensor=tensor)
         self.assertEqual(ret.shape, torch.Size((3, 2, 1, 4)))
 
     def test_adjust_deconv_weight_shape(self):
-        weight_tensor = torch.randn(4, 5, 6, 7)
+        weight_tensor = torch.randn(4,5,6,7)
         group = 2
         adjusted_weight = adjust_deconv_weight_shape(group, weight_tensor)
         self.assertEqual(list(adjusted_weight.shape), [10, 2, 6, 7])
 
-        weight_tensor = torch.randn(4, 5, 6, 7)
+        weight_tensor = torch.randn(4,5,6,7)
         group = 1
         adjusted_weight = adjust_deconv_weight_shape(group, weight_tensor)
         self.assertEqual(list(adjusted_weight.shape), [5, 4, 6, 7])
 
-        weight_tensor = torch.randn(4, 5, 6)
+        weight_tensor = torch.randn(4,5,6)
         group = 2
         adjusted_weight = adjust_deconv_weight_shape(group, weight_tensor)
         self.assertEqual(list(adjusted_weight.shape), [10, 2, 6])

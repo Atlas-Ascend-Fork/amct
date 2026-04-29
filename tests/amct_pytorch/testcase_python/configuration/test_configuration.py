@@ -15,18 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
 import sys
+import os
 import unittest
-
+import json
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
-    Configuration,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
 
 from .utils import models
 
@@ -72,8 +69,7 @@ class TestConfigurationForTorch(unittest.TestCase):
 
         with open(os.path.join(self.temp_folder, 'test_create_from_param.json'), 'r') as f:
             quant_config = json.load(f)
-        layers = ['avg_pool', 'fc.0', 'fc.2', 'fc.5', 'layer1.0', 'layer2.0',
-                  'layer3.0', 'layer4.0', 'layer5.0', 'layer6.0']
+        layers = ['avg_pool', 'fc.0', 'fc.2', 'fc.5', 'layer1.0', 'layer2.0', 'layer3.0', 'layer4.0', 'layer5.0', 'layer6.0']
         for item in layers:
             self.assertIn(item, quant_config)
         layers_name = Configuration.get_layers_name(quant_config)
@@ -83,6 +79,8 @@ class TestConfigurationForTorch(unittest.TestCase):
         ''' test create config from param for: conv, fc'''
         self.graph.add_model(self.model_001)
         # Configuration.create_quant_config(
+        #     config_file=os.path.join(self.temp_folder, 'test_create_from_param_skip_error.json'),
+        #     graph=self.graph,
         #     skip_modules=['layer2.2'])
         self.assertRaises(ValueError, Configuration.create_quant_config,
             os.path.join(self.temp_folder, 'test_create_from_param_skip_error.json'),
@@ -177,7 +175,7 @@ class TestSharedWeightConfig(unittest.TestCase):
 
     def test_shared_weight_quant(self):
         self.graph.add_model(self.net)
-        cfg_content = '''
+        cfg_content ='''
     override_layer_configs : {
     layer_name : "conv1"
     calibration_config : {
@@ -196,7 +194,7 @@ class TestSharedWeightConfig(unittest.TestCase):
 '''
         config_file = os.path.join(self.temp_folder, 'test_shared_weight_conv1.json')
         config_defination = os.path.join(self.temp_folder, 'test_shared_weight_conv1.cfg')
-        with open(config_defination, 'w+') as f:
+        with open(config_defination,'w+') as f:
             f.write(cfg_content)
 
         Configuration.create_quant_config(config_file, self.graph,
@@ -208,7 +206,7 @@ class TestSharedWeightConfig(unittest.TestCase):
 
     def test_shared_weight_defination_error(self):
         self.graph.add_model(self.net)
-        cfg_content = '''
+        cfg_content ='''
     override_layer_configs : {
     layer_name : "conv2"
     calibration_config : {
@@ -227,7 +225,7 @@ class TestSharedWeightConfig(unittest.TestCase):
 '''
         config_file = os.path.join(self.temp_folder, 'test_shared_weight_conv2.json')
         config_defination = os.path.join(self.temp_folder, 'test_shared_weight_conv2.cfg')
-        with open(config_defination, 'w+') as f:
+        with open(config_defination,'w+') as f:
             f.write(cfg_content)
         try:
             Configuration.create_quant_config(config_file, self.graph,

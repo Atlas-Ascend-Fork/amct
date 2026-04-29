@@ -15,33 +15,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import logging
 import os
 import unittest
-from io import BytesIO
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from io import BytesIO
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.auto_channel_prune_search import (
-    AutoChannelPruneSearch,
-    TaylorLossSensitivity,
-    auto_channel_prune_search,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.auto_channel_prune.\
-    auto_channel_prune_config_helper import (
-    AutoChannelPruneConfigHelper,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
-    GraphQuerier,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
+from amct_pytorch.graph_based_compression.amct_pytorch.auto_channel_prune_search import AutoChannelPruneSearch
+from amct_pytorch.graph_based_compression.amct_pytorch.auto_channel_prune_search import TaylorLossSensitivity
+from amct_pytorch.graph_based_compression.amct_pytorch.auto_channel_prune_search import auto_channel_prune_search
+from amct_pytorch.graph_based_compression.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphQuerier
+
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-logger = logging.getLogger(__name__)
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -55,7 +46,7 @@ class Net001(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net001, self).__init__()
+        super(Net001,self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -87,7 +78,7 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128, 10, bias=True))
+            nn.Linear(128,10, bias=True))
 
     def forward(self, x):
         x = self.layer1(x)
@@ -96,7 +87,7 @@ class Net001(nn.Module):
         x = self.layer4(x)
         x = self.layer5(x)
         x = self.layer6(x)
-        x = x.view(x.size(0), -1)
+        x = x.view(x.size(0),-1)
         x = self.fc(x)
         x = F.log_softmax(x, dim=1)
 
@@ -133,9 +124,8 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
         cls.graph.add_model(model)
 
         cls.config_helper = AutoChannelPruneConfigHelper(cls.graph, config_defination, GraphQuerier, CAPACITY)
-        cls.auto_channel_prune_search = AutoChannelPruneSearch(
-            cls.graph, cls.args, cls.config_helper, None, cls.output_cofig, None)
-        logger.info('AutoChannelPruneSearchTorch start!')
+        cls.auto_channel_prune_search = AutoChannelPruneSearch(cls.graph, cls.args, cls.config_helper, None, cls.output_cofig, None)
+        print('AutoChannelPruneSearchTorch start!')
 
 
     @classmethod
@@ -155,7 +145,7 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
 
     def test_get_graph_bitops(self):
         graph_bitops = self.auto_channel_prune_search.get_graph_bitops(self.graph, {})
-        logger.info(graph_bitops)
+        print(graph_bitops)
         self.assertIsNotNone(graph_bitops)
 
     def test_auto_channel_prune_search(self):
@@ -174,8 +164,7 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
         labels = torch.randn(output.size())
         sample_data = [args[0], labels]
 
-        auto_channel_prune_search(
-            model=model, config=config_defination, input_data=sample_data, output_cfg=output_cofig,
+        auto_channel_prune_search(model=model, config=config_defination, input_data=sample_data, output_cfg=output_cofig,
             sensitivity='TaylorLossSensitivity', search_alg='GreedySearch')
-        logger.info(output_cofig)
+        print(output_cofig)
         self.assertTrue(output_cofig)

@@ -17,19 +17,18 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-from io import BytesIO
 from unittest.mock import patch
-
+from io import BytesIO
 import numpy as np
-import torch
-from onnx import AttributeProto, onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.module import dequant_module
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+import torch
+from onnx import onnx_pb, AttributeProto
 
 from .utils import models
+from amct_pytorch.graph_based_compression.amct_pytorch.module import dequant_module
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -56,20 +55,24 @@ class TestDequantModule(unittest.TestCase):
     def setUp(self):
         self.graph = Parser.parse_net_to_graph(self.onnx_model)
 
-    def test_down(self):
+    def testDown(self):
         pass
 
     def test_float16_add_dequant_module(self):
         node = self.graph.get_node_by_name("layer1.0")
         node.set_attr('op_data_type', 'float16')
-        scale = np.array([1., ], np.float32)
+        scale = np.array([1.,], np.float32)
+        # shift_bit = scale = np.array([0.,], np.float32)
+        # clip_mode = 0
         enter_node, out_node = dequant_module.add_fake_dequant(self.graph, "layer1.0", scale)
         self.assertEqual(out_node.proto.op_type, "Cast")
 
     def test_float32_add_dequant_module(self):
         node = self.graph.get_node_by_name("layer1.0")
         node.set_attr('op_data_type', 'float32')
-        scale = np.array([1., ], np.float32)
+        scale = np.array([1.,], np.float32)
+        # shift_bit = scale = np.array([0.,], np.float32)
+        # clip_mode = 0
         enter_node, out_node = dequant_module.add_fake_dequant(self.graph, "layer1.0", scale)
         self.assertEqual(out_node.proto.op_type, "Mul")
 
