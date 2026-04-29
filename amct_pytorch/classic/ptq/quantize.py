@@ -1,12 +1,6 @@
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+__all__ = []
+from amct_pytorch.algorithms.registry_factory import QUANT_ALGO_REGISTRY
+from amct_pytorch.common.optimization.global_solver import GlobalSolver
 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
