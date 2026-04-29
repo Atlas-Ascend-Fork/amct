@@ -24,12 +24,6 @@ class Algorithm:
         self.algo = dict()
         self.quant_to_deploy = dict()
         self.quant_op = []
-        self.deploy_factories = dict()
-
-    def register_deploy_factory(self, quant_module_type, factory):
-        # Allows experimental modules (e.g. flatquant) to plug specialized deploy
-        # construction without classic.ptq importing them — keeps layering clean.
-        self.deploy_factories[quant_module_type] = factory
 
     def register(self, name, src_op, quant_op, deploy_op):
         if self.algo.get(name) is None:
