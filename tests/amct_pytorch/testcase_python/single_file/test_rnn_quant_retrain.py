@@ -1,47 +1,27 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
-import json
-import os
 import sys
+import os
 import unittest
-
+import json
 import numpy as np
+import torch
 import onnx
 import onnxruntime as ort
-import torch
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
-    create_quant_config,
-    create_quant_retrain_config,
-    create_quant_retrain_model,
-    quantize_model,
-    restore_quant_retrain_model,
-    save_model,
-    save_quant_retrain_model,
-)
+from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 
-from .utils import record_file_utils, rnn_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_config
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import quantize_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_model
+
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_retrain_config
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_retrain_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import restore_quant_retrain_model
+from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_quant_retrain_model
+
+from .utils import rnn_model
+from .utils import record_file_utils
 
 torch.manual_seed(0)
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

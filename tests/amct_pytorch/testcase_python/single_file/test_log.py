@@ -15,22 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
 import sys
+import os
 import unittest
-
+import json
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import (
-    LOG_FILE_SET_ENV,
-    LOG_SET_ENV,
-    Logger,
-)
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOG_SET_ENV
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOG_FILE_SET_ENV
+from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import Logger
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
-
 
 class TestLog(unittest.TestCase):
     """
@@ -55,7 +51,7 @@ class TestLog(unittest.TestCase):
         pass
 
     def test_info_level(self):
-        os.environ[LOG_SET_ENV] = 'info'
+        os.environ[LOG_SET_ENV ] = 'info'
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logi("this is info test"))
 

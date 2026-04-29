@@ -17,16 +17,12 @@
 # ----------------------------------------------------------------------------
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pytorch_pb2,
-)
-
+from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pytorch_pb2
 
 def get_producer(prune_record):
     producer_names = [producer.name for producer in prune_record.producer]
     consumer_names = [consumer.name for consumer in prune_record.consumer]
     return producer_names, consumer_names
-
 
 def read_record_file(record_file):
     record = scale_offset_record_pytorch_pb2.ScaleOffsetRecord()
@@ -34,10 +30,10 @@ def read_record_file(record_file):
         pbtxt_string = fid.read()
         try:
             text_format.Merge(pbtxt_string, record)
-        except text_format.ParseError as exc:
+        except text_format.ParseError:
             raise RuntimeError(
                 "the record_file{%s} cannot be parsered, please ensure "\
                 "it matches with scale_offset_record.proto!"
-                % (record_file)) from exc
+                % (record_file))
 
     return record

@@ -22,7 +22,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     conv + bn
@@ -35,7 +34,7 @@ class Net001(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net001, self).__init__()
+        super(Net001,self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -69,7 +68,7 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128, 10, bias=True))
+            nn.Linear(128,10, bias=True))
 
     def forward(self, x):
         x = self.layer1(x)
