@@ -23,8 +23,6 @@ set(AMCT_TOP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
 
-# Python UT 已从 tests/amct_pytorch 迁移到 amct_pytorch/unit_test，
-# 改用 pytest 驱动；pytest 配置位于工程根 pyproject.toml [tool.pytest.ini_options]。
 add_custom_target(amct_pytorch_utest
     COMMAND ${Python3_EXECUTABLE} -m pytest amct_pytorch/unit_test
     WORKING_DIRECTORY ${AMCT_TOP_DIR}
