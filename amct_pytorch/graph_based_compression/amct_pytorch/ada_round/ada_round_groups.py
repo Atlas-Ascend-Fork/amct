@@ -48,7 +48,7 @@ def _is_weight_ada_round(quant_config, layer_name):
 
 
 def _match_gelu_subgraph(input_nodes):
-    '''
+    r'''
     Function: judge whether match gelu() subgraph
         / \
         | |
@@ -116,7 +116,7 @@ def _match_gelu_subgraph(input_nodes):
 
 
 def _match_gelu_tanh_subgraph_front_part(input_nodes):
-    '''
+    r'''
     Function: judge whether match gelu('tanh') subgraph front part
      / / | |\
     | |  | Mul0
@@ -169,7 +169,7 @@ def _match_gelu_tanh_subgraph_front_part(input_nodes):
 
 
 def _match_gelu_tanh_subgraph_back_part(input_nodes):
-    '''
+    r'''
     Function: judge whether match gelu('tanh') subgraph back part
      |  \  /
      |  Add0
@@ -258,7 +258,7 @@ def _match_gelu_tanh_subgraph(input_nodes):
 
 
 def _match_rrelu_subgraph(input_nodes):
-    '''
+    r'''
     Function: judge whether match rrelu subgraph
         torch 2.1 earlier, rrelu export to RandomUniformLike + PRelu
         / \
