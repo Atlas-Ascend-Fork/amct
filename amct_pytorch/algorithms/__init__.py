@@ -33,25 +33,22 @@ from .register_algo import Algorithm
 AlgorithmRegistry = Algorithm()
 BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast']
 
-try:
-    from amct_pytorch.classic.ptq.quantize_op.gptq_module import GPTQuant
-    from amct_pytorch.classic.ptq.quantize_op.linear_awq_module import LinearAWQuant
-    from amct_pytorch.classic.ptq.quantize_op.smooth_quant_module import SmoothQuant
-    from amct_pytorch.classic.ptq.quantize_op.minmax_module import MinMaxQuant
-    from amct_pytorch.classic.ptq.quantize_op.ofmr_quant_module import OfmrQuant
-    from amct_pytorch.classic.ptq.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear
-    from amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear import NpuQuantizationLinear
-    from amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
-    from amct_pytorch.classic.ptq.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
-    from amct_pytorch.classic.ptq.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
-except ImportError:
-    pass
-else:
-    AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
-    AlgorithmRegistry.register('awq', 'Linear', LinearAWQuant, NpuWeightQuantizedLinear)
-    AlgorithmRegistry.register('smoothquant', 'Linear', SmoothQuant, NpuQuantizationLinear)
-    AlgorithmRegistry.register('minmax', 'Linear', MinMaxQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
-    AlgorithmRegistry.register('mxquant', 'Linear', NpuMXQuantizationLinear, NpuMXQuantizationLinear)
-    AlgorithmRegistry.register('ofmr', 'Linear', OfmrQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
-    AlgorithmRegistry.register('ofmr', 'Conv2d', OfmrQuant, NpuQuantizationConv2d)
-    AlgorithmRegistry.register('cast', 'Linear', NpuHIF8CastLinear, NpuHIF8CastLinear)
+from amct_pytorch.classic.ptq.quantize_op.gptq_module import GPTQuant
+from amct_pytorch.classic.ptq.quantize_op.linear_awq_module import LinearAWQuant
+from amct_pytorch.classic.ptq.quantize_op.smooth_quant_module import SmoothQuant
+from amct_pytorch.classic.ptq.quantize_op.minmax_module import MinMaxQuant
+from amct_pytorch.classic.ptq.quantize_op.ofmr_quant_module import OfmrQuant
+from amct_pytorch.classic.ptq.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear
+from amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear import NpuQuantizationLinear
+from amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
+from amct_pytorch.classic.ptq.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
+from amct_pytorch.classic.ptq.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
+
+AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
+AlgorithmRegistry.register('awq', 'Linear', LinearAWQuant, NpuWeightQuantizedLinear)
+AlgorithmRegistry.register('smoothquant', 'Linear', SmoothQuant, NpuQuantizationLinear)
+AlgorithmRegistry.register('minmax', 'Linear', MinMaxQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
+AlgorithmRegistry.register('mxquant', 'Linear', NpuMXQuantizationLinear, NpuMXQuantizationLinear)
+AlgorithmRegistry.register('ofmr', 'Linear', OfmrQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
+AlgorithmRegistry.register('ofmr', 'Conv2d', OfmrQuant, NpuQuantizationConv2d)
+AlgorithmRegistry.register('cast', 'Linear', NpuHIF8CastLinear, NpuHIF8CastLinear)
