@@ -1,0 +1,26 @@
+record {
+  key: "conv1"
+  value {
+    scale_w: 0.25009443
+    scale_w: 0.25009443
+    scale_w: 0.25009443
+    scale_w: 0.25009443
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "conv2"
+  value {
+    scale_w: 0.25009443
+    scale_w: 0.25009443
+    scale_w: 0.25009443
+    scale_w: 0.25009443
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
