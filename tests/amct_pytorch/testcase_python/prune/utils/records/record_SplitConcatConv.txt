@@ -1,0 +1,178 @@
+prune_record {
+  producer {
+    name: "layer2_1.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "prune_axis"
+      type: INT
+      i: 1
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+    attr {
+      name: "prune_group"
+      type: INT
+      i: 2
+    }
+  }
+  consumer {
+    name: "layer2_1.1"
+    attr {
+      name: "type"
+      type: STRING
+      s: "BatchNormalization"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "Concat_13"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Concat"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+  consumer {
+    name: "layer3.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 160
+    }
+  }
+}
+prune_record {
+  producer {
+    name: "layer2_2.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 80
+    }
+    attr {
+      name: "prune_axis"
+      type: INT
+      i: 1
+    }
+    attr {
+      name: "group"
+      type: INT
+      i: 2
+    }
+    attr {
+      name: "prune_group"
+      type: INT
+      i: 2
+    }
+  }
+  consumer {
+    name: "layer2_2.1"
+    attr {
+      name: "type"
+      type: STRING
+      s: "BatchNormalization"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 0
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 80
+    }
+  }
+  consumer {
+    name: "Concat_13"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Concat"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 240
+    }
+  }
+  consumer {
+    name: "layer3.0"
+    attr {
+      name: "type"
+      type: STRING
+      s: "Conv"
+    }
+    attr {
+      name: "begin"
+      type: INT
+      i: 160
+    }
+    attr {
+      name: "end"
+      type: INT
+      i: 240
+    }
+  }
+}
