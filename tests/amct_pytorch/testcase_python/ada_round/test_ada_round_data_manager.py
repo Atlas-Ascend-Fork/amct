@@ -18,7 +18,7 @@
 import unittest
 import torch
 
-from amct_pytorch.graph_based_compression.amct_pytorch.ada_round.ada_round_data_manager import AdaRoundDataManager
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_data_manager import AdaRoundDataManager
 
 
 class TestModel(torch.nn.Module):
