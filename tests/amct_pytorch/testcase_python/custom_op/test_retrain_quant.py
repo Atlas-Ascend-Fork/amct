@@ -19,7 +19,7 @@ import torch
 import unittest
 import numpy as np
 from unittest import mock
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.retrain_quant import get_quant_type
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.retrain_quant import get_quant_type
 
 
 DEVICE = torch.device('cpu')
