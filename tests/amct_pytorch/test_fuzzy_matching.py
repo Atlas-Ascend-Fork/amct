@@ -38,7 +38,7 @@ import torch
 import torch.nn as nn
 from mock_torch_npu import mock_npu
 from utils import TestModel
-from amct_pytorch.config.utils import match_fuzzy_pattern
+from amct_pytorch.common.config.utils import match_fuzzy_pattern
 from amct_pytorch import quantize, convert
 
 
@@ -293,7 +293,7 @@ class TestWeightsCfgFieldAdditional(TestCast):
     
     def test_weights_cfg_with_none_quant_type(self):
         """Test quant_type is None"""
-        from amct_pytorch.config.fields import WeightsCfgField
+        from amct_pytorch.common.config.fields import WeightsCfgField
         
         config = {}
         field = WeightsCfgField(config)
@@ -301,7 +301,7 @@ class TestWeightsCfgFieldAdditional(TestCast):
     
     def test_weights_cfg_with_group_size(self):
         """Test config with group_size"""
-        from amct_pytorch.config.fields import WeightsCfgField
+        from amct_pytorch.common.config.fields import WeightsCfgField
         
         config = {
             'type': 'int4',
@@ -316,7 +316,7 @@ class TestWeightsCfgFieldAdditional(TestCast):
     
     def test_weights_cfg_without_group_size(self):
         """Test config without group_size"""
-        from amct_pytorch.config.fields import WeightsCfgField
+        from amct_pytorch.common.config.fields import WeightsCfgField
         
         config = {
             'type': 'int8',
@@ -334,7 +334,7 @@ class TestInputsCfgFieldAdditional(TestCast):
     
     def test_inputs_cfg_with_none_quant_type(self):
         """Test quant_type is None"""
-        from amct_pytorch.config.fields import InputsCfgField
+        from amct_pytorch.common.config.fields import InputsCfgField
         
         config = {}
         field = InputsCfgField(config)
@@ -342,7 +342,7 @@ class TestInputsCfgFieldAdditional(TestCast):
     
     def test_inputs_cfg_enable_quant_false(self):
         """Test enable_quant is False"""
-        from amct_pytorch.config.fields import InputsCfgField
+        from amct_pytorch.common.config.fields import InputsCfgField
         
         config = {'enable_quant': False}
         field = InputsCfgField(config)
@@ -351,7 +351,7 @@ class TestInputsCfgFieldAdditional(TestCast):
     
     def test_inputs_cfg_enable_quant_true(self):
         """Test enable_quant is True"""
-        from amct_pytorch.config.fields import InputsCfgField
+        from amct_pytorch.common.config.fields import InputsCfgField
         
         config = {
             'enable': True,
@@ -446,7 +446,7 @@ class TestAlgorithmFieldAdditional(TestCast):
     
     def test_algorithm_field_get_value(self):
         """Test AlgorithmField.get_value() method"""
-        from amct_pytorch.config.fields import AlgorithmField
+        from amct_pytorch.common.config.fields import AlgorithmField
         
         registed_alg = Mock()
         registed_alg.algo = {'minmax': {'Linear': None}}
@@ -464,8 +464,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_no_fuzzy(self):
         """Test warning check without fuzzy config"""
-        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -486,8 +486,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_with_fuzzy(self):
         """Test warning check with fuzzy config"""
-        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -514,8 +514,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_no_match(self):
         """Test warning when fuzzy config matches no layer"""
-        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -541,8 +541,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_build_layer_types_and_quant_type(self):
         """Test building layer types and quant type"""
-        from amct_pytorch.config.parser import _build_layer_types_and_quant_type
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _build_layer_types_and_quant_type
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -571,8 +571,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_is_layer_supported_conv2d_padding_mode(self):
         """Test Conv2d padding_mode check"""
-        from amct_pytorch.config.parser import _is_layer_supported
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _is_layer_supported
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -596,7 +596,7 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_get_layer_quant_config_with_fuzzy_weights(self):
         """Test getting layer config with fuzzy weights"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -623,7 +623,7 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_get_layer_quant_config_with_fuzzy_inputs(self):
         """Test getting layer config with fuzzy inputs"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -654,7 +654,7 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_get_layer_quant_config_without_fuzzy_match(self):
         """Test layer config without fuzzy match"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,
@@ -676,7 +676,7 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_get_layer_quant_config_no_weights_config(self):
         """Test layer config without weights config"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
             'batch_num': 1,

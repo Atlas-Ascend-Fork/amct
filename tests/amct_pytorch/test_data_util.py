@@ -15,7 +15,7 @@
 # ----------------------------------------------------------------------------
 import unittest
 import torch
-from amct_pytorch.utils.data_utils import float_to_fp4e2m1
+from amct_pytorch.common.utils.data_utils import float_to_fp4e2m1
 
 
 def gloden_float_cast_to_float4_e2m1(tensor):
