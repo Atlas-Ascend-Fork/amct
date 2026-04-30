@@ -259,7 +259,7 @@ build_ut() {
   rm -rf ${BASEPATH}/tmp/
   rm -rf ${BASEPATH}/tests/amct_pytorch/amct_log/
   if [[ ${ENABLE_COVERAGE} == "TRUE" ]]; then
-    cd ${BASEPATH}/tests/amct_pytorch/; python3 -m coverage report
+    echo "Coverage XML written to ${BUILD_PATH}/coverage.xml"
   fi
 }
 
