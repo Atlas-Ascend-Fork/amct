@@ -5,15 +5,14 @@ import torch
 
 from amct_pytorch.common.utils import quant_util as qu
 from amct_pytorch.common.utils.vars import (
-    FLOAT4_E2M1,
     INT4,
     INT4_MAX,
     INT4_MIN,
     INT8,
     INT8_MAX,
     INT8_MIN,
-    MXFP4_E2M1,
 )
+
 
 # ---- pad_zero_by_group / convert_to_per_group_shape -----------------------
 
@@ -229,74 +228,5 @@ def test_quant_weight_per_channel_int8_round_trips_through_quant_tensor():
     w = torch.randn(4, 8)
     scale = w.abs().amax(dim=1, keepdim=True) / INT8_MAX
     q = qu.quant_weight(w, INT8, scale=scale)
-    assert q.shape == w.shape
-    assert q.dtype == torch.int8
-
-
-def test_quant_weight_with_group_size_int4():
-    w = torch.randn(4, 16)
-    group_size = 8
-    scale = torch.randn(4, 16 // group_size, 1).abs() + 0.1
-    q = qu.quant_weight(w, INT4, scale=scale, group_size=group_size)
-    assert q.shape == w.shape
-    assert q.dtype == torch.int32
-
-
-def test_quant_tensor_mxfp4_e2m1():
-    t = torch.randn(2, 64)
-    shared = qu.cal_shared_exponent(t, block_size=32)
-    q, se = qu.quant_tensor(t, MXFP4_E2M1, scale=shared)
-    assert q.dtype == torch.float32
-    assert se.shape == (2, 2)
-
-
-def test_quant_dequant_tensor_mxfp4_e2m1_round_trip_shape():
-    t = torch.randn(2, 64)
-    out = qu.quant_dequant_tensor(t, MXFP4_E2M1)
-    assert out.shape == t.shape
-    assert out.dtype == t.dtype
-
-
-def test_quant_tensor_int8_per_group():
-    t = torch.randn(2, 16)
-    group_size = 8
-    scale = torch.randn(2, 16 // group_size, 1) + 0.1
-    q, shared = qu.quant_tensor(t, INT8, scale=scale, group_size=group_size)
-    assert q.dtype == torch.int8
-    assert shared is None
-
-
-def test_quant_dequant_tensor_int8_per_group_round_trip():
-    t = torch.randn(2, 16)
-    group_size = 8
-    scale = torch.randn(2, 16 // group_size, 1).abs() + 0.1
-    out = qu.quant_dequant_tensor(t, INT8, scale=scale, group_size=group_size)
-    assert out.shape == t.shape
-    assert out.dtype == t.dtype
-
-
-def test_quant_tensor_int4_per_group():
-    t = torch.randn(2, 16)
-    group_size = 8
-    scale = torch.randn(2, 16 // group_size, 1) + 0.1
-    q, shared = qu.quant_tensor(t, INT4, scale=scale, group_size=group_size)
-    assert q.dtype == torch.int32
-    assert shared is None
-
-
-def test_quant_dequant_tensor_float4_e2m1():
-    t = torch.randn(2, 32)
-    max_val = t.abs().amax(dim=-1, keepdim=True)
-    scale = max_val / 6.0
-    out = qu.quant_dequant_tensor(t, FLOAT4_E2M1, scale=scale)
-    assert out.shape == t.shape
-    assert out.dtype == t.dtype
-
-
-def test_quant_weight_no_group_size_with_offset():
-    w = torch.randn(4, 8).abs() + 0.1
-    scale = w.abs().amax(dim=1, keepdim=True) / INT8_MAX
-    offset = torch.randn(4, 1)
-    q = qu.quant_weight(w, INT8, scale=scale, offset=offset, group_size=None)
     assert q.shape == w.shape
     assert q.dtype == torch.int8

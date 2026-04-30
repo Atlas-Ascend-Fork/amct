@@ -5,6 +5,7 @@ import torch
 
 from amct_pytorch.common.datasets import ptq_io
 
+
 # ---- save_ptq_kwargs ------------------------------------------------------
 
 
@@ -82,13 +83,13 @@ def test_load_ptq_inps_returns_empty_kwargs_for_non_attn_target(tmp_path):
     torch.save(inps, tmp_path / "block_0_mlp_in.pkl")
     cached, kwargs = ptq_io.load_ptq_inps(str(tmp_path), "mlp", layer_idx=0)
     assert torch.equal(cached, inps)
-    assert not kwargs
+    assert kwargs == {}
 
 
 def test_load_ptq_inps_returns_none_when_block_file_missing(tmp_path):
     cached, kwargs = ptq_io.load_ptq_inps(str(tmp_path), "mlp", layer_idx=99)
     assert cached is None
-    assert not kwargs
+    assert kwargs == {}
 
 
 def test_load_ptq_inps_skips_missing_optional_kwargs_files(tmp_path):

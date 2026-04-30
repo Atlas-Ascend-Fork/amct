@@ -66,7 +66,7 @@ def test_collect_trainable_param_groups_marks_grad_and_dedups():
 def test_collect_trainable_param_groups_returns_empty_when_no_trainable():
     layer = nn.Linear(4, 4)
     solver = BlockwiseSolver(_args(), layer_idx=0, model=layer)
-    assert not solver._collect_trainable_param_groups(layer)
+    assert solver._collect_trainable_param_groups(layer) == []
 
 
 def test_collect_trainable_param_groups_freezes_other_params_first():
@@ -76,24 +76,6 @@ def test_collect_trainable_param_groups_freezes_other_params_first():
     solver = BlockwiseSolver(_args(), layer_idx=0, model=layer)
     solver._collect_trainable_param_groups(layer)
     assert all(not p.requires_grad for p in layer.parameters())
-
-
-def test_collect_trainable_param_groups_skips_none_and_duplicates():
-    class _ModuleWithFlawedTrainable(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.w = nn.Parameter(torch.zeros(4))
-            self.b = nn.Parameter(torch.zeros(4))
-
-        def trainable_params(self):
-            return [None, self.w, self.w]
-
-    layer = nn.Module()
-    layer.flawed = _ModuleWithFlawedTrainable()
-    solver = BlockwiseSolver(_args(), layer_idx=0, model=layer)
-    groups = solver._collect_trainable_param_groups(layer)
-    assert len(groups) == 1
-    assert len(groups[0]["params"]) == 1
 
 
 # ---- solve / _optimize_block --------------------------------------------

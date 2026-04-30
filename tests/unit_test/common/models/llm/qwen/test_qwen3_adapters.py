@@ -11,21 +11,16 @@ from types import SimpleNamespace
 import pytest
 import torch.nn as nn
 
-from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5_moe import Qwen3_5Moe
 from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 register_dtype()
-
-MOE = 'moe'
-MLP = 'mlp'
-ATTN_LINEAR = 'attn-linear'
-ATTN_CACHE = 'attn-cache'
 
 
 def _stub_adapter(adapter_cls, quant_target):
@@ -41,43 +36,43 @@ def _stub_adapter(adapter_cls, quant_target):
 
 
 def test_qwen3_dense_rejects_moe_target():
-    obj = _stub_adapter(Qwen3, [MOE])
+    obj = _stub_adapter(Qwen3, ["moe"])
     with pytest.raises(ValueError, match="dense model does not support"):
         obj.parse_quant_mode()
 
 
 def test_qwen3_dense_accepts_attn_and_mlp_targets():
-    for target in ([ATTN_LINEAR], [ATTN_CACHE], [MLP]):
+    for target in (["attn-linear"], ["attn-cache"], ["mlp"]):
         obj = _stub_adapter(Qwen3, target)
         assert obj.parse_quant_mode() is None
 
 
 def test_qwen3_moe_rejects_mlp_target():
-    obj = _stub_adapter(Qwen3Moe, [MLP])
+    obj = _stub_adapter(Qwen3Moe, ["mlp"])
     with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
         obj.parse_quant_mode()
 
 
 def test_qwen3_moe_accepts_moe_and_attn_targets():
-    for target in ([MOE], [ATTN_LINEAR], [ATTN_CACHE]):
+    for target in (["moe"], ["attn-linear"], ["attn-cache"]):
         obj = _stub_adapter(Qwen3Moe, target)
         assert obj.parse_quant_mode() is None
 
 
 def test_qwen3_5_dense_rejects_moe_target():
-    obj = _stub_adapter(Qwen3_5, [MOE])
+    obj = _stub_adapter(Qwen3_5, ["moe"])
     with pytest.raises(ValueError, match="dense model and does not support"):
         obj.parse_quant_mode()
 
 
 def test_qwen3_5_moe_rejects_mlp_target():
-    obj = _stub_adapter(Qwen3_5Moe, [MLP])
+    obj = _stub_adapter(Qwen3_5Moe, ["mlp"])
     with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
         obj.parse_quant_mode()
 
 
 def test_qwen3_next_rejects_mlp_target():
-    obj = _stub_adapter(Qwen3Next, [MLP])
+    obj = _stub_adapter(Qwen3Next, ["mlp"])
     with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
         obj.parse_quant_mode()
 
@@ -86,23 +81,23 @@ def test_qwen3_next_rejects_mlp_target():
 
 
 def test_qwen3_layer_weight_prefix_uses_model_layers():
-    obj = _stub_adapter(Qwen3, [MLP])
+    obj = _stub_adapter(Qwen3, ["mlp"])
     assert obj.get_layer_weight_prefix(7) == "model.layers.7."
 
 
 def test_qwen3_moe_layer_weight_prefix_uses_model_layers():
-    obj = _stub_adapter(Qwen3Moe, [MOE])
+    obj = _stub_adapter(Qwen3Moe, ["moe"])
     assert obj.get_layer_weight_prefix(0) == "model.layers.0."
 
 
 def test_qwen3_5_uses_model_language_model_prefix():
-    obj = _stub_adapter(Qwen3_5, [MLP])
+    obj = _stub_adapter(Qwen3_5, ["mlp"])
     assert obj.get_layer_weight_prefix(2) == "model.language_model.layers.2."
     assert obj._embed_base_prefix() == "model.language_model."
 
 
 def test_qwen3_next_uses_model_layers_prefix():
-    obj = _stub_adapter(Qwen3Next, [MOE])
+    obj = _stub_adapter(Qwen3Next, ["moe"])
     assert obj.get_layer_weight_prefix(5) == "model.layers.5."
 
 
@@ -132,7 +127,6 @@ def _build_moe_block_with_quant_linears():
     block.self_attn.q_proj = QuantLinear(
         SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
         nn.Linear(4, 4),
-        w_bits=8,
         name="q_proj",
     )
 
@@ -145,7 +139,6 @@ def _build_moe_block_with_quant_linears():
         expert.up_proj = QuantLinear(
             SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
             nn.Linear(4, 4),
-            w_bits=8,
             name="up_proj",
         )
         block.mlp.experts.expert_modules.append(expert)
@@ -153,7 +146,7 @@ def _build_moe_block_with_quant_linears():
 
 
 def test_qwen3_moe_iter_deploy_bindings_rewrites_expert_path():
-    obj = _stub_adapter(Qwen3Moe, [MOE])
+    obj = _stub_adapter(Qwen3Moe, ["moe"])
     block = _build_moe_block_with_quant_linears()
     bindings = list(obj.iter_deploy_bindings(layer_idx=3, block=block))
     names = [b[0] for b in bindings]
@@ -168,7 +161,9 @@ def test_qwen3_moe_iter_deploy_bindings_rewrites_expert_path():
 
 def test_qwen3_moe_iter_deploy_bindings_raises_on_malformed_expert_name():
     """Construct a name that starts with the expert prefix but has the wrong arity."""
-    obj = _stub_adapter(Qwen3Moe, [MOE])
+    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+    obj = _stub_adapter(Qwen3Moe, ["moe"])
     block = nn.Module()
     block.mlp = nn.Module()
     block.mlp.experts = nn.Module()
@@ -177,7 +172,6 @@ def test_qwen3_moe_iter_deploy_bindings_raises_on_malformed_expert_name():
     block.mlp.experts.expert_modules.bad = QuantLinear(
         SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
         nn.Linear(4, 4),
-        w_bits=8,
         name="bad",
     )
     with pytest.raises(ValueError, match="Unexpected Qwen3 MoE expert module name"):

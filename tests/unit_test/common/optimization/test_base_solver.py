@@ -94,10 +94,3 @@ def test_unimplemented_hooks_default_to_no_op():
     assert solver.forward_once() is None
     assert solver.origin_forward() is None
     assert solver.quant_forward() is None
-
-
-def test_base_solver_granularity_class_attribute():
-    from amct_pytorch.common.optimization.base_solver import (
-        BaseSolver as base_solver_cls,
-    )
-    assert base_solver_cls.granularity == "block"

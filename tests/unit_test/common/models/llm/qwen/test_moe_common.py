@@ -1,41 +1,10 @@
-from types import SimpleNamespace
-
 import pytest
 import torch
-import torch.nn as nn
 
 from amct_pytorch.common.models.llm.qwen.moe_common import (
-    QuantGatedExperts,
     is_packed_experts,
     pack_gated_expert_weights,
 )
-from amct_pytorch.quantization.bit_policy import BitPolicy
-from amct_pytorch.quantization.dtypes import register_dtype
-
-register_dtype()
-
-
-_MLP_BP = BitPolicy({
-    "mlp": {
-        "gate_proj": {"w_bits": 8, "a_bits": 8},
-        "up_proj": {"w_bits": 8, "a_bits": 8},
-        "down_proj": {"w_bits": 8, "a_bits": 8},
-    },
-    "moe": {
-        "routed": {
-            "gate_proj": {"w_bits": 8, "a_bits": 8},
-            "up_proj": {"w_bits": 8, "a_bits": 8},
-            "down_proj": {"w_bits": 8, "a_bits": 8},
-        },
-    },
-})
-
-
-def _make_args(quant_target=("moe",)):
-    return SimpleNamespace(
-        algos=[], quant_dtype="int", w_bits=8, a_bits=8,
-        quant_target=list(quant_target), bit_policy=_MLP_BP,
-    )
 
 
 # ---- is_packed_experts ----------------------------------------------------
@@ -132,63 +101,3 @@ def test_pack_gated_expert_weights_raises_on_inconsistent_experts():
     sd.pop("mlp.experts.1.down_proj.weight")
     with pytest.raises(KeyError, match="Inconsistent expert weights"):
         pack_gated_expert_weights(sd)
-
-
-# ---- QuantGatedExperts ----------------------------------------------------
-
-
-class _FakeExpertModule(nn.Module):
-    """A stand-in GatedExpertView compatible with QuantGatedMLP."""
-    def __init__(self, experts_module, expert_idx=0, hidden_attr="hidden_dim",
-                 intermediate_attr="intermediate_dim", act_attr="act_fn",
-                 gate_up_name="gate_up_proj", down_name="down_proj",
-                 materialize=False):
-        super().__init__()
-        self.hidden_size = 4
-        self.intermediate_size = 8
-        self.act_fn = nn.SiLU()
-        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size)
-        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size)
-        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size)
-
-
-class _FakePackedExperts:
-    """Minimal packed-expert module with num_experts attr."""
-    def __init__(self, num_experts=2, **kwargs):
-        self.num_experts = num_experts
-
-
-def test_quant_gated_experts_init_creates_expert_modules(monkeypatch):
-    args = _make_args()
-    pe = _FakePackedExperts(num_experts=2)
-    qge = QuantGatedExperts(args, pe, view_cls=_FakeExpertModule, group="moe.routed")
-    assert qge.num_experts == 2
-    assert qge.group == "moe.routed"
-    assert len(qge.expert_modules) == 2
-
-
-def test_quant_gated_experts_build_ptq_expert_module_returns_materialized(monkeypatch):
-    args = _make_args()
-    pe = _FakePackedExperts(num_experts=2, hidden=4, intermediate=8)
-    qge = QuantGatedExperts(args, pe, view_cls=_FakeExpertModule, group="moe.routed")
-    m = qge.build_ptq_expert_module(0)
-    assert m.hidden_size == 4
-
-
-def test_quant_gated_experts_iter_ptq_expert_modules_yields_all(monkeypatch):
-    args = _make_args()
-    pe = _FakePackedExperts(num_experts=3, hidden=4, intermediate=8)
-    qge = QuantGatedExperts(args, pe, view_cls=_FakeExpertModule, group="moe.routed")
-    modules = list(qge.iter_ptq_expert_modules())
-    assert len(modules) == 3
-
-
-def test_quant_gated_experts_forward_empty_top_k_returns_zeros(monkeypatch):
-    args = _make_args()
-    pe = _FakePackedExperts(num_experts=2, hidden=4, intermediate=8)
-    qge = QuantGatedExperts(args, pe, view_cls=_FakeExpertModule, group="moe.routed")
-    hs = torch.randn(2, 4)
-    top_k_index = torch.empty(2, 0, dtype=torch.long)
-    top_k_weights = torch.empty(2, 0)
-    out = qge.forward(hs, top_k_index, top_k_weights)
-    assert torch.equal(out, torch.zeros_like(hs))

@@ -18,7 +18,7 @@
 import logging
 import io
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import LOGGER
 
 def log_check_deco(func):
     def wrapper(*args, **kwargs):

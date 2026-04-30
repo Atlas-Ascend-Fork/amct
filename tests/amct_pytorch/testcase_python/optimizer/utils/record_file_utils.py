@@ -24,8 +24,8 @@ import sys
 import numpy as np
 
 from google.protobuf import text_format
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
 
 
 def create_file(record_file,

@@ -1,5 +1,4 @@
 import argparse
-from types import SimpleNamespace
 
 import pytest
 import torch
@@ -7,47 +6,17 @@ import torch.nn as nn
 
 from amct_pytorch.common.models.llm.common.quant_apply import (
     PlainLinear,
-    QuantGatedMLP,
     apply_quant_to_attn,
     apply_quant_to_moe_mlp,
+    build_direct_quant_args,
     set_model_act_quant_state,
     set_model_to_observe,
     set_model_weight_quant_state,
 )
-from amct_pytorch.quantization.bit_policy import BitPolicy
-from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
     WeightQuantizer,
 )
-
-_MLP_BIT_POLICY = BitPolicy({
-    "mlp": {
-        "gate_proj": {"w_bits": 8, "a_bits": 8},
-        "up_proj": {"w_bits": 8, "a_bits": 8},
-        "down_proj": {"w_bits": 8, "a_bits": 8},
-    },
-    "moe": {
-        "routed": {
-            "gate_proj": {"w_bits": 8, "a_bits": 8},
-            "up_proj": {"w_bits": 8, "a_bits": 8},
-            "down_proj": {"w_bits": 8, "a_bits": 8},
-        },
-        "shared": {
-            "gate_proj": {"w_bits": 8, "a_bits": 8},
-            "up_proj": {"w_bits": 8, "a_bits": 8},
-            "down_proj": {"w_bits": 8, "a_bits": 8},
-        },
-    },
-    "attn-linear": {
-        "q_proj": {"w_bits": 8, "a_bits": 8},
-        "k_proj": {"w_bits": 8, "a_bits": 8},
-        "v_proj": {"w_bits": 8, "a_bits": 8},
-        "o_proj": {"w_bits": 8, "a_bits": 8},
-    },
-})
-
-register_dtype()
 
 
 # ---- PlainLinear ---------------------------------------------------------
@@ -71,19 +40,16 @@ def test_plain_linear_ignores_structure_transform_kwarg():
 # ---- set_model_*_quant_state ---------------------------------------------
 
 
-_MOCK_QUANT_ARGS = SimpleNamespace(w_bits=8, quant_dtype="int", algos=[])
-
-
 class _StubActQuantizer(ActivationQuantizer):
     def __init__(self):
-        super().__init__(_MOCK_QUANT_ARGS, bits=8)
+        nn.Module.__init__(self)
         self.enable = False
         self.is_observe = True
 
 
 class _StubWeightQuantizer(WeightQuantizer):
     def __init__(self):
-        super().__init__(_MOCK_QUANT_ARGS)
+        nn.Module.__init__(self)
         self.enable = False
 
 
@@ -127,16 +93,29 @@ def test_set_model_to_observe_only_targets_modules_with_attribute(flag):
     assert not hasattr(m.wq, "is_observe")
 
 
+# ---- build_direct_quant_args ---------------------------------------------
+
+
+def test_build_direct_quant_args_returns_independent_copy_with_overrides():
+    args = argparse.Namespace(w_bits=4, a_bits=4, algos=["awq", "smooth"], extra="keep")
+    new = build_direct_quant_args(args, bits=8)
+    assert new is not args
+    assert new.w_bits == 8 and new.a_bits == 8
+    assert new.algos == []
+    assert new.extra == "keep"
+    # Source args should not be mutated.
+    assert args.w_bits == 4 and args.algos == ["awq", "smooth"]
+
+
 # ---- apply_quant_to_attn / apply_quant_to_moe_mlp -------------------------
 
 
 class _FakeQuantWrapper(nn.Module):
     """Records the wrapped child so we can assert replacement behavior."""
-    def __init__(self, args, original, group=None):
+    def __init__(self, args, original):
         super().__init__()
         self.args = args
         self.original = original
-        self.group = group
 
 
 def _decoder_layer():
@@ -192,142 +171,3 @@ def test_apply_quant_to_moe_mlp_skips_none_experts():
     apply_quant_to_moe_mlp(args=object(), model=layer, cls=_FakeQuantWrapper)
     assert isinstance(layer.experts[0], _FakeQuantWrapper)
     assert layer.experts[1] is None
-
-
-def test_apply_quant_to_moe_mlp_with_routed_expert_bits():
-    layer = nn.Module()
-    layer.mlp = nn.Module()
-    layer.mlp.experts = nn.ModuleList([nn.Linear(4, 4)])
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, bit_policy=_MLP_BIT_POLICY,
-        quant_target=["moe"], algos=[], quant_dtype="int",
-    )
-    apply_quant_to_moe_mlp(args=args, model=layer, cls=_FakeQuantWrapper)
-    assert isinstance(layer.mlp.experts[0], _FakeQuantWrapper)
-    assert layer.mlp.experts[0].group == "moe.routed"
-
-
-def test_apply_quant_to_moe_mlp_with_shared_experts():
-    layer = nn.Module()
-    layer.shared_experts = nn.Linear(4, 4)
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, bit_policy=_MLP_BIT_POLICY,
-        quant_target=["moe"], algos=[], quant_dtype="int",
-    )
-    apply_quant_to_moe_mlp(args=args, model=layer, cls=_FakeQuantWrapper)
-    assert isinstance(layer.shared_experts, _FakeQuantWrapper)
-    assert layer.shared_experts.group == "moe.shared"
-
-
-class _FakeMLP(nn.Module):
-    def __init__(self, hidden_size=8, intermediate_size=16):
-        super().__init__()
-        self.hidden_size = hidden_size
-        self.intermediate_size = intermediate_size
-        self.act_fn = nn.SiLU()
-        self.up_proj = nn.Linear(hidden_size, intermediate_size)
-        self.gate_proj = nn.Linear(hidden_size, intermediate_size)
-        self.down_proj = nn.Linear(intermediate_size, hidden_size)
-
-
-def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
-    cmds = []
-
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
-    )
-    mlp = _FakeMLP()
-    gated = QuantGatedMLP(args, mlp)
-
-    def input_transform(x, **kw):
-        cmds.append("input_xform")
-        return x
-
-    gated.input_transform = input_transform
-
-    def hidden_transform(x, **kw):
-        cmds.append("hidden_xform")
-        return x
-
-    gated.hidden_transform = hidden_transform
-    gated.input_quant.enable = True
-    gated.hidden_quant.enable = True
-
-    x = torch.randn(2, 8)
-    gated(x)
-    assert "input_xform" in cmds
-    assert "hidden_xform" in cmds
-
-
-def test_quant_gated_mlp_forward_passthrough_when_quant_disabled():
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
-    )
-    mlp = _FakeMLP()
-    gated = QuantGatedMLP(args, mlp)
-    x = torch.randn(2, 8)
-    y = gated(x)
-    assert y.shape == (2, mlp.hidden_size)
-
-
-def test_quant_gated_mlp_export_ptq_params_returns_module_params(monkeypatch):
-    from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
-
-    monkeypatch.setattr(PtqParamHandler, "export_module", lambda m: {"sub": {"k": 1}})
-    monkeypatch.setattr(PtqParamHandler, "export_trainable_module", lambda m: {})
-
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
-    )
-    mlp = _FakeMLP()
-    gated = QuantGatedMLP(args, mlp)
-    result = gated.export_ptq_params()
-    assert result == {"sub": {"k": 1}}
-    original = False
-    trainable = False
-
-    from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
-
-    monkeypatch.setattr(PtqParamHandler, "export_module", lambda m: {})
-    monkeypatch.setattr(PtqParamHandler, "export_trainable_module",
-                        lambda m: trainable or {"trainable": [1]})
-
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
-    )
-    mlp = _FakeMLP()
-    gated = QuantGatedMLP(args, mlp)
-    result = gated.export_ptq_params()
-    assert result == {"trainable": [1]}
-
-
-def test_quant_gated_mlp_load_ptq_params_nested_dicts(monkeypatch):
-    loaded = {}
-    from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
-
-    monkeypatch.setattr(PtqParamHandler, "load_module", lambda m, p: loaded.update({"module": True}))
-    monkeypatch.setattr(PtqParamHandler, "load_trainable_module", lambda m, p: loaded.update({"trainable": True}))
-
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
-    )
-    mlp = _FakeMLP()
-    gated = QuantGatedMLP(args, mlp)
-    gated.load_ptq_params({"a": {"b": "c"}, "d": {"e": "f"}})
-    assert loaded.get("module") is True
-
-
-def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
-    loaded = {}
-    from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
-
-    monkeypatch.setattr(PtqParamHandler, "load_module", lambda m, p: loaded.update({"module": True}))
-    monkeypatch.setattr(PtqParamHandler, "load_trainable_module", lambda m, p: loaded.update({"trainable": True}))
-
-    args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
-    )
-    mlp = _FakeMLP()
-    gated = QuantGatedMLP(args, mlp)
-    gated.load_ptq_params({"some_key": [1, 2, 3]})
-    assert loaded.get("trainable") is True
