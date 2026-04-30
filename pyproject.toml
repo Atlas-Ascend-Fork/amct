@@ -16,7 +16,6 @@ omit = [
     "*/classic/*",
     "*/experimental/*",
     "*/cli/*",
-    "*/unit_test/*",
     "**/__init__.py",
     "*/common/models/llm/deepseek/*",
 ]
