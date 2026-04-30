@@ -33,10 +33,6 @@ class NpuHIF8Linear(torch.nn.Module):
         import torch_npu
         device = quant_module.weight.device
         
-        self.x1_dtype = torch_npu.hifloat8
-        self.npu_quantize_act_type = torch_npu.hifloat8
-        self.x2_dtype = torch_npu.hifloat8
-        
         self._init_weight_quant(quant_module)
         if quant_module.bias is None:
             self.bias = None
@@ -62,24 +58,16 @@ class NpuHIF8Linear(torch.nn.Module):
         inputs: input data in torch.tensor.
         """
         import torch_npu
-        
-        output_dtype = x.dtype
-        
         quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=self.npu_quantize_act_type,
             dst_type_max=15)
-        self.pertoken_scale = pertoken_scale.view(-1)
             
         if self.is_new_torch_npu:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                output_dtype=output_dtype,
-                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-                group_sizes=None, y_scale=None)
+                scale=self.deq_scale, pertoken_scale=pertoken_scale.view(-1),
+                output_dtype=x.dtype, x1_dtype=torch_npu.hifloat8, x2_dtype=torch_npu.hifloat8)
             if self.bias is not None:
                 output = output + self.bias
         else:
-            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                bias=self.bias, output_dtype=output_dtype)
+            print("Donot support")
 
         return output
