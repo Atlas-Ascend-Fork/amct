@@ -1,0 +1,13 @@
+{
+    "version":1,
+    "batch_num":1,
+    "layer1.0":{
+        "retrain_enable":true,
+        "retrain_data_config":{
+            "algo":"ulq_quantize"
+        },
+        "retrain_weight_config":{
+            "algo":"arq_retrain"
+        }
+    }
+}
