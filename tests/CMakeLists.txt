@@ -23,8 +23,14 @@ set(AMCT_TOP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
 
+if(ENABLE_COVERAGE STREQUAL "TRUE")
+    set(PYTEST_COV_ARGS --cov --cov-config=${AMCT_TOP_DIR}/pyproject.toml --cov-report=term-missing --cov-report=xml:${AMCT_TOP_DIR}/build/coverage.xml)
+else()
+    set(PYTEST_COV_ARGS "")
+endif()
+
 add_custom_target(amct_pytorch_utest
-    COMMAND ${Python3_EXECUTABLE} -m pytest
+    COMMAND ${Python3_EXECUTABLE} -m pytest ${PYTEST_COV_ARGS}
     WORKING_DIRECTORY ${AMCT_TOP_DIR}
     COMMENT "run amct_pytorch python unit tests"
 )
