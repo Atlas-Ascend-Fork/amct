@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.module_info import ModuleInfo
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.module_info import ModuleInfo
 
 
 class TestModuleInfo(unittest.TestCase):

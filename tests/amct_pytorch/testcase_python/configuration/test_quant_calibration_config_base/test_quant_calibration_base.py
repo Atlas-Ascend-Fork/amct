@@ -23,7 +23,7 @@ import json
 
 import torch
 
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_config_base import QuantCalibrationConfigBase
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_config_base import QuantCalibrationConfigBase
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

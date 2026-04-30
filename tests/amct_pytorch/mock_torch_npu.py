@@ -16,7 +16,7 @@
 import math
 import torch
 
-from amct_pytorch.utils.quant_util import convert_dtype
+from amct_pytorch.common.utils.quant_util import convert_dtype
 
 
 @property
