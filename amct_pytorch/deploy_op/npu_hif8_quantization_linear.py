@@ -31,12 +31,6 @@ class NpuHIF8Linear(torch.nn.Module):
         """
         super().__init__()
         import torch_npu
-        device = quant_module.weight.device
-        
-        self.x1_dtype = torch_npu.hifloat8
-        self.npu_quantize_act_type = torch_npu.hifloat8
-        self.x2_dtype = torch_npu.hifloat8
-        
         self._init_weight_quant(quant_module)
         if quant_module.bias is None:
             self.bias = None
@@ -45,14 +39,15 @@ class NpuHIF8Linear(torch.nn.Module):
         self.is_new_torch_npu = True if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype') else False
         
     def _init_weight_quant(self, quant_module):
-        fp8_weight = quant_module.weight
+        fp8_weight = quant_module.weight # n, k
         fp8_scale = quant_module.weight_scale_inv
         dequant_weight = fp8_weight.to(torch.float32) / fp8_scale
         weight_max = dequant_weight.max(dim=1, keepdim=True).values
-        scale = (weight_max / 16.0).to(torch.float32)
+        scale = (weight_max / 16.0).to(torch.float32).flatten() # n
         self.register_buffer('deq_scale', scale)
         import torch_npu
-        hif8_quantized_tensor = torch_npu.npu_quantize(dequant_weight, scale.flatten(), None, dtype=torch_npu.hifloat8)
+        # k, n * n
+        hif8_quantized_tensor = torch_npu.npu_quantize(dequant_weight.transpose(0, 1), scale, None, dtype=torch_npu.hifloat8)
         self.register_buffer('quantized_weight', hif8_quantized_tensor)
 
     def forward(self, x):
@@ -62,24 +57,15 @@ class NpuHIF8Linear(torch.nn.Module):
         inputs: input data in torch.tensor.
         """
         import torch_npu
-        
-        output_dtype = x.dtype
-        
-        quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=self.npu_quantize_act_type,
-            dst_type_max=15)
-        self.pertoken_scale = pertoken_scale.view(-1)
+        quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=torch_npu.hifloat8, dst_type_max=15)
             
         if self.is_new_torch_npu:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                output_dtype=output_dtype,
-                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-                group_sizes=None, y_scale=None)
+                scale=self.deq_scale, pertoken_scale=pertoken_scale.view(-1),
+                output_dtype=x.dtype, x1_dtype=torch_npu.hifloat8, x2_dtype=torch_npu.hifloat8)
             if self.bias is not None:
                 output = output + self.bias
         else:
-            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                bias=self.bias, output_dtype=output_dtype)
+            print("Do not support current convert")
 
         return output
