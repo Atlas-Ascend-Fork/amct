@@ -13,7 +13,6 @@ env = [
 [tool.coverage.run]
 source = ["amct_pytorch"]
 omit = [
-    "*/classic/*",
     "*/experimental/*",
     "*/cli/*",
     "**/__init__.py",
