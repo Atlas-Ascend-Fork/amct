@@ -22,9 +22,9 @@ from utils import TestModel, TestModelBias, TestModelConv2d
 
 from amct_pytorch import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
 from amct_pytorch import INT8_MINMAX_WEIGHT_QUANT_CFG, INT8_SMOOTHQUANT_CFG
-from amct_pytorch.config import parse_config
-from amct_pytorch.algorithm import AlgorithmRegistry
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.common.config import parse_config
+from amct_pytorch.algorithms import AlgorithmRegistry
+from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
 
 class CustomQuant(BaseQuantizeModule):
     def __init__(self, ori_module, layer_name, quant_config):
