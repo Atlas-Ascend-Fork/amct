@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 """Structural tests for QuantGLM5Attn / QuantGLM5MLP / QuantGLM5Indexer.
 
 Forward of QuantGLM5Attn requires a real attention-implementation backend to
@@ -37,15 +19,10 @@ from amct_pytorch.common.models.llm.glm.glm5.glm5 import (
     QuantGLM5MLP,
     _linear_with_structure,
 )
-from amct_pytorch.quantization.bit_policy import BitPolicy
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 register_dtype()
-
-W_BITS = 'w_bits'
-
-A_BITS = 'a_bits'
 
 
 def _tiny_config():
@@ -82,27 +59,13 @@ def _quant_args(quant_target=("attn-linear",)):
         a_bits=8,
         q_bits=8, k_bits=8, p_bits=8, v_bits=8,
         quant_target=list(quant_target),
-        bit_policy=BitPolicy({
-            "mlp": {
-                "gate_proj": {W_BITS: 8, A_BITS: 8},
-                "up_proj": {W_BITS: 8, A_BITS: 8},
-                "down_proj": {W_BITS: 8, A_BITS: 8},
-            },
-            "attn-linear": {
-                "q_proj": {W_BITS: 8, A_BITS: 8},
-                "k_proj": {W_BITS: 8, A_BITS: 8},
-                "v_proj": {W_BITS: 8, A_BITS: 8},
-                "o_proj": {W_BITS: 8, A_BITS: 8},
-            },
-            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-        }),
     )
 
 
 # ---- _linear_with_structure ----------------------------------------------
 
 
-def test_linear_with_structure_no_transform_matches_f_linear():
+def test_linear_with_structure_no_transform_matches_F_linear():
     linear = nn.Linear(4, 8)
     x = torch.randn(2, 4)
     out = _linear_with_structure(x, linear)
@@ -118,8 +81,7 @@ def test_linear_with_structure_passes_inv_t_and_name_to_transform():
         seen["name"] = name
         return weight
 
-    _linear_with_structure(torch.zeros(1, 4), linear,
-                           structure_transform=transform, name="proj")
+    _linear_with_structure(torch.zeros(1, 4), linear, structure_transform=transform, name="proj")
     assert seen == {"inv_t": True, "name": "proj"}
 
 
@@ -169,8 +131,7 @@ def test_quant_glm5_attn_attn_linear_branch_uses_quant_linear():
 
 def test_quant_glm5_attn_without_attn_linear_still_uses_quant_linear_for_projections():
     """GLM5 always wraps projections in QuantLinear regardless of attn-linear flag.
-    The flag only controls structure transforms and activation quantizers.
-    """
+    The flag only controls structure transforms and activation quantizers."""
     cfg = _tiny_config()
     attn = GlmMoeDsaAttention(cfg, layer_idx=0)
     qattn = QuantGLM5Attn(_quant_args(quant_target=["attn-cache"]), attn)

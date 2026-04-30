@@ -1,27 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 import os
 
 import pytest
 import torch
 
 from amct_pytorch.common.datasets import ptq_io
+
 
 # ---- save_ptq_kwargs ------------------------------------------------------
 
@@ -100,13 +83,13 @@ def test_load_ptq_inps_returns_empty_kwargs_for_non_attn_target(tmp_path):
     torch.save(inps, tmp_path / "block_0_mlp_in.pkl")
     cached, kwargs = ptq_io.load_ptq_inps(str(tmp_path), "mlp", layer_idx=0)
     assert torch.equal(cached, inps)
-    assert not kwargs
+    assert kwargs == {}
 
 
 def test_load_ptq_inps_returns_none_when_block_file_missing(tmp_path):
     cached, kwargs = ptq_io.load_ptq_inps(str(tmp_path), "mlp", layer_idx=99)
     assert cached is None
-    assert not kwargs
+    assert kwargs == {}
 
 
 def test_load_ptq_inps_skips_missing_optional_kwargs_files(tmp_path):

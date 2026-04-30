@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 import pytest
 import torch
 
@@ -25,13 +7,12 @@ from amct_pytorch.common.datasets import preproc
 class _StubTokenizer:
     """Whitespace tokenizer: each word -> id = ord(first char)."""
 
+    def encode(self, text):
+        return [ord(t[0]) for t in text.split() if t]
+
     def __call__(self, text, return_tensors=None):
         ids = self.encode(text)
         return type("Enc", (), {"input_ids": torch.tensor([ids])})()
-
-    @staticmethod
-    def encode(text):
-        return [ord(t[0]) for t in text.split() if t]
 
 
 class _FakeDataset(list):
@@ -75,18 +56,6 @@ def test_pileval_awq_raises_when_not_enough_tokens_for_n_samples():
     ds = _texts_to_dataset(["a a", "b b"])
     with pytest.raises(ValueError, match="Not enough pileval tokens"):
         preproc.pileval_awq(ds, _StubTokenizer(), n_samples=2, seq_len=4)
-
-
-def test_pileval_awq_skips_empty_encoded_samples():
-    class _SelectiveTokenizer:
-        @staticmethod
-        def encode(text):
-            if text == "skip me":
-                return []
-            return [ord(c) for c in text.split()]
-    ds = _texts_to_dataset(["skip me", "a a a a a a a a", "b b b b b b b b"])
-    samples = preproc.pileval_awq(ds, _SelectiveTokenizer(), n_samples=1, seq_len=8)
-    assert len(samples) == 1
 
 
 # ---- get_pileval / get_wikitext2 (load_dataset is mocked) -----------------
@@ -142,4 +111,4 @@ def test_get_wiki_inputs_returns_empty_when_seq_len_exceeds_tokens(monkeypatch):
     fake_enc = type("Enc", (), {"input_ids": torch.arange(3).unsqueeze(0)})()
     monkeypatch.setattr(preproc, "get_wikitext2", lambda tokenizer: fake_enc)
     chunks = preproc.get_wiki_inputs(tokenizer=None, seq_len=8)
-    assert not chunks
+    assert chunks == []

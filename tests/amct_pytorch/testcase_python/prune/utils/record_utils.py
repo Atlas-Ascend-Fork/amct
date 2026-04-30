@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 from google.protobuf import text_format
 
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pytorch_pb2
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pytorch_pb2
 
 def get_producer(prune_record):
     producer_names = [producer.name for producer in prune_record.producer]

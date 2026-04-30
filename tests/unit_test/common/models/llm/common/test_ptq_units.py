@@ -1,48 +1,25 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 from amct_pytorch.common.models.llm.common.ptq_units import (
     PtqUnit,
     iter_indexed_units,
     make_ptq_unit,
 )
 
-EXPERT_IDX = 'expert_idx'
-MLP = 'mlp'
-
-SRC = 'src'
-
 
 def test_make_ptq_unit_defaults_metadata_to_empty_dict():
-    unit = make_ptq_unit(MLP, MLP, 3, module="m")
+    unit = make_ptq_unit("mlp", "mlp", 3, module="m")
     assert isinstance(unit, PtqUnit)
-    assert unit.kind == MLP and unit.name == MLP
+    assert unit.kind == "mlp" and unit.name == "mlp"
     assert unit.layer_idx == 3 and unit.module == "m"
     assert unit.metadata == {}
 
 
 def test_make_ptq_unit_preserves_provided_metadata():
-    unit = make_ptq_unit("moe", "expert_0", 1, module="m", metadata={EXPERT_IDX: 0})
-    assert unit.metadata == {EXPERT_IDX: 0}
+    unit = make_ptq_unit("moe", "expert_0", 1, module="m", metadata={"expert_idx": 0})
+    assert unit.metadata == {"expert_idx": 0}
 
 
 def test_save_name_replaces_dots_with_underscores():
-    assert make_ptq_unit(MLP, "block.mlp.up_proj", 0, module=None).save_name == "block_mlp_up_proj"
+    assert make_ptq_unit("mlp", "block.mlp.up_proj", 0, module=None).save_name == "block_mlp_up_proj"
 
 
 def test_iter_indexed_units_skips_none_modules():
@@ -86,8 +63,7 @@ def test_iter_indexed_units_metadata_fn_attaches_per_item_metadata():
         name_prefix="e",
         layer_idx=2,
         items=items,
-        metadata_fn=lambda idx, item: {EXPERT_IDX: idx, SRC: item},
+        metadata_fn=lambda idx, item: {"expert_idx": idx, "src": item},
     ))
-    assert units[0].metadata == {EXPERT_IDX: 0, SRC: "a"}
-    assert units[1].metadata == {EXPERT_IDX: 1, SRC: "b"}
-
+    assert units[0].metadata == {"expert_idx": 0, "src": "a"}
+    assert units[1].metadata == {"expert_idx": 1, "src": "b"}

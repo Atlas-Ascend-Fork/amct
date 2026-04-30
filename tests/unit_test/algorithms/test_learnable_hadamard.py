@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 from types import SimpleNamespace
 
 import pytest
@@ -27,8 +9,6 @@ from amct_pytorch.algorithms.quant.learnable_hadamard import (
     get_random_orthg,
 )
 
-TRANSFORM_WEIGHT = 'transform_weight'
-
 
 # ---- get_random_orthg ----------------------------------------------------
 
@@ -37,6 +17,7 @@ TRANSFORM_WEIGHT = 'transform_weight'
 def test_get_random_orthg_returns_orthogonal_matrix(size):
     q = get_random_orthg(size)
     assert q.shape == (size, size)
+    # Q @ Q^T == I
     assert torch.allclose(q @ q.T, torch.eye(size), atol=1e-5)
 
 
@@ -153,8 +134,8 @@ def test_learnable_hadamard_trainable_params_includes_transform_weight():
 def test_learnable_hadamard_export_load_round_trip():
     layer = _make_hadamard(matrix_size=4)
     params = layer.export_ptq_params()
-    assert TRANSFORM_WEIGHT in params
-    assert torch.equal(params[TRANSFORM_WEIGHT], layer.transform.linear.weight.detach().cpu())
+    assert "transform_weight" in params
+    assert torch.equal(params["transform_weight"], layer.transform.linear.weight.detach().cpu())
 
     other = _make_hadamard(matrix_size=4)
     other.load_ptq_params(params)

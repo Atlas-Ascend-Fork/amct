@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 import math
 
 import pytest
@@ -26,6 +8,7 @@ from amct_pytorch.common.models.llm.common.attention_forward import (
     repeat_kv,
     scaled_dot_product_attention,
 )
+
 
 # ---- repeat_kv -----------------------------------------------------------
 
@@ -66,11 +49,11 @@ class _StdAttnModule(nn.Module):
 
 
 def _reference_sdpa(q, k, v, attn_mask=None, is_causal=False):
-    seq_len, s_len = q.size(-2), k.size(-2)
+    L, S = q.size(-2), k.size(-2)
     scale = 1 / math.sqrt(q.size(-1))
-    bias = torch.zeros(seq_len, s_len, dtype=q.dtype, device=q.device)
+    bias = torch.zeros(L, S, dtype=q.dtype, device=q.device)
     if is_causal:
-        mask = torch.ones(seq_len, s_len, dtype=torch.bool, device=q.device).tril(0)
+        mask = torch.ones(L, S, dtype=torch.bool, device=q.device).tril(0)
         bias.masked_fill_(mask.logical_not(), float("-inf"))
     if attn_mask is not None:
         if attn_mask.dtype == torch.bool:

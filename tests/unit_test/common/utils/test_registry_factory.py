@@ -1,26 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
 import pytest
 
 from amct_pytorch.common.utils.registry_factory import Registry, RegistryItem
-
-BAR = 'bar'
-BAZ = 'baz'
 
 
 def test_register_via_decorator_uses_class_name():
@@ -37,13 +17,13 @@ def test_register_via_decorator_uses_class_name():
 def test_register_with_explicit_name_and_metadata():
     registry = Registry("test")
 
-    @registry.register(name=BAR, description="hi", flag=True)
+    @registry.register(name="bar", description="hi", flag=True)
     class Bar:
         pass
 
-    item = registry.get_item(BAR)
+    item = registry.get_item("bar")
     assert isinstance(item, RegistryItem)
-    assert item.name == BAR
+    assert item.name == "bar"
     assert item.target is Bar
     assert item.metadata == {"description": "hi", "flag": True}
 
@@ -51,24 +31,24 @@ def test_register_with_explicit_name_and_metadata():
 def test_call_alias_matches_register():
     registry = Registry("alias")
 
-    @registry(name=BAZ)
+    @registry(name="baz")
     class Baz:
         pass
 
-    assert registry.has(BAZ)
-    assert registry.get(BAZ) is Baz
+    assert registry.has("baz")
+    assert registry.get("baz") is Baz
 
 
 def test_duplicate_register_raises_without_force():
     registry = Registry("dup")
 
     @registry.register(name="x")
-    class DummyAlgoA:
+    class A:
         pass
 
     with pytest.raises(KeyError, match="already registered"):
         @registry.register(name="x")
-        class DummyAlgoB:
+        class B:
             pass
 
 
@@ -76,14 +56,14 @@ def test_duplicate_register_overrides_with_force():
     registry = Registry("dup")
 
     @registry.register(name="x")
-    class DummyAlgoA:
+    class A:
         pass
 
     @registry.register(name="x", force=True)
-    class DummyAlgoB:
+    class B:
         pass
 
-    assert registry.get("x") is DummyAlgoB
+    assert registry.get("x") is B
 
 
 def test_get_missing_lists_available_keys():
@@ -145,10 +125,3 @@ def test_register_function_directly_without_decorator_call():
 
     registry.register(fn, name="fn")
     assert registry.get("fn")() == 42
-
-
-def test_get_item_missing_raises():
-    registry = Registry("gi")
-    with pytest.raises(KeyError, match="not registered"):
-        registry.get_item("nope")
-

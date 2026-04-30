@@ -1,21 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-"""Lightweight adapter tests for  glm5 / longcat / qwen3.6 families."""
+"""Lightweight adapter tests for pangu / glm5 / longcat / qwen3.6 families."""
 
 from types import SimpleNamespace
 
@@ -23,17 +6,16 @@ import pytest
 import torch.nn as nn
 
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.common.models.llm.glm.glm5.glm5 import GLM5
 from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import LongcatLite
 from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import LongcatNext
+from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
 from amct_pytorch.common.models.llm.qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe
+from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 register_dtype()
-
-DENSE = 'dense'
 
 
 def _stub(adapter_cls, **attrs):
@@ -43,6 +25,27 @@ def _stub(adapter_cls, **attrs):
     for k, v in attrs.items():
         setattr(obj, k, v)
     return obj
+
+
+# ---- Pangu7B -------------------------------------------------------------
+
+
+def test_pangu7b_rejects_moe_target():
+    obj = _stub(Pangu7B, quant_target=["moe"])
+    with pytest.raises(ValueError, match="dense model"):
+        obj.parse_quant_mode()
+
+
+def test_pangu7b_layer_weight_prefix():
+    obj = _stub(Pangu7B, quant_target=["mlp"])
+    assert obj.get_layer_weight_prefix(3) == "model.layers.3."
+
+
+def test_pangu7b_update_config_sets_eager_attn():
+    cfg = SimpleNamespace()
+    obj = _stub(Pangu7B, quant_target=["mlp"], config=cfg)
+    obj._update_config()
+    assert obj.config._attn_implementation == "eager"
 
 
 # ---- LongcatLite / LongcatNext ------------------------------------------
@@ -103,17 +106,15 @@ def test_glm5_ensure_config_writes_mlp_layer_types_when_missing():
         config=SimpleNamespace(num_hidden_layers=6, first_k_dense_replace=2, moe_layer_freq=2, mlp_layer_types=None),
     )
     obj._ensure_glm5_config()
-    assert obj.config.mlp_layer_types == [DENSE, DENSE, "sparse", DENSE, "sparse", DENSE]
+    assert obj.config.mlp_layer_types == ["dense", "dense", "sparse", "dense", "sparse", "dense"]
 
 
 def test_glm5_ensure_config_no_op_when_mlp_layer_types_already_set():
-    existing = [DENSE, "sparse"]
+    existing = ["dense", "sparse"]
     obj = _stub(
         GLM5,
         quant_target=[],
-        config=SimpleNamespace(
-            num_hidden_layers=2, first_k_dense_replace=1,
-            moe_layer_freq=1, mlp_layer_types=existing),
+        config=SimpleNamespace(num_hidden_layers=2, first_k_dense_replace=1, moe_layer_freq=1, mlp_layer_types=existing),
     )
     obj._ensure_glm5_config()
     assert obj.config.mlp_layer_types is existing
@@ -177,14 +178,14 @@ def _make_block_with_quant_linears_for_glm5():
     args = SimpleNamespace(algos=[], quant_dtype="int", w_bits=8)
     block = nn.Module()
     block.self_attn = nn.Module()
-    block.self_attn.q_proj = QuantLinear(args, nn.Linear(4, 4), w_bits=args.w_bits, name="q_proj")
+    block.self_attn.q_proj = QuantLinear(args, nn.Linear(4, 4), name="q_proj")
 
     block.mlp = nn.Module()
     block.mlp.experts = nn.Module()
     block.mlp.experts.expert_modules = nn.ModuleList()
     for _ in range(2):
         e = nn.Module()
-        e.up_proj = QuantLinear(args, nn.Linear(4, 4), w_bits=args.w_bits, name="up_proj")
+        e.up_proj = QuantLinear(args, nn.Linear(4, 4), name="up_proj")
         block.mlp.experts.expert_modules.append(e)
     return block
 
@@ -212,10 +213,10 @@ def test_qwen3_6_moe_registers_in_model_registry():
 @pytest.mark.parametrize(
     "key,expected_cls",
     [
-        ("longcat_lite", LongcatLite),
+        ("pangu-7b", Pangu7B),
+        ("longcat-lite", LongcatLite),
         ("glm5", GLM5),
     ],
 )
 def test_other_adapters_register_under_expected_keys(key, expected_cls):
     assert MODEL_REGISTRY.get(key) is expected_cls
-

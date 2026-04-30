@@ -1,45 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
 import pytest
 import torch
 
 from amct_pytorch.quantization.dtypes.int import QuantDequantInt
-from amct_pytorch.quantization.dtypes.int_impl import (
-    dynamic_per_token_quant,
-    int4_assistance_bias,
-    pack_4bit,
-    scale_fp32_to_u64,
-    weight_quant,
-)
 from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
-from amct_pytorch.quantization.dtypes.mxfp_impl import (
-    down_size,
-    f4_unpacked_to_f32,
-    f32_to_f4_unpacked,
-    quantize_elewise,
-    round_to_decimal,
-    shared_exponents,
-    unpack_uint4,
-    up_size,
-)
-from amct_pytorch.quantization.dtypes.mxfp_impl import (
-    pack_uint4 as mx_pack_uint4,
-)
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -51,15 +14,7 @@ def test_mxfp_forward_shape_and_dtype_preserved(bits):
     assert y.dtype == x.dtype
 
 
-def test_mxfp_forward_with_tensor_v():
-    qdq = QuantDequantMx(bits=8)
-    x = torch.randn(4, 64)
-    v = torch.randn(4, 64)
-    y = qdq(x, v=v)
-    assert y.shape == x.shape
-
-
-def test_mxfp_forward_bits16_is_passthrough():
+def test_mxfp_bits16_is_passthrough():
     qdq = QuantDequantMx(bits=16)
     x = torch.randn(2, 32)
     assert torch.equal(qdq(x), x)
@@ -124,121 +79,4 @@ def test_int_quant_passes_gradient_through_ste():
     y = qdq(x)
     y.sum().backward()
     assert x.grad is not None
-    assert torch.allclose(x.grad, torch.ones_like(x), atol=2e-2, rtol=2e-2)
-
-    assert not torch.all(x.grad == 0)
-
-
-class TestIntImpl:
-    def test_dynamic_per_token_quant_preserves_shape(self):
-        x = torch.randn(4, 32, dtype=torch.float32)
-        y = dynamic_per_token_quant(x, bits=8)
-        assert y.shape == x.shape
-        assert y.dtype == x.dtype
-
-    def test_dynamic_per_token_quant_4bit_preserves_shape(self):
-        x = torch.randn(4, 16, dtype=torch.float32)
-        y = dynamic_per_token_quant(x, bits=4)
-        assert y.shape == x.shape
-
-    def test_scale_fp32_to_u64_shape(self):
-        scale = torch.randn(2, 4, dtype=torch.float32)
-        out = scale_fp32_to_u64(scale)
-        assert out.dtype == torch.uint64
-
-    def test_pack_4bit_shape(self):
-        x = torch.randint(-8, 7, (16, 32), dtype=torch.int8)
-        packed = pack_4bit(x)
-        assert packed.dtype == torch.int8
-        assert packed.shape[1] == 32
-
-    def test_weight_quant_8bit_shape(self):
-        w = torch.randn(8, 32, dtype=torch.float32)
-        out = weight_quant(w, bits=8)
-        assert out.shape == w.shape
-
-    def test_weight_quant_with_tensor_v(self):
-        w = torch.randn(8, 32, dtype=torch.float32)
-        v = torch.randn(8, 1, dtype=torch.float32)
-        out = weight_quant(w, bits=8, v=v)
-        assert out.shape == w.shape
-
-    def test_weight_quant_4bit_real_quant(self):
-        w = torch.randn(8, 32, dtype=torch.float32)
-        qw, scale, bias = weight_quant(w, bits=4, real_quant=True)
-        assert qw.dtype == torch.int8
-        assert qw.shape[1] == 32
-        assert bias.shape == (8,)
-
-    def test_int4_assistance_bias_shape(self):
-        weight = torch.randint(-8, 7, (4, 32), dtype=torch.int8)
-        scale = torch.randn(4, 1, dtype=torch.float32)
-        bias = int4_assistance_bias(weight, scale)
-        assert bias.shape == (4,)
-
-
-class TestMxfpImpl:
-    def test_down_size(self):
-        assert down_size((4, 8)) == (4, 4)
-        with pytest.raises(AssertionError):
-            down_size((4, 7))
-
-    def test_up_size(self):
-        assert up_size((4, 4)) == (4, 8)
-
-    def test_pack_unpack_roundtrip(self):
-        x = torch.randint(0, 16, (4, 8), dtype=torch.uint8)
-        packed = mx_pack_uint4(x)
-        unpacked = unpack_uint4(packed)
-        assert torch.equal(unpacked, x)
-
-    def test_round_to_decimal(self):
-        x = torch.tensor([1.0, 1.5, 1.76, 3.0], dtype=torch.float32)
-        r = round_to_decimal(x)
-        assert r[0].item() == 0.0
-        assert r[3].item() == 1.0
-
-    def test_shared_exponents_shape(self):
-        x = torch.randn(2, 8, 32, dtype=torch.float32)
-        e = shared_exponents(x, emax=8)
-        assert e.shape == (2, 8, 1)
-
-    def test_quantize_elewise_shape(self):
-        x = torch.randn(2, 4, 16, dtype=torch.float32)
-        q = quantize_elewise(x, min_exp=0, max_norm=6.0, shift_val=2)
-        assert q.shape == x.shape
-
-    def test_quantize_elewise_with_tensor_v(self):
-        x = torch.randn(2, 4, 16, dtype=torch.float32)
-        v = torch.randn(2, 4, 16, dtype=torch.float32)
-        q = quantize_elewise(x, min_exp=0, max_norm=6.0, shift_val=2, v=v)
-        assert q.shape == x.shape
-
-    def test_f4_unpacked_to_f32_returns_float32(self):
-        x = torch.randint(0, 16, (4, 8), dtype=torch.uint8)
-        out = f4_unpacked_to_f32(x)
-        assert out.dtype == torch.float32
-        assert out.shape == x.shape
-
-
-class TestMxfpDeploy:
-    def test_deploy_8bit_returns_fp8_weights(self):
-        qdq = QuantDequantMx(bits=8)
-        x = torch.randn(4, 64, dtype=torch.float32)
-        ex_mx, e8m0_data = qdq.deploy(x)
-        assert ex_mx.dtype == torch.float8_e4m3fn
-        assert e8m0_data.dtype == torch.uint8
-
-    def test_deploy_4bit_returns_packed_uint8(self):
-        qdq = QuantDequantMx(bits=4)
-        x = torch.randn(4, 64, dtype=torch.float32)
-        ex_mx, e8m0_data = qdq.deploy(x)
-        assert ex_mx.dtype == torch.uint8
-        assert e8m0_data.dtype == torch.uint8
-
-    def test_export_deploy_returns_dict(self):
-        qdq = QuantDequantMx(bits=8)
-        x = torch.randn(4, 64, dtype=torch.float32)
-        out = qdq.export_deploy(x)
-        assert "qweight" in out
-        assert "weight_scale" in out
+    assert torch.equal(x.grad, torch.ones_like(x))

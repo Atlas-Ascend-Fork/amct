@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-from amct_pytorch.algorithm import AlgorithmRegistry
+from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch import quantize, convert, algorithm_register
 from utils import TestModel
 

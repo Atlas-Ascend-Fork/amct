@@ -24,7 +24,7 @@ find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
 
 add_custom_target(amct_pytorch_utest
-    COMMAND ${Python3_EXECUTABLE} -m pytest amct_pytorch/unit_test
+    COMMAND ${Python3_EXECUTABLE} -m pytest
     WORKING_DIRECTORY ${AMCT_TOP_DIR}
     COMMENT "run amct_pytorch python unit tests"
 )

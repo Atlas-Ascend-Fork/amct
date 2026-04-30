@@ -1,27 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 from types import SimpleNamespace
 
 import pytest
 import torch
 
 from amct_pytorch.algorithms.quant.auto_clip import LAC, LWC
+
 
 # ---- LWC -----------------------------------------------------------------
 
@@ -31,25 +14,25 @@ def _lwc_args(w_size=(4, 8), quant_dtype="int"):
 
 
 def test_lwc_clip_dim_for_int_dtype_uses_first_dim():
-    lwc = LWC(_lwc_args(w_size=(4, 8), quant_dtype="int"), w_bits=8)
+    lwc = LWC(_lwc_args(w_size=(4, 8), quant_dtype="int"))
     assert lwc.clip_dim == 4
     assert lwc.clip_factor_min.shape == (4, 1)
     assert lwc.clip_factor_max.shape == (4, 1)
 
 
 def test_lwc_clip_dim_for_mxfp_uses_w_size_product_over_32():
-    lwc = LWC(_lwc_args(w_size=(8, 64), quant_dtype="mxfp"), w_bits=8)
+    lwc = LWC(_lwc_args(w_size=(8, 64), quant_dtype="mxfp"))
     assert lwc.clip_dim == 8 * 64 // 32
 
 
 def test_lwc_init_value_equals_4():
-    lwc = LWC(_lwc_args(), w_bits=8)
+    lwc = LWC(_lwc_args())
     assert torch.allclose(lwc.clip_factor_min.data, torch.full_like(lwc.clip_factor_min.data, 4.0))
     assert torch.allclose(lwc.clip_factor_max.data, torch.full_like(lwc.clip_factor_max.data, 4.0))
 
 
 def test_lwc_trainable_params_returns_both_clip_factors():
-    lwc = LWC(_lwc_args(), w_bits=8)
+    lwc = LWC(_lwc_args())
     params = lwc.trainable_params()
     # Identity check — `in` would invoke tensor.__eq__ and raise.
     assert any(p is lwc.clip_factor_min for p in params)
@@ -57,7 +40,7 @@ def test_lwc_trainable_params_returns_both_clip_factors():
 
 
 def test_lwc_export_load_round_trip():
-    lwc = LWC(_lwc_args(), w_bits=8)
+    lwc = LWC(_lwc_args())
     with torch.no_grad():
         lwc.clip_factor_min.fill_(1.5)
         lwc.clip_factor_max.fill_(2.5)
@@ -65,7 +48,7 @@ def test_lwc_export_load_round_trip():
     assert torch.equal(params["clip_factor_min"], lwc.clip_factor_min.detach().cpu())
     assert torch.equal(params["clip_factor_max"], lwc.clip_factor_max.detach().cpu())
 
-    other = LWC(_lwc_args(), w_bits=8)
+    other = LWC(_lwc_args())
     other.load_ptq_params(params)
     assert torch.equal(other.clip_factor_min.data, lwc.clip_factor_min.data)
     assert torch.equal(other.clip_factor_max.data, lwc.clip_factor_max.data)
@@ -73,7 +56,7 @@ def test_lwc_export_load_round_trip():
 
 def test_lwc_apply_clip_with_zero_factors_clamps_to_half_amplitude():
     # sigmoid(0) = 0.5 -> max clipped to 0.5 * row_max, min clipped to 0.5 * row_min.
-    lwc = LWC(_lwc_args(w_size=(2, 4), quant_dtype="int"), w_bits=8)
+    lwc = LWC(_lwc_args(w_size=(2, 4), quant_dtype="int"))
     with torch.no_grad():
         lwc.clip_factor_min.zero_()
         lwc.clip_factor_max.zero_()
@@ -85,7 +68,7 @@ def test_lwc_apply_clip_with_zero_factors_clamps_to_half_amplitude():
 
 
 def test_lwc_forward_preserves_shape_for_mxfp():
-    lwc = LWC(_lwc_args(w_size=(2, 32), quant_dtype="mxfp"), w_bits=8)
+    lwc = LWC(_lwc_args(w_size=(2, 32), quant_dtype="mxfp"))
     x = torch.randn(2, 32)
     assert lwc(x).shape == x.shape
 
