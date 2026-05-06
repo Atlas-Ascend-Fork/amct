@@ -4,7 +4,7 @@
 
 **Ascend Model Compression Toolkit**
 
-_昇腾 NPU 原生低比特量化压缩工具包_
+_昇腾 NPU 原生模型压缩工具包_
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/quick_install.md)
@@ -32,7 +32,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
   <img src="docs/figures/amct_architecture.png" alt="AMCT 架构" width="720">
 </div>
 
-**亮点**
+**亮点为：**
 
 - **🎯 硬件亲和** —— 量化结果直接对接昇腾 NPU 低比特运算单元
 - **🔢 多精度全栈** —— INT8 / INT4 / MXFP8 / MXFP4 / HiFloat8 任选
