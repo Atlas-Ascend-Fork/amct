@@ -101,7 +101,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 
 完整环境部署请参见 [快速安装](docs/quick_install.md)。
 
-### 安装
+### 安装&验证
 
 ```bash
 # 1. 拉取源码并安装依赖
@@ -120,8 +120,6 @@ cd amct_pytorch && pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --u
 ```
 
 > ⚠️ **注意**：若 pip 版本 > 25.2，安装命令需追加 `--no-build-isolation`，否则可能出现 `ModuleNotFoundError: No module named 'torch'`。
-
-### 安装验证
 
 ```bash
 # 验证 AMCT 安装
