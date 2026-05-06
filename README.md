@@ -123,7 +123,7 @@ cd amct_pytorch && pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --u
 
 ```bash
 # 验证 AMCT 安装
-python3 -c "import amct_pytorch as amct; print(f'AMCT 版本: {amct.__version__}')"
+python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 ```
 
 更多构建选项与本地验证请参见 [构建指南](docs/build.md)。
