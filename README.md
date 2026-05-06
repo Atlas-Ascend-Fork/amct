@@ -10,7 +10,7 @@ _昇腾 NPU 原生低比特量化压缩工具包_
 [![CANN](https://img.shields.io/badge/CANN-%E2%89%A58.5.0-green.svg)](docs/quick_install.md)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1.0%20%7C%202.7.1-orange.svg)](requirements.txt)
 
-[快速开始](#-快速开始) · [特性](#-核心特性) · [样例](#-文档与样例) · [FAQ](#-常见问题) · [贡献](#-参与贡献)
+[快速开始](#-快速开始) · [特性](#-核心特性) · [样例](#-文档样例) · [FAQ](#-常见问题) · [贡献](#-参与贡献)
 
 </div>
 
@@ -45,34 +45,34 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 |----------|------|
 | **PTQ 量化算法** | Min-Max / AWQ / GPTQ / SmoothQuant 等训练后量化算法，详见 [算法介绍](docs/algorithm_brief.md) |
 | **HiFloat8 量化** | 华为自研 8-bit 浮点格式，锥形精度 + 大动态范围，详见 [HiFloat8 介绍](docs/context/hifloat8_quantization.md) |
-| **NPU 自定义算子** | 基于npu的自研算子，Ascend C kernel 实现，详见 [npu_ops](npu_ops/README.md) |
+| **NPU 自定义算子** | 基于NPU的自研算子，Ascend C kernel 实现，详见 [npu_ops](npu_ops/README.md) |
 | **大模型量化** | DeepSeek-V3.2 / V4 量化方案，详见 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
 
 ### 算法支持矩阵
 
 **激活权重量化 (W+A)**
 
-| 算法 | INT8 (W+A) | INT4 (W+A) | MXFP8/MXFP4 | HiFloat8 |
-|------|:----------:|:----------:|:-----------:|:--------:|
-| Min-Max       | ✅ | — | — | — |
-| SmoothQuant   | ✅ | — | — | — |
-| Cast          | — | — | — | ✅ |
-| Quantile      | — | — | — | ✅ |
-| OFMR          | — | — | — | ✅ |
-| MXQuant       | — | — | ✅ | — |
-| FlatQuant     | — | ✅ | — | — |
+| 算法 | INT8 | INT4 | MXFP8 | HiFloat8 |
+|--------|:----------:|:----------:|:-----------:|:--------:|
+| Min-Max     | ✅ | — | — | — |
+| SmoothQuant | ✅ | — | — | — |
+| Cast        | — | — | — | ✅ |
+| Quantile    | — | — | — | ✅ |
+| OFMR        | — | — | — | ✅ |
+| MXQuant     | — | — | ✅ | — |
+| FlatQuant   | — | ✅ | — | — |
 
 **权重量化 (W)**
 
-| 算法 | INT8 (W) | INT4 (W) | MXFP8/MXFP4 | HiFloat8 |
-|------|:--------:|:--------:|:-----------:|:--------:|
-| Min-Max  | ✅ | — | — | — |
-| AWQ      | ✅ | ✅ | — | — |
-| GPTQ     | ✅ | ✅ | — | — |
-| Cast     | — | — | — | ✅ |
-| Quantile | — | — | — | ✅ |
-| OFMR     | — | — | — | ✅ |
-| MXQuant  | — | — | ✅ | — |
+| 算法 | INT8 | INT4 | MXFP8 | MXFP4 | HiFloat8 |
+|--------|:----------:|:----------:|:-----------:|:-----------:|:--------:|
+| Min-Max    | ✅ | ✅ | — | — | — |
+| AWQ        | ✅ | ✅ | — | — | — |
+| GPTQ       | ✅ | ✅ | — | ✅ | ✅ |
+| Cast       | — | — | — | — | ✅ |
+| Quantile   | — | — | — | — | ✅ |
+| OFMR       | — | — | — | — | ✅ |
+| MXQuant    | — | — | ✅ | ✅ | — |
 
 
 ## 📊 性能收益
