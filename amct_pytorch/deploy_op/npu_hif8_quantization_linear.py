@@ -37,24 +37,6 @@ class NpuHIF8Linear(torch.nn.Module):
         else:
             self.register_buffer('bias', quant_module.bias)
         self.is_new_torch_npu = True if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype') else False
-        
-    def _init_weight_quant(self, quant_module):
-        fp8_weight = quant_module.weight # n, k
-        fp8_scale = quant_module.weight_scale_inv
-        if quant_module.block_size is not None: # block quantize
-            n, k = quant_module.weight.shape
-            block_h, block_w = quant_module.block_size
-            fp8_scale = torch.repeat_interleave(fp8_scale, block_h, dim=0)
-            fp8_scale = torch.repeat_interleave(fp8_scale, block_w, dim=1)
-            fp8_scale = fp8_scale[:n, :k]
-        dequant_weight = fp8_weight.to(torch.float32) / fp8_scale
-        weight_max = dequant_weight.max(dim=1, keepdim=True).values
-        scale = (weight_max / 16.0).to(torch.float32).flatten() # n
-        self.register_buffer('deq_scale', scale)
-        import torch_npu
-        # k, n * n
-        hif8_quantized_tensor = torch_npu.npu_quantize(dequant_weight.transpose(0, 1), scale, None, dtype=torch_npu.hifloat8)
-        self.register_buffer('quantized_weight', hif8_quantized_tensor)
 
     def forward(self, x):
         """
@@ -75,3 +57,22 @@ class NpuHIF8Linear(torch.nn.Module):
             print("Do not support current convert")
 
         return output
+        
+    def _init_weight_quant(self, quant_module):
+        fp8_weight = quant_module.weight # n, k
+        fp8_scale = quant_module.weight_scale_inv
+        if quant_module.block_size is not None: # block quantize
+            n, k = quant_module.weight.shape
+            block_h, block_w = quant_module.block_size
+            fp8_scale = torch.repeat_interleave(fp8_scale, block_h, dim=0)
+            fp8_scale = torch.repeat_interleave(fp8_scale, block_w, dim=1)
+            fp8_scale = fp8_scale[:n, :k]
+        dequant_weight = fp8_weight.to(torch.float32) / fp8_scale
+        weight_max = dequant_weight.max(dim=1, keepdim=True).values
+        scale = (weight_max / 16.0).to(torch.float32).flatten() # n
+        self.register_buffer('deq_scale', scale)
+        import torch_npu
+        # k, n * n
+        hif8_quantized_tensor = torch_npu.npu_quantize(dequant_weight.transpose(0, 1),
+                                                       scale, None, dtype=torch_npu.hifloat8)
+        self.register_buffer('quantized_weight', hif8_quantized_tensor)

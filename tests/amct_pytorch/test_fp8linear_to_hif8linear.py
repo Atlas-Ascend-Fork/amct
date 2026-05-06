@@ -1,13 +1,15 @@
-import torch.nn as nn
-import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
-import torch
 import copy 
 import unittest
-from amct_pytorch import quantize, convert
+import torch.nn as nn
+import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
 from transformers.integrations.finegrained_fp8 import FP8Linear
+import torch
 import transformers
 import numpy as np
+from amct_pytorch import quantize, convert
+
 torch.manual_seed(0)
+
 
 class FP8Model(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim):
@@ -23,6 +25,7 @@ class FP8Model(nn.Module):
         x = self.layer2(x)
         return x
 
+
 class TestFP8HIF8(unittest.TestCase):
     '''    ST FOR FP8HIF8 ALGORITHM    '''    
     @classmethod
@@ -33,11 +36,12 @@ class TestFP8HIF8(unittest.TestCase):
         cls.test_inputs = torch.randn(batch, input_dim).to(torch.bfloat16)        
         cls.ori_out = cls.test_model(cls.test_inputs)       
         print('TestFP8HIF8 START!')   
+    
     @classmethod    
     def tearDownClass(cls):        
         print('TestFP8HIF8 END!') 
        
-    def test_FP8_HIF8_success(self):     
+    def test_fp8_hif8_success(self):     
         model = copy.deepcopy(self.test_model)        
         quantize(model)        
         print(model)        
