@@ -43,13 +43,14 @@ set(TORCH_NPU_INCLUDE_DIRS ${TORCH_NPU_PATH}/include ${TORCH_NPU_PATH}/csrc)
 set(TORCH_NPU_LIBRARIES ${TORCH_NPU_PATH}/lib)
 
 add_library(hifloat8_cast_ops SHARED
-    op_kernel/hifloat8_cast_wrapper.asc
-    op_extension/register.cpp
+    op_kernel/hifloat8_cast_kernel.asc
+    op_host/hifloat8_cast_op.asc
+    op_host/register.cpp
 )
 
 target_include_directories(hifloat8_cast_ops PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel
-    ${CMAKE_CURRENT_SOURCE_DIR}/op_extension
+    ${CMAKE_CURRENT_SOURCE_DIR}/op_host
     ${TORCH_INCLUDE_DIRS}
     ${TORCH_NPU_INCLUDE_DIRS}
     ${ACL_INCLUDE_DIR}
