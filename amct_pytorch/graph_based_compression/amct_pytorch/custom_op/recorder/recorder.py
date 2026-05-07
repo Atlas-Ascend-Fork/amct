@@ -207,6 +207,7 @@ class Recorder(nn.Module): # pylint: disable=R0902
         offset_d = quant_factors.get('offset_d')
         offset_h = quant_factors.get('offset_h')
         num_bits = quant_factors.get('num_bits')
+        fakequant_precision_mode = self.fakequant_precision_mode
         if scale_d is None or offset_d is None:
             raise ValueError("scale_d and offset_d are necessary")
         for layer_name in layers_name:
@@ -215,7 +216,8 @@ class Recorder(nn.Module): # pylint: disable=R0902
                 if scale_h is not None:
                     scale_h = cast_fp16_precision(scale_h)
             record_activation_scale_offset(self.records, layer_name,
-                                            scale_d, offset_d, num_bits, scale_h, offset_h)
+                                           scale_d, offset_d, num_bits, scale_h, offset_h,
+                                           fakequant_precision_mode)
             self.__counts['act_cali_num'] += 1
         LOGGER.logd(
             "Record layer '{}' data's quant factors!".format(layers_name),

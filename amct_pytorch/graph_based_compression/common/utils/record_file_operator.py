@@ -194,7 +194,8 @@ def read_shift_bits(records, layer_name):
     return shift_bits
 
 
-def record_activation_scale_offset(records, layer_name, scale, offset, num_bits=None, scale_h=None, offset_h=None):
+def record_activation_scale_offset(records, layer_name, scale, offset, num_bits=None, scale_h=None,
+    offset_h=None, fakequant_precision_mode='DEFAULT'):
     """
     Function: Write scale_w and offset_w to record file
     Parameters: records: ScaleOffsetRecord() object to write

@@ -135,7 +135,9 @@ class InsertDequantPass(BaseFusionPass):
             ],
             outputs=[object_node.name + '.dequant.output0'],
             layer_name=object_node.name,
-            dtype=dtype)
+            dtype=dtype,
+            fakequant_precision_mode=self.records.get(object_node.name).get('fakequant_precision_mode', 'DEFAULT'),
+        )
         dequant_node = graph.add_node(node_proto)
 
         return dequant_node, dequant_param
@@ -174,7 +176,8 @@ def construct_dequant_param(dequant_param, # pylint: disable=no-member
 def construct_dequant_node(inputs, # pylint: disable=no-member
                            outputs,
                            layer_name,
-                           dtype):
+                           dtype,
+                           fakequant_precision_mode='DEFAULT'):
     """
     Function: construct quant node in onnx
     Inputs:
@@ -192,4 +195,5 @@ def construct_dequant_node(inputs, # pylint: disable=no-member
     node_proto.output.extend(outputs) # pylint: disable=E1101
     attr_helper = AttributeProtoHelper(node_proto)
     attr_helper.set_attr_value('dtype', 'INT', dtype)
+    attr_helper.set_attr_value('fakequant_precision_mode', 'STRING', bytes(fakequant_precision_mode + ' ', 'utf-8'))
     return node_proto

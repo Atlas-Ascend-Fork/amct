@@ -76,7 +76,9 @@ class InsertQuantPass(BaseFusionPass):
                 1.0 / self.records.get(object_node.name).get('data_scale'),
                 'offset':
                 self.records.get(object_node.name).get('data_offset'),
-                'dst_type': 'INT{:d}'.format(num_bits)
+                'dst_type': 'INT{:d}'.format(num_bits),
+                'fakequant_precision_mode':
+                self.records.get(object_name).get('fakequant_precision_mode', 'DEFAULT'),
             },
             layer_name=object_node.name)
         quant_node = graph.add_node(node_proto)
@@ -135,5 +137,7 @@ def construct_quant_node(inputs, # pylint: disable=no-member
     attr_helper.set_attr_value('scale', 'FLOAT', attrs['scale'])
     attr_helper.set_attr_value('offset', 'FLOAT', attrs['offset'])
     attr_helper.set_attr_value('dst_type', 'STRING', bytes(attrs['dst_type'], 'utf-8'))
+    attr_helper.set_attr_value('fakequant_precision_mode', 'STRING', \
+        bytes(str(attrs.get('fakequant_precision_mode', 'DEFAULT')) + ' ', 'utf-8'))
 
     return node_proto
