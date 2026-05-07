@@ -289,7 +289,8 @@ def read_activation_scale_offset(records, layer_name):
     return scale, offset
 
 
-def generate_records(layers_length, scale_value=0.1, offset_value=0):
+def generate_records(layers_length, scale_value=0.1, offset_value=0,
+                     fakequant_precision_mode='DEFAULT'):
     records = {}
     for layer_name in layers_length:
         length = layers_length[layer_name]
@@ -300,6 +301,7 @@ def generate_records(layers_length, scale_value=0.1, offset_value=0):
         record['weight_offset'] = np.array([offset_value]*length, dtype=np.int8)
         record['act_type'] = 'INT8'
         record['wts_type'] = 'INT8'
+        record['fakequant_precision_mode'] = fakequant_precision_mode
 
         records[layer_name] = record
 
