@@ -179,6 +179,8 @@ class RNNRetrainQuant(nn.Module):
 
         if self.do_init:
             self._acts_quant_init(inputs, hx)
+        else:
+            self.quant_module.act_init_over = True
         
         outputs = self.quant_module(inputs, hx)
 

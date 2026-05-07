@@ -47,6 +47,7 @@ class CompModuleRNN(nn.Module):
                  common_config=None,
                  acts_comp_reuse=None):
         super().__init__()
+        self.act_init_over = False
         self.replaced_module = module # ori_module
         self.replaced_module_type = module._get_name()
         self.act_config = act_config
@@ -175,6 +176,11 @@ class CompModuleRNN(nn.Module):
         Inputs:
             inputs: data used for calibration in torch.tensor.
         """
+        if not self.act_init_over:
+            if self.replaced_module_type == 'LSTM':
+                return inputs, hx[0]
+            else:
+                return inputs, hx
         act_qat_param = {
             NUM_BITS: self.act_config.get(NUM_BITS),
             FIXED_MIN: self.act_config.get(FIXED_MIN),
