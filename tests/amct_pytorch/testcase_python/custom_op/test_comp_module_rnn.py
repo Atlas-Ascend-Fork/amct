@@ -102,3 +102,28 @@ class TestCompModuleRNN(unittest.TestCase):
         comp_module.comp_algs.append('quant')
         inputs = torch.randn(1, 10, 10)
         comp_module.forward(inputs, self.h0)
+
+    def test_act_init_over_default_false(self):
+        comp_module = CompModuleRNN(**self.comp_args)
+        comp_module.comp_algs.append('quant')
+        self.assertFalse(comp_module.act_init_over)
+
+    def test_act_init_over_true_triggers_quant_path(self):
+        comp_module = CompModuleRNN(**self.comp_args)
+        comp_module.comp_algs.append('quant')
+        comp_module.act_init_over = True
+        comp_module.forward(self.input, (self.h0, self.c0))
+
+    def test_act_init_over_lstm_early_return(self):
+        comp_module = CompModuleRNN(**self.comp_args)
+        comp_module.comp_algs.append('quant')
+        result_inputs, result_hx = comp_module._acts_comp_quant(self.input, (self.h0, self.c0))
+        self.assertTrue(torch.equal(result_inputs, self.input))
+        self.assertTrue(torch.equal(result_hx, self.h0))
+
+    def test_act_init_over_gru_early_return(self):
+        comp_module = CompModuleRNN(**self.gru_comp_args)
+        comp_module.comp_algs.append('quant')
+        result_inputs, result_hx = comp_module._acts_comp_quant(self.input, self.h0)
+        self.assertTrue(torch.equal(result_inputs, self.input))
+        self.assertTrue(torch.equal(result_hx, self.h0))

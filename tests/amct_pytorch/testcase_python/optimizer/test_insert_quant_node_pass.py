@@ -118,7 +118,8 @@ class TestInsertQuantPass(unittest.TestCase):
     def test_match_pattern_success(self):
         records = {'conv1': {
                 'data_scale': 1,
-                'data_offset': 0
+                'data_offset': 0,
+                'fakequant_precision_mode': 'DEFAULT',
             }
         }
         test_model = deepcopy(self.model_proto)
@@ -128,7 +129,8 @@ class TestInsertQuantPass(unittest.TestCase):
     def test_match_pattern_not_in_quantizable_types(self):
         records = {'conv1': {
                 'data_scale': 1,
-                'data_offset': 0
+                'data_offset': 0,
+                'fakequant_precision_mode': 'DEFAULT',
             }
         }
         test_model = deepcopy(self.model_proto)
@@ -138,7 +140,8 @@ class TestInsertQuantPass(unittest.TestCase):
     def test_match_pattern_not_in_records(self):
         records = {'conv2': {
                 'data_scale': 1,
-                'data_offset': 0
+                'data_offset': 0,
+                'fakequant_precision_mode': 'DEFAULT',
             }
         }
         test_model = deepcopy(self.model_proto)
@@ -149,7 +152,8 @@ class TestInsertQuantPass(unittest.TestCase):
         records = {'conv1': {
                 'data_scale': 1,
                 'data_offset': 0,
-                'act_type': 'INT8'
+                'act_type': 'INT8',
+                'fakequant_precision_mode': 'DEFAULT',
             }
         }
         test_model = deepcopy(self.model_proto)
@@ -164,7 +168,8 @@ class TestInsertQuantPass(unittest.TestCase):
         records = {'avg_pool1': {
                 'data_scale': 1,
                 'data_offset': 0,
-                'act_type': 'INT8'
+                'act_type': 'INT8',
+                'fakequant_precision_mode': 'DEFAULT',
             }
         }
         test_model = deepcopy(self.model_proto)

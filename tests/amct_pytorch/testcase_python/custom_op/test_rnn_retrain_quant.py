@@ -134,6 +134,16 @@ class TestRNNRetrainQuant(unittest.TestCase):
     def test_forward_success(self):
         self.retrain_quant.forward(self.input, (self.h0, self.c0))
         self.retrain_quant_gru.forward(self.input, self.h0)
+
+    def test_act_init_over_set_when_no_ifmr(self):
+        self.assertFalse(self.retrain_quant.do_init)
+        self.retrain_quant.forward(self.input, (self.h0, self.c0))
+        self.assertTrue(self.retrain_quant.quant_module.act_init_over)
+
+    def test_act_init_over_set_when_no_ifmr_gru(self):
+        self.assertFalse(self.retrain_quant_gru.do_init)
+        self.retrain_quant_gru.forward(self.input, self.h0)
+        self.assertTrue(self.retrain_quant_gru.quant_module.act_init_over)
     
     def test_forward_seq_n_success(self):
         inputs = torch.randn(1, 10, 10)
