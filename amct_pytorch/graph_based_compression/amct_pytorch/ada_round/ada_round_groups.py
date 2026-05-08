@@ -29,6 +29,14 @@ ACTIVATION_MAP = {
 }
 
 
+def _get_single_consumer(node):
+    """Get the single consumer of node's output anchor 0."""
+    consumers, _ = node.get_consumers(0)
+    if len(consumers) != 1:
+        return None
+    return consumers[0]
+
+
 def _is_weight_ada_round(quant_config, layer_name):
     '''
     Function: determine whether weight do ada round
@@ -48,189 +56,92 @@ def _is_weight_ada_round(quant_config, layer_name):
 
 
 def _match_gelu_subgraph(input_nodes):
-    '''
-    Function: judge whether match gelu() subgraph
-        / \
-        | |
-        | Div
-        | |
-        | Erf
-        | |
-        | Add
-        \ /
-        Mul
-         |
-        Mul
-    Parameters:
-        input_nodes: input_nodes of subgraph
-    Return:
-        True: match
-        False: mismatch
-    '''
     if len(input_nodes) != 2:
         return False
 
     div_node = input_nodes[0]
     if div_node.type != 'Div':
         return False
-    consumers, _ = div_node.get_consumers(0)
-    if len(consumers) != 1:
-        return False
     div_value = QuantOpInfo.get_node_input_value(div_node, 1)
     except_value = np.array(1.4142135381698608, dtype=np.float32)
     if div_value != except_value and div_value != except_value.astype(np.float16):
         return False
 
-    erf_node = consumers[0]
-    if erf_node.type != 'Erf':
-        return False
-    consumers, _ = erf_node.get_consumers(0)
-    if len(consumers) != 1:
+    erf_node = _get_single_consumer(div_node)
+    if erf_node is None or erf_node.type != 'Erf':
         return False
 
-    add_node = consumers[0]
-    if add_node.type != 'Add':
+    add_node = _get_single_consumer(erf_node)
+    if add_node is None or add_node.type != 'Add':
         return False
-    consumers, _ = add_node.get_consumers(0)
-    if len(consumers) != 1:
-        return False
-    add_value = QuantOpInfo.get_node_input_value(add_node, 1)
-    if add_value != 1:
+    if QuantOpInfo.get_node_input_value(add_node, 1) != 1:
         return False
 
-    mul0_node = consumers[0]
-    if mul0_node.type != MUL or mul0_node is not input_nodes[1]:
-        return False
-    consumers, _ = mul0_node.get_consumers(0)
-    if len(consumers) != 1:
+    mul0_node = _get_single_consumer(add_node)
+    if mul0_node is None or mul0_node.type != MUL or mul0_node is not input_nodes[1]:
         return False
 
-    mul1_node = consumers[0]
-    if mul1_node.type != MUL:
+    mul1_node = _get_single_consumer(mul0_node)
+    if mul1_node is None or mul1_node.type != MUL:
         return False
-    mul1_value = QuantOpInfo.get_node_input_value(mul1_node, 1)
-    if mul1_value != 0.5:
+    if QuantOpInfo.get_node_input_value(mul1_node, 1) != 0.5:
         return False
 
     return True
 
 
 def _match_gelu_tanh_subgraph_front_part(input_nodes):
-    '''
-    Function: judge whether match gelu('tanh') subgraph front part
-     / / | |\
-    | |  | Mul0
-    | |  \ /
-    | |  Mul1
-    | |   |
-    | |  Mul2
-    |  \ /
-    |  Add0
-    |   |
-    Parameters:
-        input_nodes: input_nodes of subgraph
-    Return:
-        True: match
-        False: mismatch
-    '''
     mul0_node = input_nodes[0]
     if mul0_node.type != MUL or mul0_node is not input_nodes[1]:
         return False
-    consumers, _ = mul0_node.get_consumers(0)
-    if len(consumers) != 1:
+
+    mul1_node = _get_single_consumer(mul0_node)
+    if mul1_node is None or mul1_node.type != MUL or mul1_node is not input_nodes[2]:
         return False
 
-    mul1_node = consumers[0]
-    if mul1_node.type != MUL or mul1_node is not input_nodes[2]:
-        return False
-    consumers, _ = mul1_node.get_consumers(0)
-    if len(consumers) != 1:
-        return False
-
-    mul2_node = consumers[0]
-    if mul2_node.type != MUL:
-        return False
-    consumers, _ = mul2_node.get_consumers(0)
-    if len(consumers) != 1:
+    mul2_node = _get_single_consumer(mul1_node)
+    if mul2_node is None or mul2_node.type != MUL:
         return False
     mul2_value = QuantOpInfo.get_node_input_value(mul2_node, 0)
     except_value = np.array(0.044714998453855515, dtype=np.float32)
     if mul2_value != except_value and mul2_value != except_value.astype(np.float16):
         return False
 
-    add0_node = consumers[0]
-    if add0_node.type != 'Add' or add0_node is not input_nodes[3]:
-        return False
-    consumers, _ = add0_node.get_consumers(0)
-    if len(consumers) != 1:
+    add0_node = _get_single_consumer(mul2_node)
+    if add0_node is None or add0_node.type != 'Add' or add0_node is not input_nodes[3]:
         return False
 
     return True
 
 
 def _match_gelu_tanh_subgraph_back_part(input_nodes):
-    '''
-    Function: judge whether match gelu('tanh') subgraph back part
-     |  \  /
-     |  Add0
-     |    |
-     |  Mul3
-     |    |
-     |  Tanh
-     |    |
-     |  Add1
-     |    |
-      \  /
-      Mul4
-        |
-      Mul5
-    Parameters:
-        input_nodes: input_nodes of subgraph
-    Return:
-        True: match
-        False: mismatch
-    '''
     add0_node = input_nodes[3]
     mul3_node = add0_node.get_output_anchor(0).get_peer_input_anchor()[0].node
     if mul3_node.type != MUL:
-        return False
-    consumers, _ = mul3_node.get_consumers(0)
-    if len(consumers) != 1:
         return False
     mul3_value = QuantOpInfo.get_node_input_value(mul3_node, 0)
     except_value = np.array(0.7978845834732056, dtype=np.float32)
     if mul3_value != except_value and mul3_value != except_value.astype(np.float16):
         return False
 
-    tanh_node = consumers[0]
-    if tanh_node.type != 'Tanh':
-        return False
-    consumers, _ = tanh_node.get_consumers(0)
-    if len(consumers) != 1:
+    tanh_node = _get_single_consumer(mul3_node)
+    if tanh_node is None or tanh_node.type != 'Tanh':
         return False
 
-    add1_node = consumers[0]
-    if add1_node.type != 'Add':
+    add1_node = _get_single_consumer(tanh_node)
+    if add1_node is None or add1_node.type != 'Add':
         return False
-    consumers, _ = add1_node.get_consumers(0)
-    if len(consumers) != 1:
-        return False
-    add1_value = QuantOpInfo.get_node_input_value(add1_node, 0)
-    if add1_value != 1:
+    if QuantOpInfo.get_node_input_value(add1_node, 0) != 1:
         return False
 
-    mul4_node = consumers[0]
-    if mul4_node.type != MUL or mul4_node is not input_nodes[4]:
-        return False
-    consumers, _ = mul4_node.get_consumers(0)
-    if len(consumers) != 1:
+    mul4_node = _get_single_consumer(add1_node)
+    if mul4_node is None or mul4_node.type != MUL or mul4_node is not input_nodes[4]:
         return False
 
-    mul5_node = consumers[0]
-    if mul5_node.type != MUL:
+    mul5_node = _get_single_consumer(mul4_node)
+    if mul5_node is None or mul5_node.type != MUL:
         return False
-    mul5_value = QuantOpInfo.get_node_input_value(mul5_node, 0)
-    if mul5_value != 0.5:
+    if QuantOpInfo.get_node_input_value(mul5_node, 0) != 0.5:
         return False
 
     return True
@@ -258,33 +169,15 @@ def _match_gelu_tanh_subgraph(input_nodes):
 
 
 def _match_rrelu_subgraph(input_nodes):
-    '''
-    Function: judge whether match rrelu subgraph
-        torch 2.1 earlier, rrelu export to RandomUniformLike + PRelu
-        / \
-        | |
-        | RandomUniformLike
-        | |
-        \ /
-        PRelu
-    Parameters:
-        input_nodes: input_nodes of subgraph
-    Return:
-        True: has rrelu
-        False: don't have rrelu
-    '''
     if len(input_nodes) != 2:
         return False
 
     rand_node = input_nodes[0]
     if rand_node.type != 'RandomUniformLike':
         return False
-    consumers, _ = rand_node.get_consumers(0)
-    if len(consumers) != 1:
-        return False
 
-    prelu_node = consumers[0]
-    if prelu_node.type != 'PRelu' or prelu_node is not input_nodes[1]:
+    prelu_node = _get_single_consumer(rand_node)
+    if prelu_node is None or prelu_node.type != 'PRelu' or prelu_node is not input_nodes[1]:
         return False
 
     return True

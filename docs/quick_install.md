@@ -7,14 +7,14 @@
 - bash >= 5.1.16
 - GCC >= 7.3.x
 - CMake >= 3.16.0（建议使用3.20.0版本）
-- Python：3.11
+- Python >= 3.9.x
    
   请确保该依赖已安装，注意满足版本要求。
 
 - PyTorch：2.7.1、2.1.0
 - Ascend Extension for PyTorch：版本配套关系请单击[Link](https://hiascend.com/document/redirect/pytorchuserguide)，查看“版本说明 >相关产品版本配套说明”章节。
 
-此处以PyTorch2.7.1版本为例，安装业务运行时依赖的Python第三方库，安装命令如下，PyTorch2.1.0版本安装依赖命令请参见《[AMCT模型压缩工具](https://www.hiascend.com/document/redirect/CannCommunityToolAmctInstalDepdence)》：
+此处以Python3.11、PyTorch2.7.1版本为例，安装业务运行时依赖的Python第三方库，安装命令如下，PyTorch2.1.0版本安装依赖命令请参见《[AMCT模型压缩工具](https://www.hiascend.com/document/redirect/CannCommunityToolAmctInstalDepdence)》：
 
 ```bash
 pip3 install -r requirements.txt
