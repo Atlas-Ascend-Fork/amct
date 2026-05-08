@@ -106,10 +106,9 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 ```bash
 # 1. 拉取源码并安装依赖
 git clone https://gitcode.com/cann/amct.git
-cd amct
-pip install -r requirements.txt
 
 # 2. 源码构建打包
+cd amct
 bash build.sh --pkg
 
 # 3. 解包并安装（产物位于 build_out/）
