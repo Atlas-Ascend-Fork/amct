@@ -78,7 +78,6 @@ class TestLongcatFlashMLA(unittest.TestCase):
         self.assertEqual(type(model.attn).__name__, 'LongcatFlashMLAQuant')
         self.assertIsNotNone(model.attn.scale_k)
         self.assertIsNotNone(model.attn.scale_v)
-        model = model
         convert(model)
         self.assertEqual(type(model.attn).__name__, 'NpuLongcatFlashMLA')
         for i in range(5):

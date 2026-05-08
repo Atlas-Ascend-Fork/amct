@@ -203,14 +203,12 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
             wts_type = quant_config.quant_cfg.weights_cfg.quant_type
             if quant_config.quant_cfg.kvcache_cfg.quant_kv:
                 check_kv_config(quant_config, algo)
-            kvcache_type = quant_config.quant_cfg.kvcache_cfg.quant_type if \
-                        quant_config.quant_cfg.kvcache_cfg.quant_kv else 'NOT_QUANTIZE'
             if wts_type is None:
                 quant_type_comb = None
             else:
                 quant_type_comb = act_type + ' ' + wts_type
                 check_config(quant_type_comb, quant_config, algo)
-    return layer_types, quant_type_comb, kvcache_type
+    return layer_types, quant_type_comb
 
 
 def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
@@ -246,7 +244,7 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
 
 def get_supported_layers(model, quant_config, registed_alg):
     '''get supported layers based on quant config and registed algorithm'''
-    layer_types, quant_type_comb, kvcache_dtype = _build_layer_types_and_quant_type(quant_config, registed_alg)
+    layer_types, quant_type_comb = _build_layer_types_and_quant_type(quant_config, registed_alg)
 
     detail_config = dict()
     all_layer_names = [name for name, mod in model.named_modules()

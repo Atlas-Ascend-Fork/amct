@@ -77,7 +77,6 @@ class TestDeepseekV3Attention(unittest.TestCase):
         self.assertEqual(type(model.attn).__name__, 'DeepseekV3AttentionQuant')
         self.assertIsNotNone(model.attn.scale_k)
         self.assertIsNotNone(model.attn.scale_v)
-        model = model.npu()
         convert(model)
         self.assertEqual(type(model.attn).__name__, 'NpuDeepseekV3AttentionQuant')
         for i in range(5):
