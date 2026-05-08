@@ -9,10 +9,10 @@
     python create_pr.py --title "PR标题" --head "user:branch" --base "develop" --body "完整描述"
 """
 
-import requests
 import sys
 import os
 import argparse
+import requests
 
 
 def load_pr_template(template_path=None):
