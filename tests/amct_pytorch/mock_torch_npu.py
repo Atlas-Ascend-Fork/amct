@@ -116,8 +116,8 @@ def mock_npu_quantize(input, scales, zero_points=None,
     return out
 
 
-def mock_npu_anti_quantize(inputs, scales, zero_points=None,
-    dtype=torch.qint8, axis=1, div_mode=True):
+def mock_npu_anti_quant(inputs, scales, zero_points=None,
+    src_dtype=None, dst_dtype=None):
     out = inputs * scales
     return out
 
