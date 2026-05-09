@@ -461,6 +461,7 @@ class QuantConfig:
             quant_cfg['weights_cfg'] = weights_cfg.get_value()
         elif quant_cfg['weights_cfg'] is None and \
             quant_cfg['kvcache_cfg'].get('enable_quant') == False:
+                self._layer_config_cache[layer_name] = None
             return None
         
         fuzzy_inputs_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'inputs')

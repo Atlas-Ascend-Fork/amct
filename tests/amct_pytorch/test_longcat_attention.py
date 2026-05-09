@@ -72,7 +72,6 @@ class TestLongcatFlashMLA(unittest.TestCase):
             'algorithm': {'quantile'},
         }
         model = copy.deepcopy(self.test_model)
-        torch.Tensor.npu = mock_npu
         quantize(model, cfg)
         model(self.hidden_states, past_key_values=self.kvcache_quant)
         self.assertEqual(type(model.attn).__name__, 'LongcatFlashMLAQuant')
@@ -80,5 +79,6 @@ class TestLongcatFlashMLA(unittest.TestCase):
         self.assertIsNotNone(model.attn.scale_v)
         convert(model)
         self.assertEqual(type(model.attn).__name__, 'NpuLongcatFlashMLA')
+        torch.Tensor.npu = mock_npu
         for i in range(5):
             quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)
