@@ -58,7 +58,7 @@ class TestLongcatFlashMLA(unittest.TestCase):
         del sys.modules['torch_npu']
         
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
-    @patch('torch_npu.npu_anti_quantize', wraps=mock_npu_anti_quantize)
+    @patch('torch_npu.npu_anti_quant', wraps=mock_npu_anti_quant)
     def test_quantize_longcat_success(self, mock_1, mock_2):
         cfg = {
             'batch_num': 1,
