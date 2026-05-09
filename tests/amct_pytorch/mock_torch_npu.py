@@ -166,7 +166,8 @@ def mocked_npu_quant_conv2d(x, weight, scale, stride, pads,
     out = out.to(output_dtype)
     return out
 
-def mock_npu_dynamic_quant(x, dst_type=torch_npu.hifloat8, dst_type_max=15):
+
+def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=15):
     scale_shape = x.shape[0]
     scale = torch.randn(scale_shape)
     return x, scale
