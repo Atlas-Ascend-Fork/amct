@@ -1,16 +1,18 @@
 import copy 
 import unittest
+import sys
+
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
 import torch.nn as nn
+from mock_torch_npu import *
 import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
 from transformers.integrations.finegrained_fp8 import FP8Linear
 import torch
-import sys
 import transformers
 import numpy as np
 from amct_pytorch import quantize, convert
-from mock_torch_npu import *
-from unittest.mock import MagicMock
-from unittest.mock import patch
 
 torch.manual_seed(0)
 
@@ -55,7 +57,8 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch('amct_pytorch.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema', 
+           MagicMock(return_value=True))
     def test_fp8_hif8_success(self, mock_1, mock_2, mock_3):     
         model = copy.deepcopy(self.test_model)        
         quantize(model)        
@@ -63,7 +66,6 @@ class TestFP8HIF8(unittest.TestCase):
         self.assertEqual(list(model.state_dict().keys()), list(self.test_model.state_dict().keys()))        
         self.assertEqual(type(model.layer1).__name__, 'FP8Linear')        
         self.assertEqual(type(model.layer2).__name__, 'FP8Linear')        
-        model = model.npu()        
         convert(model)        
         self.assertEqual(type(model.layer1).__name__, 'NpuHIF8Linear')       
         self.assertEqual(type(model.layer2).__name__, 'NpuHIF8Linear')        
