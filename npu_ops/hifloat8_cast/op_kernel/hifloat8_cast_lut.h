@@ -104,52 +104,6 @@ __aicore__ inline void GetHif8BitsNumV2(int32_t expNoBias,
     else                                 { dotValue = 0x0C; expBits = 4; fracBits = 1; }
 }
 
-// FP32 bits（不含符号）→ HiFloat8 magnitude（不含符号）
-__aicore__ inline uint8_t Fp32MagnitudeToHif8(uint32_t inData)
-{
-    uint32_t expFp  = (inData >> FP32_FRAC_BITS_V2) & 0xFF;
-    uint32_t fracFp = inData & 0x7FFFFF;
-
-    if (expFp == 255) return fracFp > 0 ? 0x80 : 0x6F;
-
-    int32_t expNoBias = (int32_t)expFp - (int32_t)FP32_EXP_BIAS_V2;
-
-    if (expNoBias < -22) return 0x00;
-    if (expNoBias >= 15) return 0x6E;
-
-    if (expNoBias >= -22 && expNoBias < -15) {
-        uint32_t fracHiF8 = (fracFp >> (FP32_FRAC_BITS_V2 - 1)) >= 1
-            ? HIF8_DENORMAL_EXP_BIAS_V2 + expNoBias + 1
-            : HIF8_DENORMAL_EXP_BIAS_V2 + expNoBias;
-        return (uint8_t)fracHiF8;
-    }
-
-    uint32_t dotValue, expHiF8Bits, fracHiF8Bits;
-    GetHif8BitsNumV2(expNoBias, dotValue, expHiF8Bits, fracHiF8Bits);
-
-    uint32_t fracShift = FP32_FRAC_BITS_V2 - fracHiF8Bits - 1;
-    uint32_t fractmp  = fracFp >> fracShift;
-    uint32_t fracMax  = (1u << (fracHiF8Bits + 1)) - 1;
-    uint32_t fracHiF8 = 0;
-
-    if (fractmp == fracMax) {
-        expNoBias += 1;
-        GetHif8BitsNumV2(expNoBias, dotValue, expHiF8Bits, fracHiF8Bits);
-    } else if ((fractmp & 0x01) == 0x01) {
-        fracHiF8 = (fractmp + 1) >> 1;
-    } else {
-        fracHiF8 = fractmp >> 1;
-    }
-
-    uint32_t signExp = expNoBias < 0 ? 1u : 0u;
-    if (dotValue == 1) {
-        return (uint8_t)((dotValue << fracHiF8Bits) | fracHiF8);
-    }
-    int32_t absExp = expNoBias < 0 ? -expNoBias : expNoBias;
-    uint32_t expHiF8 = (uint32_t)absExp - (1u << (expHiF8Bits - 1));
-    return (uint8_t)((dotValue << 3) | (signExp << (expHiF8Bits + fracHiF8Bits - 1))
-                     | (expHiF8 << fracHiF8Bits) | fracHiF8);
-}
 
 // HiFloat8 → FP bits（scalar，仅 LUT Init 使用）
 __aicore__ inline uint32_t Hif8ToFpBitsV2(uint8_t inData,
@@ -270,25 +224,6 @@ private:
             case 4: expBits_=FP16_EXP_BITS_V2; fracBits_=FP16_FRAC_BITS_V2; expBias_=FP16_EXP_BIAS_V2; inputBytes_=1; outputBytes_=2; break;
             case 5: expBits_=BF16_EXP_BITS_V2; fracBits_=BF16_FRAC_BITS_V2; expBias_=BF16_EXP_BIAS_V2; inputBytes_=1; outputBytes_=2; break;
             default: break;
-        }
-    }
-
-    // ── LUT 初始化（每核执行一次，scalar）─────────────────────────────────────
-
-    // 32768-entry LUT for BF16/FP16 encode (positive half only)
-    // key  = absBits = raw uint16_t bit pattern with sign bit cleared (0x0000–0x7FFF)
-    // value = HiFloat8 magnitude（不含符号位）；符号在 ComputeEncode16 中叠加
-    __aicore__ inline void InitLut16()
-    {
-        auto lut = lut16Buf_.Get<uint8_t>();
-        for (uint32_t i = 0; i < LUT16_SIZE; i++) {
-            uint16_t val  = (uint16_t)i;  // sign bit always 0 (positive half)
-            uint32_t exp  = (val >> fracBits_) & ((1u << expBits_) - 1);
-            uint32_t frac = val & ((1u << fracBits_) - 1);
-            uint32_t expFp32  = exp + (FP32_EXP_BIAS_V2 - expBias_);
-            uint32_t fp32Bits = (expFp32 << FP32_FRAC_BITS_V2)
-                              | (frac << (FP32_FRAC_BITS_V2 - fracBits_));
-            lut.SetValue(i, Fp32MagnitudeToHif8(fp32Bits));  // magnitude only, no sign
         }
     }
 
