@@ -69,7 +69,7 @@ class TestModelDeepseekV3Attention(nn.Module):
         self.register_buffer("cos", torch.ones(4096, config.qk_rope_head_dim))
         self.register_buffer("sin", torch.zeros(4096, config.qk_rope_head_dim))
 
-    def forward(self, hidden_states, attention_mask=None, past_key_value=None, **kwargs):
+    def forward(self, hidden_states, attention_mask=None, past_key_values=None, **kwargs):
         batch, seq_len, _ = hidden_states.shape
         cos_sin = (self.cos[:seq_len].unsqueeze(0), self.sin[:seq_len].unsqueeze(0))
         
@@ -77,7 +77,7 @@ class TestModelDeepseekV3Attention(nn.Module):
             hidden_states=hidden_states,
             position_embeddings=cos_sin,
             attention_mask=attention_mask,
-            past_key_value=past_key_value,
+            past_key_values=past_key_values,
             **kwargs
         )
         return attn_out
@@ -91,7 +91,7 @@ class TestModelLongcatFlashMLA(nn.Module):
         self.register_buffer("cos", torch.ones(4096, config.qk_rope_head_dim))
         self.register_buffer("sin", torch.zeros(4096, config.qk_rope_head_dim))
 
-    def forward(self, hidden_states, attention_mask=None, past_key_value=None, **kwargs):
+    def forward(self, hidden_states, attention_mask=None, past_key_values=None, **kwargs):
         batch, seq_len, _ = hidden_states.shape
         cos_sin = (self.cos[:seq_len].unsqueeze(0), self.sin[:seq_len].unsqueeze(0))
         
@@ -99,7 +99,7 @@ class TestModelLongcatFlashMLA(nn.Module):
             hidden_states=hidden_states,
             position_embeddings=cos_sin,
             attention_mask=attention_mask,
-            past_key_value=past_key_value,
+            past_key_values=past_key_values,
             **kwargs
         )
         return attn_out
