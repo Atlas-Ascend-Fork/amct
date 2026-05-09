@@ -4,9 +4,13 @@ import torch.nn as nn
 import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
 from transformers.integrations.finegrained_fp8 import FP8Linear
 import torch
+import sys
 import transformers
 import numpy as np
 from amct_pytorch import quantize, convert
+from mock_torch_npu import *
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 torch.manual_seed(0)
 
@@ -40,8 +44,19 @@ class TestFP8HIF8(unittest.TestCase):
     @classmethod    
     def tearDownClass(cls):        
         print('TestFP8HIF8 END!') 
-       
-    def test_fp8_hif8_success(self):     
+        
+    def setUp(self):
+        mock_torch_npu = MagicMock()
+        sys.modules['torch_npu'] = mock_torch_npu
+ 
+    def tearDown(self):
+        del sys.modules['torch_npu']
+    
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
+    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    def test_fp8_hif8_success(self, mock_1, mock_2, mock_3):     
         model = copy.deepcopy(self.test_model)        
         quantize(model)        
         print(model)        
