@@ -66,22 +66,23 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
         if hasattr(past_key_values, "is_hooked") and past_key_values.is_hooked:
             return
         def hook_update(key_states, value_states, layer_idx, **kwargs):
+            device = key_states.device
             quantized_key_states = \
-                torch_npu.npu_quantize(key_states, self.scale_k, None, dtype=torch_npu.hifloat8,
+                torch_npu.npu_quantize(key_states.to('npu'), self.scale_k.to('npu'), None, dtype=torch_npu.hifloat8,
                                        div_mode=False)
             quantized_value_states = \
-                torch_npu.npu_quantize(value_states, self.scale_v, None, dtype=torch_npu.hifloat8,
+                torch_npu.npu_quantize(value_states.to('npu'), self.scale_v.to('npu'), None, dtype=torch_npu.hifloat8,
                                        div_mode=False)
             key_states, value_states = \
-                update_function(quantized_key_states, quantized_value_states, layer_idx, **kwargs)
+                update_function(quantized_key_states.to(device), quantized_value_states.to(device), layer_idx, **kwargs)
             dequantized_key_states = \
-                torch_npu.npu_anti_quant(key_states, self.scale_k.to(torch.float32),
+                torch_npu.npu_anti_quant(key_states.to('npu'), self.scale_k.to(torch.float32).to('npu'),
                                          src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
             dequantized_value_states = \
-                torch_npu.npu_anti_quant(value_states, self.scale_v.to(torch.float32),
+                torch_npu.npu_anti_quant(value_states.to('npu'), self.scale_v.to(torch.float32).to('npu'),
                                          src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
             
-            return dequantized_key_states, dequantized_value_states
+            return dequantized_key_states.to(device), dequantized_value_states.to(device)
         
         past_key_values.update = hook_update
         past_key_values.is_hooked = True
