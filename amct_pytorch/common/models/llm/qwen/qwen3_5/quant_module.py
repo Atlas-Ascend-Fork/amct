@@ -23,9 +23,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, Pla
 
 
 class QuantQwen35MLP(QuantGatedMLP):
-
-    def __init__(self, quant_args, mlp_module: Qwen3_5MLP):
-        super().__init__(quant_args, mlp_module)
+    pass
 
 
 class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
@@ -33,23 +31,26 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
         super().__init__(attn_module.config, attn_module.layer_idx)
         self.quant_args = quant_args
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
-        self.hidden_size = getattr(attn_module, "hidden_size", attn_module.config.hidden_size)
-
+        self.hidden_size = attn_module.hidden_size
+        self.value_dim = attn_module.value_dim
         self.conv1d = attn_module.conv1d
         self.dt_bias = attn_module.dt_bias
         self.A_log = attn_module.A_log
         self.norm = attn_module.norm
-        self.out_proj = QuantLinear(quant_args, attn_module.out_proj, name="out_proj") if self.enable_attn_linear else PlainLinear(attn_module.out_proj)
-        self.in_proj_qkv = QuantLinear(quant_args, attn_module.in_proj_qkv, name="in_proj_qkv") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_qkv)
-        self.in_proj_z = QuantLinear(quant_args, attn_module.in_proj_z, name="in_proj_z") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_z)
-        self.in_proj_b = QuantLinear(quant_args, attn_module.in_proj_b, name="in_proj_b") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_b)
-        self.in_proj_a = QuantLinear(quant_args, attn_module.in_proj_a, name="in_proj_a") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_a)
+        bits = quant_args.bit_policy["attn-linear"]
+        out, qkv = bits["out_proj"], bits["in_proj_qkv"]
+        z, b, a = bits["in_proj_z"], bits["in_proj_b"], bits["in_proj_a"]
+        self.out_proj = QuantLinear(quant_args, attn_module.out_proj, w_bits=out.w, name="out_proj") if self.enable_attn_linear else PlainLinear(attn_module.out_proj)
+        self.in_proj_qkv = QuantLinear(quant_args, attn_module.in_proj_qkv, w_bits=qkv.w, name="in_proj_qkv") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_qkv)
+        self.in_proj_z = QuantLinear(quant_args, attn_module.in_proj_z, w_bits=z.w, name="in_proj_z") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_z)
+        self.in_proj_b = QuantLinear(quant_args, attn_module.in_proj_b, w_bits=b.w, name="in_proj_b") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_b)
+        self.in_proj_a = QuantLinear(quant_args, attn_module.in_proj_a, w_bits=a.w, name="in_proj_a") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_a)
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.inp_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
-            self.o_proj_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
+            self.inp_afq = ActivationQuantizer(quant_args, qkv.a)
+            self.o_proj_afq = ActivationQuantizer(quant_args, out.a)
         else:
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
@@ -57,7 +58,7 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
     def forward(
@@ -124,22 +125,25 @@ class QuantQwen35Attn(Qwen3_5Attention):
         super().__init__(attn_module.config, attn_module.layer_idx)
         self.quant_args = quant_args
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
-        self.hidden_size = getattr(attn_module, "hidden_size", attn_module.config.hidden_size)
-        self.q_proj = QuantLinear(quant_args, attn_module.q_proj) if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
-        self.k_proj = QuantLinear(quant_args, attn_module.k_proj) if self.enable_attn_linear else PlainLinear(attn_module.k_proj)
-        self.v_proj = QuantLinear(quant_args, attn_module.v_proj) if self.enable_attn_linear else PlainLinear(attn_module.v_proj)
-        self.o_proj = QuantLinear(quant_args, attn_module.o_proj) if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
+        self.hidden_size = attn_module.config.hidden_size
+        self.value_dim = attn_module.config.num_attention_heads * self.head_dim
+        bits = quant_args.bit_policy["attn-linear"]
+        q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
+        self.q_proj = QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
+        self.k_proj = QuantLinear(quant_args, attn_module.k_proj, w_bits=k.w, name="k_proj") if self.enable_attn_linear else PlainLinear(attn_module.k_proj)
+        self.v_proj = QuantLinear(quant_args, attn_module.v_proj, w_bits=v.w, name="v_proj") if self.enable_attn_linear else PlainLinear(attn_module.v_proj)
+        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
         self.qk_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.q_bits,
-            r_bits=quant_args.k_bits,
+            l_bits=quant_args.bit_policy.cache_bits("q"),
+            r_bits=quant_args.bit_policy.cache_bits("k"),
             left_dim=self.head_dim,
             right_dim=self.head_dim,
         )
         self.pv_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.p_bits,
-            r_bits=quant_args.v_bits,
+            l_bits=quant_args.bit_policy.cache_bits("p"),
+            r_bits=quant_args.bit_policy.cache_bits("v"),
             right_dim=self.head_dim,
         )
 
@@ -149,8 +153,8 @@ class QuantQwen35Attn(Qwen3_5Attention):
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.inp_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
-            self.o_proj_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
+            self.inp_afq = ActivationQuantizer(quant_args, q.a)
+            self.o_proj_afq = ActivationQuantizer(quant_args, o.a)
         else:
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
@@ -158,7 +162,7 @@ class QuantQwen35Attn(Qwen3_5Attention):
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
 

@@ -93,13 +93,9 @@ class Qwen3_5(BaseModel):
         return apply_quant_to_attn(self.args, decoder_layer, attn_cls)
 
     def apply_quant_moe_mlp(self, decoder_layer):
-        shared_expert_bits = getattr(self.args, "shared_expert_bits", 8)
-        routed_expert_bits = getattr(self.args, "routed_expert_bits", None)
         return apply_quant_to_moe_mlp(
             self.args,
             decoder_layer,
-            shared_expert_bits=shared_expert_bits,
-            routed_expert_bits=routed_expert_bits,
             cls=QuantQwen35MLP,
         )
 

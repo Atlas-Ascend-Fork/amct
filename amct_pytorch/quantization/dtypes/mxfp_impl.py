@@ -22,6 +22,7 @@
 import torch
 from torch import Tensor
 from enum import Enum, IntEnum
+from numbers import Number
 from torchao.prototype.custom_fp_utils import (
     _f32_to_floatx_unpacked,
     _floatx_unpacked_to_f32,
@@ -114,11 +115,19 @@ def shared_exponents(x: Tensor, emax):
     shared_exp = shared_exp.clamp(min=-127, max=1e10)
     return shared_exp
 
-def quantize_elewise(x, min_exp, max_norm, shift_val):
+
+def round_ste(x: torch.Tensor) -> torch.Tensor:
+    rounded = torch.sign(x) * torch.floor(torch.abs(x) + 0.5)
+    return (rounded - x).detach() + x
+
+
+def quantize_elewise(x, min_exp, max_norm, shift_val, v=0.0):
     private_exp = torch.floor(torch.log2(torch.abs(x) + (x == 0).type(x.dtype)))
     private_exp = 2 ** (private_exp.clip(min=min_exp))
     x = x / private_exp * shift_val
-    x = torch.sign(x) * torch.floor(torch.abs(x) + 0.5)
+    if isinstance(v, torch.Tensor):
+        v = v.to(device=x.device, dtype=x.dtype)
+    x = round_ste(x + v)
     x = x / shift_val * private_exp
     x = torch.clamp(x, min=-max_norm, max=max_norm)
     return x

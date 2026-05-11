@@ -24,9 +24,9 @@ from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, bu
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.indexer import rotate_activation, fp32_index
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3Attention, apply_rotary_pos_emb
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3MLP
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.indexer import rotate_activation, fp32_index
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import DeepseekV3Attention, apply_rotary_pos_emb
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import DeepseekV3MLP
 
 
 def _linear_with_structure(hidden_states, linear, structure_transform=None, name=None):
@@ -48,15 +48,15 @@ class QuantIndexer(torch.nn.Module):
         self.index_topk: int = args.model_args.index_topk
         self.q_lora_rank: int = args.model_args.q_lora_rank
         # self.bit: int = bit
-        self.wq_b = QuantLinear(args, module.wq_b) if self.enable_attn_linear else module.wq_b
+        self.wq_b = QuantLinear(args, module.wq_b, w_bits=args.bit_policy["attn-linear"]["wq_b"].w, name="wq_b") if self.enable_attn_linear else module.wq_b
         self.wk = Linear(self.dim, self.head_dim, dtype=torch.get_default_dtype(), bias=False)
         self.k_norm = LayerNorm(self.head_dim)
         self.weights_proj = Linear(self.dim, self.n_heads, dtype=torch.get_default_dtype(), bias=False)
         self.softmax_scale = self.head_dim ** -0.5
         self.scale_fmt = args.model_args.scale_fmt
         self.rotary_emb = rotary_emb
-        self.afq_rot_q = ActivationQuantizer(args, bits=16) if self.enable_attn_cache else nn.Identity()
-        self.afq_rot_k = ActivationQuantizer(args, bits=16) if self.enable_attn_cache else nn.Identity()
+        self.afq_rot_q = ActivationQuantizer(args, bits=args.bit_policy.cache_bits("q")) if self.enable_attn_cache else nn.Identity()
+        self.afq_rot_k = ActivationQuantizer(args, bits=args.bit_policy.cache_bits("k")) if self.enable_attn_cache else nn.Identity()
 
         self.wk.weight.data[:] = module.wk.weight.data.clone()
 
@@ -126,14 +126,18 @@ class QuantDSA(DeepseekV3Attention):
         self.kv_a_layernorm = module.kv_a_layernorm
         self.kv_b_proj = module.kv_b_proj
 
-        self.o_proj = QuantLinear(args, module.o_proj) if self.enable_attn_linear else PlainLinear(module.o_proj)
+        bits = args.bit_policy["attn-linear"]
+        o = bits["o_proj"]
+        self.o_proj = QuantLinear(args, module.o_proj, w_bits=o.w, name="o_proj") if self.enable_attn_linear else PlainLinear(module.o_proj)
 
-        self.q_cache_quantizer = ActivationQuantizer(args, bits=16) if self.enable_attn_cache else nn.Identity()
+        self.q_cache_quantizer = ActivationQuantizer(args, bits=args.bit_policy.cache_bits("q")) if self.enable_attn_cache else nn.Identity()
 
-        self.k_cache_quantizer = ActivationQuantizer(args, bits=16) if self.enable_attn_cache else nn.Identity()
+        self.k_cache_quantizer = ActivationQuantizer(args, bits=args.bit_policy.cache_bits("k")) if self.enable_attn_cache else nn.Identity()
 
-        self.inp_afq = ActivationQuantizer(args, bits=args.a_bits) if self.enable_attn_linear else nn.Identity()
-        self.o_proj_afq = ActivationQuantizer(args, bits=args.a_bits) if self.enable_attn_linear else nn.Identity()
+        # inp_afq has no single QuantLinear consumer (q_proj/q_a_proj/kv_a_proj
+        # are kept as raw nn.Linear in DSA); fall back to the group-level a_bits.
+        self.inp_afq = ActivationQuantizer(args, bits=bits.default.a) if self.enable_attn_linear else nn.Identity()
+        self.o_proj_afq = ActivationQuantizer(args, bits=o.a) if self.enable_attn_linear else nn.Identity()
         self.indexer = QuantIndexer(module.indexer, args, self.rotary_emb)
 
     def _init_structure_transforms(self):
@@ -287,6 +291,4 @@ class QuantDSA(DeepseekV3Attention):
 
 class QuantDeepseekV3MLP(QuantGatedMLP):
     """DeepSeek expert/shared-expert MLP backed by the common gated-MLP quant wrapper."""
-
-    def __init__(self, quant_args, mlp_module: DeepseekV3MLP):
-        super().__init__(quant_args, mlp_module)
+    pass
