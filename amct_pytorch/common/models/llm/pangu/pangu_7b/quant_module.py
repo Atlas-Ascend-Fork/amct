@@ -79,8 +79,7 @@ def apply_rotary_pos_emb(q, k, cos, sin, unsqueeze_dim=1):
 
 
 class QuantPanguMLP(QuantGatedMLP):
-    def __init__(self, quant_args, mlp_module):
-        super().__init__(quant_args, mlp_module)
+    pass
 
 
 class QuantPanguAttn(nn.Module):
@@ -97,31 +96,34 @@ class QuantPanguAttn(nn.Module):
         self.is_causal = attn_module.is_causal
         self.quant_args = quant_args
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
-        self.hidden_size = getattr(attn_module, "hidden_size", attn_module.config.hidden_size)
+        self.hidden_size = attn_module.hidden_size
+        self.value_dim = attn_module.value_dim
 
-        self.q_proj = QuantLinear(quant_args, attn_module.q_proj, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
-        self.k_proj = QuantLinear(quant_args, attn_module.k_proj, name="k_proj") if self.enable_attn_linear else PlainLinear(attn_module.k_proj)
-        self.v_proj = QuantLinear(quant_args, attn_module.v_proj, name="v_proj") if self.enable_attn_linear else PlainLinear(attn_module.v_proj)
-        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
+        bits = quant_args.bit_policy["attn-linear"]
+        q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
+        self.q_proj = QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
+        self.k_proj = QuantLinear(quant_args, attn_module.k_proj, w_bits=k.w, name="k_proj") if self.enable_attn_linear else PlainLinear(attn_module.k_proj)
+        self.v_proj = QuantLinear(quant_args, attn_module.v_proj, w_bits=v.w, name="v_proj") if self.enable_attn_linear else PlainLinear(attn_module.v_proj)
+        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
         self.qk_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.q_bits,
-            r_bits=quant_args.k_bits,
+            l_bits=quant_args.bit_policy.cache_bits("q"),
+            r_bits=quant_args.bit_policy.cache_bits("k"),
             left_dim=self.head_dim,
             right_dim=self.head_dim,
         )
         self.pv_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.p_bits,
-            r_bits=quant_args.v_bits,
+            l_bits=quant_args.bit_policy.cache_bits("p"),
+            r_bits=quant_args.bit_policy.cache_bits("v"),
             right_dim=self.head_dim,
         )
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.inp_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
-            self.o_proj_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
+            self.inp_afq = ActivationQuantizer(quant_args, q.a)
+            self.o_proj_afq = ActivationQuantizer(quant_args, o.a)
         else:
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
@@ -129,7 +131,7 @@ class QuantPanguAttn(nn.Module):
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
     def forward(

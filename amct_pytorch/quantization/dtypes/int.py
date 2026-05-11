@@ -1,4 +1,5 @@
 import torch
+from numbers import Number
 from loguru import logger
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
@@ -13,18 +14,17 @@ class QuantDequantInt(torch.nn.Module):
         self.is_act = is_act
         self._deploy_mod = False
 
-    def fake_quant(self, x: Tensor) -> Tensor:
+    def fake_quant(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.is_act:
             x = dynamic_per_token_quant(x, self.bits)
         else:
-            x = weight_quant(x, self.bits)
+            x = weight_quant(x, self.bits, v=v)
         return x
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.bits == 16:
             return x
-        x = (self.fake_quant(x) - x).detach() + x
-        return x
+        return self.fake_quant(x, v=v)
 
     def export_deploy(self, x: Tensor):
         qx, scale, bias = weight_quant(x, self.bits, real_quant=True)

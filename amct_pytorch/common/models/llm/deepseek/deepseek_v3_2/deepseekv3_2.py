@@ -8,9 +8,9 @@ from tqdm import tqdm
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, apply_quant_to_moe_mlp
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.indexer import ModelArgs
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_dsa import QuantDeepseekV3MLP, QuantDSA
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.indexer import ModelArgs
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import QuantDeepseekV3MLP, QuantDSA
 
 
 @MODEL_REGISTRY.register(
@@ -30,7 +30,7 @@ class DeepseekV32(BaseModel):
         self.num_layers = self.args.model_args.n_layers
 
     def local_args(self):
-        config = Path(__file__).with_name("config_671B_v3.2.json")
+        config = Path(__file__).parent / "modeling" / "config_671B_v3.2.json"
         with open(config) as f:
             model_args = ModelArgs(**json.load(f))
         self.args.model_args = model_args
@@ -90,13 +90,9 @@ class DeepseekV32(BaseModel):
         return apply_quant_to_attn(self.args, decoder_layer, QuantDSA)
 
     def apply_quant_moe_mlp(self, decoder_layer):
-        shared_expert_bits = getattr(self.args, "shared_expert_bits", 8)
-        routed_expert_bits = getattr(self.args, "routed_expert_bits", None)
         return apply_quant_to_moe_mlp(
             self.args,
             decoder_layer,
-            shared_expert_bits=shared_expert_bits,
-            routed_expert_bits=routed_expert_bits,
             cls=QuantDeepseekV3MLP,
         )
 

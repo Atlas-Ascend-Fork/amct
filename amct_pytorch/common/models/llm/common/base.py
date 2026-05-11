@@ -22,6 +22,9 @@ class BaseModel(metaclass=ABCMeta):
         self.position_ids = None
         self.attention_mask = None
         self.position_embeddings = None
+        # Per-sample state (vs position_ids etc. which are shared). Adapters
+        # set this to a per-sample list when they need it (e.g. v4 hash MoE).
+        self.input_ids = None
         self.model_path = self.args.model
         self.config = AutoConfig.from_pretrained(
             self.model_path, trust_remote_code=True)
@@ -186,6 +189,10 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
+    def _dispatch_block(self, module):
+        # Default: whole block on one NPU. Adapters override for multi-NPU dispatch.
+        return module.to(self.args.device)
+
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
@@ -195,7 +202,7 @@ class BaseModel(metaclass=ABCMeta):
             set_model_weight_quant_state(block, enable_quant)
             set_model_act_quant_state(block, enable_quant)
 
-        block = block.to(self.args.device).eval()
+        block = self._dispatch_block(block).eval()
         if use_quant_block and hook_name is None:
             from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
@@ -206,10 +213,16 @@ class BaseModel(metaclass=ABCMeta):
             self.register_block_forward_hooks(block, hook_name, hooks, act_stat)
 
         block_kwargs = self.get_block_forward_kwargs()
+        # When self.input_ids is set (v4-style per-sample state), inject it
+        # per iteration; otherwise fall through to shared-kwargs behaviour.
+        input_ids_list = self.input_ids if self.input_ids is not None else [None] * len(samples)
         with torch.no_grad():
-            for sample in samples:
+            for sample, ids in zip(samples, input_ids_list):
                 sample = sample.to(self.args.device)
-                out = block(sample, **block_kwargs)
+                call_kwargs = dict(block_kwargs)
+                if ids is not None:
+                    call_kwargs["input_ids"] = ids.to(self.args.device)
+                out = block(sample, **call_kwargs)
                 out = out[0] if isinstance(out, (tuple, list)) else out
                 outs.append(out.to("cpu"))
 
@@ -217,7 +230,25 @@ class BaseModel(metaclass=ABCMeta):
             for hook in hooks:
                 hook.remove()
             self.save_block_hook_inputs(act_stat, hook_name, layer_idx)
+        # Break dispatch_model's hook ref cycle, then drop block ref so the
+        # GC + empty_cache below actually frees this layer's NPU memory before
+        # the next layer's dispatch (otherwise layer N+1 sees N's footprint
+        # still pinned).
+        try:
+            from accelerate.hooks import remove_hook_from_module
+            remove_hook_from_module(block, recurse=True)
+        except Exception:
+            pass
+        block = None
+        self._release_block_caches()
         return outs
+
+    def _release_block_caches(self):
+        # torch_npu's allocator caches freed chunks; without empty_cache the
+        # next layer's larger contiguous alloc may OOM despite enough free space.
+        import gc
+        gc.collect()
+        torch.npu.empty_cache()
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         pass
