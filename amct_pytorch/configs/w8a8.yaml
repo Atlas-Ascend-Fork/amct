@@ -1,0 +1,4 @@
+# Uniform W8A8 across all linears. Anything not covered (e.g. KV cache) stays
+# at 16 by default; override below if needed.
+w_bits: 8
+a_bits: 8
