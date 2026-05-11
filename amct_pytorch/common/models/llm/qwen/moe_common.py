@@ -13,21 +13,23 @@ class QuantGatedExperts(nn.Module):
         args,
         experts_module,
         view_cls=GatedExpertView,
+        group: str = "moe.routed",
     ):
         super().__init__()
         self.args = args
         self.packed_experts = experts_module
         self.num_experts = experts_module.num_experts
         self.view_cls = view_cls
+        self.group = group
         self.expert_modules = nn.ModuleList(
             [
-                QuantGatedMLP(args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=False))
+                QuantGatedMLP(args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=False), group=group)
                 for expert_idx in range(self.num_experts)
             ]
         )
 
     def build_ptq_expert_module(self, expert_idx: int):
-        return QuantGatedMLP(self.args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=True))
+        return QuantGatedMLP(self.args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=True), group=self.group)
 
     def iter_ptq_expert_modules(self):
         for expert_idx in range(self.num_experts):
