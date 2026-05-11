@@ -16,6 +16,11 @@ from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, 
 
 
 class BaseModel(metaclass=ABCMeta):
+    # Names of the pre-attn / pre-ffn norms on a single decoder block.
+    # HuggingFace convention; adapters with different naming override these.
+    attn_norm_name = "input_layernorm"
+    ffn_norm_name = "post_attention_layernorm"
+
     def __init__(self, args):
         self.args = args
         self.quant_target = args.quant_target
