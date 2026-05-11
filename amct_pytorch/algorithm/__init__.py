@@ -20,7 +20,12 @@ __all__ = [
     'BUILT_IN_ALGORITHM'
 ]
 
-from transformers.integrations.finegrained_fp8 import FP8Linear
+try:
+    from transformers.integrations.finegrained_fp8 import FP8Linear
+except:
+    from amct_pytorch.utils.log import LOGGER
+    LOGGER.logd(f'from transformers import FP8Linear failed, pls check if transformers '
+                f'is installed and if correct version')
 
 from amct_pytorch.algorithm.register_algo import Algorithm
 from amct_pytorch.quantize_op.gptq_module import GPTQuant

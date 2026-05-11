@@ -36,7 +36,7 @@ class NpuHIF8Linear(torch.nn.Module):
             self.bias = None
         else:
             self.register_buffer('bias', quant_module.bias)
-        self.is_new_torch_npu = True if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype') else False
+        self.is_support_hifloat8 = True if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype') else False
 
     def forward(self, x):
         """
@@ -47,27 +47,29 @@ class NpuHIF8Linear(torch.nn.Module):
         import torch_npu
         quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=torch_npu.hifloat8, dst_type_max=15)
             
-        if self.is_new_torch_npu:
+        if self.is_support_hifloat8:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=pertoken_scale.view(-1),
                 output_dtype=x.dtype, x1_dtype=torch_npu.hifloat8, x2_dtype=torch_npu.hifloat8)
             if self.bias is not None:
                 output = output + self.bias
         else:
-            print("Do not support current convert")
+            raise RuntimeError(f'current environment do not support hifloat8 quantize')
 
         return output
         
     def _init_weight_quant(self, quant_module):
-        fp8_weight = quant_module.weight # n, k
-        fp8_scale = quant_module.weight_scale_inv
-        if quant_module.block_size is not None: # block quantize
-            n, k = quant_module.weight.shape
-            block_h, block_w = quant_module.block_size
-            fp8_scale = torch.repeat_interleave(fp8_scale, block_h, dim=0)
-            fp8_scale = torch.repeat_interleave(fp8_scale, block_w, dim=1)
-            fp8_scale = fp8_scale[:n, :k]
-        dequant_weight = fp8_weight.to(torch.float32) / fp8_scale
+        dequant_weight = quant_module.weight
+        if type(quant_module).__name__ == "FP8Linear":
+            fp8_weight = quant_module.weight # n, k
+            fp8_scale = quant_module.weight_scale_inv
+            if quant_module.block_size is not None: # block quantize
+                n, k = quant_module.weight.shape
+                block_h, block_w = quant_module.block_size
+                fp8_scale = torch.repeat_interleave(fp8_scale, block_h, dim=0)
+                fp8_scale = torch.repeat_interleave(fp8_scale, block_w, dim=1)
+                fp8_scale = fp8_scale[:n, :k]
+            dequant_weight = fp8_weight.to(torch.float32) / fp8_scale
         weight_max = dequant_weight.max(dim=1, keepdim=True).values
         scale = (weight_max / 16.0).to(torch.float32).flatten() # n
         self.register_buffer('deq_scale', scale)
