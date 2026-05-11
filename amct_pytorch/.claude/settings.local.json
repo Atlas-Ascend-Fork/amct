@@ -53,7 +53,9 @@
       "Read(//data4/cann-kernels-extract/run_package/**)",
       "Bash(mkdir -p /data4/cann-kernels-opp)",
       "Bash(bash /data4/cann-kernels-extract/run_package/Ascend910B-opp_kernel-8.5.t8.0.b060-linux.aarch64.run --noexec --extract=/data4/cann-kernels-opp)",
-      "Bash(ASCEND_RT_VISIBLE_DEVICES=0 python -c ' *)"
+      "Bash(ASCEND_RT_VISIBLE_DEVICES=0 python -c ' *)",
+      "Bash(ASCEND_RT_VISIBLE_DEVICES=0 ASCEND_LAUNCH_BLOCKING=1 timeout 120 python -c ' *)",
+      "Bash(ASCEND_RT_VISIBLE_DEVICES=0 timeout 120 python -c ' *)"
     ]
   }
 }

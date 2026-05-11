@@ -1,0 +1,3 @@
+# Uniform W4A4 across all linears.
+w_bits: 4
+a_bits: 4
