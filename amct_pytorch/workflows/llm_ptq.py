@@ -160,6 +160,12 @@ class LlmPtqWorkflow:
 
             layer_results = {}
             for unit in units:
+                if self._unit_result_path(unit) and os.path.exists(self._unit_result_path(unit)):
+                    logger.info(
+                        f"Skip PTQ unit '{unit.name}' in layer {layer_idx}: "
+                        f"params already exist at {self._unit_result_path(unit)}"
+                    )
+                    continue
                 unit_batch = self._prepare_unit_batch(unit)
                 solver = self._build_block_solver(solver_cls, layer_idx, unit.module)
                 logger.info(f"PTQ unit '{unit.name}' ({unit.kind}) in layer {layer_idx}")
@@ -206,11 +212,16 @@ class LlmPtqWorkflow:
             return batch[0]
         return batch
 
-    def _save_unit_result(self, unit: PtqUnit, result: Any):
+    def _unit_result_path(self, unit: PtqUnit) -> str | None:
+        if not self.args.quant_param_dir:
+            return None
         if unit.layer_idx is None:
             file_name = f"{unit.save_name}.pt"
         else:
             file_name = f"layer_{unit.layer_idx}_{unit.save_name}.pt"
-        save_path = os.path.join(self.args.quant_param_dir, file_name)
+        return os.path.join(self.args.quant_param_dir, file_name)
+
+    def _save_unit_result(self, unit: PtqUnit, result: Any):
+        save_path = self._unit_result_path(unit)
         torch.save(result, save_path)
         logger.info("Saved PTQ params for layer {} unit '{}' to {}", unit.layer_idx, unit.name, save_path)
