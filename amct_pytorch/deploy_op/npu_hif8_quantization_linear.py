@@ -36,7 +36,7 @@ class NpuHIF8Linear(torch.nn.Module):
             self.bias = None
         else:
             self.register_buffer('bias', quant_module.bias)
-        self.is_new_torch_npu = True if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype') else False
+        self.is_support_hifloat8 = True if check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype') else False
 
     def forward(self, x):
         """
@@ -47,14 +47,14 @@ class NpuHIF8Linear(torch.nn.Module):
         import torch_npu
         quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=torch_npu.hifloat8, dst_type_max=15)
             
-        if self.is_new_torch_npu:
+        if self.is_support_hifloat8:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=pertoken_scale.view(-1),
                 output_dtype=x.dtype, x1_dtype=torch_npu.hifloat8, x2_dtype=torch_npu.hifloat8)
             if self.bias is not None:
                 output = output + self.bias
         else:
-            print("Do not support current convert")
+            raise RuntimeError(f'current environment do not support hifloat8 quantize')
 
         return output
         
