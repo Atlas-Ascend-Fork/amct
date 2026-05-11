@@ -26,24 +26,27 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v4.quant_module import (
 
 
 class _NoMoveAlignDevicesHook(AlignDevicesHook):
+    # Same forward-time I/O alignment as AlignDevicesHook, but init_hook is a
+    # no-op: assumes params/buffers were placed by the caller already (档 3).
     def init_hook(self, module):
         return module
 
 
 @MODEL_REGISTRY.register(
-    name="deepseek_v4",
+    name="deepseekv4",
     task="llm",
     family="deepseek",
     description="DeepSeek V4 model adapter",
 )
 class DeepseekV4(BaseModel):
-    attn_norm_name = "attn_norm"
-    ffn_norm_name = "ffn_norm"
-
     def __init__(self, args):
         super().__init__(args)
         if not isinstance(self.config, DeepseekV4Config):
             self.config = DeepseekV4Config(**self.config.to_dict())
+        # PTQ-only shrink of max_seq_len → args.seq_len so Attention/Indexer
+        # kv_cache + freqs_cis buffers don't preallocate for 1M positions.
+        # Safe because precompute_freqs_cis values at [0, args.seq_len] are
+        # identical regardless of max_seq_len (YaRN scaling uses original_seq_len).
         ptq_seq = getattr(args, "seq_len", None)
         if ptq_seq and ptq_seq < self.config.max_seq_len:
             self.config.max_seq_len = ptq_seq
@@ -51,17 +54,22 @@ class DeepseekV4(BaseModel):
         self.cls = Block
         self.model = self.empty_weights_model()
         self.num_layers = self.config.n_layers
+        # Eval workflow sets this to True; PTQ leaves it False so block() falls
+        # back to BaseModel's CPU-staging load (needed for per-expert iteration).
         self._sharded_block = False
 
     def empty_weights_model(self):
+        # include_buffers=True: v4's Attention/Indexer register_buffer needs
+        # to land on meta too, otherwise the 61-layer model preallocates ~40 GB.
         with init_empty_weights(include_buffers=True):
             model = AutoModelForCausalLM.from_config(
                 self.config,
                 trust_remote_code=True,
                 torch_dtype=torch.bfloat16,
             )
-        from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (
-            precompute_freqs_cis)
+        # precompute_freqs_cis is @lru_cache; clear so per-layer block() calls
+        # in real-CPU context recompute instead of returning the cached meta tensor.
+        from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import precompute_freqs_cis
         precompute_freqs_cis.cache_clear()
         return model
 
@@ -69,12 +77,13 @@ class DeepseekV4(BaseModel):
         return f"layers.{layer_idx}."
 
     def get_embed_load_specs(self):
+        # v4 checkpoint is flat: embed/norm/head at top level, no `model.` prefix.
         tie = bool(getattr(self.config, "tie_word_embeddings", False))
         head_prefix = "embed." if tie else "head."
         return [
             (self.model.embed, "embed."),
-            (self.model.norm, "norm."),
-            (self.model.head, head_prefix),
+            (self.model.norm,  "norm."),
+            (self.model.head,  head_prefix),
         ]
 
     def load_embed_state_dict(self):
@@ -82,6 +91,8 @@ class DeepseekV4(BaseModel):
         self._load_top_level_hc_head_params()
 
     def _load_top_level_hc_head_params(self):
+        # hc_head_* are top-level Parameters on DeepseekV4ForCausalLM, not under
+        # any submodule, so standard embed/head loading skips them.
         weight_map = getattr(self, "_weight_map", None) or get_weight_mappings(self.model_path)
         self._weight_map = weight_map
         for name in ("hc_head_fn", "hc_head_scale", "hc_head_base"):
@@ -95,6 +106,7 @@ class DeepseekV4(BaseModel):
             file_path = os.path.join(self.model_path, weight_map[key])
             with safe_open(file_path, framework="pt", device="cpu") as f:
                 tensor = f.get_tensor(key)
+            # hc_head_* are declared fp32 in the modeling code.
             setattr(self.model, name, nn.Parameter(tensor.to(torch.float32)))
 
     def block(self, layer_idx):
@@ -102,8 +114,7 @@ class DeepseekV4(BaseModel):
         BaseModel) for PTQ. PTQ needs CPU staging so it can move one expert
         at a time onto the NPU during per-MLP learning; the sharded path
         pins every expert to a fixed NPU via AlignDevicesHook, which fights
-        PTQ's ``.to(device)`` / ``.cpu()`` cycle.
-        """
+        PTQ's ``.to(device)`` / ``.cpu()`` cycle."""
         if self._sharded_block:
             return self._block_sharded(layer_idx)
         return super().block(layer_idx)
@@ -149,6 +160,9 @@ class DeepseekV4(BaseModel):
                 f"(e.g. {missing[:3]}); checkpoint key missing under '{weight_prefix}'."
             )
 
+        # Buffers (kv_cache / freqs_cis / kv_state / score_state) are on real
+        # CPU after init_empty_weights(); send each to its target NPU.
+        # _NoMoveAlignDevicesHook in _dispatch_block won't do this for us.
         for name, buf in list(block.named_buffers()):
             target_dev = self._resolve_param_device(name, device_map)
             if str(buf.device) == target_dev:
@@ -167,6 +181,7 @@ class DeepseekV4(BaseModel):
 
     @staticmethod
     def _resolve_param_device(local_name, device_map):
+        # Longest-matching path wins; "" is root fallback only.
         best_path = None
         for path in device_map:
             if path and (local_name == path or local_name.startswith(path + ".")):
@@ -182,6 +197,8 @@ class DeepseekV4(BaseModel):
         n_npu = max(1, torch.npu.device_count())
         if n_npu <= 1:
             return None
+        # Note: attn.compressor stays on the attn card because Attention.forward
+        # aliases compressor.kv_cache as a view of attn.kv_cache.
         device_map = {"": "npu:0"}
         attn_dev = 1 % n_npu
         device_map["attn"] = f"npu:{attn_dev}"
@@ -191,6 +208,8 @@ class DeepseekV4(BaseModel):
             indexer_dev = 2 % n_npu
             device_map["attn.indexer"] = f"npu:{indexer_dev}"
             reserved.add(indexer_dev)
+        # Reserve attn/indexer cards from experts so sparse_attn intermediates
+        # (~10 GB) don't share with routed expert weights.
         expert_devices = [d for d in range(n_npu) if d not in reserved] or list(range(n_npu))
         for i in range(len(block.ffn.experts)):
             device_map[f"ffn.experts.{i}"] = f"npu:{expert_devices[i % len(expert_devices)]}"
@@ -200,6 +219,11 @@ class DeepseekV4(BaseModel):
         device_map = self._build_block_device_map(module)
         if device_map is None:
             return super()._dispatch_block(module)
+        # block() (档 3) already placed every param on its target NPU. Bypass
+        # dispatch_model — its init_hook would call .to(npu:0) on every param
+        # under the root entry, transiently pulling 30+ GB back to npu:0 and
+        # OOM'ing pro-sized blocks. We just need the AlignDevicesHook attached
+        # at each device_map target so cross-card forward I/O works.
         for path, dev in sorted(device_map.items(), key=lambda kv: kv[0].count(".")):
             target = module if path == "" else module
             if path:
@@ -216,6 +240,11 @@ class DeepseekV4(BaseModel):
 
     @staticmethod
     def _retag_descendant_hooks(root, device_map):
+        # Workaround for accelerate: when device_map has root + nested overrides,
+        # descendants of an override keep the root's execution_device hook (the
+        # recursion stops at modules that already have a hook). Plus override
+        # targets default to io_same_device=False, but our parents (e.g.
+        # Block.forward) need outputs back on their device. Retag both.
         sorted_entries = sorted(
             ((p, d) for p, d in device_map.items() if p),
             key=lambda kv: kv[0].count("."),
@@ -245,10 +274,14 @@ class DeepseekV4(BaseModel):
         return decoder_layer
 
     def apply_quant_attn(self, decoder_layer):
+        # v4 names attn `attn` (not `self_attn`); wrap directly, skip framework helper.
         decoder_layer.attn = QuantV4Attention(self.args, decoder_layer.attn)
         return decoder_layer
 
     def apply_quant_moe_mlp(self, decoder_layer):
+        # v4 MoE is on `block.ffn`; pass `ffn` as recursion root. Per-expert
+        # bit-widths come from ``args.bit_policy`` via the role assigned by
+        # ``apply_quant_to_moe_mlp`` (``moe.routed`` / ``moe.shared``).
         return apply_quant_to_moe_mlp(
             self.args,
             decoder_layer.ffn,
@@ -256,6 +289,7 @@ class DeepseekV4(BaseModel):
         )
 
     def iter_ptq_units(self, layer_idx, block):
+        # v4 names attn/ffn, not self_attn/mlp.
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             attn = getattr(block, "attn", None)
             yield make_ptq_unit("attn", "attn", layer_idx, attn)
@@ -278,6 +312,9 @@ class DeepseekV4(BaseModel):
         yield from super().iter_deploy_bindings(layer_idx, block)
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
+        # Drive embed → HC expand → keyword layer call by hand; v4's
+        # Block.forward(x, start_pos, input_ids) doesn't fit Catcher's positional
+        # signature, and DeepseekV4ForCausalLM calls layers positionally too.
         outs = []
         self.load_embed_state_dict()
 
@@ -297,6 +334,7 @@ class DeepseekV4(BaseModel):
                     pass
 
         layers[0] = layers[0].module
+        # Per-sample input_ids needed by hash-routed MoE Gate.
         self.input_ids = list(samples)
         return outs
 
@@ -310,6 +348,8 @@ class DeepseekV4(BaseModel):
         )
 
     def do_head_forward(self, inps):
+        # Unroll ParallelHead.forward to emit full-sequence logits for KL PTQ
+        # (the default returns last-token only).
         device = self.args.device
         head = self.model.head.to(device)
         norm = self.model.norm.to(device)
@@ -336,8 +376,3 @@ class DeepseekV4(BaseModel):
                 logits = F.linear(x.float(), head.weight)  # [b, s, vocab]
                 preds.append(logits[:, :-1, :].contiguous().to("cpu"))
         return preds
-
-    def get_scale_name(self, weight_name):
-        scale_prefix = ".scale"
-        scale_inv_name = weight_name.replace('.weight', '.scale')
-        return scale_prefix, scale_inv_name

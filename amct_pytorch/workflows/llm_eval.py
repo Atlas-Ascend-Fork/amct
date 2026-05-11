@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import inspect
+import json
 import os
+from typing import Any
 from tqdm import tqdm
 import torch
 from loguru import logger
 
 from amct_pytorch.common.datasets.preproc import get_wiki_inputs
 from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
+# from amct_pytorch.common.models.llm.common import PtqUnit
 from amct_pytorch.common.models.llm import register_llm_models
+from amct_pytorch.common.optimization import register_solvers
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.utils.run_logging import setup_run_logging
+from amct_pytorch.common.optimization import SOLVER_REGISTRY
+from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 
 
 class LlmEvalWorkflow:
@@ -27,13 +33,18 @@ class LlmEvalWorkflow:
         self.data_provider = None
         self.model_name = args.model_name
         self.quant_target = args.quant_target
-        self.a_bits, self.w_bits = args.a_bits, args.w_bits
-        self.q_bits, self.k_bits, self.p_bits, self.v_bits = args.q_bits, args.k_bits, args.p_bits, args.v_bits
+        self.quant_dtype = args.quant_dtype
+        self.bit_policy = args.bit_policy
 
 
     def setup(self):
         self._register_components()
         self.pipeline = self._build_pipeline()
+        # Opt-in flag: adapters that support a sharded multi-NPU block-load
+        # (currently deepseek_v4) should use it during eval. PTQ keeps the
+        # default CPU-staging load so per-expert iteration works.
+        if hasattr(self.pipeline, "_sharded_block"):
+            self.pipeline._sharded_block = True
         sink_id, _ = setup_run_logging(
             self.args,
             f"eval_{self.model_name}_{self.eval_mode}",
@@ -50,10 +61,10 @@ class LlmEvalWorkflow:
             raise ValueError(
                 f"Unsupported granularity '{self.granularity}' for eval."
             )
-        logger.info(f"Model: {self.model_name}; Quant target: {self.quant_target}; "
-                    f"a_bits: {self.a_bits}, w_bits: {self.w_bits} "
-                    f"q_bits: {self.q_bits}, k_bits: {self.k_bits}, p_bits: {self.p_bits}, v_bits: {self.v_bits}; "
-                    f"PPL: {ppl}")
+        logger.info(
+            f"Model: {self.model_name}; Quant target: {self.quant_target}; Quant dtype: {self.quant_dtype}; "
+            f"PPL: {ppl}\n{self.bit_policy.summary()}"
+        )
         logger.remove(sink_id)
 
     def _register_components(self):
@@ -65,24 +76,23 @@ class LlmEvalWorkflow:
         model_cls = MODEL_REGISTRY.get(self.model_name)
         return model_cls(self.args)
 
-    def _get_relevant_quant_bits(self):
+    def _has_relevant_quant(self):
         quant_targets = set(self.args.quant_target)
-        bits = []
         if quant_targets.intersection({"mlp", "moe", "attn-linear"}):
-            bits.extend([self.args.a_bits, self.args.w_bits])
+            if self.bit_policy.has_quant_linear():
+                return True
         if "attn-cache" in quant_targets:
-            bits.extend([self.args.q_bits, self.args.k_bits, self.args.p_bits, self.args.v_bits])
-        return bits
+            if self.bit_policy.has_quant_cache():
+                return True
+        return False
 
     def _resolve_eval_states(self):
         if self.eval_mode == "bf16":
             return False, False, "Eval mode=bf16: use original BF16 blocks."
 
-        relevant_bits = self._get_relevant_quant_bits()
-        enable_quant = any(bit < 16 for bit in relevant_bits)
-        if enable_quant:
+        if self._has_relevant_quant():
             return True, True, "Eval mode=quant: run quant modules with quantization enabled."
-        return True, False, "Eval mode=quant with all relevant bits=16: run rebuilt quant modules with quantization disabled."
+        return True, False, "Eval mode=quant with no <16-bit entries in policy: run rebuilt quant modules with quantization disabled."
 
     def _run_blockwise(self,):
         tokenizer = self.pipeline.tokenizer
