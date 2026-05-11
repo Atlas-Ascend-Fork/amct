@@ -23,14 +23,14 @@
 // See hifloat8_cast_op.cpp:ComputeTileLength() for the derivation.
 constexpr uint32_t DOUBLE_BUFFER = 2;
 
-// Data type conversion mode
+constexpr uint32_t LUT16_SIZE = 32768;
+constexpr uint32_t LUT8_SIZE  = 256;
+
 enum HiFloat8CastMode : uint32_t {
-    FP32_TO_HIF8 = 0,
-    FP16_TO_HIF8 = 1,
-    BF16_TO_HIF8 = 2,
-    HIF8_TO_FP32 = 3,
-    HIF8_TO_FP16 = 4,
-    HIF8_TO_BF16 = 5,
+    FP16_TO_HIF8 = 0,
+    BF16_TO_HIF8 = 1,
+    HIF8_TO_FP16 = 2,
+    HIF8_TO_BF16 = 3,
 };
 
 // Tiling data structure

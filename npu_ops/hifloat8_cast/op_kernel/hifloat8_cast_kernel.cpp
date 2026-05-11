@@ -17,12 +17,12 @@
 /*
  * KernelHiFloat8CastLut — LUT 查表实现
  *
- *  castMode | LUT 每元素指令数 | 优化手段
- *  ---------|----------------|--------------------------------
- *  0 FP16→  | ~5 条          | 32768-entry 半空间 UB LUT + 符号分离
- *  1 BF16→  | ~5 条          | 32768-entry 半空间 UB LUT + 符号分离
- *  2 →FP16  | 1 条           | 256-entry UB LUT 消除分支
- *  3 →BF16  | 1 条           | 256-entry UB LUT 消除分支
+ *  castMode          | LUT 每元素指令数 | 优化手段
+ *  ------------------|----------------|--------------------------------
+ *  FP16_TO_HIF8      | ~5 条          | 32768-entry 半空间 UB LUT + 符号分离
+ *  BF16_TO_HIF8      | ~5 条          | 32768-entry 半空间 UB LUT + 符号分离
+ *  HIF8_TO_FP16      | 1 条           | 256-entry UB LUT 消除分支
+ *  HIF8_TO_BF16      | 1 条           | 256-entry UB LUT 消除分支
  *
  * UB 占用（tileLength 由 host 运行时根据平台实际可用 UB 大小计算；
  *          maxTile ≥ 32768 时对齐到 32768，否则对齐到 32，上限 65536）：
@@ -51,106 +51,12 @@
 #include "kernel_operator.h"
 #include "hifloat8_cast_tiling.h"
 
-constexpr uint32_t FP16_EXP_BITS = 5;
-constexpr uint32_t FP16_FRAC_BITS = 10;
-constexpr uint32_t FP16_EXP_BIAS = 15;
-
-constexpr uint32_t BF16_EXP_BITS = 8;
-constexpr uint32_t BF16_FRAC_BITS = 7;
-constexpr uint32_t BF16_EXP_BIAS = 127;
-
 constexpr uint32_t HIF8_SIGN_SHIFT = 7;
-constexpr uint32_t HIF8_DENORMAL_EXP_BIAS = 23;
-
-// 32768-entry LUT for BF16/FP16 encode (positive half: indexed by absBits = val & 0x7FFF)
-// Sign bit is stripped before lookup and re-applied after, halving UB from 64KB→32KB.
-constexpr uint32_t LUT16_SIZE = 32768;
-// 256-entry LUT for decode (indexed by raw HiF8 uint8_t value)
-constexpr uint32_t LUT8_SIZE = 256;
-
-constexpr uint32_t HIF8_DOT_TABLE[16] = {
-    (0x00 << 24) | (3 << 16) | (0 << 8) | (0 << 4) | 7,
-    (0x00 << 24) | (3 << 16) | (1 << 8) | (0 << 4) | 7,
-    (0x08 << 24) | (3 << 16) | (3 << 8) | (1 << 4) | 7,
-    (0x08 << 24) | (3 << 16) | (3 << 8) | (1 << 4) | 7,
-    (0x18 << 24) | (3 << 16) | (4 << 8) | (2 << 4) | 7,
-    (0x18 << 24) | (3 << 16) | (4 << 8) | (2 << 4) | 7,
-    (0x18 << 24) | (3 << 16) | (4 << 8) | (2 << 4) | 7,
-    (0x18 << 24) | (3 << 16) | (4 << 8) | (2 << 4) | 7,
-    (0x1c << 24) | (2 << 16) | (4 << 8) | (3 << 4) | 3,
-    (0x1c << 24) | (2 << 16) | (4 << 8) | (3 << 4) | 3,
-    (0x1c << 24) | (2 << 16) | (4 << 8) | (3 << 4) | 3,
-    (0x1c << 24) | (2 << 16) | (4 << 8) | (3 << 4) | 3,
-    (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
-    (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
-    (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
-    (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
-};
-
-// HiFloat8 → FP16/BF16 bits（scalar，仅 InitLut8 使用；输出恒为 16-bit）
-__aicore__ inline uint32_t Hif8ToFpBits(uint8_t inData,
-                                         uint32_t expBits,
-                                         uint32_t fracBits,
-                                         uint32_t expBias)
-{
-    if (inData == 0) return 0;
-
-    uint32_t expMax = (1u << expBits) - 1;
-
-    if (inData == 0x80) return (expMax << fracBits) | ((1u << fracBits) - 1);
-    if (inData == 0x6F) return expMax << fracBits;
-    if (inData == 0xEF) return (1u << 15) | (expMax << fracBits);  // sign bit at bit 15
-
-    uint8_t dot           = (inData & 0x78) >> 3;
-    uint32_t info         = HIF8_DOT_TABLE[dot];
-
-    uint8_t expMask      = (info >> 24) & 0xFF;
-    uint8_t fracHiF8Bits = (info >> 16) & 0xFF;
-    uint8_t expSignShift = (info >> 8)  & 0xFF;
-    uint8_t expHiF8Bits  = (info >> 4)  & 0x0F;
-    uint8_t fracMask     = info & 0x0F;
-
-    uint32_t expHiF8 = (inData & expMask) >> fracHiF8Bits;
-    uint32_t signExp = (inData >> expSignShift) & 0x01;
-    uint32_t fracFpN = inData & fracMask;
-    uint32_t expFpN;
-    uint32_t sign = inData >> HIF8_SIGN_SHIFT;
-
-    if (expSignShift == 0) {
-        // HiFloat8 subnormal: value = 2^(fracFpN - HIF8_DENORMAL_EXP_BIAS), no fractional part.
-        int32_t biasedExp = (int32_t)expBias - (int32_t)(HIF8_DENORMAL_EXP_BIAS - fracFpN);
-        if (biasedExp <= 0) {
-            // Subnormal in target format (e.g. FP16): mantissa = 2^(biasedExp-1+fracBits)
-            int32_t shift = biasedExp - 1 + (int32_t)fracBits;
-            uint32_t mantissa = (shift >= 0) ? (1u << (uint32_t)shift) : 0u;
-            return (sign << 15) | mantissa;
-        }
-        expFpN = (uint32_t)biasedExp;
-        fracFpN = 0;
-    } else if (expSignShift == 1) {
-        expFpN = expBias;
-    } else {
-        int32_t expNoBias = (int32_t)((expHiF8 | (1u << (expHiF8Bits - 1))) * (signExp == 1 ? -1 : 1));
-        int32_t biasedExp = expNoBias + (int32_t)expBias;
-        if (biasedExp <= 0) {
-            // Subnormal in target format: value = 2^expNoBias × (1 + fracFpN/2^fracHiF8Bits)
-            // mantissa = ((1<<fracHiF8Bits)|fracFpN) << (biasedExp-1+fracBits-fracHiF8Bits)
-            int32_t shift = biasedExp - 1 + (int32_t)fracBits - (int32_t)fracHiF8Bits;
-            uint32_t S = (1u << fracHiF8Bits) | fracFpN;
-            uint32_t mantissa = (shift >= 0) ? (S << (uint32_t)shift) : (S >> (uint32_t)(-shift));
-            return (sign << 15) | mantissa;
-        }
-        expFpN = (uint32_t)biasedExp;
-    }
-
-    return (sign << 15) | (expFpN << fracBits) | (fracFpN << (fracBits - fracHiF8Bits));
-}
 
 class KernelHiFloat8CastLut {
 public:
     __aicore__ inline KernelHiFloat8CastLut(AscendC::TPipe* pipe) : pipe_(pipe) {}
 
-    // lut_gm: FP16/BF16 encode 时传预计算 32KB GM 指针；decode 时传 0
     __aicore__ inline void Init(GM_ADDR input, GM_ADDR output,
                                  const __gm__ HiFloat8CastTilingData* tiling,
                                  GM_ADDR lut_gm)
@@ -158,7 +64,7 @@ public:
         uint32_t castMode = tiling->castMode;
         uint32_t blockIdx = AscendC::GetBlockIdx();
 
-        isEncode_    = (castMode <= 1);
+        isEncode_    = (castMode <= BF16_TO_HIF8);
         inputBytes_  = isEncode_ ? 2u : 1u;
         outputBytes_ = isEncode_ ? 1u : 2u;
         tileLength_  = tiling->tileLength;
@@ -178,8 +84,6 @@ public:
         pipe_->InitBuffer(outQueue_, DOUBLE_BUFFER, tileLength_ * outputBytes_);
 
         if (isEncode_) {
-            // BF16/FP16 encode: 从 GM 复制预计算半空间 LUT 到 UB
-            // LUT16_SIZE=32768 < 65535，单次 DataCopyPad 即可完成
             pipe_->InitBuffer(lut16Buf_, LUT16_SIZE);
             AscendC::GlobalTensor<uint8_t> lutGm;
             lutGm.SetGlobalBuffer((__gm__ uint8_t*)lut_gm, LUT16_SIZE);
@@ -188,16 +92,13 @@ public:
             AscendC::DataCopyPadParams pp{false, 0, 0, 0};
             AscendC::DataCopyPad(lutUb, lutGm[0], cp, pp);
         } else {
-            // decode: LUT 只有 256 条，在 UB 内直接构建，开销可忽略
-            bool isFP16       = (castMode == 2);
-            uint32_t expBits  = isFP16 ? FP16_EXP_BITS  : BF16_EXP_BITS;
-            uint32_t fracBits = isFP16 ? FP16_FRAC_BITS : BF16_FRAC_BITS;
-            uint32_t expBias  = isFP16 ? FP16_EXP_BIAS  : BF16_EXP_BIAS;
             pipe_->InitBuffer(lut8Buf_, LUT8_SIZE * 2u);
-            auto lut = lut8Buf_.Get<uint16_t>();
-            for (uint32_t i = 0; i < LUT8_SIZE; i++) {
-                lut.SetValue(i, (uint16_t)Hif8ToFpBits((uint8_t)i, expBits, fracBits, expBias));
-            }
+            AscendC::GlobalTensor<uint16_t> lutGm;
+            lutGm.SetGlobalBuffer((__gm__ uint16_t*)lut_gm, LUT8_SIZE);
+            auto lutUb = lut8Buf_.Get<uint16_t>();
+            AscendC::DataCopyParams    cp{1, (uint16_t)(LUT8_SIZE * 2u), 0, 0};
+            AscendC::DataCopyPadParams pp{false, 0, 0, 0};
+            AscendC::DataCopyPad(lutUb, lutGm[0], cp, pp);
         }
     }
 
@@ -316,8 +217,8 @@ private:
     AscendC::GlobalTensor<uint8_t> inputGm_;
     AscendC::GlobalTensor<uint8_t> outputGm_;
 
-    AscendC::TQue<AscendC::TPosition::VECIN,  DOUBLE_BUFFER> inQueue_;
-    AscendC::TQue<AscendC::TPosition::VECOUT, DOUBLE_BUFFER> outQueue_;
+    AscendC::TQue<AscendC::TPosition::VECIN,  1> inQueue_;
+    AscendC::TQue<AscendC::TPosition::VECOUT, 1> outQueue_;
 
     // BF16/FP16 encode UB LUT（32768 × 1B = 32KB，半空间）
     AscendC::TBuf<AscendC::TPosition::VECCALC> lut16Buf_;
