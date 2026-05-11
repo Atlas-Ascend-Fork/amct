@@ -18,7 +18,9 @@
 
 #include <cstdint>
 
-constexpr uint32_t TILE_LENGTH = 8192;  // Optimized: increased from 2048 to 8192 (4x improvement)
+// TILE_LENGTH is no longer a compile-time constant; it is computed at runtime on the host
+// based on the platform UB size and passed in HiFloat8CastTilingData.tileLength.
+// See hifloat8_cast_op.cpp:ComputeTileLength() for the derivation.
 constexpr uint32_t DOUBLE_BUFFER = 2;
 
 // Data type conversion mode
@@ -38,4 +40,5 @@ struct HiFloat8CastTilingData {
     uint64_t numPerCore;      // Elements per core
     uint64_t tailNumLastCore; // Tail elements for last core
     uint32_t castMode;        // Conversion mode
+    uint32_t tileLength;      // Elements per tile (runtime, based on platform UB size)
 };

@@ -17,7 +17,9 @@
 #include "hifloat8_cast_tiling.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
+#include <algorithm>
 #include <cstring>
+#include <mutex>
 
 // GM_ADDR is a device-side Ascend C alias for uint64_t; define it for host compilation
 #ifndef GM_ADDR
@@ -27,6 +29,9 @@ using GM_ADDR = uint64_t;
 // Forward declarations of kernel entry points (defined in hifloat8_cast_kernel.asc)
 extern "C" __global__ __vector__ void hifloat8_cast_kernel_lut(
     GM_ADDR input, GM_ADDR output, GM_ADDR tiling, GM_ADDR lut_gm);
+
+constexpr uint32_t LUT16_SIZE = 32768;  // encode: 32768-entry half-space LUT (32 KB)
+constexpr uint32_t LUT8_SIZE  = 256;    // decode: 256-entry LUT (512 B as uint16)
 
 // ── Host-side LUT helpers ─────────────────────────────────────────────────────
 // Run on CPU to precompute the 32768-entry encode LUT once per mode.
@@ -50,7 +55,7 @@ static uint8_t HostFp32MagnitudeToHif8(uint32_t inData)
     int32_t expNoBias = (int32_t)expFp - 127;
     if (expNoBias < -22) return 0x00;
     if (expNoBias >= 15) return 0x6E;
-    if (expNoBias >= -22 && expNoBias < -15) {
+    if (expNoBias < -15) {
         uint32_t fracHiF8 = (fracFp >> 22) >= 1 ? (uint32_t)(23 + expNoBias + 1)
                                                  : (uint32_t)(23 + expNoBias);
         return (uint8_t)fracHiF8;
@@ -92,8 +97,23 @@ static at::Tensor BuildLut16Cpu(int64_t castMode)
         uint16_t val  = (uint16_t)i;  // sign bit always 0
         uint32_t exp  = (val >> fracBitsN) & ((1u << expBitsN) - 1);
         uint32_t frac = val & ((1u << fracBitsN) - 1);
-        uint32_t expFp32  = exp + (127u - expBias);
-        uint32_t fp32Bits = (expFp32 << 23) | (frac << (23u - fracBitsN));
+        uint32_t fp32Bits;
+        if (exp == 0) {
+            // Subnormal: no implicit leading 1; normalize by finding the leading 1 in frac.
+            if (frac == 0) {
+                fp32Bits = 0u;
+            } else {
+                // p: position of leading 1 bit; __builtin_clz is UB for 0, guarded above.
+                uint32_t p = 31u - (uint32_t)__builtin_clz(frac);
+                // fp32Exp = (1 - expBias) + (p - fracBitsN) + 127
+                int32_t fp32Exp = (int32_t)p - (int32_t)fracBitsN - (int32_t)(expBias - 1u) + 127;
+                uint32_t fp32Frac = (frac & ((1u << p) - 1u)) << (23u - p);
+                fp32Bits = (fp32Exp > 0) ? (((uint32_t)fp32Exp << 23) | fp32Frac) : 0u;
+            }
+        } else {
+            uint32_t expFp32 = exp + (127u - expBias);
+            fp32Bits = (expFp32 << 23) | (frac << (23u - fracBitsN));
+        }
         data[i] = HostFp32MagnitudeToHif8(fp32Bits);  // magnitude only, no sign
     }
     return lut;
@@ -109,19 +129,53 @@ static uint32_t GetAivCoreNum()
     return n > 0u ? n : 32u;
 }
 
+static uint32_t GetUbSizeBytes()
+{
+    auto* platform = platform_ascendc::PlatformAscendCManager::GetInstance();
+    if (platform == nullptr) return 256u * 1024u;
+    uint64_t ub = 0;
+    platform->GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub);
+    return ub > 0u ? static_cast<uint32_t>(ub) : 256u * 1024u;
+}
+
+// Compute the largest TILE_LENGTH that fits in the UB for the given mode.
+//
+// UB layout per core:
+//   encode (inputBytes=2, outputBytes=1):
+//     LUT16(32KB) + DOUBLE_BUFFER*T*2B(inQ) + DOUBLE_BUFFER*T*1B(outQ) = 32768 + 6T
+//   decode (inputBytes=1, outputBytes=2):
+//     LUT8(512B)  + DOUBLE_BUFFER*T*1B(inQ) + DOUBLE_BUFFER*T*2B(outQ) =   512 + 6T
+//
+// Cap at 65536 (DataCopyParams split logic in CopyIn covers up to this size).
+// Align to 32768 so that full-tile byteCount is always an exact multiple of 32768,
+// enabling the {N, 32768} split without remainder handling.
+static uint32_t ComputeTileLength(uint32_t ubBytes, bool isEncode)
+{
+    uint32_t lutBytes = isEncode ? LUT16_SIZE : (LUT8_SIZE * 2u);
+    if (ubBytes <= lutBytes + 192u) return 32u;
+    uint32_t maxTile = (ubBytes - lutBytes) / 6u;
+    maxTile = std::min(maxTile, 65536u);
+    if (maxTile >= 32768u) {
+        // Align to 32768: keeps full-tile byteCount as an exact multiple of 32768,
+        // enabling the efficient {N, 32768} DataCopy split in CopyIn.
+        return (maxTile / 32768u) * 32768u;
+    }
+    // Align to 32 elements (≥ 32-byte DMA alignment for both 1B and 2B/element)
+    return std::max((maxTile / 32u) * 32u, 32u);
+}
+
 namespace ascend_kernel {
 
 at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode) {
     TORCH_CHECK(castMode >= 0 && castMode <= 3, "castMode must be in [0, 3]");
     TORCH_CHECK(input.device().type() == c10::DeviceType::PrivateUse1, "input must be on NPU device");
+    if (castMode == 0) TORCH_CHECK(input.dtype() == at::kHalf,     "castMode=0 requires half input");
+    if (castMode == 1) TORCH_CHECK(input.dtype() == at::kBFloat16, "castMode=1 requires bfloat16 input");
+    if (castMode >= 2) TORCH_CHECK(input.dtype() == at::kByte,     "castMode>=2 requires uint8 input");
 
     auto inputContiguous = input.contiguous();
     int64_t totalElements = inputContiguous.numel();
     TORCH_CHECK(totalElements > 0, "input tensor must not be empty");
-
-    if (castMode == 0) TORCH_CHECK(input.dtype() == at::kHalf,     "castMode=0 requires half input");
-    if (castMode == 1) TORCH_CHECK(input.dtype() == at::kBFloat16, "castMode=1 requires bfloat16 input");
-    if (castMode >= 2) TORCH_CHECK(input.dtype() == at::kByte,     "castMode>=2 requires uint8 input");
 
     at::Tensor output;
     if (castMode <= 1)      output = at::empty(inputContiguous.sizes(), inputContiguous.options().dtype(at::kByte));
@@ -130,10 +184,12 @@ at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode) {
 
     auto aclStream = c10_npu::getCurrentNPUStream().stream(false);
 
-    constexpr uint32_t MIN_ELEMENTS_PER_CORE = 8192;
-    uint32_t maxBlocks = GetAivCoreNum();
+    bool     isEncode   = (castMode <= 1);
+    uint32_t ubBytes    = GetUbSizeBytes();
+    uint32_t tileLength = ComputeTileLength(ubBytes, isEncode);
+    uint32_t maxBlocks  = GetAivCoreNum();
 
-    uint32_t idealBlocks = static_cast<uint32_t>((totalElements + MIN_ELEMENTS_PER_CORE - 1) / MIN_ELEMENTS_PER_CORE);
+    uint32_t idealBlocks = static_cast<uint32_t>((totalElements + tileLength - 1) / tileLength);
     uint32_t numBlocks = std::min(idealBlocks, maxBlocks);
     numBlocks = std::max(numBlocks, 1u);
 
@@ -141,7 +197,8 @@ at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode) {
     uint64_t tailNum    = static_cast<uint64_t>(totalElements - numPerCore * (numBlocks - 1));
 
     HiFloat8CastTilingData tilingHost = {numBlocks, static_cast<uint64_t>(totalElements),
-                                         numPerCore, tailNum, static_cast<uint32_t>(castMode)};
+                                         numPerCore, tailNum, static_cast<uint32_t>(castMode),
+                                         tileLength};
 
     at::Tensor tilingTensor = at::empty({sizeof(HiFloat8CastTilingData)},
                                         at::device(at::kCPU).dtype(at::kByte));
@@ -149,16 +206,23 @@ at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode) {
     at::Tensor tilingDevice = tilingTensor.to(input.device());
 
     // Encode LUT 缓存：首次调用时 CPU 构建后传到 NPU，后续复用
-    static at::Tensor s_lut_fp16;  // FP16 encode LUT on NPU
-    static at::Tensor s_lut_bf16;  // BF16 encode LUT on NPU
+    // std::call_once 保证多线程并发调用时只初始化一次
+    static at::Tensor    s_lut_fp16, s_lut_bf16;
+    static std::once_flag s_once_fp16, s_once_bf16;
 
     GM_ADDR lut_gm = 0;
     if (castMode <= 1) {
-        at::Tensor& cached = (castMode == 0) ? s_lut_fp16 : s_lut_bf16;
-        if (!cached.defined()) {
-            cached = BuildLut16Cpu(castMode).to(input.device());
+        if (castMode == 0) {
+            std::call_once(s_once_fp16, [&]() {
+                s_lut_fp16 = BuildLut16Cpu(0).to(input.device());
+            });
+            lut_gm = (GM_ADDR)s_lut_fp16.data_ptr();
+        } else {
+            std::call_once(s_once_bf16, [&]() {
+                s_lut_bf16 = BuildLut16Cpu(1).to(input.device());
+            });
+            lut_gm = (GM_ADDR)s_lut_bf16.data_ptr();
         }
-        lut_gm = (GM_ADDR)cached.data_ptr();
     }
 
     hifloat8_cast_kernel_lut<<<numBlocks, nullptr, aclStream>>>(

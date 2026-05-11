@@ -1,6 +1,6 @@
 # npu_ops
 
-AMCT 自定义算子目录，支持 PyTorch / CANN 尚未原生支持的模型压缩相关算子（量化、稀疏、低比特类型转换等）。
+AMCT 自定义算子目录，补齐 PyTorch / CANN 尚未原生支持的模型压缩相关算子（量化、稀疏、低比特类型转换等）。
 
 ```
 amct_pytorch/      模型压缩框架（PTQ/QAT、稀疏、图分析等）
@@ -31,8 +31,17 @@ CANN / Ascend NPU
 
 ```bash
 cd npu_ops/
-bash ops_build.sh               # 编译全部算子 → 生成 dist/npu_ops-*.whl
-bash ops_build.sh hifloat8_cast # 仅编译指定算子
+bash ops_build.sh [--soc <soc>] [<算子>]
+
+# --soc 指定目标平台（默认 ascend910b）：
+#   ascend910b    A2
+#   ascend910_93  A3
+#   ascend950     A5
+
+bash ops_build.sh                              # 全部算子，A2
+bash ops_build.sh --soc ascend910_93           # 全部算子，A3
+bash ops_build.sh hifloat8_cast               # 指定算子，A2
+bash ops_build.sh --soc ascend950 hifloat8_cast  # 指定算子，A5
 ```
 
 产物：`dist/npu_ops-1.0.0-cp*-cp*-linux_aarch64.whl`，包含所有算子的 Python 包及编译 `.so`。

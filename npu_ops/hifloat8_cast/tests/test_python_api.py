@@ -28,7 +28,7 @@ Test coverage:
 import sys
 import torch
 import torch_npu
-from npu_ops.hifloat8 import encode_to_hifloat8, decode_from_hifloat8
+from npu_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
 
 torch.npu.set_device(0)
 def test_type_inference():

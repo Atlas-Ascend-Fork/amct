@@ -1,20 +1,31 @@
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-# 
-#     http://www.apache.org/licenses/LICENSE-2.0
-
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.16)
+
+# ---------------------------------------------------------------------------
+# Target NPU architecture — pass -DNPU_ARCH=<value> to select platform:
+#   dav-2201  Ascend A2 (ascend910b,   910B1/B2/B3, UB 256 KB)  [default]
+#             Ascend A3 (ascend910_93, 910_93,       UB 512 KB)  共用同一 ISA
+#   dav-3510  Ascend A5 (ascend950,                 UB 512 KB+)
+#
+# A2/A3 编译产物相同；UB 差异由运行时 GetCoreMemSize() 决定 tileLength。
+# ---------------------------------------------------------------------------
+set(NPU_ARCH "dav-2201" CACHE STRING "Target NPU architecture")
+set_property(CACHE NPU_ARCH PROPERTY STRINGS "dav-2201" "dav-3510")
+
+if(NOT NPU_ARCH MATCHES "^dav-(2201|3510)$")
+    message(FATAL_ERROR
+        "Unsupported NPU_ARCH='${NPU_ARCH}'. "
+        "Supported values: dav-2201 (A2/A3), dav-3510 (A5)")
+endif()
 
 find_package(ASC REQUIRED)
 
@@ -85,7 +96,7 @@ target_link_directories(hifloat8_cast_ops PRIVATE
 
 target_compile_options(hifloat8_cast_ops PRIVATE
     ${TORCH_CXX_FLAGS}
-    $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-2201>
+    $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>
 )
 
-message(STATUS "TORCH_LIBRARY module 'libhifloat8_cast_ops.so' will be built")
+message(STATUS "Building libhifloat8_cast_ops.so for NPU_ARCH=${NPU_ARCH}")

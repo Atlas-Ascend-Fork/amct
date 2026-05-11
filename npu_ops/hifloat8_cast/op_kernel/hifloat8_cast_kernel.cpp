@@ -24,9 +24,18 @@
  *  2 →FP16  | 1 条           | 256-entry UB LUT 消除分支
  *  3 →BF16  | 1 条           | 256-entry UB LUT 消除分支
  *
- * UB 占用（TILE_LENGTH=8192，队列按实际元素宽度分配）：
- *   BF16/FP16 encode:  32KB(LUT16) + 32KB(inQ×2 @2B) + 16KB(outQ×2 @1B) = 80KB  < 256KB
- *   decode FP16/BF16:   1KB(LUT8)  + 16KB(inQ×2 @1B) + 32KB(outQ×2 @2B) = 49KB  < 256KB
+ * UB 占用（tileLength 由 host 运行时根据平台实际可用 UB 大小计算；
+ *          maxTile ≥ 32768 时对齐到 32768，否则对齐到 32，上限 65536）：
+ *   BF16/FP16 encode:  32KB(LUT16) + 2T×2B(inQ) + 2T×1B(outQ)  = 32768 + 6T bytes
+ *   decode FP16/BF16:   1KB(LUT8)  + 2T×1B(inQ) + 2T×2B(outQ)  =   512 + 6T bytes
+ *
+ *   A2 实测 UB = 196352B：encode T=27264 → 196352B，decode T=32640 → 196352B
+ *   A3 标称 UB = 512KB：  encode T=65536 → 425984B，decode T=65536 → 393728B
+ *
+ * CopyIn DataCopy 拆分策略（DataCopyParams.blockLen 为 uint16_t，max 65535）：
+ *   byteCount ≤ 65535           → {1, byteCount}
+ *   byteCount % 32768 == 0      → {byteCount/32768, 32768}   (全 tile，tileLength 对齐保证整除)
+ *   byteCount 为偶数（encode tail）→ {2, byteCount/2}         (count ≤ 65535，blockLen ≤ 65535)
  *
  * 半空间 LUT 原理：
  *   BF16/FP16 编码关于符号位对称：encode(-x) = encode(x) | 0x80（当 encode(x)≠0 时）
@@ -105,18 +114,35 @@ __aicore__ inline uint32_t Hif8ToFpBits(uint8_t inData,
     uint32_t signExp = (inData >> expSignShift) & 0x01;
     uint32_t fracFpN = inData & fracMask;
     uint32_t expFpN;
+    uint32_t sign = inData >> HIF8_SIGN_SHIFT;
 
     if (expSignShift == 0) {
-        expFpN = expBias - (HIF8_DENORMAL_EXP_BIAS - fracFpN);
+        // HiFloat8 subnormal: value = 2^(fracFpN - HIF8_DENORMAL_EXP_BIAS), no fractional part.
+        int32_t biasedExp = (int32_t)expBias - (int32_t)(HIF8_DENORMAL_EXP_BIAS - fracFpN);
+        if (biasedExp <= 0) {
+            // Subnormal in target format (e.g. FP16): mantissa = 2^(biasedExp-1+fracBits)
+            int32_t shift = biasedExp - 1 + (int32_t)fracBits;
+            uint32_t mantissa = (shift >= 0) ? (1u << (uint32_t)shift) : 0u;
+            return (sign << 15) | mantissa;
+        }
+        expFpN = (uint32_t)biasedExp;
         fracFpN = 0;
     } else if (expSignShift == 1) {
         expFpN = expBias;
     } else {
         int32_t expNoBias = (int32_t)((expHiF8 | (1u << (expHiF8Bits - 1))) * (signExp == 1 ? -1 : 1));
-        expFpN = (uint32_t)(expNoBias + (int32_t)expBias);
+        int32_t biasedExp = expNoBias + (int32_t)expBias;
+        if (biasedExp <= 0) {
+            // Subnormal in target format: value = 2^expNoBias × (1 + fracFpN/2^fracHiF8Bits)
+            // mantissa = ((1<<fracHiF8Bits)|fracFpN) << (biasedExp-1+fracBits-fracHiF8Bits)
+            int32_t shift = biasedExp - 1 + (int32_t)fracBits - (int32_t)fracHiF8Bits;
+            uint32_t S = (1u << fracHiF8Bits) | fracFpN;
+            uint32_t mantissa = (shift >= 0) ? (S << (uint32_t)shift) : (S >> (uint32_t)(-shift));
+            return (sign << 15) | mantissa;
+        }
+        expFpN = (uint32_t)biasedExp;
     }
 
-    uint32_t sign = inData >> HIF8_SIGN_SHIFT;
     return (sign << 15) | (expFpN << fracBits) | (fracFpN << (fracBits - fracHiF8Bits));
 }
 
@@ -135,20 +161,21 @@ public:
         isEncode_    = (castMode <= 1);
         inputBytes_  = isEncode_ ? 2u : 1u;
         outputBytes_ = isEncode_ ? 1u : 2u;
+        tileLength_  = tiling->tileLength;
 
         total_    = (blockIdx < tiling->blockNum - 1)
                     ? tiling->numPerCore : tiling->tailNumLastCore;
-        tileNum_  = (total_ + TILE_LENGTH - 1) / TILE_LENGTH;
-        tailTile_ = total_ - TILE_LENGTH * (tileNum_ - 1);
-        if (tailTile_ == 0 && tileNum_ > 0) { tileNum_--; tailTile_ = TILE_LENGTH; }
+        tileNum_  = (total_ + tileLength_ - 1) / tileLength_;
+        tailTile_ = total_ - tileLength_ * (tileNum_ - 1);
+        // tailTile_ > 0 guaranteed: total_ > 0, ceiling division ensures last tile is non-empty
 
         uint64_t offset = (uint64_t)blockIdx * tiling->numPerCore;
         inputGm_.SetGlobalBuffer((__gm__ uint8_t*)input  + offset * inputBytes_,
                                   total_ * inputBytes_);
         outputGm_.SetGlobalBuffer((__gm__ uint8_t*)output + offset * outputBytes_,
                                    total_ * outputBytes_);
-        pipe_->InitBuffer(inQueue_,  DOUBLE_BUFFER, TILE_LENGTH * inputBytes_);
-        pipe_->InitBuffer(outQueue_, DOUBLE_BUFFER, TILE_LENGTH * outputBytes_);
+        pipe_->InitBuffer(inQueue_,  DOUBLE_BUFFER, tileLength_ * inputBytes_);
+        pipe_->InitBuffer(outQueue_, DOUBLE_BUFFER, tileLength_ * outputBytes_);
 
         if (isEncode_) {
             // BF16/FP16 encode: 从 GM 复制预计算半空间 LUT 到 UB
@@ -177,7 +204,7 @@ public:
     __aicore__ inline void Process()
     {
         for (uint32_t i = 0; i < tileNum_; i++) {
-            uint32_t count = (i == tileNum_ - 1) ? tailTile_ : TILE_LENGTH;
+            uint32_t count = (i == tileNum_ - 1) ? tailTile_ : tileLength_;
             CopyIn(i, count);
             Compute(count);
             CopyOut(i, count);
@@ -189,18 +216,37 @@ private:
 
     __aicore__ inline void CopyIn(uint32_t tileIdx, uint32_t count)
     {
-        uint32_t byteOffset = tileIdx * TILE_LENGTH * inputBytes_;
+        uint32_t byteOffset = tileIdx * tileLength_ * inputBytes_;
         uint32_t byteCount  = count * inputBytes_;
         auto xLocal = inQueue_.AllocTensor<uint8_t>();
-        AscendC::DataCopyParams    copyParams{1, (uint16_t)byteCount, 0, 0};
         AscendC::DataCopyPadParams padParams{false, 0, 0, 0};
-        AscendC::DataCopyPad(xLocal, inputGm_[byteOffset], copyParams, padParams);
+        // DataCopyParams.blockLen is uint16_t (max 65535); split large byteCount:
+        //
+        //  Case A — byteCount ≤ 65535 : {1, byteCount}
+        //           covers all decode tiles and small encode tails
+        //
+        //  Case B — byteCount % 32768 == 0 : {byteCount/32768, 32768}
+        //           full tiles when tileLength ∈ {32768, 65536} (tileLength aligned to 32768)
+        //           e.g. encode tileLength=65536 → byteCount=131072 → {4, 32768}
+        //               decode tileLength=65536 → byteCount=65536  → {2, 32768}
+        //
+        //  Case C — byteCount even, not case B : {2, byteCount/2}
+        //           encode tail tiles; byteCount=count*2, count ≤ 65535 → byteCount/2 ≤ 65535
+        AscendC::DataCopyParams cp;
+        if (byteCount <= 65535u) {
+            cp = {1, (uint16_t)byteCount, 0, 0};
+        } else if (byteCount % 32768u == 0u) {
+            cp = {(uint16_t)(byteCount / 32768u), 32768u, 0, 0};
+        } else {
+            cp = {2u, (uint16_t)(byteCount >> 1), 0, 0};
+        }
+        AscendC::DataCopyPad(xLocal, inputGm_[byteOffset], cp, padParams);
         inQueue_.EnQue(xLocal);
     }
 
     __aicore__ inline void CopyOut(uint32_t tileIdx, uint32_t count)
     {
-        uint32_t byteOffset = tileIdx * TILE_LENGTH * outputBytes_;
+        uint32_t byteOffset = tileIdx * tileLength_ * outputBytes_;
         uint32_t byteCount  = count * outputBytes_;
         auto yLocal = outQueue_.DeQue<uint8_t>();
         AscendC::DataCopyExtParams copyParams{1, byteCount, 0, 0, 0};
@@ -264,6 +310,7 @@ private:
 
     bool     isEncode_;
     uint32_t inputBytes_, outputBytes_;
+    uint32_t tileLength_;
     uint32_t total_, tileNum_, tailTile_;
 
     AscendC::GlobalTensor<uint8_t> inputGm_;

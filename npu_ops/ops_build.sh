@@ -1,25 +1,23 @@
 #!/bin/bash
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2025-2026. All rights reserved.
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+# Apache License, Version 2.0
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-# 
-#     http://www.apache.org/licenses/LICENSE-2.0
-
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
-
 # 构建所有 NPU 算子并打包为统一 wheel
 #
 # 用法：
-#   bash ops_build.sh               # 构建全部 op，输出到 dist/
-#   bash ops_build.sh hifloat8_cast # 仅构建指定 op
+#   bash ops_build.sh [--soc <soc>] [<op>]
+#
+#   --soc <soc>   目标 SOC（可选，默认 ascend910b）：
+#                   ascend910b    Ascend A2（910B1/B2/B3，dav-2201）[默认]
+#                   ascend910_93  Ascend A3（910B4，dav-3101）
+#                   ascend950     Ascend A5（dav-3510）
+#   <op>          仅构建指定算子，省略则构建全部
+#
+# 示例：
+#   bash ops_build.sh                            # 构建全部，默认 A2
+#   bash ops_build.sh --soc ascend910_93         # 构建全部，A3
+#   bash ops_build.sh hifloat8_cast              # 仅构建 hifloat8_cast，A2
+#   bash ops_build.sh --soc ascend950 hifloat8_cast  # 仅构建 hifloat8_cast，A5
 #
 # 产物：dist/npu_ops-1.0.0-cp*-cp*-linux_aarch64.whl
 #
@@ -32,13 +30,51 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# ── 解析参数 ──────────────────────────────────────────────────────────────────
+SOC="ascend910b"
+OP_NAME=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --soc)
+            SOC="$2"
+            shift 2
+            ;;
+        --soc=*)
+            SOC="${1#*=}"
+            shift
+            ;;
+        -*)
+            echo "未知选项: $1" >&2
+            echo "用法: bash ops_build.sh [--soc ascend910b|ascend910_93|ascend950] [<op>]" >&2
+            exit 1
+            ;;
+        *)
+            OP_NAME="$1"
+            shift
+            ;;
+    esac
+done
+
+# SOC → NPU_ARCH
+# ascend910b 和 ascend910_93 共用 dav-2201（ISA 相同，UB 大小由运行时平台 API 区分）
+case "$SOC" in
+    ascend910b)   NPU_ARCH="dav-2201" ;;
+    ascend910_93) NPU_ARCH="dav-2201" ;;
+    ascend950)    NPU_ARCH="dav-3510" ;;
+    *)
+        echo "不支持的 SOC: '$SOC'，可选值: ascend910b, ascend910_93, ascend950" >&2
+        exit 1
+        ;;
+esac
+
 # ── 加载 CANN 环境 ─────────────────────────────────────────────────────────────
 echo "[1/4] 加载 CANN 环境..."
 # shellcheck disable=SC1091
 source "$ASCEND_HOME_PATH/set_env.sh"
 
 # ── 编译各算子 ────────────────────────────────────────────────────────────────
-echo "[2/4] 编译算子..."
+echo "[2/4] 编译算子 (SOC=${SOC}, NPU_ARCH=${NPU_ARCH})..."
 
 build_op() {
     local op_name="$1"
@@ -46,12 +82,14 @@ build_op() {
 
     echo "  编译 $op_name ..."
     rm -rf "$op_dir/build" && mkdir "$op_dir/build"
-    cmake -S "$op_dir" -B "$op_dir/build" -DCMAKE_BUILD_TYPE=Release > /dev/null
+    cmake -S "$op_dir" -B "$op_dir/build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DNPU_ARCH="${NPU_ARCH}" > /dev/null
     cmake --build "$op_dir/build" -j"$(nproc)"
 }
 
-if [ -n "$1" ]; then
-    build_op "$1"
+if [ -n "$OP_NAME" ]; then
+    build_op "$OP_NAME"
 else
     for op in */; do
         op="${op%/}"
@@ -87,13 +125,13 @@ collect_op() {
     done
 }
 
-if [ -n "$1" ]; then
+if [ -n "$OP_NAME" ]; then
     # 仅重新收集指定 op，保留其他已有包
-    collect_op "$1"
+    collect_op "$OP_NAME"
     # 补回其余已编译的包
     for op in */; do
         op="${op%/}"
-        [ "$op" = "$1" ] && continue
+        [ "$op" = "$OP_NAME" ] && continue
         [ -d "$op/python" ] && collect_op "$op"
     done
 else
