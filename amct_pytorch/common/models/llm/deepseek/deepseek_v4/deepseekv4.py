@@ -39,6 +39,9 @@ class _NoMoveAlignDevicesHook(AlignDevicesHook):
     description="DeepSeek V4 model adapter",
 )
 class DeepseekV4(BaseModel):
+    attn_norm_name = "attn_norm"
+    ffn_norm_name = "ffn_norm"
+
     def __init__(self, args):
         super().__init__(args)
         if not isinstance(self.config, DeepseekV4Config):
