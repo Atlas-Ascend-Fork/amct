@@ -169,6 +169,10 @@ class LlmPtqWorkflow:
                 layer_results[unit.name] = unit_result
                 self._save_unit_result(unit, unit_result)
 
+                unit.module.to("cpu")
+                del unit_batch, solver, unit_result
+                torch.npu.empty_cache()
+
             results[layer_idx] = layer_results
         return results
 

@@ -27,8 +27,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
 
 
 class QuantLongcatMLP(QuantGatedMLP):
-    def __init__(self, quant_args, mlp_module: LongcatFlashMLP):
-        super().__init__(quant_args, mlp_module)
+    pass
 
 
 class LongcatPackedExpertLinearView:
@@ -121,43 +120,43 @@ class QuantLongcatMLA(LongcatFlashMLA):
         self.hidden_size = attn_module.config.hidden_size
         self.value_dim = attn_module.num_heads * attn_module.v_head_dim
 
+        bits = quant_args.bit_policy["attn-linear"]
+        kv_a, kv_b, o = bits["kv_a_proj_with_mqa"], bits["kv_b_proj"], bits["o_proj"]
         if hasattr(attn_module, "q_proj"):
-            self.q_proj = QuantLinear(quant_args, attn_module.q_proj, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
+            q = bits["q_proj"]
+            self.q_proj = QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
         else:
-            self.q_a_proj = QuantLinear(quant_args, attn_module.q_a_proj, name="q_a_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_a_proj)
+            q_a, q_b = bits["q_a_proj"], bits["q_b_proj"]
+            self.q_a_proj = QuantLinear(quant_args, attn_module.q_a_proj, w_bits=q_a.w, name="q_a_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_a_proj)
             self.q_a_layernorm = attn_module.q_a_layernorm
-            self.q_b_proj = QuantLinear(quant_args, attn_module.q_b_proj, name="q_b_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_b_proj)
+            self.q_b_proj = QuantLinear(quant_args, attn_module.q_b_proj, w_bits=q_b.w, name="q_b_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_b_proj)
 
         self.kv_a_proj_with_mqa = (
-            QuantLinear(
-                quant_args,
-                attn_module.kv_a_proj_with_mqa,
-                name="kv_a_proj_with_mqa",
-            )
+            QuantLinear(quant_args, attn_module.kv_a_proj_with_mqa, w_bits=kv_a.w, name="kv_a_proj_with_mqa")
             if self.enable_attn_linear else PlainLinear(attn_module.kv_a_proj_with_mqa)
         )
         self.kv_a_layernorm = attn_module.kv_a_layernorm
-        self.kv_b_proj = QuantLinear(quant_args, attn_module.kv_b_proj, name="kv_b_proj") if self.enable_attn_linear else PlainLinear(attn_module.kv_b_proj)
-        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
+        self.kv_b_proj = QuantLinear(quant_args, attn_module.kv_b_proj, w_bits=kv_b.w, name="kv_b_proj") if self.enable_attn_linear else PlainLinear(attn_module.kv_b_proj)
+        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
         self.qk_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.q_bits,
-            r_bits=quant_args.k_bits,
+            l_bits=quant_args.bit_policy.cache_bits("q"),
+            r_bits=quant_args.bit_policy.cache_bits("k"),
             left_dim=self.qk_head_dim,
             right_dim=self.qk_head_dim,
         )
         self.pv_matmul = QuantizedMatmul(
             self.quant_args,
-            l_bits=quant_args.p_bits,
-            r_bits=quant_args.v_bits,
+            l_bits=quant_args.bit_policy.cache_bits("p"),
+            r_bits=quant_args.bit_policy.cache_bits("v"),
             right_dim=self.v_head_dim,
         )
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.inp_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
-            self.o_proj_afq = ActivationQuantizer(quant_args, self.quant_args.a_bits)
+            self.inp_afq = ActivationQuantizer(quant_args, kv_a.a)
+            self.o_proj_afq = ActivationQuantizer(quant_args, o.a)
         else:
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()

@@ -1,4 +1,5 @@
 import torch
+from numbers import Number
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.quantization.dtypes.mxfp_impl import shared_exponents, quantize_elewise, f32_to_f4_unpacked, pack_uint4
@@ -18,24 +19,25 @@ class QuantDequantMx(torch.nn.Module):
         else:
             self.ebits, self.mbits, self.emax, self.max_norm, self.shift_val, self.min_exp = 2, 3, 2, 6.0, 2, 0
 
-    def quant(self, x: Tensor, qdim: int = -1):
+    def quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
         x = x.unflatten(qdim, (-1, self.block_size))
+        if isinstance(v, torch.Tensor):
+            v = v.to(device=x.device, dtype=x.dtype).unflatten(qdim, (-1, self.block_size))
         E8M0 = shared_exponents(x, self.emax)
         x = x / (2 ** E8M0)
-        ExMx = quantize_elewise(x, self.min_exp, self.max_norm, self.shift_val)
+        ExMx = quantize_elewise(x, self.min_exp, self.max_norm, self.shift_val, v=v)
         return E8M0, ExMx
 
-    def fake_quant(self, x: Tensor, qdim: int = -1):
-        E8M0, ExMx = self.quant(x, qdim)
+    def fake_quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
+        E8M0, ExMx = self.quant(x, qdim, v=v)
         dx = (2 ** E8M0) * ExMx
         dx = dx.flatten(qdim - 1, qdim)
         return dx
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.bits == 16:
             return x
-        x = (self.fake_quant(x) - x).detach() + x
-        return x
+        return self.fake_quant(x, v=v)
 
     def deploy(self, x: Tensor, qdim: int = -1):
         E8M0, ExMx = self.quant(x, qdim)

@@ -127,16 +127,17 @@ class ActivationQuantizer(torch.nn.Module):
 
 class WeightQuantizer(torch.nn.Module):
 
-    def __init__(self, args):
+    def __init__(self, args, w_bits):
         super(WeightQuantizer, self).__init__()
         self.args = args
+        self.bits = w_bits
         self.algorithms = nn.ModuleDict()
         self._init_algo()
-        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=args.w_bits)
+        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=w_bits)
         self.enable = False
 
     def _init_algo(self):
-        self.algorithms = build_algorithms_by_target(self.args, "weight")
+        self.algorithms = build_algorithms_by_target(self.args, "weight", self.bits)
 
     def trainable_params(self):
         params = []

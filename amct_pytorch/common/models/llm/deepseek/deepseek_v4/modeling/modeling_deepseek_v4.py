@@ -69,7 +69,7 @@ class ModelArgs:
     compress_rope_theta: float = 40000.0
     original_seq_len: int = 0
     rope_theta: float = 10000.0
-    rope_factor: float = 40.
+    rope_factor: float = 40
     beta_fast: int = 32
     beta_slow: int = 1
     # index
@@ -102,8 +102,7 @@ class RMSNorm(nn.Module):
 def precompute_freqs_cis(dim, seqlen, original_seq_len, base, factor, beta_fast, beta_slow) -> torch.Tensor:
     """Precomputes complex exponentials for rotary embeddings with YaRN scaling.
     When original_seq_len > 0, applies frequency interpolation with a smooth
-    linear ramp between beta_fast and beta_slow correction ranges.
-    """
+    linear ramp between beta_fast and beta_slow correction ranges."""
 
     def find_correction_dim(num_rotations, dim, base, max_seq_len):
         return dim * math.log(max_seq_len / (num_rotations * 2 * math.pi)) / (2 * math.log(base))
@@ -111,7 +110,7 @@ def precompute_freqs_cis(dim, seqlen, original_seq_len, base, factor, beta_fast,
     def find_correction_range(low_rot, high_rot, dim, base, max_seq_len):
         low = math.floor(find_correction_dim(low_rot, dim, base, max_seq_len))
         high = math.ceil(find_correction_dim(high_rot, dim, base, max_seq_len))
-        return max(low, 0), min(high, dim - 1)
+        return max(low, 0), min(high, dim-1)
 
     def linear_ramp_factor(min, max, dim):
         if min == max:
@@ -181,14 +180,14 @@ def hadamard_transformers_fix(x):
 
 
 def rotate_activation(x: torch.Tensor) -> torch.Tensor:
-    return hadamard_transformers_fix(x)
+    return  hadamard_transformers_fix(x)
 
 
 @lru_cache(1)
 def get_window_topk_idxs(window_size: int, bsz: int, seqlen: int, start_pos: int):
     if start_pos >= window_size - 1:
         start_pos %= window_size
-        matrix = torch.cat([torch.arange(start_pos + 1, window_size), torch.arange(0, start_pos + 1)], dim=0)
+        matrix = torch.cat([torch.arange(start_pos + 1, window_size),  torch.arange(0, start_pos + 1)], dim=0)
     elif start_pos > 0:
         matrix = F.pad(torch.arange(start_pos + 1), (0, window_size - start_pos - 1), value=-1)
     else:
@@ -211,8 +210,7 @@ def get_compress_topk_idxs(ratio: int, bsz: int, seqlen: int, start_pos: int, of
 
 class Compressor(nn.Module):
     """Compresses KV cache via learned gated pooling over `compress_ratio` consecutive tokens.
-    When overlap=True (ratio==4), uses overlapping windows for smoother compression boundaries.
-    """
+    When overlap=True (ratio==4), uses overlapping windows for smoother compression boundaries."""
 
     def __init__(self, args: ModelArgs, compress_ratio: int = 4, head_dim: int = 512, rotate: bool = False):
         super().__init__()
@@ -234,23 +232,8 @@ class Compressor(nn.Module):
         self.kv_cache: torch.Tensor = None  # assigned lazily from Attention.kv_cache
         # State buffers for decode-phase incremental compression.
         # With overlap: state[:, :ratio] = overlapping window, state[:, ratio:] = current window.
-        self.register_buffer(
-            "kv_state",
-            torch.zeros(
-                args.max_batch_size,
-                coff * compress_ratio,
-                coff * self.head_dim,
-                dtype=torch.float32),
-            persistent=False)
-        self.register_buffer(
-            "score_state",
-            torch.full(
-                (args.max_batch_size,
-                coff * compress_ratio,
-                coff * self.head_dim),
-                float("-inf"),
-                dtype=torch.float32),
-            persistent=False)
+        self.register_buffer("kv_state", torch.zeros(args.max_batch_size, coff * compress_ratio, coff * self.head_dim, dtype=torch.float32), persistent=False)
+        self.register_buffer("score_state", torch.full((args.max_batch_size, coff * compress_ratio, coff * self.head_dim), float("-inf"), dtype=torch.float32), persistent=False)
         self.freqs_cis: torch.Tensor = None
 
     def overlap_transform(self, tensor: torch.Tensor, value=0):
@@ -277,11 +260,11 @@ class Compressor(nn.Module):
             cutoff = seqlen - remainder
             offset = ratio if overlap else 0
             if overlap and cutoff >= ratio:
-                self.kv_state[:bsz, :ratio] = kv[:, cutoff - ratio : cutoff]
-                self.score_state[:bsz, :ratio] = score[:, cutoff - ratio : cutoff] + self.ape
+                self.kv_state[:bsz, :ratio] = kv[:, cutoff-ratio : cutoff]
+                self.score_state[:bsz, :ratio] = score[:, cutoff-ratio : cutoff] + self.ape
             if remainder > 0:
-                kv, self.kv_state[:bsz, offset : offset + remainder] = kv.split([cutoff, remainder], dim=1)
-                self.score_state[:bsz, offset : offset + remainder] = score[:, cutoff:] + self.ape[:remainder]
+                kv, self.kv_state[:bsz, offset : offset+remainder] = kv.split([cutoff, remainder], dim=1)
+                self.score_state[:bsz, offset : offset+remainder] = score[:, cutoff:] + self.ape[:remainder]
                 score = score[:, :cutoff]
             kv = kv.unflatten(1, (-1, ratio))
             score = score.unflatten(1, (-1, ratio)) + self.ape
@@ -297,8 +280,7 @@ class Compressor(nn.Module):
                 self.score_state[:bsz, ratio + start_pos % ratio] = score.squeeze(1)
                 if should_compress:
                     kv_state = torch.cat([self.kv_state[:bsz, :ratio, :d], self.kv_state[:bsz, ratio:, d:]], dim=1)
-                    score_state = torch.cat([self.score_state[:bsz, :ratio, :d],
-                                            self.score_state[:bsz, ratio:, d:]], dim=1)
+                    score_state = torch.cat([self.score_state[:bsz, :ratio, :d], self.score_state[:bsz, ratio:, d:]], dim=1)
                     kv = (kv_state * score_state.softmax(dim=1)).sum(dim=1, keepdim=True)
                     self.kv_state[:bsz, :ratio] = self.kv_state[:bsz, ratio:]
                     self.score_state[:bsz, :ratio] = self.score_state[:bsz, ratio:]
@@ -329,8 +311,7 @@ class Compressor(nn.Module):
 
 class Indexer(torch.nn.Module):
     """Selects top-k compressed KV positions for sparse attention via learned scoring.
-    Has its own Compressor (with Hadamard rotation) to build compressed KV for scoring.
-    """
+    Has its own Compressor (with Hadamard rotation) to build compressed KV for scoring."""
 
     def __init__(self, args: ModelArgs, compress_ratio: int = 4):
         super().__init__()
@@ -347,19 +328,12 @@ class Indexer(torch.nn.Module):
         self.compress_ratio = compress_ratio
 
         self.compressor = Compressor(args, compress_ratio, self.head_dim, True)
-        self.register_buffer(
-    "kv_cache",
-    torch.zeros(
-        args.max_batch_size,
-        args.max_seq_len //
-        compress_ratio,
-        self.head_dim),
-         persistent=False)
+        self.register_buffer("kv_cache", torch.zeros(args.max_batch_size, args.max_seq_len // compress_ratio, self.head_dim), persistent=False)
         self.freqs_cis = None
 
     def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, offset: int):
         bsz, seqlen, _ = x.size()
-        freqs_cis = self.freqs_cis[start_pos:start_pos + seqlen]
+        freqs_cis = self.freqs_cis[start_pos:start_pos+seqlen]
         ratio = self.compress_ratio
         rd = self.rope_head_dim
         end_pos = start_pos + seqlen
@@ -393,8 +367,7 @@ class Indexer(torch.nn.Module):
 
 class Attention(nn.Module):
     """Multi-head Latent Attention (MLA) with sliding window + optional KV compression.
-    Uses low-rank Q projection (wq_a -> q_norm -> wq_b) and grouped low-rank O projection.
-    """
+    Uses low-rank Q projection (wq_a -> q_norm -> wq_b) and grouped low-rank O projection."""
     def __init__(self, layer_id: int, args: ModelArgs):
         super().__init__()
         self.layer_id = layer_id
@@ -418,14 +391,7 @@ class Attention(nn.Module):
         self.wq_b = nn.Linear(self.q_lora_rank, self.n_heads * self.head_dim, bias=False)
         self.wkv = nn.Linear(self.dim, self.head_dim, bias=False)
         self.kv_norm = RMSNorm(self.head_dim, self.eps)
-        self.wo_a = nn.Linear(
-    self.n_heads *
-    self.head_dim //
-    self.n_groups,
-    self.n_groups *
-    args.o_lora_rank,
-    bias=False,
-     dtype=torch.bfloat16)
+        self.wo_a = nn.Linear(self.n_heads * self.head_dim // self.n_groups, self.n_groups * args.o_lora_rank, bias=False, dtype=torch.bfloat16)
         self.wo_b = nn.Linear(self.n_groups * args.o_lora_rank, self.dim, bias=False)
         self.softmax_scale = self.head_dim ** -0.5
 
@@ -437,13 +403,7 @@ class Attention(nn.Module):
                 self.indexer = None
 
         kv_cache_size = args.window_size + (args.max_seq_len // self.compress_ratio if self.compress_ratio else 0)
-        self.register_buffer(
-    "kv_cache",
-    torch.zeros(
-        args.max_batch_size,
-        kv_cache_size,
-        self.head_dim),
-         persistent=False)
+        self.register_buffer("kv_cache", torch.zeros(args.max_batch_size, kv_cache_size, self.head_dim), persistent=False)
         if self.compress_ratio:
             original_seq_len, rope_theta = args.original_seq_len, args.compress_rope_theta
         else:
@@ -466,15 +426,7 @@ class Attention(nn.Module):
 
         attn_weights = torch.matmul(query_states, kv_states.transpose(2, 3)) * softmax_scale
 
-        index_mask = torch.full(
-    (query_states.shape[0],
-    1,
-    query_states.shape[2],
-    kv_states.shape[2] + 1),
-    fill_value=torch.finfo(
-        torch.float32).min,
-        dtype=torch.float32,
-         device=query_states.device)
+        index_mask = torch.full((query_states.shape[0], 1, query_states.shape[2], kv_states.shape[2] + 1), fill_value=torch.finfo(torch.float32).min, dtype=torch.float32, device=query_states.device)
         valid_mask = topk_idxs >= 0
         q_idx, k_idx, m_idx = torch.where(valid_mask)
         index_mask[:, q_idx, k_idx, topk_idxs[q_idx, k_idx, m_idx]] = 0
@@ -491,7 +443,7 @@ class Attention(nn.Module):
 
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         bsz, seqlen, _ = x.size()
-        freqs_cis = self.freqs_cis[start_pos:start_pos + seqlen]
+        freqs_cis = self.freqs_cis[start_pos:start_pos+seqlen]
         win = self.window_size
         ratio = self.compress_ratio
         rd = self.rope_head_dim
@@ -528,8 +480,7 @@ class Attention(nn.Module):
                 self.kv_cache[:bsz, :seqlen] = kv
             else:
                 cutoff = seqlen % win
-                self.kv_cache[:bsz, cutoff: win], self.kv_cache[:bsz,
-                    :cutoff] = kv[:, -win:].split([win - cutoff, cutoff], dim=1)
+                self.kv_cache[:bsz, cutoff: win], self.kv_cache[:bsz, :cutoff] = kv[:, -win:].split([win - cutoff, cutoff], dim=1)
             if self.compress_ratio:
                 if (kv_compress := self.compressor(x, start_pos)) is not None:
                     kv = torch.cat([kv, kv_compress], dim=1)
@@ -555,8 +506,7 @@ class Attention(nn.Module):
 class Gate(nn.Module):
     """MoE gating: computes expert routing scores and selects top-k experts.
     Supports hash-based routing (first n_hash_layers) where expert indices are
-    predetermined per token ID, and score-based routing (remaining layers).
-    """
+    predetermined per token ID, and score-based routing (remaining layers)."""
     def __init__(self, layer_id: int, args: ModelArgs):
         super().__init__()
         self.dim = args.dim
@@ -566,12 +516,7 @@ class Gate(nn.Module):
         self.hash = layer_id < args.n_hash_layers
         self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
         if self.hash:
-            self.tid2eid = nn.Parameter(
-    torch.empty(
-        args.vocab_size,
-        args.n_activated_experts,
-        dtype=torch.int32),
-         requires_grad=False)
+            self.tid2eid = nn.Parameter(torch.empty(args.vocab_size, args.n_activated_experts, dtype=torch.int32), requires_grad=False)
             self.bias = None
         else:
             self.bias = nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32))
@@ -623,31 +568,20 @@ class Expert(nn.Module):
 
 class MoE(nn.Module):
     """Mixture-of-Experts: gate routes each token to top-k routed experts + 1 shared expert.
-    Experts are sharded across TP ranks; each rank handles n_routed_experts // world_size experts.
-    """
+    Experts are sharded across TP ranks; each rank handles n_routed_experts // world_size experts."""
     def __init__(self, layer_id: int, args: ModelArgs):
         super().__init__()
         self.layer_id = layer_id
         self.dim = args.dim
-        assert args.n_routed_experts % world_size == 0, (
-            f"Number of experts must be divisible by world_size (world_size={world_size})")
+        assert args.n_routed_experts % world_size == 0, f"Number of experts must be divisible by world size (world_size={world_size})"
         self.n_routed_experts = args.n_routed_experts
         self.n_local_experts = args.n_routed_experts // world_size
         self.n_activated_experts = args.n_activated_experts
         self.experts_start_idx = rank * self.n_local_experts
         self.experts_end_idx = self.experts_start_idx + self.n_local_experts
         self.gate = Gate(layer_id, args)
-        self.experts = nn.ModuleList(
-            [
-                Expert(
-                    args.dim,
-                    args.moe_inter_dim,
-                    dtype=None,
-                    swiglu_limit=args.swiglu_limit
-                ) if self.experts_start_idx <= i < self.experts_end_idx
-                else None
-                for i in range(self.n_routed_experts)
-            ])
+        self.experts = nn.ModuleList([Expert(args.dim, args.moe_inter_dim, dtype=None, swiglu_limit=args.swiglu_limit) if self.experts_start_idx <= i < self.experts_end_idx else None
+                                       for i in range(self.n_routed_experts)])
         assert args.n_shared_experts == 1
         self.shared_experts = Expert(args.dim, args.moe_inter_dim, swiglu_limit=args.swiglu_limit)
 
@@ -673,8 +607,7 @@ class Block(nn.Module):
     """Transformer block with Hyper-Connections (HC) mixing.
     Instead of a simple residual, HC maintains `hc_mult` copies of the hidden state.
     hc_pre: reduces hc copies -> 1 via learned weighted sum (pre-weights from Sinkhorn).
-    hc_post: expands 1 -> hc copies via learned post-weights + combination matrix.
-    """
+    hc_post: expands 1 -> hc copies via learned post-weights + combination matrix."""
     def __init__(self, args: ModelArgs, layer_id: int):
         super().__init__()
         self.layer_id = layer_id
@@ -702,8 +635,7 @@ class Block(nn.Module):
         x = x.flatten(2).float()
         rsqrt = torch.rsqrt(x.square().mean(-1, keepdim=True) + self.norm_eps)
         mixes = F.linear(x, hc_fn) * rsqrt
-        pre, post, comb = hc_split_sinkhorn_torch(
-    mixes, hc_scale, hc_base, self.hc_mult, self.hc_sinkhorn_iters, self.hc_eps)
+        pre, post, comb = hc_split_sinkhorn_torch(mixes, hc_scale, hc_base, self.hc_mult, self.hc_sinkhorn_iters, self.hc_eps)
         y = torch.sum(pre.unsqueeze(-1) * x.view(shape), dim=2)
         return y.to(dtype), post, comb
 
@@ -735,15 +667,13 @@ class ParallelHead(nn.Module):
         self.dim = dim
         self.norm_eps = norm_eps
         self.hc_eps = hc_eps
-        # lm_head in the checkpoint is stored in bf16, while the parameter here is
-        # stored in fp32 for easier computation of logits later.
+        # lm_head in the checkpoint is stored in bf16, while the parameter here is stored in fp32 for easier computation of logits later.
         self.weight = nn.Parameter(torch.empty(self.vocab_size, self.dim, dtype=torch.float32))
 
     def get_logits(self, x):
         return F.linear(x[:, -1].float(), self.weight)
 
-    def forward(self, x: torch.Tensor, hc_fn: torch.Tensor,
-                hc_scale: torch.Tensor, hc_base: torch.Tensor, norm: RMSNorm):
+    def forward(self, x: torch.Tensor, hc_fn: torch.Tensor, hc_scale: torch.Tensor, hc_base: torch.Tensor, norm: RMSNorm):
         # x: [b,s,hc,d]
         x = self.hc_head(x, hc_fn, hc_scale, hc_base)
         logits = self.get_logits(norm(x))
@@ -773,8 +703,7 @@ class DeepseekV4PreTrainedModel(PreTrainedModel):
 
 class DeepseekV4ForCausalLM(DeepseekV4PreTrainedModel):
     """Full DeepSeek-V4 model: embed -> HC-expand -> N blocks -> HC-head -> logits.
-    Sets global state (world_size, rank, default_dtype, scale_fmt, scale_dtype) in __init__.
-    """
+    Sets global state (world_size, rank, default_dtype, scale_fmt, scale_dtype) in __init__."""
     def __init__(self, config: DeepseekV4Config):
         global world_size, rank, default_dtype, scale_fmt, scale_dtype
         world_size = dist.get_world_size() if dist.is_initialized() else 1

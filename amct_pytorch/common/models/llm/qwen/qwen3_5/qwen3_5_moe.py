@@ -17,7 +17,7 @@ from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, 
 from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts, is_packed_experts
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5, QuantQwen35MLP
 
-from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, build_direct_quant_args
+from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, build_no_algo_args
 
 
 # for reference, qwen3.5-35b ppl is 6.5571
@@ -72,7 +72,6 @@ class Qwen3_5Moe(Qwen3_5):
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
-        shared_expert_args = build_direct_quant_args(self.args, bits=8)
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             self.apply_quant_attn(decoder_layer)
 
@@ -81,10 +80,11 @@ class Qwen3_5Moe(Qwen3_5):
             if quant_moe is not None:
                 experts = getattr(quant_moe, "experts", None)
                 if experts is not None and is_packed_experts(experts):
-                    quant_moe.experts = QuantGatedExperts(self.args, experts)
+                    quant_moe.experts = QuantGatedExperts(self.args, experts, group="moe.routed")
                     shared_expert = getattr(quant_moe, "shared_expert", None)
                     if shared_expert is not None and not isinstance(shared_expert, QuantQwen35MLP):
-                        quant_moe.shared_expert = QuantQwen35MLP(shared_expert_args, shared_expert)
+                        shared_expert_args = build_no_algo_args(self.args)
+                        quant_moe.shared_expert = QuantQwen35MLP(shared_expert_args, shared_expert, group="moe.shared")
 
         return decoder_layer
 

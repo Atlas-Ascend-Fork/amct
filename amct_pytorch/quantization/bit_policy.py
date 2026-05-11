@@ -39,8 +39,7 @@ class _GroupBits:
     @property
     def default(self) -> LayerBits:
         """Group-level (w, a) — falls through to top-level when the group has
-        no complete entry of its own.
-        """
+        no complete entry of its own."""
         return LayerBits(*self._policy.linear_bits(group=self._group))
 
 
@@ -123,26 +122,6 @@ class BitPolicy:
 
     def summary(self) -> str:
         return "BitPolicy:\n" + yaml.safe_dump(self.cfg, sort_keys=False, default_flow_style=False).rstrip()
-
-
-def ensure_bit_policy(args) -> BitPolicy:
-    policy = getattr(args, "bit_policy", None)
-    if policy is not None:
-        return policy
-
-    cfg = {
-        "w_bits": int(getattr(args, "w_bits", 16)),
-        "a_bits": int(getattr(args, "a_bits", 16)),
-        _CACHE_GROUP: {
-            "q": int(getattr(args, "q_bits", 16)),
-            "k": int(getattr(args, "k_bits", 16)),
-            "p": int(getattr(args, "p_bits", 16)),
-            "v": int(getattr(args, "v_bits", 16)),
-        },
-    }
-    policy = BitPolicy(cfg)
-    setattr(args, "bit_policy", policy)
-    return policy
 
 
 def _check_complete(node: dict, path: str):
