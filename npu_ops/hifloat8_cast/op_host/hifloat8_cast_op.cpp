@@ -15,6 +15,7 @@
  */
 
 #include "hifloat8_cast_tiling.h"
+#include "tiling/platform/platform_ascendc.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 #include <cstring>
 
@@ -24,16 +25,11 @@ using GM_ADDR = uint64_t;
 #endif
 
 // Forward declarations of kernel entry points (defined in hifloat8_cast_kernel.asc)
-extern "C" __global__ __vector__ void hifloat8_cast_kernel_scalar(
-    GM_ADDR input, GM_ADDR output, GM_ADDR tiling);
 extern "C" __global__ __vector__ void hifloat8_cast_kernel_lut(
     GM_ADDR input, GM_ADDR output, GM_ADDR tiling, GM_ADDR lut_gm);
 
-// ── Host-side LUT helpers (plain C++, mirrors kernel scalar logic) ─────────────
-//
-// These functions run on the CPU to precompute the 32768-entry encode LUT once.
-// They intentionally duplicate Fp32MagnitudeToHif8 / GetHif8BitsNum without
-// __aicore__ so they are callable from host code.
+// ── Host-side LUT helpers ─────────────────────────────────────────────────────
+// Run on CPU to precompute the 32768-entry encode LUT once per mode.
 
 static void HostGetHif8BitsNum(int32_t expNoBias,
                                 uint32_t& dotValue, uint32_t& expBitsOut, uint32_t& fracBitsOut)
@@ -81,14 +77,14 @@ static uint8_t HostFp32MagnitudeToHif8(uint32_t inData)
                      | (expHiF8 << fracHiF8Bits) | fracHiF8);
 }
 
-// Build 32768-entry encode LUT on CPU for FP16 (castMode=1) or BF16 (castMode=2).
+// Build 32768-entry encode LUT on CPU for FP16 (castMode=0) or BF16 (castMode=1).
 // Positive half only (sign bit stripped): key = absBits = val & 0x7FFF, value = magnitude.
-// Mirrors KernelHiFloat8CastLut::InitLut16() exactly; sign is re-applied in ComputeEncode16.
+// Sign is re-applied in ComputeEncode16.
 static at::Tensor BuildLut16Cpu(int64_t castMode)
 {
-    uint32_t expBias   = (castMode == 1) ? 15u : 127u;
-    uint32_t expBitsN  = (castMode == 1) ? 5u  : 8u;
-    uint32_t fracBitsN = (castMode == 1) ? 10u : 7u;
+    uint32_t expBias   = (castMode == 0) ? 15u : 127u;
+    uint32_t expBitsN  = (castMode == 0) ? 5u  : 8u;
+    uint32_t fracBitsN = (castMode == 0) ? 10u : 7u;
 
     at::Tensor lut = at::empty({32768}, at::device(at::kCPU).dtype(at::kByte));
     uint8_t*   data = lut.data_ptr<uint8_t>();
@@ -105,34 +101,40 @@ static at::Tensor BuildLut16Cpu(int64_t castMode)
 
 // ── Torch binding ──────────────────────────────────────────────────────────────
 
+static uint32_t GetAivCoreNum()
+{
+    auto* platform = platform_ascendc::PlatformAscendCManager::GetInstance();
+    if (platform == nullptr) return 32u;
+    uint32_t n = platform->GetCoreNumAiv();
+    return n > 0u ? n : 32u;
+}
+
 namespace ascend_kernel {
 
 at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode) {
-    TORCH_CHECK(castMode >= 0 && castMode <= 5, "castMode must be in [0, 5]");
+    TORCH_CHECK(castMode >= 0 && castMode <= 3, "castMode must be in [0, 3]");
     TORCH_CHECK(input.device().type() == c10::DeviceType::PrivateUse1, "input must be on NPU device");
 
     auto inputContiguous = input.contiguous();
     int64_t totalElements = inputContiguous.numel();
     TORCH_CHECK(totalElements > 0, "input tensor must not be empty");
 
-    if (castMode == 0) TORCH_CHECK(input.dtype() == at::kFloat,     "castMode=0 requires float input");
-    if (castMode == 1) TORCH_CHECK(input.dtype() == at::kHalf,      "castMode=1 requires half input");
-    if (castMode == 2) TORCH_CHECK(input.dtype() == at::kBFloat16,  "castMode=2 requires bfloat16 input");
-    if (castMode >= 3) TORCH_CHECK(input.dtype() == at::kByte,      "castMode>=3 requires uint8 input");
+    if (castMode == 0) TORCH_CHECK(input.dtype() == at::kHalf,     "castMode=0 requires half input");
+    if (castMode == 1) TORCH_CHECK(input.dtype() == at::kBFloat16, "castMode=1 requires bfloat16 input");
+    if (castMode >= 2) TORCH_CHECK(input.dtype() == at::kByte,     "castMode>=2 requires uint8 input");
 
     at::Tensor output;
-    if (castMode <= 2)      output = at::empty(inputContiguous.sizes(), inputContiguous.options().dtype(at::kByte));
-    else if (castMode == 3) output = at::empty(inputContiguous.sizes(), inputContiguous.options().dtype(at::kFloat));
-    else if (castMode == 4) output = at::empty(inputContiguous.sizes(), inputContiguous.options().dtype(at::kHalf));
+    if (castMode <= 1)      output = at::empty(inputContiguous.sizes(), inputContiguous.options().dtype(at::kByte));
+    else if (castMode == 2) output = at::empty(inputContiguous.sizes(), inputContiguous.options().dtype(at::kHalf));
     else                    output = at::empty(inputContiguous.sizes(), inputContiguous.options().dtype(at::kBFloat16));
 
     auto aclStream = c10_npu::getCurrentNPUStream().stream(false);
 
     constexpr uint32_t MIN_ELEMENTS_PER_CORE = 8192;
-    constexpr uint32_t MAX_BLOCKS = 32;
+    uint32_t maxBlocks = GetAivCoreNum();
 
     uint32_t idealBlocks = static_cast<uint32_t>((totalElements + MIN_ELEMENTS_PER_CORE - 1) / MIN_ELEMENTS_PER_CORE);
-    uint32_t numBlocks = std::min(idealBlocks, MAX_BLOCKS);
+    uint32_t numBlocks = std::min(idealBlocks, maxBlocks);
     numBlocks = std::max(numBlocks, 1u);
 
     uint64_t numPerCore = static_cast<uint64_t>(totalElements / numBlocks);
@@ -146,33 +148,24 @@ at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode) {
     std::memcpy(tilingTensor.data_ptr(), &tilingHost, sizeof(HiFloat8CastTilingData));
     at::Tensor tilingDevice = tilingTensor.to(input.device());
 
-    // castMode 1/2 (FP16/BF16 encode) 和 3/4/5 (decode) 使用 LUT kernel
-    // castMode 0 (FP32 encode) 使用 scalar kernel（FP32 取值空间大，无法 LUT 化）
-    if (castMode == 1 || castMode == 2 || castMode >= 3) {
-        // Encode LUT 缓存：首次调用时 CPU 构建后传到 NPU，后续复用
-        static at::Tensor s_lut_fp16;  // FP16 encode LUT on NPU
-        static at::Tensor s_lut_bf16;  // BF16 encode LUT on NPU
+    // Encode LUT 缓存：首次调用时 CPU 构建后传到 NPU，后续复用
+    static at::Tensor s_lut_fp16;  // FP16 encode LUT on NPU
+    static at::Tensor s_lut_bf16;  // BF16 encode LUT on NPU
 
-        GM_ADDR lut_gm = 0;
-        if (castMode == 1 || castMode == 2) {
-            at::Tensor& cached = (castMode == 1) ? s_lut_fp16 : s_lut_bf16;
-            if (!cached.defined()) {
-                cached = BuildLut16Cpu(castMode).to(input.device());
-            }
-            lut_gm = (GM_ADDR)cached.data_ptr();
+    GM_ADDR lut_gm = 0;
+    if (castMode <= 1) {
+        at::Tensor& cached = (castMode == 0) ? s_lut_fp16 : s_lut_bf16;
+        if (!cached.defined()) {
+            cached = BuildLut16Cpu(castMode).to(input.device());
         }
-
-        hifloat8_cast_kernel_lut<<<numBlocks, nullptr, aclStream>>>(
-            (GM_ADDR)inputContiguous.data_ptr(),
-            (GM_ADDR)output.data_ptr(),
-            (GM_ADDR)tilingDevice.data_ptr(),
-            lut_gm);
-    } else {
-        hifloat8_cast_kernel_scalar<<<numBlocks, nullptr, aclStream>>>(
-            (GM_ADDR)inputContiguous.data_ptr(),
-            (GM_ADDR)output.data_ptr(),
-            (GM_ADDR)tilingDevice.data_ptr());
+        lut_gm = (GM_ADDR)cached.data_ptr();
     }
+
+    hifloat8_cast_kernel_lut<<<numBlocks, nullptr, aclStream>>>(
+        (GM_ADDR)inputContiguous.data_ptr(),
+        (GM_ADDR)output.data_ptr(),
+        (GM_ADDR)tilingDevice.data_ptr(),
+        lut_gm);
 
     return output;
 }
