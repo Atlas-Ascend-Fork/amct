@@ -19,47 +19,17 @@
 import os
 import argparse
 
-
-LINEAR_QUANT_TARGETS = {"mlp", "moe", "attn-linear"}
-CACHE_QUANT_TARGET = "attn-cache"
-LINEAR_BIT_FIELDS = ("a_bits", "w_bits")
-CACHE_BIT_FIELDS = ("q_bits", "k_bits", "p_bits", "v_bits")
-ALL_BIT_FIELDS = LINEAR_BIT_FIELDS + CACHE_BIT_FIELDS
-
-
-def _format_bit_fields(args, field_names):
-    return ", ".join(f"{field}={getattr(args, field)}" for field in field_names)
-
-
-def _validate_quant_target_bits(args):
-    quant_targets = set(args.quant_target)
-    uses_linear_bits = any(target in LINEAR_QUANT_TARGETS for target in quant_targets)
-    uses_cache_bits = CACHE_QUANT_TARGET in quant_targets
-
-    invalid_linear_bits = [field for field in LINEAR_BIT_FIELDS if getattr(args, field) != 16]
-    if not uses_linear_bits and invalid_linear_bits:
-        raise ValueError(
-            "a_bits/w_bits only apply to quant_target in {mlp, moe, attn-linear}, "
-            f"but got quant_target={args.quant_target} with {_format_bit_fields(args, invalid_linear_bits)}."
-        )
-
-    invalid_cache_bits = [field for field in CACHE_BIT_FIELDS if getattr(args, field) != 16]
-    if not uses_cache_bits and invalid_cache_bits:
-        raise ValueError(
-            "q_bits/k_bits/p_bits/v_bits only apply to quant_target containing 'attn-cache', "
-            f"but got quant_target={args.quant_target} with {_format_bit_fields(args, invalid_cache_bits)}."
-        )
+from amct_pytorch.quantization.bit_policy import BitPolicy
 
 
 def _validate_eval_mode(args):
     if args.eval_mode != "bf16":
         return
-
-    invalid_bits = [field for field in ALL_BIT_FIELDS if getattr(args, field) != 16]
-    if invalid_bits:
+    policy = args.bit_policy
+    if policy.has_quant_linear() or policy.has_quant_cache():
         raise ValueError(
-            "eval_mode=bf16 requires all quantization bits to be 16, "
-            f"but got {_format_bit_fields(args, invalid_bits)}."
+            "eval_mode=bf16 requires a bit_config with no <16-bit entries.\n"
+            f"{policy.summary()}"
         )
 
 
@@ -67,11 +37,10 @@ def parser_gen(command=None):
     parser = argparse.ArgumentParser()
 
     # General Arguments
-    parser.add_argument('--model', type=str, required=True,
-                        help='Path or HuggingFace repo id of the model to load.')
-    parser.add_argument('--model_name', type=str, required=True,
-                        help='Registry key used to dispatch the model adapter '
-                             '(e.g. qwen3, qwen3_moe, deepseek-v3.2, glm5).')
+    parser.add_argument('--model', type=str, default='deepseek-ai/DeepSeek-V3.2',
+                        help='Model to load.')
+    parser.add_argument('--model_name', type=str, default='deepseek-ai/DeepSeek-V3.2',
+                        help='Model to load.')
     parser.add_argument('--device', type=str, default='npu:0',
                         help='Device to use.') # granularity
     parser.add_argument('--granularity', type=str, default='model',
@@ -125,27 +94,10 @@ def parser_gen(command=None):
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)
 
-    # Activation Quantization Arguments
-    parser.add_argument('--a_bits', type=int, default=16,
-                        help='''Number of bits for inputs of the linear layers.
-                            This applies to all linear layers in the model, including down-projection and out-projection.''')
-
-    # Weight Quantization Arguments
-    parser.add_argument('--w_bits', type=int, default=16,
-                        help='Number of bits for weights of the linear layers.')
-
-    # KV-Cache Quantization Arguments
-    parser.add_argument('--q_bits', type=int, default=16,
-                        help='Number of bits for queries quantization')
-
-    parser.add_argument('--k_bits', type=int, default=16,
-                        help='Number of bits for K-cache quantization')
-
-    parser.add_argument('--p_bits', type=int, default=16,
-                        help='Number of bits for P quantization.')
-
-    parser.add_argument('--v_bits', type=int, default=16,
-                        help='Number of bits for V-cache quantization.')
+    # Per-layer bit-width policy. Required when running with quantization.
+    parser.add_argument('--bit_config', type=str, default=None,
+                        help='Path to a yaml file describing per-role bit-widths. '
+                             'See configs/ for examples.')
 
     # Experiments Arguments
     parser.add_argument('--attn_linear_param_dir', default="")
@@ -154,7 +106,12 @@ def parser_gen(command=None):
     parser.add_argument('--wikitext_final_out', default="")
 
     args = parser.parse_args()
-    _validate_quant_target_bits(args)
+
+    if args.bit_config:
+        args.bit_policy = BitPolicy.from_yaml(args.bit_config)
+    else:
+        args.bit_policy = BitPolicy()
+
     if command == "eval":
         _validate_eval_mode(args)
 

@@ -42,41 +42,44 @@ def set_model_to_observe(model, flag):
             mod.is_observe = flag
 
 
-def build_direct_quant_args(args, bits=8):
-    """Build a direct-quant config that skips PTQ-specific algorithms."""
+def build_no_algo_args(args):
+    """Return a shallow-copied args with ``algos`` cleared.
+
+    Historically used for the MoE shared-expert path, which is wrapped with the
+    same gated-MLP class but skips PTQ-specific algorithms. Bit-widths come
+    from ``args.bit_policy`` based on the role passed at construction time.
+    """
     new_args = deepcopy(args)
-    new_args.w_bits = bits
-    new_args.a_bits = bits
     new_args.algos = []
     return new_args
 
 
-def apply_quant_to_moe_mlp(args, model, shared_expert_bits=None, routed_expert_bits=None, cls=None):
+def apply_quant_to_moe_mlp(args, model, cls=None):
+    """Wrap dense MLPs and per-expert MoE blocks with their quant counterparts.
+
+    The ``group`` is assigned by location so the bit policy can target each path:
+      - top-level ``mlp`` (no ``experts`` attr) -> ``mlp``
+      - per-expert wrappers under ``experts``    -> ``moe.routed``
+      - shared experts                           -> ``moe.shared`` (skips algos
+        via :func:`build_no_algo_args`, matching prior behavior)
+    """
     for name, mod in model.named_children():
         if name in ["mlp"] and hasattr(mod, "experts") is False:
-            new_args = args
-            setattr(model, name, cls(new_args, mod))
+            setattr(model, name, cls(args, mod, group="mlp"))
             break
 
         if name in ["experts"]:
             for i in range(len(mod)):
                 if mod[i] is None:
                     continue
-                new_args = args
-                if routed_expert_bits is not None:
-                    _new_args = deepcopy(args)
-                    _new_args.w_bits = routed_expert_bits
-                    new_args = _new_args
-                mod[i] = cls(new_args, mod[i])
+                mod[i] = cls(args, mod[i], group="moe.routed")
 
         if name in ["shared_experts"]:
-            new_args = args
-            if shared_expert_bits is not None:
-                new_args = build_direct_quant_args(args, bits=shared_expert_bits)
-            setattr(model, name, cls(new_args, mod))
+            shared_args = build_no_algo_args(args)
+            setattr(model, name, cls(shared_args, mod, group="moe.shared"))
 
         if len(list(mod.children())) > 0:
-            apply_quant_to_moe_mlp(args, mod, shared_expert_bits=shared_expert_bits, routed_expert_bits=routed_expert_bits, cls=cls)
+            apply_quant_to_moe_mlp(args, mod, cls=cls)
 
     return model
 
@@ -92,23 +95,37 @@ def apply_quant_to_attn(args, model, cls):
 
 
 class QuantGatedMLP(nn.Module):
-    """Reusable gated-MLP quant wrapper for fan-out/fan-in feed-forward blocks."""
+    """Reusable gated-MLP quant wrapper for fan-out/fan-in feed-forward blocks.
 
-    def __init__(self, quant_args, mlp_module):
+    ``group`` selects which yaml block applies:
+      - ``"mlp"``        — dense MLP (default)
+      - ``"moe.routed"`` — per-expert wrapper inside a routed MoE
+      - ``"moe.shared"`` — shared-expert wrapper
+
+    Per-projection bits come from yaml entries keyed by ``gate_proj`` /
+    ``up_proj`` / ``down_proj`` under that group. Activation quantizers reuse
+    the ``a_bits`` of the linear they feed.
+    """
+
+    def __init__(self, quant_args, mlp_module, group: str = "mlp"):
         super().__init__()
         self.quant_args = quant_args
+        self.group = group
         self.hidden_size = mlp_module.hidden_size
         self.intermediate_size = mlp_module.intermediate_size
         self.act_fn = mlp_module.act_fn
         self.input_transform = None
         self.hidden_transform = None
         self._init_structure_transforms()
-        self.up_proj = QuantLinear(quant_args, mlp_module.up_proj, name="up_proj")
-        self.gate_proj = QuantLinear(quant_args, mlp_module.gate_proj, name="gate_proj")
-        self.down_proj = QuantLinear(quant_args, mlp_module.down_proj, name="down_proj")
 
-        self.input_quant = ActivationQuantizer(quant_args, self.quant_args.a_bits)
-        self.hidden_quant = ActivationQuantizer(quant_args, self.quant_args.a_bits)
+        bits = quant_args.bit_policy[group]
+        gate, up, down = bits["gate_proj"], bits["up_proj"], bits["down_proj"]
+        self.gate_proj = QuantLinear(quant_args, mlp_module.gate_proj, w_bits=gate.w, name="gate_proj")
+        self.up_proj   = QuantLinear(quant_args, mlp_module.up_proj,   w_bits=up.w,   name="up_proj")
+        self.down_proj = QuantLinear(quant_args, mlp_module.down_proj, w_bits=down.w, name="down_proj")
+        # Activation bits come from the projection they feed.
+        self.input_quant  = ActivationQuantizer(quant_args, gate.a)
+        self.hidden_quant = ActivationQuantizer(quant_args, down.a)
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
