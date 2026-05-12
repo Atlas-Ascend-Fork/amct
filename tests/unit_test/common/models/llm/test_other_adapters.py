@@ -213,8 +213,8 @@ def test_qwen3_6_moe_registers_in_model_registry():
 @pytest.mark.parametrize(
     "key,expected_cls",
     [
-        ("pangu-7b", Pangu7B),
-        ("longcat-lite", LongcatLite),
+        ("pangu_7b", Pangu7B),
+        ("longcat_lite", LongcatLite),
         ("glm5", GLM5),
     ],
 )
