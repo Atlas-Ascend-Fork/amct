@@ -13,6 +13,7 @@ from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
 class QuantQwen3MLP(QuantGatedMLP):
@@ -23,6 +24,7 @@ class QuantQwen3Attn(Qwen3Attention):
     def __init__(self, quant_args, attn_module):
         super().__init__(attn_module.config, attn_module.layer_idx)
         self.quant_args = quant_args
+        ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
         self.hidden_size = attn_module.config.hidden_size
         self.value_dim = attn_module.head_dim * attn_module.config.num_attention_heads

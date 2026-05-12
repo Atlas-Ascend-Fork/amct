@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (
     Attention,
     Compressor,
@@ -71,6 +72,7 @@ class QuantV4Compressor(nn.Module):
     def __init__(self, quant_args, compressor: Compressor):
         super().__init__()
         self.quant_args = quant_args
+        ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in quant_args.quant_target
         self.compress_ratio = compressor.compress_ratio
         self.overlap = compressor.overlap
@@ -136,6 +138,7 @@ class QuantV4Indexer(nn.Module):
     def __init__(self, quant_args, indexer: Indexer):
         super().__init__()
         self.quant_args = quant_args
+        ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in quant_args.quant_target
         self.n_local_heads = indexer.n_local_heads
         self.head_dim = indexer.head_dim
@@ -202,6 +205,7 @@ class QuantV4Attention(nn.Module):
     def __init__(self, quant_args, module: Attention):
         super().__init__()
         self.quant_args = quant_args
+        ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in quant_args.quant_target
         self.enable_attn_cache = "attn-cache" in quant_args.quant_target
 
