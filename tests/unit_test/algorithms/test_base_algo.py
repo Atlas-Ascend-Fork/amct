@@ -69,3 +69,26 @@ def test_quant_algo_falls_back_to_int_when_dtype_key_missing():
     assert algo.quant_dtype == "int"
     assert algo.weight_bits == 4
     assert algo.activation_bits == 8
+
+
+def test_base_algo_init_with_empty_config():
+    class _Concrete(BaseAlgo):
+        def apply(self, model, *args, **kwargs):
+            pass
+        def get_config(self):
+            return super().get_config()
+    algo = _Concrete({})
+    assert algo.config == {}
+    assert algo.name == "_Concrete"
+    assert algo.get_config() == {}
+
+
+def test_abstract_apply_body_executes_via_super_call():
+    class _CallsSuper(BaseAlgo):
+        def apply(self, model, *args, **kwargs):
+            super().apply(model, *args, **kwargs)
+        def get_config(self):
+            return super().get_config()
+    obj = _CallsSuper({})
+    result = obj.apply(None)
+    assert result is None
