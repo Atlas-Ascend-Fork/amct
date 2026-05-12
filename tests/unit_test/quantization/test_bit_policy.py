@@ -22,16 +22,14 @@ import pytest
 from amct_pytorch.quantization.bit_policy import (
     BitPolicy,
     LayerBits,
-    _check_complete,
     _GroupBits,
+    _check_complete,
     _has_lt_16,
 )
 
+
 # ---- BitPolicy.__init__ ----------------------------------------------------
 
-W_BITS = 'w_bits'
-
-A_BITS = 'a_bits'
 
 def test_init_defaults_to_16():
     bp = BitPolicy()
@@ -43,7 +41,7 @@ def test_init_defaults_to_16():
 
 def test_init_raises_on_incomplete_top_level_bits():
     with pytest.raises(ValueError, match="Incomplete bit entry at top level"):
-        BitPolicy({W_BITS: 8})
+        BitPolicy({"w_bits": 8})
 
 
 def test_init_cfg_none_is_treated_as_empty():
@@ -82,12 +80,12 @@ def test_from_yaml_raises_on_non_mapping(tmp_path):
 
 def test_init_validates_subtree_incompleteness():
     with pytest.raises(ValueError, match="Incomplete bit entry at 'mlp.gate_proj'"):
-        BitPolicy({W_BITS: 16, A_BITS: 16, "mlp": {"gate_proj": {W_BITS: 8}}})
+        BitPolicy({"w_bits": 16, "a_bits": 16, "mlp": {"gate_proj": {"w_bits": 8}}})
 
 
 def test_init_validates_nested_subtree_incompleteness():
     with pytest.raises(ValueError, match="Incomplete bit entry at 'mlp.gate_proj'"):
-        BitPolicy({"mlp": {"gate_proj": {W_BITS: 8, "up_proj": {W_BITS: 8}}}})
+        BitPolicy({"mlp": {"gate_proj": {"w_bits": 8, "up_proj": {"w_bits": 8}}}})
 
 
 # ---- _check_complete --------------------------------------------------------
@@ -95,58 +93,58 @@ def test_init_validates_nested_subtree_incompleteness():
 
 def test_check_complete_raises_on_mismatched_bits():
     with pytest.raises(ValueError, match="Incomplete bit entry at 'test.group'"):
-        _check_complete({W_BITS: 4}, "test.group")
+        _check_complete({"w_bits": 4}, "test.group")
 
 
 def test_check_complete_passes_on_complete_node():
     # Should not raise.
-    _check_complete({W_BITS: 8, A_BITS: 8}, "test")
+    _check_complete({"w_bits": 8, "a_bits": 8}, "test")
 
 
 def test_check_complete_recurse_into_nested_dicts():
     with pytest.raises(ValueError, match="Incomplete bit entry at 'test.nested'"):
-        _check_complete({"nested": {W_BITS: 4}}, "test")
+        _check_complete({"nested": {"w_bits": 4}}, "test")
 
 
 def test_check_complete_ignores_non_bit_non_dict_values():
     # int values that are not bit keys should be skipped.
-    _check_complete({W_BITS: 8, A_BITS: 8, "extra": 42, "nested": {W_BITS: 8, A_BITS: 8}}, "root")
+    _check_complete({"w_bits": 8, "a_bits": 8, "extra": 42, "nested": {"w_bits": 8, "a_bits": 8}}, "root")
 
 
 # ---- _has_lt_16 ------------------------------------------------------------
 
 
 def test_has_lt_16_true_for_low_bits():
-    assert _has_lt_16({W_BITS: 4, A_BITS: 8}) is True
+    assert _has_lt_16({"w_bits": 4, "a_bits": 8}) is True
 
 
 def test_has_lt_16_false_for_all_16():
-    assert _has_lt_16({W_BITS: 16, A_BITS: 16}) is False
+    assert _has_lt_16({"w_bits": 16, "a_bits": 16}) is False
 
 
 def test_has_lt_16_true_in_nested_dict():
-    assert _has_lt_16({"proj": {W_BITS: 16, A_BITS: 4}}) is True
+    assert _has_lt_16({"proj": {"w_bits": 16, "a_bits": 4}}) is True
 
 
 def test_has_lt_16_false_with_non_int_values():
-    assert _has_lt_16({W_BITS: 16, A_BITS: "8"}) is False
+    assert _has_lt_16({"w_bits": 16, "a_bits": "8"}) is False
 
 
 # ---- BitPolicy.has_quant_linear / has_quant_cache --------------------------
 
 
 def test_has_quant_linear_true_when_top_level_below_16():
-    bp = BitPolicy({W_BITS: 8, A_BITS: 16})
+    bp = BitPolicy({"w_bits": 8, "a_bits": 16})
     assert bp.has_quant_linear() is True
 
 
 def test_has_quant_linear_true_from_nested_group():
-    bp = BitPolicy({"mlp": {"gate_proj": {W_BITS: 8, A_BITS: 8}}, W_BITS: 16, A_BITS: 16})
+    bp = BitPolicy({"mlp": {"gate_proj": {"w_bits": 8, "a_bits": 8}}, "w_bits": 16, "a_bits": 16})
     assert bp.has_quant_linear() is True
 
 
 def test_has_quant_linear_false_when_all_bits_16():
-    bp = BitPolicy({W_BITS: 16, A_BITS: 16, "mlp": {"gate_proj": {W_BITS: 16, A_BITS: 16}}})
+    bp = BitPolicy({"w_bits": 16, "a_bits": 16, "mlp": {"gate_proj": {"w_bits": 16, "a_bits": 16}}})
     assert bp.has_quant_linear() is False
 
 
@@ -161,7 +159,7 @@ def test_has_quant_cache_false_when_all_keys_16():
 
 
 def test_has_quant_cache_false_when_no_cache_group():
-    bp = BitPolicy({W_BITS: 8, A_BITS: 8})
+    bp = BitPolicy({"w_bits": 8, "a_bits": 8})
     assert bp.has_quant_cache() is False
 
 
@@ -169,24 +167,24 @@ def test_has_quant_cache_false_when_no_cache_group():
 
 
 def test_linear_bits_falls_back_to_top_level():
-    bp = BitPolicy({W_BITS: 4, A_BITS: 8})
+    bp = BitPolicy({"w_bits": 4, "a_bits": 8})
     assert bp.linear_bits(name="q_proj", group="attn-linear") == (4, 8)
 
 
 def test_linear_bits_resolves_group_level_override():
     bp = BitPolicy({
-        W_BITS: 16, A_BITS: 16,
-        "attn-linear": {W_BITS: 8, A_BITS: 8},
+        "w_bits": 16, "a_bits": 16,
+        "attn-linear": {"w_bits": 8, "a_bits": 8},
     })
     assert bp.linear_bits(name="q_proj", group="attn-linear") == (8, 8)
 
 
 def test_linear_bits_resolves_projection_level_override():
     bp = BitPolicy({
-        W_BITS: 16, A_BITS: 16,
+        "w_bits": 16, "a_bits": 16,
         "attn-linear": {
-            W_BITS: 8, A_BITS: 8,
-            "q_proj": {W_BITS: 4, A_BITS: 4},
+            "w_bits": 8, "a_bits": 8,
+            "q_proj": {"w_bits": 4, "a_bits": 4},
         },
     })
     assert bp.linear_bits(name="q_proj", group="attn-linear") == (4, 4)
@@ -194,16 +192,16 @@ def test_linear_bits_resolves_projection_level_override():
 
 def test_linear_bits_dotted_group():
     bp = BitPolicy({
-        W_BITS: 16, A_BITS: 16,
+        "w_bits": 16, "a_bits": 16,
         "moe": {
-            "routed": {W_BITS: 8, A_BITS: 8},
+            "routed": {"w_bits": 8, "a_bits": 8},
         },
     })
     assert bp.linear_bits(name="gate_proj", group="moe.routed") == (8, 8)
 
 
 def test_linear_bits_no_name_no_group_returns_global():
-    bp = BitPolicy({W_BITS: 4, A_BITS: 8})
+    bp = BitPolicy({"w_bits": 4, "a_bits": 8})
     assert bp.linear_bits() == (4, 8)
 
 
@@ -222,7 +220,7 @@ def test_cache_bits_returns_configured_value():
 
 
 def test_cache_bits_returns_default_16_when_no_cache_group():
-    bp = BitPolicy({W_BITS: 16, A_BITS: 16})
+    bp = BitPolicy({"w_bits": 16, "a_bits": 16})
     assert bp.cache_bits("q") == 16
 
 
@@ -230,7 +228,7 @@ def test_cache_bits_returns_default_16_when_no_cache_group():
 
 
 def test_summary_includes_bitpolicy_prefix():
-    bp = BitPolicy({W_BITS: 8, A_BITS: 8})
+    bp = BitPolicy({"w_bits": 8, "a_bits": 8})
     s = bp.summary()
     assert s.startswith("BitPolicy:")
 
@@ -241,8 +239,8 @@ def test_summary_includes_bitpolicy_prefix():
 def test_group_bits_getitem_returns_layer_bits():
     bp = BitPolicy({
         "attn-linear": {
-            "q_proj": {W_BITS: 8, A_BITS: 4},
-            "k_proj": {W_BITS: 8, A_BITS: 4},
+            "q_proj": {"w_bits": 8, "a_bits": 4},
+            "k_proj": {"w_bits": 8, "a_bits": 4},
         },
     })
     gb = _GroupBits(bp, "attn-linear")
@@ -253,7 +251,7 @@ def test_group_bits_getitem_returns_layer_bits():
 
 def test_group_bits_default_returns_group_level_bits():
     bp = BitPolicy({
-        "attn-linear": {W_BITS: 4, A_BITS: 8},
+        "attn-linear": {"w_bits": 4, "a_bits": 8},
     })
     gb = _GroupBits(bp, "attn-linear")
     d = gb.default
@@ -261,8 +259,7 @@ def test_group_bits_default_returns_group_level_bits():
 
 
 def test_group_bits_default_falls_back_to_top_level():
-    bp = BitPolicy({W_BITS: 8, A_BITS: 4})
+    bp = BitPolicy({"w_bits": 8, "a_bits": 4})
     gb = _GroupBits(bp, "mlp")
     d = gb.default
     assert d.w == 8 and d.a == 4
-
