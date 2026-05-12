@@ -201,6 +201,9 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
 
 def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
     '''Check if layer is supported for quantization'''
+    if type(mod).__name__ == 'FP8Linear':
+        LOGGER.logw('layer:{} is already quantized, do not need quantized again.'.format(name))
+        return False
     if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
         return False
     if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
