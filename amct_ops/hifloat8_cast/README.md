@@ -73,13 +73,8 @@ hifloat8_cast/
 │   └── hifloat8_cast/
 │       ├── __init__.py            Python 包入口（加载 .so、注册算子）
 │       └── ops.py                 Python 接口实现
-├── scripts/
-│   ├── accuracy_compare_cpu_npu.py     CPU vs NPU 精度逐 bit 对比
-│   ├── perf_compare_cpu_npu.py         FP16 性能对比（NPU vs CPU）
-│   ├── perf_bf16_compare.py            BF16 性能对比（NPU vs CPU）
-│   ├── perf_test_multicore.py          多核优化性能测试（FP16）
-│   ├── test_python_api.py              Python API 综合测试
-│   └── test_qwen3_smoothquant_hif8.py  Qwen3 SmoothQuant + HiFloat8 集成测试
+├── tests/
+│   └── test_hifloat8_cast.py      Python API 综合测试
 ├── docs/
 ├── CMakeLists.txt
 └── README.md
