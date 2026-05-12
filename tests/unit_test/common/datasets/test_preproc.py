@@ -58,6 +58,17 @@ def test_pileval_awq_raises_when_not_enough_tokens_for_n_samples():
         preproc.pileval_awq(ds, _StubTokenizer(), n_samples=2, seq_len=4)
 
 
+def test_pileval_awq_skips_empty_encoded_samples():
+    class _SelectiveTokenizer:
+        def encode(self, text):
+            if text == "skip me":
+                return []
+            return [ord(c) for c in text.split()]
+    ds = _texts_to_dataset(["skip me", "a a a a a a a a", "b b b b b b b b"])
+    samples = preproc.pileval_awq(ds, _SelectiveTokenizer(), n_samples=1, seq_len=8)
+    assert len(samples) == 1
+
+
 # ---- get_pileval / get_wikitext2 (load_dataset is mocked) -----------------
 
 

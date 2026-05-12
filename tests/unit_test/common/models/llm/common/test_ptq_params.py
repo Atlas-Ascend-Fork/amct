@@ -246,3 +246,30 @@ def test_load_layer_strict_raises_when_any_missing(tmp_path):
     )
     with pytest.raises(FileNotFoundError, match="not found for unit 'missing'"):
         store.load_layer(layer_idx=0, block=None, param_dir=str(tmp_path), strict=True)
+
+
+def test_ptq_param_store_load_layer_strict_raises_on_missing(tmp_path):
+    from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
+    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
+    def _fake_iter_units(layer_idx, block):
+        unit = make_ptq_unit("mlp", "mlp", layer_idx=layer_idx, module=block)
+        yield unit
+    handler = PtqParamHandler()
+    store = PtqParamStore(handler, _fake_iter_units)
+    block = nn.Module()
+    with pytest.raises(FileNotFoundError, match="PTQ params not found"):
+        store.load_layer(0, block, str(tmp_path), strict=True)
+
+
+def test_ptq_param_store_load_layer_nonstrict_missing_ok(tmp_path):
+    from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
+    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
+    def _fake_iter_units(layer_idx, block):
+        unit = make_ptq_unit("mlp", "mlp", layer_idx=layer_idx, module=block)
+        yield unit
+    handler = PtqParamHandler()
+    store = PtqParamStore(handler, _fake_iter_units)
+    block = nn.Module()
+    result = store.load_layer(0, block, str(tmp_path), strict=False)
+    assert result["loaded"] == []
+    assert result["missing"] == ["mlp"]

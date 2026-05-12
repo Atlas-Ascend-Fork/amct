@@ -87,3 +87,73 @@ def test_generate_quant_config_merges_cache_scheme_into_top_level():
 def test_generate_quant_config_has_global_compression_ratio_one():
     cfg = generate_quant_config(cache_scheme={}, ignores=[])
     assert cfg["global_compression_ratio"] == 1
+
+
+import torch.nn as nn
+from amct_pytorch.common.models.llm.common.deploy_export import (
+    get_quant_ignore_linear_names,
+    export_block_deploy,
+)
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+
+def test_get_quant_ignore_linear_names_finds_plain_linear():
+    block = nn.Sequential(nn.Linear(4, 4))
+    names = get_quant_ignore_linear_names(block, "prefix.")
+    assert names == ["prefix.0"]
+
+
+def test_get_quant_ignore_linear_names_no_quant_linear_all_plain():
+    block = nn.Module()
+    block.a = nn.Linear(4, 4)
+    block.b = nn.Linear(8, 8)
+    names = get_quant_ignore_linear_names(block, "")
+    assert sorted(names) == ["a", "b"]
+
+
+def test_get_quant_ignore_linear_names_skips_quant_linear_prefix():
+    class _NestedQL(QuantLinear):
+        def __init__(self):
+            nn.Module.__init__(self)
+            self.nested_fc = nn.Linear(4, 4)
+
+    block = nn.Module()
+    block.q_proj = _NestedQL()
+    names = get_quant_ignore_linear_names(block, "")
+    assert len(names) == 0
+
+
+def test_export_block_deploy_basic():
+    class FakeQuantLinear:
+        def export_deploy(self):
+            return {"qweight": "qw_val", "weight_scale": "ws_val"}
+
+    fql = FakeQuantLinear()
+    pipeline = __import__("types").SimpleNamespace(
+        args=__import__("types").SimpleNamespace(device="cpu"),
+        build_quant_block=lambda idx: nn.Linear(4, 4),
+        load_selected_layer_ptq_params=lambda idx, block, strict: None,
+        get_layer_weight_prefix=lambda idx: "p.",
+        iter_deploy_bindings=lambda idx, block: [("p.key.weight", fql)],
+    )
+    deploy_tensors, tensor_routes = export_block_deploy(pipeline, 0, [])
+    assert deploy_tensors["p.key.weight"] == "qw_val"
+    assert deploy_tensors["p.key.weight_scale"] == "ws_val"
+    assert tensor_routes["p.key.weight_scale"] == "p.key.weight"
+
+
+def test_export_block_deploy_skips_none_extra_tensor():
+    class FakeQuantLinear:
+        def export_deploy(self):
+            return {"qweight": "qw", "extra": None}
+
+    fql = FakeQuantLinear()
+    pipeline = __import__("types").SimpleNamespace(
+        args=__import__("types").SimpleNamespace(device="cpu"),
+        build_quant_block=lambda idx: nn.Linear(4, 4),
+        load_selected_layer_ptq_params=lambda idx, block, strict: None,
+        get_layer_weight_prefix=lambda idx: "",
+        iter_deploy_bindings=lambda idx, block: [("k.weight", fql)],
+    )
+    deploy_tensors, _ = export_block_deploy(pipeline, 0, [])
+    assert "k.extra" not in deploy_tensors

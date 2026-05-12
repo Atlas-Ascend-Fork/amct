@@ -17,12 +17,7 @@
 # ----------------------------------------------------------------------------
 import pytest
 
-from amct_pytorch.common.config.utils import (
-    get_alg_name_from_config,
-    match_fuzzy_pattern,
-)
-
-MODEL_LAYERS_0_SELF_ATTN_Q_PROJ = 'model.layers.0.self_attn.q_proj'
+from amct_pytorch.common.config.utils import get_alg_name_from_config, match_fuzzy_pattern
 
 
 def test_get_alg_name_from_dict():
@@ -49,18 +44,17 @@ def test_get_alg_name_from_invalid():
 
 
 def test_match_fuzzy_exact():
-    assert match_fuzzy_pattern(MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, MODEL_LAYERS_0_SELF_ATTN_Q_PROJ)
-    assert not match_fuzzy_pattern(MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, "model.layers.1.self_attn.q_proj")
+    assert match_fuzzy_pattern("model.layers.0.self_attn.q_proj", "model.layers.0.self_attn.q_proj")
+    assert not match_fuzzy_pattern("model.layers.0.self_attn.q_proj", "model.layers.1.self_attn.q_proj")
 
 
 def test_match_fuzzy_wildcard():
-    assert match_fuzzy_pattern(MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, "*self_attn.q_proj")
+    assert match_fuzzy_pattern("model.layers.0.self_attn.q_proj", "*self_attn.q_proj")
     assert match_fuzzy_pattern("model.layers.1.self_attn.k_proj", "*self_attn.k_proj")
     assert not match_fuzzy_pattern("model.layers.0.mlp.gate_proj", "*self_attn.q_proj")
 
 
 def test_match_fuzzy_with_suffix():
-    assert match_fuzzy_pattern(MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, "*self_attn.q_proj.weights")
+    assert match_fuzzy_pattern("model.layers.0.self_attn.q_proj", "*self_attn.q_proj.weights")
     assert match_fuzzy_pattern("model.layers.1.self_attn.q_proj", "*self_attn.q_proj.inputs")
     assert not match_fuzzy_pattern("model.layers.0.mlp.gate_proj", "*self_attn.q_proj.weights")
-

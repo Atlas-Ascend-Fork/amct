@@ -21,13 +21,13 @@ import os
 import pytest
 
 from amct_pytorch.common.utils.log import (
-    LOG_FILE_SET_ENV,
-    LOG_SET_ENV,
     LOGGER,
-    Logger,
-    LoggerBase,
     check_level,
     log_split_deco,
+    Logger,
+    LoggerBase,
+    LOG_SET_ENV,
+    LOG_FILE_SET_ENV,
 )
 
 
@@ -161,6 +161,6 @@ def test_logger_logw_writes_warning_message():
         lb.logw("this is a warning")
 
 
-def test_logger_is_instantiated():
+def test_lOGGER_is_instantiated():
     assert LOGGER is not None
     assert isinstance(LOGGER, Logger)

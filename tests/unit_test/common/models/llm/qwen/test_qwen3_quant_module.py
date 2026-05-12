@@ -15,6 +15,7 @@ from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import (
     QuantQwen3Attn,
     QuantQwen3MLP,
 )
+from amct_pytorch.quantization.bit_policy import BitPolicy
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -43,6 +44,20 @@ def _quant_args(quant_target=("attn-linear",)):
         a_bits=8,
         q_bits=8, k_bits=8, p_bits=8, v_bits=8,
         quant_target=list(quant_target),
+        bit_policy=BitPolicy({
+            "attn-linear": {
+                "q_proj": {"w_bits": 8, "a_bits": 8},
+                "k_proj": {"w_bits": 8, "a_bits": 8},
+                "v_proj": {"w_bits": 8, "a_bits": 8},
+                "o_proj": {"w_bits": 8, "a_bits": 8},
+            },
+            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+            "mlp": {
+                "gate_proj": {"w_bits": 8, "a_bits": 8},
+                "up_proj": {"w_bits": 8, "a_bits": 8},
+                "down_proj": {"w_bits": 8, "a_bits": 8},
+            },
+        }),
     )
 
 
