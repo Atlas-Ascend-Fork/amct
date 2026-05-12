@@ -19,9 +19,14 @@ cmake_minimum_required(VERSION 3.16.0)
 set(CMAKE_CXX_STANDARD 17)
 
 set(AMCT_TOP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
+set(BASE_DIR ${AMCT_TOP_DIR}/amct_pytorch)
+set(AMCT_DIR ${AMCT_TOP_DIR})
 
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
+
+add_subdirectory(${AMCT_TOP_DIR}/amct_pytorch/classic/ptq/graph_based
+                 ${CMAKE_BINARY_DIR}/amct_pytorch_classic_ptq_graph_based)
 
 if(ENABLE_COVERAGE STREQUAL "TRUE")
     set(PYTEST_COV_ARGS --cov --cov-config=${AMCT_TOP_DIR}/pyproject.toml --cov-report=term-missing --cov-report=xml:${AMCT_TOP_DIR}/build/coverage.xml)
@@ -34,6 +39,7 @@ add_custom_target(amct_pytorch_utest
     WORKING_DIRECTORY ${AMCT_TOP_DIR}
     COMMENT "run amct_pytorch python unit tests"
 )
+add_dependencies(amct_pytorch_utest amct_pytorch_proto_compile)
 
 add_custom_target(amct_utest
     DEPENDS amct_pytorch_utest
