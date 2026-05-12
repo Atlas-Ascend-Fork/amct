@@ -14,7 +14,7 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import Q
 
 
 @MODEL_REGISTRY.register(
-    name="deepseekv32",
+    name="deepseek_v3_2",
     task="llm",
     family="deepseek",
     description="DeepSeek V3.2 model adapter",

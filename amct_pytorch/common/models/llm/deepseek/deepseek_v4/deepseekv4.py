@@ -33,7 +33,7 @@ class _NoMoveAlignDevicesHook(AlignDevicesHook):
 
 
 @MODEL_REGISTRY.register(
-    name="deepseekv4",
+    name="deepseek_v4",
     task="llm",
     family="deepseek",
     description="DeepSeek V4 model adapter",

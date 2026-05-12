@@ -1,5 +1,4 @@
 import torch
-from numbers import Number
 from loguru import logger
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY

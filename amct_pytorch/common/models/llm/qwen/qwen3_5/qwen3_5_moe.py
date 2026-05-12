@@ -22,7 +22,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_att
 
 # for reference, qwen3.5-35b ppl is 6.5571
 @MODEL_REGISTRY.register(
-    name="qwen3_5moe",
+    name="qwen3_5_moe",
     task="llm",
     family="qwen",
     description="Qwen3.5 moe model adapter",
