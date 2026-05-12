@@ -17,7 +17,7 @@ from amct_pytorch.common.models.llm.pangu.pangu_7b.quant_module import _ensure_t
 
 
 @MODEL_REGISTRY.register(
-    name="pangu-7b",
+    name="pangu_7b",
     task="llm",
     family="pangu",
     description="openPangu Embedded 7B model adapter",
@@ -36,7 +36,7 @@ class Pangu7B(BaseModel):
 
     def parse_quant_mode(self):
         if "moe" in self.quant_target:
-            raise ValueError("pangu-7b is a dense model and does not support quant_target='moe'.")
+            raise ValueError("pangu_7b is a dense model and does not support quant_target='moe'.")
 
     def _update_config(self):
         self.config._attn_implementation = "eager"
