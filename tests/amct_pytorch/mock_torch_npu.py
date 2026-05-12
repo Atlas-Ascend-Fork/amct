@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -63,7 +63,7 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
 
     if x_fp32.shape[-1] != weight_fp32.shape[1]:
         weight_fp32 = weight_fp32.transpose(0, 1)
-    
+
     if scale_fp32.dim() == 1 and scale_fp32.numel() == weight_fp32.shape[0]:
         weight_fp32 = weight_fp32 * scale_fp32.unsqueeze(1)
 
@@ -120,7 +120,7 @@ def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
     return weight
 
 
-def mock_npu_dynamic_mx_quant(weight, axis=None, round_mode=None, 
+def mock_npu_dynamic_mx_quant(weight, axis=None, round_mode=None,
         dst_type=None, block_size=None):
     shape = (weight.shape[0], math.ceil(weight.shape[1] / 64), 2)
     scale = torch.randn(shape)
@@ -160,8 +160,14 @@ def mocked_npu_quant_conv2d(x, weight, scale, stride, pads,
     weight = weight.to(torch.float32)
     if bias is not None:
         bias = bias.to(torch.float32)
- 
+
     out = torch.nn.functional.conv2d(x, weight, bias, stride, pads, dilation, groups)
     out *= scale.reshape(1, -1, 1, 1)
     out = out.to(output_dtype)
     return out
+
+
+def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=15):
+    scale_shape = x.shape[0]
+    scale = torch.randn(scale_shape)
+    return x, scale

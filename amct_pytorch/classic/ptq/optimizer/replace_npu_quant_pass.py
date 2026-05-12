@@ -50,7 +50,8 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                 False: mismatch
         """
         module_type = type(module)
-        if module_type in AlgorithmRegistry.quant_to_deploy.keys():
+        if module_type in AlgorithmRegistry.quant_to_deploy.keys() or \
+            module_type.__name__ in AlgorithmRegistry.quant_to_deploy.keys():
             return True
         
         return False
@@ -65,6 +66,8 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         """
         module_type = type(object_module)
         deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
+        if deploy_ops is None:
+            deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type.__name__)
         
         if deploy_ops is None:
             raise RuntimeError(f"The deploy_op for {module_type.__name__} is None! "
@@ -73,8 +76,9 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         if isinstance(object_module, deploy_ops[0]):
             LOGGER.logd(f'{module_type.__name__} do not need to invoke convert')
             return
-
-        if type(object_module).__name__ == 'FlatQuantAttention' or type(object_module).__name__ == 'FlatQuantMLP':
+        if module_type.__name__ == 'FP8Linear':
+            npu_module = deploy_ops[0](object_module)
+        elif type(object_module).__name__ == 'FlatQuantAttention' or type(object_module).__name__ == 'FlatQuantMLP':
             # We needs to access layernorm and trans from higher level, so it cannot be done within the module
             # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
             from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
