@@ -19,6 +19,7 @@
 import torch
 import torch.nn as nn
 from loguru import logger
+from inspect import Parameter, signature
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
@@ -53,7 +54,7 @@ def build_algorithms_by_target(args, target, *ctor_args):
                 f"Algorithm '{algo_name}' cannot be used for target '{target}'. "
                 f"Declared targets: {targets}"
             )
-        algorithms[algo_name] = algo_item.target(args, *ctor_args)
+        algorithms[algo_name] = _build_algorithm(algo_item.target, args, *ctor_args)
     if target == "structure":
         if len(algorithms) == 0:
             return None
@@ -64,6 +65,18 @@ def build_algorithms_by_target(args, target, *ctor_args):
         return next(iter(algorithms.values()))
     else:
         return algorithms
+
+
+def _build_algorithm(algo_cls, args, *ctor_args):
+    init_params = list(signature(algo_cls.__init__).parameters.values())
+    positional_params = [
+        param for param in init_params[1:]
+        if param.kind in (Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD)
+    ]
+    has_varargs = any(param.kind == Parameter.VAR_POSITIONAL for param in init_params)
+    if has_varargs or len(positional_params) > 1:
+        return algo_cls(args, *ctor_args)
+    return algo_cls(args)
 
 
 def set_quantizer_state(model, enable=True):
@@ -127,13 +140,13 @@ class ActivationQuantizer(torch.nn.Module):
 
 class WeightQuantizer(torch.nn.Module):
 
-    def __init__(self, args, w_bits):
+    def __init__(self, args, w_bits=None):
         super(WeightQuantizer, self).__init__()
         self.args = args
-        self.bits = w_bits
+        self.bits = w_bits if w_bits is not None else args.w_bits
         self.algorithms = nn.ModuleDict()
         self._init_algo()
-        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=w_bits)
+        self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits)
         self.enable = False
 
     def _init_algo(self):

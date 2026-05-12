@@ -8,6 +8,7 @@ from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
 
 
@@ -95,9 +96,10 @@ class QuantPanguAttn(nn.Module):
         self.attention_dropout = attn_module.attention_dropout
         self.is_causal = attn_module.is_causal
         self.quant_args = quant_args
+        ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
         self.hidden_size = attn_module.hidden_size
-        self.value_dim = attn_module.value_dim
+        self.value_dim = getattr(attn_module, "value_dim", self.num_heads * self.head_dim)
 
         bits = quant_args.bit_policy["attn-linear"]
         q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]

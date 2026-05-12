@@ -1,4 +1,5 @@
 from copy import deepcopy
+from inspect import Parameter, signature
 
 import torch.nn as nn
 
@@ -10,6 +11,7 @@ from amct_pytorch.quantization.modules.quant_base import (
     build_algorithms_by_target,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
 class PlainLinear(nn.Module):
@@ -54,6 +56,25 @@ def build_no_algo_args(args):
     return new_args
 
 
+def build_direct_quant_args(args, bits):
+    """Return args for a direct quantized path that bypasses PTQ algorithms."""
+    new_args = build_no_algo_args(args)
+    new_args.w_bits = bits
+    new_args.a_bits = bits
+    return new_args
+
+
+def _build_quant_wrapper(cls, args, module, group):
+    init_params = signature(cls.__init__).parameters
+    accepts_group = (
+        "group" in init_params
+        or any(param.kind == Parameter.VAR_KEYWORD for param in init_params.values())
+    )
+    if accepts_group:
+        return cls(args, module, group=group)
+    return cls(args, module)
+
+
 def apply_quant_to_moe_mlp(args, model, cls=None):
     """Wrap dense MLPs and per-expert MoE blocks with their quant counterparts.
 
@@ -65,18 +86,18 @@ def apply_quant_to_moe_mlp(args, model, cls=None):
     """
     for name, mod in model.named_children():
         if name in ["mlp"] and hasattr(mod, "experts") is False:
-            setattr(model, name, cls(args, mod, group="mlp"))
+            setattr(model, name, _build_quant_wrapper(cls, args, mod, group="mlp"))
             break
 
         if name in ["experts"]:
             for i in range(len(mod)):
                 if mod[i] is None:
                     continue
-                mod[i] = cls(args, mod[i], group="moe.routed")
+                mod[i] = _build_quant_wrapper(cls, args, mod[i], group="moe.routed")
 
         if name in ["shared_experts"]:
             shared_args = build_no_algo_args(args)
-            setattr(model, name, cls(shared_args, mod, group="moe.shared"))
+            setattr(model, name, _build_quant_wrapper(cls, shared_args, mod, group="moe.shared"))
 
         if len(list(mod.children())) > 0:
             apply_quant_to_moe_mlp(args, mod, cls=cls)
@@ -110,6 +131,7 @@ class QuantGatedMLP(nn.Module):
     def __init__(self, quant_args, mlp_module, group: str = "mlp"):
         super().__init__()
         self.quant_args = quant_args
+        ensure_bit_policy(quant_args)
         self.group = group
         self.hidden_size = mlp_module.hidden_size
         self.intermediate_size = mlp_module.intermediate_size

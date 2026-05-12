@@ -22,6 +22,7 @@ from einops import rearrange
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.indexer import rotate_activation, fp32_index
@@ -106,6 +107,7 @@ class QuantDSA(DeepseekV3Attention):
     def __init__(self, args, module: DeepseekV3Attention):
         super().__init__(module.config, module.layer_idx)
         self.quant_args = args
+        ensure_bit_policy(args)
         self.enable_attn_linear = "attn-linear" in args.quant_target
         self.enable_attn_cache = "attn-cache" in args.quant_target
         self.hidden_size = getattr(module, "hidden_size", args.model_args.dim)
