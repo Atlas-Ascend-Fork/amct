@@ -17,17 +17,17 @@
 """
 HiFloat8 encode/decode operators for Ascend NPU
 
-Registers torch.ops.npu.encode_to_hifloat8 and torch.ops.npu.decode_from_hifloat8
+Registers torch.ops.amct.encode_to_hifloat8 and torch.ops.amct.decode_from_hifloat8
 and re-exports them as module-level names for convenience.
 
 Usage:
     # After loading the library, either form works:
-    import torch.ops.npu
-    torch.ops.npu.encode_to_hifloat8(x)          # FP16/BF16 → HiF8
-    torch.ops.npu.decode_from_hifloat8(y)         # HiF8 → BF16 (default)
-    torch.ops.npu.decode_from_hifloat8(y, torch.float16)
+    import torch.ops.amct
+    torch.ops.amct.encode_to_hifloat8(x)          # FP16/BF16 → HiF8
+    torch.ops.amct.decode_from_hifloat8(y)         # HiF8 → BF16 (default)
+    torch.ops.amct.decode_from_hifloat8(y, torch.float16)
 
-    from npu_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+    from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
     encode_to_hifloat8(x)
     decode_from_hifloat8(y, torch.float16)
 """

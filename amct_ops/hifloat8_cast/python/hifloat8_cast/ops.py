@@ -32,9 +32,9 @@ def encode_to_hifloat8(x: torch.Tensor) -> torch.Tensor:
     Example:
         >>> x = torch.randn(1024, dtype=torch.float16, device="npu")
         >>> y = encode_to_hifloat8(x)          # uint8, same shape
-        >>> y = torch.ops.npu.encode_to_hifloat8(x)  # equivalent
+        >>> y = torch.ops.amct.encode_to_hifloat8(x)  # equivalent
     """
-    return torch.ops.npu.encode_to_hifloat8(x)
+    return torch.ops.amct.encode_to_hifloat8(x)
 
 
 def decode_from_hifloat8(
@@ -56,6 +56,6 @@ def decode_from_hifloat8(
     Example:
         >>> z = decode_from_hifloat8(y)                    # → bfloat16
         >>> z = decode_from_hifloat8(y, torch.float16)     # → float16
-        >>> z = torch.ops.npu.decode_from_hifloat8(y)      # equivalent
+        >>> z = torch.ops.amct.decode_from_hifloat8(y)      # equivalent
     """
-    return torch.ops.npu.decode_from_hifloat8(x, dtype)
+    return torch.ops.amct.decode_from_hifloat8(x, dtype)

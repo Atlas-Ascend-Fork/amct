@@ -19,7 +19,7 @@
 #   bash ops_build.sh hifloat8_cast              # 仅构建 hifloat8_cast，A2
 #   bash ops_build.sh --soc ascend950 hifloat8_cast  # 仅构建 hifloat8_cast，A5
 #
-# 产物：dist/npu_ops-1.0.0-cp*-cp*-linux_aarch64.whl
+# 产物：dist/amct_ops-1.0.0-cp*-cp*-linux_aarch64.whl
 #
 # 新增算子：
 #   1. 在 <op>/python/<pkg>/ 下放 __init__.py，<op>/CMakeLists.txt 构建 .so
@@ -99,8 +99,8 @@ fi
 
 # ── 汇集各包到 staging/ ───────────────────────────────────────────────────────
 echo "[3/4] 汇集 Python 包到 staging/..."
-rm -rf staging && mkdir -p staging/npu_ops
-cp "$SCRIPT_DIR/npu_ops_init.py" staging/npu_ops/__init__.py
+rm -rf staging && mkdir -p staging/amct_ops
+cp "$SCRIPT_DIR/ops_init.py" staging/amct_ops/__init__.py
 
 collect_op() {
     local op_name="$1"
@@ -115,13 +115,13 @@ collect_op() {
         pkg_name="$(basename "$pkg_dir")"
         [[ "$pkg_name" == _* || "$pkg_name" == .* ]] && continue
 
-        local dst="staging/npu_ops/$pkg_name"
+        local dst="staging/amct_ops/$pkg_name"
         mkdir -p "$dst"
 
         find "$pkg_dir" -maxdepth 1 -name "*.py" -exec cp {} "$dst/" \;
         find "$op_dir/build" -maxdepth 1 -name "*.so" -exec cp {} "$dst/" \;
 
-        echo "    $op_name → staging/npu_ops/$pkg_name/ ($(ls "$dst"/*.so 2>/dev/null | wc -l) .so)"
+        echo "    $op_name → staging/amct_ops/$pkg_name/ ($(ls "$dst"/*.so 2>/dev/null | wc -l) .so)"
     done
 }
 
@@ -143,15 +143,15 @@ fi
 
 # ── 构建 wheel ────────────────────────────────────────────────────────────────
 echo "[4/4] 构建 wheel..."
-rm -rf dist npu_ops.egg-info build
+rm -rf dist amct_ops.egg-info build
 mkdir -p dist
 pip wheel . -w dist/ --no-deps --no-build-isolation -q
 
 echo ""
 echo "构建完成："
-ls -lh dist/npu_ops-*.whl
+ls -lh dist/amct_ops-*.whl
 echo ""
 echo "内容："
-python3 -m zipfile -l dist/npu_ops-*.whl | grep -v "dist-info"
+python3 -m zipfile -l dist/amct_ops-*.whl | grep -v "dist-info"
 echo ""
-echo "安装方式：  pip install dist/npu_ops-*.whl"
+echo "安装方式：  pip install dist/amct_ops-*.whl"

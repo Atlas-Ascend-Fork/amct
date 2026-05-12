@@ -24,7 +24,7 @@ namespace {
 
 // ── Schema ──────────────────────────────────────────────────────────────────
 
-TORCH_LIBRARY_FRAGMENT(npu, m)
+TORCH_LIBRARY_FRAGMENT(amct, m)
 {
     m.def("encode_to_hifloat8(Tensor input) -> Tensor");
     m.def("decode_from_hifloat8(Tensor input, ScalarType? dtype=None) -> Tensor");
@@ -50,7 +50,7 @@ static at::Tensor decode_impl(const at::Tensor& input, c10::optional<at::ScalarT
     return ascend_kernel::hifloat8_cast_torch(input, outDtype == at::kHalf ? 2 : 3);
 }
 
-TORCH_LIBRARY_IMPL(npu, PrivateUse1, m)
+TORCH_LIBRARY_IMPL(amct, PrivateUse1, m)
 {
     m.impl("encode_to_hifloat8", TORCH_FN(encode_impl));
     m.impl("decode_from_hifloat8", TORCH_FN(decode_impl));
@@ -68,7 +68,7 @@ static at::Tensor decode_meta(const at::Tensor& input, c10::optional<at::ScalarT
     return at::empty(input.sizes(), input.options().dtype(dtype.value_or(at::kBFloat16)));
 }
 
-TORCH_LIBRARY_IMPL(npu, Meta, m)
+TORCH_LIBRARY_IMPL(amct, Meta, m)
 {
     m.impl("encode_to_hifloat8", &encode_meta);
     m.impl("decode_from_hifloat8", &decode_meta);

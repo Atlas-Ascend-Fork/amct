@@ -104,7 +104,7 @@ hifloat8_cast/
 ### 方式一：统一打包（推荐）
 
 ```bash
-cd npu_ops
+cd amct_ops
 bash ops_build.sh [--soc <soc>] [hifloat8_cast]
 ```
 
@@ -121,7 +121,7 @@ bash ops_build.sh                                   # 全部算子，A2
 bash ops_build.sh --soc ascend910_93                # 全部算子，A3
 bash ops_build.sh hifloat8_cast                     # 仅本算子，A2
 bash ops_build.sh --soc ascend950 hifloat8_cast     # 仅本算子，A5
-pip install dist/npu_ops-*.whl
+pip install dist/amct_ops-*.whl
 ```
 
 ### 方式二：独立编译（开发调试）
@@ -135,7 +135,7 @@ pip install dist/npu_ops-*.whl
 | A5（ascend950） | `dav-3510` |
 
 ```bash
-cd npu_ops/hifloat8_cast
+cd amct_ops/hifloat8_cast
 source $ASCEND_HOME_PATH/set_env.sh
 mkdir -p build && cd build
 
@@ -152,7 +152,7 @@ make -j8
 ```python
 import torch
 import torch_npu
-from npu_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
 
 # 编码（FP16/BF16 → HiFloat8）
 x = torch.randn(1024, 256, dtype=torch.bfloat16, device='npu')
@@ -162,11 +162,11 @@ y = encode_to_hifloat8(x)      # shape [1024, 256], dtype uint8
 z = decode_from_hifloat8(y, torch.bfloat16)  # shape [1024, 256], dtype bfloat16
 ```
 
-也可直接通过 `torch.ops.npu` 调用底层算子：
+也可直接通过 `torch.ops.amct` 调用底层算子：
 
 ```python
-y = torch.ops.npu.encode_to_hifloat8(x)
-z = torch.ops.npu.decode_from_hifloat8(y, torch.bfloat16)
+y = torch.ops.amct.encode_to_hifloat8(x)
+z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 ```
 
 ## 性能

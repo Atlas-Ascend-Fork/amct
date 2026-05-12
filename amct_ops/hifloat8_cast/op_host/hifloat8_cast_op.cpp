@@ -208,7 +208,10 @@ static at::Tensor BuildLut16Cpu(int64_t castMode)
                 fp32Bits = (fp32Exp > 0) ? (((uint32_t)fp32Exp << 23) | fp32Frac) : 0u;
             }
         } else {
-            uint32_t expFp32 = exp + (127u - expBias);
+            // exp 全 1 表示 Inf/NaN：必须显式映射到 FP32 exp=255，
+            // 否则 FP16 的 exp=31 会被加上 (127-15)=112 偏置变为 143，丢掉特殊值语义。
+            uint32_t expMaxN = (1u << expBitsN) - 1;
+            uint32_t expFp32 = (exp == expMaxN) ? 255u : (exp + (127u - expBias));
             fp32Bits = (expFp32 << 23) | (frac << (23u - fracBitsN));
         }
         data[i] = HostFp32MagnitudeToHif8(fp32Bits);  // magnitude only, no sign

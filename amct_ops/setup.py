@@ -24,7 +24,7 @@
 的 find_packages() 即可。
 
 已包含算子：
-  hifloat8_cast  →  python 包名: npu_ops.hifloat8_cast
+  hifloat8_cast  →  python 包名: amct_ops.hifloat8_cast
 """
 
 import os
@@ -40,20 +40,20 @@ class BinaryDistribution(Distribution):
 
 STAGING = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'staging')
 
-# 收集 staging/npu_ops/<sub>/ 下的 .so 文件作为 package_data
+# 收集 staging/amct_ops/<sub>/ 下的 .so 文件作为 package_data
 package_data = {}
-npu_ops_dir = os.path.join(STAGING, 'npu_ops')
-if os.path.isdir(npu_ops_dir):
-    for sub in os.listdir(npu_ops_dir):
-        sub_path = os.path.join(npu_ops_dir, sub)
+amct_ops_dir = os.path.join(STAGING, 'amct_ops')
+if os.path.isdir(amct_ops_dir):
+    for sub in os.listdir(amct_ops_dir):
+        sub_path = os.path.join(amct_ops_dir, sub)
         if not os.path.isdir(sub_path) or sub.startswith(('.', '_')):
             continue
         so_files = [f for f in os.listdir(sub_path) if f.endswith('.so')]
         if so_files:
-            package_data[f'npu_ops.{sub}'] = so_files
+            package_data[f'amct_ops.{sub}'] = so_files
 
 setup(
-    name="npu_ops",
+    name="amct_ops",
     version="1.0.0",
     description="NPU custom operators for Ascend NPU (HiFloat8, ...)",
     packages=find_packages(where='staging'),
