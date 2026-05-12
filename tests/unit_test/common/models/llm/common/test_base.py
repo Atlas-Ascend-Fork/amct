@@ -234,3 +234,1092 @@ def test_load_selected_layer_ptq_params_routes_to_store_per_target():
     assert seen[1][2] == ["mlp"]
     # The original quant_target is restored.
     assert stub.quant_target == ["attn-linear", "mlp"]
+
+
+def test_register_block_forward_hooks_returns_early_on_none_hook_name():
+    stub = _StubModel()
+    block = nn.Module()
+    stub.register_block_forward_hooks(block, hook_name=None, hooks={}, act_stat={})
+
+
+def test_register_block_forward_hooks_delegates(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.register_forward_hooks",
+        lambda block, hook_name, hooks, act_stat: captured.update(
+            block=block, hook_name=hook_name, hooks=hooks, act_stat=act_stat
+        ),
+    )
+    stub = _StubModel()
+    block = nn.Module()
+    stub.register_block_forward_hooks(block, hook_name="hook1", hooks={"k": "v"}, act_stat={"a": 1})
+    assert captured["hook_name"] == "hook1"
+
+
+def test_build_block_for_forward_quant_branch(monkeypatch):
+    stub = _StubModel()
+    block = nn.Module()
+
+    def fake_build_quant_block(layer_idx):
+        return block
+
+    def fake_load(layer_idx, block, strict):
+        pass
+
+    stub.build_quant_block = fake_build_quant_block
+    stub.load_selected_layer_ptq_params = fake_load
+    result = stub._build_block_for_forward(3, use_quant_block=True)
+    assert result is block
+
+
+def test_build_block_for_forward_plain_branch(monkeypatch):
+    stub = _StubModel()
+    block = nn.Module()
+
+    def fake_block(layer_idx):
+        return block
+
+    stub.block = fake_block
+    result = stub._build_block_for_forward(5, use_quant_block=False)
+    assert result is block
+
+
+def test_iter_deploy_bindings_returns_empty_on_no_quant_linear():
+    stub = _StubModel()
+    stub.get_layer_weight_prefix = lambda layer_idx: "p."
+    block = nn.Module()
+    block.fc = nn.Linear(4, 4)
+    bindings = list(stub.iter_deploy_bindings(0, block))
+    assert bindings == []
+
+
+def test_get_block_forward_kwargs_omits_none_values():
+    stub = _StubModel(args=SimpleNamespace(device="cpu"))
+    stub.position_ids = torch.tensor([[0, 1, 2]])
+    assert "attention_mask" not in stub.get_block_forward_kwargs()
+    assert "position_ids" in stub.get_block_forward_kwargs()
+
+
+def test_iter_ptq_units_moe_uses_expert_modules_fallback():
+    stub = _StubModel(quant_target=["moe"])
+    block = nn.Module()
+    block.mlp = nn.Module()
+    block.mlp.experts = type("E", (), {"expert_modules": [nn.Linear(4, 4), nn.Linear(4, 4)]})()
+    units = list(stub.iter_ptq_units(layer_idx=0, block=block))
+    assert [u.name for u in units] == ["expert_0", "expert_1"]
+
+
+def test_iter_ptq_units_moe_uses_iter_ptq_expert_modules():
+    stub = _StubModel(quant_target=["moe"])
+    block = nn.Module()
+    block.mlp = nn.Module()
+
+    class _IterExperts:
+        def __iter__(self):
+            yield nn.Linear(4, 4)
+            yield nn.Linear(4, 4)
+
+        def iter_ptq_expert_modules(self):
+            return self
+
+    block.mlp.experts = _IterExperts()
+    units = list(stub.iter_ptq_units(layer_idx=0, block=block))
+    assert [u.name for u in units] == ["expert_0", "expert_1"]
+
+
+def test_load_selected_layer_ptq_params_attn_cache_target(monkeypatch):
+    warnings = []
+    monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
+                        __import__("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+    stub = _StubModel(
+        quant_target=["attn-cache"],
+        args=SimpleNamespace(
+            attn_linear_param_dir="",
+            attn_cache_param_dir="/cache_params",
+            moe_mlp_param_dir="",
+        ),
+    )
+    seen = []
+
+    def fake_load(layer_idx, block, param_dir, strict):
+        seen.append((layer_idx, param_dir))
+        return {"loaded": ["u1"], "missing": []}
+
+    stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
+    results = stub.load_selected_layer_ptq_params(5, block=nn.Module())
+    assert "attn-cache" in results
+    assert seen[0][1] == "/cache_params"
+    assert stub.quant_target == ["attn-cache"]
+
+
+def test_load_selected_layer_ptq_params_moe_target():
+    stub = _StubModel(
+        quant_target=["moe"],
+        args=SimpleNamespace(
+            attn_linear_param_dir="",
+            attn_cache_param_dir="",
+            moe_mlp_param_dir="/moe_params",
+        ),
+    )
+    seen = []
+
+    def fake_load(layer_idx, block, param_dir, strict):
+        seen.append((layer_idx, param_dir))
+        return {"loaded": ["e0"], "missing": []}
+
+    stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
+    results = stub.load_selected_layer_ptq_params(3, block=nn.Module())
+    assert "moe" in results
+    assert seen[0][1] == "/moe_params"
+
+
+def test_load_selected_layer_ptq_params_partial_warns(monkeypatch):
+    warnings = []
+    monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
+                        __import__("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+    stub = _StubModel(
+        quant_target=["mlp"],
+        args=SimpleNamespace(
+            attn_linear_param_dir="",
+            attn_cache_param_dir="",
+            moe_mlp_param_dir="/mlp_params",
+        ),
+    )
+
+    def fake_load(layer_idx, block, param_dir, strict):
+        return {"loaded": ["x"], "missing": ["y"]}
+
+    stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
+    stub.load_selected_layer_ptq_params(1, block=nn.Module())
+    assert any("Partially loaded" in w for w in warnings)
+
+
+def test_load_selected_layer_ptq_params_full_missing_warns(monkeypatch):
+    warnings = []
+    monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
+                        __import__("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+    stub = _StubModel(
+        quant_target=["mlp"],
+        args=SimpleNamespace(
+            attn_linear_param_dir="",
+            attn_cache_param_dir="",
+            moe_mlp_param_dir="/mlp_params",
+        ),
+    )
+
+    def fake_load(layer_idx, block, param_dir, strict):
+        return {"loaded": [], "missing": ["z"]}
+
+    stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
+    stub.load_selected_layer_ptq_params(2, block=nn.Module())
+    assert any("No PTQ params loaded" in w for w in warnings)
+
+
+def test_iter_deploy_bindings_yields_quant_linear_weights(monkeypatch):
+    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+    stub = _StubModel()
+    stub.get_layer_weight_prefix = lambda layer_idx: "model.layers.0."
+
+    block = nn.Module()
+    block.q_linear = QuantLinear.__new__(QuantLinear)
+    block.q_linear._parameters = {}
+    block.q_linear._buffers = {}
+    block.q_linear._modules = {}
+
+    bindings = list(stub.iter_deploy_bindings(0, block))
+    assert len(bindings) == 1
+    assert bindings[0][0] == "model.layers.0.q_linear.weight"
+
+
+def test_iter_ptq_units_raises_for_moe_without_mlp():
+    stub = _StubModel(quant_target=["moe"])
+    block = nn.Module()
+    with pytest.raises(ValueError, match="Unsupported quant target"):
+        list(stub.iter_ptq_units(layer_idx=0, block=block))
+
+
+# ---- build_quant_block ----------------------------------------------------
+
+
+def test_build_quant_block_delegates_to_block():
+    stub = _StubModel(quant_target=["mlp"])
+    captured = {}
+
+    def _fake_block(idx):
+        captured["idx"] = idx
+        return nn.Linear(4, 4)
+
+    stub.block = _fake_block
+    result = stub.build_quant_block(3)
+    assert captured["idx"] == 3
+    assert isinstance(result, nn.Linear)
+
+
+# ---- get_block_forward_kwargs (individual) / _build_block_for_forward ----
+
+
+def test_get_block_forward_kwargs_returns_empty_when_no_state():
+    stub = _StubModel(quant_target=["mlp"])
+    stub.args = SimpleNamespace(device="cpu")
+    stub.position_ids = None
+    stub.position_embeddings = None
+    stub.attention_mask = None
+    assert stub.get_block_forward_kwargs() == {}
+
+
+def test_get_block_forward_kwargs_includes_position_ids():
+    stub = _StubModel(quant_target=["mlp"])
+    stub.args = SimpleNamespace(device="cpu")
+    pid = torch.tensor([1, 2, 3])
+    stub.position_ids = pid
+    stub.position_embeddings = None
+    stub.attention_mask = None
+    kwargs = stub.get_block_forward_kwargs()
+    assert torch.equal(kwargs["position_ids"], pid)
+
+
+def test_get_block_forward_kwargs_includes_attention_mask():
+    stub = _StubModel(quant_target=["mlp"])
+    stub.args = SimpleNamespace(device="cpu")
+    mask = torch.tensor([1, 1, 0])
+    stub.position_ids = None
+    stub.position_embeddings = None
+    stub.attention_mask = mask
+    kwargs = stub.get_block_forward_kwargs()
+    assert torch.equal(kwargs["attention_mask"], mask)
+
+
+def test_get_block_forward_kwargs_includes_position_embeddings():
+    stub = _StubModel(quant_target=["mlp"])
+    stub.args = SimpleNamespace(device="cpu")
+    emb = (torch.tensor([1.0]), torch.tensor([2.0]))
+    stub.position_ids = None
+    stub.position_embeddings = emb
+    stub.attention_mask = None
+    kwargs = stub.get_block_forward_kwargs()
+    assert len(kwargs["position_embeddings"]) == 2
+    assert torch.equal(kwargs["position_embeddings"][0], emb[0])
+
+
+def test_build_block_for_forward_calls_block_when_no_quant():
+    stub = _StubModel(quant_target=["mlp"])
+    captured = {}
+    def _fake_block(idx):
+        captured["idx"] = idx
+        return nn.Linear(4, 4)
+    stub.block = _fake_block
+    result = stub._build_block_for_forward(3, use_quant_block=False)
+    assert captured["idx"] == 3
+    assert isinstance(result, nn.Linear)
+
+
+def test_build_block_for_forward_calls_build_quant_block_when_quant():
+    stub = _StubModel(quant_target=["mlp"])
+    captured = {}
+    def _fake_quant_block(idx):
+        captured["quant_idx"] = idx
+        mod = nn.Linear(4, 4)
+        return mod
+    stub.build_quant_block = _fake_quant_block
+    stub.load_selected_layer_ptq_params = lambda idx, block, strict: {}
+    result = stub._build_block_for_forward(3, use_quant_block=True)
+    assert captured["quant_idx"] == 3
+
+
+# ---- load_selected_layer_ptq_params (no-param-dir fallbacks) -------------
+
+
+def test_load_selected_layer_ptq_params_attn_linear_with_no_param_dir_logs_warning():
+    stub = _StubModel(quant_target=["attn-linear"])
+    stub.args = SimpleNamespace(attn_linear_param_dir="")
+    block = nn.Module()
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    assert "attn-linear" in results
+    assert results["attn-linear"]["loaded"] == []
+
+
+def test_load_selected_layer_ptq_params_mlp_with_no_param_dir():
+    stub = _StubModel(quant_target=["mlp"])
+    stub.args = SimpleNamespace(moe_mlp_param_dir="")
+    block = nn.Module()
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    assert "mlp" in results
+
+
+def test_load_selected_layer_ptq_params_moe_with_no_param_dir():
+    stub = _StubModel(quant_target=["moe"])
+    stub.args = SimpleNamespace(moe_mlp_param_dir="")
+    block = nn.Module()
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    assert "moe" in results
+
+
+def test_load_selected_layer_ptq_params_attn_cache_with_no_param_dir():
+    stub = _StubModel(quant_target=["attn-cache"])
+    stub.args = SimpleNamespace(attn_cache_param_dir="")
+    block = nn.Module()
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    assert "attn-cache" in results
+    assert results["attn-cache"]["loaded"] == []
+
+
+def test_load_selected_layer_ptq_params_restores_original_quant_target():
+    stub = _StubModel(quant_target=["mlp"])
+    stub.args = SimpleNamespace(moe_mlp_param_dir="")
+    block = nn.Module()
+    original = stub.quant_target
+    stub.load_selected_layer_ptq_params(0, block, strict=False)
+    assert stub.quant_target == original
+
+
+# ---- iter_ptq_units additional branches -----------------------------------
+
+
+def test_iter_ptq_units_attn_linear_yields_attn():
+    stub = _StubModel(quant_target=["attn-linear"])
+    block = nn.Module()
+    block.self_attn = nn.Linear(4, 4)
+    units = list(stub.iter_ptq_units(layer_idx=0, block=block))
+    assert len(units) == 1
+    assert units[0].kind == "attn"
+
+
+def test_iter_ptq_units_attn_cache_yields_attn():
+    stub = _StubModel(quant_target=["attn-cache"])
+    block = nn.Module()
+    block.self_attn = nn.Linear(4, 4)
+    units = list(stub.iter_ptq_units(layer_idx=0, block=block))
+    assert len(units) == 1
+    assert units[0].kind == "attn"
+
+
+def test_iter_ptq_units_moe_yields_experts():
+    stub = _StubModel(quant_target=["moe"])
+    block = nn.Module()
+    expert0 = nn.Linear(4, 4)
+    expert1 = nn.Linear(4, 4)
+    block.mlp = nn.Module()
+    block.mlp.experts = [expert0, expert1]
+    units = list(stub.iter_ptq_units(layer_idx=0, block=block))
+    assert len(units) == 2
+    assert all(u.kind == "moe" for u in units)
+    assert units[0].metadata == {"expert_idx": 0}
+    assert units[1].metadata == {"expert_idx": 1}
+
+
+def test_iter_ptq_units_raises_when_no_mlp_and_not_attn():
+    stub = _StubModel(quant_target=["unknown"])
+    block = nn.Module()
+    with pytest.raises(ValueError, match="Unsupported quant target"):
+        list(stub.iter_ptq_units(layer_idx=0, block=block))
+
+
+# ---- iter_deploy_bindings -------------------------------------------------
+
+
+def test_iter_deploy_bindings_yields_quant_linear_weight_paths():
+    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+    stub = _StubModel(quant_target=["mlp"])
+    stub.get_layer_weight_prefix = lambda idx: "model.layers.0."
+    block = nn.Module()
+    ql = QuantLinear.__new__(QuantLinear)
+    ql._parameters = {}
+    ql._buffers = {}
+    ql._modules = {}
+    block.q_proj = ql
+    bindings = list(stub.iter_deploy_bindings(0, block))
+    assert len(bindings) == 1
+    assert bindings[0][0] == "model.layers.0.q_proj.weight"
+    assert bindings[0][1] is ql
+
+
+def test_iter_deploy_bindings_skips_non_quant_linear():
+    stub = _StubModel(quant_target=["mlp"])
+    stub.get_layer_weight_prefix = lambda idx: "model.layers.0."
+    block = nn.Module()
+    block.linear = nn.Linear(4, 4)
+    bindings = list(stub.iter_deploy_bindings(0, block))
+    assert len(bindings) == 0
+
+
+# ---- load_unit_inputs -----------------------------------------------------
+
+
+def test_load_unit_inputs_delegates_to_load_ptq_inps(tmp_path, monkeypatch):
+    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
+    stub = _StubModel(quant_target=["mlp"])
+    unit = make_ptq_unit("mlp", "mlp", layer_idx=2, module=nn.Linear(4, 4))
+    fake_data = torch.randn(4, 4)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
+        lambda data_dir, kind, layer_idx: fake_data,
+    )
+    result = stub.load_unit_inputs("/tmp/fake", unit)
+    assert result is fake_data
+
+
+# ---- safetensors-based weight loading tests ------------------------------
+
+
+import json
+import os
+from unittest.mock import MagicMock
+
+from safetensors.torch import save_file
+
+
+from tests.unit_test.conftest import SAFETENSORS_TMP_DIR
+
+
+def _make_tiny_safetensors_model_dir(num_layers=1):
+    """Create a fake model directory with real safetensors files and index.json."""
+    from accelerate import init_empty_weights
+    from transformers.models.qwen3.modeling_qwen3 import Qwen3Config, Qwen3DecoderLayer
+
+    model_dir = SAFETENSORS_TMP_DIR / "fake_model"
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    hidden_size = 8
+    intermediate_size = 16
+    num_attention_heads = 2
+    num_key_value_heads = 2
+    head_dim = 4
+    vocab_size = 100
+
+    config = Qwen3Config(
+        num_hidden_layers=num_layers,
+        hidden_size=hidden_size,
+        intermediate_size=intermediate_size,
+        num_attention_heads=num_attention_heads,
+        num_key_value_heads=num_key_value_heads,
+        head_dim=head_dim,
+        rms_norm_eps=1e-6,
+        vocab_size=vocab_size,
+        max_position_embeddings=512,
+        rope_theta=10000.0,
+        tie_word_embeddings=False,
+    )
+
+    weight_map = {}
+
+    # Discover parameter names and shapes via init_empty_weights
+    with init_empty_weights():
+        layer_decoder = Qwen3DecoderLayer(config, 0)
+    layer_tensors = {}
+    for name, param in layer_decoder.named_parameters():
+        full_name = f"model.layers.0.{name}"
+        layer_tensors[full_name] = torch.zeros(param.shape, dtype=torch.bfloat16)
+        weight_map[full_name] = "model-00001-of-00002.safetensors"
+
+    file_path = model_dir / "model-00001-of-00002.safetensors"
+    save_file(layer_tensors, str(file_path))
+
+    # Create embed / head tensors
+    embed_head_tensors = {
+        "model.embed_tokens.weight": torch.zeros(vocab_size, hidden_size, dtype=torch.bfloat16),
+        "model.norm.weight": torch.zeros(hidden_size, dtype=torch.bfloat16),
+        "lm_head.weight": torch.zeros(vocab_size, hidden_size, dtype=torch.bfloat16),
+    }
+    for name in embed_head_tensors:
+        weight_map[name] = "model-00002-of-00002.safetensors"
+    embed_file = model_dir / "model-00002-of-00002.safetensors"
+    save_file(embed_head_tensors, str(embed_file))
+
+    # Write index.json
+    index = {
+        "metadata": {"total_size": 0},
+        "weight_map": weight_map,
+    }
+    with open(model_dir / "model.safetensors.index.json", "w") as f:
+        json.dump(index, f)
+
+    return model_dir, config, weight_map
+
+
+def _mock_hf_for_safetensors_test(monkeypatch, model_dir, config):
+    """Mock HF dependencies to point at the fake safetensors model dir."""
+    from accelerate import init_empty_weights
+    from transformers import AutoModelForCausalLM
+
+    fake_tokenizer = MagicMock()
+
+    # Build a real empty model to return from mocked from_config/from_pretrained
+    with init_empty_weights():
+        empty_model = AutoModelForCausalLM.from_config(
+            config, trust_remote_code=True, torch_dtype=torch.bfloat16
+        )
+
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.AutoConfig",
+        type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: config)})(),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
+        type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.init_empty_weights",
+        lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
+        type("FakeAMFCLM", (), {
+            "from_pretrained": staticmethod(lambda *a, **kw: empty_model),
+            "from_config": staticmethod(lambda *a, **kw: empty_model),
+        })(),
+    )
+
+
+def test_load_layer_weight_reads_safetensors_from_disk(monkeypatch):
+    from types import SimpleNamespace
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    state_dict = model.load_layer_weight("model.layers.0.")
+    assert len(state_dict) > 0
+    # self_attn.q_proj.weight should be present after prefix stripping
+    assert "self_attn.q_proj.weight" in state_dict
+    assert state_dict["self_attn.q_proj.weight"].shape == (8, 8)
+
+
+def test_block_creates_layer_with_weights(monkeypatch):
+    from types import SimpleNamespace
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    layer = model.block(0)
+    assert isinstance(layer, nn.Module)
+    # Should have loaded real weights from safetensors
+    assert layer.self_attn.q_proj.weight.shape == (8, 8)
+
+
+def test_load_embed_state_dict_loads_embed_weights(monkeypatch):
+    from types import SimpleNamespace
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    model.float_model = lambda: model.empty_weights_model()
+    model.load_embed_state_dict()
+
+
+# ---- do_embedding_forward -----------------------------------------------
+
+
+def test_do_embedding_forward_runs_full_model_forward(tmp_path, monkeypatch):
+    """Test do_embedding_forward runs the full model forward pass with safetensors weights."""
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir(num_layers=1)
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.tqdm",
+        lambda iterable, **kwargs: iterable,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir=str(tmp_path),
+        output_dir=str(tmp_path),
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    model.float_model = lambda: model.empty_weights_model()
+
+    batch, seq_len = 2, 4
+    samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
+
+    outs = model.do_embedding_forward(samples)
+
+    assert isinstance(outs, list)
+
+
+def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
+    """Test do_embedding_forward captures position_ids/embeddings from Catcher."""
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir(num_layers=1)
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.tqdm",
+        lambda iterable, **kwargs: iterable,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir=str(tmp_path),
+        output_dir=str(tmp_path),
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    model.float_model = lambda: model.empty_weights_model()
+
+    batch, seq_len = 2, 4
+    samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
+
+    outs = model.do_embedding_forward(samples)
+
+    assert model.position_ids is not None
+    assert model.position_embeddings is not None
+
+
+# ---- do_block_forward / do_head_forward --------------------------------
+
+
+def _compute_position_embeddings(config, batch, seq_len, device="cpu", dtype=torch.bfloat16):
+    from transformers.models.qwen3.modeling_qwen3 import Qwen3RotaryEmbedding
+    rope = Qwen3RotaryEmbedding(config)
+    position_ids = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch, -1)
+    hidden_states = torch.zeros(batch, seq_len, config.hidden_size, device=device, dtype=dtype)
+    cos, sin = rope(hidden_states, position_ids)
+    return (cos, sin)
+
+
+def test_do_block_forward_runs_layer_forward_pass(monkeypatch):
+    from types import SimpleNamespace
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    batch, seq_len, hidden_size = 2, 4, 8
+    model.position_embeddings = _compute_position_embeddings(config, batch, seq_len)
+    samples = [torch.randn(batch, seq_len, hidden_size, dtype=torch.bfloat16)]
+
+    outs = model.do_block_forward(0, samples, hook_name=None, use_quant_block=False)
+
+    assert len(outs) == 1
+    assert outs[0].shape == (batch, seq_len, hidden_size)
+
+
+def test_do_block_forward_with_hook_enables_act_stat_collection(monkeypatch):
+    from types import SimpleNamespace
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.register_forward_hooks",
+        lambda block, hook_name, hooks, act_stat: None,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
+        lambda act_stat, hook_name, save_target, layer_idx, data_dir: None,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    batch, seq_len, hidden_size = 2, 4, 8
+    model.position_embeddings = _compute_position_embeddings(config, batch, seq_len)
+    samples = [torch.randn(batch, seq_len, hidden_size, dtype=torch.bfloat16)]
+
+    outs = model.do_block_forward(0, samples, hook_name="test_hook")
+
+    assert len(outs) == 1
+    assert outs[0].shape == (batch, seq_len, hidden_size)
+
+
+def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypatch):
+    """do_embedding_forward calls save_ptq_kwargs when hook_name is not None (line 170)."""
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir(num_layers=1)
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.tqdm",
+        lambda iterable, **kwargs: iterable,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
+        lambda *a, **kw: None,
+    )
+    save_captured = {}
+
+    def _fake_save_kwargs(pos_ids, pos_embs, attn_mask, data_dir):
+        save_captured["called"] = True
+        save_captured["data_dir"] = data_dir
+
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.save_ptq_kwargs",
+        _fake_save_kwargs,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir=str(tmp_path),
+        output_dir=str(tmp_path),
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    model.float_model = lambda: model.empty_weights_model()
+
+    batch, seq_len = 2, 4
+    samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
+
+    model.do_embedding_forward(samples, hook_name="test_hook")
+
+    assert save_captured.get("called") is True
+    assert save_captured.get("data_dir") == str(tmp_path)
+
+
+def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
+    """do_block_forward calls set_model_weight/act_quant_state when use_quant_block=True (lines 194-196)."""
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+
+    weight_state = {}
+    act_state = {}
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_weight_quant_state",
+        lambda mod, flag: weight_state.update({"called": True, "flag": flag}),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_act_quant_state",
+        lambda mod, flag: act_state.update({"called": True, "flag": flag}),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
+        lambda *a, **kw: None,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+
+    class _FakeBlock(nn.Module):
+        def forward(self, x, **kwargs):
+            return x
+
+    fake_block = _FakeBlock()
+    monkeypatch.setattr(model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block)
+
+    batch, seq_len, hidden_size = 2, 4, 8
+    samples = [torch.randn(batch, seq_len, hidden_size)]
+
+    model.do_block_forward(0, samples, use_quant_block=True, hook_name="some_hook")
+
+    assert weight_state.get("called") is True
+    assert weight_state.get("flag") == False
+    assert act_state.get("called") is True
+    assert act_state.get("flag") == False
+
+
+def test_do_block_forward_quant_eval_mode(monkeypatch):
+    """do_block_forward sets QuantLinear._eval_mode when use_quant_block=True and hook_name is None (lines 200-204)."""
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_weight_quant_state",
+        lambda mod, flag: None,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_act_quant_state",
+        lambda mod, flag: None,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+
+    ql = QuantLinear.__new__(QuantLinear)
+    ql._eval_mode = False
+    ql._cached_eval_weight = "stale"
+    ql._parameters = {}
+    ql._modules = {}
+    ql._buffers = {}
+
+    class _FakeBlock(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.q_linear = ql
+
+        def forward(self, x, **kwargs):
+            return x
+
+    fake_block = _FakeBlock()
+    monkeypatch.setattr(model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block)
+
+    batch, seq_len, hidden_size = 2, 4, 8
+    samples = [torch.randn(batch, seq_len, hidden_size)]
+
+    model.do_block_forward(0, samples, use_quant_block=True, hook_name=None)
+
+    assert ql._eval_mode is True
+    assert ql._cached_eval_weight is None
+
+
+def test_do_block_forward_with_hook_removal(monkeypatch):
+    """do_block_forward calls hook.remove() when hook_name is not None (line 218)."""
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+    from unittest.mock import MagicMock
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_weight_quant_state",
+        lambda mod, flag: None,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_act_quant_state",
+        lambda mod, flag: None,
+    )
+
+    mock_hook = MagicMock()
+    hooks_list = []
+
+    def _fake_register_hooks(block, target_name, hooks, act_stat):
+        hooks.append(mock_hook)
+
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.register_forward_hooks",
+        _fake_register_hooks,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
+        lambda *a, **kw: None,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+
+    class _FakeBlock(nn.Module):
+        def forward(self, x, **kwargs):
+            return x
+
+    fake_block = _FakeBlock()
+    monkeypatch.setattr(model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block)
+
+    batch, seq_len, hidden_size = 2, 4, 8
+    samples = [torch.randn(batch, seq_len, hidden_size)]
+
+    model.do_block_forward(0, samples, use_quant_block=True, hook_name="test_hook")
+
+    mock_hook.remove.assert_called_once()
+
+
+def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
+    from types import SimpleNamespace
+    from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
+    model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
+    _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: weight_map,
+    )
+
+    args = SimpleNamespace(
+        model=str(model_dir),
+        quant_target=["mlp"],
+        device="cpu",
+        data_dir="/tmp/fake",
+        output_dir="/tmp/fake",
+        quant_dtype="int8",
+        w_bits=8,
+        a_bits=8,
+        algos=[],
+        cali_bsz=2,
+        moe_mlp_param_dir="",
+    )
+
+    model = Qwen3(args)
+    model.float_model = lambda: model.empty_weights_model()
+    model.load_embed_state_dict()
+
+    batch, seq_len, hidden_size = 2, 4, 8
+    model.position_embeddings = _compute_position_embeddings(config, batch, seq_len)
+    samples = [torch.randn(batch, seq_len, hidden_size, dtype=torch.bfloat16)]
+    inter_outs = model.do_block_forward(0, samples, hook_name=None)
+
+    preds = model.do_head_forward(inter_outs)
+
+    assert len(preds) == 1
+    assert preds[0].shape == (batch, seq_len - 1, config.vocab_size)
