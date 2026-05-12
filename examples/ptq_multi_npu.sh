@@ -24,7 +24,8 @@ output_path="" # 量化系数保存路径
 
 NUM_BLOCKS=61 # 模型有多少个 decoder layers
 NUM_TASKS=8  # 同时启动多少个 PTQ 进程
-NUM_NPUS=8   # 可用 NPU 数
+CARDS=(0 1 2 3 4 5 6 7) # 可用的 NPU ID
+NUM_NPUS=${#CARDS[@]}   # 可用 NPU 数
 LAUNCH_INTERVAL=60 # 相邻任务启动间隔，单位秒
 
 avg=$((NUM_BLOCKS / NUM_TASKS))
@@ -41,9 +42,10 @@ for ((i=0; i<NUM_TASKS; i++)); do
 
   end=$((start + len))
   npu_id=$((i % NUM_NPUS))
+  logic_id=${CARDS[$npu_id]}
 
-  echo "Launching task $i: blocks [$start, $end), npu $npu_id"
-  ASCEND_RT_VISIBLE_DEVICES=$npu_id python amct_pytorch/cli/llm/ptq.py \
+  echo "Launching task $i: blocks [$start, $end), npu $logic_id"
+  ASCEND_RT_VISIBLE_DEVICES=$logic_id python amct_pytorch/cli/llm/ptq.py \
       --model $model_path \
       --model_name $model_name \
       --data_dir $data_path \
