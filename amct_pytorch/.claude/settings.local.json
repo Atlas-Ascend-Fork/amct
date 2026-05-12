@@ -58,7 +58,8 @@
       "Bash(ASCEND_RT_VISIBLE_DEVICES=0 timeout 120 python -c ' *)",
       "Bash(sed -n '161,180p' /data4/l00968832/amct_llm/amct_pytorch/workflows/llm_ptq.py)",
       "Bash(sed -n '210,230p' /data4/l00968832/amct_llm/amct_pytorch/workflows/llm_ptq.py)",
-      "Bash(python -m compileall -q /data4/l00968832/amct_llm/amct_pytorch/workflows/llm_ptq.py)"
+      "Bash(python -m compileall -q /data4/l00968832/amct_llm/amct_pytorch/workflows/llm_ptq.py)",
+      "Bash(grep -rA5 \"MODEL_REGISTRY.register\" /data4/l00968832/amct_llm/amct_pytorch/common/models/llm)"
     ]
   }
 }
