@@ -95,3 +95,7 @@ help(amct_ops.hifloat8_cast.encode_to_hifloat8)   # 查看单个函数签名和�
 - C++ 侧：`TORCH_LIBRARY_FRAGMENT(amct, m)` + `TORCH_LIBRARY_IMPL(amct, PrivateUse1, m)`
 - Python 侧：`torch.ops.amct.<算子名>` 或模块导入 `from amct_ops.xxx import ...`
 - 算子名在 `amct` 内须唯一，新增前先检索 `torch.ops.amct` 是否已存在同名算子。
+
+
+## 参考
+[cann/ops-nn算子开发指导](https://gitcode.com/cann/ops-nn/blob/master/docs/zh/develop/torch_extension_develop_guide.md)
