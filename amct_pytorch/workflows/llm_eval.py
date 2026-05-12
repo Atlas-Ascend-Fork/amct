@@ -18,6 +18,7 @@ from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
 class LlmEvalWorkflow:
@@ -34,7 +35,7 @@ class LlmEvalWorkflow:
         self.model_name = args.model_name
         self.quant_target = args.quant_target
         self.quant_dtype = args.quant_dtype
-        self.bit_policy = args.bit_policy
+        self.bit_policy = ensure_bit_policy(args)
 
 
     def setup(self):
@@ -77,6 +78,8 @@ class LlmEvalWorkflow:
         return model_cls(self.args)
 
     def _has_relevant_quant(self):
+        if not hasattr(self, "bit_policy"):
+            self.bit_policy = ensure_bit_policy(self.args)
         quant_targets = set(self.args.quant_target)
         if quant_targets.intersection({"mlp", "moe", "attn-linear"}):
             if self.bit_policy.has_quant_linear():
@@ -86,7 +89,20 @@ class LlmEvalWorkflow:
                 return True
         return False
 
+    def _get_relevant_quant_bits(self):
+        if not hasattr(self, "bit_policy"):
+            self.bit_policy = ensure_bit_policy(self.args)
+        quant_targets = set(self.args.quant_target)
+        bits = []
+        if quant_targets.intersection({"mlp", "moe", "attn-linear"}):
+            bits.extend([self.bit_policy.w_bits, self.bit_policy.a_bits])
+        if "attn-cache" in quant_targets:
+            bits.extend(self.bit_policy.cache_bits(key) for key in ("q", "k", "p", "v"))
+        return bits
+
     def _resolve_eval_states(self):
+        if not hasattr(self, "bit_policy"):
+            self.bit_policy = ensure_bit_policy(self.args)
         if self.eval_mode == "bf16":
             return False, False, "Eval mode=bf16: use original BF16 blocks."
 
