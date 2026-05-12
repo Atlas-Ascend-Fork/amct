@@ -46,9 +46,9 @@ class LlmExtractPtqDataWorkflow:
     def _run_blockwise(self):
         tokenizer = self.pipeline.tokenizer
         hook_name = (
-            "input_layernorm"
+            self.pipeline.attn_norm_name
             if self.quant_target in ("attn", "attn-linear", "attn-cache")
-            else "post_attention_layernorm"
+            else self.pipeline.ffn_norm_name
         )
         samples = get_pileval(tokenizer, self.nsamples, seq_len=self.seq_len)
         logger.info(

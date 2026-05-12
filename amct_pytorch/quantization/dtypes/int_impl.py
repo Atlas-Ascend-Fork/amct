@@ -2,6 +2,10 @@ import numpy as np
 import torch
 
 
+def round_ste(x: torch.Tensor) -> torch.Tensor:
+    return (torch.round(x) - x).detach() + x
+
+
 def dynamic_per_token_quant(tensor: torch.Tensor, bits: int) -> torch.Tensor:
     dtype = tensor.dtype
     qmax = 2 ** (bits - 1) - 1
@@ -10,7 +14,8 @@ def dynamic_per_token_quant(tensor: torch.Tensor, bits: int) -> torch.Tensor:
     min_val = tensor.amin(dim=-1, keepdim=True)
     abs_max = torch.max(max_val.abs(), min_val.abs()).clamp(min=1e-5)
     scale = abs_max / qmax
-    tensor = torch.clamp((tensor / scale.clamp_min(1e-9)).round(), qmin, qmax)
+    tensor = round_ste(tensor / scale.clamp_min(1e-9))
+    tensor = torch.clamp(tensor, qmin, qmax)
     tensor = tensor * scale
     return tensor.to(dtype)
 
@@ -49,15 +54,15 @@ def pack_4bit(x: torch.Tensor):
     return y.T.contiguous()
 
 
-def weight_quant(tensor: torch.Tensor, bits=8, weight_clip_factor=None, real_quant=False):
+def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor = 0.0):
     assert tensor.dim() == 2
     qmax = 2 ** (bits - 1) - 1
     abs_max = torch.abs(tensor).max(dim=1, keepdim=True)[0]
-    if weight_clip_factor is not None:
-        abs_max = abs_max * weight_clip_factor
     scale = abs_max / qmax
     assert scale.shape == (tensor.shape[0], 1)
-    quantized = torch.round(tensor / scale)
+    if isinstance(v, torch.Tensor):
+        v = v.to(device=tensor.device, dtype=tensor.dtype)
+    quantized = round_ste(tensor / scale + v)
     quantized = torch.clamp(quantized, -qmax, qmax)
     if real_quant:
         if bits == 4:

@@ -61,8 +61,8 @@ from transformers.utils import (
 )
 
 
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.indexer import Indexer
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.configuration_deepseek import DeepseekV3Config
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.indexer import Indexer
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.configuration_deepseek import DeepseekV3Config
 
 if is_flash_attn_2_available():
     from flash_attn import flash_attn_func, flash_attn_varlen_func

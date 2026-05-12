@@ -39,7 +39,7 @@ class QuantGLM5Indexer(nn.Module):
         self.qk_rope_head_dim = self.config.qk_rope_head_dim
         self.index_topk = self.config.index_topk
         self.q_lora_rank = self.config.q_lora_rank
-        self.wq_b = QuantLinear(args, module.wq_b, name="wq_b")
+        self.wq_b = QuantLinear(args, module.wq_b, w_bits=args.bit_policy["attn-linear"]["wq_b"].w, name="wq_b")
         self.wk = module.wk
         self.k_norm = module.k_norm
         self.weights_proj = module.weights_proj
@@ -97,25 +97,29 @@ class QuantGLM5Attn(GlmMoeDsaAttention):
         self.quant_args = args
         self.enable_attn_linear = "attn-linear" in args.quant_target
         self.hidden_size = getattr(module, "hidden_size", module.config.hidden_size)
+        bits = args.bit_policy["attn-linear"]
+        kv_a, kv_b, o = bits["kv_a_proj_with_mqa"], bits["kv_b_proj"], bits["o_proj"]
         if self.q_lora_rank is None:
-            self.q_proj = QuantLinear(args, module.q_proj, name="q_proj")
+            q = bits["q_proj"]
+            self.q_proj = QuantLinear(args, module.q_proj, w_bits=q.w, name="q_proj")
         else:
-            self.q_a_proj = QuantLinear(args, module.q_a_proj, name="q_a_proj")
+            q_a, q_b = bits["q_a_proj"], bits["q_b_proj"]
+            self.q_a_proj = QuantLinear(args, module.q_a_proj, w_bits=q_a.w, name="q_a_proj")
             self.q_a_layernorm = module.q_a_layernorm
-            self.q_b_proj = QuantLinear(args, module.q_b_proj, name="q_b_proj")
+            self.q_b_proj = QuantLinear(args, module.q_b_proj, w_bits=q_b.w, name="q_b_proj")
 
-        self.kv_a_proj_with_mqa = QuantLinear(args, module.kv_a_proj_with_mqa, name="kv_a_proj_with_mqa")
+        self.kv_a_proj_with_mqa = QuantLinear(args, module.kv_a_proj_with_mqa, w_bits=kv_a.w, name="kv_a_proj_with_mqa")
         self.kv_a_layernorm = module.kv_a_layernorm
-        self.kv_b_proj = QuantLinear(args, module.kv_b_proj, name="kv_b_proj")
-        self.o_proj = QuantLinear(args, module.o_proj, name="o_proj")
+        self.kv_b_proj = QuantLinear(args, module.kv_b_proj, w_bits=kv_b.w, name="kv_b_proj")
+        self.o_proj = QuantLinear(args, module.o_proj, w_bits=o.w, name="o_proj")
         self.scaling = module.scaling
         self.indexer = QuantGLM5Indexer(args, module.indexer)
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.inp_afq = ActivationQuantizer(args, bits=args.a_bits)
-            self.o_proj_afq = ActivationQuantizer(args, bits=args.a_bits)
+            self.inp_afq = ActivationQuantizer(args, bits=kv_a.a)
+            self.o_proj_afq = ActivationQuantizer(args, bits=o.a)
         else:
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
@@ -123,7 +127,10 @@ class QuantGLM5Attn(GlmMoeDsaAttention):
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        # out_transform sits between attn_output ([B, S, num_heads * v_head_dim])
+        # and o_proj's input dim, which is num_heads * v_head_dim — not hidden_size
+        # (default GLM-MoE-DSA: 64*256=16384 vs hidden 6144).
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.num_heads * self.v_head_dim)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
     def forward(
@@ -256,7 +263,15 @@ class GLM5(BaseModel):
         self.num_layers = self.config.num_hidden_layers
 
     def float_model(self):
-        return super().float_model()
+        # Same reason as `_ensure_glm5_config`: DSA indexer breaks under SDPA's
+        # None causal-mask short-circuit, so force eager.
+        from transformers import AutoModelForCausalLM
+        return AutoModelForCausalLM.from_pretrained(
+            self.model_path,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+            attn_implementation="eager",
+        )
 
     def empty_weights_model(self):
         return super().empty_weights_model()
@@ -270,6 +285,13 @@ class GLM5(BaseModel):
         return layer_idx >= first_dense and ((layer_idx - first_dense) % moe_freq == 0)
 
     def _ensure_glm5_config(self):
+        # Force eager attention so create_causal_mask always materialises a 4D
+        # mask. The DSA indexer needs a non-None additive causal mask to keep
+        # topk causal; SDPA's `_ignore_causal_mask_sdpa` short-circuit returns
+        # None for unpadded prefill, which makes the indexer pick future tokens
+        # and the merged mask drops causality entirely.
+        self.config._attn_implementation = "eager"
+
         if getattr(self.config, "mlp_layer_types", None):
             return
 
@@ -364,6 +386,10 @@ class GLM5(BaseModel):
                 items=experts.expert_modules,
                 metadata_fn=lambda expert_idx, _: {"expert_idx": expert_idx},
             )
+            if "mlp" in self.quant_target:
+                shared_experts = getattr(mlp, "shared_experts", None)
+                if shared_experts is not None:
+                    yield make_ptq_unit("mlp", "shared_experts", layer_idx, shared_experts)
             return
 
         if "mlp" in self.quant_target:
