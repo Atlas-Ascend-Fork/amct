@@ -178,14 +178,14 @@ def _make_block_with_quant_linears_for_glm5():
     args = SimpleNamespace(algos=[], quant_dtype="int", w_bits=8)
     block = nn.Module()
     block.self_attn = nn.Module()
-    block.self_attn.q_proj = QuantLinear(args, nn.Linear(4, 4), name="q_proj")
+    block.self_attn.q_proj = QuantLinear(args, nn.Linear(4, 4), w_bits=args.w_bits, name="q_proj")
 
     block.mlp = nn.Module()
     block.mlp.experts = nn.Module()
     block.mlp.experts.expert_modules = nn.ModuleList()
     for _ in range(2):
         e = nn.Module()
-        e.up_proj = QuantLinear(args, nn.Linear(4, 4), name="up_proj")
+        e.up_proj = QuantLinear(args, nn.Linear(4, 4), w_bits=args.w_bits, name="up_proj")
         block.mlp.experts.expert_modules.append(e)
     return block
 
