@@ -198,6 +198,11 @@ uint8_t FpNToHiF8(T inData, uint32_t expBits, uint32_t fracBits)
     uint32_t fracFpN = inData & ((1 << fracBits) - 1);
     uint32_t fracHiF8 = 0;
     int32_t expNoBias = 0;
+
+    // ±0 → 0x00：HiFloat8 retains no the sign bit of zero
+    if (expFpN == 0 && fracFpN == 0) {
+        return 0x00;
+    }
     if (expFpN == ((1U << expBits) - 1) && fracFpN > 0) {
         outData = 0x80; //nan 0b10000000
     } else if (expFpN == ((1U << expBits) - 1) && fracFpN == 0) {
