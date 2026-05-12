@@ -10,6 +10,7 @@ from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts, is
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.common.models import MODEL_REGISTRY
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     ALL_ATTENTION_FUNCTIONS,
@@ -31,6 +32,7 @@ def _linear_with_structure(hidden_states, linear, structure_transform=None, name
 class QuantGLM5Indexer(nn.Module):
     def __init__(self, args, module):
         super().__init__()
+        ensure_bit_policy(args)
         self.config = module.config
         self.layer_idx = module.layer_idx
         self.hidden_size = self.config.hidden_size
@@ -95,6 +97,7 @@ class QuantGLM5Attn(GlmMoeDsaAttention):
     def __init__(self, args, module: GlmMoeDsaAttention):
         super().__init__(module.config, module.layer_idx)
         self.quant_args = args
+        ensure_bit_policy(args)
         self.enable_attn_linear = "attn-linear" in args.quant_target
         self.hidden_size = getattr(module, "hidden_size", module.config.hidden_size)
         bits = args.bit_policy["attn-linear"]
