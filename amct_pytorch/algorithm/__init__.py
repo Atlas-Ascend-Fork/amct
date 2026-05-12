@@ -36,6 +36,7 @@ from amct_pytorch.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
 from amct_pytorch.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
 from amct_pytorch.deploy_op.npu_quantization_deepseekv3_attention import NpuDeepseekV3AttentionQuant
 from amct_pytorch.deploy_op.npu_quantization_longcat_flashmla import NpuLongcatFlashMLA
+from amct_pytorch.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
 
 AlgorithmRegistry = Algorithm()
 AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
@@ -49,5 +50,6 @@ AlgorithmRegistry.register('cast', 'Linear', NpuHIF8CastLinear, NpuHIF8CastLinea
 AlgorithmRegistry.register('quantile', 'Linear', QuantileQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
 AlgorithmRegistry.register('quantile', 'DeepseekV3Attention', DeepseekV3AttentionQuant, NpuDeepseekV3AttentionQuant)
 AlgorithmRegistry.register('quantile', 'LongcatFlashMLA', LongcatFlashMLAQuant, NpuLongcatFlashMLA)
+AlgorithmRegistry.register('cast', None, 'FP8Linear', NpuHIF8Linear)
 
 BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast', 'quantile']

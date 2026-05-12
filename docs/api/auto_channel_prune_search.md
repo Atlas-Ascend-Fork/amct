@@ -48,7 +48,7 @@ auto_channel_prune_search(model, config, input_data, output_cfg, sensitivity, se
 </td>
 <td class="cellrowborder" valign="top" width="79.03999999999999%" headers="mcps1.1.4.1.3 "><p id="p7677132119613"><a name="p7677132119613"></a><a name="p7677132119613"></a>含义：自动通道稀疏配置文件路径。</p>
 <p id="p4435183911710"><a name="p4435183911710"></a><a name="p4435183911710"></a>基于basic_info.proto文件中的AutoChannelPruneConfig生成的简易配置文件，*.proto文件所在路径为：<em id="i54361539151713"><a name="i54361539151713"></a><a name="i54361539151713"></a><span id="ph2538725141110"><a name="ph2538725141110"></a><a name="ph2538725141110"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。</p>
-<p id="p4232851666"><a name="p4232851666"></a><a name="p4232851666"></a>*.proto文件参数解释以及生成的自动通道稀疏搜索配置文件样例请参见<a href="../context/自动通道稀疏搜索简易配置文件.md">自动通道稀疏搜索简易配置文件</a>。</p>
+<p id="p4232851666"><a name="p4232851666"></a><a name="p4232851666"></a>*.proto文件参数解释以及生成的自动通道稀疏搜索配置文件样例请参见<a href="../context/auto_channel_prune_search_config.md">自动通道稀疏搜索简易配置文件</a>。</p>
 <p id="p1543455424113"><a name="p1543455424113"></a><a name="p1543455424113"></a>数据类型：string</p>
 </td>
 </tr>

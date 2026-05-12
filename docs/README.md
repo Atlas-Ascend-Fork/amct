@@ -4,7 +4,7 @@
 模型压缩的核心的方法包括量化、剪枝、知识蒸馏和低秩分解等。
 
 量化，是将FP32/FP16/BF16等高精度数据转为INT8/FP8/INT4/FP4等低精度数据，通过减少每个参数的比特数，降低存储占用与内存带宽，同时利用硬件低精度计算单元实现推理加速。
-根据优化对象的不同，可以将量化分为权重量化、激活量化和KV-cache量化。上述关于压缩特性的概念解释请参见[压缩概念](./压缩概念.md)。
+根据优化对象的不同，可以将量化分为权重量化、激活量化和KV-cache量化。上述关于压缩特性的概念解释请参见[压缩概念](./compression_concepts.md)。
 
 ## AMCT量化流程
 
@@ -54,11 +54,12 @@ amct.convert(model)
 <summary><strong>更多方式</strong></summary>
 
 ## 基于图的量化方式
+
 AMCT提供了基于图的torch模型量化方式，这种量化方式通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行量化优化，最后生成onnx量化模型。
 
 ### 训练后量化
 
-训练后量化根据量化后是否手动调优量化配置文件，分为[基于精度的自动量化](#基于精度的自动量化)和[手工量化](#手工量化)。训练后量化使用的量化算法请参见[算法介绍](算法介绍.md)。
+训练后量化根据量化后是否手动调优量化配置文件，分为[基于精度的自动量化](#基于精度的自动量化)和[手工量化](#手工量化)。训练后量化使用的量化算法请参见[算法介绍](algorithm_brief.md)。
 
 #### 基于精度的自动量化
 
@@ -80,29 +81,28 @@ AMCT提供了基于图的torch模型量化方式，这种量化方式通过将to
 
 3. 使用用户传入的初始量化配置文件（[1](#li1620271314520)中调用[create\_quant\_config](./api/create_quant_config.md)生成的）对模型进行训练后量化，得到量化后fake quant模型的精度。
 4. 原始模型精度与量化后fake quant模型精度进行比较，如果精度达标，则输出量化后的部署模型和fake quant模型，如果不达标，则进行基于精度的自动量化流程：
-   1.  进行原始PyTorch网络的推理， dump出每一层的输入activation数据，缓存起来；
-   2.  利用训练后量化的量化因子构造量化层的单算子网络，利用缓存的activation数据计算量化后fake quant单算子网络的输出数据和原始PyTorch单算子网络输出的余弦相似度。
-   3.  <a name="li411322192712"></a>将余弦相似度的列表传给[accuracy\_based\_auto\_calibration](./api/accuracy_based_auto_calibration.md)中的量化策略strategy模块，strategy模块基于[2](#li23141824486)中生成的初始化的量化配置文件，输出回退某些层后的新的quant config量化配置文件。
-   4.  根据quant config量化配置文件重新进行训练后量化，得到回退后的fake quant模型。
-   5.  调用[accuracy\_based\_auto\_calibration](./api/accuracy_based_auto_calibration.md)中的evaluator模块进行回退后的fake quant模型精度测试，查看精度是否达标：
-       -   如果达标，则输出回退后的fake quant模型以及部署模型。
-       -   如果不达标，则将余弦相似度排序最差的层回退，再次进行[4.c](#li411322192712)，输出新的量化配置。
-       -   如果回退所有层后精度仍不达标，则不生成量化模型。
+   1. 进行原始PyTorch网络的推理， dump出每一层的输入activation数据，缓存起来；
+   2. 利用训练后量化的量化因子构造量化层的单算子网络，利用缓存的activation数据计算量化后fake quant单算子网络的输出数据和原始PyTorch单算子网络输出的余弦相似度。
+   3. <a name="li411322192712"></a>将余弦相似度的列表传给[accuracy\_based\_auto\_calibration](./api/accuracy_based_auto_calibration.md)中的量化策略strategy模块，strategy模块基于[2](#li23141824486)中生成的初始化的量化配置文件，输出回退某些层后的新的quant config量化配置文件。
+   4. 根据quant config量化配置文件重新进行训练后量化，得到回退后的fake quant模型。
+   5. 调用[accuracy\_based\_auto\_calibration](./api/accuracy_based_auto_calibration.md)中的evaluator模块进行回退后的fake quant模型精度测试，查看精度是否达标：
+       - 如果达标，则输出回退后的fake quant模型以及部署模型。
+       - 如果不达标，则将余弦相似度排序最差的层回退，再次进行[4.c](#li411322192712)，输出新的量化配置。
+       - 如果回退所有层后精度仍不达标，则不生成量化模型。
 
 [accuracy\_based\_auto\_calibration](./api/accuracy_based_auto_calibration.md)接口内部基于精度的自动量化流程如下图所示。
 
+![](./figures/auto_quant.png "自动量化流程")
 
-![](./figures/自动量化流程.png "自动量化流程")
-
-#####  调用示例
+##### 调用示例
 
 本示例演示使用AMCT进行基于精度的自动量化流程。该过程需要用户实现一个模型推理得到精度的回调函数，由于AMCT需要基于回调函数返回的精度数据进行量化层的筛选，因此回调函数的返回数值应尽可能反映模型的精度。
 
 > [!NOTE]说明
 >
-> -   如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
-> -   如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
-> -   以下是关键步骤的代码示例，不能直接拷贝编译运行，仅供参考。
+> - 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+> - 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+> - 以下是关键步骤的代码示例，不能直接拷贝编译运行，仅供参考。
 
 ```python
 # 1.导入AMCT包
@@ -180,7 +180,7 @@ amct.accuracy_based_auto_calibration(
 
 训练后量化接口调用流程如下图所示：
 
-![](./figures/PTQ接口调用流程.png "训练后量化接口调用流程")
+![](./figures/ptq_interface.png "训练后量化接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，工具使用分为如下场景：
 
@@ -193,20 +193,21 @@ amct.accuracy_based_auto_calibration(
      fake\_quant模型主要用于验证量化后模型的精度，可以在ONNX Runtime环境下运行。进行前向推理的计算过程中，在fake\_quant模型中对卷积层等的输入数据和权重进行了量化反量化的操作，来模拟量化后的计算结果，从而快速验证量化后模型的精度。如下图所示，以INT8量化为例，Quant层、Conv2d卷积层和DeQuant层之间的数据都是float32数据类型的，其中Quant层将数据量化到INT8又反量化为float32，权重也是量化到INT8又反量化为float32，实际卷积层的计算是基于float32数据类型的，该模型用于在ONNX Runtime环境验证量化后模型的精度，不能够用于ATC工具转换成om模型。
 
      **图 2**  fake\_quant模型<a name="fig830317361367"></a>  
-     ![](./figures/fake_quant模型.png "fake_quant模型")
+     ![](./figures/fake_quant_module.png "fake_quant模型")
 
    - 部署模型文件：ONNX格式的模型文件，模型名中包含deploy，经过ATC转换工具转换后可部署到AI处理器。
 
      以INT8量化为例，deploy模型由于已经将权重等转换为INT8，INT32类型，因此不能在ONNX Runtime环境上执行推理计算。如下图所示，deploy模型的AscendQuant层将float32的输入数据量化为INT8，作为卷积层的输入，权重也是使用INT8数据类型作为计算，在deploy模型中的卷积层的计算是基于INT8，INT32数据类型的，输出为INT32数据类型经过AscendDeQuant层转换成float32数据类型传输给下一个网络层。
 
      **图 3**  deploy模型<a name="fig32095209306"></a>  
-     ![](./figures/deploy模型.png "deploy模型")
+     ![](./figures/deploy_module.png "deploy模型")
 
 ##### 调用示例
 
 > [!NOTE]说明
->-   如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
->-   如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+>
+>- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
 
 1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
@@ -232,10 +233,10 @@ amct.accuracy_based_auto_calibration(
       skip_layers = []
       batch_num = 1
       amct.create_quant_config(config_file=config_file,
-      			 model=ori_model,
+                model=ori_model,
                                input_data=ori_model_input_data,
-      			 skip_layers=skip_layers,
-      			 batch_num=batch_num)
+                skip_layers=skip_layers,
+                batch_num=batch_num)
       ```
 
    2. 修改图，在图中插入数据量化，权重量化等相关的算子，用于计算量化相关参数。
@@ -244,8 +245,8 @@ amct.accuracy_based_auto_calibration(
       record_file = './tmp/record.txt'
       modified_onnx_model = './tmp/modified_model.onnx'
       calibration_model = amct.quantize_model(config_file=config_file,
-      					modified_onnx_model=modified_onnx_model,
-      					record_file=record_file,
+                     modified_onnx_model=modified_onnx_model,
+                     record_file=record_file,
                                               model=ori_model,
                                               input_data=ori_model_input_data)
       ```
@@ -254,8 +255,8 @@ amct.accuracy_based_auto_calibration(
 
       该步骤执行时，需要注意如下两点：
 
-      1.  校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
-      2.  前向推理次数为batch\_num，如果次数不足，由于校准算子没有将量化因子输出到record文件中，会导致后续读取record校验失败。
+      1. 校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
+      2. 前向推理次数为batch\_num，如果次数不足，由于校准算子没有将量化因子输出到record文件中，会导致后续读取record校验失败。
 
       ```python
       user_do_inference_torch(calibration_model, calibration_data, batch_num)
@@ -316,7 +317,7 @@ amct.accuracy_based_auto_calibration(
 
 6. <a name="li6823133201119"></a>手动修改activation\_quant\_params和weight\_quant\_params，调整量化算法及参数：
 
-   算法参数意义请参见[训练后量化配置参数](./context/训练后量化配置参数.md)，算法说明请参见[算法介绍](算法介绍.md)。
+   算法参数意义请参见[训练后量化配置参数](./context/ptq_config_param.md)，算法说明请参见[算法介绍](algorithm_brief.md)。
 
 7. 若按照[6](#li6823133201119)中的量化配置进行量化后，精度满足要求，则调参结束，否则表明量化对精度影响很大，不能进行量化，去除量化配置。
 
@@ -327,10 +328,9 @@ amct.accuracy_based_auto_calibration(
 
 #### 量化流程
 
-量化感知训练接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理。量化感知训练使用的量化算法请参见[算法介绍](算法介绍.md)。
+量化感知训练接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理。量化感知训练使用的量化算法请参见[算法介绍](algorithm_brief.md)。
 
-
-![](./figures/QAT接口调用流程.png "接口调用流程-0")
+![](./figures/qat_interface.png "接口调用流程-0")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -345,11 +345,12 @@ amct.accuracy_based_auto_calibration(
 #### 调用示例
 
 > [!NOTE]说明
->1.  基于PyTorch环境进行训练，当前仅支持distributed模式（即DistributedDataParallel模式）的多卡训练，不支持DataParallel模式的多卡训练，使用DP模式训练会报错。
->2.  调用AMCT的部分，函数入参可以根据实际情况进行调整。量化感知训练基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
->3.  使用AMCT的量化感知训练特性时，如果训练过程卡死，请检查当前服务器是否有其他ONNX Runtime程序在运行（可以用**top**命令查看服务器所有进程），如果有，请先暂停其他ONNX Runtime程序，重新执行量化感知训练。
->4.  参考本章节进行量化，模型中存在PyTorch自定义算子时，可能存在无法导出生成ONNX模型，从而导致量化失败的问题。具体报错信息如下：'Model cannot be quantized for it cannot be export to onnx!' 。此时，您可以参考[单算子模式的量化感知训练](#单算子模式的量化感知训练)章节，进行单算子模式的量化。
->5.  如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>
+>1. 基于PyTorch环境进行训练，当前仅支持distributed模式（即DistributedDataParallel模式）的多卡训练，不支持DataParallel模式的多卡训练，使用DP模式训练会报错。
+>2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。量化感知训练基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
+>3. 使用AMCT的量化感知训练特性时，如果训练过程卡死，请检查当前服务器是否有其他ONNX Runtime程序在运行（可以用**top**命令查看服务器所有进程），如果有，请先暂停其他ONNX Runtime程序，重新执行量化感知训练。
+>4. 参考本章节进行量化，模型中存在PyTorch自定义算子时，可能存在无法导出生成ONNX模型，从而导致量化失败的问题。具体报错信息如下：'Model cannot be quantized for it cannot be export to onnx!' 。此时，您可以参考[单算子模式的量化感知训练](#单算子模式的量化感知训练)章节，进行单算子模式的量化。
+>5. 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
 
 1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
@@ -370,7 +371,7 @@ amct.accuracy_based_auto_calibration(
 3. 调用AMCT，执行量化流程。
    1. 生成量化配置。
 
-      实现该步骤前，应先恢复训练好的参数，如[1](zh-cn_topic_0000001113175684.md#li341817311449)中的ori\_model.load\(\)。
+      实现该步骤前，应先恢复训练好的参数，如上一步骤中的ori\_model.load\(\)。
 
       ```python
       config_file = './tmp/config.json'
@@ -388,9 +389,9 @@ amct.accuracy_based_auto_calibration(
       ```python
       record_file = './tmp/record.txt'
       quant_retrain_model = amct.create_quant_retrain_model(config_file=config_file,
-      						      model=ori_model,
-      						      record_file=record_file,
-      						      input_data=ori_model_input_data)
+                              model=ori_model,
+                              record_file=record_file,
+                              input_data=ori_model_input_data)
       ```
 
    3. （由用户补充处理）使用修改后的图，创建反向梯度，在训练集上做训练，训练量化因子。
@@ -462,10 +463,10 @@ amct.accuracy_based_auto_calibration(
       record_file = './tmp/record.txt'
       quant_pth_file = './ckpt/user_model_newest.ckpt'
       quant_retrain_model = amct.restore_quant_retrain_model(config_file=config_file,
-      						       model=ori_model,
-      						       record_file=record_file,
-      	                                               input_data=ori_model_input_data,
-      	                                               pth_file=quant_pth_file)
+                               model=ori_model,
+                               record_file=record_file,
+                               input_data=ori_model_input_data,
+                               pth_file=quant_pth_file)
       ```
 
    2. （由用户补充处理）使用修改后的图，创建反向梯度，在训练集上做训练，训练量化因子。
@@ -552,7 +553,7 @@ amct.accuracy_based_auto_calibration(
 
 3. 完成配置后，精度满足要求则调参结束；否则表明量化感知训练对精度影响很大，不能进行量化感知训练，去除量化感知训练配置。
 
-配置文件中参数说明请参见[量感知训练配置参数说明](./context/量化感知训练配置参数.md)。
+配置文件中参数说明请参见[量化感知训练配置参数说明](./context/qat_config_param.md)。
 
 ### 单算子模式的量化感知训练
 
@@ -562,7 +563,7 @@ amct.accuracy_based_auto_calibration(
 
 单算子模式的量化感知训练功能，提供由Pytorch原生算子转换生成的自定义QAT算子，基于该算子进行量化因子的重训练，量化因子作为算子参数保存在QAT单算子中，**无需导出ONNX模型**，可以避免上述量化感知训练方案中的算子导出异常问题。训练完成后，通过**torch.onnx.export**机制，建立QAT算子与ONNX原生算子的映射关系，将Pytorch模型中QAT算子计算获得的参数传递给ONNX原生量化算子，完成模型导出。简易示意图如下图所示。
 
-![](./figures/单算子模式量化感知训练.png "单算子模式量化感知训练")
+![](./figures/singleop_qat.png "单算子模式量化感知训练")
 
 实现原理如下图所示（以torch.nn.Conv2d算子为例进行说明）：
 
@@ -737,8 +738,6 @@ convert_qat_model('inter_model.onnx', './outputs/resnet101')
 validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 ```
 
-
-
 ### 量化数据均衡预处理
 
 在一些数据分布不均匀的场景，由于离群值的影响，对数据进行per-tensor量化得到的结果误差较大，而per-channel量化可以获得更低的误差。但由于当前硬件不支持数据per-channel量化，仅支持权重per-channel量化；在该背景下AMCT设计出一套方法，本节将给出详细介绍。
@@ -749,22 +748,23 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 
 均衡预处理接口调用流程如下图所示。
 
-![](figures/均衡预处理接口调用流程.png "均衡预处理接口调用流程")
+![](figures/dmq_balancer.png "均衡预处理接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，工具使用分为如下场景：
 
-1.  用户首先构造PyTorch的原始模型，并在简易配置文件_dmp\_quant.cfg_中设置dmq参数（简易配置文件配置参数请参见[训练后量化简易配置文件](./context/训练后量化简易配置文件.md)中的DMQBalancer），然后将配置文件传入[create\_quant\_config](./api/create_quant_config.md)。
-2.  <a name="li16458161113715"></a>根据PyTorch模型和量化配置文件，即可调用[quantize\_preprocess](./api/quantize_preprocess.md)接口对原始PyTorch模型进行优化，优化后的PyTorch模型中包含了均衡量化算法。
-3.  使用校准集在PyTorch环境下执行**一次**前向推理，产生均衡量化因子，并将均衡量化因子输出到文件中。
-4.  根据PyTorch模型、量化配置文件和record文件，即可调用[quantize\_model](./api/quantize_model.md)接口对原始PyTorch模型再次进行优化，优化后的PyTorch模型中包含了量化算法。
-5.  使用校准集在PyTorch环境下执行前向推理，产生量化因子，并将量化因子输出到文件中。
-6.  最后用户可以调用[save\_model](./api/save_model.md)接口保存量化后的模型，包括可在ONNX执行框架ONNX Runtime环境中进行精度仿真的模型文件和可部署在AI处理器的模型文件。
+1. 用户首先构造PyTorch的原始模型，并在简易配置文件_dmp\_quant.cfg_中设置dmq参数（简易配置文件配置参数请参见[训练后量化简易配置文件](./context/ptq_config.md)中的DMQBalancer），然后将配置文件传入[create\_quant\_config](./api/create_quant_config.md)。
+2. <a name="li16458161113715"></a>根据PyTorch模型和量化配置文件，即可调用[quantize\_preprocess](./api/quantize_preprocess.md)接口对原始PyTorch模型进行优化，优化后的PyTorch模型中包含了均衡量化算法。
+3. 使用校准集在PyTorch环境下执行**一次**前向推理，产生均衡量化因子，并将均衡量化因子输出到文件中。
+4. 根据PyTorch模型、量化配置文件和record文件，即可调用[quantize\_model](./api/quantize_model.md)接口对原始PyTorch模型再次进行优化，优化后的PyTorch模型中包含了量化算法。
+5. 使用校准集在PyTorch环境下执行前向推理，产生量化因子，并将量化因子输出到文件中。
+6. 最后用户可以调用[save\_model](./api/save_model.md)接口保存量化后的模型，包括可在ONNX执行框架ONNX Runtime环境中进行精度仿真的模型文件和可部署在AI处理器的模型文件。
 
 #### 调用示例
 
 > [!NOTE]说明 
->-   如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
->-   如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+>
+>- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
 
 1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
@@ -793,11 +793,11 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
       skip_layers = []
       batch_num = 1
       amct.create_quant_config(config_file=config_file,
-      			        model=ori_model,
-                                      input_data=ori_model_input_data,
-      			        skip_layers=skip_layers,
-      			        batch_num=batch_num,
-                                      config_defination=config_defination)
+                       model=ori_model,
+                       input_data=ori_model_input_data,
+                       skip_layers=skip_layers,
+                       batch_num=batch_num,
+                       config_defination=config_defination)
       ```
 
    2. 修改图，在图中插入均衡量化算子，用于计算均衡量化因子。
@@ -806,17 +806,17 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
       record_file = './tmp/record.txt'
       modified_onnx_model = './tmp/modified_model.onnx'
       calibration_model = amct.quantize_preprocess(config_file=config_file,
-      					            record_file=record_file,
-                                                          model=ori_model,
-                                                          input_data=ori_model_input_data)
+                                record_file=record_file,
+                                model=ori_model,
+                                input_data=ori_model_input_data)
       ```
 
    3. （由用户补充处理）基于PyTorch环境，使用修改后的模型（calibration\_model）在校准集（calibration\_data）上做模型推理，找到均衡量化因子。
 
       该步骤执行时，需要注意如下两点：
 
-      1.  校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
-      2.  前向推理的次数为1，如果次数超过1次，每执行一次推理，record中均衡量化因子会被记录一次，后续过程会失败。
+      1. 校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
+      2. 前向推理的次数为1，如果次数超过1次，每执行一次推理，record中均衡量化因子会被记录一次，后续过程会失败。
 
       ```python
       user_do_inference_torch(calibration_model, calibration_data, test_iterations=1)
@@ -827,18 +827,18 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
       ```python
       modified_onnx_model = './tmp/modified_model.onnx'
       calibration_model = amct.quantize_model(config_file=config_file,
-      					       modified_onnx_model=modified_onnx_model,
-      					       record_file=record_file,
-                                                     model=ori_model,
-                                                     input_data=ori_model_input_data)
+                            modified_onnx_model=modified_onnx_model,
+                            record_file=record_file,
+                            model=ori_model,
+                            input_data=ori_model_input_data)
       ```
 
    5. （由用户补充处理）基于PyTorch环境，使用修改后的模型（calibration\_model）在校准集（calibration\_data）上做模型推理，生成量化因子。
 
       该步骤执行时，需要注意如下两点：
 
-      1.  校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
-      2.  前向推理的次数为batch\_num，如果次数不够，后续过程会失败。
+      1. 校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
+      2. 前向推理的次数为batch\_num，如果次数不够，后续过程会失败。
 
       ```python
       user_do_inference_torch(calibration_model, calibration_data, batch_num)
@@ -864,8 +864,6 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
    user_do_inference_onnx(quant_model, test_data, test_iterations)
    ```
 
-
-
 ### KV Cache量化
 
 KV Cache（Key-Value Cache）是一种缓存技术，通过存储键值对的形式来复用计算结果，以达到提高性能和降低内存消耗的目的。在大规模训练和推理中，随着batch\_size和sequence\_length的不断增长，KV Cache占用的内存开销也快速增大，甚至会超过模型本身；而对KV Cache进行INT8量化可以大幅度减少模型运行中的内存消耗，降低模型部署成本。
@@ -876,21 +874,22 @@ KV Cache（Key-Value Cache）是一种缓存技术，通过存储键值对的形
 
 KV Cache量化接口调用流程如下图所示。
 
-![](figures/KV-Cache量化调用流程.png "KV-Cache量化调用流程")
+![](figures/kv_cache_quant.png "KV-Cache量化调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，简要流程如下：
 
-1.  用户首先构造PyTorch的原始模型，然后使用[create\_quant\_cali\_config](./api/create_quant_cali_config.md)生成量化配置文件。
-2.  根据PyTorch模型和量化配置文件，找到模型对应的待量化Linear算子，即可调用[create\_quant\_cali\_model](./api/create_quant_cali_model.md)接口对原始PyTorch模型进行修改，在Linear输出后添加IFMR/HFMG量化算子。
-3.  使用校准集在PyTorch环境下执行前向推理，根据量化算法配置调用IFMR/HFMG量化算法对输出做校准，并将结果依据对应格式输出到量化因子文件中。
+1. 用户首先构造PyTorch的原始模型，然后使用[create\_quant\_cali\_config](./api/create_quant_cali_config.md)生成量化配置文件。
+2. 根据PyTorch模型和量化配置文件，找到模型对应的待量化Linear算子，即可调用[create\_quant\_cali\_model](./api/create_quant_cali_model.md)接口对原始PyTorch模型进行修改，在Linear输出后添加IFMR/HFMG量化算子。
+3. 使用校准集在PyTorch环境下执行前向推理，根据量化算法配置调用IFMR/HFMG量化算法对输出做校准，并将结果依据对应格式输出到量化因子文件中。
 
 **如果用户需要支持更多算子类型，或者用户自定义了其他操作，则可以使用[QuantCalibrationOp](./api/QuantCalibrationOp.md)接口，进行构图，然后进行量化校准，并输出量化因子文件。**
 
 #### 调用示例
 
 > [!NOTE]说明
->-   如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
->-   如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+>
+>- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
 
 1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
@@ -914,9 +913,9 @@ KV Cache量化接口调用流程如下图所示。
       ```python
       config_file = './tmp/config.json'
       amct.create_quant_cali_config(config_file=config_file,
-      			         model=ori_model,
-      			         quant_layers=None,
-      			         config_defination="./configs/quant.cfg")
+                        model=ori_model,
+                        quant_layers=None,
+                        config_defination="./configs/quant.cfg")
       ```
 
    2. 修改图，在图插入量化相关的算子，用于计算量化相关参数。
@@ -926,16 +925,16 @@ KV Cache量化接口调用流程如下图所示。
       ```python
       record_file = './tmp/record.txt'
       calibration_model = amct.create_quant_cali_model(config_file=config_file,
-      					            record_file=record_file,
-      					            model=ori_model)
+                                 record_file=record_file,
+                                 model=ori_model)
       ```
 
    3. （由用户补充处理）基于PyTorch环境，使用修改后的模型（calibration\_model）在校准集（calibration\_data）上做模型推理，生成量化因子。
 
       该步骤执行时，需要注意如下两点：
 
-      1.  校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
-      2.  前向推理的次数为batch\_num，如果次数不够，后续过程会失败。
+      1. 校准集及其预处理过程数据要与模型匹配，以保证量化的精度。
+      2. 前向推理的次数为batch\_num，如果次数不够，后续过程会失败。
 
       ```python
       user_do_inference_torch(calibration_model, calibration_data, batch_num)
@@ -943,14 +942,14 @@ KV Cache量化接口调用流程如下图所示。
 
    4. 输出量化因子文件。
 
-
-
 ## 稀疏
+
 AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行稀疏优化，最后生成onnx量化模型。
 
 ### 通道稀疏
 
 #### 自动通道稀疏
+
 ##### 功能介绍
 
 当前通道稀疏支持对不同的层做不同稀疏率的稀疏处理，但逐层设置稀疏率对用户的使用门槛较高，对于某一层，如何选择稀疏率（即配置中的prune\_ratio）是比较困难的，手工尝试的配置需要进行重训练，耗费时间多。针对上述问题，引入自动通道稀疏搜索特性，根据用户模型来计算各通道的稀疏敏感度（影响精度）以及稀疏收益（影响性能），然后搜索策略依据稀疏敏感度和稀疏收益来搜索最优的逐层通道稀疏率，以平衡精度和性能。
@@ -969,8 +968,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 自动通道稀疏搜索流程如下图所示，支持稀疏的层以及规格请参见[通道稀疏支持的层以及约束](./api/create_prune_retrain_model.md)。
 
-
-![](./figures/自动通道稀疏搜索流程.png "自动通道稀疏搜索流程")
+![](./figures/autochannelprune.png "自动通道稀疏搜索流程")
 
 各流程简要说明如下：
 
@@ -983,7 +981,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 
 3. 比特复杂度计算：计算每个通道的比特复杂度，视为通道的稀疏收益。
 
-4. 通道稀疏率配置搜索：默认采用[自动通道稀疏搜索算法](算法介绍.md)，搜索满足用户指定压缩率的最优通道稀疏率配置；支持用户自定义求解器。
+4. 通道稀疏率配置搜索：默认采用[自动通道稀疏搜索算法](algorithm_brief.md)，搜索满足用户指定压缩率的最优通道稀疏率配置；支持用户自定义求解器。
 
    > [!NOTE]说明 
    > 自动通道稀疏搜索特性只是生成通道稀疏的简易配置文件，若想得到最终稀疏后模型，还需要进行[手工稀疏](#手工稀疏)，将上述生成的简易配置文件作为入参传入通道稀疏。
@@ -1004,8 +1002,9 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
 本示例演示了使用AMCT进行自动通道稀疏搜索的流程，该过程需要用户传入PyTorch模型与校准数据，用户可选择自定义实现sensitivity模块与search\_alg模块。
 
 > [!NOTE]说明 
->-   如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
->-   如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+>
+>- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
 
 1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
@@ -1083,29 +1082,26 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
        search_alg='GreedySearch')
    ```
 
-
-
 #### 手工稀疏
 
 ##### 稀疏流程
 
 通道稀疏功能接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理：
 
-![](figures/通道稀疏接口调用流程.png "通道稀疏接口调用流程")
+![](figures/channel_sparse_interface.png "通道稀疏接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
-1.  用户首先构造PyTorch的原始模型，调用[create\_prune\_retrain\_model](./api/create_prune_retrain_model.md)接口对原始模型进行修改，在图结构中插入通道稀疏mask算子，修改后的模型参数量被裁剪。
-2.  对修改后的模型进行训练，直至精度满足要求；如果训练过程中断，则可基于原始模型和记录稀疏信息的文件，重新调用[restore\_prune\_retrain\_model](./api/restore_prune_retrain_model.md)接口稀疏模型，继续进行量化感知的训练，直至精度满足要求。
-3.  根据最终的重训练好的通道稀疏模型，生成满足精度要求的pth文件；或者调用[save\_prune\_retrain\_model](./api/save_prune_retrain_model.md)接口，生成最终ONNX仿真模型以及部署模型。
-
-
+1. 用户首先构造PyTorch的原始模型，调用[create\_prune\_retrain\_model](./api/create_prune_retrain_model.md)接口对原始模型进行修改，在图结构中插入通道稀疏mask算子，修改后的模型参数量被裁剪。
+2. 对修改后的模型进行训练，直至精度满足要求；如果训练过程中断，则可基于原始模型和记录稀疏信息的文件，重新调用[restore\_prune\_retrain\_model](./api/restore_prune_retrain_model.md)接口稀疏模型，继续进行量化感知的训练，直至精度满足要求。
+3. 根据最终的重训练好的通道稀疏模型，生成满足精度要求的pth文件；或者调用[save\_prune\_retrain\_model](./api/save_prune_retrain_model.md)接口，生成最终ONNX仿真模型以及部署模型。
 
 ##### 调用示例
 
 > [!NOTE]说明 
->1.  如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
->2.  调用AMCT的部分，函数入参可以根据实际情况进行调整。稀疏基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
+>
+>1. 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。稀疏基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
 
 1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
@@ -1245,8 +1241,6 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
    user_do_inference_onnx(prune_retrain_model, test_data, test_iterations)
    ```
 
-
-
 ##### 后续处理
 
 如果稀疏后输出的模型为pth格式，则需要参考该章节，如果调用[save\_prune\_retrain\_model](./api/save_prune_retrain_model.md)接口，则不需要。
@@ -1264,12 +1258,10 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 稀疏后，如果精度不满足要求，可以参见本节提供的方法进行调优。
 
-如果按照某组配置稀疏模型后，经过重训练精度未满足要求，则可以修改简易配置文件（文件配置请参见[量化感知训练简易配置文件](./context/量化感知训练简易配置文件.md)）重新稀疏模型并重训练。常用的方法包括：
+如果按照某组配置稀疏模型后，经过重训练精度未满足要求，则可以修改简易配置文件（文件配置请参见[量化感知训练简易配置文件](./context/qat_config.md)）重新稀疏模型并重训练。常用的方法包括：
 
--   调整稀疏率，由简易配置文件中的**prune\_ratio**参数控制，用户可尝试减小稀疏率并重新进行稀疏来进行调试。
--   某些层不做稀疏，由简易配置文件中的**regular\_prune\_skip\_layers**参数控制，通过该参数配置不需要稀疏的层。
-
-
+- 调整稀疏率，由简易配置文件中的**prune\_ratio**参数控制，用户可尝试减小稀疏率并重新进行稀疏来进行调试。
+- 某些层不做稀疏，由简易配置文件中的**regular\_prune\_skip\_layers**参数控制，通过该参数配置不需要稀疏的层。
 
 ### 4选2结构化稀疏
 
@@ -1277,19 +1269,20 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 4选2结构化稀疏功能接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理：
 
-![](figures/4选2结构化稀疏接口调用流程.png "4选2结构化稀疏接口调用流程")
+![](figures/m4n2_interface.png "4选2结构化稀疏接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
-1.  用户首先构造PyTorch的原始模型，调用[create\_prune\_retrain\_model](./api/create_prune_retrain_model.md)接口对原始模型进行修改，把待稀疏的算子替换成插入了4选2结构化稀疏的算子。
-2.  对修改后的模型进行训练，直至精度满足要求；如果训练过程中断，则可基于原始模型和记录稀疏信息的文件，重新调用[restore\_prune\_retrain\_model](./api/restore_prune_retrain_model.md)接口稀疏模型，继续进行量化感知的训练，直至精度满足要求。
-3.  根据用户最终的重训练好的4选2结构化稀疏模型，调用[save\_prune\_retrain\_model](./api/save_prune_retrain_model.md)接口，还原替换的算子并对weight进行稀疏，生成最终ONNX仿真模型以及部署模型。
+1. 用户首先构造PyTorch的原始模型，调用[create\_prune\_retrain\_model](./api/create_prune_retrain_model.md)接口对原始模型进行修改，把待稀疏的算子替换成插入了4选2结构化稀疏的算子。
+2. 对修改后的模型进行训练，直至精度满足要求；如果训练过程中断，则可基于原始模型和记录稀疏信息的文件，重新调用[restore\_prune\_retrain\_model](./api/restore_prune_retrain_model.md)接口稀疏模型，继续进行量化感知的训练，直至精度满足要求。
+3. 根据用户最终的重训练好的4选2结构化稀疏模型，调用[save\_prune\_retrain\_model](./api/save_prune_retrain_model.md)接口，还原替换的算子并对weight进行稀疏，生成最终ONNX仿真模型以及部署模型。
 
 #### 调用示例
 
 > [!NOTE]说明 
->1.  如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
->2.  调用AMCT的部分，函数入参可以根据实际情况进行调整。稀疏基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
+>
+>1. 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。稀疏基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
 
 1. <a name="li341817311449"></a>（可选，由用户补充处理）建议使用原始待量化的模型和测试集，在PyTorch环境下推理，验证环境、推理脚本是否正常。
 
@@ -1304,7 +1297,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 2. 调用AMCT，执行4选2结构化稀疏流程。
    1. 对原始模型进行修改，把待稀疏的算子替换成插入了4选2结构化稀疏的算子。
 
-      实现该步骤前，应先恢复训练好的参数，如[1](zh-cn_topic_0000001314585948.md#li341817311449)中的ori\_model.load\(\)。
+      实现该步骤前，应先恢复训练好的参数，如上一步骤中的ori\_model.load\(\)。
 
       ```python
       simple_cfg = './retrain.cfg'
@@ -1419,18 +1412,14 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
    user_do_inference_onnx(prune_retrain_model, test_data, test_iterations)
    ```
 
-
-
 #### 手工调优
 
 稀疏后，如果精度不满足要求，可以参见本节提供的方法进行调优。
 
-如果按照某组配置稀疏模型后，经过重训练精度未满足要求，则可以修改简易配置文件（文件配置请参见[量化感知训练简易配置文件](./context/量化感知训练简易配置文件.md)）重新稀疏模型并重训练。常用的方法包括：
+如果按照某组配置稀疏模型后，经过重训练精度未满足要求，则可以修改简易配置文件（文件配置请参见[量化感知训练简易配置文件](./context/qat_config.md)）重新稀疏模型并重训练。常用的方法包括：
 
--   调整更新间隔（计算哪些元素被保留的间隔），由简易配置文件中的**update\_freq**参数控制，用户可尝试将更新间隔改为正整数并重新进行稀疏来进行调试，一般来说更新间隔越小精度收益越大。
--   某些层不做稀疏，由简易配置文件中的**regular\_prune\_skip\_layers**参数控制，通过该参数配置不需要稀疏的层。
-
-
+- 调整更新间隔（计算哪些元素被保留的间隔），由简易配置文件中的**update\_freq**参数控制，用户可尝试将更新间隔改为正整数并重新进行稀疏来进行调试，一般来说更新间隔越小精度收益越大。
+- 某些层不做稀疏，由简易配置文件中的**regular\_prune\_skip\_layers**参数控制，通过该参数配置不需要稀疏的层。
 
 ### 组合压缩
 
@@ -1440,33 +1429,34 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 目前组合压缩支持如下组合方式，使用AMCT进行压缩时，每层可压缩算子每次只能选择其中一种组合压缩方式，简要流程如下图所示。
 
--   [手工稀疏](#手工稀疏)+[量化感知训练](#量化感知训练)  INT8量化
--   [4选2结构化稀疏](#4选2结构化稀疏)+[量化感知训练](#量化感知训练)  INT8量化
+- [手工稀疏](#手工稀疏)+[量化感知训练](#量化感知训练)  INT8量化
+- [4选2结构化稀疏](#4选2结构化稀疏)+[量化感知训练](#量化感知训练)  INT8量化
 
-当前组合压缩特性的压缩配置由用户手动处理（故又称之为静态组合压缩，压缩配置文件配置方法请参见[量化感知训练简易配置文件](./context/量化感知训练简易配置文件.md)），通过手动设置全局量化位宽和稀疏率（通道稀疏比例）或更新4选2稀疏的间隔，实现模型自动压缩.
+当前组合压缩特性的压缩配置由用户手动处理（故又称之为静态组合压缩，压缩配置文件配置方法请参见[量化感知训练简易配置文件](./context/qat_config.md)），通过手动设置全局量化位宽和稀疏率（通道稀疏比例）或更新4选2稀疏的间隔，实现模型自动压缩.
 
 支持组合压缩的层以及约束请分别参见[手工稀疏](#手工稀疏)、[4选2结构化稀疏](#4选2结构化稀疏)和[量化感知训练](#量化感知训练)。
 
-![](figures/组合压缩简要流程.png "组合压缩简要流程")
+![](figures/combined_compress.png "组合压缩简要流程")
 
 #### 组合压缩场景介绍
+
 当前组合压缩支持如下几种场景，实际使用时，可以通过简易配置文件中的参数进行控制。如下场景中的整网量化指[量化感知训练](#量化感知训练)，其中：
 
--   整网量化：量化方式二选一。
+- 整网量化：量化方式二选一。
 
-    -   整网（全局）量化配置参数：retrain\_data\_quant\_config/retrain\_weight\_quant\_config
-    -   部分层差异化配置参数：override\_layer\_configs或override\_layer\_types
-
-    参数优先级：override\_layer\_configs\>override\_layer\_types\>retrain\_data\_quant\_config/retrain\_weight\_quant\_config
-
--   整网稀疏：包括通道稀疏和4选2结构化稀疏，使用时二选一。
-
-    -   整网（全局）稀疏配置参数：prune\_config
-    -   部分层差异化稀疏参数：override\_layer\_configs或override\_layer\_types
+    - 整网（全局）量化配置参数：retrain\_data\_quant\_config/retrain\_weight\_quant\_config
+    - 部分层差异化配置参数：override\_layer\_configs或override\_layer\_types
 
     参数优先级：override\_layer\_configs\>override\_layer\_types\>retrain\_data\_quant\_config/retrain\_weight\_quant\_config
 
-关于上述参数的详细解释请参见[量化感知训练简易配置文件](./context/量化感知训练简易配置文件.md)。
+- 整网稀疏：包括通道稀疏和4选2结构化稀疏，使用时二选一。
+
+    - 整网（全局）稀疏配置参数：prune\_config
+    - 部分层差异化稀疏参数：override\_layer\_configs或override\_layer\_types
+
+    参数优先级：override\_layer\_configs\>override\_layer\_types\>retrain\_data\_quant\_config/retrain\_weight\_quant\_config
+
+关于上述参数的详细解释请参见[量化感知训练简易配置文件](./context/qat_config.md)。
 
 **表 1**  组合压缩场景介绍
 
@@ -1545,28 +1535,29 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 组合压缩接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理：
 
-![](figures/组合压缩接口调用流程.png "组合压缩接口调用流程")
+![](figures/combined_compress_interface.png "组合压缩接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
-1.  用户构造Pytorch的原始模型，调用[create\_compressed\_retrain\_model](./api/create_compressed_retrain_model.md)接口对原始模型进行修改，修改后的模型包含了稀疏和量化相关的算子。
-2.  对修改后的模型进行训练，如果训练未中断，将训练后的模型进行推理，在推理的过程中，会将量化因子写出到record文件中，然后调用[save\_compressed\_retrain\_model](./api/save_compressed_retrain_model.md)接口保存精度仿真模型以及部署模型；如果训练过程中断，则可基于保存的pth模型参数，重新调用[restore\_compressed\_retrain\_model](./api/restore_compressed_retrain_model.md)接口，输出根据稀疏关系稀疏好并插入了量化算子的模型，并且重新加载中断前保存模型的权重，继续进行训练，然后进行推理，最后调用[save\_compressed\_retrain\_model](./api/save_compressed_retrain_model.md)接口保存量化后的模型。
+1. 用户构造Pytorch的原始模型，调用[create\_compressed\_retrain\_model](./api/create_compressed_retrain_model.md)接口对原始模型进行修改，修改后的模型包含了稀疏和量化相关的算子。
+2. 对修改后的模型进行训练，如果训练未中断，将训练后的模型进行推理，在推理的过程中，会将量化因子写出到record文件中，然后调用[save\_compressed\_retrain\_model](./api/save_compressed_retrain_model.md)接口保存精度仿真模型以及部署模型；如果训练过程中断，则可基于保存的pth模型参数，重新调用[restore\_compressed\_retrain\_model](./api/restore_compressed_retrain_model.md)接口，输出根据稀疏关系稀疏好并插入了量化算子的模型，并且重新加载中断前保存模型的权重，继续进行训练，然后进行推理，最后调用[save\_compressed\_retrain\_model](./api/save_compressed_retrain_model.md)接口保存量化后的模型。
 
 #### 调用示例
 
 > [!NOTE]说明 
->1.  基于PyTorch环境进行训练，当前仅支持distributed模式（即DistributedDataParallel模式）的多卡训练，不支持DataParallel模式的多卡训练，使用DP模式训练会报错。
->2.  调用AMCT的部分，函数入参可以根据实际情况进行调整。组合压缩基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
->3.  使用AMCT的量化感知训练特性时，如果训练过程卡死，请检查当前服务器是否有其他ONNX Runtime程序在运行（可以用**top**命令查看服务器所有进程），如果有，请先暂停其他ONNX Runtime程序，重新执行量化感知训练。
->4.  如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>
+>1. 基于PyTorch环境进行训练，当前仅支持distributed模式（即DistributedDataParallel模式）的多卡训练，不支持DataParallel模式的多卡训练，使用DP模式训练会报错。
+>2. 调用AMCT的部分，函数入参可以根据实际情况进行调整。组合压缩基于用户的训练过程，请确保已经有基于PyTorch环境进行训练的脚本，并且训练后的精度正常。
+>3. 使用AMCT的量化感知训练特性时，如果训练过程卡死，请检查当前服务器是否有其他ONNX Runtime程序在运行（可以用**top**命令查看服务器所有进程），如果有，请先暂停其他ONNX Runtime程序，重新执行量化感知训练。
+>4. 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
 
-1.  导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
+1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
     ```python
     import amct_pytorch as amct
     ```
 
-2.  <a name="li2796152115712"></a>（可选，由用户补充处理）建议使用原始待量化的模型和测试集，在PyTorch环境下推理，验证环境、推理脚本是否正常。
+2. <a name="li2796152115712"></a>（可选，由用户补充处理）建议使用原始待量化的模型和测试集，在PyTorch环境下推理，验证环境、推理脚本是否正常。
 
     推荐执行该步骤，请确保原始模型可以完成推理且精度正常；执行该步骤时，可以使用部分测试集，减少运行时间。
 
@@ -1576,8 +1567,8 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
     user_test_model(ori_model, test_data, test_iterations)
     ```
 
-3.  调用AMCT，执行组合压缩流程。
-    1.  <a name="li7715155181310"></a>修改模型，对模型ori\_model进行稀疏并插入量化相关的算子，保存成新的训练模型retrain\_model。
+3. 调用AMCT，执行组合压缩流程。
+    1. <a name="li7715155181310"></a>修改模型，对模型ori\_model进行稀疏并插入量化相关的算子，保存成新的训练模型retrain\_model。
 
         实现该步骤前，应先恢复训练好的参数，如[2](#li2796152115712)中的ori\_model.load\(\)。
 
@@ -1591,8 +1582,8 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
                                         record_file=record_file)
         ```
 
-    2.  （由用户补充处理）使用修改后的图，创建反向梯度，在训练集上做训练，训练量化因子。
-        1.  使用修改后的图，创建反向梯度。
+    2. （由用户补充处理）使用修改后的图，创建反向梯度，在训练集上做训练，训练量化因子。
+        1. 使用修改后的图，创建反向梯度。
 
             该步骤需要在[3.a](#li7715155181310)后执行。
 
@@ -1600,7 +1591,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
             optimizer = user_create_optimizer(compressed_retrain_model)
             ```
 
-        2.  从训练好的checkpoint恢复模型，并训练模型。
+        2. 从训练好的checkpoint恢复模型，并训练模型。
 
             注意：从训练好的checkpoint恢复模型参数后再训练；训练中保存的参数应该包括量化因子：前batch\_num次训练后会生成量化因子，如果训练次数少于batch\_num会导致失败。
 
@@ -1609,13 +1600,13 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
             user_train_model(optimizer, compressed_retrain_model, train_data)
             ```
 
-        3.  训练完成后，执行推理，计算量化因子并保存。
+        3. 训练完成后，执行推理，计算量化因子并保存。
 
             ```python
             user_infer_graph(compressed_retrain_model)
             ```
 
-    3.  保存模型。
+    3. 保存模型。
 
         ```python
         save_path = '/.result/user_model'
@@ -1626,7 +1617,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
              input_data=ori_model_input_data)
         ```
 
-4.  （可选，由用户补充处理）基于ONNX Runtime的环境，使用组合压缩后模型（compressed\_model）在测试集（test\_data）上做推理，测试组合压缩后仿真模型的精度。使用组合压缩后仿真模型精度与[1](zh-cn_topic_0000001217658691.md#li2796152115712)中的原始精度做对比，可以观察组合压缩对精度的影响。
+4. （可选，由用户补充处理）基于ONNX Runtime的环境，使用组合压缩后模型（compressed\_model）在测试集（test\_data）上做推理，测试组合压缩后仿真模型的精度。使用组合压缩后仿真模型精度与[1](#li2796152115712)中的原始精度做对比，可以观察组合压缩对精度的影响。
 
     ```python
     compressed_model = './results/user_model_fake_quant_model.onnx' 
@@ -1635,20 +1626,20 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 **如果训练过程中断，需要从ckpt中恢复数据，继续训练，则调用流程为：**
 
-1.  导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
+1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
     ```python
     import amct_pytorch as amct
     ```
 
-2.  准备原始模型。
+2. 准备原始模型。
 
     ```python
     ori_model = user_create_model()
     ```
 
-3.  调用AMCT，执行组合压缩流程。
-    1.  修改模型，对模型ori\_model进行稀疏并插入量化相关的算子，加载权重参数，保存成新的训练模型retrain\_model。
+3. 调用AMCT，执行组合压缩流程。
+    1. 修改模型，对模型ori\_model进行稀疏并插入量化相关的算子，加载权重参数，保存成新的训练模型retrain\_model。
 
         ```python
         simple_cfg = './compressed.cfg'
@@ -1662,8 +1653,8 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
                                         pth_file=compressed_pth_file)
         ```
 
-    2.  （由用户补充处理）使用修改后的图，创建反向梯度，在训练集上做训练，训练量化因子。
-        1.  使用修改后的图，创建反向梯度。
+    2. （由用户补充处理）使用修改后的图，创建反向梯度，在训练集上做训练，训练量化因子。
+        1. 使用修改后的图，创建反向梯度。
 
             该步骤需要在[3.a](#li7715155181310)后执行。
 
@@ -1671,7 +1662,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
             optimizer = user_create_optimizer(compressed_retrain_model)
             ```
 
-        2.  从训练好的checkpoint恢复模型，并训练模型。
+        2. 从训练好的checkpoint恢复模型，并训练模型。
 
             注意：从训练好的checkpoint恢复模型参数后再训练；训练中保存的参数应该包括量化因子：前batch\_num次训练后会生成量化因子，如果训练次数少于batch\_num会导致失败。
 
@@ -1680,13 +1671,13 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
             user_train_model(optimizer, compressed_retrain_model, train_data)
             ```
 
-        3.  训练完成后，执行推理，计算量化因子并保存。
+        3. 训练完成后，执行推理，计算量化因子并保存。
 
             ```python
             user_infer_graph(compressed_retrain_model)
             ```
 
-    3.  保存模型。
+    3. 保存模型。
 
         ```python
         save_path = '/.result/user_model'
@@ -1697,7 +1688,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
              input_data=ori_model_input_data)
         ```
 
-4.  （可选，由用户补充处理）基于ONNX Runtime的环境，使用组合压缩后模型（compressed\_model）在测试集（test\_data）上做推理，测试组合压缩后仿真模型的精度。使用组合压缩后仿真模型精度与[1](zh-cn_topic_0000001217658691.md#li2796152115712)中的原始精度做对比，可以观察组合压缩对精度的影响。
+4. （可选，由用户补充处理）基于ONNX Runtime的环境，使用组合压缩后模型（compressed\_model）在测试集（test\_data）上做推理，测试组合压缩后仿真模型的精度。使用组合压缩后仿真模型精度与[1](#li2796152115712)中的原始精度做对比，可以观察组合压缩对精度的影响。
 
     ```python
     compressed_model = './results/user_model_fake_quant_model.onnx' 
@@ -1705,6 +1696,7 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
     ```
 
 #### 手工调优
+
 组合压缩后，模型精度不满足要求，则需要参见[稀疏](#稀疏)下的手动调优章节和[量化感知训练](#量化感知训练)下的章节分别进行调优。
 
 ## 逐层蒸馏
@@ -1714,15 +1706,15 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 本节详细介绍逐层蒸馏支持的层，接口调用流程和示例。
 
 - 支持做蒸馏和量化的算子：
-  -   torch.nn.Linear：复用层（共用weight和bias参数）不支持量化。
-  -   torch.nn.Conv2d：padding\_mode为zeros才支持量化，复用层（共用weight和bias参数）不支持量化。
+  - torch.nn.Linear：复用层（共用weight和bias参数）不支持量化。
+  - torch.nn.Conv2d：padding\_mode为zeros才支持量化，复用层（共用weight和bias参数）不支持量化。
 
 - 支持做蒸馏的激活算子：
-  -   torch.nn.ReLU
-  -   torch.nn.LeakyReLU
-  -   torch.nn.Sigmoid
-  -   torch.nn.Tanh
-  -   torch.nn.Softmax
+  - torch.nn.ReLU
+  - torch.nn.LeakyReLU
+  - torch.nn.Sigmoid
+  - torch.nn.Tanh
+  - torch.nn.Softmax
 
 - 支持做蒸馏的归一化算子
 
@@ -1732,20 +1724,21 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
 调用流程如下图所示。
 
-![](figures/蒸馏接口调用流程.png "蒸馏接口调用流程")
+![](figures/distill_interface.png "蒸馏接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，逐层蒸馏特性主要分为4个部分，创建蒸馏配置、创建蒸馏模型、蒸馏量化模型和保存量化模型，详情如下：
 
-1.  创建蒸馏配置，用户首先构造PyTorch的原始模型，然后使用[create\_distill\_config](./api/create_distill_config.md)接口，将用户自定义的蒸馏配置与AMCT算法定义的蒸馏配置相结合，输出网络每一层的蒸馏配置信息。
-2.  创建蒸馏模型，调用[create\_distill\_model](./api/create_distill_model.md)接口对原始模型进行修改，根据蒸馏配置信息生成一个待蒸馏的量化模型。
-3.  蒸馏模型，调用[distill](./api/distill.md)接口，根据用户配置的模型推理和优化方法，结合蒸馏配置信息，对网络进行分块蒸馏，得到蒸馏后的性能优化的量化模型。
-4.  保存量化模型，最后调用[save\_distill\_model](./api/save_distill_model.md)接口保存已蒸馏优化的量化模型，包括可在ONNX执行框架ONNX Runtime环境中进行精度仿真的模型文件和可部署在AI处理器的模型文件。
+1. 创建蒸馏配置，用户首先构造PyTorch的原始模型，然后使用[create\_distill\_config](./api/create_distill_config.md)接口，将用户自定义的蒸馏配置与AMCT算法定义的蒸馏配置相结合，输出网络每一层的蒸馏配置信息。
+2. 创建蒸馏模型，调用[create\_distill\_model](./api/create_distill_model.md)接口对原始模型进行修改，根据蒸馏配置信息生成一个待蒸馏的量化模型。
+3. 蒸馏模型，调用[distill](./api/distill.md)接口，根据用户配置的模型推理和优化方法，结合蒸馏配置信息，对网络进行分块蒸馏，得到蒸馏后的性能优化的量化模型。
+4. 保存量化模型，最后调用[save\_distill\_model](./api/save_distill_model.md)接口保存已蒸馏优化的量化模型，包括可在ONNX执行框架ONNX Runtime环境中进行精度仿真的模型文件和可部署在AI处理器的模型文件。
 
 ### 调用示例
 
 > [!NOTE]说明
->-   如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
->-   如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+>
+>- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
 
 1. 导入AMCT包，并通过[工具构建](./build.md)中的环境变量设置日志级别。
 
@@ -1828,15 +1821,14 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
    user_do_inference_onnx(quant_model, test_data, test_iterations)
    ```
 
-
-
 ## 张量分解
+
 张量分解通过分解卷积核的张量，将一个卷积转化成两个小卷积的堆叠来降低推理开销，如用户模型中存在大量卷积，且卷积核shape普遍大于\(64, 64, 3, 3\)时推荐使用张量分解。
 
 目前仅支持满足如下条件的卷积进行分解：
 
--   group=1、dilation=\(1,1\)、stride<3
--   kernel\_h\>2、kernel\_w\>2
+- group=1、dilation=\(1,1\)、stride<3
+- kernel\_h\>2、kernel\_w\>2
 
 卷积是否分解由AMCT自动判断，即便满足上述条件，也不一定会分解；例如，用户使用的PyTorch原始模型中存在torch.nn.Conv2d层，且该层满足上述条件，才有可能将相应的Conv2d层分解成两个Conv2d层。
 
@@ -1844,38 +1836,38 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
 该场景为可选操作，用户自行决定是否进行原始模型的分解。
 
-
 ### 分解约束
 
 如果torch.nn.Conv2d层的权重shape过大，会造成分解时间过长或分解异常中止，为防止出现该情况，执行分解动作前，请先参见如下约束或参考数据：
 
--   **分解工具性能参考数据：**
+- **分解工具性能参考数据：**
 
-    -   CPU: Intel\(R\) Xeon\(R\) CPU E5-2699 v4 @ 2.20GHz
-    -   内存: 512G
+    - CPU: Intel\(R\) Xeon\(R\) CPU E5-2699 v4 @ 2.20GHz
+    - 内存: 512G
 
     分解单层卷积：
 
-    -   shape\(512, 512, 5, 5\)，大约耗时7秒。
-    -   shape\(1024, 1024, 3, 3\)，大约耗时12秒。
-    -   shape\(1024, 1024, 5, 5\)，大约耗时52秒。
-    -   shape\(2048, 2048, 3, 3\)，大约耗时89秒。
-    -   shape\(2048, 2048, 5, 5\)，大约耗时374秒。
+    - shape\(512, 512, 5, 5\)，大约耗时7秒。
+    - shape\(1024, 1024, 3, 3\)，大约耗时12秒。
+    - shape\(1024, 1024, 5, 5\)，大约耗时52秒。
+    - shape\(2048, 2048, 3, 3\)，大约耗时89秒。
+    - shape\(2048, 2048, 5, 5\)，大约耗时374秒。
 
--   **内存超限风险提醒**：
+- **内存超限风险提醒**：
 
     分解大卷积核存在内存超限风险参考数值：分解shape为\(2048, 2048, 5, 5\)的卷积核约需9G内存。
     
 ### 分解方式
+
 张量分解有两种使用方式，在线张量分解和离线张量分解，用户可以根据实际情况选择其中一个方式进行分解。详细说明如下：
 
-1.  **在线张量分解**
+1. **在线张量分解**
 
     即直接分解原始网络模型并进行fine-tune：在训练代码中引入张量分解接口，对已包含预训练权重的模型进行分解，然后进行fine-tune。
 
     该流程在张量分解时直接修改模型结构并更新权重，分解后的模型可直接使用，其优点是使用方便，仅需一步操作；而缺点是每次调用脚本都要重新进行分解计算，需要耗费一定时间。
 
-1.  **离线张量分解**
+2. **离线张量分解**
 
     即先分解原始网络模型，然后再进行fine-tune：首先将含有预训练权重的模型调用张量分解接口进行分解，保存分解信息文件和分解后的权重；后续使用时，在训练脚本中引入张量分解接口，读取保存的分解信息文件对模型结构进行分解，然后加载保存的分解后的权重，再进行fine-tune。
 
@@ -1884,16 +1876,16 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 ### 分解流程
 
 接口调用流程如下图所示。
-![](./figures/张量分解接口调用流程.png "张量分解接口调用流程")
+![](./figures/decomposition_interface.png "张量分解接口调用流程")
 
-1.  **在线分解流程**
+1. **在线分解流程**
 
     在训练脚本中，准备好含有预训练权重的torch.nn.Module模型对象，在将模型参数传递给优化器之前，将模型对象传递给[auto\_decomposition](./api/auto_decomposition.md)接口进行张量分解，得到分解后的模型对象，即可直接对其进行fine-tune。
 
-2.  **离线分解流程**
+2. **离线分解流程**
 
-    1.  <a name="li265516506413"></a>在任意脚本中，准备好含有预训练权重的torch.nn.Module模型对象，将模型对象和分解信息文件保存路径传递给[auto\_decomposition](./api/auto_decomposition.md)接口进行张量分解，得到分解后的模型对象和保存的分解信息文件，并对分解后的模型权重进行保存。
-    2.  <a name="li1228813421049"></a>fine-tune时，在训练脚本中，在将模型参数传递给优化器之前，将模型对象和[2.a](#li265516506413)中得到的分解信息文件路径传递给[decompose\_network](./api/decompose_network.md)接口，该接口会将模型结构修改为分解后的结构，然后加载[2.a](zh-cn_topic_0000001152857864.md#li265516506413)保存的分解后的模型权重，对模型进行fine-tune。
+    1. <a name="li265516506413"></a>在任意脚本中，准备好含有预训练权重的torch.nn.Module模型对象，将模型对象和分解信息文件保存路径传递给[auto\_decomposition](./api/auto_decomposition.md)接口进行张量分解，得到分解后的模型对象和保存的分解信息文件，并对分解后的模型权重进行保存。
+    2. <a name="li1228813421049"></a>fine-tune时，在训练脚本中，在将模型参数传递给优化器之前，将模型对象和[2.a](#li265516506413)中得到的分解信息文件路径传递给[decompose\_network](./api/decompose_network.md)接口，该接口会将模型结构修改为分解后的结构，然后加载[2.a](#li265516506413)保存的分解后的模型权重，对模型进行fine-tune。
 
     > [!NOTE]说明 
     >离线分解时，[2.a](#li265516506413)步骤在调用[auto\_decomposition](./api/auto_decomposition.md)接口后，用户需要自行保存分解后模型权重；[2.b](#li1228813421049)步骤在调用完成[decompose\_network](./api/decompose_network.md)后，用户需自行加载所保存的分解后的模型权重。
@@ -1901,14 +1893,14 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 
 张量分解后会将1个卷积分解为2个串联的卷积，模型的其中一层卷积分解前后情况如下图所示。
 
-![](./figures/卷积分解前后示意图.png "卷积分解前后示意图")
-
+![](./figures/conv_decompose.png "卷积分解前后示意图")
 
 ### 调用示例
+
 > [!NOTE]说明：
 > 以下示例中，\(\*\)表示用户已有的代码，...表示用户已有代码的省略，此处仅为示例，实际用户代码可能不同，请根据实际情况进行调整。
 
-1.  **在线张量分解**
+1. **在线张量分解**
 
     在训练脚本中，调用[auto\_decomposition](./api/auto_decomposition.md)分解含有预训练权重的PyTorch模型，然后直接fine-tune。
 
@@ -1921,8 +1913,8 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
     train(net, optimizer, ...)                           # (*) fine-tune
     ```
 
-2.  **离线张量分解**
-    1.  在任意脚本中，调用[auto\_decomposition](./api/auto_decomposition.md)分解含有预训练权重的PyTorch模型，保存分解信息文件和分解后的模型权重。
+2. **离线张量分解**
+    1. 在任意脚本中，调用[auto\_decomposition](./api/auto_decomposition.md)分解含有预训练权重的PyTorch模型，保存分解信息文件和分解后的模型权重。
 
         ```python
         from amct_pytorch.tensor_decompose import auto_decomposition
@@ -1935,7 +1927,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
         torch.save(net.state_dict(), "decomposed_path/decomposed_weights.pth")      # 保存分解后的模型权重
         ```
 
-    2.  在训练脚本中，调用[decompose\_network](./api/decompose_network.md)，根据[2.a](#li265516506413)得到的分解信息文件将模型结构修改为分解后的结构，再加载[2.a](#li265516506413)保存的分解后的模型权重，进行fine-tune。
+    2. 在训练脚本中，调用[decompose\_network](./api/decompose_network.md)，根据[2.a](#li265516506413)得到的分解信息文件将模型结构修改为分解后的结构，再加载[2.a](#li265516506413)保存的分解后的模型权重，进行fine-tune。
 
         ```python
         from amct_pytorch.tensor_decompose import decompose_network
@@ -1949,7 +1941,4 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
         train(net, optimizer, ...)                                                  # (*) fine-tune
         ```
 
-
-
 </details>
-

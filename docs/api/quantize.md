@@ -8,7 +8,6 @@
 | Atlas A3 训练系列产品/Atlas A3 推理系列产品 | √        |
 | Atlas A2 训练系列产品/Atlas A2 推理系列产品 | √        |
 
-
 ## 功能说明
 
 基于torch module的训练后量化接口，高精度模型转换为校准模型，得到量化校准模型，推理后计算得到量化参数。
@@ -49,7 +48,6 @@ quantize(model, config)
 </tr>
 </tbody>
 </table>
-
 
 ## 全量化支持的层<a name="section1326262414717"></a>
 
@@ -190,8 +188,6 @@ quantize(model, config)
 </tbody>
 </table>
 
-
-
 ## 返回值说明
 
 无
@@ -286,7 +282,7 @@ quantize(model, cfg)
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p13604125511814"><a name="p13604125511814"></a><a name="p13604125511814"></a>string类型，权重量化粒度。</p>
 <a name="ul8259163310191"></a><a name="ul8259163310191"></a><ul id="ul8259163310191"><li>tensor，对应per-tensor。</li><li>channel，对应per-channel。</li><li>group，对应per-group。</li></ul>
-<p id="p10604115511810"><a name="p10604115511810"></a><a name="p10604115511810"></a>量化粒度介绍请参见<a href="../压缩概念.md" target="_blank" rel="noopener noreferrer">压缩概念</a>。</p>
+<p id="p10604115511810"><a name="p10604115511810"></a><a name="p10604115511810"></a>量化粒度介绍请参见<a href="../compression_concepts.md" target="_blank" rel="noopener noreferrer">压缩概念</a>。</p>
 </td>
 </tr>
 <tr id="row1460485515186"><td class="cellrowborder" valign="top" width="11.04%" headers="mcps1.1.5.1.1 "><p id="p1260495514181"><a name="p1260495514181"></a><a name="p1260495514181"></a>-</p>
@@ -346,7 +342,7 @@ quantize(model, cfg)
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p66040553184"><a name="p66040553184"></a><a name="p66040553184"></a>string类型，量化算法，支持如下配置：</p>
 <a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li></ul>
-<p id="p4604195517184"><a name="p4604195517184"></a><a name="p4604195517184"></a>具体请参见<a href="../算法介绍.md" target="_blank" rel="noopener noreferrer">量化算法介绍</a>。</p>
+<p id="p4604195517184"><a name="p4604195517184"></a><a name="p4604195517184"></a>具体请参见<a href="../algorithm_brief.md" target="_blank" rel="noopener noreferrer">量化算法介绍</a>。</p>
 </td>
 </tr>
 <tr id="row1060418558184"><td class="cellrowborder" valign="top" width="11.04%" headers="mcps1.1.5.1.1 "><p id="p9604135541813"><a name="p9604135541813"></a><a name="p9604135541813"></a>skip_layers</p>
@@ -360,5 +356,3 @@ quantize(model, cfg)
 </tr>
 </tbody>
 </table>
-
-
