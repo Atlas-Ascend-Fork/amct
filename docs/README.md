@@ -181,7 +181,7 @@ amct.accuracy_based_auto_calibration(
 
 训练后量化接口调用流程如下图所示：
 
-![](./figures/ptq_interface.png "训练后量化接口调用流程")
+![](./figures/PTQ_interface.png "训练后量化接口调用流程")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现，工具使用分为如下场景：
 
@@ -331,7 +331,7 @@ amct.accuracy_based_auto_calibration(
 
 量化感知训练接口调用流程如下图所示，如下流程中的训练环境借助PyTorch框架的CPU环境或者NPU环境，在该开源框架的推理脚本基础上，调用AMCT  API完成模型压缩，压缩后的部署模型需要使用ATC工具转换成适配AI处理器的离线模型后，然后才能在AI处理器上实现推理。量化感知训练使用的量化算法请参见[算法介绍](algorithm_brief.md)。
 
-![](./figures/qat_interface.png "接口调用流程-0")
+![](./figures/QAT_interface.png "接口调用流程-0")
 
 蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
 
@@ -1877,6 +1877,7 @@ AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将to
 ### 分解流程
 
 接口调用流程如下图所示。
+
 ![](./figures/decomposition_interface.png "张量分解接口调用流程")
 
 1. **在线分解流程**
