@@ -125,3 +125,9 @@ def test_register_function_directly_without_decorator_call():
 
     registry.register(fn, name="fn")
     assert registry.get("fn")() == 42
+
+
+def test_get_item_missing_raises():
+    registry = Registry("gi")
+    with pytest.raises(KeyError, match="not registered"):
+        registry.get_item("nope")
