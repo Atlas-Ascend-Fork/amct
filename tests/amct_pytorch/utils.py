@@ -14,6 +14,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch.nn as nn
+from transformers.models.deepseek_v3.modeling_deepseek_v3 import DeepseekV3Attention as deepseek_module
+from transformers.models.longcat_flash.modular_longcat_flash import LongcatFlashMLA as longcat_module
+import torch
 
 
 class TestModel(nn.Module):
@@ -56,3 +59,47 @@ class TestModelConv2d(nn.Module):
         x = self.conv2d2(x)
         x = self.conv2d3(x)
         return x
+
+
+class TestModelDeepseekV3Attention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.attn = deepseek_module(config, layer_idx=0)
+        self.register_buffer("cos", torch.ones(4096, config.qk_rope_head_dim))
+        self.register_buffer("sin", torch.zeros(4096, config.qk_rope_head_dim))
+
+    def forward(self, hidden_states, attention_mask=None, past_key_values=None, **kwargs):
+        batch, seq_len, _ = hidden_states.shape
+        cos_sin = (self.cos[:seq_len].unsqueeze(0), self.sin[:seq_len].unsqueeze(0))
+        
+        attn_out, attn_weight = self.attn(
+            hidden_states=hidden_states,
+            position_embeddings=cos_sin,
+            attention_mask=attention_mask,
+            past_key_values=past_key_values,
+            **kwargs
+        )
+        return attn_out
+
+    
+class TestModelLongcatFlashMLA(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.attn = longcat_module(config, layer_idx=0)
+        self.register_buffer("cos", torch.ones(4096, config.qk_rope_head_dim))
+        self.register_buffer("sin", torch.zeros(4096, config.qk_rope_head_dim))
+
+    def forward(self, hidden_states, attention_mask=None, past_key_values=None, **kwargs):
+        batch, seq_len, _ = hidden_states.shape
+        cos_sin = (self.cos[:seq_len].unsqueeze(0), self.sin[:seq_len].unsqueeze(0))
+        
+        attn_out, attn_weight = self.attn(
+            hidden_states=hidden_states,
+            position_embeddings=cos_sin,
+            attention_mask=attention_mask,
+            past_key_values=past_key_values,
+            **kwargs
+        )
+        return attn_out
