@@ -14,11 +14,8 @@
  * limitations under the License.
  */
 
-#include <torch/extension.h>
-
-namespace ascend_kernel {
-at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode);
-}
+#include "ops.h"
+#include "hifloat8_cast_tiling.h"
 
 namespace {
 
@@ -37,7 +34,7 @@ static at::Tensor encode_impl(const at::Tensor& input)
     auto dtype = input.scalar_type();
     TORCH_CHECK(dtype == at::kHalf || dtype == at::kBFloat16,
                 "encode_to_hifloat8: expected float16 or bfloat16, got ", input.dtype());
-    return ascend_kernel::hifloat8_cast_torch(input, dtype == at::kHalf ? 0 : 1);
+    return ascend_kernel::hifloat8_cast_torch(input, dtype == at::kHalf ? FP16_TO_HIF8 : BF16_TO_HIF8);
 }
 
 static at::Tensor decode_impl(const at::Tensor& input, c10::optional<at::ScalarType> dtype)
@@ -47,7 +44,7 @@ static at::Tensor decode_impl(const at::Tensor& input, c10::optional<at::ScalarT
     at::ScalarType outDtype = dtype.value_or(at::kBFloat16);
     TORCH_CHECK(outDtype == at::kHalf || outDtype == at::kBFloat16,
                 "decode_from_hifloat8: expected float16 or bfloat16, got ", outDtype);
-    return ascend_kernel::hifloat8_cast_torch(input, outDtype == at::kHalf ? 2 : 3);
+    return ascend_kernel::hifloat8_cast_torch(input, outDtype == at::kHalf ? HIF8_TO_FP16 : HIF8_TO_BF16);
 }
 
 TORCH_LIBRARY_IMPL(amct, PrivateUse1, m)
@@ -74,4 +71,4 @@ TORCH_LIBRARY_IMPL(amct, Meta, m)
     m.impl("decode_from_hifloat8", &decode_meta);
 }
 
-}
+} // namespace

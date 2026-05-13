@@ -75,7 +75,7 @@ public:
         tailTile_ = total_ - tileLength_ * (tileNum_ - 1);
         // tailTile_ > 0 guaranteed: total_ > 0, ceiling division ensures last tile is non-empty
 
-        uint64_t offset = (uint64_t)blockIdx * tiling->numPerCore;
+        uint64_t offset = static_cast<uint64_t>(blockIdx) * tiling->numPerCore;
         inputGm_.SetGlobalBuffer((__gm__ uint8_t*)input  + offset * inputBytes_,
                                   total_ * inputBytes_);
         outputGm_.SetGlobalBuffer((__gm__ uint8_t*)output + offset * outputBytes_,
@@ -88,7 +88,7 @@ public:
             AscendC::GlobalTensor<uint8_t> lutGm;
             lutGm.SetGlobalBuffer((__gm__ uint8_t*)lut_gm, LUT16_SIZE);
             auto lutUb = lut16Buf_.Get<uint8_t>();
-            AscendC::DataCopyParams    cp{1, (uint16_t)LUT16_SIZE, 0, 0};
+            AscendC::DataCopyParams    cp{1, static_cast<uint16_t>(LUT16_SIZE), 0, 0};
             AscendC::DataCopyPadParams pp{false, 0, 0, 0};
             AscendC::DataCopyPad(lutUb, lutGm[0], cp, pp);
         } else {
@@ -96,7 +96,7 @@ public:
             AscendC::GlobalTensor<uint16_t> lutGm;
             lutGm.SetGlobalBuffer((__gm__ uint16_t*)lut_gm, LUT8_SIZE);
             auto lutUb = lut8Buf_.Get<uint16_t>();
-            AscendC::DataCopyParams    cp{1, (uint16_t)(LUT8_SIZE * 2u), 0, 0};
+            AscendC::DataCopyParams    cp{1, static_cast<uint16_t>(LUT8_SIZE * 2u), 0, 0};
             AscendC::DataCopyPadParams pp{false, 0, 0, 0};
             AscendC::DataCopyPad(lutUb, lutGm[0], cp, pp);
         }
@@ -135,11 +135,11 @@ private:
         //           encode tail tiles; byteCount=count*2, count ≤ 65535 → byteCount/2 ≤ 65535
         AscendC::DataCopyParams cp;
         if (byteCount <= 65535u) {
-            cp = {1, (uint16_t)byteCount, 0, 0};
+            cp = {1, static_cast<uint16_t>(byteCount), 0, 0};
         } else if (byteCount % 32768u == 0u) {
-            cp = {(uint16_t)(byteCount / 32768u), 32768u, 0, 0};
+            cp = {static_cast<uint16_t>(byteCount / 32768u), 32768u, 0, 0};
         } else {
-            cp = {2u, (uint16_t)(byteCount >> 1), 0, 0};
+            cp = {2u, static_cast<uint16_t>(byteCount >> 1), 0, 0};
         }
         AscendC::DataCopyPad(xLocal, inputGm_[byteOffset], cp, padParams);
         inQueue_.EnQue(xLocal);
@@ -182,8 +182,8 @@ private:
 
         for (uint32_t i = 0; i < count; i++) {
             uint16_t v    = xU16.GetValue(i);
-            uint8_t  sign = (uint8_t)(v >> 15);
-            uint8_t  mag  = lut.GetValue((uint32_t)(v & 0x7FFFu));
+            uint8_t  sign = static_cast<uint8_t>(v >> 15);
+            uint8_t  mag  = lut.GetValue(static_cast<uint32_t>(v & 0x7FFFu));
             // 下溢/零时 mag==0，不叠加符号位（保持 0x00）
             yLocal.SetValue(i, (mag == 0x00u) ? 0x00u : (mag | (sign << HIF8_SIGN_SHIFT)));
         }
@@ -209,10 +209,13 @@ private:
 private:
     AscendC::TPipe* pipe_;
 
-    bool     isEncode_;
-    uint32_t inputBytes_, outputBytes_;
-    uint32_t tileLength_;
-    uint32_t total_, tileNum_, tailTile_;
+    bool     isEncode_    = false;
+    uint32_t inputBytes_  = 0;
+    uint32_t outputBytes_ = 0;
+    uint32_t tileLength_  = 0;
+    uint32_t total_       = 0;
+    uint32_t tileNum_     = 0;
+    uint32_t tailTile_    = 0;
 
     AscendC::GlobalTensor<uint8_t> inputGm_;
     AscendC::GlobalTensor<uint8_t> outputGm_;
