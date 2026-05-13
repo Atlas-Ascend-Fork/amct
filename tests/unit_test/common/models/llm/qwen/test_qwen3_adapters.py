@@ -127,6 +127,7 @@ def _build_moe_block_with_quant_linears():
     block.self_attn.q_proj = QuantLinear(
         SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
         nn.Linear(4, 4),
+        w_bits=8,
         name="q_proj",
     )
 
@@ -139,6 +140,7 @@ def _build_moe_block_with_quant_linears():
         expert.up_proj = QuantLinear(
             SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
             nn.Linear(4, 4),
+            w_bits=8,
             name="up_proj",
         )
         block.mlp.experts.expert_modules.append(expert)
@@ -172,6 +174,7 @@ def test_qwen3_moe_iter_deploy_bindings_raises_on_malformed_expert_name():
     block.mlp.experts.expert_modules.bad = QuantLinear(
         SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
         nn.Linear(4, 4),
+        w_bits=8,
         name="bad",
     )
     with pytest.raises(ValueError, match="Unexpected Qwen3 MoE expert module name"):

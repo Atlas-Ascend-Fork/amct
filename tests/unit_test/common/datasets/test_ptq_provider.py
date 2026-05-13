@@ -146,3 +146,15 @@ def test_materialize_gt_takes_first_when_module_returns_tuple():
     inps = torch.zeros(2, 3)
     out = provider.materialize_gt(inps, _M())
     assert torch.equal(out, torch.ones(2, 3))
+
+
+def test_materialize_gt_non_floating_point_input():
+    class _EmbeddingModule(torch.nn.Module):
+        def forward(self, x, **kwargs):
+            return x.float() * 2.0
+
+    provider = _make_provider(cali_bsz=2)
+    inps = torch.randint(0, 10, (4,)).to(torch.int64)
+    out = provider.materialize_gt(inps, _EmbeddingModule())
+    assert out.shape == (4,)
+    assert out.dtype == torch.float32
