@@ -17,7 +17,7 @@
 
 from amct_pytorch.utils.vars import SUPPORT_WEIGHT_QUANT_DTYPE, SUPPORT_INPUT_QUANT_DTYPE
 from amct_pytorch.utils.vars import SUPPORT_QUANT_STRATEGY_WEIGHT, SUPPORT_QUANT_STRATEGY_INPUT
-from amct_pytorch.utils.vars import SUPPORT_QUANT_DYNAMIC_INPUT
+from amct_pytorch.utils.vars import SUPPORT_QUANT_DYNAMIC_INPUT, SUPPORT_KVCACHE_QUANT_DTYPE
 from amct_pytorch.utils.vars import WTS_ASYMMETRIC_DTYPE, GROUP_SIZE_SUPPORTED_DTYPE
 from amct_pytorch.utils.vars import GROUP_SIZE_SUPPORTED_MAP
 from amct_pytorch.config.utils import get_alg_name_from_config
@@ -144,10 +144,44 @@ class InputsCfgField():
                 f'but got {self.strategy}')
 
 
+class KvcacheCfgField():
+    def __init__(self, config):
+        self.quant_kv = config.get('enable_quant', True)
+        if self.quant_kv:
+            self.quant_type = config.get('type')
+            self.symmetric = config.get('symmetric')
+            self.strategy = config.get('strategy')
+            if self.quant_type is not None:
+                self.check()
+        self.value = self.set_value()
+    
+    def set_value(self):
+        if not self.quant_kv:
+            return {'enable_quant': False}
+        if self.quant_type is None:
+            return None
+        return {'quant_type': self.quant_type,
+                'symmetric': self.symmetric,
+                'strategy': self.strategy}
+    
+    def get_value(self):
+        return self.value
+
+    def check(self):
+        if self.quant_type not in SUPPORT_KVCACHE_QUANT_DTYPE:
+            raise ValueError(f'Kvcache quant_dtype only support {SUPPORT_KVCACHE_QUANT_DTYPE}, " \
+                            "but got {self.quant_type}')
+        if self.symmetric not in [True]:
+            raise ValueError(f'Kvcache symmetric only support bool [True], but got {self.symmetric}')
+        if self.strategy != 'tensor':
+            raise ValueError(f'Kvcache strategy only support tensor, but got {self.strategy}')
+
+
 class QuantCfgField():
     def __init__(self, config):
         self.weights_cfg = WeightsCfgField(config.get('weights', {}))
         self.inputs_cfg = InputsCfgField(config.get('inputs', {'enable_quant': False}))
+        self.kvcache_cfg = KvcacheCfgField(config.get('kvcache', {'enable_quant': False}))
         self.fuzzy_configs = QuantCfgField.extract_fuzzy_configs(config)
         
         self._validate_weights_config()
@@ -160,7 +194,7 @@ class QuantCfgField():
         Extract fuzzy matching configs from quant_cfg
         Patterns like '*down_proj.weights' or '*self_attn.q_proj.inputs'
         """
-        fuzzy_configs = {'weights': [], 'inputs': []}
+        fuzzy_configs = {'weights': [], 'inputs': [], 'kvcache': []}
         
         for key, value in config.items():
             if '*' in key:
@@ -174,12 +208,18 @@ class QuantCfgField():
                         'pattern': key,
                         'config': value
                     })
-        
+                elif key.endswith('.kvcache'):
+                    fuzzy_configs['kvcache'].append({
+                        'pattern': key,
+                        'config': value
+                    })
+
         return fuzzy_configs
 
     def set_value(self):
         return {'weights_cfg': self.weights_cfg.get_value(),
-                'inputs_cfg': self.inputs_cfg.get_value()}
+                'inputs_cfg': self.inputs_cfg.get_value(),
+                'kvcache_cfg': self.kvcache_cfg.get_value()}
 
     def get_value(self):
         return self.value
@@ -205,8 +245,11 @@ class QuantCfgField():
         Either a precise weights configuration or a fuzzy matching *.weights configuration
         """
         has_weights_config = self.weights_cfg.get_value() is not None
+        has_kvcache_config = self.kvcache_cfg.get_value() is not None
         has_fuzzy_weights_config = len(self.fuzzy_configs['weights']) > 0
         
+        if has_kvcache_config:
+            return
         if not has_weights_config and not has_fuzzy_weights_config:
             raise ValueError(
                 'Configuration must include at least one weights configuration: either '
@@ -405,11 +448,19 @@ class QuantConfig:
         
         quant_cfg = self.quant_cfg.get_value().copy()
         
+        fuzzy_kvcache_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'kvcache')
+        if fuzzy_kvcache_cfg:
+            kvcache_cfg = KvcacheCfgField(fuzzy_kvcache_cfg)
+            quant_cfg['kvcache_cfg'] = kvcache_cfg.get_value()
+        elif quant_cfg['kvcache_cfg'] is None:
+            quant_cfg['kvcache_cfg'] = {'enable_quant': False}
+        
         fuzzy_weights_cfg = self.quant_cfg.get_fuzzy_config(layer_name, 'weights')
         if fuzzy_weights_cfg:
             weights_cfg = WeightsCfgField(fuzzy_weights_cfg)
             quant_cfg['weights_cfg'] = weights_cfg.get_value()
-        elif quant_cfg['weights_cfg'] is None:
+        elif quant_cfg['weights_cfg'] is None and \
+            quant_cfg['kvcache_cfg'].get('enable_quant') == False:
             self._layer_config_cache[layer_name] = None
             return None
         

@@ -20,6 +20,7 @@ from amct_pytorch.config.fields import QuantConfig, WeightsCfgField, InputsCfgFi
 from amct_pytorch.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
 from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
 from amct_pytorch.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
+from amct_pytorch.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE, KVCACHE_OPS
 from amct_pytorch.algorithm import BUILT_IN_ALGORITHM
 
 
@@ -95,14 +96,15 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
     
     fuzzy_weights = quant_config.quant_cfg.fuzzy_configs['weights']
     fuzzy_inputs = quant_config.quant_cfg.fuzzy_configs['inputs']
+    fuzzy_kvcache = quant_config.quant_cfg.fuzzy_configs['kvcache']
     skip_layers = quant_config.skip_layers.skip_layers
     
-    if not fuzzy_weights and not fuzzy_inputs:
+    if not fuzzy_weights and not fuzzy_inputs and not fuzzy_kvcache:
         return
     
     skip_layers_set = set(skip_layers or [])
     
-    all_fuzzy_patterns = fuzzy_weights + fuzzy_inputs
+    all_fuzzy_patterns = fuzzy_weights + fuzzy_inputs + fuzzy_kvcache
     pattern_match_count = {cfg['pattern']: 0 for cfg in all_fuzzy_patterns}
     
     for fuzzy_cfg in all_fuzzy_patterns:
@@ -176,6 +178,14 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     return True
 
 
+def check_kv_config(quant_config, algo):
+    quant_type = quant_config.quant_cfg.kvcache_cfg.quant_type
+    if quant_type not in ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE.keys():
+        raise ValueError(f'Do not support {quant_type} of kvcache quant dtype.')
+    if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE[quant_type]:
+        raise ValueError(f'Algorithm {algo} do not support kvcache quant dtype {quant_type}')
+
+
 def _build_layer_types_and_quant_type(quant_config, registed_alg):
     '''Build layer types mapping and get quant type combination'''
     algos = quant_config.algorithm.names
@@ -191,6 +201,8 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
             act_type = quant_config.quant_cfg.inputs_cfg.quant_type if \
                         quant_config.quant_cfg.inputs_cfg.quant_input else 'NOT_QUANTIZE'
             wts_type = quant_config.quant_cfg.weights_cfg.quant_type
+            if quant_config.quant_cfg.kvcache_cfg.quant_kv:
+                check_kv_config(quant_config, algo)
             if wts_type is None:
                 quant_type_comb = None
             else:
@@ -205,6 +217,8 @@ def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
         LOGGER.logw('layer:{} is already quantized, do not need quantized again.'.format(name))
         return False
     if type(mod) not in layer_types.keys() and type(mod).__name__ not in layer_types.keys():
+        return False
+    if quant_config.quant_cfg.kvcache_cfg.quant_kv and type(mod).__name__ not in KVCACHE_OPS:
         return False
     if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
         LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has requirement '

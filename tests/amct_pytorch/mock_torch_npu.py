@@ -116,6 +116,12 @@ def mock_npu_quantize(input, scales, zero_points=None,
     return out
 
 
+def mock_npu_anti_quant(inputs, scales, zero_points=None,
+    src_dtype=None, dst_dtype=None):
+    out = inputs * scales
+    return out.to(dst_dtype)
+
+
 def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
     return weight
 
