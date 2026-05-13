@@ -46,10 +46,10 @@ def _get_scale_shape(weight_shape, group_size: int):
     targets=("weight",),
 )
 class AutoRound(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, w_bits):
         super().__init__()
         self.args = args
-        self.bits = args.w_bits
+        self.bits = w_bits
         self.group_size = self._get_group_size(args)
         self.enable_minmax_tuning = getattr(args, "enable_minmax_tuning", True)
         self.q_scale_thresh = 1e-5
