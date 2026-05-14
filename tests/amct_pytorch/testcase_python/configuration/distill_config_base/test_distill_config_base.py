@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import shutil
 import sys
@@ -40,11 +41,32 @@ from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+logger = logging.getLogger(__name__)
+
+CHANNEL_WISE = 'channel_wise'
+
+CONV2D = 'Conv2d'
+
+QUANT_ENABLE = 'quant_enable'
+
+DISTILL_DATA_CONFIG = 'distill_data_config'
+
+ALGO = 'algo'
+
+ULQ_QUANTIZE = 'ulq_quantize'
+
+DST_TYPE = 'dst_type'
+
+INT8 = 'INT8'
+
+ARQ_DISTILL = 'arq_distill'
+
+DISTILL_WEIGHT_CONFIG = 'distill_weight_config'
 
 class TestDistillConfigBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestDistillConfigBase start!')
+        logger.info('TestDistillConfigBase start!')
         cls.temp_folder = os.path.join(CUR_DIR, 'test_distill_config_base')
         os.makedirs(cls.temp_folder, exist_ok=True)
 
@@ -66,28 +88,28 @@ class TestDistillConfigBase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.temp_folder)
-        print('TestDistillConfigBase end!')
+        logger.info('TestDistillConfigBase end!')
 
     def test_check_dst_type_legal_default_data(self):
         data_config = {
-            'algo' : 'ulq_quantize'
+            ALGO : ULQ_QUANTIZE
         }
         weight_config = {
-            'algo' : 'arq_distill',
-            'channel_wise' : True,
-            'dst_type' : 'INT4'
+            ALGO : 'arq_distill',
+            CHANNEL_WISE : True,
+            DST_TYPE : 'INT4'
         }
         with self.assertRaises(ValueError):
             self.distill_config_base.check_dst_type_legal(data_config, weight_config)
 
     def test_check_dst_type_legal_default_weight(self):
         data_config = {
-            'algo' : 'ulq_quantize',
-            'dst_type' : 'INT4'
+            ALGO : ULQ_QUANTIZE,
+            DST_TYPE : 'INT4'
         }
         weight_config = {
-            'algo' : 'arq_distill',
-            'channel_wise' : True
+            ALGO : 'arq_distill',
+            CHANNEL_WISE : True
         }
         with self.assertRaises(ValueError):
             self.distill_config_base.check_dst_type_legal(data_config, weight_config)
@@ -211,19 +233,19 @@ class TestDistillConfigBase(unittest.TestCase):
         config = self.distill_config_base.parse_distill_config(config_file, self.graph.model)
         self.assertEqual(config.get('batch_num'), 1)
         self.assertEqual(config.get('group_size'), 1)
-        self.assertEqual(config.get('data_dump'), False)
+        self.assertFalse(config.get('data_dump'))
         distill_groups = [['conv1', 'bn1'], ['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']]
         self.assertEqual(config.get('distill_group'), distill_groups)
         layer_config = {
-            "quant_enable":True,
-            "distill_data_config":{
-                "algo":"ulq_quantize",
-                "dst_type":"INT8"
+            QUANT_ENABLE:True,
+            DISTILL_DATA_CONFIG:{
+                ALGO:ULQ_QUANTIZE,
+                DST_TYPE:INT8
             },
-            "distill_weight_config":{
-                "algo":"arq_distill",
-                "channel_wise":True,
-                "dst_type":"INT8"
+            DISTILL_WEIGHT_CONFIG:{
+                ALGO:ARQ_DISTILL,
+                CHANNEL_WISE:True,
+                DST_TYPE:INT8
             }
         }
         self.assertEqual(config.get('conv1'), layer_config)
@@ -239,50 +261,50 @@ class TestDistillConfigBase(unittest.TestCase):
         config = self.distill_config_base.parse_distill_config(config_file, self.graph.model)
         self.assertEqual(config.get('batch_num'), 2)
         self.assertEqual(config.get('group_size'), 2)
-        self.assertEqual(config.get('data_dump'), True)
+        self.assertTrue(config.get('data_dump'))
         distill_groups = [['conv1', 'bn1'], ['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']]
         self.assertEqual(config.get('distill_group'), distill_groups)
         conv1_config = {
-            "quant_enable":False,
-            "distill_data_config":{
-                "algo":"ulq_quantize",
-                "dst_type":"INT8"
+            QUANT_ENABLE:False,
+            DISTILL_DATA_CONFIG:{
+                ALGO:ULQ_QUANTIZE,
+                DST_TYPE:INT8
             },
-            "distill_weight_config":{
-                "algo":"arq_distill",
-                "channel_wise":True,
-                "dst_type":"INT8"
+            DISTILL_WEIGHT_CONFIG:{
+                ALGO:ARQ_DISTILL,
+                CHANNEL_WISE:True,
+                DST_TYPE:INT8
             }
         }
         self.assertEqual(config.get('conv1'), conv1_config)
         conv2_config = {
-            "quant_enable":True,
-            "distill_data_config":{
-                "algo":"ulq_quantize",
+            QUANT_ENABLE:True,
+            DISTILL_DATA_CONFIG:{
+                ALGO:ULQ_QUANTIZE,
                 "clip_max":6.0,
                 "clip_min":-6.0,
                 "fixed_min":True,
-                "dst_type":"INT8"
+                DST_TYPE:INT8
             },
-            "distill_weight_config":{
-                "algo":"arq_distill",
-                "channel_wise":False,
-                "dst_type":"INT8"
+            DISTILL_WEIGHT_CONFIG:{
+                ALGO:ARQ_DISTILL,
+                CHANNEL_WISE:False,
+                DST_TYPE:INT8
             }
         }
         self.assertEqual(config.get('conv2'), conv2_config)
         conv3_config = {
-            "quant_enable":True,
-            "distill_data_config":{
-                "algo":"ulq_quantize",
+            QUANT_ENABLE:True,
+            DISTILL_DATA_CONFIG:{
+                ALGO:ULQ_QUANTIZE,
                 "clip_max":3.0,
                 "clip_min":-3.0,
-                "dst_type":"INT4"
+                DST_TYPE:"INT4"
             },
-            "distill_weight_config":{
-                "algo":"arq_distill",
-                "channel_wise":False,
-                "dst_type":"INT4"
+            DISTILL_WEIGHT_CONFIG:{
+                ALGO:ARQ_DISTILL,
+                CHANNEL_WISE:False,
+                DST_TYPE:"INT4"
             }
         }
         self.assertEqual(config.get('conv3'), conv3_config)
@@ -299,7 +321,7 @@ class TestDistillConfigBase(unittest.TestCase):
 
     def test_get_supported_layers_success(self):
         layer2type = self.distill_config_base._get_supported_layers(self.graph.model)
-        self.assertEqual(layer2type, {'conv1':'Conv2d', 'conv2':'Conv2d', 'conv3':'Conv2d'})
+        self.assertEqual(layer2type, {'conv1':CONV2D, 'conv2':CONV2D, 'conv3':CONV2D})
 
     def test_check_proto_skip_layer(self):
         supported_layer2type = {'layer':'type'}
@@ -312,7 +334,7 @@ class TestDistillConfigBase(unittest.TestCase):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
 
     def test_check_proto_skip_type(self):
-        supported_layer2type = {'conv1':'Conv2d'}
+        supported_layer2type = {'conv1':CONV2D}
         skip_types = ['type1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
@@ -322,7 +344,7 @@ class TestDistillConfigBase(unittest.TestCase):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
 
     def test_check_proto_override_layer(self):
-        supported_layer2type = {'conv1':'Conv2d'}
+        supported_layer2type = {'conv1':CONV2D}
         override_layers = ['layer1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
@@ -332,7 +354,7 @@ class TestDistillConfigBase(unittest.TestCase):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
 
     def test_check_proto_override_type(self):
-        supported_layer2type = {'conv1':'Conv2d', 'conv3':'Conv2d'}
+        supported_layer2type = {'conv1':CONV2D, 'conv3':CONV2D}
         override_types = ['type1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
@@ -343,7 +365,7 @@ class TestDistillConfigBase(unittest.TestCase):
 
     def test_get_distill_unit(self):
         distill_groups = [['conv1', 'bn1']]
-        supported_distill_layers = {'conv1':'Conv2d', 'conv2':'Conv2d', 'conv3':'Conv2d'}
+        supported_distill_layers = {'conv1':CONV2D, 'conv2':CONV2D, 'conv3':CONV2D}
         distill_unit = self.distill_config_base._get_distill_unit(self.graph, distill_groups, supported_distill_layers)
         self.assertEqual(distill_unit, [['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']])
 
@@ -394,3 +416,4 @@ class TestDistillConfigBase(unittest.TestCase):
         layers = {'start_layer':'layer'}
         with self.assertRaises(ValueError):
             self.distill_config_base._get_all_nodes_between_two_layers(layers, graph)
+

@@ -79,8 +79,6 @@ class TestConfigurationForTorch(unittest.TestCase):
         ''' test create config from param for: conv, fc'''
         self.graph.add_model(self.model_001)
         # Configuration.create_quant_config(
-        #     config_file=os.path.join(self.temp_folder, 'test_create_from_param_skip_error.json'),
-        #     graph=self.graph,
         #     skip_modules=['layer2.2'])
         self.assertRaises(ValueError, Configuration.create_quant_config,
             os.path.join(self.temp_folder, 'test_create_from_param_skip_error.json'),

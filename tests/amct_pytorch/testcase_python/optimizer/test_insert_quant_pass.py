@@ -18,9 +18,12 @@
 import os,sys
 import unittest
 import argparse
+import logging
 import torch
 import torch.nn.functional as F
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
@@ -49,7 +52,7 @@ def run_inference_model_auto_cali(model, iterations=2):
     correct = 0
     iter_num = 0
     with torch.no_grad():
-        for i in range(iterations):
+        for _ in range(iterations):
             data = torch.tensor(
                 np.random.uniform(0, 10, (4,2,3,3,3)).astype(np.float32))
             data = data.to(device)
@@ -93,7 +96,7 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
         fakequant_model, fakequant_file = do_calibration(
             model, self.args_shape, self.temp_folder)
         run_inference_model_auto_cali(fakequant_model, iterations=test_iter)
-        print('='*50, 'reesult', '='*50)
+        logger.info('%s reesult %s', '='*50, '='*50)
         self.assertTrue(os.path.exists(fakequant_file))
 
 

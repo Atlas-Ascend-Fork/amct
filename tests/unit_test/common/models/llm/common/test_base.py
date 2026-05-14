@@ -1,3 +1,4 @@
+import importlib
 from types import SimpleNamespace
 
 import pytest
@@ -6,19 +7,37 @@ import torch.nn as nn
 
 from amct_pytorch.common.models.llm.common.base import BaseModel
 
+QUANT_TARGET_ATTN_CACHE = 'attn-cache'
+QUANT_TARGET_ATTN_LINEAR = 'attn-linear'
+QUANT_TARGET_MLP = 'mlp'
+
+CALLED = 'called'
+FROM_PRETRAINED = 'from_pretrained'
+POSITION_IDS = 'position_ids'
+
+FLAG = 'flag'
 
 class _StubModel(BaseModel):
-    """Subclass that bypasses BaseModel.__init__ to avoid HF model loading."""
+    """Subclass that bypasses BaseModel HF model loading via mocking."""
 
     def __init__(self, args=None, quant_target=()):
-        # Skip the parent constructor's HF / safetensors machinery.
-        self.args = args
-        self.quant_target = list(quant_target)
-        self.position_ids = None
-        self.attention_mask = None
-        self.position_embeddings = None
-        self.config = SimpleNamespace(tie_word_embeddings=False)
-        self.model_path = "/fake/path"
+        from unittest.mock import patch
+
+        if args is None:
+            args = SimpleNamespace()
+        if not hasattr(args, 'model'):
+            args.model = "/fake/path"
+        if not hasattr(args, 'quant_target'):
+            args.quant_target = list(quant_target)
+
+        with patch(
+            "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+            return_value=SimpleNamespace(tie_word_embeddings=False),
+        ), patch(
+            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained",
+            return_value=SimpleNamespace(),
+        ):
+            super().__init__(args)
 
 
 # ---- _embed_base_prefix / get_embed_load_specs ---------------------------
@@ -68,7 +87,7 @@ def test_get_embed_load_specs_falls_back_to_untied_when_attr_missing():
 
 def test_get_block_forward_kwargs_empty_when_nothing_set():
     stub = _StubModel(args=SimpleNamespace(device="cpu"))
-    assert stub.get_block_forward_kwargs() == {}
+    assert not stub.get_block_forward_kwargs()
 
 
 def test_get_block_forward_kwargs_moves_tensors_to_args_device():
@@ -78,9 +97,9 @@ def test_get_block_forward_kwargs_moves_tensors_to_args_device():
     stub.position_embeddings = (torch.ones(1, 3, 4), torch.zeros(1, 3, 4))
 
     kwargs = stub.get_block_forward_kwargs()
-    assert set(kwargs) == {"position_ids", "attention_mask", "position_embeddings"}
-    assert kwargs["position_ids"].device.type == "cpu"
-    assert torch.equal(kwargs["position_ids"], stub.position_ids)
+    assert set(kwargs) == {POSITION_IDS, "attention_mask", "position_embeddings"}
+    assert kwargs[POSITION_IDS].device.type == "cpu"
+    assert torch.equal(kwargs[POSITION_IDS], stub.position_ids)
     pe0, pe1 = kwargs["position_embeddings"]
     assert torch.equal(pe0, stub.position_embeddings[0])
     assert torch.equal(pe1, stub.position_embeddings[1])
@@ -97,7 +116,7 @@ def _make_block_with_attn_and_mlp():
 
 
 def test_iter_ptq_units_yields_attn_when_target_is_attn_linear():
-    stub = _StubModel(quant_target=["attn-linear"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_LINEAR])
     block = _make_block_with_attn_and_mlp()
     units = list(stub.iter_ptq_units(layer_idx=2, block=block))
     assert len(units) == 1
@@ -109,7 +128,7 @@ def test_iter_ptq_units_yields_attn_when_target_is_attn_linear():
 
 
 def test_iter_ptq_units_picks_linear_attn_when_block_layer_type_is_linear_attention():
-    stub = _StubModel(quant_target=["attn-cache"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_CACHE])
     block = nn.Module()
     block.linear_attn = nn.Linear(4, 4)
     block.layer_type = "linear_attention"
@@ -119,11 +138,11 @@ def test_iter_ptq_units_picks_linear_attn_when_block_layer_type_is_linear_attent
 
 
 def test_iter_ptq_units_yields_mlp_when_target_is_mlp():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     block = _make_block_with_attn_and_mlp()
     units = list(stub.iter_ptq_units(layer_idx=1, block=block))
     assert len(units) == 1
-    assert units[0].kind == "mlp" and units[0].name == "mlp"
+    assert units[0].kind == QUANT_TARGET_MLP and units[0].name == QUANT_TARGET_MLP
     assert units[0].module is block.mlp
 
 
@@ -149,7 +168,7 @@ def test_iter_ptq_units_raises_when_target_is_unsupported_and_block_lacks_mlp():
 
 
 def test_save_block_hook_inputs_raises_when_hook_name_is_none():
-    stub = _StubModel(quant_target=["mlp"], args=SimpleNamespace(data_dir="/tmp"))
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/tmp"))
     with pytest.raises(ValueError, match="hook_name cannot be None"):
         stub.save_block_hook_inputs(act_stat={}, hook_name=None, layer_idx=0)
 
@@ -169,7 +188,7 @@ def test_save_block_hook_inputs_chooses_attn_save_target_when_attn_in_quant_targ
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.save_ptq_inps", fake_save
     )
-    stub = _StubModel(quant_target=["attn-linear"], args=SimpleNamespace(data_dir="/d"))
+    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_LINEAR], args=SimpleNamespace(data_dir="/d"))
     stub.save_block_hook_inputs({"k": 1}, hook_name="hook", layer_idx=4)
     assert captured["save_target"] == "attn"
     assert captured["layer_idx"] == 4
@@ -183,10 +202,9 @@ def test_save_block_hook_inputs_uses_quant_target_for_non_attn(monkeypatch):
         "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
         lambda *a, **k: captured.update(args=a, kwargs=k),
     )
-    stub = _StubModel(quant_target=["mlp"], args=SimpleNamespace(data_dir="/d"))
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/d"))
     stub.save_block_hook_inputs({}, hook_name="hook", layer_idx=2)
-    # Positional: (act_stat, hook_name, save_target, layer_idx, data_dir)
-    assert captured["args"][2] == "mlp"
+    assert captured.get("args")[2] == QUANT_TARGET_MLP
 
 
 # ---- load_selected_layer_ptq_params --------------------------------------
@@ -194,7 +212,7 @@ def test_save_block_hook_inputs_uses_quant_target_for_non_attn(monkeypatch):
 
 def test_load_selected_layer_ptq_params_warns_on_missing_dir(monkeypatch):
     stub = _StubModel(
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         args=SimpleNamespace(
             attn_linear_param_dir="",
             attn_cache_param_dir="",
@@ -206,14 +224,14 @@ def test_load_selected_layer_ptq_params_warns_on_missing_dir(monkeypatch):
         load_layer=lambda *a, **k: pytest.fail("should not be called"),
     )
     results = stub.load_selected_layer_ptq_params(0, block=nn.Module())
-    assert results == {"mlp": {"loaded": [], "missing": []}}
+    assert results == {QUANT_TARGET_MLP: {"loaded": [], "missing": []}}
     # Original quant_target preserved after the temporary swap.
-    assert stub.quant_target == ["mlp"]
+    assert stub.quant_target == [QUANT_TARGET_MLP]
 
 
 def test_load_selected_layer_ptq_params_routes_to_store_per_target():
     stub = _StubModel(
-        quant_target=["attn-linear", "mlp"],
+        quant_target=[QUANT_TARGET_ATTN_LINEAR, QUANT_TARGET_MLP],
         args=SimpleNamespace(
             attn_linear_param_dir="/a",
             attn_cache_param_dir="",
@@ -228,12 +246,12 @@ def test_load_selected_layer_ptq_params_routes_to_store_per_target():
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load_layer)
     results = stub.load_selected_layer_ptq_params(7, block=nn.Module())
-    assert set(results) == {"attn-linear", "mlp"}
+    assert set(results) == {QUANT_TARGET_ATTN_LINEAR, QUANT_TARGET_MLP}
     # quant_target was temporarily set to a single-target list per call.
-    assert seen[0][2] == ["attn-linear"]
-    assert seen[1][2] == ["mlp"]
+    assert seen[0][2] == [QUANT_TARGET_ATTN_LINEAR]
+    assert seen[1][2] == [QUANT_TARGET_MLP]
     # The original quant_target is restored.
-    assert stub.quant_target == ["attn-linear", "mlp"]
+    assert stub.quant_target == [QUANT_TARGET_ATTN_LINEAR, QUANT_TARGET_MLP]
 
 
 def test_register_block_forward_hooks_returns_early_on_none_hook_name():
@@ -244,16 +262,20 @@ def test_register_block_forward_hooks_returns_early_on_none_hook_name():
 
 def test_register_block_forward_hooks_delegates(monkeypatch):
     captured = {}
+
+    def _mock_register_forward_hooks(block, hook_name, hooks, act_stat):
+        captured.update(
+            block=block, hook_name=hook_name, hooks=hooks, act_stat=act_stat
+        )
+
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.register_forward_hooks",
-        lambda block, hook_name, hooks, act_stat: captured.update(
-            block=block, hook_name=hook_name, hooks=hooks, act_stat=act_stat
-        ),
+        _mock_register_forward_hooks,
     )
     stub = _StubModel()
     block = nn.Module()
     stub.register_block_forward_hooks(block, hook_name="hook1", hooks={"k": "v"}, act_stat={"a": 1})
-    assert captured["hook_name"] == "hook1"
+    assert captured.get("hook_name") == "hook1"
 
 
 def test_build_block_for_forward_quant_branch(monkeypatch):
@@ -286,18 +308,22 @@ def test_build_block_for_forward_plain_branch(monkeypatch):
 
 def test_iter_deploy_bindings_returns_empty_on_no_quant_linear():
     stub = _StubModel()
-    stub.get_layer_weight_prefix = lambda layer_idx: "p."
+
+    def get_layer_weight_prefix(layer_idx):
+        return "p."
+
+    stub.get_layer_weight_prefix = get_layer_weight_prefix
     block = nn.Module()
     block.fc = nn.Linear(4, 4)
     bindings = list(stub.iter_deploy_bindings(0, block))
-    assert bindings == []
+    assert not bindings
 
 
 def test_get_block_forward_kwargs_omits_none_values():
     stub = _StubModel(args=SimpleNamespace(device="cpu"))
     stub.position_ids = torch.tensor([[0, 1, 2]])
     assert "attention_mask" not in stub.get_block_forward_kwargs()
-    assert "position_ids" in stub.get_block_forward_kwargs()
+    assert POSITION_IDS in stub.get_block_forward_kwargs()
 
 
 def test_iter_ptq_units_moe_uses_expert_modules_fallback():
@@ -330,9 +356,9 @@ def test_iter_ptq_units_moe_uses_iter_ptq_expert_modules():
 def test_load_selected_layer_ptq_params_attn_cache_target(monkeypatch):
     warnings = []
     monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
-                        __import__("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+                        importlib.import_module("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
     stub = _StubModel(
-        quant_target=["attn-cache"],
+        quant_target=[QUANT_TARGET_ATTN_CACHE],
         args=SimpleNamespace(
             attn_linear_param_dir="",
             attn_cache_param_dir="/cache_params",
@@ -347,9 +373,9 @@ def test_load_selected_layer_ptq_params_attn_cache_target(monkeypatch):
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
     results = stub.load_selected_layer_ptq_params(5, block=nn.Module())
-    assert "attn-cache" in results
+    assert QUANT_TARGET_ATTN_CACHE in results
     assert seen[0][1] == "/cache_params"
-    assert stub.quant_target == ["attn-cache"]
+    assert stub.quant_target == [QUANT_TARGET_ATTN_CACHE]
 
 
 def test_load_selected_layer_ptq_params_moe_target():
@@ -376,9 +402,9 @@ def test_load_selected_layer_ptq_params_moe_target():
 def test_load_selected_layer_ptq_params_partial_warns(monkeypatch):
     warnings = []
     monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
-                        __import__("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+                        importlib.import_module("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
     stub = _StubModel(
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         args=SimpleNamespace(
             attn_linear_param_dir="",
             attn_cache_param_dir="",
@@ -397,9 +423,9 @@ def test_load_selected_layer_ptq_params_partial_warns(monkeypatch):
 def test_load_selected_layer_ptq_params_full_missing_warns(monkeypatch):
     warnings = []
     monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
-                        __import__("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+                        importlib.import_module("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
     stub = _StubModel(
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         args=SimpleNamespace(
             attn_linear_param_dir="",
             attn_cache_param_dir="",
@@ -418,7 +444,11 @@ def test_load_selected_layer_ptq_params_full_missing_warns(monkeypatch):
 def test_iter_deploy_bindings_yields_quant_linear_weights(monkeypatch):
     from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     stub = _StubModel()
-    stub.get_layer_weight_prefix = lambda layer_idx: "model.layers.0."
+
+    def get_layer_weight_prefix(layer_idx):
+        return "model.layers.0."
+
+    stub.get_layer_weight_prefix = get_layer_weight_prefix
 
     block = nn.Module()
     block.q_linear = QuantLinear.__new__(QuantLinear)
@@ -442,7 +472,7 @@ def test_iter_ptq_units_raises_for_moe_without_mlp():
 
 
 def test_build_quant_block_delegates_to_block():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     captured = {}
 
     def _fake_block(idx):
@@ -459,27 +489,27 @@ def test_build_quant_block_delegates_to_block():
 
 
 def test_get_block_forward_kwargs_returns_empty_when_no_state():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     stub.args = SimpleNamespace(device="cpu")
     stub.position_ids = None
     stub.position_embeddings = None
     stub.attention_mask = None
-    assert stub.get_block_forward_kwargs() == {}
+    assert not stub.get_block_forward_kwargs()
 
 
 def test_get_block_forward_kwargs_includes_position_ids():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     stub.args = SimpleNamespace(device="cpu")
     pid = torch.tensor([1, 2, 3])
     stub.position_ids = pid
     stub.position_embeddings = None
     stub.attention_mask = None
     kwargs = stub.get_block_forward_kwargs()
-    assert torch.equal(kwargs["position_ids"], pid)
+    assert torch.equal(kwargs[POSITION_IDS], pid)
 
 
 def test_get_block_forward_kwargs_includes_attention_mask():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     stub.args = SimpleNamespace(device="cpu")
     mask = torch.tensor([1, 1, 0])
     stub.position_ids = None
@@ -490,7 +520,7 @@ def test_get_block_forward_kwargs_includes_attention_mask():
 
 
 def test_get_block_forward_kwargs_includes_position_embeddings():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     stub.args = SimpleNamespace(device="cpu")
     emb = (torch.tensor([1.0]), torch.tensor([2.0]))
     stub.position_ids = None
@@ -502,7 +532,7 @@ def test_get_block_forward_kwargs_includes_position_embeddings():
 
 
 def test_build_block_for_forward_calls_block_when_no_quant():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     captured = {}
     def _fake_block(idx):
         captured["idx"] = idx
@@ -514,14 +544,18 @@ def test_build_block_for_forward_calls_block_when_no_quant():
 
 
 def test_build_block_for_forward_calls_build_quant_block_when_quant():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     captured = {}
     def _fake_quant_block(idx):
         captured["quant_idx"] = idx
         mod = nn.Linear(4, 4)
         return mod
     stub.build_quant_block = _fake_quant_block
-    stub.load_selected_layer_ptq_params = lambda idx, block, strict: {}
+
+    def load_selected_layer_ptq_params(idx, block, strict):
+        return {}
+
+    stub.load_selected_layer_ptq_params = load_selected_layer_ptq_params
     result = stub._build_block_for_forward(3, use_quant_block=True)
     assert captured["quant_idx"] == 3
 
@@ -530,20 +564,20 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
 
 
 def test_load_selected_layer_ptq_params_attn_linear_with_no_param_dir_logs_warning():
-    stub = _StubModel(quant_target=["attn-linear"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_LINEAR])
     stub.args = SimpleNamespace(attn_linear_param_dir="")
     block = nn.Module()
     results = stub.load_selected_layer_ptq_params(0, block, strict=False)
-    assert "attn-linear" in results
-    assert results["attn-linear"]["loaded"] == []
+    assert QUANT_TARGET_ATTN_LINEAR in results
+    assert results[QUANT_TARGET_ATTN_LINEAR]["loaded"] == []
 
 
 def test_load_selected_layer_ptq_params_mlp_with_no_param_dir():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     stub.args = SimpleNamespace(moe_mlp_param_dir="")
     block = nn.Module()
     results = stub.load_selected_layer_ptq_params(0, block, strict=False)
-    assert "mlp" in results
+    assert QUANT_TARGET_MLP in results
 
 
 def test_load_selected_layer_ptq_params_moe_with_no_param_dir():
@@ -555,16 +589,16 @@ def test_load_selected_layer_ptq_params_moe_with_no_param_dir():
 
 
 def test_load_selected_layer_ptq_params_attn_cache_with_no_param_dir():
-    stub = _StubModel(quant_target=["attn-cache"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_CACHE])
     stub.args = SimpleNamespace(attn_cache_param_dir="")
     block = nn.Module()
     results = stub.load_selected_layer_ptq_params(0, block, strict=False)
-    assert "attn-cache" in results
-    assert results["attn-cache"]["loaded"] == []
+    assert QUANT_TARGET_ATTN_CACHE in results
+    assert results[QUANT_TARGET_ATTN_CACHE]["loaded"] == []
 
 
 def test_load_selected_layer_ptq_params_restores_original_quant_target():
-    stub = _StubModel(quant_target=["mlp"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     stub.args = SimpleNamespace(moe_mlp_param_dir="")
     block = nn.Module()
     original = stub.quant_target
@@ -576,7 +610,7 @@ def test_load_selected_layer_ptq_params_restores_original_quant_target():
 
 
 def test_iter_ptq_units_attn_linear_yields_attn():
-    stub = _StubModel(quant_target=["attn-linear"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_LINEAR])
     block = nn.Module()
     block.self_attn = nn.Linear(4, 4)
     units = list(stub.iter_ptq_units(layer_idx=0, block=block))
@@ -585,7 +619,7 @@ def test_iter_ptq_units_attn_linear_yields_attn():
 
 
 def test_iter_ptq_units_attn_cache_yields_attn():
-    stub = _StubModel(quant_target=["attn-cache"])
+    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_CACHE])
     block = nn.Module()
     block.self_attn = nn.Linear(4, 4)
     units = list(stub.iter_ptq_units(layer_idx=0, block=block))
@@ -619,8 +653,11 @@ def test_iter_ptq_units_raises_when_no_mlp_and_not_attn():
 
 def test_iter_deploy_bindings_yields_quant_linear_weight_paths():
     from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-    stub = _StubModel(quant_target=["mlp"])
-    stub.get_layer_weight_prefix = lambda idx: "model.layers.0."
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
+    def get_layer_weight_prefix(idx):
+        return "model.layers.0."
+
+    stub.get_layer_weight_prefix = get_layer_weight_prefix
     block = nn.Module()
     ql = QuantLinear.__new__(QuantLinear)
     ql._parameters = {}
@@ -634,8 +671,11 @@ def test_iter_deploy_bindings_yields_quant_linear_weight_paths():
 
 
 def test_iter_deploy_bindings_skips_non_quant_linear():
-    stub = _StubModel(quant_target=["mlp"])
-    stub.get_layer_weight_prefix = lambda idx: "model.layers.0."
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
+    def get_layer_weight_prefix(idx):
+        return "model.layers.0."
+
+    stub.get_layer_weight_prefix = get_layer_weight_prefix
     block = nn.Module()
     block.linear = nn.Linear(4, 4)
     bindings = list(stub.iter_deploy_bindings(0, block))
@@ -647,8 +687,8 @@ def test_iter_deploy_bindings_skips_non_quant_linear():
 
 def test_load_unit_inputs_delegates_to_load_ptq_inps(tmp_path, monkeypatch):
     from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
-    stub = _StubModel(quant_target=["mlp"])
-    unit = make_ptq_unit("mlp", "mlp", layer_idx=2, module=nn.Linear(4, 4))
+    stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
+    unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=2, module=nn.Linear(4, 4))
     fake_data = torch.randn(4, 4)
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -751,11 +791,11 @@ def _mock_hf_for_safetensors_test(monkeypatch, model_dir, config):
 
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoConfig",
-        type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: config)})(),
+        type("FakeAC", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: config)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
@@ -764,14 +804,13 @@ def _mock_hf_for_safetensors_test(monkeypatch, model_dir, config):
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
         type("FakeAMFCLM", (), {
-            "from_pretrained": staticmethod(lambda *a, **kw: empty_model),
+            FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
             "from_config": staticmethod(lambda *a, **kw: empty_model),
         })(),
     )
 
 
 def test_load_layer_weight_reads_safetensors_from_disk(monkeypatch):
-    from types import SimpleNamespace
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
@@ -783,7 +822,7 @@ def test_load_layer_weight_reads_safetensors_from_disk(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -804,7 +843,6 @@ def test_load_layer_weight_reads_safetensors_from_disk(monkeypatch):
 
 
 def test_block_creates_layer_with_weights(monkeypatch):
-    from types import SimpleNamespace
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
@@ -816,7 +854,7 @@ def test_block_creates_layer_with_weights(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -836,7 +874,6 @@ def test_block_creates_layer_with_weights(monkeypatch):
 
 
 def test_load_embed_state_dict_loads_embed_weights(monkeypatch):
-    from types import SimpleNamespace
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
@@ -848,7 +885,7 @@ def test_load_embed_state_dict_loads_embed_weights(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -861,7 +898,10 @@ def test_load_embed_state_dict_loads_embed_weights(monkeypatch):
     )
 
     model = Qwen3(args)
-    model.float_model = lambda: model.empty_weights_model()
+    def float_model():
+        return model.empty_weights_model()
+
+    model.float_model = float_model
     model.load_embed_state_dict()
 
 
@@ -885,7 +925,7 @@ def test_do_embedding_forward_runs_full_model_forward(tmp_path, monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
         output_dir=str(tmp_path),
@@ -898,7 +938,10 @@ def test_do_embedding_forward_runs_full_model_forward(tmp_path, monkeypatch):
     )
 
     model = Qwen3(args)
-    model.float_model = lambda: model.empty_weights_model()
+    def float_model():
+        return model.empty_weights_model()
+
+    model.float_model = float_model
 
     batch, seq_len = 2, 4
     samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
@@ -925,7 +968,7 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
         output_dir=str(tmp_path),
@@ -938,7 +981,10 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
     )
 
     model = Qwen3(args)
-    model.float_model = lambda: model.empty_weights_model()
+    def float_model():
+        return model.empty_weights_model()
+
+    model.float_model = float_model
 
     batch, seq_len = 2, 4
     samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
@@ -962,7 +1008,6 @@ def _compute_position_embeddings(config, batch, seq_len, device="cpu", dtype=tor
 
 
 def test_do_block_forward_runs_layer_forward_pass(monkeypatch):
-    from types import SimpleNamespace
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
@@ -974,7 +1019,7 @@ def test_do_block_forward_runs_layer_forward_pass(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -998,7 +1043,6 @@ def test_do_block_forward_runs_layer_forward_pass(monkeypatch):
 
 
 def test_do_block_forward_with_hook_enables_act_stat_collection(monkeypatch):
-    from types import SimpleNamespace
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
@@ -1018,7 +1062,7 @@ def test_do_block_forward_with_hook_enables_act_stat_collection(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -1062,7 +1106,7 @@ def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypa
     save_captured = {}
 
     def _fake_save_kwargs(pos_ids, pos_embs, attn_mask, data_dir):
-        save_captured["called"] = True
+        save_captured[CALLED] = True
         save_captured["data_dir"] = data_dir
 
     monkeypatch.setattr(
@@ -1072,7 +1116,7 @@ def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypa
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir=str(tmp_path),
         output_dir=str(tmp_path),
@@ -1085,14 +1129,17 @@ def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypa
     )
 
     model = Qwen3(args)
-    model.float_model = lambda: model.empty_weights_model()
+    def float_model():
+        return model.empty_weights_model()
+
+    model.float_model = float_model
 
     batch, seq_len = 2, 4
     samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
 
     model.do_embedding_forward(samples, hook_name="test_hook")
 
-    assert save_captured.get("called") is True
+    assert save_captured.get(CALLED) is True
     assert save_captured.get("data_dir") == str(tmp_path)
 
 
@@ -1111,11 +1158,11 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
     act_state = {}
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.quant_apply.set_model_weight_quant_state",
-        lambda mod, flag: weight_state.update({"called": True, "flag": flag}),
+        lambda mod, flag: weight_state.update({CALLED: True, FLAG: flag}),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.quant_apply.set_model_act_quant_state",
-        lambda mod, flag: act_state.update({"called": True, "flag": flag}),
+        lambda mod, flag: act_state.update({CALLED: True, FLAG: flag}),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
@@ -1124,7 +1171,7 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -1150,10 +1197,10 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
 
     model.do_block_forward(0, samples, use_quant_block=True, hook_name="some_hook")
 
-    assert weight_state.get("called") is True
-    assert weight_state.get("flag") == False
-    assert act_state.get("called") is True
-    assert act_state.get("flag") == False
+    assert weight_state.get(CALLED) is True
+    assert not weight_state.get(FLAG)
+    assert act_state.get(CALLED) is True
+    assert not act_state.get(FLAG)
 
 
 def test_do_block_forward_quant_eval_mode(monkeypatch):
@@ -1178,7 +1225,7 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -1222,7 +1269,6 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
 def test_do_block_forward_with_hook_removal(monkeypatch):
     """do_block_forward calls hook.remove() when hook_name is not None (line 218)."""
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
-    from unittest.mock import MagicMock
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
     _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
@@ -1256,7 +1302,7 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -1286,7 +1332,6 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
 
 
 def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
-    from types import SimpleNamespace
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
@@ -1298,7 +1343,7 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
 
     args = SimpleNamespace(
         model=str(model_dir),
-        quant_target=["mlp"],
+        quant_target=[QUANT_TARGET_MLP],
         device="cpu",
         data_dir="/tmp/fake",
         output_dir="/tmp/fake",
@@ -1311,7 +1356,10 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
     )
 
     model = Qwen3(args)
-    model.float_model = lambda: model.empty_weights_model()
+    def float_model():
+        return model.empty_weights_model()
+
+    model.float_model = float_model
     model.load_embed_state_dict()
 
     batch, seq_len, hidden_size = 2, 4, 8
@@ -1323,3 +1371,4 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
 
     assert len(preds) == 1
     assert preds[0].shape == (batch, seq_len - 1, config.vocab_size)
+

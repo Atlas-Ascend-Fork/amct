@@ -25,6 +25,9 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 register_dtype()
 
+W_BITS = 'w_bits'
+
+A_BITS = 'a_bits'
 
 def _tiny_config():
     return GlmMoeDsaConfig(
@@ -62,15 +65,15 @@ def _quant_args(quant_target=("attn-linear",)):
         quant_target=list(quant_target),
         bit_policy=BitPolicy({
             "mlp": {
-                "gate_proj": {"w_bits": 8, "a_bits": 8},
-                "up_proj": {"w_bits": 8, "a_bits": 8},
-                "down_proj": {"w_bits": 8, "a_bits": 8},
+                "gate_proj": {W_BITS: 8, A_BITS: 8},
+                "up_proj": {W_BITS: 8, A_BITS: 8},
+                "down_proj": {W_BITS: 8, A_BITS: 8},
             },
             "attn-linear": {
-                "q_proj": {"w_bits": 8, "a_bits": 8},
-                "k_proj": {"w_bits": 8, "a_bits": 8},
-                "v_proj": {"w_bits": 8, "a_bits": 8},
-                "o_proj": {"w_bits": 8, "a_bits": 8},
+                "q_proj": {W_BITS: 8, A_BITS: 8},
+                "k_proj": {W_BITS: 8, A_BITS: 8},
+                "v_proj": {W_BITS: 8, A_BITS: 8},
+                "o_proj": {W_BITS: 8, A_BITS: 8},
             },
             "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
         }),
@@ -186,3 +189,4 @@ def test_quant_glm5_indexer_records_geometry_from_module():
     assert indexer.index_topk == cfg.index_topk
     assert indexer.q_lora_rank == cfg.q_lora_rank
     assert indexer._cached_keys is None
+

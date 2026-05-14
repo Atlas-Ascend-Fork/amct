@@ -34,8 +34,9 @@ def float8_e4m3fn():
     return
 
 
-def npu_quant_matmul(x1, x2, x2_scale, offset=None, bias=None, pertoken_scale=None, output_dtype=torch.bfloat16,
-    x2_dtype=None, pertoken_scale_dtype=None, scale_dtype=None, group_sizes=None):
+def npu_quant_matmul(x1, x2, x2_scale, offset=None, bias=None, pertoken_scale=None,
+    output_dtype=torch.bfloat16, x2_dtype=None, pertoken_scale_dtype=None,
+    scale_dtype=None, group_sizes=None):
     if len(x1.shape) < 2 or len(x1.shape) > 6:
         raise RuntimeError()
     if x2.dtype == torch.float8_e4m3fn:
@@ -72,8 +73,9 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
     return out
 
 
-def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None, output_dtype=torch.float32,
-    x1_dtype=None, x2_dtype=None, group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
+def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
+    output_dtype=torch.float32, x1_dtype=None, x2_dtype=None,
+    group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
     scale_dtype=None):
     x = x.to(torch.float32)
     weight = weight.to(torch.float32)
@@ -155,7 +157,8 @@ def mock_npu_trans_quant_param(scale, offset=None):
 
 
 def mocked_npu_quant_conv2d(x, weight, scale, stride, pads,
-    dilation, groups, offset_x, output_dtype, bias=None, input_dtype=None, weight_dtype=None):
+    dilation, groups, offset_x, output_dtype, bias=None,
+    input_dtype=None, weight_dtype=None):
     x = x.to(torch.float32)
     weight = weight.to(torch.float32)
     if bias is not None:

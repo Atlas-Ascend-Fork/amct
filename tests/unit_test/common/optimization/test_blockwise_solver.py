@@ -66,7 +66,7 @@ def test_collect_trainable_param_groups_marks_grad_and_dedups():
 def test_collect_trainable_param_groups_returns_empty_when_no_trainable():
     layer = nn.Linear(4, 4)
     solver = BlockwiseSolver(_args(), layer_idx=0, model=layer)
-    assert solver._collect_trainable_param_groups(layer) == []
+    assert not solver._collect_trainable_param_groups(layer)
 
 
 def test_collect_trainable_param_groups_freezes_other_params_first():

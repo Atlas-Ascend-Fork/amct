@@ -30,6 +30,22 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pa
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
 
+DATA_SCALE = 'data_scale'
+DATA_OFFSET = 'data_offset'
+
+DATA0 = 'data0'
+OBJECT_NODE = 'object_node'
+
+SCALE = 'scale'
+
+OFFSET = 'offset'
+
+QUANT_BIT = 'quant_bit'
+
+DST_TYPE = 'dst_type'
+
+INT8 = 'INT8'
+
 class TestQuantFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -46,7 +62,7 @@ class TestQuantFusionPass(unittest.TestCase):
         self.graph = onnx_pb.GraphProto()
         # Add graph input 0
         graph_input0 = self.graph.input.add()
-        graph_input0.name = 'data0'
+        graph_input0.name = DATA0
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
@@ -90,9 +106,9 @@ class TestQuantFusionPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = [conv_name]
             relu1.output[:] = outputs
-        conv_sub(self.graph, 'conv1', ['data0'], ['conv1_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub(self.graph, 'conv2', ['data0'], ['conv2_output'], {'scale': 0.99999, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub(self.graph, 'conv3', ['data0'], ['conv3_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
+        conv_sub(self.graph, 'conv1', [DATA0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv2', [DATA0], ['conv2_output'], {SCALE: 0.99999, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv3', [DATA0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         # Add add
         add1 = self.graph.node.add()
         add1.name = 'add1'
@@ -110,9 +126,9 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_match_pattern_success(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 0.99999, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 0.99999, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
@@ -121,9 +137,9 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_match_pattern_failed(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 0.99999, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 0.99999, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
@@ -132,16 +148,16 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_do_pass_success(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 0.99999, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 0.99999, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         data_node = graph._in_out_nodes[0]
-        graph.get_node_by_name('conv1.quant').set_attr('object_node', 'conv1')
-        graph.get_node_by_name('conv2.quant').set_attr('object_node', 'conv2')
-        graph.get_node_by_name('conv3.quant').set_attr('object_node', 'conv3')
+        graph.get_node_by_name('conv1.quant').set_attr(OBJECT_NODE, 'conv1')
+        graph.get_node_by_name('conv2.quant').set_attr(OBJECT_NODE, 'conv2')
+        graph.get_node_by_name('conv3.quant').set_attr(OBJECT_NODE, 'conv3')
 
         before_length = len(graph.nodes)
         QuantFusionPass(records).do_pass(graph, data_node)
@@ -151,3 +167,4 @@ class TestQuantFusionPass(unittest.TestCase):
             RuntimeError,
             graph.get_node_by_name,
             'conv3_quant')
+

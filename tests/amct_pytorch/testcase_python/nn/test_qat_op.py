@@ -37,26 +37,28 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.co
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import LinearQAT
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.matmul import MatMulQAT
 
+RETRAIN_DATA_CONFIG = 'retrain_data_config'
+
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 
 quant_configs = [
     {
         'retrain_weight_config': {},
-        'retrain_data_config': {}
+        RETRAIN_DATA_CONFIG: {}
     },
 
     {
         'retrain_weight_config':
             {'weights_retrain_algo': 'ulq_retrain'},
-        'retrain_data_config':
+        RETRAIN_DATA_CONFIG:
             {'batch_num': 3}
     },
 
     {
         'retrain_weight_config':
             {'channel_wise': False},
-        'retrain_data_config':
+        RETRAIN_DATA_CONFIG:
             {'batch_num': 3,
              'clip_min': -1.0,
              'clip_max': 1.0}
@@ -67,7 +69,7 @@ quant_configs = [
             {'weights_retrain_algo': 'ulq_retrain',
              'channel_wise': False
             },
-        'retrain_data_config':
+        RETRAIN_DATA_CONFIG:
             {'batch_num': 3,
              'fixed_min': True}
     },
@@ -76,7 +78,7 @@ quant_configs = [
         'retrain_weight_config':
             {'weights_retrain_algo': 'ulq_retrain',
              'channel_wise': False},
-        'retrain_data_config':
+        RETRAIN_DATA_CONFIG:
             {'batch_num': 3,
              'clip_min': -1.0,
              'clip_max': 1.0,
@@ -87,7 +89,7 @@ quant_configs = [
         'retrain_weight_config':
             {'dst_type': 'INT8',
              'weights_retrain_algo': 'ulq_retrain'},
-        'retrain_data_config':
+        RETRAIN_DATA_CONFIG:
             {'dst_type': 'INT8',
              'batch_num': 3,
              'clip_min': -1.0,
@@ -96,32 +98,35 @@ quant_configs = [
     }
 ]
 
+MATMUL_QAT_ONNX = 'matmul_qat.onnx'
+
+CPUEXECUTIONPROVIDER = 'CPUExecutionProvider'
 
 def similarity(data0, data1):
     data0_nan = np.isnan(data0)
     data0[data0_nan] = 1
     data1_nan = np.isnan(data1)
     data1[data1_nan] = 1
-    similarity = np.sum(np.multiply(data0, data1).astype(np.float64))\
+    cos_sim = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
     if (data0 == data1).all():
-        similarity = 100
-    if np.isnan(similarity) or np.isinf(similarity):
+        cos_sim = 100
+    if np.isnan(cos_sim) or np.isinf(cos_sim):
         data0 = np.divide(data0,np.power(10,38))
         data1 = np.divide(data1,np.power(10,38))
-        similarity = np.sum(np.multiply(data0, data1).astype(np.float64))\
+        cos_sim = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
-        if np.isnan(similarity) or np.isinf(similarity):
+        if np.isnan(cos_sim) or np.isinf(cos_sim):
             data0 = np.divide(data0,np.power(10,38))
             data1 = np.divide(data1,np.power(10,38))
-            similarity = np.sum(np.multiply(data0, data1).astype(np.float64))\
+            cos_sim = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
-    if np.isnan(similarity):
-        similarity = 0
-    return similarity
+    if np.isnan(cos_sim):
+        cos_sim = 0
+    return cos_sim
 
 class TestQatOp(unittest.TestCase):
     @classmethod
@@ -142,14 +147,14 @@ class TestQatOp(unittest.TestCase):
 
     def test_qat_base_init_success(self):
         quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'clip_max': 1.0,
                 'clip_min': -1.0
             }
         }
         mod = Conv2dQAT(1, 1, 1, config=quant_conf)
-        self.assertTrue(isinstance(mod.retrain_data_config, dict))
-        self.assertTrue(isinstance(mod.retrain_weight_config, dict))
+        self.assertIsInstance(mod.retrain_data_config, dict)
+        self.assertIsInstance(mod.retrain_weight_config, dict)
         self.assertEqual(mod.retrain_data_config.get('clip_max'), 1.0)
         self.assertEqual(mod.retrain_data_config.get('clip_min'), -1.0)
         self.assertEqual(mod.act_num_bits, 8)
@@ -157,7 +162,7 @@ class TestQatOp(unittest.TestCase):
 
     def test_qat_base_init_failed_wrong_config_data_type(self):
         wrong_quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'dst_type': 1,
                 'batch_num': '1',
                 'fixed_min': 1,
@@ -174,7 +179,7 @@ class TestQatOp(unittest.TestCase):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
             with open('./amct_log/amct_pytorch.classic.ptq.graph_based.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
-                for item in wrong_quant_conf.get('retrain_data_config').keys():
+                for item in wrong_quant_conf.get(RETRAIN_DATA_CONFIG).keys():
                     self.assertIn(item, log_content)
             with open('./amct_log/amct_pytorch.classic.ptq.graph_based.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
@@ -183,7 +188,7 @@ class TestQatOp(unittest.TestCase):
 
     def test_qat_base_init_failed_clip_max_min_not_both_set(self):
         wrong_quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'clip_max': 1.0,
             }
         }
@@ -191,7 +196,7 @@ class TestQatOp(unittest.TestCase):
 
     def test_qat_base_init_failed_wrong_config_data_scope(self):
         wrong_quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'dst_type': 1,
             },
             'retrain_weight_config': {
@@ -203,7 +208,7 @@ class TestQatOp(unittest.TestCase):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
             with open('./amct_log/amct_pytorch.classic.ptq.graph_based.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
-                for item in wrong_quant_conf.get('retrain_data_config').keys():
+                for item in wrong_quant_conf.get(RETRAIN_DATA_CONFIG).keys():
                     self.assertIn(item, log_content)
             with open('./amct_log/amct_pytorch.classic.ptq.graph_based.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
@@ -211,7 +216,7 @@ class TestQatOp(unittest.TestCase):
                     self.assertIn(item, log_content)
 
         wrong_quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'batch_num': -1
             }
         }
@@ -219,7 +224,7 @@ class TestQatOp(unittest.TestCase):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
 
         wrong_quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'clip_min': 1.0,
                 'clip_max': 1.0
             }
@@ -228,7 +233,7 @@ class TestQatOp(unittest.TestCase):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
 
         wrong_quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'clip_min': -1.0,
                 'clip_max': -1.0
             }
@@ -259,7 +264,7 @@ class TestQatOp(unittest.TestCase):
 
     def test_check_qat_config_mismatch_dst_type(self):
         wrong_quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'dst_type': 'INT16',
             },
             'retrain_weight_config': {
@@ -271,7 +276,7 @@ class TestQatOp(unittest.TestCase):
 
     def test_qat_init_d16w8(self):
         quant_conf = {
-            'retrain_data_config': {
+            RETRAIN_DATA_CONFIG: {
                 'dst_type': 'INT16',
             },
             'retrain_weight_config': {
@@ -301,7 +306,7 @@ class TestConv2dQAT(unittest.TestCase):
     def test_conv2d_qat_from_float_success(self):
         mod = torch.nn.Conv2d(1, 1, 1, padding_mode='zeros')
         qat_mod = Conv2dQAT.from_float(mod)
-        self.assertTrue(isinstance(qat_mod, Conv2dQAT))
+        self.assertIsInstance(qat_mod, Conv2dQAT)
 
     def test_conv2d_qat_from_float_failed_padding_mode_not_zeros(self):
         mod = torch.nn.Conv2d(1, 1, 1, padding_mode='reflect')
@@ -376,7 +381,7 @@ class TestConvTranspose2dQAT(unittest.TestCase):
     def test_conv_transpose_2d_qat_from_float_success(self):
         mod = torch.nn.ConvTranspose2d(1, 1, 1, padding_mode='zeros')
         qat_mod = ConvTranspose2dQAT.from_float(mod)
-        self.assertTrue(isinstance(qat_mod, ConvTranspose2dQAT))
+        self.assertIsInstance(qat_mod, ConvTranspose2dQAT)
 
     def test_conv_transpose_2d_qat_from_float_failed_ori_op_not_conv_transpose_2d(self):
         mod = torch.nn.Conv2d(1, 1, 1)
@@ -530,7 +535,7 @@ class TestLinearQAT(unittest.TestCase):
     def test_lineard_qat_channel_wise_default_false_01(self):
         config = None
         LinearQAT(1, 1, config=config)
-        self.assertTrue(config is None)
+        self.assertIsNone(config)
 
 def set_module(model, sub_module_name, module):
     tokens = sub_module_name.split('.')
@@ -642,7 +647,7 @@ class TestConv1dQAT(unittest.TestCase):
 
     def test_conv1d_qat_scratch_from_zero(self):
         net_conv1d_qat = NetConv1dQAT()
-        for i in range(5):
+        for _ in range(5):
             ret = net_conv1d_qat.forward(torch.rand(1, 2, 28))
             self.assertIsNotNone(ret)
 
@@ -655,7 +660,7 @@ class TestConv1dQAT(unittest.TestCase):
                     module)
                 set_module(net_conv1d, name, qat_module)
                 idx += 1
-        for i in range(5):
+        for _ in range(5):
             ret = net_conv1d.forward(torch.rand(1, 2, 28))
             self.assertIsNotNone(ret)
 
@@ -774,7 +779,7 @@ class TestConvTranspose1dQAT(unittest.TestCase):
 
     def test_conv_transpose_1d_qat_scratch_from_zero(self):
         net_conv_transpose_1d_qat = NetConvTranspose1dQAT()
-        for i in range(5):
+        for _ in range(5):
             ret = net_conv_transpose_1d_qat.forward(torch.rand(1, 2, 28))
             self.assertIsNotNone(ret)
 
@@ -787,7 +792,7 @@ class TestConvTranspose1dQAT(unittest.TestCase):
                     module, config=quant_configs[idx])
                 set_module(net_conv_transpose_1d, name, qat_module)
                 idx += 1
-        for i in range(5):
+        for _ in range(5):
             ret = net_conv_transpose_1d.forward(torch.rand(1, 2, 28))
             self.assertIsNotNone(ret)
 
@@ -825,7 +830,7 @@ class TestMatMulQAT(unittest.TestCase):
             MatMulQAT.check_input(torch.randn(3,))
 
     def test_acts_quant_init_success(self):
-        matmul_op = MatMulQAT(config={'retrain_data_config': {'batch_num': 2}})
+        matmul_op = MatMulQAT(config={RETRAIN_DATA_CONFIG: {'batch_num': 2}})
         result = matmul_op.acts_quant_init(
             torch.randn(30, 30), matmul_op.acts_quant_params.get('input'), matmul_op.input_init_module)
         self.assertFalse(result)
@@ -840,7 +845,7 @@ class TestMatMulQAT(unittest.TestCase):
         self.assertFalse(matmul_op.input_clip_min_pre.isnan().all())
 
     def test_acts_quant_success(self):
-        matmul_op = MatMulQAT(config={'retrain_data_config': {'batch_num': 2}})
+        matmul_op = MatMulQAT(config={RETRAIN_DATA_CONFIG: {'batch_num': 2}})
         result = matmul_op.acts_quant(
             torch.randn(30, 30), matmul_op.acts_quant_params.get('input'))
 
@@ -861,90 +866,90 @@ class TestMatMulQAT(unittest.TestCase):
 
     def test_matmul_qat_init_failed_wrong_config_item_dtype(self):
         with self.assertRaises(ValueError):
-            MatMulQAT(config={'retrain_data_config': {'batch_num': '1'}})
-            MatMulQAT(config={'retrain_data_config': {'dst_type': 1}})
-            MatMulQAT(config={'retrain_data_config': {'fixed_min': '1'}})
-            MatMulQAT(config={'retrain_data_config': {'clip_max': '1'}})
-            MatMulQAT(config={'retrain_data_config': {'clip_min': '1'}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'batch_num': '1'}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'dst_type': 1}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'fixed_min': '1'}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'clip_max': '1'}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'clip_min': '1'}})
 
     def test_matmul_qat_init_failed_wrong_config_item_scope(self):
         with self.assertRaises(ValueError):
-            MatMulQAT(config={'retrain_data_config': {'dst_type': 'INT4'}})
-            MatMulQAT(config={'retrain_data_config': {'batch_num': 0}})
-            MatMulQAT(config={'retrain_data_config': {'clip_max': 0}})
-            MatMulQAT(config={'retrain_data_config': {'clip_min': 0}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'dst_type': 'INT4'}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'batch_num': 0}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'clip_max': 0}})
+            MatMulQAT(config={RETRAIN_DATA_CONFIG: {'clip_min': 0}})
 
     def test_matmul_qat_init_success(self):
-        MatMulQAT(config={'retrain_data_config': {'dst_type': 'INT8'}})
+        MatMulQAT(config={RETRAIN_DATA_CONFIG: {'dst_type': 'INT8'}})
 
     def test_matmul_op_infer_success(self):
         # norm data
         mod = MatMulQAT()
-        for i in range(10):
+        for _ in range(10):
             input = torch.randn(30, 30, 30)
             other = torch.randn(30, 30, 30)
             mod(input, other)
-        self.onnx_path = os.path.join(self.temp_dir, 'matmul_qat.onnx')
+        self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
         torch.onnx.export(mod, (input, other), self.onnx_path)
         ori_out = torch.matmul(input, other)
-        ort_session = ort.InferenceSession(self.onnx_path, providers=['CPUExecutionProvider'])
+        ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
             None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
-        self.assertTrue(sim > 99)
+        self.assertGreater(sim, 99)
         
         # all zeros
         mod = MatMulQAT()
-        for i in range(10):
+        for _ in range(10):
             input = torch.zeros(30, 30, 30)
             other = torch.zeros(30, 30, 30)
             mod(input, other)
-        self.onnx_path = os.path.join(self.temp_dir, 'matmul_qat.onnx')
+        self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
         torch.onnx.export(mod, (input, other), self.onnx_path)
         ori_out = torch.matmul(input, other)
-        ort_session = ort.InferenceSession(self.onnx_path, providers=['CPUExecutionProvider'])
+        ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
             None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
-        self.assertTrue(sim > 99)
+        self.assertGreater(sim, 99)
         
         # all ones
         mod = MatMulQAT()
-        for i in range(10):
+        for _ in range(10):
             input = torch.ones(30, 30, 30)
             other = torch.ones(30, 30, 30)
             mod(input, other)
-        self.onnx_path = os.path.join(self.temp_dir, 'matmul_qat.onnx')
+        self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
         torch.onnx.export(mod, (input, other), self.onnx_path)
         ori_out = torch.matmul(input, other)
-        ort_session = ort.InferenceSession(self.onnx_path, providers=['CPUExecutionProvider'])
+        ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
             None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
-        self.assertTrue(sim > 99)
+        self.assertGreater(sim, 99)
         
         # uniform
         mod = MatMulQAT()
-        for i in range(10):
+        for _ in range(10):
             input = torch.rand(30, 30, 30) * 5 - 2
             other = torch.rand(30, 30, 30) * 3 + 7
             mod(input, other)
-        self.onnx_path = os.path.join(self.temp_dir, 'matmul_qat.onnx')
+        self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
         torch.onnx.export(mod, (input, other), self.onnx_path)
         ori_out = torch.matmul(input, other)
-        ort_session = ort.InferenceSession(self.onnx_path, providers=['CPUExecutionProvider'])
+        ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
             None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
-        self.assertTrue(sim > 99)
+        self.assertGreater(sim, 99)
         
         op_type_dict = defaultdict(int)
         model = onnx.load(self.onnx_path)
@@ -975,3 +980,4 @@ class TestMatMulQAT(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             mod(input, other)
+
