@@ -27,8 +27,6 @@ class BaseModel(metaclass=ABCMeta):
         self.position_ids = None
         self.attention_mask = None
         self.position_embeddings = None
-        # Per-sample state (vs position_ids etc. which are shared). Adapters
-        # set this to a per-sample list when they need it (e.g. v4 hash MoE).
         self.input_ids = None
         self.model_path = self.args.model
         self.config = AutoConfig.from_pretrained(
@@ -95,22 +93,18 @@ class BaseModel(metaclass=ABCMeta):
         weight_map = getattr(self, "_weight_map", None)
         if weight_map is None:
             weight_map = get_weight_mappings(self.model_path)
-        # Find files containing this layer's weights
         file_list = set()
         for weight_name, file_name in weight_map.items():
             if weight_name.startswith(prefix):
                 file_list.add(file_name)
-        # Load weights from files
         state_dict = {}
         for file_path in file_list:
             full_path = os.path.join(self.model_path, file_path)
             with safe_open(full_path, framework="pt", device="cpu") as f:
                 for key in f.keys():
                     if key.startswith(prefix):
-                        # Remove prefix from key
                         new_key = key[len(prefix):]
                         state_dict[new_key] = f.get_tensor(key)
-        # Remove rotary_emb.inv_freq if present (not needed for inference)
         state_dict.pop('self_attn.rotary_emb.inv_freq', None)
         return state_dict
 
@@ -165,7 +159,6 @@ class BaseModel(metaclass=ABCMeta):
         layers[0] = layers[0].bfloat16()
         layers[0] = Catcher(layers[0], outs)
         with torch.no_grad():
-            # Loop through each batch
             for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc=f"Embedding Processing..."):
                 try:
                     self.model(inputs)
@@ -195,7 +188,6 @@ class BaseModel(metaclass=ABCMeta):
         return self.block(layer_idx)
 
     def _dispatch_block(self, module):
-        # Default: whole block on one NPU. Adapters override for multi-NPU dispatch.
         return module.to(self.args.device)
 
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
@@ -218,8 +210,6 @@ class BaseModel(metaclass=ABCMeta):
             self.register_block_forward_hooks(block, hook_name, hooks, act_stat)
 
         block_kwargs = self.get_block_forward_kwargs()
-        # When self.input_ids is set (v4-style per-sample state), inject it
-        # per iteration; otherwise fall through to shared-kwargs behaviour.
         input_ids_list = self.input_ids if self.input_ids is not None else [None] * len(samples)
         with torch.no_grad():
             for sample, ids in zip(samples, input_ids_list):
@@ -235,10 +225,6 @@ class BaseModel(metaclass=ABCMeta):
             for hook in hooks:
                 hook.remove()
             self.save_block_hook_inputs(act_stat, hook_name, layer_idx)
-        # Break dispatch_model's hook ref cycle, then drop block ref so the
-        # GC + empty_cache below actually frees this layer's NPU memory before
-        # the next layer's dispatch (otherwise layer N+1 sees N's footprint
-        # still pinned).
         try:
             from accelerate.hooks import remove_hook_from_module
             remove_hook_from_module(block, recurse=True)
@@ -249,8 +235,6 @@ class BaseModel(metaclass=ABCMeta):
         return outs
 
     def _release_block_caches(self):
-        # torch_npu's allocator caches freed chunks; without empty_cache the
-        # next layer's larger contiguous alloc may OOM despite enough free space.
         import gc
         gc.collect()
         torch.npu.empty_cache()

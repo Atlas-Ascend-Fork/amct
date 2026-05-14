@@ -41,9 +41,6 @@ class LlmEvalWorkflow:
     def setup(self):
         self._register_components()
         self.pipeline = self._build_pipeline()
-        # Opt-in flag: adapters that support a sharded multi-NPU block-load
-        # (currently deepseek_v4) should use it during eval. PTQ keeps the
-        # default CPU-staging load so per-expert iteration works.
         if hasattr(self.pipeline, "_sharded_block"):
             self.pipeline._sharded_block = True
         sink_id, _ = setup_run_logging(

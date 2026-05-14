@@ -106,7 +106,6 @@ def apply_quant_to_moe_mlp(args, model, cls=None):
 
 
 def apply_quant_to_attn(args, model, cls):
-    # skip_initialization()
     for name, mod in model.named_children():
         if name in ["self_attn", "linear_attn"]:
             setattr(model, name, cls(args, mod))
@@ -145,7 +144,6 @@ class QuantGatedMLP(nn.Module):
         self.gate_proj = QuantLinear(quant_args, mlp_module.gate_proj, w_bits=gate.w, name="gate_proj")
         self.up_proj   = QuantLinear(quant_args, mlp_module.up_proj,   w_bits=up.w,   name="up_proj")
         self.down_proj = QuantLinear(quant_args, mlp_module.down_proj, w_bits=down.w, name="down_proj")
-        # Activation bits come from the projection they feed.
         self.input_quant  = ActivationQuantizer(quant_args, gate.a)
         self.hidden_quant = ActivationQuantizer(quant_args, down.a)
 

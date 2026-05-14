@@ -209,7 +209,6 @@ class QuantV4Attention(nn.Module):
         self.enable_attn_linear = "attn-linear" in quant_args.quant_target
         self.enable_attn_cache = "attn-cache" in quant_args.quant_target
 
-        # Plain attributes copied from the wrapped module.
         self.layer_id = module.layer_id
         self.dim = module.dim
         self.n_heads = module.n_heads
@@ -228,7 +227,6 @@ class QuantV4Attention(nn.Module):
         self.kv_norm = module.kv_norm
         self.freqs_cis = module.freqs_cis
 
-        # Linears.
         if self.enable_attn_linear:
             bits = quant_args.bit_policy["attn-linear"]
             wq_a, wq_b = bits["wq_a"], bits["wq_b"]
@@ -237,9 +235,6 @@ class QuantV4Attention(nn.Module):
             self.wq_b = QuantLinear(quant_args, module.wq_b, w_bits=wq_b.w, name="wq_b")
             self.wkv = QuantLinear(quant_args, module.wkv, w_bits=wkv.w, name="wkv")
             self.wo_b = QuantLinear(quant_args, module.wo_b, w_bits=wo_b.w, name="wo_b")
-            # wo_a uses a grouped einsum on weight.view(g, r, d_in); QuantLinear's
-            # F.linear forward doesn't fit this, so we keep the underlying nn.Linear
-            # and run weight quant manually via a side WeightQuantizer.
             from amct_pytorch.quantization.modules.quant_base import WeightQuantizer
             self.wo_a = module.wo_a
             self.quant_args.w_size = module.wo_a.weight.data.shape
@@ -259,7 +254,6 @@ class QuantV4Attention(nn.Module):
             self.wq_b_afq = nn.Identity()
             self.wo_b_afq = nn.Identity()
 
-        # Cache quantizers.
         self.q_cache_quantizer = (
             ActivationQuantizer(quant_args, bits=quant_args.bit_policy.cache_bits("q"))
             if self.enable_attn_cache else nn.Identity()
@@ -269,7 +263,6 @@ class QuantV4Attention(nn.Module):
             if self.enable_attn_cache else nn.Identity()
         )
 
-        # Compressor / Indexer.
         if self.compress_ratio:
             self.compressor = QuantV4Compressor(quant_args, module.compressor)
             self.indexer = (
@@ -323,7 +316,6 @@ class QuantV4Attention(nn.Module):
         ratio = self.compress_ratio
         rd = self.rope_head_dim
 
-        # Lazily share freqs_cis with sub-modules (mirrors upstream behaviour).
         if self.compress_ratio:
             if self.compressor.freqs_cis is None:
                 self.compressor.freqs_cis = self.freqs_cis
@@ -334,19 +326,16 @@ class QuantV4Attention(nn.Module):
                     self.indexer.compressor.freqs_cis = self.freqs_cis
 
         x_q = self.inp_afq(x)
-        # q
         qr = q = self.q_norm(self.wq_a(x_q))
         qr_q = self.wq_b_afq(qr)
         q = self.wq_b(qr_q).unflatten(-1, (self.n_local_heads, self.head_dim))
         q = q * torch.rsqrt(q.square().mean(-1, keepdim=True) + self.eps)
         apply_rotary_emb(q[..., -rd:], freqs_cis)
 
-        # kv (single-head MLA)
         kv = self.wkv(x_q)
         kv = self.kv_norm(kv)
         apply_rotary_emb(kv[..., -rd:], freqs_cis)
 
-        # attn-cache taps (sit where decode-mode would write into kv_cache).
         q = self.q_cache_quantizer(q)
         kv = self.k_cache_quantizer(kv)
 
@@ -368,7 +357,6 @@ class QuantV4Attention(nn.Module):
         o = self.sparse_attn(q, kv, self.attn_sink.float(), topk_idxs.to(q.device), self.softmax_scale)
         apply_rotary_emb(o[..., -rd:], freqs_cis, True)
 
-        # o_proj: grouped wo_a einsum, then wo_b
         o = o.view(bsz, seqlen, self.n_local_groups, -1)
         o = self._wo_a_apply(o)
         o_flat = o.flatten(2)
