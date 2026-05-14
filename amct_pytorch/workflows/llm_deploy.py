@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import torch
 from collections import defaultdict
 from pathlib import Path
 from tqdm import tqdm
@@ -45,6 +46,8 @@ class LlmDeployWorkflow:
         sink_id = self.setup()
         if self.granularity == "block":
             results = self._run_blockwise()
+        elif self.granularity == "tensor":
+            results = self._run_tensorwise()
         else:
             raise ValueError(
                 f"Unsupported granularity '{self.granularity}' for deploy."
@@ -190,6 +193,55 @@ class LlmDeployWorkflow:
         new_config_file = os.path.join(self.output_dir, "config.json")
         with open(new_config_file, "w") as f:
             json.dump(config, f, indent=2)
+
+    def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
+        if self.quant_dtype == "bf16":
+            return tensor.to(torch.bfloat16)
+        # TODO: int8 weight-only RTN (per-channel symmetric) etc.
+        raise NotImplementedError(
+            f"tensor granularity does not support quant_dtype '{self.quant_dtype}' yet"
+        )
+
+    def _refresh_config_tensor(self):
+        config_file = os.path.join(self.output_dir, "config.json")
+        with open(config_file, "r") as f:
+            config = json.load(f)
+        if self.quant_dtype == "bf16":
+            config["torch_dtype"] = "bfloat16"
+            config.pop("quantization_config", None)
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=2)
+
+    def _run_tensorwise(self):
+        self._copy_support_files()
+        original_index = self._load_weight_index()
+        original_weight_map = dict(original_index.get("weight_map", {}))
+
+        weights_by_file = defaultdict(list)
+        for weight_name, file_name in original_weight_map.items():
+            weights_by_file[file_name].append(weight_name)
+
+        updated_weight_map = {}
+        model_dir = Path(self.model_path)
+        for source_file in tqdm(sorted(weights_by_file), desc="Tensor casting..."):
+            source_path = model_dir / source_file
+            converted = {}
+            with safe_open(str(source_path), framework="pt", device="cpu") as f:
+                for weight_name in weights_by_file[source_file]:
+                    tensor = f.get_tensor(weight_name)
+                    converted[weight_name] = self._convert_tensor(weight_name, tensor)
+            self._write_safetensor_file(source_file, converted)
+            for weight_name in converted:
+                updated_weight_map[weight_name] = source_file
+
+        index_path = self._refresh_weight_index(original_index, updated_weight_map)
+        self._refresh_config_tensor()
+        logger.info("Exported tensor-converted model to {}", self.output_dir)
+        logger.info("Refreshed weight index at {}", index_path)
+        return {
+            "index_path": index_path,
+            "num_output_files": len(set(updated_weight_map.values())),
+        }
 
     def _run_blockwise(self):
         self._copy_support_files()
