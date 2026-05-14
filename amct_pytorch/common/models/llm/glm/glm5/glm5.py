@@ -130,9 +130,6 @@ class QuantGLM5Attn(GlmMoeDsaAttention):
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        # out_transform sits between attn_output ([B, S, num_heads * v_head_dim])
-        # and o_proj's input dim, which is num_heads * v_head_dim — not hidden_size
-        # (default GLM-MoE-DSA: 64*256=16384 vs hidden 6144).
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.num_heads * self.v_head_dim)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
@@ -266,8 +263,6 @@ class GLM5(BaseModel):
         self.num_layers = self.config.num_hidden_layers
 
     def float_model(self):
-        # Same reason as `_ensure_glm5_config`: DSA indexer breaks under SDPA's
-        # None causal-mask short-circuit, so force eager.
         from transformers import AutoModelForCausalLM
         return AutoModelForCausalLM.from_pretrained(
             self.model_path,
@@ -288,11 +283,6 @@ class GLM5(BaseModel):
         return layer_idx >= first_dense and ((layer_idx - first_dense) % moe_freq == 0)
 
     def _ensure_glm5_config(self):
-        # Force eager attention so create_causal_mask always materialises a 4D
-        # mask. The DSA indexer needs a non-None additive causal mask to keep
-        # topk causal; SDPA's `_ignore_causal_mask_sdpa` short-circuit returns
-        # None for unpadded prefill, which makes the indexer pick future tokens
-        # and the merged mask drops causality entirely.
         self.config._attn_implementation = "eager"
 
         if getattr(self.config, "mlp_layer_types", None):

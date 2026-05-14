@@ -70,9 +70,7 @@ def cal_shared_exponent(input_tensor, block_size=32):
     ori_shape = input_tensor.shape
     reshape_input_tensor = input_tensor.reshape(-1, ori_shape[-1])
     first_dim, _ = reshape_input_tensor.shape
-    # fill 0 if the number of data is not divisible by 32
     reshape_input_tensor = pad_zero_by_group(reshape_input_tensor, block_size)
-    # reshape to [first_dim, block_size]
     reshaped_tensor = reshape_input_tensor.view(first_dim, -1, block_size)
     max_values = torch.max(torch.abs(reshaped_tensor), dim=-1).values
     zero_mask = (max_values == 0)
@@ -82,7 +80,6 @@ def cal_shared_exponent(input_tensor, block_size=32):
 
     exponents = torch.floor(torch.log2(non_zero_max_vals))
     mantissas = non_zero_max_vals / torch.pow(2, exponents)
-    # exp add 1 if mantissas larger than 1.75;
     shared_exponents = torch.where(mantissas > 1.75, exponents + 1, exponents) - FP4E2M1_MAX_EXP
 
     shared_exponents[zero_mask] = 0
@@ -252,7 +249,6 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
         quantized_tensor = tensor / scale.to(tensor.device)
         quantized_tensor = quantized_tensor if offset is None else quantized_tensor + offset.to(tensor.device)
         if dst_dtype == FLOAT4_E2M1:
-            # npu op pack4 need dtype float32 but value within [-6.0~6.0]
             quantized_tensor = float_to_fp4e2m1(quantized_tensor).to(torch.float32)
         elif dst_dtype == INT8:
             quantized_tensor = quantized_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
@@ -294,8 +290,6 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
         dequantize_tensor = quantized_tensor * scale.to(ori_dtype).reshape(scale.shape[0], -1, 1)
         dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     else:
-        # int4\int8\float4
-        # only int8、int4 support assymetric quant
         ori_shape = tensor.shape
         if group_size is not None:
             quantized_tensor = convert_to_per_group_shape(quantized_tensor, group_size)
