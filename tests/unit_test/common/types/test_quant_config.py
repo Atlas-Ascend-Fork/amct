@@ -8,7 +8,7 @@ def test_default_values():
     assert cfg.activation_bits == 8
     assert cfg.quant_dtype == "int"
     assert cfg.group_size is None
-    assert cfg.extra_config == {}
+    assert not cfg.extra_config
 
 
 def test_explicit_values_and_extra_kwargs_collected():

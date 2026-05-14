@@ -62,8 +62,6 @@ class TestDequantModule(unittest.TestCase):
         node = self.graph.get_node_by_name("layer1.0")
         node.set_attr('op_data_type', 'float16')
         scale = np.array([1.,], np.float32)
-        # shift_bit = scale = np.array([0.,], np.float32)
-        # clip_mode = 0
         enter_node, out_node = dequant_module.add_fake_dequant(self.graph, "layer1.0", scale)
         self.assertEqual(out_node.proto.op_type, "Cast")
 
@@ -71,8 +69,6 @@ class TestDequantModule(unittest.TestCase):
         node = self.graph.get_node_by_name("layer1.0")
         node.set_attr('op_data_type', 'float32')
         scale = np.array([1.,], np.float32)
-        # shift_bit = scale = np.array([0.,], np.float32)
-        # clip_mode = 0
         enter_node, out_node = dequant_module.add_fake_dequant(self.graph, "layer1.0", scale)
         self.assertEqual(out_node.proto.op_type, "Mul")
 

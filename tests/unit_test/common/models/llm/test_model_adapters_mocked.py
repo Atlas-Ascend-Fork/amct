@@ -28,6 +28,12 @@ from transformers.models.qwen3.modeling_qwen3 import Qwen3Config, Qwen3DecoderLa
 from tests.unit_test.common.models.llm.common.test_base import _make_block_with_attn_and_mlp
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
+FROM_PRETRAINED = 'from_pretrained'
+QUANT_TARGET_MLP = 'mlp'
+W_BITS = 'w_bits'
+A_BITS = 'a_bits'
+
+DENSE = 'dense'
 
 def _make_qwen3_config(num_layers=2):
     return Qwen3Config(
@@ -45,7 +51,7 @@ def _make_qwen3_config(num_layers=2):
     )
 
 
-def _make_mock_args(model_path="/tmp/fake_model", quant_target=("mlp",), **extra):
+def _make_mock_args(model_path="/tmp/fake_model", quant_target=(QUANT_TARGET_MLP,), **extra):
     base = {
         "model": model_path,
         "quant_target": list(quant_target),
@@ -53,8 +59,8 @@ def _make_mock_args(model_path="/tmp/fake_model", quant_target=("mlp",), **extra
         "data_dir": "/tmp/fake_data",
         "output_dir": "/tmp/fake_output",
         "quant_dtype": "int8",
-        "w_bits": 8,
-        "a_bits": 8,
+        W_BITS: 8,
+        A_BITS: 8,
         "algos": [],
         "cali_bsz": 2,
     }
@@ -70,11 +76,11 @@ def mock_hf_model(monkeypatch):
 
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoConfig",
-        type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: cfg)})(),
+        type("FakeAC", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: cfg)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
@@ -85,7 +91,7 @@ def mock_hf_model(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
         type("FakeAMFCLM", (), {
-            "from_pretrained": staticmethod(lambda *a, **kw: empty_model),
+            FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
             "from_config": staticmethod(lambda *a, **kw: empty_model),
         })(),
     )
@@ -102,12 +108,12 @@ def mock_hf_model(monkeypatch):
 class TestQwen3Mocked:
     def test_qwen3_init_creates_model(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Qwen3(args)
         assert model.num_layers == 2
         assert model.textconfig is Qwen3Config
         assert model.cls is Qwen3DecoderLayer
-        assert model.quant_target == ["mlp"]
+        assert model.quant_target == [QUANT_TARGET_MLP]
         assert model.config.num_hidden_layers == 2
         assert model.tokenizer is not None
 
@@ -131,28 +137,36 @@ class TestQwen3Mocked:
 
     def test_qwen3_iter_ptq_units_called(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
-        model = Qwen3(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         block = nn.Module()
         block.mlp = nn.Linear(4, 4)
         units = list(model.iter_ptq_units(0, block))
         assert len(units) == 1
-        assert units[0].kind == "mlp"
+        assert units[0].kind == QUANT_TARGET_MLP
 
     def test_qwen3_export_block_deploy_returns_tensors(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
         from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy
-        model = Qwen3(_make_mock_args(quant_target=["mlp"]))
-        model.block = lambda layer_idx: nn.Linear(4, 4)
-        model.load_selected_layer_ptq_params = lambda layer_idx, block, strict: None
+        model = Qwen3(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
+
+        def block(layer_idx):
+            return nn.Linear(4, 4)
+
+        model.block = block
+
+        def load_selected_layer_ptq_params(layer_idx, block, strict):
+            return None
+
+        model.load_selected_layer_ptq_params = load_selected_layer_ptq_params
         tensors, routes = export_block_deploy(model, 0, [])
         assert isinstance(tensors, dict)
         assert isinstance(routes, dict)
 
     def test_qwen3_init_cls_property(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
-        from transformers.models.qwen3.modeling_qwen3 import Qwen3DecoderLayer
+        from transformers.models.qwen3.modeling_qwen3 import Qwen3DecoderLayer as qwen3_decoder_layer
         model = Qwen3(_make_mock_args())
-        assert model.cls is Qwen3DecoderLayer
+        assert model.cls is qwen3_decoder_layer
 
     def test_qwen3_num_layers_property(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
@@ -161,9 +175,9 @@ class TestQwen3Mocked:
 
     def test_qwen3_textconfig_property(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
-        from transformers.models.qwen3.modeling_qwen3 import Qwen3Config
+        from transformers.models.qwen3.modeling_qwen3 import Qwen3Config as qwen3_config
         model = Qwen3(_make_mock_args())
-        assert model.textconfig is Qwen3Config
+        assert model.textconfig is qwen3_config
 
 
 class TestQwen3MoeMocked:
@@ -184,24 +198,24 @@ class TestQwen3MoeMocked:
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoConfig",
-            type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: cfg)})(),
+            type("FakeAC", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: cfg)})(),
         )
         fake_tokenizer = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-            type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+            type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.init_empty_weights",
             lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
         )
-        from transformers import AutoModelForCausalLM
+        from transformers import AutoModelForCausalLM as auto_model_for_causal_lm
         with init_empty_weights():
-            empty_model = AutoModelForCausalLM.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
+            empty_model = auto_model_for_causal_lm.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
             type("FakeAMFCLM", (), {
-                "from_pretrained": staticmethod(lambda *a, **kw: empty_model),
+                FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
                 "from_config": staticmethod(lambda *a, **kw: empty_model),
             })(),
         )
@@ -232,24 +246,24 @@ class TestQwen3MoeMocked:
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoConfig",
-            type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: cfg)})(),
+            type("FakeAC", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: cfg)})(),
         )
         fake_tokenizer = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-            type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+            type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.init_empty_weights",
             lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
         )
-        from transformers import AutoModelForCausalLM
+        from transformers import AutoModelForCausalLM as auto_model_for_causal_lm
         with init_empty_weights():
-            empty_model = AutoModelForCausalLM.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
+            empty_model = auto_model_for_causal_lm.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
             type("FakeAMFCLM", (), {
-                "from_pretrained": staticmethod(lambda *a, **kw: empty_model),
+                FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
                 "from_config": staticmethod(lambda *a, **kw: empty_model),
             })(),
         )
@@ -257,8 +271,8 @@ class TestQwen3MoeMocked:
             "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
             lambda path: {},
         )
-        args = _make_mock_args(quant_target=["mlp"], moe_mlp_param_dir="")
-        with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP], moe_mlp_param_dir="")
+        with pytest.raises(ValueError, match=f"does not support quant_target='{QUANT_TARGET_MLP}'"):
             Qwen3Moe(args)
 
     def test_qwen3_moe_num_experts(self, monkeypatch):
@@ -537,7 +551,7 @@ class TestQwen3MoeMocked:
         block = nn.Module()
         block.linear = nn.Linear(4, 4)
         bindings = list(model.iter_deploy_bindings(0, block))
-        assert bindings == []
+        assert not bindings
 
     def test_qwen3_moe_float_model_delegates(self, monkeypatch):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
@@ -653,10 +667,15 @@ class TestQwen3MoeMocked:
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
         mock_result = [torch.randn(2, 4, 8)]
+        fake_block_result = mock_result
+
+        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
+                                   use_quant_block=False, enable_quant=False):
+            return fake_block_result
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            lambda self, layer_idx, samples, hook_name=None, use_quant_block=False,
-            enable_quant=False: mock_result,
+            _mock_do_block_forward,
         )
         result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
         assert result is mock_result
@@ -789,7 +808,7 @@ class TestQwen3MoeMocked:
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
-        unit = make_ptq_unit("moe", "mlp", layer_idx=0, module=nn.Linear(4, 4))
+        unit = make_ptq_unit("moe", QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -804,23 +823,23 @@ def _mock_base_deps(monkeypatch, cfg):
     fake_tokenizer = MagicMock()
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoConfig",
-        type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: cfg)})(),
+        type("FakeAC", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: cfg)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
         lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
     )
-    from transformers import AutoModelForCausalLM
+    from transformers import AutoModelForCausalLM as auto_model_for_causal_lm
     with init_empty_weights():
-        empty_model = AutoModelForCausalLM.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
+        empty_model = auto_model_for_causal_lm.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
         type("FakeAMFCLM", (), {
-            "from_pretrained": staticmethod(lambda *a, **kw: empty_model),
+            FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
             "from_config": staticmethod(lambda *a, **kw: empty_model),
         })(),
     )
@@ -864,8 +883,8 @@ class TestQwen3NextMocked:
             max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
-        args = _make_mock_args(quant_target=["mlp"])
-        with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
+        with pytest.raises(ValueError, match=f"does not support quant_target='{QUANT_TARGET_MLP}'"):
             Qwen3Next(args)
 
     def test_qwen3_next_export_block_deploy(self, monkeypatch):
@@ -885,8 +904,16 @@ class TestQwen3NextMocked:
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
         model = Qwen3Next(args)
-        model.block = lambda layer_idx: nn.Linear(4, 4)
-        model.load_selected_layer_ptq_params = lambda layer_idx, block, strict: None
+
+        def block(layer_idx):
+            return nn.Linear(4, 4)
+
+        model.block = block
+
+        def load_selected_layer_ptq_params(layer_idx, block, strict):
+            return None
+
+        model.load_selected_layer_ptq_params = load_selected_layer_ptq_params
         tensors, routes = export_block_deploy(model, 0, [])
         assert isinstance(tensors, dict)
 
@@ -1231,7 +1258,7 @@ class TestQwen3NextMocked:
         block = nn.Module()
         block.linear = nn.Linear(4, 4)
         bindings = list(model.iter_deploy_bindings(0, block))
-        assert bindings == []
+        assert not bindings
 
     def test_qwen3_next_float_model_delegates(self, monkeypatch):
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
@@ -1315,10 +1342,15 @@ class TestQwen3NextMocked:
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
         mock_result = [torch.randn(2, 4, 8)]
+        fake_block_result = mock_result
+
+        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
+                                   use_quant_block=False, enable_quant=False):
+            return fake_block_result
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            lambda self, layer_idx, samples, hook_name=None, use_quant_block=False,
-            enable_quant=False: mock_result,
+            _mock_do_block_forward,
         )
         result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
         assert result is mock_result
@@ -1384,7 +1416,7 @@ class TestQwen3NextMocked:
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
-        unit = make_ptq_unit("moe", "mlp", layer_idx=0, module=nn.Linear(4, 4))
+        unit = make_ptq_unit("moe", QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -1422,23 +1454,23 @@ def _mock_base_deps_wrapper(monkeypatch, cfg):
     fake_tokenizer = MagicMock()
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoConfig",
-        type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: cfg)})(),
+        type("FakeAC", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: cfg)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
         lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
     )
-    from transformers import AutoModelForCausalLM
+    from transformers import AutoModelForCausalLM as auto_model_for_causal_lm
     with init_empty_weights():
-        empty_model = AutoModelForCausalLM.from_config(cfg.text_config, trust_remote_code=True, torch_dtype=torch.bfloat16)
+        empty_model = auto_model_for_causal_lm.from_config(cfg.text_config, trust_remote_code=True, torch_dtype=torch.bfloat16)
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
         type("FakeAMFCLM", (), {
-            "from_pretrained": staticmethod(lambda *a, **kw: empty_model),
+            FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
             "from_config": staticmethod(lambda *a, **kw: empty_model),
         })(),
     )
@@ -1459,11 +1491,11 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Qwen3_5(args)
         assert model.num_layers == 2
         assert model.cls is Qwen3_5DecoderLayer
-        assert model.quant_target == ["mlp"]
+        assert model.quant_target == [QUANT_TARGET_MLP]
 
     def test_qwen3_5_parse_quant_mode_rejects_moe(self, monkeypatch):
         from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
@@ -1489,7 +1521,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         assert model.get_layer_weight_prefix(0) == "model.language_model.layers.0."
 
     def test_qwen3_5_embed_base_prefix(self, monkeypatch):
@@ -1502,7 +1534,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         assert model._embed_base_prefix() == "model.language_model."
 
     def test_qwen3_5_get_block_attention_mask(self, monkeypatch):
@@ -1515,7 +1547,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         assert model.get_block_attention_mask(nn.Module()) is None
 
     def test_qwen3_5_build_quant_block_mlp(self, monkeypatch):
@@ -1528,7 +1560,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_block = nn.Linear(4, 4)
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
         monkeypatch.setattr(model, "apply_quant_moe_mlp", lambda dl: setattr(dl, "_q", True))
@@ -1610,7 +1642,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         dl = nn.Linear(4, 4)
         captured = {}
         def _mock(args, dl_in, **kwargs):
@@ -1631,11 +1663,11 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         block = _make_block_with_attn_and_mlp()
         units = list(model.iter_ptq_units(0, block))
         assert len(units) == 1
-        assert units[0].kind == "mlp"
+        assert units[0].kind == QUANT_TARGET_MLP
 
     def test_qwen3_5_iter_deploy_bindings(self, monkeypatch):
         from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
@@ -1648,7 +1680,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         ql = QuantLinear.__new__(QuantLinear)
         ql._parameters = {}
         ql._modules = {}
@@ -1668,7 +1700,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.float_model",
@@ -1686,7 +1718,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = {"some.weight": torch.randn(4, 4)}
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.load_layer_weight",
@@ -1704,7 +1736,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.load_embed_state_dict",
             lambda self: None,
@@ -1721,7 +1753,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.block",
@@ -1739,7 +1771,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = [torch.randn(2, 4, 8)]
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_embedding_forward",
@@ -1758,12 +1790,17 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = [torch.randn(2, 4, 8)]
+        fake_block_result = mock_result
+
+        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
+                                   use_quant_block=False, enable_quant=False):
+            return fake_block_result
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            lambda self, layer_idx, samples, hook_name=None, use_quant_block=False,
-            enable_quant=False: mock_result,
+            _mock_do_block_forward,
         )
         result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
         assert result is mock_result
@@ -1778,7 +1815,7 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = [torch.randn(2, 4, 100)]
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_head_forward",
@@ -1798,8 +1835,8 @@ class TestQwen3_5Mocked:
             "rope_theta": 10000.0, "tie_word_embeddings": False,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        model = Qwen3_5(_make_mock_args(quant_target=["mlp"]))
-        unit = make_ptq_unit("mlp", "mlp", layer_idx=0, module=nn.Linear(4, 4))
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
+        unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -1847,8 +1884,8 @@ class TestQwen3_5MoeMocked:
             "n_routed_experts": 4, "n_shared_experts": 0,
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
-        args = _make_mock_args(quant_target=["mlp"], moe_mlp_param_dir="")
-        with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP], moe_mlp_param_dir="")
+        with pytest.raises(ValueError, match=f"does not support quant_target='{QUANT_TARGET_MLP}'"):
             Qwen3_5Moe(args)
 
     def test_qwen3_5_moe_get_layer_weight_prefix(self, monkeypatch):
@@ -2230,10 +2267,15 @@ class TestQwen3_5MoeMocked:
         _mock_base_deps_wrapper(monkeypatch, cfg)
         model = Qwen3_5Moe(_make_mock_args(quant_target=["moe"]))
         mock_result = [torch.randn(2, 4, 8)]
+        fake_block_result = mock_result
+
+        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
+                                   use_quant_block=False, enable_quant=False):
+            return fake_block_result
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            lambda self, layer_idx, samples, hook_name=None, use_quant_block=False,
-            enable_quant=False: mock_result,
+            _mock_do_block_forward,
         )
         result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
         assert result is mock_result
@@ -2281,7 +2323,7 @@ class TestQwen3_5MoeMocked:
         })
         _mock_base_deps_wrapper(monkeypatch, cfg)
         model = Qwen3_5Moe(_make_mock_args(quant_target=["moe"]))
-        unit = make_ptq_unit("moe", "mlp", layer_idx=0, module=nn.Linear(4, 4))
+        unit = make_ptq_unit("moe", QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -2308,7 +2350,7 @@ def _make_glm5_cfg(num_layers=2, **extra):
     return cfg
 
 
-def _setup_glm5(monkeypatch, cfg, quant_target=("mlp",)):
+def _setup_glm5(monkeypatch, cfg, quant_target=(QUANT_TARGET_MLP,)):
     from amct_pytorch.common.models.llm.glm.glm5.glm5 import GLM5
 
     _mock_base_deps(monkeypatch, cfg)
@@ -2324,7 +2366,7 @@ class TestGLM5Mocked:
         model = _setup_glm5(monkeypatch, cfg)
         assert model.num_layers == 2
         assert model.cls is GlmMoeDsaDecoderLayer
-        assert model.quant_target == ["mlp"]
+        assert model.quant_target == [QUANT_TARGET_MLP]
 
     def test_glm5_init_moe(self, monkeypatch):
         cfg = _make_glm5_cfg()
@@ -2377,15 +2419,15 @@ class TestGLM5Mocked:
         _mock_base_deps(monkeypatch, cfg)
         # Now clear mlp_layer_types so _ensure_glm5_config regenerates it
         cfg.mlp_layer_types = None
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         GLM5(args)
-        assert cfg.mlp_layer_types == ["dense", "sparse", "dense", "sparse"]
+        assert cfg.mlp_layer_types == [DENSE, "sparse", DENSE, "sparse"]
 
     def test_glm5_ensure_config_skips_when_present(self, monkeypatch):
         cfg = _make_glm5_cfg()
-        cfg.mlp_layer_types = ["dense", "dense"]
+        cfg.mlp_layer_types = [DENSE, DENSE]
         model = _setup_glm5(monkeypatch, cfg)
-        assert cfg.mlp_layer_types == ["dense", "dense"]
+        assert cfg.mlp_layer_types == [DENSE, DENSE]
 
     # ---- block ---------------------------------------------------
 
@@ -2462,7 +2504,7 @@ class TestGLM5Mocked:
     def test_glm5_build_quant_block_attn_linear_also_mlp(self, monkeypatch):
         from amct_pytorch.common.models.llm.glm.glm5 import glm5 as glm5_mod
 
-        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["attn-linear", "mlp"])
+        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["attn-linear", QUANT_TARGET_MLP])
         mock_block = nn.Module()
         mock_block.self_attn = nn.Linear(4, 4)
         mock_block.mlp = nn.Linear(4, 4)
@@ -2477,7 +2519,7 @@ class TestGLM5Mocked:
         assert captured_mlp.get("called") is True
 
     def test_glm5_build_quant_block_no_mlp(self, monkeypatch):
-        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["mlp"])
+        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=[QUANT_TARGET_MLP])
         mock_block = nn.Module()  # no mlp attribute
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
         result = model.build_quant_block(0)
@@ -2486,7 +2528,7 @@ class TestGLM5Mocked:
     def test_glm5_build_quant_block_mlp_only(self, monkeypatch):
         from amct_pytorch.common.models.llm.glm.glm5 import glm5 as glm5_mod
 
-        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["mlp"])
+        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=[QUANT_TARGET_MLP])
         mock_block = nn.Module()
         mock_block.mlp = nn.Linear(4, 4)
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
@@ -2531,7 +2573,7 @@ class TestGLM5Mocked:
     def test_glm5_build_quant_block_moe_and_mlp_shared_experts(self, monkeypatch):
         from amct_pytorch.common.models.llm.glm.glm5 import glm5 as glm5_mod
 
-        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["moe", "mlp"])
+        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["moe", QUANT_TARGET_MLP])
         mock_block = nn.Module()
         mock_block.mlp = nn.Module()
         mock_block.mlp.experts = type("PE", (), {"gate_up_proj": None, "down_proj": None, "num_experts": 2})()
@@ -2554,12 +2596,12 @@ class TestGLM5Mocked:
     # ---- iter_ptq_units -------------------------------------------
 
     def test_glm5_iter_ptq_units_mlp(self, monkeypatch):
-        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["mlp"])
+        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=[QUANT_TARGET_MLP])
         block = _make_block_with_attn_and_mlp()
         units = list(model.iter_ptq_units(0, block))
         assert len(units) == 1
-        assert units[0].kind == "mlp"
-        assert units[0].name == "mlp"
+        assert units[0].kind == QUANT_TARGET_MLP
+        assert units[0].name == QUANT_TARGET_MLP
 
     def test_glm5_iter_ptq_units_attn_linear(self, monkeypatch):
         model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["attn-linear"])
@@ -2598,7 +2640,7 @@ class TestGLM5Mocked:
         block = nn.Module()
         block.mlp = nn.Module()  # no experts attr
         units = list(model.iter_ptq_units(0, block))
-        assert units == []
+        assert not units
 
     def test_glm5_iter_ptq_units_moe_not_quant_gated_raises(self, monkeypatch):
         model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["moe"])
@@ -2629,7 +2671,7 @@ class TestGLM5Mocked:
         assert units[0].metadata == {"expert_idx": 0}
 
     def test_glm5_iter_ptq_units_mlp_with_shared_experts(self, monkeypatch):
-        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=["mlp"])
+        model = _setup_glm5(monkeypatch, _make_glm5_cfg(), quant_target=[QUANT_TARGET_MLP])
         block = nn.Module()
         block.mlp = nn.Module()
         shared = nn.Linear(4, 4)
@@ -2637,7 +2679,7 @@ class TestGLM5Mocked:
         units = list(model.iter_ptq_units(0, block))
         assert len(units) == 1
         assert units[0].name == "shared_experts"
-        assert units[0].kind == "mlp"
+        assert units[0].kind == QUANT_TARGET_MLP
 
     # ---- iter_deploy_bindings -------------------------------------
 
@@ -2701,7 +2743,7 @@ class TestGLM5Mocked:
         block = nn.Module()
         block.linear = nn.Linear(4, 4)
         bindings = list(model.iter_deploy_bindings(0, block))
-        assert bindings == []
+        assert not bindings
 
     # ---- load_unit_inputs -----------------------------------------
 
@@ -2709,7 +2751,7 @@ class TestGLM5Mocked:
         from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 
         model = _setup_glm5(monkeypatch, _make_glm5_cfg())
-        unit = make_ptq_unit("mlp", "mlp", layer_idx=2, module=nn.Linear(4, 4))
+        unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=2, module=nn.Linear(4, 4))
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -2723,14 +2765,20 @@ class TestGLM5Mocked:
     def test_glm5_float_model_delegates_to_super(self, monkeypatch):
         model = _setup_glm5(monkeypatch, _make_glm5_cfg())
         mock_result = MagicMock()
+        def _mock_from_pretrained(*a, **kw):
+            return mock_result
+
         monkeypatch.setattr(
             "transformers.AutoModelForCausalLM.from_pretrained",
-            lambda *a, **kw: mock_result,
+            _mock_from_pretrained,
         )
         import transformers
         original = transformers.AutoModelForCausalLM.from_pretrained
         try:
-            transformers.AutoModelForCausalLM.from_pretrained = lambda *a, **kw: mock_result
+            def from_pretrained(*a, **kw):
+                return mock_result
+
+            transformers.AutoModelForCausalLM.from_pretrained = from_pretrained
             assert model.float_model() is mock_result
         finally:
             transformers.AutoModelForCausalLM.from_pretrained = original
@@ -2774,10 +2822,15 @@ class TestGLM5Mocked:
     def test_glm5_do_block_forward_delegates_to_super(self, monkeypatch):
         model = _setup_glm5(monkeypatch, _make_glm5_cfg())
         mock_result = [torch.randn(2, 4, 8)]
+        fake_block_result = mock_result
+
+        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
+                                   use_quant_block=False, enable_quant=False):
+            return fake_block_result
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            lambda self, layer_idx, samples, hook_name=None, use_quant_block=False,
-            enable_quant=False: mock_result,
+            _mock_do_block_forward,
         )
         result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
         assert result is mock_result
@@ -2804,11 +2857,11 @@ def _mock_pangu_deps(monkeypatch, num_layers=2):
 
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoConfig",
-        type("FakeAC", (), {"from_pretrained": staticmethod(lambda *a, **kw: cfg)})(),
+        type("FakeAC", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: cfg)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {"from_pretrained": staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
@@ -2826,7 +2879,7 @@ def _mock_pangu_deps(monkeypatch, num_layers=2):
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
         type("FakeAMFCLM", (), {
-            "from_pretrained": staticmethod(lambda *a, **kw: mock_model),
+            FROM_PRETRAINED: staticmethod(lambda *a, **kw: mock_model),
             "from_config": staticmethod(lambda *a, **kw: mock_model),
         })(),
     )
@@ -2840,25 +2893,25 @@ class TestPangu7BMocked:
     def test_pangu_init(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Pangu7B(args)
         assert model.num_layers == 2
-        assert model.quant_target == ["mlp"]
+        assert model.quant_target == [QUANT_TARGET_MLP]
 
     def test_pangu_iter_ptq_units_mlp(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Pangu7B(args)
         block = _make_block_with_attn_and_mlp()
         units = list(model.iter_ptq_units(0, block))
         assert len(units) == 1
-        assert units[0].kind == "mlp"
+        assert units[0].kind == QUANT_TARGET_MLP
 
     def test_pangu_get_layer_weight_prefix(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Pangu7B(args)
         assert model.get_layer_weight_prefix(0) == "model.layers.0."
 
@@ -2872,7 +2925,7 @@ class TestPangu7BMocked:
     def test_pangu_build_quant_block_mlp(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Pangu7B(args)
         mock_block = nn.Linear(4, 4)
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
@@ -2900,7 +2953,7 @@ class TestPangu7BMocked:
     def test_pangu_build_quant_block_both(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["attn-cache", "mlp"])
+        args = _make_mock_args(quant_target=["attn-cache", QUANT_TARGET_MLP])
         model = Pangu7B(args)
         mock_block = nn.Linear(4, 4)
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
@@ -2909,7 +2962,7 @@ class TestPangu7BMocked:
             captured["attn"] = True
             return dl
         def _mock_mlp(args_in, dl, **kwargs):
-            captured["mlp"] = True
+            captured[QUANT_TARGET_MLP] = True
             return dl
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b.apply_quant_to_attn", _mock_attn
@@ -2919,7 +2972,7 @@ class TestPangu7BMocked:
         )
         result = model.build_quant_block(0)
         assert captured.get("attn") is True
-        assert captured.get("mlp") is True
+        assert captured.get(QUANT_TARGET_MLP) is True
 
     def test_pangu_iter_ptq_units_attn(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
@@ -2946,7 +2999,7 @@ class TestPangu7BMocked:
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Pangu7B(args)
         ql = QuantLinear.__new__(QuantLinear)
         ql._parameters = {}
@@ -2960,7 +3013,7 @@ class TestPangu7BMocked:
     def test_pangu_block(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Pangu7B(args)
         mock_layer = MagicMock()
         mock_layer.eval.return_value = mock_layer
@@ -2973,13 +3026,13 @@ class TestPangu7BMocked:
     def test_pangu_float_model(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Pangu7B(args)
         mock_model = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b.AutoModelForCausalLM",
             type("FakeAM", (), {
-                "from_pretrained": staticmethod(lambda *a, **kw: mock_model),
+                FROM_PRETRAINED: staticmethod(lambda *a, **kw: mock_model),
             })(),
         )
         monkeypatch.setattr(
@@ -2996,7 +3049,7 @@ class TestPangu7BMocked:
     def test_pangu_load_layer_weight_delegates(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        model = Pangu7B(_make_mock_args(quant_target=["mlp"]))
+        model = Pangu7B(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = {"some.weight": torch.randn(4, 4)}
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.load_layer_weight",
@@ -3007,7 +3060,7 @@ class TestPangu7BMocked:
     def test_pangu_load_embed_state_dict_delegates(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        model = Pangu7B(_make_mock_args(quant_target=["mlp"]))
+        model = Pangu7B(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.load_embed_state_dict",
             lambda self: None,
@@ -3017,7 +3070,7 @@ class TestPangu7BMocked:
     def test_pangu_do_embedding_forward_delegates(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        model = Pangu7B(_make_mock_args(quant_target=["mlp"]))
+        model = Pangu7B(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = [torch.randn(2, 4, 8)]
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_embedding_forward",
@@ -3029,12 +3082,17 @@ class TestPangu7BMocked:
     def test_pangu_do_block_forward_delegates(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        model = Pangu7B(_make_mock_args(quant_target=["mlp"]))
+        model = Pangu7B(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = [torch.randn(2, 4, 8)]
+        fake_block_result = mock_result
+
+        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
+                                   use_quant_block=False, enable_quant=False):
+            return fake_block_result
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            lambda self, layer_idx, samples, hook_name=None, use_quant_block=False,
-            enable_quant=False: mock_result,
+            _mock_do_block_forward,
         )
         result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
         assert result is mock_result
@@ -3042,7 +3100,7 @@ class TestPangu7BMocked:
     def test_pangu_do_head_forward_delegates(self, monkeypatch):
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         _mock_pangu_deps(monkeypatch)
-        model = Pangu7B(_make_mock_args(quant_target=["mlp"]))
+        model = Pangu7B(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         mock_result = [torch.randn(2, 4, 100)]
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_head_forward",
@@ -3055,8 +3113,8 @@ class TestPangu7BMocked:
         from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
         from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
         _mock_pangu_deps(monkeypatch)
-        model = Pangu7B(_make_mock_args(quant_target=["mlp"]))
-        unit = make_ptq_unit("mlp", "mlp", layer_idx=0, module=nn.Linear(4, 4))
+        model = Pangu7B(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
+        unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -3070,11 +3128,14 @@ class TestLongcatNextMocked:
     def test_longcat_next_init(self, monkeypatch):
         from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import LongcatNext
         from transformers.models.longcat_flash.configuration_longcat_flash import LongcatFlashConfig
+        def _mock_empty_weights_model(self):
+            return AutoModelForCausalLM.from_config(
+                self.config, trust_remote_code=True, torch_dtype=torch.bfloat16)
+
         monkeypatch.setattr(
             LongcatNext,
             "empty_weights_model",
-            lambda self: AutoModelForCausalLM.from_config(
-                self.config, trust_remote_code=True, torch_dtype=torch.bfloat16),
+            _mock_empty_weights_model,
         )
         cfg = LongcatFlashConfig(
             num_hidden_layers=2, num_layers=2, hidden_size=64, intermediate_size=128,
@@ -3083,18 +3144,21 @@ class TestLongcatNextMocked:
             tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = LongcatNext(args)
         assert model.num_layers == 2
 
     def test_longcat_next_get_layer_weight_prefix(self, monkeypatch):
         from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import LongcatNext
         from transformers.models.longcat_flash.configuration_longcat_flash import LongcatFlashConfig
+        def _mock_empty_weights_model(self):
+            return AutoModelForCausalLM.from_config(
+                self.config, trust_remote_code=True, torch_dtype=torch.bfloat16)
+
         monkeypatch.setattr(
             LongcatNext,
             "empty_weights_model",
-            lambda self: AutoModelForCausalLM.from_config(
-                self.config, trust_remote_code=True, torch_dtype=torch.bfloat16),
+            _mock_empty_weights_model,
         )
         cfg = LongcatFlashConfig(
             num_hidden_layers=2, num_layers=2, hidden_size=64, intermediate_size=128,
@@ -3103,7 +3167,7 @@ class TestLongcatNextMocked:
             tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = LongcatNext(args)
         assert model.get_layer_weight_prefix(0) == "model.layers.0."
 
@@ -3119,7 +3183,7 @@ class TestLongcatLiteMocked:
             tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = LongcatLite(args)
         assert model.num_layers == 2
 
@@ -3133,13 +3197,13 @@ class TestLongcatLiteMocked:
             tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
-        args = _make_mock_args(quant_target=["mlp"])
+        args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = LongcatLite(args)
         block = nn.Module()
         block.mlps = nn.ModuleList([nn.Linear(4, 4)])
         units = list(model.iter_ptq_units(0, block))
         assert len(units) == 1
-        assert units[0].kind == "mlp"
+        assert units[0].kind == QUANT_TARGET_MLP
 
 
 class TestMoeCommon:
@@ -3244,10 +3308,10 @@ class TestPanguQuantModule:
             quant_target=["attn-linear"], q_bits=8, k_bits=8, p_bits=8, v_bits=8,
             bit_policy=BitPolicy({
                 "attn-linear": {
-                    "q_proj": {"w_bits": 8, "a_bits": 8},
-                    "k_proj": {"w_bits": 8, "a_bits": 8},
-                    "v_proj": {"w_bits": 8, "a_bits": 8},
-                    "o_proj": {"w_bits": 8, "a_bits": 8},
+                    "q_proj": {W_BITS: 8, A_BITS: 8},
+                    "k_proj": {W_BITS: 8, A_BITS: 8},
+                    "v_proj": {W_BITS: 8, A_BITS: 8},
+                    "o_proj": {W_BITS: 8, A_BITS: 8},
                 },
                 "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
             }),
@@ -3290,13 +3354,13 @@ class TestPanguQuantModule:
             lambda args, target, ctx: None,
         )
         args = _make_mock_args(
-            quant_target=["mlp"], q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+            quant_target=[QUANT_TARGET_MLP], q_bits=8, k_bits=8, p_bits=8, v_bits=8,
             bit_policy=BitPolicy({
                 "attn-linear": {
-                    "q_proj": {"w_bits": 8, "a_bits": 8},
-                    "k_proj": {"w_bits": 8, "a_bits": 8},
-                    "v_proj": {"w_bits": 8, "a_bits": 8},
-                    "o_proj": {"w_bits": 8, "a_bits": 8},
+                    "q_proj": {W_BITS: 8, A_BITS: 8},
+                    "k_proj": {W_BITS: 8, A_BITS: 8},
+                    "v_proj": {W_BITS: 8, A_BITS: 8},
+                    "o_proj": {W_BITS: 8, A_BITS: 8},
                 },
                 "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
             }),
@@ -3319,3 +3383,4 @@ class TestPanguQuantModule:
         qa = QuantPanguAttn(args, attn_module)
         assert qa.enable_attn_linear is False
         assert isinstance(qa.q_proj, nn.Module)
+

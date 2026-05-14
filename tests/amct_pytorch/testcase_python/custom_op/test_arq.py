@@ -24,7 +24,6 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import arq_real
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DEVICE = torch.device('cpu')
-# DEVICE = torch.device('cuda:0')
 
 class TestArqOp(unittest.TestCase):
     @classmethod

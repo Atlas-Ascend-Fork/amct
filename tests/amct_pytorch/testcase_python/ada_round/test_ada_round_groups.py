@@ -75,7 +75,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
-        self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.ReLU))
+        self.assertIsInstance(ada_round_groups[0][1], torch.nn.ReLU)
 
     def test_get_ada_round_groups_rrelu(self):
         class TestModel(torch.nn.Module):
@@ -95,9 +95,9 @@ class TestAdaRoundGroups(unittest.TestCase):
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
         if not version_higher_than(torch.__version__, '2.1.0'):
-            self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.RReLU))
+            self.assertIsInstance(ada_round_groups[0][1], torch.nn.RReLU)
         else:
-            self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.LeakyReLU))
+            self.assertIsInstance(ada_round_groups[0][1], torch.nn.LeakyReLU)
 
     def test_get_ada_round_groups_leaky_relu(self):
         class TestModel(torch.nn.Module):
@@ -116,7 +116,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
-        self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.LeakyReLU))
+        self.assertIsInstance(ada_round_groups[0][1], torch.nn.LeakyReLU)
 
     def test_get_ada_round_groups_prelu(self):
         class TestModel(torch.nn.Module):
@@ -136,7 +136,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
-        self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.PReLU))
+        self.assertIsInstance(ada_round_groups[0][1], torch.nn.PReLU)
         except_weight = torch.ones(5)
         self.assertTrue((ada_round_groups[0][1].weight.data == except_weight).all())
         self.assertFalse(ada_round_groups[0][1].weight.requires_grad)
@@ -158,7 +158,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
-        self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.GELU))
+        self.assertIsInstance(ada_round_groups[0][1], torch.nn.GELU)
 
     def test_get_ada_round_groups_relu6(self):
         class TestModel(torch.nn.Module):
@@ -177,7 +177,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
-        self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.ReLU6))
+        self.assertIsInstance(ada_round_groups[0][1], torch.nn.ReLU6)
 
     def test_get_ada_round_groups_sigmoid(self):
         class TestModel(torch.nn.Module):
@@ -196,7 +196,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
-        self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.Sigmoid))
+        self.assertIsInstance(ada_round_groups[0][1], torch.nn.Sigmoid)
 
     def test_get_ada_round_groups_tanh(self):
         class TestModel(torch.nn.Module):
@@ -215,7 +215,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
         self.assertEqual(ada_round_groups[0][0], 'linear')
-        self.assertTrue(isinstance(ada_round_groups[0][1], torch.nn.Tanh))
+        self.assertIsInstance(ada_round_groups[0][1], torch.nn.Tanh)
 
     def test_is_weight_ada_round_not_quant(self):
         quant_config = dict()

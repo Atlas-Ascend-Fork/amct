@@ -17,9 +17,12 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+import logging
 import torch
 import torch.nn as nn
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.module_info import ModuleInfo
 
@@ -30,11 +33,11 @@ class TestModuleInfo(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        print("TestModuleInfo start!")
+        logger.info("TestModuleInfo start!")
 
     @classmethod
     def tearDownClass(cls):
-        print("TestModuleInfo end!")
+        logger.info("TestModuleInfo end!")
         pass
 
     def setUp(self):

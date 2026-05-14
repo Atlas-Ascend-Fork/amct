@@ -27,6 +27,8 @@ import torch.optim as optim
 import numpy as np
 import copy
 
+ZEROS = 'zeros'
+
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
     """ save onnx """
     args = list()
@@ -180,7 +182,6 @@ class Net4dMatmul(nn.Module):
             nn.Linear(128,10, bias=True))
 
     def forward(self, x):
-        # x = x.view(-1, 28)
         x = self.fc(x)
         x = F.log_softmax(x, dim=1)
 
@@ -466,12 +467,12 @@ class QuantFusionNet(nn.Module):
 class DefaultNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True, padding_mode='zeros')
+        self.conv1 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True, padding_mode=ZEROS)
         self.conv2 = copy.deepcopy(self.conv1) 
-        self.conv3 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=2, groups=1, bias=True, padding_mode='zeros')
-        self.conv4 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=2, bias=True, padding_mode='zeros')
-        self.conv5 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=3, bias=True, padding_mode='zeros')
-        self.conv6 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=6, bias=True, padding_mode='zeros')
+        self.conv3 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=2, groups=1, bias=True, padding_mode=ZEROS)
+        self.conv4 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=2, bias=True, padding_mode=ZEROS)
+        self.conv5 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=3, bias=True, padding_mode=ZEROS)
+        self.conv6 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=6, bias=True, padding_mode=ZEROS)
         self.conv7 = copy.deepcopy(self.conv1)
         self.conv8 = copy.deepcopy(self.conv1)
         self.conv9 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True, padding_mode='replicate')
@@ -500,12 +501,12 @@ class DefaultNet(nn.Module):
         self.avgpool4 = nn.AvgPool2d(kernel_size=8, stride=1, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None)
         self.avgpool5 = nn.AvgPool2d(kernel_size=1, stride=1, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None)
 
-        self.deconv1 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode='zeros')
-        self.deconv2 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=2, padding_mode='zeros')
-        self.deconv3 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=2, bias=True, dilation=1, padding_mode='zeros')
-        self.deconv4 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode='zeros')
-        self.deconv5 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode='zeros')
-        self.deconv6 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode='zeros')
+        self.deconv1 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv2 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=2, padding_mode=ZEROS)
+        self.deconv3 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=2, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv4 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv5 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv6 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
 
     def forward(self, x0):
         x = self.conv1(x0)
@@ -612,5 +613,5 @@ class Net(nn.Module):
         x = self.dropout2(x)
         x = self.fc_bn2(x)
 
-        # output = F.log_softmax(x, dim=1)
         return x
+

@@ -62,7 +62,7 @@ class TestGRUQAT(unittest.TestCase):
                 qat_module = GRUQAT.from_float(
                     module)
                 set_module(net_gru, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_gru.forward(torch.rand(1, 1, 10))
             self.assertIsNotNone(ret)
 
@@ -73,7 +73,7 @@ class TestGRUQAT(unittest.TestCase):
                 qat_module = GRUQAT.from_float(
                     module)
                 set_module(net_gru, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_gru.forward(torch.rand(1, 2, 10))
             self.assertIsNotNone(ret)
 
@@ -97,7 +97,7 @@ class TestLSTMQAT(unittest.TestCase):
                 qat_module = LSTMQAT.from_float(
                     module)
                 set_module(net_lstm, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_lstm.forward(torch.rand(1, 1, 10))
             self.assertIsNotNone(ret)
     
@@ -108,7 +108,7 @@ class TestLSTMQAT(unittest.TestCase):
                 qat_module = LSTMQAT.from_float(
                     module)
                 set_module(net_lstm, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_lstm.forward(torch.rand(1, 5, 10))
             self.assertIsNotNone(ret)
 

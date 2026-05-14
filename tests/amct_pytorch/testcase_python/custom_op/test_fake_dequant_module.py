@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
 
@@ -31,10 +32,12 @@ DEVICE = torch.device('cpu')
 S16_BASE = 16
 S32_BASE = 32
 
+logger = logging.getLogger(__name__)
+
 def compare_ndarray(ndarray1, ndarray2, name):
     if not (ndarray1 - ndarray2 < 1e-5).all():
-        print(ndarray1)
-        print(ndarray2)
+        logger.info(ndarray1)
+        logger.info(ndarray2)
         raise ValueError('{} not equal'.format(name))
 
 def dequant_compute(inputs, scale_d, scale_w, deq_shape):
