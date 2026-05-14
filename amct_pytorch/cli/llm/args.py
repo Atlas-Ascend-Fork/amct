@@ -36,15 +36,14 @@ def _validate_eval_mode(args):
 def parser_gen(command=None):
     parser = argparse.ArgumentParser()
 
-    # General Arguments
     parser.add_argument('--model', type=str, default='deepseek-ai/DeepSeek-V3.2',
                         help='Model to load.')
     parser.add_argument('--model_name', type=str, default='deepseek-ai/DeepSeek-V3.2',
                         help='Model to load.')
     parser.add_argument('--device', type=str, default='npu:0',
-                        help='Device to use.') # granularity
+                        help='Device to use.')
     parser.add_argument('--granularity', type=str, default='model',
-                        help='eval for block-wise or global.') # granularity
+                        help='eval for block-wise or global.')
     parser.add_argument('--seed', type=int, default=0, help='Random seed for HuggingFace and PyTorch.')
     parser.add_argument(
         '--quant_target',
@@ -55,23 +54,17 @@ def parser_gen(command=None):
     )
     parser.add_argument("--seq_len", type=int, default=4096)
 
-    # ptq extract
     parser.add_argument('--data_dir', default="")
 
-    # ptq eval extract
     parser.add_argument('--output_dir', type=str, default="./outputs", help='Output directory path.')
 
-    # extract
     parser.add_argument('--nsamples', type=int, default=128,
                         help='Number of calibration data samples.')
-    # eval
     parser.add_argument('--eval_mode', type=str, default='bf16', choices=['bf16', 'quant'],
                         help='bf16 uses the original model path; quant rebuilds quant modules and toggles quantizers by bit-widths.')
 
-    # ptq eval
     parser.add_argument("--quant_dtype", type=str, default="mxfp", help='Quantization data type.')
 
-    # ptq
     parser.add_argument('--cali_bsz', type=int, default=4,
                         help='Batch size default is 4.')
     parser.add_argument('--base_lr', type=float, default=1e-5,
@@ -94,12 +87,10 @@ def parser_gen(command=None):
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)
 
-    # Per-layer bit-width policy. Required when running with quantization.
     parser.add_argument('--bit_config', type=str, default=None,
                         help='Path to a yaml file describing per-role bit-widths. '
                              'See configs/ for examples.')
 
-    # Experiments Arguments
     parser.add_argument('--attn_linear_param_dir', default="")
     parser.add_argument('--attn_cache_param_dir', default="")
     parser.add_argument('--moe_mlp_param_dir', default="")

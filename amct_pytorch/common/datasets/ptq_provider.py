@@ -67,7 +67,6 @@ class LlmPtqDataProvider:
                 if isinstance(gt, (tuple, list)):
                     gt = gt[0]
                 gts.append(gt.detach())
-        # ori_module.to("cpu")
         torch.npu.empty_cache()
         return torch.cat(gts, dim=0)
 
