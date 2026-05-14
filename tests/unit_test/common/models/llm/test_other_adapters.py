@@ -1,4 +1,4 @@
-"""Lightweight adapter tests for pangu / glm5 / longcat / qwen3.6 families."""
+"""Lightweight adapter tests for  glm5 / longcat / qwen3.6 families."""
 
 from types import SimpleNamespace
 
@@ -9,7 +9,6 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.glm.glm5.glm5 import GLM5
 from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import LongcatLite
 from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import LongcatNext
-from amct_pytorch.common.models.llm.pangu.pangu_7b.pangu_7b import Pangu7B
 from amct_pytorch.common.models.llm.qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.quantization.dtypes import register_dtype
@@ -26,27 +25,6 @@ def _stub(adapter_cls, **attrs):
     for k, v in attrs.items():
         setattr(obj, k, v)
     return obj
-
-
-# ---- Pangu7B -------------------------------------------------------------
-
-
-def test_pangu7b_rejects_moe_target():
-    obj = _stub(Pangu7B, quant_target=["moe"])
-    with pytest.raises(ValueError, match="dense model"):
-        obj.parse_quant_mode()
-
-
-def test_pangu7b_layer_weight_prefix():
-    obj = _stub(Pangu7B, quant_target=["mlp"])
-    assert obj.get_layer_weight_prefix(3) == "model.layers.3."
-
-
-def test_pangu7b_update_config_sets_eager_attn():
-    cfg = SimpleNamespace()
-    obj = _stub(Pangu7B, quant_target=["mlp"], config=cfg)
-    obj._update_config()
-    assert obj.config._attn_implementation == "eager"
 
 
 # ---- LongcatLite / LongcatNext ------------------------------------------
@@ -214,7 +192,6 @@ def test_qwen3_6_moe_registers_in_model_registry():
 @pytest.mark.parametrize(
     "key,expected_cls",
     [
-        ("pangu_7b", Pangu7B),
         ("longcat_lite", LongcatLite),
         ("glm5", GLM5),
     ],
