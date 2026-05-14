@@ -17,14 +17,12 @@ HiFloat8 Cast 精度测试（仅 NPU）
 
 import torch
 import torch_npu
+from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
 
 torch.npu.set_device(0)
 
-from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
-
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────
-
 PASS = "[PASS]"
 FAIL = "[FAIL]"
 WARN = "[WARN]"
@@ -42,7 +40,6 @@ def record(ok, msg=""):
 
 
 # ── 测试 1: 类型推断 ──────────────────────────────────────────────────────
-
 def test_type_inference():
     print("\n[1] 类型推断测试")
     print("-" * 60)
@@ -75,7 +72,6 @@ def test_type_inference():
 
 
 # ── 测试 2: Decode 输出类型 ────────────────────────────────────────────────
-
 def test_decode_output_type():
     print("\n[2] Decode 输出类型测试")
     print("-" * 60)
@@ -112,7 +108,6 @@ def test_decode_output_type():
 
 
 # ── 测试 3: 编解码往返（基础值）───────────────────────────────────────────
-
 def test_roundtrip_basic():
     print("\n[3] 编解码往返测试（基础值）")
     print("-" * 60)
@@ -131,7 +126,6 @@ def test_roundtrip_basic():
 
 
 # ── 测试 4: 编解码往返（随机数据）─────────────────────────────────────────
-
 def test_roundtrip_random(dtype_name, dtype, num_elements=10000):
     print(f"\n[4] 编解码往返测试（随机 {dtype_name}，{num_elements} 元素）")
     print("-" * 60)
@@ -161,7 +155,6 @@ def test_roundtrip_random(dtype_name, dtype, num_elements=10000):
 
 
 # ── 测试 5: 边界值 ──────────────────────────────────────────────────────────
-
 def test_boundary_values():
     print("\n[5] 边界值测试（FP16）")
     print("-" * 60)
@@ -215,11 +208,11 @@ def test_boundary_values():
 #   3. FP16 与 BF16 在同一组特殊值上的编码必须完全一致
 
 EXPECTED_ENCODE = {
-    '+0':   0x00,
-    '-0':   0x00,
+    '+0': 0x00,
+    '-0': 0x00,
     '+Inf': 0x6F,
     '-Inf': 0xEF,
-    'NaN':  0x80,
+    'NaN': 0x80,
 }
 
 
@@ -237,10 +230,10 @@ def _check_decoded(name, decoded_val):
 
 
 def _test_special_one_dtype(dtype_label, dtype):
-    test_names  = ['+0', '-0', '+Inf', '-Inf', 'NaN']
+    test_names = ['+0', '-0', '+Inf', '-Inf', 'NaN']
     test_values = [0.0, -0.0, float('inf'), float('-inf'), float('nan')]
 
-    x_orig    = torch.tensor(test_values, dtype=dtype, device='npu')
+    x_orig = torch.tensor(test_values, dtype=dtype, device='npu')
     y_encoded = encode_to_hifloat8(x_orig)
     z_decoded = decode_from_hifloat8(y_encoded, dtype)
 
@@ -263,8 +256,10 @@ def _test_special_one_dtype(dtype_label, dtype):
             status = "OK"
         else:
             parts = []
-            if not enc_ok: parts.append(f"编码错(应为 0x{exp:02x})")
-            if not dec_ok: parts.append(f"解码错({dec_msg})")
+            if not enc_ok:
+                parts.append(f"编码错(应为 0x{exp:02x})")
+            if not dec_ok:
+                parts.append(f"解码错({dec_msg})")
             status = "FAIL: " + ", ".join(parts)
         print(f"  [{dtype_label}] {name:>5}   0x{enc:02x}    0x{exp:02x}   {dec:>10}  {status}")
 

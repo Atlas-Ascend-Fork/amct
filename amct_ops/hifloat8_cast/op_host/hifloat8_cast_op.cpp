@@ -16,9 +16,9 @@
 
 #include "ops.h"
 #include <algorithm>
-#include <cstring>
 #include <mutex>
 #include "hifloat8_cast_tiling.h"
+#include "securec.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 
@@ -323,7 +323,9 @@ static at::Tensor UploadTilingToDevice(const HiFloat8CastTilingData& tilingHost,
 {
     at::Tensor tilingTensor = at::empty({sizeof(HiFloat8CastTilingData)},
                                         at::device(at::kCPU).dtype(at::kByte));
-    std::memcpy(tilingTensor.data_ptr(), &tilingHost, sizeof(HiFloat8CastTilingData));
+    errno_t ret = memcpy_s(tilingTensor.data_ptr(), tilingTensor.nbytes(),
+                           &tilingHost, sizeof(HiFloat8CastTilingData));
+    TORCH_CHECK(ret == EOK, "copy tiling data to host tensor failed, memcpy_s ret: ", ret);
     return tilingTensor.to(refTensor.device());
 }
 
