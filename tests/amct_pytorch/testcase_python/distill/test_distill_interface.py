@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import sys
 import os
 import unittest
@@ -34,6 +35,8 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.co
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import LinearQAT
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
 
 class DistillNet(nn.Module):
     def __init__(self):
@@ -125,12 +128,6 @@ class MultiDataset(torch.utils.data.Dataset):
         return self.X[idx], self.Y[idx]
 
 class TestDistillInterface(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_distill_interface')
@@ -150,7 +147,13 @@ class TestDistillInterface(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         os.system('rm -r ' + cls.temp_folder)
-        print("[UNITTEST END test_distill_interface.py]")
+        logger.info("[UNITTEST END test_distill_interface.py]")
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def test_create_distill_config_no_cfg(self):
         config_file = os.path.join(self.temp_folder, 'default.json')
@@ -229,8 +232,8 @@ class TestDistillInterface(unittest.TestCase):
         config_file = os.path.join(CUR_DIR, 'cfgs/Conv2dLinear_cfg.json')
         student_model = create_distill_model(config_file, ori_model, input_data)
 
-        self.assertTrue(isinstance(student_model.layer1, Conv2dQAT))
-        self.assertTrue(isinstance(student_model.layer3, LinearQAT))
+        self.assertIsInstance(student_model.layer1, Conv2dQAT)
+        self.assertIsInstance(student_model.layer3, LinearQAT)
 
         train_loader = torch.utils.data.DataLoader(input_data)
         optimizer = torch.optim.AdamW(student_model.parameters(), lr=0.1)
@@ -253,8 +256,8 @@ class TestDistillInterface(unittest.TestCase):
         config_file = os.path.join(CUR_DIR, 'cfgs/Conv2dLinear_cfg.json')
         student_model = create_distill_model(config_file, ori_model, input_data)
 
-        self.assertTrue(isinstance(student_model.layer1, Conv2dQAT))
-        self.assertTrue(isinstance(student_model.layer3, LinearQAT))
+        self.assertIsInstance(student_model.layer1, Conv2dQAT)
+        self.assertIsInstance(student_model.layer3, LinearQAT)
 
         train_loader = torch.utils.data.DataLoader(input_data)
         optimizer = torch.optim.AdamW(student_model.parameters(), lr=0.1)

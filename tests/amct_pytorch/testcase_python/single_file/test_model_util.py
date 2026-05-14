@@ -80,51 +80,51 @@ class TestModelHelper(unittest.TestCase):
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
 
     def test_get_node_output_info_tuple_input(self):
         input_data = (torch.randn(16, 2, 28, 28),)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
 
     def test_get_node_output_info_tuple_input_with_dict(self):
         input_data = ({'x': torch.randn(16, 2, 28, 28)},)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
 
     def test_get_node_output_info_tensor_input(self):
         input_data = torch.randn(16, 2, 28, 28)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
  
     def test_get_node_output_info_tuple_input(self):
         input_data = (torch.randn(16, 2, 28, 28),)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
  
     def test_get_node_output_info_tuple_input_with_dict(self):
         input_data = ({'x': torch.randn(16, 2, 28, 28)},)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)

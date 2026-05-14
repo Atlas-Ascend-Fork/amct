@@ -29,6 +29,12 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.rnn_retrain_qua
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+LAYERS_NAME = 'layers_name'
+
+LSTM = 'lstm'
+
+BATCH_NUM = 'batch_num'
+
 class TestRNNRetrainQuant(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -81,16 +87,16 @@ class TestRNNRetrainQuant(unittest.TestCase):
             'need_sync': False,
             'process_group': None,
             'world_size': 1,
-            'layers_name': ['lstm'],
-            'batch_num': 1
+            LAYERS_NAME: [LSTM],
+            BATCH_NUM: 1
         }
         cls.gru_comp_common_config = {
             'device': 'cpu',
             'need_sync': False,
             'process_group': None,
             'world_size': 1,
-            'layers_name': ['lstm'],
-            'batch_num': 1
+            LAYERS_NAME: [LSTM],
+            BATCH_NUM: 1
         }
         cls.comp_args = {
             'module': cls.module,
@@ -109,8 +115,8 @@ class TestRNNRetrainQuant(unittest.TestCase):
         cls.common_config = {
             'data_num_bits': 8,
             'wts_num_bits': 8,
-            'layers_name': ['lstm'],
-            'batch_num': 1
+            LAYERS_NAME: [LSTM],
+            BATCH_NUM: 1
         }
 
     @classmethod
@@ -152,3 +158,4 @@ class TestRNNRetrainQuant(unittest.TestCase):
     def test_update_quant_factor(self):
         with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.utils.process_scale'):
             self.retrain_quant._update_quant_factor()
+

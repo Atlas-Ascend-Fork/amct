@@ -79,7 +79,6 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         optimizer.do_optimizer(self.model_001, self.graph)
 
         named_module_dict = {name: mod for name, mod in self.model_001.named_modules()}
-        # print('named_module_dict', named_module_dict)
 
         self.assertEqual(True, isinstance(named_module_dict['layer1.0'], DMQBalancer))
         self.assertEqual(True, isinstance(named_module_dict['layer2.0'], DMQBalancer))

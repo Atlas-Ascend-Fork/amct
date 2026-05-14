@@ -17,10 +17,13 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+import logging
 import torch
 import torch.nn as nn
 from unittest import mock
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.evaluator import ModelEvaluator
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
@@ -32,7 +35,7 @@ class TestEvaluatorHelper(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        print("Test Evaluator Helper start!")
+        logger.info("Test Evaluator Helper start!")
         input_shape = "input_name1:1,3,5,5"
         data_dir = "data/input1"
         data_types = "float32"
@@ -44,7 +47,7 @@ class TestEvaluatorHelper(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        print("Test Evaluator Helper end!")
+        logger.info("Test Evaluator Helper end!")
         pass
 
     def setUp(self):

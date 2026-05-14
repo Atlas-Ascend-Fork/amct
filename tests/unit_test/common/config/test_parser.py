@@ -38,6 +38,8 @@ from amct_pytorch.algorithms import AlgorithmRegistry
 
 # ---- set_default_config ----------------------------------------------------
 
+MINMAX = 'minmax'
+MY_CUSTOM_PARSER = 'my_custom_parser'
 
 def test_set_default_config_returns_int8_minmax():
     assert set_default_config() == INT8_MINMAX_WEIGHT_QUANT_CFG
@@ -66,7 +68,7 @@ def test_check_skip_layer_no_match():
 # ---- check_config ----------------------------------------------------------
 
 
-def _make_quant_config(weight_type="int8", weight_strategy="channel", group_size=None,
+def _make_quant_config(*, weight_type="int8", weight_strategy="channel", group_size=None,
                        input_type="int8", input_strategy="tensor", enable_input=True):
     cfg = {
         "batch_num": 1,
@@ -74,7 +76,7 @@ def _make_quant_config(weight_type="int8", weight_strategy="channel", group_size
             "weights": {"type": weight_type, "symmetric": True, "strategy": weight_strategy},
             "inputs": {"type": input_type, "symmetric": True, "strategy": input_strategy, "enable_quant": enable_input},
         },
-        "algorithm": {"minmax": {}},
+        "algorithm": {MINMAX: {}},
     }
     if group_size is not None:
         cfg["quant_cfg"]["weights"]["group_size"] = group_size
@@ -83,23 +85,23 @@ def _make_quant_config(weight_type="int8", weight_strategy="channel", group_size
 
 def test_check_config_valid_int8_int8():
     qc = _make_quant_config()
-    check_config("int8 int8", qc, "minmax")
+    check_config("int8 int8", qc, MINMAX)
 
 
 def test_check_config_invalid_comb():
     with pytest.raises(ValueError, match="Do not support combination"):
-        check_config("float64 float64", _make_quant_config(), "minmax")
+        check_config("float64 float64", _make_quant_config(), MINMAX)
 
 
 def test_check_config_algo_not_support_comb():
     with pytest.raises(ValueError, match="do not support act and weight quant dtype"):
-        check_config("mxfp8_e4m3fn mxfp8_e4m3fn", _make_quant_config(), "minmax")
+        check_config("mxfp8_e4m3fn mxfp8_e4m3fn", _make_quant_config(), MINMAX)
 
 
 def test_check_config_weight_strategy_not_supported():
     qc = _make_quant_config(weight_type="int8", weight_strategy="group", group_size=64)
     with pytest.raises(ValueError, match="do not support weight quant strategy"):
-        check_config("int8 int8", qc, "minmax")
+        check_config("int8 int8", qc, MINMAX)
 
 
 def test_check_config_act_strategy_not_supported():
@@ -119,13 +121,13 @@ def test_check_config_mxfp8_act_strategy_not_group():
 def test_check_config_group_size_not_multiple_of_32():
     qc = _make_quant_config(weight_type="int4", weight_strategy="group", group_size=33, enable_input=False)
     with pytest.raises(ValueError, match="integer multiple of 32"):
-        check_config("NOT_QUANTIZE int4", qc, "minmax")
+        check_config("NOT_QUANTIZE int4", qc, MINMAX)
 
 
 def test_check_config_group_size_less_than_32():
     qc = _make_quant_config(weight_type="int4", weight_strategy="group", group_size=16, enable_input=False)
     with pytest.raises(ValueError, match="group_size larger than 32"):
-        check_config("NOT_QUANTIZE int4", qc, "minmax")
+        check_config("NOT_QUANTIZE int4", qc, MINMAX)
 
 
 # ---- check_quant_op_constraint ---------------------------------------------
@@ -193,7 +195,7 @@ def test_check_quant_op_constraint_int4_cin_not_8():
 def test_check_fuzzy_config_warnings_skip_interaction(caplog):
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}},
+                      "algorithm": {MINMAX: {}},
                       "skip_layers": ["model.layers.0.self_attn.q_proj"]}, AlgorithmRegistry)
     _check_fuzzy_config_warnings(["model.layers.0.self_attn.q_proj"], qc)
 
@@ -214,7 +216,7 @@ def test_check_layer_constraints_custom_algo():
 def test_check_layer_constraints_weight_dtype_mismatch():
     mod = nn.Linear(64, 64, dtype=torch.float64)
     qc = _make_quant_config(weight_type="int4", enable_input=False)
-    result = _check_layer_constraints(mod, "layer.0", "minmax", "NOT_QUANTIZE int4", qc)
+    result = _check_layer_constraints(mod, "layer.0", MINMAX, "NOT_QUANTIZE int4", qc)
     assert result is False
 
 
@@ -237,21 +239,21 @@ def test_check_quant_op_constraint_int4_shape():
 
 def test_check_fuzzy_config_warnings_no_fuzzy():
     qc = QuantConfig({"batch_num": 1, "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     _check_fuzzy_config_warnings(["layer.0", "layer.1"], qc)
 
 
 def test_check_fuzzy_config_warnings_with_match(caplog):
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     _check_fuzzy_config_warnings(["model.layers.0.self_attn.q_proj"], qc)
 
 
 def test_check_fuzzy_config_warnings_no_match(caplog):
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     _check_fuzzy_config_warnings(["model.layers.0.mlp.gate_proj"], qc)
 
 
@@ -261,7 +263,7 @@ def test_check_fuzzy_config_warnings_no_match(caplog):
 def test_build_layer_types_single_algo():
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     lt, qtc = _build_layer_types_and_quant_type(qc, AlgorithmRegistry)
     assert "Linear" in lt
     assert qtc == "NOT_QUANTIZE int8"
@@ -280,7 +282,7 @@ def test_build_layer_types_weight_none():
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
                                     "inputs": {"enable_quant": False}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     lt, qtc = _build_layer_types_and_quant_type(qc, AlgorithmRegistry)
     assert qtc == "NOT_QUANTIZE int8"
 
@@ -290,19 +292,19 @@ def test_build_layer_types_weight_none():
 
 def test_is_layer_supported_linear():
     mod = nn.Linear(4, 4)
-    lt = {"Linear": "minmax"}
+    lt = {"Linear": MINMAX}
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     assert _is_layer_supported(mod, "layer.0", lt, "NOT_QUANTIZE int8", qc) is True
 
 
 def test_is_layer_supported_skip_layer():
     mod = nn.Linear(4, 4)
-    lt = {"Linear": "minmax"}
+    lt = {"Linear": MINMAX}
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}},
+                      "algorithm": {MINMAX: {}},
                       "skip_layers": ["layer.0"]}, AlgorithmRegistry)
     assert _is_layer_supported(mod, "layer.0", lt, "NOT_QUANTIZE int8", qc) is False
 
@@ -314,11 +316,11 @@ def test_check_layer_constraints_no_weight():
     class NoWeightModule(nn.Module):
         pass
     mod = NoWeightModule()
-    lt = {"Linear": "minmax"}
+    lt = {"Linear": MINMAX}
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
-    assert _check_layer_constraints(mod, "norm.0", "minmax", "NOT_QUANTIZE int8", qc) is True
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
+    assert _check_layer_constraints(mod, "norm.0", MINMAX, "NOT_QUANTIZE int8", qc) is True
 
 
 # ---- get_supported_layers / parse_config -----------------------------------
@@ -345,7 +347,7 @@ def test_get_supported_layers_finds_linears():
     model = _MockModel()
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     result = get_supported_layers(model, qc, AlgorithmRegistry)
     assert len(result) == 4
 
@@ -354,7 +356,7 @@ def test_parse_config_returns_detail():
     model = _MockModel()
     config = {"batch_num": 1,
               "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-              "algorithm": {"minmax": {}}}
+              "algorithm": {MINMAX: {}}}
     result = parse_config(model, config, AlgorithmRegistry)
     assert len(result) == 4
     for name in result:
@@ -380,27 +382,27 @@ def test_check_quant_op_constraint_group_size_valid_less_than_64_returns_true():
 def test_check_fuzzy_config_warnings_pattern_no_match(caplog):
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"*nonexistent.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     _check_fuzzy_config_warnings(["model.layers.0.self_attn.q_proj"], qc)
 
 
 def test_build_layer_types_customized_algo(monkeypatch):
-    AlgorithmRegistry.algo["my_custom_parser"] = {"Linear": object()}
+    AlgorithmRegistry.algo[MY_CUSTOM_PARSER] = {"Linear": object()}
     monkeypatch.setattr("amct_pytorch.common.config.parser.BUILT_IN_ALGORITHM", [])
     try:
         qc = QuantConfig({"batch_num": 1,
                           "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                          "algorithm": {"my_custom_parser": {}}}, AlgorithmRegistry)
+                          "algorithm": {MY_CUSTOM_PARSER: {}}}, AlgorithmRegistry)
         _build_layer_types_and_quant_type(qc, AlgorithmRegistry)
     finally:
-        del AlgorithmRegistry.algo["my_custom_parser"]
+        del AlgorithmRegistry.algo[MY_CUSTOM_PARSER]
 
 
 def test_get_supported_layers_no_weights():
     model = _MockModel()
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {"minmax": {}}}, AlgorithmRegistry)
+                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
     result = get_supported_layers(model, qc, AlgorithmRegistry)
 
 
@@ -428,3 +430,4 @@ def test_build_layer_types_and_quant_type_when_wts_type_is_none():
     registed_alg.algo = {"awq": {"Linear": {}}}
     layer_types, quant_type_comb = _build_layer_types_and_quant_type(quant_config, registed_alg)
     assert quant_type_comb is None
+

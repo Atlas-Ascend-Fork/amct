@@ -97,7 +97,6 @@ class TestInsertBiasQuantPass(unittest.TestCase):
         bias = np.array([[0.0, 1.0, 2.0**31, -2.0**31], [0.0, 1.0, 2**31-1, -2**31-1]], dtype=np.float32)
         scale_w = np.array([0.1])
         scale_d = np.array(1.0)
-        # InsertBiasQuantPass.quant_bias(bias, scale_w, scale_d, 'conv1')
         self.assertRaises(RuntimeError, InsertBiasQuantPass.quant_bias, bias, scale_w, scale_d, 'conv1')
 
     def test_rnn_bias_quant_success(self):

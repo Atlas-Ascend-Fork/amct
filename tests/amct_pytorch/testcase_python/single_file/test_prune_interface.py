@@ -17,7 +17,10 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+import logging
 import torch
+
+logger = logging.getLogger(__name__)
 
 from .utils import models
 
@@ -152,7 +155,7 @@ class TestPruneInterface(unittest.TestCase):
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
         new_output = new_model.forward(args[0])
-        print('new_model', new_model)
+        logger.info('new_model %s', new_model)
         self.assertEqual(ori_output.shape, new_output.shape)
 
         if '1.10' in torch.__version__:
@@ -177,7 +180,7 @@ class TestPruneInterface(unittest.TestCase):
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
         new_output = new_model.forward(args[0])
-        print('new_model', new_model)
+        logger.info('new_model %s', new_model)
         self.assertEqual(ori_output.shape, new_output.shape)
 
         self.assertEqual(new_model.layer1.out_channels, 160)
@@ -198,7 +201,7 @@ class TestPruneInterface(unittest.TestCase):
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
         new_output = new_model.forward(args[0])
-        print('new_model', new_model)
+        logger.info('new_model %s', new_model)
         self.assertEqual(ori_output.shape, new_output.shape)
 
         self.assertEqual(new_model.layer1.out_features, 80)
