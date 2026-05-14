@@ -186,7 +186,6 @@ class LlmPtqWorkflow:
         return results
 
     def _run_modelwise(self, solver_cls):
-        # TODO ptq for model
         pass
 
     def _build_block_solver(self, solver_cls, layer_idx: int, block):
