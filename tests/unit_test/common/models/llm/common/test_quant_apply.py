@@ -1,4 +1,5 @@
 import argparse
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -71,16 +72,19 @@ def test_plain_linear_ignores_structure_transform_kwarg():
 # ---- set_model_*_quant_state ---------------------------------------------
 
 
+_MOCK_QUANT_ARGS = SimpleNamespace(w_bits=8, quant_dtype="int", algos=[])
+
+
 class _StubActQuantizer(ActivationQuantizer):
     def __init__(self):
-        nn.Module.__init__(self)
+        super().__init__(_MOCK_QUANT_ARGS, bits=8)
         self.enable = False
         self.is_observe = True
 
 
 class _StubWeightQuantizer(WeightQuantizer):
     def __init__(self):
-        nn.Module.__init__(self)
+        super().__init__(_MOCK_QUANT_ARGS)
         self.enable = False
 
 
@@ -235,8 +239,18 @@ def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
     )
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
-    gated.input_transform = lambda x, **kw: cmds.append("input_xform") or x
-    gated.hidden_transform = lambda x, **kw: cmds.append("hidden_xform") or x
+
+    def input_transform(x, **kw):
+        cmds.append("input_xform")
+        return x
+
+    gated.input_transform = input_transform
+
+    def hidden_transform(x, **kw):
+        cmds.append("hidden_xform")
+        return x
+
+    gated.hidden_transform = hidden_transform
     gated.input_quant.enable = True
     gated.hidden_quant.enable = True
 
@@ -301,7 +315,7 @@ def test_quant_gated_mlp_load_ptq_params_nested_dicts(monkeypatch):
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
     gated.load_ptq_params({"a": {"b": "c"}, "d": {"e": "f"}})
-    assert loaded["module"] is True
+    assert loaded.get("module") is True
 
 
 def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
@@ -317,4 +331,4 @@ def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
     gated.load_ptq_params({"some_key": [1, 2, 3]})
-    assert loaded["trainable"] is True
+    assert loaded.get("trainable") is True

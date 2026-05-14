@@ -19,11 +19,14 @@ import sys
 import os
 import unittest
 import json
+import logging
 import numpy as np
 import torch
 import torch.nn as nn
 
-from .utils import models
+logger = logging.getLogger(__name__)
+
+from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
@@ -60,9 +63,9 @@ class TestReplaceSyncBNPass(unittest.TestCase):
         optimizer.do_optimizer(self.model_003, None)
 
         named_module_dict = {name: mod for name, mod in self.model_003.named_modules()}
-        print('named_module_dict', named_module_dict)
+        logger.info('named_module_dict %s', named_module_dict)
 
-        self.assertEqual(isinstance(named_module_dict['bn'], torch.nn.modules.batchnorm.BatchNorm2d), True)
+        self.assertIsInstance(named_module_dict['bn'], torch.nn.modules.batchnorm.BatchNorm2d)
 
 
 if __name__ == '__main__':

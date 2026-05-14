@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import unittest
 import torch
 from amct_pytorch.common.utils.data_utils import float_to_fp4e2m1
@@ -44,17 +45,19 @@ def gloden_float_cast_to_float4_e2m1(tensor):
     return res
 
 
+logger = logging.getLogger(__name__)
+
 class Testfloat2fp4e2m1(unittest.TestCase):
     '''
     UT FOR DATA TRANSFORMATION FROM FLOAT 2 FP4E2M1
     '''
     @classmethod
     def setUpClass(cls):
-        print('Testfloat2fp4e2m1 START!')
+        logger.info('Testfloat2fp4e2m1 START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('Testfloat2fp4e2m1 END!')
+        logger.info('Testfloat2fp4e2m1 END!')
 
     def test_float16_tensor_trans_2_fp4e2m1_success(self):
         for i in range(0, 10):

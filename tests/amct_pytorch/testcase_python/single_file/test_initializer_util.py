@@ -60,11 +60,9 @@ class TestInitializerUtil(unittest.TestCase):
         pass
 
     def test_map_data_location(self):
-        # TensorProtoHelper.map_data_location(-1)
         self.assertRaises(ValueError, TensorProtoHelper.map_data_location, -1)
 
     def test_map_np_type(self):
-        # TensorProtoHelper.map_np_type(-1)
         self.assertRaises(ValueError, TensorProtoHelper.map_np_type, -1)
 
     def test_set_data(self):
@@ -119,7 +117,7 @@ class TestInitializerUtil(unittest.TestCase):
         externel_data = tensor_helper.get_data()
        
         os.remove(data_path)
-        self.assertEqual((data == externel_data).all(), True)
+        self.assertTrue((data == externel_data).all())
  
     def test_get_external_data_failed(self):
         tensor_proto = onnx_pb.TensorProto()
@@ -176,4 +174,4 @@ class TestInitializerUtil(unittest.TestCase):
         tensor_np_type = tensor_helper.map_np_type(tensor_helper.tensor.data_type)
         np_value = np.frombuffer(tensor_helper.tensor.raw_data, getattr(np, tensor_np_type))
         np_value = np.array(np_value)
-        self.assertEqual((data == np_value).all(), True)
+        self.assertTrue((data == np_value).all())

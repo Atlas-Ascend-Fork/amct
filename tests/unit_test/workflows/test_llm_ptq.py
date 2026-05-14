@@ -4,6 +4,7 @@
 real model + NPU; we cover only the pure decision logic here.
 """
 
+import importlib
 import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -16,8 +17,11 @@ from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
 
+QUANT_TARGET_MLP = "mlp"
+
+
 def _make_workflow(
-    quant_target=("mlp",),
+    quant_target=(QUANT_TARGET_MLP,),
     granularity="block",
     output_dir=None,
     model_name="qwen3",
@@ -55,7 +59,7 @@ def _make_workflow(
 
 def test_init_rejects_multiple_quant_targets():
     args = SimpleNamespace(
-        quant_target=["mlp", "attn-linear"],
+        quant_target=[QUANT_TARGET_MLP, "attn-linear"],
         granularity="block",
         output_dir="/tmp",
         model_name="qwen3",
@@ -73,7 +77,7 @@ def test_init_rejects_multiple_quant_targets():
     [
         ("attn-linear", "attn_linear_param_dir"),
         ("attn-cache", "attn_cache_param_dir"),
-        ("mlp", "moe_mlp_param_dir"),
+        (QUANT_TARGET_MLP, "moe_mlp_param_dir"),
         ("moe", "moe_mlp_param_dir"),
     ],
 )
@@ -92,16 +96,16 @@ def test_get_quant_param_dir_attr_raises_for_unknown_target():
 
 
 def test_resolve_quant_param_dir_uses_explicit_arg_when_provided():
-    wf = _make_workflow(quant_target=["mlp"], moe_mlp_param_dir="/custom/dir")
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], moe_mlp_param_dir="/custom/dir")
     assert wf._resolve_quant_param_dir() == "/custom/dir"
 
 
 def test_resolve_quant_param_dir_auto_creates_path_when_missing(tmp_path):
     wf = _make_workflow(
-        quant_target=["mlp"], output_dir=str(tmp_path), model_name="qwen3"
+        quant_target=[QUANT_TARGET_MLP], output_dir=str(tmp_path), model_name="qwen3"
     )
     out = wf._resolve_quant_param_dir()
-    expected = os.path.join(str(tmp_path), "ptq_params", "qwen3", "mlp")
+    expected = os.path.join(str(tmp_path), "ptq_params", "qwen3", QUANT_TARGET_MLP)
     assert out == expected
     # Side effect: writes back to args
     assert wf.args.moe_mlp_param_dir == expected
@@ -181,7 +185,7 @@ def test_unpack_tensor_batch_rejects_two_element_batch():
 def test_save_unit_result_layer_indexed_filename(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
     wf.args.quant_param_dir = str(tmp_path)
-    unit = make_ptq_unit("mlp", "mlp.up", layer_idx=5, module=None)
+    unit = make_ptq_unit(QUANT_TARGET_MLP, "mlp.up", layer_idx=5, module=None)
     wf._save_unit_result(unit, {"k": torch.tensor([1.0])})
     saved = torch.load(tmp_path / "layer_5_mlp_up.pt")
     assert torch.equal(saved["k"], torch.tensor([1.0]))
@@ -234,13 +238,13 @@ def test_build_block_solver_supports_block_kwarg_alias():
 def test_init_sets_solver_key_default_and_custom():
     bp = SimpleNamespace()
     args = SimpleNamespace(
-        quant_target=["mlp"], granularity="block",
+        quant_target=[QUANT_TARGET_MLP], granularity="block",
         output_dir="/tmp/ptq", model_name="qwen3",
         device="cpu", solver="modelwise",
     )
     wf = LlmPtqWorkflow(args)
     assert wf.solver_key == "modelwise"
-    assert wf.quant_target == "mlp"
+    assert wf.quant_target == QUANT_TARGET_MLP
     assert wf.model_name == "qwen3"
     assert wf.pipeline is None
     assert wf.data_provider is None
@@ -261,7 +265,10 @@ def test_init_solver_key_defaults_to_blockwise():
 
 def test_ptq_run_modelwise(monkeypatch):
     wf = _make_workflow(granularity="model")
-    wf.setup = lambda: "sink"
+
+    def setup():
+        return "sink"
+    wf.setup = setup
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY",
         SimpleNamespace(get=lambda k: object()),
@@ -292,7 +299,7 @@ def test_build_pipeline_raises_when_model_not_registered(monkeypatch):
 
 def test_prepare_unit_batch_non_tuple_inputs(monkeypatch):
     wf = _make_workflow()
-    unit = make_ptq_unit("mlp", "test_unit", layer_idx=0, module=nn.Linear(4, 4))
+    unit = make_ptq_unit(QUANT_TARGET_MLP, "test_unit", layer_idx=0, module=nn.Linear(4, 4))
     wf.data_provider = MagicMock()
     wf.data_provider.load_unit_inputs = MagicMock(return_value=torch.randn(2, 4))
     wf.data_provider.materialize_gt = MagicMock(return_value=torch.randn(2, 4))
@@ -334,7 +341,7 @@ def test_run_blockwise_empty_units_warning(monkeypatch):
     wf.args.start_block_idx = 0
     wf.args.end_block_idx = 1
     wf.device = "cpu"
-    wf.quant_target = "mlp"
+    wf.quant_target = QUANT_TARGET_MLP
 
     results = wf._run_blockwise(object)
     assert results == {}
@@ -354,7 +361,7 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
     wf.args.quant_param_dir = str(param_dir)
     wf.pipeline = MagicMock()
     wf.pipeline.build_quant_block = MagicMock(return_value=nn.Linear(4, 4))
-    unit = make_ptq_unit("mlp", "mlp", layer_idx=0, module=nn.Linear(4, 4))
+    unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
     wf.pipeline.iter_ptq_units = MagicMock(return_value=iter([unit]))
 
     wf.data_provider = MagicMock()
@@ -376,7 +383,7 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
     wf.args.start_block_idx = 0
     wf.args.end_block_idx = 1
     wf.device = "cpu"
-    wf.quant_target = "mlp"
+    wf.quant_target = QUANT_TARGET_MLP
 
     result = wf._run_blockwise(object)
     assert result == {0: {}}
@@ -386,7 +393,7 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
 
 
 def test_prepare_experiment_dirs_creates_log_dir_and_quant_param_dir(tmp_path):
-    wf = _make_workflow(output_dir=str(tmp_path), quant_target=["mlp"])
+    wf = _make_workflow(output_dir=str(tmp_path), quant_target=[QUANT_TARGET_MLP])
     wf._prepare_experiment_dirs()
     assert os.path.isdir(wf.args.log_dir)
     assert os.path.isdir(wf.args.quant_param_dir)
@@ -394,29 +401,39 @@ def test_prepare_experiment_dirs_creates_log_dir_and_quant_param_dir(tmp_path):
 
 
 def test_llm_ptq_run_blockwise(monkeypatch):
-    wf = _make_workflow(quant_target=["mlp"], granularity="block")
-    wf.setup = lambda: "sink"
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], granularity="block")
+
+    def setup():
+        return "sink"
+    wf.setup = setup
+
     class FakeBlockwiseSolver:
         pass
     monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY.get", lambda k: FakeBlockwiseSolver if k == "blockwise" else None)
     called = {}
-    wf._run_blockwise = lambda *a, **k: called.update({"run": True})
-    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.logger", __import__("types").SimpleNamespace(remove=lambda h: None))
+
+    def _run_blockwise(*a, **k):
+        called.update({"run": True})
+    wf._run_blockwise = _run_blockwise
+    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.logger", importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
     wf.run()
-    assert called["run"] is True
+    assert called.get("run") is True
 
 
 def test_llm_ptq_run_unknown_granularity(monkeypatch):
     wf = _make_workflow(granularity="unknown")
-    wf.setup = lambda: "sink"
+
+    def setup():
+        return "sink"
+    wf.setup = setup
     monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY.get", lambda k: None)
-    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.logger", __import__("types").SimpleNamespace(remove=lambda h: None))
+    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.logger", importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
     with pytest.raises(ValueError, match="Unsupported .*granularity"):
         wf.run()
 
 
 def test_llm_ptq_setup(monkeypatch):
-    wf = _make_workflow(quant_target=["mlp"])
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP])
     registered = {}
     monkeypatch.setattr(wf, "_register_components", lambda: registered.update({"reg": True}))
     monkeypatch.setattr(wf, "_prepare_experiment_dirs", lambda: registered.update({"dirs": True}))
@@ -424,9 +441,9 @@ def test_llm_ptq_setup(monkeypatch):
     monkeypatch.setattr(wf, "_build_data_provider", lambda: registered.update({"data": True}))
     monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.setup_run_logging", lambda log_dir, name: ("sink_id", None))
     wf.setup()
-    assert registered["reg"] is True
-    assert registered["pipeline"] is True
-    assert registered["data"] is True
+    assert registered.get("reg") is True
+    assert registered.get("pipeline") is True
+    assert registered.get("data") is True
 
 
 def test_get_quant_param_dir_attr_raises_on_unsupported_target():
@@ -436,30 +453,30 @@ def test_get_quant_param_dir_attr_raises_on_unsupported_target():
 
 
 def test_resolve_quant_param_dir_auto_generates_when_not_configured():
-    wf = _make_workflow(quant_target=["mlp"], output_dir="/tmp/fake")
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], output_dir="/tmp/fake")
     wf.model_name = "test_model"
     setattr(wf.args, "moe_mlp_param_dir", "")
     result = wf._resolve_quant_param_dir()
     assert "ptq_params" in result
     assert "test_model" in result
-    assert "mlp" in result
+    assert QUANT_TARGET_MLP in result
 
 
 def test_unpack_tensor_batch_raises_on_multi_element_tuple():
-    wf = _make_workflow(quant_target=["mlp"], output_dir="/tmp/fake")
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], output_dir="/tmp/fake")
     with pytest.raises(ValueError, match="contain exactly one tensor"):
         wf._unpack_tensor_batch((torch.tensor(1), torch.tensor(2)))
 
 
 def test_unpack_tensor_batch_returns_single_tensor():
-    wf = _make_workflow(quant_target=["mlp"], output_dir="/tmp/fake")
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], output_dir="/tmp/fake")
     t = torch.tensor([1.0])
     assert wf._unpack_tensor_batch((t,)) is t
     assert wf._unpack_tensor_batch(t) is t
 
 
 def test_build_block_solver_passes_kwargs():
-    wf = _make_workflow(quant_target=["mlp"], output_dir="/tmp/fake")
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], output_dir="/tmp/fake")
     captured = {}
     class _Solver:
         def __init__(self, args, layer_idx, block):
@@ -472,10 +489,10 @@ def test_build_block_solver_passes_kwargs():
 
 
 def test_save_unit_result_constructs_path(tmp_path):
-    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
-    wf = _make_workflow(quant_target=["mlp"])
+    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit as mk_ptq_unit
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP])
     wf.args.quant_param_dir = str(tmp_path)
-    unit = make_ptq_unit("mlp", "mlp", layer_idx=2, module=nn.Linear(4, 4))
+    unit = mk_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=2, module=nn.Linear(4, 4))
     wf._save_unit_result(unit, torch.randn(4, 4))
     assert (tmp_path / "layer_2_mlp.pt").exists()
 
@@ -484,11 +501,11 @@ def test_save_unit_result_constructs_path(tmp_path):
 
 
 def test_ptq_run_blockwise_mocked(monkeypatch):
-    wf = _make_workflow(quant_target=["mlp"])
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP])
     wf.pipeline = MagicMock()
     wf.pipeline.build_quant_block = MagicMock(return_value=nn.Linear(4, 4))
 
-    unit = make_ptq_unit("mlp", "mlp", layer_idx=0, module=nn.Linear(4, 4))
+    unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
     wf.pipeline.iter_ptq_units = MagicMock(return_value=iter([unit]))
 
     wf.data_provider = MagicMock()
@@ -511,7 +528,7 @@ def test_ptq_run_blockwise_mocked(monkeypatch):
     wf.args.start_block_idx = 0
     wf.args.end_block_idx = 1
     wf.device = "cpu"
-    wf.quant_target = "mlp"
+    wf.quant_target = QUANT_TARGET_MLP
     wf.args.quant_param_dir = "/tmp/fake"
 
     class FakeSolver:

@@ -5,6 +5,7 @@ NPU device, so we cover only the pure decision logic here:
 ``_resolve_eval_states`` and ``_has_relevant_quant``.
 """
 
+import importlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -157,19 +158,30 @@ def test_llm_eval_run_blockwise(monkeypatch):
         bit_policy=_make_bit_policy(w_bits=8, a_bits=8),
     )
     wf.granularity = "block"
-    wf.setup = lambda: "sink"
+
+    def setup():
+        return "sink"
+    wf.setup = setup
+
     called = {}
-    wf._run_blockwise = lambda: called.update({"blockwise": 10.5}) or 10.5
-    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", __import__("types").SimpleNamespace(info=lambda m: None, remove=lambda h: None))
+
+    def _run_blockwise():
+        called.update({"blockwise": 10.5})
+        return 10.5
+    wf._run_blockwise = _run_blockwise
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", importlib.import_module("types").SimpleNamespace(info=lambda m: None, remove=lambda h: None))
     wf.run()
-    assert called["blockwise"] == 10.5
+    assert called.get("blockwise") == 10.5
 
 
 def test_llm_eval_run_unknown_granularity(monkeypatch):
     wf = _make_workflow()
     wf.granularity = "unknown"
-    wf.setup = lambda: "sink"
-    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", __import__("types").SimpleNamespace(remove=lambda h: None))
+
+    def setup():
+        return "sink"
+    wf.setup = setup
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
     with pytest.raises(ValueError, match="Unsupported .*granularity"):
         wf.run()
 
@@ -287,7 +299,7 @@ def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
     wf.pipeline.do_head_forward = MagicMock(return_value=[torch.randn(2, 3, 100)])
 
     result = wf._run_blockwise()
-    assert result == 12.34
+    assert result == pytest.approx(12.34)
     assert wf.pipeline.do_head_forward.call_count == 1
 
 
@@ -387,7 +399,10 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
                         MagicMock(return_value=MagicMock(
                             eval=MagicMock(return_value=MagicMock(
                                 to=MagicMock(return_value=forward_fn))))))
-    wf.setup = lambda: "sink"
+
+    def setup():
+        return "sink"
+    wf.setup = setup
     wf.run()
 
 

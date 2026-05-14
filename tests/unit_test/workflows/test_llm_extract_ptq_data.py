@@ -10,6 +10,9 @@ import pytest
 
 from amct_pytorch.workflows.llm_extract_ptq_data import LlmExtractPtqDataWorkflow
 
+INPUT_LAYERNORM = 'input_layernorm'
+
+POST_ATTENTION_LAYERNORM = 'post_attention_layernorm'
 
 def _make_args(quant_target):
     return SimpleNamespace(
@@ -41,11 +44,11 @@ def test_init_unwraps_single_target_to_string():
 @pytest.mark.parametrize(
     "target,expected_hook",
     [
-        ("attn", "input_layernorm"),
-        ("attn-linear", "input_layernorm"),
-        ("attn-cache", "input_layernorm"),
-        ("mlp", "post_attention_layernorm"),
-        ("moe", "post_attention_layernorm"),
+        ("attn", INPUT_LAYERNORM),
+        ("attn-linear", INPUT_LAYERNORM),
+        ("attn-cache", INPUT_LAYERNORM),
+        ("mlp", POST_ATTENTION_LAYERNORM),
+        ("moe", POST_ATTENTION_LAYERNORM),
     ],
 )
 def test_run_blockwise_picks_hook_name_by_quant_target(monkeypatch, target, expected_hook):
@@ -56,17 +59,17 @@ def test_run_blockwise_picks_hook_name_by_quant_target(monkeypatch, target, expe
 
     class _FakePipeline:
         num_layers = 0
-        attn_norm_name = "input_layernorm"
-        ffn_norm_name = "post_attention_layernorm"
 
         def __init__(self):
             self.tokenizer = "tokenizer"
 
-        def do_embedding_forward(self, samples, hook_name):
+        @staticmethod
+        def do_embedding_forward(samples, hook_name):
             seen["embed_hook"] = hook_name
             return []
 
-        def do_block_forward(self, layer_idx, inter_io, hook_name):
+        @staticmethod
+        def do_block_forward(layer_idx, inter_io, hook_name):
             return inter_io
 
     wf.pipeline = _FakePipeline()
@@ -113,3 +116,4 @@ def test_extract_setup_returns_sink_id(monkeypatch, tmp_path):
     sink_id = wf.setup()
     assert sink_id is not None
     assert wf.pipeline is not None
+

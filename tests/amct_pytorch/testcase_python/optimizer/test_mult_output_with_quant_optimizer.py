@@ -31,6 +31,24 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pa
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import MULT_OUTPUT_TYPES
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import MultQuantOptimizerPass
 
+DATA_SCALE_KEY = "data_scale"
+OBJECT_NODE_KEY = 'object_node'
+AVE_POOL_0_NAME = 'ave_pool0'
+CONCAT_0_NAME = 'concat0'
+DATA_OFFSET = 'data_offset'
+
+SCALE = 'scale'
+
+OFFSET = 'offset'
+
+QUANT_BIT = 'quant_bit'
+
+DST_TYPE = 'dst_type'
+
+INT8 = 'INT8'
+
+POOL0 = 'pool0'
+
 class TestQuantFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -56,10 +74,10 @@ class TestQuantFusionPass(unittest.TestCase):
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add concat node
         concat_node = self.graph.node.add()
-        concat_node.name = 'concat0'
+        concat_node.name = CONCAT_0_NAME
         concat_node.op_type = 'Concat'
         concat_node.input[:] = ['data0']
-        concat_node.output[:] = ['concat0']
+        concat_node.output[:] = [CONCAT_0_NAME]
 
         def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
             # Add Ascend Quant
@@ -100,20 +118,20 @@ class TestQuantFusionPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = [conv_name]
             relu1.output[:] = outputs
-        conv_sub(self.graph, 'conv1', ['concat0'], ['conv1_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub(self.graph, 'conv2', ['concat0'], ['conv2_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub(self.graph, 'conv3', ['concat0'], ['conv3_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
+        conv_sub(self.graph, 'conv1', [CONCAT_0_NAME], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv2', [CONCAT_0_NAME], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv3', [CONCAT_0_NAME], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         # Add max_pooling
         pool0 = self.graph.node.add()
-        pool0.name = 'pool0'
+        pool0.name = POOL0
         pool0.op_type = 'MaxPool'
-        pool0.input[:] = ['concat0']
-        pool0.output[:] = ['pool0']
+        pool0.input[:] = [CONCAT_0_NAME]
+        pool0.output[:] = [POOL0]
         # Add add
         add1 = self.graph.node.add()
         add1.name = 'add1'
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', 'pool0']
+        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', POOL0]
         add1.output[:] = ['output']
         # add output
         graph_output = self.graph.output.add()
@@ -127,20 +145,20 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_match_pattern_success(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        concat_node = graph.get_node_by_name('concat0')
+        concat_node = graph.get_node_by_name(CONCAT_0_NAME)
         self.assertTrue(MultQuantOptimizerPass(records).match_pattern(concat_node))
 
     def test_match_pattern_failed_not_support_producer(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 0.99999, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE_KEY: 0.99999, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
@@ -149,41 +167,41 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_match_pattern_failed_exist_not_supported_node_in_mult_output(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 0.99999, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE_KEY: 0.99999, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         del test_model.graph.node[-1]
         ave_pool = test_model.graph.node.add()
-        ave_pool.name = 'ave_pool0'
+        ave_pool.name = AVE_POOL_0_NAME
         ave_pool.op_type = 'AveragePool'
-        ave_pool.input[:] = ['concat0']
-        ave_pool.output[:] = ['ave_pool0']
+        ave_pool.input[:] = [CONCAT_0_NAME]
+        ave_pool.output[:] = [AVE_POOL_0_NAME]
 
         add1 = test_model.graph.node.add()
         add1.name = 'add1'
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', 'pool0', 'ave_pool0']
+        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', POOL0, AVE_POOL_0_NAME]
         add1.output[:] = ['output']
 
         graph = Graph(test_model)
-        concat_node = graph.get_node_by_name('concat0')
+        concat_node = graph.get_node_by_name(CONCAT_0_NAME)
         self.assertFalse(MultQuantOptimizerPass(records).match_pattern(concat_node))
 
     def test_match_pattern_without_output(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 0.99999, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE_KEY: 0.99999, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        concat_node = graph.get_node_by_name('concat0')
+        concat_node = graph.get_node_by_name(CONCAT_0_NAME)
         conv1_quant = graph.get_node_by_name('conv1.quant')
         conv2_quant = graph.get_node_by_name('conv2.quant')
         conv3_quant = graph.get_node_by_name('conv3.quant')
-        pool0 = graph.get_node_by_name('pool0')
+        pool0 = graph.get_node_by_name(POOL0)
         graph.remove_edge(concat_node, 0, conv1_quant, 0)
         graph.remove_edge(concat_node, 0, conv2_quant, 0)
         graph.remove_edge(concat_node, 0, conv3_quant, 0)
@@ -192,16 +210,16 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_do_pass_success(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        concat_node = graph.get_node_by_name('concat0')
-        graph.get_node_by_name('conv1.quant').set_attr('object_node', 'conv1')
-        graph.get_node_by_name('conv2.quant').set_attr('object_node', 'conv2')
-        graph.get_node_by_name('conv3.quant').set_attr('object_node', 'conv3')
+        concat_node = graph.get_node_by_name(CONCAT_0_NAME)
+        graph.get_node_by_name('conv1.quant').set_attr(OBJECT_NODE_KEY, 'conv1')
+        graph.get_node_by_name('conv2.quant').set_attr(OBJECT_NODE_KEY, 'conv2')
+        graph.get_node_by_name('conv3.quant').set_attr(OBJECT_NODE_KEY, 'conv3')
 
         before_length = len(graph.nodes)
         MultQuantOptimizerPass(records).do_pass(graph, concat_node)
@@ -212,26 +230,26 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_do_pass_with_not_supported_type(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         del test_model.graph.node[-1]
         ave_pool = test_model.graph.node.add()
-        ave_pool.name = 'ave_pool0'
+        ave_pool.name = AVE_POOL_0_NAME
         ave_pool.op_type = 'AveragePool'
-        ave_pool.input[:] = ['concat0']
-        ave_pool.output[:] = ['ave_pool0']
+        ave_pool.input[:] = [CONCAT_0_NAME]
+        ave_pool.output[:] = [AVE_POOL_0_NAME]
 
         add1 = test_model.graph.node.add()
         add1.name = 'add1'
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', 'pool0', 'ave_pool0']
+        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', POOL0, AVE_POOL_0_NAME]
         add1.output[:] = ['output']
 
         graph = Graph(test_model)
-        concat_node = graph.get_node_by_name('concat0')
+        concat_node = graph.get_node_by_name(CONCAT_0_NAME)
         before_length = len(graph.nodes)
         MultQuantOptimizerPass(records).do_pass(graph, concat_node)
         after_length = len(graph.nodes)
@@ -239,18 +257,19 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def test_do_pass_failed_with_mult_scale_offset(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 0.9999, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE_KEY: 0.9999, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE_KEY: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        concat_node = graph.get_node_by_name('concat0')
-        graph.get_node_by_name('conv1.quant').set_attr('object_node', 'conv1')
-        graph.get_node_by_name('conv2.quant').set_attr('object_node', 'conv2')
-        graph.get_node_by_name('conv3.quant').set_attr('object_node', 'conv3')
+        concat_node = graph.get_node_by_name(CONCAT_0_NAME)
+        graph.get_node_by_name('conv1.quant').set_attr(OBJECT_NODE_KEY, 'conv1')
+        graph.get_node_by_name('conv2.quant').set_attr(OBJECT_NODE_KEY, 'conv2')
+        graph.get_node_by_name('conv3.quant').set_attr(OBJECT_NODE_KEY, 'conv3')
 
         before_length = len(graph.nodes)
         MultQuantOptimizerPass(records).do_pass(graph, concat_node)
         after_length = len(graph.nodes)
         self.assertEqual(after_length, before_length)
+

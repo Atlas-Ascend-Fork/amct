@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import sys
 import os
 import unittest
@@ -33,6 +34,8 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.auto_calibration_he
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
 
 class TestDumpForward(unittest.TestCase):
     """
@@ -84,8 +87,8 @@ class TestDumpForward(unittest.TestCase):
 
         file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch4.bin')
         read_data = files_util.parse_dump_data(file_path, with_type=True)
-        print(data)
-        print(torch.from_numpy(read_data))
+        logger.info(data)
+        logger.info(torch.from_numpy(read_data))
         self.assertEqual((data - torch.from_numpy(read_data)).sum(), 0)
 
     def test_005_data_dump_right_nor_not(self):
@@ -94,8 +97,8 @@ class TestDumpForward(unittest.TestCase):
 
         file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch5.bin')
         read_data = files_util.parse_dump_data(file_path, with_type=True)
-        print(data)
-        print(torch.from_numpy(read_data))
+        logger.info(data)
+        logger.info(torch.from_numpy(read_data))
         self.assertEqual((data - torch.from_numpy(read_data)).sum(), 0)
 
     def test_006_int(self):
@@ -109,6 +112,6 @@ class TestDumpForward(unittest.TestCase):
 
         file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch7.bin')
         read_data = files_util.parse_dump_data(file_path, with_type=True)
-        print(data)
-        print(torch.from_numpy(read_data))
+        logger.info(data)
+        logger.info(torch.from_numpy(read_data))
         self.assertEqual((data - torch.from_numpy(read_data)).sum(), 0)

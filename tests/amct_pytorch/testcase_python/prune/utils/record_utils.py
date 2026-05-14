@@ -30,10 +30,10 @@ def read_record_file(record_file):
         pbtxt_string = fid.read()
         try:
             text_format.Merge(pbtxt_string, record)
-        except text_format.ParseError:
+        except text_format.ParseError as exc:
             raise RuntimeError(
                 "the record_file{%s} cannot be parsered, please ensure "\
                 "it matches with scale_offset_record.proto!"
-                % (record_file))
+                % (record_file)) from exc
 
     return record

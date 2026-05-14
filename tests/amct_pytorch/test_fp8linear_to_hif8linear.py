@@ -1,62 +1,21 @@
 import copy
 import logging
-import sys
 import unittest
-from unittest.mock import MagicMock, patch
+import sys
 
-import numpy as np
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
 import pytest
-import torch
 import torch.nn as nn
-import transformers
+from mock_torch_npu import mock_npu_dynamic_quant, mock_npu_quant_matmul, mock_npu_quantize
 import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
-from mock_torch_npu import (
-    mock_npu_dynamic_quant,
-    mock_npu_quant_matmul,
-    mock_npu_quantize,
-)
+import torch
+import transformers
+import numpy as np
+from amct_pytorch import quantize, convert
 
-from amct_pytorch import convert, quantize
-
-from mock_torch_npu import mock_npu_dynamic_quant
-from mock_torch_npu import mock_npu_quant_matmul
-from mock_torch_npu import mock_npu_quantize
-
-from amct_pytorch import convert
-from amct_pytorch import quantize
-
-
-LOGGER = logging.getLogger(__name__)
-
-
-class FP8Linear(nn.Module):
-    def __init__(self, in_features, out_features, block_size=None, has_bias=True):
-        super().__init__()
-        self.weight = nn.Parameter(torch.empty(out_features, in_features))
-        self.bias = nn.Parameter(torch.empty(out_features)) if has_bias else None
-        self.block_size = block_size
-        scale_shape = self._get_scale_shape(out_features, in_features, block_size)
-        self.register_buffer('weight_scale_inv', torch.ones(scale_shape))
-        nn.init.normal_(self.weight, mean=0.0, std=0.02)
-        if self.bias is not None:
-            nn.init.zeros_(self.bias)
-
-    @staticmethod
-    def _get_scale_shape(out_features, in_features, block_size):
-        if block_size is None:
-            return (out_features, in_features)
-        block_h, block_w = block_size
-        return (math.ceil(out_features / block_h), math.ceil(in_features / block_w))
-
-    def forward(self, x):
-        weight_scale_inv = self.weight_scale_inv
-        if self.block_size is not None:
-            block_h, block_w = self.block_size
-            weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_h, dim=0)
-            weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_w, dim=1)
-            weight_scale_inv = weight_scale_inv[:self.weight.shape[0], :self.weight.shape[1]]
-        weight = self.weight.to(torch.float32) / weight_scale_inv.to(torch.float32)
-        return torch.nn.functional.linear(x, weight.to(x.dtype), self.bias)
+FP8Linear = pytest.importorskip("transformers.integrations.finegrained_fp8").FP8Linear
 
 torch.manual_seed(0)
 
@@ -108,10 +67,8 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch(
-            'amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
-            MagicMock(return_value=True),
-        )
+    @patch('amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+           MagicMock(return_value=True))
     def test_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_model)
         quantize(model)
@@ -128,10 +85,8 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch(
-            'amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
-            MagicMock(return_value=True),
-        )
+    @patch('amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+           MagicMock(return_value=True))
     def test_block_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_block_model)
         quantize(model)

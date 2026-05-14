@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
 import torch
@@ -33,6 +34,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check impor
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+logger = logging.getLogger(__name__)
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -125,7 +127,7 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
 
         cls.config_helper = AutoChannelPruneConfigHelper(cls.graph, config_defination, GraphQuerier, CAPACITY)
         cls.auto_channel_prune_search = AutoChannelPruneSearch(cls.graph, cls.args, cls.config_helper, None, cls.output_cofig, None)
-        print('AutoChannelPruneSearchTorch start!')
+        logger.info('AutoChannelPruneSearchTorch start!')
 
 
     @classmethod
@@ -145,7 +147,7 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
 
     def test_get_graph_bitops(self):
         graph_bitops = self.auto_channel_prune_search.get_graph_bitops(self.graph, {})
-        print(graph_bitops)
+        logger.info(graph_bitops)
         self.assertIsNotNone(graph_bitops)
 
     def test_auto_channel_prune_search(self):
@@ -166,5 +168,5 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
 
         auto_channel_prune_search(model=model, config=config_defination, input_data=sample_data, output_cfg=output_cofig,
             sensitivity='TaylorLossSensitivity', search_alg='GreedySearch')
-        print(output_cofig)
+        logger.info(output_cofig)
         self.assertTrue(output_cofig)

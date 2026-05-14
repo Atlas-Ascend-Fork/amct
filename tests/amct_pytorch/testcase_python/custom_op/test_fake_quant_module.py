@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
 import torch
@@ -28,6 +29,8 @@ DEVICE = torch.device('cpu')
 
 np.random.seed(0)
 
+logger = logging.getLogger(__name__)
+
 
 def quant_compute(inputs, scale_d, offset_d, num_bits=8):
     clamp_min = -2**(num_bits - 1)
@@ -39,8 +42,8 @@ def quant_compute(inputs, scale_d, offset_d, num_bits=8):
 
 def compare_ndarray(ndarray1, ndarray2, name):
     if not (ndarray1 - ndarray2 < 1e-5).all():
-        print(ndarray1)
-        print(ndarray2)
+        logger.info(ndarray1)
+        logger.info(ndarray2)
         raise ValueError('{} not equal'.format(name))
 
 

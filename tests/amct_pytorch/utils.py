@@ -15,6 +15,7 @@
 # ----------------------------------------------------------------------------
 import torch.nn as nn
 
+ZEROS = 'zeros'
 
 class TestModel(nn.Module):
     def __init__(self):
@@ -47,12 +48,13 @@ class TestModelBias(nn.Module):
 class TestModelConv2d(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv2d1 = nn.Conv2d(32, 32, kernel_size=3, padding_mode='zeros')
-        self.conv2d2 = nn.Conv2d(32, 64, kernel_size=3, padding_mode='zeros')
-        self.conv2d3 = nn.Conv2d(64, 64, kernel_size=6, padding_mode='zeros')
+        self.conv2d1 = nn.Conv2d(32, 32, kernel_size=3, padding_mode=ZEROS)
+        self.conv2d2 = nn.Conv2d(32, 64, kernel_size=3, padding_mode=ZEROS)
+        self.conv2d3 = nn.Conv2d(64, 64, kernel_size=6, padding_mode=ZEROS)
 
     def forward(self, inputs):
         x = self.conv2d1(inputs)
         x = self.conv2d2(x)
         x = self.conv2d3(x)
         return x
+
