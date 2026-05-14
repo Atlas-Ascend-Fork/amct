@@ -197,7 +197,6 @@ class LlmDeployWorkflow:
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":
             return tensor.to(torch.bfloat16)
-        # TODO: int8 weight-only RTN (per-channel symmetric) etc.
         raise NotImplementedError(
             f"tensor granularity does not support quant_dtype '{self.quant_dtype}' yet"
         )

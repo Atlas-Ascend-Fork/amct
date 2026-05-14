@@ -48,7 +48,6 @@ class QuantIndexer(torch.nn.Module):
         self.rope_head_dim: int = args.model_args.qk_rope_head_dim
         self.index_topk: int = args.model_args.index_topk
         self.q_lora_rank: int = args.model_args.q_lora_rank
-        # self.bit: int = bit
         self.wq_b = QuantLinear(args, module.wq_b, w_bits=args.bit_policy["attn-linear"]["wq_b"].w, name="wq_b") if self.enable_attn_linear else module.wq_b
         self.wk = Linear(self.dim, self.head_dim, dtype=torch.get_default_dtype(), bias=False)
         self.k_norm = LayerNorm(self.head_dim)
@@ -115,7 +114,6 @@ class QuantDSA(DeepseekV3Attention):
         self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-        # self.bit = 8 if args.cls == 'c8' else 16
         if self.q_lora_rank is None:
             self.q_proj = module.q_proj
         else:
@@ -136,8 +134,6 @@ class QuantDSA(DeepseekV3Attention):
 
         self.k_cache_quantizer = ActivationQuantizer(args, bits=args.bit_policy.cache_bits("k")) if self.enable_attn_cache else nn.Identity()
 
-        # inp_afq has no single QuantLinear consumer (q_proj/q_a_proj/kv_a_proj
-        # are kept as raw nn.Linear in DSA); fall back to the group-level a_bits.
         self.inp_afq = ActivationQuantizer(args, bits=bits.default.a) if self.enable_attn_linear else nn.Identity()
         self.o_proj_afq = ActivationQuantizer(args, bits=o.a) if self.enable_attn_linear else nn.Identity()
         self.indexer = QuantIndexer(module.indexer, args, self.rotary_emb)
@@ -164,17 +160,14 @@ class QuantDSA(DeepseekV3Attention):
 
         kv_seq_len = hidden_states.shape[-2]
         if self.q_lora_rank is not None:
-            # get Wuq and Wqr
             _, q_b_proj_inc = self.q_b_proj.weight.size()
             q_b_proj = self.q_b_proj.weight.t().reshape(q_b_proj_inc, self.num_heads, self.q_head_dim)
             q_b_proj_c_weight, q_b_proj_r_weight = torch.split(q_b_proj, [self.qk_nope_head_dim, self.qk_rope_head_dim],
                                                                dim=-1)
 
-        # get Wdkv and Wkr
         dkv_weight, kr_weight = torch.split(self.kv_a_proj_with_mqa.weight.t(),
                                             [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
 
-        # get Wuk and Wuv
         _, kv_b_proj_inc = self.kv_b_proj.weight.size()
         ukv_weight = self.kv_b_proj.weight.t().reshape(kv_b_proj_inc, self.num_heads,
                                                        (self.qk_nope_head_dim + self.v_head_dim))
@@ -182,7 +175,6 @@ class QuantDSA(DeepseekV3Attention):
         uk_weight = uk_weight.reshape(kv_b_proj_inc, -1).t().reshape(self.num_heads, self.qk_nope_head_dim,
                                                                      kv_b_proj_inc)
 
-        # start calculate
         bsz, q_len, _ = hidden_states.size()
 
         if self.q_lora_rank is not None:
@@ -202,11 +194,9 @@ class QuantDSA(DeepseekV3Attention):
 
         cos, sin = self.rotary_emb(ckv, seq_len=kv_seq_len)
         if self.q_lora_rank is not None:
-            # wqr
             qr = torch.matmul(q, q_b_proj_r_weight.reshape(q_b_proj_inc, -1)).view(bsz, q_len, self.num_heads,
                                                                                      self.qk_rope_head_dim).transpose(1,
                                                                                                                       2)
-            # wuq
             q_nope = torch.matmul(q, q_b_proj_c_weight.reshape(q_b_proj_inc, -1)).view(bsz, q_len, self.num_heads,
                                                                                             self.qk_nope_head_dim).transpose(
                 1, 2)
