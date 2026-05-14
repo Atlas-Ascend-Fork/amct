@@ -7,12 +7,13 @@ from amct_pytorch.common.datasets import preproc
 class _StubTokenizer:
     """Whitespace tokenizer: each word -> id = ord(first char)."""
 
-    def encode(self, text):
-        return [ord(t[0]) for t in text.split() if t]
-
     def __call__(self, text, return_tensors=None):
         ids = self.encode(text)
         return type("Enc", (), {"input_ids": torch.tensor([ids])})()
+
+    @staticmethod
+    def encode(text):
+        return [ord(t[0]) for t in text.split() if t]
 
 
 class _FakeDataset(list):
@@ -60,7 +61,8 @@ def test_pileval_awq_raises_when_not_enough_tokens_for_n_samples():
 
 def test_pileval_awq_skips_empty_encoded_samples():
     class _SelectiveTokenizer:
-        def encode(self, text):
+        @staticmethod
+        def encode(text):
             if text == "skip me":
                 return []
             return [ord(c) for c in text.split()]
@@ -122,4 +124,4 @@ def test_get_wiki_inputs_returns_empty_when_seq_len_exceeds_tokens(monkeypatch):
     fake_enc = type("Enc", (), {"input_ids": torch.arange(3).unsqueeze(0)})()
     monkeypatch.setattr(preproc, "get_wikitext2", lambda tokenizer: fake_enc)
     chunks = preproc.get_wiki_inputs(tokenizer=None, seq_len=8)
-    assert chunks == []
+    assert not chunks

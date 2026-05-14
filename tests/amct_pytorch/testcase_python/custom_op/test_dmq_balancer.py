@@ -118,11 +118,7 @@ class TestDMQBalancerFunc(unittest.TestCase):
         self.assertIsNotNone(tensor_balance_factor)
 
     # def test_dmq_balancer_func_forward_failed(self):
-    #     dmq_balancer_function = DMQBalancerFunction()
 
-    #     weight_tensor = torch.tensor([[0, 1, 2, 3], [4, 5, 6, 7]], device=DEVICE, dtype=torch.float32)
-    #     inputs = torch.tensor([[0, 1, 2, 3], [4, 5, 6, 7]], device=DEVICE, dtype=torch.float32)
-    #     migration_strength = 0.5
 
     #     with self.assertRaises(RuntimeError):
     #         tensor_balance_factor = dmq_balancer_function.forward(dmq_balancer_function, inputs,

@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import sys
 import os
 import unittest
@@ -29,6 +30,8 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample im
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+logger = logging.getLogger(__name__)
+
 class DistillNet(nn.Module):
     def __init__(self):
         super(DistillNet, self).__init__()
@@ -39,12 +42,6 @@ class DistillNet(nn.Module):
         return x
 
 class TestDistillDataManager(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_distill_data_manager')
@@ -60,7 +57,13 @@ class TestDistillDataManager(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         os.system('rm -r ' + cls.temp_folder)
-        print("[UNITTEST END test_distill_data_manager.py]")
+        logger.info("[UNITTEST END test_distill_data_manager.py]")
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def test_get_norm_min_data(self):
         data_t = torch.tensor([1.0])

@@ -14,18 +14,36 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
+import logging
 import unittest
 import sys
 import torch
 import torch.nn as nn
 from utils import TestModel, TestModelBias
-from mock_torch_npu import *
+from mock_torch_npu import (
+    mock_npu,
+    mock_npu_convert_weight_to_int4pack,
+    mock_npu_dtype_cast,
+    mock_npu_dynamic_mx_quant,
+    mock_npu_format_cast,
+    mock_npu_quant_matmul,
+    mock_npu_quantize,
+    mock_npu_trans_quant_param,
+    mock_npu_weight_quant_batchmatmul,
+)
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from amct_pytorch import quantize, convert
 
+logger = logging.getLogger(__name__)
+
+SMOOTH_QUANT = 'SmoothQuant'
+NPU_QUANTIZATION_LINEAR = 'NpuQuantizationLinear'
+
 torch.manual_seed(0)
+
+LINEAR = 'Linear'
 
 class TestSmoothQuant(unittest.TestCase):
     '''
@@ -36,11 +54,11 @@ class TestSmoothQuant(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        print('TestSmoothQuant START!')
+        logger.info('TestSmoothQuant START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestSmoothQuant END!')
+        logger.info('TestSmoothQuant END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -75,14 +93,14 @@ class TestSmoothQuant(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'SmoothQuant')
-        self.assertEqual(type(model.linear2).__name__, 'SmoothQuant')
-        self.assertEqual(type(model.linear3).__name__, 'SmoothQuant')
+        self.assertEqual(type(model.linear1).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear2).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear3).__name__, SMOOTH_QUANT)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear')
-        self.assertEqual(type(model.linear3).__name__, 'NpuQuantizationLinear')
+        self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -110,14 +128,14 @@ class TestSmoothQuant(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'SmoothQuant')
-        self.assertEqual(type(model.linear2).__name__, 'SmoothQuant')
-        self.assertEqual(type(model.linear3).__name__, 'SmoothQuant')
+        self.assertEqual(type(model.linear1).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear2).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear3).__name__, SMOOTH_QUANT)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear')
-        self.assertEqual(type(model.linear3).__name__, 'NpuQuantizationLinear')
+        self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
 
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
@@ -146,17 +164,17 @@ class TestSmoothQuant(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'SmoothQuant')
-        self.assertEqual(type(model.linear2).__name__, 'SmoothQuant')
-        self.assertEqual(type(model.linear3).__name__, 'SmoothQuant')
+        self.assertEqual(type(model.linear1).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear2).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear3).__name__, SMOOTH_QUANT)
         self.assertIsNotNone(model.linear1.offset_w)
         self.assertIsNotNone(model.linear1.scale_d)
         self.assertIsNone(model.linear1.offset_d)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear')
-        self.assertEqual(type(model.linear3).__name__, 'NpuQuantizationLinear')
+        self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize) 
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul) 
@@ -189,13 +207,14 @@ class TestSmoothQuant(unittest.TestCase):
         quantize(model, cfg) 
         model(self.inputs) 
         torch.Tensor.npu = mock_npu 
-        self.assertEqual(type(model.linear1).__name__, 'Linear') 
-        self.assertEqual(type(model.linear2).__name__, 'SmoothQuant') 
-        self.assertEqual(type(model.linear3).__name__, 'Linear') 
+        self.assertEqual(type(model.linear1).__name__, LINEAR) 
+        self.assertEqual(type(model.linear2).__name__, SMOOTH_QUANT) 
+        self.assertEqual(type(model.linear3).__name__, LINEAR) 
         self.assertIsNotNone(model.linear2.scale_w1) 
         self.assertIsNotNone(model.linear2.scale_d) 
         convert(model) 
         quant_out = model(self.inputs.npu()) 
-        self.assertEqual(type(model.linear1).__name__, 'Linear') 
-        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear') 
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR) 
+        self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR) 
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
+

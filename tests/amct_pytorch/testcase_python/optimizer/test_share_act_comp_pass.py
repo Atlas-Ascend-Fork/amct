@@ -23,7 +23,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .utils import models
+from tests.amct_pytorch.testcase_python.optimizer.utils import models
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
@@ -80,15 +80,14 @@ class TestShareActCompPass(unittest.TestCase):
         optimizer.do_optimizer(self.graph, self.model_002)
 
         named_module_dict = {name: mod for name, mod in self.model_002.named_modules()}
-        # print('named_module_dict', named_module_dict)
 
-        self.assertEqual(isinstance(named_module_dict['branch1'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch2'], nn.Conv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch3'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch3'].acts_comp_reuse, CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch4'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['conv'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['linear'], CompModuleLinear), True)
+        self.assertIsInstance(named_module_dict['branch1'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['branch2'], nn.Conv2d)
+        self.assertIsInstance(named_module_dict['branch3'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['branch3'].acts_comp_reuse, CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['branch4'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['conv'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['linear'], CompModuleLinear)
 
 
 if __name__ == '__main__':

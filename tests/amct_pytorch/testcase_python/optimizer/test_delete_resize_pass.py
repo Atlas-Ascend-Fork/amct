@@ -74,7 +74,6 @@ class TestDeleteResizePass(unittest.TestCase):
         self.assertTrue(is_matched)
 
         passer.do_pass(graph, resize_node)
-        # self.assertEqual(6, ori_len - len(graph.nodes))
 
     def test_do_success_02(self):
         """ now is fail"""

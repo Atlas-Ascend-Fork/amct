@@ -17,10 +17,13 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+import logging
 
 import torch
 import numpy as np
 from unittest import mock
+
+logger = logging.getLogger(__name__)
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.weight_quant_api import \
     adjust_conv_weight_shape, adjust_axis_for_group_wise, adjust_deconv_weight_shape
@@ -31,11 +34,11 @@ class TestNetParams(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        print("Test ParamsHelperTorch start!")
+        logger.info("Test ParamsHelperTorch start!")
 
     @classmethod
     def tearDownClass(cls):
-        print("Test ParamsHelperTorch end!")
+        logger.info("Test ParamsHelperTorch end!")
 
     def setUp(self):
         pass

@@ -19,9 +19,17 @@ import os
 from io import BytesIO
 import sys
 import unittest
+import logging
 import torch
 from unittest.mock import patch
 import numpy as np
+
+DATA_SCALE = 'data_scale'
+DATA_OFFSET = 'data_offset'
+WEIGHT_SCALE = 'weight_scale'
+WEIGHT_OFFSET = 'weight_offset'
+
+logger = logging.getLogger(__name__)
 
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
 from .util import models
@@ -45,6 +53,23 @@ from google.protobuf import text_format
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 
+S_TRANSPOSE = '%s.transpose'
+CONCAT0 = 'concat0'
+
+SCALE = 'scale'
+
+OFFSET = 'offset'
+
+QUANT_BIT = 'quant_bit'
+
+DST_TYPE = 'dst_type'
+
+INT8 = 'INT8'
+
+POOL0 = 'pool0'
+
+ADD1 = 'add1'
+
 def conv_sub_with_trans(graph, conv_name, inputs, outputs, quant_attrs):
     # Add Ascend Quant
     quant_node = graph.node.add()
@@ -54,7 +79,7 @@ def conv_sub_with_trans(graph, conv_name, inputs, outputs, quant_attrs):
     conv = graph.node.add()
     conv.name = conv_name
     conv.op_type = 'Conv'
-    conv.input[:] = ['%s_quant' % (conv_name), '%s.transpose' % (conv_name), '%s.bias' % (conv_name)]
+    conv.input[:] = ['%s_quant' % (conv_name), S_TRANSPOSE % (conv_name), '%s.bias' % (conv_name)]
     conv.output[:] = [conv_name]
     # add attribute "kernel_shape"
     kernel_shape = conv.attribute.add()
@@ -74,10 +99,10 @@ def conv_sub_with_trans(graph, conv_name, inputs, outputs, quant_attrs):
     weights.dims[:] = [6]
     # Add Transpose
     transpose = graph.node.add()
-    transpose.name = '%s.transpose' % (conv_name)
+    transpose.name = S_TRANSPOSE % (conv_name)
     transpose.op_type = 'Transpose'
     transpose.input[:] = ['%s.weights' % (conv_name)]
-    transpose.output[:] = ['%s.transpose' % (conv_name)]
+    transpose.output[:] = [S_TRANSPOSE % (conv_name)]
     # Add bias
     bias = graph.initializer.add()
     bias.name = '%s.bias' % (conv_name)
@@ -177,11 +202,6 @@ def deconv_sub(graph, deconv_name, inputs, outputs, quant_attrs):
     relu1.output[:] = outputs
 
 class TestReplaceWeightQuantPass(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
     @classmethod
     def setUpClass(self):
         QUANTIZABLE_TYPES.extend(['ConvTranspose2d','AvgPool2d'])
@@ -198,33 +218,33 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add concat node
         concat_node = self.graph.node.add()
-        concat_node.name = 'concat0'
+        concat_node.name = CONCAT0
         concat_node.op_type = 'Concat'
         concat_node.input[:] = ['data0']
-        concat_node.output[:] = ['concat0']
+        concat_node.output[:] = [CONCAT0]
 
-        conv_sub(self.graph, 'conv1', ['concat0'], ['conv1_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub(self.graph, 'conv2', ['concat0'], ['conv2_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub_with_trans(self.graph, 'conv3', ['concat0'], ['conv3_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        deconv_sub(self.graph, 'deconv1', ['concat0'], ['deconv1_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
+        conv_sub(self.graph, 'conv1', [CONCAT0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv2', [CONCAT0], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub_with_trans(self.graph, 'conv3', [CONCAT0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        deconv_sub(self.graph, 'deconv1', [CONCAT0], ['deconv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
 
         # Add max_pooling
         pool0 = self.graph.node.add()
-        pool0.name = 'pool0'
+        pool0.name = POOL0
         pool0.op_type = 'MaxPool'
-        pool0.input[:] = ['concat0']
-        pool0.output[:] = ['pool0']
+        pool0.input[:] = [CONCAT0]
+        pool0.output[:] = [POOL0]
         # Add add
         add1 = self.graph.node.add()
-        add1.name = 'add1'
+        add1.name = ADD1
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', 'deconv1_output', 'pool0']
-        add1.output[:] = ['add1']
+        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', 'deconv1_output', POOL0]
+        add1.output[:] = [ADD1]
         # Add average_pool
         pad0 = self.graph.node.add()
         pad0.name = 'avg_pool1_pad'
         pad0.op_type = 'Pad'
-        pad0.input[:] = ['add1']
+        pad0.input[:] = [ADD1]
         pad0.output[:] = ['pad0']
         # Add average_pool
         avg_pool1 = self.graph.node.add()
@@ -242,16 +262,22 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
     def tearDownClass(self):
         QUANTIZABLE_TYPES.remove('ConvTranspose2d')
         QUANTIZABLE_TYPES.remove('AvgPool2d')
-        print("[UNITTEST END replace_quant_pass.py]")
+        logger.info("[UNITTEST END replace_quant_pass.py]")
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def test_do_pass_int4_success(self):
         with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
             with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
                 records = {'conv1': {
-                        'data_scale': 1.0,
-                        'data_offset': 0,
-                        'weight_scale': np.array([1.0], dtype=np.float32),
-                        'weight_offset': np.array([0], dtype=np.int8),
+                        DATA_SCALE: 1.0,
+                        DATA_OFFSET: 0,
+                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
+                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
                     }
                 }
                 test_model = deepcopy(self.model_proto)
@@ -266,10 +292,10 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
             with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
                 records = {'conv3': {
-                        'data_scale': 1.0,
-                        'data_offset': 0,
-                        'weight_scale': np.array([1.0], dtype=np.float32),
-                        'weight_offset': np.array([0], dtype=np.int8),
+                        DATA_SCALE: 1.0,
+                        DATA_OFFSET: 0,
+                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
+                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
                     }
                 }
                 test_model = deepcopy(self.model_proto)
@@ -285,10 +311,10 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
             with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
                 records = {'deconv1': {
-                        'data_scale': 1.0,
-                        'data_offset': 0,
-                        'weight_scale': np.array([1.0], dtype=np.float32),
-                        'weight_offset': np.array([0], dtype=np.int8),
+                        DATA_SCALE: 1.0,
+                        DATA_OFFSET: 0,
+                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
+                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
                     }
                 }
                 test_model = deepcopy(self.model_proto)
@@ -302,9 +328,9 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
     def test_match_pattern_success(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
@@ -313,8 +339,8 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
     def test_match_pattern_false0(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
@@ -323,18 +349,18 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
     def test_match_pattern_false1(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        conv_node = graph.get_node_by_name('concat0')
+        conv_node = graph.get_node_by_name(CONCAT0)
         self.assertFalse(InsertWeightQuantPass(records).match_pattern(conv_node))
 
     def test_match_pattern_false2(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
@@ -358,8 +384,8 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
         records = {
             node_name: {
-                'weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'weight_offset': np.array([0]*4, dtype=np.int8),
+                WEIGHT_SCALE: np.array([1.0]*4, dtype=np.float32),
+                WEIGHT_OFFSET: np.array([0]*4, dtype=np.int8),
                 'recurrence_weight_scale': np.array([1.0]*4, dtype=np.float32),
                 'recurrence_weight_offset': np.array([0]*4, dtype=np.int8),
             }
@@ -385,12 +411,12 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
         records = {
             'conv1': {
-                'weight_scale': np.array([1.0]*3, dtype=np.float32),
-                'weight_offset': np.array([0]*3, dtype=np.int8)
+                WEIGHT_SCALE: np.array([1.0]*3, dtype=np.float32),
+                WEIGHT_OFFSET: np.array([0]*3, dtype=np.int8)
             },
             'deconv1': {
-                'weight_scale': np.array([1.0]*3, dtype=np.float32),
-                'weight_offset': np.array([0]*3, dtype=np.int8)
+                WEIGHT_SCALE: np.array([1.0]*3, dtype=np.float32),
+                WEIGHT_OFFSET: np.array([0]*3, dtype=np.int8)
             }
         }
 
@@ -403,3 +429,4 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         node_name = 'conv1'
         node = graph.get_node_by_name(node_name)
         passer.do_pass(graph, node)
+

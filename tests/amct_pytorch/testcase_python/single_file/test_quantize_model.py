@@ -19,8 +19,11 @@ import sys
 import os
 import unittest
 import json
+import logging
 import numpy as np
 import torch
+
+logger = logging.getLogger(__name__)
 
 from .utils import models
 from .utils import record_file_utils
@@ -68,9 +71,9 @@ class TestQuantizeModel(unittest.TestCase):
         config_file = os.path.join(CUR_DIR, 'utils/test_quantize_model/model_002.json')
         modfied_onnx_file = os.path.join(self.temp_folder, 'no_exit/model_modified.onnx')
         record_file = os.path.join(self.temp_folder, 'model_002.txt')
-        print("=*"*30)
+        logger.info("=*" * 30)
         for name, mod in self.model_002.named_modules():
-            print(name, mod)
+            logger.info('%s %s', name, mod)
         new_model = quantize_model(config_file, modfied_onnx_file, record_file,
             self.model_002, self.args, None, None, None)
 

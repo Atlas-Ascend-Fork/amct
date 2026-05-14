@@ -26,6 +26,7 @@ torch.manual_seed(42)
 # 获取根日志记录器
 import logging
 root_logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # 移除所有的处理器
 for handler in root_logger.handlers[:]:
@@ -39,7 +40,13 @@ SCOP_MAP = {
     "FLOAT4_E2M1": 6,
 }
 
+CUT_BIT_TYPE_TA = "TA"
+
 FLT_EPSILON = 1.192092896e-7
+
+SSR = 'SSR'
+ONES = 'ones'
+
 def golden_float4(weight, quant_type, group_size):
     """
     Scales weights to a quantization type scope based on specified group size.
@@ -296,25 +303,23 @@ def cvt_float16_to_hifuint8(x, round_mode="round", over_mode=True):
 
     if round_mode == "hybrid":
         if abs(exponent) < 4:
-            cut_bit_type = "TA"
+            cut_bit_type = CUT_BIT_TYPE_TA
         else:
-            cut_bit_type = "SSR"
     elif round_mode == "round":
-        cut_bit_type = "TA"
+        cut_bit_type = CUT_BIT_TYPE_TA
     elif round_mode == "storound":
-        cut_bit_type = "SSR"
     else:
-        cut_bit_type = "TA"
+        cut_bit_type = CUT_BIT_TYPE_TA
 
     #precheck
     fraction_int = int(x_abs * pow(2, 10)*pow(2, -exponent) - pow(2, 10))
     dot_hif8_value, exponent_hif8_bits, fraction_hif8_bits = _get_hif8_fraction_bits_number(exponent)
-    if cut_bit_type == "TA":
+    if cut_bit_type == CUT_BIT_TYPE_TA:
         carry_exp_status, hif8_frac_value = _fp16_ta_round_to_hif8(fraction_int, fraction_hif8_bits, exponent)
-    elif cut_bit_type == "SSR":
+    elif cut_bit_type == SSR:
         carry_exp_status, hif8_frac_value = _fp16_ssr_round_to_hif8(fraction_int, fraction_hif8_bits, exponent)
     else:
-        print(f"unknow round type")
+        logger.info("unknow round type")
         return 0
     if carry_exp_status:
         exponent += 1
@@ -393,24 +398,22 @@ def cvt_float32_to_hifuint8(x, round_mode="round", over_mode=True):
     exponent = math.floor(math.log2(x_abs))
     if round_mode == "hybrid":
         if abs(exponent) < 4:
-            cut_bit_type = "TA"
+            cut_bit_type = CUT_BIT_TYPE_TA
         else:
-            cut_bit_type = "SSR"
     elif round_mode == "round":
-        cut_bit_type = "TA"
+        cut_bit_type = CUT_BIT_TYPE_TA
     elif round_mode == "storound":
-        cut_bit_type = "SSR"
     else:
-        cut_bit_type = "TA"
+        cut_bit_type = CUT_BIT_TYPE_TA
     #precheck
     fraction_int = int(x_abs * pow(2, 23)*pow(2, -exponent) - pow(2, 23))
     dot_hif8_value, exponent_hif8_bits, fraction_hif8_bits = _get_hif8_fraction_bits_number(exponent)
-    if cut_bit_type == "TA":
+    if cut_bit_type == CUT_BIT_TYPE_TA:
         carry_exp_status, hif8_frac_value = _fp32_ta_round_to_hif8(fraction_int, fraction_hif8_bits, exponent)
-    elif cut_bit_type == "SSR":
+    elif cut_bit_type == SSR:
         carry_exp_status, hif8_frac_value = _fp32_ssr_round_to_hif8(fraction_int, fraction_hif8_bits, exponent)
     else:
-        print(f"unknow round type")
+        logger.info("unknow round type")
         return 0
     if carry_exp_status:
         exponent += 1
@@ -522,7 +525,7 @@ def cvt_hifuint8_to_float(x, over_mode=True):
             m_value = 1
             exponet_value = (x & 7) - 23  # b00000111 = 7
         else:
-            print("error,dot error")
+            logger.info("error,dot error")
             m_value = 0.0
             exponet_value = 0
         return sign*pow(2.0, exponet_value)*m_value
@@ -561,7 +564,7 @@ def _get_hif8_fraction_bits_number(exponent):
     if 8 <= abs(exponent) <= 15:
         #d4
         return 12, 4, 1
-    if exponent > 15:
+    else:
         #over flow
         return 12, 4, -1
 
@@ -663,7 +666,6 @@ def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=3
     return result
 
 def convert_golden_inverse_conversion(input_tensor, quant_type):
-    #return input_tensor
     dtype = input_tensor.dtype
 
     if quant_type in ('FLOAT4_E2M1'):
@@ -671,11 +673,11 @@ def convert_golden_inverse_conversion(input_tensor, quant_type):
 
     return input_tensor.to(dtype)
 
-def set_model_data_distribution(model, distribution_type='ones', quant_type='MXFP4_E2M1'):
+def set_model_data_distribution(model, distribution_type=ONES, quant_type='MXFP4_E2M1'):
     for name, param in model.named_parameters():
         param.data = param.data.to(DATA_TYPE).to(DEVICE)
         if "weight" not in name: continue
-        if distribution_type == 'ones':
+        if distribution_type == ONES:
             param.data = torch.ones_like(param.data).to(DATA_TYPE)
             param.data = convert_golden_inverse_conversion(param.data, quant_type).to(DATA_TYPE).to(DEVICE)
         elif distribution_type == 'zeros':
@@ -692,7 +694,7 @@ def set_model_data_distribution(model, distribution_type='ones', quant_type='MXF
     for _, buffer in model.named_buffers():
         buffer.data = buffer.data.to(DATA_TYPE).to(DEVICE)
         if "weight" not in name: continue
-        if distribution_type == 'ones':
+        if distribution_type == ONES:
             buffer.data = torch.ones_like(buffer.data).to(DATA_TYPE)
             buffer.data = convert_golden_inverse_conversion(param.data, quant_type).to(DATA_TYPE).to(DEVICE)
         elif distribution_type == 'zeros':
@@ -734,8 +736,8 @@ def similarity(data0, data1):
     return similar
 
 
-def set_data_distribution(data_shape, distribution_type='ones', quant_type='MXFP4_E2M1'):
-    if distribution_type == 'ones':
+def set_data_distribution(data_shape, distribution_type=ONES, quant_type='MXFP4_E2M1'):
+    if distribution_type == ONES:
         data = torch.ones(data_shape).to(DATA_TYPE).to(DEVICE)
     elif distribution_type == 'zeros':
         data = torch.zeros(data_shape).to(DATA_TYPE).to(DEVICE)
@@ -745,4 +747,5 @@ def set_data_distribution(data_shape, distribution_type='ones', quant_type='MXFP
         data = torch.rand(data_shape).to(DATA_TYPE).to(DEVICE)
     data = convert_golden_inverse_conversion(data, quant_type).to(DATA_TYPE).to(DEVICE)
     return data
+
 

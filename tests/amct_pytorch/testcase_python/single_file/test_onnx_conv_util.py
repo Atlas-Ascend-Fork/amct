@@ -80,8 +80,8 @@ class TestOnnxConvUtil(unittest.TestCase):
         graph.model = model
 
         conv_util = OnnxConvUtil(graph.get_node_by_name('conv1'))
-        self.assertEqual(conv_util.is_depthwise_conv(), True)
+        self.assertTrue(conv_util.is_depthwise_conv())
         self.assertEqual(conv_util.get_depthwise_multiplier(), 2)
 
         conv_util = OnnxConvUtil(graph.get_node_by_name('conv2'))
-        self.assertEqual(conv_util.is_group_conv(), True)
+        self.assertTrue(conv_util.is_group_conv())

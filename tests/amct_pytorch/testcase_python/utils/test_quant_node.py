@@ -17,10 +17,13 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+import logging
 from io import BytesIO
 import torch
 import torch.nn as nn
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
@@ -32,11 +35,11 @@ class TestQuantOpInfo(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        print("TestQuantOpInfo start!")
+        logger.info("TestQuantOpInfo start!")
 
     @classmethod
     def tearDownClass(cls):
-        print("TestQuantOpInfo end!")
+        logger.info("TestQuantOpInfo end!")
         pass
 
     def setUp(self):
