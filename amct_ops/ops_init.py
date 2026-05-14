@@ -26,6 +26,6 @@ Quick start
 >>> z = decode_from_hifloat8(y)         # → bfloat16, same shape
 """
 
-from . import hifloat8_cast
-
 __all__ = ['hifloat8_cast']
+
+from . import hifloat8_cast
