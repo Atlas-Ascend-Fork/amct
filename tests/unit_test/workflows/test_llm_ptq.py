@@ -322,6 +322,7 @@ def test_prepare_unit_batch_non_tuple_inputs(monkeypatch):
 def test_run_blockwise_empty_units_warning(monkeypatch):
     wf = _make_workflow()
     wf.pipeline = MagicMock()
+    wf.pipeline.num_layers = 10
     wf.pipeline.build_quant_block = MagicMock(return_value=nn.Linear(4, 4))
     wf.pipeline.iter_ptq_units = MagicMock(return_value=iter([]))
     wf.data_provider = MagicMock()
@@ -360,6 +361,7 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
     wf.args.quant_param_dir = str(param_dir)
     wf.pipeline = MagicMock()
+    wf.pipeline.num_layers = 10
     wf.pipeline.build_quant_block = MagicMock(return_value=nn.Linear(4, 4))
     unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
     wf.pipeline.iter_ptq_units = MagicMock(return_value=iter([unit]))
@@ -503,6 +505,7 @@ def test_save_unit_result_constructs_path(tmp_path):
 def test_ptq_run_blockwise_mocked(monkeypatch):
     wf = _make_workflow(quant_target=[QUANT_TARGET_MLP])
     wf.pipeline = MagicMock()
+    wf.pipeline.num_layers = 10
     wf.pipeline.build_quant_block = MagicMock(return_value=nn.Linear(4, 4))
 
     unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
