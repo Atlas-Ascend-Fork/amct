@@ -83,5 +83,5 @@ class TestDeleteQatPass(unittest.TestCase):
         model = copy.deepcopy(self.qat_model)
         optimizer.do_optimizer(model, None)
 
-        self.assertTrue(isinstance(model.conv, nn.Conv2d))
+        self.assertIsInstance(model.conv, nn.Conv2d)
 

@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
 import torch
@@ -35,6 +36,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.prune_record
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+logger = logging.getLogger(__name__)
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -129,13 +131,13 @@ class TestTaylorLossSensitivity(unittest.TestCase):
         cls.graph_info = cls.auto_channel_prune_search.graph_info
         cls.test_iteration = 1
 
-        print('TestTaylorLossSensitivity start!')
+        logger.info('TestTaylorLossSensitivity start!')
 
 
     @classmethod
     def tearDownClass(cls):
         os.popen('rm -r ' + cls.temp_folder)
-        print('TestTaylorLossSensitivity end!')
+        logger.info('TestTaylorLossSensitivity end!')
         pass
 
     def setUp(self):
@@ -157,7 +159,7 @@ class TestTaylorLossSensitivity(unittest.TestCase):
         sentitvity_func.setup_initialization(graph_tuple=(self.graph, self.graph_info),
             input_data=self.sample_data, test_iteration=self.test_iteration)
 
-        print(self.graph_info)
+        logger.info(self.graph_info)
         ch_info = {'begin': 0,  'end': self.graph_info.get('layer1.0').get('cout')}
         ch_score = sentitvity_func.compute_taylor_by_channel('layer1.0', ch_info)
         assert not torch.any(torch.isnan(ch_score))
@@ -169,7 +171,7 @@ class TestTaylorLossSensitivity(unittest.TestCase):
             sentitvity_func.setup_initialization(graph_tuple=(self.graph, self.graph_info),
                 input_data=self.sample_data, test_iteration=100)
         except Exception as e:
-            print('[Exception]test_sensitivity_param_error:', e)
+            logger.info('[Exception]test_sensitivity_param_error:', e)
             self.assertTrue(True)
 
 
@@ -182,4 +184,4 @@ class TestTaylorLossSensitivity(unittest.TestCase):
         attr_helper = AttrProtoHelper(record[0].producer[0])
         sensitivity = attr_helper.get_attr_value('sensitivity')
         self.assertTrue(sensitivity)
-        print(sensitivity)
+        logger.info(sensitivity)

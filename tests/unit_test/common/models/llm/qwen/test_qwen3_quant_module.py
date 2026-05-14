@@ -21,6 +21,12 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 register_dtype()
 
+W_BITS = 'w_bits'
+A_BITS = 'a_bits'
+ATTN_CACHE = 'attn-cache'
+ATTN_LINEAR = 'attn-linear'
+MLP = 'mlp'
+
 
 def _tiny_qwen3_config():
     return Qwen3Config(
@@ -36,7 +42,7 @@ def _tiny_qwen3_config():
     )
 
 
-def _quant_args(quant_target=("attn-linear",)):
+def _quant_args(quant_target=(ATTN_LINEAR,)):
     return SimpleNamespace(
         algos=[],
         quant_dtype="int",
@@ -45,17 +51,17 @@ def _quant_args(quant_target=("attn-linear",)):
         q_bits=8, k_bits=8, p_bits=8, v_bits=8,
         quant_target=list(quant_target),
         bit_policy=BitPolicy({
-            "attn-linear": {
-                "q_proj": {"w_bits": 8, "a_bits": 8},
-                "k_proj": {"w_bits": 8, "a_bits": 8},
-                "v_proj": {"w_bits": 8, "a_bits": 8},
-                "o_proj": {"w_bits": 8, "a_bits": 8},
+            ATTN_LINEAR: {
+                "q_proj": {W_BITS: 8, A_BITS: 8},
+                "k_proj": {W_BITS: 8, A_BITS: 8},
+                "v_proj": {W_BITS: 8, A_BITS: 8},
+                "o_proj": {W_BITS: 8, A_BITS: 8},
             },
-            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-            "mlp": {
-                "gate_proj": {"w_bits": 8, "a_bits": 8},
-                "up_proj": {"w_bits": 8, "a_bits": 8},
-                "down_proj": {"w_bits": 8, "a_bits": 8},
+            ATTN_CACHE: {"q": 8, "k": 8, "p": 8, "v": 8},
+            MLP: {
+                "gate_proj": {W_BITS: 8, A_BITS: 8},
+                "up_proj": {W_BITS: 8, A_BITS: 8},
+                "down_proj": {W_BITS: 8, A_BITS: 8},
             },
         }),
     )
@@ -73,7 +79,7 @@ def _position_embeddings(bs, seq, head_dim):
 def test_quant_qwen3_mlp_forward_preserves_shape():
     cfg = _tiny_qwen3_config()
     mlp = Qwen3MLP(cfg)
-    qmlp = QuantQwen3MLP(_quant_args(quant_target=["mlp"]), mlp)
+    qmlp = QuantQwen3MLP(_quant_args(quant_target=[MLP]), mlp)
     x = torch.randn(1, 4, cfg.hidden_size)
     out = qmlp(x)
     assert out.shape == x.shape
@@ -82,7 +88,7 @@ def test_quant_qwen3_mlp_forward_preserves_shape():
 def test_quant_qwen3_mlp_uses_quant_linear_for_each_proj():
     cfg = _tiny_qwen3_config()
     mlp = Qwen3MLP(cfg)
-    qmlp = QuantQwen3MLP(_quant_args(quant_target=["mlp"]), mlp)
+    qmlp = QuantQwen3MLP(_quant_args(quant_target=[MLP]), mlp)
     assert isinstance(qmlp.up_proj, QuantLinear)
     assert isinstance(qmlp.gate_proj, QuantLinear)
     assert isinstance(qmlp.down_proj, QuantLinear)
@@ -94,7 +100,7 @@ def test_quant_qwen3_mlp_uses_quant_linear_for_each_proj():
 def test_quant_qwen3_attn_with_attn_linear_uses_quant_linear_projections():
     cfg = _tiny_qwen3_config()
     attn = Qwen3Attention(cfg, layer_idx=0)
-    qattn = QuantQwen3Attn(_quant_args(quant_target=["attn-linear"]), attn)
+    qattn = QuantQwen3Attn(_quant_args(quant_target=[ATTN_LINEAR]), attn)
     for proj in (qattn.q_proj, qattn.k_proj, qattn.v_proj, qattn.o_proj):
         assert isinstance(proj, QuantLinear)
     # Activation quantizers are real, not Identity.
@@ -105,7 +111,7 @@ def test_quant_qwen3_attn_with_attn_linear_uses_quant_linear_projections():
 def test_quant_qwen3_attn_without_attn_linear_uses_plain_linear_wrappers():
     cfg = _tiny_qwen3_config()
     attn = Qwen3Attention(cfg, layer_idx=0)
-    qattn = QuantQwen3Attn(_quant_args(quant_target=["attn-cache"]), attn)
+    qattn = QuantQwen3Attn(_quant_args(quant_target=[ATTN_CACHE]), attn)
     for proj in (qattn.q_proj, qattn.k_proj, qattn.v_proj, qattn.o_proj):
         assert isinstance(proj, PlainLinear)
     # In this branch transforms must be None and afq replaced with Identity.
@@ -118,7 +124,7 @@ def test_quant_qwen3_attn_without_attn_linear_uses_plain_linear_wrappers():
 def test_quant_qwen3_attn_qk_pv_matmul_constructed():
     cfg = _tiny_qwen3_config()
     attn = Qwen3Attention(cfg, layer_idx=0)
-    qattn = QuantQwen3Attn(_quant_args(quant_target=["attn-cache"]), attn)
+    qattn = QuantQwen3Attn(_quant_args(quant_target=[ATTN_CACHE]), attn)
     # qk_matmul / pv_matmul are always built regardless of attn-linear flag.
     assert qattn.qk_matmul is not None
     assert qattn.pv_matmul is not None
@@ -127,7 +133,7 @@ def test_quant_qwen3_attn_qk_pv_matmul_constructed():
     assert qattn.qk_matmul.r_bits == 8
 
 
-@pytest.mark.parametrize("quant_target", [["attn-linear"], ["attn-cache"]])
+@pytest.mark.parametrize("quant_target", [[ATTN_LINEAR], [ATTN_CACHE]])
 def test_quant_qwen3_attn_forward_returns_correct_shape(quant_target):
     cfg = _tiny_qwen3_config()
     attn = Qwen3Attention(cfg, layer_idx=0)
@@ -146,7 +152,7 @@ def test_quant_qwen3_attn_forward_disabled_quant_matches_plain_attn_skeleton():
     the wrapper should still give a finite, real-valued tensor."""
     cfg = _tiny_qwen3_config()
     attn = Qwen3Attention(cfg, layer_idx=0)
-    qattn = QuantQwen3Attn(_quant_args(quant_target=["attn-cache"]), attn)
+    qattn = QuantQwen3Attn(_quant_args(quant_target=[ATTN_CACHE]), attn)
     bs, seq = 1, 4
     h = torch.randn(bs, seq, cfg.hidden_size)
     cos, sin = _position_embeddings(bs, seq, cfg.head_dim)

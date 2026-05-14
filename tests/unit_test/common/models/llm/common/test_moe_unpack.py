@@ -18,7 +18,6 @@ class _FakeExperts:
     def __init__(self):
         # Two experts, packed gate/up: [E, 2*intermediate, hidden] = [2, 6, 4]
         self.gate_up_proj = torch.arange(2 * 6 * 4, dtype=torch.float32).reshape(2, 6, 4)
-        # down: [E, hidden, intermediate] = [2, 4, 3]
         self.down_proj = torch.arange(2 * 4 * 3, dtype=torch.float32).reshape(2, 4, 3) + 1000
 
 

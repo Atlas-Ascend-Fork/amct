@@ -96,6 +96,6 @@ class TestInsertQatPass(unittest.TestCase):
         model = copy.deepcopy(self.model_001)
         optimizer.do_optimizer(model, self.graph)
 
-        self.assertTrue(isinstance(model.layer1, Conv2dQAT))
-        self.assertTrue(isinstance(model.layer3, LinearQAT))
+        self.assertIsInstance(model.layer1, Conv2dQAT)
+        self.assertIsInstance(model.layer3, LinearQAT)
 

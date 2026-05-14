@@ -90,5 +90,4 @@ def test_abstract_apply_body_executes_via_super_call():
         def get_config(self):
             return super().get_config()
     obj = _CallsSuper({})
-    result = obj.apply(None)
-    assert result is None
+    obj.apply(None)

@@ -18,10 +18,13 @@
 import os
 import sys
 import unittest
+import logging
 import torch
 from unittest.mock import patch
 import numpy as np
 from copy import deepcopy
+
+logger = logging.getLogger(__name__)
 
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
 from .util import models
@@ -43,15 +46,29 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import files
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
 from google.protobuf import text_format
 
+DATA_SCALE = 'data_scale'
+DATA_OFFSET = 'data_offset'
+
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+CONCAT0 = 'concat0'
+OBJECT_NODE = 'object_node'
+
+SCALE = 'scale'
+
+OFFSET = 'offset'
+
+QUANT_BIT = 'quant_bit'
+
+DST_TYPE = 'dst_type'
+
+INT8 = 'INT8'
+
+ANTIQUANT0 = 'antiquant0'
+
+POOL0 = 'pool0'
+
 class TestReplaceAntiQuantPass(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     @classmethod
     def setUpClass(self):
         # set basic info
@@ -67,10 +84,10 @@ class TestReplaceAntiQuantPass(unittest.TestCase):
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add concat node
         concat_node = self.graph.node.add()
-        concat_node.name = 'concat0'
+        concat_node.name = CONCAT0
         concat_node.op_type = 'Concat'
         concat_node.input[:] = ['data0']
-        concat_node.output[:] = ['concat0']
+        concat_node.output[:] = [CONCAT0]
 
         def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
             # Add Ascend Quant
@@ -111,24 +128,24 @@ class TestReplaceAntiQuantPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = [conv_name]
             relu1.output[:] = outputs
-        conv_sub(self.graph, 'conv1', ['concat0'], ['conv1_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub(self.graph, 'conv2', ['concat0'], ['conv2_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
-        conv_sub(self.graph, 'conv3', ['concat0'], ['conv3_output'], {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'})
+        conv_sub(self.graph, 'conv1', [CONCAT0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv2', [CONCAT0], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv3', [CONCAT0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         # Add AntiAscend Quant
         antiquant0 = self.graph.node.add()
-        antiquant0.CopyFrom(construct_anti_quant_node(['concat0'], ['antiquant0'],
-            {'scale': 1, 'offset': 0, 'quant_bit': 8, 'dst_type': 'INT8'}, 'antiquant0'))
+        antiquant0.CopyFrom(construct_anti_quant_node([CONCAT0], [ANTIQUANT0],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8}, ANTIQUANT0))
         # Add max_pooling
         pool0 = self.graph.node.add()
-        pool0.name = 'pool0'
+        pool0.name = POOL0
         pool0.op_type = 'MaxPool'
-        pool0.input[:] = ['antiquant0']
-        pool0.output[:] = ['pool0']
+        pool0.input[:] = [ANTIQUANT0]
+        pool0.output[:] = [POOL0]
         # Add add
         add1 = self.graph.node.add()
         add1.name = 'add1'
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', 'pool0']
+        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', POOL0]
         add1.output[:] = ['output']
         # add output
         graph_output = self.graph.output.add()
@@ -138,29 +155,35 @@ class TestReplaceAntiQuantPass(unittest.TestCase):
 
     @classmethod
     def tearDownClass(self):
-        print("[UNITTEST END replace_antiquant_pass.py]")
+        logger.info("[UNITTEST END replace_antiquant_pass.py]")
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def test_do_pass_success(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         numbits = 8
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         data_node = graph.get_node_by_name('antiquant0.anti_quant')
-        graph.get_node_by_name('conv1.quant').set_attr('object_node', 'conv1')
-        graph.get_node_by_name('conv2.quant').set_attr('object_node', 'conv2')
-        graph.get_node_by_name('conv3.quant').set_attr('object_node', 'conv3')
+        graph.get_node_by_name('conv1.quant').set_attr(OBJECT_NODE, 'conv1')
+        graph.get_node_by_name('conv2.quant').set_attr(OBJECT_NODE, 'conv2')
+        graph.get_node_by_name('conv3.quant').set_attr(OBJECT_NODE, 'conv3')
 
         ReplaceAntiQuantPass(records).do_pass(graph, data_node)
 
     def test_match_pattern_success(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
@@ -169,11 +192,12 @@ class TestReplaceAntiQuantPass(unittest.TestCase):
 
     def test_match_pattern_false(self):
         records = {
-            'conv1': {'data_scale': 1, 'data_offset': 0},
-            'conv2': {'data_scale': 1, 'data_offset': 0},
-            'conv3': {'data_scale': 1, 'data_offset': 0},
+            'conv1': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
+            'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        antiquant_node = graph.get_node_by_name('concat0')
+        antiquant_node = graph.get_node_by_name(CONCAT0)
         self.assertFalse(ReplaceAntiQuantPass(records).match_pattern(antiquant_node))
+

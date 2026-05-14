@@ -41,6 +41,8 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZ
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+CONV1D = 'conv1d'
+
 class TestInsertCaliQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -86,7 +88,6 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         optimizer.do_optimizer(model, self.graph)
 
         named_module_dict = {name: mod for name, mod in model.named_modules()}
-        # print('named_module_dict', named_module_dict)
 
         self.assertEqual(True, isinstance(named_module_dict['layer1.0'].cali_quant_module, IFMR))
         self.assertEqual(True, isinstance(named_module_dict['layer2.0'].cali_quant_module, IFMR))
@@ -124,7 +125,6 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         optimizer.do_optimizer(model, self.graph)
 
         named_module_dict = {name: mod for name, mod in model.named_modules()}
-        # print('named_module_dict', named_module_dict)
         self.assertEqual(True, isinstance(named_module_dict['layer1.0'].cali_quant_module, HFMG))
         self.assertEqual(True, isinstance(named_module_dict['layer2.0'].cali_quant_module, HFMG))
         self.assertEqual(True, isinstance(named_module_dict['layer3.0'].cali_quant_module, HFMG))
@@ -167,10 +167,11 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         Parser.export_onnx(conv1d_module, torch.randn(1,1,1), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
         for name, mod in conv1d_module.named_modules():
-            if name == 'conv1d':
+            if name == CONV1D:
                 conv1d_mod = mod
                 break
-        records = {'conv1d': {'tensor_balance_factor': [3, 3, 3]}}
+        records = {CONV1D: {'tensor_balance_factor': [3, 3, 3]}}
 
         cali_quant_pass = InsertCaliQuantPass(None,records=records)
-        cali_quant_pass.broad_cast_tensor_balance_factor('conv1d', conv1d_mod, graph)
+        cali_quant_pass.broad_cast_tensor_balance_factor(CONV1D, conv1d_mod, graph)
+

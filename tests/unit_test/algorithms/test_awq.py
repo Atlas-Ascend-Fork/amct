@@ -60,7 +60,8 @@ def test_apply_scale_updates_weight_and_input():
     input_before = inp.clone()
 
     class FakeModule:
-        pass
+        def __init__(self):
+            self.weight = None
 
     mod = FakeModule()
     mod.weight = torch.nn.Parameter(weight_before.clone())

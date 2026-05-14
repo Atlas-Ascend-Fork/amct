@@ -15,25 +15,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import unittest
 import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import AttributeProto
+
+logger = logging.getLogger(__name__)
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_rnn_fake_quant_pass import InsertRNNFakeQuantPass
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 
+DATA_SCALE = 'data_scale'
+DATA_OFFSET = 'data_offset'
+ASCEND_QUANT = 'AscendQuant'
+ASCEND_ANTI_QUANT = 'AscendAntiQuant'
+HIDDEN_SIZE = 'hidden_size'
+LINEAR_BEFORE_RESET = 'linear_before_reset'
+
+logger = logging.getLogger(__name__)
 
 class TestInsertRNNFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestInsertRNNFakeQuantPass start!')
+        logger.info('TestInsertRNNFakeQuantPass start!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestInsertRNNFakeQuantPass end!')
+        logger.info('TestInsertRNNFakeQuantPass end!')
 
     def setUp(self):
         graph_proto = onnx_pb.GraphProto()
@@ -94,7 +105,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         lstm_0.output[:] = ['Y0', 'Y0_h', 'Y0_c']
         # add attribute
         hidden_size = lstm_0.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add unquantizable lstm_1
@@ -105,7 +116,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         lstm_1.output[:] = ['Y1', 'Y1_h', 'Y1_c']
         # add attribute
         hidden_size = lstm_1.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add attribute
@@ -121,8 +132,8 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
 
         self.records = {
             'lstm_0': {
-                'data_scale': 1.0,
-                'data_offset': 0,
+                DATA_SCALE: 1.0,
+                DATA_OFFSET: 0,
                 'h_scale': 1.0,
                 'h_offset': 0,
                 'act_type': 'INT8',
@@ -157,17 +168,17 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
     def test_generate_fake_quant_node(self):
         lstm_0 = self.graph.get_node_by_name('lstm_0')
         quant_node, antiquant_node = InsertRNNFakeQuantPass(self.records).generate_fake_quant_node(self.graph, lstm_0, 0)
-        self.assertEqual(quant_node.type, 'AscendQuant')
-        self.assertEqual(antiquant_node.type, 'AscendAntiQuant')
+        self.assertEqual(quant_node.type, ASCEND_QUANT)
+        self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)
 
 class TestInsertRNNFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestInsertRNNFakeQuantPass start!')
+        logger.info('TestInsertRNNFakeQuantPass start!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestInsertRNNFakeQuantPass end!')
+        logger.info('TestInsertRNNFakeQuantPass end!')
 
     def setUp(self):
         graph_proto = onnx_pb.GraphProto()
@@ -221,12 +232,12 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         gru_0.input[:] = ['X', 'W', 'R', '', '', 'h']
         gru_0.output[:] = ['Y0', 'Y0_h']
         linear_before_reset = gru_0.attribute.add()
-        linear_before_reset.name = 'linear_before_reset'
+        linear_before_reset.name = LINEAR_BEFORE_RESET
         linear_before_reset.type = AttributeProto.AttributeType.INT
         linear_before_reset.i = 1
         # add attribute
         hidden_size = gru_0.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
 
@@ -238,12 +249,12 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         gru_1.output[:] = ['Y1', 'Y1_h']
         # add attribute
         hidden_size = gru_1.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add attribute
         linear_before_reset = gru_1.attribute.add()
-        linear_before_reset.name = 'linear_before_reset'
+        linear_before_reset.name = LINEAR_BEFORE_RESET
         linear_before_reset.type = AttributeProto.AttributeType.INT
         linear_before_reset.i = 0
 
@@ -254,8 +265,8 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
 
         self.records = {
             'gru_0': {
-                'data_scale': 1.0,
-                'data_offset': 0,
+                DATA_SCALE: 1.0,
+                DATA_OFFSET: 0,
                 'h_scale': 1.0,
                 'h_offset': 0,
                 'act_type': 'INT8',
@@ -286,5 +297,5 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
     def test_generate_fake_quant_node(self):
         gru_0 = self.graph.get_node_by_name('gru_0')
         quant_node, antiquant_node = InsertRNNFakeQuantPass(self.records).generate_fake_quant_node(self.graph, gru_0, 0)
-        self.assertEqual(quant_node.type, 'AscendQuant')
-        self.assertEqual(antiquant_node.type, 'AscendAntiQuant')
+        self.assertEqual(quant_node.type, ASCEND_QUANT)
+        self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)

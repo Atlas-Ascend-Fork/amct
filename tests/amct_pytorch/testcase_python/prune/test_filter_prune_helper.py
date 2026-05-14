@@ -193,6 +193,7 @@ class FakeRetrainConfig:
 
     def __init__(self):
         super(FakeRetrainConfig, self).__init__()
+        self.prune_layers = None
 
     def set_prune_layers(self, prune_layers):
         self.prune_layers = prune_layers

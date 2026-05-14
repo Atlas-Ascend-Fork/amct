@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 from io import BytesIO
 import sys
@@ -44,13 +45,9 @@ from google.protobuf import text_format
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+logger = logging.getLogger(__name__)
+
 class TestReplaceBiasQuantPass(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     @classmethod
     def setUpClass(self):
         self.temp_folder = os.path.join(CUR_DIR, 'test_bias_fakequant_pass')
@@ -93,7 +90,13 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
     @classmethod
     def tearDownClass(self):
         os.system('rm -r ' + self.temp_folder)
-        print("[UNITTEST END bias_fakequant_pass.py]")
+        logger.info("[UNITTEST END bias_fakequant_pass.py]")
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def test_bias_fake_quant_pass_succ(self):
         optimizer = GraphOptimizer()

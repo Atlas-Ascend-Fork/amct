@@ -9,6 +9,8 @@ from amct_pytorch.algorithms.quant.learnable_hadamard import (
     get_random_orthg,
 )
 
+TRANSFORM_WEIGHT = 'transform_weight'
+
 
 # ---- get_random_orthg ----------------------------------------------------
 
@@ -17,7 +19,6 @@ from amct_pytorch.algorithms.quant.learnable_hadamard import (
 def test_get_random_orthg_returns_orthogonal_matrix(size):
     q = get_random_orthg(size)
     assert q.shape == (size, size)
-    # Q @ Q^T == I
     assert torch.allclose(q @ q.T, torch.eye(size), atol=1e-5)
 
 
@@ -134,8 +135,8 @@ def test_learnable_hadamard_trainable_params_includes_transform_weight():
 def test_learnable_hadamard_export_load_round_trip():
     layer = _make_hadamard(matrix_size=4)
     params = layer.export_ptq_params()
-    assert "transform_weight" in params
-    assert torch.equal(params["transform_weight"], layer.transform.linear.weight.detach().cpu())
+    assert TRANSFORM_WEIGHT in params
+    assert torch.equal(params[TRANSFORM_WEIGHT], layer.transform.linear.weight.detach().cpu())
 
     other = _make_hadamard(matrix_size=4)
     other.load_ptq_params(params)

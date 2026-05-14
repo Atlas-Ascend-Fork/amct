@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import sys
 import os
 import unittest
@@ -29,6 +30,8 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample im
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import DistillSampleBase
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
 
 class DistillNet(nn.Module):
     def __init__(self):
@@ -49,12 +52,6 @@ class DistillQATNet(nn.Module):
         return x
 
 class TestDistillHelper(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_distill_helper')
@@ -73,8 +70,14 @@ class TestDistillHelper(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         os.system('rm -r ' + cls.temp_folder)
-        print("[UNITTEST END test_distill_helper.py]")
+        logger.info("[UNITTEST END test_distill_helper.py]")
 
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def test_run_model_one_batch(self):
         DistillHelper.run_model_one_batch(self.torch_model, self.data)

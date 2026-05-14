@@ -14,6 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import logging
 import unittest
 import sys
 import copy
@@ -28,6 +29,9 @@ from mock_torch_npu import mock_npu_quantize
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch import quantize, convert, HIFP8_QUANTILE_CFG
 
+logger = logging.getLogger(__name__)
+
+QUANTILEQUANT = 'QuantileQuant'
 
 class TestQuantileQuant(unittest.TestCase):
     @classmethod
@@ -35,11 +39,11 @@ class TestQuantileQuant(unittest.TestCase):
         cls.model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.model(cls.inputs)
-        print('TestQuantile START!')
+        logger.info('TestQuantile START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestQuantile END!')
+        logger.info('TestQuantile END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -72,9 +76,9 @@ class TestQuantileQuant(unittest.TestCase):
         self.assertEqual(model.linear1.scale_w.shape[0], 64)
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNone(model.linear2.offset_w)
-        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
-        self.assertEqual(type(model.linear2).__name__, 'QuantileQuant')
-        self.assertEqual(type(model.linear3).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
+        self.assertEqual(type(model.linear2).__name__, QUANTILEQUANT)
+        self.assertEqual(type(model.linear3).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
@@ -109,7 +113,7 @@ class TestQuantileQuant(unittest.TestCase):
         model(self.inputs)
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNotNone(model.linear1.scale_d)
-        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
@@ -140,7 +144,7 @@ class TestQuantileQuant(unittest.TestCase):
 
         model(self.inputs)
         self.assertIsNotNone(model.linear1.scale_w)
-        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
@@ -173,7 +177,7 @@ class TestQuantileQuant(unittest.TestCase):
 
         model(self.inputs)
         self.assertIsNotNone(model.linear1.scale_w)
-        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
@@ -203,7 +207,7 @@ class TestQuantileQuant(unittest.TestCase):
             model(inputs)
         
         self.assertIsNotNone(model.linear1.scale_w)
-        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
@@ -222,7 +226,7 @@ class TestQuantileQuant(unittest.TestCase):
         
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNone(model.linear1.scale_d)
-        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
@@ -259,10 +263,11 @@ class TestQuantileQuant(unittest.TestCase):
         
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNone(model.linear1.scale_d)
-        self.assertEqual(type(model.linear1).__name__, 'QuantileQuant')
+        self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
 
 if __name__ == '__main__':
     unittest.main()
+

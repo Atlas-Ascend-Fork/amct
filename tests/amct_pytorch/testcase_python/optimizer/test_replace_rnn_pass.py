@@ -15,25 +15,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import unittest
 import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import AttributeProto
+
+logger = logging.getLogger(__name__)
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_rnn_pass import ReplaceRNNPass
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 
+DATA_SCALE = 'data_scale'
+DATA_OFFSET = 'data_offset'
+HIDDEN_SIZE = 'hidden_size'
+LINEAR_BEFORE_RESET = 'linear_before_reset'
+
+logger = logging.getLogger(__name__)
 
 class TestReplaceRNNPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestReplaceRNNPass start!')
+        logger.info('TestReplaceRNNPass start!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestReplaceRNNPass end!')
+        logger.info('TestReplaceRNNPass end!')
 
     def setUp(self):
         graph_proto = onnx_pb.GraphProto()
@@ -94,7 +103,7 @@ class TestReplaceRNNPass(unittest.TestCase):
         lstm_0.output[:] = ['Y0', 'Y0_h', 'Y0_c']
         # add attribute
         hidden_size = lstm_0.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add unquantizable lstm_1
@@ -105,7 +114,7 @@ class TestReplaceRNNPass(unittest.TestCase):
         lstm_1.output[:] = ['Y1', 'Y1_h', 'Y1_c']
         # add attribute
         hidden_size = lstm_1.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add attribute
@@ -121,8 +130,8 @@ class TestReplaceRNNPass(unittest.TestCase):
 
         self.records = {
             'lstm_0': {
-                'data_scale': 1.0,
-                'data_offset': 0,
+                DATA_SCALE: 1.0,
+                DATA_OFFSET: 0,
                 'h_scale': 1.0,
                 'h_offset': 0,
                 'act_type': 'INT8',
@@ -163,11 +172,11 @@ class TestReplaceRNNPass(unittest.TestCase):
 class TestReplaceRNNPassGRU(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestReplaceRNNPassGRU start!')
+        logger.info('TestReplaceRNNPassGRU start!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestReplaceRNNPassGRU end!')
+        logger.info('TestReplaceRNNPassGRU end!')
 
     def setUp(self):
         graph_proto = onnx_pb.GraphProto()
@@ -221,12 +230,12 @@ class TestReplaceRNNPassGRU(unittest.TestCase):
         gru_0.input[:] = ['X', 'W', 'R', '', '', 'h']
         gru_0.output[:] = ['Y0', 'Y0_h']
         linear_before_reset = gru_0.attribute.add()
-        linear_before_reset.name = 'linear_before_reset'
+        linear_before_reset.name = LINEAR_BEFORE_RESET
         linear_before_reset.type = AttributeProto.AttributeType.INT
         linear_before_reset.i = 1
         # add attribute
         hidden_size = gru_0.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
 
@@ -238,12 +247,12 @@ class TestReplaceRNNPassGRU(unittest.TestCase):
         gru_1.output[:] = ['Y1', 'Y1_h']
         # add attribute
         hidden_size = gru_1.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add attribute
         linear_before_reset = gru_1.attribute.add()
-        linear_before_reset.name = 'linear_before_reset'
+        linear_before_reset.name = LINEAR_BEFORE_RESET
         linear_before_reset.type = AttributeProto.AttributeType.INT
         linear_before_reset.i = 0
 
@@ -254,8 +263,8 @@ class TestReplaceRNNPassGRU(unittest.TestCase):
 
         self.records = {
             'gru_0': {
-                'data_scale': 1.0,
-                'data_offset': 0,
+                DATA_SCALE: 1.0,
+                DATA_OFFSET: 0,
                 'h_scale': 1.0,
                 'h_offset': 0,
                 'act_type': 'INT8',

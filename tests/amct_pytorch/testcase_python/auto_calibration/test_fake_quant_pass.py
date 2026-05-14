@@ -16,6 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os,sys
+import logging
 import unittest
 import argparse
 import torch
@@ -41,6 +42,7 @@ DATA_PATH = os.path.join(DATASETS_DIR, 'pytorch/data')
 MAX_ACC_ERR = 0.5
 DEVICE = 'cpu'
 
+logger = logging.getLogger(__name__)
 
 class TestAutoCaliFakeQuantPass(unittest.TestCase):
     @classmethod
@@ -74,7 +76,6 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
         # prepare ori_model
         device = DEVICE
         model = self.model.to(device)
-        # model.load_state_dict(torch.load(self.ckpt, map_location=device))
         test_iter = 2
         # run ori_model
         run_inference_model_auto_cali(
@@ -84,8 +85,7 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
         fakequant_model, fakequant_file = do_calibration(
             model, self.args_shape, self.temp_folder)
         run_inference_model_auto_cali(fakequant_model, iterations=test_iter)
-        print('='*50, 'reesult', '='*50)
-        # self.assertLess(abs(acc_ptq - acc_ori), MAX_ACC_ERR)
+        logger.info('%s reesult %s', '='*50, '='*50)
         self.assertTrue(os.path.exists(fakequant_file))
 
 

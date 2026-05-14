@@ -125,4 +125,4 @@ class TestFakeConvModule(unittest.TestCase):
             sub_module, quant_params, "conv1")
         inputs = np.random.uniform(0, 1, (1,3,32))
         out = fake_conv(torch.tensor(inputs).to(torch.float))
-        self.assertTrue(isinstance(out, torch.Tensor))
+        self.assertIsInstance(out, torch.Tensor)
