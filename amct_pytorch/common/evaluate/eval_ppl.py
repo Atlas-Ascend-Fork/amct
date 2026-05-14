@@ -21,14 +21,12 @@ from tqdm import tqdm
 
 
 def wikitext2_ppl(preds, samples, seq_len=4096):
-    # nsamples = testenc.numel() // seq_len
     bs = 1
     nlls = []
     nsamples = len(samples)
     for i, sample in tqdm(enumerate(samples), desc="Evaluating"):
         shift_logits = preds[i]
         shift_labels = sample[:, 1:]
-        # Compute loss
         loss_fct = nn.CrossEntropyLoss()
         loss = loss_fct(
             shift_logits.reshape(-1, shift_logits.size(-1)),
@@ -36,13 +34,9 @@ def wikitext2_ppl(preds, samples, seq_len=4096):
         )
         if i == 0:
             logger.info(f"iter {i}:loss {loss}")
-        # Calculate negative log likelihood
         neg_Log_likelihood = loss.float() * seq_len
-        # Append to list of negative log likelihoods
         nlls.append(neg_Log_likelihood)
 
-    # Compute perplexity
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * seq_len))
-    # Empty NPU cache to save memory
     torch.npu.empty_cache()
     return ppl.item()

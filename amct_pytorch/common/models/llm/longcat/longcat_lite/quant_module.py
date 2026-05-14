@@ -79,8 +79,6 @@ class LongcatPackedExpertView(nn.Module):
 class LongcatUnpackedExperts(nn.Module):
     def __init__(self, args, experts_module):
         super().__init__()
-        # Keep the packed expert container registered so block.to(device)
-        # moves the underlying expert weights together with the unpacked views.
         self.packed_experts = experts_module
         self.num_routed_experts = experts_module.num_routed_experts
         self.total_experts = experts_module.total_experts

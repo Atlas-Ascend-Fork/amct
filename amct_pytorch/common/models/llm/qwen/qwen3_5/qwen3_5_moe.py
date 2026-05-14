@@ -20,7 +20,6 @@ from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5, QuantQw
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, build_no_algo_args
 
 
-# for reference, qwen3.5-35b ppl is 6.5571
 @MODEL_REGISTRY.register(
     name="qwen3_5_moe",
     task="llm",
