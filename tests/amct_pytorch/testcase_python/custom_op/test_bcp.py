@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import sys
 import os
 import unittest
@@ -29,6 +30,8 @@ DEVICE = 'cuda:0'
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import bcp
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
 
 class TestBcp(unittest.TestCase):
     """
@@ -62,15 +65,15 @@ class TestBcp(unittest.TestCase):
             'ascend_optimized': True,
             'prune_group': 1
         }
-        print('ori_data:', tensor_list[0].type())
-        print(tensor_list[0][0])
+        logger.info('ori_data:', tensor_list[0].type())
+        logger.info(tensor_list[0][0])
         # call bcp_op
         prune_mask = bcp(tensor_list, prune_axises, algo_param['prune_ratio'], algo_param['prune_group'], algo_param['ascend_optimized'])
         # call numpy bcp
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
         is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
-        self.assertEqual(is_equal, True)
+        self.assertTrue(is_equal)
 
     # @unittest.skip('*')
     def test_algo_002(self):
@@ -89,7 +92,7 @@ class TestBcp(unittest.TestCase):
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
         is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
-        self.assertEqual(is_equal, True)
+        self.assertTrue(is_equal)
 
     # @unittest.skip('*')
     def test_algo_003(self):
@@ -108,7 +111,7 @@ class TestBcp(unittest.TestCase):
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
         is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
-        self.assertEqual(is_equal, True)
+        self.assertTrue(is_equal)
 
     # @unittest.skip('*')
     def test_algo_004(self):
@@ -129,7 +132,7 @@ class TestBcp(unittest.TestCase):
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
         is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
-        self.assertEqual(is_equal, True)
+        self.assertTrue(is_equal)
 
     # @unittest.skip('*')
     def test_algo_005(self):
@@ -150,7 +153,7 @@ class TestBcp(unittest.TestCase):
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
         is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
-        self.assertEqual(is_equal, True)
+        self.assertTrue(is_equal)
 
     @unittest.skip('*')
     def test_algo_006(self):
@@ -169,30 +172,18 @@ class TestBcp(unittest.TestCase):
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
         is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
-        print('prune_mask_list', prune_mask_list)
-        print('prune_mask', prune_mask)
-        print('equal:', prune_mask_list==prune_mask.cpu().numpy())
-        print('numpy_num', sum(prune_mask_list[0:80]), sum(prune_mask_list[80:160]))
-        print('op_num', prune_mask.cpu().numpy()[0:80].sum(), prune_mask.cpu().numpy()[80:160].sum())
-        self.assertEqual(is_equal, True)
+        logger.info('prune_mask_list', prune_mask_list)
+        logger.info('prune_mask', prune_mask)
+        logger.info('equal:', prune_mask_list==prune_mask.cpu().numpy())
+        logger.info('numpy_num', sum(prune_mask_list[0:80]), sum(prune_mask_list[80:160]))
+        logger.info('op_num', prune_mask.cpu().numpy()[0:80].sum(), prune_mask.cpu().numpy()[80:160].sum())
+        self.assertTrue(is_equal)
 
 class BcpFaker:
     def __init__(self, tensor_list, prune_axises, prune_param):
         self.tensor_list = tensor_list
         self.prune_axises = prune_axises
         self.prune_param = prune_param
-
-    def do(self):
-        # 计算norm值
-        norm_list = list()
-        for data_tensor, cout_axis in zip(self.tensor_list, self.prune_axises):
-            norm_val = self.cal_norm(data_tensor, cout_axis)
-            norm_list.append(norm_val)
-        # 计算cout
-        prune_mask, prune_index = self.cal_channel_index(norm_list,
-            self.prune_param['prune_ratio'], self.prune_param['ascend_optimized'], self.prune_param['prune_group'])
-
-        return prune_mask
 
     @staticmethod
     def cal_channel_index(norm_list, prune_ratio, ascend_optimized, prune_group):
@@ -243,11 +234,24 @@ class BcpFaker:
             axis_list[axis] = 0
             wts_np = np.transpose(wts_np, axis_list)
         wts_np = wts_np.reshape([wts_np.shape[0], -1])
-        norm = np.linalg.norm(wts_np, ord=ord_map[norm_algo], axis=1, keepdims=False)
+        norm = np.linalg.norm(wts_np, ord=ord_map.get(norm_algo), axis=1, keepdims=False)
         norm = norm/(wts_np[0].size)
         norm = (norm - norm.min()) / (norm.max() - norm.min())
         return norm
 
+    @staticmethod
     def prune_cout_to_prune_index(prune_cout):
         prune_index = [idx for idx,val in enumerate(prune_cout) if val==0]
         return prune_index
+
+    def do(self):
+        # 计算norm值
+        norm_list = list()
+        for data_tensor, cout_axis in zip(self.tensor_list, self.prune_axises):
+            norm_val = self.cal_norm(data_tensor, cout_axis)
+            norm_list.append(norm_val)
+        # 计算cout
+        prune_mask, prune_index = self.cal_channel_index(norm_list,
+            self.prune_param['prune_ratio'], self.prune_param['ascend_optimized'], self.prune_param['prune_group'])
+
+        return prune_mask

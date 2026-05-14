@@ -1,12 +1,16 @@
 import copy
 import logging
-import math
+import unittest
 import sys
 import unittest
 
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pytest
+import torch.nn as nn
+from mock_torch_npu import mock_npu_dynamic_quant, mock_npu_quant_matmul, mock_npu_quantize
+import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
 import torch
 import torch.nn as nn
 
@@ -52,6 +56,7 @@ class FP8Linear(nn.Module):
 
 torch.manual_seed(0)
 
+logger = logging.getLogger(__name__)
 
 class FP8Model(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, block_size=None):
@@ -83,11 +88,11 @@ class TestFP8HIF8(unittest.TestCase):
                                         block_size).to(torch.bfloat16)
         cls.test_inputs = torch.randn(batch, input_dim).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.test_inputs)
-        LOGGER.info('TestFP8HIF8 START!')
+        logger.info('TestFP8HIF8 START!')
 
     @classmethod
     def tearDownClass(cls):
-        LOGGER.info('TestFP8HIF8 END!')
+        logger.info('TestFP8HIF8 END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -104,14 +109,14 @@ class TestFP8HIF8(unittest.TestCase):
     def test_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_model)
         quantize(model)
-        LOGGER.info("%s", model)
+        logger.info(model)
         self.assertEqual(list(model.state_dict().keys()), list(self.test_model.state_dict().keys()))
         self.assertEqual(type(model.layer1).__name__, 'FP8Linear')
         self.assertEqual(type(model.layer2).__name__, 'FP8Linear')
         convert(model)
         self.assertEqual(type(model.layer1).__name__, 'NpuHIF8Linear')
         self.assertEqual(type(model.layer2).__name__, 'NpuHIF8Linear')
-        LOGGER.info("%s", model)
+        logger.info(model)
         quant_out = model(self.test_inputs)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
@@ -122,12 +127,12 @@ class TestFP8HIF8(unittest.TestCase):
     def test_block_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_block_model)
         quantize(model)
-        LOGGER.info("%s", model)
+        logger.info(model)
         self.assertEqual(list(model.state_dict().keys()), list(self.test_model.state_dict().keys()))
         self.assertEqual(type(model.layer1).__name__, 'FP8Linear')
         self.assertEqual(type(model.layer2).__name__, 'FP8Linear')
         convert(model)
         self.assertEqual(type(model.layer1).__name__, 'NpuHIF8Linear')
         self.assertEqual(type(model.layer2).__name__, 'NpuHIF8Linear')
-        LOGGER.info("%s", model)
+        logger.info(model)
         quant_out = model(self.test_inputs)

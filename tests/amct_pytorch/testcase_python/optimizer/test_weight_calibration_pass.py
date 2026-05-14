@@ -39,6 +39,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZ
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+CONV1D = 'conv1d'
 
 class TestWeightsCalibrationPass(unittest.TestCase):
     @classmethod
@@ -179,11 +180,12 @@ class TestWeightsCalibrationPass(unittest.TestCase):
         tmp_onnx = BytesIO()
         Parser.export_onnx(conv1d_module, torch.randn(3,3,3), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
-        node = graph.get_node_by_name('conv1d')
+        node = graph.get_node_by_name(CONV1D)
         for name, mod in conv1d_module.named_modules():
-            if name == 'conv1d':
+            if name == CONV1D:
                 conv1d_mod = mod
                 break
 
-        modified_weight = WeightsCalibrationPass.apply_balance_scale_to_weight(conv1d_mod, 'conv1d', [3, 3, 3], torch.ones(3,3,3))
+        modified_weight = WeightsCalibrationPass.apply_balance_scale_to_weight(conv1d_mod, CONV1D, [3, 3, 3], torch.ones(3,3,3))
         self.assertTrue((modified_weight == torch.ones(3, 3, 3) * 3).all())
+

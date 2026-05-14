@@ -31,6 +31,10 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.prune_interface import _c
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+DYNAMIC_AXES = 'dynamic_axes'
+
+CONTAINER_ELEMENT_TYPE_ERROR = 'container element type error'
+
 class TestSelectivePrune(unittest.TestCase):
     """
     The ST for QuantizeTool
@@ -113,7 +117,6 @@ class TestSelectivePrune(unittest.TestCase):
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
         new_output = new_model.forward(args[0])
-        # print('new_model', new_model)
         self.assertEqual(ori_output.shape, new_output.shape)
 
         self.assertEqual(new_model.layer1.replaced_module.out_channels, 160)
@@ -217,61 +220,62 @@ class TestSelectivePrune(unittest.TestCase):
     def test_check_param_onnx_export(self):
         export_setting = {'input_names': None,
                           'output_names': None,
-                          'dynamic_axes': None}
+                          DYNAMIC_AXES: None}
         _check_param_onnx_export(**export_setting)
 
-        export_setting['dynamic_axes'] = {1: 1}
+        export_setting[DYNAMIC_AXES] = {1: 1}
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
             flag = 'dynamic_axes key must be str' in str(e)
             self.assertTrue(flag)
 
-        export_setting['dynamic_axes'] = {'1': (1, 1)}
+        export_setting[DYNAMIC_AXES] = {'1': (1, 1)}
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
             flag = 'dynamic_axes value must be dict or list' in str(e)
             self.assertTrue(flag)
 
-        export_setting['dynamic_axes'] = {'1': ['1']}
+        export_setting[DYNAMIC_AXES] = {'1': ['1']}
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
-            flag = 'container element type error' in str(e)
+            flag = CONTAINER_ELEMENT_TYPE_ERROR in str(e)
             self.assertTrue(flag)
 
-        export_setting['dynamic_axes'] = {'1': {'1': '1'}}
+        export_setting[DYNAMIC_AXES] = {'1': {'1': '1'}}
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
-            flag = 'container element type error' in str(e)
+            flag = CONTAINER_ELEMENT_TYPE_ERROR in str(e)
             self.assertTrue(flag)
 
-        export_setting['dynamic_axes'] = {'1': {1: 1}}
+        export_setting[DYNAMIC_AXES] = {'1': {1: 1}}
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
-            flag = 'container element type error' in str(e)
+            flag = CONTAINER_ELEMENT_TYPE_ERROR in str(e)
             self.assertTrue(flag)
 
-        export_setting['dynamic_axes'] = (1, 1)
+        export_setting[DYNAMIC_AXES] = (1, 1)
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
             flag = 'dynamic_axes type must be dict' in str(e)
             self.assertTrue(flag)
 
-        export_setting['dynamic_axes'] = {'inputs':[-4, -3]}
+        export_setting[DYNAMIC_AXES] = {'inputs':[-4, -3]}
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
             flag = 'dynamic_axes value is invalid' in str(e)
             self.assertTrue(flag)
 
-        export_setting['dynamic_axes'] = {'inputs': {-1: '1'}}
+        export_setting[DYNAMIC_AXES] = {'inputs': {-1: '1'}}
         try:
             _check_param_onnx_export(**export_setting)
         except Exception as e:
             flag = 'dynamic_axes value is invalid' in str(e)
             self.assertTrue(flag)
+

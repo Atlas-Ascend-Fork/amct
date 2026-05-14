@@ -9,8 +9,10 @@ from amct_pytorch.common.datasets.ptq_provider import (
 )
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 
+MLP = 'mlp'
 
 @pytest.fixture(autouse=True)
+
 def _stub_npu_empty_cache(monkeypatch):
     fake = type("F", (), {"empty_cache": staticmethod(lambda: None)})()
     monkeypatch.setattr(torch, "npu", fake, raising=False)
@@ -34,13 +36,14 @@ def test_load_unit_inputs_delegates_to_pipeline():
     captured = {}
 
     class _Pipe:
-        def load_unit_inputs(self, data_dir, unit):
+        @staticmethod
+        def load_unit_inputs(data_dir, unit):
             captured["data_dir"] = data_dir
             captured["unit"] = unit
             return ("inps", "kwargs")
 
     provider = _make_provider(data_dir="/d", pipeline=_Pipe())
-    unit = make_ptq_unit("mlp", "mlp", 1, module=None)
+    unit = make_ptq_unit(MLP, MLP, 1, module=None)
     out = provider.load_unit_inputs(unit)
     assert out == ("inps", "kwargs")
     assert captured == {"data_dir": "/d", "unit": unit}
@@ -61,13 +64,13 @@ def test_get_model_data_packs_args():
 def test_build_unit_batch_without_gts():
     provider = _make_provider(cali_bsz=2)
     inps = torch.arange(8).reshape(4, 2)
-    unit = make_ptq_unit("mlp", "mlp", layer_idx=3, module=None, metadata={"k": "v"})
+    unit = make_ptq_unit(MLP, MLP, layer_idx=3, module=None, metadata={"k": "v"})
 
     batch = provider.build_unit_batch(unit, inps, kwargs={"a": 1})
 
     assert isinstance(batch, BlockPtqBatch)
     assert batch.layer_idx == 3
-    assert batch.unit_name == "mlp"
+    assert batch.unit_name == MLP
     assert batch.kwargs == {"a": 1}
     assert batch.has_gts is False
     assert batch.metadata == {"k": "v"}
@@ -84,7 +87,7 @@ def test_build_unit_batch_with_gts_pairs_inputs_and_targets():
     provider = _make_provider(cali_bsz=2)
     inps = torch.arange(4).reshape(2, 2)
     gts = torch.arange(4, 8).reshape(2, 2)
-    unit = make_ptq_unit("mlp", "mlp", 0, module=None)
+    unit = make_ptq_unit(MLP, MLP, 0, module=None)
 
     batch = provider.build_unit_batch(unit, inps, kwargs=None, gts=gts)
     assert batch.has_gts is True
@@ -97,7 +100,7 @@ def test_build_unit_batch_with_gts_pairs_inputs_and_targets():
 def test_build_unit_batch_metadata_is_none_when_unit_has_empty_dict():
     provider = _make_provider()
     # make_ptq_unit defaults metadata to {}; provider downgrades to None.
-    unit = make_ptq_unit("mlp", "mlp", 0, module=None)
+    unit = make_ptq_unit(MLP, MLP, 0, module=None)
     batch = provider.build_unit_batch(unit, torch.zeros(2, 2), kwargs=None)
     assert batch.metadata is None
 
@@ -158,3 +161,4 @@ def test_materialize_gt_non_floating_point_input():
     out = provider.materialize_gt(inps, _EmbeddingModule())
     assert out.shape == (4,)
     assert out.dtype == torch.float32
+

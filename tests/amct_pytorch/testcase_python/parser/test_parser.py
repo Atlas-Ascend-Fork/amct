@@ -31,6 +31,10 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import M
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+OP_DATA_TYPE = 'op_data_type'
+
+FLOAT16 = 'float16'
+
 class TestParser(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -137,13 +141,11 @@ class TestParser(unittest.TestCase):
         args = tuple(args)
 
         tmp_onnx = BytesIO()
-        # Parser.export_onnx(model, args, tmp_onnx)
         if not version_higher_than(torch.__version__, '1.10.0'):
             self.assertRaises(RuntimeError, Parser.export_onnx, model, args, tmp_onnx)
 
         if not version_higher_than(torch.__version__, '1.10.0'):
             tmp_onnx = os.path.join(self.temp_folder, 'ConvBNConvSerial.onnx')
-            # Parser.export_onnx(model, args, tmp_onnx)
             self.assertRaises(RuntimeError, Parser.export_onnx, model, args, tmp_onnx)
 
     def test_write_node_attrs_extracted_from_onnx(self):
@@ -161,8 +163,8 @@ class TestParser(unittest.TestCase):
                 conv_node = node
 
         customized_attr = {
-            conv_node.name: [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},],
-            "BatchNormalization_1": [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},]
+            conv_node.name: [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING", "attr_val": bytes(FLOAT16, encoding='utf-8')},],
+            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING", "attr_val": bytes(FLOAT16, encoding='utf-8')},]
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
@@ -173,14 +175,14 @@ class TestParser(unittest.TestCase):
         # set file's permission 640
         os.chmod(file_realpath, stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP)
         graph = Parser.parse_net_to_graph(file_realpath)
-        Parser.write_node_attrs_extracted_from_onnx(graph, file_realpath, ['op_data_type'])
+        Parser.write_node_attrs_extracted_from_onnx(graph, file_realpath, [OP_DATA_TYPE])
         conv_node = None
         for node in graph.nodes:
             if node.type == 'Conv':
                 conv_node = node
                 break
-        self.assertTrue(conv_node.has_attr("op_data_type"))
-        self.assertEqual(conv_node.get_attr("op_data_type"), "float16")
+        self.assertTrue(conv_node.has_attr(OP_DATA_TYPE))
+        self.assertEqual(conv_node.get_attr(OP_DATA_TYPE), FLOAT16)
 
     @patch('torch.onnx.export')
     def test_parse_export_return_model(self, mock_torch_onnx_export):
@@ -226,3 +228,4 @@ class TestParser(unittest.TestCase):
     def test_validate_export_setting_invalid_dynamic_axes_7(self):
         export_setting = {'dynamic_axes': {"inputs": {-4: '32'}}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
+

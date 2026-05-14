@@ -2,6 +2,8 @@ import pytest
 
 from amct_pytorch.common.utils.registry_factory import Registry, RegistryItem
 
+BAR = 'bar'
+BAZ = 'baz'
 
 def test_register_via_decorator_uses_class_name():
     registry = Registry("test")
@@ -17,13 +19,13 @@ def test_register_via_decorator_uses_class_name():
 def test_register_with_explicit_name_and_metadata():
     registry = Registry("test")
 
-    @registry.register(name="bar", description="hi", flag=True)
+    @registry.register(name=BAR, description="hi", flag=True)
     class Bar:
         pass
 
-    item = registry.get_item("bar")
+    item = registry.get_item(BAR)
     assert isinstance(item, RegistryItem)
-    assert item.name == "bar"
+    assert item.name == BAR
     assert item.target is Bar
     assert item.metadata == {"description": "hi", "flag": True}
 
@@ -31,12 +33,12 @@ def test_register_with_explicit_name_and_metadata():
 def test_call_alias_matches_register():
     registry = Registry("alias")
 
-    @registry(name="baz")
+    @registry(name=BAZ)
     class Baz:
         pass
 
-    assert registry.has("baz")
-    assert registry.get("baz") is Baz
+    assert registry.has(BAZ)
+    assert registry.get(BAZ) is Baz
 
 
 def test_duplicate_register_raises_without_force():
@@ -131,3 +133,4 @@ def test_get_item_missing_raises():
     registry = Registry("gi")
     with pytest.raises(KeyError, match="not registered"):
         registry.get_item("nope")
+

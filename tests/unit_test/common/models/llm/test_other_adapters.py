@@ -17,6 +17,7 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 register_dtype()
 
+DENSE = 'dense'
 
 def _stub(adapter_cls, **attrs):
     obj = adapter_cls.__new__(adapter_cls)
@@ -106,11 +107,11 @@ def test_glm5_ensure_config_writes_mlp_layer_types_when_missing():
         config=SimpleNamespace(num_hidden_layers=6, first_k_dense_replace=2, moe_layer_freq=2, mlp_layer_types=None),
     )
     obj._ensure_glm5_config()
-    assert obj.config.mlp_layer_types == ["dense", "dense", "sparse", "dense", "sparse", "dense"]
+    assert obj.config.mlp_layer_types == [DENSE, DENSE, "sparse", DENSE, "sparse", DENSE]
 
 
 def test_glm5_ensure_config_no_op_when_mlp_layer_types_already_set():
-    existing = ["dense", "sparse"]
+    existing = [DENSE, "sparse"]
     obj = _stub(
         GLM5,
         quant_target=[],
@@ -220,3 +221,4 @@ def test_qwen3_6_moe_registers_in_model_registry():
 )
 def test_other_adapters_register_under_expected_keys(key, expected_cls):
     assert MODEL_REGISTRY.get(key) is expected_cls
+

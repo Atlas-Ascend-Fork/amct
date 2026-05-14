@@ -14,6 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
+import logging
 import unittest
 import sys
 import torch
@@ -25,11 +26,18 @@ from amct_pytorch import INT8_MINMAX_WEIGHT_QUANT_CFG, INT8_SMOOTHQUANT_CFG
 from amct_pytorch.common.config import parse_config
 from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch import quantize, convert
-from mock_torch_npu import *
+from mock_torch_npu import (
+    mock_npu_convert_weight_to_int4pack,
+    mock_npu_quant_matmul,
+    mock_npu_quantize,
+    mock_npu_weight_quant_batchmatmul,
+)
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 torch.manual_seed(0)
+
+logger = logging.getLogger(__name__)
 
 class TestModel(nn.Module):
     def __init__(self):
@@ -54,11 +62,11 @@ class TestDefQuantize(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs).to(torch.float32).detach().to('cpu').numpy().astype(np.float32)
-        print('TestDefQuantize START!')
+        logger.info('TestDefQuantize START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestDefQuantize END!')
+        logger.info('TestDefQuantize END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()

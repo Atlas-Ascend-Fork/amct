@@ -185,7 +185,6 @@ class MobilenetTailModel(torch.nn.Module):
         x_dim4 = self.features(x)
         x = nn.functional.adaptive_avg_pool2d(x_dim4, (1, 1))
         x = torch.reshape(x, (x_dim4.shape[0], -1))
-        # x = torch.reshape(x, (x.shape[0], -1))
         x = self.classifier(x)
         return x
 
@@ -204,7 +203,6 @@ class Yolov3ResizeModel(torch.nn.Module):
 
     def forward(self, x):
         x = self.features(x)
-        # x = nn.functional.interpolate(x, size=[52, 52])
         x = nn.functional.interpolate(x, scale_factor=2, mode='bicubic')
         return x
 

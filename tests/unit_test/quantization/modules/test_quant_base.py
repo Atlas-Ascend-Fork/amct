@@ -20,6 +20,14 @@ from amct_pytorch.quantization.modules.quant_base import (
 register_dtype()
 
 
+UT_OBSERVE_ALGO = '_ut_observe'
+UT_DOUBLE_ALGO = '_ut_double'
+UT_QUANT_HOOK_ALGO = '_ut_quant_hook'
+UT_QH_A_ALGO = '_ut_qh_a'
+UT_QH_EXPORT_ALGO = '_ut_qh_export'
+
+UT_QH_B = '_ut_qh_b'
+
 def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=()):
     return SimpleNamespace(
         algos=list(algos),
@@ -57,7 +65,7 @@ def test_get_algo_names_filters_by_target(_ephemeral_algo):
     # Activation also valid.
     assert get_algo_names_by_target(args, "activation") == [_ephemeral_algo]
     # Structure not in declared targets.
-    assert get_algo_names_by_target(args, "structure") == []
+    assert not get_algo_names_by_target(args, "structure")
 
 
 def test_get_algo_names_raises_on_algo_without_targets():
@@ -169,7 +177,7 @@ def test_activation_quantizer_forward_quantizes_when_enabled():
 def test_activation_quantizer_trainable_params_collects_from_algorithms(_ephemeral_algo):
     aq = ActivationQuantizer(_args(algos=[_ephemeral_algo]), bits=8)
     # The ephemeral algo has no `trainable_params` -> empty.
-    assert aq.trainable_params() == []
+    assert not aq.trainable_params()
 
 
 def test_activation_quantizer_deploy_hooks_are_no_ops():
@@ -198,7 +206,7 @@ def test_weight_quantizer_forward_quantizes_when_enabled():
 def test_weight_quantizer_observe_input_dispatches_to_algorithms_with_hook():
     seen = []
 
-    @ALGO_REGISTRY.register(name="_ut_observe", targets=("weight",))
+    @ALGO_REGISTRY.register(name=UT_OBSERVE_ALGO, targets=("weight",))
     class _Obs(nn.Module):
         def __init__(self, args, *_):
             super().__init__()
@@ -207,18 +215,18 @@ def test_weight_quantizer_observe_input_dispatches_to_algorithms_with_hook():
             seen.append((x, weight))
 
     try:
-        wq = WeightQuantizer(_args(algos=["_ut_observe"], w_bits=8), w_bits=8)
+        wq = WeightQuantizer(_args(algos=[UT_OBSERVE_ALGO], w_bits=8), w_bits=8)
         x = torch.zeros(1, 4)
         w = torch.ones(4, 4)
         wq.observe_input(x, w)
         assert len(seen) == 1
         assert torch.equal(seen[0][0], x) and torch.equal(seen[0][1], w)
     finally:
-        ALGO_REGISTRY._items.pop("_ut_observe", None)
+        ALGO_REGISTRY._items.pop(UT_OBSERVE_ALGO, None)
 
 
 def test_weight_quantizer_algo_forward_chains_non_quantize_algos():
-    @ALGO_REGISTRY.register(name="_ut_double", targets=("weight",))
+    @ALGO_REGISTRY.register(name=UT_DOUBLE_ALGO, targets=("weight",))
     class _Double(nn.Module):
         def __init__(self, args, *_):
             super().__init__()
@@ -227,16 +235,16 @@ def test_weight_quantizer_algo_forward_chains_non_quantize_algos():
             return x * 2
 
     try:
-        wq = WeightQuantizer(_args(algos=["_ut_double"], w_bits=8), w_bits=8)
+        wq = WeightQuantizer(_args(algos=[UT_DOUBLE_ALGO], w_bits=8), w_bits=8)
         out, qa = wq.algo_forward(torch.ones(1, 4))
         assert qa is None
         assert torch.equal(out, torch.full((1, 4), 2.0))
     finally:
-        ALGO_REGISTRY._items.pop("_ut_double", None)
+        ALGO_REGISTRY._items.pop(UT_DOUBLE_ALGO, None)
 
 
 def test_weight_quantizer_algo_forward_picks_quantize_hook_separately():
-    @ALGO_REGISTRY.register(name="_ut_quant_hook", targets=("weight",))
+    @ALGO_REGISTRY.register(name=UT_QUANT_HOOK_ALGO, targets=("weight",))
     class _Q(nn.Module):
         def __init__(self, args, *_):
             super().__init__()
@@ -245,17 +253,17 @@ def test_weight_quantizer_algo_forward_picks_quantize_hook_separately():
             return x * 0
 
     try:
-        wq = WeightQuantizer(_args(algos=["_ut_quant_hook"], w_bits=8), w_bits=8)
+        wq = WeightQuantizer(_args(algos=[UT_QUANT_HOOK_ALGO], w_bits=8), w_bits=8)
         x = torch.ones(1, 4)
         out, qa = wq.algo_forward(x)
         assert torch.equal(out, x)        # passthrough — quantize hook is deferred
         assert isinstance(qa, _Q)
     finally:
-        ALGO_REGISTRY._items.pop("_ut_quant_hook", None)
+        ALGO_REGISTRY._items.pop(UT_QUANT_HOOK_ALGO, None)
 
 
 def test_weight_quantizer_algo_forward_rejects_multiple_quantize_hooks():
-    for n in ("_ut_qh_a", "_ut_qh_b"):
+    for n in (UT_QH_A_ALGO, UT_QH_B):
         @ALGO_REGISTRY.register(name=n, targets=("weight",))
         class _Q(nn.Module):
             def __init__(self, args, *_):
@@ -265,11 +273,11 @@ def test_weight_quantizer_algo_forward_rejects_multiple_quantize_hooks():
                 return x
 
     try:
-        wq = WeightQuantizer(_args(algos=["_ut_qh_a", "_ut_qh_b"], w_bits=8), w_bits=8)
+        wq = WeightQuantizer(_args(algos=[UT_QH_A_ALGO, UT_QH_B], w_bits=8), w_bits=8)
         with pytest.raises(ValueError, match="Only one weight algorithm"):
             wq.algo_forward(torch.zeros(1, 4))
     finally:
-        for n in ("_ut_qh_a", "_ut_qh_b"):
+        for n in (UT_QH_A_ALGO, UT_QH_B):
             ALGO_REGISTRY._items.pop(n, None)
 
 
@@ -281,18 +289,18 @@ def test_weight_quantizer_export_deploy_uses_quant_obj_export():
 
 
 def test_weight_quantizer_export_deploy_rejects_quantize_hook_path():
-    @ALGO_REGISTRY.register(name="_ut_qh_export", targets=("weight",))
+    @ALGO_REGISTRY.register(name=UT_QH_EXPORT_ALGO, targets=("weight",))
     class _Q(nn.Module):
         def __init__(self, args, *_):
             super().__init__()
         def quantize(self, x, q):
             return x
     try:
-        wq = WeightQuantizer(_args(algos=["_ut_qh_export"], w_bits=8), w_bits=8)
+        wq = WeightQuantizer(_args(algos=[UT_QH_EXPORT_ALGO], w_bits=8), w_bits=8)
         with pytest.raises(NotImplementedError, match="custom weight quantize"):
             wq.export_deploy(torch.zeros(4, 8))
     finally:
-        ALGO_REGISTRY._items.pop("_ut_qh_export", None)
+        ALGO_REGISTRY._items.pop(UT_QH_EXPORT_ALGO, None)
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
@@ -417,34 +425,35 @@ def test_build_algorithms_raises_when_target_not_in_algo_targets():
 
 
 def test_build_algorithms_by_target_raises_on_missing_targets_metadata(monkeypatch):
-    from amct_pytorch.quantization.modules import quant_base
-    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-    from types import SimpleNamespace
+    from amct_pytorch.quantization.modules import quant_base as quant_base_mod
+    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
+    from types import SimpleNamespace as simple_ns
     monkeypatch.setattr(
-        quant_base, "get_algo_names_by_target",
+        quant_base_mod, "get_algo_names_by_target",
         lambda args, target: ["fake_algo"],
     )
     monkeypatch.setattr(
-        ALGO_REGISTRY, "get_item",
-        lambda name: SimpleNamespace(metadata={}, target=lambda *a: None),
+        algo_registry, "get_item",
+        lambda name: simple_ns(metadata={}, target=lambda *a: None),
     )
     args = SimpleNamespace()
     with pytest.raises(ValueError, match="missing registry metadata"):
-        quant_base.build_algorithms_by_target(args, "mlp")
+        quant_base_mod.build_algorithms_by_target(args, "mlp")
 
 
 def test_build_algorithms_by_target_raises_on_mismatched_target(monkeypatch):
-    from amct_pytorch.quantization.modules import quant_base
-    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-    from types import SimpleNamespace
+    from amct_pytorch.quantization.modules import quant_base as quant_base_mod
+    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
+    from types import SimpleNamespace as simple_ns
     monkeypatch.setattr(
-        quant_base, "get_algo_names_by_target",
+        quant_base_mod, "get_algo_names_by_target",
         lambda args, target: ["fake_algo"],
     )
     monkeypatch.setattr(
-        ALGO_REGISTRY, "get_item",
-        lambda name: SimpleNamespace(metadata={"targets": ("attn",)}, target=lambda *a: None),
+        algo_registry, "get_item",
+        lambda name: simple_ns(metadata={"targets": ("attn",)}, target=lambda *a: None),
     )
     args = SimpleNamespace()
     with pytest.raises(ValueError, match="cannot be used for target"):
-        quant_base.build_algorithms_by_target(args, "mlp")
+        quant_base_mod.build_algorithms_by_target(args, "mlp")
+

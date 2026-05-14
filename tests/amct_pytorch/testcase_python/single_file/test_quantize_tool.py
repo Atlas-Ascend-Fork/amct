@@ -39,6 +39,8 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import struc
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+ALGO_KEY = 'algo'
+
 class TestQuantizeTool(unittest.TestCase):
     """
     The UT for QuantizeTool
@@ -90,11 +92,9 @@ class TestQuantizeTool(unittest.TestCase):
         record_module = Recorder(record_file)
         model = IFMR(mod_conv, record_module, ["conv"])
         model.to(torch.device("cpu"))
-        # model.forward(self.args[0])
 
         args = torch.randn((1, 2, 28, 28))
         config_file = os.path.join(self.temp_folder, 'ifmr.json')
-        # create_quant_config(onfig_file, model, args)
 
         self.assertRaises(RuntimeError, create_quant_config, config_file, model, args)
 
@@ -121,13 +121,11 @@ class TestQuantizeTool(unittest.TestCase):
         record_module = Recorder(record_file)
         model = IFMR(mod_conv, record_module, ["conv"])
         model.to(torch.device("cpu"))
-        # model.forward(self.args[0])
 
         args = torch.randn((1, 2, 28, 28))
         config_file = os.path.join(self.temp_folder, 'ifmr.json')
         modfied_onnx_file = os.path.join(self.temp_folder, 'no_exit/ifmr_modified.onnx')
         record_file = os.path.join(self.temp_folder, 'ifmr.txt')
-        # quantize_model(config_file, modfied_onnx_file, record_file, model, args)
 
         self.assertRaises(RuntimeError, quantize_model, config_file, modfied_onnx_file, record_file, model, args)
 
@@ -140,10 +138,10 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize"
+                    ALGO_KEY:"ulq_quantize"
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -154,10 +152,10 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize"
+                    ALGO_KEY:"ulq_quantize"
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -174,10 +172,10 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize"
+                    ALGO_KEY:"ulq_quantize"
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -188,11 +186,11 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize",
+                    ALGO_KEY:"ulq_quantize",
                     "ifmr_init": True
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -208,10 +206,10 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize"
+                    ALGO_KEY:"ulq_quantize"
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -222,10 +220,10 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize"
+                    ALGO_KEY:"ulq_quantize"
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -242,10 +240,10 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize"
+                    ALGO_KEY:"ulq_quantize"
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -266,11 +264,11 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize",
+                    ALGO_KEY:"ulq_quantize",
                     "ifmr_init": False
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -281,11 +279,11 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize",
+                    ALGO_KEY:"ulq_quantize",
                     "ifmr_init": True
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -302,11 +300,11 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize",
+                    ALGO_KEY:"ulq_quantize",
                     "ifmr_init": False
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -317,10 +315,10 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize"
+                    ALGO_KEY:"ulq_quantize"
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }
@@ -337,11 +335,11 @@ class TestQuantizeTool(unittest.TestCase):
             "conv1":{
                 "retrain_enable":True,
                 "retrain_data_config":{
-                    "algo":"ulq_quantize",
+                    ALGO_KEY:"ulq_quantize",
                     "ifmr_init": False
                 },
                 "retrain_weight_config":{
-                    "algo":"arq_retrain",
+                    ALGO_KEY:"arq_retrain",
                     "channel_wise":True
                 }
             }

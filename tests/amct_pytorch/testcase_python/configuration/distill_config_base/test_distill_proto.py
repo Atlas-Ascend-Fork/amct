@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import shutil
 import sys
@@ -34,17 +35,19 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.vars_util im
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+logger = logging.getLogger(__name__)
+
 
 class TestDistillProto(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestDistillProto start!')
+        logger.info('TestDistillProto start!')
         config_proto_file = os.path.join(CUR_DIR, './utils/sample.cfg')
         cls.distill_proto_config = DistillProtoConfig(config_proto_file, CAPACITY)
 
     @classmethod
     def tearDownClass(cls):
-        print('TestDistillProto end!')
+        logger.info('TestDistillProto end!')
 
     def test_parse_data_type_not_support(self):
         with self.assertRaises(ValueError):
