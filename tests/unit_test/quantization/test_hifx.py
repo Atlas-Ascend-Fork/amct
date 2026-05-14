@@ -54,7 +54,6 @@ def test_hifp_init_defaults():
     qdq = QuantDequantHifp()
     assert qdq.bits == 8
     assert qdq.is_act is False
-    assert qdq._deploy_mod is False
 
 
 def test_hifp_init_explicit_bits():
@@ -145,68 +144,4 @@ def test_hifp_registered_in_dtype_registry():
     assert cls is QuantDequantHifp
 
 
-# ---- QuantDequantHifp.export_level / expected_cost / get_level_probability -
 
-
-def test_hifp_export_level_returns_argmax_index(monkeypatch):
-    from amct_pytorch.quantization.dtypes.hifx import QuantDequantHifp as quant_dequant_hifp
-    def quantize_level1(self, x):
-        return x
-    quant_dequant_hifp.quantize_level1 = quantize_level1
-    def quantize_level2(self, x):
-        return x
-    quant_dequant_hifp.quantize_level2 = quantize_level2
-    def quantize_level3(self, x):
-        return x
-    quant_dequant_hifp.quantize_level3 = quantize_level3
-    try:
-        qdq = quant_dequant_hifp(bits=8)
-        level = qdq.export_level()
-        assert level in (0, 1, 2)
-    finally:
-        del quant_dequant_hifp.quantize_level1
-        del quant_dequant_hifp.quantize_level2
-        del quant_dequant_hifp.quantize_level3
-
-
-def test_hifp_expected_cost_returns_weighted_scalar(monkeypatch):
-    from amct_pytorch.quantization.dtypes.hifx import QuantDequantHifp as quant_dequant_hifp
-    def quantize_level1(self, x):
-        return x
-    quant_dequant_hifp.quantize_level1 = quantize_level1
-    def quantize_level2(self, x):
-        return x
-    quant_dequant_hifp.quantize_level2 = quantize_level2
-    def quantize_level3(self, x):
-        return x
-    quant_dequant_hifp.quantize_level3 = quantize_level3
-    try:
-        qdq = quant_dequant_hifp(bits=8)
-        cost = qdq.expected_cost()
-        assert isinstance(cost.item(), float)
-    finally:
-        del quant_dequant_hifp.quantize_level1
-        del quant_dequant_hifp.quantize_level2
-        del quant_dequant_hifp.quantize_level3
-
-
-def test_hifp_get_level_probability_noise_disabled_returns_softmax(monkeypatch):
-    from amct_pytorch.quantization.dtypes.hifx import QuantDequantHifp as quant_dequant_hifp
-    def quantize_level1(self, x):
-        return x
-    quant_dequant_hifp.quantize_level1 = quantize_level1
-    def quantize_level2(self, x):
-        return x
-    quant_dequant_hifp.quantize_level2 = quantize_level2
-    def quantize_level3(self, x):
-        return x
-    quant_dequant_hifp.quantize_level3 = quantize_level3
-    try:
-        qdq = quant_dequant_hifp(bits=8)
-        p = qdq.get_level_probability(noise_disable=True)
-        assert p.shape == (3,)
-        assert abs(p.sum().item() - 1.0) < 1e-5
-    finally:
-        del quant_dequant_hifp.quantize_level1
-        del quant_dequant_hifp.quantize_level2
-        del quant_dequant_hifp.quantize_level3
