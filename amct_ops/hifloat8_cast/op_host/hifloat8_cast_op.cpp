@@ -41,6 +41,7 @@ constexpr uint32_t BF16_EXP_BIAS = 127;
 
 constexpr uint32_t HIF8_SIGN_SHIFT = 7;
 constexpr uint32_t HIF8_DENORMAL_EXP_BIAS = 23;
+constexpr uint8_t HIF8_POSITIVE_MIN_NORMAL = 0x7E;
 
 constexpr uint32_t HIF8_DOT_TABLE[16] = {
     (0x00 << 24) | (3 << 16) | (0 << 8) | (0 << 4) | 7,
@@ -146,14 +147,22 @@ static uint8_t HostFp32MagnitudeToHif8(uint32_t inData)
 {
     uint32_t expFp  = (inData >> 23) & 0xFF;
     uint32_t fracFp = inData & 0x7FFFFF;
+    // Host LUT 只编码正数幅值，符号位由 device encode 阶段补回。
+    if (expFp == 0) return 0x00;
     if (expFp == 255) return fracFp > 0 ? 0x80 : 0x6F;
+
     int32_t expNoBias = static_cast<int32_t>(expFp) - 127;
-    if (expNoBias < -22) return 0x00;
+    // 超出 HiFloat8 表示范围时，饱和到最大正有限值。
     if (expNoBias >= 15) return 0x6E;
+
+    // HiFloat8 denormal 区间；过小值归零，边界值保留最小非零编码。
     if (expNoBias < -15) {
-        uint32_t fracHiF8 = (fracFp >> 22) >= 1 ? static_cast<uint32_t>(23 + expNoBias + 1)
-                                                 : static_cast<uint32_t>(23 + expNoBias);
-        return static_cast<uint8_t>(fracHiF8);
+        if (expNoBias < -23) return 0x00;
+        if (expNoBias == -23) return 0x01;
+
+        uint32_t fracHiF8 = static_cast<uint32_t>(HIF8_DENORMAL_EXP_BIAS + expNoBias);
+        if ((fracFp >> 22) >= 1u) ++fracHiF8;
+        return fracHiF8 >= 8u ? HIF8_POSITIVE_MIN_NORMAL : static_cast<uint8_t>(fracHiF8);
     }
     uint32_t dotValue    = 0;
     uint32_t expHiF8Bits = 0;
@@ -163,6 +172,7 @@ static uint8_t HostFp32MagnitudeToHif8(uint32_t inData)
     uint32_t fractmp   = fracFp >> fracShift;
     uint32_t fracMax   = (1u << (fracHiF8Bits + 1)) - 1;
     uint32_t fracHiF8  = 0;
+    // 多取 1 bit 作为舍入位；尾数溢出时进位到下一个指数段。
     if (fractmp == fracMax) {
         expNoBias += 1;
         HostGetHif8BitsNum(expNoBias, dotValue, expHiF8Bits, fracHiF8Bits);
@@ -175,6 +185,7 @@ static uint8_t HostFp32MagnitudeToHif8(uint32_t inData)
     int32_t absExpFinal = expNoBias < 0 ? -expNoBias : expNoBias;
     uint32_t signExp = expNoBias < 0 ? 1u : 0u;
     uint32_t expHiF8 = static_cast<uint32_t>(absExpFinal) - (1u << (expHiF8Bits - 1));
+    // 拼接 dot、指数符号、指数幅值和尾数，得到无数值符号位的 HiFloat8 编码。
     return static_cast<uint8_t>((dotValue << 3) | (signExp << (expHiF8Bits + fracHiF8Bits - 1))
                                 | (expHiF8 << fracHiF8Bits) | fracHiF8);
 }

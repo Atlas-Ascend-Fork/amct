@@ -25,3 +25,7 @@ Quick start
 >>> y = encode_to_hifloat8(x)           # → uint8, same shape
 >>> z = decode_from_hifloat8(y)         # → bfloat16, same shape
 """
+
+from . import hifloat8_cast
+
+__all__ = ['hifloat8_cast']
