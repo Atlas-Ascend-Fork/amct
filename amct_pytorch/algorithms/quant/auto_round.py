@@ -51,7 +51,6 @@ class AutoRound(nn.Module):
         self.args = args
         self.bits = w_bits
         self.group_size = self._get_group_size(args)
-        self.enable_minmax_tuning = getattr(args, "enable_minmax_tuning", True)
         self.q_scale_thresh = 1e-5
 
         weight_shape = tuple(args.w_size)
@@ -63,25 +62,26 @@ class AutoRound(nn.Module):
         self.value = nn.Parameter(torch.zeros_like(grouped_weight), requires_grad=True)
         self.min_scale = nn.Parameter(
             torch.ones(scale_shape, dtype=torch.float32),
-            requires_grad=self.enable_minmax_tuning,
+            requires_grad=True,
         )
         self.max_scale = nn.Parameter(
             torch.ones(scale_shape, dtype=torch.float32),
-            requires_grad=self.enable_minmax_tuning,
+            requires_grad=True,
         )
 
     @staticmethod
     def _get_group_size(args):
-        if getattr(args, "quant_dtype", "") == "mxfp":
-            return 32
-        if getattr(args, "quant_dtype", "") == "hifx":
-            return 64
-        return -1
+        if args.quant_dtype == "int":
+            group_size = -1
+        elif args.quant_dtype == "mxfp":
+            group_size = 32
+        else:
+            group_size = 64
+            raise ValueError("Not supported hifx for now")
+        return group_size
 
     def trainable_params(self):
-        params = [self.value]
-        if self.enable_minmax_tuning:
-            params.extend([self.min_scale, self.max_scale])
+        params = [self.value, self.min_scale, self.max_scale]
         return params
 
     def export_ptq_params(self):
