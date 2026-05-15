@@ -63,7 +63,7 @@ z = decode_from_hifloat8(y, torch.float16)    # 指定输出 FP16
 ```
 hifloat8_cast/
 ├── op_kernel/
-│   ├── hifloat8_cast_kernel.asc   device 端 kernel（LUT encode + decode，半空间 LUT 优化）
+│   ├── hifloat8_cast_kernel.cpp   device 端 kernel（LUT encode + decode，半空间 LUT 优化）
 │   └── hifloat8_cast_tiling.h     TilingData 结构体定义（tileLength 由 host 运行时填入）
 ├── op_extension/
 │   ├── hifloat8_cast_torch.cpp    PyTorch host 实现（CPU 端 LUT 预计算与缓存，调用 ASC 生成的 host stub）
@@ -73,7 +73,6 @@ hifloat8_cast/
 │   └── hifloat8_cast/
 │       ├── __init__.py            Python 包入口（加载 .so、注册算子）
 │       └── ops.py                 Python 接口实现
-├── scripts/                       精度、性能和 CPU/NPU 对比脚本
 ├── CMakeLists.txt
 └── README.md
 ```
@@ -88,7 +87,7 @@ hifloat8_cast/
 
 > CANN 运行时会保留部分 UB，`tileLength` 在每次调用时由 `GetCoreMemSize()` 查询实际可用量并计算，无需手动指定。
 
-- CANN ≥ 8.5.0
+- CANN 9.0.0
 - Python ≥ 3.9
 - PyTorch + torch_npu（适配对应 CANN 版本）
 
@@ -108,6 +107,7 @@ bash ops_build.sh [--soc <soc>] [hifloat8_cast]
 | `ascend950` | A5（UB 512 KB+） | `dav-3510` | |
 
 > A2/A3 共用同一 ISA（`dav-2201`），编译产物相同；UB 大小差异由运行时平台 API 区分，自动选择最优 `tileLength`。
+> A5 构建要求当前 CANN 编译器支持 `dav-3510`。如果 `bisheng` 报 `Unsupported NPU architecture or soc`，需要更换支持 A5 目标的 CANN 编译环境。
 
 ```bash
 bash ops_build.sh                                   # 全部算子，A2
@@ -224,45 +224,33 @@ z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 ## 精度
 
 精度验证通过以下方式进行：
-- **NPU API 综合测试**：类型推断、边界值、特殊值、非规格化数、全 256 个 HiFloat8 decode 完备性，17/17 通过
-- **CPU/NPU 一致性**：随机采样 100K 个 FP16/BF16 值，与 `amct_pytorch/experimental/hifloat8` CPU 参考扩展逐 bit 对比，10/10 通过
+- **NPU API 综合测试**：类型推断、边界值、特殊值、非规格化数、全 256 个 HiFloat8 decode 完备性，见 `tests/amct_ops/test_hifloat8_cast.py`
 - **边界/特殊值**：±0、±Inf、NaN、最大值、最小非规格化数等边界情况
 
 | 测试场景 | 结果 |
 |---------|------|
-| 随机 FP16/BF16 Encode（100K 样本） | ✓ 逐 bit 一致 |
-| 随机 FP16/BF16 Decode（100K 样本） | ✓ 逐 bit 一致 |
-| 边界值 Encode（FP16 13 个，BF16 13 个） | ✓ 逐个一致 |
-| 特殊值：±0 / ±Inf / NaN（FP16 编码） | ✓ 编码字节一致 |
-| 全 256 个 HiF8 值解码（FP16 + BF16） | ✓ 完全一致 |
+| 随机 FP16/BF16 roundtrip | ✓ 相对误差在 HiFloat8 精度范围内 |
+| 边界值 roundtrip | ✓ 覆盖 0、正负数、小数、较大值 |
+| 特殊值：±0 / ±Inf / NaN | ✓ 编码字节和解码语义符合规范 |
+| 全 256 个 HiF8 值解码（FP16 + BF16） | ✓ 仅 0x80 为 NaN 编码 |
 
 > 注：FP16 subnormal 编解码（含 HiFloat8 非规格化值映射到 FP16 非规格化值）已全部验证正确。
 
 ## 测试
 
 ```bash
-# 若未安装 wheel，可先从源码 staging 运行：
-# export PYTHONPATH=/path/to/amct/amct_ops/staging
+# 在仓库根目录执行。先构建 amct_ops，再通过 staging 运行测试。
+bash amct_ops/ops_build.sh hifloat8_cast
 
 # Python API 综合测试（类型推断、边界值、特殊值、非规格化数）
-python3 scripts/test_accuracy.py
-
-# 性能测试（NPU 多核，FP16 + BF16）
-python3 scripts/test_performance.py
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_hifloat8_cast
 ```
 
-以下脚本需要额外构建 CPU 参考实现（`amct_pytorch/experimental/hifloat8/build.sh`），用于 CPU vs NPU 对比：
+也可以先安装 wheel 后再执行测试：
 
 ```bash
-LIBGOMP_ARCH="$(uname -m)"
-
-# 精度验证（CPU vs NPU 逐 bit 对比）
-LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
-    python3 scripts/test_accuracy_cpu_npu.py
-
-# FP16 性能对比（NPU vs CPU）
-LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
-    python3 scripts/test_performance_cpu_npu.py
+pip install amct_ops/dist/amct_ops-*.whl
+python3 -m unittest tests.amct_ops.test_hifloat8_cast
 ```
 
-> `LD_PRELOAD` 解决 libgomp TLS 问题，仅加载 CPU 参考实现时需要。
+更多测试执行说明见 `tests/amct_ops/README.md`。

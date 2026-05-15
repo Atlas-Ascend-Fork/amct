@@ -92,8 +92,10 @@ execute_process(
 set(TORCH_NPU_INCLUDE_DIRS ${TORCH_NPU_PATH}/include ${TORCH_NPU_PATH}/csrc)
 set(TORCH_NPU_LIBRARIES ${TORCH_NPU_PATH}/lib)
 
+set_source_files_properties(op_kernel/hifloat8_cast_kernel.cpp PROPERTIES LANGUAGE ASC)
+
 add_library(hifloat8_cast_ops SHARED
-    op_kernel/hifloat8_cast_kernel.asc
+    op_kernel/hifloat8_cast_kernel.cpp
     op_extension/hifloat8_cast_torch.cpp
     op_extension/register.cpp
 )
