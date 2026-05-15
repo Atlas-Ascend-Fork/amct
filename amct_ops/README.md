@@ -38,7 +38,19 @@ bash ops_build.sh hifloat8_cast                  # 指定算子，A2
 bash ops_build.sh --soc ascend950 hifloat8_cast  # 指定算子，指定A5
 ```
 
-产物：`dist/amct_ops-1.0.0-cp*-cp*-linux_aarch64.whl`，包含所有算子的 Python 包及编译 `.so`。
+产物：`dist/amct_ops-1.0.0-cp*-cp*-linux_<arch>.whl`，其中 `<arch>` 随构建主机自动生成为 `x86_64` 或 `aarch64`，包含所有算子的 Python 包及编译 `.so`。
+
+wheel 文件名中的两个 `cp*` 分别表示 Python 实现/版本标签和 ABI 标签。例如，`cp311-cp311` 表示该 wheel 面向 CPython 3.11，并依赖 CPython 3.11 ABI；`linux_<arch>` 表示构建主机平台架构。
+
+### 已知 CMake 告警
+
+使用 pip 安装的 PyTorch 构建时，`find_package(Torch)` 可能输出如下告警：
+
+```text
+static library kineto_LIBRARY-NOTFOUND not found.
+```
+
+该告警来自 PyTorch 自带的 `TorchConfig.cmake`，表示未找到 Kineto profiler 的静态库。当前 `amct_ops` 算子不依赖 PyTorch profiler / Kineto 能力；只要 CMake configure、编译和链接成功，该告警可以忽略。
 
 安装：
 
@@ -95,7 +107,6 @@ help(amct_ops.hifloat8_cast.encode_to_hifloat8)   # 查看单个函数签名和�
 - C++ 侧：`TORCH_LIBRARY_FRAGMENT(amct, m)` + `TORCH_LIBRARY_IMPL(amct, PrivateUse1, m)`
 - Python 侧：`torch.ops.amct.<算子名>` 或模块导入 `from amct_ops.xxx import ...`
 - 算子名在 `amct` 内须唯一，新增前先检索 `torch.ops.amct` 是否已存在同名算子。
-
 
 ## 参考
 [cann/ops-nn算子开发指导](https://gitcode.com/cann/ops-nn/blob/master/docs/zh/develop/torch_extension_develop_guide.md)

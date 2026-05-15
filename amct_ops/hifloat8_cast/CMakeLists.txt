@@ -33,9 +33,41 @@ project(hifloat8_cast LANGUAGES ASC CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(ACL_INCLUDE_DIR "$ENV{ASCEND_HOME_PATH}/aarch64-linux/include")
-set(ASC_INCLUDE_DIR "$ENV{ASCEND_HOME_PATH}/aarch64-linux/asc/include")
-set(ACL_LIB_DIR "$ENV{ASCEND_HOME_PATH}/lib64")
+if(NOT DEFINED ENV{ASCEND_HOME_PATH})
+    message(FATAL_ERROR "ASCEND_HOME_PATH is not set. Please source CANN set_env.sh before building.")
+endif()
+
+set(ASCEND_ARCH_DIR "" CACHE STRING "CANN host architecture directory, e.g. x86_64-linux or aarch64-linux")
+if(NOT ASCEND_ARCH_DIR)
+    string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" HOST_PROCESSOR)
+    if(HOST_PROCESSOR MATCHES "^(x86_64|amd64)$")
+        set(ASCEND_ARCH_DIR "x86_64-linux")
+    elseif(HOST_PROCESSOR MATCHES "^(aarch64|arm64)$")
+        set(ASCEND_ARCH_DIR "aarch64-linux")
+    else()
+        message(FATAL_ERROR
+            "Unsupported host CPU architecture='${CMAKE_SYSTEM_PROCESSOR}'. "
+            "Please pass -DASCEND_ARCH_DIR=x86_64-linux or -DASCEND_ARCH_DIR=aarch64-linux.")
+    endif()
+endif()
+
+set(ASCEND_HOME_PATH "$ENV{ASCEND_HOME_PATH}")
+set(ACL_INCLUDE_DIR "${ASCEND_HOME_PATH}/${ASCEND_ARCH_DIR}/include")
+set(ASC_INCLUDE_DIR "${ASCEND_HOME_PATH}/${ASCEND_ARCH_DIR}/asc/include")
+set(ACL_LIB_DIR "${ASCEND_HOME_PATH}/lib64")
+set(ASCEND_ARCH_LIB_DIR "${ASCEND_HOME_PATH}/${ASCEND_ARCH_DIR}/lib64")
+
+foreach(REQUIRED_CANN_DIR
+    "${ACL_INCLUDE_DIR}"
+    "${ASC_INCLUDE_DIR}"
+    "${ASCEND_ARCH_LIB_DIR}"
+)
+    if(NOT IS_DIRECTORY "${REQUIRED_CANN_DIR}")
+        message(FATAL_ERROR
+            "Required CANN directory does not exist: ${REQUIRED_CANN_DIR}. "
+            "Please install the ${ASCEND_ARCH_DIR} CANN package or pass the correct -DASCEND_ARCH_DIR.")
+    endif()
+endforeach()
 
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
@@ -69,6 +101,7 @@ add_library(hifloat8_cast_ops SHARED
 target_include_directories(hifloat8_cast_ops PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel
     ${CMAKE_CURRENT_SOURCE_DIR}/op_host
+    ${Python3_INCLUDE_DIRS}
     ${TORCH_INCLUDE_DIRS}
     ${TORCH_NPU_INCLUDE_DIRS}
     ${ACL_INCLUDE_DIR}
@@ -90,7 +123,7 @@ target_link_libraries(hifloat8_cast_ops PRIVATE
 
 target_link_directories(hifloat8_cast_ops PRIVATE
     ${ACL_LIB_DIR}
-    "$ENV{ASCEND_HOME_PATH}/aarch64-linux/lib64"
+    ${ASCEND_ARCH_LIB_DIR}
     ${TORCH_NPU_LIBRARIES}
 )
 
@@ -99,4 +132,4 @@ target_compile_options(hifloat8_cast_ops PRIVATE
     $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${NPU_ARCH}>
 )
 
-message(STATUS "Building libhifloat8_cast_ops.so for NPU_ARCH=${NPU_ARCH}")
+message(STATUS "Building libhifloat8_cast_ops.so for ASCEND_ARCH_DIR=${ASCEND_ARCH_DIR}, NPU_ARCH=${NPU_ARCH}")

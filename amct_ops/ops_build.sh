@@ -19,7 +19,7 @@
 #   bash ops_build.sh hifloat8_cast              # 仅构建 hifloat8_cast，A2
 #   bash ops_build.sh --soc ascend950 hifloat8_cast  # 仅构建 hifloat8_cast，A5
 #
-# 产物：dist/amct_ops-1.0.0-cp*-cp*-linux_aarch64.whl
+# 产物：dist/amct_ops-1.0.0-cp*-cp*-linux_<arch>.whl
 #
 # 新增算子：
 #   1. 在 <op>/python/<pkg>/ 下放 __init__.py，<op>/CMakeLists.txt 构建 .so
@@ -29,6 +29,20 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+HOST_MACHINE="$(uname -m)"
+case "$HOST_MACHINE" in
+    x86_64|amd64)
+        CANN_ARCH_DIR="x86_64-linux"
+        ;;
+    aarch64|arm64)
+        CANN_ARCH_DIR="aarch64-linux"
+        ;;
+    *)
+        echo "不支持的主机 CPU 架构: '$HOST_MACHINE'，可选值: x86_64, aarch64" >&2
+        exit 1
+        ;;
+esac
 
 # ── 解析参数 ──────────────────────────────────────────────────────────────────
 SOC="ascend910b"
@@ -74,7 +88,7 @@ echo "[1/4] 加载 CANN 环境..."
 source "$ASCEND_HOME_PATH/set_env.sh"
 
 # ── 编译各算子 ────────────────────────────────────────────────────────────────
-echo "[2/4] 编译算子 (SOC=${SOC}, NPU_ARCH=${NPU_ARCH})..."
+echo "[2/4] 编译算子 (HOST=${HOST_MACHINE}, CANN_ARCH_DIR=${CANN_ARCH_DIR}, SOC=${SOC}, NPU_ARCH=${NPU_ARCH})..."
 
 build_op() {
     local op_name="$1"
@@ -84,7 +98,8 @@ build_op() {
     rm -rf "$op_dir/build" && mkdir "$op_dir/build"
     cmake -S "$op_dir" -B "$op_dir/build" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DNPU_ARCH="${NPU_ARCH}" > /dev/null
+        -DNPU_ARCH="${NPU_ARCH}" \
+        -DASCEND_ARCH_DIR="${CANN_ARCH_DIR}" > /dev/null
     cmake --build "$op_dir/build" -j"$(nproc)"
 }
 

@@ -142,6 +142,16 @@ make -j8
 
 编译产物：`build/libhifloat8_cast_ops.so`
 
+### 已知 CMake 告警
+
+使用 pip 安装的 PyTorch 构建时，`find_package(Torch)` 可能输出如下告警：
+
+```text
+static library kineto_LIBRARY-NOTFOUND not found.
+```
+
+该告警来自 PyTorch 自带的 `TorchConfig.cmake`，表示未找到 Kineto profiler 的静态库。`hifloat8_cast` 不依赖 PyTorch profiler / Kineto 能力；只要 CMake configure、编译和链接成功，该告警可以忽略。
+
 ## 使用
 
 ```python
@@ -226,16 +236,18 @@ python3 scripts/perf_test_multicore.py
 以下脚本需要额外构建 CPU 参考实现（`amct_pytorch/experimental/hifloat8/build.sh`），用于 CPU vs NPU 对比：
 
 ```bash
+LIBGOMP_ARCH="$(uname -m)"
+
 # 精度验证（CPU vs NPU 逐 bit 对比）
-LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 \
+LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
     python3 scripts/accuracy_compare_cpu_npu.py
 
 # FP16 性能对比（NPU vs CPU）
-LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 \
+LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
     python3 scripts/perf_compare_cpu_npu.py
 
 # BF16 性能对比（NPU vs CPU）
-LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1 \
+LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
     python3 scripts/perf_bf16_compare.py
 ```
 
