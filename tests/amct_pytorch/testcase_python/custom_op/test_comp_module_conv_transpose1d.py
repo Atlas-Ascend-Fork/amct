@@ -17,10 +17,15 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv_transpose1d import CompModuleConvTranspose1d
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv_transpose1d import (
+    CompModuleConvTranspose1d,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

@@ -14,6 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import math
+
 import torch
 
 from amct_pytorch.common.utils.quant_util import convert_dtype
@@ -58,9 +59,9 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
     bias_fp32 = bias.float() if bias is not None else None
 
     if weight_fp32.dim() == 3:
-        N_div_8, K, _ = weight_fp32.shape
-        N = N_div_8 * 8
-        weight_fp32 = weight_fp32.reshape(K, N)
+        n_div_8, k_val, _ = weight_fp32.shape
+        n_val = n_div_8 * 8
+        weight_fp32 = weight_fp32.reshape(k_val, n_val)
 
     if x_fp32.shape[-1] != weight_fp32.shape[1]:
         weight_fp32 = weight_fp32.transpose(0, 1)
@@ -100,20 +101,20 @@ def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
     return out
 
 
-def mock_npu_quantize(input, scales, zero_points=None,
+def mock_npu_quantize(input_val, scales, zero_points=None,
     dtype=torch.qint8, axis=1, div_mode=True):
     if div_mode:
-        out = input / scales
+        out = input_val / scales
     else:
-        out = input.transpose(-1, -2) * scales
+        out = input_val.transpose(-1, -2) * scales
         out = out.transpose(-1, -2)
     if zero_points is not None:
-        zero_points_shape = [1] * len(input.shape)
+        zero_points_shape = [1] * len(input_val.shape)
         zero_points_shape[axis] = -1
         zero_points = zero_points.reshape(zero_points_shape)
         out += zero_points
     if dtype == torch.qint8:
-        out = torch.quantize_per_tensor(input, 1, 0, dtype)
+        out = torch.quantize_per_tensor(input_val, 1, 0, dtype)
 
     return out
 

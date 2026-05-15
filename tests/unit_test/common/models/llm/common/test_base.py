@@ -1,11 +1,16 @@
 import importlib
+import json
+import os
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 import torch
 import torch.nn as nn
+from safetensors.torch import save_file
 
 from amct_pytorch.common.models.llm.common.base import BaseModel
+from tests.unit_test.conftest import SAFETENSORS_TMP_DIR
 
 QUANT_TARGET_ATTN_CACHE = 'attn-cache'
 QUANT_TARGET_ATTN_LINEAR = 'attn-linear'
@@ -699,16 +704,6 @@ def test_load_unit_inputs_delegates_to_load_ptq_inps(tmp_path, monkeypatch):
 
 
 # ---- safetensors-based weight loading tests ------------------------------
-
-
-import json
-import os
-from unittest.mock import MagicMock
-
-from safetensors.torch import save_file
-
-
-from tests.unit_test.conftest import SAFETENSORS_TMP_DIR
 
 
 def _make_tiny_safetensors_model_dir(num_layers=1):

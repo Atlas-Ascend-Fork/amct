@@ -2,7 +2,27 @@ import pytest
 import torch
 
 from amct_pytorch.quantization.dtypes.int import QuantDequantInt
+from amct_pytorch.quantization.dtypes.int_impl import (
+    dynamic_per_token_quant,
+    int4_assistance_bias,
+    pack_4bit,
+    scale_fp32_to_u64,
+    weight_quant,
+)
 from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
+from amct_pytorch.quantization.dtypes.mxfp_impl import (
+    down_size,
+    f4_unpacked_to_f32,
+    f32_to_f4_unpacked,
+    quantize_elewise,
+    round_to_decimal,
+    shared_exponents,
+    unpack_uint4,
+    up_size,
+)
+from amct_pytorch.quantization.dtypes.mxfp_impl import (
+    pack_uint4 as mx_pack_uint4,
+)
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -90,26 +110,6 @@ def test_int_quant_passes_gradient_through_ste():
     assert torch.allclose(x.grad, torch.ones_like(x), atol=2e-2, rtol=2e-2)
 
     assert not torch.all(x.grad == 0)
-
-
-from amct_pytorch.quantization.dtypes.int_impl import (
-    dynamic_per_token_quant,
-    scale_fp32_to_u64,
-    pack_4bit,
-    weight_quant,
-    int4_assistance_bias,
-)
-from amct_pytorch.quantization.dtypes.mxfp_impl import (
-    down_size,
-    up_size,
-    unpack_uint4,
-    pack_uint4 as mx_pack_uint4,
-    f32_to_f4_unpacked,
-    f4_unpacked_to_f32,
-    round_to_decimal,
-    shared_exponents,
-    quantize_elewise,
-)
 
 
 class TestIntImpl:
@@ -208,16 +208,16 @@ class TestMxfpDeploy:
     def test_deploy_8bit_returns_fp8_weights(self):
         qdq = QuantDequantMx(bits=8)
         x = torch.randn(4, 64, dtype=torch.float32)
-        ExMx, E8M0 = qdq.deploy(x)
-        assert ExMx.dtype == torch.float8_e4m3fn
-        assert E8M0.dtype == torch.uint8
+        ex_mx, e8m0_data = qdq.deploy(x)
+        assert ex_mx.dtype == torch.float8_e4m3fn
+        assert e8m0_data.dtype == torch.uint8
 
     def test_deploy_4bit_returns_packed_uint8(self):
         qdq = QuantDequantMx(bits=4)
         x = torch.randn(4, 64, dtype=torch.float32)
-        ExMx, E8M0 = qdq.deploy(x)
-        assert ExMx.dtype == torch.uint8
-        assert E8M0.dtype == torch.uint8
+        ex_mx, e8m0_data = qdq.deploy(x)
+        assert ex_mx.dtype == torch.uint8
+        assert e8m0_data.dtype == torch.uint8
 
     def test_export_deploy_returns_dict(self):
         qdq = QuantDequantMx(bits=8)

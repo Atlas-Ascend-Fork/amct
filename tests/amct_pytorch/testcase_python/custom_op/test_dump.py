@@ -15,23 +15,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import json
 import logging
-import sys
+import math
 import os
+import sys
 import unittest
 from unittest import mock
 from unittest.mock import patch
-import json
+
 import numpy as np
 import torch
-import math
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.dump.dump import DUMP
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import (
+    files as files_util,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import struct_helper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.auto_calibration_helper import AutoCalibrationHelper
-
-
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.dump.dump import DUMP
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.auto_calibration_helper import (
+    AutoCalibrationHelper,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -68,17 +71,17 @@ class TestDumpForward(unittest.TestCase):
         pass
 
     def test_001_float32(self):
-        data = torch.tensor([1,2,3], dtype=torch.float32)
+        data = torch.tensor([1, 2, 3], dtype=torch.float32)
         ret = self.dump_module(data)
         assert 0 == ((ret != data).sum())
 
     def test_002_double(self):
-        data = torch.tensor([1,2,3], dtype=torch.float64)
+        data = torch.tensor([1, 2, 3], dtype=torch.float64)
         ret = self.dump_module(data)
         assert 0 == ((ret != data).sum())
 
     def test_003_not_support(self):
-        data = torch.tensor([1,2,3], dtype=torch.int8)
+        data = torch.tensor([1, 2, 3], dtype=torch.int8)
         self.assertRaises(RuntimeError, self.dump_module, data)
 
     def test_004_data_dump_right_nor_not(self):
@@ -102,7 +105,7 @@ class TestDumpForward(unittest.TestCase):
         self.assertEqual((data - torch.from_numpy(read_data)).sum(), 0)
 
     def test_006_int(self):
-        data = torch.tensor([1,2,3], dtype=torch.int32)
+        data = torch.tensor([1, 2, 3], dtype=torch.int32)
         ret = self.dump_module(data)
         assert 0 == ((ret != data).sum())
 

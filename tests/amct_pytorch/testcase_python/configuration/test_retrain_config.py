@@ -15,16 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import unittest
 import json
 import os
+import unittest
+
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import CONFIGURER
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+    CONFIGURER,
+    RetrainConfig,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-
 from tests.amct_pytorch.testcase_python.configuration.utils import models
 
 REGULAR_PRUNE_ENABLE = 'regular_prune_enable'
@@ -153,7 +155,9 @@ class TestRetrainConfigForPrune(unittest.TestCase):
         config_defination = os.path.join(CUR_DIR, "./utils/net_001_quant_has_prune.cfg")
         RetrainConfig.set_ability(enable_retrain=True, enable_prune=False)
         retrain_config = {}
-        self.assertRaises(ValueError, CONFIGURER.create_config_from_proto, retrain_config, self.graph, config_defination)
+        self.assertRaises(
+            ValueError, CONFIGURER.create_config_from_proto,
+            retrain_config, self.graph, config_defination)
 
     #@unittest.skip('*')
     def test_prune_skip_override_repeated(self):
@@ -260,7 +264,7 @@ class TestRetrainConfigForPrune(unittest.TestCase):
 
 
         config_defination = os.path.join(CUR_DIR, "./utils/net_001_quant_has_prune.cfg")
-        layer1_0_skip_override_types =  {
+        layer1_0_skip_override_types = {
             REGULAR_PRUNE_ENABLE: False,
             REGULAR_PRUNE_CONFIG: {
                 PRUNE_TYPE: FILTER_PRUNE,
@@ -286,7 +290,7 @@ class TestRetrainConfigForPrune(unittest.TestCase):
         self.assertEqual(RetrainConfig.retrain_config.get('layer3.0'), None)
         self.assertEqual(RetrainConfig.retrain_config.get('layer4.0'), None)
 
-        override_layer_types =  {
+        override_layer_types = {
             REGULAR_PRUNE_ENABLE: True,
             REGULAR_PRUNE_CONFIG: {
                 PRUNE_TYPE: FILTER_PRUNE,
@@ -318,11 +322,14 @@ class TestRetrainConfigForPrune(unittest.TestCase):
         RetrainConfig.init(self.graph, config_defination, True, True)
 
     def test_compressed_only_quant_only_data_weight_cfg(self):
-        config_defination = os.path.join(CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_data_weight.cfg")
+        config_defination = os.path.join(
+            CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_data_weight.cfg")
         self.assertRaises(ValueError, RetrainConfig.init, self.graph, config_defination, True, True)
 
     def test_compressed_only_quant_only_data_weight_no_channelwise_cfg(self):
-        config_defination = os.path.join(CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_data_weight_nochannelwise.cfg")
+        config_defination = os.path.join(
+            CUR_DIR,
+            "./utils/compressed_cfg/net_001_compressed_quant_only_data_weight_nochannelwise.cfg")
         RetrainConfig.init(self.graph, config_defination, True, True)
 
         layer_quant = {
@@ -367,15 +374,19 @@ class TestRetrainConfigForPrune(unittest.TestCase):
         self.assertEqual(RetrainConfig.retrain_config['fc.5'], fc_quant)
 
     def test_compressed_only_quant_only_skip_layers(self):
-        config_defination = os.path.join(CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_skip_layers.cfg")
+        config_defination = os.path.join(
+            CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_skip_layers.cfg")
         self.assertRaises(ValueError, RetrainConfig.init, self.graph, config_defination, True, True)
 
     def test_compressed_only_quant_only_skip_layer_types(self):
-        config_defination = os.path.join(CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_skip_layer_types.cfg")
+        config_defination = os.path.join(
+            CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_skip_layer_types.cfg")
         self.assertRaises(ValueError, RetrainConfig.init, self.graph, config_defination, True, True)
 
     def test_compressed_only_override_layer_configs(self):
-        config_defination = os.path.join(CUR_DIR, "./utils/compressed_cfg/net_001_compressed_quant_only_override_layer_configs.cfg")
+        config_defination = os.path.join(
+            CUR_DIR,
+            "./utils/compressed_cfg/net_001_compressed_quant_only_override_layer_configs.cfg")
         RetrainConfig.init(self.graph, config_defination, True, True)
 
         self.assertTrue(RetrainConfig.retrain_config['layer1.0'].get(REGULAR_PRUNE_ENABLE))

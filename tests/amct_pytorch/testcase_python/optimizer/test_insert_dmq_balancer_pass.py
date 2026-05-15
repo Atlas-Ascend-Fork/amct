@@ -15,26 +15,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
+import os
+import sys
+import unittest
+from unittest import mock
+from unittest.mock import mock_open, patch
+
 import numpy as np
 import torch
 
-from unittest import mock
-from unittest.mock import patch, mock_open
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.dmq_balancer.dmq_balancer import (
+    DMQBalancer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_dmq_balancer_pass import (
+    InsertDMQBalancerPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_TYPES,
+)
 
 from .utils import models
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import Configuration
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_dmq_balancer_pass import InsertDMQBalancerPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.dmq_balancer.dmq_balancer import DMQBalancer
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

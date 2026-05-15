@@ -15,7 +15,6 @@ from amct_pytorch.common.utils.vars import (
     MXFP4_E2M1,
 )
 
-
 # ---- pad_zero_by_group / convert_to_per_group_shape -----------------------
 
 

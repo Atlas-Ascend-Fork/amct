@@ -19,22 +19,21 @@ import pytest
 import torch
 import torch.nn as nn
 
+from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.common.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
+from amct_pytorch.common.config.fields import QuantConfig
 from amct_pytorch.common.config.parser import (
-    set_default_config,
-    check_skip_layer,
+    _build_layer_types_and_quant_type,
+    _check_fuzzy_config_warnings,
+    _check_layer_constraints,
+    _is_layer_supported,
     check_config,
     check_quant_op_constraint,
-    _check_fuzzy_config_warnings,
-    _build_layer_types_and_quant_type,
-    _is_layer_supported,
-    _check_layer_constraints,
+    check_skip_layer,
     get_supported_layers,
     parse_config,
+    set_default_config,
 )
-from amct_pytorch.common.config.fields import QuantConfig
-from amct_pytorch.algorithms import AlgorithmRegistry
-
 
 # ---- set_default_config ----------------------------------------------------
 
@@ -145,15 +144,21 @@ def test_check_quant_op_constraint_non_linear():
 
 def test_check_quant_op_constraint_cin_not_multiple_of_64():
     mod = _make_mock_linear(in_features=63, out_features=64)
-    result = check_quant_op_constraint(mod, "layer.0", "float8_e4m3fn float4_e2m1",
-                                       _make_quant_config(weight_type="float4_e2m1", weight_strategy="group", group_size=64))
+    result = check_quant_op_constraint(
+        mod, "layer.0", "float8_e4m3fn float4_e2m1",
+        _make_quant_config(
+            weight_type="float4_e2m1", weight_strategy="group", group_size=64),
+    )
     assert result is False
 
 
 def test_check_quant_op_constraint_has_bias():
     mod = _make_mock_linear(in_features=64, out_features=64, has_bias=True)
-    result = check_quant_op_constraint(mod, "layer.0", "float8_e4m3fn float4_e2m1",
-                                       _make_quant_config(weight_type="float4_e2m1", weight_strategy="group", group_size=64))
+    result = check_quant_op_constraint(
+        mod, "layer.0", "float8_e4m3fn float4_e2m1",
+        _make_quant_config(
+            weight_type="float4_e2m1", weight_strategy="group", group_size=64),
+    )
     assert result is False
 
 
@@ -180,23 +185,39 @@ def test_check_quant_op_constraint_mxfp8_ceiling_odd():
 
 def test_check_quant_op_constraint_mxfp4_shape_cout_not_64():
     mod = _make_mock_linear(in_features=64, out_features=63)
-    result = check_quant_op_constraint(mod, "layer.0", "NOT_QUANTIZE mxfp4_e2m1",
-                                       _make_quant_config(weight_type="mxfp4_e2m1", weight_strategy="group", group_size=32, enable_input=False))
+    result = check_quant_op_constraint(
+        mod, "layer.0", "NOT_QUANTIZE mxfp4_e2m1",
+        _make_quant_config(
+            weight_type="mxfp4_e2m1", weight_strategy="group",
+            group_size=32, enable_input=False),
+    )
     assert result is False
 
 
 def test_check_quant_op_constraint_int4_cin_not_8():
     mod = _make_mock_linear(in_features=7, out_features=8)
-    result = check_quant_op_constraint(mod, "layer.0", "NOT_QUANTIZE int4",
-                                       _make_quant_config(weight_type="int4", weight_strategy="channel", enable_input=False))
+    result = check_quant_op_constraint(
+        mod, "layer.0", "NOT_QUANTIZE int4",
+        _make_quant_config(
+            weight_type="int4", weight_strategy="channel", enable_input=False),
+    )
     assert result is False
 
 
 def test_check_fuzzy_config_warnings_skip_interaction(caplog):
-    qc = QuantConfig({"batch_num": 1,
-                      "quant_cfg": {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {MINMAX: {}},
-                      "skip_layers": ["model.layers.0.self_attn.q_proj"]}, AlgorithmRegistry)
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "*self_attn.q_proj.weights": {
+                    "type": "int4", "symmetric": True, "strategy": "channel",
+                },
+            },
+            "algorithm": {MINMAX: {}},
+            "skip_layers": ["model.layers.0.self_attn.q_proj"],
+        },
+        AlgorithmRegistry,
+    )
     _check_fuzzy_config_warnings(["model.layers.0.self_attn.q_proj"], qc)
 
 
@@ -238,22 +259,50 @@ def test_check_quant_op_constraint_int4_shape():
 
 
 def test_check_fuzzy_config_warnings_no_fuzzy():
-    qc = QuantConfig({"batch_num": 1, "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "weights": {
+                    "type": "int8", "symmetric": True, "strategy": "channel",
+                },
+            },
+            "algorithm": {MINMAX: {}},
+        },
+        AlgorithmRegistry,
+    )
     _check_fuzzy_config_warnings(["layer.0", "layer.1"], qc)
 
 
 def test_check_fuzzy_config_warnings_with_match(caplog):
-    qc = QuantConfig({"batch_num": 1,
-                      "quant_cfg": {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "*self_attn.q_proj.weights": {
+                    "type": "int4", "symmetric": True, "strategy": "channel",
+                },
+            },
+            "algorithm": {MINMAX: {}},
+        },
+        AlgorithmRegistry,
+    )
     _check_fuzzy_config_warnings(["model.layers.0.self_attn.q_proj"], qc)
 
 
 def test_check_fuzzy_config_warnings_no_match(caplog):
-    qc = QuantConfig({"batch_num": 1,
-                      "quant_cfg": {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-                      "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "*self_attn.q_proj.weights": {
+                    "type": "int4", "symmetric": True, "strategy": "channel",
+                },
+            },
+            "algorithm": {MINMAX: {}},
+        },
+        AlgorithmRegistry,
+    )
     _check_fuzzy_config_warnings(["model.layers.0.mlp.gate_proj"], qc)
 
 
@@ -421,6 +470,7 @@ def test_get_supported_layers_constraint_skip():
 
 def test_build_layer_types_and_quant_type_when_wts_type_is_none():
     from unittest.mock import MagicMock
+
     from amct_pytorch.common.config.parser import _build_layer_types_and_quant_type
     quant_config = MagicMock()
     quant_config.quant_cfg.inputs_cfg.quant_input = False

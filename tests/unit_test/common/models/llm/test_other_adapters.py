@@ -6,11 +6,11 @@ import pytest
 import torch.nn as nn
 
 from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.common.models.llm.glm.glm5.glm5 import GLM5
 from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import LongcatLite
 from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import LongcatNext
 from amct_pytorch.common.models.llm.qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe
-from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -93,7 +93,9 @@ def test_glm5_ensure_config_no_op_when_mlp_layer_types_already_set():
     obj = _stub(
         GLM5,
         quant_target=[],
-        config=SimpleNamespace(num_hidden_layers=2, first_k_dense_replace=1, moe_layer_freq=1, mlp_layer_types=existing),
+        config=SimpleNamespace(
+            num_hidden_layers=2, first_k_dense_replace=1,
+            moe_layer_freq=1, mlp_layer_types=existing),
     )
     obj._ensure_glm5_config()
     assert obj.config.mlp_layer_types is existing
