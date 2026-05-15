@@ -21,6 +21,7 @@ SUPPORT_INPUT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp8
 SUPPORT_QUANT_STRATEGY_WEIGHT = ['tensor', 'channel', 'group']
 SUPPORT_QUANT_STRATEGY_INPUT = ['tensor', 'token']
 SUPPORT_QUANT_DYNAMIC_INPUT = ['token']
+SUPPORT_KVCACHE_QUANT_DTYPE = ['hifloat8']
 
 INT8_MAX = torch.iinfo(torch.int8).max
 INT8_MIN = torch.iinfo(torch.int8).min
@@ -100,3 +101,9 @@ ACT_GRANULARITY_SUPPORT_MAP = {
     'tensor': ACT_PER_TENSOR_SUPPORT_COMBINATION,
     'token': ACT_PER_TOKEN_SUPPORT_COMBINATION
 }
+
+ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE = {
+    'hifloat8': ['quantile']
+}
+
+KVCACHE_OPS = ['DeepseekV3Attention', 'LongcatFlashMLA']

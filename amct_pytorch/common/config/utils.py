@@ -43,7 +43,7 @@ def match_fuzzy_pattern(layer_name, pattern):
     if fnmatch.fnmatch(layer_name, pattern):
         return True
     
-    for suffix in ['.weights', '.inputs']:
+    for suffix in ['.weights', '.inputs', '.kvcache']:
         if fnmatch.fnmatch(layer_name + suffix, pattern):
             return True
     
