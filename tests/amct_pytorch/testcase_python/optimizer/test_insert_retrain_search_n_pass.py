@@ -15,30 +15,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
 import torch.nn as nn
 
-from tests.amct_pytorch.testcase_python.optimizer.utils import models
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+    RetrainConfig,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d import (
+    CompModuleConv2d,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
+    CompModuleLinear,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.retrain_quant import (
+    RetrainQuant,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_retrain_pass import (
+    InsertRetrainPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_retrain_quant_pass import (
+    InsertRetrainQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.share_act_comp_pass import (
+    ShareActCompPass,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import RetrainConfig
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_retrain_pass import InsertRetrainPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d \
-    import CompModuleConv2d
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear \
-    import CompModuleLinear
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.share_act_comp_pass import \
-    ShareActCompPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_retrain_quant_pass import \
-    InsertRetrainQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.retrain_quant import RetrainQuant
+from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

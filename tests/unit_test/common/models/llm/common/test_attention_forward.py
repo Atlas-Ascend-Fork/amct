@@ -9,7 +9,6 @@ from amct_pytorch.common.models.llm.common.attention_forward import (
     scaled_dot_product_attention,
 )
 
-
 # ---- repeat_kv -----------------------------------------------------------
 
 
@@ -49,11 +48,11 @@ class _StdAttnModule(nn.Module):
 
 
 def _reference_sdpa(q, k, v, attn_mask=None, is_causal=False):
-    L, S = q.size(-2), k.size(-2)
+    seq_len, s_len = q.size(-2), k.size(-2)
     scale = 1 / math.sqrt(q.size(-1))
-    bias = torch.zeros(L, S, dtype=q.dtype, device=q.device)
+    bias = torch.zeros(seq_len, s_len, dtype=q.dtype, device=q.device)
     if is_causal:
-        mask = torch.ones(L, S, dtype=torch.bool, device=q.device).tril(0)
+        mask = torch.ones(seq_len, s_len, dtype=torch.bool, device=q.device).tril(0)
         bias.masked_fill_(mask.logical_not(), float("-inf"))
     if attn_mask is not None:
         if attn_mask.dtype == torch.bool:

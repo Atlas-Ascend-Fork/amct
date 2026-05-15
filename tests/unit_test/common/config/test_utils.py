@@ -17,7 +17,10 @@
 # ----------------------------------------------------------------------------
 import pytest
 
-from amct_pytorch.common.config.utils import get_alg_name_from_config, match_fuzzy_pattern
+from amct_pytorch.common.config.utils import (
+    get_alg_name_from_config,
+    match_fuzzy_pattern,
+)
 
 MODEL_LAYERS_0_SELF_ATTN_Q_PROJ = 'model.layers.0.self_attn.q_proj'
 

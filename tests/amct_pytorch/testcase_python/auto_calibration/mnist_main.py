@@ -16,13 +16,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from __future__ import print_function
+
 import argparse
 import logging
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import Dataset
 
@@ -212,7 +214,7 @@ def main():
 
     dataset1 = CustomDataset(6000)
     dataset2 = CustomDataset(200)
-    train_loader = torch.utils.data.DataLoader(dataset1,**kwargs)
+    train_loader = torch.utils.data.DataLoader(dataset1, **kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **kwargs)
 
     model = Net().to(device)
@@ -233,10 +235,9 @@ def main():
     if use_cuda:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         random_input = random_input.to(device)
-    torch_out = torch.onnx._export(model,             # model being run
-                                   random_input,                       # model input (or a tuple for multiple inputs)
-                                   "./model/mnist_cnn.onnx", # where to save the model (can be a file or file-like object)
-                                   export_params=True)      # store the trained parameter weights inside the model file
+    torch_out = torch.onnx._export(model, random_input,
+                                   "./model/mnist_cnn.onnx",
+                                   export_params=True)
 
 def test_model():
     # Training settings
@@ -277,7 +278,7 @@ def test_model():
 
     dataset1 = CustomDataset(6000)
     dataset2 = CustomDataset(200)
-    train_loader = torch.utils.data.DataLoader(dataset1,**kwargs)
+    train_loader = torch.utils.data.DataLoader(dataset1, **kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **kwargs)
 
     model = Net().to(device)

@@ -15,32 +15,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
 import logging
-import numpy as np
+import os
+import sys
+import unittest
 from io import BytesIO
-import torch
-from unittest.mock import patch
 from unittest import mock
+from unittest.mock import patch
+
+import numpy as np
+import torch
+from google.protobuf import text_format
+
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+    RetrainConfig,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+    create_quant_retrain_config,
+    create_quant_retrain_model,
+    restore_quant_retrain_model,
+    save_quant_retrain_model,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils import vars
+
+from .utils import models, record_file_utils
 
 logger = logging.getLogger(__name__)
 
-from .utils import models
-from .utils import record_file_utils
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
-from google.protobuf import text_format
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import create_quant_retrain_config
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import create_quant_retrain_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import restore_quant_retrain_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import save_quant_retrain_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils import vars
 
 STATE_DICT = 'state_dict'
 DEPLOY_MODEL_SUFFIX = '_deploy_model.onnx'
@@ -390,7 +396,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        TORCH_VERSION = '1.4.0'
+        torch_version = '1.4.0'
         cls.temp_folder = os.path.join(CUR_DIR, 'test_quant_retrain_conv_circular_model')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
@@ -577,7 +583,7 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
             """ args_shape: [(1, 2, 14)]
             """
             def __init__(self):
-                super(Net1d,self).__init__()
+                super(Net1d, self).__init__()
                 self.args_shape = [(1, 2, 14)]
                 # conv + bn
                 self.layer1 = torch.nn.Sequential(
@@ -599,7 +605,7 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
             """ args_shape: [(1, 2, 14)]
             """
             def __init__(self):
-                super(Net1d,self).__init__()
+                super(Net1d, self).__init__()
                 self.args_shape = [(1, 2, 14)]
                 # conv + bn
                 self.layer1 = torch.nn.Sequential(

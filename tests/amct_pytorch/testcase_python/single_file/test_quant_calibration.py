@@ -15,19 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
-import sys
-import unittest
-import shutil
 import json
 import logging
+import os
+import shutil
+import sys
+import unittest
 
 import torch
 
-logger = logging.getLogger(__name__)
-
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
+
+logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -76,7 +78,8 @@ class TestQuantCalibrationInterface(unittest.TestCase):
         model = CustomizedModel()
         quant_layers = {'kv_cache_quant_layers': [MATMUL1, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_config(config_file, model, quant_layers, config_proto)
+        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_config(
+            config_file, model, quant_layers, config_proto)
 
         with open(config_file) as f:
             config = json.load(f)
@@ -93,7 +96,8 @@ class TestQuantCalibrationInterface(unittest.TestCase):
         quant_layers = {'kv_cache_quant_layers': [MATMUL1, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
         record_file = os.path.join(self.temp_dir, 'record.txt')
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_config(config_file, model, quant_layers, config_proto)
+        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_config(
+            config_file, model, quant_layers, config_proto)
         amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_cali_model(config_file, record_file, model)
         self.assertRaises(RuntimeError, ModuleHelper(model).check_amct_op)
 

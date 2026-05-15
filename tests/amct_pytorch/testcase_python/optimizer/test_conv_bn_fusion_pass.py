@@ -15,31 +15,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import logging
-from io import BytesIO
-import unittest
-from unittest.mock import patch
+import copy
 import json
+import logging
+import os
+import sys
+import unittest
+from io import BytesIO
+from unittest.mock import patch
+
 import numpy as np
 import torch
-import copy
 
-logger = logging.getLogger(__name__)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.record_file_operator import (
+    ScaleOffsetRecordHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import (
+    version_higher_than,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.conv_bn_fusion_pass import (
+    ConvBnFusionPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_TYPES,
+)
 
 from .utils import models
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.record_file_operator import \
-    ScaleOffsetRecordHelper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+logger = logging.getLogger(__name__)
 
 CONV_TRANSPOSE_2D = 'ConvTranspose2d'
 AVG_POOL_2D = 'AvgPool2d'
@@ -51,7 +64,7 @@ CONV1 = 'conv1'
 class TestConvbnFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        QUANTIZABLE_TYPES.extend([CONV_TRANSPOSE_2D,AVG_POOL_2D])
+        QUANTIZABLE_TYPES.extend([CONV_TRANSPOSE_2D, AVG_POOL_2D])
         cls.temp_folder = os.path.join(CUR_DIR, 'test_conv_bn_fusion_pass')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)

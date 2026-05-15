@@ -15,20 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
-
 from onnx import onnx_pb
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+    construct_quant_node,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.quant_fusion_pass import (
+    QuantFusionPass,
+)
 
 DATA_SCALE = 'data_scale'
 DATA_OFFSET = 'data_offset'
@@ -107,7 +110,8 @@ class TestQuantFusionPass(unittest.TestCase):
             relu1.input[:] = [conv_name]
             relu1.output[:] = outputs
         conv_sub(self.graph, 'conv1', [DATA0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv2', [DATA0], ['conv2_output'], {SCALE: 0.99999, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv2', [DATA0], ['conv2_output'],
+                 {SCALE: 0.99999, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         conv_sub(self.graph, 'conv3', [DATA0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         # Add add
         add1 = self.graph.node.add()
@@ -162,7 +166,7 @@ class TestQuantFusionPass(unittest.TestCase):
         before_length = len(graph.nodes)
         QuantFusionPass(records).do_pass(graph, data_node)
         after_length = len(graph.nodes)
-        self.assertEqual(before_length -  after_length, 1)
+        self.assertEqual(before_length - after_length, 1)
         self.assertRaises(
             RuntimeError,
             graph.get_node_by_name,

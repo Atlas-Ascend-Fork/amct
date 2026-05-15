@@ -15,17 +15,22 @@
 # ----------------------------------------------------------------------------
 import copy
 import logging
-import unittest
 import sys
-from unittest.mock import MagicMock
-from unittest.mock import patch
+import unittest
+from unittest.mock import MagicMock, patch
+
 import torch
 import torch.nn as nn
+from mock_torch_npu import (
+    mock_npu,
+    mock_npu_dtype_cast,
+    mock_npu_quant_matmul,
+    mock_npu_quantize,
+    mock_npu_weight_quant_batchmatmul,
+)
 from utils import TestModel, TestModelBias
-from mock_torch_npu import mock_npu_dtype_cast, mock_npu, mock_npu_quant_matmul, mock_npu_weight_quant_batchmatmul
-from mock_torch_npu import mock_npu_quantize
 
-from amct_pytorch import quantize, convert
+from amct_pytorch import convert, quantize
 
 NPU_HIF8_CAST_LINEAR = 'NpuHIF8CastLinear'
 HIFLOAT8 = 'hifloat8'

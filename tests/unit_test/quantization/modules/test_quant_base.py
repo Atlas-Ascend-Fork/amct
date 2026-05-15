@@ -425,9 +425,10 @@ def test_build_algorithms_raises_when_target_not_in_algo_targets():
 
 
 def test_build_algorithms_by_target_raises_on_missing_targets_metadata(monkeypatch):
-    from amct_pytorch.quantization.modules import quant_base as quant_base_mod
-    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
     from types import SimpleNamespace as simple_ns
+
+    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
+    from amct_pytorch.quantization.modules import quant_base as quant_base_mod
     monkeypatch.setattr(
         quant_base_mod, "get_algo_names_by_target",
         lambda args, target: ["fake_algo"],
@@ -442,9 +443,10 @@ def test_build_algorithms_by_target_raises_on_missing_targets_metadata(monkeypat
 
 
 def test_build_algorithms_by_target_raises_on_mismatched_target(monkeypatch):
-    from amct_pytorch.quantization.modules import quant_base as quant_base_mod
-    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
     from types import SimpleNamespace as simple_ns
+
+    from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
+    from amct_pytorch.quantization.modules import quant_base as quant_base_mod
     monkeypatch.setattr(
         quant_base_mod, "get_algo_names_by_target",
         lambda args, target: ["fake_algo"],

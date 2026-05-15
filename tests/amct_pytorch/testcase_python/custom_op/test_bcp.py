@@ -15,19 +15,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import json
 import logging
-import sys
+import math
 import os
+import sys
 import unittest
 from unittest import mock
-import json
+
 import numpy as np
 import torch
-import math
 
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import bcp
 
 DEVICE = 'cuda:0'
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import bcp
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -68,11 +69,16 @@ class TestBcp(unittest.TestCase):
         logger.info('ori_data:', tensor_list[0].type())
         logger.info(tensor_list[0][0])
         # call bcp_op
-        prune_mask = bcp(tensor_list, prune_axises, algo_param['prune_ratio'], algo_param['prune_group'], algo_param['ascend_optimized'])
+        prune_mask = bcp(
+            tensor_list, prune_axises,
+            algo_param['prune_ratio'],
+            algo_param['prune_group'],
+            algo_param['ascend_optimized'],
+        )
         # call numpy bcp
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
-        is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
         self.assertTrue(is_equal)
 
     # @unittest.skip('*')
@@ -87,11 +93,16 @@ class TestBcp(unittest.TestCase):
             'prune_group': 2
         }
         # call bcp_op
-        prune_mask = bcp(tensor_list, prune_axises, algo_param['prune_ratio'], algo_param['prune_group'], algo_param['ascend_optimized'])
+        prune_mask = bcp(
+            tensor_list, prune_axises,
+            algo_param['prune_ratio'],
+            algo_param['prune_group'],
+            algo_param['ascend_optimized'],
+        )
         # call numpy bcp
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
-        is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
         self.assertTrue(is_equal)
 
     # @unittest.skip('*')
@@ -106,11 +117,16 @@ class TestBcp(unittest.TestCase):
             'prune_group': 1
         }
         # call bcp_op
-        prune_mask = bcp(tensor_list, prune_axises, algo_param['prune_ratio'], algo_param['prune_group'], algo_param['ascend_optimized'])
+        prune_mask = bcp(
+            tensor_list, prune_axises,
+            algo_param['prune_ratio'],
+            algo_param['prune_group'],
+            algo_param['ascend_optimized'],
+        )
         # call numpy bcp
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
-        is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
         self.assertTrue(is_equal)
 
     # @unittest.skip('*')
@@ -127,11 +143,16 @@ class TestBcp(unittest.TestCase):
             'prune_group': 1
         }
         # call bcp_op
-        prune_mask = bcp(tensor_list, prune_axises, algo_param['prune_ratio'], algo_param['prune_group'], algo_param['ascend_optimized'])
+        prune_mask = bcp(
+            tensor_list, prune_axises,
+            algo_param['prune_ratio'],
+            algo_param['prune_group'],
+            algo_param['ascend_optimized'],
+        )
         # call numpy bcp
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
-        is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
         self.assertTrue(is_equal)
 
     # @unittest.skip('*')
@@ -148,11 +169,16 @@ class TestBcp(unittest.TestCase):
             'prune_group': 1
         }
         # call bcp_op
-        prune_mask = bcp(tensor_list, prune_axises, algo_param['prune_ratio'], algo_param['prune_group'], algo_param['ascend_optimized'])
+        prune_mask = bcp(
+            tensor_list, prune_axises,
+            algo_param['prune_ratio'],
+            algo_param['prune_group'],
+            algo_param['ascend_optimized'],
+        )
         # call numpy bcp
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
-        is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
         self.assertTrue(is_equal)
 
     @unittest.skip('*')
@@ -167,14 +193,19 @@ class TestBcp(unittest.TestCase):
             'prune_group': 2
         }
         # call bcp_op
-        prune_mask = bcp(tensor_list, prune_axises, algo_param['prune_ratio'], algo_param['prune_group'], algo_param['ascend_optimized'])
+        prune_mask = bcp(
+            tensor_list, prune_axises,
+            algo_param['prune_ratio'],
+            algo_param['prune_group'],
+            algo_param['ascend_optimized'],
+        )
         # call numpy bcp
         prune_mask_list = BcpFaker(tensor_list, prune_axises, algo_param).do()
         # compare
-        is_equal = (prune_mask_list==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_list == prune_mask.cpu().numpy()).all()
         logger.info('prune_mask_list', prune_mask_list)
         logger.info('prune_mask', prune_mask)
-        logger.info('equal:', prune_mask_list==prune_mask.cpu().numpy())
+        logger.info('equal:', prune_mask_list == prune_mask.cpu().numpy())
         logger.info('numpy_num', sum(prune_mask_list[0:80]), sum(prune_mask_list[80:160]))
         logger.info('op_num', prune_mask.cpu().numpy()[0:80].sum(), prune_mask.cpu().numpy()[80:160].sum())
         self.assertTrue(is_equal)
@@ -192,11 +223,11 @@ class BcpFaker:
         def cal_prune_num(num, prune_ratio, ascend_optimized, prune_group):
             remain_num = num - round(num * prune_ratio)
             if ascend_optimized:
-                remain_num = min(math.ceil(remain_num/16)*16, num)
+                remain_num = min(math.ceil(remain_num / 16) * 16, num)
                 if remain_num == 0:
                     remain_num = min(num, 16)
             if prune_group > 1:
-                remain_num = min(math.floor(remain_num/prune_group)*prune_group, num)
+                remain_num = min(math.floor(remain_num / prune_group) * prune_group, num)
             if remain_num == 0:
                 remain_num = prune_group
             prune_num = num - remain_num
@@ -214,8 +245,8 @@ class BcpFaker:
             return prune_cout, prune_index
         # do prune
         for i in range(prune_group):
-            start_idx = i*group_len
-            norm_grp = norm[start_idx:(i+1)*group_len]
+            start_idx = i * group_len
+            norm_grp = norm[start_idx:(i + 1) * group_len]
             sort_index = np.argsort(norm_grp) + start_idx
             prune_index.extend(sort_index[0:prune_nums_grp].tolist())
         prune_index.sort()
@@ -235,13 +266,13 @@ class BcpFaker:
             wts_np = np.transpose(wts_np, axis_list)
         wts_np = wts_np.reshape([wts_np.shape[0], -1])
         norm = np.linalg.norm(wts_np, ord=ord_map.get(norm_algo), axis=1, keepdims=False)
-        norm = norm/(wts_np[0].size)
+        norm = norm / (wts_np[0].size)
         norm = (norm - norm.min()) / (norm.max() - norm.min())
         return norm
 
     @staticmethod
     def prune_cout_to_prune_index(prune_cout):
-        prune_index = [idx for idx,val in enumerate(prune_cout) if val==0]
+        prune_index = [idx for idx, val in enumerate(prune_cout) if val == 0]
         return prune_index
 
     def do(self):
