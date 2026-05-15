@@ -199,9 +199,9 @@ def test_quant_cfg_with_fuzzy_patterns():
     assert f.fuzzy_configs["inputs"][0]["pattern"] == "*self_attn.q_proj.inputs"
 
 
-def test_quant_cfg_no_weights_or_fuzzy_raises():
-    with pytest.raises(ValueError, match="at least one weights configuration"):
-        QuantCfgField({"inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"}})
+def test_quant_cfg_inputs_only_with_default_kvcache():
+    cfg = QuantCfgField({"inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"}})
+    assert cfg.kvcache_cfg.get_value() == {"enable_quant": False}
 
 
 def test_quant_cfg_get_fuzzy_config_matches():
