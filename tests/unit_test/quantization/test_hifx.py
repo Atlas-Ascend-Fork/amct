@@ -43,11 +43,10 @@ class _FakeHifloat8:
 class _FakeHifloat8Module:
     hifloat8_cast = _FakeHifloat8
 
-
 sys.modules["amct_pytorch.quantization.dtypes.hifloat8"] = _FakeHifloat8Module
 sys.modules["amct_pytorch.quantization.dtypes.hifloat8.hifloat8_cast"] = _FakeHifloat8
-
 from amct_pytorch.quantization.dtypes.hifx import QuantDequantHifp
+
 
 
 def test_hifp_init_defaults():
@@ -108,7 +107,9 @@ def test_hifp_fake_quant_raises_for_unsupported_bits():
 
 
 def test_hifp_forward_bits8_calls_fake_quant(monkeypatch):
-    from amct_pytorch.quantization.dtypes.hifx import QuantDequantHifp as quant_dequant_hifp
+    from amct_pytorch.quantization.dtypes.hifx import (
+        QuantDequantHifp as quant_dequant_hifp,
+    )
     def quantize_level1(self, x):
         return x
     quant_dequant_hifp.quantize_level1 = quantize_level1

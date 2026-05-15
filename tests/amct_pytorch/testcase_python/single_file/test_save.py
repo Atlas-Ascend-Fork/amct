@@ -15,20 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
-from io import BytesIO
+import os
 import stat
+import sys
+import unittest
+from io import BytesIO
 
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import generate_onnx_file_name
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import split_dir_prefix
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import _write_node_info, delete_customized_attr
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import (
+    _write_node_info,
+    delete_customized_attr,
+    generate_onnx_file_name,
+    split_dir_prefix,
+)
 
 OP_DATA_TYPE = 'op_data_type'
 
@@ -91,8 +94,10 @@ class TestSave(unittest.TestCase):
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
-            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},],
-            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},]
+            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                        "attr_val": bytes("float16", encoding='utf-8')}, ],
+            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                                     "attr_val": bytes("float16", encoding='utf-8')}, ]
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
@@ -119,8 +124,10 @@ class TestSave(unittest.TestCase):
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
-            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},],
-            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},]
+            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                        "attr_val": bytes("float16", encoding='utf-8')}, ],
+            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                                     "attr_val": bytes("float16", encoding='utf-8')}, ]
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()

@@ -7,11 +7,15 @@ and the full pipeline; they are deferred to the tiny-config integration batch.
 import importlib
 
 import pytest
+import torch.nn as nn
 
 from amct_pytorch.common.models.llm.common.deploy_export import (
+    export_block_deploy,
     generate_quant_config,
     generate_quant_group,
+    get_quant_ignore_linear_names,
 )
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 CONFIG_GROUPS_KEY = 'config_groups'
 GROUP_0 = 'group_0'
@@ -100,14 +104,6 @@ def test_generate_quant_config_merges_cache_scheme_into_top_level():
 def test_generate_quant_config_has_global_compression_ratio_one():
     cfg = generate_quant_config(cache_scheme={}, ignores=[])
     assert cfg["global_compression_ratio"] == 1
-
-
-import torch.nn as nn
-from amct_pytorch.common.models.llm.common.deploy_export import (
-    get_quant_ignore_linear_names,
-    export_block_deploy,
-)
-from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def test_get_quant_ignore_linear_names_finds_plain_linear():

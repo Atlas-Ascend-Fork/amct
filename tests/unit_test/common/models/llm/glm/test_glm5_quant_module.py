@@ -29,6 +29,7 @@ W_BITS = 'w_bits'
 
 A_BITS = 'a_bits'
 
+
 def _tiny_config():
     return GlmMoeDsaConfig(
         hidden_size=64,
@@ -83,7 +84,7 @@ def _quant_args(quant_target=("attn-linear",)):
 # ---- _linear_with_structure ----------------------------------------------
 
 
-def test_linear_with_structure_no_transform_matches_F_linear():
+def test_linear_with_structure_no_transform_matches_f_linear():
     linear = nn.Linear(4, 8)
     x = torch.randn(2, 4)
     out = _linear_with_structure(x, linear)
@@ -99,7 +100,8 @@ def test_linear_with_structure_passes_inv_t_and_name_to_transform():
         seen["name"] = name
         return weight
 
-    _linear_with_structure(torch.zeros(1, 4), linear, structure_transform=transform, name="proj")
+    _linear_with_structure(torch.zeros(1, 4), linear,
+                           structure_transform=transform, name="proj")
     assert seen == {"inv_t": True, "name": "proj"}
 
 
@@ -149,7 +151,8 @@ def test_quant_glm5_attn_attn_linear_branch_uses_quant_linear():
 
 def test_quant_glm5_attn_without_attn_linear_still_uses_quant_linear_for_projections():
     """GLM5 always wraps projections in QuantLinear regardless of attn-linear flag.
-    The flag only controls structure transforms and activation quantizers."""
+    The flag only controls structure transforms and activation quantizers.
+    """
     cfg = _tiny_config()
     attn = GlmMoeDsaAttention(cfg, layer_idx=0)
     qattn = QuantGLM5Attn(_quant_args(quant_target=["attn-cache"]), attn)
@@ -189,4 +192,3 @@ def test_quant_glm5_indexer_records_geometry_from_module():
     assert indexer.index_topk == cfg.index_topk
     assert indexer.q_lora_rank == cfg.q_lora_rank
     assert indexer._cached_keys is None
-

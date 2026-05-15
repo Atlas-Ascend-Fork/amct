@@ -19,13 +19,15 @@
 Generate model for ut.
 """
 from __future__ import print_function
+
 import argparse  #Python 命令行解析工具
+import copy
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-import copy
 
 ZEROS = 'zeros'
 
@@ -80,7 +82,7 @@ class Net001(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net001,self).__init__()
+        super(Net001, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -112,7 +114,7 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128,10, bias=True))
+            nn.Linear(128, 10, bias=True))
 
     def forward(self, x):
         x = self.layer1(x)
@@ -121,7 +123,7 @@ class Net001(nn.Module):
         x = self.layer4(x)
         x = self.layer5(x)
         x = self.layer6(x)
-        x = x.view(x.size(0),-1)
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         x = F.log_softmax(x, dim=1)
 
@@ -131,12 +133,12 @@ class Quant(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     """
     def __init__(self, scale, offset, quant_bit):
-        super(Quant,self).__init__()
+        super(Quant, self).__init__()
         self.scale = scale
         self.offset = offset
         self.quant_bit = quant_bit
-        self.min_value = -2**(quant_bit-1)
-        self.max_value = 2**(quant_bit-1) - 1
+        self.min_value = -2**(quant_bit - 1)
+        self.max_value = 2**(quant_bit - 1) - 1
 
     def forward(self, data):
         data = torch.mul(data, self.scale)
@@ -155,7 +157,7 @@ class Net3d(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d,self).__init__()
+        super(Net3d, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv3d(2, 4, kernel_size=3, bias=False),
@@ -173,13 +175,13 @@ class Net4dMatmul(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net4dMatmul,self).__init__()
+        super(Net4dMatmul, self).__init__()
         # fc
         self.fc = nn.Sequential(
             nn.Linear(28, 1024, bias=True),
             nn.Linear(1024, 128, bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(128,10, bias=True))
+            nn.Linear(128, 10, bias=True))
 
     def forward(self, x):
         x = self.fc(x)
@@ -214,11 +216,11 @@ class EltwiseConv(nn.Module):
     def forward(self, x):
         x1 = self.layer1(x)
         x2 = self.layer2(x)
-        x_1_2 = x1+x2
+        x_1_2 = x1 + x2
         x3 = self.layer3(x)
         x_1_2_3 = x_1_2 + x3
         x4 = self.layer4(x)
-        x_1_2_4 = x_1_2+x4
+        x_1_2_4 = x_1_2 + x4
         y1 = self.layer5(x_1_2_3)
         y2 = self.layer6(x_1_2_4)
         return y1, y2
@@ -233,7 +235,7 @@ class LinearIn2(nn.Module):
         self.layer3 = nn.Linear(1024, 128, bias=False)
         self.layer4 = nn.BatchNorm1d(128)
         self.layer5 = nn.ReLU(inplace=True)
-        self.layer6 = nn.Linear(128,10, bias=True)
+        self.layer6 = nn.Linear(128, 10, bias=True)
 
     def forward(self, x):
         x = self.layer1(x)
@@ -253,7 +255,7 @@ class LinearIn3(nn.Module):
         self.layer3 = nn.Linear(1024, 128, bias=False)
         self.layer4 = nn.BatchNorm1d(16)
         self.layer5 = nn.ReLU(inplace=True)
-        self.layer6 = nn.Linear(128,10, bias=True)
+        self.layer6 = nn.Linear(128, 10, bias=True)
 
     def forward(self, x):
         x = self.layer1(x)
@@ -274,7 +276,7 @@ class LinearIn4(nn.Module):
         self.layer3 = nn.Linear(1024, 128, bias=False)
         self.layer4 = nn.BatchNorm2d(3)
         self.layer5 = nn.ReLU(inplace=True)
-        self.layer6 = nn.Linear(128,10, bias=True)
+        self.layer6 = nn.Linear(128, 10, bias=True)
 
     def forward(self, x):
         x = self.layer1(x)
@@ -424,7 +426,7 @@ class NetConvDeconv(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(NetConvDeconv,self).__init__()
+        super(NetConvDeconv, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -467,15 +469,27 @@ class QuantFusionNet(nn.Module):
 class DefaultNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True, padding_mode=ZEROS)
+        self.conv1 = nn.Conv2d(
+            in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1,
+            dilation=1, groups=1, bias=True, padding_mode=ZEROS)
         self.conv2 = copy.deepcopy(self.conv1) 
-        self.conv3 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=2, groups=1, bias=True, padding_mode=ZEROS)
-        self.conv4 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=2, bias=True, padding_mode=ZEROS)
-        self.conv5 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=3, bias=True, padding_mode=ZEROS)
-        self.conv6 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=6, bias=True, padding_mode=ZEROS)
+        self.conv3 = nn.Conv2d(
+            in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1,
+            dilation=2, groups=1, bias=True, padding_mode=ZEROS)
+        self.conv4 = nn.Conv2d(
+            in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1,
+            dilation=1, groups=2, bias=True, padding_mode=ZEROS)
+        self.conv5 = nn.Conv2d(
+            in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1,
+            dilation=1, groups=3, bias=True, padding_mode=ZEROS)
+        self.conv6 = nn.Conv2d(
+            in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1,
+            dilation=1, groups=6, bias=True, padding_mode=ZEROS)
         self.conv7 = copy.deepcopy(self.conv1)
         self.conv8 = copy.deepcopy(self.conv1)
-        self.conv9 = nn.Conv2d(in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True, padding_mode='replicate')
+        self.conv9 = nn.Conv2d(
+            in_channels=6, out_channels=6, kernel_size=3, stride=1, padding=1,
+            dilation=1, groups=1, bias=True, padding_mode='replicate')
         self.conv10 = copy.deepcopy(self.conv1)
 
         self.bn1 = nn.BatchNorm2d(6)
@@ -495,18 +509,36 @@ class DefaultNet(nn.Module):
         self.linear3 = copy.deepcopy(self.linear1)
         self.linear4 = copy.deepcopy(self.linear1)
 
-        self.avgpool1 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None)
+        self.avgpool1 = nn.AvgPool2d(
+            kernel_size=2, stride=2, padding=0, ceil_mode=False,
+            count_include_pad=True, divisor_override=None)
         self.avgpool2 = copy.deepcopy(self.avgpool1)
         self.avgpool3 = copy.deepcopy(self.avgpool1)
-        self.avgpool4 = nn.AvgPool2d(kernel_size=8, stride=1, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None)
-        self.avgpool5 = nn.AvgPool2d(kernel_size=1, stride=1, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None)
+        self.avgpool4 = nn.AvgPool2d(
+            kernel_size=8, stride=1, padding=0, ceil_mode=False,
+            count_include_pad=True, divisor_override=None)
+        self.avgpool5 = nn.AvgPool2d(
+            kernel_size=1, stride=1, padding=0, ceil_mode=False,
+            count_include_pad=True, divisor_override=None)
 
-        self.deconv1 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv2 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=2, padding_mode=ZEROS)
-        self.deconv3 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=2, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv4 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv5 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv6 = nn.ConvTranspose2d(6, 6, kernel_size=3, stride=1, padding=1, output_padding=0, groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv1 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv2 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=2, padding_mode=ZEROS)
+        self.deconv3 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=2, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv4 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv5 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv6 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
 
     def forward(self, x0):
         x = self.conv1(x0)

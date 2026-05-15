@@ -22,11 +22,10 @@ import pytest
 from amct_pytorch.quantization.bit_policy import (
     BitPolicy,
     LayerBits,
-    _GroupBits,
     _check_complete,
+    _GroupBits,
     _has_lt_16,
 )
-
 
 # ---- BitPolicy.__init__ ----------------------------------------------------
 

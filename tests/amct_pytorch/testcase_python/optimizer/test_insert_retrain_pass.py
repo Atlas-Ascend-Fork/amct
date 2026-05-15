@@ -15,36 +15,50 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
 import logging
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
 
-logger = logging.getLogger(__name__)
-
-from tests.amct_pytorch.testcase_python.optimizer.utils import models
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+    RetrainConfig,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_base import (
+    CompModuleBase,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv1d import (
+    CompModuleConv1d,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d import (
+    CompModuleConv2d,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv3d import (
+    CompModuleConv3d,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
+    CompModuleLinear,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_retrain_pass import (
+    InsertRetrainPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.share_act_comp_pass import (
+    ShareActCompPass,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import RetrainConfig
+from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_retrain_pass import InsertRetrainPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv1d \
-    import CompModuleConv1d
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d \
-    import CompModuleConv2d
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv3d \
-    import CompModuleConv3d
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear \
-    import CompModuleLinear
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_base \
-    import CompModuleBase
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.share_act_comp_pass import \
-    ShareActCompPass
+logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -193,12 +207,15 @@ class TestInsertRetrainConv1dPass(unittest.TestCase):
         self.assertIsInstance(named_module_dict['layer1.0'], CompModuleConv1d)
 
     def test_check_conv1d_retrain_padding_mode(self):
-        mod = CompModuleConv1d(module=torch.nn.Conv1d(1,1,1, padding_mode='reflect'),
-                               act_config={'ifmr_init':True, 'algo': 'ulq_quantize', 'num_bits': 8, 'fixed_min': False},
-                               wts_config={'algo': 'arq_retrain', 'num_bits': 8, 'channel_wise': True},
-                               common_config={'device': 'cpu', })
+        mod = CompModuleConv1d(
+            module=torch.nn.Conv1d(1, 1, 1, padding_mode='reflect'),
+            act_config={'ifmr_init': True, 'algo': 'ulq_quantize',
+                        'num_bits': 8, 'fixed_min': False},
+            wts_config={'algo': 'arq_retrain', 'num_bits': 8,
+                        'channel_wise': True},
+            common_config={'device': 'cpu', })
         mod.comp_algs.append('quant')
-        self.assertRaises(RuntimeError, mod, torch.randn(1,1,1))
+        self.assertRaises(RuntimeError, mod, torch.randn(1, 1, 1))
 
 if __name__ == '__main__':
     unittest.main()

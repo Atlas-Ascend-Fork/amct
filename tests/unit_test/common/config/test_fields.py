@@ -17,23 +17,23 @@
 # ----------------------------------------------------------------------------
 import pytest
 
+from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.common.config.fields import (
-    BatchNumField,
-    WeightsCfgField,
-    InputsCfgField,
-    QuantCfgField,
+    AlgorithmField,
     AwqField,
-    GptqField,
-    SmoothQuantField,
-    MinmaxField,
-    MxQuant,
+    BatchNumField,
     CastField,
     CustomAlgField,
-    AlgorithmField,
-    SkipLayersField,
+    GptqField,
+    InputsCfgField,
+    MinmaxField,
+    MxQuant,
+    QuantCfgField,
     QuantConfig,
+    SkipLayersField,
+    SmoothQuantField,
+    WeightsCfgField,
 )
-from amct_pytorch.algorithms import AlgorithmRegistry
 
 POSITIVE_INT = 'positive int'
 
@@ -444,7 +444,7 @@ def test_quant_config_get_layer_config_fuzzy_inputs_fallback():
 def test_quant_config_with_gptq():
     cfg = {"batch_num": 1,
            "quant_cfg": {"weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"gptq"} }
+           "algorithm": {"gptq"}}
     qc = QuantConfig(cfg, AlgorithmRegistry)
     assert qc.algorithm.names == ["gptq"]
 

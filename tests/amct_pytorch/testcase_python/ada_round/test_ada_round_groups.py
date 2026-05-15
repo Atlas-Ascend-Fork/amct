@@ -17,18 +17,23 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import get_ada_round_groups
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import _is_weight_ada_round
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import _match_gelu_subgraph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import _match_gelu_tanh_subgraph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import _match_rrelu_subgraph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import _get_other_activation
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import (
+    _get_other_activation,
+    _is_weight_ada_round,
+    _match_gelu_subgraph,
+    _match_gelu_tanh_subgraph,
+    _match_rrelu_subgraph,
+    get_ada_round_groups,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import (
+    version_higher_than,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import version_higher_than
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -41,7 +46,7 @@ class TestAdaRoundGroups(unittest.TestCase):
             os.makedirs(cls.temp_folder)
 
         cls.quant_config = {
-            'linear':{
+            'linear': {
                 'weight_quant_params': {
                     'wts_algo': 'ada_quantize'
                 }
@@ -224,7 +229,7 @@ class TestAdaRoundGroups(unittest.TestCase):
 
     def test_not_weight_ada_round(self):
         quant_config = {
-            'name':{
+            'name': {
                 'weight_quant_params': {
                     'wts_algo': 'arq_quantize'
                 }
@@ -242,7 +247,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 2
@@ -265,7 +270,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 2
@@ -288,7 +293,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 1.4142135381698608
@@ -312,7 +317,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 1.4142135381698608
@@ -337,7 +342,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 1.4142135381698608
@@ -361,7 +366,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 1.4142135381698608
@@ -386,7 +391,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 1.4142135381698608
@@ -411,7 +416,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 / 1.4142135381698608
@@ -441,7 +446,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -470,7 +475,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -499,7 +504,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -528,7 +533,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -557,7 +562,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -586,7 +591,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -615,7 +620,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -644,7 +649,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -673,7 +678,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -702,7 +707,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -731,7 +736,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -760,7 +765,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0
@@ -789,7 +794,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.linear = torch.nn.Linear(5,5)
+                self.linear = torch.nn.Linear(5, 5)
             def forward(self, x):
                 x0 = self.linear(x)
                 x1 = x0 * x0

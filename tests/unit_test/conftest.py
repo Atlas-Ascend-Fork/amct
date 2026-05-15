@@ -1,5 +1,5 @@
-import shutil
 import random
+import shutil
 from pathlib import Path
 
 import numpy as np
