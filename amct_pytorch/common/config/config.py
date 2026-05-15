@@ -182,3 +182,16 @@ HIFP8_QUANTILE_CFG = {
     'algorithm': {'quantile'},
     'skip_layers': {'lm_head'}
 }
+
+
+HIFP8_KVCACHE_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'kvcache': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'quantile'}
+}
