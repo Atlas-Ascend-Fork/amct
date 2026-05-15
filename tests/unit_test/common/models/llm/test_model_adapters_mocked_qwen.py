@@ -38,7 +38,6 @@ A_BITS = 'a_bits'
 
 DENSE = 'dense'
 
-
 def _make_qwen3_config(num_layers=2):
     return Qwen3Config(
         num_hidden_layers=num_layers,
@@ -420,7 +419,6 @@ class TestQwen3MoeMocked:
         dl.mlp = nn.Linear(4, 4)
         monkeypatch.setattr(model, "block", lambda idx: dl)
         captured = {}
-
         def _mock_mlp(args_in, module):
             captured["called"] = True
             captured["module"] = module
@@ -759,7 +757,6 @@ class TestQwen3MoeMocked:
         dl = nn.Module()
         monkeypatch.setattr(model, "block", lambda idx: dl)
         captured = {}
-
         def _mock_apply(args_in, dl_in, attn_cls):
             captured["called"] = True
         monkeypatch.setattr(
@@ -792,7 +789,6 @@ class TestQwen3MoeMocked:
         dl = nn.Module()
         monkeypatch.setattr(model, "block", lambda idx: dl)
         captured = {}
-
         def _mock_apply(args_in, dl_in, attn_cls):
             captured["called"] = True
         monkeypatch.setattr(
@@ -1107,7 +1103,6 @@ class TestQwen3NextMocked:
             lambda args_in, experts, **kwargs: experts,
         )
         captured = {}
-
         class _MockQwen3NextMLP:
             def __new__(cls, args_in, module, **kwargs):
                 captured["called"] = True
@@ -1169,7 +1164,6 @@ class TestQwen3NextMocked:
         dl.layer_type = "linear_attention"
         dl.linear_attn = nn.Module()
         captured = {}
-
         def _mock(args_in, dl_in, attn_cls):
             captured["attn_cls"] = attn_cls
         monkeypatch.setattr(
@@ -1201,7 +1195,6 @@ class TestQwen3NextMocked:
         dl = nn.Module()
         dl.layer_type = "default_attention"
         captured = {}
-
         def _mock(args_in, dl_in, attn_cls):
             captured["attn_cls"] = attn_cls
         monkeypatch.setattr(

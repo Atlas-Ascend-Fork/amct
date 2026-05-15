@@ -15,24 +15,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os,sys
-import unittest
 import argparse
 import logging
+import os
+import sys
+import unittest
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-
-logger = logging.getLogger(__name__)
 
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch import accuracy_based_auto_calibration
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import generate_fakequant_module
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import save_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch import (
+    accuracy_based_auto_calibration,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.auto_calibration import (
+    AutoCalibrationEvaluatorBase,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+    generate_fakequant_module,
+    save_model,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
+
 from .utils import models
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import ModuleHelper
+
+logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DATASETS_DIR = os.path.realpath(os.path.join(CUR_DIR, '../../../../../../../../build/bin/llt/toolchain/dmct_datasets'))
@@ -54,7 +65,7 @@ def run_inference_model_auto_cali(model, iterations=2):
     with torch.no_grad():
         for _ in range(iterations):
             data = torch.tensor(
-                np.random.uniform(0, 10, (4,2,3,3,3)).astype(np.float32))
+                np.random.uniform(0, 10, (4, 2, 3, 3, 3)).astype(np.float32))
             data = data.to(device)
             output = model(data)
             iter_num = iter_num + 1
@@ -69,7 +80,7 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
             os.makedirs(cls.temp_folder)
 
         cls.model = models.Net3d001()
-        cls.args_shape = [(4,2,3,3,3)]
+        cls.args_shape = [(4, 2, 3, 3, 3)]
         cls.ckpt = os.path.join(CKPT_PATH, 'net3d_test.pt')
 
     @classmethod
@@ -96,7 +107,7 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
         fakequant_model, fakequant_file = do_calibration(
             model, self.args_shape, self.temp_folder)
         run_inference_model_auto_cali(fakequant_model, iterations=test_iter)
-        logger.info('%s reesult %s', '='*50, '='*50)
+        logger.info('%s reesult %s', '=' * 50, '=' * 50)
         self.assertTrue(os.path.exists(fakequant_file))
 
 

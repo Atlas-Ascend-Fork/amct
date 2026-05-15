@@ -15,20 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
-from unittest.mock import MagicMock
+import os
+import sys
+import unittest
 from copy import deepcopy
+from unittest.mock import MagicMock
 
 import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import (
+    QuantOpInfo,
+)
 
 CONV1 = 'conv1'
 
@@ -74,7 +76,7 @@ class TestModelHelper(unittest.TestCase):
         wts_trans = self.graph.node.add()
         wts_trans.name = 'wts_trans_0'
         wts_trans.op_type = 'Transpose'
-        wts_trans.input[:] = ['conv1.pre_weights',]
+        wts_trans.input[:] = ['conv1.pre_weights', ]
         wts_trans.output[:] = ['conv1.weights']
         # Add conv1
         conv1 = self.graph.node.add()
@@ -128,8 +130,8 @@ class TestModelHelper(unittest.TestCase):
     def test_get_parent_module_trans_node(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        node_Trans = graph.get_node_by_name(CONV1)
-        graph = QuantOpInfo.get_weight_node(node_Trans)
+        node_trans = graph.get_node_by_name(CONV1)
+        graph = QuantOpInfo.get_weight_node(node_trans)
         self.assertIsNotNone(graph)
 
     def test_get_cout_length(self):

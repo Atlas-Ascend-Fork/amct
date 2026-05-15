@@ -15,21 +15,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
-import numpy as np
 import copy
+import os
 import shutil
-import onnx
-
-from onnx import onnx_pb
+import sys
+import unittest
 from unittest.mock import patch
+
+import numpy as np
+import onnx
+from onnx import onnx_pb
 from onnx.external_data_helper import convert_model_to_external_data
+
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import convert_external_data_format
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import (
+    convert_external_data_format,
+)
 
 CONV1_WEIGHTS = 'conv1.weights'
 CONV1_BIAS = 'conv1.bias'

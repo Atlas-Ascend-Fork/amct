@@ -149,7 +149,8 @@ def test_quant_qwen3_attn_forward_returns_correct_shape(quant_target):
 
 def test_quant_qwen3_attn_forward_disabled_quant_matches_plain_attn_skeleton():
     """Without quantization (all quantizers off, no quant_target match),
-    the wrapper should still give a finite, real-valued tensor."""
+    the wrapper should still give a finite, real-valued tensor.
+    """
     cfg = _tiny_qwen3_config()
     attn = Qwen3Attention(cfg, layer_idx=0)
     qattn = QuantQwen3Attn(_quant_args(quant_target=[ATTN_CACHE]), attn)

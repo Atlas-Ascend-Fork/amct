@@ -27,20 +27,22 @@ It covers:
 """
 import copy
 import logging
-import unittest
-from unittest.mock import Mock
-from unittest.mock import MagicMock
-import sys
 import os
+import sys
+import unittest
+from unittest.mock import MagicMock, Mock
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import fnmatch
+
 import torch
 import torch.nn as nn
 from mock_torch_npu import mock_npu
 from utils import TestModel
+
+from amct_pytorch import convert, quantize
 from amct_pytorch.common.config.utils import match_fuzzy_pattern
-from amct_pytorch import quantize, convert
 
 ALGORITHM_MINMAX = 'minmax'
 KEY_BATCH_NUM = 'batch_num'
@@ -478,8 +480,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_no_fuzzy(self):
         """Test warning check without fuzzy config"""
-        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         
         config = {
             KEY_BATCH_NUM: 1,
@@ -500,8 +502,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_with_fuzzy(self):
         """Test warning check with fuzzy config"""
-        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         
         config = {
             KEY_BATCH_NUM: 1,
@@ -528,8 +530,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_no_match(self):
         """Test warning when fuzzy config matches no layer"""
-        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         
         config = {
             KEY_BATCH_NUM: 1,
@@ -555,8 +557,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_build_layer_types_and_quant_type(self):
         """Test building layer types and quant type"""
-        from amct_pytorch.common.config.parser import _build_layer_types_and_quant_type
         from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _build_layer_types_and_quant_type
         
         config = {
             KEY_BATCH_NUM: 1,
@@ -585,8 +587,8 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_is_layer_supported_conv2d_padding_mode(self):
         """Test Conv2d padding_mode check"""
-        from amct_pytorch.common.config.parser import _is_layer_supported
         from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _is_layer_supported
         
         config = {
             KEY_BATCH_NUM: 1,

@@ -1,8 +1,8 @@
 import pytest
 
 from amct_pytorch.common.utils.check_params import (
-    check_params,
     check_parameters_in_schema,
+    check_params,
 )
 
 

@@ -19,23 +19,29 @@ import logging
 import os
 import shutil
 import sys
-import numpy as np
 import unittest
+from collections import OrderedDict
 from unittest import mock
 from unittest.mock import patch
-from collections import OrderedDict
 
+import numpy as np
 import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_config_base import DistillConfigBase
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_config_base import GraphObjects
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto import DistillProtoConfig
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
+    GraphQuerier,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_config_base import (
+    DistillConfigBase,
+    GraphObjects,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto import (
+    DistillProtoConfig,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
 
 from .utils import models
 
@@ -154,7 +160,10 @@ class TestDistillConfigBase(unittest.TestCase):
         node2.set_module_name(node_proto2.name)
 
         distill_unit = [[node_proto1.name], [node_proto2.name]]
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.graph_base.node_base.NodeBase.get_consumers') as mock_get_consumers:
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.graph_base.node_base.'
+            'NodeBase.get_consumers',
+        ) as mock_get_consumers:
             mock_get_consumers.return_value = [[node2], []]
             cascade_unit = self.distill_config_base.get_cascade_unit(
                 graph, distill_unit, 2, node1, [])
@@ -237,15 +246,15 @@ class TestDistillConfigBase(unittest.TestCase):
         distill_groups = [['conv1', 'bn1'], ['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']]
         self.assertEqual(config.get('distill_group'), distill_groups)
         layer_config = {
-            QUANT_ENABLE:True,
-            DISTILL_DATA_CONFIG:{
-                ALGO:ULQ_QUANTIZE,
-                DST_TYPE:INT8
+            QUANT_ENABLE: True,
+            DISTILL_DATA_CONFIG: {
+                ALGO: ULQ_QUANTIZE,
+                DST_TYPE: INT8
             },
-            DISTILL_WEIGHT_CONFIG:{
-                ALGO:ARQ_DISTILL,
-                CHANNEL_WISE:True,
-                DST_TYPE:INT8
+            DISTILL_WEIGHT_CONFIG: {
+                ALGO: ARQ_DISTILL,
+                CHANNEL_WISE: True,
+                DST_TYPE: INT8
             }
         }
         self.assertEqual(config.get('conv1'), layer_config)
@@ -265,46 +274,46 @@ class TestDistillConfigBase(unittest.TestCase):
         distill_groups = [['conv1', 'bn1'], ['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']]
         self.assertEqual(config.get('distill_group'), distill_groups)
         conv1_config = {
-            QUANT_ENABLE:False,
-            DISTILL_DATA_CONFIG:{
-                ALGO:ULQ_QUANTIZE,
-                DST_TYPE:INT8
+            QUANT_ENABLE: False,
+            DISTILL_DATA_CONFIG: {
+                ALGO: ULQ_QUANTIZE,
+                DST_TYPE: INT8
             },
-            DISTILL_WEIGHT_CONFIG:{
-                ALGO:ARQ_DISTILL,
-                CHANNEL_WISE:True,
-                DST_TYPE:INT8
+            DISTILL_WEIGHT_CONFIG: {
+                ALGO: ARQ_DISTILL,
+                CHANNEL_WISE: True,
+                DST_TYPE: INT8
             }
         }
         self.assertEqual(config.get('conv1'), conv1_config)
         conv2_config = {
-            QUANT_ENABLE:True,
-            DISTILL_DATA_CONFIG:{
-                ALGO:ULQ_QUANTIZE,
-                "clip_max":6.0,
-                "clip_min":-6.0,
-                "fixed_min":True,
-                DST_TYPE:INT8
+            QUANT_ENABLE: True,
+            DISTILL_DATA_CONFIG: {
+                ALGO: ULQ_QUANTIZE,
+                "clip_max": 6.0,
+                "clip_min": -6.0,
+                "fixed_min": True,
+                DST_TYPE: INT8
             },
-            DISTILL_WEIGHT_CONFIG:{
-                ALGO:ARQ_DISTILL,
-                CHANNEL_WISE:False,
-                DST_TYPE:INT8
+            DISTILL_WEIGHT_CONFIG: {
+                ALGO: ARQ_DISTILL,
+                CHANNEL_WISE: False,
+                DST_TYPE: INT8
             }
         }
         self.assertEqual(config.get('conv2'), conv2_config)
         conv3_config = {
-            QUANT_ENABLE:True,
-            DISTILL_DATA_CONFIG:{
-                ALGO:ULQ_QUANTIZE,
-                "clip_max":3.0,
-                "clip_min":-3.0,
-                DST_TYPE:"INT4"
+            QUANT_ENABLE: True,
+            DISTILL_DATA_CONFIG: {
+                ALGO: ULQ_QUANTIZE,
+                "clip_max": 3.0,
+                "clip_min": -3.0,
+                DST_TYPE: "INT4"
             },
-            DISTILL_WEIGHT_CONFIG:{
-                ALGO:ARQ_DISTILL,
-                CHANNEL_WISE:False,
-                DST_TYPE:"INT4"
+            DISTILL_WEIGHT_CONFIG: {
+                ALGO: ARQ_DISTILL,
+                CHANNEL_WISE: False,
+                DST_TYPE: "INT4"
             }
         }
         self.assertEqual(config.get('conv3'), conv3_config)
@@ -315,57 +324,73 @@ class TestDistillConfigBase(unittest.TestCase):
             self.distill_config_base.parse_distill_config(config_file, self.graph.model)
 
     def test_get_supported_layers_empty(self):
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check.GraphQuerier.get_support_distill_layer2type', return_value=[]):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check.'
+            'GraphQuerier.get_support_distill_layer2type',
+            return_value=[],
+        ):
             with self.assertRaises(ValueError):
                 self.distill_config_base._get_supported_layers(self.graph.model)
 
     def test_get_supported_layers_success(self):
         layer2type = self.distill_config_base._get_supported_layers(self.graph.model)
-        self.assertEqual(layer2type, {'conv1':CONV2D, 'conv2':CONV2D, 'conv3':CONV2D})
+        self.assertEqual(layer2type, {'conv1': CONV2D, 'conv2': CONV2D, 'conv3': CONV2D})
 
     def test_check_proto_skip_layer(self):
-        supported_layer2type = {'layer':'type'}
+        supported_layer2type = {'layer': 'type'}
         skip_layers = ['layer1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_quant_skip_layers',
-            return_value=skip_layers):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'distill_proto.DistillProtoConfig.get_quant_skip_layers',
+            return_value=skip_layers,
+        ):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
 
     def test_check_proto_skip_type(self):
-        supported_layer2type = {'conv1':CONV2D}
+        supported_layer2type = {'conv1': CONV2D}
         skip_types = ['type1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_quant_skip_layer_types',
-            return_value=skip_types):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'distill_proto.DistillProtoConfig.get_quant_skip_layer_types',
+            return_value=skip_types,
+        ):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
 
     def test_check_proto_override_layer(self):
-        supported_layer2type = {'conv1':CONV2D}
+        supported_layer2type = {'conv1': CONV2D}
         override_layers = ['layer1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_override_layers',
-            return_value=override_layers):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'distill_proto.DistillProtoConfig.get_override_layers',
+            return_value=override_layers,
+        ):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
 
     def test_check_proto_override_type(self):
-        supported_layer2type = {'conv1':CONV2D, 'conv3':CONV2D}
+        supported_layer2type = {'conv1': CONV2D, 'conv3': CONV2D}
         override_types = ['type1']
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto.DistillProtoConfig.get_override_layer_types',
-            return_value=override_types):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'distill_proto.DistillProtoConfig.get_override_layer_types',
+            return_value=override_types,
+        ):
             with self.assertRaises(ValueError):
                 self.distill_config_base.check_proto(proto, supported_layer2type)
 
     def test_get_distill_unit(self):
         distill_groups = [['conv1', 'bn1']]
-        supported_distill_layers = {'conv1':CONV2D, 'conv2':CONV2D, 'conv3':CONV2D}
+        supported_distill_layers = {'conv1': CONV2D, 'conv2': CONV2D, 'conv3': CONV2D}
         distill_unit = self.distill_config_base._get_distill_unit(self.graph, distill_groups, supported_distill_layers)
         self.assertEqual(distill_unit, [['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']])
 
@@ -404,7 +429,7 @@ class TestDistillConfigBase(unittest.TestCase):
         node = graph.add_node(node_proto)
         node.set_module_name(node_proto.name)
         node.set_attr('is_reuse', True)
-        layers = {'start_layer':node_proto.name}
+        layers = {'start_layer': node_proto.name}
         with self.assertRaises(ValueError):
             self.distill_config_base._get_all_nodes_between_two_layers(layers, graph)
 
@@ -413,7 +438,7 @@ class TestDistillConfigBase(unittest.TestCase):
         model_proto.producer_name = 'model'
 
         graph = Graph(model_proto)
-        layers = {'start_layer':'layer'}
+        layers = {'start_layer': 'layer'}
         with self.assertRaises(ValueError):
             self.distill_config_base._get_all_nodes_between_two_layers(layers, graph)
 

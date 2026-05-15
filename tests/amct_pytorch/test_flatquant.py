@@ -17,7 +17,7 @@ import logging
 import os
 import unittest
 
-from amct_pytorch import quantize, convert
+from amct_pytorch import convert, quantize
 
 # Customize accordingly
 LLAMA2_7B_MODEL_PATH = "meta-llama/Llama-2-7b-hf"

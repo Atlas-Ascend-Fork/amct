@@ -97,5 +97,7 @@ def test_unimplemented_hooks_default_to_no_op():
 
 
 def test_base_solver_granularity_class_attribute():
-    from amct_pytorch.common.optimization.base_solver import BaseSolver as base_solver_cls
+    from amct_pytorch.common.optimization.base_solver import (
+        BaseSolver as base_solver_cls,
+    )
     assert base_solver_cls.granularity == "block"
