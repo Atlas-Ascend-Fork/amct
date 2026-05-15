@@ -15,14 +15,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
-from io import BytesIO
 import sys
 import unittest
-import logging
-import torch
+from copy import deepcopy
+from io import BytesIO
 from unittest.mock import patch
+
 import numpy as np
+import torch
+from google.protobuf import text_format
+from onnx import onnx_pb
+
+import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import (
+    files as files_util,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+    construct_quant_node,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
+    InsertWeightQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_weight_quant_pass import (
+    ReplaceWeightQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.weight_fakequant_pass import (
+    WeightFakequantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parse_record_file import (
+    RecordFileParser,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_TYPES,
+)
+
+from .util import models, record_file
 
 DATA_SCALE = 'data_scale'
 DATA_OFFSET = 'data_offset'
@@ -30,28 +73,6 @@ WEIGHT_SCALE = 'weight_scale'
 WEIGHT_OFFSET = 'weight_offset'
 
 logger = logging.getLogger(__name__)
-
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
-from .util import models
-from .util import record_file
-from onnx import onnx_pb
-from copy import deepcopy
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.weight_fakequant_pass import WeightFakequantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import InsertWeightQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_weight_quant_pass import ReplaceWeightQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parse_record_file import RecordFileParser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from google.protobuf import text_format
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 
 S_TRANSPOSE = '%s.transpose'
 CONCAT0 = 'concat0'
@@ -187,7 +208,7 @@ def deconv_sub(graph, deconv_name, inputs, outputs, quant_attrs):
     weights.name = '%s.weights' % (deconv_name)
     weights.data_type = 6
     weights.int32_data[:] = [1] * 81
-    weights.dims[:] = [3,3,3,3]
+    weights.dims[:] = [3, 3, 3, 3]
     # Add bias
     bias = graph.initializer.add()
     bias.name = '%s.bias' % (deconv_name)
@@ -204,7 +225,7 @@ def deconv_sub(graph, deconv_name, inputs, outputs, quant_attrs):
 class TestReplaceWeightQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        QUANTIZABLE_TYPES.extend(['ConvTranspose2d','AvgPool2d'])
+        QUANTIZABLE_TYPES.extend(['ConvTranspose2d', 'AvgPool2d'])
         # set basic info
         self.model_proto = onnx_pb.ModelProto()
         self.model_proto.producer_name = 'model'
@@ -225,8 +246,12 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
         conv_sub(self.graph, 'conv1', [CONCAT0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         conv_sub(self.graph, 'conv2', [CONCAT0], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub_with_trans(self.graph, 'conv3', [CONCAT0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        deconv_sub(self.graph, 'deconv1', [CONCAT0], ['deconv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub_with_trans(
+            self.graph, 'conv3', [CONCAT0], ['conv3_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        deconv_sub(
+            self.graph, 'deconv1', [CONCAT0], ['deconv1_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
 
         # Add max_pooling
         pool0 = self.graph.node.add()
@@ -271,8 +296,12 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         pass
 
     def test_do_pass_int4_success(self):
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
-            with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+            return_value=4):
+            with patch(
+                'amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+                return_value=4):
                 records = {'conv1': {
                         DATA_SCALE: 1.0,
                         DATA_OFFSET: 0,
@@ -289,8 +318,12 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 self.assertEqual(TensorProtoHelper(graph.nodes[0].proto).get_data().dtype, 'float32')
 
     def test_do_pass_int4_trans_success(self):
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
-            with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+            return_value=4):
+            with patch(
+                'amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+                return_value=4):
                 records = {'conv3': {
                         DATA_SCALE: 1.0,
                         DATA_OFFSET: 0,
@@ -304,12 +337,18 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 optimizer.add_pass(InsertWeightQuantPass(records))
                 optimizer.add_pass(ReplaceWeightQuantPass(records))
                 optimizer.do_optimizer(graph, test_model)
-                self.assertEqual(TensorProtoHelper(graph.get_node_by_name('conv3.weights').proto).get_data().dtype, 'float32')
+                self.assertEqual(
+                    TensorProtoHelper(graph.get_node_by_name('conv3.weights').proto).get_data().dtype,
+                    'float32')
                 
 
     def test_do_pass_int4_deconv_success(self):
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
-            with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch(
+            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+            return_value=4):
+            with patch(
+                'amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+                return_value=4):
                 records = {'deconv1': {
                         DATA_SCALE: 1.0,
                         DATA_OFFSET: 0,
@@ -372,8 +411,8 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.lstm = torch.nn.LSTM(10, 20, 1)
-            def forward(self, input, hx):
-                x = self.lstm(input, hx)
+            def forward(self, input_data, hx):
+                x = self.lstm(input_data, hx)
                 return x
         model = RNNModule()
         tmp_onnx = BytesIO()
@@ -384,10 +423,10 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
         records = {
             node_name: {
-                WEIGHT_SCALE: np.array([1.0]*4, dtype=np.float32),
-                WEIGHT_OFFSET: np.array([0]*4, dtype=np.int8),
-                'recurrence_weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'recurrence_weight_offset': np.array([0]*4, dtype=np.int8),
+                WEIGHT_SCALE: np.array([1.0] * 4, dtype=np.float32),
+                WEIGHT_OFFSET: np.array([0] * 4, dtype=np.int8),
+                'recurrence_weight_scale': np.array([1.0] * 4, dtype=np.float32),
+                'recurrence_weight_offset': np.array([0] * 4, dtype=np.int8),
             }
         }
         passer = WeightFakequantPass(records)
@@ -400,8 +439,8 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 super().__init__()
                 self.conv1 = torch.nn.Conv1d(3, 3, 3)
                 self.deconv1 = torch.nn.ConvTranspose1d(3, 3, 3)
-            def forward(self, input):
-                x = self.conv1(input)
+            def forward(self, input_data):
+                x = self.conv1(input_data)
                 x = self.deconv1(x)
                 return x
         model = Conv1dModule()
@@ -411,12 +450,12 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
         records = {
             'conv1': {
-                WEIGHT_SCALE: np.array([1.0]*3, dtype=np.float32),
-                WEIGHT_OFFSET: np.array([0]*3, dtype=np.int8)
+                WEIGHT_SCALE: np.array([1.0] * 3, dtype=np.float32),
+                WEIGHT_OFFSET: np.array([0] * 3, dtype=np.int8)
             },
             'deconv1': {
-                WEIGHT_SCALE: np.array([1.0]*3, dtype=np.float32),
-                WEIGHT_OFFSET: np.array([0]*3, dtype=np.int8)
+                WEIGHT_SCALE: np.array([1.0] * 3, dtype=np.float32),
+                WEIGHT_OFFSET: np.array([0] * 3, dtype=np.int8)
             }
         }
 

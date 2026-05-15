@@ -16,23 +16,33 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import sys
 import os
+import sys
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import torch
 import torch.nn as nn
-from unittest.mock import patch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distillation_interface import create_distill_config
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distillation_interface import create_distill_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distillation_interface import distill
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distillation_interface import save_distill_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import DistillSampleBase
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import LinearQAT
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import (
+    DistillSampleBase,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distillation_interface import (
+    create_distill_config,
+    create_distill_model,
+    distill,
+    save_distill_model,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+    Conv2dQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import (
+    LinearQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -109,7 +119,7 @@ class ModelMultiTensorInput(DistillSampleBase):
 class ModelMultiInvalidInput(DistillSampleBase):
     @staticmethod
     def get_model_input_data(samples):
-        return (1,1,1,1)
+        return (1, 1, 1, 1)
 
 class ModelMultiInvalidInputDict(DistillSampleBase):
     @staticmethod
@@ -117,15 +127,15 @@ class ModelMultiInvalidInputDict(DistillSampleBase):
         return dict()
 
 class MultiDataset(torch.utils.data.Dataset):
-    def __init__(self, X, Y):
-        self.X = X
-        self.Y = Y
+    def __init__(self, x_data, y_data):
+        self.x_data = x_data
+        self.y_data = y_data
 
     def __len__(self):
-        return len(self.X)
+        return len(self.x_data)
 
     def __getitem__(self, idx):
-        return self.X[idx], self.Y[idx]
+        return self.x_data[idx], self.y_data[idx]
 
 class TestDistillInterface(unittest.TestCase):
     @classmethod
@@ -134,7 +144,7 @@ class TestDistillInterface(unittest.TestCase):
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
-        cls.data = torch.randn(1,2,4,4)
+        cls.data = torch.randn(1, 2, 4, 4)
         cls.train_loader = torch.utils.data.DataLoader(cls.data)
         cls.groups = [['conv']]
         # torch model
@@ -177,52 +187,69 @@ class TestDistillInterface(unittest.TestCase):
 
     def test_distill_dump_success(self):
         optimizer = torch.optim.AdamW(self.qat_model.parameters(), lr=0.1)
-        distill(self.torch_model, self.qat_model, self.dump_cfg_file, self.train_loader, epochs=1, loss=None, optimizer=optimizer)
+        distill(
+            self.torch_model, self.qat_model, self.dump_cfg_file, self.train_loader,
+            epochs=1, loss=None, optimizer=optimizer)
 
     def test_distill_invalid_epochs(self):
         optimizer = torch.optim.AdamW(self.qat_model.parameters(), lr=0.1)
-        self.assertRaises(ValueError, distill, self.torch_model, self.qat_model, self.dump_cfg_file, self.train_loader, epochs=0, loss=None, optimizer=optimizer)
+        self.assertRaises(
+            ValueError, distill, self.torch_model, self.qat_model,
+            self.dump_cfg_file, self.train_loader, epochs=0, loss=None,
+            optimizer=optimizer)
 
     def test_distill_invalid_cfg(self):
         optimizer = torch.optim.AdamW(self.qat_model.parameters(), lr=0.1)
         cfg = 'abcd.json'
-        self.assertRaises(OSError, distill, self.torch_model, self.qat_model, cfg, self.train_loader, epochs=1, loss=None, optimizer=optimizer)
+        self.assertRaises(
+            OSError, distill, self.torch_model, self.qat_model, cfg,
+            self.train_loader, epochs=1, loss=None, optimizer=optimizer)
 
     def test_distill_user_define_sample(self):
         model = DistillNetMultiInput()
         qat_model = DistillNetMultiInputQat()
         sample = ModelMultiTensorInput()
 
-        data0 = torch.randn(1,2,4,4)
-        data1 = torch.randn(1,2,4,4)
+        data0 = torch.randn(1, 2, 4, 4)
+        data1 = torch.randn(1, 2, 4, 4)
         dataset = MultiDataset(data0, data1)
         train_loader = torch.utils.data.DataLoader(dataset)
-        distill(model, qat_model, self.cfg_file, train_loader, epochs=1, loss=None, optimizer=None, sample_instance=sample)
+        distill(
+            model, qat_model, self.cfg_file, train_loader,
+            epochs=1, loss=None, optimizer=None, sample_instance=sample)
 
     def test_distill_user_define_sample_dump(self):
         model = DistillNetMultiInput()
         qat_model = DistillNetMultiInputQat()
         sample = ModelMultiTensorInput()
 
-        data0 = torch.randn(1,2,4,4)
-        data1 = torch.randn(1,2,4,4)
+        data0 = torch.randn(1, 2, 4, 4)
+        data1 = torch.randn(1, 2, 4, 4)
         dataset = MultiDataset(data0, data1)
         train_loader = torch.utils.data.DataLoader(dataset)
-        distill(model, qat_model, self.dump_cfg_file, train_loader, epochs=1, loss=None, optimizer=None, sample_instance=sample)
+        distill(
+            model, qat_model, self.dump_cfg_file, train_loader,
+            epochs=1, loss=None, optimizer=None, sample_instance=sample)
 
     def test_distill_user_define_invalid_sample(self):
         model = DistillNetMultiInput()
         qat_model = DistillNetMultiInputQat()
         sample = ModelMultiInvalidInput()
 
-        data0 = torch.randn(1,2,4,4)
-        data1 = torch.randn(1,2,4,4)
+        data0 = torch.randn(1, 2, 4, 4)
+        data1 = torch.randn(1, 2, 4, 4)
         dataset = MultiDataset(data0, data1)
         train_loader = torch.utils.data.DataLoader(dataset)
-        self.assertRaises(RuntimeError, distill, model, qat_model, self.dump_cfg_file, train_loader, epochs=1, loss=None, optimizer=None, sample_instance=sample)
+        self.assertRaises(
+            RuntimeError, distill, model, qat_model,
+            self.dump_cfg_file, train_loader, epochs=1, loss=None,
+            optimizer=None, sample_instance=sample)
 
         sample = ModelMultiInvalidInputDict()
-        self.assertRaises(RuntimeError, distill, model, qat_model, self.dump_cfg_file, train_loader, epochs=1, loss=None, optimizer=None, sample_instance=sample)
+        self.assertRaises(
+            RuntimeError, distill, model, qat_model,
+            self.dump_cfg_file, train_loader, epochs=1, loss=None,
+            optimizer=None, sample_instance=sample)
 
 
     def test_create_and_save_distill_model_with_default_record(self):
@@ -265,7 +292,7 @@ class TestDistillInterface(unittest.TestCase):
 
         save_path = os.path.join(self.temp_folder, 'save_distill')
         record_file = os.path.join(self.temp_folder, 'scale_offset_record.txt')
-        save_distill_model(student_model, save_path, input_data, record_file = record_file)
+        save_distill_model(student_model, save_path, input_data, record_file=record_file)
 
         fake_quant_onnx = os.path.join(self.temp_folder, 'save_distill_fake_quant_model.onnx')
         deploy_quant_onnx = os.path.join(self.temp_folder, 'save_distill_deploy_model.onnx')

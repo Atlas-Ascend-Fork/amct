@@ -16,16 +16,20 @@
 import copy
 import logging
 import unittest
+
 import torch
 import torch.nn as nn
-
 from utils import TestModel, TestModelBias, TestModelConv2d
 
-from amct_pytorch import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
-from amct_pytorch import INT8_MINMAX_WEIGHT_QUANT_CFG, INT8_SMOOTHQUANT_CFG
-from amct_pytorch.common.config import parse_config
+from amct_pytorch import (
+    INT4_AWQ_WEIGHT_QUANT_CFG,
+    INT4_GPTQ_WEIGHT_QUANT_CFG,
+    INT8_MINMAX_WEIGHT_QUANT_CFG,
+    INT8_SMOOTHQUANT_CFG,
+)
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.common.config import parse_config
 
 KEY_BATCH_NUM = 'batch_num'
 KEY_SYMMETRIC = 'symmetric'
@@ -137,7 +141,9 @@ class TestConfigParse(unittest.TestCase):
         self.assertTrue(detail_config.get(LAYER_LINEAR1).get(INPUTS_CFG).get(KEY_SYMMETRIC))
         self.assertEqual(detail_config.get(LAYER_LINEAR1).get(INPUTS_CFG).get(KEY_STRATEGY), STRATEGY_TENSOR)
         self.assertEqual(len(detail_config.get(LAYER_LINEAR1).get(ALGORITHM_KEY)), 1)
-        self.assertEqual(detail_config.get(LAYER_LINEAR1).get(ALGORITHM_KEY).get(SMOOTH_QUANT).get(SMOOTH_STRENGTH), 0.5)
+        self.assertEqual(
+            detail_config.get(LAYER_LINEAR1).get(ALGORITHM_KEY)
+            .get(SMOOTH_QUANT).get(SMOOTH_STRENGTH), 0.5)
 
     def test_invalid_batch_num(self):
         invalid_batch_num_cfg = {

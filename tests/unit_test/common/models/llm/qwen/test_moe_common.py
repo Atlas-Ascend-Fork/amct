@@ -1,8 +1,8 @@
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn as nn
-
-from types import SimpleNamespace
 
 from amct_pytorch.common.models.llm.qwen.moe_common import (
     QuantGatedExperts,

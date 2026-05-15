@@ -27,7 +27,7 @@ def kernel_func(inputs, do_cali=False, deq_scale=None):
     global accum_inputs
     # data in [c, *]
     channle_num = inputs.shape[1]
-    inputs = inputs.transpose(0,1).reshape([channle_num, -1])
+    inputs = inputs.transpose(0, 1).reshape([channle_num, -1])
     if accum_inputs is None:
         accum_inputs = inputs
     else:
@@ -43,16 +43,16 @@ def kernel_func(inputs, do_cali=False, deq_scale=None):
 
 
     # c++
-    quanti_bit=32
-    clamp_min = -pow(2.0, quanti_bit-1)
-    clamp_max = pow(2.0, quanti_bit-1) - 1
+    quanti_bit = 32
+    clamp_min = -pow(2.0, quanti_bit - 1)
+    clamp_max = pow(2.0, quanti_bit - 1) - 1
     s32_data = torch.round(torch.div(accum_inputs, deq_scale))
     s32_data = torch.clamp(s32_data, clamp_min, clamp_max)
 
     shift_bits = 16
-    s16_clamp_min = -pow(2.0, shift_bits-1)
-    s16_clamp_max = pow(2.0, shift_bits-1) - 1
-    errs_list = [0] *16
+    s16_clamp_min = -pow(2.0, shift_bits - 1)
+    s16_clamp_max = pow(2.0, shift_bits - 1) - 1
+    errs_list = [0] * 16
     for shift_bit in range(1, shift_bits + 1):
         shift_factor = pow(2.0, shift_bit)
         s16_data = torch.floor(torch.div(s32_data, shift_factor))
@@ -75,8 +75,8 @@ def test_conv_channel_wise():
     scale_weight = torch.tensor([0.0005, 0.005, 0.05])
     scale_data = torch.tensor(0.001)
 
-    flag, shift_bit = kernel_func(inputs, False, scale_weight*scale_data)
-    flag, shift_bit = kernel_func(inputs, True, scale_weight*scale_data)
+    flag, shift_bit = kernel_func(inputs, False, scale_weight * scale_data)
+    flag, shift_bit = kernel_func(inputs, True, scale_weight * scale_data)
 
 
 def test_conv():
@@ -84,16 +84,16 @@ def test_conv():
     scale_weight = torch.tensor([0.005])
     scale_data = torch.tensor(0.001)
 
-    flag, shift_bit = kernel_func(inputs, False, scale_weight*scale_data)
-    flag, shift_bit = kernel_func(inputs, True, scale_weight*scale_data)
+    flag, shift_bit = kernel_func(inputs, False, scale_weight * scale_data)
+    flag, shift_bit = kernel_func(inputs, True, scale_weight * scale_data)
 
 def test_fc():
     inputs = torch.rand([20, 30])
     scale_weight = torch.tensor([0.0004])
     scale_data = torch.tensor(0.001)
 
-    flag, shift_bit = kernel_func(inputs, False, scale_weight*scale_data)
-    flag, shift_bit = kernel_func(inputs, True, scale_weight*scale_data)
+    flag, shift_bit = kernel_func(inputs, False, scale_weight * scale_data)
+    flag, shift_bit = kernel_func(inputs, True, scale_weight * scale_data)
 
 
 if __name__ == "__main__":

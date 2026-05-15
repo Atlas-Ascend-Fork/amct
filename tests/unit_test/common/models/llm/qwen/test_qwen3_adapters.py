@@ -11,12 +11,12 @@ from types import SimpleNamespace
 import pytest
 import torch.nn as nn
 
+from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5_moe import Qwen3_5Moe
 from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
-from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 

@@ -17,31 +17,49 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-from io import BytesIO
 import sys
 import unittest
-import torch
+from copy import deepcopy
+from io import BytesIO
 from unittest.mock import patch
+
 import numpy as np
+import torch
+from google.protobuf import text_format
+from onnx import onnx_pb
 
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
-from .util import models
-from .util import record_file
-from onnx import onnx_pb
-from copy import deepcopy
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import (
+    files as files_util,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_bias_quant_pass import InsertBiasQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_bias_quant_pass import ReplaceBiasQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_bias_quant_pass import (
+    InsertBiasQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+    construct_quant_node,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_bias_quant_pass import (
+    ReplaceBiasQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parse_record_file import (
+    RecordFileParser,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parse_record_file import RecordFileParser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from google.protobuf import text_format
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+
+from .util import models, record_file
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -125,8 +143,8 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.lstm = torch.nn.LSTM(10, 20, 1)
-            def forward(self, input, hx):
-                x = self.lstm(input, hx)
+            def forward(self, input_data, hx):
+                x = self.lstm(input_data, hx)
                 return x
         model = RNNModule()
         tmp_onnx = BytesIO()
@@ -139,10 +157,10 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
             node_name: {
                 'data_scale': np.array(1.0, dtype=np.float32),
                 'h_scale': np.array(1.0, dtype=np.float32),
-                'weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'weight_offset': np.array([0]*4, dtype=np.int8),
-                'recurrence_weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'recurrence_weight_offset': np.array([0]*4, dtype=np.int8),
+                'weight_scale': np.array([1.0] * 4, dtype=np.float32),
+                'weight_offset': np.array([0] * 4, dtype=np.int8),
+                'recurrence_weight_scale': np.array([1.0] * 4, dtype=np.float32),
+                'recurrence_weight_offset': np.array([0] * 4, dtype=np.int8),
             }
         }
 

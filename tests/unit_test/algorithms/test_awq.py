@@ -19,7 +19,12 @@ import pytest
 import torch
 import torch.nn as nn
 
-from amct_pytorch.algorithms.quant.awq import calculate_scale_offset_by_granularity, apply_scale, process_weights_for_layers, search_scale
+from amct_pytorch.algorithms.quant.awq import (
+    apply_scale,
+    calculate_scale_offset_by_granularity,
+    process_weights_for_layers,
+    search_scale,
+)
 from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
 from amct_pytorch.common.utils.vars import INT8
 
@@ -218,5 +223,7 @@ def test_search_best_scale_raises_on_invalid_loss():
             torch.randn(2, 4, 4),
             [layer],
             block,
-            {"algorithm": {"awq": {"grids_num": 3}}, "weights_cfg": {"quant_type": "int8", "strategy": "channel", "group_size": None}},
+            {"algorithm": {"awq": {"grids_num": 3}},
+             "weights_cfg": {"quant_type": "int8", "strategy": "channel",
+                             "group_size": None}},
         )

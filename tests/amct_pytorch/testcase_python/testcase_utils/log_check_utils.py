@@ -15,10 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import logging
 import io
+import logging
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import LOGGER
+
 
 def log_check_deco(func):
     def wrapper(*args, **kwargs):

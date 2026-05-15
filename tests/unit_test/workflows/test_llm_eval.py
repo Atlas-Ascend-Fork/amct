@@ -169,7 +169,10 @@ def test_llm_eval_run_blockwise(monkeypatch):
         called.update({"blockwise": 10.5})
         return 10.5
     wf._run_blockwise = _run_blockwise
-    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", importlib.import_module("types").SimpleNamespace(info=lambda m: None, remove=lambda h: None))
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.logger",
+        importlib.import_module("types").SimpleNamespace(
+            info=lambda m: None, remove=lambda h: None))
     wf.run()
     assert called.get("blockwise") == 10.5
 
@@ -181,7 +184,9 @@ def test_llm_eval_run_unknown_granularity(monkeypatch):
     def setup():
         return "sink"
     wf.setup = setup
-    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.logger", importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.logger",
+        importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
     with pytest.raises(ValueError, match="Unsupported .*granularity"):
         wf.run()
 
@@ -214,7 +219,9 @@ def test_eval_get_relevant_quant_bits_mlp():
 
 
 def test_eval_get_relevant_quant_bits_attn_cache():
-    wf = _make_eval_workflow(quant_target=["attn-cache"], bit_policy=_make_bit_policy(**{"attn-cache": {"q": 4, "k": 4, "p": 8, "v": 8}}))
+    wf = _make_eval_workflow(
+        quant_target=["attn-cache"],
+        bit_policy=_make_bit_policy(**{"attn-cache": {"q": 4, "k": 4, "p": 8, "v": 8}}))
     assert wf._has_relevant_quant() is True
 
 

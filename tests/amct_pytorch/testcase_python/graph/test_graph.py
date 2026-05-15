@@ -15,17 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
+from onnx import TensorProto, ValueInfoProto, helper, onnx_pb
 
-from onnx import onnx_pb
-from onnx import helper, TensorProto, ValueInfoProto
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
 
@@ -360,25 +359,29 @@ class TestGraph(unittest.TestCase):
         self.assertEqual(graph._nodes[0].name, 'conv1.weights')
 
     def test_delete_initializer_from_input(self):
-        weight = np.random.randn(3,3,3,3).astype(np.float32).flatten()
+        weight = np.random.randn(3, 3, 3, 3).astype(np.float32).flatten()
         bias = np.random.randn(3).astype(np.float32)
-        w = helper.make_tensor(CONV1_WEIGHT, TensorProto.FLOAT, [3,3,3,3], weight)
+        w = helper.make_tensor(CONV1_WEIGHT, TensorProto.FLOAT, [3, 3, 3, 3], weight)
         b = helper.make_tensor(CONV1_BIAS, TensorProto.FLOAT, (3,), bias)
         initializer = [w, b]
-        x = helper.make_tensor_value_info('input.1', TensorProto.FLOAT, (16,3,224,224))
-        w_input = helper.make_tensor_value_info(CONV1_WEIGHT, TensorProto.FLOAT, (3,3,3,3))
+        x = helper.make_tensor_value_info('input.1', TensorProto.FLOAT, (16, 3, 224, 224))
+        w_input = helper.make_tensor_value_info(CONV1_WEIGHT, TensorProto.FLOAT, (3, 3, 3, 3))
         b_input = helper.make_tensor_value_info(CONV1_BIAS, TensorProto.FLOAT, (3,))
  
         identity_0_node = helper.make_node('Identity', inputs=[CONV1_WEIGHT], outputs=['conv2.weight'], name=IDENTITY_0)
         identity_1_node = helper.make_node('Identity', inputs=[CONV1_BIAS], outputs=['conv2.bias'], name='identity_1')
  
-        conv1 = helper.make_node('Conv', inputs=['input.1', CONV1_WEIGHT, CONV1_BIAS], outputs=['conv1.output'], name=CONV1)
-        conv2 = helper.make_node('Conv', inputs=['conv1.output', 'conv2.weight', 'conv2.bias'], outputs=['conv2.output'], name='conv2')
-        y = helper.make_tensor_value_info('conv2.output', TensorProto.FLOAT, [3,3,3,3])
+        conv1 = helper.make_node(
+            'Conv', inputs=['input.1', CONV1_WEIGHT, CONV1_BIAS],
+            outputs=['conv1.output'], name=CONV1)
+        conv2 = helper.make_node(
+            'Conv', inputs=['conv1.output', 'conv2.weight', 'conv2.bias'],
+            outputs=['conv2.output'], name='conv2')
+        y = helper.make_tensor_value_info('conv2.output', TensorProto.FLOAT, [3, 3, 3, 3])
         graph_def = helper.make_graph((identity_0_node, identity_1_node, conv1, conv2),
                                   'model',
                                   [x, w_input, b_input],
-                                  [y,],
+                                  [y, ],
                                   initializer=initializer)
         mode_def = helper.make_model(graph_def, opset_imports=[
                                      helper.make_opsetid("", 12)])
@@ -390,22 +393,26 @@ class TestGraph(unittest.TestCase):
         self.assertFalse(err_flag)
 
     def test_parse_unsqueeze_nodes(self):
-        weight = np.random.randn(3,3,3,3).astype(np.float32).flatten()
+        weight = np.random.randn(3, 3, 3, 3).astype(np.float32).flatten()
         bias = np.random.randn(3).astype(np.float32)
-        w = helper.make_tensor(CONV1_WEIGHT, TensorProto.FLOAT, [3,3,3,3], weight)
+        w = helper.make_tensor(CONV1_WEIGHT, TensorProto.FLOAT, [3, 3, 3, 3], weight)
         b = helper.make_tensor(CONV1_BIAS, TensorProto.FLOAT, (3,), bias)
         initializer = [w, b]
-        x = helper.make_tensor_value_info('input.1', TensorProto.FLOAT, (16,3,224,224))
+        x = helper.make_tensor_value_info('input.1', TensorProto.FLOAT, (16, 3, 224, 224))
 
         identity_node = helper.make_node('Identity', inputs=['input.1'], outputs=[IDENTITY_0], name=IDENTITY_0)
 
-        node_unsquezee_1 = helper.make_node(op_type="Unsqueeze", name="unsquezee_1", inputs=[IDENTITY_0], outputs=['unsquezee_1.output'])
-        conv1 = helper.make_node('Conv', inputs=["unsquezee_1.output", CONV1_WEIGHT, CONV1_BIAS], outputs=['conv1.output'], name=CONV1)
-        y = helper.make_tensor_value_info('conv1.output', TensorProto.FLOAT, [3,3,3,3])
+        node_unsquezee_1 = helper.make_node(
+            op_type="Unsqueeze", name="unsquezee_1",
+            inputs=[IDENTITY_0], outputs=['unsquezee_1.output'])
+        conv1 = helper.make_node(
+            'Conv', inputs=["unsquezee_1.output", CONV1_WEIGHT, CONV1_BIAS],
+            outputs=['conv1.output'], name=CONV1)
+        y = helper.make_tensor_value_info('conv1.output', TensorProto.FLOAT, [3, 3, 3, 3])
         graph_def = helper.make_graph((identity_node, node_unsquezee_1, conv1),
                                   'model',
-                                  [x,],
-                                  [y,],
+                                  [x, ],
+                                  [y, ],
                                   initializer=initializer)
         mode_def = helper.make_model(graph_def, opset_imports=[
                                      helper.make_opsetid("", 12)])

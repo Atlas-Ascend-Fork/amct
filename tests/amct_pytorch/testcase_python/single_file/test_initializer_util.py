@@ -19,11 +19,13 @@ import os
 import unittest
 from unittest.mock import patch
 
-from onnx import onnx_pb
 import numpy as np
+from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -110,7 +112,7 @@ class TestInitializerUtil(unittest.TestCase):
  
         path = os.path.dirname(os.path.abspath(__file__))
         data_path = os.path.join(path, "data.bin")
-        data = np.array([0.1]*20, np.float16)
+        data = np.array([0.1] * 20, np.float16)
         data.tofile(data_path)
  
         tensor_helper = TensorProtoHelper(tensor_proto, path)
@@ -143,7 +145,7 @@ class TestInitializerUtil(unittest.TestCase):
  
         path = os.path.dirname(os.path.abspath(__file__))
         data_path = os.path.join(path, "data.bin")
-        data = np.array([0.1]*20, np.float16)
+        data = np.array([0.1] * 20, np.float16)
         data.tofile(data_path)
  
         tensor_helper = TensorProtoHelper(tensor_proto, path)
@@ -167,7 +169,7 @@ class TestInitializerUtil(unittest.TestCase):
         ex_data.key = "length"
         ex_data.value = str(40)
  
-        data = np.array([0.1]*20, np.float16)
+        data = np.array([0.1] * 20, np.float16)
         tensor_helper = TensorProtoHelper(tensor_proto)
         tensor_helper.set_external_data(data)
  

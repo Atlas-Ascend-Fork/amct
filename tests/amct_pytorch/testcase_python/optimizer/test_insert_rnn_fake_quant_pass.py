@@ -17,16 +17,23 @@
 # ----------------------------------------------------------------------------
 import logging
 import unittest
+
 import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import AttributeProto
 
-logger = logging.getLogger(__name__)
-
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_rnn_fake_quant_pass import InsertRNNFakeQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_rnn_fake_quant_pass import (
+    InsertRNNFakeQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import (
+    QuantOpInfo,
+)
+
+logger = logging.getLogger(__name__)
 
 DATA_SCALE = 'data_scale'
 DATA_OFFSET = 'data_offset'
@@ -86,17 +93,17 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         graph_input3.type.tensor_type.shape.dim.add().dim_value = 1
         graph_input3.type.tensor_type.shape.dim.add().dim_value = 3
         # Add W
-        W = graph_proto.initializer.add()
-        W.name = 'W'
-        W.data_type = 3
-        W.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        W.dims[:] = [1, 3, 3]
+        w_val = graph_proto.initializer.add()
+        w_val.name = 'W'
+        w_val.data_type = 3
+        w_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        w_val.dims[:] = [1, 3, 3]
         # Add R
-        R = graph_proto.initializer.add()
-        R.name = 'R'
-        R.data_type = 3
-        R.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        R.dims[:] = [1, 3, 3]
+        r_val = graph_proto.initializer.add()
+        r_val.name = 'R'
+        r_val.data_type = 3
+        r_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        r_val.dims[:] = [1, 3, 3]
         # add quantizable lstm_0
         lstm_0 = graph_proto.node.add()
         lstm_0.name = 'lstm_0'
@@ -167,7 +174,8 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
 
     def test_generate_fake_quant_node(self):
         lstm_0 = self.graph.get_node_by_name('lstm_0')
-        quant_node, antiquant_node = InsertRNNFakeQuantPass(self.records).generate_fake_quant_node(self.graph, lstm_0, 0)
+        quant_node, antiquant_node = InsertRNNFakeQuantPass(
+            self.records).generate_fake_quant_node(self.graph, lstm_0, 0)
         self.assertEqual(quant_node.type, ASCEND_QUANT)
         self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)
 
@@ -214,17 +222,17 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         graph_input2.type.tensor_type.shape.dim.add().dim_value = 1
         graph_input2.type.tensor_type.shape.dim.add().dim_value = 3
         # Add W
-        W = graph_proto.initializer.add()
-        W.name = 'W'
-        W.data_type = 3
-        W.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        W.dims[:] = [1, 3, 3]
+        w_val = graph_proto.initializer.add()
+        w_val.name = 'W'
+        w_val.data_type = 3
+        w_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        w_val.dims[:] = [1, 3, 3]
         # Add R
-        R = graph_proto.initializer.add()
-        R.name = 'R'
-        R.data_type = 3
-        R.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        R.dims[:] = [1, 3, 3]
+        r_val = graph_proto.initializer.add()
+        r_val.name = 'R'
+        r_val.data_type = 3
+        r_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        r_val.dims[:] = [1, 3, 3]
         # add quantizable gru_0
         gru_0 = graph_proto.node.add()
         gru_0.name = 'gru_0'

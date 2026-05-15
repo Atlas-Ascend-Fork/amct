@@ -15,11 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import torch
 import unittest
 from unittest import mock
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import utils
 
+import torch
+
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import utils
 
 DEVICE = torch.device('cpu')
 
@@ -36,7 +37,7 @@ class CustomizedModel(torch.nn.Module):
     def forward(self, inputs):
         y = self.conv_1(inputs)
         y = self.conv_2(y)
-        y = y.transpose(1,3)
+        y = y.transpose(1, 3)
         y = self.matmul_1(y)
         y = self.matmul_2(y)
         y = self.matmul_3(y)
