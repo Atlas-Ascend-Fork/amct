@@ -1,19 +1,6 @@
 # -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ----------------------------------------------------------------------------
+# Apache License, 2.0
 """
 HiFloat8 Cast 精度测试（仅 NPU）
 
@@ -25,7 +12,7 @@ HiFloat8 Cast 精度测试（仅 NPU）
   5. 全 256 个 HiFloat8 值 decode 完备性
 
 运行：
-    python tests/test_accuracy.py
+    python scripts/test_accuracy.py
 """
 
 import torch
@@ -35,7 +22,10 @@ from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
 torch.npu.set_device(0)
 
 
+
+
 # ── 工具函数 ──────────────────────────────────────────────────────────────
+
 PASS = "[PASS]"
 FAIL = "[FAIL]"
 WARN = "[WARN]"
@@ -53,6 +43,7 @@ def record(ok, msg=""):
 
 
 # ── 测试 1: 类型推断 ──────────────────────────────────────────────────────
+
 def test_type_inference():
     print("\n[1] 类型推断测试")
     print("-" * 60)
@@ -85,6 +76,7 @@ def test_type_inference():
 
 
 # ── 测试 2: Decode 输出类型 ────────────────────────────────────────────────
+
 def test_decode_output_type():
     print("\n[2] Decode 输出类型测试")
     print("-" * 60)
@@ -121,6 +113,7 @@ def test_decode_output_type():
 
 
 # ── 测试 3: 编解码往返（基础值）───────────────────────────────────────────
+
 def test_roundtrip_basic():
     print("\n[3] 编解码往返测试（基础值）")
     print("-" * 60)
@@ -139,6 +132,7 @@ def test_roundtrip_basic():
 
 
 # ── 测试 4: 编解码往返（随机数据）─────────────────────────────────────────
+
 def test_roundtrip_random(dtype_name, dtype, num_elements=10000):
     print(f"\n[4] 编解码往返测试（随机 {dtype_name}，{num_elements} 元素）")
     print("-" * 60)
@@ -168,6 +162,7 @@ def test_roundtrip_random(dtype_name, dtype, num_elements=10000):
 
 
 # ── 测试 5: 边界值 ──────────────────────────────────────────────────────────
+
 def test_boundary_values():
     print("\n[5] 边界值测试（FP16）")
     print("-" * 60)
@@ -221,11 +216,11 @@ def test_boundary_values():
 #   3. FP16 与 BF16 在同一组特殊值上的编码必须完全一致
 
 EXPECTED_ENCODE = {
-    '+0': 0x00,
-    '-0': 0x00,
+    '+0':   0x00,
+    '-0':   0x00,
     '+Inf': 0x6F,
     '-Inf': 0xEF,
-    'NaN': 0x80,
+    'NaN':  0x80,
 }
 
 
@@ -243,10 +238,10 @@ def _check_decoded(name, decoded_val):
 
 
 def _test_special_one_dtype(dtype_label, dtype):
-    test_names = ['+0', '-0', '+Inf', '-Inf', 'NaN']
+    test_names  = ['+0', '-0', '+Inf', '-Inf', 'NaN']
     test_values = [0.0, -0.0, float('inf'), float('-inf'), float('nan')]
 
-    x_orig = torch.tensor(test_values, dtype=dtype, device='npu')
+    x_orig    = torch.tensor(test_values, dtype=dtype, device='npu')
     y_encoded = encode_to_hifloat8(x_orig)
     z_decoded = decode_from_hifloat8(y_encoded, dtype)
 
@@ -269,10 +264,8 @@ def _test_special_one_dtype(dtype_label, dtype):
             status = "OK"
         else:
             parts = []
-            if not enc_ok:
-                parts.append(f"编码错(应为 0x{exp:02x})")
-            if not dec_ok:
-                parts.append(f"解码错({dec_msg})")
+            if not enc_ok: parts.append(f"编码错(应为 0x{exp:02x})")
+            if not dec_ok: parts.append(f"解码错({dec_msg})")
             status = "FAIL: " + ", ".join(parts)
         print(f"  [{dtype_label}] {name:>5}   0x{enc:02x}    0x{exp:02x}   {dec:>10}  {status}")
 
@@ -307,9 +300,9 @@ def test_denormal_values():
     print("  说明: HiFloat8 可能对极小值应用 Flush-to-Zero (FTZ)")
 
     test_cases = [
-        ('FP16 max denormal', torch.float16, 6.1035e-5),
+        ('FP16 max denormal', torch.float16, 6.097555e-5),
         ('FP16 min denormal', torch.float16, 5.96e-8),
-        ('BF16 max denormal', torch.bfloat16, 1.17549435e-38),
+        ('BF16 max denormal', torch.bfloat16, 1.1663108e-38),
         ('BF16 min denormal', torch.bfloat16, 9.2e-41),
     ]
 
@@ -339,10 +332,33 @@ def test_denormal_values():
     print(f"  {PASS if ok else WARN} 非规格化数处理: {n_ok}/{len(test_cases)}")
 
 
-# ── 测试 8: 全 256 个 HiFloat8 值 decode ─────────────────────────────────────
+def test_fp16_subnormal_rounding_regression():
+    print("\n[8] FP16 非规格化数舍入回归测试")
+    print("-" * 60)
+
+    value = 2.7180e-05
+    expected = 0x7E
+
+    x_orig = torch.tensor([value], dtype=torch.float16, device='npu')
+    y_encoded = encode_to_hifloat8(x_orig)
+    z_decoded = decode_from_hifloat8(y_encoded, torch.float16)
+
+    encoded = y_encoded.cpu().item()
+    decoded = float(z_decoded[0].cpu())
+    ok = (encoded == expected)
+    record(ok)
+
+    print(f"  输入值: {float(x_orig[0].cpu()):.10e}")
+    print(f"  编码值: 0x{encoded:02x}")
+    print(f"  期望值: 0x{expected:02x}")
+    print(f"  解码值: {decoded:.10e}")
+    print(f"  {PASS if ok else FAIL} FP16 subnormal 应进位到最小 normal (0x7E)")
+
+
+# ── 测试 9: 全 256 个 HiFloat8 值 decode ─────────────────────────────────────
 
 def test_full_256_decode():
-    print("\n[8] 全 256 个 HiFloat8 值 decode 完备性")
+    print("\n[9] 全 256 个 HiFloat8 值 decode 完备性")
     print("-" * 60)
 
     all_hif8 = torch.arange(256, dtype=torch.int32, device='npu').to(torch.uint8)
@@ -386,6 +402,7 @@ def main():
     test_boundary_values()
     test_special_values()
     test_denormal_values()
+    test_fp16_subnormal_rounding_regression()
     test_full_256_decode()
 
     print()

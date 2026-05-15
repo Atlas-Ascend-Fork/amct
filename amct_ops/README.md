@@ -23,6 +23,12 @@
 
 所有算子通过根目录的统一构建脚本一次性编译并打包为 wheel：
 
+依赖要求：
+
+- CANN ≥ 8.5.0
+- Python ≥ 3.9
+- PyTorch + torch_npu（适配对应 CANN 版本）
+
 ```bash
 cd amct_ops/
 bash ops_build.sh [--soc <soc>] [<算子>]
@@ -90,10 +96,10 @@ help(amct_ops.hifloat8_cast.encode_to_hifloat8)   # 查看单个函数签名和�
 
 ```
 <新算子>/
-├── op_kernel/              Ascend C kernel（.cpp + tiling.h）
-├── op_host/                PyTorch C++ binding（TORCH_LIBRARY 注册）
+├── op_kernel/              Ascend C kernel（.asc + tiling.h）
+├── op_extension/           PyTorch C++ binding（host stub 调用 + TORCH_LIBRARY 注册）
 ├── python/<pkg>/           Python 接口（__init__.py）
-├── tests/                  测试与示例
+├── scripts/                测试与示例
 ├── CMakeLists.txt          独立编译入口
 └── README.md
 ```

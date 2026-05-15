@@ -63,19 +63,17 @@ z = decode_from_hifloat8(y, torch.float16)    # 指定输出 FP16
 ```
 hifloat8_cast/
 ├── op_kernel/
-│   ├── hifloat8_cast_kernel.cpp   device 端 kernel（LUT encode + decode，半空间 LUT 优化）
+│   ├── hifloat8_cast_kernel.asc   device 端 kernel（LUT encode + decode，半空间 LUT 优化）
 │   └── hifloat8_cast_tiling.h     TilingData 结构体定义（tileLength 由 host 运行时填入）
-├── op_host/
-│   ├── hifloat8_cast_op.cpp       host 端实现（Torch binding，CPU 端 LUT 预计算与缓存）
+├── op_extension/
+│   ├── hifloat8_cast_torch.cpp    PyTorch host 实现（CPU 端 LUT 预计算与缓存，调用 ASC 生成的 host stub）
 │   ├── ops.h                      PyTorch C++ 扩展函数声明
 │   └── register.cpp               TORCH_LIBRARY 注册
 ├── python/
 │   └── hifloat8_cast/
 │       ├── __init__.py            Python 包入口（加载 .so、注册算子）
 │       └── ops.py                 Python 接口实现
-├── tests/
-│   └── test_hifloat8_cast.py      Python API 综合测试
-├── docs/
+├── scripts/                       精度、性能和 CPU/NPU 对比脚本
 ├── CMakeLists.txt
 └── README.md
 ```
@@ -90,7 +88,7 @@ hifloat8_cast/
 
 > CANN 运行时会保留部分 UB，`tileLength` 在每次调用时由 `GetCoreMemSize()` 查询实际可用量并计算，无需手动指定。
 
-- CANN ≥ 9.0.0
+- CANN ≥ 8.5.0
 - Python ≥ 3.9
 - PyTorch + torch_npu（适配对应 CANN 版本）
 
@@ -177,30 +175,47 @@ z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 ## 性能
 
 **测试平台**：Ascend 910B3 (A2，ascend910b)，CANN 9.0.0  
-**吞吐量定义**：(输入字节 + 输出字节) / 耗时（100 次迭代均值，20 次预热，NPU synchronize 计时）  
+**吞吐量定义**：(输入字节 + 输出字节) / 耗时（100 次迭代均值，10 次预热，NPU synchronize 计时）  
 **推荐场景**：数据量 ≥ 256K 时 NPU 优势显著
 
 ### BF16 ↔ HiFloat8
 
 | 数据大小 | Encode (ms) | 吞吐 (MB/s) | Decode (ms) | 吞吐 (MB/s) |
 |---------|------------|------------|------------|------------|
-| 4K      | 0.187      | 66         | 0.176      | 70         |
-| 16K     | 0.186      | 264        | 0.182      | 270        |
-| 64K     | 0.186      | 1060       | 0.180      | 1093       |
-| 256K    | 0.266      | 2960       | 0.275      | 2864       |
-| 1M      | 0.842      | 3735       | 0.847      | 3714       |
-| 4M      | 3.138      | 4009       | 3.103      | 4056       |
+| 1K      | 0.207      | 14.9       | 0.228      | 13.5       |
+| 4K      | 0.215      | 57.2       | 0.219      | 56.0       |
+| 16K     | 0.215      | 228.4      | 0.255      | 192.9      |
+| 64K     | 0.215      | 914.0      | 0.290      | 677.6      |
+| 256K    | 0.289      | 2723.9     | 0.293      | 2679.8     |
+| 1M      | 0.867      | 3627.2     | 0.863      | 3645.7     |
+| 4M      | 3.133      | 4016.7     | 3.111      | 4044.3     |
+| 16M     | 12.236     | 4113.4     | 12.152     | 4141.7     |
 
 ### FP16 ↔ HiFloat8
 
 | 数据大小 | Encode (ms) | 吞吐 (MB/s) | Decode (ms) | 吞吐 (MB/s) |
 |---------|------------|------------|------------|------------|
-| 4K      | 0.203      | 61         | 0.178      | 69         |
-| 16K     | 0.200      | 246        | 0.185      | 265        |
-| 64K     | 0.199      | 987        | 0.189      | 1043       |
-| 256K    | 0.259      | 3031       | 0.266      | 2959       |
-| 1M      | 0.837      | 3759       | 0.859      | 3662       |
-| 4M      | 3.118      | 4035       | 3.112      | 4044       |
+| 1K      | 0.208      | 14.8       | 0.224      | 13.7       |
+| 4K      | 0.216      | 56.9       | 0.223      | 55.1       |
+| 16K     | 0.215      | 228.6      | 0.257      | 191.6      |
+| 64K     | 0.217      | 904.1      | 0.289      | 680.9      |
+| 256K    | 0.288      | 2734.8     | 0.293      | 2687.8     |
+| 1M      | 0.867      | 3628.1     | 0.863      | 3645.2     |
+| 4M      | 3.130      | 4019.6     | 3.121      | 4032.2     |
+| 16M     | 12.236     | 4113.4     | 12.148     | 4143.1     |
+
+### Roundtrip（Encode + Decode）
+
+| 数据大小 | FP16 (ms) | 吞吐 (MB/s) | BF16 (ms) | 吞吐 (MB/s) |
+|---------|----------|------------|----------|------------|
+| 1K      | 0.389    | 10.5       | 0.392    | 10.5       |
+| 4K      | 0.392    | 41.8       | 0.393    | 41.7       |
+| 16K     | 0.394    | 166.2      | 0.390    | 168.1      |
+| 64K     | 0.388    | 674.8      | 0.389    | 673.7      |
+| 256K    | 0.548    | 1911.9     | 0.554    | 1891.6     |
+| 1M      | 1.714    | 2446.7     | 1.716    | 2444.9     |
+| 4M      | 6.246    | 2686.2     | 6.249    | 2684.8     |
+| 16M     | 24.393   | 2751.1     | 24.401   | 2750.3     |
 
 > 小数据（< 256K）吞吐较低，但已通过核数优先策略优化避免过多核加载LUT开销。  
 > 大数据（≥ 4M）encode/decode 吞吐均超过 4 GB/s，接近 HBM 带宽上限。  
@@ -209,14 +224,14 @@ z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 ## 精度
 
 精度验证通过以下方式进行：
-- **Encode 一致性**：随机采样 100K 个 FP16/BF16 值，编码后解码，与 Python 参考实现逐 bit 对比
-- **Decode 完备性**：枚举全部 256 个 HiFloat8 编码，分别解码为 FP16 和 BF16，与 Python 参考实现逐 bit 对比
+- **NPU API 综合测试**：类型推断、边界值、特殊值、非规格化数、全 256 个 HiFloat8 decode 完备性，17/17 通过
+- **CPU/NPU 一致性**：随机采样 100K 个 FP16/BF16 值，与 `amct_pytorch/experimental/hifloat8` CPU 参考扩展逐 bit 对比，10/10 通过
 - **边界/特殊值**：±0、±Inf、NaN、最大值、最小非规格化数等边界情况
 
 | 测试场景 | 结果 |
 |---------|------|
 | 随机 FP16/BF16 Encode（100K 样本） | ✓ 逐 bit 一致 |
-| 随机 FP16 Decode（100K 样本） | ✓ 逐 bit 一致 |
+| 随机 FP16/BF16 Decode（100K 样本） | ✓ 逐 bit 一致 |
 | 边界值 Encode（FP16 13 个，BF16 13 个） | ✓ 逐个一致 |
 | 特殊值：±0 / ±Inf / NaN（FP16 编码） | ✓ 编码字节一致 |
 | 全 256 个 HiF8 值解码（FP16 + BF16） | ✓ 完全一致 |
@@ -226,11 +241,14 @@ z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 ## 测试
 
 ```bash
+# 若未安装 wheel，可先从源码 staging 运行：
+# export PYTHONPATH=/path/to/amct/amct_ops/staging
+
 # Python API 综合测试（类型推断、边界值、特殊值、非规格化数）
-python3 scripts/test_python_api.py
+python3 scripts/test_accuracy.py
 
 # 性能测试（NPU 多核，FP16 + BF16）
-python3 scripts/perf_test_multicore.py
+python3 scripts/test_performance.py
 ```
 
 以下脚本需要额外构建 CPU 参考实现（`amct_pytorch/experimental/hifloat8/build.sh`），用于 CPU vs NPU 对比：
@@ -240,15 +258,11 @@ LIBGOMP_ARCH="$(uname -m)"
 
 # 精度验证（CPU vs NPU 逐 bit 对比）
 LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
-    python3 scripts/accuracy_compare_cpu_npu.py
+    python3 scripts/test_accuracy_cpu_npu.py
 
 # FP16 性能对比（NPU vs CPU）
 LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
-    python3 scripts/perf_compare_cpu_npu.py
-
-# BF16 性能对比（NPU vs CPU）
-LD_PRELOAD=/usr/lib/${LIBGOMP_ARCH}-linux-gnu/libgomp.so.1 \
-    python3 scripts/perf_bf16_compare.py
+    python3 scripts/test_performance_cpu_npu.py
 ```
 
 > `LD_PRELOAD` 解决 libgomp TLS 问题，仅加载 CPU 参考实现时需要。

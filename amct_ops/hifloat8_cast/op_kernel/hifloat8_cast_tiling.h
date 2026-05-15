@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,11 +20,11 @@
 
 // TILE_LENGTH is no longer a compile-time constant; it is computed at runtime on the host
 // based on the platform UB size and passed in HiFloat8CastTilingData.tileLength.
-// See hifloat8_cast_op.cpp:ComputeTileLength() for the derivation.
+// See op_extension/hifloat8_cast_torch.cpp:ComputeMaxTileLength() for the derivation.
 constexpr uint32_t DOUBLE_BUFFER = 2;
 
 constexpr uint32_t LUT16_SIZE = 32768;
-constexpr uint32_t LUT8_SIZE  = 256;
+constexpr uint32_t LUT8_SIZE = 256;
 
 enum HiFloat8CastMode : uint32_t {
     FP16_TO_HIF8 = 0,

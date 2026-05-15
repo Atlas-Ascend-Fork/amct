@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -18,8 +18,8 @@
 
 #include <torch/extension.h>
 
-namespace ascend_kernel {
+namespace AscendKernel {
 
-at::Tensor hifloat8_cast_torch(const at::Tensor& input, int64_t castMode);
+at::Tensor Hifloat8CastTorch(const at::Tensor &input, int64_t castMode);
 
-}
+} // namespace AscendKernel
