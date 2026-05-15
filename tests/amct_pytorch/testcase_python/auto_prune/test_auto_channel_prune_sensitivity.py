@@ -18,21 +18,32 @@
 import logging
 import os
 import unittest
+from io import BytesIO
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from io import BytesIO
 
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.auto_channel_prune_search import AutoChannelPruneSearch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.auto_channel_prune_search import TaylorLossSensitivity
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.auto_channel_prune_search import auto_channel_prune_search
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.auto_channel_prune_search import (
+    AutoChannelPruneSearch,
+    TaylorLossSensitivity,
+    auto_channel_prune_search,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.auto_channel_prune \
+    .auto_channel_prune_config_helper import (
+    AutoChannelPruneConfigHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.prune_record_attr_util import (
+    AttrProtoHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
+    GraphQuerier,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -50,7 +61,7 @@ class Net001(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net001,self).__init__()
+        super(Net001, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -82,7 +93,7 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128,10, bias=True))
+            nn.Linear(128, 10, bias=True))
 
     def forward(self, x):
         x = self.layer1(x)
@@ -91,7 +102,7 @@ class Net001(nn.Module):
         x = self.layer4(x)
         x = self.layer5(x)
         x = self.layer6(x)
-        x = x.view(x.size(0),-1)
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         x = F.log_softmax(x, dim=1)
 
@@ -127,7 +138,8 @@ class TestTaylorLossSensitivity(unittest.TestCase):
         cls.sample_data = [cls.args[0], labels]
 
         cls.config_helper = AutoChannelPruneConfigHelper(cls.graph, cls.config_defination, GraphQuerier, CAPACITY)
-        cls.auto_channel_prune_search = AutoChannelPruneSearch(cls.graph, cls.args, cls.config_helper, None, cls.output_cofig, None)
+        cls.auto_channel_prune_search = AutoChannelPruneSearch(
+            cls.graph, cls.args, cls.config_helper, None, cls.output_cofig, None)
         cls.graph_info = cls.auto_channel_prune_search.graph_info
         cls.test_iteration = 1
 
@@ -160,7 +172,7 @@ class TestTaylorLossSensitivity(unittest.TestCase):
             input_data=self.sample_data, test_iteration=self.test_iteration)
 
         logger.info(self.graph_info)
-        ch_info = {'begin': 0,  'end': self.graph_info.get('layer1.0').get('cout')}
+        ch_info = {'begin': 0, 'end': self.graph_info.get('layer1.0').get('cout')}
         ch_score = sentitvity_func.compute_taylor_by_channel('layer1.0', ch_info)
         assert not torch.any(torch.isnan(ch_score))
 

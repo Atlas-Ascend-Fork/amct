@@ -15,27 +15,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
-import json
-import numpy as np
-import torch
 import copy
-
+import json
+import os
+import sys
+import unittest
 from collections import OrderedDict
 
-from .utils import models
+import numpy as np
+import torch
+
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config import (
+    get_enable_quant_layers,
+    parse_distill_config,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+    Conv2dQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import (
+    LinearQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_qat_pass import (
+    InsertQatPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config import parse_distill_config
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config import get_enable_quant_layers
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_qat_pass import InsertQatPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import LinearQAT
-
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import DISTILL_TYPES
+
+from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -86,8 +95,11 @@ class TestInsertQatPass(unittest.TestCase):
         mod = torch.nn.Conv2d(1, 1, 1, padding_mode='zeros')
         distill_config = OrderedDict([('layer2', OrderedDict([
             ('quant_enable', True),
-            ('distill_data_config', OrderedDict([('algo', 'ulq_quantize'), ('dst_type', 'INT8')])),
-            ('distill_weight_config', OrderedDict([('algo', 'arq_distill'), ('channel_wise', True), ('dst_type', 'INT8')]))]))])
+            ('distill_data_config',
+             OrderedDict([('algo', 'ulq_quantize'), ('dst_type', 'INT8')])),
+            ('distill_weight_config',
+             OrderedDict([('algo', 'arq_distill'), ('channel_wise', True),
+                          ('dst_type', 'INT8')]))]))])
         self.assertFalse(InsertQatPass(distill_config).match_pattern(mod, 'layer1'))
 
     def test_insert_qat_do_pass_success(self):

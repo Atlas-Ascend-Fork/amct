@@ -15,16 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
-import torch
-import numpy as np
+import logging
 import math
+import os
+
+import numpy as np
+import torch
 
 np.random.seed(42)
 torch.manual_seed(42)
 
-# 获取根日志记录器
-import logging
 root_logger = logging.getLogger()
 logger = logging.getLogger(__name__)
 
@@ -267,8 +267,8 @@ def trans_np_hifuint8_tensor_to_float32(in_tensor):
     return out_tensor
 
 def cvt_float16_to_hifuint8(x, round_mode="round", over_mode=True):
-    Ec = 0
-    over_value = 1.25 * pow(2.0, 15 + Ec)
+    e_c = 0
+    over_value = 1.25 * pow(2.0, 15 + e_c)
     sign = False
     sign_int_value = 0
     if x < 0.0:
@@ -305,14 +305,16 @@ def cvt_float16_to_hifuint8(x, round_mode="round", over_mode=True):
         if abs(exponent) < 4:
             cut_bit_type = CUT_BIT_TYPE_TA
         else:
+            pass
     elif round_mode == "round":
         cut_bit_type = CUT_BIT_TYPE_TA
     elif round_mode == "storound":
+        pass
     else:
         cut_bit_type = CUT_BIT_TYPE_TA
 
     #precheck
-    fraction_int = int(x_abs * pow(2, 10)*pow(2, -exponent) - pow(2, 10))
+    fraction_int = int(x_abs * pow(2, 10) * pow(2, -exponent) - pow(2, 10))
     dot_hif8_value, exponent_hif8_bits, fraction_hif8_bits = _get_hif8_fraction_bits_number(exponent)
     if cut_bit_type == CUT_BIT_TYPE_TA:
         carry_exp_status, hif8_frac_value = _fp16_ta_round_to_hif8(fraction_int, fraction_hif8_bits, exponent)
@@ -366,8 +368,8 @@ def cvt_float32_to_hifuint8(x, round_mode="round", over_mode=True):
     sign = False
     sign_int_value = 0
     x_abs = math.fabs(x)
-    Ec = 0
-    over_value = 1.25 * pow(2.0, 15 + Ec)
+    e_c = 0
+    over_value = 1.25 * pow(2.0, 15 + e_c)
     if x < 0.0:
         sign = True
         sign_int_value = 128
@@ -400,13 +402,15 @@ def cvt_float32_to_hifuint8(x, round_mode="round", over_mode=True):
         if abs(exponent) < 4:
             cut_bit_type = CUT_BIT_TYPE_TA
         else:
+            pass
     elif round_mode == "round":
         cut_bit_type = CUT_BIT_TYPE_TA
     elif round_mode == "storound":
+        pass
     else:
         cut_bit_type = CUT_BIT_TYPE_TA
     #precheck
-    fraction_int = int(x_abs * pow(2, 23)*pow(2, -exponent) - pow(2, 23))
+    fraction_int = int(x_abs * pow(2, 23) * pow(2, -exponent) - pow(2, 23))
     dot_hif8_value, exponent_hif8_bits, fraction_hif8_bits = _get_hif8_fraction_bits_number(exponent)
     if cut_bit_type == CUT_BIT_TYPE_TA:
         carry_exp_status, hif8_frac_value = _fp32_ta_round_to_hif8(fraction_int, fraction_hif8_bits, exponent)
@@ -528,7 +532,7 @@ def cvt_hifuint8_to_float(x, over_mode=True):
             logger.info("error,dot error")
             m_value = 0.0
             exponet_value = 0
-        return sign*pow(2.0, exponet_value)*m_value
+        return sign * pow(2.0, exponet_value) * m_value
 
 _float16_to_hifuint8 = np.vectorize(
     cvt_float16_to_hifuint8, excluded=["round_mode", "over_mode"]
@@ -572,7 +576,7 @@ def _fp32_ta_round_to_hif8(fraction32_int, hif8_bits_num, exponent):
     if exponent == -23:
         return True, 0
     #fp32 fraction is 23,keep hif8_bits_num + 1 bits
-    hif8_value_tmp = fraction32_int >> (23 - (hif8_bits_num+1))
+    hif8_value_tmp = fraction32_int >> (23 - (hif8_bits_num + 1))
     if hif8_value_tmp == pow(2, hif8_bits_num + 1) - 1:
         #carry exponent
         return True, 0
@@ -614,8 +618,8 @@ def _fp16_ta_round_to_hif8(fraction16_int, hif8_bits_num, exponent):
     if exponent == -23:
         return True, 0
     #fp16 fraction is 10,keep hif8_bits_num + 1 bits
-    hif8_value_tmp = fraction16_int >> (10 - (hif8_bits_num+1))
-    if hif8_value_tmp == pow(2, hif8_bits_num+1) - 1:
+    hif8_value_tmp = fraction16_int >> (10 - (hif8_bits_num + 1))
+    if hif8_value_tmp == pow(2, hif8_bits_num + 1) - 1:
         #carry exponent
         return True, 0
     elif hif8_value_tmp == 0:
@@ -714,22 +718,22 @@ def similarity(data0, data1):
     data1_nan = np.isnan(data1)
     data1[data1_nan] = 1
     similar = similarity_1 = np.sum(np.multiply(data0.astype(np.float64), data1.astype(np.float64)).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if (data0 == data1).all():
         similar = 100
     if np.isnan(similar) or np.isinf(similar):
-        data0 = np.divide(data0,np.power(10,38))
-        data1 = np.divide(data1,np.power(10,38))
+        data0 = np.divide(data0, np.power(10, 38))
+        data1 = np.divide(data1, np.power(10, 38))
         similar = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
         if np.isnan(similar) or np.isinf(similar):
-            data0 = np.divide(data0,np.power(10,38))
-            data1 = np.divide(data1,np.power(10,38))
+            data0 = np.divide(data0, np.power(10, 38))
+            data1 = np.divide(data1, np.power(10, 38))
             similar = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if np.isnan(similar):
         similar = 0
 

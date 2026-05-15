@@ -19,13 +19,19 @@
 Operation functions for scale and offset record file
 """
 from __future__ import print_function
+
 import os
 import sys
-import numpy as np
 
+import numpy as np
 from google.protobuf import text_format
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import QuantOpInfo
+
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import (
+    QuantOpInfo,
+)
 
 
 def create_file(record_file, layers_name, err_layers=None,
@@ -300,8 +306,8 @@ def generate_records(layers_length, scale_value=0.1, offset_value=0):
         record = dict()
         record['data_scale'] = np.array(scale_value, dtype=np.float32)
         record['data_offset'] = np.array(offset_value, dtype=np.int8)
-        record['weight_scale'] = np.array([scale_value]*length, dtype=np.float32)
-        record['weight_offset'] = np.array([offset_value]*length, dtype=np.int8)
+        record['weight_scale'] = np.array([scale_value] * length, dtype=np.float32)
+        record['weight_offset'] = np.array([offset_value] * length, dtype=np.int8)
 
         records[layer_name] = record
 

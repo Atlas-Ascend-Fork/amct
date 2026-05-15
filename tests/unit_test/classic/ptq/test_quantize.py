@@ -4,9 +4,9 @@ import pytest
 from torch import nn
 
 from amct_pytorch.classic.ptq.quantize import (
-    quantize,
-    convert,
     algorithm_register,
+    convert,
+    quantize,
 )
 from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
 

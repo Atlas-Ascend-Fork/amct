@@ -15,16 +15,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import json
 import logging
 import os
+import shutil
 import sys
 import unittest
-import shutil
-import json
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_config_base import QuantCalibrationConfigBase
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration \
+    .quant_calibration_config_base.quant_calibration_config_base import (
+    QuantCalibrationConfigBase,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -71,13 +74,40 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
         self.assertNotIn('asymmetric', config.get(MATMUL1_LAYER_NAME))
 
     def test_check_quant_layers(self):
-        QuantCalibrationConfigBase.check_quant_layers(CustomizedModel(), {KV_CACHE_QUANT_LAYERS: (MATMUL1_LAYER_NAME, 'matmul2')})
-        self.assertRaises(ValueError, QuantCalibrationConfigBase.check_quant_layers, CustomizedModel(), {KV_CACHE_QUANT_LAYERS: ('matmul3', 'matmul4')})
-        self.assertRaises(ValueError, QuantCalibrationConfigBase.check_quant_layers, CustomizedModel(), {KV_CACHE_QUANT_LAYERS: ('relu0')})
-        self.assertRaises(ValueError, QuantCalibrationConfigBase.check_quant_layers, CustomizedModel(), {KV_CACHE_QUANT_LAYERS: (MATMUL1_LAYER_NAME, MATMUL1_LAYER_NAME)})
+        QuantCalibrationConfigBase.check_quant_layers(
+            CustomizedModel(),
+            {KV_CACHE_QUANT_LAYERS: (MATMUL1_LAYER_NAME, 'matmul2')},
+        )
+        self.assertRaises(
+            ValueError,
+            QuantCalibrationConfigBase.check_quant_layers,
+            CustomizedModel(),
+            {KV_CACHE_QUANT_LAYERS: ('matmul3', 'matmul4')},
+        )
+        self.assertRaises(
+            ValueError,
+            QuantCalibrationConfigBase.check_quant_layers,
+            CustomizedModel(),
+            {KV_CACHE_QUANT_LAYERS: ('relu0')},
+        )
+        self.assertRaises(
+            ValueError,
+            QuantCalibrationConfigBase.check_quant_layers,
+            CustomizedModel(),
+            {KV_CACHE_QUANT_LAYERS: (MATMUL1_LAYER_NAME, MATMUL1_LAYER_NAME)},
+        )
 
     def test_add_global_to_layer(self):
-        config = {'batch_num': 2, 'activation_offset': True, MATMUL1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {'act_algo': 'ifmr', 'search_range': [0.8, 1.2]}}}
+        config = {
+            'batch_num': 2,
+            'activation_offset': True,
+            MATMUL1_LAYER_NAME: {
+                KV_DATA_QUANT_CONFIG: {
+                    'act_algo': 'ifmr',
+                    'search_range': [0.8, 1.2],
+                },
+            },
+        }
         QuantCalibrationConfigBase.add_global_to_layer(config)
         self.assertEqual(2, config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('batch_num'))
         self.assertEqual(True, config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('with_offset'))
@@ -87,7 +117,18 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
     def test_get_quant_layer_config(self):
         ret = QuantCalibrationConfigBase.get_quant_layer_config(MATMUL1_LAYER_NAME, {})
         self.assertIsNone(ret)
-        ret = QuantCalibrationConfigBase.get_quant_layer_config(MATMUL1_LAYER_NAME, {'batch_num': 2, 'activation_offset': True, MATMUL1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {'act_algo': 'ifmr', 'search_range': [0.8, 1.2]}}})
+        full_config = {
+            'batch_num': 2,
+            'activation_offset': True,
+            MATMUL1_LAYER_NAME: {
+                KV_DATA_QUANT_CONFIG: {
+                    'act_algo': 'ifmr',
+                    'search_range': [0.8, 1.2],
+                },
+            },
+        }
+        ret = QuantCalibrationConfigBase.get_quant_layer_config(
+            MATMUL1_LAYER_NAME, full_config)
         self.assertIn(KV_DATA_QUANT_CONFIG, ret)
 
     def test_create_default_config(self):
@@ -105,7 +146,13 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
         quant_layers = {}
-        self.assertRaises(RuntimeError, QuantCalibrationConfigBase().create_default_config, config_file, model, quant_layers)
+        self.assertRaises(
+            RuntimeError,
+            QuantCalibrationConfigBase().create_default_config,
+            config_file,
+            model,
+            quant_layers,
+        )
 
     def test_create_config_from_proto(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
@@ -128,7 +175,13 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
         model = CustomizedModel()
         quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_01.cfg')
-        self.assertRaises(RuntimeError, QuantCalibrationConfigBase().create_config_from_proto, config_file, model, config_proto)
+        self.assertRaises(
+            RuntimeError,
+            QuantCalibrationConfigBase().create_config_from_proto,
+            config_file,
+            model,
+            config_proto,
+        )
 
     def test_parse_quant_config(self):
         config_file = os.path.join(self.temp_dir, 'config.json')

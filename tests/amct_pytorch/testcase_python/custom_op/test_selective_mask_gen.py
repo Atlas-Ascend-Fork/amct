@@ -15,19 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import json
 import logging
-import sys
+import math
 import os
+import sys
 import unittest
 from unittest import mock
-import json
+
 import numpy as np
 import torch
-import math
 
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import (
+    selective_mask_gen,
+)
 
 DEVICE = 'cuda:0'
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import selective_mask_gen
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -110,7 +113,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(prune_mask_faker[0])
 
         # compare
-        is_equal = (prune_mask_faker.cpu().numpy()==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
@@ -141,7 +144,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(prune_mask_faker[0])
 
         # compare
-        is_equal = (prune_mask_faker.cpu().numpy()==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
@@ -171,7 +174,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(prune_mask_faker[0])
 
         # compare
-        is_equal = (prune_mask_faker.cpu().numpy()==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
@@ -202,7 +205,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(prune_mask_faker[0])
 
         # compare
-        is_equal = (prune_mask_faker.cpu().numpy()==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
@@ -234,7 +237,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(prune_mask_faker[0])
 
         # compare
-        is_equal = (prune_mask_faker.cpu().numpy()==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
@@ -264,7 +267,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(prune_mask_faker[0])
 
         # compare
-        is_equal = (prune_mask_faker.cpu().numpy()==prune_mask.cpu().numpy()).all()
+        is_equal = (prune_mask_faker.cpu().numpy() == prune_mask.cpu().numpy()).all()
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
@@ -276,17 +279,6 @@ class SelectiveMaskFaker:
         self.prune_size = prune_size
         self.prune_axis = prune_axis
 
-    def _padding_and_reshape(self, weights, in_channels, group_size, dim):
-        num_groups = int(math.ceil(in_channels / group_size))
-        in_padding = num_groups * group_size - in_channels
-        group_shape = weights.shape[:dim] + (num_groups, group_size) + weights.shape[dim + 1:]
-
-        padding_shape = weights.shape[:dim] + (in_padding,) + weights.shape[dim + 1:]
-        weights_padding = torch.cat((weights.abs(), \
-            torch.zeros(padding_shape, dtype=weights.dtype, device=weights.device)), dim=dim)
-        weights_group = weights_padding.reshape(group_shape)
-
-        return weights_group
 
     def generate_mask(self, weights, group_size=4, pruned_size=2, dim=1):
         in_channels = weights.shape[dim]
@@ -305,3 +297,16 @@ class SelectiveMaskFaker:
         prune_mask = self.generate_mask(self.data_tensor,
             self.group_size, self.prune_size, self.prune_axis)
         return prune_mask
+
+
+    def _padding_and_reshape(self, weights, in_channels, group_size, dim):
+        num_groups = int(math.ceil(in_channels / group_size))
+        in_padding = num_groups * group_size - in_channels
+        group_shape = weights.shape[:dim] + (num_groups, group_size) + weights.shape[dim + 1:]
+
+        padding_shape = weights.shape[:dim] + (in_padding,) + weights.shape[dim + 1:]
+        weights_padding = torch.cat((weights.abs(), \
+            torch.zeros(padding_shape, dtype=weights.dtype, device=weights.device)), dim=dim)
+        weights_group = weights_padding.reshape(group_shape)
+
+        return weights_group

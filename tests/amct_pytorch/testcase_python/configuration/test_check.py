@@ -16,27 +16,39 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
-from io import BytesIO
 import sys
-sys.path.append("~/amct/llt/asl/aoetools/amct/amct_pytorch.classic.ptq.graph_based.amct_pytorch/ut/testcase_python/configuration")
+from io import BytesIO
+
+sys.path.append(
+    "~/amct/llt/asl/aoetools/amct/"
+    "amct_pytorch.classic.ptq.graph_based.amct_pytorch/ut/"
+    "testcase_python/configuration")
 
 import unittest
+
 import torch
 import torch.nn.functional as F
 from onnx import onnx_pb
 
-from .utils import models
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
+    GraphChecker,
+    GraphQuerier,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_ONNX_TYPES,
+    QUANTIZABLE_TYPES,
+)
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import GraphChecker
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
+from .utils import models
 
 CONV2D = 'Conv2d'
 CONV3D = 'Conv3d'
@@ -127,7 +139,7 @@ class TestCheckModel(unittest.TestCase):
         onnx_file = os.path.join(self.temp_folder, 'SingleConv.onnx')
         Parser.export_onnx(model, args, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
-        self.assertEqual(GraphQuerier.get_support_int16_quantizable_layers(graph), [LAYER1,LAYER2])
+        self.assertEqual(GraphQuerier.get_support_int16_quantizable_layers(graph), [LAYER1, LAYER2])
 
     def test_get_act_symmetric_limit_types(self):
         ret = GraphQuerier.get_act_symmetric_limit_types()
@@ -467,7 +479,7 @@ class TestCheckGraph(unittest.TestCase):
                 return self.deconv(x)
 
         onnx_file = BytesIO()
-        test_model =TestModel()
+        test_model = TestModel()
         test_model.eval()
         Parser.export_onnx(test_model, torch.randn(1, 4, 12, 12), onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
@@ -490,7 +502,7 @@ class TestCheckGraph(unittest.TestCase):
                 return self.deconv(x)
 
         onnx_file = BytesIO()
-        test_model =TestModel()
+        test_model = TestModel()
         test_model.eval()
         Parser.export_onnx(test_model, torch.randn(1, 4, 12, 12), onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
@@ -512,7 +524,7 @@ class TestCheckGraph(unittest.TestCase):
                 return self.deconv(x)
 
         onnx_file = BytesIO()
-        test_model =TestModel()
+        test_model = TestModel()
         test_model.eval()
         Parser.export_onnx(test_model, torch.randn(1, 4, 12, 12), onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
@@ -763,14 +775,14 @@ class TestCheckGraph(unittest.TestCase):
         self.assertIn(CONV2D, layer_types)
 
     def test_check_padding_mode_conv1d(self):
-        mod = torch.nn.Conv1d(3,3,3,padding_mode='zeros')
+        mod = torch.nn.Conv1d(3, 3, 3, padding_mode='zeros')
         mod_type = 'Conv1d'
         self.assertTrue(GraphChecker.check_padding_mode(mod_type, mod_name, mod))
-        mod = torch.nn.Conv1d(3,3,3,padding_mode='reflect')
+        mod = torch.nn.Conv1d(3, 3, 3, padding_mode='reflect')
         self.assertFalse(GraphChecker.check_padding_mode(mod_type, mod_name, mod))
 
     def test_check_graph_int16_quantize_type_conv1d(self):
-        model = torch.nn.Sequential(torch.nn.Conv1d(3,3,3,padding_mode='zeros'))
+        model = torch.nn.Sequential(torch.nn.Conv1d(3, 3, 3, padding_mode='zeros'))
         model_onnx = BytesIO()
         Parser.export_onnx(model, torch.randn(3, 3, 3), model_onnx)
         graph = Parser.parse_net_to_graph(model_onnx)
@@ -779,7 +791,7 @@ class TestCheckGraph(unittest.TestCase):
         self.assertTrue(GraphChecker.check_graph_shared_type(node))
 
     def test_check_rnn_limit_not_rnn(self):
-        mod = torch.nn.Conv2d(3,3,3,padding_mode='zeros')
+        mod = torch.nn.Conv2d(3, 3, 3, padding_mode='zeros')
         mod_type = CONV2D
         mod_name = 'conv'
         self.assertTrue(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))

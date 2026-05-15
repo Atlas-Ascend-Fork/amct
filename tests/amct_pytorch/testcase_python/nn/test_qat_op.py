@@ -15,27 +15,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import unittest
-import os
 import copy
+import os
 import shutil
+import unittest
 from collections import defaultdict
 
-import torch
-from torch import nn
 import numpy as np
 import onnx
 import onnxruntime as ort
+import torch
+from torch import nn
 
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.utils import (
+    copy_tensor,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv1d import (
+    Conv1dQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+    Conv2dQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv3d import (
+    Conv3dQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv_transpose_1d import (
+    ConvTranspose1dQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv_transpose_2d import (
+    ConvTranspose2dQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import (
+    LinearQAT,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.matmul import (
+    MatMulQAT,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv1d import Conv1dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv_transpose_2d import ConvTranspose2dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv_transpose_1d import ConvTranspose1dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv3d import Conv3dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import LinearQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.matmul import MatMulQAT
 
 RETRAIN_DATA_CONFIG = 'retrain_data_config'
 
@@ -108,22 +124,22 @@ def similarity(data0, data1):
     data1_nan = np.isnan(data1)
     data1[data1_nan] = 1
     cos_sim = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if (data0 == data1).all():
         cos_sim = 100
     if np.isnan(cos_sim) or np.isinf(cos_sim):
-        data0 = np.divide(data0,np.power(10,38))
-        data1 = np.divide(data1,np.power(10,38))
+        data0 = np.divide(data0, np.power(10, 38))
+        data1 = np.divide(data1, np.power(10, 38))
         cos_sim = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
         if np.isnan(cos_sim) or np.isinf(cos_sim):
-            data0 = np.divide(data0,np.power(10,38))
-            data1 = np.divide(data1,np.power(10,38))
+            data0 = np.divide(data0, np.power(10, 38))
+            data1 = np.divide(data1, np.power(10, 38))
             cos_sim = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if np.isnan(cos_sim):
         cos_sim = 0
     return cos_sim
@@ -142,7 +158,7 @@ class TestQatOp(unittest.TestCase):
             os.remove('./amct_log/amct_pytorch.classic.ptq.graph_based.amct_pytorch.log')
             LOGGER.logi('amct_pytorch.classic.ptq.graph_based.amct_pytorch.log is initialized successfully.')
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_qat_base_init_success(self):
@@ -300,7 +316,7 @@ class TestConv2dQAT(unittest.TestCase):
     def setUp(self):
         pass
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_conv2d_qat_from_float_success(self):
@@ -375,7 +391,7 @@ class TestConvTranspose2dQAT(unittest.TestCase):
     def setUp(self):
         pass
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_conv_transpose_2d_qat_from_float_success(self):
@@ -449,7 +465,7 @@ class TestConv3dQAT(unittest.TestCase):
     def setUp(self):
         pass
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_conv3d_qat_limit_check_01(self):
@@ -501,7 +517,7 @@ class TestLinearQAT(unittest.TestCase):
     def setUp(self):
         pass
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_lineard_qat_limit_check_01(self):
@@ -637,7 +653,7 @@ class TestConv1dQAT(unittest.TestCase):
     def setUp(self):
         pass
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_conv1d_qat_from_float_failed_ori_op_not_conv1d(self):
@@ -673,9 +689,9 @@ class TestConv1dQAT(unittest.TestCase):
         self.assertRaises(ValueError, Conv1dQAT, 1, 1, 1, padding_mode='reflect')
 
     def test_conv1d_qat_not_support_dtype(self):
-        mod = Conv1dQAT(1,1,1)
+        mod = Conv1dQAT(1, 1, 1)
         mod = mod.to(torch.float64)
-        self.assertRaises(ValueError, mod, torch.randn(1,1,1).to(torch.float64))
+        self.assertRaises(ValueError, mod, torch.randn(1, 1, 1).to(torch.float64))
 
 
 class NetConvTranspose1dQAT(nn.Module):
@@ -774,7 +790,7 @@ class TestConvTranspose1dQAT(unittest.TestCase):
     def setUp(self):
         pass
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_conv_transpose_1d_qat_scratch_from_zero(self):
@@ -815,16 +831,16 @@ class TestMatMulQAT(unittest.TestCase):
     def setUp(self):
         pass
 
-    def testDown(self):
+    def test_down(self):
         pass
     
     def test_check_input_error_wrong_dtype(self):
         with self.assertRaises(ValueError):
-            MatMulQAT.check_input(torch.randn(32,3).to(torch.float16))
+            MatMulQAT.check_input(torch.randn(32, 3).to(torch.float16))
 
     def test_check_input_error_wrong_shape(self):
         with self.assertRaises(RuntimeError):
-            MatMulQAT.check_input(torch.randn(3,3,3,3,3,3,3))
+            MatMulQAT.check_input(torch.randn(3, 3, 3, 3, 3, 3, 3))
 
         with self.assertRaises(RuntimeError):
             MatMulQAT.check_input(torch.randn(3,))
@@ -886,16 +902,16 @@ class TestMatMulQAT(unittest.TestCase):
         # norm data
         mod = MatMulQAT()
         for _ in range(10):
-            input = torch.randn(30, 30, 30)
+            input_data = torch.randn(30, 30, 30)
             other = torch.randn(30, 30, 30)
-            mod(input, other)
+            mod(input_data, other)
         self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
-        torch.onnx.export(mod, (input, other), self.onnx_path)
-        ori_out = torch.matmul(input, other)
+        torch.onnx.export(mod, (input_data, other), self.onnx_path)
+        ori_out = torch.matmul(input_data, other)
         ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
-            None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
+            None, {ort_session.get_inputs()[0].name: input_data.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
         self.assertGreater(sim, 99)
@@ -903,16 +919,16 @@ class TestMatMulQAT(unittest.TestCase):
         # all zeros
         mod = MatMulQAT()
         for _ in range(10):
-            input = torch.zeros(30, 30, 30)
+            input_data = torch.zeros(30, 30, 30)
             other = torch.zeros(30, 30, 30)
-            mod(input, other)
+            mod(input_data, other)
         self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
-        torch.onnx.export(mod, (input, other), self.onnx_path)
-        ori_out = torch.matmul(input, other)
+        torch.onnx.export(mod, (input_data, other), self.onnx_path)
+        ori_out = torch.matmul(input_data, other)
         ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
-            None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
+            None, {ort_session.get_inputs()[0].name: input_data.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
         self.assertGreater(sim, 99)
@@ -920,16 +936,16 @@ class TestMatMulQAT(unittest.TestCase):
         # all ones
         mod = MatMulQAT()
         for _ in range(10):
-            input = torch.ones(30, 30, 30)
+            input_data = torch.ones(30, 30, 30)
             other = torch.ones(30, 30, 30)
-            mod(input, other)
+            mod(input_data, other)
         self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
-        torch.onnx.export(mod, (input, other), self.onnx_path)
-        ori_out = torch.matmul(input, other)
+        torch.onnx.export(mod, (input_data, other), self.onnx_path)
+        ori_out = torch.matmul(input_data, other)
         ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
-            None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
+            None, {ort_session.get_inputs()[0].name: input_data.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
         self.assertGreater(sim, 99)
@@ -937,16 +953,16 @@ class TestMatMulQAT(unittest.TestCase):
         # uniform
         mod = MatMulQAT()
         for _ in range(10):
-            input = torch.rand(30, 30, 30) * 5 - 2
+            input_data = torch.rand(30, 30, 30) * 5 - 2
             other = torch.rand(30, 30, 30) * 3 + 7
-            mod(input, other)
+            mod(input_data, other)
         self.onnx_path = os.path.join(self.temp_dir, MATMUL_QAT_ONNX)
         
-        torch.onnx.export(mod, (input, other), self.onnx_path)
-        ori_out = torch.matmul(input, other)
+        torch.onnx.export(mod, (input_data, other), self.onnx_path)
+        ori_out = torch.matmul(input_data, other)
         ort_session = ort.InferenceSession(self.onnx_path, providers=[CPUEXECUTIONPROVIDER])
         quantized_out = ort_session.run(
-            None, {ort_session.get_inputs()[0].name: input.cpu().numpy(),
+            None, {ort_session.get_inputs()[0].name: input_data.cpu().numpy(),
                    ort_session.get_inputs()[1].name: other.cpu().numpy()})
         sim = similarity(ori_out.detach().cpu().numpy(), quantized_out[0])
         self.assertGreater(sim, 99)
@@ -962,22 +978,22 @@ class TestMatMulQAT(unittest.TestCase):
     def test_matmul_qat_infer_failed_dtype_wrong(self):
         # norm data
         mod = MatMulQAT()
-        input = torch.rand(30, 30, 30).to(torch.float16)
+        input_data = torch.rand(30, 30, 30).to(torch.float16)
         other = torch.rand(30, 30, 30).to(torch.float16)
         with self.assertRaises(ValueError):
-            mod(input, other)
+            mod(input_data, other)
 
     def test_matmul_qat_infer_failed_shape_wrong(self):
         # norm data
         mod = MatMulQAT()
-        input = torch.rand(30)
+        input_data = torch.rand(30)
         other = torch.rand(30)
         with self.assertRaises(RuntimeError):
-            mod(input, other)
+            mod(input_data, other)
 
-        input = torch.rand(3, 3, 3, 3, 3, 3, 3)
+        input_data = torch.rand(3, 3, 3, 3, 3, 3, 3)
         other = torch.rand(3, 3, 3, 3, 3, 3, 3)
 
         with self.assertRaises(RuntimeError):
-            mod(input, other)
+            mod(input_data, other)
 

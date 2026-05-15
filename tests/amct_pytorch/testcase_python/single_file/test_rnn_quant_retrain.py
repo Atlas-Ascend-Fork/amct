@@ -1,27 +1,29 @@
-import sys
-import os
-import unittest
 import json
+import os
+import sys
+import unittest
+
 import numpy as np
-import torch
 import onnx
 import onnxruntime as ort
+import torch
 from google.protobuf import text_format
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+    create_quant_config,
+    create_quant_retrain_config,
+    create_quant_retrain_model,
+    quantize_model,
+    restore_quant_retrain_model,
+    save_model,
+    save_quant_retrain_model,
+)
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import create_quant_config
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import quantize_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import save_model
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import create_quant_retrain_config
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import create_quant_retrain_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import restore_quant_retrain_model
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import save_quant_retrain_model
-
-from .utils import rnn_model
-from .utils import record_file_utils
+from .utils import record_file_utils, rnn_model
 
 torch.manual_seed(0)
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]

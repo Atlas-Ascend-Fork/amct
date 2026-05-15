@@ -16,7 +16,6 @@ import torch.nn as nn
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
-
 QUANT_TARGET_MLP = "mlp"
 
 
@@ -411,13 +410,17 @@ def test_llm_ptq_run_blockwise(monkeypatch):
 
     class FakeBlockwiseSolver:
         pass
-    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY.get", lambda k: FakeBlockwiseSolver if k == "blockwise" else None)
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY.get",
+        lambda k: FakeBlockwiseSolver if k == "blockwise" else None)
     called = {}
 
     def _run_blockwise(*a, **k):
         called.update({"run": True})
     wf._run_blockwise = _run_blockwise
-    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.logger", importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.logger",
+        importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
     wf.run()
     assert called.get("run") is True
 
@@ -429,7 +432,9 @@ def test_llm_ptq_run_unknown_granularity(monkeypatch):
         return "sink"
     wf.setup = setup
     monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY.get", lambda k: None)
-    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.logger", importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.logger",
+        importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
     with pytest.raises(ValueError, match="Unsupported .*granularity"):
         wf.run()
 
@@ -491,7 +496,9 @@ def test_build_block_solver_passes_kwargs():
 
 
 def test_save_unit_result_constructs_path(tmp_path):
-    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit as mk_ptq_unit
+    from amct_pytorch.common.models.llm.common.ptq_units import (
+        make_ptq_unit as mk_ptq_unit,
+    )
     wf = _make_workflow(quant_target=[QUANT_TARGET_MLP])
     wf.args.quant_param_dir = str(tmp_path)
     unit = mk_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=2, module=nn.Linear(4, 4))

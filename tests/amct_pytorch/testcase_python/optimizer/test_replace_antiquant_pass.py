@@ -15,36 +15,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import sys
 import unittest
-import logging
-import torch
-from unittest.mock import patch
-import numpy as np
 from copy import deepcopy
+from unittest.mock import patch
 
-logger = logging.getLogger(__name__)
+import numpy as np
+import torch
+from google.protobuf import text_format
+from onnx import onnx_pb
 
 import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
-from .util import models
-from .util import record_file
-
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import (
+    files as files_util,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from onnx import onnx_pb
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_anti_quant_pass import ReplaceAntiQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import construct_anti_quant_node
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import \
-    MultQuantOptimizerPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.quant_fusion_pass import QuantFusionPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+    construct_quant_node,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import (
+    MultQuantOptimizerPass,
+    construct_anti_quant_node,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.quant_fusion_pass import (
+    QuantFusionPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_anti_quant_pass import (
+    ReplaceAntiQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parse_record_file import (
+    RecordFileParser,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parse_record_file import RecordFileParser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import files as files_util
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
-from google.protobuf import text_format
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+
+from .util import models, record_file
+
+logger = logging.getLogger(__name__)
 
 DATA_SCALE = 'data_scale'
 DATA_OFFSET = 'data_offset'

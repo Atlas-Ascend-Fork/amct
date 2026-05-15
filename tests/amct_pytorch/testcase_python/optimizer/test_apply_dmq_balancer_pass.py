@@ -15,19 +15,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
-
 from onnx import onnx_pb
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.apply_dmq_balancer_pass import ApplyDMQBalancerPass
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.apply_dmq_balancer_pass import (
+    ApplyDMQBalancerPass,
+)
 
 CONV1 = 'conv1'
 

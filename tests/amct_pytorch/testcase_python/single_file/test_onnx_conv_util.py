@@ -16,15 +16,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
+import unittest
 from io import BytesIO
 
-import unittest
 import torch
 import torch.nn.functional as F
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
-
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_conv_util import (
+    OnnxConvUtil,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

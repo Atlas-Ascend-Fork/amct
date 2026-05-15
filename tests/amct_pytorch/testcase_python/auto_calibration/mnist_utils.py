@@ -17,12 +17,13 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import torch
-from torch.utils.data import Dataset
-import torch.nn.functional as F
+
+import numpy as np
 import onnx
 import onnxruntime
-import numpy as np
+import torch
+import torch.nn.functional as F
+from torch.utils.data import Dataset
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DATASETS_DIR = os.path.realpath(os.path.join(CUR_DIR, '../../../../../../../../build/bin/llt/toolchain/dmct_datasets'))
@@ -78,7 +79,7 @@ def run_inference_model(model, iterations=None):
     test_loader = torch.utils.data.DataLoader(dataset2, **kwargs)
     if iterations is None:
         iterations = len(test_loader.dataset) // batch_size + 1
-        logger.info('-'*20 + ' iterations ' + str(iterations) + ' ' + '-'*20)
+        logger.info('-' * 20 + ' iterations ' + str(iterations) + ' ' + '-' * 20)
 
     model.eval()
     test_loss = 0
@@ -118,7 +119,7 @@ def run_inference_model_auto_cali(model, iterations=2):
     iter_num = 0
     with torch.no_grad():
         for _ in range(iterations):
-            data = torch.tensor(np.random.uniform(0, 10, (32,1,28,28)).astype(np.float32))
+            data = torch.tensor(np.random.uniform(0, 10, (32, 1, 28, 28)).astype(np.float32))
             data = data.to(device)
             output = model(data)
             iter_num = iter_num + 1
@@ -151,7 +152,7 @@ def run_inference_onnx(onnx_file, iterations=None):
     test_loader = torch.utils.data.DataLoader(dataset2, **kwargs)
     if iterations is None:
         iterations = len(test_loader.dataset) // batch_size + 1
-        logger.info('-'*20 + ' iterations ' + str(iterations) + ' ' + '-'*20)
+        logger.info('-' * 20 + ' iterations ' + str(iterations) + ' ' + '-' * 20)
 
     # run model
     test_loss = 0

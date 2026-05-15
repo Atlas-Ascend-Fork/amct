@@ -15,22 +15,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
-import sys
-import unittest
-import shutil
+import copy
+import io
 import json
 import logging
-import io
-import copy
+import os
+import shutil
+import sys
+import unittest
 
-from google.protobuf import text_format
-import torch
 import numpy as np
+import torch
+from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.quant_calibration_op import QuantCalibrationOp
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.quant_calibration_op import (
+    QuantCalibrationOp,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import scale_offset_record_pb2
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -91,22 +95,22 @@ def calc_similarity(data0, data1):
     data1_nan = np.isnan(data1)
     data1[data1_nan] = 1
     similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if (data0 == data1).all():
         similarity = 100
     if np.isnan(similarity) or np.isinf(similarity):
-        data0 = np.divide(data0,np.power(10,38))
-        data1 = np.divide(data1,np.power(10,38))
+        data0 = np.divide(data0, np.power(10, 38))
+        data1 = np.divide(data1, np.power(10, 38))
         similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
         if np.isnan(similarity) or np.isinf(similarity):
-            data0 = np.divide(data0,np.power(10,38))
-            data1 = np.divide(data1,np.power(10,38))
+            data0 = np.divide(data0, np.power(10, 38))
+            data1 = np.divide(data1, np.power(10, 38))
             similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if np.isnan(similarity):
         similarity = 0
     return similarity
@@ -177,23 +181,23 @@ class TestQuantCalibrationOp(unittest.TestCase):
 
     def test_quant_calibration_op_failed_invalid_input(self):
         op = QuantCalibrationOp(self.record_file)
-        self.assertRaises(TypeError, op, 'a', torch.randn(3,4).to(dtype=torch.float64))
+        self.assertRaises(TypeError, op, 'a', torch.randn(3, 4).to(dtype=torch.float64))
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.randn(3,4)
+        input_data = torch.randn(3, 4)
         input_data[0][0] = np.inf
         self.assertRaises(RuntimeError, op, 'a', input_data)
 
 
         op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
-        self.assertRaises(TypeError, op, 'a', torch.randn(3,4).to(dtype=torch.float64))
+        self.assertRaises(TypeError, op, 'a', torch.randn(3, 4).to(dtype=torch.float64))
         op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
-        input_data = torch.randn(3,4)
+        input_data = torch.randn(3, 4)
         input_data[0][0] = np.inf
         self.assertRaises(RuntimeError, op, 'a', input_data)
 
     def test_quant_calibration_op_success_ifmr(self):
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.randn(128,128)
+        input_data = torch.randn(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -202,7 +206,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.randn(1,1)
+        input_data = torch.randn(1, 1)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -211,7 +215,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.ones(128,128)
+        input_data = torch.ones(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -220,7 +224,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.zeros(128,128)
+        input_data = torch.zeros(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -230,7 +234,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
 
     def test_quant_calibration_op_success_hfmg(self):
         op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
-        input_data = torch.randn(1,1)
+        input_data = torch.randn(1, 1)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -239,7 +243,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
-        input_data = torch.randn(128,128)
+        input_data = torch.randn(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -248,7 +252,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
-        input_data = torch.zeros(128,128)
+        input_data = torch.zeros(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -257,7 +261,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
-        input_data = torch.ones(128,128)
+        input_data = torch.ones(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())

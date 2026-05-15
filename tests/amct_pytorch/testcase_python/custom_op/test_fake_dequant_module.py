@@ -19,11 +19,13 @@ import logging
 import os
 import unittest
 
-import torch
 import numpy as np
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
+import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.fake_quant import FakeDeQuant
+import amct_pytorch.classic.ptq.graph_based.amct_pytorch
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.fake_quant import (
+    FakeDeQuant,
+)
 
 np.random.seed(0)
 

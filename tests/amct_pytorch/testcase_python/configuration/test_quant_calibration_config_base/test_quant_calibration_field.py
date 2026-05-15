@@ -19,8 +19,12 @@ import logging
 import unittest
 
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config_base import quant_calibration_field as field
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import ModuleHelper
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config_base import (
+    quant_calibration_field as field,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -235,8 +239,10 @@ class TestQuantCalibrationField(unittest.TestCase):
 
     def test_quant_calibration_config_root_build(self):
         obj = field.QuantCalibrationConfigRoot(ModuleHelper, CAPACITY)
-        obj.build({'batch_num': 8, 'activation_offset': False, MATMUL_1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}},
-                  {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})
+        obj.build(
+            {'batch_num': 8, 'activation_offset': False,
+             MATMUL_1_LAYER_NAME: {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}},
+            {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})
         ret = obj.dump()
         self.assertEqual(ret.get('batch_num'), 8)
         self.assertFalse(ret.get('activation_offset'))

@@ -262,7 +262,9 @@ def test_llm_deploy_run_blockwise(monkeypatch):
     def _run_blockwise():
         return {"index_path": "/out", "num_output_files": 1}
     wf._run_blockwise = _run_blockwise
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.logger",
+        importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
     result = wf.run()
     assert result["index_path"] == "/out"
 

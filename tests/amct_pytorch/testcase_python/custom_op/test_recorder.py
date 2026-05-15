@@ -17,9 +17,12 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -53,7 +56,7 @@ class TestRecorder(unittest.TestCase):
         record_module.record_quant_layer(LAYER_NAME)
         scale = [0.1, 0.2]
         offset = [1, 2]
-        record_module.forward(LAYER_NAME, 'kv_cache', {'scale':scale, 'offset':offset})
+        record_module.forward(LAYER_NAME, 'kv_cache', {'scale': scale, 'offset': offset})
         self.assertTrue(os.path.exists(record_file))
 
     def test_add_kv_cache_factors_num_error(self):

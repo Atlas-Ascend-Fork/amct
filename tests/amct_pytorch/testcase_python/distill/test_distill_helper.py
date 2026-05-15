@@ -16,18 +16,24 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import sys
 import os
+import sys
 import unittest
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import DistillSampleBase
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_helper import (
+    DistillHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import (
+    DistillSampleBase,
+    ModelSingleTensorInput,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+    Conv2dQAT,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -58,7 +64,7 @@ class TestDistillHelper(unittest.TestCase):
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
-        cls.data = torch.randn(1,2,4,4)
+        cls.data = torch.randn(1, 2, 4, 4)
         cls.train_loader = torch.utils.data.DataLoader(cls.data)
         cls.groups = [['conv']]
         # torch model
@@ -96,8 +102,8 @@ class TestDistillHelper(unittest.TestCase):
 
     def test_get_distill_modules_loss(self):
         distill_helper = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
-        input_data = torch.tensor(torch.randn(1,2,4,4))
-        target = torch.tensor(torch.randn(1,2,2,2))
+        input_data = torch.tensor(torch.randn(1, 2, 4, 4))
+        target = torch.tensor(torch.randn(1, 2, 2, 2))
 
         modules = []
         for name, module in self.torch_model.named_modules():
@@ -109,8 +115,8 @@ class TestDistillHelper(unittest.TestCase):
 
     def test_get_distill_modules_loss_invalid_target(self):
         distill_helper = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
-        input_data = torch.tensor([1,2,4,4])
-        target = torch.tensor([1,2,4,4])
+        input_data = torch.tensor([1, 2, 4, 4])
+        target = torch.tensor([1, 2, 4, 4])
         modules = []
         for name, module in self.torch_model.named_modules():
             if name == 'conv':

@@ -19,11 +19,13 @@
 Generate model for ut.
 """
 from __future__ import print_function
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
+
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
     """ save onnx """
@@ -76,7 +78,7 @@ class Net001(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net001,self).__init__()
+        super(Net001, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -108,7 +110,7 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128,10, bias=True))
+            nn.Linear(128, 10, bias=True))
         self.avg_pool = nn.AvgPool2d(kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
@@ -119,7 +121,7 @@ class Net001(nn.Module):
         x = self.avg_pool(x)
         x = self.layer5(x)
         x = self.layer6(x)
-        x = x.view(x.size(0),-1)
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         x = F.log_softmax(x, dim=1)
 
@@ -129,12 +131,12 @@ class Quant(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     """
     def __init__(self, scale, offset, quant_bit):
-        super(Quant,self).__init__()
+        super(Quant, self).__init__()
         self.scale = scale
         self.offset = offset
         self.quant_bit = quant_bit
-        self.min_value = -2**(quant_bit-1)
-        self.max_value = 2**(quant_bit-1) - 1
+        self.min_value = -2**(quant_bit - 1)
+        self.max_value = 2**(quant_bit - 1) - 1
 
     def forward(self, data):
         data = torch.mul(data, self.scale)
@@ -153,7 +155,7 @@ class Net3d(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d,self).__init__()
+        super(Net3d, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv3d(2, 4, kernel_size=3, bias=False),
@@ -168,7 +170,7 @@ class MobilenetTailModel(torch.nn.Module):
     """ [2, 32, 28, 28]
     """
     def __init__(self):
-        super(MobilenetTailModel,self).__init__()
+        super(MobilenetTailModel, self).__init__()
         self.int_channels = 32
         self.last_channel = 64
         self.num_classes = 100
@@ -192,7 +194,7 @@ class Yolov3ResizeModel(torch.nn.Module):
     """ [2, 32, 28, 28]
     """
     def __init__(self):
-        super(Yolov3ResizeModel,self).__init__()
+        super(Yolov3ResizeModel, self).__init__()
         self.int_channels = 32
         self.last_channel = 64
         self.num_classes = 100
@@ -210,7 +212,7 @@ class ConvPadLong(torch.nn.Module):
     """ [2, 32, 28, 28]
     """
     def __init__(self):
-        super(ConvPadLong,self).__init__()
+        super(ConvPadLong, self).__init__()
         self.int_channels = 32
         self.last_channel = 64
         self.num_classes = 100

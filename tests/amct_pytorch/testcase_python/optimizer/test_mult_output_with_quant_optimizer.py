@@ -15,21 +15,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
-
 from onnx import onnx_pb
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import construct_quant_node
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import MULT_OUTPUT_TYPES
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import MultQuantOptimizerPass
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+    construct_quant_node,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import (
+    MultQuantOptimizerPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+    MULT_OUTPUT_TYPES,
+)
 
 DATA_SCALE_KEY = "data_scale"
 OBJECT_NODE_KEY = 'object_node'
@@ -118,9 +123,12 @@ class TestQuantFusionPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = [conv_name]
             relu1.output[:] = outputs
-        conv_sub(self.graph, 'conv1', [CONCAT_0_NAME], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv2', [CONCAT_0_NAME], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv3', [CONCAT_0_NAME], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv1', [CONCAT_0_NAME], ['conv1_output'],
+                 {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv2', [CONCAT_0_NAME], ['conv2_output'],
+                 {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(self.graph, 'conv3', [CONCAT_0_NAME], ['conv3_output'],
+                 {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         # Add max_pooling
         pool0 = self.graph.node.add()
         pool0.name = POOL0
@@ -224,7 +232,7 @@ class TestQuantFusionPass(unittest.TestCase):
         before_length = len(graph.nodes)
         MultQuantOptimizerPass(records).do_pass(graph, concat_node)
         after_length = len(graph.nodes)
-        self.assertEqual(after_length -  before_length, 2)
+        self.assertEqual(after_length - before_length, 2)
         self.assertEqual(graph.get_node_by_name('pool0.quant').name, 'pool0.quant')
         self.assertEqual(graph.get_node_by_name('pool0.anti_quant').name, 'pool0.anti_quant')
 

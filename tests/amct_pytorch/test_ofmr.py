@@ -12,11 +12,12 @@
 # ----------------------------------------------------------------------------
 import copy
 import logging
-import unittest
 import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
 import torch
 import torch.nn as nn
-from utils import TestModel, TestModelConv2d
 from mock_torch_npu import (
     mock_npu,
     mock_npu_convert_weight_to_int4pack,
@@ -29,9 +30,9 @@ from mock_torch_npu import (
     mock_npu_weight_quant_batchmatmul,
     mocked_npu_quant_conv2d,
 )
-from unittest.mock import MagicMock
-from unittest.mock import patch
-from amct_pytorch import quantize, convert
+from utils import TestModel, TestModelConv2d
+
+from amct_pytorch import convert, quantize
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,10 @@ class TestOFMR(unittest.TestCase):
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
-    @patch('amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_hif8_weight_tensor_sym_ofmr_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6):
         cfg = {
             'batch_num': 1,
@@ -107,7 +111,10 @@ class TestOFMR(unittest.TestCase):
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
-    @patch('amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_hif8_weight_channel_sym_ofmr_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6):
         cfg = {
             'batch_num': 1,
@@ -144,7 +151,10 @@ class TestOFMR(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
-    @patch('amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_fp8_weight_tensor_sym_ofmr_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
@@ -181,7 +191,10 @@ class TestOFMR(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
-    @patch('amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_fp8_weight_channel_sym_ofmr_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
@@ -215,7 +228,10 @@ class TestOFMR(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_fp8_sym_ofmr_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -258,7 +274,10 @@ class TestOFMR(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
-    @patch('amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_hif8_sym_ofmr_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
