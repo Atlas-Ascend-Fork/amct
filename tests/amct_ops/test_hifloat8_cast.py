@@ -31,6 +31,7 @@ EXPECTED_ENCODE = {
 }
 DEVICE = 'npu'
 
+
 class TestHiFloat8Cast(unittest.TestCase):
     @staticmethod
     def _is_decoded_special_value_valid(name, decoded_val):
