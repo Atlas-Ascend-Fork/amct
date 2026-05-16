@@ -1,4 +1,4 @@
-# HiFloat8 Cast Kernel
+# hifloat8_cast — HiFloat8 数据类型转换算子
 
 HiFloat8 数据类型转换算子，支持 FP16/BF16 ↔ HiFloat8 双向转换。
 
@@ -63,27 +63,27 @@ z = decode_from_hifloat8(y, torch.float16)    # 指定输出 FP16
 ```
 hifloat8_cast/
 ├── op_kernel/
-│   ├── hifloat8_cast_kernel.cpp   device 端 kernel（LUT encode + decode，半空间 LUT 优化）
-│   └── hifloat8_cast_tiling.h     TilingData 结构体定义（tileLength 由 host 运行时填入）
+│   ├── hifloat8_cast_kernel.cpp   # device 端 kernel（LUT encode + decode，半空间 LUT 优化）
+│   └── hifloat8_cast_tiling.h     # TilingData 结构体定义（tileLength 由 host 运行时填入）
 ├── op_extension/
-│   ├── hifloat8_cast_torch.cpp    PyTorch host 实现（CPU 端 LUT 预计算与缓存，调用 ASC 生成的 host stub）
-│   ├── ops.h                      PyTorch C++ 扩展函数声明
-│   └── register.cpp               TORCH_LIBRARY 注册
+│   ├── hifloat8_cast_torch.cpp    # PyTorch host 实现（CPU 端 LUT 预计算与缓存，调用 ASC 生成的 host stub）
+│   ├── ops.h                      # PyTorch C++ 扩展函数声明
+│   └── register.cpp               # TORCH_LIBRARY 注册
 ├── python/
 │   └── hifloat8_cast/
-│       ├── __init__.py            Python 包入口（加载 .so、注册算子）
-│       └── ops.py                 Python 接口实现
-├── CMakeLists.txt
-└── README.md
+│       ├── __init__.py            # Python 包入口（加载 .so、注册算子）
+│       └── ops.py                 # Python 接口实现
+├── CMakeLists.txt                 # CMake 构建配置
+└── README.md                      # 算子说明文档
 ```
 
 ## 环境依赖
 
 | SOC | 平台 | 标称 UB / core | CANN 实测可用 UB |
 |-----|------|--------------|----------------|
-| `ascend910b` | A2（910B1 / 910B2 / 910B3） | 256 KB | ~192 KB |
-| `ascend910_93` | A3（910_93） | 512 KB | ~384 KB |
-| `ascend950` | A5 | 512 KB+ | — |
+| `ascend910b` | A2（Ascend 910B1/B2/B3） | 256 KB | ~192 KB |
+| `ascend910_93` | A3（Ascend 910_93） | 512 KB | ~384 KB |
+| `ascend950` | A5（Ascend 950） | 512 KB+ | — |
 
 > CANN 运行时会保留部分 UB，`tileLength` 在每次调用时由 `GetCoreMemSize()` 查询实际可用量并计算，无需手动指定。
 
@@ -110,14 +110,16 @@ bash ops_build.sh [--soc <soc>] [hifloat8_cast]
 > A5 构建要求当前 CANN 编译器支持 `dav-3510`。如果 `bisheng` 报 `Unsupported NPU architecture or soc`，需要更换支持 A5 目标的 CANN 编译环境。
 
 ```bash
-bash ops_build.sh                                   # 全部算子，A2
-bash ops_build.sh --soc ascend910_93                # 全部算子，A3
-bash ops_build.sh hifloat8_cast                     # 仅本算子，A2
-bash ops_build.sh --soc ascend950 hifloat8_cast     # 仅本算子，A5
+bash ops_build.sh                                   # 全部算子，默认平台
+bash ops_build.sh --soc ascend910_93                # 全部算子，指定平台
+bash ops_build.sh hifloat8_cast                     # 指定算子，默认平台
+bash ops_build.sh --soc ascend950 hifloat8_cast     # 指定算子，指定平台
 pip install dist/amct_ops-*.whl
 ```
 
-### 方式二：独立编译（开发调试）
+### 方式二：单算子独立编译（开发调试）
+
+针对单个算子进行独立编译，适用于开发调试场景。
 
 通过 `-DNPU_ARCH` 指定目标平台（默认 A2）：
 
@@ -140,7 +142,7 @@ make -j8
 
 编译产物：`build/libhifloat8_cast_ops.so`
 
-### 已知 CMake 告警
+#### 已知 CMake 告警
 
 使用 pip 安装的 PyTorch 构建时，`find_package(Torch)` 可能输出如下告警：
 
@@ -150,7 +152,7 @@ static library kineto_LIBRARY-NOTFOUND not found.
 
 该告警来自 PyTorch 自带的 `TorchConfig.cmake`，表示未找到 Kineto profiler 的静态库。`hifloat8_cast` 不依赖 PyTorch profiler / Kineto 能力；只要 CMake configure、编译和链接成功，该告警可以忽略。
 
-## 使用
+## 使用方式
 
 ```python
 import torch
@@ -172,7 +174,7 @@ y = torch.ops.amct.encode_to_hifloat8(x)
 z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 ```
 
-## 性能
+## 性能数据
 
 **测试平台**：Ascend 910B3 (A2，ascend910b)，CANN 9.0.0  
 **吞吐量定义**：(输入字节 + 输出字节) / 耗时（100 次迭代均值，10 次预热，NPU synchronize 计时）  
@@ -221,7 +223,7 @@ z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 > 大数据（≥ 4M）encode/decode 吞吐均超过 4 GB/s，接近 HBM 带宽上限。  
 > tileLength 由运行时根据平台实际 UB 大小和核数动态计算。
 
-## 精度
+## 精度验证
 
 精度验证通过以下方式进行：
 - **NPU API 综合测试**：类型推断、边界值、特殊值、非规格化数、全 256 个 HiFloat8 decode 完备性，见 `tests/amct_ops/test_hifloat8_cast.py`
