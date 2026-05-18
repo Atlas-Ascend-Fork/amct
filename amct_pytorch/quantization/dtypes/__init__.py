@@ -1,3 +1,5 @@
+__all__ = ["register_dtype", "DTYPE_REGISTRY"]
+
 from amct_pytorch.common.utils.registry_factory import Registry
 
 DTYPE_REGISTRY = Registry("dtype")
@@ -10,8 +12,8 @@ def register_dtype():
     if _REGISTERED:
         return
 
-    from .mxfp import QuantDequantMx  # noqa: F401
     from .int import QuantDequantInt
+    from .mxfp import QuantDequantMx  # noqa: F401
     try:
         from .hifx import QuantDequantHifp
     except ImportError as exc:
@@ -19,6 +21,3 @@ def register_dtype():
         logger.warning(f"Skip hifp dtype registration: {exc}")
 
     _REGISTERED = True
-
-
-__all__ = ["register_dtype", "DTYPE_REGISTRY"]

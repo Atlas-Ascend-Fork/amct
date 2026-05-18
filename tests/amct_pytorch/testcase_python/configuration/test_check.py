@@ -754,6 +754,7 @@ class TestCheckGraph(unittest.TestCase):
         self.assertEqual(layer_names, ans)
 
     def test_check_distill_type_conv2d(self):
+        mod_name = CONV1
         mod = torch.nn.Conv2d(3, 3, 3)
         self.assertTrue(GraphChecker.check_distill_type(mod_name, mod))
 
@@ -776,6 +777,7 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_check_padding_mode_conv1d(self):
         mod = torch.nn.Conv1d(3, 3, 3, padding_mode='zeros')
+        mod_name = CONV1
         mod_type = 'Conv1d'
         self.assertTrue(GraphChecker.check_padding_mode(mod_type, mod_name, mod))
         mod = torch.nn.Conv1d(3, 3, 3, padding_mode='reflect')
