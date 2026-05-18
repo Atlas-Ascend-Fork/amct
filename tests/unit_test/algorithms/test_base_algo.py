@@ -2,7 +2,6 @@ import pytest
 
 from amct_pytorch.algorithms.common.base_algo import BaseAlgo, BaseQuantAlgo
 
-
 # ---- BaseAlgo (abstract) ------------------------------------------------
 
 

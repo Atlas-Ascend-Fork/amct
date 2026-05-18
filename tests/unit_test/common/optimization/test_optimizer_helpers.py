@@ -1,7 +1,9 @@
 import pytest
 import torch
+import torch.nn as nn
 
 from amct_pytorch.common.optimization.optimizer import (
+    SGDG,
     Cayley_loop,
     matrix_norm_one,
     norm,
@@ -61,10 +63,6 @@ def test_qr_retraction_yields_orthonormal_rows():
     # Row vectors should be orthonormal.
     assert q.shape == (3, 5)
     assert torch.allclose(q @ q.t(), torch.eye(3), atol=1e-5)
-
-
-from amct_pytorch.common.optimization.optimizer import SGDG
-import torch.nn as nn
 
 
 class TestSGDG:

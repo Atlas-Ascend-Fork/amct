@@ -15,29 +15,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import copy
+import json
 import os
+import sys
 import unittest
 from io import BytesIO
-import json
+from unittest import mock
+from unittest.mock import mock_open, patch
+
 import numpy as np
 import torch
-import copy
 
-from unittest import mock
-from unittest.mock import patch, mock_open
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.hfmg.hfmg import HFMG
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_cali_quant import (
+    InsertCaliQuantPass,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_TYPES,
+)
 
 from .utils import models
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import Configuration
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_cali_quant import InsertCaliQuantPass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.hfmg.hfmg import HFMG
-
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -46,7 +55,7 @@ CONV1D = 'conv1d'
 class TestInsertCaliQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        QUANTIZABLE_TYPES.extend(['ConvTranspose2d','AvgPool2d'])
+        QUANTIZABLE_TYPES.extend(['ConvTranspose2d', 'AvgPool2d'])
         cls.temp_folder = os.path.join(CUR_DIR, 'test_insert_ifmr_pass')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
@@ -104,18 +113,18 @@ class TestInsertCaliQuantPass(unittest.TestCase):
     def test_insert_hfmg(self, mock_get_layer_config):
         ''' test: conv(+ bias), Gemm, Matmul '''
         mock_get_layer_config.return_value = {
-            "quant_enable":True,
-            "activation_quant_params":{
+            "quant_enable": True,
+            "activation_quant_params": {
                 "act_algo": "hfmg",
                 "num_of_bins": 4096,
-                "with_offset":True,
-                "batch_num":2,
-                "num_bits":8
+                "with_offset": True,
+                "batch_num": 2,
+                "num_bits": 8
             },
-            "weight_quant_params":{
-                "channel_wise":True,
-                "num_bits":8,
-                "with_offset":False
+            "weight_quant_params": {
+                "channel_wise": True,
+                "num_bits": 8,
+                "with_offset": False
             }
         }
         model = copy.deepcopy(self.model_001)
@@ -139,18 +148,18 @@ class TestInsertCaliQuantPass(unittest.TestCase):
     @patch.object(Configuration, 'get_layer_config')
     def test_broad_cast_tensor_balance_factor(self, mock_get_layer_config):
         mock_get_layer_config.return_value = {
-            "quant_enable":True,
-            "activation_quant_params":{
+            "quant_enable": True,
+            "activation_quant_params": {
                 "act_algo": "hfmg",
                 "num_of_bins": 4096,
-                "with_offset":True,
-                "batch_num":2,
-                "num_bits":8
+                "with_offset": True,
+                "batch_num": 2,
+                "num_bits": 8
             },
-            "weight_quant_params":{
-                "channel_wise":True,
-                "num_bits":8,
-                "with_offset":False
+            "weight_quant_params": {
+                "channel_wise": True,
+                "num_bits": 8,
+                "with_offset": False
             },
             'dmq_balancer_param': {
                 0.5
@@ -159,12 +168,12 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         class Conv1dModule(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1d = torch.nn.Conv1d(1,1,1)
+                self.conv1d = torch.nn.Conv1d(1, 1, 1)
             def forward(self, x):
                 return self.conv1d(x)
         conv1d_module = Conv1dModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(conv1d_module, torch.randn(1,1,1), tmp_onnx)
+        Parser.export_onnx(conv1d_module, torch.randn(1, 1, 1), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
         for name, mod in conv1d_module.named_modules():
             if name == CONV1D:
@@ -172,6 +181,6 @@ class TestInsertCaliQuantPass(unittest.TestCase):
                 break
         records = {CONV1D: {'tensor_balance_factor': [3, 3, 3]}}
 
-        cali_quant_pass = InsertCaliQuantPass(None,records=records)
+        cali_quant_pass = InsertCaliQuantPass(None, records=records)
         cali_quant_pass.broad_cast_tensor_balance_factor(CONV1D, conv1d_mod, graph)
 

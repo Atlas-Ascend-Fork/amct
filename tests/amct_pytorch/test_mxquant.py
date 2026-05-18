@@ -12,11 +12,12 @@
 # ----------------------------------------------------------------------------
 import copy
 import logging
-import unittest
 import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
 import torch
 import torch.nn as nn
-from utils import TestModel, TestModelBias
 from mock_torch_npu import (
     mock_npu,
     mock_npu_convert_weight_to_int4pack,
@@ -27,10 +28,9 @@ from mock_torch_npu import (
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
 )
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from utils import TestModel, TestModelBias
 
-from amct_pytorch import quantize, convert
+from amct_pytorch import convert, quantize
 
 logger = logging.getLogger(__name__)
 

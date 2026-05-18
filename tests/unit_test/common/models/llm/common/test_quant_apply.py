@@ -15,12 +15,11 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     set_model_weight_quant_state,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
+from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
     WeightQuantizer,
 )
-from amct_pytorch.quantization.dtypes import register_dtype
-
 
 _MLP_BIT_POLICY = BitPolicy({
     "mlp": {

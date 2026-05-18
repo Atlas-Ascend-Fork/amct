@@ -17,15 +17,22 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-import torch
-import numpy as np
-from torch.nn.utils.rnn import pack_sequence
 from unittest.mock import patch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import Recorder
+import numpy as np
+import torch
+from torch.nn.utils.rnn import pack_sequence
+
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
+    CompModuleRNN,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.rnn_retrain_quant import RNNRetrainQuant
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.rnn_retrain_quant import (
+    RNNRetrainQuant,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -129,9 +136,9 @@ class TestRNNRetrainQuant(unittest.TestCase):
             self.retrain_quant.forward(input_data)
 
     def test_forward_sequence_length_error(self):
-        input = torch.randn(2, 1, 10)
+        input_data = torch.randn(2, 1, 10)
         with self.assertRaises(ValueError):
-            self.retrain_quant.forward(input)
+            self.retrain_quant.forward(input_data)
 
     def test_forward_hx_none(self):
         with self.assertRaises(ValueError):

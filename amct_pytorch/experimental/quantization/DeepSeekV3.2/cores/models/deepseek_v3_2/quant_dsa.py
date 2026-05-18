@@ -176,9 +176,8 @@ class QuantDSA(DeepseekV3Attention):
                                                                                      self.qk_rope_head_dim).transpose(1,
                                                                                                                       2)
             # wuq
-            q_nope = self.qnope_matmul(q, q_b_proj_c_weight.reshape(q_b_proj_inc, -1)).view(bsz, q_len, self.num_heads,
-                                                                                            self.qk_nope_head_dim).transpose(
-                1, 2)
+            q_nope = self.qnope_matmul(q, q_b_proj_c_weight.reshape(q_b_proj_inc, -1)).view(bsz,
+                                       q_len, self.num_heads, self.qk_nope_head_dim).transpose(1, 2)
 
         else:
             q = q.view(bsz, q_len, self.num_heads, self.qk_nope_head_dim + self.qk_rope_head_dim).transpose(1, 2)

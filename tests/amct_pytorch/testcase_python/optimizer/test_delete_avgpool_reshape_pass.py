@@ -17,11 +17,15 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+
 import torch
 
-from .util import models
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer import (
+    ReplaceAvgpoolReshapePass,
+)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer import ReplaceAvgpoolReshapePass
+
+from .util import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

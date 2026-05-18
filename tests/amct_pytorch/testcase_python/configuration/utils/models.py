@@ -19,13 +19,16 @@
 Generate model for ut.
 """
 from __future__ import print_function
+
 import argparse  #Python 命令行解析工具
+import copy
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-import copy
+
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
     """ save onnx """
@@ -78,7 +81,7 @@ class Net001(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net001,self).__init__()
+        super(Net001, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -112,7 +115,7 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128,10, bias=True))
+            nn.Linear(128, 10, bias=True))
 
     def forward(self, x):
         x = self.layer1(x)
@@ -136,7 +139,7 @@ class Net001Sub(nn.Module):
     depthwise_conv + bn
     """
     def __init__(self):
-        super(Net001Sub,self).__init__()
+        super(Net001Sub, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),
@@ -168,7 +171,7 @@ class Net001Sub(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128,10, bias=True))
+            nn.Linear(128, 10, bias=True))
 
     def forward(self, x):
         x = self.layer1(x)
@@ -181,12 +184,12 @@ class Quant(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     """
     def __init__(self, scale, offset, quant_bit):
-        super(Quant,self).__init__()
+        super(Quant, self).__init__()
         self.scale = scale
         self.offset = offset
         self.quant_bit = quant_bit
-        self.min_value = -2**(quant_bit-1)
-        self.max_value = 2**(quant_bit-1) - 1
+        self.min_value = -2**(quant_bit - 1)
+        self.max_value = 2**(quant_bit - 1) - 1
 
     def forward(self, data):
         data = torch.mul(data, self.scale)
@@ -205,7 +208,7 @@ class Net3d(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d,self).__init__()
+        super(Net3d, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv3d(2, 4, kernel_size=3, bias=False),
@@ -221,7 +224,7 @@ class Net3d001(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d001,self).__init__()
+        super(Net3d001, self).__init__()
         self.args_shape = [(1, 2, 4, 14, 14)]
         # conv + bn
         self.layer1 = nn.Sequential(
@@ -237,7 +240,7 @@ class Net3d002(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d002,self).__init__()
+        super(Net3d002, self).__init__()
         self.args_shape = [(1, 2, 4, 14, 14)]
         # conv + bn
         self.layer1 = nn.Sequential(
@@ -253,7 +256,7 @@ class Net3d003(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d003,self).__init__()
+        super(Net3d003, self).__init__()
         self.args_shape = [(1, 2, 4, 14, 14)]
         # conv + bn
         self.layer1 = nn.Sequential(
@@ -269,7 +272,7 @@ class Net3d004(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d004,self).__init__()
+        super(Net3d004, self).__init__()
         self.args_shape = [(1, 2, 4, 14, 14)]
         # conv + bn
         self.layer1 = nn.Sequential(
@@ -288,7 +291,7 @@ class Net002(nn.Module):
     conv(dilation = [3, 3]) + bn
     """
     def __init__(self):
-        super(Net002,self).__init__()
+        super(Net002, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False, dilation=2),
@@ -340,21 +343,21 @@ class MatmulDim(nn.Module):
 
 class TorchConv3dShareWeightModel(nn.Module):
     '''conv3d|conv3d  shared weight'''
-    def __init__(self,in_channels=3,out_channels=3, kernel_size=(2,3,3), \
-        stride=(1,2,2), padding=(0,1,1), dilation=(1,1,1), groups=1,bias=True):
+    def __init__(self, in_channels=3, out_channels=3, kernel_size=(2, 3, 3), \
+        stride=(1, 2, 2), padding=(0, 1, 1), dilation=(1, 1, 1), groups=1, bias=True):
         super(TorchConv3dShareWeightModel, self).__init__()
-        self.conv1 =  nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, \
-            stride=stride, padding=padding,dilation=dilation, groups=groups,bias=bias)
-        self.conv2 =  nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, \
-            stride=stride, padding=padding,dilation=dilation, groups=groups,bias=bias)
+        self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, \
+            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
+        self.conv2 = nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, \
+            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
         self.conv3 = copy.copy(self.conv2) #浅拷贝 指向相同 weight共享
         # self.conv3 = copy.deepcopy(self.conv2) #浅拷贝 指向相同 weight共享
 
     def forward(self, x):
         x = self.conv1(x)
         y1 = self.conv2(x)
-        y2= self.conv3(x)
-        z = torch.cat((y1,y2),0)
+        y2 = self.conv3(x)
+        z = torch.cat((y1, y2), 0)
 
         return z
 

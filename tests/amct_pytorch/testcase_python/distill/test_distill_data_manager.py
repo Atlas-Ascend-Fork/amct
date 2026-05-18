@@ -16,17 +16,23 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import sys
 import os
+import sys
 import unittest
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_data_manager import DistillDataManager
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_data_manager import (
+    DistillDataManager,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_helper import (
+    DistillHelper,
+)
+from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import (
+    ModelSingleTensorInput,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -48,7 +54,7 @@ class TestDistillDataManager(unittest.TestCase):
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
-        cls.data = torch.randn(1,2,4,4)
+        cls.data = torch.randn(1, 2, 4, 4)
         cls.train_loader = torch.utils.data.DataLoader(cls.data)
         cls.groups = [['conv']]
         cls.torch_model = DistillNet().to(torch.device("cpu"))
@@ -117,10 +123,14 @@ class TestDistillDataManager(unittest.TestCase):
         distill_manager = DistillDataManager(self.sample_ins)
 
         # infer input data
-        self.assertRaises(RuntimeError, distill_manager.get_input_data_by_inferring, self.torch_model, ['linear'], self.data)
+        self.assertRaises(
+            RuntimeError, distill_manager.get_input_data_by_inferring,
+            self.torch_model, ['linear'], self.data)
         
         # infer output data
-        self.assertRaises(RuntimeError, distill_manager.get_output_data_by_inferring, self.torch_model, ['linear'], self.data)
+        self.assertRaises(
+            RuntimeError, distill_manager.get_output_data_by_inferring,
+            self.torch_model, ['linear'], self.data)
     
 
 

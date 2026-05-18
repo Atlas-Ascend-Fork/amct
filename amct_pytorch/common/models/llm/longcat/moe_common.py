@@ -30,7 +30,14 @@ class QuantLongcatExperts(nn.Module):
         self.quant_mlp_cls = quant_mlp_cls
 
         expert_modules = [
-            self.quant_mlp_cls(self.args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_size", intermediate_attr="intermediate_size", materialize=False))
+            self.quant_mlp_cls(
+    self.args,
+    self.view_cls(
+        self.packed_experts,
+        expert_idx,
+        hidden_attr="hidden_size",
+        intermediate_attr="intermediate_size",
+         materialize=False))
             for expert_idx in range(self.num_routed_experts)
         ]
         expert_modules.extend(nn.Identity() for _ in range(self.total_experts - self.num_routed_experts))
@@ -41,14 +48,20 @@ class QuantLongcatExperts(nn.Module):
             raise IndexError(f"expert_idx {expert_idx} out of routed expert range {self.num_routed_experts}.")
         return self.quant_mlp_cls(
             self.args,
-            self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_size", intermediate_attr="intermediate_size", materialize=True),
+            self.view_cls(
+    self.packed_experts,
+    expert_idx,
+    hidden_attr="hidden_size",
+    intermediate_attr="intermediate_size",
+     materialize=True),
         )
 
     def iter_ptq_expert_modules(self):
         for expert_idx in range(self.num_routed_experts):
             yield self.build_ptq_expert_module(expert_idx)
 
-    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor, top_k_weights: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor,
+                top_k_weights: torch.Tensor) -> torch.Tensor:
         final_hidden_states = torch.zeros_like(hidden_states)
         if top_k_index.numel() == 0:
             return final_hidden_states

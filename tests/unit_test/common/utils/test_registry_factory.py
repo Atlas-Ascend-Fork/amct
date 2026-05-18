@@ -45,12 +45,12 @@ def test_duplicate_register_raises_without_force():
     registry = Registry("dup")
 
     @registry.register(name="x")
-    class A:
+    class DummyAlgoA:
         pass
 
     with pytest.raises(KeyError, match="already registered"):
         @registry.register(name="x")
-        class B:
+        class DummyAlgoB:
             pass
 
 
@@ -58,14 +58,14 @@ def test_duplicate_register_overrides_with_force():
     registry = Registry("dup")
 
     @registry.register(name="x")
-    class A:
+    class DummyAlgoA:
         pass
 
     @registry.register(name="x", force=True)
-    class B:
+    class DummyAlgoB:
         pass
 
-    assert registry.get("x") is B
+    assert registry.get("x") is DummyAlgoB
 
 
 def test_get_missing_lists_available_keys():
