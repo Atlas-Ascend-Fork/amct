@@ -77,7 +77,7 @@ class CompModuleRNN(nn.Module):
         output_cell = []
         current_state = None
         for i in range(0, self.sequence_length):
-            xi = inputs[:, i:i+1, :] if self.replaced_module.batch_first else inputs[i:i+1, :, :]
+            xi = inputs[:, i:i + 1, :] if self.replaced_module.batch_first else inputs[i:i + 1, :, :]
             acts_comp_func = self.acts_comp_reuse._acts_comp_quant if self.acts_comp_reuse else self._acts_comp_quant
             shape = xi.shape
             xi = xi.reshape(shape[0] * shape[1], shape[-1])

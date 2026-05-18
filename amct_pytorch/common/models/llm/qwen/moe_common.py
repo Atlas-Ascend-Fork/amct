@@ -23,19 +23,29 @@ class QuantGatedExperts(nn.Module):
         self.group = group
         self.expert_modules = nn.ModuleList(
             [
-                QuantGatedMLP(args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=False), group=group)
+                QuantGatedMLP(
+    args,
+    self.view_cls(
+        self.packed_experts,
+        expert_idx,
+        hidden_attr="hidden_dim",
+        intermediate_attr="intermediate_dim",
+        materialize=False),
+         group=group)
                 for expert_idx in range(self.num_experts)
             ]
         )
 
     def build_ptq_expert_module(self, expert_idx: int):
-        return QuantGatedMLP(self.args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim", intermediate_attr="intermediate_dim", materialize=True), group=self.group)
+        return QuantGatedMLP(self.args, self.view_cls(self.packed_experts, expert_idx, hidden_attr="hidden_dim",
+                             intermediate_attr="intermediate_dim", materialize=True), group=self.group)
 
     def iter_ptq_expert_modules(self):
         for expert_idx in range(self.num_experts):
             yield self.build_ptq_expert_module(expert_idx)
 
-    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor, top_k_weights: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor,
+                top_k_weights: torch.Tensor) -> torch.Tensor:
         final_hidden_states = torch.zeros_like(hidden_states)
         if top_k_index.numel() == 0:
             return final_hidden_states

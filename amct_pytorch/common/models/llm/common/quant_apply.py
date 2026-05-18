@@ -15,8 +15,10 @@ from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
 class PlainLinear(nn.Module):
-    """Wrap a plain nn.Linear so it accepts and ignores a ``structure_transform`` kwarg,
-    matching the call signature of QuantLinear at non-quantized attn projections."""
+    """
+    Wrap a plain nn.Linear so it accepts and ignores a ``structure_transform`` kwarg,
+    matching the call signature of QuantLinear at non-quantized attn projections.
+    """
 
     def __init__(self, linear: nn.Module):
         super().__init__()
@@ -142,9 +144,9 @@ class QuantGatedMLP(nn.Module):
         bits = quant_args.bit_policy[group]
         gate, up, down = bits["gate_proj"], bits["up_proj"], bits["down_proj"]
         self.gate_proj = QuantLinear(quant_args, mlp_module.gate_proj, w_bits=gate.w, name="gate_proj")
-        self.up_proj   = QuantLinear(quant_args, mlp_module.up_proj,   w_bits=up.w,   name="up_proj")
+        self.up_proj = QuantLinear(quant_args, mlp_module.up_proj, w_bits=up.w, name="up_proj")
         self.down_proj = QuantLinear(quant_args, mlp_module.down_proj, w_bits=down.w, name="down_proj")
-        self.input_quant  = ActivationQuantizer(quant_args, gate.a)
+        self.input_quant = ActivationQuantizer(quant_args, gate.a)
         self.hidden_quant = ActivationQuantizer(quant_args, down.a)
 
     def _init_structure_transforms(self):

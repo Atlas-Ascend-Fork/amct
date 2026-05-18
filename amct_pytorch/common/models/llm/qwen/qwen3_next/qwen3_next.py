@@ -21,7 +21,9 @@ from amct_pytorch.common.models.llm.qwen.moe_common import (
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.qwen.qwen3_next.quant_module import QuantQwen3NextMLP, QuantQwen3NextLinearAttn, QuantQwen3NextAttn
+from amct_pytorch.common.models.llm.qwen.qwen3_next.quant_module import (
+    QuantQwen3NextAttn, QuantQwen3NextLinearAttn, QuantQwen3NextMLP,
+)
 
 
 @MODEL_REGISTRY.register(

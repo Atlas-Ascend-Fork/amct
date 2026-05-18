@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 from loguru import logger
 
-from .base_solver import BaseSolver
-from amct_pytorch.common.optimization.factory import build_lr_scheduler, build_optimizer, set_require_grad_all
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
+from amct_pytorch.common.optimization.factory import build_lr_scheduler, build_optimizer, set_require_grad_all
+
+from .base_solver import BaseSolver
+
 
 @SOLVER_REGISTRY.register(name="block", description="Blockwise calibration solver")
 class BlockwiseSolver(BaseSolver):

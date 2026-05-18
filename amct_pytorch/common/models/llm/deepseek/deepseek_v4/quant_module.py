@@ -33,7 +33,8 @@ class QuantV4Expert(QuantGatedMLP):
     intermediate_size/act_fn``; v4 Expert provides ``w1/w3/w2`` and a numeric
     ``swiglu_limit``. Build a thin facade module that aliases the names, then
     let the parent wrap them in QuantLinear. ``forward`` is re-implemented to
-    apply v4's clamp-then-silu semantics and the optional routing weight."""
+    apply v4's clamp-then-silu semantics and the optional routing weight.
+    """
 
     def __init__(self, quant_args, expert: Expert, group: str = "moe.routed"):
         facade = nn.Module()
@@ -133,7 +134,8 @@ class QuantV4Compressor(nn.Module):
 
 class QuantV4Indexer(nn.Module):
     """Indexer wrapper. Quantizes ``wq_b`` / ``weights_proj`` and embeds a
-    QuantV4Compressor for the indexer's own compressed-KV path."""
+    QuantV4Compressor for the indexer's own compressed-KV path.
+    """
 
     def __init__(self, quant_args, indexer: Indexer):
         super().__init__()
@@ -151,7 +153,11 @@ class QuantV4Indexer(nn.Module):
             bits = quant_args.bit_policy["attn-linear"]
             wq_b, weights_proj = bits["idx_wq_b"], bits["idx_weights_proj"]
             self.wq_b = QuantLinear(quant_args, indexer.wq_b, w_bits=wq_b.w, name="idx_wq_b")
-            self.weights_proj = QuantLinear(quant_args, indexer.weights_proj, w_bits=weights_proj.w, name="idx_weights_proj")
+            self.weights_proj = QuantLinear(
+    quant_args,
+    indexer.weights_proj,
+    w_bits=weights_proj.w,
+     name="idx_weights_proj")
             self.qr_afq = ActivationQuantizer(quant_args, wq_b.a)
             self.x_afq = ActivationQuantizer(quant_args, weights_proj.a)
         else:
@@ -286,7 +292,8 @@ class QuantV4Attention(nn.Module):
 
     def sparse_attn(self, query_states, kv_states, attn_sink, topk_idxs, softmax_scale):
         """Bit-for-bit copy of upstream Attention.sparse_attn — pure compute,
-        no state, safe to inline."""
+        no state, safe to inline.
+        """
         query_states = query_states.transpose(1, 2)
         kv_states = kv_states.unsqueeze(1)
         attn_weights = torch.matmul(query_states, kv_states.transpose(2, 3)) * softmax_scale

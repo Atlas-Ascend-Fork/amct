@@ -16,10 +16,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from inspect import Parameter, signature
+
 import torch
 import torch.nn as nn
 from loguru import logger
-from inspect import Parameter, signature
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
@@ -135,7 +136,7 @@ class ActivationQuantizer(torch.nn.Module):
         pass
 
     def fake_quant(self, x):
-        return  self.quant_obj(x)
+        return self.quant_obj(x)
 
 
 class WeightQuantizer(torch.nn.Module):
