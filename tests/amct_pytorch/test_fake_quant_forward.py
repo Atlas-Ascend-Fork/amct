@@ -49,3 +49,42 @@ class TestQuantTensorNoNpu(unittest.TestCase):
         dq = quant_dequant_tensor(w, 'int8', scale)
         self.assertEqual(dq.dtype, torch.bfloat16)
         self.assertEqual(dq.shape, w.shape)
+
+
+class TestBaseQuantizeFakeQuant(unittest.TestCase):
+    """_fake_quant_forward produces quant-dequant output, not raw float output."""
+
+    def setUp(self):
+        sys.modules.pop('torch_npu', None)
+
+    def _make_weight_only_module(self):
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        linear = nn.Linear(8, 4, bias=True).to(torch.bfloat16)
+        cfg = {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': 'int8', 'symmetric': True,
+                           'strategy': 'tensor', 'enable_quant': False},
+        }
+        return MinMaxQuant(linear, 'test_layer', cfg), linear
+
+    def test_fake_quant_forward_differs_from_fp(self):
+        """_fake_quant_forward output must differ from raw float output."""
+        mod, linear = self._make_weight_only_module()
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        fp_out = linear(x)
+        fake_out = mod._fake_quant_forward(x)
+        self.assertFalse(torch.allclose(fp_out, fake_out, atol=0),
+                         "fake quant output must differ from float output")
+
+    def test_fake_quant_forward_matches_manual_quant_dequant(self):
+        """_fake_quant_forward must equal manual quant_dequant(weight) @ x."""
+        from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        mod, _ = self._make_weight_only_module()
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        fake_out = mod._fake_quant_forward(x)
+        dq_w = quant_dequant_tensor(mod.weight.data, 'int8', mod.scale_w, mod.offset_w, mod.group_size)
+        expected = F.linear(x, dq_w, mod.bias)
+        self.assertTrue(torch.allclose(fake_out, expected),
+                        f"max diff: {(fake_out - expected).abs().max()}")
