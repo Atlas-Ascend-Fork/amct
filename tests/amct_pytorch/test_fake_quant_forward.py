@@ -164,3 +164,45 @@ class TestSmoothQuantFakeQuant(unittest.TestCase):
         expected_qw = mod.weight.data * smooth.to(dtype=mod.weight.dtype)
         self.assertTrue(torch.allclose(mod._quantizable_weight(), expected_qw),
                         "_quantizable_weight must return weight * smooth_factor")
+
+
+class TestOfmrFakeQuant(unittest.TestCase):
+    """OfmrQuant forward applies fake quant after batch_num calibration rounds."""
+
+    def setUp(self):
+        sys.modules.pop('torch_npu', None)
+
+    def _cfg(self):
+        return {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': 'int8', 'symmetric': True,
+                           'strategy': 'tensor', 'enable_quant': False},
+        }
+
+    def test_during_calibration_output_equals_fp(self):
+        """During calibration (cur_batch == batch_num), output equals fp_out."""
+        from amct_pytorch.quantize_op.ofmr_quant_module import OfmrQuant
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = OfmrQuant(linear, 'l', self._cfg())
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        fp_ref = linear(x)
+        out = mod(x)   # cur_batch=1 == batch_num → calibrates, returns fp_out
+        self.assertTrue(torch.allclose(fp_ref, out),
+                        "During calibration, output should equal float output")
+
+    def test_after_calibration_applies_fake_quant(self):
+        """After calibration, forward applies fake quant to weight."""
+        from amct_pytorch.quantize_op.ofmr_quant_module import OfmrQuant
+        from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = OfmrQuant(linear, 'l', self._cfg())
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        mod(x)       # calibration: cur_batch=1 == batch_num → scale_w computed
+        out = mod(x) # fake quant: cur_batch=2 > batch_num
+
+        dq_w = quant_dequant_tensor(mod.weight.data, 'int8', mod.scale_w, mod.offset_w)
+        expected = F.linear(x, dq_w, mod.bias)
+        self.assertTrue(torch.allclose(out, expected),
+                        f"max diff: {(out - expected).abs().max()}")

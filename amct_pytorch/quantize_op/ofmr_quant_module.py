@@ -90,7 +90,9 @@ class OfmrQuant(BaseQuantizeModule):
 
             self.cur_batch += 1
             if self.cur_batch > self.batch_num:
-                return fp_out
+                if self.scale_w is not None:
+                    return self._fake_quant_forward(inputs)
+                return fp_out  # progressive FP8+FP4 path: scale_w1/scale_w2 used instead
 
             self._calc_weight_quant_loss(inputs, fp_out)
             if not self.weight_compress_only: 
