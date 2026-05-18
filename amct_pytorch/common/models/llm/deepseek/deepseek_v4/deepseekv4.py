@@ -335,3 +335,8 @@ class DeepseekV4(BaseModel):
                 logits = F.linear(x.float(), head.weight)  # [b, s, vocab]
                 preds.append(logits[:, :-1, :].contiguous().to("cpu"))
         return preds
+
+    def get_scale_name(self, weight_name):
+        scale_prefix = ".scale"
+        scale_inv_name = weight_name.replace('.weight', '.scale')
+        return scale_prefix, scale_inv_name

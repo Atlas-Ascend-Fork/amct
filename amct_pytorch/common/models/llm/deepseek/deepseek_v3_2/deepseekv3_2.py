@@ -104,3 +104,8 @@ class DeepseekV32(BaseModel):
 
     def load_unit_inputs(self, data_dir, unit):
         return super().load_unit_inputs(data_dir, unit)
+
+    def get_scale_name(self, weight_name):
+        scale_prefix = "_scale_inv"
+        scale_inv_name = f"{weight_name}_scale_inv"
+        return scale_prefix, scale_inv_name
