@@ -304,7 +304,7 @@ class BaseModel(metaclass=ABCMeta):
         try:
             for target_name, param_dir in target_specs:
                 if not param_dir:
-                    logger.warning(
+                    logger.debug(
                         "No PTQ param dir specified for target '{}' at layer {}; fallback to direct quant for this target.",
                         target_name,
                         layer_idx,
@@ -317,7 +317,7 @@ class BaseModel(metaclass=ABCMeta):
                 results[target_name] = result
 
                 if result["loaded"] and result["missing"]:
-                    logger.warning(
+                    logger.debug(
                         "Partially loaded PTQ params for layer {} target '{}' from '{}'; missing units: {}.",
                         layer_idx,
                         target_name,
@@ -325,7 +325,7 @@ class BaseModel(metaclass=ABCMeta):
                         ", ".join(result["missing"]),
                     )
                 elif not result["loaded"]:
-                    logger.warning(
+                    logger.debug(
                         "No PTQ params loaded for layer {} target '{}' from '{}'; fallback to direct quant for this target.",
                         layer_idx,
                         target_name,

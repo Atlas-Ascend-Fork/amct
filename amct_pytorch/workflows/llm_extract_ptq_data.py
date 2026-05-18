@@ -54,9 +54,8 @@ class LlmExtractPtqDataWorkflow:
         )
         samples = get_pileval(tokenizer, self.nsamples, seq_len=self.seq_len)
         logger.info(
-            "Loaded {} calibration samples for extract_ptq_data with hook_name={}.",
+            "Loaded {} calibration samples for extract_ptq_data.",
             len(samples),
-            hook_name,
         )
         inter_io = self.pipeline.do_embedding_forward(samples, hook_name=hook_name)
         for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):
