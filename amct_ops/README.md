@@ -16,8 +16,8 @@
 | 维度 | `amct_pytorch/` | `amct_ops/` |
 |------|-----------------|------------|
 | 关注点 | 压缩算法与流程编排 | 算子底层实现 |
-| 语言 | Python | Ascend C kernel + C++ binding + Python 接口 |
-| 产物 | .tar.gz 包（源码压缩包）| wheel 包（含 .so + Python 接口）|
+| 语言 | Python | Ascend C kernel & C++ binding & Python 接口 |
+| 产物 | .tar.gz 包（源码压缩包）| wheel 包（含 .so & Python 接口）|
 | 复用性 | 绑定 AMCT 流程 | 独立的 PyTorch 扩展，不强依赖 AMCT 主流程 |
 
 **使用方式**：
@@ -44,7 +44,7 @@ amct_ops/
 
 ## 构建与打包
 
-所有算子通过根目录的统一构建脚本一次性编译并打包为 wheel。
+所有算子通过amct_ops根目录的统一构建脚本一次性编译并打包为 wheel。
 
 ### 依赖要求
 
@@ -121,6 +121,8 @@ static library kineto_LIBRARY-NOTFOUND not found.
 
 ## 新增算子
 
+### 算子目录结构
+
 每个算子独占一个子目录，结构参照 `hifloat8_cast/`：
 
 ```
@@ -134,7 +136,7 @@ static library kineto_LIBRARY-NOTFOUND not found.
 
 新增后无需修改 `ops_build.sh` 或 `setup.py`，构建脚本会自动发现 `<op>/python/<pkg>/` 目录并打包。正式测试放在 `tests/amct_ops/` 下，避免把构建产物、性能脚本或依赖额外参考实现的对比工具放入算子源码目录。
 
-## 命名空间约束
+### 命名空间约束
 
 **所有算子必须注册到 `amct` 命名空间**——与 `amct_ops` 包名一致，便于调用方区分 AMCT 自定义算子与 `torch_npu` 上游算子。
 

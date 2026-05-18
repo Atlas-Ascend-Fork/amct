@@ -2,7 +2,7 @@
 
 HiFloat8 数据类型转换算子，支持 FP16/BF16 ↔ HiFloat8 双向转换。
 
-## 功能
+## 功能介绍
 
 支持 4 种转换模式，底层统一由 `KernelHiFloat8CastLut` 实现：
 
@@ -15,14 +15,14 @@ HiFloat8 数据类型转换算子，支持 FP16/BF16 ↔ HiFloat8 双向转换�
 
 > Python 接口根据输入 dtype 自动选择 castMode，无需手动指定。
 
-## 接口
+## 接口说明
 
 ### encode_to_hifloat8(x: Tensor) -> Tensor
 
 将 FP16/BF16 张量编码为 HiFloat8 格式。
 
 **参数**：
-- `x`：输入张量（NPU 设备），dtype 为 `torch.float16` 或 `torch.bfloat16`，任意 shape
+- `x`：输入张量（NPU 设备），dtype 为 `torch.float16` 或 `torch.bfloat16`，任意非空 shape
 
 **返回**：
 - `torch.uint8` 张量，shape 与输入相同
@@ -43,7 +43,7 @@ y = encode_to_hifloat8(x_bf16)
 将 HiFloat8 格式解码为 FP16/BF16 张量。
 
 **参数**：
-- `x`：HiFloat8 编码张量（`torch.uint8`），任意 shape
+- `x`：HiFloat8 编码张量（`torch.uint8`），任意非空 shape
 - `dtype`：输出类型，默认 `torch.bfloat16`，支持 `float16` / `bfloat16`
 
 **返回**：
@@ -58,7 +58,7 @@ z = decode_from_hifloat8(y)                   # 默认输出 BF16
 z = decode_from_hifloat8(y, torch.float16)    # 指定输出 FP16
 ```
 
-## 文件结构
+## 目录结构
 
 ```
 hifloat8_cast/
@@ -81,9 +81,9 @@ hifloat8_cast/
 
 | SOC | 平台 | 标称 UB / core | CANN 实测可用 UB |
 |-----|------|--------------|----------------|
-| `ascend910b` | A2（Ascend 910B1/B2/B3） | 256 KB | ~192 KB |
-| `ascend910_93` | A3（Ascend 910_93） | 512 KB | ~384 KB |
-| `ascend950` | A5（Ascend 950） | 512 KB+ | — |
+| `ascend910b` | Atlas A2系列产品 | 256 KB | ~192 KB |
+| `ascend910_93` |Atlas A3系列产品 | 512 KB | ~384 KB |
+| `ascend950` | Ascend950PR/Ascend950DT | 512 KB+ | — |
 
 > CANN 运行时会保留部分 UB，`tileLength` 在每次调用时由 `GetCoreMemSize()` 查询实际可用量并计算，无需手动指定。
 
@@ -125,9 +125,9 @@ pip install dist/amct_ops-*.whl
 
 | 平台 | `-DNPU_ARCH` |
 |------|-------------|
-| A2（ascend910b，256 KB） | `dav-2201`（默认） |
-| A3（ascend910_93，512 KB） | `dav-2201`（同 A2） |
-| A5（ascend950） | `dav-3510` |
+| Atlas A2系列产品 | `dav-2201`（默认） |
+| Atlas A3系列产品 | `dav-2201`（同 A2） |
+| Ascend950PR/Ascend950DT | `dav-3510` |
 
 ```bash
 cd amct_ops/hifloat8_cast
@@ -152,7 +152,7 @@ static library kineto_LIBRARY-NOTFOUND not found.
 
 该告警来自 PyTorch 自带的 `TorchConfig.cmake`，表示未找到 Kineto profiler 的静态库。`hifloat8_cast` 不依赖 PyTorch profiler / Kineto 能力；只要 CMake configure、编译和链接成功，该告警可以忽略。
 
-## 使用方式
+## 使用示例
 
 ```python
 import torch
@@ -174,7 +174,7 @@ y = torch.ops.amct.encode_to_hifloat8(x)
 z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 ```
 
-## 性能数据
+## 性能验证
 
 **测试平台**：Ascend 910B3 (A2，ascend910b)，CANN 9.0.0  
 **吞吐量定义**：(输入字节 + 输出字节) / 耗时（100 次迭代均值，10 次预热，NPU synchronize 计时）  
@@ -238,7 +238,7 @@ z = torch.ops.amct.decode_from_hifloat8(y, torch.bfloat16)
 
 > 注：FP16 subnormal 编解码（含 HiFloat8 非规格化值映射到 FP16 非规格化值）已全部验证正确。
 
-## 测试
+## 测试方法
 
 ```bash
 # 在仓库根目录执行。先构建 amct_ops，再通过 staging 运行测试。

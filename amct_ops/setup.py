@@ -59,7 +59,7 @@ setup(
     packages=find_packages(where='staging'),
     package_dir={'': 'staging'},
     package_data=package_data,
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     install_requires=[
         "torch",
         "torch_npu",
