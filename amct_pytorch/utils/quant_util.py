@@ -230,7 +230,9 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
     Returns:
         torch.tensor
     """
-    import torch_npu
+    _NPU_ONLY_TYPES = (HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN)
+    if dst_dtype in _NPU_ONLY_TYPES:
+        import torch_npu
     shared_exponent = None
 
     if dst_dtype == HIFLOAT8:
@@ -274,7 +276,9 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
     Returns:
         torch.tensor
     """
-    import torch_npu    
+    _NPU_ONLY_TYPES = (HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN)
+    if dst_dtype in _NPU_ONLY_TYPES:
+        import torch_npu
     ori_dtype = tensor.dtype
     ori_shape = tensor.shape
     quantized_tensor, shared_exponent = quant_tensor(tensor, dst_dtype, scale, offset, group_size)
