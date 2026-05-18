@@ -88,3 +88,59 @@ class TestBaseQuantizeFakeQuant(unittest.TestCase):
         expected = F.linear(x, dq_w, mod.bias)
         self.assertTrue(torch.allclose(fake_out, expected),
                         f"max diff: {(fake_out - expected).abs().max()}")
+
+
+class TestMinMaxFakeQuant(unittest.TestCase):
+    """MinMaxQuant forward uses fake quant after calibration."""
+
+    def setUp(self):
+        sys.modules.pop('torch_npu', None)
+
+    def _cfg(self, weight_only=True):
+        return {
+            'batch_num': 2,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': 'int8', 'symmetric': True,
+                           'strategy': 'tensor', 'enable_quant': not weight_only},
+        }
+
+    def test_during_calibration_output_equals_fp(self):
+        """weight+act path: output equals fp_out while cur_batch <= batch_num."""
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = MinMaxQuant(linear, 'l', self._cfg(weight_only=False))
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        fp_ref = linear(x)
+        out = mod(x)   # cur_batch=1, batch_num=2 → calibrating
+        self.assertTrue(torch.allclose(fp_ref, out),
+                        "During calibration, output should equal float output")
+
+    def test_weight_compress_only_applies_fake_quant_immediately(self):
+        """weight_compress_only=True: every forward applies fake quant."""
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = MinMaxQuant(linear, 'l', self._cfg(weight_only=True))
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        out = mod(x)
+        dq_w = quant_dequant_tensor(mod.weight.data, 'int8', mod.scale_w, mod.offset_w)
+        expected = F.linear(x, dq_w, mod.bias)
+        self.assertTrue(torch.allclose(out, expected),
+                        f"max diff: {(out - expected).abs().max()}")
+
+    def test_after_calibration_weight_act_fake_quant(self):
+        """weight+act: after batch_num rounds, both are fake-quanted."""
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = MinMaxQuant(linear, 'l', self._cfg(weight_only=False))
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        mod(x)   # cur_batch=1 (calibrating)
+        mod(x)   # cur_batch=2 == batch_num → scale_d computed, returns fp_out
+        out = mod(x)  # cur_batch=3 > batch_num → fake quant
+        dq_w = quant_dequant_tensor(mod.weight.data, 'int8', mod.scale_w, mod.offset_w)
+        dq_x = quant_dequant_tensor(x, 'int8', mod.scale_d, mod.offset_d)
+        expected = F.linear(dq_x, dq_w, mod.bias)
+        self.assertTrue(torch.allclose(out, expected),
+                        f"max diff: {(out - expected).abs().max()}")
