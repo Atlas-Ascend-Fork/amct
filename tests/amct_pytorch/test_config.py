@@ -109,6 +109,66 @@ class TestConfigParse(unittest.TestCase):
         self.assertEqual(len(detail_config.get('linear1').get('algorithm')), 1)
         self.assertEqual(detail_config.get('linear1').get('algorithm').get('smoothquant').get('smooth_strength'), 0.5)
 
+    def test_int8_int4_minmax_cfg(self):
+        model_fp16 = copy.deepcopy(self.test_model).to(torch.float16)
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'minmax'},
+            'skip_layers': {'lm_head'}
+        }
+        detail_config = parse_config(model_fp16, cfg, AlgorithmRegistry)
+
+        self.assertEqual(len(detail_config.keys()), 2)
+        self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('quant_type'), 'int4')
+        self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('strategy'), 'channel')
+        self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('quant_type'), 'int8')
+        self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('strategy'), 'tensor')
+        self.assertEqual(list(detail_config.get('linear1').get('algorithm'))[0], 'minmax')
+
+    def test_int8_int4_smooth_cfg(self):
+        model_fp16 = copy.deepcopy(self.test_model).to(torch.float16)
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+            'skip_layers': {'lm_head'}
+        }
+        detail_config = parse_config(model_fp16, cfg, AlgorithmRegistry)
+
+        self.assertEqual(len(detail_config.keys()), 2)
+        self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('quant_type'), 'int4')
+        self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear1').get('weights_cfg').get('strategy'), 'channel')
+        self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('quant_type'), 'int8')
+        self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('symmetric'), True)
+        self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('strategy'), 'tensor')
+        self.assertEqual(detail_config.get('linear1').get('algorithm').get('smoothquant').get('smooth_strength'), 0.5)
+
     def test_invalid_batch_num(self):
         invalid_batch_num_cfg = {
             'batch_num': 1.2,
@@ -317,8 +377,8 @@ class TestConfigParse(unittest.TestCase):
             
             self.assertIn('Smoothquant smooth_strength only support float (0, 1), but got', str(e))
 
-    def test_unsupported_quant_type_comb(self):
-        unsupported_quant_type_comb_cfg = {
+    def test_int8_int4_quant_type_comb(self):
+        int8_int4_quant_type_comb_cfg = {
             'batch_num': 1,
             'quant_cfg': {
                 'weights': {
@@ -334,11 +394,9 @@ class TestConfigParse(unittest.TestCase):
             },
             'algorithm': {'minmax'},
         }
-        try:
-            detail_config = parse_config(self.test_model, unsupported_quant_type_comb_cfg, AlgorithmRegistry)
-        except Exception as e:
-            
-            self.assertIn('Do not support combination int8 int4 of act and weight quant dtype', str(e))
+        detail_config = parse_config(copy.deepcopy(self.test_model).to(torch.float16),
+                                     int8_int4_quant_type_comb_cfg, AlgorithmRegistry)
+        self.assertEqual(len(detail_config.keys()), 2)
 
     def test_unsupported_algo_for_quant_type_comb(self):
         unsupported_algo_quant_type_comb_cfg = {
@@ -483,7 +541,7 @@ class TestConfigParse(unittest.TestCase):
             'quant_cfg': {
                 'weights': {
                     'type': 'int8',
-                    'symmetric': False,
+                    'symmetric': True,
                     'strategy': 'group',
                     'group_size': 32
                 },
@@ -557,7 +615,7 @@ class TestConfigParse(unittest.TestCase):
             'quant_cfg': {
                 'weights': {
                     'type': 'int8',
-                    'symmetric': False,
+                    'symmetric': True,
                     'strategy': 'tensor'
                 },
                 'inputs': {
@@ -581,7 +639,7 @@ class TestConfigParse(unittest.TestCase):
             'quant_cfg': {
                 'weights': {
                     'type': 'int8',
-                    'symmetric': False,
+                    'symmetric': True,
                     'strategy': 'tensor'
                 },
                 'inputs': {
@@ -597,6 +655,140 @@ class TestConfigParse(unittest.TestCase):
             detail_config = parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
             self.assertIn('Inputs strategy token do not support asymmetric quantization', str(e))
+
+    def test_int8_int8_weight_asymmetric_invalid_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': False,
+                    'strategy': 'channel'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.8}}
+        }
+        model = self.test_model.to(torch.bfloat16)
+        try:
+            parse_config(model, cfg, AlgorithmRegistry)
+        except Exception as e:
+            self.assertIn('int8 int8 only support symmetric weight quantization', str(e))
+
+    def test_int8_int4_weight_asymmetric_invalid_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int4',
+                    'symmetric': False,
+                    'strategy': 'channel'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'minmax'},
+        }
+        model = self.test_model.to(torch.float16)
+        try:
+            parse_config(model, cfg, AlgorithmRegistry)
+        except Exception as e:
+            self.assertIn('int8 int4 only support symmetric weight quantization', str(e))
+
+    def test_int8_int4_group_invalid_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        model = self.test_model.to(torch.float16)
+        try:
+            parse_config(model, cfg, AlgorithmRegistry)
+        except Exception as e:
+            self.assertIn('int8 int4 only support weight quant strategy tensor or channel', str(e))
+
+    def test_int8_int4_token_invalid_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'token',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        model = self.test_model.to(torch.float16)
+        try:
+            parse_config(model, cfg, AlgorithmRegistry)
+        except Exception as e:
+            self.assertIn('int8 int4 only support activation quant strategy tensor', str(e))
+
+    def test_int8_int4_activation_asymmetric_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'tensor'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': False,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'minmax'},
+        }
+        detail_config = parse_config(copy.deepcopy(self.test_model).to(torch.float16), cfg, AlgorithmRegistry)
+        self.assertEqual(len(detail_config.keys()), 2)
+        self.assertEqual(detail_config.get('linear1').get('inputs_cfg').get('symmetric'), False)
+
+    def test_int8_int4_dtype_skip_cfg(self):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int4',
+                    'symmetric': True,
+                    'strategy': 'channel'
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        detail_config = parse_config(copy.deepcopy(self.test_model).to(torch.bfloat16), cfg, AlgorithmRegistry)
+        self.assertEqual(len(detail_config.keys()), 0)
 
     def test_float8_float4_smooth_cfg(self):
         cfg = {

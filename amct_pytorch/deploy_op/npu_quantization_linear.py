@@ -17,7 +17,7 @@
 import torch
 from amct_pytorch.utils.quant_util import quant_weight, apply_smooth_weight
 from amct_pytorch.quantize_op.utils import apply_progressive_quant
-from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, FLOAT4_E2M1
+from amct_pytorch.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, INT4, FLOAT4_E2M1
 from amct_pytorch.utils.check_params import check_parameters_in_schema
 
 
@@ -123,7 +123,7 @@ class NpuQuantizationLinear(torch.nn.Module):
             weight = apply_smooth_weight(quant_module.scale, weight)
             self.register_buffer('scale_factor', (1 / quant_module.scale).to(device=device))
         weight_tensor = self._get_quantize_wts(quant_module, weight, device)
-        if self.wts_type in [HIFLOAT8, INT8, FLOAT8_E4M3FN]:
+        if self.wts_type in [HIFLOAT8, INT8, INT4, FLOAT8_E4M3FN]:
             self.register_buffer('quantized_weight', weight_tensor.contiguous())
         else:
             self.register_buffer('quantized_weight', weight_tensor)
@@ -157,6 +157,12 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.register_buffer('deq_scale', self.scale_w_tensor)
         elif self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
             self.register_buffer('deq_scale', self.scale_w2)
+        elif self.act_type == INT8 and self.output_dtype == torch.float16:
+            # deq_scale must be set to int64 of npu op when fp16 activation do int8 quantization
+            import torch_npu
+            deq_scale_tensor = quant_module.scale_d.to(device=device) * self.scale_w_tensor
+            deq_scale_tensor = torch_npu.npu_trans_quant_param(deq_scale_tensor.reshape(1, -1)).reshape(-1)
+            self.register_buffer('deq_scale', deq_scale_tensor)
         else:
             deq_scale_tensor = quant_module.scale_d.to(device=device) * self.scale_w_tensor
             self.register_buffer('deq_scale', deq_scale_tensor)
@@ -198,7 +204,7 @@ class NpuQuantizationLinear(torch.nn.Module):
                 self.bias = self.bias + self.offset_bias
         else:
             if self.offset_bias is None:
-                self.bias = None 
+                self.bias = None
             else:
                 self.bias = self.offset_bias
 
@@ -225,5 +231,8 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.scale_w_tensor = quant_module.scale_w.to(device=device)
             weight_tensor = quant_weight(weight, self.wts_type, self.scale_w_tensor, group_size=self.group_size)
             weight_tensor = torch.transpose(weight_tensor, 1, 0)
+            if self.wts_type == INT4:
+                weight_tensor = torch_npu.npu_convert_weight_to_int4pack(
+                    weight_tensor.contiguous().npu()).to(device=device)
             self.scale_w_tensor = self.scale_w_tensor.reshape(-1)
         return weight_tensor
