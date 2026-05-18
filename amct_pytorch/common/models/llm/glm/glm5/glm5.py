@@ -2,16 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from loguru import logger
-
-from amct_pytorch.common.models.llm.common.base import BaseModel
-from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, make_ptq_unit
-from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP
-from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts, is_packed_experts, pack_gated_expert_weights
-from amct_pytorch.algorithms.quant import AlgoBuildContext
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
-from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-from amct_pytorch.quantization.bit_policy import ensure_bit_policy
-from amct_pytorch.common.models import MODEL_REGISTRY
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     ALL_ATTENTION_FUNCTIONS,
     GlmMoeDsaAttention,
@@ -20,6 +10,20 @@ from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     eager_attention_forward,
     is_flash_attention_requested,
 )
+
+from amct_pytorch.algorithms.quant import AlgoBuildContext
+from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.models.llm.common.base import BaseModel
+from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, make_ptq_unit
+from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP
+from amct_pytorch.common.models.llm.qwen.moe_common import (
+    QuantGatedExperts,
+    is_packed_experts,
+    pack_gated_expert_weights,
+)
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
+from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def _linear_with_structure(hidden_states, linear, structure_transform=None, name=None):
@@ -49,7 +53,8 @@ class QuantGLM5Indexer(nn.Module):
         self._cached_keys = None
 
     @torch.no_grad()
-    def forward(self, hidden_states, q_resid, position_embeddings, attention_mask, use_cache=False, structure_transform=None):
+    def forward(self, hidden_states, q_resid, position_embeddings,
+                attention_mask, use_cache=False, structure_transform=None):
         batch_size, seq_len, _ = hidden_states.shape
         cos, sin = position_embeddings
 
@@ -59,7 +64,12 @@ class QuantGLM5Indexer(nn.Module):
         q_pe = apply_rotary_pos_emb(q_pe, cos, sin, unsqueeze_dim=2)
         q = torch.cat([q_pe, q_nope], dim=-1)
 
-        k = self.k_norm(_linear_with_structure(hidden_states, self.wk, structure_transform=structure_transform, name="wk"))
+        k = self.k_norm(
+    _linear_with_structure(
+        hidden_states,
+        self.wk,
+        structure_transform=structure_transform,
+         name="wk"))
         k_pe, k_nope = torch.split(k, [self.qk_rope_head_dim, self.head_dim - self.qk_rope_head_dim], dim=-1)
         k_pe = apply_rotary_pos_emb(k_pe.unsqueeze(2), cos, sin, unsqueeze_dim=2).squeeze(2)
         k = torch.cat([k_pe, k_nope], dim=-1)

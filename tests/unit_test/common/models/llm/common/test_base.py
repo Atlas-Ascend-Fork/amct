@@ -1,4 +1,3 @@
-import importlib
 import json
 import os
 from types import SimpleNamespace
@@ -358,10 +357,7 @@ def test_iter_ptq_units_moe_uses_iter_ptq_expert_modules():
     assert [u.name for u in units] == ["expert_0", "expert_1"]
 
 
-def test_load_selected_layer_ptq_params_attn_cache_target(monkeypatch):
-    warnings = []
-    monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
-                        importlib.import_module("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+def test_load_selected_layer_ptq_params_attn_cache_target():
     stub = _StubModel(
         quant_target=[QUANT_TARGET_ATTN_CACHE],
         args=SimpleNamespace(
@@ -404,10 +400,7 @@ def test_load_selected_layer_ptq_params_moe_target():
     assert seen[0][1] == "/moe_params"
 
 
-def test_load_selected_layer_ptq_params_partial_warns(monkeypatch):
-    warnings = []
-    monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
-                        importlib.import_module("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+def test_load_selected_layer_ptq_params_partial_warns():
     stub = _StubModel(
         quant_target=[QUANT_TARGET_MLP],
         args=SimpleNamespace(
@@ -421,14 +414,12 @@ def test_load_selected_layer_ptq_params_partial_warns(monkeypatch):
         return {"loaded": ["x"], "missing": ["y"]}
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
-    stub.load_selected_layer_ptq_params(1, block=nn.Module())
-    assert any("Partially loaded" in w for w in warnings)
+    results = stub.load_selected_layer_ptq_params(1, block=nn.Module())
+    assert results[QUANT_TARGET_MLP]["loaded"] == ["x"]
+    assert results[QUANT_TARGET_MLP]["missing"] == ["y"]
 
 
-def test_load_selected_layer_ptq_params_full_missing_warns(monkeypatch):
-    warnings = []
-    monkeypatch.setattr("amct_pytorch.common.models.llm.common.base.logger",
-                        importlib.import_module("types").SimpleNamespace(warning=lambda m, *a, **k: warnings.append(m)))
+def test_load_selected_layer_ptq_params_full_missing_warns():
     stub = _StubModel(
         quant_target=[QUANT_TARGET_MLP],
         args=SimpleNamespace(
@@ -442,8 +433,9 @@ def test_load_selected_layer_ptq_params_full_missing_warns(monkeypatch):
         return {"loaded": [], "missing": ["z"]}
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
-    stub.load_selected_layer_ptq_params(2, block=nn.Module())
-    assert any("No PTQ params loaded" in w for w in warnings)
+    results = stub.load_selected_layer_ptq_params(2, block=nn.Module())
+    assert results[QUANT_TARGET_MLP]["loaded"] == []
+    assert results[QUANT_TARGET_MLP]["missing"] == ["z"]
 
 
 def test_iter_deploy_bindings_yields_quant_linear_weights(monkeypatch):

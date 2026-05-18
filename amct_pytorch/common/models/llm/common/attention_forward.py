@@ -35,10 +35,10 @@ def scaled_dot_product_attention(module, query, key, value, attn_mask=None, drop
             attn_bias = attn_mask + attn_bias
 
     if enable_gqa:
-        key = key.repeat_interleave(query.size(-3)//key.size(-3), -3)
-        value = value.repeat_interleave(query.size(-3)//value.size(-3), -3)
+        key = key.repeat_interleave(query.size(-3) // key.size(-3), -3)
+        value = value.repeat_interleave(query.size(-3) // value.size(-3), -3)
 
-    attn_weight = module.qk_matmul(query,  key) * scale_factor
+    attn_weight = module.qk_matmul(query, key) * scale_factor
     attn_weight += attn_bias
     attn_weight = torch.softmax(attn_weight, dim=-1)
     attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
