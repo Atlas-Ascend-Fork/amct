@@ -8,8 +8,7 @@ from tqdm import tqdm
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, apply_quant_to_moe_mlp
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.indexer import ModelArgs
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import Block
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import QuantDeepseekV3MLP, QuantDSA
 
 
@@ -23,17 +22,10 @@ class DeepseekV32(BaseModel):
     def __init__(self, args):
         super().__init__(args)
         self.quant_target = args.quant_target
-        self.local_args()
         self.init_cls()
-        self.cls = DeepseekV3DecoderLayer
+        self.cls = Block
         self.model = self.empty_weights_model()
-        self.num_layers = self.args.model_args.n_layers
-
-    def local_args(self):
-        config = Path(__file__).parent / "modeling" / "config_671B_v3.2.json"
-        with open(config) as f:
-            model_args = ModelArgs(**json.load(f))
-        self.args.model_args = model_args
+        self.num_layers = self.config.num_hidden_layers
 
     def float_model(self):
         return super().float_model()
