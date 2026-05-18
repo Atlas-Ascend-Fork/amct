@@ -17,6 +17,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BaseQuantizeModule(nn.Module):
@@ -34,6 +35,8 @@ class BaseQuantizeModule(nn.Module):
         # smooth_factor (SmoothQuant) or AWQ pre-scale; distinct from scale_w
         self.scale = None
         self.clip_max = None
+        self.weight = None
+        self.bias = None
 
     def _quantizable_weight(self):
         # scale_w was computed from weight * smooth_factor for SmoothQuant,
@@ -51,7 +54,6 @@ class BaseQuantizeModule(nn.Module):
 
     @torch.no_grad()
     def _fake_quant_forward(self, inputs):
-        import torch.nn.functional as F
         from amct_pytorch.utils.quant_util import quant_dequant_tensor
 
         dequant_w = quant_dequant_tensor(
