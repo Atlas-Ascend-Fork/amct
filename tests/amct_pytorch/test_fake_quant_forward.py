@@ -115,3 +115,52 @@ class TestMinMaxFakeQuant(unittest.TestCase):
         expected = F.linear(dq_x, dq_w, mod.bias)
         self.assertTrue(torch.allclose(out, expected),
                         f"max diff: {(out - expected).abs().max()}")
+
+
+class TestSmoothQuantFakeQuant(unittest.TestCase):
+    """SmoothQuant forward applies smooth_factor-aware fake quant after calibration."""
+
+    def setUp(self):
+        sys.modules.pop('torch_npu', None)
+
+    def _cfg(self):
+        return {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': 'int8', 'symmetric': True, 'strategy': 'tensor'},
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+        }
+
+    def test_after_calibration_uses_smooth_factor(self):
+        """Fake quant uses weight * smooth_factor and input / smooth_factor."""
+        from amct_pytorch.quantize_op.smooth_quant_module import SmoothQuant
+        from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = SmoothQuant(linear, 'l', self._cfg())
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        mod(x)           # cur_batch=1 == batch_num → params computed, returns raw output
+        out = mod(x)     # cur_batch=2 > batch_num → fake quant
+
+        smooth = mod.scale  # smooth_factor, shape [1, cin]
+        dq_w = quant_dequant_tensor(
+            mod.weight.data * smooth.to(dtype=mod.weight.dtype),
+            'int8', mod.scale_w, mod.offset_w)
+        dq_x = quant_dequant_tensor(
+            x / smooth.to(dtype=x.dtype),
+            'int8', mod.scale_d, mod.offset_d)
+        expected = F.linear(dq_x, dq_w, mod.bias)
+        self.assertTrue(torch.allclose(out, expected),
+                        f"max diff: {(out - expected).abs().max()}")
+
+    def test_quantizable_weight_applies_smooth_factor(self):
+        """_quantizable_weight returns weight * smooth_factor (not raw weight)."""
+        from amct_pytorch.quantize_op.smooth_quant_module import SmoothQuant
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = SmoothQuant(linear, 'l', self._cfg())
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        mod(x)   # calibration completes, mod.scale = smooth_factor
+        smooth = mod.scale
+        expected_qw = mod.weight.data * smooth.to(dtype=mod.weight.dtype)
+        self.assertTrue(torch.allclose(mod._quantizable_weight(), expected_qw),
+                        "_quantizable_weight must return weight * smooth_factor")
