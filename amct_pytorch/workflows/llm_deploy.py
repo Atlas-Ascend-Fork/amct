@@ -18,6 +18,7 @@ from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import register_dtype
+from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
 class LlmDeployWorkflow:
@@ -223,15 +224,41 @@ class LlmDeployWorkflow:
 
         updated_weight_map = {}
         model_dir = Path(self.model_path)
-        for source_file in tqdm(sorted(weights_by_file), desc="Tensor casting..."):
+        loaded_files = {}
+        for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             source_path = model_dir / source_file
-            converted = {}
-            with safe_open(str(source_path), framework="pt", device="cpu") as f:
-                for weight_name in weights_by_file[source_file]:
-                    tensor = f.get_tensor(weight_name)
-                    converted[weight_name] = self._convert_tensor(weight_name, tensor)
-            self._write_safetensor_file(source_file, converted)
-            for weight_name in converted:
+            current_state_dict = load_file(source_path, device="cpu")
+            loaded_files[source_file] = current_state_dict
+
+            new_state_dict = {}
+            for weight_name, weight in current_state_dict.items():
+                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
+                if weight_name.endswith(scale_prefix):
+                    continue
+                elif weight.element_size() == 1:
+                    # FP8 weight
+                    try:
+                        # Get scale_inv from the correct file
+                        file_name = original_weight_map[scale_inv_name]
+                        if file_name not in loaded_files:
+                            file_path = model_dir / file_name
+                            loaded_files[file_name] = load_file(file_path, device="cpu")
+                        scale_inv = loaded_files[file_name][scale_inv_name]
+                        if weight.dtype == torch.int8:
+                            weight = weight_dequant(weight, scale_inv, block_size=32, is_mx=True, is_packed=True)
+                        else:
+                            weight = weight_dequant(weight, scale_inv)
+                    except KeyError:
+                        print(
+                            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
+                    new_state_dict[weight_name] = weight
+                    new_weight_map[weight_name] = source_file
+                else:
+                    new_state_dict[weight_name] = weight
+                    new_weight_map[weight_name] = source_file
+
+            self._write_safetensor_file(source_file, new_state_dict)
+            for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file
 
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
