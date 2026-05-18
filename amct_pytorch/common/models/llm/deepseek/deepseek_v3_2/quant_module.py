@@ -25,7 +25,7 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.indexer import rotate_activation, fp32_index
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import rotate_activation, fp32_index
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import (
     DeepseekV3Attention, DeepseekV3MLP, apply_rotary_pos_emb,
 )
