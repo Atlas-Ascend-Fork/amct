@@ -100,13 +100,13 @@ class MinMaxQuant(BaseQuantizeModule):
         if self.weight_compress_only:
             if self.scale_w is not None:
                 return self._fake_quant_forward(inputs)
-            return fp_out
+            return fp_out  # progressive FP8+FP4 path: scale_w1/scale_w2 used instead
 
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
             if self.scale_w is not None:
                 return self._fake_quant_forward(inputs)
-            return fp_out
+            return fp_out  # progressive FP8+FP4 path: scale_w1/scale_w2 used instead
         if self.act_granularity == 'tensor':
             batch_max = torch.max(inputs).reshape(-1)
             batch_min = torch.min(inputs).reshape(-1)
