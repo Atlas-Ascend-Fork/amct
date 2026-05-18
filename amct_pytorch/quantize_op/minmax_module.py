@@ -98,11 +98,15 @@ class MinMaxQuant(BaseQuantizeModule):
         fp_out = self.ori_module(inputs)
 
         if self.weight_compress_only:
-            return self._fake_quant_forward(inputs)
+            if self.scale_w is not None:
+                return self._fake_quant_forward(inputs)
+            return fp_out
 
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
-            return self._fake_quant_forward(inputs)
+            if self.scale_w is not None:
+                return self._fake_quant_forward(inputs)
+            return fp_out
         if self.act_granularity == 'tensor':
             batch_max = torch.max(inputs).reshape(-1)
             batch_min = torch.min(inputs).reshape(-1)
