@@ -36,7 +36,11 @@ NUM_BITS_4 = 4
 NUM_BITS_8 = 8
 
 
-def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 128, is_mx: bool=False) -> torch.Tensor:
+def weight_dequant(
+    weight: torch.Tensor,
+    scale: torch.Tensor,
+    block_size: int = 128,
+     is_mx: bool = False) -> torch.Tensor:
     """
     Dequantizes the given weight tensor using the provided scale tensor, efficiently handling cases where
     `weight` is not a multiple of `block_size` by broadcasting `scale`.

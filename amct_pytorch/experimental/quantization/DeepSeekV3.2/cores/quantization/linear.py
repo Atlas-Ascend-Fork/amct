@@ -40,8 +40,8 @@ class QuantLinear(nn.Module):
         if self.lwc:
             lwc_dim = self.linear.weight.shape[0] if self.lwc else -1
             init_value = 4.
-            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1))*init_value, requires_grad=True)
-            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1))*init_value, requires_grad=True)
+            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1)) * init_value, requires_grad=True)
+            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1)) * init_value, requires_grad=True)
             self.sigmoid = nn.Sigmoid()
 
         self._eval_mode = False

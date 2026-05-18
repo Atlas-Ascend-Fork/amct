@@ -40,10 +40,13 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
     quant_config["config_groups"]["group_0"].update(generate_quant_group(a_num_bits=8, w_num_bits=8, qtype=qtype))
     if is_mx:
         if w4a4:
-            quant_config["config_groups"]["group_1"].update(generate_quant_group(a_num_bits=4, w_num_bits=4, qtype=qtype))
-            quant_config["config_groups"]["group_2"].update(generate_quant_group(a_num_bits=8, w_num_bits=4, qtype=qtype))
+            quant_config["config_groups"]["group_1"].update(
+                generate_quant_group(a_num_bits=4, w_num_bits=4, qtype=qtype))
+            quant_config["config_groups"]["group_2"].update(
+                generate_quant_group(a_num_bits=8, w_num_bits=4, qtype=qtype))
         else:
-            quant_config["config_groups"]["group_1"].update(generate_quant_group(a_num_bits=8, w_num_bits=4 if w4a8 else 8, qtype=qtype))
+            quant_config["config_groups"]["group_1"].update(generate_quant_group(
+                a_num_bits=8, w_num_bits=4 if w4a8 else 8, qtype=qtype))
         quant_config["weight_block_size"] = [1, 32]
     return quant_config
 

@@ -10,7 +10,6 @@ from loguru import logger
 
 from amct_pytorch.common.datasets.preproc import get_wiki_inputs
 from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
-# from amct_pytorch.common.models.llm.common import PtqUnit
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.optimization import register_solvers
 from amct_pytorch.quantization.dtypes import register_dtype
@@ -105,7 +104,10 @@ class LlmEvalWorkflow:
 
         if self._has_relevant_quant():
             return True, True, "Eval mode=quant: run quant modules with quantization enabled."
-        return True, False, "Eval mode=quant with no <16-bit entries in policy: run rebuilt quant modules with quantization disabled."
+        return True, False, (
+            "Eval mode=quant with no <16-bit entries in policy: "
+            "run rebuilt quant modules with quantization disabled."
+        )
 
     def _run_blockwise(self,):
         tokenizer = self.pipeline.tokenizer
@@ -128,7 +130,7 @@ class LlmEvalWorkflow:
 
 
     def _run_modelwise(self, ):
-        model =  self.pipeline.float_model().eval().to(self.device)
+        model = self.pipeline.float_model().eval().to(self.device)
         tokenizer = self.pipeline.tokenizer
         samples = get_wiki_inputs(tokenizer, self.seq_len)
         logger.info("Loaded {} eval samples for modelwise eval.", len(samples))

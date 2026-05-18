@@ -21,8 +21,6 @@ __all__ = [
     'BUILT_IN_ALGORITHM',
 ]
 
-from .registry_factory import ALGO_REGISTRY
-from .register_algo import Algorithm
 
 AlgorithmRegistry = Algorithm()
 BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast', 'quantile']
@@ -38,6 +36,14 @@ from amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear import NpuQuanti
 from amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
 from amct_pytorch.classic.ptq.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
 from amct_pytorch.classic.ptq.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
+from amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
+from amct_pytorch.classic.ptq.deploy_op.npu_quantization_deepseekv3_attention import NpuDeepseekV3AttentionQuant
+from amct_pytorch.classic.ptq.deploy_op.npu_quantization_longcat_flashmla import NpuLongcatFlashMLA
+from .register_algo import Algorithm
+from .registry_factory import ALGO_REGISTRY
+
+AlgorithmRegistry = Algorithm()
+BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast', 'quantile']
 
 AlgorithmRegistry.register('gptq', 'Linear', GPTQuant, NpuWeightQuantizedLinear)
 AlgorithmRegistry.register('awq', 'Linear', LinearAWQuant, NpuWeightQuantizedLinear)

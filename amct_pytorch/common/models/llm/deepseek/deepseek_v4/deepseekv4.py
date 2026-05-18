@@ -72,8 +72,8 @@ class DeepseekV4(BaseModel):
         head_prefix = "embed." if tie else "head."
         return [
             (self.model.embed, "embed."),
-            (self.model.norm,  "norm."),
-            (self.model.head,  head_prefix),
+            (self.model.norm, "norm."),
+            (self.model.head, head_prefix),
         ]
 
     def load_embed_state_dict(self):
@@ -101,7 +101,8 @@ class DeepseekV4(BaseModel):
         BaseModel) for PTQ. PTQ needs CPU staging so it can move one expert
         at a time onto the NPU during per-MLP learning; the sharded path
         pins every expert to a fixed NPU via AlignDevicesHook, which fights
-        PTQ's ``.to(device)`` / ``.cpu()`` cycle."""
+        PTQ's ``.to(device)`` / ``.cpu()`` cycle.
+        """
         if self._sharded_block:
             return self._block_sharded(layer_idx)
         return super().block(layer_idx)

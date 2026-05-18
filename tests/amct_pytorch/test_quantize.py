@@ -27,6 +27,7 @@ from mock_torch_npu import (
     mock_npu_quant_matmul,
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
+    mock_npu
 )
 
 from amct_pytorch import (

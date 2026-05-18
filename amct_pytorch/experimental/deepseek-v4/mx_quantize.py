@@ -285,7 +285,7 @@ def _quantize_elemwise_core(A, bits, exp_bits, max_norm, round='nearest',
             torch.abs(A) + (A == 0).type(A.dtype)))
 
         # The minimum representable exponent for 8 exp bits is -126
-        min_exp = -(2**(exp_bits-1)) + 2
+        min_exp = -(2**(exp_bits - 1)) + 2
         private_exp = private_exp.clip(min=min_exp)
     else:
         private_exp = None
@@ -369,7 +369,7 @@ def quantize_mx(
     # in the element data format
     shared_exp = shared_exp - emax
 
-    scale_emax = 2**(scale_bits-1) - 1
+    scale_emax = 2**(scale_bits - 1) - 1
     shared_exp[shared_exp > scale_emax] = float("NaN")
     shared_exp[shared_exp < -scale_emax] = -scale_emax
 

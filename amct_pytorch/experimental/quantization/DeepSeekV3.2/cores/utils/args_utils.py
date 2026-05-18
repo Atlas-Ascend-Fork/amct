@@ -30,8 +30,11 @@ def parser_gen():
 
     # Activation Quantization Arguments
     parser.add_argument('--a_bits', type=int, default=16,
-                        help='''Number of bits for inputs of the linear layers.
-                            This applies to all linear layers in the model, including down-projection and out-projection.''')
+                    help=(
+                        'Number of bits for inputs of the linear layers. '
+                        'This applies to all linear layers in the model, '
+                        'including down-projection and out-projection.'
+                    ))
     parser.add_argument('--a_asym', action="store_true", default=False,
                         help='Use asymmetric activation quantization.')
 

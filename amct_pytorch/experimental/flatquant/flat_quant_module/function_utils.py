@@ -1,9 +1,10 @@
 import math
-import torch
-import numpy as np
-
-from scipy.linalg import qr
 from collections import OrderedDict
+
+import numpy as np
+import torch
+from scipy.linalg import qr
+
 
 def get_init_scale(w_smax, x_smax, alpha=0.5):
     return (w_smax.pow(1 - alpha) / x_smax.pow(alpha)).clamp(min=1e-5)
@@ -68,7 +69,9 @@ def print_trainable_parameters(model):
         all_param += param.numel()
         if param.requires_grad:
             trainable_params += param.numel()
-    print(f"trainable params: {trainable_params} || all params: {all_param} || trainable: {100 * trainable_params / all_param:.2f}%")
+    print(
+    f"trainable params: {trainable_params} || all params: {all_param} || trainable: {
+        100 * trainable_params / all_param:.2f}%")
 
 
 def set_require_grad_all(model, requires_grad):
