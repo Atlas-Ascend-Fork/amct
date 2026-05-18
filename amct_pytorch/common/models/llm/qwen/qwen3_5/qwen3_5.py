@@ -10,7 +10,9 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     apply_quant_to_attn,
     apply_quant_to_moe_mlp,
 )
-from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import QuantQwen35LinearAttn, QuantQwen35Attn, QuantQwen35MLP
+from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
+    QuantQwen35Attn, QuantQwen35LinearAttn, QuantQwen35MLP,
+)
 
 
 # for reference, qwen3.5-4b ppl is 9.5375

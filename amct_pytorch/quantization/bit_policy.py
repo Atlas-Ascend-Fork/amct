@@ -39,7 +39,8 @@ class _GroupBits:
     @property
     def default(self) -> LayerBits:
         """Group-level (w, a) — falls through to top-level when the group has
-        no complete entry of its own."""
+        no complete entry of its own.
+        """
         return LayerBits(*self._policy.linear_bits(group=self._group))
 
 

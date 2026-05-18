@@ -19,14 +19,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from enum import Enum, IntEnum
+
 import torch
 from torch import Tensor
-from enum import Enum, IntEnum
 from torchao.prototype.custom_fp_utils import (
     _f32_to_floatx_unpacked,
     _floatx_unpacked_to_f32,
 )
-
 
 FP32_EXPONENT_BIAS = 127
 FP32_MIN_NORMAL = 2 ** (-FP32_EXPONENT_BIAS + 1)
@@ -84,7 +84,7 @@ def f4_unpacked_to_f32(x: torch.Tensor):
 def round_to_decimal(x):
     exponent = torch.floor(torch.log2(x))
     mantissa = x / (2**exponent)
-    exponent = torch.where(mantissa > 1.75, exponent+1, exponent)
+    exponent = torch.where(mantissa > 1.75, exponent + 1, exponent)
     return exponent
 
 def shared_exponents(x: Tensor, emax):

@@ -24,8 +24,9 @@ DEEPSEEK_PRETRAINED_CONFIG_ARCHIVE_MAP = {}
 
 class DeepseekV3Config(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`DeepseekV3Model`]. It is used to instantiate an DeepSeek
-    model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
+    This is the configuration class to store the configuration of a [`DeepseekV3Model`]. It is used to instantiate
+    an DeepSeek model according to the specified arguments, defining the model architecture. Instantiating a
+    configuration with the
     defaults will yield a similar configuration to that of the DeepSeek-V3.
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
@@ -56,7 +57,8 @@ class DeepseekV3Config(PretrainedConfig):
         n_group (`int`, *optional*, defaults to None):
             Number of groups for routed experts.
         topk_group (`int`, *optional*, defaults to None):
-            Number of selected groups for each token(for each token, ensuring the selected experts is only within `topk_group` groups).
+            Number of selected groups for each token(for each token, ensuring the
+            selected experts is only within `topk_group` groups).
         num_experts_per_tok (`int`, *optional*, defaults to None):
             Number of selected experts, None means dense model.
         moe_layer_freq (`int`, *optional*, defaults to 1):

@@ -65,7 +65,7 @@ class LearnableHadamard(nn.Module):
         self.size = ctx.matrix_size
         self.transform = InvSingleTransMatrix(self.size)
 
-    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str = None) -> torch.Tensor:
         return self.transform(x, inv_t=inv_t)
 
     def trainable_params(self):

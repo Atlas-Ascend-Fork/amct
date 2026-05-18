@@ -42,11 +42,36 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
         bits = quant_args.bit_policy["attn-linear"]
         out, qkv = bits["out_proj"], bits["in_proj_qkv"]
         z, b, a = bits["in_proj_z"], bits["in_proj_b"], bits["in_proj_a"]
-        self.out_proj = QuantLinear(quant_args, attn_module.out_proj, w_bits=out.w, name="out_proj") if self.enable_attn_linear else PlainLinear(attn_module.out_proj)
-        self.in_proj_qkv = QuantLinear(quant_args, attn_module.in_proj_qkv, w_bits=qkv.w, name="in_proj_qkv") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_qkv)
-        self.in_proj_z = QuantLinear(quant_args, attn_module.in_proj_z, w_bits=z.w, name="in_proj_z") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_z)
-        self.in_proj_b = QuantLinear(quant_args, attn_module.in_proj_b, w_bits=b.w, name="in_proj_b") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_b)
-        self.in_proj_a = QuantLinear(quant_args, attn_module.in_proj_a, w_bits=a.w, name="in_proj_a") if self.enable_attn_linear else PlainLinear(attn_module.in_proj_a)
+        self.out_proj = QuantLinear(
+            quant_args,
+            attn_module.out_proj,
+            w_bits=out.w,
+            name="out_proj") if self.enable_attn_linear else PlainLinear(
+            attn_module.out_proj)
+        self.in_proj_qkv = QuantLinear(
+            quant_args,
+            attn_module.in_proj_qkv,
+            w_bits=qkv.w,
+            name="in_proj_qkv") if self.enable_attn_linear else PlainLinear(
+            attn_module.in_proj_qkv)
+        self.in_proj_z = QuantLinear(
+            quant_args,
+            attn_module.in_proj_z,
+            w_bits=z.w,
+            name="in_proj_z") if self.enable_attn_linear else PlainLinear(
+            attn_module.in_proj_z)
+        self.in_proj_b = QuantLinear(
+            quant_args,
+            attn_module.in_proj_b,
+            w_bits=b.w,
+            name="in_proj_b") if self.enable_attn_linear else PlainLinear(
+            attn_module.in_proj_b)
+        self.in_proj_a = QuantLinear(
+            quant_args,
+            attn_module.in_proj_a,
+            w_bits=a.w,
+            name="in_proj_a") if self.enable_attn_linear else PlainLinear(
+            attn_module.in_proj_a)
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
@@ -77,7 +102,9 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
         hidden_states = self.inp_afq(hidden_states)
 
         mixed_qkv = self.in_proj_qkv(hidden_states, structure_transform=self.input_transform).transpose(1, 2)
-        z = self.in_proj_z(hidden_states, structure_transform=self.input_transform).reshape(batch_size, seq_len, -1, self.head_v_dim)
+        z = self.in_proj_z(
+    hidden_states, structure_transform=self.input_transform).reshape(
+        batch_size, seq_len, -1, self.head_v_dim)
         b = self.in_proj_b(hidden_states, structure_transform=self.input_transform)
         a = self.in_proj_a(hidden_states, structure_transform=self.input_transform)
 
@@ -132,10 +159,30 @@ class QuantQwen35Attn(Qwen3_5Attention):
         self.value_dim = attn_module.config.num_attention_heads * self.head_dim
         bits = quant_args.bit_policy["attn-linear"]
         q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
-        self.q_proj = QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
-        self.k_proj = QuantLinear(quant_args, attn_module.k_proj, w_bits=k.w, name="k_proj") if self.enable_attn_linear else PlainLinear(attn_module.k_proj)
-        self.v_proj = QuantLinear(quant_args, attn_module.v_proj, w_bits=v.w, name="v_proj") if self.enable_attn_linear else PlainLinear(attn_module.v_proj)
-        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
+        self.q_proj = QuantLinear(
+    quant_args,
+    attn_module.q_proj,
+    w_bits=q.w,
+    name="q_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.q_proj)
+        self.k_proj = QuantLinear(
+    quant_args,
+    attn_module.k_proj,
+    w_bits=k.w,
+    name="k_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.k_proj)
+        self.v_proj = QuantLinear(
+    quant_args,
+    attn_module.v_proj,
+    w_bits=v.w,
+    name="v_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.v_proj)
+        self.o_proj = QuantLinear(
+    quant_args,
+    attn_module.o_proj,
+    w_bits=o.w,
+    name="o_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.o_proj)
         self.qk_matmul = QuantizedMatmul(
             self.quant_args,
             l_bits=quant_args.bit_policy.cache_bits("q"),
@@ -183,13 +230,23 @@ class QuantQwen35Attn(Qwen3_5Attention):
         hidden_states = self.inp_afq(hidden_states)
 
         query_states, gate = torch.chunk(
-            self.q_proj(hidden_states, structure_transform=self.input_transform).view(*input_shape, -1, self.head_dim * 2), 2, dim=-1
-        )
+    self.q_proj(
+        hidden_states, structure_transform=self.input_transform).view(
+            *input_shape, -1, self.head_dim * 2), 2, dim=-1)
         gate = gate.reshape(*input_shape, -1)
 
         query_states = self.q_norm(query_states.view(hidden_shape)).transpose(1, 2)
-        key_states = self.k_norm(self.k_proj(hidden_states, structure_transform=self.input_transform).view(hidden_shape)).transpose(1, 2)
-        value_states = self.v_proj(hidden_states, structure_transform=self.input_transform).view(hidden_shape).transpose(1, 2)
+        key_states = self.k_norm(
+    self.k_proj(
+        hidden_states,
+        structure_transform=self.input_transform).view(hidden_shape)).transpose(
+            1,
+             2)
+        value_states = self.v_proj(
+    hidden_states,
+    structure_transform=self.input_transform).view(hidden_shape).transpose(
+        1,
+         2)
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
