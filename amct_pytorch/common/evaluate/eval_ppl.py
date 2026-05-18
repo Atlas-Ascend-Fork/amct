@@ -34,8 +34,8 @@ def wikitext2_ppl(preds, samples, seq_len=4096):
         )
         if i == 0:
             logger.info(f"iter {i}:loss {loss}")
-        neg_Log_likelihood = loss.float() * seq_len
-        nlls.append(neg_Log_likelihood)
+        neg_log_likelihood = loss.float() * seq_len
+        nlls.append(neg_log_likelihood)
 
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * seq_len))
     torch.npu.empty_cache()

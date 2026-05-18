@@ -50,8 +50,9 @@ def prepare_quant_params(args, layer_idx, param_dir=None):
 
 def prepare_layer(args, layer, layer_idx, cls=QuantDSA):  # use for quantization
     if layer_idx < args.start_block_idx or layer_idx > args.end_block_idx:
-        logger.warning \
-            (f'Layer idx {layer_idx} not in the range {args.start_block_idx}-{args.end_block_idx}, not replace quant layer.')
+        logger.warning(
+            f'Layer idx {layer_idx} not in the range '
+            f'{args.start_block_idx}-{args.end_block_idx}, not replace quant layer.')
         return layer
     if args.train_mode == "mla":
         layer = apply_quant_to_mla(args, layer, cls=cls)

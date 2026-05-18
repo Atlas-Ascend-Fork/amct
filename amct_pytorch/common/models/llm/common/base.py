@@ -1,18 +1,18 @@
 import os
-import torch
 from abc import ABCMeta
-from tqdm import tqdm
+
+import torch
 from accelerate import init_empty_weights
-from loguru import logger
-from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM
-from safetensors import safe_open
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
-from amct_pytorch.common.datasets.ptq_io import save_ptq_inps, save_ptq_kwargs, load_ptq_inps
+from loguru import logger
+from safetensors import safe_open
+from tqdm import tqdm
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, save_ptq_kwargs
 from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
-from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, make_ptq_unit, PtqUnit
-
-
+from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
 
 
 class BaseModel(metaclass=ABCMeta):
@@ -79,8 +79,8 @@ class BaseModel(metaclass=ABCMeta):
         lm_head_prefix = f"{base}embed_tokens." if tie else "lm_head."
         return [
             (self.model.model.embed_tokens, f"{base}embed_tokens."),
-            (self.model.model.norm,         f"{base}norm."),
-            (self.model.lm_head,            lm_head_prefix),
+            (self.model.model.norm, f"{base}norm."),
+            (self.model.lm_head, lm_head_prefix),
         ]
 
     def load_embed_state_dict(self):
@@ -195,7 +195,10 @@ class BaseModel(metaclass=ABCMeta):
         outs, hooks = [], []
         block = self._build_block_for_forward(layer_idx, use_quant_block=use_quant_block)
         if use_quant_block:
-            from amct_pytorch.common.models.llm.common.quant_apply import set_model_act_quant_state, set_model_weight_quant_state
+            from amct_pytorch.common.models.llm.common.quant_apply import (
+                set_model_act_quant_state,
+                set_model_weight_quant_state,
+            )
             set_model_weight_quant_state(block, enable_quant)
             set_model_act_quant_state(block, enable_quant)
 
@@ -305,7 +308,8 @@ class BaseModel(metaclass=ABCMeta):
             for target_name, param_dir in target_specs:
                 if not param_dir:
                     logger.debug(
-                        "No PTQ param dir specified for target '{}' at layer {}; fallback to direct quant for this target.",
+                        "No PTQ param dir specified for target '{}' at layer {}; "
+                        "fallback to direct quant for this target.",
                         target_name,
                         layer_idx,
                     )
@@ -326,7 +330,8 @@ class BaseModel(metaclass=ABCMeta):
                     )
                 elif not result["loaded"]:
                     logger.debug(
-                        "No PTQ params loaded for layer {} target '{}' from '{}'; fallback to direct quant for this target.",
+                        "No PTQ params loaded for layer {} target '{}' from '{}'; "
+                        "fallback to direct quant for this target.",
                         layer_idx,
                         target_name,
                         param_dir,

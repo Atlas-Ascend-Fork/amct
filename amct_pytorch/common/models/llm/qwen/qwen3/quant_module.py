@@ -30,10 +30,30 @@ class QuantQwen3Attn(Qwen3Attention):
         self.value_dim = attn_module.head_dim * attn_module.config.num_attention_heads
         bits = quant_args.bit_policy["attn-linear"]
         q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
-        self.q_proj = QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj") if self.enable_attn_linear else PlainLinear(attn_module.q_proj)
-        self.k_proj = QuantLinear(quant_args, attn_module.k_proj, w_bits=k.w, name="k_proj") if self.enable_attn_linear else PlainLinear(attn_module.k_proj)
-        self.v_proj = QuantLinear(quant_args, attn_module.v_proj, w_bits=v.w, name="v_proj") if self.enable_attn_linear else PlainLinear(attn_module.v_proj)
-        self.o_proj = QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj") if self.enable_attn_linear else PlainLinear(attn_module.o_proj)
+        self.q_proj = QuantLinear(
+    quant_args,
+    attn_module.q_proj,
+    w_bits=q.w,
+    name="q_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.q_proj)
+        self.k_proj = QuantLinear(
+    quant_args,
+    attn_module.k_proj,
+    w_bits=k.w,
+    name="k_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.k_proj)
+        self.v_proj = QuantLinear(
+    quant_args,
+    attn_module.v_proj,
+    w_bits=v.w,
+    name="v_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.v_proj)
+        self.o_proj = QuantLinear(
+    quant_args,
+    attn_module.o_proj,
+    w_bits=o.w,
+    name="o_proj") if self.enable_attn_linear else PlainLinear(
+        attn_module.o_proj)
         self.q_norm = attn_module.q_norm
         self.k_norm = attn_module.k_norm
         self.qk_matmul = QuantizedMatmul(

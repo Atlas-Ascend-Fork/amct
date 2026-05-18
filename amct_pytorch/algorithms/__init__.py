@@ -21,8 +21,6 @@ __all__ = [
     'BUILT_IN_ALGORITHM',
 ]
 
-from .registry_factory import ALGO_REGISTRY
-from .register_algo import Algorithm
 
 from amct_pytorch.classic.ptq.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.classic.ptq.quantize_op.linear_awq_module import LinearAWQuant
@@ -40,6 +38,8 @@ from amct_pytorch.classic.ptq.deploy_op.npu_hif8_cast_quantization_linear import
 from amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
 from amct_pytorch.classic.ptq.deploy_op.npu_quantization_deepseekv3_attention import NpuDeepseekV3AttentionQuant
 from amct_pytorch.classic.ptq.deploy_op.npu_quantization_longcat_flashmla import NpuLongcatFlashMLA
+from .register_algo import Algorithm
+from .registry_factory import ALGO_REGISTRY
 
 AlgorithmRegistry = Algorithm()
 BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast', 'quantile']
