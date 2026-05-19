@@ -186,6 +186,7 @@ class TestGRUQAT(unittest.TestCase):
         loss = criterion(output, label)
         optimizer.zero_grad()
         loss.backward()
+        optimizer.step()
         
         self.new_model.eval()
         with torch.no_grad():

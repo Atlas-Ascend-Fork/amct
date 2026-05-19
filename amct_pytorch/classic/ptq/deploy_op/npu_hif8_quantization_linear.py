@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
+# 
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,7 +15,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-
 from amct_pytorch.common.utils.check_params import check_parameters_in_schema
 
 
@@ -47,7 +46,7 @@ class NpuHIF8Linear(torch.nn.Module):
         """
         import torch_npu
         quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=torch_npu.hifloat8, dst_type_max=15)
-
+            
         if self.is_support_hifloat8:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=pertoken_scale.view(-1),
@@ -58,7 +57,7 @@ class NpuHIF8Linear(torch.nn.Module):
             raise RuntimeError(f'current environment do not support hifloat8 quantize')
 
         return output
-
+        
     def _init_weight_quant(self, quant_module):
         fp8_weight = quant_module.weight # n, k
         fp8_scale = quant_module.weight_scale_inv

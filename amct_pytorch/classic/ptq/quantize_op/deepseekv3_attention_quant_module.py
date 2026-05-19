@@ -20,9 +20,9 @@ from torch import nn
 import torch.nn.functional as F
 from transformers.cache_utils import DynamicCache
 from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.classic.ptq.quantize_op.utils import calculate_quantile_ema_scale
 from amct_pytorch.common.utils.vars import HIFLOAT8
 from amct_pytorch.common.utils.log import LOGGER
-from amct_pytorch.classic.ptq.quantize_op.utils import calculate_quantile_ema_scale
 
 
 class DeepseekV3AttentionQuant(BaseQuantizeModule):

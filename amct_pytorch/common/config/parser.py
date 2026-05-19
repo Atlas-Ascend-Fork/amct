@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
+# 
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -52,7 +52,7 @@ def check_skip_layer(layer_name, skip_layers):
 
 def check_config(quant_data_comb, quant_config, algo):
     """
-    Check whether the config is valid
+    Check whether the config is valid 
     Params:
     quant_data_comb: quantize data type combination str
     quant_config: quant parameters
@@ -77,7 +77,7 @@ def check_config(quant_data_comb, quant_config, algo):
                 f'activation quant strategy {act_strategy}')
         if act_dtype in ['mxfp8_e4m3fn'] and act_strategy != 'group':
             raise ValueError(f'act_dtype and wts_dtype {quant_data_comb} only support activation quant strategy group')
-
+    
     if quant_config.quant_cfg.weights_cfg.group_size is not None:
         group_size = quant_config.quant_cfg.weights_cfg.group_size
         if group_size < 32 or group_size % 32 != 0:
@@ -93,20 +93,20 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
         quant_config: QuantConfig object
     """
     from amct_pytorch.common.config.utils import match_fuzzy_pattern
-
+    
     fuzzy_weights = quant_config.quant_cfg.fuzzy_configs['weights']
     fuzzy_inputs = quant_config.quant_cfg.fuzzy_configs['inputs']
     fuzzy_kvcache = quant_config.quant_cfg.fuzzy_configs['kvcache']
     skip_layers = quant_config.skip_layers.skip_layers
-
+    
     if not fuzzy_weights and not fuzzy_inputs and not fuzzy_kvcache:
         return
-
+    
     skip_layers_set = set(skip_layers or [])
-
+    
     all_fuzzy_patterns = fuzzy_weights + fuzzy_inputs + fuzzy_kvcache
     pattern_match_count = {cfg['pattern']: 0 for cfg in all_fuzzy_patterns}
-
+    
     for fuzzy_cfg in all_fuzzy_patterns:
         pattern = fuzzy_cfg['pattern']
         for layer_name in all_layer_names:
@@ -116,7 +116,7 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
             if layer_name in skip_layers_set:
                 LOGGER.logw(f'Fuzzy matched layer {layer_name} is also in skip_layers, '
                            f'quantization will be skipped', 'ConfigParser')
-
+    
     for pattern, match_count in pattern_match_count.items():
         if match_count == 0:
             LOGGER.logw(f'Fuzzy pattern {pattern} does not match any layer in the model', 'ConfigParser')
@@ -124,7 +124,7 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
 
 def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     """
-    Check whether the current layer fits requirements of deploy op
+    Check whether the current layer fits requirements of deploy op 
     Params:
     layer_name: string, Specifies whether to skip the quantized layer name
     quant_data_comb: quantize data type combination str
@@ -174,7 +174,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     if group_size >= mod.weight.shape[1]:
         LOGGER.logd(f'group size should less than cout, current group_size is {group_size}, '
             f'cout is {mod.weight.shape[1]}, skip quantization of current layer {layer_name}')
-        return False
+        return False 
     return True
 
 
@@ -252,22 +252,22 @@ def get_supported_layers(model, quant_config, registed_alg):
     detail_config = dict()
     all_layer_names = [name for name, mod in model.named_modules()
                        if type(mod) in layer_types.keys() or type(mod).__name__ in layer_types.keys()]
-
+    
     _check_fuzzy_config_warnings(all_layer_names, quant_config)
 
     for name, mod in model.named_modules():
         if not _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
             continue
-
+        
         algo = layer_types[type(mod).__name__]
         if not _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
             continue
-
+        
         layer_quant_cfg = quant_config.get_layer_config(name)
         if layer_quant_cfg is None:
             continue
-
-        detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}}
+        
+        detail_config_algo = {'algorithm': {algo: quant_config.algorithm.get_value()['algorithm'][algo]}} 
         detail_config[name] = quant_config.batch_num.get_value() \
             | layer_quant_cfg | detail_config_algo
     return detail_config

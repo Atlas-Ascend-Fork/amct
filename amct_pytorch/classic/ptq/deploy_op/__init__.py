@@ -19,9 +19,7 @@ __all__ = [
     'NpuQuantizationLinear',
     'NpuWeightQuantizedLinear',
     'NpuQuantizationConv2d',
-    'NpuMXQuantizationLinear',
-    'NpuHIF8CastLinear',
-    'NpuHIF8Linear',
+    'NpuMXQuantizationLinear'
 ]
 
 from amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear import NpuQuantizationLinear
@@ -29,4 +27,3 @@ from amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module import NpuWeight
 from amct_pytorch.classic.ptq.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
 from amct_pytorch.classic.ptq.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear
 from amct_pytorch.classic.ptq.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
-from amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
