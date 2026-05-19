@@ -51,7 +51,8 @@ def unpack_mxfloat4_to_fp32(packed_tensor):
     return fp32_tensor.view(*new_shape)
 
 
-def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 128, is_mx: bool=False, is_packed: bool=False) -> torch.Tensor:
+def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 128, 
+                   is_mx: bool = False, is_packed: bool = False) -> torch.Tensor:
     """
     Dequantizes the given weight tensor using the provided scale tensor, efficiently handling cases where
     `weight` is not a multiple of `block_size` by broadcasting `scale`.
@@ -139,6 +140,7 @@ def f32_to_f4_unpacked(x):
     """
     return _f32_to_floatx_unpacked(x, EBITS_F4_E2M1, MBITS_F4_E2M1)
 
+
 def f4_unpacked_to_f32(x: torch.Tensor):
     """
     Input: torch.Tensor of dtype uint8, with bits 0-3 empty and bits 4-7
@@ -153,6 +155,7 @@ def round_to_decimal(x):
     mantissa = x / (2**exponent)
     exponent = torch.where(mantissa > 1.75, exponent + 1, exponent)
     return exponent
+
 
 def shared_exponents(x: Tensor, emax):
     shared_exp, _ = torch.max(torch.abs(x), dim=-1, keepdim=True)

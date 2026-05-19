@@ -49,6 +49,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
+
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     conv + bn

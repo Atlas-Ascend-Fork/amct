@@ -38,6 +38,7 @@ MATMUL1_LAYER_NAME = "matmul1"
 KV_CACHE_QUANT_LAYERS = 'kv_cache_quant_layers'
 KV_DATA_QUANT_CONFIG = 'kv_data_quant_config'
 
+
 class CustomizedModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -52,6 +53,7 @@ class CustomizedModel(torch.nn.Module):
         y = self.matmul3(y)
         y = self.relu(y)
         return y
+
 
 class TestQuantCalibrationConfigBase(unittest.TestCase):
     @classmethod

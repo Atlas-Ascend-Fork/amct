@@ -32,6 +32,7 @@ def cali_flat_quant(model, dataloader, dev):
     # catch the first layer input
     inps = []
     layer_kwargs = {}
+
     def layer_input_data_hook(module, args, kwargs):
         inps.append(args[0].squeeze(0))
         layer_kwargs.update(kwargs)

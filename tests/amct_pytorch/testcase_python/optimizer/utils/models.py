@@ -59,8 +59,10 @@ def create_onnx(model, args_shapes, onnx_file, mode='eval'):
 def save_state_dict(model, name):
     torch.save(model.state_dict(), name)
 
+
 def restore_model(model, state_dict_path):
     model.load_state_dict(torch.load(state_dict_path))
+
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -241,6 +243,7 @@ class Net3d(nn.Module):
 
         return x
 
+
 class Net3d001(nn.Module):
     def __init__(self):
         super(Net3d001, self).__init__()
@@ -256,6 +259,7 @@ class Net3d001(nn.Module):
         x = self.layer2(x)
 
         return x
+
 
 class Net1d(nn.Module):
     """ args_shape: [(1, 2, 14)]

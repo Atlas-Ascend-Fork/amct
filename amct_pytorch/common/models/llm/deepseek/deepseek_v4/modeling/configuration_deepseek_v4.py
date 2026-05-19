@@ -73,19 +73,32 @@ class DeepseekV4Config(PretrainedConfig):
         **kwargs,
     ):
         # 1) HF flat aliases -> ModelArgs names
-        if hidden_size is not None: dim = hidden_size
-        if num_hidden_layers is not None: n_layers = num_hidden_layers
-        if num_attention_heads is not None: n_heads = num_attention_heads
-        if moe_intermediate_size is not None: moe_inter_dim = moe_intermediate_size
-        if num_experts_per_tok is not None: n_activated_experts = num_experts_per_tok
-        if qk_rope_head_dim is not None: rope_head_dim = qk_rope_head_dim
-        if rms_norm_eps is not None: norm_eps = rms_norm_eps
-        if sliding_window is not None: window_size = sliding_window
-        if scoring_func is not None: score_func = scoring_func
-        if routed_scaling_factor is not None: route_scale = routed_scaling_factor
-        if num_hash_layers is not None: n_hash_layers = num_hash_layers
-        if num_nextn_predict_layers is not None: n_mtp_layers = num_nextn_predict_layers
-        if max_position_embeddings is not None: max_seq_len = max_position_embeddings
+        if hidden_size is not None:
+            dim = hidden_size
+        if num_hidden_layers is not None:
+            n_layers = num_hidden_layers
+        if num_attention_heads is not None:
+            n_heads = num_attention_heads
+        if moe_intermediate_size is not None:
+            moe_inter_dim = moe_intermediate_size
+        if num_experts_per_tok is not None:
+            n_activated_experts = num_experts_per_tok
+        if qk_rope_head_dim is not None:
+            rope_head_dim = qk_rope_head_dim
+        if rms_norm_eps is not None:
+            norm_eps = rms_norm_eps
+        if sliding_window is not None:
+            window_size = sliding_window
+        if scoring_func is not None:
+            score_func = scoring_func
+        if routed_scaling_factor is not None:
+            route_scale = routed_scaling_factor
+        if num_hash_layers is not None:
+            n_hash_layers = num_hash_layers
+        if num_nextn_predict_layers is not None:
+            n_mtp_layers = num_nextn_predict_layers
+        if max_position_embeddings is not None:
+            max_seq_len = max_position_embeddings
 
         # 2) rope_scaling dict -> flat YaRN fields
         if rope_scaling is not None:

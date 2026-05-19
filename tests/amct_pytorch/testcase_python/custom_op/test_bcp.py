@@ -34,6 +34,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
+
 class TestBcp(unittest.TestCase):
     """
     The UT for QuantizeTool
@@ -209,6 +210,7 @@ class TestBcp(unittest.TestCase):
         logger.info('numpy_num', sum(prune_mask_list[0:80]), sum(prune_mask_list[80:160]))
         logger.info('op_num', prune_mask.cpu().numpy()[0:80].sum(), prune_mask.cpu().numpy()[80:160].sum())
         self.assertTrue(is_equal)
+
 
 class BcpFaker:
     def __init__(self, tensor_list, prune_axises, prune_param):

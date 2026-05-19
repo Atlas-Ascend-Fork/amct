@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 T = TypeVar("T")
 
+
 @dataclass
 class PtqUnit:
     kind: str

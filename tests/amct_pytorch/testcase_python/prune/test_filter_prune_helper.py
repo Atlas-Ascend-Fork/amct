@@ -44,6 +44,7 @@ DEVICE = 'cpu'
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestFilterPruneHelper(unittest.TestCase):
     """
     The UT for QuantizeTool
@@ -85,9 +86,9 @@ class TestFilterPruneHelper(unittest.TestCase):
         configer = FakeRetrainConfig()
         configer.set_prune_layers(['layer1.0', 'layer2.0'])
         with mock.patch.object(retrain_config, 'RetrainConfig', FakeRetrainConfig):
-                for node in graph.nodes:
-                    helper = create_filter_prune_helper(node)
-                    helper.process(record_helper)
+            for node in graph.nodes:
+                helper = create_filter_prune_helper(node)
+                helper.process(record_helper)
 
         producer_names, consumer_names = record_utils.get_producer(record.prune_record[0])
         self.assertEqual(producer_names, ['layer1.0'])
@@ -196,6 +197,7 @@ class TestFilterPruneHelper(unittest.TestCase):
 
 class FakeRetrainConfig:
     __instance = None
+
     def __new__(cls, *args, **kwargs):
         if cls.__instance is None:
             cls.__instance = object.__new__(cls, *args, **kwargs)

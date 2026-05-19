@@ -14,6 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
+import logging
 import unittest
 import sys
 from unittest.mock import MagicMock
@@ -21,7 +22,7 @@ from unittest.mock import patch
 import torch
 import torch.nn as nn
 from utils import TestModelDeepseekV3Attention
-from mock_torch_npu import *
+from mock_torch_npu import mock_npu_quantize, mock_npu_anti_quant, mock_npu
 from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
 from transformers.cache_utils import DynamicCache
 from amct_pytorch import quantize, convert
@@ -41,13 +42,13 @@ class TestDeepseekV3Attention(unittest.TestCase):
         cls.kvcache_ori = DynamicCache()
         cls.kvcache_quant = DynamicCache()
         cls.kvcache = DynamicCache()
-        for i in range(5):
+        for _ in range(5):
             cls.ori_out = cls.test_model(cls.hidden_states, past_key_values=cls.kvcache_ori)
-        print('TestDeepseekV3Attention START!')
+        logging.info('TestDeepseekV3Attention START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestDeepseekV3Attention END!')
+        logging.info('TestDeepseekV3Attention END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -79,5 +80,5 @@ class TestDeepseekV3Attention(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.attn).__name__, 'NpuDeepseekV3AttentionQuant')
-        for i in range(5):
+        for _ in range(5):
             quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)

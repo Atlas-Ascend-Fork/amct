@@ -14,7 +14,8 @@ from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.optimization import register_solvers
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.quantization.dtypes import register_dtype
-from amct_pytorch.common.models.llm.common.quant_apply import set_model_act_quant_state, set_model_weight_quant_state, set_model_to_observe
+from amct_pytorch.common.models.llm.common.quant_apply import (
+    set_model_act_quant_state, set_model_weight_quant_state, set_model_to_observe)
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging

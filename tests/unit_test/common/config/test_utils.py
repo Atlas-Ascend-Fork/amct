@@ -24,6 +24,7 @@ from amct_pytorch.common.config.utils import (
 
 MODEL_LAYERS_0_SELF_ATTN_Q_PROJ = 'model.layers.0.self_attn.q_proj'
 
+
 def test_get_alg_name_from_dict():
     names, attrs = get_alg_name_from_config({"minmax": {}, "awq": {"grids_num": 20}})
     assert names == ["minmax", "awq"]

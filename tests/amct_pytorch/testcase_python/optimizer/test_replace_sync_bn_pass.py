@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestReplaceSyncBNPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

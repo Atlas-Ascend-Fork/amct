@@ -25,7 +25,8 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import rotate_activation, fp32_index
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import (
+    rotate_activation, fp32_index)
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import (
     DeepseekV3Attention, DeepseekV3MLP, Indexer, apply_rotary_emb,
 )
@@ -36,6 +37,7 @@ def _linear_with_structure(hidden_states, linear, structure_transform=None, name
     if structure_transform is not None:
         weight = structure_transform(weight, inv_t=True, name=name)
     return F.linear(hidden_states, weight, linear.bias)
+
 
 class QuantIndexer(torch.nn.Module):
     def __init__(self, quant_args, module: Indexer):
@@ -48,7 +50,8 @@ class QuantIndexer(torch.nn.Module):
         self.softmax_scale = self.head_dim ** -0.5
 
 
-    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
+    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, 
+                freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
         bsz, seqlen, _ = x.size()
         end_pos = start_pos + seqlen
         q = self.wq_b(qr)
