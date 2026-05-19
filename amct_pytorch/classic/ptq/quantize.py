@@ -14,20 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+__all__ = ['quantize', 'convert', 'algorithm_register']
+
 from torch import nn
 
 from amct_pytorch.algorithms import AlgorithmRegistry
-from amct_pytorch.common.config import set_default_config, parse_config
+from amct_pytorch.classic.ptq.optimizer import (InsertQuantizeModulePass,
+                                                ModelOptimizer,
+                                                ReplaceNpuQuantModulePass)
+from amct_pytorch.classic.ptq.quantize_op.base_quant_module import \
+    BaseQuantizeModule
+from amct_pytorch.common.config import parse_config, set_default_config
 from amct_pytorch.common.utils.check_params import check_params
-from amct_pytorch.classic.ptq.optimizer import (
-    InsertQuantizeModulePass,
-    ModelOptimizer,
-    ReplaceNpuQuantModulePass,
-)
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
-
-
-__all__ = ['quantize', 'convert', 'algorithm_register']
 
 
 @check_params(model=nn.Module,

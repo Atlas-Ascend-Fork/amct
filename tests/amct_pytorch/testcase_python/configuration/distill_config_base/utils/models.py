@@ -20,7 +20,7 @@ Generate model for ut.
 """
 from __future__ import print_function
 
-import argparse  #Python 命令行解析工具
+import argparse  # Python 命令行解析工具
 import copy
 
 import numpy as np
@@ -66,8 +66,10 @@ def create_onnx(model, args_shapes, onnx_file, mode='eval'):
 def save_state_dict(model, name):
     torch.save(model.state_dict(), name)
 
+
 def restore_model(model, state_dict_path):
     model.load_state_dict(torch.load(state_dict_path))
+
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]

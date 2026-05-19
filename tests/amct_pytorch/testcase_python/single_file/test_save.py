@@ -40,6 +40,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 K_ = './'
 AMCT = 'amct'
 
+
 class TestSave(unittest.TestCase):
     """
     The UT for QuantizeTool

@@ -40,6 +40,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
+
 class TestDumpForward(unittest.TestCase):
     """
     The UT for QuantizeTool

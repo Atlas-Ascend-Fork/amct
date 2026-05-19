@@ -45,6 +45,7 @@ NPU_WEIGHT_QUANTIZED_LINEAR = 'NpuWeightQuantizedLinear'
 
 torch.manual_seed(0)
 
+
 class TestMinMax(unittest.TestCase):
     '''
     ST FOR MINMAX ALGORITHM

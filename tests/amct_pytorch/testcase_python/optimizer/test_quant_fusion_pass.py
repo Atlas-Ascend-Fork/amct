@@ -49,6 +49,7 @@ DST_TYPE = 'dst_type'
 
 INT8 = 'INT8'
 
+
 class TestQuantFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -70,6 +71,7 @@ class TestQuantFusionPass(unittest.TestCase):
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
+
         def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
             # Add Ascend Quant
             quant_node = graph.node.add()

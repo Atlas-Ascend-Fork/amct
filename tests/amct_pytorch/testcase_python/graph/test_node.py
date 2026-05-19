@@ -38,6 +38,7 @@ CONV = 'conv'
 
 CONV0 = 'conv0'
 
+
 class TestNode(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

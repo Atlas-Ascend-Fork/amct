@@ -38,6 +38,7 @@ RELU1 = 'relu1'
 
 ADD1 = 'add1'
 
+
 class TestModelHelper(unittest.TestCase):
     """
     The UT for QuantOpInfo

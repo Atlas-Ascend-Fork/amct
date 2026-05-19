@@ -58,12 +58,14 @@ SMOOTH_QUANT = 'smoothquant'
 
 SMOOTH_STRENGTH = 'smooth_strength'
 
+
 class CustomQuant(BaseQuantizeModule):
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__(ori_module, layer_name, quant_config)
 
     def forward(self, inputs):
         return inputs
+
 
 class CustomDeployQuant(nn.Module):
     def __init__(self, ori_module):
@@ -73,6 +75,7 @@ class CustomDeployQuant(nn.Module):
         return inputs
 
 logger = logging.getLogger(__name__)
+
 
 class TestConfigParse(unittest.TestCase):
     '''

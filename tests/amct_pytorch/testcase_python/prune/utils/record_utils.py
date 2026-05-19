@@ -27,6 +27,7 @@ def get_producer(prune_record):
     consumer_names = [consumer.name for consumer in prune_record.consumer]
     return producer_names, consumer_names
 
+
 def read_record_file(record_file):
     record = scale_offset_record_pytorch_pb2.ScaleOffsetRecord()
     with open(record_file, 'r') as fid:

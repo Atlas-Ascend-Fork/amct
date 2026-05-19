@@ -172,7 +172,6 @@ class DeepseekV32Config(PretrainedConfig):
         self.num_nextn_predict_layers = n_mtp_layers
         self.max_position_embeddings = max_seq_len
         self.rope_scaling = rope_scaling
-        # self.quantization_config = quantization_config
 
         super().__init__(tie_word_embeddings=tie_word_embeddings, **kwargs)
 

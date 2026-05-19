@@ -1,5 +1,6 @@
 from typing import Dict, Any, Optional
 
+
 class QuantConfig:
     def __init__(
         self,

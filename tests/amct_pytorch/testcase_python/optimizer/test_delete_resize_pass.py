@@ -36,6 +36,7 @@ from .util import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestDeleteResizePass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

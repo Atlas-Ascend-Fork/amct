@@ -36,17 +36,20 @@ S32_BASE = 32
 
 logger = logging.getLogger(__name__)
 
+
 def compare_ndarray(ndarray1, ndarray2, name):
     if not (ndarray1 - ndarray2 < 1e-5).all():
         logger.info(ndarray1)
         logger.info(ndarray2)
         raise ValueError('{} not equal'.format(name))
 
+
 def dequant_compute(inputs, scale_d, scale_w, deq_shape):
     deq_scale = scale_d * scale_w
     deq_scale = deq_scale.reshape(deq_shape)
     dequantized_data = inputs * deq_scale
     return dequantized_data
+
 
 class TestFakeDeQuantModule(unittest.TestCase):
     @classmethod
