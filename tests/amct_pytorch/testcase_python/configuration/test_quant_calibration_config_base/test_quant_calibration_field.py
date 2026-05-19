@@ -34,6 +34,7 @@ MATMUL_1_LAYER_NAME = "matmul_1"
 LINEAR = 'Linear'
 ACT_ALGO = 'act_algo'
 
+
 class TestQuantCalibrationField(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

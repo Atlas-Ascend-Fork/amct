@@ -1,3 +1,21 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
 import json
 import os
 from types import SimpleNamespace
@@ -20,6 +38,7 @@ FROM_PRETRAINED = 'from_pretrained'
 POSITION_IDS = 'position_ids'
 
 FLAG = 'flag'
+
 
 class _StubModel(BaseModel):
     """Subclass that bypasses BaseModel HF model loading via mocking."""
@@ -208,7 +227,7 @@ def test_save_block_hook_inputs_uses_quant_target_for_non_attn(monkeypatch):
     )
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/d"))
     stub.save_block_hook_inputs({}, hook_name="hook", layer_idx=2)
-    assert captured.get("args")[2] == QUANT_TARGET_MLP
+    assert captured.get("args")[2] == QUANT_TARGET_MLP  # noqa: E1111
 
 
 # ---- load_selected_layer_ptq_params --------------------------------------
@@ -227,10 +246,10 @@ def test_load_selected_layer_ptq_params_warns_on_missing_dir(monkeypatch):
     stub.ptq_param_store = SimpleNamespace(
         load_layer=lambda *a, **k: pytest.fail("should not be called"),
     )
-    results = stub.load_selected_layer_ptq_params(0, block=nn.Module())
+    results = stub.load_selected_layer_ptq_params(0, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert results == {QUANT_TARGET_MLP: {"loaded": [], "missing": []}}
     # Original quant_target preserved after the temporary swap.
-    assert stub.quant_target == [QUANT_TARGET_MLP]
+    assert stub.quant_target == [QUANT_TARGET_MLP]  # noqa: E1111
 
 
 def test_load_selected_layer_ptq_params_routes_to_store_per_target():
@@ -249,7 +268,7 @@ def test_load_selected_layer_ptq_params_routes_to_store_per_target():
         return {"loaded": ["x"], "missing": []}
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load_layer)
-    results = stub.load_selected_layer_ptq_params(7, block=nn.Module())
+    results = stub.load_selected_layer_ptq_params(7, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert set(results) == {QUANT_TARGET_ATTN_LINEAR, QUANT_TARGET_MLP}
     # quant_target was temporarily set to a single-target list per call.
     assert seen[0][2] == [QUANT_TARGET_ATTN_LINEAR]
@@ -354,7 +373,7 @@ def test_iter_ptq_units_moe_uses_iter_ptq_expert_modules():
 
     block.mlp.experts = _IterExperts()
     units = list(stub.iter_ptq_units(layer_idx=0, block=block))
-    assert [u.name for u in units] == ["expert_0", "expert_1"]
+    assert [u.name for u in units] == ["expert_0", "expert_1"]  # noqa: E1111
 
 
 def test_load_selected_layer_ptq_params_attn_cache_target():
@@ -373,10 +392,10 @@ def test_load_selected_layer_ptq_params_attn_cache_target():
         return {"loaded": ["u1"], "missing": []}
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
-    results = stub.load_selected_layer_ptq_params(5, block=nn.Module())
+    results = stub.load_selected_layer_ptq_params(5, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert QUANT_TARGET_ATTN_CACHE in results
     assert seen[0][1] == "/cache_params"
-    assert stub.quant_target == [QUANT_TARGET_ATTN_CACHE]
+    assert stub.quant_target == [QUANT_TARGET_ATTN_CACHE]  # noqa: E1111
 
 
 def test_load_selected_layer_ptq_params_moe_target():
@@ -395,7 +414,7 @@ def test_load_selected_layer_ptq_params_moe_target():
         return {"loaded": ["e0"], "missing": []}
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
-    results = stub.load_selected_layer_ptq_params(3, block=nn.Module())
+    results = stub.load_selected_layer_ptq_params(3, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert "moe" in results
     assert seen[0][1] == "/moe_params"
 
@@ -414,7 +433,7 @@ def test_load_selected_layer_ptq_params_partial_warns():
         return {"loaded": ["x"], "missing": ["y"]}
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
-    results = stub.load_selected_layer_ptq_params(1, block=nn.Module())
+    results = stub.load_selected_layer_ptq_params(1, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert results[QUANT_TARGET_MLP]["loaded"] == ["x"]
     assert results[QUANT_TARGET_MLP]["missing"] == ["y"]
 
@@ -433,7 +452,7 @@ def test_load_selected_layer_ptq_params_full_missing_warns():
         return {"loaded": [], "missing": ["z"]}
 
     stub.ptq_param_store = SimpleNamespace(load_layer=fake_load)
-    results = stub.load_selected_layer_ptq_params(2, block=nn.Module())
+    results = stub.load_selected_layer_ptq_params(2, block=nn.Module())  # pylint: disable=assignment-from-no-return
     assert results[QUANT_TARGET_MLP]["loaded"] == []
     assert results[QUANT_TARGET_MLP]["missing"] == ["z"]
 
@@ -531,6 +550,7 @@ def test_get_block_forward_kwargs_includes_position_embeddings():
 def test_build_block_for_forward_calls_block_when_no_quant():
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     captured = {}
+
     def _fake_block(idx):
         captured["idx"] = idx
         return nn.Linear(4, 4)
@@ -543,7 +563,8 @@ def test_build_block_for_forward_calls_block_when_no_quant():
 def test_build_block_for_forward_calls_build_quant_block_when_quant():
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     captured = {}
-    def _fake_quant_block(idx):
+
+    def _fake_quant_block(idx):  # noqa: E1111
         captured["quant_idx"] = idx
         mod = nn.Linear(4, 4)
         return mod
@@ -552,7 +573,7 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
     def load_selected_layer_ptq_params(idx, block, strict):
         return {}
 
-    stub.load_selected_layer_ptq_params = load_selected_layer_ptq_params
+    stub.load_selected_layer_ptq_params = load_selected_layer_ptq_params  # noqa: E1111
     result = stub._build_block_for_forward(3, use_quant_block=True)
     assert captured["quant_idx"] == 3
 
@@ -560,11 +581,11 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
 # ---- load_selected_layer_ptq_params (no-param-dir fallbacks) -------------
 
 
-def test_load_selected_layer_ptq_params_attn_linear_with_no_param_dir_logs_warning():
+def test_load_selected_layer_ptq_params_attn_linear_with_no_param_dir_logs_warning():  # pylint: disable=assignment-from-no-return
     stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_LINEAR])
     stub.args = SimpleNamespace(attn_linear_param_dir="")
     block = nn.Module()
-    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)  # pylint: disable=assignment-from-no-return
     assert QUANT_TARGET_ATTN_LINEAR in results
     assert results[QUANT_TARGET_ATTN_LINEAR]["loaded"] == []
 
@@ -573,7 +594,7 @@ def test_load_selected_layer_ptq_params_mlp_with_no_param_dir():
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     stub.args = SimpleNamespace(moe_mlp_param_dir="")
     block = nn.Module()
-    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)  # pylint: disable=assignment-from-no-return
     assert QUANT_TARGET_MLP in results
 
 
@@ -581,7 +602,7 @@ def test_load_selected_layer_ptq_params_moe_with_no_param_dir():
     stub = _StubModel(quant_target=["moe"])
     stub.args = SimpleNamespace(moe_mlp_param_dir="")
     block = nn.Module()
-    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)  # pylint: disable=assignment-from-no-return
     assert "moe" in results
 
 
@@ -589,7 +610,7 @@ def test_load_selected_layer_ptq_params_attn_cache_with_no_param_dir():
     stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_CACHE])
     stub.args = SimpleNamespace(attn_cache_param_dir="")
     block = nn.Module()
-    results = stub.load_selected_layer_ptq_params(0, block, strict=False)
+    results = stub.load_selected_layer_ptq_params(0, block, strict=False)  # pylint: disable=assignment-from-no-return
     assert QUANT_TARGET_ATTN_CACHE in results
     assert results[QUANT_TARGET_ATTN_CACHE]["loaded"] == []
 
@@ -651,6 +672,7 @@ def test_iter_ptq_units_raises_when_no_mlp_and_not_attn():
 def test_iter_deploy_bindings_yields_quant_linear_weight_paths():
     from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
+
     def get_layer_weight_prefix(idx):
         return "model.layers.0."
 
@@ -669,6 +691,7 @@ def test_iter_deploy_bindings_yields_quant_linear_weight_paths():
 
 def test_iter_deploy_bindings_skips_non_quant_linear():
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
+
     def get_layer_weight_prefix(idx):
         return "model.layers.0."
 
@@ -885,6 +908,7 @@ def test_load_embed_state_dict_loads_embed_weights(monkeypatch):
     )
 
     model = Qwen3(args)
+
     def float_model():
         return model.empty_weights_model()
 
@@ -925,6 +949,7 @@ def test_do_embedding_forward_runs_full_model_forward(tmp_path, monkeypatch):
     )
 
     model = Qwen3(args)
+
     def float_model():
         return model.empty_weights_model()
 
@@ -968,6 +993,7 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
     )
 
     model = Qwen3(args)
+
     def float_model():
         return model.empty_weights_model()
 
@@ -1116,6 +1142,7 @@ def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypa
     )
 
     model = Qwen3(args)
+
     def float_model():
         return model.empty_weights_model()
 
@@ -1343,6 +1370,7 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
     )
 
     model = Qwen3(args)
+
     def float_model():
         return model.empty_weights_model()
 

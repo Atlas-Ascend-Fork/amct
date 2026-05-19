@@ -45,6 +45,7 @@ OP_DATA_TYPE = 'op_data_type'
 
 FLOAT16 = 'float16'
 
+
 class TestParser(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -85,6 +86,7 @@ class TestParser(unittest.TestCase):
     @patch('torch.onnx.export')
     def test_parse_unsupport_bn(self, mock_export):
         mock_export.side_effect = RuntimeError()
+
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super(TestModel, self).__init__()
@@ -104,6 +106,7 @@ class TestParser(unittest.TestCase):
     @patch.object(ModuleHelper, 'deep_copy')
     def test_parse_export_unsupport_deep_copy_model(self, mock_deep_copy):
         mock_deep_copy.side_effect = RuntimeError()
+
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super(TestModel, self).__init__()

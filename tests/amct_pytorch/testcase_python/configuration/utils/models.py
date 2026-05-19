@@ -20,7 +20,7 @@ Generate model for ut.
 """
 from __future__ import print_function
 
-import argparse  #Python 命令行解析工具
+import argparse  # Python 命令行解析工具
 import copy
 
 import numpy as np
@@ -66,8 +66,10 @@ def create_onnx(model, args_shapes, onnx_file, mode='eval'):
 def save_state_dict(model, name):
     torch.save(model.state_dict(), name)
 
+
 def restore_model(model, state_dict_path):
     model.load_state_dict(torch.load(state_dict_path))
+
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -132,6 +134,7 @@ class Net001(nn.Module):
 
         return x, y
 
+
 class Net001Sub(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     conv + bn
@@ -180,6 +183,7 @@ class Net001Sub(nn.Module):
 
         return x
 
+
 class Quant(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     """
@@ -220,6 +224,7 @@ class Net3d(nn.Module):
 
         return x
 
+
 class Net3d001(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
@@ -235,6 +240,7 @@ class Net3d001(nn.Module):
         x = self.layer1(x)
 
         return x
+
 
 class Net3d002(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
@@ -252,6 +258,7 @@ class Net3d002(nn.Module):
 
         return x
 
+
 class Net3d003(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
@@ -268,6 +275,7 @@ class Net3d003(nn.Module):
 
         return x
 
+
 class Net3d004(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
@@ -283,6 +291,7 @@ class Net3d004(nn.Module):
         x = self.layer1(x)
 
         return x
+
 
 class Net002(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -308,6 +317,7 @@ class Net002(nn.Module):
 
         return x
 
+
 class SingleConv(nn.Module):
     def __init__(self):
         super(SingleConv, self).__init__()
@@ -322,6 +332,7 @@ class SingleConv(nn.Module):
         x = self.layer1(x)
         output = self.layer2(x)
         return output
+
 
 class MatmulDim(nn.Module):
     def __init__(self):
@@ -341,6 +352,7 @@ class MatmulDim(nn.Module):
 
         return output
 
+
 class TorchConv3dShareWeightModel(nn.Module):
     '''conv3d|conv3d  shared weight'''
     def __init__(self, in_channels=3, out_channels=3, kernel_size=(2, 3, 3), \
@@ -350,7 +362,7 @@ class TorchConv3dShareWeightModel(nn.Module):
             stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
         self.conv2 = nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, \
             stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias)
-        self.conv3 = copy.copy(self.conv2) #浅拷贝 指向相同 weight共享
+        self.conv3 = copy.copy(self.conv2)  # 浅拷贝 指向相同 weight共享
         # self.conv3 = copy.deepcopy(self.conv2) #浅拷贝 指向相同 weight共享
 
     def forward(self, x):
@@ -360,6 +372,7 @@ class TorchConv3dShareWeightModel(nn.Module):
         z = torch.cat((y1, y2), 0)
 
         return z
+
 
 class LinearNet(nn.Module):
     def __init__(self):

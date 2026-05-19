@@ -60,7 +60,8 @@ class DeepseekV4(BaseModel):
                 trust_remote_code=True,
                 torch_dtype=torch.bfloat16,
             )
-        from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import precompute_freqs_cis
+        from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (
+            precompute_freqs_cis)
         precompute_freqs_cis.cache_clear()
         return model
 

@@ -48,6 +48,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
+
 class DistillNet(nn.Module):
     def __init__(self):
         super(DistillNet, self).__init__()
@@ -57,6 +58,7 @@ class DistillNet(nn.Module):
         x = self.conv(x)
         return x
 
+
 class DistillQATNet(nn.Module):
     def __init__(self):
         super(DistillQATNet, self).__init__()
@@ -65,6 +67,7 @@ class DistillQATNet(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
+
 
 class DistillNetMultiInput(nn.Module):
     def __init__(self):
@@ -79,6 +82,7 @@ class DistillNetMultiInput(nn.Module):
         x = self.relu(x)
         return x, y
 
+
 class DistillNetMultiInputQat(nn.Module):
     def __init__(self):
         super(DistillNetMultiInputQat, self).__init__()
@@ -91,6 +95,7 @@ class DistillNetMultiInputQat(nn.Module):
         x = self.bn(x)
         x = self.relu(x)
         return x, y
+
 
 class Conv2dLinear(nn.Module):
     """ not do prune"""
@@ -111,20 +116,24 @@ class Conv2dLinear(nn.Module):
         x = self.layer5(x)
         return x
 
+
 class ModelMultiTensorInput(DistillSampleBase):
     @staticmethod
     def get_model_input_data(samples):
         return samples
+
 
 class ModelMultiInvalidInput(DistillSampleBase):
     @staticmethod
     def get_model_input_data(samples):
         return (1, 1, 1, 1)
 
+
 class ModelMultiInvalidInputDict(DistillSampleBase):
     @staticmethod
     def get_model_input_data(samples):
         return dict()
+
 
 class MultiDataset(torch.utils.data.Dataset):
     def __init__(self, x_data, y_data):
@@ -136,6 +145,7 @@ class MultiDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         return self.x_data[idx], self.y_data[idx]
+
 
 class TestDistillInterface(unittest.TestCase):
     @classmethod

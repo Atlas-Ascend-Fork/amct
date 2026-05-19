@@ -38,6 +38,7 @@ A_BITS = 'a_bits'
 
 DENSE = 'dense'
 
+
 def _make_qwen3_config(num_layers=2):
     return Qwen3Config(
         num_hidden_layers=num_layers,
@@ -304,6 +305,7 @@ class TestQwen35Mocked:
         dl.layer_type = "linear_attention"
         dl.linear_attn = nn.Module()
         captured = {}
+
         def _mock(args, dl_in, attn_cls):
             captured["attn_cls"] = attn_cls
         monkeypatch.setattr(
@@ -330,6 +332,7 @@ class TestQwen35Mocked:
         dl = nn.Module()
         dl.layer_type = "default_attention"
         captured = {}
+
         def _mock(args, dl_in, attn_cls):
             captured["attn_cls"] = attn_cls
         monkeypatch.setattr(
@@ -355,6 +358,7 @@ class TestQwen35Mocked:
         model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         dl = nn.Linear(4, 4)
         captured = {}
+
         def _mock(args, dl_in, **kwargs):
             captured["cls"] = kwargs.get("cls")
         monkeypatch.setattr(
@@ -735,6 +739,7 @@ class TestQwen35MoeMocked:
             lambda args_in, experts, **kwargs: experts,
         )
         captured = {}
+
         class _MockQwen35MLP:
             def __new__(cls, args_in, module, **kwargs):
                 captured["called"] = True
@@ -1266,6 +1271,7 @@ class TestGLM5Mocked:
 
         # Mock QuantGLM5Attn constructor to avoid deep dependencies
         captured = {}
+
         def _mock_attn(args, module):
             captured["called"] = True
             captured["module"] = module
@@ -1288,6 +1294,7 @@ class TestGLM5Mocked:
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
         monkeypatch.setattr(glm5_mod, "QuantGLM5Attn", lambda args, module: module)
         captured_mlp = {}
+
         def _mock_mlp(args, module):
             captured_mlp["called"] = True
             return module
@@ -1310,6 +1317,7 @@ class TestGLM5Mocked:
         mock_block.mlp = nn.Linear(4, 4)
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
         captured = {}
+
         def _mock_mlp(args, module):
             captured["called"] = True
             captured["module"] = module
@@ -1339,6 +1347,7 @@ class TestGLM5Mocked:
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
 
         captured = {}
+
         def _mock_ge(args, experts_module):
             captured["called"] = True
             captured["experts"] = experts_module
@@ -1357,11 +1366,13 @@ class TestGLM5Mocked:
         mock_block.mlp.shared_experts = nn.Linear(4, 4)
         monkeypatch.setattr(model, "block", lambda idx: mock_block)
         ge_captured = {}
+
         def _mock_ge(args, experts_module):
             ge_captured["called"] = True
             return experts_module
         monkeypatch.setattr(glm5_mod, "QuantGatedExperts", _mock_ge)
         se_captured = {}
+
         def _mock_se(args, module):
             se_captured["called"] = True
             return module
@@ -1542,6 +1553,7 @@ class TestGLM5Mocked:
     def test_glm5_float_model_delegates_to_super(self, monkeypatch):
         model = _setup_glm5(monkeypatch, _make_glm5_cfg())
         mock_result = MagicMock()
+
         def _mock_from_pretrained(*a, **kw):
             return mock_result
 
@@ -1632,6 +1644,7 @@ class TestLongcatNextMocked:
         from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import (
             LongcatNext,
         )
+
         def _mock_empty_weights_model(self):
             return AutoModelForCausalLM.from_config(
                 self.config, trust_remote_code=True, torch_dtype=torch.bfloat16)
@@ -1660,6 +1673,7 @@ class TestLongcatNextMocked:
         from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import (
             LongcatNext,
         )
+
         def _mock_empty_weights_model(self):
             return AutoModelForCausalLM.from_config(
                 self.config, trust_remote_code=True, torch_dtype=torch.bfloat16)

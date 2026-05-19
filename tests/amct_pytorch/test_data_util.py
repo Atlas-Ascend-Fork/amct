@@ -49,6 +49,7 @@ def gloden_float_cast_to_float4_e2m1(tensor):
 
 logger = logging.getLogger(__name__)
 
+
 class Testfloat2fp4e2m1(unittest.TestCase):
     '''
     UT FOR DATA TRANSFORMATION FROM FLOAT 2 FP4E2M1

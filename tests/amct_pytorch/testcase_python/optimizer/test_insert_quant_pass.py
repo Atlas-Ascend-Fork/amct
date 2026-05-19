@@ -52,6 +52,7 @@ DATA_PATH = os.path.join(DATASETS_DIR, 'pytorch/data')
 
 DEVICE = 'cpu'
 
+
 def run_inference_model_auto_cali(model, iterations=2):
     batch_size = 16
     torch.manual_seed(1)
@@ -71,6 +72,7 @@ def run_inference_model_auto_cali(model, iterations=2):
             iter_num = iter_num + 1
             if iter_num == iterations:
                 break
+
 
 class TestAutoCaliFakeQuantPass(unittest.TestCase):
     @classmethod

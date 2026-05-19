@@ -204,7 +204,7 @@ def precompute_freqs_cis(args: ModelArgs) -> torch.Tensor:
         """
         low = math.floor(find_correction_dim(low_rot, dim, base, max_seq_len))
         high = math.ceil(find_correction_dim(high_rot, dim, base, max_seq_len))
-        return max(low, 0), min(high, dim-1)
+        return max(low, 0), min(high, dim - 1)
 
     def linear_ramp_factor(min, max, dim):
         """
@@ -238,7 +238,11 @@ def precompute_freqs_cis(args: ModelArgs) -> torch.Tensor:
 
 
 def fp32_index(q: torch.Tensor, k: torch.Tensor, weights):
-    logits = (torch.matmul(q.transpose(1, 2).to(torch.float32), k.permute(0, 2, 3, 1).to(torch.float32))).to(torch.float32)
+    logits = (
+        torch.matmul(
+            q.transpose(1, 2).to(torch.float32), k.permute(0, 2, 3, 1).to(torch.float32)
+        )
+    ).to(torch.float32)
     logits = torch.relu(logits)
     logits = logits * weights.permute(0, 2, 1, 3).to(torch.float32)
     logits = torch.sum(logits, dim=1)
@@ -294,13 +298,15 @@ class Indexer(torch.nn.Module):
         self.wq_b = nn.Linear(self.q_lora_rank, self.n_heads * self.head_dim, bias=False)
         self.wk = nn.Linear(self.dim, self.head_dim, bias=False)
         self.k_norm = LayerNorm(self.head_dim)
-        # weights_proj in the checkpoint is stored in bf16, while the parameters here are stored in fp32 for convenient.
+        # weights_proj in the checkpoint is stored in bf16, 
+        # while the parameters here are stored in fp32 for convenient.
         self.weights_proj = nn.Linear(self.dim, self.n_heads, dtype=torch.float32, bias=False)
         self.softmax_scale = self.head_dim ** -0.5
         self.scale_fmt = args.scale_fmt
 
 
-    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
+    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, 
+                freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
         bsz, seqlen, _ = x.size()
         end_pos = start_pos + seqlen
         q = self.wq_b(qr)
@@ -331,8 +337,22 @@ class Indexer(torch.nn.Module):
 def weight_dequant(weight, scale):
     shape = weight.shape
     assert weight.dim() == 2
-    weight = weight.view(shape[0] // block_size, block_size, shape[1] // block_size, block_size).transpose(1, 2).contiguous().view(-1, block_size * block_size)
-    weight = (weight.float() * scale.view(-1, 1).float()).to(torch.get_default_dtype()).view(shape[0] // block_size, shape[1] // block_size, block_size, block_size).transpose(1, 2).contiguous().view(shape)
+    weight = (
+        weight.view(
+            shape[0] // block_size, block_size, shape[1] // block_size, block_size
+        )
+        .transpose(1, 2)
+        .contiguous()
+        .view(-1, block_size * block_size)
+    )
+    weight = (
+        (weight.float() * scale.view(-1, 1).float())
+        .to(torch.get_default_dtype())
+        .view(shape[0] // block_size, shape[1] // block_size, block_size, block_size)
+        .transpose(1, 2)
+        .contiguous()
+        .view(shape)
+    )
     return weight
 
 
@@ -369,7 +389,8 @@ class DeepseekV3Attention(nn.Module):
         self.q_b_proj = nn.Linear(self.q_lora_rank, self.n_heads * self.qk_head_dim, bias=False)
         self.kv_a_proj_with_mqa = nn.Linear(self.dim, self.kv_lora_rank + self.qk_rope_head_dim, bias=False)
         self.kv_a_layernorm = RMSNorm(self.kv_lora_rank)
-        self.kv_b_proj = nn.Linear(self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim), bias=False)
+        self.kv_b_proj = nn.Linear(self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim), 
+                                   bias=False)
         self.o_proj = nn.Linear(self.n_heads * self.v_head_dim, self.dim, bias=False)
         self.softmax_scale = self.qk_head_dim ** -0.5
         self.scale_fmt = args.scale_fmt
@@ -466,7 +487,11 @@ class Gate(nn.Module):
         self.score_func = args.score_func
         self.route_scale = args.route_scale
         self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
-        self.e_score_correction_bias = nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32)) if self.dim == 7168 else None
+        self.e_score_correction_bias = (
+            nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32))
+            if self.dim == 7168
+            else None
+        )
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         scores = F.linear(x.float(), self.weight.float())
@@ -510,16 +535,28 @@ class MoE(nn.Module):
     def __init__(self, args: ModelArgs):
         super().__init__()
         self.dim = args.dim
-        assert args.n_routed_experts % world_size == 0, f"Number of experts must be divisible by world size (world_size={world_size})"
+        assert args.n_routed_experts % world_size == 0, (
+            f"Number of experts must be divisible by world size (world_size={world_size})"
+        )
         self.n_routed_experts = args.n_routed_experts
         self.n_local_experts = args.n_routed_experts // world_size
         self.n_activated_experts = args.n_activated_experts
         self.experts_start_idx = rank * self.n_local_experts
         self.experts_end_idx = self.experts_start_idx + self.n_local_experts
         self.gate = Gate(args)
-        self.experts = nn.ModuleList([Expert(args.dim, args.moe_intermediate_size) if self.experts_start_idx <= i < self.experts_end_idx else None
-                                      for i in range(self.n_routed_experts)])
-        self.shared_experts = DeepseekV3MLP(args.dim, args.n_shared_experts * args.moe_intermediate_size, reduce_output=False)
+        self.experts = nn.ModuleList(
+            [
+                Expert(args.dim, args.moe_intermediate_size)
+                if self.experts_start_idx <= i < self.experts_end_idx
+                else None
+                for i in range(self.n_routed_experts)
+            ]
+        )
+        self.shared_experts = DeepseekV3MLP(
+            args.dim,
+            args.n_shared_experts * args.moe_intermediate_size,
+            reduce_output=False,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = x.size()
@@ -543,7 +580,11 @@ class Block(nn.Module):
     def __init__(self, layer_id: int, args: ModelArgs):
         super().__init__()
         self.self_attn = DeepseekV3Attention(args)
-        self.mlp = DeepseekV3MLP(args.dim, args.intermediate_size) if layer_id < args.first_k_dense_replace else MoE(args)
+        self.mlp = (
+            DeepseekV3MLP(args.dim, args.intermediate_size)
+            if layer_id < args.first_k_dense_replace
+            else MoE(args)
+        )
         self.post_attention_layernorm = RMSNorm(args.dim)
         self.input_layernorm = RMSNorm(args.dim)
 
@@ -587,7 +628,8 @@ class DeepseekV32ForCausalLM(DeepseekV32PreTrainedModel):
         for layer_id in range(config.n_layers):
             self.layers.append(Block(layer_id, config))
         self.norm = RMSNorm(config.dim, self.norm_eps)
-        # lm_head in the checkpoint is stored in bf16, while the parameter here is stored in fp32 for easier computation of logits later.
+        # lm_head in the checkpoint is stored in bf16, 
+        # while the parameter here is stored in fp32 for easier computation of logits later.
         self.head = nn.Linear(config.dim, config.vocab_size, bias=False)
         self.post_init()
 

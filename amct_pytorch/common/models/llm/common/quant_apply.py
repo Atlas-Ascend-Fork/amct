@@ -40,6 +40,7 @@ def set_model_weight_quant_state(model, flag):
         if isinstance(mod, WeightQuantizer):
             mod.enable = flag
 
+
 def set_model_to_observe(model, flag):
     for name, mod in model.named_modules():
         if hasattr(mod, "is_observe"):
