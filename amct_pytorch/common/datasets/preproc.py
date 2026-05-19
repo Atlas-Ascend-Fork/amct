@@ -2,6 +2,7 @@ import torch
 from tqdm import tqdm
 from datasets import load_dataset, load_from_disk
 
+
 def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
     dataset = calib_dataset.shuffle(seed=42)
     samples = []
