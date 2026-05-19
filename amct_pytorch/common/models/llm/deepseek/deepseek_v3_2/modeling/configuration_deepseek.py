@@ -37,6 +37,7 @@ class DeepseekV32Config(PretrainedConfig):
         rope_head_dim=64,
         norm_eps=1e-6,
         o_groups=8,
+        n_group=8,
         o_lora_rank=1024,
         window_size=128,
         compress_rope_theta=40000.0,
@@ -45,6 +46,7 @@ class DeepseekV32Config(PretrainedConfig):
         rope_factor=40,
         beta_fast=32,
         beta_slow=1,
+        mscale=1.,
         index_n_heads=64,
         index_head_dim=128,
         index_topk=512,
@@ -99,7 +101,7 @@ class DeepseekV32Config(PretrainedConfig):
             if "beta_slow" in rope_scaling:
                 beta_slow = rope_scaling["beta_slow"]
             if "mscale" in rope_scaling:
-                beta_slow = rope_scaling["mscale"]
+                mscale = rope_scaling["mscale"]
 
         # 3) quantization_config dict -> dtype / scale_fmt for the runtime globals
         if quantization_config is not None:
@@ -118,6 +120,7 @@ class DeepseekV32Config(PretrainedConfig):
         self.vocab_size = vocab_size
         self.dim = dim
         self.moe_inter_dim = moe_inter_dim
+        self.inter_dim = inter_dim
         self.n_layers = n_layers
         self.n_hash_layers = n_hash_layers
         self.n_mtp_layers = n_mtp_layers
@@ -133,6 +136,7 @@ class DeepseekV32Config(PretrainedConfig):
         self.rope_head_dim = rope_head_dim
         self.norm_eps = norm_eps
         self.o_groups = o_groups
+        self.n_group = n_group
         self.o_lora_rank = o_lora_rank
         self.window_size = window_size
         self.compress_rope_theta = compress_rope_theta
@@ -156,6 +160,7 @@ class DeepseekV32Config(PretrainedConfig):
         self.hidden_size = dim
         self.num_hidden_layers = n_layers
         self.num_attention_heads = n_heads
+        self.intermediate_size = inter_dim
         self.moe_intermediate_size = moe_inter_dim
         self.num_experts_per_tok = n_activated_experts
         self.qk_rope_head_dim = rope_head_dim

@@ -7,9 +7,12 @@ from safetensors import safe_open
 from tqdm import tqdm
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
+from amct_pytorch.common.models.llm.common.capture import Catcher
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, apply_quant_to_moe_mlp
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import Block
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import QuantDeepseekV3MLP, QuantDSA
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import QuantDeepseekV3MLP, QuantDeepseekV3Attention
+from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
+
 
 
 @MODEL_REGISTRY.register(
@@ -36,6 +39,16 @@ class DeepseekV32(BaseModel):
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         return f"model.layers.{layer_idx}."
 
+    def get_embed_load_specs(self):
+        base = self._embed_base_prefix()
+        tie = bool(getattr(self.config, "tie_word_embeddings", False))
+        lm_head_prefix = f"{base}embed_tokens." if tie else "lm_head."
+        return [
+            (self.model.embed, f"{base}embed_tokens."),
+            (self.model.norm, f"{base}norm."),
+            (self.model.head, lm_head_prefix),
+        ]
+
     def load_layer_weight(self, prefix):
         return super().load_layer_weight(prefix)
 
@@ -43,16 +56,32 @@ class DeepseekV32(BaseModel):
         return super().load_embed_state_dict()
 
     def block(self, layer_idx):
-        if not hasattr(self.config, 'model_args'):
-            self.config.model_args = self.args.model_args
-        decoder_layer = self.cls(self.config, layer_idx, is_nextn=layer_idx == 61)
+        decoder_layer = self.cls(layer_idx, self.config)
         state_dict = self.load_layer_weight(self.get_layer_weight_prefix(layer_idx))
         decoder_layer.load_state_dict(state_dict, strict=True)
         decoder_layer.eval().bfloat16()
         return decoder_layer
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
-        return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
+        outs = []
+        self.load_embed_state_dict()
+        layers = self.model.layers
+        layers[0] = self.block(0)
+        layers[0] = layers[0].bfloat16()
+        layers[0] = Catcher(layers[0], outs)
+        with torch.no_grad():
+            for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc=f"Embedding Processing..."):
+                try:
+                    self.model(inputs)
+                except ValueError:
+                    pass
+        self.position_ids = layers[0].position_ids
+        self.position_embeddings = layers[0].position_embeddings
+        self.attention_mask = layers[0].attention_mask
+        if hook_name is not None:
+            save_ptq_kwargs(self.position_ids, self.position_embeddings, self.attention_mask, self.args.data_dir)
+        layers[0] = layers[0].module
+        return outs
 
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         return super().do_block_forward(
@@ -79,7 +108,7 @@ class DeepseekV32(BaseModel):
         return decoder_layer
 
     def apply_quant_attn(self, decoder_layer):
-        return apply_quant_to_attn(self.args, decoder_layer, QuantDSA)
+        return apply_quant_to_attn(self.args, decoder_layer, QuantDeepseekV3Attention)
 
     def apply_quant_moe_mlp(self, decoder_layer):
         return apply_quant_to_moe_mlp(
