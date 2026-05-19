@@ -62,6 +62,7 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
         update_function = past_key_values.update
         if hasattr(past_key_values, "is_hooked") and past_key_values.is_hooked:
             return
+
         def hook_update(key_states, value_states, layer_idx, **kwargs):
             import torch_npu
             device = key_states.device

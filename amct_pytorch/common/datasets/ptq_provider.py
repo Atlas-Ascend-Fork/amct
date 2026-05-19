@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from amct_pytorch.common.models.llm.common.base import PtqUnit
 
+
 @dataclass
 class BlockPtqBatch:
     layer_idx: int
