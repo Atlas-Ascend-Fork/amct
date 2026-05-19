@@ -15,7 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from amct_pytorch.utils.check_params import check_parameters_in_schema
+from amct_pytorch.common.utils.check_params import check_parameters_in_schema
 
 
 class NpuHIF8Linear(torch.nn.Module):
