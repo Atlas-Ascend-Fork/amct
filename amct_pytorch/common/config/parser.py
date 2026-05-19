@@ -93,7 +93,7 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
         quant_config: QuantConfig object
     """
     from amct_pytorch.common.config.utils import match_fuzzy_pattern
-
+    
     fuzzy_weights = quant_config.quant_cfg.fuzzy_configs['weights']
     fuzzy_inputs = quant_config.quant_cfg.fuzzy_configs['inputs']
     fuzzy_kvcache = quant_config.quant_cfg.fuzzy_configs['kvcache']
