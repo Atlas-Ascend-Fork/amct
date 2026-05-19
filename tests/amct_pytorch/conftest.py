@@ -18,7 +18,7 @@ import sys
 from unittest.mock import MagicMock
 
 # Add project root to path so amct_pytorch is importable without installation
-_project_root = os.path.join(os.path.dirname(__file__), '..', '..')
+_project_root = os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.abspath(_project_root))
 
 # Mock graph_based_compression to avoid requiring compiled proto files.
@@ -26,5 +26,13 @@ sys.path.insert(0, os.path.abspath(_project_root))
 # depend on graph_based_compression; it is only pulled in by amct_pytorch/__init__.py.
 _mock = MagicMock()
 _mock.__all__ = []
-sys.modules.setdefault('amct_pytorch.graph_based_compression', _mock)
-sys.modules.setdefault('amct_pytorch.graph_based_compression.amct_pytorch', _mock)
+sys.modules.setdefault("amct_pytorch.graph_based_compression", _mock)
+sys.modules.setdefault("amct_pytorch.graph_based_compression.amct_pytorch", _mock)
+
+# Mock transformers.cache_utils.DynamicCache: pulled in by the deepseekv3 and
+# longcat attention modules that get imported through amct_pytorch.algorithm,
+# but unused by the calibration modules under test.
+_transformers_mock = MagicMock()
+_transformers_cache_utils_mock = MagicMock()
+sys.modules.setdefault("transformers", _transformers_mock)
+sys.modules.setdefault("transformers.cache_utils", _transformers_cache_utils_mock)
