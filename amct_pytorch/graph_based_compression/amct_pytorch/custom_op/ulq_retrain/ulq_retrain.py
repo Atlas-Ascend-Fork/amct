@@ -39,7 +39,6 @@ class UlqRetrainFunction(Function):
         Function: UlqRetrain foward funtion.
         """
         check_quant_data(inputs, 'activation')
-        ctx.inputs = inputs
         outputs, scale, offset, clip_max, clip_min = ulq_retrain_forward_pytorch(
             inputs,
             clip_max,
@@ -72,8 +71,7 @@ class UlqRetrainFunction(Function):
             clip_max.data.copy_(clip_max_tmp.data)
             clip_min.data.copy_(clip_min_tmp.data)
 
-        ctx.clip_max = clip_max
-        ctx.clip_min = clip_min
+        ctx.save_for_backward(inputs, clip_max, clip_min)
         ctx.num_bits = act_qat_param.get('num_bits')
         ctx.asymmetric = act_qat_param.get('asymmetric', True)
 
@@ -87,10 +85,11 @@ class UlqRetrainFunction(Function):
         Function: UlqRetrain backward funtion required by torch
                   torch.autograd.
         """
-        res = ulq_retrain_backward_pytorch(ctx.inputs,
+        inputs, clip_max, clip_min = ctx.saved_tensors
+        res = ulq_retrain_backward_pytorch(inputs,
             grad_outputs,
-            ctx.clip_max,
-            ctx.clip_min,
+            clip_max,
+            clip_min,
             ctx.num_bits,
             ctx.asymmetric)
 

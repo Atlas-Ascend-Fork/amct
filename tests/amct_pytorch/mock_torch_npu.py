@@ -116,6 +116,12 @@ def mock_npu_quantize(input, scales, zero_points=None,
     return out
 
 
+def mock_npu_anti_quant(inputs, scales, zero_points=None,
+    src_dtype=None, dst_dtype=None):
+    out = inputs * scales
+    return out.to(dst_dtype)
+
+
 def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
     return weight
 
@@ -165,3 +171,9 @@ def mocked_npu_quant_conv2d(x, weight, scale, stride, pads,
     out *= scale.reshape(1, -1, 1, 1)
     out = out.to(output_dtype)
     return out
+
+
+def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=15):
+    scale_shape = x.shape[0]
+    scale = torch.randn(scale_shape)
+    return x, scale

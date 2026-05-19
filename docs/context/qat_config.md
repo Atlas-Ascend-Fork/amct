@@ -191,7 +191,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" width="14.058594140585942%" headers="mcps1.2.6.1.4 "><p id="p13712123824620"><a name="p13712123824620"></a><a name="p13712123824620"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="54.20457954204579%" headers="mcps1.2.6.1.5 "><p id="p6712538104620"><a name="p6712538104620"></a><a name="p6712538104620"></a>ULQ数据量化算法配置。算法介绍请参见<a href="../算法介绍.md">ULQ数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="54.20457954204579%" headers="mcps1.2.6.1.5 "><p id="p6712538104620"><a name="p6712538104620"></a><a name="p6712538104620"></a>ULQ数据量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">ULQ数据量化算法</a>。</p>
 </td>
 </tr>
 <tr id="row10327195261215"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p1015622491618"><a name="p1015622491618"></a><a name="p1015622491618"></a>optional</p>
@@ -289,7 +289,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" width="14.058594140585942%" headers="mcps1.2.6.1.4 "><p id="p8183175795111"><a name="p8183175795111"></a><a name="p8183175795111"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="54.20457954204579%" headers="mcps1.2.6.1.5 "><p id="p41831257135111"><a name="p41831257135111"></a><a name="p41831257135111"></a>ARQ权重量化算法配置。算法介绍请参见<a href="../算法介绍.md">ARQ权重量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="54.20457954204579%" headers="mcps1.2.6.1.5 "><p id="p41831257135111"><a name="p41831257135111"></a><a name="p41831257135111"></a>ARQ权重量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">ARQ权重量化算法</a>。</p>
 </td>
 </tr>
 <tr id="row033113172131"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p9716349171711"><a name="p9716349171711"></a><a name="p9716349171711"></a>optional</p>
@@ -318,7 +318,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" width="14.058594140585942%" headers="mcps1.2.6.1.4 "><p id="p264616477128"><a name="p264616477128"></a><a name="p264616477128"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="54.20457954204579%" headers="mcps1.2.6.1.5 "><p id="p8281113418465"><a name="p8281113418465"></a><a name="p8281113418465"></a>ULQ权重量化算法配置。算法介绍请参见<a href="../算法介绍.md">ULQ数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="54.20457954204579%" headers="mcps1.2.6.1.5 "><p id="p8281113418465"><a name="p8281113418465"></a><a name="p8281113418465"></a>ULQ权重量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">ULQ数据量化算法</a>。</p>
 </td>
 </tr>
 <tr id="row088521215307"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p204013810308"><a name="p204013810308"></a><a name="p204013810308"></a>optional</p>
@@ -480,7 +480,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p18263162463011"><a name="p18263162463011"></a><a name="p18263162463011"></a>balanced_l2_norm_filter_prune</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p02631724113012"><a name="p02631724113012"></a><a name="p02631724113012"></a>BalancedL2NormFilterPruner（简称BCP）算法，算法介绍请参见<a href="../算法介绍.md">手工通道稀疏算法</a>。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p02631724113012"><a name="p02631724113012"></a><a name="p02631724113012"></a>BalancedL2NormFilterPruner（简称BCP）算法，算法介绍请参见<a href="../algorithm_brief.md">手工通道稀疏算法</a>。</p>
 </td>
 </tr>
 <tr id="row10390424113913"><td class="cellrowborder" rowspan="3" valign="top" width="12.748725127487251%" headers="mcps1.2.6.1.1 "><p id="p7391162453918"><a name="p7391162453918"></a><a name="p7391162453918"></a>BalancedL2NormFilterPruner</p>
@@ -529,7 +529,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p1606132210497"><a name="p1606132210497"></a><a name="p1606132210497"></a>l1_selective_prune</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p460752224919"><a name="p460752224919"></a><a name="p460752224919"></a>L1SelectivePrune算法，算法介绍请参见<a href="../算法介绍.md">4选2结构化稀疏算法</a>。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p460752224919"><a name="p460752224919"></a><a name="p460752224919"></a>L1SelectivePrune算法，算法介绍请参见<a href="../algorithm_brief.md">4选2结构化稀疏算法</a>。</p>
 </td>
 </tr>
 <tr id="row2433194089"><td class="cellrowborder" rowspan="3" valign="top" width="12.748725127487251%" headers="mcps1.2.6.1.1 "><p id="p173074260497"><a name="p173074260497"></a><a name="p173074260497"></a>L1SelectivePruner</p>

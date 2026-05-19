@@ -253,7 +253,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </td>
 <td class="cellrowborder" valign="top" width="12.84871512848715%" headers="mcps1.2.6.1.4 "><p id="zh-cn_topic_0240188735_p16393454142316"><a name="zh-cn_topic_0240188735_p16393454142316"></a><a name="zh-cn_topic_0240188735_p16393454142316"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="zh-cn_topic_0240188735_p7393554192316"><a name="zh-cn_topic_0240188735_p7393554192316"></a><a name="zh-cn_topic_0240188735_p7393554192316"></a>ARQ量化算法配置。算法介绍请参见<a href="../算法介绍.md">ARQ权重量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="zh-cn_topic_0240188735_p7393554192316"><a name="zh-cn_topic_0240188735_p7393554192316"></a><a name="zh-cn_topic_0240188735_p7393554192316"></a>ARQ量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">ARQ权重量化算法</a>。</p>
 <p id="p817613334379"><a name="p817613334379"></a><a name="p817613334379"></a>该算法与ADAquantize、NUQuantize算法不能同时配置，若同时配置，则以配置文件中最后配置的量化算法为准。</p>
 </td>
 </tr>
@@ -287,7 +287,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </td>
 <td class="cellrowborder" valign="top" width="12.84871512848715%" headers="mcps1.2.6.1.4 "><p id="p9777144010535"><a name="p9777144010535"></a><a name="p9777144010535"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="p91642185612"><a name="p91642185612"></a><a name="p91642185612"></a>AdaRound自适应舍入量化算法，算法介绍请参见<a href="../算法介绍.md">ADA权重量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="p91642185612"><a name="p91642185612"></a><a name="p91642185612"></a>AdaRound自适应舍入量化算法，算法介绍请参见<a href="../algorithm_brief.md">ADA权重量化算法</a>。</p>
 <p id="p0329794386"><a name="p0329794386"></a><a name="p0329794386"></a>该算法与ARQuantize、NUQuantize算法不能同时配置，若同时配置，则以配置文件中最后配置的量化算法为准。</p>
 <p id="p9965162019211"><a name="p9965162019211"></a><a name="p9965162019211"></a>该量化算法支持的激活函数为：ReLU、RReLU、LeakyReLU、PReLU、GELU、ReLU6、Sigmoid、Tanh。</p>
 <p id="p154861059165910"><a name="p154861059165910"></a><a name="p154861059165910"></a>上述激活函数对应的ONNX算子为：Relu、LeakyRelu、LeakyRelu、PRelu、Gelu、Clip、Sigmoid、Tanh。</p>
@@ -359,7 +359,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </td>
 <td class="cellrowborder" valign="top" width="12.84871512848715%" headers="mcps1.2.6.1.4 "><p id="p108368785317"><a name="p108368785317"></a><a name="p108368785317"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="p14836137155316"><a name="p14836137155316"></a><a name="p14836137155316"></a>DMQ均衡算法配置。算法介绍请参见<a href="../算法介绍.md">DMQ均衡算法</a>。</p>
+<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="p14836137155316"><a name="p14836137155316"></a><a name="p14836137155316"></a>DMQ均衡算法配置。算法介绍请参见<a href="../algorithm_brief.md">DMQ均衡算法</a>。</p>
 </td>
 </tr>
 <tr id="row579116575524"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p12836177175313"><a name="p12836177175313"></a><a name="p12836177175313"></a>optional</p>
@@ -379,7 +379,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </td>
 <td class="cellrowborder" valign="top" width="12.84871512848715%" headers="mcps1.2.6.1.4 "><p id="zh-cn_topic_0240188735_p1984611242417"><a name="zh-cn_topic_0240188735_p1984611242417"></a><a name="zh-cn_topic_0240188735_p1984611242417"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="zh-cn_topic_0240188735_p58460292417"><a name="zh-cn_topic_0240188735_p58460292417"></a><a name="zh-cn_topic_0240188735_p58460292417"></a>FMR数据量化算法配置。算法介绍请参见<a href="../算法介绍.md">IFMR数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="zh-cn_topic_0240188735_p58460292417"><a name="zh-cn_topic_0240188735_p58460292417"></a><a name="zh-cn_topic_0240188735_p58460292417"></a>FMR数据量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">IFMR数据量化算法</a>。</p>
 <p id="p1877244707"><a name="p1877244707"></a><a name="p1877244707"></a>该算法与HFMGQuantize算法不能同时配置，若同时配置，则以配置文件中最后配置的量化算法为准。</p>
 </td>
 </tr>
@@ -458,7 +458,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </td>
 <td class="cellrowborder" valign="top" width="12.84871512848715%" headers="mcps1.2.6.1.4 "><p id="p196910310511"><a name="p196910310511"></a><a name="p196910310511"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="p16989132195213"><a name="p16989132195213"></a><a name="p16989132195213"></a>HFMG数据量化算法配置。算法介绍请参见<a href="../算法介绍.md">HFMG数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="58.284171582841715%" headers="mcps1.2.6.1.5 "><p id="p16989132195213"><a name="p16989132195213"></a><a name="p16989132195213"></a>HFMG数据量化算法配置。算法介绍请参见<a href="../algorithm_brief.md">HFMG数据量化算法</a>。</p>
 <p id="p0610538149"><a name="p0610538149"></a><a name="p0610538149"></a>该算法与FMRQuantize算法不能同时配置，若同时配置，则以配置文件中最后配置的量化算法为准。</p>
 </td>
 </tr>

@@ -1,0 +1,134 @@
+{
+  "skill_name": "gitcode-pr",
+  "version": "1.0.0",
+  "last_run": "2026-03-24T21:50:00Z",
+  "description": "GitCode PR 代码审查 skill 的测试用例。每个用例执行后需要清理已发布的评论。",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "basic-pr-review",
+      "prompt": "检视 https://gitcode.com/cann/ge/pull/1437，找出代码中的 Bug，输出审查摘要。注意：此用例只做审查，不要发布评论。",
+      "expected_output": "识别出 hcom_graph_optimizer.cc 中第 844 行的条件判断逻辑错误（it == end() 时尝试解引用）",
+      "files": [],
+      "cleanup": "无需清理（此用例不发布评论）",
+      "last_result": {
+        "status": "passed",
+        "with_skill": {
+          "bug_identified": true,
+          "correct_file": true,
+          "line_number": 844,
+          "duration_ms": 172814
+        },
+        "without_skill": {
+          "bug_identified": true,
+          "correct_file": true,
+          "line_number": 841,
+          "duration_ms": 198708
+        }
+      },
+      "assertions": [
+        {
+          "name": "identifies-bug-in-condition",
+          "description": "能够识别出条件判断 it == end() 的逻辑错误",
+          "check": "输出中应指出 it == end() 表示没找到元素，但代码却尝试使用 it->second"
+        },
+        {
+          "name": "correct-file-location",
+          "description": "正确定位问题文件",
+          "check": "输出中应提及 hcom_graph_optimizer.cc 文件"
+        },
+        {
+          "name": "no-comment-published",
+          "description": "不应发布评论（只做审查）",
+          "check": "输出中不应包含已发布评论的确认"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "line-number-accuracy",
+      "prompt": "审查 PR #1437 的代码变更，找出 if (it == (itMap->second).end()) 这行代码的准确行号，并说明如何获取的。注意：此用例只定位行号，不要发布评论。",
+      "expected_output": "准确定位到第 844 行，并说明通过 raw 文件验证或 grep -n 获取",
+      "files": [],
+      "cleanup": "无需清理（此用例不发布评论）",
+      "last_result": {
+        "status": "passed",
+        "with_skill": {
+          "correct_line": 844,
+          "method": "curl raw.gitcode.com + grep -n",
+          "duration_ms": 126774
+        },
+        "without_skill": {
+          "correct_line": 844,
+          "method": "git show + grep -n",
+          "duration_ms": 232885
+        }
+      },
+      "assertions": [
+        {
+          "name": "correct-line-number",
+          "description": "准确定位行号",
+          "check": "输出中应指出问题代码在第 844 行（不是 843 行）"
+        },
+        {
+          "name": "explains-method",
+          "description": "解释行号获取方法",
+          "check": "输出中应说明通过 raw 文件验证或 grep -n 命令获取行号"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "review-and-comment",
+      "prompt": "审查 https://gitcode.com/cann/ge/pull/1437，发现问题后发布行内评论到 PR。重要：评论内容必须以 [TEST] 开头，并在测试完成后记录评论 ID 以便清理。",
+      "expected_output": "成功发布行内评论到 hcom_graph_optimizer.cc 第 844 行附近，评论以 [TEST] 开头",
+      "files": [],
+      "cleanup": "删除已发布的测试评论。使用以下命令获取并删除：\ncurl -s -H \"PRIVATE-TOKEN: $GITCODE_API_TOKEN\" \"https://api.gitcode.com/api/v4/projects/cann%2Fge/merge_requests/1437/discussions\" | jq -r '.[].notes[] | select(.body | startswith(\"[TEST]\")) | .id' | while read id; do curl -s -X DELETE \"https://api.gitcode.com/api/v5/repos/cann/ge/pulls/comments/$id?access_token=$GITCODE_API_TOKEN\"; done",
+      "last_result": {
+        "status": "skipped",
+        "reason": "跳过以避免向真实 PR 发布测试评论"
+      },
+      "assertions": [
+        {
+          "name": "comment-has-test-prefix",
+          "description": "评论以 [TEST] 开头",
+          "check": "发布的评论内容必须以 [TEST] 开头，便于识别和清理"
+        },
+        {
+          "name": "publishes-inline-comment",
+          "description": "发布行内评论到正确位置",
+          "check": "应成功调用 GitCode API 发布行内评论到正确文件和行号"
+        },
+        {
+          "name": "records-comment-id",
+          "description": "记录评论 ID",
+          "check": "输出中应记录已发布评论的 ID，以便后续清理"
+        }
+      ]
+    }
+  ],
+  "benchmark_summary": {
+    "iteration_1": {
+      "date": "2026-03-24",
+      "evals_run": 2,
+      "evals_passed": 2,
+      "with_skill_avg_duration_ms": 149794,
+      "without_skill_avg_duration_ms": 215796,
+      "findings": {
+        "with_skill_strengths": [
+          "使用标准化流程（review.md 步骤）",
+          "准确定位行号 (844)",
+          "清晰的 Bug 分析和影响说明"
+        ],
+        "without_skill_strengths": [
+          "发现更多潜在问题 (5个 vs 1个)",
+          "更详细的审查摘要"
+        ],
+        "improvements_needed": [
+          "with_skill 可以输出更全面的审查",
+          "eval-3 需要在测试环境运行"
+        ]
+      }
+    }
+  }
+}

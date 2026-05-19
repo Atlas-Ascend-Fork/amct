@@ -101,40 +101,25 @@ macro(install_package)
  
     install(TARGETS ${TARGET_LIST}
         EXPORT ${PKG_NAME}-targets
-        LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR} OPTIONAL COMPONENT opensdk
-        ARCHIVE DESTINATION ${INSTALL_LIBRARY_DIR} OPTIONAL COMPONENT opensdk
-        RUNTIME DESTINATION ${INSTALL_RUNTIME_DIR} OPTIONAL COMPONENT opensdk
+        LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR} OPTIONAL
+        ARCHIVE DESTINATION ${INSTALL_LIBRARY_DIR} OPTIONAL
+        RUNTIME DESTINATION ${INSTALL_RUNTIME_DIR} OPTIONAL
     )
  
     if (file_count GREATER 0)
         foreach(i RANGE 1 ${file_count})
-            install(FILES ${FILES_${i}} DESTINATION ${FILES_DESTINATION_${i}} COMPONENT opensdk EXCLUDE_FROM_ALL)
+            install(FILES ${FILES_${i}} DESTINATION ${FILES_DESTINATION_${i}} EXCLUDE_FROM_ALL)
         endforeach()
     endif()
  
     if (directory_count GREATER 0)
         foreach(i RANGE 1 ${directory_count})
             install(DIRECTORY ${DIRECTORY_${i}} DESTINATION ${DIRECTORY_DESTINATION_${i}}
-                COMPONENT opensdk EXCLUDE_FROM_ALL
+                EXCLUDE_FROM_ALL
                 FILES_MATCHING 
                 PATTERN "*.h"
                 PATTERN "*.cppm")
         endforeach()
-    endif()
- 
-    if (PACKAGE STREQUAL "opensdk")
-        install(EXPORT ${PKG_NAME}-targets DESTINATION ${INSTALL_CONFIG_DIR}
-            FILE ${PKG_NAME}-targets.cmake COMPONENT opensdk EXCLUDE_FROM_ALL
-        )
-        configure_package_config_file(${TOP_DIR}/cmake/config/pkg_config_template.cmake.in
-            ${CMAKE_CURRENT_BINARY_DIR}/${PKG_NAME}-config.cmake
-            INSTALL_DESTINATION ${INSTALL_CONFIG_DIR}
-            PATH_VARS INSTALL_BASE_DIR INSTALL_INCLUDE_DIR INSTALL_LIBRARY_DIR INSTALL_RUNTIME_DIR INSTALL_CONFIG_DIR
-            INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX}
-        )
-        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${PKG_NAME}-config.cmake
-            DESTINATION ${INSTALL_CONFIG_DIR} COMPONENT opensdk EXCLUDE_FROM_ALL
-        )
     endif()
  
     unset(PKG_NAME)

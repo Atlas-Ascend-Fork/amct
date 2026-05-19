@@ -61,7 +61,7 @@ create_distill_config(config_file, model, input_data, config_defination=None)
 </td>
 <td class="cellrowborder" valign="top" width="7.57%" headers="mcps1.1.4.1.2 "><p id="p1027410568437"><a name="p1027410568437"></a><a name="p1027410568437"></a>输入</p>
 </td>
-<td class="cellrowborder" valign="top" width="79.5%" headers="mcps1.1.4.1.3 "><p id="p14527715174319"><a name="p14527715174319"></a><a name="p14527715174319"></a>含义：简易配置文件。基于distill_config_pytorch.proto文件生成的简易配置文件distill.cfg，*.proto文件所在路径为：<em id="i12274856104314"><a name="i12274856104314"></a><a name="i12274856104314"></a><span id="ph244511481409"><a name="ph244511481409"></a><a name="ph244511481409"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。*.proto文件参数解释以及生成的<em id="i3473122313913"><a name="i3473122313913"></a><a name="i3473122313913"></a>distill</em>.cfg简易量化配置文件样例请参见<a href="../context/蒸馏简易配置文件.md">蒸馏简易配置文件</a>。</p>
+<td class="cellrowborder" valign="top" width="79.5%" headers="mcps1.1.4.1.3 "><p id="p14527715174319"><a name="p14527715174319"></a><a name="p14527715174319"></a>含义：简易配置文件。基于distill_config_pytorch.proto文件生成的简易配置文件distill.cfg，*.proto文件所在路径为：<em id="i12274856104314"><a name="i12274856104314"></a><a name="i12274856104314"></a><span id="ph244511481409"><a name="ph244511481409"></a><a name="ph244511481409"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。*.proto文件参数解释以及生成的<em id="i3473122313913"><a name="i3473122313913"></a><a name="i3473122313913"></a>distill</em>.cfg简易量化配置文件样例请参见<a href="../context/distill_config.md">蒸馏简易配置文件</a>。</p>
 <p id="p1275756114320"><a name="p1275756114320"></a><a name="p1275756114320"></a>默认值：None。</p>
 <p id="p3275175644316"><a name="p3275175644316"></a><a name="p3275175644316"></a>数据类型：string</p>
 </td>
