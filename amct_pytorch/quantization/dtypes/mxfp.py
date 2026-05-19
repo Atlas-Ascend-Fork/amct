@@ -5,6 +5,7 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     f32_to_f4_unpacked, pack_uint4, quantize_elewise, shared_exponents,
 )
 
+
 @DTYPE_REGISTRY.register(name="mxfp", description="quant dequant for mxfp")
 class QuantDequantMx(torch.nn.Module):
     def __init__(self, bits=8, is_act=False):

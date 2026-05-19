@@ -45,6 +45,7 @@ MY_UNIQUE_ALGO = 'my_unique_algo'
 
 ALGO_B = 'algo_b'
 
+
 def test_batch_num_valid():
     f = BatchNumField(4)
     assert f.get_value() == {"batch_num": 4}

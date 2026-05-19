@@ -10,7 +10,8 @@ from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.capture import Catcher
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, apply_quant_to_moe_mlp
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import Block
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import QuantDeepseekV3MLP, QuantDeepseekV3Attention
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import (
+    QuantDeepseekV3MLP, QuantDeepseekV3Attention)
 from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
 
 

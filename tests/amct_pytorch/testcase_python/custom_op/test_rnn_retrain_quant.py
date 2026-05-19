@@ -42,6 +42,7 @@ LSTM = 'lstm'
 
 BATCH_NUM = 'batch_num'
 
+
 class TestRNNRetrainQuant(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

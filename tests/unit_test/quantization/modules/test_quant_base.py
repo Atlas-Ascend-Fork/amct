@@ -1,3 +1,20 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
 import pytest
@@ -27,6 +44,7 @@ UT_QH_A_ALGO = '_ut_qh_a'
 UT_QH_EXPORT_ALGO = '_ut_qh_export'
 
 UT_QH_B = '_ut_qh_b'
+
 
 def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=()):
     return SimpleNamespace(
@@ -293,6 +311,7 @@ def test_weight_quantizer_export_deploy_rejects_quantize_hook_path():
     class _Q(nn.Module):
         def __init__(self, args, *_):
             super().__init__()
+
         def quantize(self, x, q):
             return x
     try:
@@ -304,7 +323,9 @@ def test_weight_quantizer_export_deploy_rejects_quantize_hook_path():
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
+
     name = "_ut_struct_mis"
+
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
     class _Algo(nn.Module):
         def __init__(self, args, ctx=None):
@@ -318,14 +339,18 @@ def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
 
 
 def test_activation_quantizer_trainable_params_returns_params_from_algo():
+
     name = "_ut_act_tp"
+
     @ALGO_REGISTRY.register(name=name, targets=("activation",))
     class _AlgoWithParams(nn.Module):
         def __init__(self, args):
             super().__init__()
             self.p = nn.Parameter(torch.tensor(1.0))
+
         def forward(self, x):
             return x
+
         def trainable_params(self):
             return [self.p]
     try:
@@ -337,11 +362,14 @@ def test_activation_quantizer_trainable_params_returns_params_from_algo():
 
 
 def test_activation_quantizer_forward_applies_algo_when_enabled():
+
     name = "_ut_act_fwd"
+
     @ALGO_REGISTRY.register(name=name, targets=("activation",))
     class _DoubleAlgo(nn.Module):
         def __init__(self, args):
             super().__init__()
+
         def forward(self, x):
             return x * 2
     try:
@@ -356,14 +384,18 @@ def test_activation_quantizer_forward_applies_algo_when_enabled():
 
 
 def test_weight_quantizer_trainable_params_returns_params_from_algo():
+
     name = "_ut_wt_tp"
+
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
     class _WtAlgoWithParams(nn.Module):
         def __init__(self, args, *_):
             super().__init__()
             self.p = nn.Parameter(torch.tensor(2.0))
+
         def forward(self, x):
             return x
+
         def trainable_params(self):
             return [self.p]
     try:
@@ -375,11 +407,14 @@ def test_weight_quantizer_trainable_params_returns_params_from_algo():
 
 
 def test_weight_quantizer_forward_uses_quantize_algo_when_enabled():
+
     name = "_ut_wt_qalgo"
+
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
     class _QAlgo(nn.Module):
         def __init__(self, args, *_):
             super().__init__()
+
         def quantize(self, x, quant_obj):
             return x * 100
 
@@ -411,7 +446,9 @@ def test_build_algorithms_raises_with_missing_targets():
 
 
 def test_build_algorithms_raises_when_target_not_in_algo_targets():
+
     name = "_ut_struct_nonmatch"
+
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
     class _Algo(nn.Module):
         def __init__(self, args, ctx=None):

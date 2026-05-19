@@ -57,6 +57,7 @@ DEVICE = 'cpu'
 
 logger = logging.getLogger(__name__)
 
+
 class TestAutoCaliFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

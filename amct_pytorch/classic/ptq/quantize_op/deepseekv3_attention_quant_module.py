@@ -90,6 +90,7 @@ class DeepseekV3AttentionQuant(BaseQuantizeModule):
     def _hook_kv_states(self, past_key_value):
         update_function = past_key_value.update
         capture_data = {}
+
         def hook_update(key_states, value_states, layer_idx, **kwargs):
             capture_data['k'] = torch.max(torch.abs(key_states)).reshape(-1)
             capture_data['v'] = torch.max(torch.abs(value_states)).reshape(-1)

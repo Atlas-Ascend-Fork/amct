@@ -47,6 +47,7 @@ PRUNE_RATIO = 'prune_ratio'
 
 ASCEND_OPTIMIZED = 'ascend_optimized'
 
+
 class TestRetrainConfigForPrune(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

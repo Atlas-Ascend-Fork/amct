@@ -44,6 +44,7 @@ LINEAR_BEFORE_RESET = 'linear_before_reset'
 
 logger = logging.getLogger(__name__)
 
+
 class TestInsertRNNFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -178,6 +179,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
             self.records).generate_fake_quant_node(self.graph, lstm_0, 0)
         self.assertEqual(quant_node.type, ASCEND_QUANT)
         self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)
+
 
 class TestInsertRNNFakeQuantPass(unittest.TestCase):
     @classmethod

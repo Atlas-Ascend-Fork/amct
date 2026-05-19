@@ -61,6 +61,7 @@ LAYER1 = 'layer1'
 
 LAYER2 = 'layer2'
 
+
 class TestCheckModel(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -179,6 +180,7 @@ class TestCheckModel(unittest.TestCase):
 
     def test_amct_ops_in_model(self):
         temp_folder = self.temp_folder
+
         class Net(torch.nn.Module):
             def __init__(self):
                 super(Net, self).__init__()
@@ -186,6 +188,7 @@ class TestCheckModel(unittest.TestCase):
                 record_module = Recorder(record_file)
                 self.layer1 = IFMR(torch.nn.Conv2d(2, 4, kernel_size=2),
                     record_module, ['conv'])
+
             def forward(self, x):
                 x = self.layer1(x)
 
@@ -584,6 +587,7 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_check_reused_node_not_support(self):
         onnx_file = os.path.join(self.temp_folder, 'reused_model.onnx')
+
         class Net(torch.nn.Module):
             def __init__(self):
                 super(Net, self).__init__()
@@ -623,6 +627,7 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_check_input_dim_reduction_not_support(self):
         onnx_file = os.path.join(self.temp_folder, 'dim_reduction_model.onnx')
+
         class Net(torch.nn.Module):
             def __init__(self):
                 super(Net, self).__init__()

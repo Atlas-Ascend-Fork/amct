@@ -36,6 +36,7 @@ CUSTOMQUANT = 'CustomQuant'
 
 CUSTOMDEPLOYQUANT = 'CustomDeployQuant'
 
+
 class CustomQuant(BaseQuantizeModule):
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__(ori_module, layer_name, quant_config)
@@ -43,12 +44,14 @@ class CustomQuant(BaseQuantizeModule):
     def forward(self, inputs):
         return inputs
 
+
 class CustomDeployQuant(nn.Module):
     def __init__(self, ori_module):
         super().__init__()
 
     def forward(self, inputs):
         return inputs
+
 
 class TestCustomizedAlgo(unittest.TestCase):
     '''

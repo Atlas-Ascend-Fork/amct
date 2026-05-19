@@ -31,6 +31,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
+
 class CustomizedModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -43,6 +44,7 @@ class CustomizedModel(torch.nn.Module):
         y = self.matmul2(inputs)
         y = self.matmul3(inputs)
         return y
+
 
 class TestQuantCalibrationProtoConfig(unittest.TestCase):
     @classmethod

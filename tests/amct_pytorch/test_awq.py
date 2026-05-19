@@ -43,6 +43,7 @@ NPU_WEIGHT_QUANTIZED_LINEAR = 'NpuWeightQuantizedLinear'
 
 torch.manual_seed(0)
 
+
 class TestAwq(unittest.TestCase):
     '''
     ST FOR AWQ ALGORITHM

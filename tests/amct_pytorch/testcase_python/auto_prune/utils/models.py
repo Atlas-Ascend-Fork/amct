@@ -20,7 +20,7 @@ Generate model for ut.
 """
 from __future__ import print_function
 
-import argparse  #Python 命令行解析工具
+import argparse  # Python 命令行解析工具
 import copy
 
 import numpy as np
@@ -30,6 +30,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 ZEROS = 'zeros'
+
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
     """ save onnx """
@@ -67,8 +68,10 @@ def create_onnx(model, args_shapes, onnx_file, mode='eval'):
 def save_state_dict(model, name):
     torch.save(model.state_dict(), name)
 
+
 def restore_model(model, state_dict_path):
     model.load_state_dict(torch.load(state_dict_path))
+
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -128,6 +131,7 @@ class Net001(nn.Module):
         x = F.log_softmax(x, dim=1)
 
         return x
+
 
 class Quant(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -190,6 +194,7 @@ class Net4dMatmul(nn.Module):
 
         return x
 
+
 class EltwiseConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -248,6 +253,7 @@ class LinearIn2(nn.Module):
 
         return x
 
+
 class LinearIn3(nn.Module):
     def __init__(self):
         super().__init__()
@@ -267,6 +273,7 @@ class LinearIn3(nn.Module):
         x = self.layer6(x)
 
         return x
+
 
 class LinearIn4(nn.Module):
     def __init__(self):
@@ -289,6 +296,7 @@ class LinearIn4(nn.Module):
 
         return x
 
+
 class Conv2dLinear(nn.Module):
     """ not do prune"""
     def __init__(self):
@@ -309,6 +317,7 @@ class Conv2dLinear(nn.Module):
 
         return x
 
+
 class LinearConv2d(nn.Module):
     """ not do prune"""
     def __init__(self):
@@ -327,6 +336,7 @@ class LinearConv2d(nn.Module):
         x = self.layer4(x)
         x = self.layer5(x)
         return x
+
 
 class LinearAddConv2d(nn.Module):
     """ not do prune"""
@@ -347,6 +357,7 @@ class LinearAddConv2d(nn.Module):
         out = x_1 + x_2
         return out
 
+
 class LinearConcatConv2d(nn.Module):
     """ not do prune"""
     def __init__(self):
@@ -366,6 +377,7 @@ class LinearConcatConv2d(nn.Module):
         out = torch.cat([x_1, x_2], 1)
 
         return out
+
 
 class ConcatDim0Conv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -414,6 +426,7 @@ class GroupConv(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
         return x
+
 
 class NetConvDeconv(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -505,24 +518,7 @@ class DefaultNet(nn.Module):
             kernel_size=1, stride=1, padding=0, ceil_mode=False,
             count_include_pad=True, divisor_override=None)
 
-        self.deconv1 = nn.ConvTranspose2d(
-            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
-            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv2 = nn.ConvTranspose2d(
-            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
-            groups=1, bias=True, dilation=2, padding_mode=ZEROS)
-        self.deconv3 = nn.ConvTranspose2d(
-            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
-            groups=2, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv4 = nn.ConvTranspose2d(
-            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
-            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv5 = nn.ConvTranspose2d(
-            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
-            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
-        self.deconv6 = nn.ConvTranspose2d(
-            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
-            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self._init_deconv()
 
     def forward(self, x0):
         x = self.conv1(x0)
@@ -571,3 +567,22 @@ class DefaultNet(nn.Module):
 
         return y1, y2, y3, y4
 
+    def _init_deconv(self):
+        self.deconv1 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv2 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=2, padding_mode=ZEROS)
+        self.deconv3 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=2, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv4 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv5 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)
+        self.deconv6 = nn.ConvTranspose2d(
+            6, 6, kernel_size=3, stride=1, padding=1, output_padding=0,
+            groups=1, bias=True, dilation=1, padding_mode=ZEROS)

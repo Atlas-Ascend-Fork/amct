@@ -1,3 +1,20 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 """Logic tests for LlmPtqWorkflow.
 
 `_run_blockwise` and `_prepare_unit_batch` are end-to-end paths that require a
@@ -326,7 +343,7 @@ def test_run_blockwise_empty_units_warning(monkeypatch):
     wf.pipeline.iter_ptq_units = MagicMock(return_value=iter([]))
     wf.data_provider = MagicMock()
 
-    warns = []
+    warns = []  # noqa: E1111
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.logger",
         MagicMock(warning=lambda msg, *args: warns.append(msg)),
@@ -343,7 +360,7 @@ def test_run_blockwise_empty_units_warning(monkeypatch):
     wf.device = "cpu"
     wf.quant_target = QUANT_TARGET_MLP
 
-    results = wf._run_blockwise(object)
+    results = wf._run_blockwise(object) # pylint: disable=assignment-from-no-return
     assert results == {}
     assert len(warns) >= 1
 
@@ -369,7 +386,7 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
     wf.data_provider.load_unit_inputs = MagicMock(return_value=(torch.randn(2, 4), {}))
     wf.data_provider.materialize_gt = MagicMock(return_value=torch.randn(2, 4))
     wf.data_provider.build_unit_batch = MagicMock(return_value=SimpleNamespace(
-        data_loader=[(torch.randn(2, 4), {})], kwargs={}))
+        data_loader=[(torch.randn(2, 4), {})], kwargs={}))  # noqa: E1111
 
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.set_model_act_quant_state", lambda m, v: None)
@@ -386,7 +403,7 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
     wf.device = "cpu"
     wf.quant_target = QUANT_TARGET_MLP
 
-    result = wf._run_blockwise(object)
+    result = wf._run_blockwise(object)  # pylint: disable=assignment-from-no-return
     assert result == {0: {}}
 
 
@@ -485,6 +502,7 @@ def test_unpack_tensor_batch_returns_single_tensor():
 def test_build_block_solver_passes_kwargs():
     wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], output_dir="/tmp/fake")
     captured = {}
+
     class _Solver:
         def __init__(self, args, layer_idx, block):
             captured["layer_idx"] = layer_idx
@@ -533,7 +551,7 @@ def test_ptq_run_blockwise_mocked(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.logger", MagicMock(),
     )
-    monkeypatch.setattr(torch, "save", lambda obj, f: None)
+    monkeypatch.setattr(torch, "save", lambda obj, f: None)  # noqa: E1111
 
     wf.args.start_block_idx = 0
     wf.args.end_block_idx = 1
@@ -551,5 +569,5 @@ def test_ptq_run_blockwise_mocked(monkeypatch):
         def finalize(self):
             return {}
 
-    results = wf._run_blockwise(FakeSolver)
+    results = wf._run_blockwise(FakeSolver)  # pylint: disable=assignment-from-no-return
     assert 0 in results

@@ -43,6 +43,7 @@ NPU_WEIGHT_QUANTIZED_LINEAR = 'NpuWeightQuantizedLinear'
 
 torch.manual_seed(0)
 
+
 class TestGptq(unittest.TestCase):
     '''
     ST FOR GPTQ ALGORITHM

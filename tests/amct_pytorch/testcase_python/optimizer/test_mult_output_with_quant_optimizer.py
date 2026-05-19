@@ -54,6 +54,7 @@ INT8 = 'INT8'
 
 POOL0 = 'pool0'
 
+
 class TestQuantFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

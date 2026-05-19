@@ -31,6 +31,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import (
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestLog(unittest.TestCase):
     """
     The UT for QuantizeTool

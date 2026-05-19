@@ -33,6 +33,7 @@ def set_dtype(dtype):
     finally:
         torch.set_default_dtype(prev)
 
+
 @dataclass
 class ModelArgs:
     """Model hyperparameters. Field names match the config JSON keys."""
@@ -317,9 +318,6 @@ class Compressor(nn.Module):
         apply_rotary_emb(kv[..., -rd:], freqs_cis)
         if self.rotate:
             kv = rotate_activation(kv)
-            # fp4_act_quant(kv, fp4_block_size, True)
-        # else:
-        #     act_quant(kv[..., :-rd], 64, scale_fmt, scale_dtype, True)
         if start_pos == 0:
             self.kv_cache[:bsz, :seqlen // ratio] = kv
         else:
@@ -371,7 +369,6 @@ class Indexer(torch.nn.Module):
         apply_rotary_emb(q[..., -rd:], freqs_cis)
         q = rotate_activation(q)
         # use fp4 simulation for q and kv in indexer
-        # fp4_act_quant(q, fp4_block_size, True)
         self.compressor(x, start_pos)
         weights = self.weights_proj(x) * (self.softmax_scale * self.n_heads ** -0.5)
         # We performed QAT here, kv could also use fp8 format, though current implementation uses bf16
@@ -511,7 +508,6 @@ class Attention(nn.Module):
         kv = self.kv_norm(kv)
         apply_rotary_emb(kv[..., -rd:], freqs_cis)
         # FP8-simulate non-rope dims to match QAT; rope dims stay bf16 for positional precision
-        # act_quant(kv[..., :-rd], 64, scale_fmt, scale_dtype, True)
         topk_idxs = get_window_topk_idxs(win, bsz, seqlen, start_pos)
         if self.compress_ratio:
             offset = kv.size(1) if start_pos == 0 else win
