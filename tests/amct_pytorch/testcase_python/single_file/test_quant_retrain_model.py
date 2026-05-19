@@ -53,6 +53,7 @@ DEPLOY_MODEL_SUFFIX = '_deploy_model.onnx'
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestQuantRetrainModel(unittest.TestCase):
     """
     The UT for QuantizeTool

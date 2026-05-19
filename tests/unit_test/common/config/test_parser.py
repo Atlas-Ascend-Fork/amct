@@ -40,6 +40,7 @@ from amct_pytorch.common.config.parser import (
 MINMAX = 'minmax'
 MY_CUSTOM_PARSER = 'my_custom_parser'
 
+
 def test_set_default_config_returns_int8_minmax():
     assert set_default_config() == INT8_MINMAX_WEIGHT_QUANT_CFG
 
@@ -457,6 +458,7 @@ def test_get_supported_layers_no_weights():
 
 def test_get_supported_layers_constraint_skip():
     model = _MockModel()
+
     class BadWeightLinear(nn.Module):
         def __init__(self):
             super().__init__()

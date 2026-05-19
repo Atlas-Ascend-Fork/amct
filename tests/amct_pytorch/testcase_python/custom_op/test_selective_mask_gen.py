@@ -40,6 +40,7 @@ GROUP_SIZE_KEY = "group_size"
 PRUNE_AXIS_KEY = 'prune_axis'
 PRUNE_SIZE = 'prune_size'
 
+
 class TestSelectiveMaskGen(unittest.TestCase):
     """
     The UT for SelectiveMaskGen

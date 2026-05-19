@@ -31,6 +31,7 @@ DATA_PATH = os.path.join(DATASETS_DIR, 'pytorch/data')
 
 logger = logging.getLogger(__name__)
 
+
 class CustomDataset(Dataset):
     def __init__(self, num_samples):
         """
@@ -107,6 +108,7 @@ def run_inference_model(model, iterations=None):
 
     return test_loss, acc
 
+
 def run_inference_model_auto_cali(model, iterations=2):
     batch_size = 16
     torch.manual_seed(1)
@@ -140,8 +142,8 @@ def run_inference_onnx(onnx_file, iterations=None):
     logger.info('otputs: %s', output_names)
 
     def to_numpy(tensor):
-       data_numpy = tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
-       return data_numpy
+        data_numpy = tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+        return data_numpy
     # prepare data
     batch_size = 16
     torch.manual_seed(1)

@@ -47,6 +47,7 @@ FLT_EPSILON = 1.192092896e-7
 SSR = 'SSR'
 ONES = 'ones'
 
+
 def golden_float4(weight, quant_type, group_size):
     """
     Scales weights to a quantization type scope based on specified group size.
@@ -76,6 +77,7 @@ def golden_float4(weight, quant_type, group_size):
     quant_weight = convert_to_ori_shape(quant_weight, ori_shape)
     return quant_weight.to(device)
 
+
 def convert_to_per_group_shape(input_tensor, group_size):
     """
     Converts the input 2D tensor into a shape grouped by the specified group size. 
@@ -97,6 +99,7 @@ def convert_to_per_group_shape(input_tensor, group_size):
         flattened = input_tensor.flatten()
  
     return flattened.reshape(-1, group_size)
+
 
 def calculate_scale_by_group_size(tensor, wts_type, group_size, pad=False):
     """
@@ -122,6 +125,7 @@ def calculate_scale_by_group_size(tensor, wts_type, group_size, pad=False):
 
     return scale.reshape(weight_max.shape)
 
+
 def convert_to_ori_shape(input_tensor, ori_shape):
     """
     Converts a flattened tensor back to its original 2D shape by truncating excess elements.
@@ -137,6 +141,7 @@ def convert_to_ori_shape(input_tensor, ori_shape):
  
     flattened = input_tensor.flatten()[:total_elements]
     return flattened.reshape(ori_shape)
+
 
 def convert_to_ori_shape(input_tensor, ori_shape):
     """
@@ -197,6 +202,7 @@ def float_cast_to_float4e1m2(values: torch.Tensor) -> torch.Tensor:
     
     return res.to(values.device)
 
+
 def float_cast_to_float4e2m1(values: torch.Tensor) -> torch.Tensor:
     """
     Function: convert float to float4_e2m1 using PyTorch
@@ -236,6 +242,7 @@ def float_cast_to_float4e2m1(values: torch.Tensor) -> torch.Tensor:
     
     return res
 
+
 def golden_hifloat8(in_tensor):
     hifloat8 = trans_np_float_tensor_to_hifuint8(in_tensor.to('cpu').numpy())
     float32 = trans_np_hifuint8_tensor_to_float32(hifloat8)
@@ -256,6 +263,7 @@ def trans_np_float_tensor_to_hifuint8(in_tensor, round_mode="round", over_mode=T
     out_tensor = out_tensor.reshape(shape_tensor)
     return out_tensor
 
+
 def trans_np_hifuint8_tensor_to_float32(in_tensor):
     shape_tensor = in_tensor.shape
     if 0 in shape_tensor:
@@ -265,6 +273,7 @@ def trans_np_hifuint8_tensor_to_float32(in_tensor):
     out_tensor = _hifuint8_to_float(in_tensor)
     out_tensor = out_tensor.reshape(shape_tensor).astype(np.float32)
     return out_tensor
+
 
 def cvt_float16_to_hifuint8(x, round_mode="round", over_mode=True):
     e_c = 0
@@ -364,6 +373,7 @@ def cvt_float16_to_hifuint8(x, round_mode="round", over_mode=True):
         hif8_int_value = sign_int_value + dot_int_value + sig_exp + exponent_int_value + hif8_frac_value
     return hif8_int_value
 
+
 def cvt_float32_to_hifuint8(x, round_mode="round", over_mode=True):
     sign = False
     sign_int_value = 0
@@ -449,6 +459,7 @@ def cvt_float32_to_hifuint8(x, round_mode="round", over_mode=True):
         hif8_int_value = sign_int_value + dot_int_value + sig_exp + exponent_int_value + hif8_frac_value
     return hif8_int_value
 
+
 def cvt_hifuint8_to_float(x, over_mode=True):
     if x == 0:
         return float(0)
@@ -472,11 +483,11 @@ def cvt_hifuint8_to_float(x, over_mode=True):
             sign = -1.0
         else:
             sign = 1.0
-        dot_4_bits = x & 120 #b01111000 = 120
+        dot_4_bits = x & 120  # b01111000 = 120
         dot_4_value = dot_4_bits >> 3
         if dot_4_value >= 12:
             #备注 b1100 =12 D4
-            exponet = x & 30 #b00011110 = 30
+            exponet = x & 30  # b00011110 = 30
             exponet_int = exponet >> 1
             if exponet_int >= 8:
                 #备注 b1000 = 8
@@ -484,18 +495,18 @@ def cvt_hifuint8_to_float(x, over_mode=True):
             else:
                 exponet_value = exponet_int + 8
 
-            fra_int = x & 1 #b00000001
+            fra_int = x & 1  # b00000001
             m_value = 1.0 + fra_int * 0.5
         elif dot_4_value >= 8:
             #备注 b1000 =8 D3
-            exponet = x & 28 #b00011100 = 28
+            exponet = x & 28  # b00011100 = 28
             exponet_int = exponet >> 2
             if exponet_int >= 4:
                 #备注 b100 = 4
                 exponet_value = -exponet_int
             else:
                 exponet_value = exponet_int + 4
-            fra_int = x & 3 #b00000011
+            fra_int = x & 3  # b00000011
             m_value = 1.0 + fra_int * 0.25
         elif dot_4_value >= 4:
             #备注 b0100 =8 D2
@@ -545,6 +556,8 @@ _float32_to_hifuint8 = np.vectorize(
 _hifuint8_to_float = np.vectorize(
     cvt_hifuint8_to_float, excluded=["over_mode"]
 )
+
+
 def _get_hif8_fraction_bits_number(exponent):
     #备注 return dot value(4bits), exponent size, fraction size
     if exponent < -22:
@@ -572,6 +585,7 @@ def _get_hif8_fraction_bits_number(exponent):
         #over flow
         return 12, 4, -1
 
+
 def _fp32_ta_round_to_hif8(fraction32_int, hif8_bits_num, exponent):
     if exponent == -23:
         return True, 0
@@ -590,10 +604,11 @@ def _fp32_ta_round_to_hif8(fraction32_int, hif8_bits_num, exponent):
     else:
         return False, hif8_value_tmp >> 1
 
+
 def _fp32_ssr_round_to_hif8(fraction32_int, hif8_bits_num, exponent):
     t14_mask = 16383  # b11111111111111
     if exponent == -23:
-        f14_values = (fraction32_int >> 10) + 8192 #10 0000 0000 0000
+        f14_values = (fraction32_int >> 10) + 8192  # 10 0000 0000 0000
         t14_values = fraction32_int & t14_mask
         hif8_value = 0
 
@@ -632,8 +647,9 @@ def _fp16_ta_round_to_hif8(fraction16_int, hif8_bits_num, exponent):
     else:
         return False, hif8_value_tmp >> 1
 
+
 def _fp16_ssr_round_to_hif8(fraction16_int, hif8_bits_num, exponent):
-    t2_mask = 1 #b1
+    t2_mask = 1  # b1
     t2_values = (fraction16_int & t2_mask) * 2 + 1
     if exponent == -23:
         f2_values = 2 + fraction16_int >> 9
@@ -669,6 +685,7 @@ def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=3
     result = input_tensor * expanded_tensor
     return result
 
+
 def convert_golden_inverse_conversion(input_tensor, quant_type):
     dtype = input_tensor.dtype
 
@@ -677,10 +694,12 @@ def convert_golden_inverse_conversion(input_tensor, quant_type):
 
     return input_tensor.to(dtype)
 
+
 def set_model_data_distribution(model, distribution_type=ONES, quant_type='MXFP4_E2M1'):
     for name, param in model.named_parameters():
         param.data = param.data.to(DATA_TYPE).to(DEVICE)
-        if "weight" not in name: continue
+        if "weight" not in name:
+            continue
         if distribution_type == ONES:
             param.data = torch.ones_like(param.data).to(DATA_TYPE)
             param.data = convert_golden_inverse_conversion(param.data, quant_type).to(DATA_TYPE).to(DEVICE)
@@ -697,7 +716,8 @@ def set_model_data_distribution(model, distribution_type=ONES, quant_type='MXFP4
 
     for _, buffer in model.named_buffers():
         buffer.data = buffer.data.to(DATA_TYPE).to(DEVICE)
-        if "weight" not in name: continue
+        if "weight" not in name:
+            continue
         if distribution_type == ONES:
             buffer.data = torch.ones_like(buffer.data).to(DATA_TYPE)
             buffer.data = convert_golden_inverse_conversion(param.data, quant_type).to(DATA_TYPE).to(DEVICE)
@@ -711,6 +731,7 @@ def set_model_data_distribution(model, distribution_type=ONES, quant_type='MXFP4
         elif distribution_type == 'rand':
             buffer.data = torch.rand_like(buffer.data).to(DATA_TYPE)
             buffer.data = convert_golden_inverse_conversion(param.data, quant_type).to(DATA_TYPE).to(DEVICE)
+
 
 def similarity(data0, data1):
     data0_nan = np.isnan(data0)

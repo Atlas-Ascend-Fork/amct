@@ -25,6 +25,7 @@ RUN_SKIPPED = os.getenv('RUN_SKIPPED_TESTS', 'False').lower() == 'true'
 
 logger = logging.getLogger(__name__)
 
+
 class TestFlatQuant(unittest.TestCase):
     '''
     ST FOR FLATQUANT ALGORITHM

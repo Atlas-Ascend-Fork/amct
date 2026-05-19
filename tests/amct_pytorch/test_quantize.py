@@ -45,6 +45,7 @@ torch.manual_seed(0)
 
 logger = logging.getLogger(__name__)
 
+
 class TestModel(nn.Module):
     def __init__(self):
         super().__init__()

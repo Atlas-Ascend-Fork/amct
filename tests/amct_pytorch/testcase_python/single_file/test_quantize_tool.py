@@ -42,6 +42,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 ALGO_KEY = 'algo'
 
+
 class TestQuantizeTool(unittest.TestCase):
     """
     The UT for QuantizeTool

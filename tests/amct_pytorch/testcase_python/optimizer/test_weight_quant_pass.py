@@ -50,6 +50,7 @@ from .utils import models, record_file_utils
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestWeightQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -108,6 +109,7 @@ class TestWeightQuantPass(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.lstm = torch.nn.LSTM(10, 20, 1)
+
             def forward(self, input_data, hx):
                 x = self.lstm(input_data, hx)
                 return x
