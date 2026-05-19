@@ -37,6 +37,7 @@ constexpr uint32_t BF16_EXP_BITS = 8;
 constexpr uint32_t BF16_FRAC_BITS = 7;
 constexpr uint32_t HIF8_SIGN_SHIFT = 7;
 constexpr uint32_t HIF8_DENORMAL_EXP_BIAS = 23;
+constexpr uint8_t HIF8_POSITIVE_MIN_NORMAL = 0x7E;
 constexpr int FP32 = 0;
 constexpr int FP16 = 1;
 constexpr int BF16 = 2;
@@ -198,14 +199,29 @@ uint8_t FpNToHiF8(T inData, uint32_t expBits, uint32_t fracBits)
     uint32_t fracFpN = inData & ((1 << fracBits) - 1);
     uint32_t fracHiF8 = 0;
     int32_t expNoBias = 0;
+    bool isSubnormal = (expFpN == 0 && fracFpN != 0);
+    // ±0 → 0x00：HiFloat8 retains no the sign bit of zero
+    if (expFpN == 0 && fracFpN == 0) {
+        return 0x00;
+    }
     if (expFpN == ((1U << expBits) - 1) && fracFpN > 0) {
         outData = 0x80; //nan 0b10000000
     } else if (expFpN == ((1U << expBits) - 1) && fracFpN == 0) {
         outData = (sign << HIF8_SIGN_SHIFT) | 0x6F; // inf S1101111
     } else {
-        expNoBias = expFpN - ((1 << (expBits - 1)) - 1);
-        if (expNoBias < -22) {
+        if (isSubnormal) {
+            uint32_t p = 31u - static_cast<uint32_t>(__builtin_clz(fracFpN));
+            expNoBias = static_cast<int32_t>(p) - static_cast<int32_t>(fracBits)
+                - static_cast<int32_t>((1U << (expBits - 1)) - 2U);
+            fracFpN = (fracFpN & ((1u << p) - 1u)) << (fracBits - p);
+        } else {
+            expNoBias = expFpN - ((1 << (expBits - 1)) - 1);
+        }
+
+        if (expNoBias < -23) {
             outData = 0x00; // FpN value < 2^-22, hifloat8 value = 0
+        } else if (expNoBias == -23) {
+            outData = (sign << HIF8_SIGN_SHIFT) | 0x01;
         } else if (expNoBias >= 15) {
             outData = (sign << HIF8_SIGN_SHIFT) | 0x6E; // MAX hifloat8 0b01101110
         }  else if (expNoBias >= -22 && expNoBias < -15) { // hifloat8 denormal
@@ -214,7 +230,8 @@ uint8_t FpNToHiF8(T inData, uint32_t expBits, uint32_t fracBits)
             } else {
                 fracHiF8 = HIF8_DENORMAL_EXP_BIAS + expNoBias;
             }
-            outData = (sign << HIF8_SIGN_SHIFT) | fracHiF8;
+            outData = (sign << HIF8_SIGN_SHIFT)
+                | (fracHiF8 >= 8u ? HIF8_POSITIVE_MIN_NORMAL : static_cast<uint8_t>(fracHiF8));
         } else {
             uint32_t dotValue = 0;
             uint32_t expHiF8Bits = 0;
@@ -346,4 +363,3 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("hifloat8_to_float16",  &Hifloat8ToFloat16,  "convert hifloat8 to float16");
     m.def("hifloat8_to_bfloat16", &Hifloat8ToBFloat16, "convert hifloat8 to bfloat16");
 }
-

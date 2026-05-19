@@ -93,7 +93,7 @@ create_quant_config(config_file, model, input_data, skip_layers=None, batch_num=
 <td class="cellrowborder" valign="top" width="7.090000000000001%" headers="mcps1.1.4.1.2 "><p id="zh-cn_topic_0240188739_p46121659184520"><a name="zh-cn_topic_0240188739_p46121659184520"></a><a name="zh-cn_topic_0240188739_p46121659184520"></a>输入</p>
 </td>
 <td class="cellrowborder" valign="top" width="82.01%" headers="mcps1.1.4.1.3 "><p id="p77792024182811"><a name="p77792024182811"></a><a name="p77792024182811"></a>含义：基于calibration_config_pytorch.proto文件生成的简易量化配置文件<em id="zh-cn_topic_0240188739_i04991385212"><a name="zh-cn_topic_0240188739_i04991385212"></a><a name="zh-cn_topic_0240188739_i04991385212"></a>quant</em>.cfg，*.proto文件所在路径为：<em id="zh-cn_topic_0240188739_i13405105118558"><a name="zh-cn_topic_0240188739_i13405105118558"></a><a name="zh-cn_topic_0240188739_i13405105118558"></a><span id="ph244511481409"><a name="ph244511481409"></a><a name="ph244511481409"></a>AMCT</span>安装目录</em>/amct_pytorch/proto/。</p>
-<p id="zh-cn_topic_0240188739_p153825102371"><a name="zh-cn_topic_0240188739_p153825102371"></a><a name="zh-cn_topic_0240188739_p153825102371"></a>*.proto文件参数解释以及生成的<em id="zh-cn_topic_0240188739_i8781171513315"><a name="zh-cn_topic_0240188739_i8781171513315"></a><a name="zh-cn_topic_0240188739_i8781171513315"></a>quant</em>.cfg简易量化配置文件样例请参见<a href="../context/训练后量化简易配置文件.md">训练后量化简易配置文件</a>。</p>
+<p id="zh-cn_topic_0240188739_p153825102371"><a name="zh-cn_topic_0240188739_p153825102371"></a><a name="zh-cn_topic_0240188739_p153825102371"></a>*.proto文件参数解释以及生成的<em id="zh-cn_topic_0240188739_i8781171513315"><a name="zh-cn_topic_0240188739_i8781171513315"></a><a name="zh-cn_topic_0240188739_i8781171513315"></a>quant</em>.cfg简易量化配置文件样例请参见<a href="../context/ptq_config.md">训练后量化简易配置文件</a>。</p>
 <p id="zh-cn_topic_0240188739_p1944053764718"><a name="zh-cn_topic_0240188739_p1944053764718"></a><a name="zh-cn_topic_0240188739_p1944053764718"></a>默认值：None</p>
 <p id="zh-cn_topic_0240188739_p86121059144513"><a name="zh-cn_topic_0240188739_p86121059144513"></a><a name="zh-cn_topic_0240188739_p86121059144513"></a>数据类型：string</p>
 <p id="zh-cn_topic_0240188739_p337494234812"><a name="zh-cn_topic_0240188739_p337494234812"></a><a name="zh-cn_topic_0240188739_p337494234812"></a>使用约束：当取值为None时，使用输入参数生成配置文件；否则，忽略输入的其他量化参数（skip_layers，batch_num，activation_offset），根据简易量化配置文件参数config_defination生成JSON格式的配置文件。</p>
@@ -208,9 +208,9 @@ amct.create_quant_config(config_file="./configs/config.json",
                          activation_offset=True)
 ```
 
-落盘文件说明：生成JSON格式的量化配置文件，样例如下（重新执行量化时，该接口生成的量化配置文件将会被覆盖），参数解释请参见[训练后量化配置参数](../context/训练后量化配置参数.md).
+落盘文件说明：生成JSON格式的量化配置文件，样例如下（重新执行量化时，该接口生成的量化配置文件将会被覆盖），参数解释请参见[训练后量化配置参数](../context/ptq_config_param.md).
 
--   训练后量化配置文件（数据量化使用[IFMR数据量化算法](../算法介绍.md)）
+-   训练后量化配置文件（数据量化使用[IFMR数据量化算法](../algorithm_brief.md)）
 
     ```
     {
@@ -264,7 +264,7 @@ amct.create_quant_config(config_file="./configs/config.json",
     }
     ```
 
--   训练后量化配置文件（数据量化使用[HFMG数据量化算法](../算法介绍.md)）
+-   训练后量化配置文件（数据量化使用[HFMG数据量化算法](../algorithm_brief.md)）
 
     ```
     {
@@ -291,7 +291,7 @@ amct.create_quant_config(config_file="./configs/config.json",
     }
     ```
 
--   自适应舍入量化简易配置文件（权重量化使用[ADA权重量化算法](../算法介绍.md)）
+-   自适应舍入量化简易配置文件（权重量化使用[ADA权重量化算法](../algorithm_brief.md)）
 
     ```
     "layer_name1":{

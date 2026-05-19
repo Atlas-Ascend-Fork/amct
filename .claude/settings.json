@@ -1,0 +1,70 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(install-default-skills)",
+      "Skill(planning-with-files)",
+      "Skill(skill-creator)",
+      "Skill(gitcode-pr)",
+      "Skill(gitcode-issue)",
+      "Task(subagent_type=code-analyzer)",
+      "Task(subagent_type=evaluator)",
+      "Task(subagent_type=Explore)",
+      "Task(subagent_type=Plan)",
+      "Task(subagent_type=general-purpose)",
+      "WebSearch",
+      "WebFetch(domain:support.huawei.com)",
+      "WebFetch(domain:www.huawei.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.hiascend.com)",
+      "WebFetch(domain:gitee.com)",
+      "WebFetch(domain:gitcode.com)",
+      "WebFetch(domain:docs.gitcode.com)",
+      "mcp__web-reader__webReader",
+      "Read",
+      "Glob",
+      "Grep",
+      "LSP",
+      "AskUserQuestion",
+      "TodoWrite",
+      "EnterPlanMode",
+      "ExitPlanMode",
+      "TaskOutput",
+      "KillShell",
+      "Edit(file_path:./**)",
+      "Write(file_path:./**)",
+      "NotebookEdit(file_path:./**)",
+      "Bash"
+    ],
+    "deny": [],
+    "ask": [
+      "Bash(command:rm *)",
+      "Bash(command:rm -rf *)",
+      "Bash(command:mv *)",
+      "Bash(command:cp * / *)",
+      "Bash(command:chmod *)",
+      "Bash(command:chown *)"
+    ]
+  },
+  "enabledPlugins": {
+    "skill-creator@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
+  },
+  "sandbox": {
+    "enabled": false,
+    "autoAllowBashIfSandboxed": false
+  },
+  "includeCoAuthoredBy": false,
+  "gitAttribution": false,
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/skills/default-skills/scripts/install-default-skills.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
