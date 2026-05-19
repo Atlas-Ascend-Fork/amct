@@ -61,7 +61,8 @@ def parser_gen(command=None):
     parser.add_argument('--nsamples', type=int, default=128,
                         help='Number of calibration data samples.')
     parser.add_argument('--eval_mode', type=str, default='bf16', choices=['bf16', 'quant'],
-                        help='bf16 uses the original model path; quant rebuilds quant modules and toggles quantizers by bit-widths.')
+                        help='bf16 uses the original model path; '
+                             'quant rebuilds quant modules and toggles quantizers by bit-widths.')
 
     parser.add_argument("--quant_dtype", type=str, default="mxfp", help='Quantization data type.')
 
