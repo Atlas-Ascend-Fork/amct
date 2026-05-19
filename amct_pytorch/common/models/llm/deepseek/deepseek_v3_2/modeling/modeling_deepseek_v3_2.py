@@ -336,9 +336,9 @@ def weight_dequant(weight, scale):
     return weight
 
 
-class MLA(nn.Module):
+class DeepseekV3Attention(nn.Module):
     """
-    Multi-Head Latent Attention (MLA) Layer.
+    Multi-Head Latent Attention (DeepseekV3Attention) Layer.
 
     Attributes:
         dim (int): Dimensionality of the input features.
@@ -383,7 +383,7 @@ class MLA(nn.Module):
 
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         """
-        Forward pass for the Multi-Head Latent Attention (MLA) Layer.
+        Forward pass for the Multi-Head Latent Attention (DeepseekV3Attention) Layer.
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, seq_len, dim).
@@ -444,7 +444,7 @@ class MLA(nn.Module):
         return x
 
 
-class MLP(nn.Module):
+class DeepseekV3MLP(nn.Module):
 
     def __init__(self, dim: int, inter_dim: int, reduce_output: bool = True):
         super().__init__()
@@ -519,7 +519,7 @@ class MoE(nn.Module):
         self.gate = Gate(args)
         self.experts = nn.ModuleList([Expert(args.dim, args.moe_intermediate_size) if self.experts_start_idx <= i < self.experts_end_idx else None
                                       for i in range(self.n_routed_experts)])
-        self.shared_experts = MLP(args.dim, args.n_shared_experts * args.moe_intermediate_size, reduce_output=False)
+        self.shared_experts = DeepseekV3MLP(args.dim, args.n_shared_experts * args.moe_intermediate_size, reduce_output=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = x.size()
@@ -542,8 +542,8 @@ class MoE(nn.Module):
 class Block(nn.Module):
     def __init__(self, layer_id: int, args: ModelArgs):
         super().__init__()
-        self.self_attn = MLA(args)
-        self.mlp = MLP(args.dim, args.intermediate_size) if layer_id < args.first_k_dense_replace else MoE(args)
+        self.self_attn = DeepseekV3Attention(args)
+        self.mlp = DeepseekV3MLP(args.dim, args.intermediate_size) if layer_id < args.first_k_dense_replace else MoE(args)
         self.post_attention_layernorm = RMSNorm(args.dim)
         self.input_layernorm = RMSNorm(args.dim)
 
