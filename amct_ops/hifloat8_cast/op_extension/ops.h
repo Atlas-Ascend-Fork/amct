@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <torch/extension.h>
 
 namespace AscendKernel {

@@ -30,6 +30,7 @@
 extern "C" void hifloat8_cast_kernel_lut(uint32_t blockDim, void *l2Ctrl, aclrtStream stream, uint8_t *input,
     uint8_t *output, uint8_t *tiling, uint8_t *lutGm);
 
+namespace {
 constexpr uint32_t FP16_EXP_BITS = 5;
 constexpr uint32_t FP16_FRAC_BITS = 10;
 constexpr uint32_t FP16_EXP_BIAS = 15;
@@ -60,6 +61,7 @@ constexpr uint32_t HIF8_DOT_TABLE[16] = {
     (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
     (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
 };
+}
 
 static uint32_t HostHif8ToFpBits(uint8_t inData, uint32_t expBits, uint32_t fracBits, uint32_t expBias) {
     if (inData == 0) {
