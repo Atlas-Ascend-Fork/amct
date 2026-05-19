@@ -93,7 +93,16 @@ class DeepseekV32(BaseModel):
         )
 
     def do_head_forward(self, inps):
-        return super().do_head_forward(inps)
+        self.model.norm.to(self.args.device)
+        self.model.head.to(self.args.device)
+        preds = []
+        with torch.no_grad():
+            for idx, inp in tqdm(enumerate(inps), total=len(inps), desc='Head Processing...'):
+                inp = inp.to(self.args.device)
+                out = self.model.norm(inp)
+                out = self.model.head(out)[:, :-1, :].contiguous()
+                preds.append(out.to('cpu'))
+        return preds
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
