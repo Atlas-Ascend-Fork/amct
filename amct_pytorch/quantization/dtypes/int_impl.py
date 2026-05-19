@@ -13,8 +13,8 @@ def dynamic_per_token_quant(tensor: torch.Tensor, bits: int) -> torch.Tensor:
     max_val = tensor.amax(dim=-1, keepdim=True)
     min_val = tensor.amin(dim=-1, keepdim=True)
     abs_max = torch.max(max_val.abs(), min_val.abs()).clamp(min=1e-5)
-    scale = abs_max / qmax
-    tensor = round_ste(tensor / scale.clamp_min(1e-9))
+    scale = (abs_max / qmax).clamp_min(1e-9)
+    tensor = round_ste(tensor / scale)
     tensor = torch.clamp(tensor, qmin, qmax)
     tensor = tensor * scale
     return tensor.to(dtype)
@@ -58,7 +58,7 @@ def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor
     assert tensor.dim() == 2
     qmax = 2 ** (bits - 1) - 1
     abs_max = torch.abs(tensor).max(dim=1, keepdim=True)[0]
-    scale = abs_max / qmax
+    scale = (abs_max / qmax).clamp_min(1e-9)
     assert scale.shape == (tensor.shape[0], 1)
     if isinstance(v, torch.Tensor):
         v = v.to(device=tensor.device, dtype=tensor.dtype)
