@@ -235,3 +235,46 @@ class TestOfmrFakeQuant(unittest.TestCase):
         expected = F.linear(x, dq_w, mod.bias)
         self.assertTrue(torch.allclose(out, expected),
                         f"max diff: {(out - expected).abs().max()}")
+
+
+class TestAWQFakeQuant(unittest.TestCase):
+    """LinearAWQuant fake quant uses ori_module.weight (AWQ-scaled), not self.weight."""
+
+    def setUp(self):
+        sys.modules.pop('torch_npu', None)
+
+    def _make_cfg(self):
+        return {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': None, 'symmetric': True,
+                           'strategy': 'tensor', 'enable_quant': False},
+            'algorithm': {'awq': {'grids_num': 20, 'duo_scaling': False}},
+        }
+
+    def test_quantizable_weight_override_returns_ori_module_weight(self):
+        """_quantizable_weight must return ori_module.weight.data (post-apply_scale)."""
+        from amct_pytorch.quantize_op.linear_awq_module import LinearAWQuant
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = LinearAWQuant(linear, 'l', self._make_cfg())
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        mod(x)   # calibration: apply_scale modifies ori_module.weight, calc_done=True
+        self.assertTrue(
+            torch.allclose(mod._quantizable_weight(), mod.ori_module.weight.data),
+            "_quantizable_weight must return ori_module.weight.data")
+
+    def test_after_calibration_output_matches_manual(self):
+        """After calc_done, forward equals quant_dequant(ori_module.weight) @ x."""
+        from amct_pytorch.quantize_op.linear_awq_module import LinearAWQuant
+        from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        linear = nn.Linear(8, 4).to(torch.bfloat16)
+        mod = LinearAWQuant(linear, 'l', self._make_cfg())
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        mod(x)    # calibration pass
+        out = mod(x)  # fake quant pass
+
+        dq_w = quant_dequant_tensor(mod.ori_module.weight.data, 'int8', mod.scale_w, mod.offset_w)
+        expected = F.linear(x, dq_w, mod.bias)
+        self.assertTrue(torch.allclose(out, expected),
+                        f"max diff: {(out - expected).abs().max()}")
