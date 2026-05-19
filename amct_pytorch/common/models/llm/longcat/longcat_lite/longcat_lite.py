@@ -270,5 +270,5 @@ class LongcatLite(BaseModel):
         path = Path(data_dir) / f"block_{unit.layer_idx}_{input_name}_in.pkl"
         if not path.exists():
             raise FileNotFoundError(f"PTQ inputs not found for unit '{unit.name}': {path}")
-        cached_inps = torch.load(path)
+        cached_inps = torch.load(path, weight_only=True)
         return cached_inps, kwargs
