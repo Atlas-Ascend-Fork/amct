@@ -72,7 +72,9 @@ class LinearAWQuant(BaseQuantizeModule):
             input_data = input_data.to(self.weight.device)
             output = F.linear(input_data, self.weight, self.bias)
         if self.calc_done:
-            return output
+            if self.scale_w is not None:
+                return self._fake_quant_forward(input_data)
+            return output  # scale_w not set; return raw output
 
         scale_awq = search_scale(input_data, [self.ori_module], self.ori_module, self.quant_config)
         apply_scale(scale_awq, self.ori_module, input_data)
@@ -84,3 +86,7 @@ class LinearAWQuant(BaseQuantizeModule):
         self.calc_done = True
         LOGGER.logd("Calculate awq quant params of layer '{}' success!".format(self.layer_name), 'LinearAWQuant')
         return output
+
+    def _quantizable_weight(self):
+        # scale_w was computed from ori_module.weight (already *= scale_awq via apply_scale)
+        return self.ori_module.weight.data
