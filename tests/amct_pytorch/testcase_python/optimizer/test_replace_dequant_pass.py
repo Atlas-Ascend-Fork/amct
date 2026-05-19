@@ -178,6 +178,10 @@ class TestReplaceDequantPass(unittest.TestCase):
         pad0.op_type = 'Pad'
         pad0.input[:] = [ADD1]
         pad0.output[:] = ['pad0']
+        cls.add_data()
+
+    @classmethod
+    def add_data(cls):
         # Add average_pool
         avg_pool1 = cls.graph.node.add()
         avg_pool1.name = AVG_POOL1

@@ -99,24 +99,24 @@ class TestDistillConfigBase(unittest.TestCase):
 
     def test_check_dst_type_legal_default_data(self):
         data_config = {
-            ALGO : ULQ_QUANTIZE
+            ALGO: ULQ_QUANTIZE
         }
         weight_config = {
-            ALGO : 'arq_distill',
-            CHANNEL_WISE : True,
-            DST_TYPE : 'INT4'
+            ALGO: 'arq_distill',
+            CHANNEL_WISE: True,
+            DST_TYPE: 'INT4'
         }
         with self.assertRaises(ValueError):
             self.distill_config_base.check_dst_type_legal(data_config, weight_config)
 
     def test_check_dst_type_legal_default_weight(self):
         data_config = {
-            ALGO : ULQ_QUANTIZE,
-            DST_TYPE : 'INT4'
+            ALGO: ULQ_QUANTIZE,
+            DST_TYPE: 'INT4'
         }
         weight_config = {
-            ALGO : 'arq_distill',
-            CHANNEL_WISE : True
+            ALGO: 'arq_distill',
+            CHANNEL_WISE: True
         }
         with self.assertRaises(ValueError):
             self.distill_config_base.check_dst_type_legal(data_config, weight_config)

@@ -26,7 +26,8 @@ def load_ptq_inps(data_dir, quant_target, layer_idx):
         if os.path.exists(os.path.join(data_dir, f"position_ids.pkl")):
             kwargs["position_ids"] = torch.load(os.path.join(data_dir, f"position_ids.pkl"), weights_only=True)
         if os.path.exists(os.path.join(data_dir, f"position_embeddings.pkl")):
-            kwargs["position_embeddings"] = torch.load(os.path.join(data_dir, f"position_embeddings.pkl"), weights_only=True)
+            kwargs["position_embeddings"] = torch.load(os.path.join(data_dir, f"position_embeddings.pkl"), 
+                                                       weights_only=True)
         if os.path.exists(os.path.join(data_dir, f"attention_mask.pkl")):
             kwargs["attention_mask"] = torch.load(os.path.join(data_dir, f"attention_mask.pkl"), weights_only=True)
     file_path = os.path.join(data_dir, f"block_{layer_idx}_{quant_target}_in.pkl")
