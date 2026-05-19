@@ -42,6 +42,7 @@ LINEAR_BEFORE_RESET = 'linear_before_reset'
 
 logger = logging.getLogger(__name__)
 
+
 class TestReplaceRNNPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -175,6 +176,7 @@ class TestReplaceRNNPass(unittest.TestCase):
         deq_scale_node = ReplaceRNNPass(self.records).construct_deq_scale_node(self.graph, lstm_0)
         deq_scale = TensorProtoHelper(QuantOpInfo.get_node_tensor(deq_scale_node)).get_data()
         self.assertEqual(deq_scale.shape, (8,))
+
 
 class TestReplaceRNNPassGRU(unittest.TestCase):
     @classmethod

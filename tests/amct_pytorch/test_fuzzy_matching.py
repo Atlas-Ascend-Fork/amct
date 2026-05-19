@@ -67,6 +67,7 @@ logger = logging.getLogger(__name__)
 
 LAYER1 = 'layer1'
 
+
 class TestCast(unittest.TestCase):
     '''
     ST FOR CAST ALGORITHM
@@ -88,6 +89,7 @@ class TestCast(unittest.TestCase):
  
     def tearDown(self):
         del sys.modules['torch_npu']
+
 
 class TestFuzzyPatternMatching(TestCast):
     """Test fuzzy pattern matching functionality"""
@@ -130,6 +132,7 @@ class TestFuzzyPatternMatching(TestCast):
         """Test complex pattern"""
         self.assertTrue(match_fuzzy_pattern('model.layers.0.self_attn.q_proj', '*self_attn.q_proj.inputs'))
         self.assertFalse(match_fuzzy_pattern('model.layers.0.self_attn.k_proj', '*self_attn.q_proj.inputs'))
+
 
 class TestFuzzyPatternExceptions(TestCast):
     """Test wildcard pattern exception scenarios"""
@@ -211,6 +214,7 @@ class TestFuzzyPatternExceptions(TestCast):
         result = match_fuzzy_pattern('model.layer', '*.invalid')
         self.assertFalse(result)
 
+
 class TestFuzzyConfigBoundaryConditions(TestCast):
     """Test boundary conditions"""
     
@@ -242,6 +246,7 @@ class TestFuzzyConfigBoundaryConditions(TestCast):
         result = match_fuzzy_pattern('model.layer.name', '*name')
         self.assertTrue(result)
 
+
 class TestFuzzyConfigSpecialCharacters(TestCast):
     """Test special character handling"""
     
@@ -269,6 +274,7 @@ class TestFuzzyConfigSpecialCharacters(TestCast):
         """SC-005: Test escape characters"""
         result = match_fuzzy_pattern('layer\nname', '*name')
         self.assertTrue(result)
+
 
 class TestFuzzyConfigPerformance(TestCast):
     """Test performance"""
@@ -306,6 +312,7 @@ class TestFuzzyConfigPerformance(TestCast):
         elapsed_time = time.time() - start_time
         
         self.assertLess(elapsed_time, 0.1)
+
 
 class TestWeightsCfgFieldAdditional(TestCast):
     """Test WeightsCfgField class new code"""
@@ -346,6 +353,7 @@ class TestWeightsCfgFieldAdditional(TestCast):
         value = field.get_value()
         self.assertEqual(value[QUANT_TYPE], QUANT_TYPE_INT8)
         self.assertIsNone(value.get(GROUP_SIZE))
+
 
 class TestInputsCfgFieldAdditional(TestCast):
     """Test InputsCfgField class new code"""
@@ -458,6 +466,7 @@ class TestInputsCfgFieldAdditional(TestCast):
         except ValueError as e:
             assert 'weights configuration' in str(e)
 
+
 class TestAlgorithmFieldAdditional(TestCast):
     """Test AlgorithmField class new code"""
     
@@ -474,6 +483,7 @@ class TestAlgorithmFieldAdditional(TestCast):
         value = field.get_value()
         self.assertIsNotNone(value)
         self.assertEqual(value['algorithm'], {ALGORITHM_MINMAX: {}})
+
 
 class TestParserFunctionsAdditional(TestCast):
     """Test parser module new helper functions"""

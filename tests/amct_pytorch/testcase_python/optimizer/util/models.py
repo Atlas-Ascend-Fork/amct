@@ -63,8 +63,10 @@ def create_onnx(model, args_shapes, onnx_file, mode='eval'):
 def save_state_dict(model, name):
     torch.save(model.state_dict(), name)
 
+
 def restore_model(model, state_dict_path):
     model.load_state_dict(torch.load(state_dict_path))
+
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -127,6 +129,7 @@ class Net001(nn.Module):
 
         return x
 
+
 class Quant(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     """
@@ -166,6 +169,8 @@ class Net3d(nn.Module):
         x = self.layer1(x)
 
         return x
+
+
 class MobilenetTailModel(torch.nn.Module):
     """ [2, 32, 28, 28]
     """
@@ -190,6 +195,7 @@ class MobilenetTailModel(torch.nn.Module):
         x = self.classifier(x)
         return x
 
+
 class Yolov3ResizeModel(torch.nn.Module):
     """ [2, 32, 28, 28]
     """
@@ -207,6 +213,7 @@ class Yolov3ResizeModel(torch.nn.Module):
         x = self.features(x)
         x = nn.functional.interpolate(x, scale_factor=2, mode='bicubic')
         return x
+
 
 class ConvPadLong(torch.nn.Module):
     """ [2, 32, 28, 28]

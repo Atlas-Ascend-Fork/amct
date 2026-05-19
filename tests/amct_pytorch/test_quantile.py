@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 QUANTILEQUANT = 'QuantileQuant'
 
+
 class TestQuantileQuant(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

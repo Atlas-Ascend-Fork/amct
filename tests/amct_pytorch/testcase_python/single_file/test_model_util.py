@@ -38,6 +38,7 @@ from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestModelHelper(unittest.TestCase):
     """
     The UT for QuantizeTool

@@ -62,6 +62,7 @@ logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestInsertRetrainPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -161,6 +162,7 @@ class TestInsertRetrainConv3dPass(unittest.TestCase):
                 module.acts_clip_max_pre.data = torch.tensor(1.0)
         new_output = self.model_3d.forward(self.args[0])
         self.assertIsInstance(named_module_dict['layer1.0'], CompModuleConv3d)
+
 
 class TestInsertRetrainConv1dPass(unittest.TestCase):
     @classmethod

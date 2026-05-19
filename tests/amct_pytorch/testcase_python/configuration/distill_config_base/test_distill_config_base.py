@@ -69,6 +69,7 @@ ARQ_DISTILL = 'arq_distill'
 
 DISTILL_WEIGHT_CONFIG = 'distill_weight_config'
 
+
 class TestDistillConfigBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

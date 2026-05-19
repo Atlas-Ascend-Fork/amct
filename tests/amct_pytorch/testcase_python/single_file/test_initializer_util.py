@@ -29,6 +29,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_ut
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestInitializerUtil(unittest.TestCase):
     """
     The UT for QuantizeTool

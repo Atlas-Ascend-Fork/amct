@@ -19,6 +19,7 @@ import torch
 
 accum_inputs = None
 
+
 def kernel_func(inputs, do_cali=False, deq_scale=None):
     """
     device is same;
@@ -70,6 +71,7 @@ def kernel_func(inputs, do_cali=False, deq_scale=None):
     accum_inputs = None
     return torch.tensor(1), best_shift_bit
 
+
 def test_conv_channel_wise():
     inputs = torch.rand([2, 3, 4, 5])
     scale_weight = torch.tensor([0.0005, 0.005, 0.05])
@@ -86,6 +88,7 @@ def test_conv():
 
     flag, shift_bit = kernel_func(inputs, False, scale_weight * scale_data)
     flag, shift_bit = kernel_func(inputs, True, scale_weight * scale_data)
+
 
 def test_fc():
     inputs = torch.rand([20, 30])

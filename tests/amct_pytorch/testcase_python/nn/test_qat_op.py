@@ -118,6 +118,7 @@ MATMUL_QAT_ONNX = 'matmul_qat.onnx'
 
 CPUEXECUTIONPROVIDER = 'CPUExecutionProvider'
 
+
 def similarity(data0, data1):
     data0_nan = np.isnan(data0)
     data0[data0_nan] = 1
@@ -143,6 +144,7 @@ def similarity(data0, data1):
     if np.isnan(cos_sim):
         cos_sim = 0
     return cos_sim
+
 
 class TestQatOp(unittest.TestCase):
     @classmethod
@@ -505,6 +507,7 @@ class TestConv3dQAT(unittest.TestCase):
         with self.assertRaises(RuntimeError) as cm:
             qat_op.forward(torch.randn(3, 12, 64, 64))
 
+
 class TestLinearQAT(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -553,6 +556,7 @@ class TestLinearQAT(unittest.TestCase):
         LinearQAT(1, 1, config=config)
         self.assertIsNone(config)
 
+
 def set_module(model, sub_module_name, module):
     tokens = sub_module_name.split('.')
     sub_tokens = tokens[:-1]
@@ -560,6 +564,7 @@ def set_module(model, sub_module_name, module):
     for s in sub_tokens:
         cur_mod = getattr(cur_mod, s)
     setattr(cur_mod, tokens[-1], module)
+
 
 class NetConv1d(nn.Module):
     def __init__(self):
@@ -598,6 +603,7 @@ class NetConv1d(nn.Module):
         x = self.layer6(x)
 
         return x
+
 
 class NetConv1dQAT(nn.Module):
     def __init__(self):
@@ -816,6 +822,7 @@ class TestConvTranspose1dQAT(unittest.TestCase):
         net_conv_transpose_1d_qat = NetConvTranspose1dQAT()
         with self.assertRaises(RuntimeError) as cm:
             ret = net_conv_transpose_1d_qat.forward(torch.rand(2, 28))
+
 
 class TestMatMulQAT(unittest.TestCase):
     @classmethod

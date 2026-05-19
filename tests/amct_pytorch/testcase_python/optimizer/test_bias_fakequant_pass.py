@@ -65,33 +65,34 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
+
 class TestReplaceBiasQuantPass(unittest.TestCase):
     @classmethod
-    def setUpClass(self):
-        self.temp_folder = os.path.join(CUR_DIR, 'test_bias_fakequant_pass')
-        if not os.path.isdir(self.temp_folder):
-            os.makedirs(self.temp_folder)
+    def setUpClass(cls):
+        cls.temp_folder = os.path.join(CUR_DIR, 'test_bias_fakequant_pass')
+        if not os.path.isdir(cls.temp_folder):
+            os.makedirs(cls.temp_folder)
 
-        self.model = models.Net001().to(torch.device("cpu"))
-        self.args_shape = [(2, 2, 28, 28)]
-        self.args = list()
-        for input_shape in self.args_shape:
-            self.args.append(torch.randn(input_shape))
-        self.args = tuple(self.args)
+        cls.model = models.Net001().to(torch.device("cpu"))
+        cls.args_shape = [(2, 2, 28, 28)]
+        cls.args = list()
+        for input_shape in cls.args_shape:
+            cls.args.append(torch.randn(input_shape))
+        cls.args = tuple(cls.args)
 
-        self.onnx_file = os.path.join(self.temp_folder, 'net_bias_fakequant.onnx')
-        Parser.export_onnx(self.model, self.args, self.onnx_file)
-        self.graph = Parser.parse_net_to_graph(self.onnx_file)
+        cls.onnx_file = os.path.join(cls.temp_folder, 'net_bias_fakequant.onnx')
+        Parser.export_onnx(cls.model, cls.args, cls.onnx_file)
+        cls.graph = Parser.parse_net_to_graph(cls.onnx_file)
 
-        self.config_file = os.path.join(self.temp_folder, 'net_bias_fakequant.json')
+        cls.config_file = os.path.join(cls.temp_folder, 'net_bias_fakequant.json')
         skip_layers = []
         batch_num = 2
-        amct.create_quant_config(self.config_file,
-                                 self.model,
-                                 self.args,
+        amct.create_quant_config(cls.config_file,
+                                 cls.model,
+                                 cls.args,
                                  skip_layers,
                                  batch_num)
-        self.records = record_file.generate_records(
+        cls.records = record_file.generate_records(
             layers_length={
                 "layer1.0": 16,
                 "layer2.0": 16,
@@ -106,8 +107,8 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
             })
 
     @classmethod
-    def tearDownClass(self):
-        os.system('rm -r ' + self.temp_folder)
+    def tearDownClass(cls):
+        os.system('rm -r ' + cls.temp_folder)
         logger.info("[UNITTEST END bias_fakequant_pass.py]")
 
     def setUp(self):
@@ -143,6 +144,7 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.lstm = torch.nn.LSTM(10, 20, 1)
+
             def forward(self, input_data, hx):
                 x = self.lstm(input_data, hx)
                 return x

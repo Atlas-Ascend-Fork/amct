@@ -61,6 +61,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 CONV1 = 'conv1'
 
+
 class TestConvbnFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -148,6 +149,7 @@ class TestConvbnFusionPass(unittest.TestCase):
     @patch.object(Configuration, 'get_skip_fusion_layers')
     def test_conv_bn_fusion_pass_with_unsupport_padding_typpe(self, mock_get_skip_fusion_layers):
         mock_get_skip_fusion_layers.return_value = []
+
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()
@@ -203,6 +205,7 @@ class TestConvbnFusionPass(unittest.TestCase):
     @patch.object(Configuration, 'get_skip_fusion_layers')
     def test_conv_bn_fusion_pass_dialation_2(self, mock_get_skip_fusion_layers):
         mock_get_skip_fusion_layers.return_value = []
+
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()

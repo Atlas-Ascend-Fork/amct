@@ -104,7 +104,8 @@ class TestDMQBalancer(unittest.TestCase):
         with open(self.config_file) as f:
             quant_config = json.loads(f.read())
         for key, val in quant_config.items():
-            if key == 'avg_pool': continue
+            if key == 'avg_pool':
+                continue
             if isinstance(val, dict):
                 self.assertIn('dmq_balancer_param', val)
 
@@ -263,6 +264,7 @@ def do_calibration(model, args_shape, temp_folder):
 
     return TestDMQBalancer.modfied_onnx_file, fake_quant_onnx
 
+
 def do_calibration_1(model, input_data):
     batch_num = 2
     cfg_def = os.path.join(CUR_DIR, 'utils/test_dmq_balancer/dmq_balancer.cfg')
@@ -285,6 +287,7 @@ def do_calibration_1(model, input_data):
     # run dmq_balancer_model
     run_inference_model(dmq_balancer_model, iterations=batch_num)
     return dmq_balancer_model
+
 
 def do_calibration_2(model, input_data, modfied_onnx_file):
     batch_num = 2
@@ -344,6 +347,7 @@ def run_inference_model(model, iterations=2):
             if iter_num == iterations:
                 break
 
+
 def run_inference_onnx(onnx_file, iterations=2):
     # prepare model
     logger.info('onnx_file %s', onnx_file)
@@ -357,8 +361,8 @@ def run_inference_onnx(onnx_file, iterations=2):
     logger.info('otputs: %s', output_names)
 
     def to_numpy(tensor):
-       data_numpy = tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
-       return data_numpy
+        data_numpy = tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+        return data_numpy
 
     # prepare data
     batch_size = 16

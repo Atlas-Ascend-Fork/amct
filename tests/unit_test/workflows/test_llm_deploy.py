@@ -1,3 +1,20 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 """Logic tests for LlmDeployWorkflow.
 
 The full `_run_blockwise` requires a real safetensors-backed model dir; we
@@ -37,6 +54,7 @@ KEY_SHARD1_SAFETENSORS = 'shard1.safetensors'
 KEY_SUBDIR = 'subdir'
 KEY_UNKNOWN_WEIGHT = 'unknown.weight'
 
+
 def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype="int8"):
     workflow = LlmDeployWorkflow.__new__(LlmDeployWorkflow)
     args = SimpleNamespace(
@@ -60,6 +78,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
 
 # ---- dtype flag derivation ----------------------------------------------
 
+
 @pytest.mark.parametrize(
     "dtype,is_mx,is_int,is_hif",
     [
@@ -76,6 +95,7 @@ def test_quant_dtype_flags_set_correctly(dtype, is_mx, is_int, is_hif):
 
 # ---- _is_weight_file -----------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "name,expected",
     [
@@ -90,6 +110,7 @@ def test_is_weight_file_recognizes_safetensors_artifacts(name, expected):
     assert LlmDeployWorkflow._is_weight_file(Path(name)) is expected
 
 # ---- _copy_support_files -------------------------------------------------
+
 
 def test_copy_support_files_copies_non_weight_files_only(tmp_path):
     src = tmp_path / "src"
@@ -115,6 +136,7 @@ def test_copy_support_files_copies_non_weight_files_only(tmp_path):
     assert not (dst / SAFETENSORS_INDEX_JSON).exists()
     assert not (dst / ".hidden").exists()
 
+
 def test_copy_support_files_skips_existing_destinations(tmp_path):
     src = tmp_path / "src"
     dst = tmp_path / "dst"
@@ -129,6 +151,7 @@ def test_copy_support_files_skips_existing_destinations(tmp_path):
 
 # ---- _load_weight_index --------------------------------------------------
 
+
 def test_load_weight_index_reads_json(tmp_path):
     index = {"weight_map": {"a.weight": KEY_SHARD1_SAFETENSORS}, METADATA_KEY: {"total_size": 999}}
     (tmp_path / SAFETENSORS_INDEX_JSON).write_text(json.dumps(index))
@@ -136,6 +159,7 @@ def test_load_weight_index_reads_json(tmp_path):
     assert wf._load_weight_index() == index
 
 # ---- _write_safetensor_file / _write_block_file ------------------------
+
 
 def test_write_safetensor_file_creates_file_atomically(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
@@ -145,10 +169,12 @@ def test_write_safetensor_file_creates_file_atomically(tmp_path):
     # The .tmp file should have been renamed away.
     assert not list(tmp_path.glob(".*tmp"))
 
+
 def test_write_safetensor_file_no_op_for_empty_tensors(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
     wf._write_safetensor_file("layer.safetensors", {})
     assert not (tmp_path / "layer.safetensors").exists()
+
 
 def test_write_block_file_uses_zero_padded_filename_and_returns_routing(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
@@ -159,6 +185,7 @@ def test_write_block_file_uses_zero_padded_filename_and_returns_routing(tmp_path
     assert (tmp_path / "layer_004.safetensors").exists()
 
 # ---- _collect_replaced_original_weights ---------------------------------
+
 
 def test_collect_replaced_original_weights_uses_routing_to_resolve_base():
     wf = _make_workflow()
@@ -174,6 +201,7 @@ def test_collect_replaced_original_weights_uses_routing_to_resolve_base():
     out = wf._collect_replaced_original_weights(layer_tensors, tensor_routes, original)
     assert out == {MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT}
 
+
 def test_collect_replaced_original_weights_returns_empty_when_unrelated():
     wf = _make_workflow()
     layer_tensors = {KEY_UNKNOWN_WEIGHT: "x"}
@@ -183,7 +211,6 @@ def test_collect_replaced_original_weights_returns_empty_when_unrelated():
         wf._collect_replaced_original_weights(layer_tensors, routes, original) == set()
     )
 
-# ---- _refresh_weight_index ----------------------------------------------
 
 def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
@@ -204,6 +231,7 @@ def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
 
 # ---- _refresh_config -----------------------------------------------------
 
+
 def test_refresh_config_attaches_quantization_block(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
     # Original config that the workflow reads in.
@@ -217,6 +245,7 @@ def test_refresh_config_attaches_quantization_block(tmp_path):
     # int dtype path -> int-quantized format.
     assert refreshed[QUANTIZATION_CONFIG]["format"] == "int-quantized"
 
+
 def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp8")
     (tmp_path / CONFIG_JSON).write_text("{}")
@@ -225,6 +254,7 @@ def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
     assert refreshed[QUANTIZATION_CONFIG]["format"] == "float-quantized"
 
 # ---- _write_remaining_original_weights ----------------------------------
+
 
 def test_write_remaining_original_weights_skips_replaced_and_shards_rest(tmp_path):
     src = tmp_path / "src"
@@ -251,6 +281,7 @@ def test_write_remaining_original_weights_skips_replaced_and_shards_rest(tmp_pat
     assert (dst / REST_00000).exists()
     assert all(file_name.startswith("rest_") for file_name in updated.values())
 
+
 def test_llm_deploy_run_blockwise(monkeypatch):
     wf = _make_workflow()
     wf.granularity = GRANULARITY_BLOCK
@@ -268,6 +299,7 @@ def test_llm_deploy_run_blockwise(monkeypatch):
     result = wf.run()
     assert result["index_path"] == "/out"
 
+
 def test_llm_deploy_setup(monkeypatch):
     wf = _make_workflow()
     called = {}
@@ -281,6 +313,7 @@ def test_llm_deploy_setup(monkeypatch):
     assert called.get("pipe") is True
 
 # ---- Task 15: Additional deploy coverage ---------------------------------
+
 
 def _make_deploy_workflow(**overrides):
     defaults = dict(
@@ -302,11 +335,13 @@ def _make_deploy_workflow(**overrides):
     wf.is_hif = wf.quant_dtype.startswith("hif")
     return wf
 
+
 def test_deploy_is_weight_file_safetensors():
     assert LlmDeployWorkflow._is_weight_file(Path(MODEL_SAFETENSORS)) is True
     assert LlmDeployWorkflow._is_weight_file(Path("layer_0.safetensors")) is True
     assert LlmDeployWorkflow._is_weight_file(Path(SAFETENSORS_INDEX_JSON)) is True
     assert LlmDeployWorkflow._is_weight_file(Path(CONFIG_JSON)) is False
+
 
 def test_deploy_init_dtype_flags():
     wf_int = _make_deploy_workflow(quant_dtype="int4")
@@ -320,6 +355,7 @@ def test_deploy_init_dtype_flags():
 
     wf_hif = _make_deploy_workflow(quant_dtype="hifloat8")
     assert wf_hif.is_hif is True
+
 
 def test_deploy_setup_creates_output_dir_and_registers(tmp_path, monkeypatch):
     monkeypatch.setattr(
@@ -342,6 +378,7 @@ def test_deploy_setup_creates_output_dir_and_registers(tmp_path, monkeypatch):
     assert out.exists()
     assert wf.pipeline is not None
 
+
 def test_deploy_run_unsupported_granularity():
     wf = _make_deploy_workflow(granularity="model")
 
@@ -352,6 +389,7 @@ def test_deploy_run_unsupported_granularity():
         wf.run()
 
 # ---- _run_blockwise (mocked helpers) -------------------------------------
+
 
 def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
     def _mock_export_block_deploy(pipeline, layer_idx, quant_ignore_layers):
@@ -394,6 +432,7 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
 
 # ---- __init__ via actual constructor -------------------------------------
 
+
 def test_deploy_init_sets_all_attrs():
     args = SimpleNamespace(
         granularity=GRANULARITY_BLOCK, model_name=MODEL_NAME_QWEN3, model=FAKE_MODEL,
@@ -411,6 +450,7 @@ def test_deploy_init_sets_all_attrs():
     assert wf.is_int is True
     assert wf.is_hif is False
 
+
 def test_deploy_init_mx_flag():
     wf = LlmDeployWorkflow(SimpleNamespace(
         granularity=GRANULARITY_BLOCK, model_name="q", model="/m", quant_dtype="mxfp8",
@@ -420,6 +460,7 @@ def test_deploy_init_mx_flag():
     assert wf.is_int is False
     assert wf.is_hif is False
 
+
 def test_deploy_init_hif_flag():
     wf = LlmDeployWorkflow(SimpleNamespace(
         granularity=GRANULARITY_BLOCK, model_name="q", model="/m", quant_dtype="hifp8",
@@ -428,6 +469,7 @@ def test_deploy_init_hif_flag():
     assert wf.is_hif is True
 
 # ---- _write_remaining_original_weights: shard split -----------------------
+
 
 def test_write_remaining_weights_splits_on_max_shard_size(tmp_path):
     src = tmp_path / "src"
@@ -448,12 +490,14 @@ def test_write_remaining_weights_splits_on_max_shard_size(tmp_path):
 
 # ---- _write_remaining_original_weights: empty chunk -----------------------
 
+
 def test_write_remaining_weights_empty_input_returns_empty():
     wf = _make_workflow()
     updated = wf._write_remaining_original_weights({}, set())
     assert updated == {}
 
 # ---- _run_blockwise: empty layer tensors ----------------------------------
+
 
 def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     monkeypatch.setattr(

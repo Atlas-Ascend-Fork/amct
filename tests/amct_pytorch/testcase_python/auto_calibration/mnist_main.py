@@ -134,6 +134,7 @@ class Net(nn.Module):
 
 logger = logging.getLogger(__name__)
 
+
 def train(train_cfg, epoch):
     args = train_cfg['args']
     model = train_cfg['model']
@@ -238,6 +239,7 @@ def main():
     torch_out = torch.onnx._export(model, random_input,
                                    "./model/mnist_cnn.onnx",
                                    export_params=True)
+
 
 def test_model():
     # Training settings

@@ -40,6 +40,7 @@ torch.manual_seed(0)
 
 logger = logging.getLogger(__name__)
 
+
 class TestCast(unittest.TestCase):
     '''
     ST FOR CAST ALGORITHM

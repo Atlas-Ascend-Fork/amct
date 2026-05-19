@@ -43,6 +43,7 @@ def quant_compute(inputs, scale_d, offset_d, num_bits=8):
     quantized_data = clamped_data - offset_d
     return quantized_data
 
+
 def compare_ndarray(ndarray1, ndarray2, name):
     if not (ndarray1 - ndarray2 < 1e-5).all():
         logger.info(ndarray1)
