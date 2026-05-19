@@ -19,8 +19,8 @@ from torch import nn
 import torch.nn.functional as F
 from transformers.cache_utils import DynamicCache
 
-from amct_pytorch.utils.vars import HIFLOAT8
-from amct_pytorch.utils.log import LOGGER
+from amct_pytorch.common.utils.vars import HIFLOAT8
+from amct_pytorch.common.utils.log import LOGGER
 
 
 class NpuLongcatFlashMLA(torch.nn.Module):
