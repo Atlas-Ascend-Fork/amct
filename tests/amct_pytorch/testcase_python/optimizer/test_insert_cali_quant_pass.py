@@ -52,6 +52,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 CONV1D = 'conv1d'
 
+
 class TestInsertCaliQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -165,10 +166,12 @@ class TestInsertCaliQuantPass(unittest.TestCase):
                 0.5
             }
         }
+
         class Conv1dModule(torch.nn.Module):
             def __init__(self):
                 super().__init__()
                 self.conv1d = torch.nn.Conv1d(1, 1, 1)
+
             def forward(self, x):
                 return self.conv1d(x)
         conv1d_module = Conv1dModule()

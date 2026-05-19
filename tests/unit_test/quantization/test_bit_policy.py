@@ -33,6 +33,7 @@ W_BITS = 'w_bits'
 
 A_BITS = 'a_bits'
 
+
 def test_init_defaults_to_16():
     bp = BitPolicy()
     assert bp.w_bits == 16

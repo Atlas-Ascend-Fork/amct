@@ -48,6 +48,7 @@ QUANT_ENABLE = 'quant_enable'
 
 INT8 = 'INT8'
 
+
 class TestDistillField(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

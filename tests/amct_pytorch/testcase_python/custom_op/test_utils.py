@@ -24,6 +24,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import utils
 
 DEVICE = torch.device('cpu')
 
+
 class CustomizedModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -43,6 +44,7 @@ class CustomizedModel(torch.nn.Module):
         y = self.matmul_3(y)
         y = self.relu_0(y)
         return y
+
 
 class TestUtils(unittest.TestCase):
     @classmethod

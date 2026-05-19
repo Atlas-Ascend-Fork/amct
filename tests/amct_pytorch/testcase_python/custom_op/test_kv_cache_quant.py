@@ -30,6 +30,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.record
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestKVCacheQuant(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

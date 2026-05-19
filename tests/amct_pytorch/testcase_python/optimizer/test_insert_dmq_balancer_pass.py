@@ -49,6 +49,7 @@ from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestInsertCaliQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

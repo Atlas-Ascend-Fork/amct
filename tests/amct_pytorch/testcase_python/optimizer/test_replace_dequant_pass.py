@@ -84,22 +84,23 @@ ADD1 = 'add1'
 
 AVG_POOL1 = 'avg_pool1'
 
+
 class TestReplaceDequantPass(unittest.TestCase):
     @classmethod
-    def setUpClass(self):
+    def setUpClass(cls):
         # set basic info
-        self.model_proto = onnx_pb.ModelProto()
-        self.model_proto.producer_name = 'model'
-        self.graph = onnx_pb.GraphProto()
+        cls.model_proto = onnx_pb.ModelProto()
+        cls.model_proto.producer_name = 'model'
+        cls.graph = onnx_pb.GraphProto()
         # Add graph input 0
-        graph_input0 = self.graph.input.add()
+        graph_input0 = cls.graph.input.add()
         graph_input0.name = 'data0'
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add concat node
-        concat_node = self.graph.node.add()
+        concat_node = cls.graph.node.add()
         concat_node.name = CONCAT0
         concat_node.op_type = 'Concat'
         concat_node.input[:] = ['data0']
@@ -156,29 +157,29 @@ class TestReplaceDequantPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = ['%s_dequant' % (conv_name)]
             relu1.output[:] = outputs
-        conv_sub(self.graph, 'conv1', [CONCAT0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv2', [CONCAT0], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv3', [CONCAT0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(cls.graph, 'conv1', [CONCAT0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(cls.graph, 'conv2', [CONCAT0], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(cls.graph, 'conv3', [CONCAT0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
         # Add max_pooling
-        pool0 = self.graph.node.add()
+        pool0 = cls.graph.node.add()
         pool0.name = POOL0
         pool0.op_type = 'MaxPool'
         pool0.input[:] = [CONCAT0]
         pool0.output[:] = [POOL0]
         # Add add
-        add1 = self.graph.node.add()
+        add1 = cls.graph.node.add()
         add1.name = ADD1
         add1.op_type = 'Add'
         add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', POOL0]
         add1.output[:] = [ADD1]
         # Add average_pool
-        pad0 = self.graph.node.add()
+        pad0 = cls.graph.node.add()
         pad0.name = 'avg_pool1_pad'
         pad0.op_type = 'Pad'
         pad0.input[:] = [ADD1]
         pad0.output[:] = ['pad0']
         # Add average_pool
-        avg_pool1 = self.graph.node.add()
+        avg_pool1 = cls.graph.node.add()
         avg_pool1.name = AVG_POOL1
         kernel_shape = avg_pool1.attribute.add()
         kernel_shape.name = 'kernel_shape'
@@ -188,23 +189,23 @@ class TestReplaceDequantPass(unittest.TestCase):
         avg_pool1.input[:] = ['pad0']
         avg_pool1.output[:] = [AVG_POOL1]
         # Add Ascend DeQuant
-        dequant_node = self.graph.node.add()
+        dequant_node = cls.graph.node.add()
         dequant_node.CopyFrom(construct_dequant_node([AVG_POOL1] + ['avg_pool1.dequant.param'], ['output'],
-                                                     AVG_POOL1, 0))
+                                                      AVG_POOL1, 0))
         # Add conv1.dequant.param
-        dequant_param = self.graph.initializer.add()
+        dequant_param = cls.graph.initializer.add()
         dequant_param.name = 'avg_pool1.dequant.param'
         dequant_param.data_type = 13
         dequant_param.uint64_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
         dequant_param.dims[:] = [16]
         # add output
-        graph_output = self.graph.output.add()
+        graph_output = cls.graph.output.add()
         graph_output.name = 'output'
         graph_output.type.tensor_type.shape.dim.add().dim_value = 1
-        self.model_proto.graph.CopyFrom(self.graph)
+        cls.model_proto.graph.CopyFrom(cls.graph)
 
     @classmethod
-    def tearDownClass(self):
+    def tearDownClass(cls):
         logger.info("[UNITTEST END replace_dequant_pass.py]")
 
     def setUp(self):

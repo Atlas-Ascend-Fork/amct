@@ -36,6 +36,7 @@ RELU1 = 'relu1'
 
 ADD1 = 'add1'
 
+
 class TestInsertQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
