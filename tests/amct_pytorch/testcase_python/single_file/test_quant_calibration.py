@@ -35,6 +35,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 MATMUL1 = 'matmul1'
 
+
 class CustomizedModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -47,6 +48,7 @@ class CustomizedModel(torch.nn.Module):
         y = self.matmul2(inputs)
         y = self.matmul3(inputs)
         return y
+
 
 class TestQuantCalibrationInterface(unittest.TestCase):
     @classmethod

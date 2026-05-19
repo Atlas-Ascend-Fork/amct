@@ -20,6 +20,7 @@ import torch
 
 ZEROS = 'zeros'
 
+
 class TestModel(nn.Module):
     def __init__(self):
         super().__init__()

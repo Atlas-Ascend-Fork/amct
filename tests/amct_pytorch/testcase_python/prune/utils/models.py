@@ -22,6 +22,7 @@ import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
+
 class SingleLinear(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -60,6 +61,7 @@ class SingleConv(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         return x
+
 
 class SingleDepthwsieConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -100,6 +102,7 @@ class GroupConv(nn.Module):
         x = self.layer3(x)
         return x
 
+
 class SingleGroupConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -112,6 +115,7 @@ class SingleGroupConv(nn.Module):
         x = self.layer1(x)
         return x
 
+
 class SingleDeconv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -122,6 +126,7 @@ class SingleDeconv(nn.Module):
     def forward(self, x):
         x = self.layer1(x)
         return x
+
 
 class MultiDeconv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -144,6 +149,7 @@ class MultiDeconv(nn.Module):
         x = self.layer3(x)
         return x
 
+
 class ConcatConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -165,6 +171,7 @@ class ConcatConv(nn.Module):
         x_1_2 = torch.cat((x1, x2), dim=1)
         x3 = self.layer3(x_1_2)
         return x3
+
 
 class EltwiseConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -202,6 +209,7 @@ class EltwiseConv(nn.Module):
         y2 = self.layer6(x_1_2_4)
         return y1, y2
 
+
 class SplitConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -227,6 +235,7 @@ class SplitConv(nn.Module):
         x2_2 = self.layer2_2(x1[1])
 
         return x2_1, x2_2
+
 
 class SplitConcatGroupConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -258,6 +267,7 @@ class SplitConcatGroupConv(nn.Module):
 
         return x3
 
+
 class SplitConcatConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -287,6 +297,8 @@ class SplitConcatConv(nn.Module):
         x3 = self.layer3(x2)
 
         return x3
+
+
 class AvgpoolFlatten(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -305,6 +317,7 @@ class AvgpoolFlatten(nn.Module):
         x3 = self.layer3(x2)
 
         return x3
+
 
 class NetTrainBranch(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]

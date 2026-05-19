@@ -41,6 +41,7 @@ def log_check_deco(func):
         log_check(log_info, func_name)
     return wrapper
 
+
 def log_check(log_info, func_name):
     if '  ' in log_info:
         raise RuntimeError(

@@ -38,6 +38,7 @@ DYNAMIC_AXES = 'dynamic_axes'
 
 CONTAINER_ELEMENT_TYPE_ERROR = 'container element type error'
 
+
 class TestSelectivePrune(unittest.TestCase):
     """
     The ST for QuantizeTool

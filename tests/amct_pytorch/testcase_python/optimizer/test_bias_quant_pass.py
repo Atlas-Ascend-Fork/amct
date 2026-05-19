@@ -49,6 +49,7 @@ from .utils import models, record_file_utils
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestInsertBiasQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

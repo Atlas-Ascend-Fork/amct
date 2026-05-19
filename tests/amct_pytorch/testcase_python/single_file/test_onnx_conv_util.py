@@ -29,6 +29,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_conv_util impo
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
+
 class TestOnnxConvUtil(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

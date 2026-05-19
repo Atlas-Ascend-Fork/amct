@@ -32,6 +32,7 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.gemm_transb_opt
 
 FC0 = 'fc0'
 
+
 class TestInsertQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

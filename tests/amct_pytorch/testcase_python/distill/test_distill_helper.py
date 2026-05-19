@@ -39,6 +39,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
+
 class DistillNet(nn.Module):
     def __init__(self):
         super(DistillNet, self).__init__()
@@ -48,6 +49,7 @@ class DistillNet(nn.Module):
         x = self.conv(x)
         return x
 
+
 class DistillQATNet(nn.Module):
     def __init__(self):
         super(DistillQATNet, self).__init__()
@@ -56,6 +58,7 @@ class DistillQATNet(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
+
 
 class TestDistillHelper(unittest.TestCase):
     @classmethod

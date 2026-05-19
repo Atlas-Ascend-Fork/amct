@@ -213,6 +213,7 @@ def test_search_best_scale_raises_on_invalid_loss():
         def __init__(self):
             super().__init__()
             self.dummy = nn.Parameter(torch.zeros(1))
+
         def forward(self, x, **kwargs):
             return torch.tensor(float("nan"))
     block = _NanBlock()

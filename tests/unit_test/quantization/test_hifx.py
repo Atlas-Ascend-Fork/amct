@@ -110,12 +110,15 @@ def test_hifp_forward_bits8_calls_fake_quant(monkeypatch):
     from amct_pytorch.quantization.dtypes.hifx import (
         QuantDequantHifp as quant_dequant_hifp,
     )
+
     def quantize_level1(self, x):
         return x
     quant_dequant_hifp.quantize_level1 = quantize_level1
+
     def quantize_level2(self, x):
         return x
     quant_dequant_hifp.quantize_level2 = quantize_level2
+
     def quantize_level3(self, x):
         return x
     quant_dequant_hifp.quantize_level3 = quantize_level3

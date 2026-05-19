@@ -45,6 +45,7 @@ torch.manual_seed(0)
 
 LINEAR = 'Linear'
 
+
 class TestSmoothQuant(unittest.TestCase):
     '''
     ST FOR SMOOTH ALGORITHM

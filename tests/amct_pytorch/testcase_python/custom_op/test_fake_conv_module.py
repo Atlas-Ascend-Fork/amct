@@ -32,6 +32,7 @@ np.random.seed(0)
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DEVICE = torch.device('cpu')
 
+
 class TestFakeConvModule(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

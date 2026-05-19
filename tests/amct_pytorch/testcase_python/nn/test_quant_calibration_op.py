@@ -47,6 +47,7 @@ RECORD2_TXT = 'record2.txt'
 
 MATMUL2 = 'matmul2'
 
+
 def read_kv_cache_factors(record_file, layer_name):
     records = scale_offset_record_pb2.ScaleOffsetRecord()
     with open(record_file, 'r') as read_file:

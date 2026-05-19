@@ -56,6 +56,7 @@ class TestQuantOpInfo(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.conv1d = torch.nn.Conv1d(1, 1, 1)
+
             def forward(self, x):
                 return self.conv1d(x)
         conv1d_module = Conv1dModule()
@@ -71,6 +72,7 @@ class TestQuantOpInfo(unittest.TestCase):
                 super().__init__()
                 self.lstm = torch.nn.LSTM(10, 20, 1)
                 self.gru = torch.nn.GRU(10, 20, 1)
+
             def forward(self, input_data, hx):
                 x = self.lstm(input_data, hx)
                 y = self.gru(input_data, hx[0])
@@ -91,6 +93,7 @@ class TestQuantOpInfo(unittest.TestCase):
                 super().__init__()
                 self.lstm = nn.LSTM(10, 20, 1)
                 self.gru = nn.GRU(10, 20, 1)
+
             def forward(self, input_data, hx):
                 x = self.lstm(input_data, hx)
                 y = self.gru(input_data, hx[0])

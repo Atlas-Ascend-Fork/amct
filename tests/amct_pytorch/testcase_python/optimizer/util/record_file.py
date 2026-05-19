@@ -34,9 +34,12 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import (
 )
 
 
-def _normalize_defaults(err_layers, skip_n_layers, skip_fusion_layers,
-                        no_fusion_layers, record_weight, record_data,
-                        unmatch_length):
+def create_file(record_file, layers_name, err_layers=None,
+                scale_value=0.01, offset_value=0, graph=None,
+                channel_wise=False, record_weight=None,
+                record_data=None, err_length=False,
+                unmatch_length=None, skip_n_layers=None,
+                skip_fusion_layers=None, no_fusion_layers=None):
     if err_layers is None:
         err_layers = []
     if skip_n_layers is None:
@@ -51,65 +54,6 @@ def _normalize_defaults(err_layers, skip_n_layers, skip_fusion_layers,
         record_data = [True, True]
     if unmatch_length is None:
         unmatch_length = [False, False]
-    return (err_layers, skip_n_layers, skip_fusion_layers,
-            no_fusion_layers, record_weight, record_data, unmatch_length)
-
-
-def _process_layers(records, layers_length, record_weight, record_data,
-                    scale_value, offset_value, err_length, unmatch_length,
-                    skip_n_layers, skip_fusion_layers, no_fusion_layers):
-    for layer_name in layers_length:
-        if record_weight:
-            scale_length_except = layers_length[layer_name]
-            if err_length:
-                scale_length_except += 1
-            scale = [scale_value] * scale_length_except
-            if unmatch_length[0]:
-                offset_length_except = scale_length_except + 1
-            else:
-                offset_length_except = scale_length_except
-            offset = [offset_value] * offset_length_except
-            record_weights_scale_offset(records, layer_name, scale, offset,
-                                        record_weight)
-        if record_data:
-            record_data_scale_offset(records, layer_name, scale_value,
-                                     offset_value, record_data)
-        if layer_name not in skip_n_layers:
-            scale_length_except = layers_length[layer_name]
-            if err_length:
-                scale_length_except += 1
-            if unmatch_length[1]:
-                n_length_except = scale_length_except + 1
-            else:
-                n_length_except = scale_length_except
-        if layer_name not in no_fusion_layers:
-            skip = layer_name in skip_fusion_layers
-            record_do_fusion(records, layer_name, skip)
-
-
-def _process_err_layers(records, err_layers, record_weight, record_data,
-                        scale_value, offset_value):
-    for layer_name in err_layers:
-        if record_weight:
-            scale = [scale_value] * 3
-            offset = [offset_value] * 3
-            record_weights_scale_offset(records, layer_name, scale, offset,
-                                        record_weight)
-        if record_data:
-            record_data_scale_offset(records, layer_name, scale_value,
-                                     offset_value, record_data)
-
-
-def create_file(record_file, layers_name, err_layers=None,
-                scale_value=0.01, offset_value=0, graph=None,
-                channel_wise=False, record_weight=None,
-                record_data=None, err_length=False,
-                unmatch_length=None, skip_n_layers=None,
-                skip_fusion_layers=None, no_fusion_layers=None):
-    (err_layers, skip_n_layers, skip_fusion_layers, no_fusion_layers,
-     record_weight, record_data, unmatch_length) = _normalize_defaults(
-         err_layers, skip_n_layers, skip_fusion_layers,
-         no_fusion_layers, record_weight, record_data, unmatch_length)
     if graph is None:
         err_layers += layers_name
         layers_name = []
@@ -136,17 +80,36 @@ def generate_file(record_file, layers_length, err_layers=None,
                   record_data=None, err_length=False,
                   unmatch_length=None, skip_n_layers=None,
                   skip_fusion_layers=None, no_fusion_layers=None):
-    (err_layers, skip_n_layers, skip_fusion_layers, no_fusion_layers,
-     record_weight, record_data, unmatch_length) = _normalize_defaults(
-         err_layers, skip_n_layers, skip_fusion_layers,
-         no_fusion_layers, record_weight, record_data, unmatch_length)
+    if err_layers is None:
+        err_layers = []
+    if skip_n_layers is None:
+        skip_n_layers = []
+    if skip_fusion_layers is None:
+        skip_fusion_layers = []
+    if no_fusion_layers is None:
+        no_fusion_layers = []
+    if record_weight is None:
+        record_weight = [True, True]
+    if record_data is None:
+        record_data = [True, True]
+    if unmatch_length is None:
+        unmatch_length = [False, False]
 
     records = scale_offset_record_pb2.ScaleOffsetRecord()
-    _process_layers(records, layers_length, record_weight, record_data,
-                    scale_value, offset_value, err_length, unmatch_length,
-                    skip_n_layers, skip_fusion_layers, no_fusion_layers)
-    _process_err_layers(records, err_layers, record_weight, record_data,
-                        scale_value, offset_value)
+    record_file_data(layers_length, scale_value, offset_value, record_weight, record_data, err_length,
+                     unmatch_length, skip_n_layers, skip_fusion_layers, no_fusion_layers, records)
+
+    for layer_name in err_layers:
+        if record_weight:
+            scale = [scale_value] * 3
+            offset = [offset_value] * 3
+            record_weights_scale_offset(records, layer_name, scale, offset,
+                                        record_weight)
+        if record_data:
+            scale = scale_value
+            offset = offset_value
+            record_data_scale_offset(records, layer_name, scale, offset,
+                                     record_data)
 
     file_realpath = os.path.realpath(record_file)
     file_dir = os.path.split(file_realpath)
@@ -154,6 +117,41 @@ def generate_file(record_file, layers_length, err_layers=None,
         os.makedirs(file_dir[0])
     with open(file_realpath, 'w') as file:
         file.write(text_format.MessageToString(records, as_utf8=True))
+
+
+def record_file_data(layers_length, scale_value, offset_value, record_weight, record_data, err_length,
+                     unmatch_length, skip_n_layers, skip_fusion_layers, no_fusion_layers, records):
+    for layer_name in layers_length:
+        if record_weight:
+            scale_length_except = layers_length[layer_name]
+            if err_length:
+                scale_length_except += 1
+            scale = [scale_value] * scale_length_except
+            if unmatch_length[0]:
+                offset_length_except = scale_length_except + 1
+            else:
+                offset_length_except = scale_length_except
+            offset = [offset_value] * offset_length_except
+            record_weights_scale_offset(records, layer_name, scale, offset,
+                                        record_weight)
+        if record_data:
+            scale = scale_value
+            offset = offset_value
+            record_data_scale_offset(records, layer_name, scale, offset,
+                                     record_data)
+        if layer_name not in skip_n_layers:
+            scale_length_except = layers_length[layer_name]
+            if err_length:
+                scale_length_except += 1
+            if unmatch_length[1]:
+                n_length_except = scale_length_except + 1
+            else:
+                n_length_except = scale_length_except
+        if layer_name not in no_fusion_layers:
+            if layer_name in skip_fusion_layers:
+                record_do_fusion(records, layer_name, True)
+            else:
+                record_do_fusion(records, layer_name, False)
 
 
 def record_weights_scale_offset(records,
@@ -305,6 +303,7 @@ def read_activation_scale_offset(records, layer_name):
         raise RuntimeError("Cannot find layer '{}' in record " \
             "file".format(layer_name))
     return scale, offset
+
 
 def generate_records(layers_length, scale_value=0.1, offset_value=0):
     records = {}
