@@ -48,9 +48,14 @@ amct_ops/
 
 ### 依赖要求
 
-- CANN 9.0.0
-- Python ≥ 3.9
-- PyTorch + torch_npu（适配对应 CANN 版本）
+| 依赖 | 版本 |
+|------|------|
+| Python | >=3.9 |
+| PyTorch | 2.7.1 或 2.1.0（需配套 `torch_npu`） |
+| GCC / CMake | ≥ 7.3 / ≥ 3.16（推荐 3.20） |
+| CANN（Toolkit & Ops） | ≥ 9.0.0（需提前安装 NPU 驱动 / 固件） |
+
+完整环境部署请参见 [快速安装](../docs/quick_install.md)
 
 ### 构建命令
 
