@@ -41,7 +41,7 @@ class DeepseekV32Config(PretrainedConfig):
         o_lora_rank=1024,
         window_size=128,
         compress_rope_theta=40000.0,
-        original_seq_len=0,
+        original_seq_len=4096,
         rope_theta=10000.0,
         rope_factor=40,
         beta_fast=32,
