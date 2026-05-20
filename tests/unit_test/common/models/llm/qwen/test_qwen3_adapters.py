@@ -24,11 +24,13 @@ exercise the adapter-level overrides that are pure logic: `parse_quant_mode`,
 """
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch.nn as nn
 
 from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
@@ -181,6 +183,32 @@ def test_qwen3_moe_iter_deploy_bindings_rewrites_expert_path():
     assert "model.layers.3.mlp.experts.1.up_proj.weight" in names
     # The original expert_modules.<idx> path must NOT appear.
     assert all("expert_modules" not in n for n in names)
+
+
+# ---- Qwen3 adapter delegation methods (lines 35, 70, 82) --------------------
+
+
+def test_qwen3_float_model_delegates_to_super():
+    obj = _stub_adapter(Qwen3, [MLP])
+    with patch.object(BaseModel, 'float_model', return_value="called"):
+        assert obj.float_model() == "called"
+
+
+def test_qwen3_build_quant_block_applies_attn():
+    obj = _stub_adapter(Qwen3, [ATTN_LINEAR])
+    decoder_layer = MagicMock()
+    decoder_layer.self_attn = MagicMock()
+    with patch.object(obj, 'block', return_value=decoder_layer):
+        with patch('amct_pytorch.common.models.llm.qwen.qwen3.qwen3.apply_quant_to_attn') as mock_apply:
+            result = obj.build_quant_block(0)
+            mock_apply.assert_called_once()
+            assert result is decoder_layer
+
+
+def test_qwen3_load_unit_inputs_delegates_to_super():
+    obj = _stub_adapter(Qwen3, [MLP])
+    with patch.object(BaseModel, 'load_unit_inputs', return_value="called"):
+        assert obj.load_unit_inputs("/data", "unit") == "called"
 
 
 def test_qwen3_moe_iter_deploy_bindings_raises_on_malformed_expert_name():

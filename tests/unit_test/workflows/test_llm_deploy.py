@@ -525,3 +525,41 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     assert wf._write_block_file.call_count == 0
     assert "index_path" in result
 
+
+# ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
+
+
+def _make_bit_policy():
+    """Build a minimal BitPolicy suitable for constructor tests."""
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+    return BitPolicy({
+        "mlp": {"gate_proj": {"w_bits": 8, "a_bits": 8}},
+        "attn-linear": {},
+        "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+    })
+
+
+def test_convert_tensor_bf16():
+    wf = _make_workflow(quant_dtype="bf16")
+    t = torch.arange(6, dtype=torch.float32).reshape(2, 3)
+    out = wf._convert_tensor("test.weight", t)
+    assert out.dtype == torch.bfloat16
+    assert torch.equal(out.float(), t)
+
+
+def test_convert_tensor_unsupported_raises():
+    wf = _make_workflow(quant_dtype="int8")
+    t = torch.zeros(2, 3)
+    with pytest.raises(NotImplementedError, match="tensor granularity"):
+        wf._convert_tensor("test.weight", t)
+
+
+def test_refresh_config_tensor_bf16(tmp_path):
+    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="bf16")
+    config = {"torch_dtype": "float32", "quantization_config": {"old": True}}
+    (tmp_path / "config.json").write_text(json.dumps(config))
+    wf._refresh_config_tensor()
+    refreshed = json.loads((tmp_path / "config.json").read_text())
+    assert refreshed["torch_dtype"] == "bfloat16"
+    assert "quantization_config" not in refreshed
+

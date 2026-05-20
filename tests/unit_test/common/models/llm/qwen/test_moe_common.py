@@ -209,3 +209,33 @@ def test_quant_gated_experts_forward_empty_top_k_returns_zeros(monkeypatch):
     top_k_weights = torch.empty(2, 0)
     out = qge.forward(hs, top_k_index, top_k_weights)
     assert torch.equal(out, torch.zeros_like(hs))
+
+
+def test_is_packed_experts_returns_false_for_non_packed():
+    experts = nn.ModuleList([nn.Linear(4, 8) for _ in range(4)])
+    assert is_packed_experts(experts) is False
+
+
+def test_pack_gated_expert_weights_raises_on_missing_key():
+    state_dict = {
+        "mlp.experts.0.gate_proj.weight": torch.randn(4, 8),
+        "mlp.experts.0.up_proj.weight": torch.randn(4, 8),
+    }
+    with pytest.raises(KeyError):
+        pack_gated_expert_weights(state_dict, expert_prefix="mlp.experts")
+
+
+def test_pack_gated_expert_weights_packs_correctly():
+    state_dict = {
+        "mlp.experts.0.gate_proj.weight": torch.randn(4, 8),
+        "mlp.experts.0.up_proj.weight": torch.randn(4, 8),
+        "mlp.experts.0.down_proj.weight": torch.randn(8, 4),
+        "mlp.experts.1.gate_proj.weight": torch.randn(4, 8),
+        "mlp.experts.1.up_proj.weight": torch.randn(4, 8),
+        "mlp.experts.1.down_proj.weight": torch.randn(8, 4),
+    }
+    result = pack_gated_expert_weights(state_dict, expert_prefix="mlp.experts")
+    assert "mlp.experts.gate_up_proj" in result
+    assert "mlp.experts.down_proj" in result
+    assert "mlp.experts.0.gate_proj.weight" not in result
+    assert result["mlp.experts.gate_up_proj"].shape == (2, 8, 8)

@@ -31,14 +31,14 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     down_size,
     f4_unpacked_to_f32,
     f32_to_f4_unpacked,
+    pack_uint4 as mx_pack_uint4,
     quantize_elewise,
     round_to_decimal,
     shared_exponents,
+    unpack_mxfloat4_to_fp32,
     unpack_uint4,
     up_size,
-)
-from amct_pytorch.quantization.dtypes.mxfp_impl import (
-    pack_uint4 as mx_pack_uint4,
+    weight_dequant,
 )
 
 
@@ -242,3 +242,39 @@ class TestMxfpDeploy:
         out = qdq.export_deploy(x)
         assert "qweight" in out
         assert "weight_scale" in out
+
+
+def test_unpack_mxfloat4_to_fp32_shape_doubles():
+    packed = torch.tensor([[0x01, 0x23], [0x45, 0x67]], dtype=torch.uint8)
+    unpacked = unpack_mxfloat4_to_fp32(packed)
+    assert unpacked.shape == (2, 4)
+    assert unpacked.is_floating_point()
+
+
+def test_weight_dequant_is_mx():
+    weight = torch.randn(16, 32, dtype=torch.float32)
+    scale = torch.randn(1, 4, dtype=torch.float32)
+    result = weight_dequant(weight, scale, block_size=8, is_mx=True)
+    assert result.shape == (16, 32)
+    assert result.dtype == torch.get_default_dtype()
+
+
+def test_weight_dequant_non_mx():
+    weight = torch.randn(16, 32)
+    scale = torch.randn(2, 4)
+    result = weight_dequant(weight, scale, block_size=8, is_mx=False)
+    assert result.shape == (16, 32)
+
+
+def test_weight_dequant_packed_non_mx():
+    weight_uint8 = torch.randint(0, 255, (16, 16), dtype=torch.uint8)
+    scale = torch.randn(2, 4)
+    result = weight_dequant(weight_uint8, scale, block_size=8, is_packed=True)
+    assert result.shape == (16, 32)
+
+
+def test_weight_dequant_asserts_scale_mismatch():
+    weight = torch.randn(16, 32)
+    scale = torch.randn(3, 4)
+    with pytest.raises(AssertionError):
+        weight_dequant(weight, scale, block_size=8)
