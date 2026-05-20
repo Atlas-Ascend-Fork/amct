@@ -152,3 +152,34 @@ class TestRNNRetrainQuant(unittest.TestCase):
     def test_update_quant_factor(self):
         with patch('amct_pytorch.graph_based_compression.amct_pytorch.custom_op.utils.process_scale'):
             self.retrain_quant._update_quant_factor()
+
+    def test_acts_quant_init_keeps_default_h_clip_when_initial_h_is_zero(self):
+        act_config = {
+            'num_bits': 8,
+            'clip_max': 1.0,
+            'clip_min': -1.0,
+            'ifmr_init': True
+        }
+        common_config = {
+            'device': 'cpu',
+            'need_sync': False,
+            'process_group': None,
+            'world_size': 1,
+            'layers_name': ['lstm'],
+            'batch_num': 1
+        }
+        comp_args = {
+            'module': torch.nn.LSTM(10, 20, 1, batch_first=True),
+            'act_config': act_config,
+            'wts_config': self.wts_config,
+            'common_config': common_config,
+            'acts_comp_reuse': False
+        }
+        quant_module = CompModuleRNN(**comp_args)
+        record_module = Recorder(os.path.join(self.temp_folder, 'record_zero_h.txt'))
+        retrain_quant = RNNRetrainQuant(quant_module, record_module)
+
+        retrain_quant._acts_quant_init(torch.randn(1, 1, 10), (torch.zeros_like(self.h0), self.c0))
+
+        self.assertEqual(quant_module.acts_h_clip_max.item(), 1.0)
+        self.assertEqual(quant_module.acts_h_clip_min.item(), -1.0)
