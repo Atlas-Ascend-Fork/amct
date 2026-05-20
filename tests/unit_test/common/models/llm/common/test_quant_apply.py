@@ -349,3 +349,11 @@ def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
     gated = QuantGatedMLP(args, mlp)
     gated.load_ptq_params({"some_key": [1, 2, 3]})
     assert loaded.get("trainable") is True
+
+
+def test_quant_gated_mlp_forward():
+    args = SimpleNamespace(algos=[], quant_dtype="int", w_bits=8, a_bits=8, quant_target=["mlp"])
+    mlp = QuantGatedMLP(args, _FakeMLP(hidden_size=4, intermediate_size=8))
+    x = torch.randn(2, 4)
+    out = mlp(x)
+    assert out.shape == (2, 4)

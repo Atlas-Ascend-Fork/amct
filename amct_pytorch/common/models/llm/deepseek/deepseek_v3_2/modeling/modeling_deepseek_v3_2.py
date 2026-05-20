@@ -298,14 +298,14 @@ class Indexer(torch.nn.Module):
         self.wq_b = nn.Linear(self.q_lora_rank, self.n_heads * self.head_dim, bias=False)
         self.wk = nn.Linear(self.dim, self.head_dim, bias=False)
         self.k_norm = LayerNorm(self.head_dim)
-        # weights_proj in the checkpoint is stored in bf16, 
+        # weights_proj in the checkpoint is stored in bf16,
         # while the parameters here are stored in fp32 for convenient.
         self.weights_proj = nn.Linear(self.dim, self.n_heads, dtype=torch.float32, bias=False)
         self.softmax_scale = self.head_dim ** -0.5
         self.scale_fmt = args.scale_fmt
 
 
-    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, 
+    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int,
                 freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
         bsz, seqlen, _ = x.size()
         end_pos = start_pos + seqlen
@@ -389,7 +389,7 @@ class DeepseekV3Attention(nn.Module):
         self.q_b_proj = nn.Linear(self.q_lora_rank, self.n_heads * self.qk_head_dim, bias=False)
         self.kv_a_proj_with_mqa = nn.Linear(self.dim, self.kv_lora_rank + self.qk_rope_head_dim, bias=False)
         self.kv_a_layernorm = RMSNorm(self.kv_lora_rank)
-        self.kv_b_proj = nn.Linear(self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim), 
+        self.kv_b_proj = nn.Linear(self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim),
                                    bias=False)
         self.o_proj = nn.Linear(self.n_heads * self.v_head_dim, self.dim, bias=False)
         self.softmax_scale = self.qk_head_dim ** -0.5
@@ -487,7 +487,7 @@ class Gate(nn.Module):
         self.score_func = args.score_func
         self.route_scale = args.route_scale
         self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
-        self.e_score_correction_bias = nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32))
+        self.e_score_correction_bias = nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32)) if self.dim == 7168 else None
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         scores = F.linear(x.float(), self.weight.float())
@@ -624,7 +624,7 @@ class DeepseekV32ForCausalLM(DeepseekV32PreTrainedModel):
         for layer_id in range(config.n_layers):
             self.layers.append(Block(layer_id, config))
         self.norm = RMSNorm(config.dim, self.norm_eps)
-        # lm_head in the checkpoint is stored in bf16, 
+        # lm_head in the checkpoint is stored in bf16,
         # while the parameter here is stored in fp32 for easier computation of logits later.
         self.head = nn.Linear(config.dim, config.vocab_size, bias=False)
         self.post_init()

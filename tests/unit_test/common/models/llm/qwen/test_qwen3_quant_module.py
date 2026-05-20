@@ -176,3 +176,22 @@ def test_quant_qwen3_attn_forward_disabled_quant_matches_plain_attn_skeleton():
     cos, sin = _position_embeddings(bs, seq, cfg.head_dim)
     out, _ = qattn(h, position_embeddings=(cos, sin))
     assert torch.isfinite(out).all()
+
+
+class _IdentityTransform(torch.nn.Module):
+    def forward(self, x, **kwargs):
+        return x
+
+
+def test_quant_qwen3_attn_forward_with_structure_transform():
+    """Cover input_transform / out_transform branches (lines 98, 126)."""
+    cfg = _tiny_qwen3_config()
+    attn = Qwen3Attention(cfg, layer_idx=0)
+    qattn = QuantQwen3Attn(_quant_args(quant_target=[ATTN_LINEAR]), attn)
+    qattn.input_transform = _IdentityTransform()
+    qattn.out_transform = _IdentityTransform()
+    bs, seq = 1, 4
+    h = torch.randn(bs, seq, cfg.hidden_size)
+    cos, sin = _position_embeddings(bs, seq, cfg.head_dim)
+    out, _ = qattn(h, position_embeddings=(cos, sin))
+    assert out.shape == h.shape

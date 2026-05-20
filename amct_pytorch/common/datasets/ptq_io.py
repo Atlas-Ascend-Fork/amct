@@ -24,14 +24,15 @@ def load_ptq_inps(data_dir, quant_target, layer_idx):
     kwargs = {}
     if quant_target == "attn":
         if os.path.exists(os.path.join(data_dir, f"position_ids.pkl")):
-            kwargs["position_ids"] = torch.load(os.path.join(data_dir, f"position_ids.pkl"), weight_only=True)
+            kwargs["position_ids"] = torch.load(os.path.join(data_dir, f"position_ids.pkl"), weights_only=True)
         if os.path.exists(os.path.join(data_dir, f"position_embeddings.pkl")):
-            kwargs["position_embeddings"] = torch.load(os.path.join(data_dir, f"position_embeddings.pkl"), weight_only=True)
+            kwargs["position_embeddings"] = torch.load(os.path.join(data_dir, f"position_embeddings.pkl"), 
+                                                       weights_only=True)
         if os.path.exists(os.path.join(data_dir, f"attention_mask.pkl")):
-            kwargs["attention_mask"] = torch.load(os.path.join(data_dir, f"attention_mask.pkl"), weight_only=True)
+            kwargs["attention_mask"] = torch.load(os.path.join(data_dir, f"attention_mask.pkl"), weights_only=True)
     file_path = os.path.join(data_dir, f"block_{layer_idx}_{quant_target}_in.pkl")
     try:
-        cached_inps = torch.load(file_path, weight_only=True)
+        cached_inps = torch.load(file_path, weights_only=True)
     except FileNotFoundError:
         logger.warning("PTQ input file not found: {}", file_path)
         return None, kwargs
