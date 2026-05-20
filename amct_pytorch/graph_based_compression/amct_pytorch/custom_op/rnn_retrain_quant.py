@@ -27,6 +27,7 @@ from ...amct_pytorch.custom_op.utils import tensor
 from ...amct_pytorch.custom_op.utils import process_scale
 from ...amct_pytorch.custom_op.retrain_quant import get_quant_type
 from ...amct_pytorch.utils.vars import BATCH_NUM
+from ...amct_pytorch.utils.vars import FLT_EPSILON
 
 DATA_NUM_BITS = 'data_num_bits'
 WTS_NUM_BITS = 'wts_num_bits'
@@ -264,34 +265,47 @@ class RNNRetrainQuant(nn.Module):
             hx: a torch.tensor, initial_h
         Returns: None
         """
-        is_init, act_retrain_params = self._do_ifmr(inputs, self.init_module)
-        if is_init:
-            del self.init_module
-            self.init_module = None
+        if self.init_module is None:
+            act_retrain_params = None
+        else:
+            is_init, act_retrain_params = self._do_ifmr(inputs, self.init_module)
+            if is_init:
+                del self.init_module
+                self.init_module = None
 
         if self.quant_module_type == 'LSTM':
             initial_h = hx[0]
         else:
             initial_h = hx # 1, B, H
 
-        is_init_h, act_h_retrain_params = self._do_ifmr(initial_h, self.init_module_h)
-        if is_init_h:
+        is_zero_initial_h = initial_h.abs().max() <= FLT_EPSILON
+        if self.init_module_h is None:
+            act_h_retrain_params = None
+        elif is_zero_initial_h:
             del self.init_module_h
             self.init_module_h = None
+            act_h_retrain_params = None
+        else:
+            is_init_h, act_h_retrain_params = self._do_ifmr(initial_h, self.init_module_h)
+            if is_init_h:
+                del self.init_module_h
+                self.init_module_h = None
 
         with torch.no_grad():
             if not self.quant_module.acts_comp_reuse:
-                copy_tensor(self.quant_module.acts_scale, act_retrain_params.scale)
-                copy_tensor(self.quant_module.acts_offset, act_retrain_params.offset)
-                copy_tensor(self.quant_module.acts_clip_max, act_retrain_params.clip_max)
-                copy_tensor(self.quant_module.acts_clip_min, act_retrain_params.clip_min)
-                copy_tensor(self.quant_module.acts_clip_max_pre, act_retrain_params.clip_max_pre)
-                copy_tensor(self.quant_module.acts_clip_min_pre, act_retrain_params.clip_min_pre)
-                copy_tensor(self.quant_module.acts_h_scale, act_h_retrain_params.scale)
-                copy_tensor(self.quant_module.acts_h_offset, act_h_retrain_params.offset)
-                copy_tensor(self.quant_module.acts_h_clip_max, act_h_retrain_params.clip_max)
-                copy_tensor(self.quant_module.acts_h_clip_min, act_h_retrain_params.clip_min)
-                copy_tensor(self.quant_module.acts_h_clip_max_pre, act_h_retrain_params.clip_max_pre)
-                copy_tensor(self.quant_module.acts_h_clip_min_pre, act_h_retrain_params.clip_min_pre)
+                if act_retrain_params is not None:
+                    copy_tensor(self.quant_module.acts_scale, act_retrain_params.scale)
+                    copy_tensor(self.quant_module.acts_offset, act_retrain_params.offset)
+                    copy_tensor(self.quant_module.acts_clip_max, act_retrain_params.clip_max)
+                    copy_tensor(self.quant_module.acts_clip_min, act_retrain_params.clip_min)
+                    copy_tensor(self.quant_module.acts_clip_max_pre, act_retrain_params.clip_max_pre)
+                    copy_tensor(self.quant_module.acts_clip_min_pre, act_retrain_params.clip_min_pre)
+                if act_h_retrain_params is not None:
+                    copy_tensor(self.quant_module.acts_h_scale, act_h_retrain_params.scale)
+                    copy_tensor(self.quant_module.acts_h_offset, act_h_retrain_params.offset)
+                    copy_tensor(self.quant_module.acts_h_clip_max, act_h_retrain_params.clip_max)
+                    copy_tensor(self.quant_module.acts_h_clip_min, act_h_retrain_params.clip_min)
+                    copy_tensor(self.quant_module.acts_h_clip_max_pre, act_h_retrain_params.clip_max_pre)
+                    copy_tensor(self.quant_module.acts_h_clip_min_pre, act_h_retrain_params.clip_min_pre)
 
-        self.do_init = not is_init
+        self.do_init = self.init_module is not None or self.init_module_h is not None
