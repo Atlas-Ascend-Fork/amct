@@ -42,18 +42,39 @@ def _linear_with_structure(hidden_states, linear, structure_transform=None, name
 class QuantIndexer(torch.nn.Module):
     def __init__(self, quant_args, module: Indexer):
         super().__init__()
-        self.wq_b = module.wq_b
+        bits = quant_args.bit_policy["attn-linear"]
+        wq_b = bits["wq_b"]
+        self.enable_attn_linear = "attn-linear" in quant_args.quant_target
+        self.enable_attn_cache = "attn-cache" in quant_args.quant_target
+        self.q_lora_rank = module.q_lora_rank
+        self.wq_b = QuantLinear(
+            quant_args,
+            module.wq_b,
+            w_bits=wq_b.w,
+            name="wq_b") if self.enable_attn_linear else PlainLinear(
+            module.wq_b)
+
         self.wk = module.wq_b
         self.k_norm = module.k_norm
         # weights_proj in the checkpoint is stored in bf16, while the parameters here are stored in fp32 for convenient.
         self.weights_proj = module.weights_proj
-        self.softmax_scale = self.head_dim ** -0.5
+        if self.enable_attn_linear:
+            self._init_structure_transforms()
+            self.wq_b_afq = ActivationQuantizer(quant_args, q_b_proj.a)
+        else:
+            self.wq_b_afq = nn.Identity()
 
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
     def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, 
                 freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
         bsz, seqlen, _ = x.size()
         end_pos = start_pos + seqlen
+        if self.input_transform is not None:
+            qr = self.input_transform(qr)
+        qr = self.q_b_proj_afq(qr)
         q = self.wq_b(qr)
         q = q.view(bsz, seqlen, self.n_heads, self.head_dim)
         q_pe, q_nope = torch.split(q, [self.rope_head_dim, self.head_dim - self.rope_head_dim], dim=-1)
@@ -82,29 +103,50 @@ class QuantIndexer(torch.nn.Module):
 class QuantDeepseekV3Attention(nn.Module):
     def __init__(self, quant_args, module: DeepseekV3Attention):
         super().__init__()
-        self.dim = args.dim
-        self.n_heads = args.n_heads
-        self.n_local_heads = args.n_heads // world_size
-        self.q_lora_rank = args.q_lora_rank
-        self.kv_lora_rank = args.kv_lora_rank
-        self.qk_nope_head_dim = args.qk_nope_head_dim
-        self.qk_rope_head_dim = args.qk_rope_head_dim
-        self.qk_head_dim = args.qk_nope_head_dim + args.qk_rope_head_dim
-        self.v_head_dim = args.v_head_dim
-
+        self.quant_args = quant_args
+        ensure_bit_policy(quant_args)
+        bits = quant_args.bit_policy["attn-linear"]
+        q_b_proj, o_proj = bits["q_b_proj"], bits["o_proj"]
+        self.enable_attn_linear = "attn-linear" in quant_args.quant_target
+        self.enable_attn_cache = "attn-cache" in quant_args.quant_target
+        self.q_lora_rank = module.q_lora_rank
+        self.value_dim = module.n_heads * module.v_head_dim
         self.q_a_proj = module.q_a_proj
         self.q_a_layernorm = module.q_a_layernorm
-        self.q_b_proj = module.q_b_proj
+        self.q_b_proj = QuantLinear(
+            quant_args,
+            module.q_b_proj,
+            w_bits=q_b_proj.w,
+            name="q_b_proj") if self.enable_attn_linear else PlainLinear(
+            module.q_b_proj)
         self.kv_a_proj_with_mqa = module.kv_a_proj_with_mqa
         self.kv_a_layernorm = module.kv_a_layernorm
         self.kv_b_proj = module.kv_b_proj
-        self.o_proj = module.o_proj
-        self.softmax_scale = self.qk_head_dim ** -0.5
+        self.o_proj = QuantLinear(
+            quant_args,
+            module.o_proj,
+            w_bits=o_proj.w,
+            name="o_proj") if self.enable_attn_linear else PlainLinear(
+            module.o_proj)
         self.freqs_cis = module.freqs_cis
 
         self.indexer = QuantIndexer(quant_args, module.indexer)
         self.register_buffer("freqs_cis", precompute_freqs_cis(args), persistent=False)
         self.dequant_wkv_b = None
+
+        if self.enable_attn_linear:
+            self._init_structure_transforms()
+            self.q_b_proj_afq = ActivationQuantizer(quant_args, q_b_proj.a)
+            self.o_proj_afq = ActivationQuantizer(quant_args, o_proj.a)
+        else:
+            self.q_b_proj_afq = nn.Identity()
+            self.o_proj_afq = nn.Identity()
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
+        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         bsz, seqlen, _ = x.size()
@@ -112,6 +154,9 @@ class QuantDeepseekV3Attention(nn.Module):
         mask = torch.full((seqlen, seqlen), float("-inf"), device=x.device).triu_(1) if seqlen > 1 else None
         freqs_cis = self.freqs_cis[start_pos:end_pos]
         qr = self.q_a_layernorm(self.q_a_proj(x))
+        if self.input_transform is not None:
+            qr = self.input_transform(qr)
+        qr = self.q_b_proj_afq(qr)
         q = self.q_b_proj(qr)
         q = q.view(bsz, seqlen, self.n_local_heads, self.qk_head_dim)
         q_nope, q_pe = torch.split(q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
@@ -135,7 +180,11 @@ class QuantDeepseekV3Attention(nn.Module):
 
         scores = scores.softmax(dim=-1)
         x = torch.einsum("bsht,bthd->bshd", scores, v)
-        x = self.o_proj(x.flatten(2))
+        x = x.flatten(2)
+        if self.out_transform is not None:
+            x = self.out_transform(x)
+        x = self.o_proj_afq(x)
+        x = self.o_proj(x)
         return x
 
 
