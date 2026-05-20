@@ -707,7 +707,6 @@ def test_iter_deploy_bindings_skips_non_quant_linear():
 
 
 def test_load_unit_inputs_delegates_to_load_ptq_inps(tmp_path, monkeypatch):
-    from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
     unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=2, module=nn.Linear(4, 4))
     fake_data = torch.randn(4, 4)
