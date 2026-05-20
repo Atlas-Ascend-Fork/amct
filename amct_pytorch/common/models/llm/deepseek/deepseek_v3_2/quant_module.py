@@ -45,10 +45,7 @@ class QuantIndexer(torch.nn.Module):
         self.wq_b = module.wq_b
         self.wk = module.wq_b
         self.k_norm = module.k_norm
-        # weights_proj in the checkpoint is stored in bf16, while the parameters here are stored in fp32 for convenient.
         self.weights_proj = module.weights_proj
-        self.softmax_scale = self.head_dim ** -0.5
-
 
     def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, 
                 freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
@@ -90,16 +87,6 @@ def weight_dequant(weight, scale):
 class QuantDeepseekV3Attention(nn.Module):
     def __init__(self, quant_args, module: DeepseekV3Attention):
         super().__init__()
-        self.dim = args.dim
-        self.n_heads = args.n_heads
-        self.n_local_heads = args.n_heads // world_size
-        self.q_lora_rank = args.q_lora_rank
-        self.kv_lora_rank = args.kv_lora_rank
-        self.qk_nope_head_dim = args.qk_nope_head_dim
-        self.qk_rope_head_dim = args.qk_rope_head_dim
-        self.qk_head_dim = args.qk_nope_head_dim + args.qk_rope_head_dim
-        self.v_head_dim = args.v_head_dim
-
         self.q_a_proj = module.q_a_proj
         self.q_a_layernorm = module.q_a_layernorm
         self.q_b_proj = module.q_b_proj
@@ -107,12 +94,8 @@ class QuantDeepseekV3Attention(nn.Module):
         self.kv_a_layernorm = module.kv_a_layernorm
         self.kv_b_proj = module.kv_b_proj
         self.o_proj = module.o_proj
-        self.softmax_scale = self.qk_head_dim ** -0.5
         self.freqs_cis = module.freqs_cis
-
         self.indexer = QuantIndexer(quant_args, module.indexer)
-        self.register_buffer("freqs_cis", precompute_freqs_cis(args), persistent=False)
-        self.dequant_wkv_b = None
 
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         bsz, seqlen, _ = x.size()
@@ -166,6 +149,4 @@ class QuantDeepseekV3Attention(nn.Module):
 
 
 class QuantDeepseekV3MLP(QuantGatedMLP):
-    def __init__(self, quant_args, module: DeepseekV3MLP):
-        super().__init__()
-        pass
+    pass
