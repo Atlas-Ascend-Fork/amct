@@ -12,7 +12,19 @@
    
   请确保该依赖已安装，注意满足版本要求。
 
-- PyTorch：2.7.1、2.1.0
+- PyTorch：
+	- LLM量化：2.10.0
+    - 传统量化：2.7.1、2.1.0
+- Transformers：
+	- LLM量化：5.5.4
+- Compressed-Tensors：
+	- LLM量化：0.15.0.1
+- torch_npu：
+	- LLM量化：2.10.0
+- datasets：
+	- LLM量化：4.8.4
+- zstandard：
+	- LLM量化：0.25.0
 - Ascend Extension for PyTorch：版本配套关系请单击[Link](https://hiascend.com/document/redirect/pytorchuserguide)，查看“版本说明 >相关产品版本配套说明”章节。
 
 此处以Python3.11、PyTorch2.7.1版本为例，安装业务运行时依赖的Python第三方库，安装命令如下，PyTorch2.1.0版本安装依赖命令请参见《[AMCT模型压缩工具](https://www.hiascend.com/document/redirect/CannCommunityToolAmctInstalDepdence)》：
