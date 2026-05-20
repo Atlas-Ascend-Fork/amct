@@ -138,7 +138,7 @@ def load_pth_file(model, pth_file, state_dict_name):
     """
     load_kwargs = {'map_location': torch.device('cpu')}
     if version_higher_than(torch.__version__, '2.1.0'):
-        load_kwargs['weights_only'] = False
+        load_kwargs['weights_only'] = True
     checkpoint = torch.load(pth_file, **load_kwargs)
     if state_dict_name:
         if checkpoint.get(state_dict_name):

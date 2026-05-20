@@ -36,7 +36,7 @@ def get_layer_quant_params(records, layer_name):
     if not os.path.exists(quant_result_path):
         raise RuntimeError("quant_result_path {} not exists. Please check your record file.".format(quant_result_path))
     if version_higher_than(torch.__version__, '2.1.0'):
-        load_kwargs = {'mmap': True, 'weights_only': False}
+        load_kwargs = {'mmap': True, 'weights_only': True}
     else:
         load_kwargs = {}
     try:

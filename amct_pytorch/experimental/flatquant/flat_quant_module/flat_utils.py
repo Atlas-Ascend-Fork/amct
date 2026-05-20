@@ -7,7 +7,7 @@ from .function_utils import get_paras_dict_by_name
 
 def kronecker_matmul(x, hadL, hadR):
     """equivalent to
-    
+
         had = torch.kron(hadL, hadR)
         x = x.reshape(-1, had.shape[0])
         x = x.matmul(had).reshape(init_shape)
@@ -44,9 +44,9 @@ def save_flat_matrices(model, matrices_path):
 
 def load_flat_matrices(model, matrix_path):
     from .default_model_utils import FlatQuantAttention, FlatQuantMLP
-    flat_parameters = torch.load(matrix_path)
+    flat_parameters = torch.load(matrix_path, weights_only=True)
     layers = model.model.layers
-    
+
     for i in range(len(flat_parameters.keys())):
         if isinstance(layers[i].self_attn, FlatQuantAttention) and isinstance(layers[i].mlp, FlatQuantMLP):
             flat_param = flat_parameters[i]

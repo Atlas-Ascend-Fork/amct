@@ -33,8 +33,8 @@ def load_block_inps_outs(save_dir, layer_idx):
         if not os.path.exists(out_file):
             raise ValueError(f"{out_file} not found!")
 
-        inp = torch.load(inp_file)
-        out = torch.load(out_file)
+        inp = torch.load(inp_file, weights_only=True)
+        out = torch.load(out_file, weights_only=True)
 
         cached_inps.append(inp)
         cached_outs.append(out)
