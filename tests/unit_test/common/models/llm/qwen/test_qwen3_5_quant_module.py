@@ -277,3 +277,33 @@ def test_quant_qwen35_linear_attn_delegated_attributes():
     assert hasattr(qla, "A_log")
     assert hasattr(qla, "norm")
 
+
+class _IdentityTransform(nn.Module):
+    def forward(self, x, **kwargs):
+        return x
+
+
+def test_quant_qwen35_linear_attn_forward_with_structure_transform():
+    """Cover input_transform / out_transform branches (lines 101, 145)."""
+    qla = _make_linear_attn(["attn-linear"])
+    qla.input_transform = _IdentityTransform()
+    qla.out_transform = _IdentityTransform()
+    x = torch.randn(1, 4, 64)
+    out = qla(x)
+    assert out.shape == x.shape
+
+
+def test_quant_qwen35_attn_forward_with_structure_transform():
+    """Cover input_transform / out_transform branches (lines 229, 269)."""
+    cfg = _tiny_config()
+    attn = Qwen3_5Attention(cfg, layer_idx=0)
+    qattn = QuantQwen35Attn(_quant_args(quant_target=["attn-linear"]), attn)
+    qattn.input_transform = _IdentityTransform()
+    qattn.out_transform = _IdentityTransform()
+    bs, seq = 1, 4
+    h = torch.randn(bs, seq, cfg.hidden_size)
+    cos = torch.randn(bs, seq, cfg.head_dim)
+    sin = torch.randn(bs, seq, cfg.head_dim)
+    out, weights = qattn(h, position_embeddings=(cos, sin))
+    assert out.shape == h.shape
+

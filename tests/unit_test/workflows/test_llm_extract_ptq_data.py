@@ -22,6 +22,7 @@ hook-name selection here.
 """
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -134,4 +135,40 @@ def test_extract_setup_returns_sink_id(monkeypatch, tmp_path):
     sink_id = wf.setup()
     assert sink_id is not None
     assert wf.pipeline is not None
+
+
+def test_run_completes(monkeypatch):
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None)
+
+    class FakePipeline:
+        num_layers = 1
+        tokenizer = MagicMock()
+
+        def __init__(self, args):
+            pass
+
+        @staticmethod
+        def do_embedding_forward(samples, hook_name):
+            return []
+
+        @staticmethod
+        def do_block_forward(layer_idx, inter_io, hook_name):
+            return []
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.MODEL_REGISTRY",
+        SimpleNamespace(get=lambda k: FakePipeline),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.get_pileval",
+        lambda tokenizer, n, seq_len: [],
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.logger",
+        SimpleNamespace(remove=lambda h: None, info=lambda *a, **kw: None),
+    )
+    wf = _make_extract_workflow(quant_target=["mlp"])
+    wf.args.output_dir = "/tmp"
+    wf.run()
 

@@ -242,3 +242,101 @@ def test_quant_longcat_mla_qk_pv_matmul_built():
     assert qattn.qk_matmul.l_bits == 8
     assert qattn.pv_matmul.r_bits == 8
 
+
+def _mla_config():
+    return LongcatFlashConfig(
+        hidden_size=64,
+        num_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        vocab_size=32,
+        max_position_embeddings=64,
+        ffn_hidden_size=128,
+        q_lora_rank=32,
+        kv_lora_rank=16,
+        qk_rope_head_dim=8,
+        qk_nope_head_dim=8,
+        v_head_dim=8,
+    )
+
+
+def _mla_attn_cache_args():
+    return SimpleNamespace(
+        algos=[],
+        quant_dtype="int",
+        w_bits=8, a_bits=8, q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+        quant_target=["attn-cache"],
+        bit_policy=BitPolicy({
+            "mlp": {},
+            "attn-linear": {
+                "q_proj": {"w_bits": 8, "a_bits": 8},
+                "k_proj": {"w_bits": 8, "a_bits": 8},
+                "v_proj": {"w_bits": 8, "a_bits": 8},
+                "o_proj": {"w_bits": 8, "a_bits": 8},
+                "kv_a_proj_with_mqa": {"w_bits": 8, "a_bits": 8},
+                "kv_b_proj": {"w_bits": 8, "a_bits": 8},
+                "q_a_proj": {"w_bits": 8, "a_bits": 8},
+                "q_b_proj": {"w_bits": 8, "a_bits": 8},
+            },
+            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+        }),
+    )
+
+
+def _mla_attn_linear_args():
+    return SimpleNamespace(
+        algos=[],
+        quant_dtype="int",
+        w_bits=8, a_bits=8, q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+        quant_target=["attn-linear", "attn-cache"],
+        bit_policy=BitPolicy({
+            "mlp": {},
+            "attn-linear": {
+                "q_proj": {"w_bits": 8, "a_bits": 8},
+                "k_proj": {"w_bits": 8, "a_bits": 8},
+                "v_proj": {"w_bits": 8, "a_bits": 8},
+                "o_proj": {"w_bits": 8, "a_bits": 8},
+                "kv_a_proj_with_mqa": {"w_bits": 8, "a_bits": 8},
+                "kv_b_proj": {"w_bits": 8, "a_bits": 8},
+                "q_a_proj": {"w_bits": 8, "a_bits": 8},
+                "q_b_proj": {"w_bits": 8, "a_bits": 8},
+            },
+            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+        }),
+    )
+
+
+def test_quant_longcat_mla_forward_attn_cache():
+    cfg = _mla_config()
+    attn = LongcatFlashMLA(cfg, layer_idx=0)
+    qattn = QuantLongcatMLA(_mla_attn_cache_args(), attn)
+    batch, seq = 1, 4
+    hidden = torch.randn(batch, seq, cfg.hidden_size)
+    cos = torch.randn(1, seq, attn.qk_rope_head_dim)
+    sin = torch.randn(1, seq, attn.qk_rope_head_dim)
+    out, _ = qattn(hidden, (cos, sin), attention_mask=None)
+    assert out.shape == (batch, seq, cfg.hidden_size)
+
+
+def test_quant_longcat_mla_forward_attn_linear():
+    cfg = _mla_config()
+    attn = LongcatFlashMLA(cfg, layer_idx=0)
+    qattn = QuantLongcatMLA(_mla_attn_linear_args(), attn)
+    batch, seq = 1, 4
+    hidden = torch.randn(batch, seq, cfg.hidden_size)
+    cos = torch.randn(1, seq, attn.qk_rope_head_dim)
+    sin = torch.randn(1, seq, attn.qk_rope_head_dim)
+    out, _ = qattn(hidden, (cos, sin), attention_mask=None)
+    assert out.shape == (batch, seq, cfg.hidden_size)
+
+
+def test_unpacked_experts_forward_non_empty():
+    args = _quant_args(quant_target=["mlp"])
+    experts = _FakePackedExpertsForUnpack(num_routed=2, total=3)
+    unpacked = LongcatUnpackedExperts(args, experts)
+    h = torch.randn(4, experts.hidden_size)
+    top_k_index = torch.tensor([[0], [1], [0], [1]], dtype=torch.long)
+    top_k_weights = torch.tensor([[1.0], [0.5], [0.8], [0.3]])
+    out = unpacked(h, top_k_index, top_k_weights)
+    assert out.shape == (4, experts.hidden_size)
+

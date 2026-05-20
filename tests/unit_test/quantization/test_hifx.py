@@ -15,38 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-from types import SimpleNamespace
-
 import pytest
 import torch
 
-
-class _FakeHifloat8:
-    @staticmethod
-    def float_to_hifloat8(x):
-        return x.to(torch.uint8).to(torch.int8)
-
-    @staticmethod
-    def hifloat8_to_float32(qx):
-        return qx.float()
-
-    @staticmethod
-    def hifloat8_to_float16(qx):
-        return qx.half()
-
-    @staticmethod
-    def hifloat8_to_bfloat16(qx):
-        return qx.to(torch.bfloat16)
-
-
-class _FakeHifloat8Module:
-    hifloat8_cast = _FakeHifloat8
-
-sys.modules["amct_pytorch.quantization.dtypes.hifloat8"] = _FakeHifloat8Module
-sys.modules["amct_pytorch.quantization.dtypes.hifloat8.hifloat8_cast"] = _FakeHifloat8
 from amct_pytorch.quantization.dtypes.hifx import QuantDequantHifp
-
 
 
 def test_hifp_init_defaults():
