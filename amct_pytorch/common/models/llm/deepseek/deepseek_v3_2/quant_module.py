@@ -79,14 +79,6 @@ class QuantIndexer(torch.nn.Module):
         return topk_indices
 
 
-def weight_dequant(weight, scale):
-    shape = weight.shape
-    assert weight.dim() == 2
-    weight = weight.view(shape[0] // block_size, block_size, shape[1] // block_size, block_size).transpose(1, 2).contiguous().view(-1, block_size * block_size)
-    weight = (weight.float() * scale.view(-1, 1).float()).to(torch.get_default_dtype()).view(shape[0] // block_size, shape[1] // block_size, block_size, block_size).transpose(1, 2).contiguous().view(shape)
-    return weight
-
-
 class QuantDeepseekV3Attention(nn.Module):
     def __init__(self, quant_args, module: DeepseekV3Attention):
         super().__init__()
@@ -128,39 +120,21 @@ class QuantDeepseekV3Attention(nn.Module):
         kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
         kv = self.kv_a_layernorm(kv)
         k_pe = apply_rotary_emb(k_pe.unsqueeze(2), freqs_cis)
-        if mask is not None:    # MHA prefill
-            q = torch.cat([q_nope, q_pe], dim=-1)
-            kv = self.kv_b_proj(kv)
-            kv = kv.view(bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim)
-            k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
-            k = torch.cat([k_nope, k_pe.expand(-1, -1, self.n_local_heads, -1)], dim=-1)
-            scores = torch.einsum("bshd,bthd->bsht", q, k).mul_(self.softmax_scale)
+        q = torch.cat([q_nope, q_pe], dim=-1)
+        kv = self.kv_b_proj(kv)
+        kv = kv.view(bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim)
+        k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
+        k = torch.cat([k_nope, k_pe.expand(-1, -1, self.n_local_heads, -1)], dim=-1)
+        scores = torch.einsum("bshd,bthd->bsht", q, k).mul_(self.softmax_scale)
 
-            # indexer
-            topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
-            index_mask = torch.full((bsz, seqlen, seqlen), float("-inf"), device=x.device).scatter_(-1, topk_indices, 0)
-            index_mask += mask
-            scores += index_mask.unsqueeze(2)
+        # indexer
+        topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
+        index_mask = torch.full((bsz, seqlen, seqlen), float("-inf"), device=x.device).scatter_(-1, topk_indices, 0)
+        index_mask += mask
+        scores += index_mask.unsqueeze(2)
 
-            scores = scores.softmax(dim=-1)
-            x = torch.einsum("bsht,bthd->bshd", scores, v)
-        else:                   # MQA decode
-            if self.dequant_wkv_b is None and self.kv_b_proj.scale is not None:
-                self.dequant_wkv_b = weight_dequant(self.kv_b_proj.weight, self.kv_b_proj.scale)
-            wkv_b = self.kv_b_proj.weight if self.dequant_wkv_b is None else self.dequant_wkv_b
-            wkv_b = wkv_b.view(self.n_local_heads, -1, self.kv_lora_rank)
-            q_nope = torch.einsum("bshd,hdc->bshc", q_nope, wkv_b[:, :self.qk_nope_head_dim])
-            scores = (torch.einsum("bshc,btc->bsht", q_nope, kv) +
-                      torch.einsum("bshr,btr->bsht", q_pe, k_pe.squeeze(2))) * self.softmax_scale
-
-            # indexer
-            topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
-            index_mask = torch.full((bsz, 1, end_pos), float("-inf"), device=x.device).scatter_(-1, topk_indices, 0)
-            scores += index_mask.unsqueeze(2)
-
-            scores = scores.softmax(dim=-1)
-            x = torch.einsum("bsht,btc->bshc", scores, kv)
-            x = torch.einsum("bshc,hdc->bshd", x, wkv_b[:, -self.v_head_dim:])
+        scores = scores.softmax(dim=-1)
+        x = torch.einsum("bsht,bthd->bshd", scores, v)
         x = self.o_proj(x.flatten(2))
         return x
 
