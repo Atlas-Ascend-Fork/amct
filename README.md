@@ -96,7 +96,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 |------|------|
 | Python | >=3.9 |
 | PyTorch | 2.7.1 或 2.1.0（需配套 `torch_npu`） |
-| GCC / CMake | ≥ 7.3 / ≥ 3.16（推荐 3.20） |
+| GCC / CMake / patch | ≥ 7.3 / ≥ 3.16（推荐 3.20） / 已安装 |
 | CANN（Toolkit & Ops） | ≥ 8.5.0（需提前安装 NPU 驱动 / 固件） |
 
 完整环境部署请参见 [快速安装](docs/quick_install.md)。
