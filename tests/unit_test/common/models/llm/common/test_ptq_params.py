@@ -294,3 +294,9 @@ def test_ptq_param_store_load_layer_nonstrict_missing_ok(tmp_path):
     assert not result[LOADED]
     assert result[MISSING] == [MLP_UNIT]
 
+
+def test_ptq_param_store_init():
+    handler = PtqParamHandler()
+    store = PtqParamStore(handler, lambda layer, block: [])
+    assert store is not None
+

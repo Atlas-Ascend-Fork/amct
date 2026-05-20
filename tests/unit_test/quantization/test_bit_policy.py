@@ -17,6 +17,8 @@
 # ----------------------------------------------------------------------------
 """Tests for BitPolicy / _GroupBits / _check_complete / _has_lt_16."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from amct_pytorch.quantization.bit_policy import (
@@ -25,6 +27,7 @@ from amct_pytorch.quantization.bit_policy import (
     _check_complete,
     _GroupBits,
     _has_lt_16,
+    ensure_bit_policy,
 )
 
 # ---- BitPolicy.__init__ ----------------------------------------------------
@@ -266,4 +269,23 @@ def test_group_bits_default_falls_back_to_top_level():
     gb = _GroupBits(bp, "mlp")
     d = gb.default
     assert d.w == 8 and d.a == 4
+
+
+def test_ensure_bit_policy_creates_from_args():
+    args = SimpleNamespace(
+        w_bits=8, a_bits=8, q_bits=4, k_bits=4, p_bits=4, v_bits=4,
+        bit_policy=None,
+    )
+    policy = ensure_bit_policy(args)
+    assert policy.w_bits == 8
+    assert policy.a_bits == 8
+    assert hasattr(args, "bit_policy")
+
+
+def test_ensure_bit_policy_reuses_existing():
+    existing = BitPolicy({"w_bits": 4, "a_bits": 4})
+    args = SimpleNamespace(bit_policy=existing)
+    policy = ensure_bit_policy(args)
+    assert policy is existing
+
 

@@ -468,3 +468,24 @@ def test_eval_save_inter_result(tmp_path):
     assert saved.exists()
     loaded = torch.load(str(saved))
     assert torch.equal(loaded, t)
+
+
+def test_has_relevant_quant_with_cache_target():
+    bp = _make_bit_policy(**{"attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8}})
+    workflow = _make_workflow(eval_mode="quant", quant_target=("attn-cache",), bit_policy=bp)
+    assert workflow._has_relevant_quant() is True
+
+
+def test_get_relevant_quant_bits_with_cache():
+    bp = _make_bit_policy(w_bits=16, a_bits=16, **{"attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4}})
+    workflow = _make_workflow(eval_mode="quant", quant_target=("attn-cache",), bit_policy=bp)
+    bits = workflow._get_relevant_quant_bits()
+    assert 4 in bits
+
+
+def test_get_relevant_quant_bits_with_mlp_and_cache():
+    bp = _make_bit_policy(w_bits=8, a_bits=8, **{"attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4}})
+    workflow = _make_workflow(eval_mode="quant", quant_target=("mlp", "attn-cache"), bit_policy=bp)
+    bits = workflow._get_relevant_quant_bits()
+    assert 8 in bits
+    assert 4 in bits

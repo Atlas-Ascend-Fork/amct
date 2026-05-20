@@ -571,3 +571,22 @@ def test_ptq_run_blockwise_mocked(monkeypatch):
 
     results = wf._run_blockwise(FakeSolver)  # pylint: disable=assignment-from-no-return
     assert 0 in results
+
+
+def test_register_components_runs_without_error(monkeypatch):
+    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.register_algorithms", lambda: None)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.register_llm_models", lambda: None)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.register_dtype", lambda: None)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_ptq.register_solvers", lambda: None)
+    workflow = _make_workflow()
+    workflow._register_components()
+
+
+def test_build_pipeline_uses_registry(monkeypatch):
+    def fake_cls(args):
+        return SimpleNamespace(args=args)
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.MODEL_REGISTRY", SimpleNamespace(get=lambda k: fake_cls))
+    workflow = _make_workflow()
+    pipeline = workflow._build_pipeline()
+    assert pipeline is not None

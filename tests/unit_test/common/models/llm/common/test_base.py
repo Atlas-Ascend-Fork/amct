@@ -27,6 +27,7 @@ import torch.nn as nn
 from safetensors.torch import save_file
 
 from amct_pytorch.common.models.llm.common.base import BaseModel
+from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from tests.unit_test.conftest import SAFETENSORS_TMP_DIR
 
 QUANT_TARGET_ATTN_CACHE = 'attn-cache'
@@ -1386,4 +1387,23 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
 
     assert len(preds) == 1
     assert preds[0].shape == (batch, seq_len - 1, config.vocab_size)
+
+
+def test_init_cls_does_nothing():
+    model = _StubModel()
+    result = model.init_cls()
+    assert result is None
+
+
+def test_get_layer_weight_prefix_returns_none_in_base():
+    model = _StubModel()
+    prefix = model.get_layer_weight_prefix(0)
+    assert prefix is None
+
+
+def test_load_unit_inputs_when_not_cached_returns_default():
+    model = _StubModel()
+    unit = make_ptq_unit("mlp", "mlp", 0, nn.Linear(4, 8))
+    result = model.load_unit_inputs("/nonexistent", unit)
+    assert result is not None
 
