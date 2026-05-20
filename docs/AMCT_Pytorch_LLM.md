@@ -1,12 +1,12 @@
-# AMCT PyTorch LLM 量化 Agent 使用说明
+# AMCT PyTorch LLM 量化工具使用说明
 
-本文档介绍了 `amct_pytorch` 中面向大语言模型（LLM）的量化 Agent。该 Agent 以**命令行工作流**为核心，串联起 PPL（Perplexity，困惑度） 测量、PTQ（Post-Training Quantization，训练后量化） 数据提取、PTQ 参数训练及量化权重部署导出等关键能力。同时，借助**模型适配器**、**量化算法注册表**和**量化数据类型注册表**，实现了不同模型架构与量化策略的灵活组合。
+本文档介绍了 `amct_pytorch` 中面向大语言模型（LLM）的量化工具。该工具以**命令行工作流**为核心，串联起 PPL（Perplexity，困惑度） 测量、PTQ（Post-Training Quantization，训练后量化） 数据提取、PTQ 参数训练及量化权重部署导出等关键能力。同时，借助**模型适配器**、**量化算法注册表**和**量化数据类型注册表**，实现了不同模型架构与量化策略的灵活组合。
 
 ## 1. 概述
 
 ### 1.1 能力概览
 
-量化 Agent 主要由以下模块组成：
+量化工具主要由以下模块组成：
 
 | 模块 | 路径 | 作用 |
 |------|------|------|
@@ -57,7 +57,9 @@
 
 **输出**：在`output_dir/logs/` 目录下会生成评估日志，日志中包含 PPL。
 
-**约束**：考虑到用户环境的限制，`granularity`请尽量选择block。
+**约束**：
+- 考虑到用户环境的限制，`granularity`请尽量选择block。
+- `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
 #### 2.1.1 BF16 基线 PPL 测量
 
@@ -105,7 +107,7 @@ python -m amct_pytorch.eval \
   --granularity block \
   --eval_mode quant \
   --quant_target mlp \
-  --algos lwc lac learnable_had \
+  --algos lwc lac \
   --quant_dtype int \
   --bit_config amct_pytorch/configs/example_w4a8.yaml \
   --moe_mlp_param_dir ./outputs/qwen3_ptq_params/mlp
@@ -181,7 +183,7 @@ python -m amct_pytorch.ptq \
   --quant_target mlp \
   --quant_dtype int \
   --bit_config amct_pytorch/configs/example_w4a8.yaml \
-  --algos lwc lac learnable_had \
+  --algos lwc lac \
   --data_dir ./outputs/qwen3_ptq_data \
   --start_block_idx 0 \
   --end_block_idx 32 \
@@ -349,12 +351,9 @@ layer_{layer_idx}_{unit_name}.pt
 | `lwc` | `weight` | Learnable Weight Clipping，可学习权重裁剪范围。 |
 | `lac` | `activation` | Learnable Activation Clipping，可学习激活裁剪范围。 |
 | `omniquant` | `structure` | OmniQuant 风格结构变换，学习通道缩放。 |
-| `learnable_had` | `structure` | 可学习 Hadamard-like 结构变换。 |
 | `autoround` | `weight` | 可学习 rounding offset，并可调节 min/max scale。 |
 
 - `omniquant、lwc、lac`：在可学习裁剪外加入通道缩放类结构变换，增强低比特 W/A 量化精度。详细说明请参见论文： [OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 
-
-- `learnable_had`：通过可学习hadamard矩阵优化离群值。详细说明请参见论文：[QuaRot: Outlier-Free 4-Bit Inference in Rotated LLMs](https://arxiv.org/abs/2404.00456)
 
 - `autoround`：学习权重 rounding offset，并可联合调节 min/max scale，让权重在低比特量化时选择更优的舍入方向。详细说明请参见论文：[Optimize Weight Rounding via Signed Gradient Descent for the Quantization of LLMs](https://arxiv.org/abs/2309.05516)
 
@@ -371,6 +370,7 @@ layer_{layer_idx}_{unit_name}.pt
 - `--granularity block` 是当前 LLM Agent 的主要可用路径；`ptq` 的 model 粒度仍为预留实现。
 - `--model_name` 是内部适配器名称，不一定等同于 HuggingFace 模型路径。
 - 使用 `hifx` 前需要确认 HiFloat 相关扩展已正确编译和导入。
+- `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
 ## 6. 一站式样例
 
@@ -388,8 +388,6 @@ layer_{layer_idx}_{unit_name}.pt
      --eval_mode bf16 \
      --bit_config amct_pytorch/configs/bf16.yaml
    ```
-   
-    `eval_mode=bf16` 时，对应ppl为`6.2825`。
 
 2. 直转量化测试：
 
@@ -405,8 +403,6 @@ layer_{layer_idx}_{unit_name}.pt
      --quant_dtype int \
      --bit_config amct_pytorch/configs/example_w4a8.yaml
    ```
-
-   `量化bit为A8W4，quant_target为attn-linear`时 ，对应ppl为`7.0407`。
 
 3. ptq数据提取：
 
@@ -432,11 +428,11 @@ layer_{layer_idx}_{unit_name}.pt
      --device npu:0 \
      --data_dir ./qwen3_6_moe/attn-linear \
      --quant_dtype int \
-     --algos autoround learnable_had \
+     --algos autoround \
      --bit_config amct_pytorch/configs/w4a8.yaml \
      --base_lr 1e-3 \
      --quant_target attn-linear \
-     --output_dir ./qwen3_6_moe/autoround+learnable_had
+     --output_dir ./qwen3_6_moe/autoround
    ```
 
 5. 带ptq训练结果的直转量化测试：
@@ -452,8 +448,6 @@ layer_{layer_idx}_{unit_name}.pt
      --quant_target attn-linear \
      --bit_config amct_pytorch/configs/w4a8.yaml \
      --quant_dtype int \
-     --algos autoround learnable_had \
-     --attn_linear_param_dir /data/z00961806/amct_llm/ptq_result/qwen3_6_moe/autoround_learnable_had/ptq_params/qwen3_6_moe/attn-linear
+     --algos autoround \
+     --attn_linear_param_dir ./qwen3_6_moe/autoround
    ```
-
-   `量化bit为A8W4，quant_target为attn-linear，量化算法使用autoround和learnable_had`时，对应ppl为`6.367`。
