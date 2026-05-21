@@ -42,101 +42,12 @@ class LongcatLite(BaseModel):
         self.num_layers = self.config.num_layers
         self.cls = LongcatFlashDecoderLayer
 
-    def _set_safe_attn_impl(self):
-        self.config._attn_implementation = "eager"
-
-    def float_model(self):
-        return super().float_model()
-
-    def empty_weights_model(self):
-        return super().empty_weights_model()
-
-    def get_layer_weight_prefix(self, layer_idx: int) -> str:
-        return f"model.layers.{layer_idx}."
-
-    def get_embed_load_specs(self):
-        specs = super().get_embed_load_specs()
-        specs.extend([
-            (self.model.model.ngram_embeddings.embedders, "model.ngram_embeddings.embedders."),
-            (self.model.model.ngram_embeddings.post_projs, "model.ngram_embeddings.post_projs."),
-        ])
-        return specs
-
-    def load_layer_weight(self, prefix):
-        return super().load_layer_weight(prefix)
-
-    def load_embed_state_dict(self):
-        super().load_embed_state_dict()
-        tie_weights = getattr(self.model, "tie_weights", None)
-        if callable(tie_weights):
-            tie_weights()
-
-    def _pack_expert_weights(self, state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        gate_keys = [key for key in state_dict if key.startswith("mlp.experts.") and key.endswith(".gate_proj.weight")]
-        if not gate_keys:
-            return state_dict
-
-        num_routed_experts = self.config.n_routed_experts
-        zero_expert_num = getattr(self.config, "zero_expert_num", 0) or 0
-        total_experts = num_routed_experts + zero_expert_num
-        first_gate = state_dict["mlp.experts.0.gate_proj.weight"]
-        first_down = state_dict["mlp.experts.0.down_proj.weight"]
-
-        gate_up_proj = torch.zeros(
-            total_experts,
-            first_gate.shape[0] * 2,
-            first_gate.shape[1],
-            dtype=first_gate.dtype,
-        )
-        down_proj = torch.zeros(
-            num_routed_experts,
-            first_down.shape[0],
-            first_down.shape[1],
-            dtype=first_down.dtype,
-        )
-
-        for expert_idx in range(num_routed_experts):
-            gate_key = f"mlp.experts.{expert_idx}.gate_proj.weight"
-            up_key = f"mlp.experts.{expert_idx}.up_proj.weight"
-            down_key = f"mlp.experts.{expert_idx}.down_proj.weight"
-            if gate_key not in state_dict or up_key not in state_dict or down_key not in state_dict:
-                raise KeyError(f"Missing routed expert weights for expert {expert_idx}.")
-            gate_up_proj[expert_idx] = torch.cat(
-                [state_dict.pop(gate_key), state_dict.pop(up_key)],
-                dim=0,
-            )
-            down_proj[expert_idx] = state_dict.pop(down_key)
-
-        state_dict["mlp.experts.gate_up_proj"] = gate_up_proj
-        state_dict["mlp.experts.down_proj"] = down_proj
-        return state_dict
-
-    def _load_longcat_layer_weight(self, layer_idx: int):
-        prefix = self.get_layer_weight_prefix(layer_idx)
-        state_dict = self.load_layer_weight(prefix)
-        return self._pack_expert_weights(state_dict)
-
     def block(self, layer_idx):
         decoder_layer = self.cls(self.config, layer_idx)
         state_dict = self._load_longcat_layer_weight(layer_idx)
         decoder_layer.load_state_dict(state_dict, strict=True)
         decoder_layer.eval().bfloat16()
         return decoder_layer
-
-    def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
-        return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
-
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
-        return super().do_block_forward(
-            layer_idx,
-            samples,
-            hook_name=hook_name,
-            use_quant_block=use_quant_block,
-            enable_quant=enable_quant,
-        )
-
-    def do_head_forward(self, inps):
-        return super().do_head_forward(inps)
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
@@ -159,43 +70,53 @@ class LongcatLite(BaseModel):
             )
         return decoder_layer
 
-    def _register_named_hook(self, block, name_map: dict[str, str], storage: dict[str, list[torch.Tensor]], hooks):
-        def save_output(_, __, output, save_name):
-            if isinstance(output, (tuple, list)):
-                output = output[0]
-            storage.setdefault(save_name, []).append(output.detach().cpu())
+    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+        return super().do_block_forward(
+            layer_idx,
+            samples,
+            hook_name=hook_name,
+            use_quant_block=use_quant_block,
+            enable_quant=enable_quant,
+        )
 
-        for module_name, module in block.named_modules():
-            if module_name not in name_map:
+    def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
+        return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
+
+    def do_head_forward(self, inps):
+        return super().do_head_forward(inps)
+
+    def empty_weights_model(self):
+        return super().empty_weights_model()
+
+    def float_model(self):
+        return super().float_model()
+
+    def get_embed_load_specs(self):
+        specs = super().get_embed_load_specs()
+        specs.extend([
+            (self.model.model.ngram_embeddings.embedders, "model.ngram_embeddings.embedders."),
+            (self.model.model.ngram_embeddings.post_projs, "model.ngram_embeddings.post_projs."),
+        ])
+        return specs
+
+    def get_layer_weight_prefix(self, layer_idx: int) -> str:
+        return f"model.layers.{layer_idx}."
+
+    def iter_deploy_bindings(self, layer_idx, block):
+        weight_prefix = self.get_layer_weight_prefix(layer_idx)
+        for name, module in block.named_modules():
+            if not isinstance(module, QuantLinear):
                 continue
-            hooks.append(module.register_forward_hook(lambda m, x, y, n=name_map[module_name]: save_output(m, x, y, n)))
 
-    def _save_ptq_inputs(self, layer_idx: int, storage: dict[str, list[torch.Tensor]]):
-        for save_name, tensors in storage.items():
-            _save_tensor(
-                os.path.join(self.args.data_dir, f"block_{layer_idx}_{save_name}_in.pkl"),
-                tensors,
-            )
+            if name.startswith("mlp.experts.expert_modules."):
+                parts = name.split(".")
+                if len(parts) != 5:
+                    raise ValueError(f"Unexpected LongCat expert module name: {name}")
+                _, _, _, expert_idx, proj_name = parts
+                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
+                continue
 
-    def register_block_forward_hooks(self, block, hook_name, hooks, act_stat):
-        if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
-            name_map = {
-                "input_layernorm.0": "attn_0",
-                "input_layernorm.1": "attn_1",
-            }
-        elif "moe" in self.quant_target:
-            name_map = {
-                "post_attention_layernorm.0": "moe",
-            }
-        else:
-            name_map = {
-                "post_attention_layernorm.0": "mlp_0",
-                "post_attention_layernorm.1": "mlp_1",
-            }
-        self._register_named_hook(block, name_map, act_stat, hooks)
-
-    def save_block_hook_inputs(self, act_stat, hook_name, layer_idx):
-        self._save_ptq_inputs(layer_idx, act_stat)
+            yield f"{weight_prefix}{name}.weight", module
 
     def iter_ptq_units(self, layer_idx, block):
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
@@ -246,21 +167,14 @@ class LongcatLite(BaseModel):
 
         yield from super().iter_ptq_units(layer_idx, block)
 
-    def iter_deploy_bindings(self, layer_idx, block):
-        weight_prefix = self.get_layer_weight_prefix(layer_idx)
-        for name, module in block.named_modules():
-            if not isinstance(module, QuantLinear):
-                continue
+    def load_embed_state_dict(self):
+        super().load_embed_state_dict()
+        tie_weights = getattr(self.model, "tie_weights", None)
+        if callable(tie_weights):
+            tie_weights()
 
-            if name.startswith("mlp.experts.expert_modules."):
-                parts = name.split(".")
-                if len(parts) != 5:
-                    raise ValueError(f"Unexpected LongCat expert module name: {name}")
-                _, _, _, expert_idx, proj_name = parts
-                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
-                continue
-
-            yield f"{weight_prefix}{name}.weight", module
+    def load_layer_weight(self, prefix):
+        return super().load_layer_weight(prefix)
 
     def load_unit_inputs(self, data_dir, unit: PtqUnit):
         cached_inps, kwargs = super().load_unit_inputs(data_dir, unit)
@@ -272,3 +186,89 @@ class LongcatLite(BaseModel):
             raise FileNotFoundError(f"PTQ inputs not found for unit '{unit.name}': {path}")
         cached_inps = torch.load(path, weight_only=True)
         return cached_inps, kwargs
+
+    def register_block_forward_hooks(self, block, hook_name, hooks, act_stat):
+        if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
+            name_map = {
+                "input_layernorm.0": "attn_0",
+                "input_layernorm.1": "attn_1",
+            }
+        elif "moe" in self.quant_target:
+            name_map = {
+                "post_attention_layernorm.0": "moe",
+            }
+        else:
+            name_map = {
+                "post_attention_layernorm.0": "mlp_0",
+                "post_attention_layernorm.1": "mlp_1",
+            }
+        self._register_named_hook(block, name_map, act_stat, hooks)
+
+    def save_block_hook_inputs(self, act_stat, hook_name, layer_idx):
+        self._save_ptq_inputs(layer_idx, act_stat)
+
+    def _load_longcat_layer_weight(self, layer_idx: int):
+        prefix = self.get_layer_weight_prefix(layer_idx)
+        state_dict = self.load_layer_weight(prefix)
+        return self._pack_expert_weights(state_dict)
+
+    def _pack_expert_weights(self, state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        gate_keys = [key for key in state_dict if key.startswith("mlp.experts.") and key.endswith(".gate_proj.weight")]
+        if not gate_keys:
+            return state_dict
+
+        num_routed_experts = self.config.n_routed_experts
+        zero_expert_num = getattr(self.config, "zero_expert_num", 0) or 0
+        total_experts = num_routed_experts + zero_expert_num
+        first_gate = state_dict["mlp.experts.0.gate_proj.weight"]
+        first_down = state_dict["mlp.experts.0.down_proj.weight"]
+
+        gate_up_proj = torch.zeros(
+            total_experts,
+            first_gate.shape[0] * 2,
+            first_gate.shape[1],
+            dtype=first_gate.dtype,
+        )
+        down_proj = torch.zeros(
+            num_routed_experts,
+            first_down.shape[0],
+            first_down.shape[1],
+            dtype=first_down.dtype,
+        )
+
+        for expert_idx in range(num_routed_experts):
+            gate_key = f"mlp.experts.{expert_idx}.gate_proj.weight"
+            up_key = f"mlp.experts.{expert_idx}.up_proj.weight"
+            down_key = f"mlp.experts.{expert_idx}.down_proj.weight"
+            if gate_key not in state_dict or up_key not in state_dict or down_key not in state_dict:
+                raise KeyError(f"Missing routed expert weights for expert {expert_idx}.")
+            gate_up_proj[expert_idx] = torch.cat(
+                [state_dict.pop(gate_key), state_dict.pop(up_key)],
+                dim=0,
+            )
+            down_proj[expert_idx] = state_dict.pop(down_key)
+
+        state_dict["mlp.experts.gate_up_proj"] = gate_up_proj
+        state_dict["mlp.experts.down_proj"] = down_proj
+        return state_dict
+
+    def _register_named_hook(self, block, name_map: dict[str, str], storage: dict[str, list[torch.Tensor]], hooks):
+        def save_output(_, __, output, save_name):
+            if isinstance(output, (tuple, list)):
+                output = output[0]
+            storage.setdefault(save_name, []).append(output.detach().cpu())
+
+        for module_name, module in block.named_modules():
+            if module_name not in name_map:
+                continue
+            hooks.append(module.register_forward_hook(lambda m, x, y, n=name_map[module_name]: save_output(m, x, y, n)))
+
+    def _save_ptq_inputs(self, layer_idx: int, storage: dict[str, list[torch.Tensor]]):
+        for save_name, tensors in storage.items():
+            _save_tensor(
+                os.path.join(self.args.data_dir, f"block_{layer_idx}_{save_name}_in.pkl"),
+                tensors,
+            )
+
+    def _set_safe_attn_impl(self):
+        self.config._attn_implementation = "eager"

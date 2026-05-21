@@ -18,6 +18,10 @@ class QuantConfig:
         self.group_size = group_size
         self.extra_config = kwargs
 
+    @classmethod
+    def from_dict(cls, config_dict: Dict[str, Any]) -> "QuantConfig":
+        return cls(**config_dict)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "algorithm": self.algorithm,
@@ -27,7 +31,3 @@ class QuantConfig:
             "group_size": self.group_size,
             **self.extra_config
         }
-
-    @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any]) -> "QuantConfig":
-        return cls(**config_dict)

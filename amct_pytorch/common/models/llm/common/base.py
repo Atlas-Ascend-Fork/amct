@@ -55,14 +55,6 @@ class BaseModel(metaclass=ABCMeta):
     def init_cls(self):
         pass
 
-    def _embed_base_prefix(self) -> str:
-        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
-
-        Override in adapters whose checkpoint nests the text backbone under a
-        multimodal wrapper (e.g. return `"model.language_model."`).
-        """
-        return "model."
-
     def get_embed_load_specs(self):
         """Default (embed_tokens, norm, lm_head) load specs.
 
@@ -115,13 +107,6 @@ class BaseModel(metaclass=ABCMeta):
         decoder_layer.load_state_dict(state_dict, strict=True)
         decoder_layer.eval().bfloat16()
         return decoder_layer
-
-    def _build_block_for_forward(self, layer_idx, use_quant_block=False):
-        if use_quant_block:
-            block = self.build_quant_block(layer_idx)
-            self.load_selected_layer_ptq_params(layer_idx, block, strict=False)
-            return block
-        return self.block(layer_idx)
 
     def get_block_forward_kwargs(self):
         kwargs = {}
@@ -187,9 +172,6 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
-    def _dispatch_block(self, module):
-        return module.to(self.args.device)
-
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
@@ -236,11 +218,6 @@ class BaseModel(metaclass=ABCMeta):
         block = None
         self._release_block_caches()
         return outs
-
-    def _release_block_caches(self):
-        import gc
-        gc.collect()
-        torch.npu.empty_cache()
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         pass
@@ -339,3 +316,26 @@ class BaseModel(metaclass=ABCMeta):
         finally:
             self.quant_target = original_quant_target
         return results
+
+    def _build_block_for_forward(self, layer_idx, use_quant_block=False):
+        if use_quant_block:
+            block = self.build_quant_block(layer_idx)
+            self.load_selected_layer_ptq_params(layer_idx, block, strict=False)
+            return block
+        return self.block(layer_idx)
+
+    def _dispatch_block(self, module):
+        return module.to(self.args.device)
+
+    def _embed_base_prefix(self) -> str:
+        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
+
+        Override in adapters whose checkpoint nests the text backbone under a
+        multimodal wrapper (e.g. return `"model.language_model."`).
+        """
+        return "model."
+
+    def _release_block_caches(self):
+        import gc
+        gc.collect()
+        torch.npu.empty_cache()

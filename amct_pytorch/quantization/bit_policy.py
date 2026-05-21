@@ -57,6 +57,9 @@ class BitPolicy:
         self.a_bits = int(self.cfg.get("a_bits", 16))
         self._validate()
 
+    def __getitem__(self, group: str) -> _GroupBits:
+        return _GroupBits(self, group)
+
     @classmethod
     def from_yaml(cls, path: str) -> "BitPolicy":
         with open(path, "r", encoding="utf-8") as f:
@@ -65,14 +68,22 @@ class BitPolicy:
             raise ValueError(f"bit_config yaml at {path} must be a mapping at top level")
         return cls(cfg)
 
-    def _validate(self):
-        """Enforce: any nested entry that mentions one of w_bits/a_bits must
-        mention both. (Top-level is exempt — w_bits/a_bits there are
-        independent globals.)"""
+    def cache_bits(self, key: str) -> int:
+        cache = self.cfg.get(_CACHE_GROUP) or {}
+        return int(cache.get(key, 16))
+
+    def has_quant_cache(self) -> bool:
+        cache = self.cfg.get(_CACHE_GROUP) or {}
+        return any(int(v) < 16 for v in cache.values() if isinstance(v, int))
+
+    def has_quant_linear(self) -> bool:
+        if self.w_bits < 16 or self.a_bits < 16:
+            return True
         for group in _LINEAR_GROUPS:
-            node = self.cfg.get(group)
-            if isinstance(node, dict):
-                _check_complete(node, group)
+            sub = self.cfg.get(group)
+            if isinstance(sub, dict) and _has_lt_16(sub):
+                return True
+        return False
 
     def linear_bits(self, name: str | None = None, group: str | None = None) -> tuple[int, int]:
         """Resolve (w_bits, a_bits) along ``group`` (dotted) / ``name``.
@@ -101,28 +112,17 @@ class BitPolicy:
                 return int(node["w_bits"]), int(node["a_bits"])
         return self.w_bits, self.a_bits
 
-    def __getitem__(self, group: str) -> _GroupBits:
-        return _GroupBits(self, group)
-
-    def cache_bits(self, key: str) -> int:
-        cache = self.cfg.get(_CACHE_GROUP) or {}
-        return int(cache.get(key, 16))
-
-    def has_quant_linear(self) -> bool:
-        if self.w_bits < 16 or self.a_bits < 16:
-            return True
-        for group in _LINEAR_GROUPS:
-            sub = self.cfg.get(group)
-            if isinstance(sub, dict) and _has_lt_16(sub):
-                return True
-        return False
-
-    def has_quant_cache(self) -> bool:
-        cache = self.cfg.get(_CACHE_GROUP) or {}
-        return any(int(v) < 16 for v in cache.values() if isinstance(v, int))
-
     def summary(self) -> str:
         return "BitPolicy:\n" + yaml.safe_dump(self.cfg, sort_keys=False, default_flow_style=False).rstrip()
+
+    def _validate(self):
+        """Enforce: any nested entry that mentions one of w_bits/a_bits must
+        mention both. (Top-level is exempt — w_bits/a_bits there are
+        independent globals.)"""
+        for group in _LINEAR_GROUPS:
+            node = self.cfg.get(group)
+            if isinstance(node, dict):
+                _check_complete(node, group)
 
 
 def ensure_bit_policy(args) -> BitPolicy:

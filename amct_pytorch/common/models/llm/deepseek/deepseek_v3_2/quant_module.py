@@ -64,10 +64,6 @@ class QuantIndexer(torch.nn.Module):
         else:
             self.wq_b_afq = nn.Identity()
 
-    def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-
     def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, 
                 freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
         bsz, seqlen, _ = x.size()
@@ -98,6 +94,10 @@ class QuantIndexer(torch.nn.Module):
         topk_indices_ = topk_indices.clone()
         assert torch.all(topk_indices == topk_indices_), f"{topk_indices=} {topk_indices_=}"
         return topk_indices
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
 
 class QuantDeepseekV3Attention(nn.Module):
@@ -142,12 +142,6 @@ class QuantDeepseekV3Attention(nn.Module):
             self.q_b_proj_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
 
-    def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         bsz, seqlen, _ = x.size()
         end_pos = start_pos + seqlen
@@ -186,6 +180,12 @@ class QuantDeepseekV3Attention(nn.Module):
         x = self.o_proj_afq(x)
         x = self.o_proj(x)
         return x
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
+        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
 
 class QuantDeepseekV3MLP(QuantGatedMLP):

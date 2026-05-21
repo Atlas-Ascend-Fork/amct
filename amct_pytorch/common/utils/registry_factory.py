@@ -14,6 +14,16 @@ class Registry:
         self._name = name
         self._items: dict[str, RegistryItem] = {}
 
+    def __call__(self, obj: Optional[Callable] = None, **kwargs: Any):
+        return self.register(obj=obj, **kwargs)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._items
+
+    def __repr__(self):
+        modules = ", ".join(sorted(self._items))
+        return f"Registry(name='{self._name}', modules=[{modules}])"
+
     @property
     def name(self) -> str:
         return self._name
@@ -34,17 +44,6 @@ class Registry:
         if obj is not None:
             return decorator(obj)
         return decorator
-
-    def __call__(self, obj: Optional[Callable] = None, **kwargs: Any):
-        return self.register(obj=obj, **kwargs)
-
-    def _register(self, key: str, obj: Any, force: bool, metadata: dict[str, Any]):
-        if key in self._items and not force:
-            raise KeyError(
-                f"'{key}' already registered in '{self._name}'. "
-                f"Use @REGISTRY.register(force=True) to override."
-            )
-        self._items[key] = RegistryItem(name=key, target=obj, metadata=dict(metadata))
 
     def get(self, key: str) -> Any:
         item = self._items.get(key)
@@ -75,9 +74,10 @@ class Registry:
     def items(self) -> dict[str, RegistryItem]:
         return dict(self._items)
 
-    def __contains__(self, key: object) -> bool:
-        return key in self._items
-
-    def __repr__(self):
-        modules = ", ".join(sorted(self._items))
-        return f"Registry(name='{self._name}', modules=[{modules}])"
+    def _register(self, key: str, obj: Any, force: bool, metadata: dict[str, Any]):
+        if key in self._items and not force:
+            raise KeyError(
+                f"'{key}' already registered in '{self._name}'. "
+                f"Use @REGISTRY.register(force=True) to override."
+            )
+        self._items[key] = RegistryItem(name=key, target=obj, metadata=dict(metadata))
