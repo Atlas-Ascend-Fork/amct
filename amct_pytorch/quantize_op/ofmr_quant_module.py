@@ -90,7 +90,7 @@ class OfmrQuant(BaseQuantizeModule):
 
             self.cur_batch += 1
             if self.cur_batch > self.batch_num:
-                return fp_out
+                return self._fake_quant_forward(inputs)
 
             self._calc_weight_quant_loss(inputs, fp_out)
             if not self.weight_compress_only: 
