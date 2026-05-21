@@ -187,20 +187,44 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.x2_dtype = torch_npu.float4_e2m1fn_x2
 
     def _init_bias(self, module):
+        """Decide bias form and whether forward should pass it to npu_quant_matmul:
+          - INT8 PER_TENSOR + non-dynamic: quantize bias to INT32, pass to op
+          - FP8*FP8 / HIFLOAT8*HIFLOAT8 PER_TENSOR: keep fp, add outside op
+            (preserves cann/master behavior)
+          - INT8 PER_TOKEN / dynamic: keep fp, pass to op
+          - module.bias is None: handle offset_bias if present
+        Sets self._bias_for_npu_op accordingly.
         """
-        Function: init bias for npu op
-        Args:
-            module: quant module 
-        """
-        if module.bias is not None:
-            self.register_buffer('bias', module.bias)
-            if self.offset_bias is not None:
-                self.bias = self.bias + self.offset_bias
-        else:
+        self._bias_for_npu_op = False
+        if module.bias is None:
             if self.offset_bias is None:
-                self.bias = None 
+                self.bias = None
             else:
                 self.bias = self.offset_bias
+                self._bias_for_npu_op = True
+            return
+
+        is_fp8_fp8 = (self.act_type == FLOAT8_E4M3FN
+                      and self.wts_type == FLOAT8_E4M3FN)
+        is_hif8_hif8 = (self.act_type == HIFLOAT8
+                        and self.wts_type == HIFLOAT8)
+
+        if is_fp8_fp8 or is_hif8_hif8:
+            self.register_buffer('bias', module.bias)
+        elif (self.act_granularity == 'tensor'
+                and self.dynamic is not True
+                and self.act_type == INT8):
+            deq_scale = module.scale_d * self.scale_w_tensor
+            bias_tensor = (module.bias.data / deq_scale).round().to(torch.int32)
+            self.register_buffer('bias', bias_tensor)
+            self._bias_for_npu_op = True
+        else:
+            self.register_buffer('bias', module.bias)
+            self._bias_for_npu_op = True
+
+        if self.offset_bias is not None:
+            self.bias = self.bias + self.offset_bias
+            self._bias_for_npu_op = True
 
     def _get_quantize_wts(self, quant_module, weight, device):
         """
