@@ -87,6 +87,17 @@ class BaseQuantizeModule(nn.Module):
         else:
             dequant_x = inputs
 
+        if isinstance(getattr(self, "ori_module", None), nn.Conv2d):
+            conv = self.ori_module
+            return F.conv2d(
+                dequant_x,
+                dequant_w,
+                self.bias,
+                conv.stride,
+                conv.padding,
+                conv.dilation,
+                conv.groups,
+            )
         return F.linear(dequant_x, dequant_w, self.bias)
 
     def forward(self, inputs):

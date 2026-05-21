@@ -311,6 +311,63 @@ class TestAWQFakeQuant(unittest.TestCase):
         )
 
 
+class TestFakeQuantForwardConv2dDispatch(unittest.TestCase):
+    """_fake_quant_forward must use F.conv2d (with stride/padding/etc.) for Conv2d modules.
+
+    OfmrQuant registers for both Linear and Conv2d, but the cann/master
+    quant_dequant_tensor has a 4-D reshape bug that breaks Conv2d calibration
+    end-to-end (independent of this feature). Use mocks to verify the op
+    dispatch layout without going through the calibration path.
+    """
+
+    def _make_conv2d_module_with_scale(self):
+        from amct_pytorch.quantize_op.ofmr_quant_module import OfmrQuant
+
+        conv = nn.Conv2d(4, 8, kernel_size=3, padding=1, stride=1, dilation=1, groups=1)
+        conv = conv.to(torch.bfloat16)
+        # Bypass calibration to dodge the unrelated 4-D reshape bug in
+        # quant_dequant_tensor; populate just the fields _fake_quant_forward needs.
+        mod = OfmrQuant.__new__(OfmrQuant)
+        nn.Module.__init__(mod)
+        mod.ori_module = conv
+        mod.weight = conv.weight
+        mod.bias = conv.bias
+        mod.scale = None
+        mod.scale_w = torch.ones(8).to(torch.bfloat16)
+        mod.scale_d = None
+        mod.offset_w = None
+        mod.offset_d = None
+        mod.group_size = None
+        mod.wts_type = "int8"
+        mod.act_type = "int8"
+        return mod, conv
+
+    def test_conv2d_dispatch_uses_F_conv2d_with_conv_attrs(self):
+        mod, conv = self._make_conv2d_module_with_scale()
+        x = torch.randn(2, 4, 8, 8).to(torch.bfloat16)
+        sentinel_dq_w = torch.randn(8, 4, 3, 3).to(torch.bfloat16)
+
+        with patch(
+            "amct_pytorch.utils.quant_util.quant_dequant_tensor",
+            return_value=sentinel_dq_w,
+        ):
+            out = mod._fake_quant_forward(x)
+
+        expected = F.conv2d(
+            x,
+            sentinel_dq_w,
+            conv.bias,
+            conv.stride,
+            conv.padding,
+            conv.dilation,
+            conv.groups,
+        )
+        self.assertEqual(out.shape, expected.shape)
+        self.assertTrue(
+            torch.allclose(out, expected), f"max diff: {(out - expected).abs().max()}"
+        )
+
+
 class TestApplyProgressiveQuantDequant(unittest.TestCase):
     """apply_progressive_quant_dequant does two-level quant+dequant with correct layout."""
 
