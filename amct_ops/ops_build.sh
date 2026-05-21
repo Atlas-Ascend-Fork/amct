@@ -22,7 +22,7 @@
 #
 #   --soc <soc>   目标 SOC（可选，默认 ascend910b）：
 #                   ascend910b    Ascend A2（910B1/B2/B3，dav-2201）[默认]
-ascend910_93  Ascend A3（910B4，dav-2201）
+#                   ascend910_93  Ascend A3（910B4，dav-2201）
 #                   ascend950     Ascend A5（dav-3510）
 #   <op>          仅构建指定算子，省略则构建全部
 #
