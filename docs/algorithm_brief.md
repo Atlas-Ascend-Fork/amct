@@ -1,6 +1,32 @@
 # 算法介绍
 
-## 仅权重量化算法
+## 算法支持矩阵
+
+**权重量化 (W)**
+
+| 算法 | INT8 | INT4 | MXFP8 | MXFP4 | HiFloat8 |
+|--------|:----------:|:----------:|:-----------:|:-----------:|:--------:|
+| Min-Max    | ✅ | ✅ | — | — | — |
+| AWQ        | ✅ | ✅ | — | — | — |
+| GPTQ       | ✅ | ✅ | — | ✅ | ✅ |
+| Cast       | — | — | — | — | ✅ |
+| Quantile   | — | — | — | — | ✅ |
+| OFMR       | — | — | — | — | ✅ |
+| MXQuant    | — | — | ✅ | ✅ | — |
+
+**全量化 (W+A)**
+
+| 算法 | INT8 | INT4 | MXFP8 | HiFloat8 |
+|--------|:----------:|:----------:|:-----------:|:--------:|
+| Min-Max     | ✅ | — | — | — |
+| SmoothQuant | ✅ | — | — | — |
+| Cast        | — | — | — | ✅ |
+| Quantile    | — | — | — | ✅ |
+| OFMR        | — | — | — | ✅ |
+| MXQuant     | — | — | ✅ | — |
+| FlatQuant   | — | ✅ | — | — |
+
+## 权重量化算法
 
 ### ARQ
 
@@ -50,6 +76,13 @@ ADA权重量化算法用于PTQ流程，由于量化后的权重舍入模式会�
 
 正则项（Loss函数的后半部分），用以约束h\(alpha\)向0和1两个值收敛，在迭代初期![](./figures/zh-cn_formulaimage_0000002548668769.png)较大值可以使得正则项对整体损失的影响比重变大，就会促使优化过程快速调整h\(alpha\)，接近最优解的区域。迭代后期，此时h\(alpha\)已经处于最优解区域，使用较小![](./figures/zh-cn_formulaimage_0000002548668769.png)，不会因为微小的参数变动导致正则项剧烈变化，从而让模型在微调参数时更加稳健，避免因过度调整而错过最优解，使h\(alpha\)逼近最优解。
 
+### AutoRound
+
+AutoRound可学习Rounding Offset，是面向LLM的轻量级训练后量化算法，核心是把“舍入编译V”做成可学习参数，并可联合调节min/max scale，让权重在低比特量化时选择更优的舍入方向。
+算法详细说明请参见：[Optimize Weight Rounding via Signed Gradient Descent for the Quantization of LLMs](https://arxiv.org/abs/2309.05516)。
+
+说明：`autoround`带自定义 `quantize()` hook，目前PTQ fake quant可用，但部署导出中 `export_deploy()` 暂不支持该类hook。
+
 ### AWQ
 
 AWQ（Activation-aware Weight Quantization，感知激活权重量化）是一种针对大模型的训练后量化（Post-Training Quantization，简称PTQ）方法，通过感知激活的权重量化策略，在保持模型精度的同时显著降低内存占用并提升推理速度。该算法认为并非所有权重对量化误差的敏感度都相同，仅保护约1%的显著权重即可大幅减少误差。使用少量校准数据，采用网格搜索在预设范围内寻找最优缩放因子，对显著权重进行放大后再量化，通过缩小量化间隔降低误差。
@@ -61,6 +94,17 @@ AWQ（Activation-aware Weight Quantization，感知激活权重量化）是一�
 GPTQ（Generative Pre-trained Transformer Quantization）是一种针对大模型的仅权重训练后量化（PTQ）方法，核心思路是逐层贪心量化，通过数学优化最小化量化误差。针对每个量化算子，根据激活值计算海森矩阵，分块将权重进行微调，最小化量化误差，最终输出调整后的权重以及量化因子。
 
 算法详细介绍请参见[Link](https://arxiv.org/abs/2210.17323)。
+
+### LWC
+
+LWC（Learnable Weight Clipping，可学习权重裁剪范围）是面向神经网络量化，尤其是LLM训练后量化的可微权重范围优化技术，在可学习裁剪外加入通道缩放类结构变换，增强低比特 W/A 量化精度。
+算法详细介绍请参见：[OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 。
+
+## 激活量化算法
+
+### LAC
+
+LAC（Learnable Activation Clipping，可学习激活裁剪范围），是面向神经网络量化（尤其LLM）的可微激活范围优化技术，在可学习裁剪外加入通道缩放类结构变换，增强低比特 W/A 量化精度。算法详细介绍请参见：[OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137)。
 
 ## 全量化算法
 
@@ -163,6 +207,11 @@ OFMR（Output FeatureMap Reconstruct）算法在某个数据分布下，通过�
 
 **图 1**  OFMR算法原理<a name="fig1393075517419"></a>  
 ![](./figures/OFMRquant.png "OFMR算法原理")
+
+### OmniQuant
+
+OmniQuant是面向LLM的轻量级、可微分训练后量化算法，核心是风格结构变换，学习通道缩放：在可学习裁剪外加入通道缩放类结构变换，增强低比特W/A量化精度。
+算法详细介绍请参见： [OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 。
 
 ### SmoothQuant
 
