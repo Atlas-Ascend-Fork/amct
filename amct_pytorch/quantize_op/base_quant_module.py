@@ -17,6 +17,7 @@
 
 import torch
 import torch.nn as nn
+from amct_pytorch.utils.vars import INT8, INT32_MAX, INT32_MIN
 
 
 class BaseQuantizeModule(nn.Module):
@@ -35,15 +36,36 @@ class BaseQuantizeModule(nn.Module):
         self.clip_max = None
 
     def _quantizable_weight(self):
+        """Weight tensor to pass into quant_dequant_tensor.
+        SmoothQuant pre-multiplies by self.scale (smooth_factor) so the
+        fake-quant matches scale_w, which was computed from weight * smooth_factor.
+        """
         if self.scale is not None:
             return self.weight.data * self.scale.to(device=self.weight.device,
                                                     dtype=self.weight.dtype)
         return self.weight.data
 
     def _quantizable_input(self, inputs):
+        """Activation to pass into quant_dequant_tensor.
+        SmoothQuant divides by self.scale (smooth_factor) so it matches scale_d.
+        """
         if self.scale is not None:
             return inputs / self.scale.to(device=inputs.device, dtype=inputs.dtype)
         return inputs
+
+    def _fake_quant_bias(self, deq_scale):
+        """Simulate NPU integer bias addition by quant→dequant.
+        Only INT8 + per-tensor activation path quantizes bias to INT32 (matching
+        the NPU integer accumulator); all other paths return the raw fp bias.
+        """
+        if self.bias is None:
+            return None
+        if (deq_scale is None
+                or self.act_type != INT8
+                or getattr(self, 'act_granularity', None) != 'tensor'):
+            return self.bias
+        bias_q = (self.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
+        return bias_q * deq_scale
 
     @torch.no_grad()
     def _fake_quant_forward(self, inputs):

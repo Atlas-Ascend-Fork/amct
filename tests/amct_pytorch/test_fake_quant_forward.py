@@ -348,5 +348,53 @@ class TestFakeQuantForwardConv2dDispatch(unittest.TestCase):
                         f'max diff: {(out - expected).abs().max()}')
 
 
+class TestFakeQuantBias(unittest.TestCase):
+    """_fake_quant_bias quantizes bias only on INT8 + PER_TENSOR; otherwise raw."""
+
+    def _make_int8_per_tensor_module(self, weight_only=False):
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        linear = nn.Linear(8, 4, bias=True).to(torch.bfloat16)
+        cfg = {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': 'int8', 'symmetric': True,
+                           'strategy': 'tensor', 'enable_quant': not weight_only},
+        }
+        return MinMaxQuant(linear, 'l', cfg)
+
+    def test_returns_none_when_bias_none(self):
+        mod = self._make_int8_per_tensor_module()
+        mod.bias = None
+        deq_scale = torch.ones(4).to(torch.bfloat16)
+        self.assertIsNone(mod._fake_quant_bias(deq_scale))
+
+    def test_returns_raw_bias_when_deq_scale_none(self):
+        mod = self._make_int8_per_tensor_module()
+        self.assertIs(mod._fake_quant_bias(None), mod.bias)
+
+    def test_returns_raw_bias_for_per_token_granularity(self):
+        mod = self._make_int8_per_tensor_module()
+        mod.act_granularity = 'token'
+        deq_scale = torch.ones(4).to(torch.bfloat16)
+        self.assertIs(mod._fake_quant_bias(deq_scale), mod.bias)
+
+    def test_returns_raw_bias_for_non_int8_act(self):
+        mod = self._make_int8_per_tensor_module()
+        mod.act_type = 'float8_e4m3fn'
+        deq_scale = torch.ones(4).to(torch.bfloat16)
+        self.assertIs(mod._fake_quant_bias(deq_scale), mod.bias)
+
+    def test_int8_per_tensor_round_trip_through_int32(self):
+        from amct_pytorch.utils.vars import INT32_MIN, INT32_MAX
+        mod = self._make_int8_per_tensor_module()
+        deq_scale = torch.tensor([0.25, 0.5, 0.125, 1.0]).to(mod.bias.dtype)
+        result = mod._fake_quant_bias(deq_scale)
+        expected_int = (mod.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
+        expected = expected_int * deq_scale
+        self.assertTrue(torch.allclose(result, expected),
+                        f'max diff: {(result - expected).abs().max()}')
+
+
 if __name__ == '__main__':
     unittest.main()
