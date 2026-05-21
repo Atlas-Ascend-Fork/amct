@@ -9,6 +9,7 @@ from torch import nn
 import torch.nn.functional as F
 import torch.distributed as dist
 from transformers import PreTrainedModel
+from transformers.activations import SiLUActivation
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.configuration_deepseek import DeepseekV32Config
 
 
@@ -94,7 +95,7 @@ class ModelArgs:
     # yarn
     original_seq_len: int = 4096
     rope_theta: float = 10000.0
-    rope_factor: float = 40
+    rope_factor: float = 40.
     beta_fast: int = 32
     beta_slow: int = 1
     mscale: float = 1.
@@ -469,12 +470,15 @@ class DeepseekV3MLP(nn.Module):
 
     def __init__(self, dim: int, inter_dim: int, reduce_output: bool = True):
         super().__init__()
-        self.gate_proj = nn.Linear(dim, inter_dim, bias=False)
-        self.down_proj = nn.Linear(inter_dim, dim, bias=False)
-        self.up_proj = nn.Linear(dim, inter_dim, bias=False)
+        self.hidden_size = dim
+        self.intermediate_size = inter_dim
+        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=False)
+        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=False)
+        self.act_fn = SiLUActivation()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj((F.silu(self.gate_proj(x).float()) * self.up_proj(x).float()).type_as(x))
+        return self.down_proj((self.act_fn(self.gate_proj(x).float()) * self.up_proj(x).float()).type_as(x))
 
 
 class Gate(nn.Module):
