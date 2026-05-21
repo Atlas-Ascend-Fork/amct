@@ -458,5 +458,68 @@ class TestFakeQuantCache(unittest.TestCase):
         self.assertEqual(m.call_count, 1)
 
 
+class TestFakeQuantBiasDispatch(unittest.TestCase):
+    """End-to-end dispatch: bias only quantized on INT8 PER_TENSOR; others raw."""
+
+    def _make_module(self, act_type='int8', granularity='tensor', enable_quant=True,
+                     bias=True):
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        linear = nn.Linear(8, 4, bias=bias).to(torch.bfloat16)
+        cfg = {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': act_type, 'symmetric': True,
+                           'strategy': granularity, 'enable_quant': enable_quant},
+        }
+        return MinMaxQuant(linear, 'l', cfg)
+
+    def test_fp8_per_tensor_keeps_bias_fp(self):
+        from amct_pytorch.utils import quant_util
+        mod = self._make_module(act_type='int8', granularity='tensor')
+        mod.act_type = 'float8_e4m3fn'  # override to FP8 after calibration
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        # Pre-build the cache to lock the dispatch decision.
+        with patch.object(quant_util, 'quant_dequant_tensor',
+                          wraps=quant_util.quant_dequant_tensor):
+            mod._build_fake_quant_cache()
+        self.assertIs(mod._cached_bias_for_linear, mod.bias)
+
+    def test_hifloat8_per_tensor_keeps_bias_fp(self):
+        from amct_pytorch.utils import quant_util
+        mod = self._make_module(act_type='int8', granularity='tensor')
+        mod.act_type = 'hifloat8'
+        with patch.object(quant_util, 'quant_dequant_tensor',
+                          wraps=quant_util.quant_dequant_tensor):
+            mod._build_fake_quant_cache()
+        self.assertIs(mod._cached_bias_for_linear, mod.bias)
+
+    def test_int8_per_token_skips_bias_quantization(self):
+        mod = self._make_module(act_type='int8', granularity='token')
+        mod._build_fake_quant_cache()
+        self.assertIs(mod._cached_bias_for_linear, mod.bias)
+
+    def test_none_bias_path_does_not_error(self):
+        mod = self._make_module(bias=False)
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        out = mod._fake_quant_forward(x)
+        self.assertEqual(out.shape, (2, 4))
+
+    def test_progressive_path_passes_bias_unchanged(self):
+        from amct_pytorch.quantize_op import utils as quant_utils
+        mod = self._make_module(bias=False)
+        mod.scale_w = None
+        mod.scale_w1 = torch.ones(4).to(torch.bfloat16)
+        mod.scale_w2 = torch.ones(1, 1).to(torch.bfloat16)
+        sentinel_dq_w = torch.randn(4, 8).to(torch.bfloat16)
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        with patch.object(quant_utils, 'apply_progressive_quant_dequant',
+                          return_value=sentinel_dq_w):
+            out = mod._fake_quant_forward(x)
+        # bias=None in this setup -> F.linear bias arg is None -> no error and shape matches
+        self.assertEqual(out.shape, (2, 4))
+        self.assertIsNone(mod._cached_bias_for_linear)
+
+
 if __name__ == '__main__':
     unittest.main()
