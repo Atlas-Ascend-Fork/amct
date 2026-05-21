@@ -26,10 +26,8 @@ class OfmrQuant(BaseQuantizeModule):
     Function: Customized torch.nn.Module of the OFMR quantization class.
     APIs: forward.
     """
-    def __init__(self,
-                 ori_module,
-                 layer_name,
-                 quant_config):
+
+    def __init__(self, ori_module, layer_name, quant_config):
         """
         Function: init objective.
         Args:
@@ -47,17 +45,25 @@ class OfmrQuant(BaseQuantizeModule):
         self.weight = ori_module.weight
         self.bias = ori_module.bias
 
-        self.batch_num = quant_config.get('batch_num')
-        self.wts_type = quant_config.get('weights_cfg').get('quant_type')
-        self.act_type = quant_config.get('inputs_cfg').get('quant_type')
+        self.batch_num = quant_config.get("batch_num")
+        self.wts_type = quant_config.get("weights_cfg").get("quant_type")
+        self.act_type = quant_config.get("inputs_cfg").get("quant_type")
 
-        self.weight_compress_only = True if quant_config.get('inputs_cfg').get('enable_quant') == False else False
+        self.weight_compress_only = (
+            True
+            if quant_config.get("inputs_cfg").get("enable_quant") == False  # noqa: E712
+            else False
+        )
         self.device = ori_module.weight.device
-        self.act_quant_loss = torch.zeros(len(EC_CAND), dtype=torch.float32, device=self.device)
+        self.act_quant_loss = torch.zeros(
+            len(EC_CAND), dtype=torch.float32, device=self.device
+        )
         self.cout = 1
-        if quant_config.get('weights_cfg').get('strategy') == 'channel':
+        if quant_config.get("weights_cfg").get("strategy") == "channel":
             self.cout = self.ori_module.weight.shape[0]
-        self.wts_quant_loss = torch.zeros((len(EC_CAND), self.cout), dtype=torch.float32, device=self.device)
+        self.wts_quant_loss = torch.zeros(
+            (len(EC_CAND), self.cout), dtype=torch.float32, device=self.device
+        )
         self.cur_batch = 0
 
     @staticmethod
@@ -82,20 +88,19 @@ class OfmrQuant(BaseQuantizeModule):
         inputs: data used for calibration in torch.tensor.
         """
         with torch.no_grad():
-            if isinstance(self.ori_module, nn.Linear) and \
-                (len(inputs.shape) > 6 or len(inputs.shape) < 2):
+            if isinstance(self.ori_module, nn.Linear) and (
+                len(inputs.shape) > 6 or len(inputs.shape) < 2
+            ):
                 raise RuntimeError("Linear quant only support dim from 2 to 6")
             inputs = inputs.to(self.device)
             fp_out = self.ori_module(inputs)
 
             self.cur_batch += 1
             if self.cur_batch > self.batch_num:
-                if self.scale_w is not None:
-                    return self._fake_quant_forward(inputs)
-                return fp_out  # scale_w not set; return raw output
+                return self._fake_quant_forward(inputs)
 
             self._calc_weight_quant_loss(inputs, fp_out)
-            if not self.weight_compress_only: 
+            if not self.weight_compress_only:
                 self._calc_act_quant_loss(inputs, fp_out)
 
             if self.cur_batch == self.batch_num:
@@ -110,14 +115,17 @@ class OfmrQuant(BaseQuantizeModule):
         Function: Calculate the scale of the activation value by act_quant_loss
         Return: scale_d list, activation scale
         """
-        self.act_quant_loss = self.act_quant_loss.masked_fill(torch.isnan(self.act_quant_loss), float('inf'))
+        self.act_quant_loss = self.act_quant_loss.masked_fill(
+            torch.isnan(self.act_quant_loss), float("inf")
+        )
         min_value, min_index = torch.min(self.act_quant_loss, dim=0)
         if not torch.isfinite(min_value):
             raise RuntimeError(
                 "{}'s activation quant loss has invalid value, inf or nan. "
-                "Please check activation value.".format(self.layer_name))
+                "Please check activation value.".format(self.layer_name)
+            )
         act_ec = EC_CAND[min_index.tolist()]
-        scale_d = torch.Tensor([2 ** act_ec])
+        scale_d = torch.Tensor([2**act_ec])
         return scale_d
 
     def _calc_scale_w(self):
@@ -125,15 +133,18 @@ class OfmrQuant(BaseQuantizeModule):
         Function: Calculate the scale of the weight value by wts_quant_loss
         Return: scale_w, list, weight scale
         """
-        self.wts_quant_loss = self.wts_quant_loss.masked_fill(torch.isnan(self.wts_quant_loss), float('inf'))
+        self.wts_quant_loss = self.wts_quant_loss.masked_fill(
+            torch.isnan(self.wts_quant_loss), float("inf")
+        )
         min_values, min_indices = torch.min(self.wts_quant_loss, dim=0)
         if not all(torch.isfinite(min_values)):
             raise RuntimeError(
                 "{}'s weight quant loss has invalid value, inf or nan. "
-                "Please check weight value.".format(self.layer_name))
+                "Please check weight value.".format(self.layer_name)
+            )
         wts_ecs = [EC_CAND[min_index.tolist()] for min_index in min_indices]
-        scale_w = torch.Tensor([2 ** wts_ec for wts_ec in wts_ecs])
-        if type(self.ori_module).__name__ == 'Linear' and len(scale_w) > 1:
+        scale_w = torch.Tensor([2**wts_ec for wts_ec in wts_ecs])
+        if type(self.ori_module).__name__ == "Linear" and len(scale_w) > 1:
             scale_w = scale_w.reshape(-1, 1)
         return scale_w
 
@@ -144,23 +155,36 @@ class OfmrQuant(BaseQuantizeModule):
         inputs: torch.tensor quant op's input
         fp_out: torch.tensor quant op's original output
         """
-        ori_dtype = self.ori_module.weight.dtype
+        ori_dtype = self.ori_module.weight.dtype  # noqa: F841
         for ec in EC_CAND:
-            scale_weight = torch.Tensor([2 ** ec])
-            quant_weights = quant_dequant_tensor(self.ori_module.weight, self.wts_type, scale=scale_weight)
-            if self.module_type == 'Linear':
+            scale_weight = torch.Tensor([2**ec])
+            quant_weights = quant_dequant_tensor(
+                self.ori_module.weight, self.wts_type, scale=scale_weight
+            )
+            if self.module_type == "Linear":
                 quant_out = F.linear(inputs, quant_weights, self.ori_module.bias)
-                cout_axis = -1 # NC/...C
+                cout_axis = -1  # NC/...C
             else:
-                quant_out = F.conv2d(inputs, quant_weights, self.ori_module.bias, self.ori_module.stride,
-                    self.ori_module.padding, self.ori_module.dilation, self.ori_module.groups)
-                cout_axis = -3 # NCHW/CHW
+                quant_out = F.conv2d(
+                    inputs,
+                    quant_weights,
+                    self.ori_module.bias,
+                    self.ori_module.stride,
+                    self.ori_module.padding,
+                    self.ori_module.dilation,
+                    self.ori_module.groups,
+                )
+                cout_axis = -3  # NCHW/CHW
             axis = None
             if self.cout > 1:
-                axis_list = list(range(0, len(fp_out.shape))) # get all axis, e.g conv2d: [0,1,2,3]/[0,1,2]
+                axis_list = list(
+                    range(0, len(fp_out.shape))
+                )  # get all axis, e.g conv2d: [0,1,2,3]/[0,1,2]
                 axis_list.pop(cout_axis)
                 axis = tuple(axis_list)
-            self.wts_quant_loss[ec - EC_CAND[0]] += self.compute_mse(fp_out, quant_out, axis)
+            self.wts_quant_loss[ec - EC_CAND[0]] += self.compute_mse(
+                fp_out, quant_out, axis
+            )
 
     def _calc_act_quant_loss(self, inputs, fp_out):
         """
@@ -169,14 +193,24 @@ class OfmrQuant(BaseQuantizeModule):
         inputs: torch.tensor quant op's input
         fp_out: torch.tensor quant op's original output
         """
-        ori_dtype = inputs.dtype
+        ori_dtype = inputs.dtype  # noqa: F841
         for ec in EC_CAND:
-            scale_inputes = torch.Tensor([2 ** ec]).to(torch.float32)
-            quant_inputs = quant_dequant_tensor(inputs, self.act_type, scale=scale_inputes)
-            if self.module_type == 'Linear':
-                quant_out = F.linear(quant_inputs, self.ori_module.weight, self.ori_module.bias)
+            scale_inputes = torch.Tensor([2**ec]).to(torch.float32)
+            quant_inputs = quant_dequant_tensor(
+                inputs, self.act_type, scale=scale_inputes
+            )
+            if self.module_type == "Linear":
+                quant_out = F.linear(
+                    quant_inputs, self.ori_module.weight, self.ori_module.bias
+                )
             else:
-                quant_out = F.conv2d(quant_inputs, self.ori_module.weight, self.ori_module.bias,
-                    self.ori_module.stride, self.ori_module.padding, self.ori_module.dilation,
-                    self.ori_module.groups)
+                quant_out = F.conv2d(
+                    quant_inputs,
+                    self.ori_module.weight,
+                    self.ori_module.bias,
+                    self.ori_module.stride,
+                    self.ori_module.padding,
+                    self.ori_module.dilation,
+                    self.ori_module.groups,
+                )
             self.act_quant_loss[ec - EC_CAND[0]] += self.compute_mse(fp_out, quant_out)

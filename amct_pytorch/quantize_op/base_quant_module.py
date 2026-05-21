@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -42,8 +42,9 @@ class BaseQuantizeModule(nn.Module):
         # scale_w was computed from weight * smooth_factor for SmoothQuant,
         # so the same tensor must be passed to quant_dequant_tensor
         if self.scale is not None:
-            return self.weight.data * self.scale.to(device=self.weight.device,
-                                                    dtype=self.weight.dtype)
+            return self.weight.data * self.scale.to(
+                device=self.weight.device, dtype=self.weight.dtype
+            )
         return self.weight.data
 
     def _quantizable_input(self, inputs):
@@ -56,19 +57,33 @@ class BaseQuantizeModule(nn.Module):
     def _fake_quant_forward(self, inputs):
         from amct_pytorch.utils.quant_util import quant_dequant_tensor
 
-        dequant_w = quant_dequant_tensor(
-            self._quantizable_weight(),
-            self.wts_type,
-            self.scale_w,
-            self.offset_w,
-            self.group_size)
+        # Progressive FP8+FP4 path stores scale_w1/scale_w2 instead of scale_w
+        if (
+            self.scale_w is None
+            and getattr(self, "scale_w1", None) is not None
+            and getattr(self, "scale_w2", None) is not None
+        ):
+            from amct_pytorch.quantize_op.utils import apply_progressive_quant_dequant
+
+            dequant_w = apply_progressive_quant_dequant(
+                self._quantizable_weight(), self.scale_w1, self.scale_w2
+            )
+        else:
+            dequant_w = quant_dequant_tensor(
+                self._quantizable_weight(),
+                self.wts_type,
+                self.scale_w,
+                self.offset_w,
+                self.group_size,
+            )
 
         if self.scale_d is not None:
             dequant_x = quant_dequant_tensor(
                 self._quantizable_input(inputs),
                 self.act_type,
                 self.scale_d,
-                self.offset_d)
+                self.offset_d,
+            )
         else:
             dequant_x = inputs
 

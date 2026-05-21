@@ -14,6 +14,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import unittest
+from unittest.mock import patch
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -307,3 +309,112 @@ class TestAWQFakeQuant(unittest.TestCase):
         self.assertTrue(
             torch.allclose(out, expected), f"max diff: {(out - expected).abs().max()}"
         )
+
+
+class TestApplyProgressiveQuantDequant(unittest.TestCase):
+    """apply_progressive_quant_dequant does two-level quant+dequant with correct layout."""
+
+    def test_rejects_wrong_scale_w1_shape(self):
+        from amct_pytorch.quantize_op.utils import apply_progressive_quant_dequant
+
+        weight = torch.randn(8, 64).to(torch.bfloat16)
+        bad_scale_w1 = torch.ones(4).to(torch.bfloat16)  # should be [8]
+        scale_w2 = torch.ones(int(8 * 64 / 32), 1).to(torch.bfloat16)
+        with self.assertRaises(RuntimeError):
+            apply_progressive_quant_dequant(weight, bad_scale_w1, scale_w2)
+
+    def test_rejects_wrong_scale_w2_shape(self):
+        from amct_pytorch.quantize_op.utils import apply_progressive_quant_dequant
+
+        weight = torch.randn(8, 64).to(torch.bfloat16)
+        scale_w1 = torch.ones(8).to(torch.bfloat16)
+        bad_scale_w2 = torch.ones(4, 1).to(
+            torch.bfloat16
+        )  # should be [8*64/32, 1] = [16,1]
+        with self.assertRaises(RuntimeError):
+            apply_progressive_quant_dequant(weight, scale_w1, bad_scale_w2)
+
+    def test_dispatches_to_quant_dequant_tensor_twice(self):
+        """Two-level fake quant: FP8 on weight^T then FP4 on the result."""
+        from amct_pytorch.quantize_op import utils as quant_utils
+        from amct_pytorch.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1
+
+        weight = torch.randn(8, 64).to(torch.bfloat16)
+        scale_w1 = torch.ones(8).to(torch.bfloat16)
+        scale_w2 = torch.ones(int(8 * 64 / 32), 1).to(torch.bfloat16)
+
+        # Side effect returns a tensor of the same shape as input — preserves
+        # downstream reshapes/transposes so we can assert on call args.
+        def fake_qd(tensor, dst_dtype, scale=None, offset=None, group_size=None):
+            return tensor.clone()
+
+        with patch.object(
+            quant_utils, "quant_dequant_tensor", side_effect=fake_qd
+        ) as m:
+            result = quant_utils.apply_progressive_quant_dequant(
+                weight, scale_w1, scale_w2
+            )
+
+        self.assertEqual(m.call_count, 2)
+        first_call, second_call = m.call_args_list
+        # First call: per-channel FP8 on weight^T
+        self.assertEqual(first_call.args[0].shape, weight.transpose(-1, -2).shape)
+        self.assertEqual(first_call.args[1], FLOAT8_E4M3FN)
+        self.assertIs(first_call.args[2], scale_w1)
+        # Second call: per-group FP4 on reshaped FP8-dequant
+        self.assertEqual(second_call.args[0].shape, torch.Size([8 * 64 // 32, 32]))
+        self.assertEqual(second_call.args[1], FLOAT4_E2M1)
+        self.assertIs(second_call.args[2], scale_w2)
+        # Output shape matches the input weight
+        self.assertEqual(result.shape, weight.shape)
+        self.assertEqual(result.dtype, weight.dtype)
+
+
+class TestFakeQuantForwardProgressiveDispatch(unittest.TestCase):
+    """_fake_quant_forward routes to apply_progressive_quant_dequant when scale_w1/scale_w2 are set."""
+
+    def _make_module_with_progressive_scales(self):
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+
+        linear = nn.Linear(8, 4, bias=True).to(torch.bfloat16)
+        cfg = {
+            "batch_num": 1,
+            "weights_cfg": {
+                "quant_type": "int8",  # placeholder; we override scale fields below
+                "symmetric": True,
+                "strategy": "channel",
+                "group_size": None,
+            },
+            "inputs_cfg": {
+                "quant_type": "int8",
+                "symmetric": True,
+                "strategy": "tensor",
+                "enable_quant": False,
+            },
+        }
+        mod = MinMaxQuant(linear, "l", cfg)
+        # Force the progressive branch: clear scale_w and inject scale_w1/scale_w2.
+        mod.scale_w = None
+        mod.scale_w1 = torch.ones(4).to(torch.bfloat16)
+        mod.scale_w2 = torch.ones(1, 1).to(torch.bfloat16)
+        return mod
+
+    def test_progressive_branch_calls_progressive_helper(self):
+        """When scale_w is None and scale_w1/scale_w2 are set, dispatch to progressive helper."""
+        from amct_pytorch.quantize_op import utils as quant_utils
+
+        mod = self._make_module_with_progressive_scales()
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        sentinel_dq_w = torch.randn(4, 8).to(torch.bfloat16)
+
+        with patch.object(
+            quant_utils, "apply_progressive_quant_dequant", return_value=sentinel_dq_w
+        ) as m:
+            out = mod._fake_quant_forward(x)
+
+        self.assertEqual(m.call_count, 1)
+        self.assertIs(m.call_args.args[1], mod.scale_w1)
+        self.assertIs(m.call_args.args[2], mod.scale_w2)
+        # Output should be F.linear(x, sentinel_dq_w, bias)
+        expected = F.linear(x, sentinel_dq_w, mod.bias)
+        self.assertTrue(torch.allclose(out, expected))
