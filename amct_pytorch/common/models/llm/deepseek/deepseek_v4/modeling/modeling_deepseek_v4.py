@@ -740,7 +740,6 @@ class ParallelHead(nn.Module):
 
     def forward(self, x: torch.Tensor, hc_fn: torch.Tensor,
                 hc_scale: torch.Tensor, hc_base: torch.Tensor, norm: RMSNorm):
-        # x: [b,s,hc,d]
         x = self.hc_head(x, hc_fn, hc_scale, hc_base)
         logits = self.get_logits(norm(x))
         return logits
