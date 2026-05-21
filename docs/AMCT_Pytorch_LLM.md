@@ -344,25 +344,7 @@ attn-cache:
 layer_{layer_idx}_{unit_name}.pt
 ```
 
-## 4. 量化算法说明
-
-| 算法名 | target | 作用 |
-|------|------|------|
-| `lwc` | `weight` | Learnable Weight Clipping，可学习权重裁剪范围。 |
-| `lac` | `activation` | Learnable Activation Clipping，可学习激活裁剪范围。 |
-| `omniquant` | `structure` | OmniQuant 风格结构变换，学习通道缩放。 |
-| `autoround` | `weight` | 可学习 rounding offset，并可调节 min/max scale。 |
-
-- `omniquant、lwc、lac`：在可学习裁剪外加入通道缩放类结构变换，增强低比特 W/A 量化精度。详细说明请参见论文： [OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 
-
-- `autoround`：学习权重 rounding offset，并可联合调节 min/max scale，让权重在低比特量化时选择更优的舍入方向。详细说明请参见论文：[Optimize Weight Rounding via Signed Gradient Descent for the Quantization of LLMs](https://arxiv.org/abs/2309.05516)
-
-说明：
-
-- `structure` target 当前同一位置只允许启用一个结构算法，因此 `omniquant` 与 `learnable_had` 不应同时用于同一结构位置。
-- `autoround` 带自定义 `quantize()` hook，目前 PTQ fake quant 可用，但部署导出中 `export_deploy()` 暂不支持该类 hook。
-
-## 5. 常见注意事项
+## 4. 常见注意事项
 
 - `extract_ptq_data` 和 `ptq` 的 `quant_target` 必须保持一致。
 - `ptq`、`extract_ptq_data` 当前一次只处理一个 `quant_target`，需要多目标量化时建议分目标依次执行。
@@ -372,7 +354,7 @@ layer_{layer_idx}_{unit_name}.pt
 - 使用 `hifx` 前需要确认 HiFloat 相关扩展已正确编译和导入。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
-## 6. 一站式样例
+## 5. 一站式样例
 
 本章节提供一站式样例，帮助开发者更好熟悉本特性的流程，以`qwen3.6moe`模型为例：
 
