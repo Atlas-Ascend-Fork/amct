@@ -53,6 +53,129 @@ class DeepseekV4(BaseModel):
         self.num_layers = self.config.n_layers
         self._sharded_block = False
 
+    @staticmethod
+    def _resolve_param_device(local_name, device_map):
+        best_path = None
+        for path in device_map:
+            if path and (local_name == path or local_name.startswith(path + ".")):
+                if best_path is None or len(path) > len(best_path):
+                    best_path = path
+        if best_path is not None:
+            return device_map[best_path]
+        return device_map.get("", "cpu")
+
+    @staticmethod
+    def _retag_descendant_hooks(root, device_map):
+        sorted_entries = sorted(
+            ((p, d) for p, d in device_map.items() if p),
+            key=lambda kv: kv[0].count("."),
+        )
+        for path, dev in sorted_entries:
+            target = root
+            for part in path.split("."):
+                target = getattr(target, part)
+            for sub in target.modules():
+                hook = getattr(sub, "_hf_hook", None)
+                if hook is None:
+                    continue
+                hook.execution_device = dev
+                if sub is target:
+                    hook.io_same_device = True
+
+    def apply_quant_attn(self, decoder_layer):
+        decoder_layer.attn = QuantV4Attention(self.args, decoder_layer.attn)
+        return decoder_layer
+
+    def apply_quant_moe_mlp(self, decoder_layer):
+        return apply_quant_to_moe_mlp(
+            self.args,
+            decoder_layer.ffn,
+            cls=QuantV4Expert,
+        )
+
+    def block(self, layer_idx):
+        """Dispatch: sharded multi-NPU load for eval, CPU staging (via
+        BaseModel) for PTQ. PTQ needs CPU staging so it can move one expert
+        at a time onto the NPU during per-MLP learning; the sharded path
+        pins every expert to a fixed NPU via AlignDevicesHook, which fights
+        PTQ's ``.to(device)`` / ``.cpu()`` cycle.
+        """
+        if self._sharded_block:
+            return self._block_sharded(layer_idx)
+        return super().block(layer_idx)
+
+    def build_quant_block(self, layer_idx):
+        decoder_layer = self.block(layer_idx)
+        if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
+            self.apply_quant_attn(decoder_layer)
+        if "moe" in self.quant_target:
+            self.apply_quant_moe_mlp(decoder_layer)
+        if "mlp" in self.quant_target:
+            raise ValueError(
+                "Deepseek V4 is a moe model and does not support quant_target='mlp'."
+            )
+        return decoder_layer
+
+    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+        return super().do_block_forward(
+            layer_idx,
+            samples,
+            hook_name=hook_name,
+            use_quant_block=use_quant_block,
+            enable_quant=enable_quant,
+        )
+
+    def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
+        outs = []
+        self.load_embed_state_dict()
+
+        layers = self.model.layers
+        layers[0] = self.block(0).bfloat16()
+        layers[0] = Catcher(layers[0], outs)
+        embed = self.model.embed
+        hc_mult = self.model.hc_mult
+
+        with torch.no_grad():
+            for inputs in tqdm(samples, total=len(samples), desc="Embedding Processing..."):
+                try:
+                    h = embed(inputs)
+                    h = h.unsqueeze(2).repeat(1, 1, hc_mult, 1)
+                    layers[0](h, start_pos=0, input_ids=inputs)
+                except ValueError:
+                    pass
+
+        layers[0] = layers[0].module
+        self.input_ids = list(samples)
+        return outs
+
+    def do_head_forward(self, inps):
+        device = self.args.device
+        head = self.model.head.to(device)
+        norm = self.model.norm.to(device)
+        for name in ("hc_head_fn", "hc_head_scale", "hc_head_base"):
+            param = getattr(self.model, name)
+            if param.is_meta:
+                raise RuntimeError(
+                    f"v4 top-level param '{name}' is still on meta; "
+                    "load_embed_state_dict must run before do_head_forward."
+                )
+            setattr(self.model, name, nn.Parameter(param.to(device)))
+
+        preds = []
+        with torch.no_grad():
+            for inp in tqdm(inps, total=len(inps), desc="Head Processing..."):
+                inp = inp.to(device)  # [b, s, hc_mult, d]
+                x = head.hc_head(
+                    inp,
+                    self.model.hc_head_fn,
+                    self.model.hc_head_scale,
+                    self.model.hc_head_base,
+                )  # [b, s, d]
+                x = norm(x)
+                logits = F.linear(x.float(), head.weight)  # [b, s, vocab]
+                preds.append(logits[:, :-1, :].contiguous().to("cpu"))
+        return preds
+
     def empty_weights_model(self):
         with init_empty_weights(include_buffers=True):
             model = AutoModelForCausalLM.from_config(
@@ -65,9 +188,6 @@ class DeepseekV4(BaseModel):
         precompute_freqs_cis.cache_clear()
         return model
 
-    def get_layer_weight_prefix(self, layer_idx: int) -> str:
-        return f"layers.{layer_idx}."
-
     def get_embed_load_specs(self):
         tie = bool(getattr(self.config, "tie_word_embeddings", False))
         head_prefix = "embed." if tie else "head."
@@ -77,36 +197,39 @@ class DeepseekV4(BaseModel):
             (self.model.head, head_prefix),
         ]
 
+    def get_layer_weight_prefix(self, layer_idx: int) -> str:
+        return f"layers.{layer_idx}."
+
+    def get_scale_name(self, weight_name):
+        scale_prefix = ".scale"
+        scale_inv_name = weight_name.replace('.weight', '.scale')
+        return scale_prefix, scale_inv_name
+
+    def iter_deploy_bindings(self, layer_idx, block):
+        yield from super().iter_deploy_bindings(layer_idx, block)
+
+    def iter_ptq_units(self, layer_idx, block):
+        if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
+            attn = getattr(block, "attn", None)
+            yield make_ptq_unit("attn", "attn", layer_idx, attn)
+            return
+
+        ffn = getattr(block, "ffn", None)
+        if ffn is None:
+            raise ValueError(f"Unsupported quant target '{self.quant_target}'.")
+        if "moe" in self.quant_target:
+            experts = getattr(ffn, "experts", [])
+            yield from iter_indexed_units(
+                kind="moe",
+                name_prefix="expert",
+                layer_idx=layer_idx,
+                items=experts,
+                metadata_fn=lambda expert_idx, _: {"expert_idx": expert_idx},
+            )
+
     def load_embed_state_dict(self):
         super().load_embed_state_dict()
         self._load_top_level_hc_head_params()
-
-    def _load_top_level_hc_head_params(self):
-        weight_map = getattr(self, "_weight_map", None) or get_weight_mappings(self.model_path)
-        self._weight_map = weight_map
-        for name in ("hc_head_fn", "hc_head_scale", "hc_head_base"):
-            key = next((k for k in (name, f"model.{name}") if k in weight_map), None)
-            if key is None:
-                logger.warning(
-                    "Top-level v4 param '{}' not found in checkpoint weight_map; staying meta.",
-                    name,
-                )
-                continue
-            file_path = os.path.join(self.model_path, weight_map[key])
-            with safe_open(file_path, framework="pt", device="cpu") as f:
-                tensor = f.get_tensor(key)
-            setattr(self.model, name, nn.Parameter(tensor.to(torch.float32)))
-
-    def block(self, layer_idx):
-        """Dispatch: sharded multi-NPU load for eval, CPU staging (via
-        BaseModel) for PTQ. PTQ needs CPU staging so it can move one expert
-        at a time onto the NPU during per-MLP learning; the sharded path
-        pins every expert to a fixed NPU via AlignDevicesHook, which fights
-        PTQ's ``.to(device)`` / ``.cpu()`` cycle.
-        """
-        if self._sharded_block:
-            return self._block_sharded(layer_idx)
-        return super().block(layer_idx)
 
     def _block_sharded(self, layer_idx):
         """Meta build + per-tensor direct send to target NPU. Avoids the
@@ -158,24 +281,6 @@ class DeepseekV4(BaseModel):
         block.eval()
         return block
 
-    def _weight_map_cached(self):
-        wm = getattr(self, "_weight_map", None)
-        if wm is None:
-            wm = get_weight_mappings(self.model_path)
-            self._weight_map = wm
-        return wm
-
-    @staticmethod
-    def _resolve_param_device(local_name, device_map):
-        best_path = None
-        for path in device_map:
-            if path and (local_name == path or local_name.startswith(path + ".")):
-                if best_path is None or len(path) > len(best_path):
-                    best_path = path
-        if best_path is not None:
-            return device_map[best_path]
-        return device_map.get("", "cpu")
-
     def _build_block_device_map(self, block):
         """npu:0 = stem; npu:1 = attn proper; npu:2 = attn.indexer (if present);
         experts round-robin on remaining cards. Returns None for single-NPU."""
@@ -214,130 +319,25 @@ class DeepseekV4(BaseModel):
         self._retag_descendant_hooks(module, device_map)
         return module
 
-    @staticmethod
-    def _retag_descendant_hooks(root, device_map):
-        sorted_entries = sorted(
-            ((p, d) for p, d in device_map.items() if p),
-            key=lambda kv: kv[0].count("."),
-        )
-        for path, dev in sorted_entries:
-            target = root
-            for part in path.split("."):
-                target = getattr(target, part)
-            for sub in target.modules():
-                hook = getattr(sub, "_hf_hook", None)
-                if hook is None:
-                    continue
-                hook.execution_device = dev
-                if sub is target:
-                    hook.io_same_device = True
-
-    def build_quant_block(self, layer_idx):
-        decoder_layer = self.block(layer_idx)
-        if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
-            self.apply_quant_attn(decoder_layer)
-        if "moe" in self.quant_target:
-            self.apply_quant_moe_mlp(decoder_layer)
-        if "mlp" in self.quant_target:
-            raise ValueError(
-                "Deepseek V4 is a moe model and does not support quant_target='mlp'."
-            )
-        return decoder_layer
-
-    def apply_quant_attn(self, decoder_layer):
-        decoder_layer.attn = QuantV4Attention(self.args, decoder_layer.attn)
-        return decoder_layer
-
-    def apply_quant_moe_mlp(self, decoder_layer):
-        return apply_quant_to_moe_mlp(
-            self.args,
-            decoder_layer.ffn,
-            cls=QuantV4Expert,
-        )
-
-    def iter_ptq_units(self, layer_idx, block):
-        if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
-            attn = getattr(block, "attn", None)
-            yield make_ptq_unit("attn", "attn", layer_idx, attn)
-            return
-
-        ffn = getattr(block, "ffn", None)
-        if ffn is None:
-            raise ValueError(f"Unsupported quant target '{self.quant_target}'.")
-        if "moe" in self.quant_target:
-            experts = getattr(ffn, "experts", [])
-            yield from iter_indexed_units(
-                kind="moe",
-                name_prefix="expert",
-                layer_idx=layer_idx,
-                items=experts,
-                metadata_fn=lambda expert_idx, _: {"expert_idx": expert_idx},
-            )
-
-    def iter_deploy_bindings(self, layer_idx, block):
-        yield from super().iter_deploy_bindings(layer_idx, block)
-
-    def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
-        outs = []
-        self.load_embed_state_dict()
-
-        layers = self.model.layers
-        layers[0] = self.block(0).bfloat16()
-        layers[0] = Catcher(layers[0], outs)
-        embed = self.model.embed
-        hc_mult = self.model.hc_mult
-
-        with torch.no_grad():
-            for inputs in tqdm(samples, total=len(samples), desc="Embedding Processing..."):
-                try:
-                    h = embed(inputs)
-                    h = h.unsqueeze(2).repeat(1, 1, hc_mult, 1)
-                    layers[0](h, start_pos=0, input_ids=inputs)
-                except ValueError:
-                    pass
-
-        layers[0] = layers[0].module
-        self.input_ids = list(samples)
-        return outs
-
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
-        return super().do_block_forward(
-            layer_idx,
-            samples,
-            hook_name=hook_name,
-            use_quant_block=use_quant_block,
-            enable_quant=enable_quant,
-        )
-
-    def do_head_forward(self, inps):
-        device = self.args.device
-        head = self.model.head.to(device)
-        norm = self.model.norm.to(device)
+    def _load_top_level_hc_head_params(self):
+        weight_map = getattr(self, "_weight_map", None) or get_weight_mappings(self.model_path)
+        self._weight_map = weight_map
         for name in ("hc_head_fn", "hc_head_scale", "hc_head_base"):
-            param = getattr(self.model, name)
-            if param.is_meta:
-                raise RuntimeError(
-                    f"v4 top-level param '{name}' is still on meta; "
-                    "load_embed_state_dict must run before do_head_forward."
+            key = next((k for k in (name, f"model.{name}") if k in weight_map), None)
+            if key is None:
+                logger.warning(
+                    "Top-level v4 param '{}' not found in checkpoint weight_map; staying meta.",
+                    name,
                 )
-            setattr(self.model, name, nn.Parameter(param.to(device)))
+                continue
+            file_path = os.path.join(self.model_path, weight_map[key])
+            with safe_open(file_path, framework="pt", device="cpu") as f:
+                tensor = f.get_tensor(key)
+            setattr(self.model, name, nn.Parameter(tensor.to(torch.float32)))
 
-        preds = []
-        with torch.no_grad():
-            for inp in tqdm(inps, total=len(inps), desc="Head Processing..."):
-                inp = inp.to(device)  # [b, s, hc_mult, d]
-                x = head.hc_head(
-                    inp,
-                    self.model.hc_head_fn,
-                    self.model.hc_head_scale,
-                    self.model.hc_head_base,
-                )  # [b, s, d]
-                x = norm(x)
-                logits = F.linear(x.float(), head.weight)  # [b, s, vocab]
-                preds.append(logits[:, :-1, :].contiguous().to("cpu"))
-        return preds
-
-    def get_scale_name(self, weight_name):
-        scale_prefix = ".scale"
-        scale_inv_name = weight_name.replace('.weight', '.scale')
-        return scale_prefix, scale_inv_name
+    def _weight_map_cached(self):
+        wm = getattr(self, "_weight_map", None)
+        if wm is None:
+            wm = get_weight_mappings(self.model_path)
+            self._weight_map = wm
+        return wm

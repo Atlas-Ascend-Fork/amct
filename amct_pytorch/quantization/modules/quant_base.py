@@ -112,15 +112,11 @@ class ActivationQuantizer(torch.nn.Module):
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits, is_act=True)
         self.enable = False
 
-    def _init_algo(self):
-        self.algorithms = build_algorithms_by_target(self.args, "activation")
+    def deploy(self):
+        pass
 
-    def trainable_params(self):
-        params = []
-        for algo in self.algorithms.values():
-            if hasattr(algo, "trainable_params"):
-                params.extend(algo.trainable_params())
-        return params
+    def fake_quant(self, x):
+        return self.quant_obj(x)
 
     def forward(self, x):
         if not self.enable:
@@ -129,14 +125,18 @@ class ActivationQuantizer(torch.nn.Module):
             x = algo(x)
         return self.fake_quant(x)
 
-    def deploy(self):
-        pass
-
     def load_deploy(self, scale, zero):
         pass
 
-    def fake_quant(self, x):
-        return self.quant_obj(x)
+    def trainable_params(self):
+        params = []
+        for algo in self.algorithms.values():
+            if hasattr(algo, "trainable_params"):
+                params.extend(algo.trainable_params())
+        return params
+
+    def _init_algo(self):
+        self.algorithms = build_algorithms_by_target(self.args, "activation")
 
 
 class WeightQuantizer(torch.nn.Module):
@@ -150,25 +150,6 @@ class WeightQuantizer(torch.nn.Module):
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits)
         self.enable = False
 
-    def _init_algo(self):
-        self.algorithms = build_algorithms_by_target(self.args, "weight", self.bits)
-
-    def trainable_params(self):
-        params = []
-        for algo in self.algorithms.values():
-            if hasattr(algo, "trainable_params"):
-                params.extend(algo.trainable_params())
-        return params
-
-    def observe_input(self, x, weight=None):
-        for algo in self.algorithms.values():
-            observe_input = getattr(algo, "observe_input", None)
-            if callable(observe_input):
-                observe_input(x, weight)
-
-    def fake_quant(self, x):
-        return self.quant_obj(x)
-
     def algo_forward(self, x):
         quantize_algo = None
         for algo in self.algorithms.values():
@@ -181,14 +162,6 @@ class WeightQuantizer(torch.nn.Module):
             x = algo(x)
         return x, quantize_algo
 
-    def forward(self, x):
-        if not self.enable:
-            return x
-        x, quantize_algo = self.algo_forward(x)
-        if quantize_algo is not None:
-            return quantize_algo.quantize(x, self.quant_obj)
-        return self.fake_quant(x)
-
     def export_deploy(self, x):
         x, quantize_algo = self.algo_forward(x)
         if quantize_algo is not None:
@@ -199,3 +172,30 @@ class WeightQuantizer(torch.nn.Module):
                 f"Quant dtype '{self.args.quant_dtype}' does not implement export_deploy()."
             )
         return export_fn(x)
+
+    def fake_quant(self, x):
+        return self.quant_obj(x)
+
+    def forward(self, x):
+        if not self.enable:
+            return x
+        x, quantize_algo = self.algo_forward(x)
+        if quantize_algo is not None:
+            return quantize_algo.quantize(x, self.quant_obj)
+        return self.fake_quant(x)
+
+    def observe_input(self, x, weight=None):
+        for algo in self.algorithms.values():
+            observe_input = getattr(algo, "observe_input", None)
+            if callable(observe_input):
+                observe_input(x, weight)
+
+    def trainable_params(self):
+        params = []
+        for algo in self.algorithms.values():
+            if hasattr(algo, "trainable_params"):
+                params.extend(algo.trainable_params())
+        return params
+
+    def _init_algo(self):
+        self.algorithms = build_algorithms_by_target(self.args, "weight", self.bits)

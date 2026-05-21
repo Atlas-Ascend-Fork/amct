@@ -34,16 +34,6 @@ class QuantizedMatmul(nn.Module):
         self._init_structure_transforms(left_dim, right_dim)
         self._eval_mode = False
 
-    def _init_structure_transforms(self, left_dim, right_dim):
-        if not self.enable_attn_cache:
-            return
-        if left_dim is not None:
-            ctx = AlgoBuildContext(matrix_size=128, dim_size=left_dim)
-            self.left_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        if right_dim is not None:
-            ctx = AlgoBuildContext(matrix_size=128, dim_size=right_dim)
-            self.right_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-
     def forward(self, left, right):
         if not self.enable_attn_cache:
             right = right.transpose(-2, -1)
@@ -57,3 +47,13 @@ class QuantizedMatmul(nn.Module):
         right = right.transpose(-2, -1)
         output = torch.matmul(left, right)
         return output
+
+    def _init_structure_transforms(self, left_dim, right_dim):
+        if not self.enable_attn_cache:
+            return
+        if left_dim is not None:
+            ctx = AlgoBuildContext(matrix_size=128, dim_size=left_dim)
+            self.left_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        if right_dim is not None:
+            ctx = AlgoBuildContext(matrix_size=128, dim_size=right_dim)
+            self.right_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)

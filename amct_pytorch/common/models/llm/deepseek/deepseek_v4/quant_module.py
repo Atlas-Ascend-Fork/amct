@@ -279,17 +279,6 @@ class QuantV4Attention(nn.Module):
             self.compressor = None
             self.indexer = None
 
-    def _wo_a_apply(self, o):
-        """Replicate the upstream einsum over wo_a's weight, with optional
-        weight quant. ``o`` is shaped ``[b, s, g, d_in]`` where d_in = head_dim
-        per group."""
-        weight = self.wo_a.weight  # [g*r, d_in]
-        if self.wo_a_weight_quantizer is not None:
-            self.wo_a_weight_quantizer.observe_input(o.flatten(0, 2), weight)
-            weight = self.wo_a_weight_quantizer(weight)
-        weight = weight.view(self.n_local_groups, self.o_lora_rank, -1)  # [g, r, d_in]
-        return torch.einsum("bsgd,grd->bsgr", o, weight)
-
     def sparse_attn(self, query_states, kv_states, attn_sink, topk_idxs, softmax_scale):
         """Bit-for-bit copy of upstream Attention.sparse_attn — pure compute,
         no state, safe to inline.
@@ -369,3 +358,14 @@ class QuantV4Attention(nn.Module):
         o_flat = o.flatten(2)
         o_q = self.wo_b_afq(o_flat)
         return self.wo_b(o_q)
+
+    def _wo_a_apply(self, o):
+        """Replicate the upstream einsum over wo_a's weight, with optional
+        weight quant. ``o`` is shaped ``[b, s, g, d_in]`` where d_in = head_dim
+        per group."""
+        weight = self.wo_a.weight  # [g*r, d_in]
+        if self.wo_a_weight_quantizer is not None:
+            self.wo_a_weight_quantizer.observe_input(o.flatten(0, 2), weight)
+            weight = self.wo_a_weight_quantizer(weight)
+        weight = weight.view(self.n_local_groups, self.o_lora_rank, -1)  # [g, r, d_in]
+        return torch.einsum("bsgd,grd->bsgr", o, weight)

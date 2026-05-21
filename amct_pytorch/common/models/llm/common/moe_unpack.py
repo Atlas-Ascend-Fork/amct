@@ -24,17 +24,17 @@ class ExpertLinearView(nn.Module):
         else:
             object.__setattr__(self, "_experts_module", experts_module)
 
-    def _slice_weight(self, experts_module):
-        weight_tensor = getattr(experts_module, self.weight_name)[self.expert_idx]
-        if self.start is None and self.end is None:
-            return weight_tensor
-        return weight_tensor[self.start:self.end]
-
     @property
     def weight(self):
         if self._weight is not None:
             return self._weight
         return self._slice_weight(self._experts_module)
+
+    def _slice_weight(self, experts_module):
+        weight_tensor = getattr(experts_module, self.weight_name)[self.expert_idx]
+        if self.start is None and self.end is None:
+            return weight_tensor
+        return weight_tensor[self.start:self.end]
 
 
 class GatedExpertView(nn.Module):

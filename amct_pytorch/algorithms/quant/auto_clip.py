@@ -20,12 +20,6 @@ class LWC(torch.nn.Module):
         self.clip_factor_max = torch.nn.Parameter(torch.ones((self.clip_dim, 1)) * self.init_value, requires_grad=True)
         self.clip_factor_min = torch.nn.Parameter(torch.ones((self.clip_dim, 1)) * self.init_value, requires_grad=True)
 
-    def _update_clip_dim(self):
-        if self.quant_dtype == "mxfp":
-            self.clip_dim = self.w_size[0] * self.w_size[1] // 32
-        else:
-            self.clip_dim = self.w_size[0]
-
     def trainable_params(self):
         return [self.clip_factor_min, self.clip_factor_max]
 
@@ -55,6 +49,12 @@ class LWC(torch.nn.Module):
 
     def forward(self, x):
         return self.apply_clip(x)
+
+    def _update_clip_dim(self):
+        if self.quant_dtype == "mxfp":
+            self.clip_dim = self.w_size[0] * self.w_size[1] // 32
+        else:
+            self.clip_dim = self.w_size[0]
 
 
 @ALGO_REGISTRY.register(

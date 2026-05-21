@@ -189,12 +189,6 @@ class QuantLongcatMLA(LongcatFlashMLA):
             self.inp_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
 
-    def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -273,3 +267,9 @@ class QuantLongcatMLA(LongcatFlashMLA):
         attn_output = self.o_proj_afq(attn_output)
         attn_output = self.o_proj(attn_output, structure_transform=self.out_transform)
         return attn_output, None
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
+        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
