@@ -94,6 +94,7 @@ class TestMinMaxFakeQuant(unittest.TestCase):
     def test_after_calibration_weight_act_fake_quant(self):
         from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
         from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        from amct_pytorch.utils.vars import INT32_MIN, INT32_MAX
         linear = nn.Linear(8, 4).to(torch.bfloat16)
         mod = MinMaxQuant(linear, 'l', self._cfg(weight_only=False))
         x = torch.randn(2, 8).to(torch.bfloat16)
@@ -102,7 +103,11 @@ class TestMinMaxFakeQuant(unittest.TestCase):
         out = mod(x)
         dq_w = quant_dequant_tensor(mod.weight.data, 'int8', mod.scale_w, mod.offset_w)
         dq_x = quant_dequant_tensor(x, 'int8', mod.scale_d, mod.offset_d)
-        expected = F.linear(dq_x, dq_w, mod.bias)
+        deq_scale = (mod.scale_d.to(mod.bias.dtype)
+                     * mod.scale_w.to(mod.bias.dtype)).reshape(-1)
+        bias_q = (mod.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
+        expected_bias = bias_q * deq_scale
+        expected = F.linear(dq_x, dq_w, expected_bias)
         self.assertTrue(torch.allclose(out, expected),
                         f'max diff: {(out - expected).abs().max()}')
 
@@ -122,6 +127,7 @@ class TestSmoothQuantFakeQuant(unittest.TestCase):
     def test_after_calibration_uses_smooth_factor(self):
         from amct_pytorch.quantize_op.smooth_quant_module import SmoothQuant
         from amct_pytorch.utils.quant_util import quant_dequant_tensor
+        from amct_pytorch.utils.vars import INT32_MIN, INT32_MAX
         linear = nn.Linear(8, 4).to(torch.bfloat16)
         mod = SmoothQuant(linear, 'l', self._cfg())
         x = torch.randn(2, 8).to(torch.bfloat16)
@@ -135,7 +141,11 @@ class TestSmoothQuantFakeQuant(unittest.TestCase):
         dq_x = quant_dequant_tensor(
             x / smooth.to(dtype=x.dtype),
             'int8', mod.scale_d, mod.offset_d)
-        expected = F.linear(dq_x, dq_w, mod.bias)
+        deq_scale = (mod.scale_d.to(mod.bias.dtype)
+                     * mod.scale_w.to(mod.bias.dtype)).reshape(-1)
+        bias_q = (mod.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
+        expected_bias = bias_q * deq_scale
+        expected = F.linear(dq_x, dq_w, expected_bias)
         self.assertTrue(torch.allclose(out, expected),
                         f'max diff: {(out - expected).abs().max()}')
 
@@ -394,6 +404,58 @@ class TestFakeQuantBias(unittest.TestCase):
         expected = expected_int * deq_scale
         self.assertTrue(torch.allclose(result, expected),
                         f'max diff: {(result - expected).abs().max()}')
+
+
+class TestFakeQuantCache(unittest.TestCase):
+    """_build_fake_quant_cache runs once; subsequent forward calls reuse the cache."""
+
+    def _make_int8_weight_only_module(self):
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        linear = nn.Linear(8, 4, bias=True).to(torch.bfloat16)
+        cfg = {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': 'int8', 'symmetric': True,
+                           'strategy': 'tensor', 'enable_quant': False},
+        }
+        return MinMaxQuant(linear, 'l', cfg)
+
+    def test_weight_dequant_computed_once_across_calls(self):
+        from amct_pytorch.utils import quant_util
+        mod = self._make_int8_weight_only_module()
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        with patch.object(quant_util, 'quant_dequant_tensor',
+                          wraps=quant_util.quant_dequant_tensor) as m:
+            mod._fake_quant_forward(x)
+            mod._fake_quant_forward(x)
+            mod._fake_quant_forward(x)
+        # weight dequant: 1 call total (cached); activation dequant: 0 calls
+        # because this module is weight-only (scale_d is None).
+        self.assertEqual(m.call_count, 1)
+
+    def test_progressive_dequant_computed_once_across_calls(self):
+        from amct_pytorch.quantize_op.minmax_module import MinMaxQuant
+        from amct_pytorch.quantize_op import utils as quant_utils
+        linear = nn.Linear(8, 4, bias=True).to(torch.bfloat16)
+        cfg = {
+            'batch_num': 1,
+            'weights_cfg': {'quant_type': 'int8', 'symmetric': True,
+                            'strategy': 'channel', 'group_size': None},
+            'inputs_cfg': {'quant_type': 'int8', 'symmetric': True,
+                           'strategy': 'tensor', 'enable_quant': False},
+        }
+        mod = MinMaxQuant(linear, 'l', cfg)
+        mod.scale_w = None
+        mod.scale_w1 = torch.ones(4).to(torch.bfloat16)
+        mod.scale_w2 = torch.ones(1, 1).to(torch.bfloat16)
+        sentinel_dq_w = torch.randn(4, 8).to(torch.bfloat16)
+        x = torch.randn(2, 8).to(torch.bfloat16)
+        with patch.object(quant_utils, 'apply_progressive_quant_dequant',
+                          return_value=sentinel_dq_w) as m:
+            mod._fake_quant_forward(x)
+            mod._fake_quant_forward(x)
+        self.assertEqual(m.call_count, 1)
 
 
 if __name__ == '__main__':

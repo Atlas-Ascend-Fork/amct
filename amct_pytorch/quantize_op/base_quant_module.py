@@ -67,38 +67,61 @@ class BaseQuantizeModule(nn.Module):
         bias_q = (self.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
         return bias_q * deq_scale
 
-    @torch.no_grad()
-    def _fake_quant_forward(self, inputs):
-        import torch.nn.functional as F
+    def _build_fake_quant_cache(self):
+        """Compute weight dequant tensor, deq_scale and quantized bias once.
+        These derive from calibration outputs (scale_w/scale_w1/scale_w2/scale_d/
+        offset/bias) and do not change across batches once calibration finishes,
+        so they are cached on the first _fake_quant_forward call.
+        """
         from amct_pytorch.utils.quant_util import quant_dequant_tensor
 
         if self.scale_w is None and getattr(self, 'scale_w1', None) is not None \
                 and getattr(self, 'scale_w2', None) is not None:
             from amct_pytorch.quantize_op.utils import apply_progressive_quant_dequant
-            dequant_w = apply_progressive_quant_dequant(
+            self._cached_dequant_w = apply_progressive_quant_dequant(
                 self._quantizable_weight(), self.scale_w1, self.scale_w2)
+            self._cached_deq_scale = None
         else:
-            dequant_w = quant_dequant_tensor(
-                self._quantizable_weight(),
-                self.wts_type,
-                self.scale_w,
-                self.offset_w,
-                self.group_size)
+            self._cached_dequant_w = quant_dequant_tensor(
+                self._quantizable_weight(), self.wts_type,
+                self.scale_w, self.offset_w, self.group_size)
+            if self.scale_d is not None and self.scale_w is not None:
+                ref_dtype = self.bias.dtype if self.bias is not None \
+                    else self._cached_dequant_w.dtype
+                self._cached_deq_scale = (self.scale_d.to(ref_dtype)
+                                          * self.scale_w.to(ref_dtype)).reshape(-1)
+            else:
+                self._cached_deq_scale = None
+
+        self._cached_bias_for_linear = self._fake_quant_bias(self._cached_deq_scale)
+
+    @torch.no_grad()
+    def _fake_quant_forward(self, inputs):
+        """Fake-quantize inputs and run linear/conv with the cached dequantized
+        weight and bias. Activation dequant is recomputed per batch; everything
+        else comes from the cache built on the first call.
+        """
+        import torch.nn.functional as F
+        from amct_pytorch.utils.quant_util import quant_dequant_tensor
+
+        if not getattr(self, '_fake_quant_cache_ready', False):
+            self._build_fake_quant_cache()
+            self._fake_quant_cache_ready = True
 
         if self.scale_d is not None:
             dequant_x = quant_dequant_tensor(
-                self._quantizable_input(inputs),
-                self.act_type,
-                self.scale_d,
-                self.offset_d)
+                self._quantizable_input(inputs), self.act_type,
+                self.scale_d, self.offset_d)
         else:
             dequant_x = inputs
 
         if isinstance(getattr(self, 'ori_module', None), nn.Conv2d):
             conv = self.ori_module
-            return F.conv2d(dequant_x, dequant_w, self.bias,
+            return F.conv2d(dequant_x, self._cached_dequant_w,
+                            self._cached_bias_for_linear,
                             conv.stride, conv.padding, conv.dilation, conv.groups)
-        return F.linear(dequant_x, dequant_w, self.bias)
+        return F.linear(dequant_x, self._cached_dequant_w,
+                        self._cached_bias_for_linear)
 
     def forward(self, inputs):
         pass
