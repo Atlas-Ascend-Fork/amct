@@ -8,4 +8,3 @@ numpy>=1.26.4,<2.7
 pyyaml
 transformers==5.5.4
 scipy
-datasets
