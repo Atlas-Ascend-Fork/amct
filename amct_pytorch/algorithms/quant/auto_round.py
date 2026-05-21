@@ -96,6 +96,20 @@ class AutoRound(nn.Module):
         self.min_scale.data.copy_(params["min_scale"].to(device=self.min_scale.device, dtype=self.min_scale.dtype))
         self.max_scale.data.copy_(params["max_scale"].to(device=self.max_scale.device, dtype=self.max_scale.dtype))
 
+    def quantize(self, weight: torch.Tensor, quant_obj):
+        grouped_weight, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(weight, self.group_size)
+        clip_min, clip_max = self._compute_clip_range(grouped_weight)
+
+        clipped_weight = torch.clamp(grouped_weight, min=clip_min, max=clip_max)
+        v = self.value.to(grouped_weight.device, grouped_weight.dtype)
+        clipped_weight = _revert_tensor_by_pad(clipped_weight, orig_shape, pad_len)
+        v = _revert_tensor_by_pad(v, orig_shape, pad_len)
+
+        return quant_obj(clipped_weight, v=v)
+
+    def forward(self, weight: torch.Tensor):
+        return weight
+
     def _reshape_scale(self, scale_param: torch.Tensor, grouped_weight: torch.Tensor):
         return scale_param.to(grouped_weight.device, grouped_weight.dtype).reshape(-1, 1)
 
@@ -111,17 +125,3 @@ class AutoRound(nn.Module):
         clip_min = -max_abs
         clip_max = max_abs
         return clip_min, clip_max
-
-    def quantize(self, weight: torch.Tensor, quant_obj):
-        grouped_weight, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(weight, self.group_size)
-        clip_min, clip_max = self._compute_clip_range(grouped_weight)
-
-        clipped_weight = torch.clamp(grouped_weight, min=clip_min, max=clip_max)
-        v = self.value.to(grouped_weight.device, grouped_weight.dtype)
-        clipped_weight = _revert_tensor_by_pad(clipped_weight, orig_shape, pad_len)
-        v = _revert_tensor_by_pad(v, orig_shape, pad_len)
-
-        return quant_obj(clipped_weight, v=v)
-
-    def forward(self, weight: torch.Tensor):
-        return weight

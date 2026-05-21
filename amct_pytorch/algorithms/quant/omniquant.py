@@ -20,11 +20,6 @@ class OmniQuant(nn.Module):
 
     def transform(self):
         pass
-    
-    def _get_scale(self, dtype, device):
-        scale = torch.exp(self.log_scale)
-        scale = scale.clamp(min=1e-4, max=1e4)
-        return scale.to(device=device, dtype=dtype)
 
     def forward(self, x: torch.Tensor, inv_t: bool = False, name: str = None) -> torch.Tensor:
         dtype = x.dtype
@@ -55,3 +50,8 @@ class OmniQuant(nn.Module):
         if log_scale is None:
             return
         self.log_scale.data.copy_(log_scale.to(device=self.log_scale.device, dtype=self.log_scale.dtype))
+
+    def _get_scale(self, dtype, device):
+        scale = torch.exp(self.log_scale)
+        scale = scale.clamp(min=1e-4, max=1e4)
+        return scale.to(device=device, dtype=dtype)

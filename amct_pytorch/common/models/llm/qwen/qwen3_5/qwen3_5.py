@@ -36,9 +36,6 @@ class Qwen3_5(BaseModel):
         if "moe" in self.quant_target:
             raise ValueError("Qwen3.5 < 7B is a dense model and does not support quant_target='moe'.")
 
-    def _update_config(self):
-        self.config = self.textconfig(**self.config.text_config.to_dict())
-
     def float_model(self):
         return super().float_model()
 
@@ -47,9 +44,6 @@ class Qwen3_5(BaseModel):
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         return f"model.language_model.layers.{layer_idx}."
-
-    def _embed_base_prefix(self) -> str:
-        return "model.language_model."
 
     def load_layer_weight(self, prefix):
         return super().load_layer_weight(prefix)
@@ -112,3 +106,9 @@ class Qwen3_5(BaseModel):
 
     def get_block_attention_mask(self, block):
         return None
+
+    def _update_config(self):
+        self.config = self.textconfig(**self.config.text_config.to_dict())
+
+    def _embed_base_prefix(self) -> str:
+        return "model.language_model."
