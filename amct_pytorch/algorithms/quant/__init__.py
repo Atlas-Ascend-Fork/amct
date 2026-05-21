@@ -17,7 +17,6 @@ def register_algorithms():
 
     from .auto_clip import LAC, LWC
     from .auto_round import AutoRound
-    from .learnable_hadamard import LearnableHadamard
     from .omniquant import OmniQuant
 
     _REGISTERED = True
