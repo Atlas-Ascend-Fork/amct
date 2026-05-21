@@ -142,11 +142,12 @@ model_path = "Qwen/Qwen3-0.6B"
 model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16)
 model.eval()
 
-# 2. 准备校准数据（使用随机数据作为示例）
+# 2. 准备校准数据（使用公开数据集作为示例）
 #    实际场景应使用真实数据集的代表性样本
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
-calib_data = tokenizer("\n\n".join(testenc["text"]), return_tensors="pt")
+calib_text = "\n\n".join(text for text in testenc["text"][:8] if text.strip())
+calib_data = tokenizer(calib_text, return_tensors="pt")
 
 # 3. 配置量化策略
 cfg = {
@@ -158,12 +159,13 @@ cfg = {
 }
 
 # 4. 执行量化校准（需在校准数据上推理）
-quant_model = amct.quantize(model, cfg)
+amct.quantize(model, cfg)
 with torch.no_grad():
-    quant_model(calib_data)  # 运行校准推理
+    model(**calib_data)  # 运行校准推理
 
 # 5. 转换为部署模型
-deploy_model = amct.convert(quant_model)
+amct.convert(model)
+deploy_model = model
 
 print("量化完成！deploy_model 可用于 NPU 推理")
 ```
@@ -294,4 +296,3 @@ pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isol
 ## 📝 许可证
 
 本项目基于 [Apache 2.0](LICENSE) 协议开源。使用前请阅读 [安全声明](SECURITY.md) 与 [免责声明](DISCLAIMER.md)。
-
