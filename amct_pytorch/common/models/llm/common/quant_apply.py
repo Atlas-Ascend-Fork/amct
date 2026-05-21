@@ -93,10 +93,10 @@ def apply_quant_to_moe_mlp(args, model, cls=None):
             break
 
         if name in ["experts"]:
-            for i in range(len(mod)):
-                if mod[i] is None:
+            for cur_mod in mod:
+                if cur_mod is None:
                     continue
-                mod[i] = _build_quant_wrapper(cls, args, mod[i], group="moe.routed")
+                cur_mod = _build_quant_wrapper(cls, args, cur_mod, group="moe.routed")
 
         if name in ["shared_experts"]:
             shared_args = build_no_algo_args(args)
