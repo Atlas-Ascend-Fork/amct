@@ -105,11 +105,11 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 
 「一站式平台」是为开发者提供的 NPU 环境，内部已集成完整的 CANN 环境，可以直接使用。cann-recipes-infer 针对该平台在相应样例 README 中提供了简化的「快速启动」路径，帮助用户最小步骤完成 NPU 推理体验。当前支持的模型正在持续扩展中，敬请关注：
 
-|实践|简介|
-|-----|-----|
-|[SANA-Video](models/sana-video/README.md#一站式平台的快速启动)|基于PyTorch框架，在Atlas A2/A3环境中完成SANA-Video单卡文生视频推理，针对一站式平台场景提供简化的启动流程，帮助用户快速上手完成一次端到端 NPU 推理体验。|
-|[DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Falsh-Walkthrough.ipynb)|在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的8卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。|
-|[Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)|在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。|
+| 实践                                                                           | 简介                                                                                            |
+|------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | 在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。 |
+| [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Falsh-Walkthrough.ipynb) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的8卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。   |
+
 
 
 ## 📖 文档样例
