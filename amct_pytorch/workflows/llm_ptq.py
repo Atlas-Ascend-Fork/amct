@@ -35,6 +35,13 @@ class LlmPtqWorkflow:
         self.model_name = self.args.model_name
         self.solver_key = getattr(args, "solver", "blockwise")
 
+    @staticmethod
+    def _register_components():
+        register_algorithms()
+        register_llm_models()
+        register_dtype()
+        register_solvers()
+
     def setup(self):
         self._register_components()
         self._prepare_experiment_dirs()
@@ -60,13 +67,6 @@ class LlmPtqWorkflow:
             )
         logger.remove(sink_id)
         return results
-
-    @staticmethod
-    def _register_components():
-        register_algorithms()
-        register_llm_models()
-        register_dtype()
-        register_solvers()
 
     def _prepare_experiment_dirs(self):
         self.args.log_dir = os.path.join(self.args.output_dir, "logs")

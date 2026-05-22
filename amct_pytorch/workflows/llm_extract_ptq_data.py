@@ -24,6 +24,10 @@ class LlmExtractPtqDataWorkflow:
         self.data_provider = None
         self.model_name = self.args.model_name
 
+    @staticmethod
+    def _register_components():
+        register_llm_models()
+
     def setup(self):
         ensure_log_dir(self.args)
         self._register_components()
@@ -41,10 +45,6 @@ class LlmExtractPtqDataWorkflow:
             )
         logger.remove(sink_id)
         return results
-
-    @staticmethod
-    def _register_components():
-        register_llm_models()
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)

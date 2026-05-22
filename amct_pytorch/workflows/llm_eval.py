@@ -36,6 +36,11 @@ class LlmEvalWorkflow:
         self.quant_dtype = args.quant_dtype
         self.bit_policy = ensure_bit_policy(args)
 
+    @staticmethod
+    def _register_components():
+        register_llm_models()
+        register_dtype()
+        register_algorithms()
 
     def setup(self):
         self._register_components()
@@ -63,12 +68,6 @@ class LlmEvalWorkflow:
             f"PPL: {ppl}\n{self.bit_policy.summary()}"
         )
         logger.remove(sink_id)
-
-    @staticmethod
-    def _register_components():
-        register_llm_models()
-        register_dtype()
-        register_algorithms()
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)

@@ -37,6 +37,10 @@ class BaseModel(metaclass=ABCMeta):
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(self.ptq_param_handler, self.iter_ptq_units)
 
+    @staticmethod
+    def load_unit_inputs(data_dir, unit: PtqUnit):
+        return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
+
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
@@ -260,10 +264,6 @@ class BaseModel(metaclass=ABCMeta):
             if not isinstance(module, QuantLinear):
                 continue
             yield f"{weight_prefix}{name}.weight", module
-
-    @staticmethod
-    def load_unit_inputs(data_dir, unit: PtqUnit):
-        return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
