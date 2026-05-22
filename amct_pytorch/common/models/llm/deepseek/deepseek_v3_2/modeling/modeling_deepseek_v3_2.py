@@ -569,7 +569,7 @@ class MoE(nn.Module):
         self.gate = Gate(args)
         self.experts = nn.ModuleList(
             [
-                Expert(args.dim, args.moe_intermediate_size)
+                DeepseekV3MLP(args.dim, args.moe_intermediate_size)
                 if self.experts_start_idx <= i < self.experts_end_idx
                 else None
                 for i in range(self.n_routed_experts)
