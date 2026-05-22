@@ -155,7 +155,7 @@ collect_op() {
         mkdir -p "$dst"
 
         find "$pkg_dir" -maxdepth 1 -name "*.py" -exec cp {} "$dst/" \;
-        find "$op_dir/build" -maxdepth 1 -name "*.so" -exec cp {} "$dst/" \;
+        [ -d "$op_dir/build" ] && find "$op_dir/build" -maxdepth 1 -name "*.so" -exec cp {} "$dst/" \;
 
         echo "    $op_name → staging/amct_ops/$pkg_name/ ($(ls "$dst"/*.so 2>/dev/null | wc -l) .so)"
     done
