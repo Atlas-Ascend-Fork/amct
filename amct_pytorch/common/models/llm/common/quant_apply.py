@@ -93,7 +93,7 @@ def apply_quant_to_moe_mlp(args, model, cls=None):
             break
 
         if name in ["experts"]:
-            for idx, cur_mod in enumerate(list(mod)):
+            for idx, cur_mod in enumerate(mod):
                 if cur_mod is None:
                     continue
                 mod[idx] = _build_quant_wrapper(cls, args, cur_mod, group="moe.routed")
