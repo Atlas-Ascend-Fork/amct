@@ -261,7 +261,8 @@ class BaseModel(metaclass=ABCMeta):
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
-    def load_unit_inputs(self, data_dir, unit: PtqUnit):
+    @staticmethod
+    def load_unit_inputs(data_dir, unit: PtqUnit):
         return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):

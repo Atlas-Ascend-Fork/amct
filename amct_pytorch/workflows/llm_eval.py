@@ -64,7 +64,8 @@ class LlmEvalWorkflow:
         )
         logger.remove(sink_id)
 
-    def _register_components(self):
+    @staticmethod
+    def _register_components():
         register_llm_models()
         register_dtype()
         register_algorithms()

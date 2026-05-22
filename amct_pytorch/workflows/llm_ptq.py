@@ -61,7 +61,8 @@ class LlmPtqWorkflow:
         logger.remove(sink_id)
         return results
 
-    def _register_components(self):
+    @staticmethod
+    def _register_components():
         register_algorithms()
         register_llm_models()
         register_dtype()

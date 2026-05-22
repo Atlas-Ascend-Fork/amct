@@ -36,7 +36,8 @@ class LlmExtractPtqDataWorkflow:
         logger.remove(sink_id)
         return results
 
-    def _register_components(self):
+    @staticmethod
+    def _register_components():
         register_llm_models()
 
     def _build_pipeline(self):
