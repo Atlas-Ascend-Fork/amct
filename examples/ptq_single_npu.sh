@@ -23,6 +23,7 @@ python amct_pytorch/cli/llm/ptq.py \
   --granularity block \
   --quant_target mlp \
   --quant_dtype int \
+  --data_dir ./data_dirs \
   --bit_config amct_pytorch/configs/w8a8.yaml \
   --algos lwc lac \
   --output_dir ./outputs
