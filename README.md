@@ -127,10 +127,15 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 ```text
 amct/
 ├── amct_pytorch/                  # PyTorch 量化压缩核心源码
-│   ├── experimental/              # 实验特性（HiFloat8转换、DeepSeek-v4量化转换 等）
-│   ├── deploy_op/                 # 量化部署算子
-│   └── quantize_op/               # 量化校准算子
-├── amct_ops/                      # AMCT 自定义 NPU 算子
+│   ├── algorithms/                 # 量化算法实现
+│   ├── classic/                    # 经典量化流程
+│   ├── cli/                        # 命令行入口
+│   ├── common/                     # 通用工具、模型和数据处理
+│   ├── configs/                    # 量化配置模板
+│   ├── experimental/               # 实验特性（HiFloat8、DeepSeek 等）
+│   ├── quantization/               # 量化数据类型与基础模块
+│   └── workflows/                  # LLM 量化、评估和部署流程
+├── npu_ops/                       # AMCT 自定义 NPU 算子
 ├── examples/                      # 端到端样例与调用示例
 ├── tests/                         # 单元测试
 ├── docs/                          # 工具文档（概念、API、算法等）
