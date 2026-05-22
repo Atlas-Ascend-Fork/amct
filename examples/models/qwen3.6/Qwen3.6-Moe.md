@@ -163,6 +163,3 @@ python -m amct_pytorch.eval \
   ```
 必要传参解释：
 - attn_linear_param_dir：`quant_target`为`attn-linear`时，量化算法系数保存路径
-
-基于Post-Training Quantization的直转量化精度结果：
-`Wikitext2-ppl=6.5648`
