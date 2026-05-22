@@ -23,7 +23,7 @@ class BlockwiseSolver(BaseSolver):
         super().__init__(args, layer_idx, model, None, None, max_iters)
         self.block_size = block_size
 
-    def solve(self, data_loader, forward_kwargs=None) -> nn.Module:
+    def solve(self, data_loader, forward_kwargs=None):
         if self.optimizer is None:
             self.model = self.model.to(self.args.device)
             param_groups = self._collect_trainable_param_groups(self.model)
@@ -40,6 +40,7 @@ class BlockwiseSolver(BaseSolver):
                 self.args.epochs,
                 avg_loss,
             )
+        return None
 
     def _optimize_block(self, data_loader, forward_kwargs=None):
         if self.optimizer is None:
