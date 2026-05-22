@@ -38,7 +38,6 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.configuratio
 
 world_size = 1
 rank = 0
-block_size = 128
 
 
 @contextmanager
@@ -359,6 +358,7 @@ class Indexer(torch.nn.Module):
 
 
 def weight_dequant(weight, scale):
+    block_size = 128
     shape = weight.shape
     assert weight.dim() == 2
     weight = (
