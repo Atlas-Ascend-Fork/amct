@@ -306,6 +306,16 @@ git push hgjupstream fix/gcc13-link-error -u
 - **默认合入 `develop` 分支**（日常开发、新功能、bugfix）
 - 仅当用户明确要求时，才合入其他分支（如 `master`、`release/x.y`）
 
+**PR 描述模板规则**：
+- 创建或更新 PR 描述前，必须先查找并读取当前代码仓库的 PR 模板。
+- 优先使用仓库模板，常见路径包括：
+  - `.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`
+  - `.gitcode/PULL_REQUEST_TEMPLATE.md`
+  - `.github/pull_request_template.md`
+  - `PULL_REQUEST_TEMPLATE.md`
+- 只有当前仓库不存在 PR 模板时，才允许使用本 skill 里的兜底模板。
+- 不要把本 skill 的兜底模板字段混入仓库模板；仓库模板有哪些章节，PR 描述就按这些章节填写。
+
 使用 GitCode API 创建 PR：
 
 ```bash
@@ -427,9 +437,10 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 
 ## PR 描述模板
 
-创建 PR 时使用以下模板格式化描述。
+创建 PR 时优先使用当前仓库的 PR 模板。以下模板仅用于仓库没有模板文件时兜底。
 
 **重要**：
+- **先读仓库模板**：创建或更新 PR 前必须执行模板查找，例如 `find . -maxdepth 3 -type f \( -iname '*pull*template*' -o -path './.gitcode/PULL_REQUEST_TEMPLATE*' -o -path './.github/pull_request_template*' \)`，并按找到的仓库模板填写。
 - **变更类型**：根据实际变更内容，将对应选项的 `[ ]` 改为 `[x]` 勾选
 - **核对清单**：提交 PR 前所有项都应满足，默认全部勾选 `[x]`
 

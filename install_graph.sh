@@ -22,7 +22,7 @@ echo "工作目录: $WORKING_DIR"
 # Define default values
 ARCH="$(uname -m)"
 BASE_NAME="cann-amct-graph"
-SOURCE_URL="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260131_newest/${BASE_NAME}_9.0.0_linux-${ARCH}.tar.gz"
+SOURCE_URL="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20260520_newest/${BASE_NAME}_9.1.0_linux-${ARCH}.tar.gz"
 BUNDLE_DIR="${WORKING_DIR}/amctgraph"
 OUTPUT_FILE="${BASE_NAME}_*_linux-${ARCH}.tar.gz"
 AMCT_GRAPH_FILE="${BASE_NAME}_linux-${ARCH}.tar.gz"

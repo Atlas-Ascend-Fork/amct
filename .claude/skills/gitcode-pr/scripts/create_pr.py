@@ -31,8 +31,37 @@ import argparse
 import requests
 
 
+REPO_TEMPLATE_CANDIDATES = (
+    '.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md',
+    '.gitcode/PULL_REQUEST_TEMPLATE.md',
+    '.github/pull_request_template.md',
+    '.github/PULL_REQUEST_TEMPLATE.md',
+    'PULL_REQUEST_TEMPLATE.md',
+)
+
+
+def find_repo_root(start_dir=None):
+    """查找当前仓库根目录"""
+    cur_dir = os.path.abspath(start_dir or os.getcwd())
+    while True:
+        if os.path.isdir(os.path.join(cur_dir, '.git')):
+            return cur_dir
+        parent_dir = os.path.dirname(cur_dir)
+        if parent_dir == cur_dir:
+            return None
+        cur_dir = parent_dir
+
+
 def load_pr_template(template_path=None):
     """加载 PR 模板"""
+    if template_path is None:
+        repo_root = find_repo_root()
+        if repo_root:
+            for candidate in REPO_TEMPLATE_CANDIDATES:
+                candidate_path = os.path.join(repo_root, candidate)
+                if os.path.exists(candidate_path):
+                    template_path = candidate_path
+                    break
     if template_path is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         template_path = os.path.join(script_dir, '..', 'assets', 'pr_template.md')
