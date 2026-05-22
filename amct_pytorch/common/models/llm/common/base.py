@@ -1,6 +1,6 @@
 import os
 from abc import ABCMeta
-
+import gc
 import torch
 from accelerate import init_empty_weights
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
@@ -23,6 +23,7 @@ class BaseModel(metaclass=ABCMeta):
 
     def __init__(self, args):
         self.args = args
+        self.base_prefix = "model."
         self.quant_target = args.quant_target
         self.position_ids = None
         self.attention_mask = None
@@ -66,12 +67,11 @@ class BaseModel(metaclass=ABCMeta):
         is safer than silently loading the wrong tensor).
         Adapters that need extra entries can extend `super().get_embed_load_specs()`.
         """
-        base = self._embed_base_prefix()
         tie = bool(getattr(self.config, "tie_word_embeddings", False))
-        lm_head_prefix = f"{base}embed_tokens." if tie else "lm_head."
+        lm_head_prefix = f"{self.base_prefix}embed_tokens." if tie else "lm_head."
         return [
-            (self.model.model.embed_tokens, f"{base}embed_tokens."),
-            (self.model.model.norm, f"{base}norm."),
+            (self.model.model.embed_tokens, f"{self.base_prefix}embed_tokens."),
+            (self.model.model.norm, f"{self.base_prefix}norm."),
             (self.model.lm_head, lm_head_prefix),
         ]
 
@@ -192,7 +192,7 @@ class BaseModel(metaclass=ABCMeta):
                     mod._eval_mode = True
                     mod._cached_eval_weight = None
         if hook_name is not None:
-            self.register_block_forward_hooks(block, hook_name, hooks, act_stat)
+            register_forward_hooks(block, hook_name, hooks, act_stat)
 
         block_kwargs = self.get_block_forward_kwargs()
         input_ids_list = self.input_ids if self.input_ids is not None else [None] * len(samples)
@@ -216,7 +216,8 @@ class BaseModel(metaclass=ABCMeta):
         except Exception:
             pass
         block = None
-        self._release_block_caches()
+        gc.collect()
+        torch.npu.empty_cache()
         return outs
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
@@ -326,16 +327,3 @@ class BaseModel(metaclass=ABCMeta):
 
     def _dispatch_block(self, module):
         return module.to(self.args.device)
-
-    def _embed_base_prefix(self) -> str:
-        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
-
-        Override in adapters whose checkpoint nests the text backbone under a
-        multimodal wrapper (e.g. return `"model.language_model."`).
-        """
-        return "model."
-
-    def _release_block_caches(self):
-        import gc
-        gc.collect()
-        torch.npu.empty_cache()

@@ -346,7 +346,7 @@ class Compressor(nn.Module):
             self.kv_cache[:bsz, :seqlen // ratio] = kv
         else:
             self.kv_cache[:bsz, start_pos // ratio] = kv.squeeze(1)
-        return kv
+        return
 
 
 class Indexer(torch.nn.Module):
