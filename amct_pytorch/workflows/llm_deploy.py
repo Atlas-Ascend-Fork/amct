@@ -150,7 +150,8 @@ class LlmDeployWorkflow:
             json.dump(output_index, f, ensure_ascii=False, indent=2, sort_keys=True)
         return index_path
 
-    def _register_components(self):
+    @staticmethod
+    def _register_components():
         register_llm_models()
         register_dtype()
         register_algorithms()
