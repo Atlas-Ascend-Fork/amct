@@ -75,15 +75,24 @@ class NpuQuantizationLinear(torch.nn.Module):
             if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
                 ori_shape = quant_x.shape
                 quant_x = quant_x.reshape(-1, x.shape[-1])
-            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                output_dtype=self.output_dtype,
-                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-                group_sizes=self.group_sizes, y_scale=self.y_scale)
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                output = output.reshape(*ori_shape[:-1], -1)
-            if self.bias is not None:
-                output = output + self.bias
+            if self._bias_for_npu_op and self.bias is not None:
+                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                    bias=self.bias, output_dtype=self.output_dtype,
+                    x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
+                    group_sizes=self.group_sizes, y_scale=self.y_scale)
+                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                    output = output.reshape(*ori_shape[:-1], -1)
+            else:
+                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                    output_dtype=self.output_dtype,
+                    x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
+                    group_sizes=self.group_sizes, y_scale=self.y_scale)
+                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                    output = output.reshape(*ori_shape[:-1], -1)
+                if self.bias is not None:
+                    output = output + self.bias
         else:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
