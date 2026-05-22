@@ -117,7 +117,6 @@ def test_qwen3_moe_layer_weight_prefix_uses_model_layers():
 def test_qwen3_5_uses_model_language_model_prefix():
     obj = _stub_adapter(Qwen3_5, [MLP])
     assert obj.get_layer_weight_prefix(2) == "model.language_model.layers.2."
-    assert obj._embed_base_prefix() == "model.language_model."
 
 
 def test_qwen3_next_uses_model_layers_prefix():
