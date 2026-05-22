@@ -103,7 +103,7 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 
 ### 🏃 一站式平台快速体验
 
-「一站式平台」是为开发者提供的 NPU 环境，内部已集成完整的 CANN 环境，可以直接使用。cann-recipes-infer 针对该平台在相应样例 README 中提供了简化的「快速启动」路径，帮助用户最小步骤完成 NPU 推理体验。当前支持的模型正在持续扩展中，敬请关注：
+「一站式平台」是为开发者提供的 NPU 环境，内部已集成完整的 CANN 环境，可以直接使用。AMCT 针对该平台在相应样例 README 中提供了简化的「快速启动」路径，帮助用户最小步骤完成 NPU 推理体验。当前支持的模型正在持续扩展中，敬请关注：
 
 | 实践                                                                           | 简介                                                                                             |
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
@@ -128,7 +128,6 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 amct/
 ├── amct_pytorch/                  # PyTorch 量化压缩核心源码
 │   ├── algorithms/                 # 量化算法实现
-│   ├── classic/                    # 经典量化流程
 │   ├── cli/                        # 命令行入口
 │   ├── common/                     # 通用工具、模型和数据处理
 │   ├── configs/                    # 量化配置模板
