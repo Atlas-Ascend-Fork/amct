@@ -240,11 +240,11 @@ python -m amct_pytorch.deploy \
 |------|------|------|
 | `--model` | `deepseek-ai/DeepSeek-V4-Pro` | 模型权重路径或模型标识，部署导出时应为本地模型目录。 |
 | `--model_name` | `deepseek-ai/DeepSeek-V4-Pro` | AMCT 内部模型适配器名称，需匹配已注册模型，如 `qwen3`、`deepseek_v4`。 |
-| `--device` | `npu:0` | 指定运行设备。 |
+| `--device` | `npu:0` | 指定运行设备。建议选择NPU/GPU，以加速计算。 |
 | `--granularity` | `model` | 工作粒度，即量化或处理的单位，常用选项：<br> `block`：按模块块处理（更细粒度，可能效果更好但耗时）。<br> `model`：整个模型统一处理（粗粒度，速度快），部分流程不支持。 |
 | `--seed` | `0` | 随机种子，用于控制实验中随机行为的一致性（如数据采样、初始化等），设置为固定值可保证结果可复现。 |
 | `--quant_target` | `[]` | 量化目标，支持以下组合：<br>mlp：Multi-Layer Perceptron，多层感知机。<br>moe：Mixture of Experts，混合专家模型。<br>attn-linear：Attention Linear Layer，注意力机制中的线性层。<br>attn-cache：Attention Cache，注意力缓存。 |
-| `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 |
+| `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
 | `--data_dir` | 空字符串 | PTQ 中间数据保存/读取目录。 |
 | `--output_dir` | `./outputs` | 输出目录，存放日志文件、PTQ 参数配置、最终部署模型等所有生成内容。 |
 
@@ -356,80 +356,4 @@ layer_{layer_idx}_{unit_name}.pt
 
 ## 5. 一站式样例
 
-本章节提供一站式样例，帮助开发者更好熟悉本特性的流程，以`qwen3.6moe`模型为例：
-
-1. 基准测试：
-
-   ```bash
-   python -m amct_pytorch.eval \
-     --model ./Qwen3.6-35B-A3B \
-     --model_name qwen3_6_moe \
-     --seq_len 4096 \
-     --granularity block \
-     --device npu:0 \
-     --eval_mode bf16 \
-     --bit_config amct_pytorch/configs/bf16.yaml
-   ```
-
-2. 直转量化测试：
-
-   ```bash
-   python -m amct_pytorch.eval \
-     --model ./Qwen3.6-35B-A3B \
-     --model_name qwen3_6_moe \
-     --seq_len 4096 \
-     --granularity block \
-     --device npu:0 \
-     --eval_mode quant \
-     --quant_target attn-linear \
-     --quant_dtype int \
-     --bit_config amct_pytorch/configs/example_w4a8.yaml
-   ```
-
-3. ptq数据提取：
-
-   ```bash
-   python -m amct_pytorch.extract_ptq_data \
-     --model ./Qwen3.6-35B-A3B \
-     --model_name qwen3_6_moe \
-     --seq_len 4096 \
-     --granularity block \
-     --device npu:0 \
-     --data_dir ./qwen3_6_moe/attn-linear \
-     --quant_target attn-linear
-   ```
-
-4. ptq训练：
-
-   ```bash
-   python -m amct_pytorch.ptq \
-     --model ./Qwen3.6-35B-A3B \
-     --model_name qwen3_6_moe \
-     --seq_len 4096 \
-     --granularity block \
-     --device npu:0 \
-     --data_dir ./qwen3_6_moe/attn-linear \
-     --quant_dtype int \
-     --algos autoround \
-     --bit_config amct_pytorch/configs/w4a8.yaml \
-     --base_lr 1e-3 \
-     --quant_target attn-linear \
-     --output_dir ./qwen3_6_moe/autoround
-   ```
-
-5. 带ptq训练结果的直转量化测试：
-
-   ```bash
-   python -m amct_pytorch.eval \
-     --model ./Qwen3.6-35B-A3B \
-     --model_name qwen3_6_moe \
-     --seq_len 4096 \
-     --granularity block \
-     --device npu:0 \
-     --eval_mode quant \
-     --quant_target attn-linear \
-     --bit_config amct_pytorch/configs/w4a8.yaml \
-     --quant_dtype int \
-     --algos autoround \
-     --attn_linear_param_dir ./qwen3_6_moe/autoround
-   ```
+本章节提供一站式样例，帮助开发者更好熟悉本特性的流程，以`qwen3.6moe`模型为例，可参考[Qwen-3.6-MoE一站式样例](../examples/models/qwen3.6/Qwen3.6-Moe.md)
