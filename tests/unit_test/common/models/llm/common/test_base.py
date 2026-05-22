@@ -1250,8 +1250,8 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
     model = Qwen3(args)
 
     ql = QuantLinear.__new__(QuantLinear)
-    ql._eval_mode = False
-    ql._cached_eval_weight = "stale"
+    ql.eval_mode = False
+    ql.cached_eval_weight = "stale"
     ql._parameters = {}
     ql._modules = {}
     ql._buffers = {}
@@ -1272,8 +1272,8 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
 
     model.do_block_forward(0, samples, use_quant_block=True, hook_name=None)
 
-    assert ql._eval_mode is True
-    assert ql._cached_eval_weight is None
+    assert ql.eval_mode is True
+    assert ql.cached_eval_weight is None
 
 
 def test_do_block_forward_with_hook_removal(monkeypatch):

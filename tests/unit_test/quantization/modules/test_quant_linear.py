@@ -46,8 +46,8 @@ def test_quant_linear_init_records_weight_size_in_args():
     linear, q = _make_linear_and_quant(4, 8)
     # args.w_size mutated as side effect
     assert tuple(q.args.w_size) == (8, 4)
-    assert q._eval_mode is False
-    assert q._cached_eval_weight is None
+    assert q.eval_mode is False
+    assert q.cached_eval_weight is None
     assert q._cached_transform_key is None
 
 
@@ -75,22 +75,22 @@ def test_quant_linear_train_forward_enabled_quantizer_changes_output():
 def test_quant_linear_eval_mode_caches_quantized_weight():
     linear, q = _make_linear_and_quant(4, 8)
     q.weight_quantizer.enable = True
-    q._eval_mode = True
+    q.eval_mode = True
     x = torch.randn(2, 4)
     out_first = q(x)
-    cached = q._cached_eval_weight
+    cached = q.cached_eval_weight
     assert cached is not None
     assert q._cached_transform_key is None  # no structure_transform
     # Second call with the same transform must reuse the cache.
     out_second = q(x)
-    assert q._cached_eval_weight is cached
+    assert q.cached_eval_weight is cached
     assert torch.equal(out_first, out_second)
 
 
 def test_quant_linear_eval_mode_invalidates_cache_when_transform_changes():
     linear, q = _make_linear_and_quant(4, 8)
     q.weight_quantizer.enable = True
-    q._eval_mode = True
+    q.eval_mode = True
 
     def transform(weight, inv_t=False, name=None):
         return weight  # identity-but-distinct callable
@@ -100,9 +100,9 @@ def test_quant_linear_eval_mode_invalidates_cache_when_transform_changes():
 
     x = torch.randn(2, 4)
     q(x, structure_transform=transform)
-    first_cached = q._cached_eval_weight
+    first_cached = q.cached_eval_weight
     q(x, structure_transform=transform_other)
-    assert q._cached_eval_weight is not first_cached
+    assert q.cached_eval_weight is not first_cached
 
 
 def test_quant_linear_uses_structure_transform_with_inv_t_and_name():
