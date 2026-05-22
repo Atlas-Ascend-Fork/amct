@@ -23,13 +23,6 @@ from transformers.models.longcat_flash.modeling_longcat_flash import (
     LongcatFlashMLP,
     apply_rotary_pos_emb_interleave,
 )
-
-try:
-    from transformers.models.longcat_flash.modeling_longcat_flash import is_flash_attention_requested
-except ImportError:
-    def is_flash_attention_requested(config):
-        return getattr(config, "_attn_implementation", None) == "flash_attention_2"
-
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.common.models.llm.common.attention_forward import scaled_dot_product_attention
 from amct_pytorch.common.models.llm.common.quant_apply import (
@@ -258,9 +251,6 @@ class QuantLongcatMLA(LongcatFlashMLA):
             cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
             key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
-        if is_flash_attention_requested(self.config) and self.qk_head_dim != self.v_head_dim:
-            value_states = F.pad(value_states, [0, self.qk_head_dim - self.v_head_dim])
-
         attn_output = scaled_dot_product_attention(
             self,
             query_states,
@@ -271,9 +261,6 @@ class QuantLongcatMLA(LongcatFlashMLA):
             dropout_p=0.0 if not self.training else self.attention_dropout,
             scale=self.scaling,
         )
-
-        if is_flash_attention_requested(self.config) and self.qk_head_dim != self.v_head_dim:
-            attn_output = attn_output[:, :, :, : self.v_head_dim]
 
         attn_output = attn_output.reshape(batch_size, seq_length, -1).contiguous()
         if self.out_transform is not None:
