@@ -36,12 +36,17 @@ class LlmEvalWorkflow:
         self.quant_dtype = args.quant_dtype
         self.bit_policy = ensure_bit_policy(args)
 
+    @staticmethod
+    def _register_components():
+        register_llm_models()
+        register_dtype()
+        register_algorithms()
 
     def setup(self):
         self._register_components()
         self.pipeline = self._build_pipeline()
-        if hasattr(self.pipeline, "_sharded_block"):
-            self.pipeline._sharded_block = True
+        if hasattr(self.pipeline, "sharded_block"):
+            self.pipeline.sharded_block = True
         sink_id, _ = setup_run_logging(
             self.args,
             f"eval_{self.model_name}_{self.eval_mode}",
@@ -63,11 +68,6 @@ class LlmEvalWorkflow:
             f"PPL: {ppl}\n{self.bit_policy.summary()}"
         )
         logger.remove(sink_id)
-
-    def _register_components(self):
-        register_llm_models()
-        register_dtype()
-        register_algorithms()
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)

@@ -40,6 +40,25 @@ class LlmDeployWorkflow:
     def _is_weight_file(path: Path) -> bool:
         return path.name == "model.safetensors.index.json" or path.suffix == ".safetensors"
 
+    @staticmethod
+    def _register_components():
+        register_llm_models()
+        register_dtype()
+        register_algorithms()
+
+    @staticmethod
+    def _collect_replaced_original_weights(
+        layer_tensors: dict[str, object],
+        tensor_routes: dict[str, str],
+        original_weight_map: dict[str, str],
+    ):
+        replaced = set()
+        for weight_name in layer_tensors:
+            base_weight_name = tensor_routes.get(weight_name, weight_name)
+            if base_weight_name in original_weight_map:
+                replaced.add(base_weight_name)
+        return replaced
+
     def run(self):
         sink_id = self.setup()
         if self.granularity == "block":
@@ -64,19 +83,6 @@ class LlmDeployWorkflow:
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)
         return model_cls(self.args)
-
-    def _collect_replaced_original_weights(
-        self,
-        layer_tensors: dict[str, object],
-        tensor_routes: dict[str, str],
-        original_weight_map: dict[str, str],
-    ):
-        replaced = set()
-        for weight_name in layer_tensors:
-            base_weight_name = tensor_routes.get(weight_name, weight_name)
-            if base_weight_name in original_weight_map:
-                replaced.add(base_weight_name)
-        return replaced
 
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":
@@ -149,11 +155,6 @@ class LlmDeployWorkflow:
         with open(index_path, "w", encoding="utf-8") as f:
             json.dump(output_index, f, ensure_ascii=False, indent=2, sort_keys=True)
         return index_path
-
-    def _register_components(self):
-        register_llm_models()
-        register_dtype()
-        register_algorithms()
 
     def _run_blockwise(self):
         self._copy_support_files()

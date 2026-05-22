@@ -40,8 +40,6 @@ from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.configuration_
 
 world_size = 1
 rank = 0
-block_size = 128
-fp4_block_size = 32
 default_dtype = torch.bfloat16
 scale_fmt = None
 scale_dtype = torch.float32
@@ -200,8 +198,8 @@ def hadamard_transformers_fix(x):
     dtype = x.dtype
     device = x.device
     hidden_size = x.size(-1)
-    H_m = torch.tensor(hadamard(hidden_size, dtype=np.float32) / hidden_size ** 0.5).to(device)
-    x = (x.to(torch.float32) @ H_m).to(dtype)
+    h_m = torch.tensor(hadamard(hidden_size, dtype=np.float32) / hidden_size ** 0.5).to(device)
+    x = (x.to(torch.float32) @ h_m).to(dtype)
     return x
 
 

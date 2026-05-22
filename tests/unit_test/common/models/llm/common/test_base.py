@@ -274,30 +274,6 @@ def test_load_selected_layer_ptq_params_routes_to_store_per_target():
     assert stub.quant_target == [QUANT_TARGET_ATTN_LINEAR, QUANT_TARGET_MLP]
 
 
-def test_register_block_forward_hooks_returns_early_on_none_hook_name():
-    stub = _StubModel()
-    block = nn.Module()
-    stub.register_block_forward_hooks(block, hook_name=None, hooks={}, act_stat={})
-
-
-def test_register_block_forward_hooks_delegates(monkeypatch):
-    captured = {}
-
-    def _mock_register_forward_hooks(block, hook_name, hooks, act_stat):
-        captured.update(
-            block=block, hook_name=hook_name, hooks=hooks, act_stat=act_stat
-        )
-
-    monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.base.register_forward_hooks",
-        _mock_register_forward_hooks,
-    )
-    stub = _StubModel()
-    block = nn.Module()
-    stub.register_block_forward_hooks(block, hook_name="hook1", hooks={"k": "v"}, act_stat={"a": 1})
-    assert captured.get("hook_name") == "hook1"
-
-
 def test_build_block_for_forward_quant_branch(monkeypatch):
     stub = _StubModel()
     block = nn.Module()
@@ -1250,8 +1226,8 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
     model = Qwen3(args)
 
     ql = QuantLinear.__new__(QuantLinear)
-    ql._eval_mode = False
-    ql._cached_eval_weight = "stale"
+    ql.eval_mode = False
+    ql.cached_eval_weight = "stale"
     ql._parameters = {}
     ql._modules = {}
     ql._buffers = {}
@@ -1272,8 +1248,8 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
 
     model.do_block_forward(0, samples, use_quant_block=True, hook_name=None)
 
-    assert ql._eval_mode is True
-    assert ql._cached_eval_weight is None
+    assert ql.eval_mode is True
+    assert ql.cached_eval_weight is None
 
 
 def test_do_block_forward_with_hook_removal(monkeypatch):

@@ -35,6 +35,21 @@ class LlmPtqWorkflow:
         self.model_name = self.args.model_name
         self.solver_key = getattr(args, "solver", "blockwise")
 
+    @staticmethod
+    def _register_components():
+        register_algorithms()
+        register_llm_models()
+        register_dtype()
+        register_solvers()
+
+    @staticmethod
+    def _unpack_tensor_batch(batch: Any):
+        if isinstance(batch, (tuple, list)):
+            if len(batch) != 1:
+                raise ValueError("Expected TensorDataset batches to contain exactly one tensor.")
+            return batch[0]
+        return batch
+
     def setup(self):
         self._register_components()
         self._prepare_experiment_dirs()
@@ -60,12 +75,6 @@ class LlmPtqWorkflow:
             )
         logger.remove(sink_id)
         return results
-
-    def _register_components(self):
-        register_algorithms()
-        register_llm_models()
-        register_dtype()
-        register_solvers()
 
     def _prepare_experiment_dirs(self):
         self.args.log_dir = os.path.join(self.args.output_dir, "logs")
@@ -212,13 +221,6 @@ class LlmPtqWorkflow:
 
     def _build_model_solver(self, solver_cls):
         pass
-
-    def _unpack_tensor_batch(self, batch: Any):
-        if isinstance(batch, (tuple, list)):
-            if len(batch) != 1:
-                raise ValueError("Expected TensorDataset batches to contain exactly one tensor.")
-            return batch[0]
-        return batch
 
     def _unit_result_path(self, unit: PtqUnit) -> str | None:
         if not self.args.quant_param_dir:

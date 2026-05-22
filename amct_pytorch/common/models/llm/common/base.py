@@ -37,6 +37,10 @@ class BaseModel(metaclass=ABCMeta):
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(self.ptq_param_handler, self.iter_ptq_units)
 
+    @staticmethod
+    def load_unit_inputs(data_dir, unit: PtqUnit):
+        return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
+
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
@@ -121,10 +125,6 @@ class BaseModel(metaclass=ABCMeta):
             kwargs["attention_mask"] = self.attention_mask.to(self.args.device)
         return kwargs
 
-    def register_block_forward_hooks(self, block, hook_name, hooks, act_stat):
-        if hook_name is None:
-            return
-        register_forward_hooks(block, hook_name, hooks, act_stat)
 
     def save_block_hook_inputs(self, act_stat, hook_name, layer_idx):
         if hook_name is None:
@@ -189,8 +189,8 @@ class BaseModel(metaclass=ABCMeta):
             from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
-                    mod._eval_mode = True
-                    mod._cached_eval_weight = None
+                    mod.eval_mode = True
+                    mod.cached_eval_weight = None
         if hook_name is not None:
             register_forward_hooks(block, hook_name, hooks, act_stat)
 
@@ -260,9 +260,6 @@ class BaseModel(metaclass=ABCMeta):
             if not isinstance(module, QuantLinear):
                 continue
             yield f"{weight_prefix}{name}.weight", module
-
-    def load_unit_inputs(self, data_dir, unit: PtqUnit):
-        return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
