@@ -92,6 +92,9 @@ python -m amct_pytorch.eval \
 - quant_target：量化对象，当前对Attention中的线性层进行量化
 - quant_dtype：量化数据格式，当前支持int、mxfp
 
+直转量化精度结果：
+`Wikitext2-ppl=7.0407`
+
 更多参数详细解释请参见[参数说明](../../../docs/AMCT_Pytorch_LLM.md#32-ppl-评估参数)
 
 ### PTQ数据提取
@@ -160,3 +163,6 @@ python -m amct_pytorch.eval \
   ```
 必要传参解释：
 - attn_linear_param_dir：`quant_target`为`attn-linear`时，量化算法系数保存路径
+
+基于Post-Training Quantization的直转量化精度结果：
+`Wikitext2-ppl=6.5648`
