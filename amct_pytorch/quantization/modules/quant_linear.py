@@ -33,8 +33,8 @@ class QuantLinear(nn.Module):
         self.args.w_size = self.linear.weight.data.shape
         self.w_bits = w_bits if w_bits is not None else args.w_bits
         self.weight_quantizer = WeightQuantizer(self.args, w_bits=self.w_bits)
-        self._eval_mode = False
-        self._cached_eval_weight = None
+        self.eval_mode = False
+        self.cached_eval_weight = None
         self._cached_transform_key = None
 
     def forward(
@@ -42,15 +42,15 @@ class QuantLinear(nn.Module):
         hidden_states,
         structure_transform=None,
     ):
-        if self._eval_mode:
+        if self.eval_mode:
             transform_key = None if structure_transform is None else id(structure_transform)
-            if self._cached_eval_weight is None or self._cached_transform_key != transform_key:
+            if self.cached_eval_weight is None or self._cached_transform_key != transform_key:
                 weight = self.linear.weight
                 if structure_transform is not None:
                     weight = structure_transform(weight, inv_t=True, name=self.name)
-                self._cached_eval_weight = self.weight_quantizer(weight).detach()
+                self.cached_eval_weight = self.weight_quantizer(weight).detach()
                 self._cached_transform_key = transform_key
-            weight = self._cached_eval_weight
+            weight = self.cached_eval_weight
         else:
             weight = self.linear.weight
             if structure_transform is not None:

@@ -51,7 +51,7 @@ class DeepseekV4(BaseModel):
         self.cls = Block
         self.model = self.empty_weights_model()
         self.num_layers = self.config.n_layers
-        self._sharded_block = False
+        self.sharded_block = False
 
     @staticmethod
     def _resolve_param_device(local_name, device_map):
@@ -100,7 +100,7 @@ class DeepseekV4(BaseModel):
         pins every expert to a fixed NPU via AlignDevicesHook, which fights
         PTQ's ``.to(device)`` / ``.cpu()`` cycle.
         """
-        if self._sharded_block:
+        if self.sharded_block:
             return self._block_sharded(layer_idx)
         return super().block(layer_idx)
 

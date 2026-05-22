@@ -32,7 +32,7 @@ class QuantizedMatmul(nn.Module):
         self.l_node = ActivationQuantizer(quant_args, bits=self.l_bits)
         self.r_node = ActivationQuantizer(quant_args, bits=self.r_bits)
         self._init_structure_transforms(left_dim, right_dim)
-        self._eval_mode = False
+        self.eval_mode = False
 
     def forward(self, left, right):
         if not self.enable_attn_cache:
