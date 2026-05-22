@@ -293,8 +293,8 @@ def test_ptq_run_modelwise(monkeypatch):
         "amct_pytorch.workflows.llm_ptq.logger",
         SimpleNamespace(remove=lambda h: None),
     )
-    result = wf.run()
-    assert result is None
+    with pytest.raises(ValueError, match="unsupported granularity .* for ptq"):
+        wf.run()
 
 
 # ---- _build_pipeline error path -------------------------------------------

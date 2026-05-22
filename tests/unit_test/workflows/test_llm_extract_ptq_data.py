@@ -40,6 +40,7 @@ def _make_args(quant_target):
         nsamples=8,
         device="cpu",
         model_name="qwen3",
+        granularity="block",
     )
 
 
@@ -104,6 +105,7 @@ def _make_extract_workflow(**overrides):
     defaults = dict(
         model="/tmp/fake", model_name="qwen3", quant_target=["mlp"],
         device="cpu", seq_len=2048, nsamples=32, output_dir="/tmp/fake",
+        granularity="block",
     )
     defaults.update(overrides)
     args = SimpleNamespace(**defaults)

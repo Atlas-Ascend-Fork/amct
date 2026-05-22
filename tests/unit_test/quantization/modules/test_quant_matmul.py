@@ -40,7 +40,7 @@ def test_init_default_disabled_attn_cache_skips_transform_setup():
     assert qm.enable_attn_cache is False
     assert qm.left_transform is None
     assert qm.right_transform is None
-    assert qm._eval_mode is False
+    assert qm.eval_mode is False
 
 
 def test_forward_passthrough_when_attn_cache_disabled_is_l_at_r_t():

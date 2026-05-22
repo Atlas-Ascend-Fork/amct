@@ -35,7 +35,7 @@ bash build.sh --pkg
 - 安装依赖
 
   ```bash
-  # 安装测试框架依赖 
+  # 安装测试框架依赖
   pip3 install coverage
   ```
 
