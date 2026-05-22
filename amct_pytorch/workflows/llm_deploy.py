@@ -40,6 +40,12 @@ class LlmDeployWorkflow:
     def _is_weight_file(path: Path) -> bool:
         return path.name == "model.safetensors.index.json" or path.suffix == ".safetensors"
 
+    @staticmethod
+    def _register_components():
+        register_llm_models()
+        register_dtype()
+        register_algorithms()
+
     def run(self):
         sink_id = self.setup()
         if self.granularity == "block":
@@ -149,12 +155,6 @@ class LlmDeployWorkflow:
         with open(index_path, "w", encoding="utf-8") as f:
             json.dump(output_index, f, ensure_ascii=False, indent=2, sort_keys=True)
         return index_path
-
-    @staticmethod
-    def _register_components():
-        register_llm_models()
-        register_dtype()
-        register_algorithms()
 
     def _run_blockwise(self):
         self._copy_support_files()
