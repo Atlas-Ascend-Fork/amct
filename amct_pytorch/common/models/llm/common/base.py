@@ -125,10 +125,6 @@ class BaseModel(metaclass=ABCMeta):
             kwargs["attention_mask"] = self.attention_mask.to(self.args.device)
         return kwargs
 
-    def register_block_forward_hooks(self, block, hook_name, hooks, act_stat):
-        if hook_name is None:
-            return
-        register_forward_hooks(block, hook_name, hooks, act_stat)
 
     def save_block_hook_inputs(self, act_stat, hook_name, layer_idx):
         if hook_name is None:

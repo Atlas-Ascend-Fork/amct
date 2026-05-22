@@ -274,30 +274,6 @@ def test_load_selected_layer_ptq_params_routes_to_store_per_target():
     assert stub.quant_target == [QUANT_TARGET_ATTN_LINEAR, QUANT_TARGET_MLP]
 
 
-def test_register_block_forward_hooks_returns_early_on_none_hook_name():
-    stub = _StubModel()
-    block = nn.Module()
-    stub.register_block_forward_hooks(block, hook_name=None, hooks={}, act_stat={})
-
-
-def test_register_block_forward_hooks_delegates(monkeypatch):
-    captured = {}
-
-    def _mock_register_forward_hooks(block, hook_name, hooks, act_stat):
-        captured.update(
-            block=block, hook_name=hook_name, hooks=hooks, act_stat=act_stat
-        )
-
-    monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.base.register_forward_hooks",
-        _mock_register_forward_hooks,
-    )
-    stub = _StubModel()
-    block = nn.Module()
-    stub.register_block_forward_hooks(block, hook_name="hook1", hooks={"k": "v"}, act_stat={"a": 1})
-    assert captured.get("hook_name") == "hook1"
-
-
 def test_build_block_for_forward_quant_branch(monkeypatch):
     stub = _StubModel()
     block = nn.Module()

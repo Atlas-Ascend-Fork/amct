@@ -16,15 +16,15 @@ class QuantDequantMx(torch.nn.Module):
         self.block_size = 32
         
     def deploy(self, x: Tensor, qdim: int = -1):
-        E8M0, ExMx = self.quant(x, qdim)
-        E8M0 = (E8M0 + 127).to(torch.uint8).squeeze(-1).cpu()
-        ExMx = ExMx.flatten(qdim - 1, qdim).cpu()
+        e8m0, ex_mx = self.quant(x, qdim)
+        e8m0 = (e8m0 + 127).to(torch.uint8).squeeze(-1).cpu()
+        ex_mx = ex_mx.flatten(qdim - 1, qdim).cpu()
         if self.bits == 8:
-            ExMx = ExMx.to(torch.float8_e4m3fn)
+            ex_mx = ex_mx.to(torch.float8_e4m3fn)
         else:
-            ExMx = f32_to_f4_unpacked(ExMx.float().cpu())
-            ExMx = pack_uint4(ExMx)
-        return ExMx, E8M0
+            ex_mx = f32_to_f4_unpacked(ex_mx.float().cpu())
+            ex_mx = pack_uint4(ex_mx)
+        return ex_mx, e8m0
 
     def export_deploy(self, x: Tensor):
         qx, scale = self.deploy(x)
@@ -34,8 +34,8 @@ class QuantDequantMx(torch.nn.Module):
         }
 
     def fake_quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
-        E8M0, ExMx = self.quant(x, qdim, v=v)
-        dx = (2 ** E8M0) * ExMx
+        e8m0, ex_mx = self.quant(x, qdim, v=v)
+        dx = (2 ** e8m0) * ex_mx
         dx = dx.flatten(qdim - 1, qdim)
         return dx
 
@@ -48,10 +48,10 @@ class QuantDequantMx(torch.nn.Module):
         x = x.unflatten(qdim, (-1, self.block_size))
         if isinstance(v, torch.Tensor):
             v = v.to(device=x.device, dtype=x.dtype).unflatten(qdim, (-1, self.block_size))
-        E8M0 = shared_exponents(x, self.emax)
-        x = x / (2 ** E8M0)
-        ExMx = quantize_elewise(x, self.min_exp, self.max_norm, self.shift_val, v=v)
-        return E8M0, ExMx
+        e8m0 = shared_exponents(x, self.emax)
+        x = x / (2 ** e8m0)
+        ex_mx = quantize_elewise(x, self.min_exp, self.max_norm, self.shift_val, v=v)
+        return e8m0, ex_mx
 
     def _get_format_params(self):
         if self.bits == 8:

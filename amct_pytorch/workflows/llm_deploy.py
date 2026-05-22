@@ -46,6 +46,19 @@ class LlmDeployWorkflow:
         register_dtype()
         register_algorithms()
 
+    @staticmethod
+    def _collect_replaced_original_weights(
+        layer_tensors: dict[str, object],
+        tensor_routes: dict[str, str],
+        original_weight_map: dict[str, str],
+    ):
+        replaced = set()
+        for weight_name in layer_tensors:
+            base_weight_name = tensor_routes.get(weight_name, weight_name)
+            if base_weight_name in original_weight_map:
+                replaced.add(base_weight_name)
+        return replaced
+
     def run(self):
         sink_id = self.setup()
         if self.granularity == "block":
@@ -70,19 +83,6 @@ class LlmDeployWorkflow:
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)
         return model_cls(self.args)
-
-    def _collect_replaced_original_weights(
-        self,
-        layer_tensors: dict[str, object],
-        tensor_routes: dict[str, str],
-        original_weight_map: dict[str, str],
-    ):
-        replaced = set()
-        for weight_name in layer_tensors:
-            base_weight_name = tensor_routes.get(weight_name, weight_name)
-            if base_weight_name in original_weight_map:
-                replaced.add(base_weight_name)
-        return replaced
 
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":
