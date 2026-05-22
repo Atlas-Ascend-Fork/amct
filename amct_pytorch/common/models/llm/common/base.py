@@ -189,8 +189,8 @@ class BaseModel(metaclass=ABCMeta):
             from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
-                    mod._eval_mode = True
-                    mod._cached_eval_weight = None
+                    mod.eval_mode = True
+                    mod.cached_eval_weight = None
         if hook_name is not None:
             register_forward_hooks(block, hook_name, hooks, act_stat)
 

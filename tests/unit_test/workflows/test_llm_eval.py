@@ -430,7 +430,7 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
     wf.run()
 
 
-# ---- setup with _sharded_block ---------------------------------------------
+# ---- setup with sharded_block ---------------------------------------------
 
 
 def test_eval_setup_enables_sharded_block(monkeypatch, tmp_path):
@@ -442,7 +442,7 @@ def test_eval_setup_enables_sharded_block(monkeypatch, tmp_path):
         "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None)
 
     class FakePipeline:
-        _sharded_block = False
+        sharded_block = False
 
         def __init__(self, args):
             pass
@@ -454,7 +454,7 @@ def test_eval_setup_enables_sharded_block(monkeypatch, tmp_path):
 
     wf = _make_eval_workflow(output_dir=str(tmp_path))
     wf.setup()
-    assert wf.pipeline._sharded_block is True
+    assert wf.pipeline.sharded_block is True
 
 
 # ---- _save_inter_result ---------------------------------------------------
