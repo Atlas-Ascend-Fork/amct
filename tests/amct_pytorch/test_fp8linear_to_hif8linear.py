@@ -8,46 +8,38 @@ from unittest.mock import patch
 
 import torch.nn as nn
 from mock_torch_npu import *
-import transformers.models.deepseek_v3.modeling_deepseek_v3 as deepseek_module
 import torch
-import transformers
-import numpy as np
 from amct_pytorch import quantize, convert
 
-try:
-    from transformers.integrations.finegrained_fp8 import FP8Linear
-except ModuleNotFoundError as exc:
-    if exc.name != 'triton':
-        raise
 
-    class FP8Linear(nn.Module):
-        def __init__(self, in_features, out_features, block_size=None, has_bias=True):
-            super().__init__()
-            self.weight = nn.Parameter(torch.empty(out_features, in_features))
-            self.bias = nn.Parameter(torch.empty(out_features)) if has_bias else None
-            self.block_size = block_size
-            scale_shape = self._get_scale_shape(out_features, in_features, block_size)
-            self.register_buffer('weight_scale_inv', torch.ones(scale_shape))
-            nn.init.normal_(self.weight, mean=0.0, std=0.02)
-            if self.bias is not None:
-                nn.init.zeros_(self.bias)
+class FP8Linear(nn.Module):
+    def __init__(self, in_features, out_features, block_size=None, has_bias=True):
+        super().__init__()
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        self.bias = nn.Parameter(torch.empty(out_features)) if has_bias else None
+        self.block_size = block_size
+        scale_shape = self._get_scale_shape(out_features, in_features, block_size)
+        self.register_buffer('weight_scale_inv', torch.ones(scale_shape))
+        nn.init.normal_(self.weight, mean=0.0, std=0.02)
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
 
-        @staticmethod
-        def _get_scale_shape(out_features, in_features, block_size):
-            if block_size is None:
-                return (out_features, in_features)
-            block_h, block_w = block_size
-            return (math.ceil(out_features / block_h), math.ceil(in_features / block_w))
+    @staticmethod
+    def _get_scale_shape(out_features, in_features, block_size):
+        if block_size is None:
+            return (out_features, in_features)
+        block_h, block_w = block_size
+        return (math.ceil(out_features / block_h), math.ceil(in_features / block_w))
 
-        def forward(self, x):
-            weight_scale_inv = self.weight_scale_inv
-            if self.block_size is not None:
-                block_h, block_w = self.block_size
-                weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_h, dim=0)
-                weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_w, dim=1)
-                weight_scale_inv = weight_scale_inv[:self.weight.shape[0], :self.weight.shape[1]]
-            weight = self.weight.to(torch.float32) / weight_scale_inv.to(torch.float32)
-            return torch.nn.functional.linear(x, weight.to(x.dtype), self.bias)
+    def forward(self, x):
+        weight_scale_inv = self.weight_scale_inv
+        if self.block_size is not None:
+            block_h, block_w = self.block_size
+            weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_h, dim=0)
+            weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_w, dim=1)
+            weight_scale_inv = weight_scale_inv[:self.weight.shape[0], :self.weight.shape[1]]
+        weight = self.weight.to(torch.float32) / weight_scale_inv.to(torch.float32)
+        return torch.nn.functional.linear(x, weight.to(x.dtype), self.bias)
 
 torch.manual_seed(0)
 
