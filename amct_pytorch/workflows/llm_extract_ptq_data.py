@@ -15,6 +15,7 @@ class LlmExtractPtqDataWorkflow:
         self.args = args
         self.seq_len = args.seq_len
         self.nsamples = args.nsamples
+        self.granularity = args.granularity
         if len(args.quant_target) != 1:
             raise ValueError("extract_ptq_data only supports a single quant_target.")
         self.quant_target = args.quant_target[0]
@@ -32,7 +33,12 @@ class LlmExtractPtqDataWorkflow:
 
     def run(self):
         sink_id = self.setup()
-        results = self._run_blockwise()
+        if self.granularity == "block":
+            results = self._run_blockwise()
+        else:
+            raise ValueError(
+                f"Currently unsupported granularity '{self.granularity}' for extract ptq data."
+            )
         logger.remove(sink_id)
         return results
 
