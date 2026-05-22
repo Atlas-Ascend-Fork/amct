@@ -97,6 +97,14 @@ esac
 
 # ── 加载 CANN 环境 ─────────────────────────────────────────────────────────────
 echo "[1/4] 加载 CANN 环境..."
+if [ -z "${ASCEND_HOME_PATH:-}" ]; then
+    echo "错误: 环境变量 ASCEND_HOME_PATH 未设置，请先 source CANN 的 set_env.sh 或导出该变量" >&2
+    exit 1
+fi
+if [ ! -f "$ASCEND_HOME_PATH/set_env.sh" ]; then
+    echo "错误: '$ASCEND_HOME_PATH/set_env.sh' 不存在，请检查 CANN 安装路径" >&2
+    exit 1
+fi
 # shellcheck disable=SC1091
 source "$ASCEND_HOME_PATH/set_env.sh"
 
