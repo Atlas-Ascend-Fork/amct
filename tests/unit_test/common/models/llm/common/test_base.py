@@ -64,11 +64,7 @@ class _StubModel(BaseModel):
             super().__init__(args)
 
 
-# ---- _embed_base_prefix / get_embed_load_specs ---------------------------
-
-
-def test_embed_base_prefix_default_is_model():
-    assert _StubModel()._embed_base_prefix() == "model."
+# ---- get_embed_load_specs ---------------------------
 
 
 def _build_fake_hf_model():
