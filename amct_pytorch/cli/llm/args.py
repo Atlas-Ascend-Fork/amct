@@ -36,9 +36,9 @@ def _validate_eval_mode(args):
 def parser_gen(command=None):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--model', type=str, default='deepseek-ai/DeepSeek-V3.2',
+    parser.add_argument('--model', type=str, default='deepseek-ai/DeepSeek-V4-Flash',
                         help='Model to load.')
-    parser.add_argument('--model_name', type=str, default='deepseek-ai/DeepSeek-V3.2',
+    parser.add_argument('--model_name', type=str, default='deepseek-ai/DeepSeek-V4-Flash',
                         help='Model to load.')
     parser.add_argument('--device', type=str, default='npu:0',
                         help='Device to use.')

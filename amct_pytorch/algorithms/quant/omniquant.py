@@ -15,7 +15,6 @@ class OmniQuant(nn.Module):
         self.args = args
         self.dim = ctx.dim_size
         self.log_scale = torch.nn.Parameter(torch.zeros((1, self.dim)), requires_grad=True)
-        # TODO most LLM linear bias is None
         self.is_observe = False
 
     def transform(self):
