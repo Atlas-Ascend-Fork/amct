@@ -21,7 +21,6 @@
 // TILE_LENGTH is no longer a compile-time constant; it is computed at runtime on the host
 // based on the platform UB size and passed in HiFloat8CastTilingData.tileLength.
 // See op_extension/hifloat8_cast_torch.cpp:ComputeMaxTileLength() for the derivation.
-constexpr uint32_t DOUBLE_BUFFER = 2;
 
 constexpr uint32_t LUT16_SIZE = 32768;
 constexpr uint32_t LUT8_SIZE = 256;

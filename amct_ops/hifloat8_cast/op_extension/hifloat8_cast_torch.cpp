@@ -276,8 +276,9 @@ static uint32_t ComputeMaxTileLength(uint32_t ubBytes, bool isEncode) {
     uint32_t lutBytes = isEncode ? LUT16_SIZE : (LUT8_SIZE * 2u);
     // UB 连 LUT 都放不下，硬件配置异常
     TORCH_CHECK(ubBytes > lutBytes, "UB too small to hold LUT");
-    // 每个元素占 6 字节 UB：encode/decode 各需 input(2) + output(1/2) 共 2 份（双 buffer）。
-    uint32_t maxTile = (ubBytes - lutBytes) / 6u;
+    // 每个元素占 3 字节 UB：encode/decode 的 input + output 之和（FP16/BF16 是 2B，HiF8 是 1B）。
+    // 单缓冲（TQue depth=1, InitBuffer num=1）—— 标量循环主导，MTE/Compute 重叠收益为 0。
+    uint32_t maxTile = (ubBytes - lutBytes) / 3u;
     // UB 剩余空间不足一个最小 tile（32 元素），硬件配置异常
     TORCH_CHECK(maxTile >= 32u, "UB too small to hold minimum tile");
     maxTile = std::min(maxTile, 65536u); // A3 UB 实测最大可用 tile
@@ -286,7 +287,7 @@ static uint32_t ComputeMaxTileLength(uint32_t ubBytes, bool isEncode) {
     if (maxTile >= 32768u) {  // 32768: tile对齐阈值，避免blockLen溢出
         return (maxTile / 32768u) * 32768u;
     }
-    return std::max((maxTile / 32u) * 32u, 32u);  // 32: 最小tile长度（向量指令粒度）
+    return std::max((maxTile / 32u) * 32u, 32u); // 小 tile 对齐到 32（向量指令粒度）
 }
 
 static uint32_t ComputeNumBlocks(uint64_t totalElements, uint32_t maxBlocks, uint32_t minPerCore) {

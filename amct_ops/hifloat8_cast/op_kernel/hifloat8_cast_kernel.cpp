@@ -26,11 +26,11 @@
  *
  * UB 占用（tileLength 由 host 运行时根据平台实际可用 UB 大小计算；
  *          maxTile ≥ 32768 时对齐到 32768，否则对齐到 32，上限 65536）：
- *   BF16/FP16 encode:  32KB(LUT16) + 2T×2B(inQ) + 2T×1B(outQ)  = 32768 + 6T bytes
- *   decode FP16/BF16:   1KB(LUT8)  + 2T×1B(inQ) + 2T×2B(outQ)  =   512 + 6T bytes
+ *   BF16/FP16 encode:  32KB(LUT16) + 1T×2B(inQ) + 1T×1B(outQ)  = 32768 + 3T bytes
+ *   decode FP16/BF16:   1KB(LUT8)  + 1T×1B(inQ) + 1T×2B(outQ)  =   512 + 3T bytes
  *
- *   A2 实测 UB = 196352B：encode T=27264 → 196352B，decode T=32640 → 196352B
- *   A3 标称 UB = 512KB：  encode T=65536 → 425984B，decode T=65536 → 393728B
+ *   单缓冲：compute 为标量循环，与 MTE 流水重叠收益为 0，
+ *   故 TQue depth=1 + InitBuffer num=1，释放队列另一半 UB 给 tile。
  *
  * CopyIn DataCopy 拆分策略（DataCopyParams.blockLen 为 uint16_t，max 65535）：
  *   byteCount ≤ 65535           → {1, byteCount}
@@ -75,8 +75,8 @@ public:
         uint64_t offset = static_cast<uint64_t>(blockIdx) * tiling->numPerCore;
         inputGm_.SetGlobalBuffer((__gm__ uint8_t *)input + offset * inputBytes_, total_ * inputBytes_);
         outputGm_.SetGlobalBuffer((__gm__ uint8_t *)output + offset * outputBytes_, total_ * outputBytes_);
-        pipe_->InitBuffer(inQueue_, DOUBLE_BUFFER, tileLength_ * inputBytes_);
-        pipe_->InitBuffer(outQueue_, DOUBLE_BUFFER, tileLength_ * outputBytes_);
+        pipe_->InitBuffer(inQueue_, 1, tileLength_ * inputBytes_);
+        pipe_->InitBuffer(outQueue_, 1, tileLength_ * outputBytes_);
 
         if (isEncode_) {
             pipe_->InitBuffer(lut16Buf_, LUT16_SIZE);
