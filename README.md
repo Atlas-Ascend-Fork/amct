@@ -205,7 +205,7 @@ amct/
 │   ├── experimental/              # 实验特性（HiFloat8转换、DeepSeek-v4量化转换 等）
 │   ├── deploy_op/                 # 量化部署算子
 │   └── quantize_op/               # 量化校准算子
-├── npu_ops/                       # AMCT 自定义 NPU 算子
+├── amct_ops/                      # AMCT 自定义 NPU 算子
 ├── examples/                      # 端到端样例与调用示例
 ├── tests/                         # 单元测试
 ├── docs/                          # 工具文档（概念、API、算法等）
