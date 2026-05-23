@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -64,6 +64,10 @@ OP_NAME=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --soc)
+            if [ $# -lt 2 ] || [[ "$2" == -* ]]; then
+                echo "错误: --soc 需要一个参数，可选值: ascend910b, ascend910_93, ascend950" >&2
+                exit 1
+            fi
             SOC="$2"
             shift 2
             ;;
