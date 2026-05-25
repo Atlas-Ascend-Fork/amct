@@ -286,7 +286,8 @@ python -m amct_pytorch.deploy \
 | `amct_pytorch/configs/w4a4.yaml` | 全局 W4A4（权重激活都为4bit）。 |
 | `amct_pytorch/configs/example_w4a8.yaml` | 自定义量化方案示例。 |
 
-`bit_config` 支持顶层 `w_bits`、`a_bits`，也支持按 `attn-linear`、`mlp`、`moe`、`attn-cache` 分组覆盖。linear 组内如果写 `w_bits` 或 `a_bits`，必须两者同时出现。
+- `bit_config` 支持顶层 `w_bits`、`a_bits`，也支持按 `attn-linear`、`mlp`、`moe`、`attn-cache` 分组覆盖。linear 组内如果写 `w_bits` 或 `a_bits`，必须两者同时出现。
+- `quant_dtype`传入`int`时，权重采用`per-channel`量化，激活采用`dynamic-per-token`量化，均采用对称量化。
 
 示例：
 
