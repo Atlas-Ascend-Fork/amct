@@ -33,6 +33,8 @@ from mock_torch_npu import mock_npu_quantize
 
 from amct_pytorch import convert
 from amct_pytorch import quantize
+from amct_pytorch.algorithms import AlgorithmRegistry
+from amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
 
 
 LOGGER = logging.getLogger(__name__)
@@ -66,6 +68,8 @@ class FP8Linear(nn.Module):
             weight_scale_inv = weight_scale_inv[:self.weight.shape[0], :self.weight.shape[1]]
         weight = self.weight.to(torch.float32) / weight_scale_inv.to(torch.float32)
         return torch.nn.functional.linear(x, weight.to(x.dtype), self.bias)
+
+AlgorithmRegistry.register('cast', None, FP8Linear, NpuHIF8Linear)
 
 torch.manual_seed(0)
 
