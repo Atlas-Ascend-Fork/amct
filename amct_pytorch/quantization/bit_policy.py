@@ -20,6 +20,7 @@ import yaml
 LayerBits = namedtuple("LayerBits", ("w", "a"))
 
 _BIT_KEYS = ("w_bits", "a_bits")
+_ALLOWED_BITS = (4, 8, 16)
 _LINEAR_GROUPS = ("attn-linear", "mlp", "moe")
 _CACHE_GROUP = "attn-cache"
 
@@ -66,6 +67,7 @@ class BitPolicy:
             cfg = yaml.safe_load(f) or {}
         if not isinstance(cfg, dict):
             raise ValueError(f"bit_config yaml at {path} must be a mapping at top level")
+        _validate_bit_config(cfg)
         return cls(cfg)
 
     def cache_bits(self, key: str) -> int:
@@ -159,6 +161,21 @@ def _check_complete(node: dict, path: str):
             continue
         if isinstance(v, dict):
             _check_complete(v, f"{path}.{k}")
+
+
+def _validate_bit_value(path: str, value):
+    if type(value) is not int:
+        raise ValueError(f"{path} must be int, but got {type(value).__name__}.")
+    if value not in _ALLOWED_BITS:
+        raise ValueError(f"{path} must be one of {_ALLOWED_BITS}, but got {value}.")
+
+def _validate_bit_config(node: dict, path: str = ""):
+    for k, v in node.items():
+        cur_path = f"{path}.{k}" if path else k
+        if isinstance(v, dict):
+            _validate_bit_config(v, cur_path)
+        else:
+            _validate_bit_value(cur_path, v)
 
 
 def _has_lt_16(node: dict) -> bool:

@@ -14,7 +14,7 @@
 | 工作流 | `amct_pytorch/workflows/` | 支持编排 PPL 评估、校准数据提取、PTQ 优化训练和部署导出等功能。 |
 | 模型适配器 | `amct_pytorch/common/models/llm/` | 适配 DeepSeek、Qwen、LongCat、Pangu、GLM 等模型结构。 |
 | 量化算法 | `amct_pytorch/algorithms/quant/` | 提供 LWC、LAC、OmniQuant、Learnable Hadamard、AutoRound 等算法组件。 |
-| 量化数据类型 | `amct_pytorch/quantization/dtypes/` | 提供 `mxfp`、`int`、`hifx` 等量化/反量化实现。 |
+| 量化数据类型 | `amct_pytorch/quantization/dtypes/` | 提供 `mxfp`、`int` 等量化/反量化实现。 |
 | 量化配置 | `amct_pytorch/configs/` | 提供 BF16、W8A8、W4A4、W4A8 示例配置。 |
 
 支持的典型能力：
@@ -270,7 +270,7 @@ python -m amct_pytorch.deploy \
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
-| `--quant_dtype` | 空  |量化后数据的类型，当前适配包括mxfp、int、hifx。`eval_mode=quant`时，为必要参数|
+| `--quant_dtype` | 空  |量化后数据的类型，当前适配包括mxfp、int。`eval_mode=quant`时，为必要参数|
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
 | `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
 | `--is_per_tensor` | `False` | 对于LAC（Learned Activation Clipping，学习式激活裁剪）算法，是否使用 per-tensor统计信息来确定裁剪范围。 |
@@ -280,38 +280,15 @@ python -m amct_pytorch.deploy \
 
 | 文件 | 含义 |
 |------|------|
-| `amct_pytorch/configs/bf16.yaml` | 全部保持 16 bit。 |
-| `amct_pytorch/configs/w8a8.yaml` | 全局 W8A8（权重激活都为8bit）。 |
-| `amct_pytorch/configs/w8a4.yaml` | 全局 W8A4（权重8bit，激活4bit）。 |
-| `amct_pytorch/configs/w4a4.yaml` | 全局 W4A4（权重激活都为4bit）。 |
-| `amct_pytorch/configs/example_w4a8.yaml` | 自定义量化方案示例。 |
+| [bf16.yaml](../amct_pytorch/configs/bf16.yaml) | 全部保持 16 bit。 |
+| [w8a8.yaml](../amct_pytorch/configs/w8a8.yaml) | 全局 W8A8（权重激活都为8bit）。 |
+| [w4a8.yaml](../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重8bit，激活4bit）。 |
+| [w4a4.yaml](../amct_pytorch/configs/w4a4.yaml) | 全局 W4A4（权重激活都为4bit）。 |
+| [example_w4a8.yaml](../amct_pytorch/configs/example_w4a8.yaml) | 自定义量化方案示例。 |
 
 - `bit_config` 支持顶层 `w_bits`、`a_bits`，也支持按 `attn-linear`、`mlp`、`moe`、`attn-cache` 分组覆盖。linear 组内如果写 `w_bits` 或 `a_bits`，必须两者同时出现。
 - `quant_dtype`传入`int`时，权重采用`per-channel`量化，激活采用`dynamic-per-token`量化，均采用对称量化。
-
-示例：
-
-```yaml
-w_bits: 4
-a_bits: 8
-
-attn-linear:
-  o_proj: { w_bits: 8, a_bits: 16 }
-
-mlp:
-  down_proj: { w_bits: 4, a_bits: 16 }
-
-moe:
-  routed:
-    down_proj: { w_bits: 4, a_bits: 16 }
-  shared:
-    w_bits: 8
-    a_bits: 8
-
-attn-cache:
-  k: 8
-  v: 8
-```
+- `bit_config`需要传入的yaml如果采用商发包内部的yaml文件会导致路径较长，用户可在本地自行配置yaml，可参考[configs路径下的yaml样例](../amct_pytorch/configs/)
 
 ### 3.5 PTQ 参数
 
@@ -352,7 +329,6 @@ layer_{layer_idx}_{unit_name}.pt
 - `deploy` 读取 PTQ 参数目录时，应确保对应 `quant_target` 的参数已训练完成。
 - `--granularity block` 是当前 LLM Agent 的主要可用路径；`ptq` 的 model 粒度仍为预留实现。
 - `--model_name` 是内部适配器名称，不一定等同于 HuggingFace 模型路径。
-- 使用 `hifx` 前需要确认 HiFloat 相关扩展已正确编译和导入。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
 ## 5. 一站式样例
