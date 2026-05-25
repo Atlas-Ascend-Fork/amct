@@ -16,32 +16,23 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import json
 import os
 import sys
 import unittest
+from unittest.mock import MagicMock
 
-import numpy as np
-import onnx
-import onnxruntime as ort
 import torch
-from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
     create_quant_config,
     create_quant_retrain_config,
     create_quant_retrain_model,
     quantize_model,
-    restore_quant_retrain_model,
     save_model,
     save_quant_retrain_model,
 )
 
-from .utils import record_file_utils, rnn_model
+from .utils import rnn_model
 
 torch.manual_seed(0)
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
@@ -51,6 +42,8 @@ class TestGRUPTQ(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
+
     @classmethod
     def setUpClass(cls):
         batch_size = 32
@@ -89,10 +82,10 @@ class TestGRUPTQ(unittest.TestCase):
         pass
 
     def setUp(self):
-        pass
+        sys.modules["torch_npu"] = MagicMock()
 
     def tearDown(self):
-        pass
+        del sys.modules["torch_npu"]
 
     def test_create_quant_config(self):
         config_file = os.path.join(self.temp_folder, 'config.json')

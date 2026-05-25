@@ -16,6 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -28,6 +29,8 @@ from amct_pytorch.classic.ptq.quantize import (
 )
 from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
 
+QUANTIZE_MODULE = sys.modules["amct_pytorch.classic.ptq.quantize"]
+
 
 class _DummyQuantOp(BaseQuantizeModule):
     pass
@@ -38,13 +41,13 @@ class _DummyDeployOp(nn.Module):
 
 
 def test_algorithm_register_delegates_to_registry():
-    with patch("amct_pytorch.classic.ptq.quantize.AlgorithmRegistry.register") as mock_reg:
+    with patch("amct_pytorch.algorithms.AlgorithmRegistry.register") as mock_reg:
         algorithm_register("alg_x", "Linear", _DummyQuantOp, _DummyDeployOp)
     mock_reg.assert_called_once_with("alg_x", "Linear", _DummyQuantOp, deploy_op=_DummyDeployOp)
 
 
 def test_algorithm_register_allows_none_deploy_op():
-    with patch("amct_pytorch.classic.ptq.quantize.AlgorithmRegistry.register") as mock_reg:
+    with patch("amct_pytorch.algorithms.AlgorithmRegistry.register") as mock_reg:
         algorithm_register("alg_y", "Linear", _DummyQuantOp)
     mock_reg.assert_called_once_with("alg_y", "Linear", _DummyQuantOp, deploy_op=None)
 
@@ -59,8 +62,8 @@ def test_algorithm_register_rejects_non_module_quant_op():
 
 def test_convert_runs_replace_pass_on_model():
     model = nn.Linear(4, 4)
-    with patch("amct_pytorch.classic.ptq.quantize.ModelOptimizer") as mock_opt_cls, \
-         patch("amct_pytorch.classic.ptq.quantize.ReplaceNpuQuantModulePass") as mock_pass_cls:
+    with patch.object(QUANTIZE_MODULE, "ModelOptimizer") as mock_opt_cls, \
+         patch.object(QUANTIZE_MODULE, "ReplaceNpuQuantModulePass") as mock_pass_cls:
         opt = mock_opt_cls.return_value
         convert(model)
 
@@ -78,12 +81,12 @@ def test_quantize_uses_default_config_when_none():
     model = nn.Linear(4, 4)
     sentinel_default = {"_default": True}
     sentinel_layer = {"layer": "cfg"}
-    with patch("amct_pytorch.classic.ptq.quantize.set_default_config",
+    with patch.object(QUANTIZE_MODULE, "set_default_config",
                return_value=sentinel_default) as mock_default, \
-         patch("amct_pytorch.classic.ptq.quantize.parse_config",
+         patch.object(QUANTIZE_MODULE, "parse_config",
                return_value=sentinel_layer) as mock_parse, \
-         patch("amct_pytorch.classic.ptq.quantize.ModelOptimizer") as mock_opt_cls, \
-         patch("amct_pytorch.classic.ptq.quantize.InsertQuantizeModulePass") as mock_pass_cls:
+         patch.object(QUANTIZE_MODULE, "ModelOptimizer") as mock_opt_cls, \
+         patch.object(QUANTIZE_MODULE, "InsertQuantizeModulePass") as mock_pass_cls:
         opt = mock_opt_cls.return_value
         quantize(model, None)
 
@@ -100,11 +103,11 @@ def test_quantize_uses_default_config_when_none():
 def test_quantize_passes_user_config_through():
     model = nn.Linear(4, 4)
     user_cfg = {"granularity": "tensor"}
-    with patch("amct_pytorch.classic.ptq.quantize.set_default_config") as mock_default, \
-         patch("amct_pytorch.classic.ptq.quantize.parse_config",
+    with patch.object(QUANTIZE_MODULE, "set_default_config") as mock_default, \
+         patch.object(QUANTIZE_MODULE, "parse_config",
                return_value={"layer": "cfg"}) as mock_parse, \
-         patch("amct_pytorch.classic.ptq.quantize.ModelOptimizer"), \
-         patch("amct_pytorch.classic.ptq.quantize.InsertQuantizeModulePass"):
+         patch.object(QUANTIZE_MODULE, "ModelOptimizer"), \
+         patch.object(QUANTIZE_MODULE, "InsertQuantizeModulePass"):
         quantize(model, user_cfg)
 
     mock_default.assert_not_called()

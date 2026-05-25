@@ -15,7 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import sys
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 import torch
@@ -23,6 +25,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from amct_pytorch.common.optimization.blockwise_solver import BlockwiseSolver
+
+sys.modules["torch_npu"] = MagicMock()
 
 
 def _args(epochs=1, base_lr=1e-3, optimizer="adam"):
