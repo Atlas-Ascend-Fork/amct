@@ -45,7 +45,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 |----------|------|
 | **PTQ 量化算法** | Min-Max / AWQ / GPTQ / SmoothQuant 等训练后量化算法，详见 [算法介绍](docs/algorithm_brief.md) |
 | **HiFloat8 量化** | 华为自研 8-bit 浮点格式，锥形精度 + 大动态范围，详见 [HiFloat8 介绍](docs/context/hifloat8_quantization.md) |
-| **NPU 自定义算子** | 基于NPU的自研算子，Ascend C kernel 实现，详见 [npu_ops](npu_ops/README.md) |
+| **NPU 自定义算子** | 基于NPU的自研算子，Ascend C kernel 实现，详见 [amct_ops](amct_ops/README.md) |
 | **大模型量化** | DeepSeek-V3.2 / V4 量化方案，详见 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
 
 
