@@ -287,8 +287,8 @@ python -m amct_pytorch.deploy \
 | [example_w4a8.yaml](../amct_pytorch/configs/example_w4a8.yaml) | 自定义量化方案示例。 |
 
 - `bit_config` 支持顶层 `w_bits`、`a_bits`，也支持按 `attn-linear`、`mlp`、`moe`、`attn-cache` 分组覆盖。linear 组内如果写 `w_bits` 或 `a_bits`，必须两者同时出现。
-- `quant_dtype`传入`int`时，权重采用`per-channel`量化，激活采用`dynamic-per-token`量化，均采用对称量化。
-- `bit_config`需要传入的yaml如果采用商发包内部的yaml文件会导致路径较长，用户可在本地自行配置yaml，可参考[configs路径下的yaml样例](../amct_pytorch/configs/)
+- `quant_dtype`传入`int`时，权重采用`per-channel`量化，激活采用`dynamic-per-token`量化，均采用**对称量化**。
+- `bit_config`需要传入yaml，推荐用户在本地自行配置yaml，可参考[configs路径下的yaml样例](../amct_pytorch/configs/)或直接点进上方软连接跳转
 
 ### 3.5 PTQ 参数
 
