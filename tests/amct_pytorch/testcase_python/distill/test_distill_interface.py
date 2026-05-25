@@ -19,7 +19,7 @@ import logging
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import torch
@@ -170,10 +170,10 @@ class TestDistillInterface(unittest.TestCase):
         logger.info("[UNITTEST END test_distill_interface.py]")
 
     def setUp(self):
-        pass
+        sys.modules["torch_npu"] = MagicMock()
 
     def tearDown(self):
-        pass
+        del sys.modules["torch_npu"]
 
     def test_create_distill_config_no_cfg(self):
         config_file = os.path.join(self.temp_folder, 'default.json')
