@@ -36,7 +36,7 @@ cfg = {
             'strategy': 'tensor',
         },
     },
-    'algorithm': 'algorithm': {'minmax'},
+    'algorithm': {'minmax'},
     'skip_layers': {'lm_head'}
 }
 ```
