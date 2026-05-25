@@ -21,6 +21,10 @@ __all__ = [
     'INT8_SMOOTHQUANT_CFG', 'INT8_MINMAX_WEIGHT_QUANT_CFG',
     'HIFP8_OFMR_CFG', 'FP8_OFMR_CFG', 'MXFP8_QUANT_CFG',
     'MXFP4_AWQ_WEIGHT_QUANT_CFG', 'HIFP8_CAST_CFG', 'HIFP8_QUANTILE_CFG',
+    # 结构化剪枝 façade
+    'prune', 'PrunePass', 'get_last_report',
+    'CNN_VARIANCE_PRUNE_CFG', 'DENSE_LOWVAR_PRUNE_CFG',
+    'MOE_MASSVAR_PRUNE_CFG', 'FULL_STRUCTURED_PRUNE_CFG',
 ]
 
 from amct_pytorch.classic import quantize, convert, algorithm_register
@@ -29,4 +33,13 @@ from amct_pytorch.common.config import (
     INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG,
     HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG,
     MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
+)
+
+# 结构化剪枝 façade（与 quantize/convert 同级暴露）
+from amct_pytorch.pruning import prune, PrunePass, get_last_report
+from amct_pytorch.pruning import (
+    CNN_VARIANCE_PRUNE_CFG,
+    DENSE_LOWVAR_PRUNE_CFG,
+    MOE_MASSVAR_PRUNE_CFG,
+    FULL_STRUCTURED_PRUNE_CFG,
 )
