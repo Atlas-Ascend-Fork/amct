@@ -169,3 +169,21 @@ def mocked_npu_quant_conv2d(x, weight, scale, stride, pads,
     out *= scale.reshape(1, -1, 1, 1)
     out = out.to(output_dtype)
     return out
+
+
+def mock_npu_anti_quant(tensor, scale, src_dtype=None, dst_dtype=None):
+    tensor_fp32 = tensor.float()
+    scale_fp32 = scale.float()
+    dequant = tensor_fp32 * scale_fp32
+    if dst_dtype is not None:
+        try:
+            dequant = convert_dtype(dequant, dst_dtype)
+        except ValueError:
+            dequant = dequant.to(dst_dtype)
+    return dequant
+
+
+def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=None):
+    quant_x = x
+    pertoken_scale = torch.ones(x.shape[0], 1, dtype=torch.float32, device=x.device)
+    return quant_x, pertoken_scale
