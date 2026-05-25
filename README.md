@@ -134,7 +134,7 @@ amct/
 │   ├── experimental/               # 实验特性（HiFloat8、DeepSeek 等）
 │   ├── quantization/               # 量化数据类型与基础模块
 │   └── workflows/                  # LLM 量化、评估和部署流程
-├── npu_ops/                       # AMCT 自定义 NPU 算子
+├── amct_ops/                      # AMCT 自定义 NPU 算子
 ├── examples/                      # 端到端样例与调用示例
 ├── tests/                         # 单元测试
 ├── docs/                          # 工具文档（概念、API、算法等）
@@ -223,4 +223,3 @@ pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isol
 ## 📝 许可证
 
 本项目基于 [Apache 2.0](LICENSE) 协议开源。使用前请阅读 [安全声明](SECURITY.md) 与 [免责声明](DISCLAIMER.md)。
-
