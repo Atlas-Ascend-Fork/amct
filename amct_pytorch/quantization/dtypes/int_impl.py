@@ -10,9 +10,7 @@ def dynamic_per_token_quant(tensor: torch.Tensor, bits: int) -> torch.Tensor:
     dtype = tensor.dtype
     qmax = 2 ** (bits - 1) - 1
     qmin = -2 ** (bits - 1)
-    max_val = tensor.amax(dim=-1, keepdim=True)
-    min_val = tensor.amin(dim=-1, keepdim=True)
-    abs_max = torch.max(max_val.abs(), min_val.abs()).clamp(min=1e-5)
+    abs_max = torch.abs(tensor).max(dim=-1, keepdim=True).clamp(min=1e-5)
     scale = (abs_max / qmax).clamp_min(1e-9)
     tensor = round_ste(tensor / scale)
     tensor = torch.clamp(tensor, qmin, qmax)
