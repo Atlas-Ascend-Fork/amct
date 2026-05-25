@@ -79,7 +79,7 @@ class SmoothQuant(BaseQuantizeModule):
 
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
-            return output
+            return self._fake_quant_forward(inputs)
         batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
         batch_min = inputs.reshape(-1, inputs.shape[-1]).amin(dim=0, keepdim=True)
         if self.act_granularity == 'token':
