@@ -204,8 +204,7 @@ class FakeRetrainConfig:
         return cls.__instance
 
     def __init__(self):
-        super(FakeRetrainConfig, self).__init__()
-        self.prune_layers = None
+        pass
 
     def set_prune_layers(self, prune_layers):
         self.prune_layers = prune_layers
