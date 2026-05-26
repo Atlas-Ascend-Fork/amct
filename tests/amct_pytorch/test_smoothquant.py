@@ -73,7 +73,7 @@ class TestSmoothQuant(unittest.TestCase):
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_int8_int8_tensor_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -111,7 +111,7 @@ class TestSmoothQuant(unittest.TestCase):
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_int8_int8_tensor_asym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -150,7 +150,7 @@ class TestSmoothQuant(unittest.TestCase):
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_int8_int8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -195,7 +195,7 @@ class TestSmoothQuant(unittest.TestCase):
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant) 
     @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param) 
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_fp8_fp4_group_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7, mock_8): 

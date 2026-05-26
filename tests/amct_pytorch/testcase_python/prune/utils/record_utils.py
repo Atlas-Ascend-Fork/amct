@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pytorch_pb2,
 )
 

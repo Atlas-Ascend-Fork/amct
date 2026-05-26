@@ -26,7 +26,7 @@ from unittest import mock
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import bcp
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op import bcp
 
 DEVICE = 'cuda:0'
 

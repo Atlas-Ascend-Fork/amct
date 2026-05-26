@@ -21,7 +21,7 @@ import unittest
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.prune_interface import (
+from amct_pytorch.classic.graph_based.amct_pytorch.prune_interface import (
     create_compressed_retrain_model,
     create_prune_retrain_model,
     restore_compressed_retrain_model,

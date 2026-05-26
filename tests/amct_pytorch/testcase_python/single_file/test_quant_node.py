@@ -26,9 +26,9 @@ import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import (
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
     QuantOpInfo,
 )
 

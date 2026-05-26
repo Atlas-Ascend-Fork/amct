@@ -27,11 +27,11 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
+from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
     GraphQuerier,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base import (
     distill_field,
 )
 

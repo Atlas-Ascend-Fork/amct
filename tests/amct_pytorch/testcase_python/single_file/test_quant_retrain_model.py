@@ -28,20 +28,20 @@ import numpy as np
 import torch
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
     RetrainConfig,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     create_quant_retrain_config,
     create_quant_retrain_model,
     restore_quant_retrain_model,
     save_quant_retrain_model,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils import vars
+from amct_pytorch.classic.graph_based.amct_pytorch.utils import vars
 
 from .utils import models, record_file_utils
 

@@ -25,7 +25,7 @@ set(AMCT_DIR ${AMCT_TOP_DIR})
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
 
-add_subdirectory(${AMCT_TOP_DIR}/amct_pytorch/classic/ptq/graph_based
+add_subdirectory(${AMCT_TOP_DIR}/amct_pytorch/classic/graph_based
                  ${CMAKE_BINARY_DIR}/amct_pytorch_classic_ptq_graph_based)
 
 if(ENABLE_COVERAGE STREQUAL "TRUE")

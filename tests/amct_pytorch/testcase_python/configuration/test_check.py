@@ -21,7 +21,7 @@ from io import BytesIO
 
 sys.path.append(
     "~/amct/llt/asl/aoetools/amct/"
-    "amct_pytorch.classic.ptq.graph_based.amct_pytorch/ut/"
+    "amct_pytorch.classic.graph_based.amct_pytorch/ut/"
     "testcase_python/configuration")
 
 import unittest
@@ -30,20 +30,20 @@ import torch
 import torch.nn.functional as F
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
     GraphChecker,
     GraphQuerier,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_ONNX_TYPES,
     QUANTIZABLE_TYPES,
 )

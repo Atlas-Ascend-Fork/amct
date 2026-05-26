@@ -22,8 +22,8 @@ from io import BytesIO
 import torch
 import torch.nn.functional as F
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_conv_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_conv_util import (
     OnnxConvUtil,
 )
 

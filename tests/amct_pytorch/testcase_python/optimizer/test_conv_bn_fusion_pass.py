@@ -27,26 +27,26 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.record_file_operator import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.record_file_operator import (
     ScaleOffsetRecordHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
     version_higher_than,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
     Configuration,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.conv_bn_fusion_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.conv_bn_fusion_pass import (
     ConvBnFusionPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
     ModelOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
 )
 

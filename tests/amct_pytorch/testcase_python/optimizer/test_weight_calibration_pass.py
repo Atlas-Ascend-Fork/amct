@@ -27,23 +27,23 @@ import numpy as np
 import torch
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
     Configuration,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
     ModelOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.weight_calibration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.weight_calibration import (
     WeightsCalibrationPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
 )
 

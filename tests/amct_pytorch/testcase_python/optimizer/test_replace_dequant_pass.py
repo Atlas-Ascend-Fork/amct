@@ -27,33 +27,33 @@ import torch
 from google.protobuf import text_format
 from onnx import onnx_pb
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import (
+import amct_pytorch.classic.graph_based.amct_pytorch as amct
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
     files as files_util,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
     Configuration,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_dequant_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_dequant_pass import (
     InsertDequantPass,
     construct_dequant_node,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
     InsertQuantPass,
     construct_quant_node,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_dequant_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_dequant_pass import (
     ReplaceDequantPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parse_record_file import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parse_record_file import (
     RecordFileParser,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
 

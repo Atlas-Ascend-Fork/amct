@@ -22,8 +22,8 @@ import unittest
 import numpy as np
 import torch
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.fake_quant import (
+import amct_pytorch.classic.graph_based.amct_pytorch
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.fake_quant import (
     FakeDeQuant,
 )
 

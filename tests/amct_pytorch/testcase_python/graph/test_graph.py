@@ -25,8 +25,8 @@ import numpy as np
 import torch
 from onnx import TensorProto, ValueInfoProto, helper, onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
 
 TRANSPOSE_NODE_NAME = "transpose"
 

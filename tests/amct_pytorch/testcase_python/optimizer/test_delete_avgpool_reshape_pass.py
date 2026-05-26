@@ -20,10 +20,10 @@ import unittest
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import (
     ReplaceAvgpoolReshapePass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
 from .util import models
 

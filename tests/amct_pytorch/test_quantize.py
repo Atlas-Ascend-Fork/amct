@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -78,7 +78,7 @@ class TestDefQuantize(unittest.TestCase):
     def setUp(self):
         mock_torch_npu = MagicMock()
         sys.modules['torch_npu'] = mock_torch_npu
- 
+
     def tearDown(self):
         del sys.modules['torch_npu']
 
@@ -87,7 +87,7 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_default_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -108,7 +108,7 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_int4_awq_quant_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -123,13 +123,13 @@ class TestDefQuantize(unittest.TestCase):
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
         quant_out = model(self.inputs.npu())
-        
+
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_int4_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -151,7 +151,7 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_int8_minmax_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -171,7 +171,7 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_int8_smooth_success(self, mock_1, mock_2, mock_3, mock_4):

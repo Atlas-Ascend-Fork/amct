@@ -28,13 +28,13 @@ import numpy as np
 import torch
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.quant_calibration_op import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.quant_calibration_op import (
     QuantCalibrationOp,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import LOGGER
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

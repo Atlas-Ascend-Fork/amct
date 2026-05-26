@@ -25,24 +25,24 @@ from collections import OrderedDict
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config import (
     get_enable_quant_layers,
     parse_distill_config,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
     Conv2dQAT,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.linear import (
     LinearQAT,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_qat_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_qat_pass import (
     InsertQatPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
     ModelOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import DISTILL_TYPES
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import DISTILL_TYPES
 
 from .utils import models
 

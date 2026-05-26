@@ -25,11 +25,11 @@ import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
     construct_quant_node,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.quant_fusion_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.quant_fusion_pass import (
     QuantFusionPass,
 )
 

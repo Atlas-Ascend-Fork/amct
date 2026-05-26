@@ -22,11 +22,11 @@ import unittest
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
     CONFIGURER,
     RetrainConfig,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from tests.amct_pytorch.testcase_python.configuration.utils import models
 
 REGULAR_PRUNE_ENABLE = 'regular_prune_enable'

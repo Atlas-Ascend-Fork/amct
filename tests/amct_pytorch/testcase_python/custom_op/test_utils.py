@@ -20,7 +20,7 @@ from unittest import mock
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import utils
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op import utils
 
 DEVICE = torch.device('cpu')
 

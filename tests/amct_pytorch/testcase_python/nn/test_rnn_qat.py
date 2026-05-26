@@ -28,16 +28,16 @@ import onnxruntime as ort
 import torch
 from torch import nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.utils import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils import (
     copy_tensor,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.gru import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.gru import (
     GRUQAT,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.lstm import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.lstm import (
     LSTMQAT,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import LOGGER
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -47,7 +47,7 @@ class SingleGRUNet(nn.Module):
         super(SingleGRUNet, self).__init__()
         self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
         self.hidden_size = hidden_size
-    
+
     def forward(self, x):
         h0 = torch.zeros(1, x.size(0), self.hidden_size)
         out, _ = self.gru(x, h0)
@@ -59,7 +59,7 @@ class SingleLSTMNet(nn.Module):
         super(SingleLSTMNet, self).__init__()
         self.gru = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.hidden_size = hidden_size
-    
+
     def forward(self, x):
         h0 = torch.zeros(1, x.size(0), self.hidden_size)
         c0 = torch.zeros(1, x.size(0), self.hidden_size)
@@ -124,7 +124,7 @@ class TestLSTMQAT(unittest.TestCase):
         for _ in range(5):
             ret = net_lstm.forward(torch.rand(1, 1, 10))
             self.assertIsNotNone(ret)
-    
+
     def test_lstm_qat_convert_from_ori_op_seq_n(self):
         net_lstm = SingleLSTMNet(input_size=10, hidden_size=20)
         for name, module in net_lstm.named_modules():

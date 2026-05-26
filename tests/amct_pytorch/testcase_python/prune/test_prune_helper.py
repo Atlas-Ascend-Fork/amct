@@ -21,8 +21,8 @@ from unittest import mock
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.prune.pruner_helper import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.prune.pruner_helper import (
     PruneHelper,
 )
 

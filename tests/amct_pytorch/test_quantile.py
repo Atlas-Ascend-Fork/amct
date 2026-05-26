@@ -61,7 +61,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_quantile_weight_only(self, mock_1, mock_2, mock_3):
@@ -97,7 +97,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_quantile_full_quant_with_convert(self, mock_1, mock_2, mock_3):
@@ -133,7 +133,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_quantile_with_bias(self, mock_1, mock_2, mock_3):
@@ -167,7 +167,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_quantile_with_token(self, mock_1, mock_2, mock_3):
@@ -203,7 +203,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_quantile_calibration(self, mock_1, mock_2, mock_3):
@@ -236,7 +236,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_quantile_with_config_object(self, mock_1, mock_2, mock_3):
@@ -258,7 +258,7 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch(
-        'amct_pytorch.classic.ptq.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
     def test_quantile_with_config_object(self, mock_1, mock_2, mock_3):

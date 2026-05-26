@@ -25,17 +25,17 @@ from unittest import mock
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.prune.prune_recorder_helper import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.prune.prune_recorder_helper import (
     PruneRecordHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration import (
     retrain_config,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pytorch_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.prune.filter_prune_helper import (
+from amct_pytorch.classic.graph_based.amct_pytorch.prune.filter_prune_helper import (
     create_filter_prune_helper,
 )
 
