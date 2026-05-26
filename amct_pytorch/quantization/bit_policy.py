@@ -169,6 +169,7 @@ def _validate_bit_value(path: str, value):
     if value not in _ALLOWED_BITS:
         raise ValueError(f"{path} must be one of {_ALLOWED_BITS}, but got {value}.")
 
+
 def _validate_bit_config(node: dict, path: str = ""):
     for k, v in node.items():
         cur_path = f"{path}.{k}" if path else k
