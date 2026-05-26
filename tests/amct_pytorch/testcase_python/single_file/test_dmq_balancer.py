@@ -32,8 +32,8 @@ import onnxruntime
 import torch
 import torch.nn.functional as F
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+import amct_pytorch.classic.graph_based.amct_pytorch
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     create_quant_config,
     quantize_model,
     quantize_preprocess,
@@ -93,7 +93,7 @@ class TestDMQBalancer(unittest.TestCase):
         batch_num = 2
         cfg_def = os.path.join(CUR_DIR, 'utils/test_dmq_balancer/dmq_balancer.cfg')
 
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_config(
+        amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
             config_file=self.config_file,
             model=model,
             input_data=input_data,
@@ -123,7 +123,7 @@ class TestDMQBalancer(unittest.TestCase):
         cfg_def = os.path.join(CUR_DIR, 'utils/test_dmq_balancer/dmq_balancer_not_support.cfg')
 
         with patch(
-            ('amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check.'
+            ('amct_pytorch.classic.graph_based.amct_pytorch.configuration.check.'
              'GraphQuerier.get_support_dmq_balancer_types'),
             return_value=['avg_pool']):
             self.assertRaises(ValueError, create_quant_config,
@@ -163,7 +163,7 @@ class TestDMQBalancer(unittest.TestCase):
         dmq_balancer_model = do_calibration_1(model, input_data)
 
         with patch(
-            ('amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.'
+            ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
              'parse_record_file.RecordManager.get_tensor_balance_factor'),
                    return_value=None):
             self.assertRaises(ValueError, quantize_model,
@@ -175,7 +175,7 @@ class TestDMQBalancer(unittest.TestCase):
 
         dmq_balancer_model = do_calibration_1(model, input_data)
         with patch(
-            ('amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.'
+            ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
              'parse_record_file.RecordManager.get_tensor_balance_factor'),
                    return_value=np.array([1.5], dtype=np.float32)):
             self.assertRaises(ValueError, quantize_model,
@@ -187,7 +187,7 @@ class TestDMQBalancer(unittest.TestCase):
 
         dmq_balancer_model = do_calibration_1(model, input_data)
         with patch(
-            ('amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.'
+            ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
              'parse_record_file.RecordManager.get_tensor_balance_factor'),
                    return_value=np.array([0.0], dtype=np.float32)):
             self.assertRaises(ValueError, quantize_model,
@@ -200,7 +200,7 @@ class TestDMQBalancer(unittest.TestCase):
 
         do_calibration_2(model, input_data, self.modfied_onnx_file)
         with patch(
-            ('amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.'
+            ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
              'parse_record_file.RecordManager.get_tensor_balance_factor'),
                    return_value=np.array([1.5], dtype=np.float32)):
             self.assertRaises(ValueError, save_model, self.modfied_onnx_file, self.record_file, save_path)
@@ -212,7 +212,7 @@ class TestDMQBalancer(unittest.TestCase):
 
         do_calibration_2(model, input_data, self.modfied_onnx_file)
         with patch(
-            ('amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.'
+            ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
              'parse_record_file.RecordManager.get_tensor_balance_factor'),
                    return_value=np.array([0.0], dtype=np.float32)):
             self.assertRaises(ValueError, save_model, self.modfied_onnx_file, self.record_file, save_path)
@@ -225,7 +225,7 @@ def do_calibration(model, args_shape, temp_folder):
     modfied_onnx_file = os.path.join(temp_folder, 'dmq_balancer_modified.onnx')
     fake_quant_onnx = os.path.join(temp_folder, 'dmq_balancer_fake_quant_model.onnx')
 
-    amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_config(
+    amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
         config_file=TestDMQBalancer.config_file,
         model=model,
         input_data=input_data,
@@ -234,7 +234,7 @@ def do_calibration(model, args_shape, temp_folder):
         activation_offset=True,
         config_defination=cfg_def)
 
-    dmq_balancer_model = amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_preprocess(
+    dmq_balancer_model = amct_pytorch.classic.graph_based.amct_pytorch.quantize_preprocess(
         config_file=TestDMQBalancer.config_file,
         model=model,
         input_data=input_data,
@@ -245,7 +245,7 @@ def do_calibration(model, args_shape, temp_folder):
 
     logger.info('%s calibration %s', '=' * 50, '=' * 50)
 
-    new_model = amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_model(
+    new_model = amct_pytorch.classic.graph_based.amct_pytorch.quantize_model(
         config_file=TestDMQBalancer.config_file,
         model=model,
         input_data=input_data,
@@ -257,7 +257,7 @@ def do_calibration(model, args_shape, temp_folder):
     logger.info('%s calibration %s', '=' * 50, '=' * 50)
 
     # save
-    amct_pytorch.classic.ptq.graph_based.amct_pytorch.save_model(
+    amct_pytorch.classic.graph_based.amct_pytorch.save_model(
         modfied_onnx_file=TestDMQBalancer.modfied_onnx_file,
         record_file=TestDMQBalancer.record_file,
         save_path=os.path.join(temp_folder, 'dmq_balancer'))
@@ -269,7 +269,7 @@ def do_calibration_1(model, input_data):
     batch_num = 2
     cfg_def = os.path.join(CUR_DIR, 'utils/test_dmq_balancer/dmq_balancer.cfg')
 
-    amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_config(
+    amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
         config_file=TestDMQBalancer.config_file,
         model=model,
         input_data=input_data,
@@ -278,7 +278,7 @@ def do_calibration_1(model, input_data):
         activation_offset=True,
         config_defination=cfg_def)
 
-    dmq_balancer_model = amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_preprocess(
+    dmq_balancer_model = amct_pytorch.classic.graph_based.amct_pytorch.quantize_preprocess(
         config_file=TestDMQBalancer.config_file,
         record_file=TestDMQBalancer.record_file,
         model=model,
@@ -293,7 +293,7 @@ def do_calibration_2(model, input_data, modfied_onnx_file):
     batch_num = 2
     cfg_def = os.path.join(CUR_DIR, 'utils/test_dmq_balancer/dmq_balancer.cfg')
 
-    amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_config(
+    amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
         config_file=TestDMQBalancer.config_file,
         model=model,
         input_data=input_data,
@@ -302,7 +302,7 @@ def do_calibration_2(model, input_data, modfied_onnx_file):
         activation_offset=True,
         config_defination=cfg_def)
 
-    dmq_balancer_model = amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_preprocess(
+    dmq_balancer_model = amct_pytorch.classic.graph_based.amct_pytorch.quantize_preprocess(
         config_file=TestDMQBalancer.config_file,
         record_file=TestDMQBalancer.record_file,
         model=model,
@@ -313,7 +313,7 @@ def do_calibration_2(model, input_data, modfied_onnx_file):
 
     logger.info('%s calibration %s', '=' * 50, '=' * 50)
 
-    new_model = amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_model(
+    new_model = amct_pytorch.classic.graph_based.amct_pytorch.quantize_model(
         config_file=TestDMQBalancer.config_file,
         model=model,
         input_data=input_data,

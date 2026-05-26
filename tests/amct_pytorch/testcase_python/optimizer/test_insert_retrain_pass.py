@@ -24,38 +24,38 @@ import unittest
 import numpy as np
 import torch
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+import amct_pytorch.classic.graph_based.amct_pytorch
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
     RetrainConfig,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_base import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_base import (
     CompModuleBase,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv1d import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv1d import (
     CompModuleConv1d,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d import (
     CompModuleConv2d,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv3d import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv3d import (
     CompModuleConv3d,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
     CompModuleLinear,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_retrain_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_retrain_pass import (
     InsertRetrainPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.share_act_comp_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.share_act_comp_pass import (
     ShareActCompPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
 logger = logging.getLogger(__name__)

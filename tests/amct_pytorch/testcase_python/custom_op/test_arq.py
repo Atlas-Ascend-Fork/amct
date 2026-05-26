@@ -20,7 +20,7 @@ import unittest
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op import (
     arq_cali_pytorch,
     arq_real_pytorch,
 )

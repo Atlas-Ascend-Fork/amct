@@ -25,19 +25,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.retrain_config import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
     RetrainConfig,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
     ModelOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.replace_sync_bn_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_sync_bn_pass import (
     RepalceSyncBNPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
 logger = logging.getLogger(__name__)

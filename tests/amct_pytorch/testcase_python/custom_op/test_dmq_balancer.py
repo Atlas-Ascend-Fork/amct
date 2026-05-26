@@ -21,13 +21,13 @@ from unittest.mock import patch
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.dmq_balancer.dmq_balancer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.dmq_balancer.dmq_balancer import (
     DMQBalancer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.dmq_balancer.dmq_balancer_func import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.dmq_balancer.dmq_balancer_func import (
     DMQBalancerFunction,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
 

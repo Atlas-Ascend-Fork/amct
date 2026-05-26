@@ -25,14 +25,14 @@ import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
     construct_quant_node,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.mult_output_with_quant_optimizer import (
     MultQuantOptimizerPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     MULT_OUTPUT_TYPES,
 )
 

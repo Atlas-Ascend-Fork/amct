@@ -26,23 +26,23 @@ import numpy as np
 import torch
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
     Configuration,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
     InsertWeightQuantPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.vars import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
 )
 
@@ -94,7 +94,7 @@ class TestWeightQuantPass(unittest.TestCase):
 
     def test_quant_weight_int4(self):
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
             'QuantOpInfo.get_dst_num_bits', return_value=4):
             passer = InsertWeightQuantPass(self.records)
             before_nodes = len(self.graph.nodes)

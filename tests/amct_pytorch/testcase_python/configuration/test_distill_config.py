@@ -22,7 +22,7 @@ import unittest
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config import (
     get_enable_quant_layers,
     get_quant_layer_config,
 )

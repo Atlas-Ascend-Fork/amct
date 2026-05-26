@@ -24,12 +24,12 @@ import unittest
 import numpy as np
 import torch
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+import amct_pytorch.classic.graph_based.amct_pytorch
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
     Configuration,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
     get_node_output_info,
 )
@@ -51,7 +51,7 @@ class TestModelHelper(unittest.TestCase):
         if not os.path.exists(cls.temp_dir):
             os.makedirs(cls.temp_dir)
         cls.config_file = os.path.join(cls.temp_dir, 'config.json')
-        amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_config(
+        amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
             cls.config_file, cls.model_001, torch.randn((1, 2, 28, 28)))
 
         cls.args = torch.randn(16, 2, 28, 28)

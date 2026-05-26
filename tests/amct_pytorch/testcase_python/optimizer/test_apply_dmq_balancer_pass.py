@@ -25,8 +25,8 @@ import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.apply_dmq_balancer_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.apply_dmq_balancer_pass import (
     ApplyDMQBalancerPass,
 )
 

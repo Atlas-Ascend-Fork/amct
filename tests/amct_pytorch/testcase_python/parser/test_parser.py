@@ -24,17 +24,17 @@ from unittest.mock import patch
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
     version_higher_than,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import (
     Parser,
     _export_to_onnx,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
     _write_node_info,
     delete_customized_attr,
 )

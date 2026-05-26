@@ -23,12 +23,12 @@ import unittest
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import struct_helper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import struct_helper
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     _check_config_consistency,
     add_dump_operations,
     create_quant_config,

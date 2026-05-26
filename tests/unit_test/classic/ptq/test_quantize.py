@@ -22,22 +22,28 @@ from unittest.mock import patch
 import pytest
 from torch import nn
 
-from amct_pytorch.classic.ptq.quantize import (
+from amct_pytorch.classic.quantize import (
     algorithm_register,
     convert,
     quantize,
 )
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
-QUANTIZE_MODULE = sys.modules["amct_pytorch.classic.ptq.quantize"]
+QUANTIZE_MODULE = sys.modules["amct_pytorch.classic.quantize"]
 
 
 def test_base_quantize_module_keeps_legacy_import_path():
-    from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule as ClassicBaseQuantizeModule
+    from amct_pytorch.classic.quantize_op.base_quant_module import BaseQuantizeModule as ClassicBaseQuantizeModule
     from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule as LegacyBaseQuantizeModule
 
     assert LegacyBaseQuantizeModule is BaseQuantizeModule
     assert ClassicBaseQuantizeModule is BaseQuantizeModule
+
+
+def test_classic_quantize_imports_without_ptq_package_layer():
+    from amct_pytorch.classic.quantize import algorithm_register as classic_algorithm_register
+
+    assert classic_algorithm_register is algorithm_register
 
 
 class _DummyQuantOp(BaseQuantizeModule):

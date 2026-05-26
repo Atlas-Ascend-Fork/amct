@@ -21,10 +21,10 @@ from unittest.mock import patch
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.insert_kv_cache_quant_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_kv_cache_quant_pass import (
     InsertKVCacheQuantPass,
 )
 
@@ -65,7 +65,7 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
     def test_match_pattern_not_quant(self):
         module = torch.nn.Linear(4, 8)
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config.'
             'get_kv_cache_quant_layers',
             return_value=['linear1'],
         ):
@@ -75,7 +75,7 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
     def test_match_pattern_success(self):
         module = torch.nn.Linear(4, 8)
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config.'
             'get_kv_cache_quant_layers',
             return_value=['linear1'],
         ):
@@ -99,7 +99,7 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
             }
         }
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config.'
             'get_quant_layer_config',
             return_value=config,
         ):
@@ -117,7 +117,7 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
             }
         }
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config.'
             'get_quant_layer_config',
             return_value=config,
         ):

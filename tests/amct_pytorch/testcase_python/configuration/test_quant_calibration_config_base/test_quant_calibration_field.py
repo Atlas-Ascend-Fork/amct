@@ -18,11 +18,11 @@
 import logging
 import unittest
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.quant_calibration_config_base import (
+from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config_base import (
     quant_calibration_field as field,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
 )
 

@@ -21,10 +21,10 @@ set(CMAKE_VERBOSE_MAKEFILE on)
 get_filename_component(BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR} ABSOLUTE)
 get_filename_component(AMCT_DIR ${BASE_DIR}/.. ABSOLUTE)
 
-set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/classic/ptq/graph_based/amct_pytorch/proto)
+set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/classic/graph_based/amct_pytorch/proto)
 set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 
-add_subdirectory(classic/ptq/graph_based)
+add_subdirectory(classic/graph_based)
 
 set(HI_PYTHON python3)
 add_custom_target(amct_pytorch_package

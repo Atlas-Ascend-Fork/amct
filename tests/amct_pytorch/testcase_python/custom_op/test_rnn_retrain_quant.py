@@ -23,14 +23,14 @@ import numpy as np
 import torch
 from torch.nn.utils.rnn import pack_sequence
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
     CompModuleRNN,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.rnn_retrain_quant import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.rnn_retrain_quant import (
     RNNRetrainQuant,
 )
 
@@ -164,6 +164,6 @@ class TestRNNRetrainQuant(unittest.TestCase):
         self.assertEqual(reorganized_quant_factor, [1, 0, 2])
 
     def test_update_quant_factor(self):
-        with patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.utils.process_scale'):
+        with patch('amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils.process_scale'):
             self.retrain_quant._update_quant_factor()
 

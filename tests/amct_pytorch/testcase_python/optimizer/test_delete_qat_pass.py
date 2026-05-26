@@ -25,19 +25,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.record_file_operator import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.record_file_operator import (
     ScaleOffsetRecordHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
     Conv2dQAT,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.delete_qat_pass import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.delete_qat_pass import (
     DeleteQatPass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer.model_optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
     ModelOptimizer,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
 

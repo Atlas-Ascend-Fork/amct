@@ -19,7 +19,7 @@ import unittest
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_data_manager import (
+from amct_pytorch.classic.graph_based.amct_pytorch.ada_round.ada_round_data_manager import (
     AdaRoundDataManager,
 )
 

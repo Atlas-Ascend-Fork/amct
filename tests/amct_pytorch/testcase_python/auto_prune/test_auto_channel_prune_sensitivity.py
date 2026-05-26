@@ -24,24 +24,24 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.auto_channel_prune_search import (
+from amct_pytorch.classic.graph_based.amct_pytorch.auto_channel_prune_search import (
     AutoChannelPruneSearch,
     TaylorLossSensitivity,
     auto_channel_prune_search,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.auto_channel_prune \
+from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune \
     .auto_channel_prune_config_helper import (
     AutoChannelPruneConfigHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.prune_record_attr_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.prune_record_attr_util import (
     AttrProtoHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
     GraphQuerier,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
 

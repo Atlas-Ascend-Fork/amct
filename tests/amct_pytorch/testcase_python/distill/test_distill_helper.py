@@ -24,14 +24,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_helper import (
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_helper import (
     DistillHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import (
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_sample import (
     DistillSampleBase,
     ModelSingleTensorInput,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
     Conv2dQAT,
 )
 

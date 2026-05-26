@@ -22,7 +22,7 @@ import unittest
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration \
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration \
     .quant_calibration_config_base.quant_calibration_proto import (
     QuantCalibrationProtoConfig,
 )

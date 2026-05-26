@@ -24,8 +24,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.evaluator import (
+import amct_pytorch.classic.graph_based.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.evaluator import (
     ModelEvaluator,
 )
 
@@ -69,7 +69,7 @@ class TestEvaluatorHelper(unittest.TestCase):
             "input2": np.random.rand(1, 3, 20, 20).astype('f')
         }]
         with mock.patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.cmd_line_utils.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.common.cmd_line_utils.'
             'data_handler.load_data', return_value=data_map):
             self.assertIsNone(self.evaluator_helper.calibration(modified_model=modified_model, batch_num=1))
 
@@ -83,7 +83,7 @@ class TestEvaluatorHelper(unittest.TestCase):
             "input2": np.random.rand(1, 3, 20, 20).astype('f')
         }]
         with mock.patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.cmd_line_utils.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.common.cmd_line_utils.'
             'data_handler.load_data', return_value=data_map):
             self.assertIsNone(self.evaluator_helper.evaluate(modified_model=modified_model, iterations=1))
 

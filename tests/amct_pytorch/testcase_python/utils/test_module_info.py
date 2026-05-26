@@ -23,7 +23,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.module_info import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.module_info import (
     ModuleInfo,
 )
 

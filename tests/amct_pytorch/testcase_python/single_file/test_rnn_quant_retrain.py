@@ -23,7 +23,7 @@ from unittest.mock import MagicMock
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     create_quant_config,
     create_quant_retrain_config,
     create_quant_retrain_model,
@@ -70,10 +70,10 @@ class TestGRUPTQ(unittest.TestCase):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_rnn')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
-        
+
         cls.input = torch.randn(1, time_steps, channels, height, width)
         cls.h0 = torch.zeros(1, 1, gru_hidden_size)
-        
+
         cls.ori_out = cls.model(cls.input, cls.h0)
 
     @classmethod
@@ -95,7 +95,7 @@ class TestGRUPTQ(unittest.TestCase):
             input_data=(self.input, self.h0))
 
         self.assertTrue(os.path.exists(config_file))
-    
+
     def test_quantize_model(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         record_file = os.path.join(self.temp_folder, 'record.txt')
@@ -105,23 +105,23 @@ class TestGRUPTQ(unittest.TestCase):
 
         self.assertTrue(os.path.exists(modified_model))
         output = new_model(self.input, self.h0)
-        
+
         self.assertTrue(os.path.exists(modified_model))
         self.assertIsNotNone(output)
-    
+
     def test_save_model(self):
         record_file = os.path.join(self.temp_folder, 'record.txt')
         modified_model = os.path.join(self.temp_folder, 'modified_model.onnx')
         save_path = os.path.join(self.temp_folder, 'res')
         save_model(modified_model, record_file, save_path)
-        
+
         fakequant = os.path.join(self.temp_folder, 'res_fake_quant_model.onnx')
         deploy = os.path.join(self.temp_folder, 'res_deploy_model.onnx')
 
         self.assertTrue(os.path.exists(fakequant))
         self.assertTrue(os.path.exists(deploy))
 
-    
+
 class TestGRUQAT(unittest.TestCase):
     """
     The UT for QuantizeTool
@@ -152,10 +152,10 @@ class TestGRUQAT(unittest.TestCase):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_rnn')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
-        
+
         cls.input = torch.randn(1, time_steps, channels, height, width)
         cls.h0 = torch.zeros(1, 1, gru_hidden_size)
-        
+
         cls.ori_out = cls.model(cls.input, cls.h0)
 
         cls.new_model = None
@@ -179,13 +179,13 @@ class TestGRUQAT(unittest.TestCase):
             input_data=(self.input, self.h0))
 
         self.assertTrue(os.path.exists(config_file))
-    
+
     def test_create_quant_retrain_model(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         record_file = os.path.join(self.temp_folder, 'record.txt')
         self.new_model = create_quant_retrain_model(config_file, self.model, record_file,
             (self.input, self.h0))
-        
+
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.new_model.parameters(), lr=self.learning_rate)
         label = torch.randint(0, self.num_class, (self.batch_size,))
@@ -193,12 +193,12 @@ class TestGRUQAT(unittest.TestCase):
         self.assertIsNotNone(self.new_model)
         output, _ = self.new_model(self.input, self.h0)
         self.assertIsNotNone(output)
-        
+
         loss = criterion(output, label)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        
+
         self.new_model.eval()
         with torch.no_grad():
             output, _ = self.new_model(self.input, self.h0)
@@ -206,11 +206,11 @@ class TestGRUQAT(unittest.TestCase):
         save_path = os.path.join(self.temp_folder, 'res')
         fakequant = os.path.join(self.temp_folder, 'res_fake_quant_model.onnx')
         deploy = os.path.join(self.temp_folder, 'res_deploy_model.onnx')
-        
-        save_quant_retrain_model(model=self.new_model, 
-                                 input_data=(self.input, self.h0), 
-                                 config_file=config_file, 
-                                 record_file=record_file, 
+
+        save_quant_retrain_model(model=self.new_model,
+                                 input_data=(self.input, self.h0),
+                                 config_file=config_file,
+                                 record_file=record_file,
                                  save_path=save_path)
 
         self.assertTrue(os.path.exists(fakequant))

@@ -20,10 +20,10 @@ import unittest
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
     CompModuleRNN,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
 

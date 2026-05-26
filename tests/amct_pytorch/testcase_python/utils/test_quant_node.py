@@ -24,8 +24,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
     QuantOpInfo,
 )
 

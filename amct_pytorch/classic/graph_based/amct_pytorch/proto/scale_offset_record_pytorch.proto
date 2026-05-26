@@ -1,0 +1,48 @@
+syntax = "proto2";
+import "amct_pytorch/classic/graph_based/amct_pytorch/proto/basic_info.proto";
+package AMCTPytorchProto;
+
+message SingleLayerRecord {
+    optional float scale_d = 1;
+    optional int32 offset_d = 2;
+    repeated float scale_w = 3;
+    repeated int32 offset_w = 4;
+    repeated uint32 shift_bit = 5;
+    repeated float tensor_balance_factor = 6;
+    optional bool skip_fusion = 9 [default = false];
+    optional string dst_type = 10 [default = 'INT8'];
+    optional string act_type = 11 [default = 'INT8'];
+    optional string wts_type = 12 [default = 'INT8'];
+    optional string fakequant_precision_mode = 13 [default = 'DEFAULT'];
+    optional float scale_h = 21;
+    optional int32 offset_h = 22;
+    repeated float scale_r = 23;
+    repeated int32 offset_r = 24;
+}
+
+message SingleLayerKVCacheRecord {
+    repeated float scale = 1;
+    repeated int32 offset = 2;
+}
+
+message MapFiledEntry {
+    optional string key = 1;
+    optional SingleLayerRecord value = 2;
+    optional SingleLayerKVCacheRecord kv_cache_value = 3;
+}
+
+message ScaleOffsetRecord {
+    repeated MapFiledEntry record = 1;
+    repeated PruneRecord prune_record = 2;
+}
+
+message PruneRecord {
+    repeated PruneNode producer = 1;
+    repeated PruneNode consumer = 2;
+    optional PruneNode selective_prune = 3;
+}
+
+message PruneNode {
+    required string name = 1;
+    repeated AMCTProto.AttrProto attr = 2;
+}

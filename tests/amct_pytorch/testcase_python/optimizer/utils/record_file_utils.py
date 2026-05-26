@@ -26,10 +26,10 @@ import sys
 import numpy as np
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.quant_node import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
     QuantOpInfo,
 )
 

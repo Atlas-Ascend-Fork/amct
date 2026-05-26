@@ -20,13 +20,13 @@ import unittest
 
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
     version_higher_than,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer import (
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import (
     DeleteIsolatedNodePass,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
 from .util import models
 

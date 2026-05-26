@@ -23,7 +23,7 @@ import unittest
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.log import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import (
     LOG_FILE_SET_ENV,
     LOG_SET_ENV,
     Logger,

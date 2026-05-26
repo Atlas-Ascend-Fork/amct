@@ -23,10 +23,10 @@ import unittest
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.configuration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
     Configuration,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
 from .utils import models
 

@@ -24,13 +24,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_data_manager import (
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_data_manager import (
     DistillDataManager,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_helper import (
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_helper import (
     DistillHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import (
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_sample import (
     ModelSingleTensorInput,
 )
 

@@ -25,11 +25,11 @@ import numpy as np
 import torch
 from google.protobuf import text_format
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     create_quant_config,
     quantize_model,
     save_model,

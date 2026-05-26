@@ -21,7 +21,7 @@ import unittest
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_groups import (
+from amct_pytorch.classic.graph_based.amct_pytorch.ada_round.ada_round_groups import (
     _get_other_activation,
     _is_weight_ada_round,
     _match_gelu_subgraph,
@@ -29,11 +29,11 @@ from amct_pytorch.classic.ptq.graph_based.amct_pytorch.ada_round.ada_round_group
     _match_rrelu_subgraph,
     get_ada_round_groups,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
     version_higher_than,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

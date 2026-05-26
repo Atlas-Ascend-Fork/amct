@@ -25,19 +25,19 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch
-import amct_pytorch.classic.ptq.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch import (
+import amct_pytorch.classic.graph_based.amct_pytorch
+import amct_pytorch.classic.graph_based.amct_pytorch as amct
+from amct_pytorch.classic.graph_based.amct_pytorch import (
     accuracy_based_auto_calibration,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.auto_calibration import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_calibration import (
     AutoCalibrationEvaluatorBase,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_tool import (
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     generate_fakequant_module,
     save_model,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
 )
 
@@ -123,7 +123,7 @@ def do_calibration(model, args_shape, temp_folder):
     input_data = tuple([torch.randn(input_shape) for input_shape in args_shape])
 
     batch_num = 1
-    amct_pytorch.classic.ptq.graph_based.amct_pytorch.create_quant_config(
+    amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
         config_file=config_file,
         model=model,
         input_data=input_data,
@@ -132,7 +132,7 @@ def do_calibration(model, args_shape, temp_folder):
         activation_offset=True,
         config_defination=None)
 
-    new_model = amct_pytorch.classic.ptq.graph_based.amct_pytorch.quantize_model(
+    new_model = amct_pytorch.classic.graph_based.amct_pytorch.quantize_model(
         config_file=config_file,
         model=model,
         input_data=input_data,
@@ -149,7 +149,7 @@ def do_calibration(model, args_shape, temp_folder):
         record_file=record_file)
 
     # save
-    amct_pytorch.classic.ptq.graph_based.amct_pytorch.save_model(
+    amct_pytorch.classic.graph_based.amct_pytorch.save_model(
         modfied_onnx_file=modfied_onnx_file,
         record_file=record_file,
         save_path=save_model_path)

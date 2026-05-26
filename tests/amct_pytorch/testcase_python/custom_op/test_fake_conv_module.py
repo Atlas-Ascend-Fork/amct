@@ -21,7 +21,7 @@ import unittest
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.fake_quant import (
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.fake_quant import (
     FakeQuantizedConv,
     FakeQuantizedConvTranspose,
     FakeQuantizedLinear,

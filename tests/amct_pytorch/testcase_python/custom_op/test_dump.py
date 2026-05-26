@@ -27,12 +27,12 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
     files as files_util,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils import struct_helper
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.custom_op.dump.dump import DUMP
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.auto_calibration_helper import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import struct_helper
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.dump.dump import DUMP
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.auto_calibration_helper import (
     AutoCalibrationHelper,
 )
 

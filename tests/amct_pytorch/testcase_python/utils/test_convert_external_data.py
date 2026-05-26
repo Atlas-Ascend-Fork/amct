@@ -27,12 +27,12 @@ import onnx
 from onnx import onnx_pb
 from onnx.external_data_helper import convert_model_to_external_data
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
     convert_external_data_format,
 )
 
@@ -131,7 +131,7 @@ class TestSave(unittest.TestCase):
         shutil.rmtree(self.temp_folder)
         pass
 
-    @patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
     def test_convert_external_data_format(self):
         file_name = os.path.join(self.temp_folder, 'test_external_data.pth')
         test_model = copy.deepcopy(self.model_proto)
@@ -151,7 +151,7 @@ class TestSave(unittest.TestCase):
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
         self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
 
-    @patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
     def test_convert_external_data_format_fakequant(self):
         file_name = os.path.join(self.temp_folder, 'test_external_data_fake_quant.onnx')
         test_model = copy.deepcopy(self.model_proto)
@@ -162,7 +162,7 @@ class TestSave(unittest.TestCase):
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
         self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
 
-    @patch('amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
     def test_convert_external_data_format_deploy(self):
         file_name = os.path.join(self.temp_folder, 'test_external_data_deploy.onnx')
         test_model = copy.deepcopy(self.model_proto)

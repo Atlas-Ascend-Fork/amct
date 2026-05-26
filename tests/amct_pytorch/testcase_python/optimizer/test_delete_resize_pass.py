@@ -25,12 +25,12 @@ import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
     version_higher_than,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.optimizer import DeleteResizePass
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import DeleteResizePass
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
 from .util import models
 

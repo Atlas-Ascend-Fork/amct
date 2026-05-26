@@ -25,22 +25,22 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distill.distill_sample import (
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_sample import (
     DistillSampleBase,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.distillation_interface import (
+from amct_pytorch.classic.graph_based.amct_pytorch.distillation_interface import (
     create_distill_config,
     create_distill_model,
     distill,
     save_distill_model,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
     Conv2dQAT,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.nn.module.quantization.linear import (
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.linear import (
     LinearQAT,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.utils.model_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
 )
 

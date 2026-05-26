@@ -28,20 +28,20 @@ import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check import (
+from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
     GraphQuerier,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_config_base import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base.distill_config_base import (
     DistillConfigBase,
     GraphObjects,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto import (
     DistillProtoConfig,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.graph.node import Node
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
 from .utils import models
 
@@ -162,7 +162,7 @@ class TestDistillConfigBase(unittest.TestCase):
 
         distill_unit = [[node_proto1.name], [node_proto2.name]]
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.graph_base.node_base.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.common.graph_base.node_base.'
             'NodeBase.get_consumers',
         ) as mock_get_consumers:
             mock_get_consumers.return_value = [[node2], []]
@@ -326,7 +326,7 @@ class TestDistillConfigBase(unittest.TestCase):
 
     def test_get_supported_layers_empty(self):
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.check.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.check.'
             'GraphQuerier.get_support_distill_layer2type',
             return_value=[],
         ):
@@ -343,7 +343,7 @@ class TestDistillConfigBase(unittest.TestCase):
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base.'
             'distill_proto.DistillProtoConfig.get_quant_skip_layers',
             return_value=skip_layers,
         ):
@@ -356,7 +356,7 @@ class TestDistillConfigBase(unittest.TestCase):
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base.'
             'distill_proto.DistillProtoConfig.get_quant_skip_layer_types',
             return_value=skip_types,
         ):
@@ -369,7 +369,7 @@ class TestDistillConfigBase(unittest.TestCase):
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base.'
             'distill_proto.DistillProtoConfig.get_override_layers',
             return_value=override_layers,
         ):
@@ -382,7 +382,7 @@ class TestDistillConfigBase(unittest.TestCase):
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
         proto = DistillProtoConfig(config_proto_file, CAPACITY)
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base.'
             'distill_proto.DistillProtoConfig.get_override_layer_types',
             return_value=override_types,
         ):

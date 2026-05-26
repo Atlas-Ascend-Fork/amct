@@ -27,15 +27,15 @@ from unittest.mock import patch
 import numpy as np
 import torch
 
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.utils.vars_util import (
+from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.vars_util import (
     INT4,
     INT8,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config_base.distill_proto import (
     DistillProtoConfig,
 )
-from amct_pytorch.classic.ptq.graph_based.amct_pytorch.proto import distill_config_pb2
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import distill_config_pb2
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -121,7 +121,7 @@ class TestDistillProto(unittest.TestCase):
 
     def test_check_distill_data_type_not_enable_int4(self):
         with patch(
-            'amct_pytorch.classic.ptq.graph_based.amct_pytorch.common.capacity.query_capacity.'
+            'amct_pytorch.classic.graph_based.amct_pytorch.common.capacity.query_capacity.'
             'Capacity.get_value',
             return_value=False,
         ):

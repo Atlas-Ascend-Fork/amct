@@ -39,7 +39,7 @@ from amct_pytorch import convert, quantize
 from amct_pytorch import convert
 from amct_pytorch import quantize
 from amct_pytorch.algorithms import AlgorithmRegistry
-from amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
+from amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
 
 
 LOGGER = logging.getLogger(__name__)
@@ -127,10 +127,8 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch(
-            'amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
-            MagicMock(return_value=True),
-        )
+    @patch('amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+           MagicMock(return_value=True))
     def test_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_model)
         quantize(model)
@@ -147,10 +145,8 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch(
-            'amct_pytorch.classic.ptq.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
-            MagicMock(return_value=True),
-        )
+    @patch('amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+           MagicMock(return_value=True))
     def test_block_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_block_model)
         quantize(model)
