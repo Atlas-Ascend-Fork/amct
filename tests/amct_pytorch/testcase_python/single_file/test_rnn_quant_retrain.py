@@ -85,7 +85,7 @@ class TestGRUPTQ(unittest.TestCase):
         sys.modules["torch_npu"] = MagicMock()
 
     def tearDown(self):
-        del sys.modules["torch_npu"]
+        pass
 
     def test_create_quant_config(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
