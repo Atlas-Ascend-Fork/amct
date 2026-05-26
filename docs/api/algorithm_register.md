@@ -33,10 +33,6 @@ algorithm_register(name, src_op, quant_op, deploy_op)
 ## 调用示例
 
 ```python
-import torch
-from amct_pytorch import algorithm_register
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-
 # 自定义算法名称
 name = 'customize_algo'
 # 需要量化的算子类型
