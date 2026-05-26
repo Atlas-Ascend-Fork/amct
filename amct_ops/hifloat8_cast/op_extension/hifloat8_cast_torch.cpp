@@ -139,23 +139,23 @@ static void HostGetHif8BitsNum(int32_t expNoBias, uint32_t &dotValue, uint32_t &
     if (expNoBias == 0) {
         dotValue = 0x01;
         expBitsOut = 0;
-        fracBitsOut = 3;  // HiFloat8尾数位数
+        fracBitsOut = 3;  // 3: HiFloat8尾数位数，dotValue=1场景
     } else if (absExp == 1) {
         dotValue = 0x02;
         expBitsOut = 1;
-        fracBitsOut = 3;  // HiFloat8尾数位数
+        fracBitsOut = 3;  // 3: HiFloat8尾数位数，dotValue=2场景
     } else if (absExp >= 2 && absExp <= 3) {  // HiFloat8指数区间[2, 3]
         dotValue = 0x04;
-        expBitsOut = 2;
-        fracBitsOut = 3;  // HiFloat8尾数位数
+        expBitsOut = 2;   // 2: HiFloat8指数位数，dotValue=4场景
+        fracBitsOut = 3;  // 3: HiFloat8尾数位数，dotValue=4场景
     } else if (absExp >= 4 && absExp <= 7) {  // HiFloat8指数区间[4, 7]
         dotValue = 0x08;
-        expBitsOut = 3;   // HiFloat8指数位数
-        fracBitsOut = 2;  // HiFloat8尾数位数
+        expBitsOut = 3;   // 3: HiFloat8指数位数，dotValue=8场景
+        fracBitsOut = 2;  // 2: HiFloat8尾数位数，dotValue=8场景
     } else {
         dotValue = 0x0C;
-        expBitsOut = 4;   // HiFloat8指数位数
-        fracBitsOut = 1;  // HiFloat8尾数位数
+        expBitsOut = 4;   // 4: HiFloat8指数位数，dotValue=0xc场景
+        fracBitsOut = 1;  // 1: HiFloat8尾数位数，dotValue=0xc场景
     }
 }
 
@@ -207,7 +207,7 @@ static uint8_t HostFp32MagnitudeToHif8(uint32_t inData) {
     int32_t absExpFinal = expNoBias < 0 ? -expNoBias : expNoBias;
     uint32_t signExp = expNoBias < 0 ? 1u : 0u;
     uint32_t expHiF8 = static_cast<uint32_t>(absExpFinal) - (1u << (expHiF8Bits - 1));
-    // 拼接 dot、指数符号、指数幅值和尾数，得到无数值符号位的 HiFloat8 编码。
+    // 3：dot value移动到[6:3]位置，再拼接 dot、指数符号、指数幅值和尾数，得到无数值符号位的 HiFloat8 编码。
     return static_cast<uint8_t>(
         (dotValue << 3) | (signExp << (expHiF8Bits + fracHiF8Bits - 1)) | (expHiF8 << fracHiF8Bits) | fracHiF8);
 }
