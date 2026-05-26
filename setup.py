@@ -59,6 +59,7 @@ class SetupTool(): # pylint: disable=R0903
 
 setup_tools = SetupTool()
 
+
 def get_package_data():
     """ get package data"""
     return {
