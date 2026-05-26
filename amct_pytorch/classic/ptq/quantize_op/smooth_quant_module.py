@@ -17,7 +17,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.classic.ptq.quantize_op.utils import calculate_scale_offset
 from amct_pytorch.classic.ptq.quantize_op.utils import calculate_progressive_weights_scale_factor

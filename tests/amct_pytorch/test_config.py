@@ -28,7 +28,7 @@ from amct_pytorch import (
     INT8_SMOOTHQUANT_CFG,
 )
 from amct_pytorch.algorithms import AlgorithmRegistry
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.config import parse_config
 
 KEY_BATCH_NUM = 'batch_num'
@@ -1049,4 +1049,3 @@ class TestConfigParse(unittest.TestCase):
             detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
         except Exception as e:
             self.assertIn(f'One src_op only support one algorithm, current algo', str(e))
-

@@ -38,7 +38,7 @@ from amct_pytorch import (
     convert,
     quantize,
 )
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.config import parse_config
 
 torch.manual_seed(0)

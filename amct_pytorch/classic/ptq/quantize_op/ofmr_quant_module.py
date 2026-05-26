@@ -16,7 +16,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
 EC_CAND = tuple(range(-5, 6))
 

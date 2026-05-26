@@ -17,7 +17,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.ptq.quantize_op.utils import get_weight_min_max_by_granularity, calculate_quantile_ema_scale
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.common.utils.vars import HIFLOAT8

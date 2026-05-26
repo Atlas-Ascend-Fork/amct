@@ -18,7 +18,7 @@ import math
 import torch
 from torch import nn
 
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.ptq.quantize_op.utils import calculate_scale_offset
 from amct_pytorch.classic.ptq.quantize_op.utils import calculate_progressive_weights_scale_factor
 from amct_pytorch.classic.ptq.quantize_op.utils import get_weight_min_max_by_granularity
