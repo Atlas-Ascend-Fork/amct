@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 from loguru import logger
 import torch
-from amct_pytorch.common.optimization.optimizer import SGDG as CayleyOptimizer
 
 
 def get_n_set_parameters_byname(model, required_names):
@@ -36,8 +35,6 @@ def build_optimizer(args: Any, parameters):
 
     if optimizer_name == "adamw":
         return torch.optim.AdamW(parameters)
-    if optimizer_name == "cayley":
-        return CayleyOptimizer(parameters, stiefel=True, lr=1.5)
     if optimizer_name == "adam":
         return torch.optim.Adam(parameters, lr=base_lr, weight_decay=weight_decay)
     if optimizer_name == "sgd":
