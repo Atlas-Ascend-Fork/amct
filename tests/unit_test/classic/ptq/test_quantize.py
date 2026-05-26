@@ -27,9 +27,17 @@ from amct_pytorch.classic.ptq.quantize import (
     convert,
     quantize,
 )
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
 QUANTIZE_MODULE = sys.modules["amct_pytorch.classic.ptq.quantize"]
+
+
+def test_base_quantize_module_keeps_legacy_import_path():
+    from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule as ClassicBaseQuantizeModule
+    from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule as LegacyBaseQuantizeModule
+
+    assert LegacyBaseQuantizeModule is BaseQuantizeModule
+    assert ClassicBaseQuantizeModule is BaseQuantizeModule
 
 
 class _DummyQuantOp(BaseQuantizeModule):

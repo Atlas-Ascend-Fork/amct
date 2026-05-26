@@ -24,7 +24,7 @@ __all__ = [
     'OfmrQuant'
 ]
 
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.ptq.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.classic.ptq.quantize_op.linear_awq_module import LinearAWQuant
 from amct_pytorch.classic.ptq.quantize_op.smooth_quant_module import SmoothQuant

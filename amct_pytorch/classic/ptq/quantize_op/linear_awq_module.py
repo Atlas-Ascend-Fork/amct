@@ -20,7 +20,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.algorithms.quant.awq import search_scale, apply_scale, calculate_scale_offset_by_granularity
 from amct_pytorch.common.utils.vars import INT4, INT8, FLOAT4_E2M1, MXFP4_E2M1

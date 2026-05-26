@@ -21,7 +21,7 @@ try:
     import hifloat8_cast
 except ImportError as e:
     print(f'{e}, please check it')
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
 
 class Hifloat8FakequantLinear(BaseQuantizeModule):
@@ -49,4 +49,3 @@ class Hifloat8FakequantLinear(BaseQuantizeModule):
         quantized_x = hifloat8_cast.float_to_hifloat8(x.cpu())
         fakequant_x = hifloat8_cast.hifloat8_to_float32(quantized_x).to(x)
         return F.linear(fakequant_x, self.fakequant_weight, self.bias)
-

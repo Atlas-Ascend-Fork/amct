@@ -24,7 +24,7 @@ from utils import TestModel
 
 from amct_pytorch import algorithm_register, convert, quantize
 from amct_pytorch.algorithms import AlgorithmRegistry
-from amct_pytorch.classic.ptq.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
 torch.manual_seed(0)
 
@@ -106,4 +106,3 @@ class TestCustomizedAlgo(unittest.TestCase):
             algorithm_register(AA, 'BB', CustomQuant, None)
         except Exception as e:
             self.assertIn('AA is already registered', str(e))
-
