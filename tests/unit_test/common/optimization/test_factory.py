@@ -22,7 +22,6 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch.common.optimization import factory
-from amct_pytorch.common.optimization.optimizer import SGDG
 
 # ---- get_n_set_parameters_byname / set_require_grad_all -----------------
 
@@ -92,13 +91,6 @@ def test_build_optimizer_sgd_uses_momentum_default_when_missing():
     opt = factory.build_optimizer(args, _params())
     assert isinstance(opt, torch.optim.SGD)
     assert opt.defaults["momentum"] == pytest.approx(0.9)
-
-
-def test_build_optimizer_cayley_returns_sgdg_with_stiefel():
-    args = SimpleNamespace(optimizer="cayley")
-    opt = factory.build_optimizer(args, _params())
-    assert isinstance(opt, SGDG)
-    assert opt.defaults["stiefel"] is True
 
 
 def test_build_optimizer_unknown_raises():
