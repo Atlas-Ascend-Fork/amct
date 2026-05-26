@@ -147,8 +147,7 @@ private:
         outQueue_.FreeTensor(yLocal);
     }
 
-    // ── 计算分派 ────────────────────────────────────────────────────────────
-
+    // ── 计算分派 ──
     __aicore__ inline void Compute(uint32_t count) {
         if (isEncode_) {
             ComputeEncode16(count);
@@ -157,8 +156,7 @@ private:
         }
     }
 
-    // ── BF16/FP16 → HiF8（半空间 UB LUT + 符号分离）────────────────────────
-    //
+    // ── BF16/FP16 → HiF8（半空间 UB LUT + 符号分离）──
     // LUT 只存正半空间量级（32768 条），利用对称性：
     //   encode(-x) = encode(x) | 0x80  （当 encode(x) ≠ 0 时）
     //   encode(-0) = 0x00              （下溢/零不加符号位）
