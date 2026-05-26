@@ -152,7 +152,7 @@ def mock_npu(self):
 
 
 def mock_npu_trans_quant_param(scale, offset=None):
-    if not offset:
+    if offset is None:
         return scale
     return scale, offset
 
@@ -187,3 +187,4 @@ def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=None):
     quant_x = x
     pertoken_scale = torch.ones(x.shape[0], 1, dtype=torch.float32, device=x.device)
     return quant_x, pertoken_scale
+

@@ -63,6 +63,7 @@ def check_config(quant_data_comb, quant_config, algo):
         raise ValueError(f'Do not support combination {quant_data_comb} of act and weight quant dtype.')
     if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB[quant_data_comb]:
         raise ValueError(f'Algorithm {algo} do not support act and weight quant dtype {quant_data_comb}')
+    _check_quant_dtype_comb_rules(quant_data_comb, quant_config)
 
     weight_strategy = quant_config.quant_cfg.weights_cfg.strategy
     if quant_data_comb not in WTS_GRANULARITY_SUPPORT_MAP.get(weight_strategy):
@@ -83,6 +84,25 @@ def check_config(quant_data_comb, quant_config, algo):
         if group_size < 32 or group_size % 32 != 0:
             raise ValueError(f'act_type and wts_type {quant_data_comb} only support group_size larger than 32 and '
                 f'integer multiple of 32, current is {group_size}')
+
+
+def _check_quant_dtype_comb_rules(quant_data_comb, quant_config):
+    """
+    Check combination-specific constraints that should fail during config parsing.
+    """
+    weight_cfg = quant_config.quant_cfg.weights_cfg
+    inputs_cfg = quant_config.quant_cfg.inputs_cfg
+
+    if quant_data_comb in ACT_GRANULARITY_SUPPORT_MAP['tensor'] and weight_cfg.symmetric is False:
+        raise ValueError(f'{quant_data_comb} only support symmetric weight quantization')
+
+    if quant_data_comb != 'int8 int4':
+        return
+
+    if weight_cfg.strategy not in ['tensor', 'channel']:
+        raise ValueError(f'{quant_data_comb} only support weight quant strategy tensor or channel')
+    if inputs_cfg.strategy != 'tensor':
+        raise ValueError(f'{quant_data_comb} only support activation quant strategy tensor')
 
 
 def _check_fuzzy_config_warnings(all_layer_names, quant_config):
@@ -161,7 +181,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
                 'cin and cout length should be integer multiple of 64'.format(layer_name, quant_data_comb))
             return False
 
-    if quant_data_comb == 'NOT_QUANTIZE int4':
+    if quant_data_comb in ['NOT_QUANTIZE int4', 'int8 int4']:
         if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
             LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement'
                 ' cin and cout length should be integer multiple of 8'.format(layer_name, quant_data_comb))
