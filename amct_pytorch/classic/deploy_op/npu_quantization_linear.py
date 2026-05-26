@@ -17,7 +17,7 @@
 import torch
 from amct_pytorch.common.utils.quant_util import quant_weight, apply_smooth_weight
 from amct_pytorch.classic.quantize_op.utils import apply_progressive_quant
-from amct_pytorch.common.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, FLOAT4_E2M1
+from amct_pytorch.common.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, INT4, FLOAT4_E2M1
 from amct_pytorch.common.utils.check_params import check_parameters_in_schema
 
 
