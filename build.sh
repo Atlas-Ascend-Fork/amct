@@ -102,6 +102,7 @@ checkopts() {
         ;;
       -u | --utest)
         ENABLE_TEST=TRUE
+        ENABLE_COVERAGE=TRUE
         shift
         ;;
       --cov)
