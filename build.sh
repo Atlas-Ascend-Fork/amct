@@ -34,9 +34,8 @@ usage() {
   echo "    -j<N>             Set the number of threads used for building HIXL, default is 8"
   echo "    --build-type=<TYPE>"
   echo "                      Specify build type (TYPE options: Release/Debug), Default: Release"
-  echo "    --pkg             Build run package"
-  echo "                      Use with: --torch to build only amct_pytorch package"
-  echo "    --torch           Build only amct_pytorch package (use with --pkg)"
+  echo "    --pkg             Build full amct package (amct_pytorch + graph)"
+  echo "    --torch           Build amct_pytorch package only"
   echo "    --cann_3rd_lib_path=<PATH>"
   echo "                      Set ascend third_party package install path, default ./third_party"
   echo "    --output_path=<PATH>"
@@ -57,7 +56,7 @@ checkopts() {
   OUTPUT_PATH="${BASEPATH}/build_out/"
 
   # Process the options
-  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path:, -- "$@") || {
+  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
     usage
     exit 1
   }
@@ -86,7 +85,7 @@ checkopts() {
         fi
         shift 2
         ;;
-       --pkg)
+      --pkg)
         ENABLE_PACKAGE=TRUE
         shift
         ;;
@@ -316,7 +315,7 @@ main() {
   assemble_cmake_args
   echo "CMAKE_ARGS: ${CMAKE_ARGS}"
   echo "----------------OUTPUT_PATH  ${OUTPUT_PATH}  ----------------"
-  if [[ "$ENABLE_PACKAGE" == "TRUE" && "$ENABLE_PYTORCH_PACKAGE" == "TRUE" ]]; then
+  if [[ "$ENABLE_PYTORCH_PACKAGE" == "TRUE" ]]; then
     build_pytorch_package
   elif [[ "$ENABLE_PACKAGE" == "TRUE" ]]; then
     build_package
