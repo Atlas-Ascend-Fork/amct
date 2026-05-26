@@ -55,8 +55,6 @@ else()
     option(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG_COMMUNITY "Build amct with out open source third party" TRUE)
 endif()
 
-option(ENABLE_GRAPH_BASED_COMPRESSION "Enable graph based compression module" ON)
-
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
     include(./cmake/third_party/protobuf.cmake)
 endif()

@@ -35,9 +35,6 @@ os.environ['SOURCE_DATE_EPOCH'] = \
 class SetupTool(): # pylint: disable=R0903
     """ tool for setup"""
     def __init__(self):
-        self.lite_mode = '--lite' in sys.argv
-        if self.lite_mode:
-            sys.argv.remove('--lite')
         self.set_packages()
         self.set_version()
         self.set_platform()
@@ -45,12 +42,7 @@ class SetupTool(): # pylint: disable=R0903
 
     def set_packages(self):
         """ set packages based on build mode"""
-        all_packages = setuptools.find_packages()
-        if self.lite_mode:
-            self.packages = [pkg for pkg in all_packages 
-                            if 'graph_based_compression' not in pkg]
-        else:
-            self.packages = all_packages
+        self.packages = setuptools.find_packages()
 
     def set_version(self):
         """ set version"""
@@ -67,21 +59,16 @@ class SetupTool(): # pylint: disable=R0903
 
 setup_tools = SetupTool()
 
-def get_package_data(lite_mode):
-    """ get package data based on build mode"""
-    if lite_mode:
-        return {
-            '': ['.version'],
-        }
-    else:
-        return {
-            '': ['.version'],
-            'amct_pytorch.graph_based_compression': ['amct_pytorch/proto/*.proto',
-                             'amct_pytorch/common/proto/*.proto',
-                             'amct_pytorch/capacity/*.csv',
-                             'lib/*.so',
-                             ],
-        }
+def get_package_data():
+    """ get package data"""
+    return {
+        '': ['.version'],
+        'amct_pytorch.graph_based_compression': ['amct_pytorch/proto/*.proto',
+                         'amct_pytorch/common/proto/*.proto',
+                         'amct_pytorch/capacity/*.csv',
+                         'lib/*.so',
+                         ],
+    }
 
 setuptools.setup(
     name='amct_pytorch',
@@ -102,7 +89,7 @@ setuptools.setup(
     extras_require={
         "pytorch": ["2.1"]
     },
-    package_data=get_package_data(setup_tools.lite_mode),
+    package_data=get_package_data(),
     zip_safe=False,
     **setup_tools.setup_args
 )

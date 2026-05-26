@@ -36,9 +36,7 @@ usage() {
   echo "                      Specify build type (TYPE options: Release/Debug), Default: Release"
   echo "    --pkg             Build run package"
   echo "                      Use with: --torch to build only amct_pytorch package"
-  echo "                      Use with: --torch-lite to build amct_pytorch package without graph"
   echo "    --torch           Build only amct_pytorch package (use with --pkg)"
-  echo "    --torch-lite      Build amct_pytorch package without graph module (use with --pkg)"
   echo "    --cann_3rd_lib_path=<PATH>"
   echo "                      Set ascend third_party package install path, default ./third_party"
   echo "    --output_path=<PATH>"
@@ -59,7 +57,7 @@ checkopts() {
   OUTPUT_PATH="${BASEPATH}/build_out/"
 
   # Process the options
-  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,torch-lite,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path:, -- "$@") || {
+  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path:, -- "$@") || {
     usage
     exit 1
   }
@@ -94,10 +92,6 @@ checkopts() {
         ;;
       --torch)
         ENABLE_PYTORCH_PACKAGE=TRUE
-        shift
-        ;;
-      --torch-lite)
-        ENABLE_PYTORCH_LITE_PACKAGE=TRUE
         shift
         ;;
       --output_path)
@@ -164,6 +158,11 @@ build() {
   fi
   echo "Build success!"
 
+  # Torch-only 模式由上层函数完成打包，这里仅做编译
+  if [[ "$ENABLE_PYTORCH_PACKAGE" == "TRUE" ]]; then
+    return 0
+  fi
+
   if [ -d "${OUTPUT_PATH}" ];then
     echo "${OUTPUT_PATH} exist, delete old path"
     rm -rf ${OUTPUT_PATH}
@@ -226,9 +225,6 @@ assemble_cmake_args() {
   CMAKE_ARGS="$CMAKE_ARGS -DASCEND_HOME_PATH=${ASCEND_HOME_PATH}"
   CMAKE_ARGS="$CMAKE_ARGS -DPREX=${LOWER_PREX}"
   CMAKE_ARGS="$CMAKE_ARGS -DBUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG=ON"
-  if [[ "$ENABLE_PYTORCH_LITE_PACKAGE" == "TRUE" ]]; then
-    CMAKE_ARGS="$CMAKE_ARGS -DENABLE_GRAPH_BASED_COMPRESSION=OFF"
-  fi
 }
 
 clean_build() {
@@ -287,40 +283,6 @@ build_pytorch_package() {
   echo "--------------- build amct_pytorch package end ---------------"
 }
 
-build_pytorch_lite_package() {
-  echo "--------------- build amct_pytorch lite package start ---------------"
-  build || { echo "Build failed."; exit 1; }
-  if [ -d "${OUTPUT_PATH}" ];then
-    echo "${OUTPUT_PATH} exist, delete old path"
-    rm -rf ${OUTPUT_PATH}
-  fi
-  echo "create path ${OUTPUT_PATH}"
-  mkdir ${OUTPUT_PATH}
-  mkdir "${OUTPUT_PATH}/amct_pytorch_lite"
-  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/amct_pytorch_lite/
-  
-  VERSION=$(awk -F'=' '/^Version=/ {print $2}' ../version.info)
-  echo "package ${VERSION}"
-  SYS="$(uname -s)"
-  PACKAGE_NAME="cann-amct-pytorch-lite_${VERSION}_${SYS,,}-$(uname -m).tar.gz"
-  TAR_FILE="${OUTPUT_PATH}/${PACKAGE_NAME}"
-  TARGET_DIR="${OUTPUT_PATH}/amct_pytorch_lite"
-  tar -czf ${TAR_FILE} -C ${TARGET_DIR} .
-  echo "tar -czf ${TAR_FILE} -C ${TARGET_DIR} ."
-  
-  if [ -f ${TAR_FILE} ];then
-    echo "package amct_pytorch lite run success"
-  else
-    echo "package amct_pytorch lite run failed"
-    return 1
-  fi
-  
-  rm -rf ${BASEPATH}/dist
-  rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
-  [ -n "${TARGET_DIR}" ] && rm -rf ${TARGET_DIR}
-  echo "--------------- build amct_pytorch lite package end ---------------"
-}
-
 build_ut() {
   echo $dotted_line
   echo "Start to build ut"
@@ -354,9 +316,7 @@ main() {
   assemble_cmake_args
   echo "CMAKE_ARGS: ${CMAKE_ARGS}"
   echo "----------------OUTPUT_PATH  ${OUTPUT_PATH}  ----------------"
-  if [[ "$ENABLE_PACKAGE" == "TRUE" && "$ENABLE_PYTORCH_LITE_PACKAGE" == "TRUE" ]]; then
-    build_pytorch_lite_package
-  elif [[ "$ENABLE_PACKAGE" == "TRUE" && "$ENABLE_PYTORCH_PACKAGE" == "TRUE" ]]; then
+  if [[ "$ENABLE_PACKAGE" == "TRUE" && "$ENABLE_PYTORCH_PACKAGE" == "TRUE" ]]; then
     build_pytorch_package
   elif [[ "$ENABLE_PACKAGE" == "TRUE" ]]; then
     build_package
