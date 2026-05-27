@@ -26,7 +26,7 @@ add_subdirectory(amct_tensor_decompose)
 
 message("-------pytorch -----")
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
-  set(PROTOC_PROGRAM ${AMCT_DIR}/build/protobuf_host/bin/protoc)
+  set(PROTOC_PROGRAM $<TARGET_FILE:host_protoc>)
   message("--- torch protoc ----- ${PROTOC_PROGRAM}")
   set(HI_PYTHON python3)
 endif()
@@ -41,5 +41,5 @@ add_custom_target(amct_pytorch_proto_compile
   COMMAND cd ${AMCT_TORCH_PROTO_DIR} && ${PROTOC_PROGRAM} --python_out=./ quant_calibration_config_pytorch.proto
 )
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
-add_dependencies(amct_pytorch_proto_compile protobuf_host_build ascend_protobuf_static)
+  add_dependencies(amct_pytorch_proto_compile host_protoc ascend_protobuf_static)
 endif()

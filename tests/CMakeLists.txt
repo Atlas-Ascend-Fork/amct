@@ -23,7 +23,7 @@ set(AMCT_TOP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
 set(EXECUTE_PYTHON_TEST ${Python3_EXECUTABLE} -m unittest discover)
-set(PROTOC_PROGRAM ${AMCT_TOP_DIR}/build/protobuf_host/bin/protoc)
+set(PROTOC_PROGRAM $<TARGET_FILE:host_protoc>)
 
 add_subdirectory(amct_pytorch)
 set(AMCT_TOP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
