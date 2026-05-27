@@ -257,28 +257,17 @@ build_pytorch_package() {
   fi
   echo "create path ${OUTPUT_PATH}"
   mkdir ${OUTPUT_PATH}
-  mkdir "${OUTPUT_PATH}/amct_pytorch"
-  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/amct_pytorch/
-  
-  VERSION=$(awk -F'=' '/^Version=/ {print $2}' ../version.info)
-  echo "package ${VERSION}"
-  SYS="$(uname -s)"
-  PACKAGE_NAME="cann-amct-pytorch_${VERSION}_${SYS,,}-$(uname -m).tar.gz"
-  TAR_FILE="${OUTPUT_PATH}/${PACKAGE_NAME}"
-  TARGET_DIR="${OUTPUT_PATH}/amct_pytorch"
-  tar -czf ${TAR_FILE} -C ${TARGET_DIR} .
-  echo "tar -czf ${TAR_FILE} -C ${TARGET_DIR} ."
-  
-  if [ -f ${TAR_FILE} ];then
+  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/
+
+  if ls ${OUTPUT_PATH}/*.tar.gz >/dev/null 2>&1; then
     echo "package amct_pytorch run success"
   else
     echo "package amct_pytorch run failed"
     return 1
   fi
-  
+
   rm -rf ${BASEPATH}/dist
   rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
-  [ -n "${TARGET_DIR}" ] && rm -rf ${TARGET_DIR}
   echo "--------------- build amct_pytorch package end ---------------"
 }
 
