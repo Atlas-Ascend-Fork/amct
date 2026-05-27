@@ -132,18 +132,18 @@ checkopts() {
 
 build() {
   echo "create build directory and build amct";
-  if [ -f "${BUILD_PATH}" ]
+  if [ -d "${BUILD_PATH}" ]
   then
     echo "${BUILD_PATH} exist, delete old path"
     rm -rf ${BUILD_PATH}
   fi
   echo "create path ${BUILD_PATH}"
-  mkdir ${BUILD_PATH}
+  mkdir -p ${BUILD_PATH}
 
   cd "${BUILD_PATH}"
   echo "----------------BUILD_PATH  "${BUILD_PATH}"  ----------------"
   echo "----------------TOP_DIR  "${BASEPATH}"  ----------------"
-  echo "----------------CMAKE_BUILD_TYPE  "${CMAKE_BUILD_TYPE}"  ----------------"
+  echo "----------------CMAKE_BUILD_TYPE  "${BUILD_TYPE}"  ----------------"
   echo "----------------ASCEND_HOME_PATH  "${ASCEND_HOME_PATH}"  ----------------"
   echo "----------------CANN_3RD_LIB_PATH  "${CANN_3RD_LIB_PATH}"  ----------------"
 
@@ -218,7 +218,7 @@ assemble_cmake_args() {
   CMAKE_ARGS="$CMAKE_ARGS -DENABLE_UT_EXEC=${ENABLE_UT_EXEC}"
   CMAKE_ARGS="$CMAKE_ARGS -DENABLE_COVERAGE=${ENABLE_COVERAGE}"
   CMAKE_ARGS="$CMAKE_ARGS -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}"
-  CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+  CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
   CMAKE_ARGS="$CMAKE_ARGS -DTOP_DIR=${BASEPATH}"
   CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_VERBOSE_MAKEFILE=ON"
   CMAKE_ARGS="$CMAKE_ARGS -DASCEND_HOME_PATH=${ASCEND_HOME_PATH}"
