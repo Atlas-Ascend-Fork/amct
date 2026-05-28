@@ -16,29 +16,51 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
-from io import BytesIO
 import sys
-sys.path.append("~/amct/llt/asl/aoetools/amct/amct_pytorch.graph_based_compression.amct_pytorch/ut/testcase_python/configuration")
+from io import BytesIO
+
+sys.path.append(
+    "~/amct/llt/asl/aoetools/amct/"
+    "amct_pytorch.classic.graph_based.amct_pytorch/ut/"
+    "testcase_python/configuration")
 
 import unittest
+
 import torch
 import torch.nn.functional as F
 from onnx import onnx_pb
 
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
+    GraphChecker,
+    GraphQuerier,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_ONNX_TYPES,
+    QUANTIZABLE_TYPES,
+)
+
 from .utils import models
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
 
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphQuerier
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.check import GraphChecker
-
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
+CONV2D = 'Conv2d'
+CONV3D = 'Conv3d'
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+LINEAR = 'Linear'
+CONV1 = 'conv1'
+LAYER1 = 'layer1'
+
+LAYER2 = 'layer2'
+
 
 class TestCheckModel(unittest.TestCase):
     @classmethod
@@ -72,10 +94,10 @@ class TestCheckModel(unittest.TestCase):
         ''' test GraphQuerier.get_support_quant_layer2type '''
         self.graph.add_model(self.model_001)
         layer_types = GraphQuerier.get_support_quant_layer2type(self.graph)
-        self.assertEqual(layer_types['layer1.0'], 'Conv2d')
-        self.assertEqual(layer_types['fc.0'], 'Linear')
-        self.assertEqual(layer_types['fc.2'], 'Linear')
-        self.assertEqual(layer_types['fc.5'], 'Linear')
+        self.assertEqual(layer_types['layer1.0'], CONV2D)
+        self.assertEqual(layer_types['fc.0'], LINEAR)
+        self.assertEqual(layer_types['fc.2'], LINEAR)
+        self.assertEqual(layer_types['fc.5'], LINEAR)
 
     def test_dilation_not1(self):
         model_002 = models.Net002().to(torch.device("cpu"))
@@ -101,7 +123,7 @@ class TestCheckModel(unittest.TestCase):
         layers = GraphQuerier.get_support_quant_layers(graph)
         self.assertEqual(layers, ['layer1.0'])
         layer_types = GraphQuerier.get_support_quant_layer2type(graph)
-        self.assertEqual(layer_types['layer1.0'], 'Conv3d')
+        self.assertEqual(layer_types['layer1.0'], CONV3D)
 
     def test_get_support_int16_quantizable_layers(self):
         support_layers = GraphQuerier.get_support_int16_quantizable_layers(self.graph)
@@ -118,11 +140,11 @@ class TestCheckModel(unittest.TestCase):
         onnx_file = os.path.join(self.temp_folder, 'SingleConv.onnx')
         Parser.export_onnx(model, args, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
-        self.assertEqual(GraphQuerier.get_support_int16_quantizable_layers(graph), ['layer1','layer2'])
+        self.assertEqual(GraphQuerier.get_support_int16_quantizable_layers(graph), [LAYER1, LAYER2])
 
     def test_get_act_symmetric_limit_types(self):
         ret = GraphQuerier.get_act_symmetric_limit_types()
-        self.assertEqual(ret, ['Conv3d'])
+        self.assertEqual(ret, [CONV3D])
 
     def test_get_act_symmetric_limit_layers(self):
         model_conv3d = models.Net3d().to(torch.device("cpu"))
@@ -139,7 +161,7 @@ class TestCheckModel(unittest.TestCase):
         layers = GraphQuerier.get_act_symmetric_limit_layers(graph)
         self.assertEqual(layers, ['layer1.0'])
         layer_types = GraphQuerier.get_support_quant_layer2type(graph)
-        self.assertEqual(layer_types['layer1.0'], 'Conv3d')
+        self.assertEqual(layer_types['layer1.0'], CONV3D)
 
     def test_submodel(self):
         model_001_sub = models.Net001Sub().to(torch.device("cpu"))
@@ -158,6 +180,7 @@ class TestCheckModel(unittest.TestCase):
 
     def test_amct_ops_in_model(self):
         temp_folder = self.temp_folder
+
         class Net(torch.nn.Module):
             def __init__(self):
                 super(Net, self).__init__()
@@ -165,6 +188,7 @@ class TestCheckModel(unittest.TestCase):
                 record_module = Recorder(record_file)
                 self.layer1 = IFMR(torch.nn.Conv2d(2, 4, kernel_size=2),
                     record_module, ['conv'])
+
             def forward(self, x):
                 x = self.layer1(x)
 
@@ -212,7 +236,7 @@ class TestCheckModel(unittest.TestCase):
         graph = Parser.parse_net_to_graph(tmp_onnx)
 
         model_helper = ModuleHelper(model)
-        mod_conv1 = model_helper.get_module('conv1')
+        mod_conv1 = model_helper.get_module(CONV1)
         mod_conv1_1 = model_helper.get_module('conv1_1')
         mod_conv2 = model_helper.get_module('conv2')
 
@@ -220,7 +244,7 @@ class TestCheckModel(unittest.TestCase):
             if node.type == 'GlobalAveragePool':
                 global_avg_pool_node = node
 
-        self.assertTrue(GraphChecker.check_quantize_type('conv1', mod_conv1, graph))
+        self.assertTrue(GraphChecker.check_quantize_type(CONV1, mod_conv1, graph))
         self.assertFalse(GraphChecker.check_quantize_type('conv1_1', mod_conv1_1, graph))
         self.assertTrue(GraphChecker.check_quantize_type('conv2', mod_conv2, graph))
         self.assertFalse(GraphChecker.check_special_limit(global_avg_pool_node))
@@ -266,7 +290,7 @@ class TestCheckModel(unittest.TestCase):
         graph.model = model
 
         layers = GraphQuerier.get_support_quant_layers(graph)
-        self.assertEqual(layers, ['layer2'])
+        self.assertEqual(layers, [LAYER2])
 
 
     def test_op_matching(self):
@@ -298,7 +322,7 @@ class TestCheckModel(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         graph.model = test_model
 
-        fused_op_list = ['layer1', 'layer2', 'layer1..quant',
+        fused_op_list = [LAYER1, LAYER2, 'layer1..quant',
             'layer1.dequant', 'layer1.anti_quant']
         GraphQuerier.check_op_matching(graph, fused_op_list)
 
@@ -323,7 +347,7 @@ class TestCheckModel(unittest.TestCase):
 
         mod_conv = model_helper.get_module('layer1.0')
         ret = GraphChecker.check_quantize_type(conv_node, mod_conv)
-        self.assertEqual(ret, True)
+        self.assertTrue(ret)
 
     def test_conv3d_valid_dilation_(self):
         # torch model
@@ -340,7 +364,7 @@ class TestCheckModel(unittest.TestCase):
                 break
         mod_conv = model_helper.get_module('layer1.0')
         ret = GraphChecker.check_quantize_type(conv_node, mod_conv)
-        self.assertEqual(ret, True)
+        self.assertTrue(ret)
 
     def test_conv3d_invalid_dilation(self):
         # torch model
@@ -358,7 +382,7 @@ class TestCheckModel(unittest.TestCase):
 
         mod_conv = model_helper.get_module('layer1.0')
         ret = GraphChecker.check_quantize_type(conv_node, mod_conv)
-        self.assertEqual(ret, False)
+        self.assertFalse(ret)
 
     def test_conv3d_invalid_dilation_(self):
         # torch model
@@ -376,11 +400,11 @@ class TestCheckModel(unittest.TestCase):
 
         mod_conv = model_helper.get_module('layer1.0')
         ret = GraphChecker.check_quantize_type(conv_node, mod_conv)
-        self.assertEqual(ret, False)
+        self.assertFalse(ret)
 
     def test_get_support_dmq_balancer_types(self):
         ret = GraphQuerier.get_support_dmq_balancer_types()
-        ans = set(['Conv2d', 'Conv3d', 'Linear', 'Conv1d', 'ConvTranspose2d',
+        ans = set([CONV2D, CONV3D, LINEAR, 'Conv1d', 'ConvTranspose2d',
                   'Conv', 'Gemm', 'MatMul', 'ConvTranspose', 'ConvTranspose1d'])
         self.assertEqual(set(ret), ans)
 
@@ -458,7 +482,7 @@ class TestCheckGraph(unittest.TestCase):
                 return self.deconv(x)
 
         onnx_file = BytesIO()
-        test_model =TestModel()
+        test_model = TestModel()
         test_model.eval()
         Parser.export_onnx(test_model, torch.randn(1, 4, 12, 12), onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
@@ -481,7 +505,7 @@ class TestCheckGraph(unittest.TestCase):
                 return self.deconv(x)
 
         onnx_file = BytesIO()
-        test_model =TestModel()
+        test_model = TestModel()
         test_model.eval()
         Parser.export_onnx(test_model, torch.randn(1, 4, 12, 12), onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
@@ -503,7 +527,7 @@ class TestCheckGraph(unittest.TestCase):
                 return self.deconv(x)
 
         onnx_file = BytesIO()
-        test_model =TestModel()
+        test_model = TestModel()
         test_model.eval()
         Parser.export_onnx(test_model, torch.randn(1, 4, 12, 12), onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
@@ -563,6 +587,7 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_check_reused_node_not_support(self):
         onnx_file = os.path.join(self.temp_folder, 'reused_model.onnx')
+
         class Net(torch.nn.Module):
             def __init__(self):
                 super(Net, self).__init__()
@@ -593,7 +618,7 @@ class TestCheckGraph(unittest.TestCase):
         Parser.export_onnx(model, dummy_input, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
 
-        node_conv1 = graph.get_node_by_name('conv1')
+        node_conv1 = graph.get_node_by_name(CONV1)
         node_conv1_1 = graph.get_node_by_name('conv1_1')
         node_conv2 = graph.get_node_by_name('conv2')
         self.assertTrue(GraphChecker.check_graph_quantize_type(node_conv1))
@@ -602,6 +627,7 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_check_input_dim_reduction_not_support(self):
         onnx_file = os.path.join(self.temp_folder, 'dim_reduction_model.onnx')
+
         class Net(torch.nn.Module):
             def __init__(self):
                 super(Net, self).__init__()
@@ -620,7 +646,7 @@ class TestCheckGraph(unittest.TestCase):
         Parser.export_onnx(model, dummy_input, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
 
-        node_conv1 = graph.get_node_by_name('conv1')
+        node_conv1 = graph.get_node_by_name(CONV1)
         node_conv2 = graph.get_node_by_name('conv2')
         node_conv2.set_attr('input_dimension_reduction', True)
         self.assertTrue(GraphChecker.check_graph_selective_prune_type(node_conv1))
@@ -629,10 +655,10 @@ class TestCheckGraph(unittest.TestCase):
         self.assertFalse(GraphChecker.check_prune_limit(node_conv2))
 
         layers = GraphQuerier.get_support_selective_prune_layer2type(graph)
-        self.assertEqual(list(layers.keys()), ['conv1'])
+        self.assertEqual(list(layers.keys()), [CONV1])
         graph.add_model(model)
         layers = GraphQuerier.get_support_selective_prune_layer2type(graph)
-        self.assertEqual(list(layers.keys()), ['conv1'])
+        self.assertEqual(list(layers.keys()), [CONV1])
         node_conv1.set_attr('is_reuse', True)
         self.assertFalse(GraphChecker.check_prune_limit(node_conv1))
         self.assertFalse(GraphChecker.check_graph_selective_prune_type(node_conv1))
@@ -655,7 +681,7 @@ class TestCheckGraph(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         graph.add_model(model)
         layers = GraphQuerier.get_support_quant_layers(graph)
-        self.assertEqual(layers, ['layer2'])
+        self.assertEqual(layers, [LAYER2])
 
     def test_matmul_2dim(self):
         model = models.MatmulDim().to(torch.device("cpu"))
@@ -669,14 +695,14 @@ class TestCheckGraph(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         graph.add_model(model)
         layers = GraphQuerier.get_support_quant_layers(graph)
-        self.assertEqual(layers, ['layer1', 'layer2'])
+        self.assertEqual(layers, [LAYER1, LAYER2])
 
         graph.model = None
         layers = GraphQuerier.get_support_quant_layers(graph)
         if '1.10' in torch.__version__:
-            self.assertEqual(layers, ['layer1', 'layer2', 'MatMul_4'])
+            self.assertEqual(layers, [LAYER1, LAYER2, 'MatMul_4'])
         else:
-            self.assertEqual(layers, ['layer1', 'layer2'])
+            self.assertEqual(layers, [LAYER1, LAYER2])
 
     def test_check_prune_reused_node(self):
         class Net(torch.nn.Module):
@@ -712,8 +738,8 @@ class TestCheckGraph(unittest.TestCase):
         graph = Parser.parse_net_to_graph(tmp_onnx)
         graph.model = model
 
-        conv1_prune = GraphChecker.check_graph_prune_type(graph.get_node_by_name('conv1'))
-        self.assertEqual(conv1_prune, False)
+        conv1_prune = GraphChecker.check_graph_prune_type(graph.get_node_by_name(CONV1))
+        self.assertFalse(conv1_prune)
 
         layers = GraphQuerier.get_support_prune_layer2type(graph)
         self.assertEqual(list(layers.keys()), ['conv2'])
@@ -725,7 +751,7 @@ class TestCheckGraph(unittest.TestCase):
         try:
             Parser.export_onnx(model, args, onnx_file)
         except Exception as e:
-            self.assertEqual("input data type must be tuple or torch.Tensor" in str(e), True)
+            self.assertIn("input data type must be tuple or torch.Tensor", str(e))
 
     def test_get_support_dmq_balancer_layers(self):
         layer_names = GraphQuerier.get_support_dmq_balancer_layers(self.graph)
@@ -733,7 +759,7 @@ class TestCheckGraph(unittest.TestCase):
         self.assertEqual(layer_names, ans)
 
     def test_check_distill_type_conv2d(self):
-        mod_name = 'conv1'
+        mod_name = CONV1
         mod = torch.nn.Conv2d(3, 3, 3)
         self.assertTrue(GraphChecker.check_distill_type(mod_name, mod))
 
@@ -752,18 +778,18 @@ class TestCheckGraph(unittest.TestCase):
 
     def test_get_support_winograd_layer_types(self):
         layer_types = GraphQuerier.get_support_winograd_layer_types()
-        self.assertIn('Conv2d', layer_types)
+        self.assertIn(CONV2D, layer_types)
 
     def test_check_padding_mode_conv1d(self):
-        mod = torch.nn.Conv1d(3,3,3,padding_mode='zeros')
+        mod = torch.nn.Conv1d(3, 3, 3, padding_mode='zeros')
+        mod_name = CONV1
         mod_type = 'Conv1d'
-        mod_name = 'conv1'
         self.assertTrue(GraphChecker.check_padding_mode(mod_type, mod_name, mod))
-        mod = torch.nn.Conv1d(3,3,3,padding_mode='reflect')
+        mod = torch.nn.Conv1d(3, 3, 3, padding_mode='reflect')
         self.assertFalse(GraphChecker.check_padding_mode(mod_type, mod_name, mod))
 
     def test_check_graph_int16_quantize_type_conv1d(self):
-        model = torch.nn.Sequential(torch.nn.Conv1d(3,3,3,padding_mode='zeros'))
+        model = torch.nn.Sequential(torch.nn.Conv1d(3, 3, 3, padding_mode='zeros'))
         model_onnx = BytesIO()
         Parser.export_onnx(model, torch.randn(3, 3, 3), model_onnx)
         graph = Parser.parse_net_to_graph(model_onnx)
@@ -772,8 +798,8 @@ class TestCheckGraph(unittest.TestCase):
         self.assertTrue(GraphChecker.check_graph_shared_type(node))
 
     def test_check_rnn_limit_not_rnn(self):
-        mod = torch.nn.Conv2d(3,3,3,padding_mode='zeros')
-        mod_type = 'Conv2d'
+        mod = torch.nn.Conv2d(3, 3, 3, padding_mode='zeros')
+        mod_type = CONV2D
         mod_name = 'conv'
         self.assertTrue(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
 
@@ -794,3 +820,4 @@ class TestCheckGraph(unittest.TestCase):
         mod_type = 'LSTM'
         mod_name = 'lstm'
         self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
+

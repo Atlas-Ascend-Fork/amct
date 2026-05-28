@@ -26,20 +26,46 @@ It covers:
 5. Performance tests
 """
 import copy
-import unittest
-from unittest.mock import Mock
-from unittest.mock import MagicMock
-import sys
+import logging
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import sys
+import unittest
+from unittest.mock import MagicMock, Mock
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import fnmatch
+
 import torch
 import torch.nn as nn
 from mock_torch_npu import mock_npu
 from utils import TestModel
-from amct_pytorch.config.utils import match_fuzzy_pattern
-from amct_pytorch import quantize, convert
+
+from amct_pytorch import convert, quantize
+from amct_pytorch.common.config.utils import match_fuzzy_pattern
+
+ALGORITHM_MINMAX = 'minmax'
+KEY_BATCH_NUM = 'batch_num'
+KEY_ENABLE_QUANT = 'enable_quant'
+KEY_STRATEGY = 'strategy'
+KEY_SYMMETRIC = 'symmetric'
+KEY_TYPE = 'type'
+QUANT_TYPE_INT8 = 'int8'
+PATTERN_MODEL_STAR_NAME = 'model*name'
+PATTERN_STAR_DOWN_PROJ = '*down_proj'
+LAYER1_NAME = 'layer1'
+PATTERN_MODEL_STAR_DOT_DOWN_PROJ = 'model.*.down_proj'
+PATTERN_STAR_Q_PROJ_INPUTS = '*q_proj.inputs'
+PATTERN_STAR_DOWN_PROJ_WEIGHTS = '*down_proj.weights'
+
+STRATEGY_CHANNEL = 'channel'
+STRATEGY_TENSOR = 'tensor'
+GROUP_SIZE = 'group_size'
+QUANT_TYPE = 'quant_type'
+
+logger = logging.getLogger(__name__)
+
+LAYER1 = 'layer1'
 
 
 class TestCast(unittest.TestCase):
@@ -51,11 +77,11 @@ class TestCast(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        print('TestCast START!')
+        logger.info('TestCast START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestCast END!')
+        logger.info('TestCast END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -70,14 +96,14 @@ class TestFuzzyPatternMatching(TestCast):
     
     def test_exact_match(self):
         """Test exact matching"""
-        self.assertTrue(match_fuzzy_pattern('layer1', 'layer1'))
-        self.assertFalse(match_fuzzy_pattern('layer1', 'layer2'))
+        self.assertTrue(match_fuzzy_pattern(LAYER1, LAYER1))
+        self.assertFalse(match_fuzzy_pattern(LAYER1, 'layer2'))
     
     def test_wildcard_prefix(self):
         """Test prefix wildcard"""
-        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', '*down_proj'))
-        self.assertTrue(match_fuzzy_pattern('model.layers.1.down_proj', '*down_proj'))
-        self.assertFalse(match_fuzzy_pattern('model.layers.0.up_proj', '*down_proj'))
+        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', PATTERN_STAR_DOWN_PROJ))
+        self.assertTrue(match_fuzzy_pattern('model.layers.1.down_proj', PATTERN_STAR_DOWN_PROJ))
+        self.assertFalse(match_fuzzy_pattern('model.layers.0.up_proj', PATTERN_STAR_DOWN_PROJ))
     
     def test_wildcard_suffix(self):
         """Test suffix wildcard"""
@@ -86,21 +112,21 @@ class TestFuzzyPatternMatching(TestCast):
     
     def test_wildcard_middle(self):
         """Test middle wildcard"""
-        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', 'model.*.down_proj'))
-        self.assertTrue(match_fuzzy_pattern('model.layers.1.down_proj', 'model.*.down_proj'))
-        self.assertFalse(match_fuzzy_pattern('model.layers.0.up_proj', 'model.*.down_proj'))
+        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', PATTERN_MODEL_STAR_DOT_DOWN_PROJ))
+        self.assertTrue(match_fuzzy_pattern('model.layers.1.down_proj', PATTERN_MODEL_STAR_DOT_DOWN_PROJ))
+        self.assertFalse(match_fuzzy_pattern('model.layers.0.up_proj', PATTERN_MODEL_STAR_DOT_DOWN_PROJ))
     
     def test_wildcard_with_weights_suffix(self):
         """Test wildcard with .weights suffix"""
-        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', '*down_proj.weights'))
-        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj.weights', '*down_proj.weights'))
-        self.assertFalse(match_fuzzy_pattern('model.layers.0.down_proj.inputs', '*down_proj.weights'))
+        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj', PATTERN_STAR_DOWN_PROJ_WEIGHTS))
+        self.assertTrue(match_fuzzy_pattern('model.layers.0.down_proj.weights', PATTERN_STAR_DOWN_PROJ_WEIGHTS))
+        self.assertFalse(match_fuzzy_pattern('model.layers.0.down_proj.inputs', PATTERN_STAR_DOWN_PROJ_WEIGHTS))
     
     def test_wildcard_with_inputs_suffix(self):
         """Test wildcard with .inputs suffix"""
-        self.assertTrue(match_fuzzy_pattern('model.layers.0.q_proj', '*q_proj.inputs'))
-        self.assertTrue(match_fuzzy_pattern('model.layers.0.q_proj.inputs', '*q_proj.inputs'))
-        self.assertFalse(match_fuzzy_pattern('model.layers.0.q_proj.weights', '*q_proj.inputs'))
+        self.assertTrue(match_fuzzy_pattern('model.layers.0.q_proj', PATTERN_STAR_Q_PROJ_INPUTS))
+        self.assertTrue(match_fuzzy_pattern('model.layers.0.q_proj.inputs', PATTERN_STAR_Q_PROJ_INPUTS))
+        self.assertFalse(match_fuzzy_pattern('model.layers.0.q_proj.weights', PATTERN_STAR_Q_PROJ_INPUTS))
     
     def test_complex_pattern(self):
         """Test complex pattern"""
@@ -113,7 +139,7 @@ class TestFuzzyPatternExceptions(TestCast):
     
     def test_empty_pattern(self):
         """WC-001: Test empty pattern"""
-        result = (match_fuzzy_pattern('layer1', ''))
+        result = (match_fuzzy_pattern(LAYER1, ''))
         self.assertFalse(result)
     
     def test_wildcard_only(self):
@@ -135,11 +161,11 @@ class TestFuzzyPatternExceptions(TestCast):
     
     def test_wildcard_in_middle(self):
         """WC-005: Test wildcard in middle"""
-        result = match_fuzzy_pattern('model.layer.name', 'model*name')
+        result = match_fuzzy_pattern('model.layer.name', PATTERN_MODEL_STAR_NAME)
         self.assertTrue(result)
-        result = match_fuzzy_pattern('model.other.name', 'model*name')
+        result = match_fuzzy_pattern('model.other.name', PATTERN_MODEL_STAR_NAME)
         self.assertTrue(result)
-        result = match_fuzzy_pattern('other.model.name', 'model*name')
+        result = match_fuzzy_pattern('other.model.name', PATTERN_MODEL_STAR_NAME)
         self.assertFalse(result)
     
     def test_wildcard_at_end(self):
@@ -207,7 +233,7 @@ class TestFuzzyConfigBoundaryConditions(TestCast):
         """LN-003: Test layer name with numbers"""
         result = match_fuzzy_pattern('layer0', 'layer*')
         self.assertTrue(result)
-        result = match_fuzzy_pattern('layer1', 'layer*')
+        result = match_fuzzy_pattern(LAYER1, 'layer*')
         self.assertTrue(result)
     
     def test_layer_name_with_underscore(self):
@@ -293,7 +319,7 @@ class TestWeightsCfgFieldAdditional(TestCast):
     
     def test_weights_cfg_with_none_quant_type(self):
         """Test quant_type is None"""
-        from amct_pytorch.config.fields import WeightsCfgField
+        from amct_pytorch.common.config.fields import WeightsCfgField
         
         config = {}
         field = WeightsCfgField(config)
@@ -301,32 +327,32 @@ class TestWeightsCfgFieldAdditional(TestCast):
     
     def test_weights_cfg_with_group_size(self):
         """Test config with group_size"""
-        from amct_pytorch.config.fields import WeightsCfgField
+        from amct_pytorch.common.config.fields import WeightsCfgField
         
         config = {
-            'type': 'int4',
-            'symmetric': True,
-            'strategy': 'group',
-            'group_size': 32
+            KEY_TYPE: 'int4',
+            KEY_SYMMETRIC: True,
+            KEY_STRATEGY: 'group',
+            GROUP_SIZE: 32
         }
         field = WeightsCfgField(config)
         value = field.get_value()
-        self.assertEqual(value['quant_type'], 'int4')
-        self.assertEqual(value['group_size'], 32)
+        self.assertEqual(value[QUANT_TYPE], 'int4')
+        self.assertEqual(value[GROUP_SIZE], 32)
     
     def test_weights_cfg_without_group_size(self):
         """Test config without group_size"""
-        from amct_pytorch.config.fields import WeightsCfgField
+        from amct_pytorch.common.config.fields import WeightsCfgField
         
         config = {
-            'type': 'int8',
-            'symmetric': True,
-            'strategy': 'channel'
+            KEY_TYPE: QUANT_TYPE_INT8,
+            KEY_SYMMETRIC: True,
+            KEY_STRATEGY: STRATEGY_CHANNEL
         }
         field = WeightsCfgField(config)
         value = field.get_value()
-        self.assertEqual(value['quant_type'], 'int8')
-        self.assertIsNone(value.get('group_size'))
+        self.assertEqual(value[QUANT_TYPE], QUANT_TYPE_INT8)
+        self.assertIsNone(value.get(GROUP_SIZE))
 
 
 class TestInputsCfgFieldAdditional(TestCast):
@@ -334,7 +360,7 @@ class TestInputsCfgFieldAdditional(TestCast):
     
     def test_inputs_cfg_with_none_quant_type(self):
         """Test quant_type is None"""
-        from amct_pytorch.config.fields import InputsCfgField
+        from amct_pytorch.common.config.fields import InputsCfgField
         
         config = {}
         field = InputsCfgField(config)
@@ -342,40 +368,40 @@ class TestInputsCfgFieldAdditional(TestCast):
     
     def test_inputs_cfg_enable_quant_false(self):
         """Test enable_quant is False"""
-        from amct_pytorch.config.fields import InputsCfgField
+        from amct_pytorch.common.config.fields import InputsCfgField
         
-        config = {'enable_quant': False}
+        config = {KEY_ENABLE_QUANT: False}
         field = InputsCfgField(config)
         value = field.get_value()
-        self.assertFalse(value['enable_quant'])
+        self.assertFalse(value[KEY_ENABLE_QUANT])
     
     def test_inputs_cfg_enable_quant_true(self):
         """Test enable_quant is True"""
-        from amct_pytorch.config.fields import InputsCfgField
+        from amct_pytorch.common.config.fields import InputsCfgField
         
         config = {
             'enable': True,
-            'type': 'int8',
-            'symmetric': True,
-            'strategy': 'tensor'
+            KEY_TYPE: QUANT_TYPE_INT8,
+            KEY_SYMMETRIC: True,
+            KEY_STRATEGY: STRATEGY_TENSOR
         }
         field = InputsCfgField(config)
         value = field.get_value()
-        self.assertEqual(value['quant_type'], 'int8')
-        self.assertEqual(value['strategy'], 'tensor')
+        self.assertEqual(value[QUANT_TYPE], QUANT_TYPE_INT8)
+        self.assertEqual(value[KEY_STRATEGY], STRATEGY_TENSOR)
     
     def test_get_fuzzy_config_inputs(self):
         """Test getting inputs fuzzy config"""
         config = {
-            '*q_proj.inputs': {
-                'type': 'int8',
-                'symmetric': True,
-                'strategy': 'tensor'
+            PATTERN_STAR_Q_PROJ_INPUTS: {
+                KEY_TYPE: QUANT_TYPE_INT8,
+                KEY_SYMMETRIC: True,
+                KEY_STRATEGY: STRATEGY_TENSOR
             },
             'inputs': {
-                'type': 'int8',
-                'symmetric': True,
-                'strategy': 'tensor'
+                KEY_TYPE: QUANT_TYPE_INT8,
+                KEY_SYMMETRIC: True,
+                KEY_STRATEGY: STRATEGY_TENSOR
             }
         }
         torch.Tensor.npu = mock_npu
@@ -391,12 +417,12 @@ class TestInputsCfgFieldAdditional(TestCast):
         config = {
             'quant_cfg': {
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 }
             },
-            'algorithm': {'minmax'},
+            'algorithm': {ALGORITHM_MINMAX},
         }
         torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
@@ -409,12 +435,12 @@ class TestInputsCfgFieldAdditional(TestCast):
         config = {
             'quant_cfg': {
                 '*linear1.weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 }
             },
-            'algorithm': {'minmax'},
+            'algorithm': {ALGORITHM_MINMAX},
         }
         torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
@@ -426,12 +452,12 @@ class TestInputsCfgFieldAdditional(TestCast):
         config = {
             'quant_cfg': {
                 'inputs': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 }
             },
-            'algorithm': {'minmax'},
+            'algorithm': {ALGORITHM_MINMAX},
         }
         torch.Tensor.npu = mock_npu
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
@@ -446,17 +472,17 @@ class TestAlgorithmFieldAdditional(TestCast):
     
     def test_algorithm_field_get_value(self):
         """Test AlgorithmField.get_value() method"""
-        from amct_pytorch.config.fields import AlgorithmField
+        from amct_pytorch.common.config.fields import AlgorithmField
         
         registed_alg = Mock()
-        registed_alg.algo = {'minmax': {'Linear': None}}
+        registed_alg.algo = {ALGORITHM_MINMAX: {'Linear': None}}
         
-        config = {'minmax': {}}
+        config = {ALGORITHM_MINMAX: {}}
         field = AlgorithmField(config, registed_alg)
         
         value = field.get_value()
         self.assertIsNotNone(value)
-        self.assertEqual(value['algorithm'], {'minmax': {}})
+        self.assertEqual(value['algorithm'], {ALGORITHM_MINMAX: {}})
 
 
 class TestParserFunctionsAdditional(TestCast):
@@ -464,47 +490,47 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_no_fuzzy(self):
         """Test warning check without fuzzy config"""
-        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
-                'inputs': {'enable_quant': False}
+                'inputs': {KEY_ENABLE_QUANT: False}
             },
-            'algorithm': {'minmax'}
+            'algorithm': {ALGORITHM_MINMAX}
         }
         quant_config = QuantConfig(config, Mock())
-        all_layer_names = ['layer1', 'layer2']
+        all_layer_names = [LAYER1, 'layer2']
         
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
     
     def test_check_fuzzy_config_warnings_with_fuzzy(self):
         """Test warning check with fuzzy config"""
-        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
-                '*down_proj.weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                PATTERN_STAR_DOWN_PROJ_WEIGHTS: {
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 },
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
-                'inputs': {'enable_quant': False}
+                'inputs': {KEY_ENABLE_QUANT: False}
             },
-            'algorithm': {'minmax'},
+            'algorithm': {ALGORITHM_MINMAX},
             'skip_layers': ['model.layers.0.down_proj']
         }
         quant_config = QuantConfig(config, Mock())
@@ -514,55 +540,55 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_check_fuzzy_config_warnings_no_match(self):
         """Test warning when fuzzy config matches no layer"""
-        from amct_pytorch.config.parser import _check_fuzzy_config_warnings
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _check_fuzzy_config_warnings
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
                 '*nonexistent.weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 },
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
-                'inputs': {'enable_quant': False}
+                'inputs': {KEY_ENABLE_QUANT: False}
             },
-            'algorithm': {'minmax'}
+            'algorithm': {ALGORITHM_MINMAX}
         }
         quant_config = QuantConfig(config, Mock())
-        all_layer_names = ['layer1', 'layer2']
+        all_layer_names = [LAYER1, 'layer2']
         
         _check_fuzzy_config_warnings(all_layer_names, quant_config)
     
     def test_build_layer_types_and_quant_type(self):
         """Test building layer types and quant type"""
-        from amct_pytorch.config.parser import _build_layer_types_and_quant_type
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _build_layer_types_and_quant_type
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
                 'inputs': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 }
             },
-            'algorithm': {'minmax'}
+            'algorithm': {ALGORITHM_MINMAX}
         }
         quant_config = QuantConfig(config, Mock())
         registed_alg = Mock()
-        registed_alg.algo = {'minmax': {'Linear': None}}
+        registed_alg.algo = {ALGORITHM_MINMAX: {'Linear': None}}
         
         layer_types, quant_type_comb = _build_layer_types_and_quant_type(quant_config, registed_alg)
         
@@ -571,23 +597,23 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_is_layer_supported_conv2d_padding_mode(self):
         """Test Conv2d padding_mode check"""
-        from amct_pytorch.config.parser import _is_layer_supported
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
+        from amct_pytorch.common.config.parser import _is_layer_supported
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
-                'inputs': {'enable_quant': False}
+                'inputs': {KEY_ENABLE_QUANT: False}
             },
-            'algorithm': {'minmax'}
+            'algorithm': {ALGORITHM_MINMAX}
         }
         quant_config = QuantConfig(config, Mock())
-        layer_types = {'Conv2d': 'minmax'}
+        layer_types = {'Conv2d': ALGORITHM_MINMAX}
         quant_type_comb = 'int8 int8'
         
         mod = nn.Conv2d(3, 64, 3, padding_mode='reflect')
@@ -596,97 +622,97 @@ class TestParserFunctionsAdditional(TestCast):
     
     def test_get_layer_quant_config_with_fuzzy_weights(self):
         """Test getting layer config with fuzzy weights"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
-                '*down_proj.weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                PATTERN_STAR_DOWN_PROJ_WEIGHTS: {
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 },
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
-                'inputs': {'enable_quant': False}
+                'inputs': {KEY_ENABLE_QUANT: False}
             },
-            'algorithm': {'minmax'}
+            'algorithm': {ALGORITHM_MINMAX}
         }
         quant_config = QuantConfig(config, Mock())
         
         layer_config = quant_config.get_layer_config('model.layers.0.down_proj')
         self.assertIsNotNone(layer_config)
-        self.assertEqual(layer_config['weights_cfg']['strategy'], 'tensor')
+        self.assertEqual(layer_config['weights_cfg'][KEY_STRATEGY], STRATEGY_TENSOR)
     
     def test_get_layer_quant_config_with_fuzzy_inputs(self):
         """Test getting layer config with fuzzy inputs"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
-                '*q_proj.inputs': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                PATTERN_STAR_Q_PROJ_INPUTS: {
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 },
                 'inputs': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 }
             },
-            'algorithm': {'minmax'}
+            'algorithm': {ALGORITHM_MINMAX}
         }
         quant_config = QuantConfig(config, Mock())
         
         layer_config = quant_config.get_layer_config('model.layers.0.self_attn.q_proj')
         self.assertIsNotNone(layer_config)
-        self.assertEqual(layer_config['inputs_cfg']['strategy'], 'tensor')
+        self.assertEqual(layer_config['inputs_cfg'][KEY_STRATEGY], STRATEGY_TENSOR)
     
     def test_get_layer_quant_config_without_fuzzy_match(self):
         """Test layer config without fuzzy match"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
                 'weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'channel'
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_CHANNEL
                 },
-                'inputs': {'enable_quant': False}
+                'inputs': {KEY_ENABLE_QUANT: False}
             },
-            'algorithm': {'minmax'}
+            'algorithm': {ALGORITHM_MINMAX}
         }
         quant_config = QuantConfig(config, Mock())
         
-        layer_config = quant_config.get_layer_config('layer1')
+        layer_config = quant_config.get_layer_config(LAYER1)
         self.assertIsNotNone(layer_config)
-        self.assertEqual(layer_config['weights_cfg']['strategy'], 'channel')
+        self.assertEqual(layer_config['weights_cfg'][KEY_STRATEGY], STRATEGY_CHANNEL)
     
     def test_get_layer_quant_config_no_weights_config(self):
         """Test layer config without weights config"""
-        from amct_pytorch.config.fields import QuantConfig
+        from amct_pytorch.common.config.fields import QuantConfig
         
         config = {
-            'batch_num': 1,
+            KEY_BATCH_NUM: 1,
             'quant_cfg': {
-                '*down_proj.weights': {
-                    'type': 'int8',
-                    'symmetric': True,
-                    'strategy': 'tensor'
+                PATTERN_STAR_DOWN_PROJ_WEIGHTS: {
+                    KEY_TYPE: QUANT_TYPE_INT8,
+                    KEY_SYMMETRIC: True,
+                    KEY_STRATEGY: STRATEGY_TENSOR
                 },
-                'algorithm': {'minmax'}
+                'algorithm': {ALGORITHM_MINMAX}
             }
         }
         quant_config = QuantConfig(config, Mock())
@@ -694,6 +720,6 @@ class TestParserFunctionsAdditional(TestCast):
         layer_config = quant_config.get_layer_config('model.layers.0.up_proj')
         self.assertIsNone(layer_config)
 
-
 if __name__ == '__main__':
     unittest.main()
+

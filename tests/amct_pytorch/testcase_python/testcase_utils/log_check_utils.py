@@ -15,10 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import logging
 import io
+import logging
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOGGER
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import LOGGER
+
 
 def log_check_deco(func):
     def wrapper(*args, **kwargs):
@@ -39,6 +40,7 @@ def log_check_deco(func):
 
         log_check(log_info, func_name)
     return wrapper
+
 
 def log_check(log_info, func_name):
     if '  ' in log_info:

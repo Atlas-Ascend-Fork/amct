@@ -15,22 +15,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
-from io import BytesIO
+import os
 import stat
+import sys
+import unittest
+from io import BytesIO
 
 import numpy as np
 import torch
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import generate_onnx_file_name
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import split_dir_prefix
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import _write_node_info, delete_customized_attr
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
+    _write_node_info,
+    delete_customized_attr,
+    generate_onnx_file_name,
+    split_dir_prefix,
+)
+
+OP_DATA_TYPE = 'op_data_type'
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+K_ = './'
+AMCT = 'amct'
 
 
 class TestSave(unittest.TestCase):
@@ -54,16 +62,16 @@ class TestSave(unittest.TestCase):
         pass
 
     def test_onnx_name(self):
-        name = generate_onnx_file_name('amct', 'model', 'Deploy')
+        name = generate_onnx_file_name(AMCT, 'model', 'Deploy')
         self.assertEqual(name, 'amct/model_deploy_model.onnx')
 
-        name = generate_onnx_file_name('amct', 'model', 'Fakequant')
+        name = generate_onnx_file_name(AMCT, 'model', 'Fakequant')
         self.assertEqual(name, 'amct/model_fake_quant_model.onnx')
 
-        name = generate_onnx_file_name('amct', '', 'Deploy')
+        name = generate_onnx_file_name(AMCT, '', 'Deploy')
         self.assertEqual(name, 'amct/deploy_model.onnx')
 
-        name = generate_onnx_file_name('amct', '', 'Fakequant')
+        name = generate_onnx_file_name(AMCT, '', 'Fakequant')
         self.assertEqual(name, 'amct/fake_quant_model.onnx')
 
     def test_split_dir_prefix(self):
@@ -71,12 +79,12 @@ class TestSave(unittest.TestCase):
         self.assertEqual(save_dir, os.path.realpath(''))
         self.assertEqual(save_prefix, '')
 
-        save_dir, save_prefix = split_dir_prefix('./')
-        self.assertEqual(save_dir, os.path.realpath('./'))
+        save_dir, save_prefix = split_dir_prefix(K_)
+        self.assertEqual(save_dir, os.path.realpath(K_))
         self.assertEqual(save_prefix, '')
 
         save_dir, save_prefix = split_dir_prefix('./model')
-        self.assertEqual(save_dir, os.path.realpath('./'))
+        self.assertEqual(save_dir, os.path.realpath(K_))
         self.assertEqual(save_prefix, 'model')
 
     def test_write_node_info(self):
@@ -87,8 +95,10 @@ class TestSave(unittest.TestCase):
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
-            "Conv_0": [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},],
-            "BatchNormalization_1": [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},]
+            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                        "attr_val": bytes("float16", encoding='utf-8')}, ],
+            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                                     "attr_val": bytes("float16", encoding='utf-8')}, ]
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
@@ -103,7 +113,7 @@ class TestSave(unittest.TestCase):
             find_flag = False
             if node.proto.name in ['Conv_0', 'BatchNormalization_1']:
                 for attr in node.proto.attribute:
-                    if attr.name == "op_data_type":
+                    if attr.name == OP_DATA_TYPE:
                         find_flag = True
                 self.assertTrue(find_flag)
 
@@ -115,13 +125,15 @@ class TestSave(unittest.TestCase):
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
-            "Conv_0": [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},],
-            "BatchNormalization_1": [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},]
+            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                        "attr_val": bytes("float16", encoding='utf-8')}, ],
+            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                                     "attr_val": bytes("float16", encoding='utf-8')}, ]
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
         dump_model = _write_node_info(dump_model, customized_attr)
-        delete_customized_attr(dump_model, ["op_data_type"])
+        delete_customized_attr(dump_model, [OP_DATA_TYPE])
         file_realpath = os.path.join(self.temp_folder, 'temp.onnx')
         with open(file_realpath, 'wb') as fid:
             fid.write(dump_model.SerializeToString())
@@ -132,6 +144,7 @@ class TestSave(unittest.TestCase):
             find_flag = False
             if node.proto.name in ['Conv_0', 'BatchNormalization_1']:
                 for attr in node.proto.attribute:
-                    if attr.name == "op_data_type":
+                    if attr.name == OP_DATA_TYPE:
                         find_flag = True
                 self.assertFalse(find_flag)
+

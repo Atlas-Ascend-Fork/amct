@@ -11,16 +11,31 @@
 # http://www.apache.org/licenses/LICENSE-2.0
 # ----------------------------------------------------------------------------
 import copy
-import unittest
+import logging
 import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
 import torch
 import torch.nn as nn
+from mock_torch_npu import (
+    mock_npu,
+    mock_npu_convert_weight_to_int4pack,
+    mock_npu_dtype_cast,
+    mock_npu_dynamic_mx_quant,
+    mock_npu_format_cast,
+    mock_npu_quant_matmul,
+    mock_npu_quantize,
+    mock_npu_weight_quant_batchmatmul,
+)
 from utils import TestModel, TestModelBias
-from mock_torch_npu import *
-from unittest.mock import MagicMock
-from unittest.mock import patch
 
-from amct_pytorch import quantize, convert
+from amct_pytorch import convert, quantize
+
+logger = logging.getLogger(__name__)
+
+NPU_MX_QUANTIZATION_LINEAR = 'NpuMXQuantizationLinear'
+LINEAR = 'Linear'
 
 torch.manual_seed(0)
 
@@ -34,11 +49,11 @@ class TestMinMax(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        print('TestMinMax START!')
+        logger.info('TestMinMax START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestMinMax END!')
+        logger.info('TestMinMax END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -71,9 +86,9 @@ class TestMinMax(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         quantize(model, cfg)
         model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuMXQuantizationLinear')
-        self.assertEqual(type(model.linear2).__name__, 'Linear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_MX_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertTrue(model.linear1.weight_compress_only)
         self.assertIsNotNone(model.linear1.scale_w)
         convert(model)
@@ -108,9 +123,9 @@ class TestMinMax(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         quantize(model, cfg)
         model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuMXQuantizationLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuMXQuantizationLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_MX_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_MX_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertFalse(model.linear1.weight_compress_only)
         self.assertIsNotNone(model.linear1.scale_w)
         convert(model)

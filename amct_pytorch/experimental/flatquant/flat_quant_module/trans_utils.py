@@ -10,10 +10,12 @@ class SVDSingleTransMatrix(nn.Module):
         super(SVDSingleTransMatrix, self).__init__()
         self.linear_u = nn.Linear(size, size, bias=False, dtype=torch.float32)
         self.linear_u.weight.data = get_init_weight(size).to(self.linear_u.weight)
-        self.linear_u = nn.utils.parametrizations.orthogonal(self.linear_u, orthogonal_map="cayley", use_trivialization=False)
+        self.linear_u = nn.utils.parametrizations.orthogonal(
+    self.linear_u, orthogonal_map="cayley", use_trivialization=False)
         self.linear_v = nn.Linear(size, size, bias=False, dtype=torch.float32)
         self.linear_v.weight.data = get_init_weight(size).to(self.linear_v.weight)
-        self.linear_v = nn.utils.parametrizations.orthogonal(self.linear_v, orthogonal_map="cayley", use_trivialization=False)
+        self.linear_v = nn.utils.parametrizations.orthogonal(
+    self.linear_v, orthogonal_map="cayley", use_trivialization=False)
         self.linear_diag = torch.nn.Parameter(torch.ones(size, dtype=torch.float32), requires_grad=True)
 
         self._eval_mode = False
@@ -59,18 +61,22 @@ class SVDDecomposeTransMatrix(nn.Module):
         super(SVDDecomposeTransMatrix, self).__init__()
         self.linear_u_left = nn.Linear(left_size, left_size, bias=False, dtype=torch.float32)
         self.linear_u_left.weight.data = get_init_weight(left_size).to(self.linear_u_left.weight)
-        self.linear_u_left = nn.utils.parametrizations.orthogonal(self.linear_u_left, orthogonal_map="cayley", use_trivialization=False)
+        self.linear_u_left = nn.utils.parametrizations.orthogonal(
+    self.linear_u_left, orthogonal_map="cayley", use_trivialization=False)
         self.linear_v_left = nn.Linear(left_size, left_size, bias=False, dtype=torch.float32)
         self.linear_v_left.weight.data = get_init_weight(left_size).to(self.linear_v_left.weight)
-        self.linear_v_left = nn.utils.parametrizations.orthogonal(self.linear_v_left, orthogonal_map="cayley", use_trivialization=False)
+        self.linear_v_left = nn.utils.parametrizations.orthogonal(
+    self.linear_v_left, orthogonal_map="cayley", use_trivialization=False)
         self.linear_diag_left = torch.nn.Parameter(torch.ones(left_size, dtype=torch.float32), requires_grad=True)
 
         self.linear_u_right = nn.Linear(right_size, right_size, bias=False, dtype=torch.float32)
         self.linear_u_right.weight.data = get_init_weight(right_size).to(self.linear_u_right.weight)
-        self.linear_u_right = nn.utils.parametrizations.orthogonal(self.linear_u_right, orthogonal_map="cayley", use_trivialization=False)
+        self.linear_u_right = nn.utils.parametrizations.orthogonal(
+    self.linear_u_right, orthogonal_map="cayley", use_trivialization=False)
         self.linear_v_right = nn.Linear(right_size, right_size, bias=False, dtype=torch.float32)
         self.linear_v_right.weight.data = get_init_weight(right_size).to(self.linear_v_right.weight)
-        self.linear_v_right = nn.utils.parametrizations.orthogonal(self.linear_v_right, orthogonal_map="cayley", use_trivialization=False)
+        self.linear_v_right = nn.utils.parametrizations.orthogonal(
+    self.linear_v_right, orthogonal_map="cayley", use_trivialization=False)
         self.linear_diag_right = torch.nn.Parameter(torch.ones(right_size, dtype=torch.float32), requires_grad=True)
 
         self.add_diag = add_diag
@@ -78,7 +84,11 @@ class SVDDecomposeTransMatrix(nn.Module):
         if self.add_diag:
             self_w_device = self.linear_u_left.weight.device
             if diag_init_para is None:
-                self.diag_scale = torch.nn.Parameter(torch.ones((left_size * right_size), dtype=torch.float32).to(self_w_device), requires_grad=True)
+                self.diag_scale = torch.nn.Parameter(
+    torch.ones(
+        (left_size * right_size),
+        dtype=torch.float32).to(self_w_device),
+         requires_grad=True)
             else:
                 self.diag_scale = torch.nn.Parameter(diag_init_para.to(self_w_device), requires_grad=True)
         self._eval_mode = False
@@ -92,7 +102,7 @@ class SVDDecomposeTransMatrix(nn.Module):
         if not self._eval_mode:
             matrix_u_left, matrix_u_right = self.linear_u_left.weight, self.linear_u_right.weight
             matrix_v_left, matrix_v_right = self.linear_v_left.weight, self.linear_v_right.weight
-            linear_diag_left, linear_diag_right = self.linear_diag_left,  self.linear_diag_right
+            linear_diag_left, linear_diag_right = self.linear_diag_left, self.linear_diag_right
             if inv_t:
                 linear_diag_left, linear_diag_right = 1 / linear_diag_left, 1 / linear_diag_right
         else:
@@ -100,15 +110,19 @@ class SVDDecomposeTransMatrix(nn.Module):
             if inv_t:
                 matrix_left, matrix_right = self.matrix_left_inv, self.matrix_right_inv
             return kronecker_matmul(inp, matrix_left.to(inp), matrix_right.to(inp))
-        matrix_left, matrix_right = matrix_u_left @ torch.diag(linear_diag_left) @ matrix_v_left.t(), matrix_u_right @ torch.diag(linear_diag_right) @ matrix_v_right.t()
+        matrix_left = matrix_u_left @ torch.diag(linear_diag_left) @ matrix_v_left.t()
+        matrix_right = matrix_u_right @ torch.diag(linear_diag_right) @ matrix_v_right.t()
         return kronecker_matmul(inp, matrix_left.to(inp), matrix_right.to(inp))
 
     def to_eval_mode(self):
         if not self._eval_mode:
             matrix_left = self.linear_u_left.weight @ torch.diag(self.linear_diag_left) @ self.linear_v_left.weight.t()
-            matrix_right = self.linear_u_right.weight @ torch.diag(self.linear_diag_right) @ self.linear_v_right.weight.t()
-            matrix_left_inv = self.linear_u_left.weight @ torch.diag(1 / self.linear_diag_left) @ self.linear_v_left.weight.t()
-            matrix_right_inv = self.linear_u_right.weight @ torch.diag(1 / self.linear_diag_right) @ self.linear_v_right.weight.t()
+            matrix_right = self.linear_u_right.weight @ torch.diag(
+                self.linear_diag_right) @ self.linear_v_right.weight.t()
+            matrix_left_inv = self.linear_u_left.weight @ torch.diag(
+                1 / self.linear_diag_left) @ self.linear_v_left.weight.t()
+            matrix_right_inv = self.linear_u_right.weight @ torch.diag(
+                1 / self.linear_diag_right) @ self.linear_v_right.weight.t()
             self.matrix_left = nn.Parameter(matrix_left, requires_grad=False)
             self.matrix_right = nn.Parameter(matrix_right, requires_grad=False)
             self.matrix_left_inv = nn.Parameter(matrix_left_inv, requires_grad=False)
@@ -121,5 +135,7 @@ class SVDDecomposeTransMatrix(nn.Module):
         if hasattr(self, 'matrix_left'):
             res += f", matrix.shape={self.matrix_left.shape}, matrix_right.shape={self.matrix_right.shape}, )"
         else:
-            res += f", matrix.shape={self.linear_u_left.weight.shape}, linear_right.shape={self.linear_u_right.weight.shape}, )"
+            res += f", matrix.shape={
+    self.linear_u_left.weight.shape}, linear_right.shape={
+        self.linear_u_right.weight.shape}, )"
         return res

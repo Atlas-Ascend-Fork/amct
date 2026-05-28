@@ -17,19 +17,34 @@
 # ----------------------------------------------------------------------------
 
 import os
-from io import BytesIO
-import unittest
-import torch
-from unittest.mock import patch
 import stat
+import unittest
+from io import BytesIO
+from unittest.mock import patch
 
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import _export_to_onnx
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.save import _write_node_info, delete_customized_attr
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
+import torch
+
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
+    version_higher_than,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import (
+    Parser,
+    _export_to_onnx,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
+    _write_node_info,
+    delete_customized_attr,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+OP_DATA_TYPE = 'op_data_type'
+
+FLOAT16 = 'float16'
+
 
 class TestParser(unittest.TestCase):
     @classmethod
@@ -71,6 +86,7 @@ class TestParser(unittest.TestCase):
     @patch('torch.onnx.export')
     def test_parse_unsupport_bn(self, mock_export):
         mock_export.side_effect = RuntimeError()
+
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super(TestModel, self).__init__()
@@ -90,6 +106,7 @@ class TestParser(unittest.TestCase):
     @patch.object(ModuleHelper, 'deep_copy')
     def test_parse_export_unsupport_deep_copy_model(self, mock_deep_copy):
         mock_deep_copy.side_effect = RuntimeError()
+
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super(TestModel, self).__init__()
@@ -111,16 +128,16 @@ class TestParser(unittest.TestCase):
                         padding_mode='zeros', affine=True, track_running_stats=True):
                 super(ConvBNConvSerial, self).__init__()
                 self.conv1 = torch.nn.Conv2d(in_channels, out_channels, \
-                                    kernel_size = kernel_size, stride=stride,\
-                                    padding=padding, dilation = dilation, \
-                                    groups = groups, bias = bias, \
-                                    padding_mode = padding_mode)
-                self.bn1 = torch.nn.BatchNorm2d(out_channels,affine=affine, track_running_stats=track_running_stats)
+                                    kernel_size=kernel_size, stride=stride,\
+                                    padding=padding, dilation=dilation, \
+                                    groups=groups, bias=bias, \
+                                    padding_mode=padding_mode)
+                self.bn1 = torch.nn.BatchNorm2d(out_channels, affine=affine, track_running_stats=track_running_stats)
                 self.conv2 = torch.nn.Conv2d(out_channels, out_channels, \
-                                    kernel_size = kernel_size, stride=stride,\
-                                    padding=padding, dilation = dilation, \
-                                    groups = groups, bias = bias, \
-                                    padding_mode = padding_mode)
+                                    kernel_size=kernel_size, stride=stride,\
+                                    padding=padding, dilation=dilation, \
+                                    groups=groups, bias=bias, \
+                                    padding_mode=padding_mode)
 
             def forward(self, x):
                 x = self.conv1(x)
@@ -128,22 +145,20 @@ class TestParser(unittest.TestCase):
                 x = self.conv2(x)
                 return x
 
-        model = ConvBNConvSerial(3,10000,3).to('cpu')
+        model = ConvBNConvSerial(3, 10000, 3).to('cpu')
 
-        args_shape = [(4,3,16,16)]
+        args_shape = [(4, 3, 16, 16)]
         args = list()
         for input_shape in args_shape:
             args.append(torch.randn(input_shape).to('cpu'))
         args = tuple(args)
 
         tmp_onnx = BytesIO()
-        # Parser.export_onnx(model, args, tmp_onnx)
         if not version_higher_than(torch.__version__, '1.10.0'):
             self.assertRaises(RuntimeError, Parser.export_onnx, model, args, tmp_onnx)
 
         if not version_higher_than(torch.__version__, '1.10.0'):
             tmp_onnx = os.path.join(self.temp_folder, 'ConvBNConvSerial.onnx')
-            # Parser.export_onnx(model, args, tmp_onnx)
             self.assertRaises(RuntimeError, Parser.export_onnx, model, args, tmp_onnx)
 
     def test_write_node_attrs_extracted_from_onnx(self):
@@ -160,9 +175,11 @@ class TestParser(unittest.TestCase):
             if node.type == 'Conv':
                 conv_node = node
 
+        node_attr = {"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
+                      "attr_val": bytes(FLOAT16, encoding='utf-8')}
         customized_attr = {
-            conv_node.name: [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},],
-            "BatchNormalization_1": [{"attr_name": "op_data_type", "attr_type": "STRING", "attr_val": bytes("float16", encoding='utf-8')},]
+            conv_node.name: [node_attr],
+            "BatchNormalization_1": [node_attr]
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
@@ -173,14 +190,14 @@ class TestParser(unittest.TestCase):
         # set file's permission 640
         os.chmod(file_realpath, stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP)
         graph = Parser.parse_net_to_graph(file_realpath)
-        Parser.write_node_attrs_extracted_from_onnx(graph, file_realpath, ['op_data_type'])
+        Parser.write_node_attrs_extracted_from_onnx(graph, file_realpath, [OP_DATA_TYPE])
         conv_node = None
         for node in graph.nodes:
             if node.type == 'Conv':
                 conv_node = node
                 break
-        self.assertTrue(conv_node.has_attr("op_data_type"))
-        self.assertEqual(conv_node.get_attr("op_data_type"), "float16")
+        self.assertTrue(conv_node.has_attr(OP_DATA_TYPE))
+        self.assertEqual(conv_node.get_attr(OP_DATA_TYPE), FLOAT16)
 
     @patch('torch.onnx.export')
     def test_parse_export_return_model(self, mock_torch_onnx_export):
@@ -204,7 +221,7 @@ class TestParser(unittest.TestCase):
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_2(self):
-        export_setting = {'dynamic_axes': {"inputs": (0,2,3)}}
+        export_setting = {'dynamic_axes': {"inputs": (0, 2, 3)}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_3(self):
@@ -226,3 +243,4 @@ class TestParser(unittest.TestCase):
     def test_validate_export_setting_invalid_dynamic_axes_7(self):
         export_setting = {'dynamic_axes': {"inputs": {-4: '32'}}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
+

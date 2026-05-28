@@ -15,8 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
+
 import torch
 import torch.nn as nn
+
+logger = logging.getLogger(__name__)
+
 
 class SingleLinear(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -57,6 +62,7 @@ class SingleConv(nn.Module):
         x = self.layer2(x)
         return x
 
+
 class SingleDepthwsieConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -96,6 +102,7 @@ class GroupConv(nn.Module):
         x = self.layer3(x)
         return x
 
+
 class SingleGroupConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -108,6 +115,7 @@ class SingleGroupConv(nn.Module):
         x = self.layer1(x)
         return x
 
+
 class SingleDeconv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -118,6 +126,7 @@ class SingleDeconv(nn.Module):
     def forward(self, x):
         x = self.layer1(x)
         return x
+
 
 class MultiDeconv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -140,6 +149,7 @@ class MultiDeconv(nn.Module):
         x = self.layer3(x)
         return x
 
+
 class ConcatConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -161,6 +171,7 @@ class ConcatConv(nn.Module):
         x_1_2 = torch.cat((x1, x2), dim=1)
         x3 = self.layer3(x_1_2)
         return x3
+
 
 class EltwiseConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -189,14 +200,15 @@ class EltwiseConv(nn.Module):
     def forward(self, x):
         x1 = self.layer1(x)
         x2 = self.layer2(x)
-        x_1_2 = x1+x2
+        x_1_2 = x1 + x2
         x3 = self.layer3(x)
         x_1_2_3 = x_1_2 + x3
         x4 = self.layer4(x)
-        x_1_2_4 = x_1_2+x4
+        x_1_2_4 = x_1_2 + x4
         y1 = self.layer5(x_1_2_3)
         y2 = self.layer6(x_1_2_4)
         return y1, y2
+
 
 class SplitConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -216,13 +228,14 @@ class SplitConv(nn.Module):
 
     def forward(self, x):
         x1 = self.layer1(x)
-        print(x1.shape)
+        logger.info('%s', x1.shape)
         x1 = torch.split(x1, 80, dim=1)
-        print(x1[0].shape, x1[0].shape)
+        logger.info('%s %s', x1[0].shape, x1[0].shape)
         x2_1 = self.layer2_1(x1[0])
         x2_2 = self.layer2_2(x1[1])
 
         return x2_1, x2_2
+
 
 class SplitConcatGroupConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -244,15 +257,16 @@ class SplitConcatGroupConv(nn.Module):
 
     def forward(self, x):
         x1 = self.layer1(x)
-        print(x1.shape)
+        logger.info('%s', x1.shape)
         x1 = torch.split(x1, 80, dim=1)
-        print(x1[0].shape, x1[0].shape)
+        logger.info('%s %s', x1[0].shape, x1[0].shape)
         x2_1 = self.layer2_1(x1[0])
         x2_2 = self.layer2_2(x1[1])
         x2 = torch.cat([x2_1, x2_2], 1)
         x3 = self.layer3(x2)
 
         return x3
+
 
 class SplitConcatConv(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
@@ -274,15 +288,17 @@ class SplitConcatConv(nn.Module):
 
     def forward(self, x):
         x1 = self.layer1(x)
-        print(x1.shape)
+        logger.info('%s', x1.shape)
         x1 = torch.split(x1, 80, dim=1)
-        print(x1[0].shape, x1[0].shape)
+        logger.info('%s %s', x1[0].shape, x1[0].shape)
         x2_1 = self.layer2_1(x1[0])
         x2_2 = self.layer2_2(x1[1])
         x2 = torch.cat([x2_1, x2_2], 1)
         x3 = self.layer3(x2)
 
         return x3
+
+
 class AvgpoolFlatten(nn.Module):
     """args_shape: [(1, 16, 28, 28)]
     """
@@ -291,7 +307,7 @@ class AvgpoolFlatten(nn.Module):
         self.layer1 = nn.Sequential(
             nn.Conv2d(in_channels=16, out_channels=32, groups=1, kernel_size=3, bias=True),
             nn.BatchNorm2d(32))
-        self.layer2 = nn.AdaptiveAvgPool2d(output_size=(1,1))
+        self.layer2 = nn.AdaptiveAvgPool2d(output_size=(1, 1))
         self.layer3 = nn.Linear(in_features=32, out_features=10, bias=True)
 
     def forward(self, x):
@@ -301,6 +317,7 @@ class AvgpoolFlatten(nn.Module):
         x3 = self.layer3(x2)
 
         return x3
+
 
 class NetTrainBranch(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -314,7 +331,7 @@ class NetTrainBranch(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(NetTrainBranch,self).__init__()
+        super(NetTrainBranch, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv2d(2, 16, kernel_size=3, bias=False),

@@ -15,21 +15,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
+
 import torch
+
+from amct_pytorch.classic.graph_based.amct_pytorch.prune_interface import (
+    create_compressed_retrain_model,
+    create_prune_retrain_model,
+    restore_compressed_retrain_model,
+    restore_prune_retrain_model,
+    save_compressed_retrain_model,
+    save_prune_retrain_model,
+)
 
 from .utils import models
 
-from amct_pytorch.graph_based_compression.amct_pytorch.prune_interface import create_compressed_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.prune_interface import restore_compressed_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.prune_interface import save_compressed_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.prune_interface import create_prune_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.prune_interface import restore_prune_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.prune_interface import save_prune_retrain_model
-
+logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestPruneInterface(unittest.TestCase):
     """
@@ -73,11 +79,12 @@ class TestPruneInterface(unittest.TestCase):
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
 
-        new_model2 = restore_prune_retrain_model(ori_model, args, record_file, config_defination, pth_file, 'state_dict')
+        new_model2 = restore_prune_retrain_model(
+            ori_model, args, record_file, config_defination, pth_file, 'state_dict')
         new_output2 = new_model2.forward(args[0])
 
         self.assertEqual(ori_output.shape, new_output.shape)
-        self.assertEqual((new_output==new_output2).all(), torch.tensor(True))
+        self.assertEqual((new_output == new_output2).all(), torch.tensor(True))
 
     def test_prune_model_002(self):
         config_defination = os.path.join(CUR_DIR, 'utils/test_prune_interface/model_002_prune.cfg')
@@ -152,7 +159,7 @@ class TestPruneInterface(unittest.TestCase):
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
         new_output = new_model.forward(args[0])
-        print('new_model', new_model)
+        logger.info('new_model %s', new_model)
         self.assertEqual(ori_output.shape, new_output.shape)
 
         if '1.10' in torch.__version__:
@@ -177,7 +184,7 @@ class TestPruneInterface(unittest.TestCase):
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
         new_output = new_model.forward(args[0])
-        print('new_model', new_model)
+        logger.info('new_model %s', new_model)
         self.assertEqual(ori_output.shape, new_output.shape)
 
         self.assertEqual(new_model.layer1.out_channels, 160)
@@ -198,7 +205,7 @@ class TestPruneInterface(unittest.TestCase):
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
         new_output = new_model.forward(args[0])
-        print('new_model', new_model)
+        logger.info('new_model %s', new_model)
         self.assertEqual(ori_output.shape, new_output.shape)
 
         self.assertEqual(new_model.layer1.out_features, 80)
@@ -310,7 +317,8 @@ class TestPruneInterface(unittest.TestCase):
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
 
-        new_model2 = restore_prune_retrain_model(ori_model, args, record_file, config_defination, pth_file, 'state_dict')
+        new_model2 = restore_prune_retrain_model(
+            ori_model, args, record_file, config_defination, pth_file, 'state_dict')
         new_output2 = new_model2.forward(args[0])
 
         self.assertEqual(ori_output.shape, new_output2.shape)
@@ -334,7 +342,8 @@ class TestPruneInterface(unittest.TestCase):
         new_output = new_model.forward(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        new_model2 = restore_prune_retrain_model(ori_model, args, record_file, config_defination, pth_file, 'state_dict')
+        new_model2 = restore_prune_retrain_model(
+            ori_model, args, record_file, config_defination, pth_file, 'state_dict')
 
         new_model2.eval()
         new_model2(args[0])
@@ -370,7 +379,8 @@ class TestPruneInterface(unittest.TestCase):
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(ori_model, args, config_defination, record_file, pth_file, 'state_dict')
+        restore_model = restore_compressed_retrain_model(
+            ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
 
@@ -403,7 +413,8 @@ class TestPruneInterface(unittest.TestCase):
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(ori_model, args, config_defination, record_file, pth_file, 'state_dict')
+        restore_model = restore_compressed_retrain_model(
+            ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
 
@@ -436,7 +447,8 @@ class TestPruneInterface(unittest.TestCase):
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(ori_model, args, config_defination, record_file, pth_file, 'state_dict')
+        restore_model = restore_compressed_retrain_model(
+            ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
 
@@ -467,7 +479,8 @@ class TestPruneInterface(unittest.TestCase):
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(ori_model, args, config_defination, record_file, pth_file, 'state_dict')
+        restore_model = restore_compressed_retrain_model(
+            ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
 

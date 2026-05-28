@@ -15,17 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
-import torch
-from torch.utils.data import Dataset
-import torch.nn.functional as F
+
+import numpy as np
 import onnx
 import onnxruntime
-import numpy as np
+import torch
+import torch.nn.functional as F
+from torch.utils.data import Dataset
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DATASETS_DIR = os.path.realpath(os.path.join(CUR_DIR, '../../../../../../../../build/bin/llt/toolchain/dmct_datasets'))
 DATA_PATH = os.path.join(DATASETS_DIR, 'pytorch/data')
+
+logger = logging.getLogger(__name__)
 
 
 class CustomDataset(Dataset):
@@ -76,7 +80,7 @@ def run_inference_model(model, iterations=None):
     test_loader = torch.utils.data.DataLoader(dataset2, **kwargs)
     if iterations is None:
         iterations = len(test_loader.dataset) // batch_size + 1
-        print('-'*20, 'iterations', iterations, '-'*20)
+        logger.info('-' * 20 + ' iterations ' + str(iterations) + ' ' + '-' * 20)
 
     model.eval()
     test_loss = 0
@@ -93,16 +97,17 @@ def run_inference_model(model, iterations=None):
             if iter_num == iterations:
                 break
 
-    print('iter_num', iter_num)
+    logger.info('iter_num %s', iter_num)
     data_length = iter_num * batch_size
     test_loss /= data_length
     acc = 100. * correct / data_length
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, data_length,
         100. * correct / data_length))
 
     return test_loss, acc
+
 
 def run_inference_model_auto_cali(model, iterations=2):
     batch_size = 16
@@ -115,8 +120,8 @@ def run_inference_model_auto_cali(model, iterations=2):
     correct = 0
     iter_num = 0
     with torch.no_grad():
-        for i in range(iterations):
-            data = torch.tensor(np.random.uniform(0, 10, (32,1,28,28)).astype(np.float32))
+        for _ in range(iterations):
+            data = torch.tensor(np.random.uniform(0, 10, (32, 1, 28, 28)).astype(np.float32))
             data = data.to(device)
             output = model(data)
             iter_num = iter_num + 1
@@ -126,19 +131,19 @@ def run_inference_model_auto_cali(model, iterations=2):
 
 def run_inference_onnx(onnx_file, iterations=None):
     # prepare model
-    print('onnx_file', onnx_file)
+    logger.info('onnx_file %s', onnx_file)
     onnx_model = onnx.load(onnx_file)
     onnx.checker.check_model(onnx_model)
 
     ort_session = onnxruntime.InferenceSession(onnx_file, providers=['CPUExecutionProvider'])
     input_names = [input_onnx.name for input_onnx in ort_session.get_inputs()]
     output_names = [output_onnx.name for output_onnx in ort_session.get_outputs()]
-    print('inputs:', input_names)
-    print('otputs:', output_names)
+    logger.info('inputs: %s', input_names)
+    logger.info('otputs: %s', output_names)
 
     def to_numpy(tensor):
-       data_numpy = tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
-       return data_numpy
+        data_numpy = tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+        return data_numpy
     # prepare data
     batch_size = 16
     torch.manual_seed(1)
@@ -149,7 +154,7 @@ def run_inference_onnx(onnx_file, iterations=None):
     test_loader = torch.utils.data.DataLoader(dataset2, **kwargs)
     if iterations is None:
         iterations = len(test_loader.dataset) // batch_size + 1
-        print('-'*20, 'iterations', iterations, '-'*20)
+        logger.info('-' * 20 + ' iterations ' + str(iterations) + ' ' + '-' * 20)
 
     # run model
     test_loss = 0
@@ -170,12 +175,12 @@ def run_inference_onnx(onnx_file, iterations=None):
             if iter_num == iterations:
                 break
 
-    print('iter_num', iter_num)
+    logger.info('iter_num %s', iter_num)
     data_length = iter_num * batch_size
     test_loss /= data_length
     acc = 100. * correct / data_length
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, data_length,
         100. * correct / data_length))
 

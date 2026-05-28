@@ -15,23 +15,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os,sys
-import unittest
 import argparse
+import logging
+import os
+import sys
+import unittest
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
 
-import amct_pytorch.graph_based_compression.amct_pytorch
-import amct_pytorch.graph_based_compression.amct_pytorch as amct
-from amct_pytorch.graph_based_compression.amct_pytorch import accuracy_based_auto_calibration
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import generate_fakequant_module
-from amct_pytorch.graph_based_compression.amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase
+import amct_pytorch.classic.graph_based.amct_pytorch
+import amct_pytorch.classic.graph_based.amct_pytorch as amct
+from amct_pytorch.classic.graph_based.amct_pytorch import (
+    accuracy_based_auto_calibration,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_calibration import (
+    AutoCalibrationEvaluatorBase,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
+    generate_fakequant_module,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_ONNX_TYPES,
+    QUANTIZABLE_TYPES,
+)
+
 from . import mnist_main
 from .mnist_utils import run_inference_model_auto_cali
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_ONNX_TYPES
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DATASETS_DIR = os.path.realpath(os.path.join(CUR_DIR, '../../../../../../../../build/bin/llt/toolchain/dmct_datasets'))
@@ -41,18 +55,20 @@ DATA_PATH = os.path.join(DATASETS_DIR, 'pytorch/data')
 MAX_ACC_ERR = 0.5
 DEVICE = 'cpu'
 
+logger = logging.getLogger(__name__)
+
 
 class TestAutoCaliFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        QUANTIZABLE_TYPES.extend(['ConvTranspose2d','AvgPool2d'])
-        QUANTIZABLE_ONNX_TYPES.extend(['AveragePool','ConvTranspose'])
+        QUANTIZABLE_TYPES.extend(['ConvTranspose2d', 'AvgPool2d'])
+        QUANTIZABLE_ONNX_TYPES.extend(['AveragePool', 'ConvTranspose'])
         cls.temp_folder = os.path.join(CUR_DIR, 'test_mnist')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
         cls.model = mnist_main.Net()
-        cls.args_shape = [(16,1,28,28)]
+        cls.args_shape = [(16, 1, 28, 28)]
         cls.ckpt = os.path.join(CKPT_PATH, 'mnist_cnn.pt')
 
     @classmethod
@@ -74,7 +90,6 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
         # prepare ori_model
         device = DEVICE
         model = self.model.to(device)
-        # model.load_state_dict(torch.load(self.ckpt, map_location=device))
         test_iter = 2
         # run ori_model
         run_inference_model_auto_cali(
@@ -84,8 +99,7 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
         fakequant_model, fakequant_file = do_calibration(
             model, self.args_shape, self.temp_folder)
         run_inference_model_auto_cali(fakequant_model, iterations=test_iter)
-        print('='*50, 'reesult', '='*50)
-        # self.assertLess(abs(acc_ptq - acc_ori), MAX_ACC_ERR)
+        logger.info('%s reesult %s', '=' * 50, '=' * 50)
         self.assertTrue(os.path.exists(fakequant_file))
 
 
@@ -100,7 +114,7 @@ def do_calibration(model, args_shape, temp_folder):
     input_data = tuple([torch.randn(input_shape) for input_shape in args_shape])
 
     batch_num = 1
-    amct_pytorch.graph_based_compression.amct_pytorch.create_quant_config(
+    amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
         config_file=config_file,
         model=model,
         input_data=input_data,
@@ -109,7 +123,7 @@ def do_calibration(model, args_shape, temp_folder):
         activation_offset=True,
         config_defination=None)
 
-    new_model = amct_pytorch.graph_based_compression.amct_pytorch.quantize_model(
+    new_model = amct_pytorch.classic.graph_based.amct_pytorch.quantize_model(
         config_file=config_file,
         model=model,
         input_data=input_data,
@@ -127,7 +141,7 @@ def do_calibration(model, args_shape, temp_folder):
         input_data)
 
     # save
-    amct_pytorch.graph_based_compression.amct_pytorch.save_model(
+    amct_pytorch.classic.graph_based.amct_pytorch.save_model(
         modfied_onnx_file=modfied_onnx_file,
         record_file=record_file,
         save_path=save_model_path)

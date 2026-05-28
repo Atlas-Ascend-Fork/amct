@@ -1,19 +1,43 @@
-import unittest
-import os
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
 import copy
+import os
 import shutil
+import unittest
 from collections import defaultdict
 
-import torch
-from torch import nn
 import numpy as np
 import onnx
 import onnxruntime as ort
+import torch
+from torch import nn
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.utils import copy_tensor
-from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.gru import GRUQAT
-from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.lstm import LSTMQAT
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils import (
+    copy_tensor,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.gru import (
+    GRUQAT,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.lstm import (
+    LSTMQAT,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import LOGGER
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -23,7 +47,7 @@ class SingleGRUNet(nn.Module):
         super(SingleGRUNet, self).__init__()
         self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
         self.hidden_size = hidden_size
-    
+
     def forward(self, x):
         h0 = torch.zeros(1, x.size(0), self.hidden_size)
         out, _ = self.gru(x, h0)
@@ -35,7 +59,7 @@ class SingleLSTMNet(nn.Module):
         super(SingleLSTMNet, self).__init__()
         self.gru = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.hidden_size = hidden_size
-    
+
     def forward(self, x):
         h0 = torch.zeros(1, x.size(0), self.hidden_size)
         c0 = torch.zeros(1, x.size(0), self.hidden_size)
@@ -62,7 +86,7 @@ class TestGRUQAT(unittest.TestCase):
                 qat_module = GRUQAT.from_float(
                     module)
                 set_module(net_gru, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_gru.forward(torch.rand(1, 1, 10))
             self.assertIsNotNone(ret)
 
@@ -73,7 +97,7 @@ class TestGRUQAT(unittest.TestCase):
                 qat_module = GRUQAT.from_float(
                     module)
                 set_module(net_gru, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_gru.forward(torch.rand(1, 2, 10))
             self.assertIsNotNone(ret)
 
@@ -97,10 +121,10 @@ class TestLSTMQAT(unittest.TestCase):
                 qat_module = LSTMQAT.from_float(
                     module)
                 set_module(net_lstm, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_lstm.forward(torch.rand(1, 1, 10))
             self.assertIsNotNone(ret)
-    
+
     def test_lstm_qat_convert_from_ori_op_seq_n(self):
         net_lstm = SingleLSTMNet(input_size=10, hidden_size=20)
         for name, module in net_lstm.named_modules():
@@ -108,7 +132,7 @@ class TestLSTMQAT(unittest.TestCase):
                 qat_module = LSTMQAT.from_float(
                     module)
                 set_module(net_lstm, name, qat_module)
-        for i in range(5):
+        for _ in range(5):
             ret = net_lstm.forward(torch.rand(1, 5, 10))
             self.assertIsNotNone(ret)
 

@@ -15,22 +15,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
+from onnx import onnx_pb
+
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
+    version_higher_than,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import DeleteResizePass
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+
 from .util import models
 
-from onnx import onnx_pb
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer import DeleteResizePass
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestDeleteResizePass(unittest.TestCase):
     @classmethod
@@ -74,7 +79,6 @@ class TestDeleteResizePass(unittest.TestCase):
         self.assertTrue(is_matched)
 
         passer.do_pass(graph, resize_node)
-        # self.assertEqual(6, ori_len - len(graph.nodes))
 
     def test_do_success_02(self):
         """ now is fail"""
@@ -94,7 +98,7 @@ class TestDeleteResizePass(unittest.TestCase):
         scales = graph.initializer.add()
         scales.name = 'resize_scales'
         scales.data_type = onnx_pb.TensorProto.DataType.FLOAT
-        scales.float_data[:] = [1,1,2,2]
+        scales.float_data[:] = [1, 1, 2, 2]
         scales.dims[:] = [4]
         # Add roi
         roi = graph.node.add()

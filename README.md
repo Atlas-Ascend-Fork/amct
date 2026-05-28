@@ -45,34 +45,8 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 |----------|------|
 | **PTQ 量化算法** | Min-Max / AWQ / GPTQ / SmoothQuant 等训练后量化算法，详见 [算法介绍](docs/algorithm_brief.md) |
 | **HiFloat8 量化** | 华为自研 8-bit 浮点格式，锥形精度 + 大动态范围，详见 [HiFloat8 介绍](docs/context/hifloat8_quantization.md) |
-| **NPU 自定义算子** | 基于NPU的自研算子，Ascend C kernel 实现，详见 [npu_ops](npu_ops/README.md) |
+| **NPU 自定义算子** | 基于NPU的自研算子，Ascend C kernel 实现，详见 [amct_ops](amct_ops/README.md) |
 | **大模型量化** | DeepSeek-V3.2 / V4 量化方案，详见 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
-
-### 算法支持矩阵
-
-**激活权重量化 (W+A)**
-
-| 算法 | INT8 | INT4 | MXFP8 | HiFloat8 |
-|--------|:----------:|:----------:|:-----------:|:--------:|
-| Min-Max     | ✅ | — | — | — |
-| SmoothQuant | ✅ | — | — | — |
-| Cast        | — | — | — | ✅ |
-| Quantile    | — | — | — | ✅ |
-| OFMR        | — | — | — | ✅ |
-| MXQuant     | — | — | ✅ | — |
-| FlatQuant   | — | ✅ | — | — |
-
-**权重量化 (W)**
-
-| 算法 | INT8 | INT4 | MXFP8 | MXFP4 | HiFloat8 |
-|--------|:----------:|:----------:|:-----------:|:-----------:|:--------:|
-| Min-Max    | ✅ | ✅ | — | — | — |
-| AWQ        | ✅ | ✅ | — | — | — |
-| GPTQ       | ✅ | ✅ | — | ✅ | ✅ |
-| Cast       | — | — | — | — | ✅ |
-| Quantile   | — | — | — | — | ✅ |
-| OFMR       | — | — | — | — | ✅ |
-| MXQuant    | — | — | ✅ | ✅ | — |
 
 
 ## 📊 性能收益
@@ -126,84 +100,39 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 
 更多构建选项与本地验证请参见 [构建指南](docs/build.md)。
 
-### 最简示例
+### 🏃 一站式平台快速体验
 
-以下示例展示对 Qwen3-0.6B 大模型的 INT8 权重量化流程：
+「一站式平台」是为开发者提供的 NPU 环境，内部已集成完整的 CANN 环境，可以直接使用。AMCT 针对该平台在相应样例 README 中提供了简化的「快速启动」路径，帮助用户最小步骤完成 NPU 推理体验。当前支持的模型正在持续扩展中，敬请关注：
 
-```python
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from datasets import load_dataset
-import amct_pytorch as amct
+| 实践                                                                           | 简介                                                                                             |
+|------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | 在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。 |
+| [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的单卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。    |
 
-# 1. 加载预训练模型
-model_path = "Qwen/Qwen3-0.6B"
-model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16)
-model.eval()
 
-# 2. 准备校准数据（使用随机数据作为示例）
-#    实际场景应使用真实数据集的代表性样本
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
-calib_data = tokenizer("\n\n".join(testenc["text"]), return_tensors="pt")
-
-# 3. 配置量化策略
-cfg = {
-    "batch_num": 1,
-    "quant_cfg": {
-        "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
-    },
-    "algorithm": "minmax",
-}
-
-# 4. 执行量化校准（需在校准数据上推理）
-quant_model = amct.quantize(model, cfg)
-with torch.no_grad():
-    quant_model(calib_data)  # 运行校准推理
-
-# 5. 转换为部署模型
-deploy_model = amct.convert(quant_model)
-
-print("量化完成！deploy_model 可用于 NPU 推理")
-```
-
-更完整的端到端样例参见 [examples/](examples/README.md)。
 
 ## 📖 文档样例
-
-**文档**
 
 | 主题 | 内容 |
 |------|------|
 | [压缩概念](docs/compression_concepts.md) | 量化、稀疏、蒸馏等基础概念 |
-| [压缩特性](docs/README.md) | AMCT 支持的全部压缩特性 |
+| [LLM量化](docs/AMCT_Pytorch_LLM.md) | 面向大语言模型（LLM）的量化特性 |
+| [压缩特性](docs/README.md) | AMCT 支持的基础压缩特性 |
 | [API 文档](docs/api/README.md) | 接口使用说明 |
-| [算法介绍](docs/algorithm_brief.md) | AWQ、GPTQ、SmoothQuant 等算法原理 |
-
-**端到端样例**
-
-| 算法 | 说明 |
-|------|------|
-| [Min-Max](examples/amct_pytorch/minmax/README_CN.md) | 基于极值的简单量化，入门首选 |
-| [AWQ](examples/amct_pytorch/awq/README_CN.md) | 激活感知的权重量化，适合大模型 PTQ |
-| [GPTQ](examples/amct_pytorch/gptq/README_CN.md) | 基于二阶信息的权重量化，逐层优化 |
-| [SmoothQuant](examples/amct_pytorch/smoothquant/README_CN.md) | 平滑激活分布的 W8A8 量化 |
-| [Cast](examples/amct_pytorch/cast/README_CN.md) | HiFloat8 数据直转 |
-| [Quantile](examples/amct_pytorch/quantile/README_CN.md) | HiFloat8 分位量化 |
-| [OFMR](examples/amct_pytorch/ofmr/README_CN.md) | 输出特征 Min-Max 量化 |
-| [MXQuant](examples/amct_pytorch/mxquant/README_CN.md) | 微缩浮点量化（MXFP8/MXFP4） |
-| [FlatQuant](examples/amct_pytorch/flatquant/README_CN.md) | 通过仿射变换平整化分布的量化 |
-
-完整样例索引参见 [examples/README.md](examples/README.md)。
+| [算法介绍](docs/algorithm_brief.md) | AWQ、GPTQ、SmoothQuant等算法原理 |
 
 ## 🔍 目录结构
 
 ```text
 amct/
 ├── amct_pytorch/                  # PyTorch 量化压缩核心源码
-│   ├── experimental/              # 实验特性（HiFloat8转换、DeepSeek-v4量化转换 等）
-│   ├── deploy_op/                 # 量化部署算子
-│   └── quantize_op/               # 量化校准算子
+│   ├── algorithms/                 # 量化算法实现
+│   ├── cli/                        # 命令行入口
+│   ├── common/                     # 通用工具、模型和数据处理
+│   ├── configs/                    # 量化配置模板
+│   ├── experimental/               # 实验特性（HiFloat8、DeepSeek 等）
+│   ├── quantization/               # 量化数据类型与基础模块
+│   └── workflows/                  # LLM 量化、评估和部署流程
 ├── amct_ops/                      # AMCT 自定义 NPU 算子
 ├── examples/                      # 端到端样例与调用示例
 ├── tests/                         # 单元测试
@@ -293,4 +222,3 @@ pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isol
 ## 📝 许可证
 
 本项目基于 [Apache 2.0](LICENSE) 协议开源。使用前请阅读 [安全声明](SECURITY.md) 与 [免责声明](DISCLAIMER.md)。
-

@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -14,22 +14,37 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import unittest
+import logging
 import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
+from mock_torch_npu import (
+    mock_npu_convert_weight_to_int4pack,
+    mock_npu_quant_matmul,
+    mock_npu_quantize,
+    mock_npu_weight_quant_batchmatmul,
+    mock_npu
+)
 
-from amct_pytorch import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
-from amct_pytorch import INT8_MINMAX_WEIGHT_QUANT_CFG, INT8_SMOOTHQUANT_CFG
-from amct_pytorch.config import parse_config
+from amct_pytorch import (
+    INT4_AWQ_WEIGHT_QUANT_CFG,
+    INT4_GPTQ_WEIGHT_QUANT_CFG,
+    INT8_MINMAX_WEIGHT_QUANT_CFG,
+    INT8_SMOOTHQUANT_CFG,
+    convert,
+    quantize,
+)
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-from amct_pytorch import quantize, convert
-from mock_torch_npu import *
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from amct_pytorch.common.config import parse_config
 
 torch.manual_seed(0)
+
+logger = logging.getLogger(__name__)
+
 
 class TestModel(nn.Module):
     def __init__(self):
@@ -54,16 +69,16 @@ class TestDefQuantize(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs).to(torch.float32).detach().to('cpu').numpy().astype(np.float32)
-        print('TestDefQuantize START!')
+        logger.info('TestDefQuantize START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestDefQuantize END!')
+        logger.info('TestDefQuantize END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
         sys.modules['torch_npu'] = mock_torch_npu
- 
+
     def tearDown(self):
         del sys.modules['torch_npu']
 
@@ -71,7 +86,10 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_default_success(self, mock_1, mock_2, mock_3, mock_4):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model)
@@ -89,7 +107,10 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_awq_quant_success(self, mock_1, mock_2, mock_3, mock_4):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, INT4_AWQ_WEIGHT_QUANT_CFG)
@@ -102,12 +123,15 @@ class TestDefQuantize(unittest.TestCase):
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
         quant_out = model(self.inputs.npu())
-        
+
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, INT4_GPTQ_WEIGHT_QUANT_CFG)
@@ -126,7 +150,10 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_minmax_success(self, mock_1, mock_2, mock_3, mock_4):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, INT8_MINMAX_WEIGHT_QUANT_CFG)
@@ -143,7 +170,10 @@ class TestDefQuantize(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.npu_quantization_linear.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, INT8_SMOOTHQUANT_CFG)

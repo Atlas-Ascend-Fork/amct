@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from .quant_utils import WeightQuantizer, ActivationQuantizer
 from .flat_utils import kronecker_matmul
 
+
 class FlatQuantizedLinear(nn.Module):
     def __init__(self, linear: nn.Linear, quant_config, lac):
         super(FlatQuantizedLinear, self).__init__()

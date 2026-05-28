@@ -15,29 +15,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
 
-from .utils import models
-from .utils import record_file_utils
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import struct_helper
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
+    _check_config_consistency,
+    add_dump_operations,
+    create_quant_config,
+    quantize_model,
+    save_model,
+)
 
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
-
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_config
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import quantize_model
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_model
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import _check_config_consistency
-
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import add_dump_operations
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils import struct_helper
-
+from .utils import models, record_file_utils
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+ALGO_KEY = 'algo'
+
 
 class TestQuantizeTool(unittest.TestCase):
     """
@@ -90,11 +94,9 @@ class TestQuantizeTool(unittest.TestCase):
         record_module = Recorder(record_file)
         model = IFMR(mod_conv, record_module, ["conv"])
         model.to(torch.device("cpu"))
-        # model.forward(self.args[0])
 
         args = torch.randn((1, 2, 28, 28))
         config_file = os.path.join(self.temp_folder, 'ifmr.json')
-        # create_quant_config(onfig_file, model, args)
 
         self.assertRaises(RuntimeError, create_quant_config, config_file, model, args)
 
@@ -121,13 +123,11 @@ class TestQuantizeTool(unittest.TestCase):
         record_module = Recorder(record_file)
         model = IFMR(mod_conv, record_module, ["conv"])
         model.to(torch.device("cpu"))
-        # model.forward(self.args[0])
 
         args = torch.randn((1, 2, 28, 28))
         config_file = os.path.join(self.temp_folder, 'ifmr.json')
         modfied_onnx_file = os.path.join(self.temp_folder, 'no_exit/ifmr_modified.onnx')
         record_file = os.path.join(self.temp_folder, 'ifmr.txt')
-        # quantize_model(config_file, modfied_onnx_file, record_file, model, args)
 
         self.assertRaises(RuntimeError, quantize_model, config_file, modfied_onnx_file, record_file, model, args)
 
@@ -135,30 +135,30 @@ class TestQuantizeTool(unittest.TestCase):
     def test_check_config_consistency_true_001(self):
         ''' '''
         retrain_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize"
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize"
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
         single_instance_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize"
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize"
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
@@ -169,31 +169,31 @@ class TestQuantizeTool(unittest.TestCase):
     def test_check_config_consistency_true_002(self):
         ''' '''
         retrain_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize"
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize"
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
         single_instance_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize",
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize",
                     "ifmr_init": True
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
@@ -204,29 +204,29 @@ class TestQuantizeTool(unittest.TestCase):
     def test_check_config_consistency_false_001(self):
         ''' '''
         retrain_config = {
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize"
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize"
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
         single_instance_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize"
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize"
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
@@ -237,22 +237,22 @@ class TestQuantizeTool(unittest.TestCase):
     def test_check_config_consistency_false_002(self):
         ''' '''
         retrain_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize"
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize"
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
         single_instance_config = {
-            "version":1,
-            "batch_num":1
+            "version": 1,
+            "batch_num": 1
         }
         consistency = _check_config_consistency(retrain_config, single_instance_config)
 
@@ -261,32 +261,32 @@ class TestQuantizeTool(unittest.TestCase):
     def test_check_config_consistency_false_003(self):
         ''' '''
         retrain_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize",
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize",
                     "ifmr_init": False
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
         single_instance_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize",
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize",
                     "ifmr_init": True
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
@@ -297,31 +297,31 @@ class TestQuantizeTool(unittest.TestCase):
     def test_check_config_consistency_false_004(self):
         ''' '''
         retrain_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize",
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize",
                     "ifmr_init": False
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
         single_instance_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize"
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize"
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
@@ -332,23 +332,23 @@ class TestQuantizeTool(unittest.TestCase):
     def test_check_config_consistency_false_005(self):
         ''' '''
         retrain_config = {
-            "version":1,
-            "batch_num":1,
-            "conv1":{
-                "retrain_enable":True,
-                "retrain_data_config":{
-                    "algo":"ulq_quantize",
+            "version": 1,
+            "batch_num": 1,
+            "conv1": {
+                "retrain_enable": True,
+                "retrain_data_config": {
+                    ALGO_KEY: "ulq_quantize",
                     "ifmr_init": False
                 },
-                "retrain_weight_config":{
-                    "algo":"arq_retrain",
-                    "channel_wise":True
+                "retrain_weight_config": {
+                    ALGO_KEY: "arq_retrain",
+                    "channel_wise": True
                 }
             }
         }
         single_instance_config = {
-            "version":1,
-            "batch_num":1,
+            "version": 1,
+            "batch_num": 1,
             "conv1": 1,
         }
         consistency = _check_config_consistency(retrain_config, single_instance_config)

@@ -19,12 +19,17 @@
 Generate model for ut.
 """
 from __future__ import print_function
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
+
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
+    version_higher_than,
+)
+
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
     """ save onnx """
@@ -54,8 +59,10 @@ def create_onnx(model, args_shapes, onnx_file, mode='eval'):
 def save_state_dict(model, name):
     torch.save(model.state_dict(), name)
 
+
 def restore_model(model, state_dict_path):
     model.load_state_dict(torch.load(state_dict_path))
+
 
 class Net001(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
@@ -69,7 +76,7 @@ class Net001(nn.Module):
     fc(bias) + bn
     """
     def __init__(self):
-        super(Net001,self).__init__()
+        super(Net001, self).__init__()
         affine = version_higher_than(torch.__version__, '2.1.0')
         # conv + bn
         self.layer1 = nn.Sequential(
@@ -102,7 +109,7 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128,10, bias=True))
+            nn.Linear(128, 10, bias=True))
         self.avg_pool = nn.AvgPool2d(kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
@@ -113,7 +120,7 @@ class Net001(nn.Module):
         x = self.avg_pool(x)
         x = self.layer5(x)
         x = self.layer6(x)
-        x = x.view(x.size(0),-1)
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         x = F.log_softmax(x, dim=1)
 
@@ -173,7 +180,7 @@ class Net002(nn.Module):
         x = self.relu(x)
         x = self.conv(x)
         x = self.bn(x)
-        x = x.view(x.size(0),-1)
+        x = x.view(x.size(0), -1)
         x = self.linear(x)
         return x
 
@@ -191,7 +198,7 @@ class Net003(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         x = self.bn(x)
-        x = x.view(x.size(0),-1)
+        x = x.view(x.size(0), -1)
         x = self.linear(x)
         return x
 
@@ -200,12 +207,12 @@ class Quant(nn.Module):
     """ args_shape: [(1, 2, 28, 28)]
     """
     def __init__(self, scale, offset, quant_bit):
-        super(Quant,self).__init__()
+        super(Quant, self).__init__()
         self.scale = scale
         self.offset = offset
         self.quant_bit = quant_bit
-        self.min_value = -2**(quant_bit-1)
-        self.max_value = 2**(quant_bit-1) - 1
+        self.min_value = -2**(quant_bit - 1)
+        self.max_value = 2**(quant_bit - 1) - 1
 
     def forward(self, data):
         data = torch.mul(data, self.scale)
@@ -224,7 +231,7 @@ class Net3d(nn.Module):
     """ args_shape: [(1, 2, 4, 14, 14)]
     """
     def __init__(self):
-        super(Net3d,self).__init__()
+        super(Net3d, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv3d(2, 4, kernel_size=3, bias=False),
@@ -236,9 +243,10 @@ class Net3d(nn.Module):
 
         return x
 
+
 class Net3d001(nn.Module):
     def __init__(self):
-        super(Net3d001,self).__init__()
+        super(Net3d001, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
             nn.Conv3d(2, 4, kernel_size=3, bias=False),
@@ -252,11 +260,12 @@ class Net3d001(nn.Module):
 
         return x
 
+
 class Net1d(nn.Module):
     """ args_shape: [(1, 2, 14)]
     """
     def __init__(self):
-        super(Net1d,self).__init__()
+        super(Net1d, self).__init__()
         self.args_shape = [(1, 2, 14)]
         # conv + bn
         self.layer1 = nn.Sequential(

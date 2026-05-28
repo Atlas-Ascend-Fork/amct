@@ -11,7 +11,7 @@ def round_ste(x: torch.Tensor):
 def get_qmin_qmax(bits, sym):
     if sym:
         q_max = torch.tensor(2 ** (bits - 1) - 1)
-        q_min = -q_max -1
+        q_min = -q_max - 1
     else:
         q_max, q_min = torch.tensor(2 ** bits - 1), 0
     return q_max, q_min
@@ -129,7 +129,7 @@ class WeightQuantizer(torch.nn.Module):
         self.grid = grid
         self.maxshrink = maxshrink
         if sym:
-            self.maxq = torch.tensor(2**(bits-1)-1)
+            self.maxq = torch.tensor(2**(bits - 1) - 1)
         else:
             self.maxq = torch.tensor(2**bits - 1)
 
@@ -196,7 +196,7 @@ class WeightQuantizer(torch.nn.Module):
         self.zero = self.zero.reshape(shape)
         return
 
-    def quantize(self, x, quantonly = False):
+    def quantize(self, x, quantonly=False):
         x_dtype = x.dtype
         if self.enable and self.ready() and self.bits < 16:
             if self.sym:

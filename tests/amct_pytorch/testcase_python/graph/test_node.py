@@ -15,19 +15,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
+import logging
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
-
 from onnx import onnx_pb
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
+
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
+
+SPARSE_INITIALIZER = 'sparse_initializer'
+
+CONV = 'conv'
+
+CONV0 = 'conv0'
+
 
 class TestNode(unittest.TestCase):
     @classmethod
@@ -41,10 +51,10 @@ class TestNode(unittest.TestCase):
     def setUp(self):
         # set basic info
         self.node_proto = onnx_pb.NodeProto()
-        self.node_proto.name = 'conv'
+        self.node_proto.name = CONV
         self.node_proto.op_type = 'Conv'
         self.node_proto.input[:] = ['data', 'weights', 'bias']
-        self.node_proto.output[:] = ['conv']
+        self.node_proto.output[:] = [CONV]
         # add attribute "dilations"
         dilations = self.node_proto.attribute.add()
         dilations.name = 'dilations'
@@ -72,12 +82,12 @@ class TestNode(unittest.TestCase):
     def test_init_success(self):
         test_proto = deepcopy(self.node_proto)
         node_conv = Node(0, test_proto)
-        print(node_conv.get_input_anchor(0))
-        print(node_conv.get_input_anchor(1))
-        print(node_conv.get_input_anchor(2))
-        print(node_conv.get_output_anchor(0))
-        print(node_conv)
-        self.assertEqual(node_conv.name, 'conv')
+        logger.info(node_conv.get_input_anchor(0))
+        logger.info(node_conv.get_input_anchor(1))
+        logger.info(node_conv.get_input_anchor(2))
+        logger.info(node_conv.get_output_anchor(0))
+        logger.info(node_conv)
+        self.assertEqual(node_conv.name, CONV)
         self.assertEqual(node_conv.type, 'Conv')
         self.assertEqual(node_conv.index, 0)
         self.assertEqual(len(node_conv.input_anchors), 3)
@@ -85,15 +95,15 @@ class TestNode(unittest.TestCase):
         self.assertEqual(node_conv.get_input_anchor(0).name, 'data')
         self.assertEqual(node_conv.get_input_anchor(1).name, 'weights')
         self.assertEqual(node_conv.get_input_anchor(2).name, 'bias')
-        self.assertEqual(node_conv.get_output_anchor(0).name, 'conv')
-        node_conv.set_name('conv0')
-        self.assertEqual(node_conv.name, 'conv0')
+        self.assertEqual(node_conv.get_output_anchor(0).name, CONV)
+        node_conv.set_name(CONV0)
+        self.assertEqual(node_conv.name, CONV0)
         node_conv_proto = node_conv.dump_proto()
         self.assertEqual(type(node_conv_proto), onnx_pb.NodeProto)
-        self.assertEqual(node_conv_proto.name, 'conv0')
+        self.assertEqual(node_conv_proto.name, CONV0)
         self.assertEqual(node_conv_proto.op_type, 'Conv')
         self.assertEqual(list(node_conv_proto.input), ['data', 'weights', 'bias'])
-        self.assertEqual(list(node_conv_proto.output), ['conv'])
+        self.assertEqual(list(node_conv_proto.output), [CONV])
         self.assertEqual(node_conv_proto.attribute[0].name, 'dilations')
         self.assertEqual(node_conv_proto.attribute[1].name, 'kernel_shape')
         self.assertEqual(node_conv_proto.attribute[2].name, 'pads')
@@ -101,7 +111,7 @@ class TestNode(unittest.TestCase):
 
     def test_unsupport_type(self):
         graph_proto = onnx_pb.GraphProto()
-        graph_proto.name = 'conv'
+        graph_proto.name = CONV
         self.assertRaises(
             TypeError,
             Node,
@@ -120,25 +130,25 @@ class TestNode(unittest.TestCase):
     def test_sparse_initializer_with_values(self):
         sparse_initializer = onnx_pb.SparseTensorProto()
         sparse_initializer.dims[:] = [3, 3, 3, 3]
-        sparse_initializer.values.name = 'sparse_initializer'
+        sparse_initializer.values.name = SPARSE_INITIALIZER
         sparse_node = Node(0, sparse_initializer)
-        self.assertEqual(sparse_node.name, 'sparse_initializer')
-        self.assertEqual(sparse_node.get_output_anchor(0).name, 'sparse_initializer')
+        self.assertEqual(sparse_node.name, SPARSE_INITIALIZER)
+        self.assertEqual(sparse_node.get_output_anchor(0).name, SPARSE_INITIALIZER)
         sparse_proto = sparse_node.dump_proto()
         self.assertEqual(type(sparse_proto), onnx_pb.SparseTensorProto)
-        self.assertEqual(sparse_proto.values.name, 'sparse_initializer')
+        self.assertEqual(sparse_proto.values.name, SPARSE_INITIALIZER)
         self.assertEqual(list(sparse_proto.dims), [3, 3, 3, 3])
 
     def test_sparse_initializer_with_indices(self):
         sparse_initializer = onnx_pb.SparseTensorProto()
         sparse_initializer.dims[:] = [3, 3, 3, 3]
-        sparse_initializer.indices.name = 'sparse_initializer'
+        sparse_initializer.indices.name = SPARSE_INITIALIZER
         sparse_node = Node(0, sparse_initializer)
-        self.assertEqual(sparse_node.name, 'sparse_initializer')
-        self.assertEqual(sparse_node.get_output_anchor(0).name, 'sparse_initializer')
+        self.assertEqual(sparse_node.name, SPARSE_INITIALIZER)
+        self.assertEqual(sparse_node.get_output_anchor(0).name, SPARSE_INITIALIZER)
         sparse_proto = sparse_node.dump_proto()
         self.assertEqual(type(sparse_proto), onnx_pb.SparseTensorProto)
-        self.assertEqual(sparse_proto.indices.name, 'sparse_initializer')
+        self.assertEqual(sparse_proto.indices.name, SPARSE_INITIALIZER)
         self.assertEqual(list(sparse_proto.dims), [3, 3, 3, 3])
 
     def test_graph_anchor(self):
@@ -157,7 +167,7 @@ class TestNode(unittest.TestCase):
     def test_add_input_anchor_to_unsupport_node(self):
         sparse_initializer = onnx_pb.SparseTensorProto()
         sparse_initializer.dims[:] = [3, 3, 3, 3]
-        sparse_initializer.values.name = 'sparse_initializer'
+        sparse_initializer.values.name = SPARSE_INITIALIZER
         sparse_node = Node(0, sparse_initializer)
         self.assertRaises(
             RuntimeError,
@@ -177,7 +187,7 @@ class TestNode(unittest.TestCase):
     def test_get_output_anchor_index_success(self):
         test_proto = deepcopy(self.node_proto)
         node_conv = Node(0, test_proto)
-        self.assertEqual(node_conv.get_output_anchor_index('conv'), 0)
+        self.assertEqual(node_conv.get_output_anchor_index(CONV), 0)
 
     def test_get_output_anchor_index_failed(self):
         test_proto = deepcopy(self.node_proto)
@@ -200,7 +210,7 @@ class TestNode(unittest.TestCase):
     def test_get_output_anchor_by_name_success(self):
         test_proto = deepcopy(self.node_proto)
         node_conv = Node(0, test_proto)
-        self.assertEqual(node_conv.get_output_anchor_by_name('conv').index, 0)
+        self.assertEqual(node_conv.get_output_anchor_by_name(CONV).index, 0)
 
     def test_get_output_anchor_by_name_failed(self):
         test_proto = deepcopy(self.node_proto)
@@ -263,3 +273,4 @@ class TestNode(unittest.TestCase):
         self.assertRaises(
             TypeError,
             node_conv.dump_proto)
+

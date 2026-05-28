@@ -15,24 +15,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
-import sys
-import unittest
-import shutil
+import copy
+import io
 import json
 import logging
-import io
-import copy
+import os
+import shutil
+import sys
+import unittest
 
-from google.protobuf import text_format
-import torch
 import numpy as np
+import torch
+from google.protobuf import text_format
 
-from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.quant_calibration_op import QuantCalibrationOp
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.log import LOGGER
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.quant_calibration_op import (
+    QuantCalibrationOp,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import LOGGER
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
+
+ACT_ALGO = 'act_algo'
+
+HFMG = 'hfmg'
+RECORD2_TXT = 'record2.txt'
+
+MATMUL2 = 'matmul2'
 
 
 def read_kv_cache_factors(record_file, layer_name):
@@ -69,8 +82,8 @@ def do_quant_antiquant(data, scale, offset):
         quant_channels.append(quant_channel.to(torch.int8))
 
     antiquant_channels = []
-    for i in range(len(quant_channels)):
-        antiquant_channel = (quant_channels[i].to(data.dtype) - offset[i]) * scale[i]
+    for i, qc in enumerate(quant_channels):
+        antiquant_channel = (qc.to(data.dtype) - offset[i]) * scale[i]
         antiquant_channels.append(antiquant_channel)
     antiquant_data = torch.cat(antiquant_channels, dim=-1)
 
@@ -83,22 +96,22 @@ def calc_similarity(data0, data1):
     data1_nan = np.isnan(data1)
     data1[data1_nan] = 1
     similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if (data0 == data1).all():
         similarity = 100
     if np.isnan(similarity) or np.isinf(similarity):
-        data0 = np.divide(data0,np.power(10,38))
-        data1 = np.divide(data1,np.power(10,38))
+        data0 = np.divide(data0, np.power(10, 38))
+        data1 = np.divide(data1, np.power(10, 38))
         similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
         if np.isnan(similarity) or np.isinf(similarity):
-            data0 = np.divide(data0,np.power(10,38))
-            data1 = np.divide(data1,np.power(10,38))
+            data0 = np.divide(data0, np.power(10, 38))
+            data1 = np.divide(data1, np.power(10, 38))
             similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
-                    /(np.sqrt(np.sum(data0.astype(np.float64)**2))\
-                    *np.sqrt(np.sum(data1.astype(np.float64)**2)))*100
+                    / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
+                    * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if np.isnan(similarity):
         similarity = 0
     return similarity
@@ -107,7 +120,7 @@ def calc_similarity(data0, data1):
 class TestQuantCalibrationOp(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestQuantCalibrationOp start!')
+        logger.info('TestQuantCalibrationOp start!')
         cls.temp_dir = os.path.join(CUR_DIR, 'temp')
         if not os.path.exists(cls.temp_dir):
             os.mkdir(cls.temp_dir)
@@ -115,17 +128,17 @@ class TestQuantCalibrationOp(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        print('TestQuantCalibrationOp end!')
+        logger.info('TestQuantCalibrationOp end!')
         if os.path.exists(cls.temp_dir):
             shutil.rmtree(cls.temp_dir)
 
     def test_quant_calibration_op_failed_invalid_input_type(self):
         self.assertRaises(TypeError, QuantCalibrationOp,
-            1, {'act_algo': 'ifmr'}, 'kv_cache_quant')
+            1, {ACT_ALGO: 'ifmr'}, 'kv_cache_quant')
         self.assertRaises(TypeError, QuantCalibrationOp,
             self.record_file, 1, 'kv_cache_quant')
         self.assertRaises(TypeError, QuantCalibrationOp,
-            self.record_file, {'act_algo': 'ifmr'}, 1)
+            self.record_file, {ACT_ALGO: 'ifmr'}, 1)
 
     def test_quant_calibration_op_failed_invalid_algo_params(self):
         self.assertRaises(TypeError, QuantCalibrationOp,
@@ -143,11 +156,11 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertRaises(TypeError, QuantCalibrationOp,
             self.record_file, {'search_step': 'a'})
         self.assertRaises(TypeError, QuantCalibrationOp,
-            self.record_file, {'act_algo': 'hfmg', 'num_of_bins': 'a'})
+            self.record_file, {ACT_ALGO: HFMG, 'num_of_bins': 'a'})
 
     def test_quant_calibration_op_failed_invalid_algo_params01(self):
         self.assertRaises(RuntimeError, QuantCalibrationOp,
-            self.record_file, {'act_algo': 1})
+            self.record_file, {ACT_ALGO: 1})
         self.assertRaises(RuntimeError, QuantCalibrationOp,
             self.record_file, {'batch_num': -1})
         self.assertRaises(RuntimeError, QuantCalibrationOp,
@@ -159,33 +172,33 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertRaises(RuntimeError, QuantCalibrationOp,
             self.record_file, {'search_step': 0.})
         self.assertRaises(RuntimeError, QuantCalibrationOp,
-            self.record_file, {'act_algo': 'hfmg', 'num_of_bins': 1023})
+            self.record_file, {ACT_ALGO: HFMG, 'num_of_bins': 1023})
 
         self.assertRaises(RuntimeError, QuantCalibrationOp,
-            self.record_file, {'act_algo': 'hfmg', 'search_step': 0.01})
+            self.record_file, {ACT_ALGO: HFMG, 'search_step': 0.01})
 
         self.assertRaises(RuntimeError, QuantCalibrationOp,
-            self.record_file, {'act_algo': 'ifmr', 'num_of_bins': 1024})
+            self.record_file, {ACT_ALGO: 'ifmr', 'num_of_bins': 1024})
 
     def test_quant_calibration_op_failed_invalid_input(self):
         op = QuantCalibrationOp(self.record_file)
-        self.assertRaises(TypeError, op, 'a', torch.randn(3,4).to(dtype=torch.float64))
+        self.assertRaises(TypeError, op, 'a', torch.randn(3, 4).to(dtype=torch.float64))
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.randn(3,4)
+        input_data = torch.randn(3, 4)
         input_data[0][0] = np.inf
         self.assertRaises(RuntimeError, op, 'a', input_data)
 
 
-        op = QuantCalibrationOp(self.record_file, {'act_algo': 'hfmg'})
-        self.assertRaises(TypeError, op, 'a', torch.randn(3,4).to(dtype=torch.float64))
-        op = QuantCalibrationOp(self.record_file, {'act_algo': 'hfmg'})
-        input_data = torch.randn(3,4)
+        op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
+        self.assertRaises(TypeError, op, 'a', torch.randn(3, 4).to(dtype=torch.float64))
+        op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
+        input_data = torch.randn(3, 4)
         input_data[0][0] = np.inf
         self.assertRaises(RuntimeError, op, 'a', input_data)
 
     def test_quant_calibration_op_success_ifmr(self):
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.randn(128,128)
+        input_data = torch.randn(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -194,7 +207,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.randn(1,1)
+        input_data = torch.randn(1, 1)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -203,7 +216,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.ones(128,128)
+        input_data = torch.ones(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -212,7 +225,7 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
         op = QuantCalibrationOp(self.record_file)
-        input_data = torch.zeros(128,128)
+        input_data = torch.zeros(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -221,8 +234,8 @@ class TestQuantCalibrationOp(unittest.TestCase):
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
     def test_quant_calibration_op_success_hfmg(self):
-        op = QuantCalibrationOp(self.record_file, {'act_algo': 'hfmg'})
-        input_data = torch.randn(1,1)
+        op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
+        input_data = torch.randn(1, 1)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -230,8 +243,8 @@ class TestQuantCalibrationOp(unittest.TestCase):
         fakequant_data = do_quant_antiquant(input_data, scale, offset)
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
-        op = QuantCalibrationOp(self.record_file, {'act_algo': 'hfmg'})
-        input_data = torch.randn(128,128)
+        op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
+        input_data = torch.randn(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -239,8 +252,8 @@ class TestQuantCalibrationOp(unittest.TestCase):
         fakequant_data = do_quant_antiquant(input_data, scale, offset)
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
-        op = QuantCalibrationOp(self.record_file, {'act_algo': 'hfmg'})
-        input_data = torch.zeros(128,128)
+        op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
+        input_data = torch.zeros(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -248,8 +261,8 @@ class TestQuantCalibrationOp(unittest.TestCase):
         fakequant_data = do_quant_antiquant(input_data, scale, offset)
         self.assertGreater(calc_similarity(input_data.cpu().numpy(), fakequant_data.cpu().numpy()), 99)
 
-        op = QuantCalibrationOp(self.record_file, {'act_algo': 'hfmg'})
-        input_data = torch.ones(128,128)
+        op = QuantCalibrationOp(self.record_file, {ACT_ALGO: HFMG})
+        input_data = torch.ones(128, 128)
         op('a', input_data)
         with open(self.record_file) as f:
             self.assertIn('a', f.read())
@@ -275,19 +288,19 @@ class TestQuantCalibrationOp(unittest.TestCase):
                 y = self.quant_cali_op('matmul1', y)
                 output.append(y)
                 y = self.matmul2(inputs)
-                y = self.quant_cali_op1('matmul2', y)
-                y = self.quant_cali_op2('matmul2', y)
+                y = self.quant_cali_op1(MATMUL2, y)
+                y = self.quant_cali_op2(MATMUL2, y)
                 output.append(y)
                 y = self.matmul3(inputs)
                 y = self.quant_cali_op3('matmul4', y)
                 output.append(y)
                 return output
-        logger = LOGGER.logger
+        test_logger = LOGGER.logger
         log_stream = io.StringIO()
         handler = logging.StreamHandler(log_stream)
         handler.setLevel(logging.DEBUG)
-        logger.addHandler(handler)
-        record2 = os.path.join(self.temp_dir, 'record2.txt')
+        test_logger.addHandler(handler)
+        record2 = os.path.join(self.temp_dir, RECORD2_TXT)
         model = CustomizedModel(self.record_file, record2)
         model.eval()
         model.to(dtype=torch.float32)
@@ -296,24 +309,25 @@ class TestQuantCalibrationOp(unittest.TestCase):
         output = model(input_data)
         with open(self.record_file) as f:
             self.assertIn('matmul1', f.read())
-        with open(os.path.join(self.temp_dir, 'record2.txt')) as f:
-            self.assertIn('matmul2', f.read())
-            self.assertNotIn('matmul2', f.read())
+        with open(os.path.join(self.temp_dir, RECORD2_TXT)) as f:
+            self.assertIn(MATMUL2, f.read())
+            self.assertNotIn(MATMUL2, f.read())
         model(input_data)
-        with open(os.path.join(self.temp_dir, 'record2.txt')) as f:
-            self.assertIn('matmul2', f.read())
+        with open(os.path.join(self.temp_dir, RECORD2_TXT)) as f:
+            self.assertIn(MATMUL2, f.read())
         log_info = log_stream.getvalue()
-        logger.removeHandler(handler)
+        test_logger.removeHandler(handler)
         self.assertIn('will be overwritten by AMCT', log_info)
 
         scale, offset = read_kv_cache_factors(self.record_file, 'matmul1')
         fakequant_data = do_quant_antiquant(output[0], scale, offset)
         self.assertGreater(calc_similarity(output[0].detach().cpu().numpy(), fakequant_data.detach().cpu().numpy()), 90)
 
-        scale, offset = read_kv_cache_factors(record2, 'matmul2')
+        scale, offset = read_kv_cache_factors(record2, MATMUL2)
         fakequant_data = do_quant_antiquant(output[1], scale, offset)
         self.assertGreater(calc_similarity(output[1].detach().cpu().numpy(), fakequant_data.detach().cpu().numpy()), 90)
 
         scale, offset = read_kv_cache_factors(record2, 'matmul4')
         fakequant_data = do_quant_antiquant(output[2], scale, offset)
         self.assertGreater(calc_similarity(output[2].detach().cpu().numpy(), fakequant_data.detach().cpu().numpy()), 90)
+

@@ -82,9 +82,17 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, is_fp=False):
                     "quantization_status": "compressed"}
     quant_config.update(cache_scheme)
     qtype = "float" if is_fp else "int"
-    quant_config["config_groups"]["group_0"].update(generate_quant_group(a_num_bits=NUM_BITS_8, w_num_bits=NUM_BITS_8, qtype=qtype))
+    quant_config["config_groups"]["group_0"].update(
+        generate_quant_group(
+            a_num_bits=NUM_BITS_8,
+            w_num_bits=NUM_BITS_8,
+            qtype=qtype))
     if is_fp:
-        quant_config["config_groups"]["group_1"].update(generate_quant_group(a_num_bits=NUM_BITS_8, w_num_bits=NUM_BITS_4 if w4a8 else NUM_BITS_8, qtype=qtype))
+        quant_config["config_groups"]["group_1"].update(
+            generate_quant_group(
+                a_num_bits=NUM_BITS_8,
+                w_num_bits=NUM_BITS_4 if w4a8 else NUM_BITS_8,
+                qtype=qtype))
         quant_config["weight_block_size"] = [1, 32]
     return quant_config
 

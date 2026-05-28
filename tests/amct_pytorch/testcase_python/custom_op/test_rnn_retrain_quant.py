@@ -17,17 +17,31 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-import torch
-import numpy as np
-from torch.nn.utils.rnn import pack_sequence
 from unittest.mock import patch
 
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.ifmr.ifmr import IFMR
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.rnn_retrain_quant import RNNRetrainQuant
+import numpy as np
+import torch
+from torch.nn.utils.rnn import pack_sequence
+
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
+    CompModuleRNN,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.rnn_retrain_quant import (
+    RNNRetrainQuant,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+LAYERS_NAME = 'layers_name'
+
+LSTM = 'lstm'
+
+BATCH_NUM = 'batch_num'
+
 
 class TestRNNRetrainQuant(unittest.TestCase):
     @classmethod
@@ -81,16 +95,16 @@ class TestRNNRetrainQuant(unittest.TestCase):
             'need_sync': False,
             'process_group': None,
             'world_size': 1,
-            'layers_name': ['lstm'],
-            'batch_num': 1
+            LAYERS_NAME: [LSTM],
+            BATCH_NUM: 1
         }
         cls.gru_comp_common_config = {
             'device': 'cpu',
             'need_sync': False,
             'process_group': None,
             'world_size': 1,
-            'layers_name': ['lstm'],
-            'batch_num': 1
+            LAYERS_NAME: [LSTM],
+            BATCH_NUM: 1
         }
         cls.comp_args = {
             'module': cls.module,
@@ -109,8 +123,8 @@ class TestRNNRetrainQuant(unittest.TestCase):
         cls.common_config = {
             'data_num_bits': 8,
             'wts_num_bits': 8,
-            'layers_name': ['lstm'],
-            'batch_num': 1
+            LAYERS_NAME: [LSTM],
+            BATCH_NUM: 1
         }
 
     @classmethod
@@ -123,9 +137,9 @@ class TestRNNRetrainQuant(unittest.TestCase):
             self.retrain_quant.forward(input_data)
 
     def test_forward_sequence_length_error(self):
-        input = torch.randn(2, 1, 10)
+        input_data = torch.randn(2, 1, 10)
         with self.assertRaises(ValueError):
-            self.retrain_quant.forward(input)
+            self.retrain_quant.forward(input_data)
 
     def test_forward_hx_none(self):
         with self.assertRaises(ValueError):
@@ -150,5 +164,6 @@ class TestRNNRetrainQuant(unittest.TestCase):
         self.assertEqual(reorganized_quant_factor, [1, 0, 2])
 
     def test_update_quant_factor(self):
-        with patch('amct_pytorch.graph_based_compression.amct_pytorch.custom_op.utils.process_scale'):
+        with patch('amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils.process_scale'):
             self.retrain_quant._update_quant_factor()
+
