@@ -115,6 +115,8 @@ python -m amct_pytorch.eval \
 
 参数详细解释请参见[参数说明](#3-参数说明)。
 
+`eval`相关启动指令也可参考[eval.sh](../examples/eval.sh)
+
 ### 2.2 `extract_ptq_data`
 
 **入口**：`amct_pytorch/cli/llm/extract_ptq_data.py`
@@ -150,6 +152,8 @@ python -m amct_pytorch.extract_ptq_data \
 ```
 
 参数详细解释请参见[参数说明](#3-参数说明)。
+
+`extract_ptq_data`相关启动指令也可参考[extract_ptq_data.sh](../examples/extract_ptq_data.sh)
 
 ### 2.3 `ptq`
 
@@ -213,6 +217,9 @@ python -m amct_pytorch.ptq \
 
 - 模块粒度：当前仅支持以block 为粒度的处理（`granularity=block`） 。
 - 自定义 hook 限制：若使用了自定义的 `quantize()` hook（用于权重量化算法），则当前版本不支持通过 `export_deploy()` 功能进行部署。
+
+`ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../examples/ptq_single_npu.sh)
+`ptq`多卡相关启动指令也可参考[ptq_multi_npu.sh](../examples/ptq_multi_npu.sh)
 
 #### 2.4.1 导出部署权重
 

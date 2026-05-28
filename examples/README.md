@@ -12,4 +12,4 @@
 | 使用Quantile算法量化模型 | [Quantile](algorithms/quantile/README_CN.md) | HiFloat8 分位量化 |
 | 使用ofmr算法量化模型 | [OFMR](algorithms/ofmr/README_CN.md) | 输出特征 Min-Max 量化 |
 | 使用mxquant算法量化模型 | [MXQuant](algorithms/mxquant/README_CN.md) | 微缩浮点量化（MXFP8/MXFP4） |
-| 使用MFlatQuant算法量化模型 | [FlatQuant](algorithms/flatquant/README_CN.md) | 通过仿射变换平整化分布的量化 |
+| 使用FlatQuant算法量化模型 | [FlatQuant](algorithms/flatquant/README_CN.md) | 通过仿射变换平整化分布的量化 |

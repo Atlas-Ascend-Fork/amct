@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 
 #!/bin/bash
-python amct_pytorch/cli/llm/ptq.py \
+python -m amct_pytorch.ptq \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \

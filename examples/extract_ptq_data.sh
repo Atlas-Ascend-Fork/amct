@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 
 #!/bin/bash
-python amct_pytorch/cli/llm/extract_ptq_data.py \
+python -m amct_pytorch.extract_ptq_data \
   --model /path/to/model \
   --model_name qwen3_5 \
   --device npu:0 \

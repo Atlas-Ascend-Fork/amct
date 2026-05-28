@@ -1,6 +1,6 @@
 # 训练后量化配置参数说明
 
-如果通过[create\_quant\_config](../api/create_quant_config.md)接口生成的config.json量化配置文件，推理精度不满足要求，则需要参见该章节不断调整config.json文件中的内容（用户修改JSON文件时，请确保层名唯一），直至精度满足要求，json量化配置文件样例请参见接口中的[调用示例](create_quant_config.md#zh-cn_topic_0240187365_section64231658994)部分。
+如果通过[create\_quant\_config](../api/create_quant_config.md)接口生成的config.json量化配置文件，推理精度不满足要求，则需要参见该章节不断调整config.json文件中的内容（用户修改JSON文件时，请确保层名唯一），直至精度满足要求，json量化配置文件样例请参见接口中的[调用示例](../api/create_quant_config.md#zh-cn_topic_0240187365_section64231658994)部分。
 
 配置文件中参数说明如下：
 

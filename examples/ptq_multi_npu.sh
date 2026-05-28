@@ -45,7 +45,7 @@ for ((i=0; i<NUM_TASKS; i++)); do
   logic_id=${CARDS[$npu_id]}
 
   echo "Launching task $i: blocks [$start, $end), npu $logic_id"
-  ASCEND_RT_VISIBLE_DEVICES=$logic_id python amct_pytorch/cli/llm/ptq.py \
+  ASCEND_RT_VISIBLE_DEVICES=$logic_id python -m amct_pytorch.ptq \
       --model $model_path \
       --model_name $model_name \
       --data_dir $data_path \

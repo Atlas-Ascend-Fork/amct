@@ -38,7 +38,7 @@ ARQ （Adaptive Range Quantization）算法是对权重直接量化的算法。�
 **图 2**  channel\_wise量化<a name="fig6351104815177"></a>  
 ![](./figures/channel_wise_quant.png "channel_wise量化")
 
-量化配置中ARQuantize（以PyTorch框架为例，参数解释请参见[表1](ptq_config.md#zh-cn_topic_0240188735_table1225503375617)）提供的参数channel\_wise用来选择量化方式：
+量化配置中ARQuantize（以PyTorch框架为例，参数解释请参见[表1](/docs/context//ptq_config.md#zh-cn_topic_0240188735_table1225503375617)）提供的参数channel\_wise用来选择量化方式：
 
 - channel\_wise为False时，选择[图1](#fig7600113961719)量化方式，所有filter一起分析数据分布，进行量化，某一层的所有不同channel共用一个量化因子。
 - channel\_wise为True时，选择[图2](#fig6351104815177)的量化方式，每个filter独立做数据分析，进行量化，同一层的每个channel有独立的量化因子。
