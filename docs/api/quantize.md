@@ -53,8 +53,6 @@ quantize(model, config)
 
 原始模型中数据类型为float32（fp32）、float16（fp16）、bfloat16（bf16）时，可以通过本节介绍的内容，量化后转换为HiFloat8（HiF8）、float8（fp8）、MXFP8、float4数据格式，通过对数据格式的压缩，实现模型轻量化。
 
-**注意：** 由于torch_npu暂不支持Ascend 950PR/Ascend 950DT，以下功能特性暂时只支持act_type: INT8  wts_type: INT8。
-
 该特性支持的层如下。
 
 **表 1**  支持量化的层以及约束
@@ -80,8 +78,9 @@ quantize(model, config)
 <td class="cellrowborder" valign="top" width="32.01%" headers="mcps1.2.5.1.3 "><p id="p641017541626"><a name="p641017541626"></a><a name="p641017541626"></a>act_type: HIFLOAT8  wts_type: HIFLOAT8</p>
 <p id="p6410054727"><a name="p6410054727"></a><a name="p6410054727"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN</p>
 </td>
-<td class="cellrowborder" valign="top" width="37.269999999999996%" headers="mcps1.2.5.1.4 "><p id="p134301428434"><a name="p134301428434"></a><a name="p134301428434"></a>激活（数据）支持PER_TENSOR量化，权重支持PER_TENSOR/PER_CHANNEL量化</p>
-<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>量化算法为OFMR，<a href="#section1536112219183">config详细配置</a>中必须配置ofmr选项</p>
+<td class="cellrowborder" valign="top" width="37.269999999999996%" headers="mcps1.2.5.1.4 "><p id="p134301428434"><a name="p134301428434"></a><a name="p134301428434"></a>激活（数据）支持PER_TENSOR/PER_TOKEN量化，权重支持PER_TENSOR/PER_CHANNEL量化</p>
+<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>act_type: HIFLOAT8  wts_type: HIFLOAT8时，支持OFMR量化算法、Cast数据直转算法、Quantile分位量化算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置ofmr、cast、quantile选项</p>
+<p id="p1144561153616"><a name="p1144561153616"></a><a name="p1144561153616"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN时，支持OFMR量化算法，<a href="#section1536112219183">config详细配置</a>中必须配置ofmr选项</p>
 </td>
 </tr>
 <tr id="row3281122665615"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p1711435320187"><a name="p1711435320187"></a><a name="p1711435320187"></a>bfloat16（bf16）</p>
@@ -160,7 +159,7 @@ quantize(model, config)
 <td class="cellrowborder" valign="top" width="22%" headers="mcps1.2.5.1.3 "><p id="p1032617312478"><a name="p1032617312478"></a><a name="p1032617312478"></a>wts_type: HIFLOAT8</p>
 <p id="p1978123313505"><a name="p1978123313505"></a><a name="p1978123313505"></a>wts_type: FLOAT8_E4M3FN</p>
 </td>
-<td class="cellrowborder" valign="top" width="47.73%" headers="mcps1.2.5.1.4 "><a name="ul1681123611612"></a><a name="ul1681123611612"></a><ul id="ul1681123611612"><li>支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>支持2~6维数据输入</li><li>支持OFMR量化算法、GPTQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>ofmr</span>、<span>gptq</span>选项）</li></ul>
+<td class="cellrowborder" valign="top" width="47.73%" headers="mcps1.2.5.1.4 "><a name="ul1681123611612"></a><a name="ul1681123611612"></a><ul id="ul1681123611612"><li>支持PER_TENSOR/PER_CHANNEL量化，支持对称量化</li><li>支持2~6维数据输入</li><li>wts_type: HIFLOAT8时，支持OFMR量化算法、GPTQ量化算法、Cast数据直转算法、Quantile分位量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>ofmr</span>、<span>gptq</span>、<span>cast</span>、<span>quantile</span>选项）</li><li>wts_type: FLOAT8_E4M3FN时，支持OFMR量化算法、GPTQ量化算法（<a href="#section1536112219183">config详细配置</a>中必须配置<span>ofmr</span>、<span>gptq</span>选项）</li></ul>
 </td>
 </tr>
 <tr id="row1326719415381"><td class="cellrowborder" valign="top" headers="mcps1.2.5.1.1 "><p id="p278010227380"><a name="p278010227380"></a><a name="p278010227380"></a>wts_type: MXFP4_E2M1</p>
@@ -341,7 +340,7 @@ quantize(model, cfg)
 <td class="cellrowborder" valign="top" width="11.07%" headers="mcps1.1.5.1.3 "><p id="p1060425541813"><a name="p1060425541813"></a><a name="p1060425541813"></a>-</p>
 </td>
 <td class="cellrowborder" valign="top" width="69.85%" headers="mcps1.1.5.1.4 "><p id="p66040553184"><a name="p66040553184"></a><a name="p66040553184"></a>string类型，量化算法，支持如下配置：</p>
-<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li></ul>
+<a name="ul2808111772013"></a><a name="ul2808111772013"></a><ul id="ul2808111772013"><li>awq：grids_num，uint32类型，搜索格点数量，默认为20。</li><li>gptq。</li><li>minmax。</li><li>smoothquant：smooth_strength，float类型，迁移强度，默认值0.5。</li><li>ofmr。</li><li>mxquant：仅做mx数据类型转换。</li><li>cast：HiFloat8数据直转算法，用于将权重和激活直接转换为HiFloat8类型。</li><li>quantile：HiFloat8分位量化算法，用于根据分位统计计算HiFloat8量化参数。</li></ul>
 <p id="p4604195517184"><a name="p4604195517184"></a><a name="p4604195517184"></a>具体请参见<a href="../algorithm_brief.md" target="_blank" rel="noopener noreferrer">量化算法介绍</a>。</p>
 </td>
 </tr>
