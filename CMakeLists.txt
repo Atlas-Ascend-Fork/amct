@@ -56,7 +56,6 @@ else()
 endif()
 
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
-    set(ENABLE_OPEN_SRC TRUE)
     add_cann_third_party(protobuf)
 endif()
 
