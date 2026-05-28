@@ -34,7 +34,8 @@ usage() {
   echo "    -j<N>             Set the number of threads used for building HIXL, default is 8"
   echo "    --build-type=<TYPE>"
   echo "                      Specify build type (TYPE options: Release/Debug), Default: Release"
-  echo "    --pkg             Build run package"
+  echo "    --pkg             Build full amct package (amct_pytorch + graph)"
+  echo "    --torch           Build amct_pytorch package only"
   echo "    --cann_3rd_lib_path=<PATH>"
   echo "                      Set ascend third_party package install path, default ./third_party"
   echo "    --output_path=<PATH>"
@@ -55,7 +56,7 @@ checkopts() {
   OUTPUT_PATH="${BASEPATH}/build_out/"
 
   # Process the options
-  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path:, -- "$@") || {
+  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
     usage
     exit 1
   }
@@ -84,8 +85,12 @@ checkopts() {
         fi
         shift 2
         ;;
-       --pkg)
+      --pkg)
         ENABLE_PACKAGE=TRUE
+        shift
+        ;;
+      --torch)
+        ENABLE_PYTORCH_PACKAGE=TRUE
         shift
         ;;
       --output_path)
@@ -127,18 +132,18 @@ checkopts() {
 
 build() {
   echo "create build directory and build amct";
-  if [ -f "${BUILD_PATH}" ]
+  if [ -d "${BUILD_PATH}" ]
   then
     echo "${BUILD_PATH} exist, delete old path"
     rm -rf ${BUILD_PATH}
   fi
   echo "create path ${BUILD_PATH}"
-  mkdir ${BUILD_PATH}
+  mkdir -p ${BUILD_PATH}
 
   cd "${BUILD_PATH}"
   echo "----------------BUILD_PATH  "${BUILD_PATH}"  ----------------"
   echo "----------------TOP_DIR  "${BASEPATH}"  ----------------"
-  echo "----------------CMAKE_BUILD_TYPE  "${CMAKE_BUILD_TYPE}"  ----------------"
+  echo "----------------CMAKE_BUILD_TYPE  "${BUILD_TYPE}"  ----------------"
   echo "----------------ASCEND_HOME_PATH  "${ASCEND_HOME_PATH}"  ----------------"
   echo "----------------CANN_3RD_LIB_PATH  "${CANN_3RD_LIB_PATH}"  ----------------"
 
@@ -151,6 +156,11 @@ build() {
     return 1
   fi
   echo "Build success!"
+
+  # Torch-only 模式由上层函数完成打包，这里仅做编译
+  if [[ "$ENABLE_PYTORCH_PACKAGE" == "TRUE" ]]; then
+    return 0
+  fi
 
   if [ -d "${OUTPUT_PATH}" ];then
     echo "${OUTPUT_PATH} exist, delete old path"
@@ -208,7 +218,7 @@ assemble_cmake_args() {
   CMAKE_ARGS="$CMAKE_ARGS -DENABLE_UT_EXEC=${ENABLE_UT_EXEC}"
   CMAKE_ARGS="$CMAKE_ARGS -DENABLE_COVERAGE=${ENABLE_COVERAGE}"
   CMAKE_ARGS="$CMAKE_ARGS -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}"
-  CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+  CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
   CMAKE_ARGS="$CMAKE_ARGS -DTOP_DIR=${BASEPATH}"
   CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_VERBOSE_MAKEFILE=ON"
   CMAKE_ARGS="$CMAKE_ARGS -DASCEND_HOME_PATH=${ASCEND_HOME_PATH}"
@@ -236,6 +246,29 @@ build_package() {
   bash install_graph.sh --cann_3rd_lib_path=${CANN_3RD_LIB_PATH}
   build || { echo "Build failed."; exit 1; }
   echo "--------------- build package end ---------------"
+}
+
+build_pytorch_package() {
+  echo "--------------- build amct_pytorch package start ---------------"
+  build || { echo "Build failed."; exit 1; }
+  if [ -d "${OUTPUT_PATH}" ];then
+    echo "${OUTPUT_PATH} exist, delete old path"
+    rm -rf ${OUTPUT_PATH}
+  fi
+  echo "create path ${OUTPUT_PATH}"
+  mkdir ${OUTPUT_PATH}
+  cp ${BASEPATH}/dist/*.tar.gz ${OUTPUT_PATH}/
+
+  if ls ${OUTPUT_PATH}/*.tar.gz >/dev/null 2>&1; then
+    echo "package amct_pytorch run success"
+  else
+    echo "package amct_pytorch run failed"
+    return 1
+  fi
+
+  rm -rf ${BASEPATH}/dist
+  rm -rf ${BASEPATH}/amct_pytorch/*.egg-info
+  echo "--------------- build amct_pytorch package end ---------------"
 }
 
 build_ut() {
@@ -271,7 +304,9 @@ main() {
   assemble_cmake_args
   echo "CMAKE_ARGS: ${CMAKE_ARGS}"
   echo "----------------OUTPUT_PATH  ${OUTPUT_PATH}  ----------------"
-  if [[ "$ENABLE_PACKAGE" == "TRUE" ]]; then
+  if [[ "$ENABLE_PYTORCH_PACKAGE" == "TRUE" ]]; then
+    build_pytorch_package
+  elif [[ "$ENABLE_PACKAGE" == "TRUE" ]]; then
     build_package
   fi
   if [[ "$ENABLE_TEST" == "TRUE" ]]; then

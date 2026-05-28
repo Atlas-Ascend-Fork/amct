@@ -27,6 +27,7 @@ set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 add_subdirectory(graph_based_compression)
 
 set(HI_PYTHON python3)
+
 add_custom_target(amct_pytorch_package
   DEPENDS amct_pytorch_proto_compile tensor_decompose_install_pytorch
   COMMAND cd ${BASE_DIR} && chmod 640 `find ./ -type f` && chmod 750 `find ./ -type d` && cd ${BASE_DIR}/.. &&

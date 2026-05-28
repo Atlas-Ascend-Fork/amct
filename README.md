@@ -109,13 +109,12 @@ git clone https://gitcode.com/cann/amct.git
 
 # 2. 源码构建打包
 cd amct
-bash build.sh --pkg
+bash build.sh --torch
 
-# 3. 解包并安装（产物位于 build_out/）
-#    ${version} 从 build_out/ 目录中的文件名获取，如 cann-amct_1.0.0_linux-x86_64.tar.gz
+# 3. 安装（产物位于 build_out/）
+#    ${version} 从 build_out/ 目录中的文件名获取，如 amct_pytorch-1.1.0-py3-none-linux_aarch64.tar.gz
 #    ${arch}    为 CPU 架构，如 x86_64、aarch64
-tar -zxvf build_out/cann-amct_${version}_linux-${arch}.tar.gz
-cd amct_pytorch && pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user
+pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user
 ```
 
 > ⚠️ **注意**：若 pip 版本 > 25.2，安装命令需追加 `--no-build-isolation`，否则可能出现 `ModuleNotFoundError: No module named 'torch'`。

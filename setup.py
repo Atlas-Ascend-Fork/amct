@@ -35,10 +35,14 @@ os.environ['SOURCE_DATE_EPOCH'] = \
 class SetupTool(): # pylint: disable=R0903
     """ tool for setup"""
     def __init__(self):
-        self.packages = setuptools.find_packages()
+        self.set_packages()
         self.set_version()
         self.set_platform()
         self.setup_args = dict()
+
+    def set_packages(self):
+        """ set packages based on build mode"""
+        self.packages = setuptools.find_packages()
 
     def set_version(self):
         """ set version"""
@@ -54,6 +58,18 @@ class SetupTool(): # pylint: disable=R0903
             self.platform = platform
 
 setup_tools = SetupTool()
+
+
+def get_package_data():
+    """ get package data"""
+    return {
+        '': ['.version'],
+        'amct_pytorch.graph_based_compression': ['amct_pytorch/proto/*.proto',
+                         'amct_pytorch/common/proto/*.proto',
+                         'amct_pytorch/capacity/*.csv',
+                         'lib/*.so',
+                         ],
+    }
 
 setuptools.setup(
     name='amct_pytorch',
@@ -74,14 +90,7 @@ setuptools.setup(
     extras_require={
         "pytorch": ["2.1"]
     },
-    package_data={
-        '': ['.version'],
-        'amct_pytorch.graph_based_compression': ['amct_pytorch/proto/*.proto',
-                         'amct_pytorch/common/proto/*.proto',
-                         'amct_pytorch/capacity/*.csv',
-                         'lib/*.so',
-                         ],
-    },
+    package_data=get_package_data(),
     zip_safe=False,
     **setup_tools.setup_args
 )
