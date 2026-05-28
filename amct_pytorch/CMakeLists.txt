@@ -21,12 +21,13 @@ set(CMAKE_VERBOSE_MAKEFILE on)
 get_filename_component(BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR} ABSOLUTE)
 get_filename_component(AMCT_DIR ${BASE_DIR}/.. ABSOLUTE)
 
-set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/classic/graph_based/amct_pytorch/proto)
+set(AMCT_TORCH_PROTO_DIR ${BASE_DIR}/graph_based_compression/amct_pytorch/proto)
 set(AMCT_TORCH_BUILD_DIR ${BASE_DIR}/build)
 
-add_subdirectory(classic/graph_based)
+add_subdirectory(graph_based_compression)
 
 set(HI_PYTHON python3)
+
 add_custom_target(amct_pytorch_package
   DEPENDS amct_pytorch_proto_compile tensor_decompose_install_pytorch
   COMMAND cd ${BASE_DIR} && chmod 640 `find ./ -type f` && chmod 750 `find ./ -type d` && cd ${BASE_DIR}/.. &&
@@ -49,5 +50,5 @@ install(DIRECTORY ${BASE_DIR}/dist/ DESTINATION lib)
 add_custom_target(amct_pytorch_clean
   COMMAND cd ${BASE_DIR} && rm -f *.tar.gz
   COMMAND cd ${BASE_DIR} && rm -rf amct_pytorch.egg-info && rm -rf dist && rm -rf build
-  COMMAND rm -f ${AMCT_TORCH_PROTO_DIR}/*_pb2.py
+  COMMAND cd ${BASE_DIR} && rm -f amct_pytorch/proto/*_pb2.py
 )
