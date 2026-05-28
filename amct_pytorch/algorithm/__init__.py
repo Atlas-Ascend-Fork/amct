@@ -45,6 +45,7 @@ AlgorithmRegistry.register('smoothquant', 'Linear', SmoothQuant, NpuQuantization
 AlgorithmRegistry.register('minmax', 'Linear', MinMaxQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
 AlgorithmRegistry.register('mxquant', 'Linear', NpuMXQuantizationLinear, NpuMXQuantizationLinear)
 AlgorithmRegistry.register('ofmr', 'Linear', OfmrQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
+AlgorithmRegistry.register('ofmr-lite', 'Linear', OfmrLiteQuant, NpuQuantizationLinear)
 AlgorithmRegistry.register('ofmr', 'Conv2d', OfmrQuant, NpuQuantizationConv2d)
 AlgorithmRegistry.register('cast', 'Linear', NpuHIF8CastLinear, NpuHIF8CastLinear)
 AlgorithmRegistry.register('quantile', 'Linear', QuantileQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
@@ -52,4 +53,4 @@ AlgorithmRegistry.register('cast', None, 'FP8Linear', NpuHIF8Linear)
 AlgorithmRegistry.register('quantile', 'DeepseekV3Attention', DeepseekV3AttentionQuant, NpuDeepseekV3AttentionQuant)
 AlgorithmRegistry.register('quantile', 'LongcatFlashMLA', LongcatFlashMLAQuant, NpuLongcatFlashMLA)
 
-BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast', 'quantile']
+BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'ofmr-lite', 'cast', 'quantile']

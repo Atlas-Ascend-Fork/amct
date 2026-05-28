@@ -70,9 +70,9 @@ class OfmrQuant(BaseQuantizeModule):
         reduce_axis: eg: a.shape=(7,8,9,10), reduce_axis=(0,2,3), sum.shape=(8,)
         """
         if reduce_axis:
-            loss = torch.sum((a - b).to(torch.float64).pow(2), dim=reduce_axis)
+            loss = torch.sum((a - b).to(torch.float).pow(2), dim=reduce_axis)
         else:
-            loss = torch.sum((a - b).to(torch.float64).pow(2))
+            loss = torch.sum((a - b).to(torch.float).pow(2))
         return (loss / torch.numel(a)).to(torch.float32)
 
     def forward(self, inputs):
