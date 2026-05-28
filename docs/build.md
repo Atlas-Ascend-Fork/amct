@@ -36,7 +36,7 @@ bash build.sh --pkg
 
   ```bash
   # 安装测试框架依赖
-  pip3 install coverage
+  pip3 install coverage pytest
   ```
 
 - 执行测试用例：
