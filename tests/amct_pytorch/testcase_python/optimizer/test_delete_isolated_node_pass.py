@@ -17,12 +17,18 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+
 import torch
 
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
+    version_higher_than,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import (
+    DeleteIsolatedNodePass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+
 from .util import models
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer import DeleteIsolatedNodePass
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

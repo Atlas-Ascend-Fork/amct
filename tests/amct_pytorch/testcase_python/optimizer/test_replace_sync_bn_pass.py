@@ -15,25 +15,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
+import logging
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
 import torch.nn as nn
 
-from .utils import models
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
+    RetrainConfig,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_sync_bn_pass import (
+    RepalceSyncBNPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
-
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.replace_sync_bn_pass import \
-    RepalceSyncBNPass
+logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestReplaceSyncBNPass(unittest.TestCase):
     @classmethod
@@ -60,9 +70,9 @@ class TestReplaceSyncBNPass(unittest.TestCase):
         optimizer.do_optimizer(self.model_003, None)
 
         named_module_dict = {name: mod for name, mod in self.model_003.named_modules()}
-        print('named_module_dict', named_module_dict)
+        logger.info('named_module_dict %s', named_module_dict)
 
-        self.assertEqual(isinstance(named_module_dict['bn'], torch.nn.modules.batchnorm.BatchNorm2d), True)
+        self.assertIsInstance(named_module_dict['bn'], torch.nn.modules.batchnorm.BatchNorm2d)
 
 
 if __name__ == '__main__':

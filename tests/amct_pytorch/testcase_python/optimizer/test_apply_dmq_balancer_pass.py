@@ -15,19 +15,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
-
 from onnx import onnx_pb
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.apply_dmq_balancer_pass import ApplyDMQBalancerPass
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.apply_dmq_balancer_pass import (
+    ApplyDMQBalancerPass,
+)
+
+CONV1 = 'conv1'
+
+RELU1 = 'relu1'
+
+ADD1 = 'add1'
+
 
 class TestInsertQuantPass(unittest.TestCase):
     @classmethod
@@ -56,10 +64,10 @@ class TestInsertQuantPass(unittest.TestCase):
         graph_input1.type.tensor_type.shape.dim.add().dim_value = 1
         # Add conv1
         conv1 = self.graph.node.add()
-        conv1.name = 'conv1'
+        conv1.name = CONV1
         conv1.op_type = 'Conv'
         conv1.input[:] = ['data0', 'conv1.weights', 'conv1.bias']
-        conv1.output[:] = ['conv1']
+        conv1.output[:] = [CONV1]
         # add attribute "kernel_shape"
         kernel_shape = conv1.attribute.add()
         kernel_shape.name = 'kernel_shape'
@@ -84,21 +92,21 @@ class TestInsertQuantPass(unittest.TestCase):
         bias.dims[:] = [1]
         # Add relu
         relu1 = self.graph.node.add()
-        relu1.name = 'relu1'
+        relu1.name = RELU1
         relu1.op_type = 'Relu'
-        relu1.input[:] = ['conv1']
-        relu1.output[:] = ['relu1']
+        relu1.input[:] = [CONV1]
+        relu1.output[:] = [RELU1]
         # Add add
         add1 = self.graph.node.add()
-        add1.name = 'add1'
+        add1.name = ADD1
         add1.op_type = 'Add'
-        add1.input[:] = ['relu1', 'data1']
-        add1.output[:] = ['add1']
+        add1.input[:] = [RELU1, 'data1']
+        add1.output[:] = [ADD1]
         # Add average_pool
         pad0 = self.graph.node.add()
         pad0.name = 'avg_pool1_pad'
         pad0.op_type = 'Pad'
-        pad0.input[:] = ['add1']
+        pad0.input[:] = [ADD1]
         pad0.output[:] = ['pad0']
         # Add average_pool
         avg_pool1 = self.graph.node.add()
@@ -116,25 +124,25 @@ class TestInsertQuantPass(unittest.TestCase):
         pass
 
     def test_match_pattern_success(self):
-        records = {'conv1': {
+        records = {CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'tensor_balance_factor': 1.5
             }
         }
         test_model = deepcopy(self.model_proto)
-        conv_node = Graph(test_model).get_node_by_name('conv1')
+        conv_node = Graph(test_model).get_node_by_name(CONV1)
         self.assertTrue(ApplyDMQBalancerPass(records).match_pattern(conv_node))
 
     def test_match_pattern_not_in_quantizable_types(self):
-        records = {'conv1': {
+        records = {CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'tensor_balance_factor': 1.5
             }
         }
         test_model = deepcopy(self.model_proto)
-        relu_node = Graph(test_model).get_node_by_name('relu1')
+        relu_node = Graph(test_model).get_node_by_name(RELU1)
         self.assertFalse(ApplyDMQBalancerPass(records).match_pattern(relu_node))
 
     def test_match_pattern_failed_with_avgpool(self):
@@ -149,17 +157,17 @@ class TestInsertQuantPass(unittest.TestCase):
         self.assertFalse(ApplyDMQBalancerPass(records).match_pattern(avg_node))
 
     def test_match_pattern_not_in_records(self):
-        records = {'conv1': {
+        records = {CONV1: {
                 'data_scale': 1,
                 'data_offset': 0
             }
         }
         test_model = deepcopy(self.model_proto)
-        conv_node = Graph(test_model).get_node_by_name('conv1')
+        conv_node = Graph(test_model).get_node_by_name(CONV1)
         self.assertFalse(ApplyDMQBalancerPass(records).match_pattern(conv_node))
 
     def test_do_pass_success(self):
-        records = {'conv1': {
+        records = {CONV1: {
                 'data_scale': 1.0,
                 'data_offset': 0,
                 'weight_scale': np.array([1.0], dtype=np.float32),
@@ -169,9 +177,10 @@ class TestInsertQuantPass(unittest.TestCase):
         }
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        conv_node = graph.get_node_by_name('conv1')
+        conv_node = graph.get_node_by_name(CONV1)
         before_nodes_num = len(graph.nodes)
         ApplyDMQBalancerPass(records).do_pass(graph, conv_node)
         after_nodes_num = len(graph.nodes)
         self.assertEqual(after_nodes_num - before_nodes_num, 2)
+
 

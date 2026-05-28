@@ -15,34 +15,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-from io import BytesIO
-import unittest
-from unittest.mock import patch
 import json
+import os
+import sys
+import unittest
+from io import BytesIO
+from unittest.mock import patch
+
 import numpy as np
 import torch
-
-from .utils import models
-from .utils import record_file_utils
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 from google.protobuf import text_format
 
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_weight_quant_pass import InsertWeightQuantPass
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
+    InsertWeightQuantPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_TYPES,
+)
 
+from .utils import models, record_file_utils
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestWeightQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        QUANTIZABLE_TYPES.extend(['ConvTranspose2d','AvgPool2d'])
+        QUANTIZABLE_TYPES.extend(['ConvTranspose2d', 'AvgPool2d'])
         cls.temp_folder = os.path.join(CUR_DIR, 'test_weight_quant_pass')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
@@ -81,9 +93,11 @@ class TestWeightQuantPass(unittest.TestCase):
         self.assertEqual(weight_dtype, 'int8')
 
     def test_quant_weight_int4(self):
-        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch(
+            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
+            'QuantOpInfo.get_dst_num_bits', return_value=4):
             passer = InsertWeightQuantPass(self.records)
-            before_nodes= len(self.graph.nodes)
+            before_nodes = len(self.graph.nodes)
             optimizer = GraphOptimizer()
             optimizer.add_pass(passer)
             optimizer.do_optimizer(self.graph, None)
@@ -95,8 +109,9 @@ class TestWeightQuantPass(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.lstm = torch.nn.LSTM(10, 20, 1)
-            def forward(self, input, hx):
-                x = self.lstm(input, hx)
+
+            def forward(self, input_data, hx):
+                x = self.lstm(input_data, hx)
                 return x
         model = RNNModule()
         tmp_onnx = BytesIO()
@@ -107,10 +122,10 @@ class TestWeightQuantPass(unittest.TestCase):
 
         records = {
             node_name: {
-                'weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'weight_offset': np.array([0]*4, dtype=np.int8),
-                'recurrence_weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'recurrence_weight_offset': np.array([0]*4, dtype=np.int8),
+                'weight_scale': np.array([1.0] * 4, dtype=np.float32),
+                'weight_offset': np.array([0] * 4, dtype=np.int8),
+                'recurrence_weight_scale': np.array([1.0] * 4, dtype=np.float32),
+                'recurrence_weight_offset': np.array([0] * 4, dtype=np.int8),
             }
         }
 

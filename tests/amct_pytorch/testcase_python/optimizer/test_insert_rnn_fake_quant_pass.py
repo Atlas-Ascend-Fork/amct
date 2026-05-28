@@ -15,25 +15,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import unittest
+
 import numpy as np
 from onnx import onnx_pb
 from onnx.onnx_pb import AttributeProto
 
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_rnn_fake_quant_pass import InsertRNNFakeQuantPass
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_rnn_fake_quant_pass import (
+    InsertRNNFakeQuantPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
+    QuantOpInfo,
+)
+
+logger = logging.getLogger(__name__)
+
+DATA_SCALE = 'data_scale'
+DATA_OFFSET = 'data_offset'
+ASCEND_QUANT = 'AscendQuant'
+ASCEND_ANTI_QUANT = 'AscendAntiQuant'
+HIDDEN_SIZE = 'hidden_size'
+LINEAR_BEFORE_RESET = 'linear_before_reset'
+
+logger = logging.getLogger(__name__)
 
 
 class TestInsertRNNFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestInsertRNNFakeQuantPass start!')
+        logger.info('TestInsertRNNFakeQuantPass start!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestInsertRNNFakeQuantPass end!')
+        logger.info('TestInsertRNNFakeQuantPass end!')
 
     def setUp(self):
         graph_proto = onnx_pb.GraphProto()
@@ -75,17 +94,17 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         graph_input3.type.tensor_type.shape.dim.add().dim_value = 1
         graph_input3.type.tensor_type.shape.dim.add().dim_value = 3
         # Add W
-        W = graph_proto.initializer.add()
-        W.name = 'W'
-        W.data_type = 3
-        W.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        W.dims[:] = [1, 3, 3]
+        w_val = graph_proto.initializer.add()
+        w_val.name = 'W'
+        w_val.data_type = 3
+        w_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        w_val.dims[:] = [1, 3, 3]
         # Add R
-        R = graph_proto.initializer.add()
-        R.name = 'R'
-        R.data_type = 3
-        R.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        R.dims[:] = [1, 3, 3]
+        r_val = graph_proto.initializer.add()
+        r_val.name = 'R'
+        r_val.data_type = 3
+        r_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        r_val.dims[:] = [1, 3, 3]
         # add quantizable lstm_0
         lstm_0 = graph_proto.node.add()
         lstm_0.name = 'lstm_0'
@@ -94,7 +113,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         lstm_0.output[:] = ['Y0', 'Y0_h', 'Y0_c']
         # add attribute
         hidden_size = lstm_0.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add unquantizable lstm_1
@@ -105,7 +124,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         lstm_1.output[:] = ['Y1', 'Y1_h', 'Y1_c']
         # add attribute
         hidden_size = lstm_1.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add attribute
@@ -121,8 +140,8 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
 
         self.records = {
             'lstm_0': {
-                'data_scale': 1.0,
-                'data_offset': 0,
+                DATA_SCALE: 1.0,
+                DATA_OFFSET: 0,
                 'h_scale': 1.0,
                 'h_offset': 0,
                 'act_type': 'INT8',
@@ -156,18 +175,20 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
 
     def test_generate_fake_quant_node(self):
         lstm_0 = self.graph.get_node_by_name('lstm_0')
-        quant_node, antiquant_node = InsertRNNFakeQuantPass(self.records).generate_fake_quant_node(self.graph, lstm_0, 0)
-        self.assertEqual(quant_node.type, 'AscendQuant')
-        self.assertEqual(antiquant_node.type, 'AscendAntiQuant')
+        quant_node, antiquant_node = InsertRNNFakeQuantPass(
+            self.records).generate_fake_quant_node(self.graph, lstm_0, 0)
+        self.assertEqual(quant_node.type, ASCEND_QUANT)
+        self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)
+
 
 class TestInsertRNNFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestInsertRNNFakeQuantPass start!')
+        logger.info('TestInsertRNNFakeQuantPass start!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestInsertRNNFakeQuantPass end!')
+        logger.info('TestInsertRNNFakeQuantPass end!')
 
     def setUp(self):
         graph_proto = onnx_pb.GraphProto()
@@ -203,17 +224,17 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         graph_input2.type.tensor_type.shape.dim.add().dim_value = 1
         graph_input2.type.tensor_type.shape.dim.add().dim_value = 3
         # Add W
-        W = graph_proto.initializer.add()
-        W.name = 'W'
-        W.data_type = 3
-        W.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        W.dims[:] = [1, 3, 3]
+        w_val = graph_proto.initializer.add()
+        w_val.name = 'W'
+        w_val.data_type = 3
+        w_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        w_val.dims[:] = [1, 3, 3]
         # Add R
-        R = graph_proto.initializer.add()
-        R.name = 'R'
-        R.data_type = 3
-        R.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        R.dims[:] = [1, 3, 3]
+        r_val = graph_proto.initializer.add()
+        r_val.name = 'R'
+        r_val.data_type = 3
+        r_val.int32_data[:] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        r_val.dims[:] = [1, 3, 3]
         # add quantizable gru_0
         gru_0 = graph_proto.node.add()
         gru_0.name = 'gru_0'
@@ -221,12 +242,12 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         gru_0.input[:] = ['X', 'W', 'R', '', '', 'h']
         gru_0.output[:] = ['Y0', 'Y0_h']
         linear_before_reset = gru_0.attribute.add()
-        linear_before_reset.name = 'linear_before_reset'
+        linear_before_reset.name = LINEAR_BEFORE_RESET
         linear_before_reset.type = AttributeProto.AttributeType.INT
         linear_before_reset.i = 1
         # add attribute
         hidden_size = gru_0.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
 
@@ -238,12 +259,12 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         gru_1.output[:] = ['Y1', 'Y1_h']
         # add attribute
         hidden_size = gru_1.attribute.add()
-        hidden_size.name = 'hidden_size'
+        hidden_size.name = HIDDEN_SIZE
         hidden_size.type = AttributeProto.AttributeType.INT
         hidden_size.i = 128
         # add attribute
         linear_before_reset = gru_1.attribute.add()
-        linear_before_reset.name = 'linear_before_reset'
+        linear_before_reset.name = LINEAR_BEFORE_RESET
         linear_before_reset.type = AttributeProto.AttributeType.INT
         linear_before_reset.i = 0
 
@@ -254,8 +275,8 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
 
         self.records = {
             'gru_0': {
-                'data_scale': 1.0,
-                'data_offset': 0,
+                DATA_SCALE: 1.0,
+                DATA_OFFSET: 0,
                 'h_scale': 1.0,
                 'h_offset': 0,
                 'act_type': 'INT8',
@@ -286,5 +307,5 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
     def test_generate_fake_quant_node(self):
         gru_0 = self.graph.get_node_by_name('gru_0')
         quant_node, antiquant_node = InsertRNNFakeQuantPass(self.records).generate_fake_quant_node(self.graph, gru_0, 0)
-        self.assertEqual(quant_node.type, 'AscendQuant')
-        self.assertEqual(antiquant_node.type, 'AscendAntiQuant')
+        self.assertEqual(quant_node.type, ASCEND_QUANT)
+        self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)

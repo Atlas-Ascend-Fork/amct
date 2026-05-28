@@ -13,14 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
 
-from amct_pytorch import quantize, convert
+from amct_pytorch import convert, quantize
 
 # Customize accordingly
 LLAMA2_7B_MODEL_PATH = "meta-llama/Llama-2-7b-hf"
 RUN_SKIPPED = os.getenv('RUN_SKIPPED_TESTS', 'False').lower() == 'true'
+
+logger = logging.getLogger(__name__)
 
 
 class TestFlatQuant(unittest.TestCase):
@@ -29,11 +32,11 @@ class TestFlatQuant(unittest.TestCase):
     '''
     @classmethod
     def setUpClass(cls):
-        print('TestFlatQuant START!')
+        logger.info('TestFlatQuant START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestFlatQuant END!')
+        logger.info('TestFlatQuant END!')
 
     def setUp(self):
         pass
@@ -76,7 +79,7 @@ class TestFlatQuant(unittest.TestCase):
             LLAMA2_7B_MODEL_PATH, torch_dtype='auto', config=config,
             use_auth_token=None, low_cpu_mem_usage=True)
         model.seqlen = 2048
-        print(f'---> Loading {LLAMA2_7B_MODEL_PATH} Model with seq_len: {model.seqlen}')
+        logger.info(f'---> Loading {LLAMA2_7B_MODEL_PATH} Model with seq_len: {model.seqlen}')
 
         quantize(model, cfg)
         self.assertEqual(type(model.model.layers[0].self_attn).__name__, 'FlatQuantAttention')

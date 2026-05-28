@@ -15,26 +15,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
+import math
 import os
+import sys
 import unittest
 from unittest import mock
-import json
+
 import numpy as np
 import torch
-import math
 
-from .utils import models
-from .utils import record_utils
+from amct_pytorch.classic.graph_based.amct_pytorch.common.prune.prune_recorder_helper import (
+    PruneRecordHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration import (
+    retrain_config,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pytorch_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.prune.filter_prune_helper import (
+    create_filter_prune_helper,
+)
+
+from .utils import models, record_utils
 
 DEVICE = 'cuda:0'
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.prune.filter_prune_helper import create_filter_prune_helper
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pytorch_pb2
-from amct_pytorch.graph_based_compression.amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration import retrain_config
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestPruneIndexHelper(unittest.TestCase):
     """

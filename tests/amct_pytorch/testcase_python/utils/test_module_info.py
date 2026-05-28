@@ -15,13 +15,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.module_info import ModuleInfo
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.module_info import (
+    ModuleInfo,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class TestModuleInfo(unittest.TestCase):
@@ -30,11 +36,11 @@ class TestModuleInfo(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        print("TestModuleInfo start!")
+        logger.info("TestModuleInfo start!")
 
     @classmethod
     def tearDownClass(cls):
-        print("TestModuleInfo end!")
+        logger.info("TestModuleInfo end!")
         pass
 
     def setUp(self):
@@ -44,37 +50,37 @@ class TestModuleInfo(unittest.TestCase):
         pass
 
     def test_get_wts_cout_cin(self):
-        conv2d = torch.nn.Conv2d(1,1,1)
+        conv2d = torch.nn.Conv2d(1, 1, 1)
         cout_axis, cin_axis = ModuleInfo.get_wts_cout_cin(conv2d)
         self.assertEqual(cout_axis, 0)
         self.assertEqual(cin_axis, 1)
 
-        conv3d = torch.nn.Conv3d(1,1,1)
+        conv3d = torch.nn.Conv3d(1, 1, 1)
         cout_axis, cin_axis = ModuleInfo.get_wts_cout_cin(conv3d)
         self.assertEqual(cout_axis, 0)
         self.assertEqual(cin_axis, 1)
 
-        conv1d = torch.nn.Conv1d(1,1,1)
+        conv1d = torch.nn.Conv1d(1, 1, 1)
         cout_axis, cin_axis = ModuleInfo.get_wts_cout_cin(conv1d)
         self.assertEqual(cout_axis, 0)
         self.assertEqual(cin_axis, 1)
 
-        deconv2d = torch.nn.ConvTranspose2d(1,1,1)
+        deconv2d = torch.nn.ConvTranspose2d(1, 1, 1)
         cout_axis, cin_axis = ModuleInfo.get_wts_cout_cin(deconv2d)
         self.assertEqual(cout_axis, 1)
         self.assertEqual(cin_axis, 0)
 
-        deconv3d = torch.nn.ConvTranspose3d(1,1,1)
+        deconv3d = torch.nn.ConvTranspose3d(1, 1, 1)
         cout_axis, cin_axis = ModuleInfo.get_wts_cout_cin(deconv3d)
         self.assertEqual(cout_axis, 1)
         self.assertEqual(cin_axis, 0)
 
-        linear = torch.nn.Linear(1,1)
+        linear = torch.nn.Linear(1, 1)
         cout_axis, cin_axis = ModuleInfo.get_wts_cout_cin(linear)
         self.assertEqual(cout_axis, 0)
         self.assertEqual(cin_axis, 1)
 
-        conv_transpose_1d = torch.nn.ConvTranspose1d(1,1,1)
+        conv_transpose_1d = torch.nn.ConvTranspose1d(1, 1, 1)
         cout_axis, cin_axis = ModuleInfo.get_wts_cout_cin(conv_transpose_1d)
         self.assertEqual(cout_axis, 1)
         self.assertEqual(cin_axis, 0)

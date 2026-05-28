@@ -14,17 +14,28 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
+import logging
 import unittest
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-from amct_pytorch.algorithm import AlgorithmRegistry
-from amct_pytorch import quantize, convert, algorithm_register
 from utils import TestModel
 
+from amct_pytorch import algorithm_register, convert, quantize
+from amct_pytorch.algorithms import AlgorithmRegistry
+from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
+
 torch.manual_seed(0)
+
+logger = logging.getLogger(__name__)
+
+AA = 'AA'
+
+CUSTOMQUANT = 'CustomQuant'
+
+CUSTOMDEPLOYQUANT = 'CustomDeployQuant'
+
 
 class CustomQuant(BaseQuantizeModule):
     def __init__(self, ori_module, layer_name, quant_config):
@@ -33,12 +44,14 @@ class CustomQuant(BaseQuantizeModule):
     def forward(self, inputs):
         return inputs
 
+
 class CustomDeployQuant(nn.Module):
     def __init__(self, ori_module):
         super().__init__()
 
     def forward(self, inputs):
         return inputs
+
 
 class TestCustomizedAlgo(unittest.TestCase):
     '''
@@ -49,11 +62,11 @@ class TestCustomizedAlgo(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs).to(torch.float32).detach().to('cpu').numpy().astype(np.float32)
-        print('TestCustomizedAlgo START!')
+        logger.info('TestCustomizedAlgo START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestCustomizedAlgo END!')
+        logger.info('TestCustomizedAlgo END!')
 
 
     def test_customize_algo_quantize_success(self):
@@ -72,24 +85,24 @@ class TestCustomizedAlgo(unittest.TestCase):
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {'AA': {'BB': 0.8}}
+            'algorithm': {AA: {'BB': 0.8}}
         }
         model = self.test_model.to(torch.bfloat16)
-        algorithm_register('AA', 'Linear', CustomQuant, CustomDeployQuant)
-        self.assertEqual(AlgorithmRegistry.algo['AA']['Linear'], CustomQuant)
+        algorithm_register(AA, 'Linear', CustomQuant, CustomDeployQuant)
+        self.assertEqual(AlgorithmRegistry.algo[AA]['Linear'], CustomQuant)
         self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], [CustomDeployQuant])
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
-        self.assertEqual(type(model.linear1).__name__, 'CustomQuant')
-        self.assertEqual(type(model.linear2).__name__, 'CustomQuant')
-        self.assertEqual(type(model.linear3).__name__, 'CustomQuant')
+        self.assertEqual(type(model.linear1).__name__, CUSTOMQUANT)
+        self.assertEqual(type(model.linear2).__name__, CUSTOMQUANT)
+        self.assertEqual(type(model.linear3).__name__, CUSTOMQUANT)
         convert(model)
-        self.assertEqual(type(model.linear1).__name__, 'CustomDeployQuant')
-        self.assertEqual(type(model.linear2).__name__, 'CustomDeployQuant')
-        self.assertEqual(type(model.linear3).__name__, 'CustomDeployQuant')
+        self.assertEqual(type(model.linear1).__name__, CUSTOMDEPLOYQUANT)
+        self.assertEqual(type(model.linear2).__name__, CUSTOMDEPLOYQUANT)
+        self.assertEqual(type(model.linear3).__name__, CUSTOMDEPLOYQUANT)
 
     def test_customize_algo_repeated_register_fail(self):
         try:
-            algorithm_register('AA', 'BB', CustomQuant, None)
+            algorithm_register(AA, 'BB', CustomQuant, None)
         except Exception as e:
             self.assertIn('AA is already registered', str(e))

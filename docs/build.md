@@ -17,16 +17,18 @@
 
 ### 编译
 
-进入项目根目录，执行如下编译命令：
+进入项目根目录，执行如下编译命令，生成 amct_pytorch 安装包：
 
 ```bash
-bash build.sh --pkg
+bash build.sh --torch
 ```
 
-编译成功后，会在项目根目录的build_out目录下生成`cann-amct_${version}_linux-${arch}.tar.gz`。
+编译成功后，会在项目根目录的build_out目录下生成`amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz`。
 
 - ${version}表示版本号。
-- ${arch}表示表示CPU架构，如aarch64、x86_64。
+- ${arch}表示CPU架构，如aarch64、x86_64。
+
+更多特性请参考：https://hiascend.com/document/redirect/CannCommunityToolAmct
 
 ### 本地验证
 
@@ -53,11 +55,10 @@ bash build.sh --pkg
 
 ### 安装与卸载
 
-- 安装[编译](#编译)环节生成的run包（如果安装用户为root，请将安装命令中的--user删除）。
+- 安装[编译](#编译)环节生成的安装包（如果安装用户为root，请将安装命令中的--user删除）。
 
   ```bash
-  tar -zxvf cann-amct_${version}_linux-${arch}.tar.gz
-  cd amct_pytorch && pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user
+  pip3 install amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user
   ```
 
   > [!NOTE]说明

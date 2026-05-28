@@ -15,32 +15,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
 import torch.nn as nn
 
-from .utils import models
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
-
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_retrain_pass import InsertRetrainPass
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_conv2d \
-    import CompModuleConv2d
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_linear \
-    import CompModuleLinear
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.share_act_comp_pass import \
-    ShareActCompPass
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_retrain_quant_pass import \
-    InsertRetrainQuantPass
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.retrain_quant import RetrainQuant
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
+    RetrainConfig,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d import (
+    CompModuleConv2d,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
+    CompModuleLinear,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.retrain_quant import (
+    RetrainQuant,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_retrain_pass import (
+    InsertRetrainPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_retrain_quant_pass import (
+    InsertRetrainQuantPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.share_act_comp_pass import (
+    ShareActCompPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestInsertRetrainSearchNPass(unittest.TestCase):
     @classmethod
@@ -85,16 +100,15 @@ class TestInsertRetrainSearchNPass(unittest.TestCase):
         optimizer.do_optimizer(self.graph, self.model_002)
 
         named_module_dict = {name: mod for name, mod in self.model_002.named_modules()}
-        # print('named_module_dict', named_module_dict)
 
-        self.assertEqual(isinstance(named_module_dict['branch1'], RetrainQuant), True)
-        self.assertEqual(isinstance(named_module_dict['branch2'], nn.Conv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch3'], RetrainQuant), True)
-        self.assertEqual(isinstance(named_module_dict['branch3'].quant_module.acts_comp_reuse, CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch4'], RetrainQuant), True)
-        self.assertEqual(isinstance(named_module_dict['conv'], RetrainQuant), True)
-        self.assertEqual(isinstance(named_module_dict['bn'], nn.Identity), True)
-        self.assertEqual(isinstance(named_module_dict['linear'], RetrainQuant), True)
+        self.assertIsInstance(named_module_dict['branch1'], RetrainQuant)
+        self.assertIsInstance(named_module_dict['branch2'], nn.Conv2d)
+        self.assertIsInstance(named_module_dict['branch3'], RetrainQuant)
+        self.assertIsInstance(named_module_dict['branch3'].quant_module.acts_comp_reuse, CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['branch4'], RetrainQuant)
+        self.assertIsInstance(named_module_dict['conv'], RetrainQuant)
+        self.assertIsInstance(named_module_dict['bn'], nn.Identity)
+        self.assertIsInstance(named_module_dict['linear'], RetrainQuant)
 
 
 if __name__ == '__main__':

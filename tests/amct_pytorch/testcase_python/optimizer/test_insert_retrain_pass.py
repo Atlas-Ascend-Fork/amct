@@ -15,35 +15,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
+import logging
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
 
-from .utils import models
-import amct_pytorch.graph_based_compression.amct_pytorch
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
+import amct_pytorch.classic.graph_based.amct_pytorch
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
+    RetrainConfig,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_base import (
+    CompModuleBase,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv1d import (
+    CompModuleConv1d,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d import (
+    CompModuleConv2d,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv3d import (
+    CompModuleConv3d,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
+    CompModuleLinear,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_retrain_pass import (
+    InsertRetrainPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.share_act_comp_pass import (
+    ShareActCompPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from tests.amct_pytorch.testcase_python.optimizer.utils import models
 
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_retrain_pass import InsertRetrainPass
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_conv1d \
-    import CompModuleConv1d
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_conv2d \
-    import CompModuleConv2d
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_conv3d \
-    import CompModuleConv3d
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_linear \
-    import CompModuleLinear
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.comp_module.comp_module_base \
-    import CompModuleBase
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.share_act_comp_pass import \
-    ShareActCompPass
+logger = logging.getLogger(__name__)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestInsertRetrainPass(unittest.TestCase):
     @classmethod
@@ -86,15 +104,14 @@ class TestInsertRetrainPass(unittest.TestCase):
         optimizer.do_optimizer(self.graph, self.model_002)
 
         named_module_dict = {name: mod for name, mod in self.model_002.named_modules()}
-        # print('named_module_dict', named_module_dict)
 
-        self.assertEqual(isinstance(named_module_dict['branch1'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch2'], torch.nn.Conv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch3'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch3'].acts_comp_reuse, CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['branch4'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['conv'], CompModuleConv2d), True)
-        self.assertEqual(isinstance(named_module_dict['linear'], CompModuleLinear), True)
+        self.assertIsInstance(named_module_dict['branch1'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['branch2'], torch.nn.Conv2d)
+        self.assertIsInstance(named_module_dict['branch3'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['branch3'].acts_comp_reuse, CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['branch4'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['conv'], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict['linear'], CompModuleLinear)
 
 
 class TestInsertRetrainConv3dPass(unittest.TestCase):
@@ -138,13 +155,14 @@ class TestInsertRetrainConv3dPass(unittest.TestCase):
         optimizer.do_optimizer(self.graph, self.model_3d)
 
         named_module_dict = {name: mod for name, mod in self.model_3d.named_modules()}
-        print('named_module_dict', named_module_dict)
+        logger.info('named_module_dict %s', named_module_dict)
         for _, module in self.model_3d.named_modules():
             if isinstance(module, CompModuleBase):
                 module.acts_clip_min_pre.data = torch.tensor(1.0)
                 module.acts_clip_max_pre.data = torch.tensor(1.0)
         new_output = self.model_3d.forward(self.args[0])
-        self.assertEqual(isinstance(named_module_dict['layer1.0'], CompModuleConv3d), True)
+        self.assertIsInstance(named_module_dict['layer1.0'], CompModuleConv3d)
+
 
 class TestInsertRetrainConv1dPass(unittest.TestCase):
     @classmethod
@@ -187,16 +205,19 @@ class TestInsertRetrainConv1dPass(unittest.TestCase):
         optimizer.do_optimizer(self.graph, self.model_1d)
 
         named_module_dict = {name: mod for name, mod in self.model_1d.named_modules()}
-        print('named_module_dict', named_module_dict)
-        self.assertEqual(isinstance(named_module_dict['layer1.0'], CompModuleConv1d), True)
+        logger.info('named_module_dict %s', named_module_dict)
+        self.assertIsInstance(named_module_dict['layer1.0'], CompModuleConv1d)
 
     def test_check_conv1d_retrain_padding_mode(self):
-        mod = CompModuleConv1d(module=torch.nn.Conv1d(1,1,1, padding_mode='reflect'),
-                               act_config={'ifmr_init':True, 'algo': 'ulq_quantize', 'num_bits': 8, 'fixed_min': False},
-                               wts_config={'algo': 'arq_retrain', 'num_bits': 8, 'channel_wise': True},
-                               common_config={'device': 'cpu', })
+        mod = CompModuleConv1d(
+            module=torch.nn.Conv1d(1, 1, 1, padding_mode='reflect'),
+            act_config={'ifmr_init': True, 'algo': 'ulq_quantize',
+                        'num_bits': 8, 'fixed_min': False},
+            wts_config={'algo': 'arq_retrain', 'num_bits': 8,
+                        'channel_wise': True},
+            common_config={'device': 'cpu', })
         mod.comp_algs.append('quant')
-        self.assertRaises(RuntimeError, mod, torch.randn(1,1,1))
+        self.assertRaises(RuntimeError, mod, torch.randn(1, 1, 1))
 
 if __name__ == '__main__':
     unittest.main()

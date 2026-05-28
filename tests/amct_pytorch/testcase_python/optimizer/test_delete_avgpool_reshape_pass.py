@@ -17,11 +17,15 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+
 import torch
 
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import (
+    ReplaceAvgpoolReshapePass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+
 from .util import models
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer import ReplaceAvgpoolReshapePass
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

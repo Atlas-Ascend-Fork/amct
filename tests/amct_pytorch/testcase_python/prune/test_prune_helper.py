@@ -18,17 +18,20 @@
 import os
 import unittest
 from unittest import mock
+
 import torch
 
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.prune.pruner_helper import (
+    PruneHelper,
+)
 
-from .utils import models
-from .utils import record_utils
+from .utils import models, record_utils
 
 DEVICE = 'cpu'
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.prune.pruner_helper import PruneHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestFilterPruneHelper(unittest.TestCase):
     """

@@ -1,12 +1,29 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
 import copy
 import logging
-import math
 import sys
+import math
 import unittest
+from unittest.mock import MagicMock, patch
 
-from unittest.mock import MagicMock
-from unittest.mock import patch
-
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -16,6 +33,8 @@ from mock_torch_npu import mock_npu_quantize
 
 from amct_pytorch import convert
 from amct_pytorch import quantize
+from amct_pytorch.algorithms import AlgorithmRegistry
+from amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear import NpuHIF8Linear
 
 
 LOGGER = logging.getLogger(__name__)
@@ -50,7 +69,11 @@ class FP8Linear(nn.Module):
         weight = self.weight.to(torch.float32) / weight_scale_inv.to(torch.float32)
         return torch.nn.functional.linear(x, weight.to(x.dtype), self.bias)
 
+AlgorithmRegistry.register('cast', None, FP8Linear, NpuHIF8Linear)
+
 torch.manual_seed(0)
+
+logger = logging.getLogger(__name__)
 
 
 class FP8Model(nn.Module):
@@ -99,7 +122,7 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch('amct_pytorch.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+    @patch('amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
            MagicMock(return_value=True))
     def test_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_model)
@@ -117,7 +140,7 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch('amct_pytorch.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+    @patch('amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
            MagicMock(return_value=True))
     def test_block_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_block_model)

@@ -15,25 +15,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
+import logging
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
-
-from .utils import models
-from .utils import record_file_utils
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 from google.protobuf import text_format
 
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_config
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import quantize_model
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_model
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
+    create_quant_config,
+    quantize_model,
+    save_model,
+)
+
+from .utils import models, record_file_utils
+
+logger = logging.getLogger(__name__)
 
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestQuantizeModel(unittest.TestCase):
     """
@@ -68,9 +76,9 @@ class TestQuantizeModel(unittest.TestCase):
         config_file = os.path.join(CUR_DIR, 'utils/test_quantize_model/model_002.json')
         modfied_onnx_file = os.path.join(self.temp_folder, 'no_exit/model_modified.onnx')
         record_file = os.path.join(self.temp_folder, 'model_002.txt')
-        print("=*"*30)
+        logger.info("=*" * 30)
         for name, mod in self.model_002.named_modules():
-            print(name, mod)
+            logger.info('%s %s', name, mod)
         new_model = quantize_model(config_file, modfied_onnx_file, record_file,
             self.model_002, self.args, None, None, None)
 

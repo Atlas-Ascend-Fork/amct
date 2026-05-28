@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,19 +16,18 @@
 # ----------------------------------------------------------------------------
 
 __all__ = [
-    'quantize', 'convert', 'algorithm_register', 
-    'INT4_AWQ_WEIGHT_QUANT_CFG', 'INT4_GPTQ_WEIGHT_QUANT_CFG', 'INT8_SMOOTHQUANT_CFG',
+    'quantize', 'convert', 'algorithm_register',
+    'INT4_AWQ_WEIGHT_QUANT_CFG', 'INT4_GPTQ_WEIGHT_QUANT_CFG',
+    'INT8_SMOOTHQUANT_CFG',
     'INT8_MINMAX_WEIGHT_QUANT_CFG',
-    'HIFP8_OFMR_CFG', 'FP8_OFMR_CFG', 'MXFP8_QUANT_CFG', 'MXFP4_AWQ_WEIGHT_QUANT_CFG', 'HIFP8_CAST_CFG',
-    'HIFP8_QUANTILE_CFG',
-    ]
+    'HIFP8_OFMR_CFG', 'FP8_OFMR_CFG', 'MXFP8_QUANT_CFG',
+    'MXFP4_AWQ_WEIGHT_QUANT_CFG', 'HIFP8_CAST_CFG', 'HIFP8_QUANTILE_CFG',
+]
 
-from amct_pytorch.quantize import quantize, convert, algorithm_register
-from amct_pytorch.config import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
-from amct_pytorch.config import INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG
-from amct_pytorch.config import HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG, HIFP8_CAST_CFG
-from amct_pytorch.config import HIFP8_QUANTILE_CFG
-from amct_pytorch.config import MXFP4_AWQ_WEIGHT_QUANT_CFG
-
-from amct_pytorch.graph_based_compression.amct_pytorch import *
-
+from amct_pytorch.classic import quantize, convert, algorithm_register
+from amct_pytorch.common.config import (
+    INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG,
+    INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG,
+    HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG,
+    MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
+)

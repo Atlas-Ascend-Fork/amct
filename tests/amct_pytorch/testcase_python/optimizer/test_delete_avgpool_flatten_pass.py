@@ -15,19 +15,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
+import sys
 import unittest
 from copy import deepcopy
 
-import json
 import numpy as np
 import torch
-
 from onnx import onnx_pb
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
 
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer import ReplaceAvgpoolFlattenPass
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import (
+    ReplaceAvgpoolFlattenPass,
+)
 
 
 class TestReplaceAvgpoolFlattenPass(unittest.TestCase):

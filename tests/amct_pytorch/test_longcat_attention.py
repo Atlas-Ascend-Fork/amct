@@ -14,6 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
+import logging
 import unittest
 import sys
 from unittest.mock import MagicMock
@@ -21,7 +22,7 @@ from unittest.mock import patch
 import torch
 import torch.nn as nn
 from utils import TestModelLongcatFlashMLA
-from mock_torch_npu import *
+from mock_torch_npu import mock_npu_quantize, mock_npu_anti_quant, mock_npu
 
 from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
 from transformers.cache_utils import DynamicCache
@@ -42,13 +43,13 @@ class TestLongcatFlashMLA(unittest.TestCase):
         cls.kvcache_ori = DynamicCache()
         cls.kvcache_quant = DynamicCache()
         cls.kvcache = DynamicCache()
-        for i in range(5):
+        for _ in range(5):
             cls.ori_out = cls.test_model(cls.hidden_states, past_key_values=cls.kvcache_ori)
-        print('TestLongcatFlashMLA START!')
+        logging.info('TestLongcatFlashMLA START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestLongcatFlashMLA END!')
+        logging.info('TestLongcatFlashMLA END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -80,5 +81,5 @@ class TestLongcatFlashMLA(unittest.TestCase):
         convert(model)
         self.assertEqual(type(model.attn).__name__, 'NpuLongcatFlashMLA')
         torch.Tensor.npu = mock_npu
-        for i in range(5):
+        for _ in range(5):
             quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)

@@ -15,42 +15,62 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-from io import BytesIO
-import unittest
-from unittest.mock import patch
+import copy
 import json
+import logging
+import os
+import sys
+import unittest
+from io import BytesIO
+from unittest.mock import patch
+
 import numpy as np
 import torch
-import copy
+
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.record_file_operator import (
+    ScaleOffsetRecordHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
+    version_higher_than,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.conv_bn_fusion_pass import (
+    ConvBnFusionPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_TYPES,
+)
 
 from .utils import models
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.util import version_higher_than
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.record_file_operator import \
-    ScaleOffsetRecordHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
 
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass
+logger = logging.getLogger(__name__)
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-
+CONV_TRANSPOSE_2D = 'ConvTranspose2d'
+AVG_POOL_2D = 'AvgPool2d'
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+CONV1 = 'conv1'
+
 
 class TestConvbnFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        QUANTIZABLE_TYPES.extend(['ConvTranspose2d','AvgPool2d'])
+        QUANTIZABLE_TYPES.extend([CONV_TRANSPOSE_2D, AVG_POOL_2D])
         cls.temp_folder = os.path.join(CUR_DIR, 'test_conv_bn_fusion_pass')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
         cls.model_001 = models.Net001().to(torch.device("cpu"))
-        # cls.model_001.eval()
         cls.args_shape = [(1, 2, 28, 28)]
         cls.args = list()
         for input_shape in cls.args_shape:
@@ -67,12 +87,12 @@ class TestConvbnFusionPass(unittest.TestCase):
         Configuration().init(config_file, record_file, cls.graph)
 
         skip_fusion_layers = Configuration().get_skip_fusion_layers()
-        print('skip_fusion_layers', skip_fusion_layers)
+        logger.info('skip_fusion_layers %s', skip_fusion_layers)
 
     @classmethod
     def tearDownClass(cls):
-        QUANTIZABLE_TYPES.remove('ConvTranspose2d')
-        QUANTIZABLE_TYPES.remove('AvgPool2d')
+        QUANTIZABLE_TYPES.remove(CONV_TRANSPOSE_2D)
+        QUANTIZABLE_TYPES.remove(AVG_POOL_2D)
         os.popen('rm -r ' + cls.temp_folder)
 
     def setUp(self):
@@ -116,8 +136,6 @@ class TestConvbnFusionPass(unittest.TestCase):
         optimizer.do_optimizer(model_001, graph)
 
         named_module_dict = {name: mod for name, mod in model_001.named_modules()}
-        # print('*'*20)
-        # print(named_module_dict)
 
         # BatchNormalization is not replaced by Indntity
         self.assertEqual(True, isinstance(named_module_dict['layer1.1'], torch.nn.BatchNorm2d))
@@ -131,6 +149,7 @@ class TestConvbnFusionPass(unittest.TestCase):
     @patch.object(Configuration, 'get_skip_fusion_layers')
     def test_conv_bn_fusion_pass_with_unsupport_padding_typpe(self, mock_get_skip_fusion_layers):
         mock_get_skip_fusion_layers.return_value = []
+
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()
@@ -167,9 +186,7 @@ class TestConvbnFusionPass(unittest.TestCase):
                 return x
         model = SingleConv()
         model.eval()
-        # models.create_onnx(model, [(1, 3, 19, 19)], os.path.join(self.temp_folder, 'conv_padding.onnx'))
 
-        # tmp_onnx = BytesIO()
         tmp_onnx = os.path.join(self.temp_folder, 'conv_padding.onnx')
         Parser.export_onnx(model, torch.randn(1, 3, 19, 19), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
@@ -188,6 +205,7 @@ class TestConvbnFusionPass(unittest.TestCase):
     @patch.object(Configuration, 'get_skip_fusion_layers')
     def test_conv_bn_fusion_pass_dialation_2(self, mock_get_skip_fusion_layers):
         mock_get_skip_fusion_layers.return_value = []
+
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()
@@ -237,8 +255,8 @@ class TestConvbnFusionPass(unittest.TestCase):
         record_helper = ScaleOffsetRecordHelper(scale_offset_record_pb2.ScaleOffsetRecord)
         scale = [1]
         offset = [0, 0]
-        record_helper.record_weights_scale_offset('conv1', scale, offset)
-        record_helper.record_activation_scale_offset('conv1', 1, 0)
+        record_helper.record_weights_scale_offset(CONV1, scale, offset)
+        record_helper.record_activation_scale_offset(CONV1, 1, 0)
 
 
         optimizer = ModelOptimizer()
@@ -268,33 +286,16 @@ class TestConvbnFusionPass(unittest.TestCase):
         record_helper = ScaleOffsetRecordHelper(scale_offset_record_pb2.ScaleOffsetRecord)
         scale = [1]
         offset = [0]
-        record_helper.record_weights_scale_offset('conv1', scale, offset)
-        record_helper.record_activation_scale_offset('conv1', 1, 0)
+        record_helper.record_weights_scale_offset(CONV1, scale, offset)
+        record_helper.record_activation_scale_offset(CONV1, 1, 0)
 
 
         optimizer = ModelOptimizer()
         optimizer.add_pass(ConvBnFusionPass(None, record_helper))
         optimizer.do_optimizer(model, graph)
-        scale_w, offset_w = record_helper.read_weights_scale_offset('conv1')
+        scale_w, offset_w = record_helper.read_weights_scale_offset(CONV1)
         self.assertEqual(3, len(offset_w))
         self.assertEqual(3, len(scale_w))
         self.assertNotEqual(1, scale_w[0])
 
-    # def test_conv_bn_fusion_pass_overflow_fp16(self):
-    #     model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
-    #                                 torch.nn.BatchNorm2d(3, 3)
-    #                                 )
-    #     for name, module in model.named_modules(model):
-    #         if name == '0':
-    #             module.weight = torch.tensor([40000.]*3*3*3*3).reshape(3,3,3,3)
-    #         if name == '1':
-    #             module.weight = torch.nn.Parameter(torch.tensor([4.]*3*3*3).reshape(3,3,3))
-    #     model.to(dtype=torch.float16, device=torch.device('cuda:0'))
-    #     model.eval()
-    #     tmp_onnx = BytesIO()
-    #     Parser.export_onnx(model, torch.randn(1, 3, 19, 19), tmp_onnx)
-    #     graph = Parser.parse_net_to_graph(tmp_onnx)
 
-    #     optimizer = ModelOptimizer()
-    #     optimizer.add_pass(ConvBnFusionPass(Configuration))
-    #     optimizer.do_optimizer(model, graph)

@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -14,9 +14,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import math
+
 import torch
 
-from amct_pytorch.utils.quant_util import convert_dtype
+from amct_pytorch.common.utils.quant_util import convert_dtype
 
 
 @property
@@ -34,8 +35,9 @@ def float8_e4m3fn():
     return
 
 
-def npu_quant_matmul(x1, x2, x2_scale, offset=None, bias=None, pertoken_scale=None, output_dtype=torch.bfloat16,
-    x2_dtype=None, pertoken_scale_dtype=None, scale_dtype=None, group_sizes=None):
+def npu_quant_matmul(x1, x2, x2_scale, offset=None, bias=None, pertoken_scale=None,
+    output_dtype=torch.bfloat16, x2_dtype=None, pertoken_scale_dtype=None,
+    scale_dtype=None, group_sizes=None):
     if len(x1.shape) < 2 or len(x1.shape) > 6:
         raise RuntimeError()
     if x2.dtype == torch.float8_e4m3fn:
@@ -57,13 +59,13 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
     bias_fp32 = bias.float() if bias is not None else None
 
     if weight_fp32.dim() == 3:
-        N_div_8, K, _ = weight_fp32.shape
-        N = N_div_8 * 8
-        weight_fp32 = weight_fp32.reshape(K, N)
+        n_div_8, k_val, _ = weight_fp32.shape
+        n_val = n_div_8 * 8
+        weight_fp32 = weight_fp32.reshape(k_val, n_val)
 
     if x_fp32.shape[-1] != weight_fp32.shape[1]:
         weight_fp32 = weight_fp32.transpose(0, 1)
-    
+
     if scale_fp32.dim() == 1 and scale_fp32.numel() == weight_fp32.shape[0]:
         weight_fp32 = weight_fp32 * scale_fp32.unsqueeze(1)
 
@@ -72,8 +74,9 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
     return out
 
 
-def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None, output_dtype=torch.float32,
-    x1_dtype=None, x2_dtype=None, group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
+def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
+    output_dtype=torch.float32, x1_dtype=None, x2_dtype=None,
+    group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
     scale_dtype=None):
     x = x.to(torch.float32)
     weight = weight.to(torch.float32)
@@ -98,35 +101,29 @@ def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None, output_dt
     return out
 
 
-def mock_npu_quantize(input, scales, zero_points=None,
+def mock_npu_quantize(input_val, scales, zero_points=None,
     dtype=torch.qint8, axis=1, div_mode=True):
     if div_mode:
-        out = input / scales
+        out = input_val / scales
     else:
-        out = input.transpose(-1, -2) * scales
+        out = input_val.transpose(-1, -2) * scales
         out = out.transpose(-1, -2)
     if zero_points is not None:
-        zero_points_shape = [1] * len(input.shape)
+        zero_points_shape = [1] * len(input_val.shape)
         zero_points_shape[axis] = -1
         zero_points = zero_points.reshape(zero_points_shape)
         out += zero_points
     if dtype == torch.qint8:
-        out = torch.quantize_per_tensor(input, 1, 0, dtype)
+        out = torch.quantize_per_tensor(input_val, 1, 0, dtype)
 
     return out
-
-
-def mock_npu_anti_quant(inputs, scales, zero_points=None,
-    src_dtype=None, dst_dtype=None):
-    out = inputs * scales
-    return out.to(dst_dtype)
 
 
 def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
     return weight
 
 
-def mock_npu_dynamic_mx_quant(weight, axis=None, round_mode=None, 
+def mock_npu_dynamic_mx_quant(weight, axis=None, round_mode=None,
         dst_type=None, block_size=None):
     shape = (weight.shape[0], math.ceil(weight.shape[1] / 64), 2)
     scale = torch.randn(shape)
@@ -161,19 +158,33 @@ def mock_npu_trans_quant_param(scale, offset=None):
 
 
 def mocked_npu_quant_conv2d(x, weight, scale, stride, pads,
-    dilation, groups, offset_x, output_dtype, bias=None, input_dtype=None, weight_dtype=None):
+    dilation, groups, offset_x, output_dtype, bias=None,
+    input_dtype=None, weight_dtype=None):
     x = x.to(torch.float32)
     weight = weight.to(torch.float32)
     if bias is not None:
         bias = bias.to(torch.float32)
- 
+
     out = torch.nn.functional.conv2d(x, weight, bias, stride, pads, dilation, groups)
     out *= scale.reshape(1, -1, 1, 1)
     out = out.to(output_dtype)
     return out
 
 
-def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=15):
-    scale_shape = x.shape[0]
-    scale = torch.randn(scale_shape)
-    return x, scale
+def mock_npu_anti_quant(tensor, scale, src_dtype=None, dst_dtype=None):
+    tensor_fp32 = tensor.float()
+    scale_fp32 = scale.float()
+    dequant = tensor_fp32 * scale_fp32
+    if dst_dtype is not None:
+        try:
+            dequant = convert_dtype(dequant, dst_dtype)
+        except ValueError:
+            dequant = dequant.to(dst_dtype)
+    return dequant
+
+
+def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=None):
+    quant_x = x
+    pertoken_scale = torch.ones(x.shape[0], 1, dtype=torch.float32, device=x.device)
+    return quant_x, pertoken_scale
+

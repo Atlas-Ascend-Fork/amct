@@ -187,7 +187,9 @@ class DeepseekV3LinearScalingRotaryEmbedding(DeepseekV3RotaryEmbedding):
 
 # Copied from transformers.models.llama.modeling_llama.LlamaDynamicNTKScalingRotaryEmbedding with Llama->DeepseekV3
 class DeepseekV3DynamicNTKScalingRotaryEmbedding(DeepseekV3RotaryEmbedding):
-    """DeepseekV3RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users /u/bloc97 and /u/emozilla"""
+    """DeepseekV3RotaryEmbedding extended with Dynamic NTK scaling. Credits to the Reddit users
+    /u/bloc97 and /u/emozilla
+    """
 
     def __init__(
             self,
@@ -763,7 +765,8 @@ class DeepseekV3Attention(nn.Module):
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         if "padding_mask" in kwargs:
             warnings.warn(
-                "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. "
+                "Please make sure use `attention_mask` instead.`"
             )
         bsz, q_len, _ = hidden_states.size()
 
@@ -863,17 +866,22 @@ class DeepseekV3Attention(nn.Module):
 # Copied from transformers.models.llama.modeling_llama.LlamaFlashAttention2 with Llama->DeepseekV3
 class DeepseekV3FlashAttention2(DeepseekV3Attention):
     """
-    DeepseekV3 flash attention module. This module inherits from `DeepseekV3Attention` as the weights of the module stays
-    untouched. The only required change would be on the forward pass where it needs to correctly call the public API of
-    flash attention and deal with padding tokens in case the input contains any of them.
+    DeepseekV3 flash attention module. This module inherits from `DeepseekV3Attention`
+    as the weights of the module stays untouched. The only required change would be on
+    the forward pass where it needs to correctly call the public API of flash attention
+    and deal with padding tokens in case the input contains any of them.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # TODO: Should be removed once Flash Attention for RoCm is bumped to 2.1.
-        # flash_attn<2.1 generates top-left aligned causal mask, while what is needed here is bottom-right alignement, that was made default for flash_attn>=2.1. This attribute is used to handle this difference. Reference: https://github.com/Dao-AILab/flash-attention/releases/tag/v2.1.0.
-        # Beware that with flash_attn<2.1, using q_seqlen != k_seqlen (except for the case q_seqlen == 1) produces a wrong mask (top-left).
+        # flash_attn<2.1 generates top-left aligned causal mask, while what is needed here
+        # is bottom-right alignment, that was made default for flash_attn>=2.1. This attribute
+        # is used to handle this difference. Reference:
+        # https://github.com/Dao-AILab/flash-attention/releases/tag/v2.1.0.
+        # Beware that with flash_attn<2.1, using q_seqlen != k_seqlen (except for the case
+        # q_seqlen == 1) produces a wrong mask (top-left).
         self._flash_attn_uses_top_left_mask = not is_flash_attn_greater_or_equal_2_10()
 
     def forward(
@@ -889,7 +897,8 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
         # DeepseekV3FlashAttention2 attention does not support output_attentions
         if "padding_mask" in kwargs:
             warnings.warn(
-                "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. "
+                "Please make sure use `attention_mask` instead.`"
             )
 
             # overwrite attention_mask with padding_mask
@@ -951,8 +960,9 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
                 key_states, value_states, self.layer_idx, cache_kwargs
             )
 
-        # TODO: These transpose are quite inefficient but Flash Attention requires the layout [batch_size, sequence_length, num_heads, head_dim]. We would need to refactor the KV cache
-        # to be able to avoid many of these transpose/reshape/view.
+        # TODO: These transpose are quite inefficient but Flash Attention requires the layout
+        # [batch_size, sequence_length, num_heads, head_dim]. We would need to refactor the KV
+        # cache to be able to avoid many of these transpose/reshape/view.
         query_states = query_states.transpose(1, 2)
         key_states = key_states.transpose(1, 2)
         value_states = value_states.transpose(1, 2)
@@ -1042,7 +1052,9 @@ class DeepseekV3FlashAttention2(DeepseekV3Attention):
         if not self._flash_attn_uses_top_left_mask:
             causal = self.is_causal
         else:
-            # TODO: Remove the `query_length != 1` check once Flash Attention for RoCm is bumped to 2.1. For details, please see the comment in DeepseekV3FlashAttention2 __init__.
+            # TODO: Remove the `query_length != 1` check once Flash Attention for RoCm
+            # is bumped to 2.1. For details, please see the comment in
+            # DeepseekV3FlashAttention2 __init__.
             causal = self.is_causal and query_length != 1
 
         # Contains at least one padding token in the sequence
@@ -1210,7 +1222,8 @@ class DeepseekV3DecoderLayer(nn.Module):
         """
         if "padding_mask" in kwargs:
             warnings.warn(
-                "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. "
+                "Please make sure use `attention_mask` instead.`"
             )
         residual = hidden_states
 
@@ -1577,9 +1590,10 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
         r"""
         Args:
             labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-                Labels for computing the masked language modeling loss. Indices should either be in `[0, transformers.,
-                config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
-                (masked), the loss is only computed for the tokens with labels in `[0, transformers., config.vocab_size]`.
+                Labels for computing the masked language modeling loss. Indices should
+                either be in `[0, config.vocab_size]` or -100 (see `input_ids` docstring).
+                Tokens with indices set to `-100` are ignored (masked), the loss is only
+                computed for the tokens with labels in `[0, config.vocab_size]`.
 
         Returns:
 
@@ -1734,16 +1748,18 @@ class DeepseekV3ForCausalLM(DeepseekV3PreTrainedModel):
 
 @add_start_docstrings(
     """
-    The DeepseekV3 Model transformer with a sequence classification head on top (linear layer).
-    
-    [`DeepseekV3ForSequenceClassification`] uses the last token in order to do the classification, as other causal models
-    (e.g. GPT-2) do.
-    
-    Since it does classification on the last token, it requires to know the position of the last token. If a
-    `pad_token_id` is defined in the configuration, it finds the last token that is not a padding token in each row. If
-    no `pad_token_id` is defined, it simply takes the last value in each row of the batch. Since it cannot guess the
-    padding tokens when `inputs_embeds` are passed instead of `input_ids`, it does the same (take the last value in
-    each row of the batch).
+    The DeepseekV3 Model transformer with a sequence classification head on top
+    (linear layer).
+
+    [`DeepseekV3ForSequenceClassification`] uses the last token in order to do the
+    classification, as other causal models (e.g. GPT-2) do.
+
+    Since it does classification on the last token, it requires to know the position
+    of the last token. If a `pad_token_id` is defined in the configuration, it finds
+    the last token that is not a padding token in each row. If no `pad_token_id` is
+    defined, it simply takes the last value in each row of the batch. Since it cannot
+    guess the padding tokens when `inputs_embeds` are passed instead of `input_ids`,
+    it does the same (take the last value in each row of the batch).
     """,
     DeepseekV3_START_DOCSTRING,
 )

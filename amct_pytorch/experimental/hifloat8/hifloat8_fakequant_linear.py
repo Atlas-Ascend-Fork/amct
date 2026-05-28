@@ -49,4 +49,3 @@ class Hifloat8FakequantLinear(BaseQuantizeModule):
         quantized_x = hifloat8_cast.float_to_hifloat8(x.cpu())
         fakequant_x = hifloat8_cast.hifloat8_to_float32(quantized_x).to(x)
         return F.linear(fakequant_x, self.fakequant_weight, self.bias)
-

@@ -15,35 +15,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-from io import BytesIO
-import unittest
-from unittest import mock
-from unittest.mock import patch, mock_open
 import json
+import os
+import sys
+import unittest
+from io import BytesIO
+from unittest import mock
+from unittest.mock import mock_open, patch
+
 import numpy as np
 import torch
-
-from .utils import models
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from google.protobuf import text_format
 
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.weight_calibration import WeightsCalibrationPass
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.weight_calibration import (
+    WeightsCalibrationPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
+    QUANTIZABLE_TYPES,
+)
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.vars import QUANTIZABLE_TYPES
+from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+CONV1D = 'conv1d'
 
 
 class TestWeightsCalibrationPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        QUANTIZABLE_TYPES.extend(['ConvTranspose2d','AvgPool2d', 'ConvTranspose1d'])
+        QUANTIZABLE_TYPES.extend(['ConvTranspose2d', 'AvgPool2d', 'ConvTranspose1d'])
         cls.temp_folder = os.path.join(CUR_DIR, 'test_weight_calibration_pass')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
@@ -172,18 +186,21 @@ class TestWeightsCalibrationPass(unittest.TestCase):
         class Conv1dModule(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1d = torch.nn.Conv1d(3,3,3)
+                self.conv1d = torch.nn.Conv1d(3, 3, 3)
+
             def forward(self, x):
                 return self.conv1d(x)
         conv1d_module = Conv1dModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(conv1d_module, torch.randn(3,3,3), tmp_onnx)
+        Parser.export_onnx(conv1d_module, torch.randn(3, 3, 3), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
-        node = graph.get_node_by_name('conv1d')
+        node = graph.get_node_by_name(CONV1D)
         for name, mod in conv1d_module.named_modules():
-            if name == 'conv1d':
+            if name == CONV1D:
                 conv1d_mod = mod
                 break
 
-        modified_weight = WeightsCalibrationPass.apply_balance_scale_to_weight(conv1d_mod, 'conv1d', [3, 3, 3], torch.ones(3,3,3))
+        modified_weight = WeightsCalibrationPass.apply_balance_scale_to_weight(
+            conv1d_mod, CONV1D, [3, 3, 3], torch.ones(3, 3, 3))
         self.assertTrue((modified_weight == torch.ones(3, 3, 3) * 3).all())
+

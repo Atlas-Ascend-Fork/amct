@@ -15,28 +15,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
-import numpy as np
-import torch
+import os
+import sys
+import unittest
 from unittest.mock import patch
 
-from .utils import models
-from .utils import record_file_utils
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.graph_optimizer import GraphOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+import numpy as np
+import torch
 from google.protobuf import text_format
 
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.insert_bias_quant_pass import InsertBiasQuantPass
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.replace_bias_quant_pass import ReplaceBiasQuantPass
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
+    GraphOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_bias_quant_pass import (
+    InsertBiasQuantPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_bias_quant_pass import (
+    ReplaceBiasQuantPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
 
+from .utils import models, record_file_utils
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestInsertBiasQuantPass(unittest.TestCase):
     @classmethod
@@ -78,7 +90,9 @@ class TestInsertBiasQuantPass(unittest.TestCase):
     def test_quant_bias_int4(self):
         optimizer = GraphOptimizer()
         before_nodes = len(self.graph.nodes)
-        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch(
+            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
+            'QuantOpInfo.get_dst_num_bits', return_value=4):
             optimizer.add_pass(InsertBiasQuantPass(self.records))
             optimizer.do_optimizer(self.graph, None)
             after_nodes = len(self.graph.nodes)
@@ -87,17 +101,18 @@ class TestInsertBiasQuantPass(unittest.TestCase):
     def test_replace_bias_quant_int4(self):
         optimizer = GraphOptimizer()
         before_nodes = len(self.graph.nodes)
-        with patch('amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits', return_value=4):
+        with patch(
+            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
+            'QuantOpInfo.get_dst_num_bits', return_value=4):
             optimizer.add_pass(ReplaceBiasQuantPass(self.records))
             optimizer.do_optimizer(self.graph, None)
             after_nodes = len(self.graph.nodes)
             self.assertEqual(before_nodes - after_nodes, 1)
 
     def test_bias_exceed_int32(self):
-        bias = np.array([[0.0, 1.0, 2.0**31, -2.0**31], [0.0, 1.0, 2**31-1, -2**31-1]], dtype=np.float32)
+        bias = np.array([[0.0, 1.0, 2.0**31, -2.0**31], [0.0, 1.0, 2**31 - 1, -2**31 - 1]], dtype=np.float32)
         scale_w = np.array([0.1])
         scale_d = np.array(1.0)
-        # InsertBiasQuantPass.quant_bias(bias, scale_w, scale_d, 'conv1')
         self.assertRaises(RuntimeError, InsertBiasQuantPass.quant_bias, bias, scale_w, scale_d, 'conv1')
 
     def test_rnn_bias_quant_success(self):
@@ -106,10 +121,10 @@ class TestInsertBiasQuantPass(unittest.TestCase):
             layer_name: {
                 'data_scale': np.array(1.0, dtype=np.float32),
                 'h_scale': np.array(1.0, dtype=np.float32),
-                'weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'weight_offset': np.array([0]*4, dtype=np.int8),
-                'recurrence_weight_scale': np.array([1.0]*4, dtype=np.float32),
-                'recurrence_weight_offset': np.array([0]*4, dtype=np.int8),
+                'weight_scale': np.array([1.0] * 4, dtype=np.float32),
+                'weight_offset': np.array([0] * 4, dtype=np.int8),
+                'recurrence_weight_scale': np.array([1.0] * 4, dtype=np.float32),
+                'recurrence_weight_offset': np.array([0] * 4, dtype=np.int8),
             }
         }
         bias = np.random.random([1, 160]).astype(np.float32)

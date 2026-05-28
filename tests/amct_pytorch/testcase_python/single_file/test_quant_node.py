@@ -15,20 +15,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
-from unittest.mock import MagicMock
+import os
+import sys
+import unittest
 from copy import deepcopy
+from unittest.mock import MagicMock
 
 import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node import QuantOpInfo
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
+    QuantOpInfo,
+)
+
+CONV1 = 'conv1'
+
+RELU1 = 'relu1'
+
+ADD1 = 'add1'
 
 
 class TestModelHelper(unittest.TestCase):
@@ -69,14 +77,14 @@ class TestModelHelper(unittest.TestCase):
         wts_trans = self.graph.node.add()
         wts_trans.name = 'wts_trans_0'
         wts_trans.op_type = 'Transpose'
-        wts_trans.input[:] = ['conv1.pre_weights',]
+        wts_trans.input[:] = ['conv1.pre_weights', ]
         wts_trans.output[:] = ['conv1.weights']
         # Add conv1
         conv1 = self.graph.node.add()
-        conv1.name = 'conv1'
+        conv1.name = CONV1
         conv1.op_type = 'Conv'
         conv1.input[:] = ['data0', 'conv1.weights', 'conv1.bias']
-        conv1.output[:] = ['conv1']
+        conv1.output[:] = [CONV1]
         # add attribute "kernel_shape"
         kernel_shape = conv1.attribute.add()
         kernel_shape.name = 'kernel_shape'
@@ -95,21 +103,21 @@ class TestModelHelper(unittest.TestCase):
         bias.dims[:] = [1]
         # Add relu
         relu1 = self.graph.node.add()
-        relu1.name = 'relu1'
+        relu1.name = RELU1
         relu1.op_type = 'Relu'
-        relu1.input[:] = ['conv1']
-        relu1.output[:] = ['relu1']
+        relu1.input[:] = [CONV1]
+        relu1.output[:] = [RELU1]
         # Add add
         add1 = self.graph.node.add()
-        add1.name = 'add1'
+        add1.name = ADD1
         add1.op_type = 'Add'
-        add1.input[:] = ['relu1', 'data1']
-        add1.output[:] = ['add1']
+        add1.input[:] = [RELU1, 'data1']
+        add1.output[:] = [ADD1]
         # Add average_pool
         avg_pool1 = self.graph.node.add()
         avg_pool1.name = 'avg_pool1'
         avg_pool1.op_type = 'AveragePool'
-        avg_pool1.input[:] = ['add1']
+        avg_pool1.input[:] = [ADD1]
         avg_pool1.output[:] = ['output']
         # add output
         graph_output = self.graph.output.add()
@@ -123,20 +131,20 @@ class TestModelHelper(unittest.TestCase):
     def test_get_parent_module_trans_node(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        node_Trans = graph.get_node_by_name('conv1')
-        graph = QuantOpInfo.get_weight_node(node_Trans)
+        node_trans = graph.get_node_by_name(CONV1)
+        graph = QuantOpInfo.get_weight_node(node_trans)
         self.assertIsNotNone(graph)
 
     def test_get_cout_length(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        node_add = graph.get_node_by_name('add1')
+        node_add = graph.get_node_by_name(ADD1)
         self.assertRaises(RuntimeError, QuantOpInfo.get_cout_length, node_add)
 
     def test_get_cout_length(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
-        node_add = graph.get_node_by_name('add1')
+        node_add = graph.get_node_by_name(ADD1)
         self.assertRaises(RuntimeError, QuantOpInfo.get_cout_length, node_add)
 
     def test_get_dst_num_bits_none_records(self):
@@ -146,7 +154,7 @@ class TestModelHelper(unittest.TestCase):
 
     def test_get_dst_num_bits_none_op(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'act_type': 'INT8'
@@ -157,99 +165,100 @@ class TestModelHelper(unittest.TestCase):
 
     def test_get_dst_num_bits_act_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'act_type': 'INT16'
             }
         }
 
-        num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1", "act")
+        num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "act")
         self.assertEqual(num_bits, 16)
 
     def test_get_dst_num_bits_unset_act_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'act_type': 'UNSET',
             }
         }
-        num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1", "act")
+        num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "act")
         self.assertEqual(num_bits, 8)
 
     def test_get_dst_num_bits_invalid_act_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'act_type': 'xxx'
             }
         }
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1", "act")
+            num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "act")
 
     def test_get_dst_num_bits_wts_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'wts_type': 'INT8'
             }
         }
-        num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1", "wts")
+        num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "wts")
         self.assertEqual(num_bits, 8)
 
     def test_get_dst_num_bits_unset_wts_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'wts_type': 'UNSET',
             }
         }
-        num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1", "wts")
+        num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "wts")
         self.assertEqual(num_bits, 8)
 
     def test_get_dst_num_bits_invalid_wts_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'wts_type': 'xxx'
             }
         }
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1", "wts")
+            num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "wts")
 
     def test_get_dst_num_bits_none_data_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'dst_type': 'INT8'
             }
         }
-        num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1")
+        num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1)
         self.assertEqual(num_bits, 8)
 
     def test_get_dst_num_bits_invalid_data_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
                 'dst_type': 'INT16'
             }
         }
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1")
+            num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1)
 
     def test_get_dst_num_bits_none_data_type_none_dst_type(self):
         records = {
-            'conv1': {
+            CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
             }
         }
-        num_bits = QuantOpInfo.get_dst_num_bits(records, "conv1")
+        num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1)
         self.assertEqual(num_bits, 8)
+
