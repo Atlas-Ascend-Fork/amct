@@ -3,6 +3,8 @@ import os
 
 import torch
 
+from amct_pytorch.common.utils.safe_load import safe_torch_load
+
 from .function_utils import get_paras_dict_by_name
 
 
@@ -45,7 +47,7 @@ def save_flat_matrices(model, matrices_path):
 
 def load_flat_matrices(model, matrix_path):
     from .default_model_utils import FlatQuantAttention, FlatQuantMLP
-    flat_parameters = torch.load(matrix_path)
+    flat_parameters = safe_torch_load(matrix_path)
     layers = model.model.layers
     
     for i in range(len(flat_parameters.keys())):
