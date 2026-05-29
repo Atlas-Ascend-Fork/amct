@@ -37,8 +37,8 @@ bash build.sh --torch
 - 安装依赖
 
   ```bash
-  # 安装测试框架依赖
-  pip3 install coverage
+  # 安装测试依赖
+  pip3 install pytest-cov
   ```
 
 - 执行测试用例：
