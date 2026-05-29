@@ -17,7 +17,7 @@
 import torch
 from amct_pytorch.common.utils.quant_util import quant_weight, apply_smooth_weight
 from amct_pytorch.classic.quantize_op.utils import apply_progressive_quant
-from amct_pytorch.common.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, INT4, FLOAT4_E2M1
+from amct_pytorch.common.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, INT8, INT4, FLOAT4_E2M1, INT32_MAX, INT32_MIN
 from amct_pytorch.common.utils.check_params import check_parameters_in_schema
 
 
@@ -75,15 +75,24 @@ class NpuQuantizationLinear(torch.nn.Module):
             if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
                 ori_shape = quant_x.shape
                 quant_x = quant_x.reshape(-1, x.shape[-1])
-            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                output_dtype=self.output_dtype,
-                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-                group_sizes=self.group_sizes, y_scale=self.y_scale)
-            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                output = output.reshape(*ori_shape[:-1], -1)
-            if self.bias is not None:
-                output = output + self.bias
+            if self.bias_for_npu_op and self.bias is not None:
+                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                    bias=self.bias, output_dtype=self.output_dtype,
+                    x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
+                    group_sizes=self.group_sizes, y_scale=self.y_scale)
+                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                    output = output.reshape(*ori_shape[:-1], -1)
+            else:
+                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                    output_dtype=self.output_dtype,
+                    x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
+                    group_sizes=self.group_sizes, y_scale=self.y_scale)
+                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                    output = output.reshape(*ori_shape[:-1], -1)
+                if self.bias is not None:
+                    output = output + self.bias
         else:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
@@ -193,20 +202,46 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.x2_dtype = torch_npu.float4_e2m1fn_x2
 
     def _init_bias(self, module):
+        """Decide bias form and whether forward should pass it to npu_quant_matmul:
+          - INT8 PER_TENSOR + non-dynamic: quantize bias to INT32, pass to op
+          - FP8*FP8 / HIFLOAT8*HIFLOAT8: keep fp, add outside op (preserves master behavior)
+          - INT8 PER_TOKEN / dynamic: keep fp, pass to op
+          - module.bias is None: handle offset_bias if present
+        Sets self.bias_for_npu_op accordingly.
         """
-        Function: init bias for npu op
-        Args:
-            module: quant module 
-        """
-        if module.bias is not None:
-            self.register_buffer('bias', module.bias)
-            if self.offset_bias is not None:
-                self.bias = self.bias + self.offset_bias
-        else:
+        self.bias_for_npu_op = False
+        if module.bias is None:
             if self.offset_bias is None:
                 self.bias = None
             else:
                 self.bias = self.offset_bias
+                self.bias_for_npu_op = True
+            return
+
+        is_fp8_fp8 = (self.act_type == FLOAT8_E4M3FN
+                      and self.wts_type == FLOAT8_E4M3FN)
+        is_hif8_hif8 = (self.act_type == HIFLOAT8
+                        and self.wts_type == HIFLOAT8)
+
+        if is_fp8_fp8 or is_hif8_hif8:
+            bias = module.bias
+            if self.offset_bias is not None:
+                bias = bias + self.offset_bias.to(bias.dtype)
+            self.register_buffer('bias', bias)
+            return
+
+        if (self.act_granularity == 'tensor'
+                and self.dynamic is not True
+                and self.act_type == INT8):
+            deq_scale = module.scale_d * self.scale_w_tensor
+            bias_tensor = (module.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX).to(torch.int32)
+            self.register_buffer('bias', bias_tensor)
+        else:
+            self.register_buffer('bias', module.bias)
+
+        if self.offset_bias is not None:
+            self.bias = self.bias + self.offset_bias
+        self.bias_for_npu_op = True
 
     def _get_quantize_wts(self, quant_module, weight, device):
         """

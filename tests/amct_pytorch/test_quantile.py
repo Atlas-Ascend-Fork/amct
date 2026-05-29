@@ -24,6 +24,8 @@ import torch
 import torch.nn as nn
 from mock_torch_npu import (
     mock_npu,
+    mock_npu_dtype_cast,
+    mock_npu_dynamic_quant,
     mock_npu_quant_matmul,
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
@@ -257,6 +259,8 @@ class TestQuantileQuant(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
+    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
