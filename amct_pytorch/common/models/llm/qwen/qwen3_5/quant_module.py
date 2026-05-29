@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 # Copyright 2025 The Qwen Team and The HuggingFace Inc. team. All rights reserved.
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #
