@@ -87,7 +87,17 @@ class GPTQuant(BaseQuantizeModule):
             optimized_weight, self.scale_w, self.offset_w = self.get_opt_weight_and_quant_factor()
             self.weight.data = optimized_weight
             LOGGER.logd("Calculate gptq quant params of layer '{}' success!".format(self.layer_name), 'GPTQuant')
+        if self.cur_batch > self.quant_config.get('batch_num'):
+            return self.fake_quant_forward(inputs)
         return F.linear(inputs, self.weight, self.bias)
+
+    @torch.no_grad()
+    def fake_quant_forward(self, inputs):
+        if not getattr(self, 'fake_quant_cache_ready', False):
+            self.cached_dq_w = quant_dequant_tensor(self.weight.data, self.wts_type, self.scale_w,
+                                                    self.offset_w, self.group_size)
+            self.fake_quant_cache_ready = True
+        return F.linear(inputs, self.cached_dq_w, self.bias)
 
 
     def get_opt_weight_and_quant_factor(self):
