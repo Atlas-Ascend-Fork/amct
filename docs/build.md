@@ -38,8 +38,10 @@ bash build.sh --torch
 
   ```bash
   # 安装测试框架依赖
-  pip3 install coverage
+  pip3 install pytest-cov
   ```
+
+  `pytest-cov` 会为 `pytest` 提供覆盖率参数（如 `--cov`），并自动安装覆盖率统计所需的依赖。
 
 - 执行测试用例：
 
