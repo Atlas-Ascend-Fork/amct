@@ -252,9 +252,9 @@ class TestQuantileQuant(unittest.TestCase):
         for _ in range(4):
             inputs = torch.randn(64, 64).to(torch.bfloat16)
             model(inputs)
-        
+
         self.assertIsNotNone(model.linear1.scale_w)
-        self.assertIsNone(model.linear1.scale_d)
+        self.assertIsNotNone(model.linear1.scale_d)
         self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
