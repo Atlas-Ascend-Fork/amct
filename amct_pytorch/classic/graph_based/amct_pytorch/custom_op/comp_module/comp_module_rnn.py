@@ -81,7 +81,7 @@ class CompModuleRNN(nn.Module):
             acts_comp_func = self.acts_comp_reuse._acts_comp_quant if self.acts_comp_reuse else self._acts_comp_quant
             shape = xi.shape
             xi = xi.reshape(shape[0] * shape[1], shape[-1])
-            xi. h_next = acts_comp_func(xi, h_next)
+            xi, h_next = acts_comp_func(xi, h_next)
             compressed_weights = self._wts_quant(self.replaced_module.weight_ih_l0, self.replaced_module.weight_hh_l0)
             rnn_cell.weight_ih.data = compressed_weights[0].data
             rnn_cell.weight_hh.data = compressed_weights[1].data
