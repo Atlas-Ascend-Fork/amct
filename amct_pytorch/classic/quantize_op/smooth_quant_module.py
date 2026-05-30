@@ -21,7 +21,9 @@ from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
 from amct_pytorch.classic.quantize_op.utils import calculate_progressive_weights_scale_factor
-from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1
+from amct_pytorch.classic.quantize_op.utils import apply_progressive_quant_dequant
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
+from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, INT8, INT32_MAX, INT32_MIN
 from amct_pytorch.common.utils.log import LOGGER
 
 
@@ -79,7 +81,7 @@ class SmoothQuant(BaseQuantizeModule):
 
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
-            return output
+            return self.fake_quant_forward(inputs)
         batch_max = inputs.reshape(-1, inputs.shape[-1]).amax(dim=0, keepdim=True)
         batch_min = inputs.reshape(-1, inputs.shape[-1]).amin(dim=0, keepdim=True)
         if self.act_granularity == 'token':
@@ -160,6 +162,33 @@ class SmoothQuant(BaseQuantizeModule):
                                             self.wts_symmetric, self.wts_type)
 
         return scale_w, offset_w
+
+    @torch.no_grad()
+    def fake_quant_forward(self, inputs):
+        if not getattr(self, 'fake_quant_cache_ready', False):
+            smooth_w = self.scale.to(device=self.weight.device, dtype=self.weight.dtype)
+            w = self.weight.data * smooth_w
+            if self.scale_w1 is not None:
+                self.cached_dq_w = apply_progressive_quant_dequant(w, self.scale_w1, self.scale_w2, self.group_size)
+            else:
+                self.cached_dq_w = quant_dequant_weight(w, self.wts_type, self.scale_w,
+                                                        self.offset_w, self.group_size)
+            bias = self.bias
+            if (bias is not None and self.scale_d is not None and self.scale_w is not None
+                    and self.act_type == INT8 and self.act_granularity == 'tensor'):
+                deq_scale = (self.scale_d * self.scale_w).reshape(-1)
+                bias_q = (bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
+                bias = (bias_q * deq_scale).to(bias.dtype)
+            self.cached_bias = bias
+            self.fake_quant_cache_ready = True
+
+        smooth_x = self.scale.to(device=inputs.device, dtype=inputs.dtype)
+        x = inputs / smooth_x
+        if self.scale_d is not None:
+            dq_x = quant_dequant_tensor(x, self.act_type, self.scale_d, self.offset_d)
+        else:
+            dq_x = x
+        return F.linear(dq_x, self.cached_dq_w, self.cached_bias)
 
     def _calculate_per_token_params(self, smooth_factor):
         """

@@ -17,13 +17,16 @@
 import math
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
 from amct_pytorch.classic.quantize_op.utils import calculate_progressive_weights_scale_factor
 from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity
+from amct_pytorch.classic.quantize_op.utils import apply_progressive_quant_dequant
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
-from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
+from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, INT8, INT32_MAX, INT32_MIN
 from amct_pytorch.common.utils.log import LOGGER
 
 
@@ -98,11 +101,11 @@ class MinMaxQuant(BaseQuantizeModule):
         fp_out = self.ori_module(inputs)
 
         if self.weight_compress_only:
-            return fp_out
+            return self.fake_quant_forward(inputs)
 
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
-            return fp_out
+            return self.fake_quant_forward(inputs)
         if self.act_granularity == 'tensor':
             batch_max = torch.max(inputs).reshape(-1)
             batch_min = torch.min(inputs).reshape(-1)
@@ -125,3 +128,27 @@ class MinMaxQuant(BaseQuantizeModule):
 
             LOGGER.logd("Calculate minmax quant params of layer '{}' success!".format(self.layer_name), 'MinMaxQuant')
         return fp_out
+
+    @torch.no_grad()
+    def fake_quant_forward(self, inputs):
+        if not getattr(self, 'fake_quant_cache_ready', False):
+            if self.scale_w1 is not None:
+                self.cached_dq_w = apply_progressive_quant_dequant(
+                    self.weight.data, self.scale_w1, self.scale_w2, self.group_size)
+            else:
+                self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type,
+                                                        self.scale_w, self.offset_w, self.group_size)
+            bias = self.bias
+            if (bias is not None and self.scale_d is not None and self.scale_w is not None
+                    and self.act_type == INT8 and self.act_granularity == 'tensor'):
+                deq_scale = (self.scale_d * self.scale_w).reshape(-1)
+                bias_q = (bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
+                bias = (bias_q * deq_scale).to(bias.dtype)
+            self.cached_bias = bias
+            self.fake_quant_cache_ready = True
+
+        if self.scale_d is not None:
+            dq_x = quant_dequant_tensor(inputs, self.act_type, self.scale_d, self.offset_d)
+        else:
+            dq_x = inputs
+        return F.linear(dq_x, self.cached_dq_w, self.cached_bias)
