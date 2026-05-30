@@ -120,7 +120,11 @@ amct_pytorch/classic/quantize_op/<algo>_module.py
   设置 fake_quant_cache_ready=True，后续仅重算激活 dequant。
 
 amct_pytorch/classic/quantize_op/utils.py
-  └─ apply_progressive_quant_dequant()  fp8*fp4 两级 quant→dequant（per-channel FP8 → per-group FP4）
+  └─ apply_progressive_quant_dequant()  fp8*fp4 两级 quant→dequant：先 fp8 quant only（不反量化），在 fp8 量化空间做 fp4 quant→dequant，最后乘回 scale_w1（per-channel 沿 Cout）回到原始 weight 尺度
+
+amct_pytorch/common/utils/quant_util.py
+  ├─ quant_dequant_weight()  weight quant→dequant 形状适配（transpose + scale.reshape(-1) + transpose 回），与 quant_weight 对齐
+  └─ quant_tensor() / quant_dequant_tensor()  尾部 reshape(ori_shape[0], -1)[:, :ori_shape[1]] 仅在 group_size 路径下执行，避免 N-D 激活被压成 2D
 
 amct_pytorch/classic/deploy_op/npu_quantization_linear.py
   ├─ _init_bias(module)  决定 bias 形态并设置 bias_for_npu_op
@@ -133,7 +137,8 @@ amct_pytorch/common/utils/vars.py
 ### 6.2 关键设计点
 
 - **基类零包袱**：`BaseQuantizeModule` 不放 fake quant 钩子，attention 类等不适配 Linear/Conv2d 假设的子类无需面对它们；新增的算法子类自由决定是否实现 `fake_quant_forward`。
-- **每子类自治**：每个 Linear-like 子类直接调用 `quant_dequant_tensor` / `apply_progressive_quant_dequant`，无需通过基类 helper 中转，让每个子类的 fake quant 行为一目了然。
+- **每子类自治**：每个 Linear-like 子类直接调用 `quant_dequant_tensor` / `quant_dequant_weight` / `apply_progressive_quant_dequant`，无需通过基类 helper 中转，让每个子类的 fake quant 行为一目了然。weight quant→dequant 走 `quant_dequant_weight`（处理 per-channel scale 与 [Cout, Cin] weight 的形状对齐），activation quant→dequant 走 `quant_dequant_tensor`（保留 N-D 激活原形状）。
+- **fp8\*fp4 scale 域一致**：`scale_w2` 在 `calculate_progressive_factors` 中是基于 fp8 量化后的整数值（cast 为 float、未乘 scale_w1）的 max/min 算出来的，因此 fake quant 路径必须保持在 fp8 量化空间做第二阶段 fp4 quant→dequant，最后再乘回 scale_w1。否则 fp4 量化使用错位的 scale 域，fake quant 误差会远大于同一组 scale 在 NPU deploy 路径下的实际误差。
 - **缓存策略**：与 batch 无关的量（dequantized weight、INT8 per-tensor 时的量化后 bias）首次调用时计算并缓存为实例属性，后续 batch 仅重算激活 dequant，降低大权重矩阵的重复开销。
 - **派发标志**：deploy 端 bias「算子内加 / 算子外加」的决策在 `_init_bias` 一次性确定并记录于 `bias_for_npu_op`，`forward` 仅读取标志，避免两处条件判断不同步。
 - **粒度即区分**：fake quant 端的 INT8 PER_TENSOR bias 量化条件不显式判断 `dynamic`，因为 dynamic per-token 走 `act_granularity == 'token'`，已被 per-tensor 判断排除。
@@ -187,7 +192,8 @@ amct_pytorch/common/utils/vars.py
 
 | 函数 | 签名 | 返回 | 语义 |
 |---|---|---|---|
-| apply_progressive_quant_dequant | `apply_progressive_quant_dequant(weight, scale_w1, scale_w2, group_size=32)` | Tensor | per-channel FP8 → per-group FP4 两级 quant→dequant，返回与 weight 同形浮点张量 |
+| apply_progressive_quant_dequant | `apply_progressive_quant_dequant(weight, scale_w1, scale_w2, group_size=32)` | Tensor | 在 fp8 量化空间做 per-channel FP8 quant + per-group FP4 quant→dequant，末尾乘回 scale_w1 回到原始 weight 尺度。返回与 weight 同形浮点张量。scale_w1 形状须为 `[Cout]`，scale_w2 形状须为 `[Cout*Cin/group_size, 1]` |
+| quant_dequant_weight | `quant_dequant_weight(tensor, wts_type, scale, offset=None, group_size=None)` | Tensor | weight quant→dequant：无 group_size 时先 transpose(-1,-2)、scale.reshape(-1)，调用 `quant_dequant_tensor` 后再 transpose 回；有 group_size 时直接转发。形状处理与 `quant_weight` 一致 |
 
 ### 8.3 NpuQuantizationLinear
 
@@ -277,7 +283,8 @@ amct_pytorch/common/utils/vars.py
 | 文件 | 变更 |
 |---|---|
 | amct_pytorch/common/utils/vars.py | 新增 INT32_MAX / INT32_MIN |
-| amct_pytorch/classic/quantize_op/utils.py | 新增 apply_progressive_quant_dequant |
-| amct_pytorch/classic/quantize_op/{minmax,smooth_quant,ofmr_quant,linear_awq,gptq,quantile}_module.py | 新增 fake_quant_forward；forward 校准完成后路由到该方法 |
+| amct_pytorch/common/utils/quant_util.py | 新增 quant_dequant_weight；quant_tensor / quant_dequant_tensor 尾部 reshape 收敛到 group_size 分支内 |
+| amct_pytorch/classic/quantize_op/utils.py | 新增 apply_progressive_quant_dequant，scale 域与 deploy 端 apply_progressive_quant 对齐 |
+| amct_pytorch/classic/quantize_op/{minmax,smooth_quant,ofmr_quant,linear_awq,gptq,quantile}_module.py | 新增 fake_quant_forward；forward 校准完成后路由到该方法；weight quant→dequant 调用统一切到 quant_dequant_weight |
 | amct_pytorch/classic/deploy_op/npu_quantization_linear.py | 改写 _init_bias（FP8/HIFLOAT8 路径 fp 域加 offset_bias 后早 return）；新增 bias_for_npu_op；forward 按标志派发 bias |
 | tests/amct_pytorch/test_fake_quant_forward.py | 新增 11 项端到端测试 |
