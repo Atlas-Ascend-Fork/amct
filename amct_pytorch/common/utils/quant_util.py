@@ -270,7 +270,8 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
             quantized_tensor = quantized_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
         elif dst_dtype == INT4:
             quantized_tensor = quantized_tensor.round().clamp(INT4_MIN, INT4_MAX).to(torch.int32)
-        quantized_tensor = quantized_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+        if group_size is not None:
+            quantized_tensor = quantized_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     return quantized_tensor, shared_exponent
 
 
@@ -312,5 +313,6 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
         quantized_tensor = quantized_tensor.to(scale.dtype)
         dequantize_tensor = quantized_tensor if offset is None else quantized_tensor - offset
         dequantize_tensor = dequantize_tensor * scale
-        dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+        if group_size is not None:
+            dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     return dequantize_tensor.to(ori_dtype)
