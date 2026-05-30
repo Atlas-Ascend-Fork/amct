@@ -23,7 +23,8 @@ from amct_pytorch.common.utils import safe_load
 def test_safe_torch_load_defaults_to_weights_only(monkeypatch):
     captured_kwargs = {}
 
-    def fake_load(path, **kwargs):
+    def fake_load(path, *, weights_only=None, **kwargs):
+        captured_kwargs["weights_only"] = weights_only
         captured_kwargs.update(kwargs)
         return {"path": path}
 
@@ -36,7 +37,8 @@ def test_safe_torch_load_defaults_to_weights_only(monkeypatch):
 def test_safe_torch_load_preserves_explicit_weights_only(monkeypatch):
     captured_kwargs = {}
 
-    def fake_load(path, **kwargs):
+    def fake_load(path, *, weights_only=None, **kwargs):
+        captured_kwargs["weights_only"] = weights_only
         captured_kwargs.update(kwargs)
         return {"path": path}
 
@@ -46,8 +48,11 @@ def test_safe_torch_load_preserves_explicit_weights_only(monkeypatch):
     assert captured_kwargs["weights_only"] is False
 
 
-def test_safe_torch_load_rejects_unsupported_torch_version(monkeypatch):
-    monkeypatch.setattr(safe_load.torch, "__version__", "1.12.1")
+def test_safe_torch_load_rejects_missing_weights_only_support(monkeypatch):
+    def fake_load_without_weights_only(path, **kwargs):
+        return {"path": path, "kwargs": kwargs}
 
-    with pytest.raises(RuntimeError, match="requires PyTorch 1.13.0 or later"):
+    monkeypatch.setattr(safe_load.torch, "load", fake_load_without_weights_only)
+
+    with pytest.raises(RuntimeError, match="support weights_only"):
         safe_load.safe_torch_load("params.pth")

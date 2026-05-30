@@ -14,15 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from packaging.version import parse as parse_version
+import inspect
+
 import torch
 
 WEIGHTS_ONLY = "weights_only"
-MIN_TORCH_VERSION = "1.13.0"
 
 
-def _is_supported_torch_version():
-    return parse_version(torch.__version__) >= parse_version(MIN_TORCH_VERSION)
+def _supports_weights_only():
+    return WEIGHTS_ONLY in inspect.signature(torch.load).parameters
 
 
 def safe_torch_load(file_path, **kwargs):
@@ -32,10 +32,10 @@ def safe_torch_load(file_path, **kwargs):
     Supported PyTorch versions provide the weights_only argument. Do not fall
     back to unsafe pickle loading when the runtime does not support it.
     """
-    if not _is_supported_torch_version():
+    if not _supports_weights_only():
         raise RuntimeError(
-            f"safe_torch_load requires PyTorch {MIN_TORCH_VERSION} or later, "
-            f"but found {torch.__version__}."
+            "safe_torch_load requires torch.load to support weights_only, "
+            f"but current PyTorch {torch.__version__} does not."
         )
     kwargs.setdefault(WEIGHTS_ONLY, True)
     return torch.load(file_path, **kwargs)
