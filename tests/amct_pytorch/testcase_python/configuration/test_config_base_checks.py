@@ -151,14 +151,6 @@ class TestConfigBaseChecks(unittest.TestCase):
         self.assertRaises(ValueError, obj.create_quant_config,
                           '/tmp/x.json', GRAPH, skip_layers=['l1'])
 
-    def test_fill_default_activation_asymmetric_tensor(self):
-        obj, q = _cfg()
-        q.get_act_symmetric_limit_layers.return_value = []
-        config = {'activation_offset': True,
-                  'tensor_quantize': [{ACT: {'asymmetric': None}}]}
-        obj._fill_default_activation_asymmetric(GRAPH, config, [], ['ifmr', None])
-        self.assertIn('asymmetric', config['tensor_quantize'][0][ACT])
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -63,13 +63,13 @@ class TestConfigBaseStatic(unittest.TestCase):
         algo = 'ifmr'
         config = {'act_algo': algo}
         ConfigBase.set_global_asymmetric(config, [algo, True], False)
-        self.assertTrue(config['asymmetric'])
+        self.assertTrue(config.get('asymmetric'))
 
     def test_set_global_asymmetric_fallback(self):
         config = {'act_algo': 'ifmr'}
         # asymmetric is None -> falls back to activation_offset
         ConfigBase.set_global_asymmetric(config, ['hfmg', None], True)
-        self.assertTrue(config['asymmetric'])
+        self.assertTrue(config.get('asymmetric'))
 
     def test_add_global_to_layer(self):
         quant_config = {
@@ -82,14 +82,16 @@ class TestConfigBaseStatic(unittest.TestCase):
             },
         }
         ConfigBase.add_global_to_layer(quant_config, num_bits=8, wts_algo='arq_quantize')
-        layer = quant_config['layer1']
-        self.assertEqual(layer[ACT]['search_range_start'], 0.7)
-        self.assertEqual(layer[ACT]['search_range_end'], 1.3)
-        self.assertNotIn('search_range', layer[ACT])
-        self.assertEqual(layer[ACT]['batch_num'], 4)
-        self.assertEqual(layer[ACT]['fakequant_precision_mode'], 'FORCE_FP16')
-        self.assertEqual(layer[WGT]['num_bits'], 8)
-        self.assertEqual(layer[WGT]['wts_algo'], 'arq_quantize')
+        layer = quant_config.get('layer1')
+        act = layer.get(ACT)
+        wgt = layer.get(WGT)
+        self.assertEqual(act.get('search_range_start'), 0.7)
+        self.assertEqual(act.get('search_range_end'), 1.3)
+        self.assertNotIn('search_range', act)
+        self.assertEqual(act.get('batch_num'), 4)
+        self.assertEqual(act.get('fakequant_precision_mode'), 'FORCE_FP16')
+        self.assertEqual(wgt.get('num_bits'), 8)
+        self.assertEqual(wgt.get('wts_algo'), 'arq_quantize')
 
 
 class TestConfigBaseModuleFuncs(unittest.TestCase):

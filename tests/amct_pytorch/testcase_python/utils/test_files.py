@@ -36,9 +36,6 @@ class TestFiles(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-    def _path(self, *parts):
-        return os.path.join(self.tmp_dir, *parts)
-
     def test_create_path_idempotent(self):
         target = self._path('a', 'b', 'c')
         files.create_path(target)
@@ -176,6 +173,9 @@ class TestFiles(unittest.TestCase):
         self.assertTrue(os.path.isfile(json_path))
         with open(json_path) as fid:
             self.assertEqual(json.load(fid), content)
+
+    def _path(self, *parts):
+        return os.path.join(self.tmp_dir, *parts)
 
 
 if __name__ == '__main__':
