@@ -22,7 +22,7 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset, get_weight_min_max_by_granularity
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.common.utils.vars import MXFP4_E2M1, FLOAT8_E4M3FN, HIFLOAT8
 from amct_pytorch.common.utils.log import LOGGER
 
@@ -94,7 +94,7 @@ class GPTQuant(BaseQuantizeModule):
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
         if not getattr(self, 'fake_quant_cache_ready', False):
-            self.cached_dq_w = quant_dequant_tensor(self.weight.data, self.wts_type, self.scale_w,
+            self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w,
                                                     self.offset_w, self.group_size)
             self.fake_quant_cache_ready = True
         return F.linear(inputs, self.cached_dq_w, self.bias)

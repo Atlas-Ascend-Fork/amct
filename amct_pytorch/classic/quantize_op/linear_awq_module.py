@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.algorithms.quant.awq import search_scale, apply_scale, calculate_scale_offset_by_granularity
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.common.utils.vars import INT4, INT8, FLOAT4_E2M1, MXFP4_E2M1
 from amct_pytorch.common.utils.log import LOGGER
 
@@ -89,7 +89,7 @@ class LinearAWQuant(BaseQuantizeModule):
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
         if not getattr(self, 'fake_quant_cache_ready', False):
-            self.cached_dq_w = quant_dequant_tensor(self.ori_module.weight.data, self.wts_type, self.scale_w,
+            self.cached_dq_w = quant_dequant_weight(self.ori_module.weight.data, self.wts_type, self.scale_w,
                                                     self.offset_w, getattr(self, 'group_size', None))
             self.fake_quant_cache_ready = True
         x = inputs * self.scale.to(device=inputs.device, dtype=inputs.dtype)

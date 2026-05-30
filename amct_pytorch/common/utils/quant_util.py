@@ -149,6 +149,22 @@ def quant_weight(tensor, wts_type, scale, offset=None, group_size=None):
     return quantized_tensor
 
 
+@torch.no_grad()
+def quant_dequant_weight(tensor, wts_type, scale, offset=None, group_size=None):
+    """
+    Function: weight quant -> dequant. Mirrors the shape handling of
+    quant_weight so per-channel scale (shape [Cout]) broadcasts correctly
+    against weight (shape [Cout, Cin, ...]).
+    """
+    if not group_size:
+        tensor = tensor.transpose(-1, -2).contiguous()
+        scale = scale.reshape(-1)
+        offset = offset.reshape(-1) if offset is not None else None
+        dq = quant_dequant_tensor(tensor, wts_type, scale, offset)
+        return dq.transpose(-1, -2).contiguous()
+    return quant_dequant_tensor(tensor, wts_type, scale, offset, group_size)
+
+
 def apply_smooth_weight(smooth_factor, ori_weight):
     """
     Function: apply smooth factor to scale weight

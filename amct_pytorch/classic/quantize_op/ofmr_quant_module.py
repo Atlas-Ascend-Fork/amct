@@ -15,7 +15,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
 EC_CAND = tuple(range(-5, 6))
@@ -106,7 +106,7 @@ class OfmrQuant(BaseQuantizeModule):
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
         if not getattr(self, 'fake_quant_cache_ready', False):
-            self.cached_dq_w = quant_dequant_tensor(self.weight.data, self.wts_type, self.scale_w,
+            self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w,
                                                     self.offset_w, getattr(self, 'group_size', None))
             self.fake_quant_cache_ready = True
 

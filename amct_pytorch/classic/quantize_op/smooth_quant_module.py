@@ -22,7 +22,7 @@ from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
 from amct_pytorch.classic.quantize_op.utils import calculate_progressive_weights_scale_factor
 from amct_pytorch.classic.quantize_op.utils import apply_progressive_quant_dequant
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, INT8, INT32_MAX, INT32_MIN
 from amct_pytorch.common.utils.log import LOGGER
 
@@ -171,7 +171,7 @@ class SmoothQuant(BaseQuantizeModule):
             if self.scale_w1 is not None:
                 self.cached_dq_w = apply_progressive_quant_dequant(w, self.scale_w1, self.scale_w2, self.group_size)
             else:
-                self.cached_dq_w = quant_dequant_tensor(w, self.wts_type, self.scale_w,
+                self.cached_dq_w = quant_dequant_weight(w, self.wts_type, self.scale_w,
                                                         self.offset_w, self.group_size)
             bias = self.bias
             if (bias is not None and self.scale_d is not None and self.scale_w is not None
