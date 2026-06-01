@@ -342,6 +342,7 @@ class BaseModel(metaclass=ABCMeta):
     def _dispatch_block(self, module):
         return module.to(self.args.device)
     
+    @staticmethod
     def _embed_base_prefix(self) -> str:
         """Checkpoint-side public prefix for `embed_tokens` / `norm`.
 
