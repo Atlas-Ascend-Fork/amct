@@ -21,21 +21,27 @@ import torch.nn as nn
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
-def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="float", activation_use_clip=False):
-    quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": True,
-                                         "group_size": None, "num_bits": a_num_bits,
-                                         "observer": "memoryless", "observer_kwargs": {},
-                                         "strategy": "token", "symmetric": True, "type": qtype},
+def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="float", activation_use_clip=False,
+                         w_group_size=None, quantize_activation=True):
+    input_activations = None
+    if quantize_activation:
+        input_activations = {"actorder": None, "block_structure": None, "dynamic": True,
+                             "group_size": None, "num_bits": a_num_bits,
+                             "observer": "memoryless", "observer_kwargs": {},
+                             "strategy": "token", "symmetric": True, "type": qtype}
+    quant_group = {"input_activations": input_activations,
                    "activation_use_clip": activation_use_clip,
                    "output_activations": None,
                    "weights": {"actorder": None, "block_structure": None, "dynamic": False,
-                               "group_size": None, "num_bits": w_num_bits,
+                               "group_size": w_group_size, "num_bits": w_num_bits,
                                "observer": "minmax", "observer_kwargs": {},
-                               "strategy": "channel", "symmetric": True, "type": qtype}}
+                               "strategy": "group" if w_group_size else "channel",
+                               "symmetric": True, "type": qtype}}
     return quant_group
 
 
-def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=False):
+def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=False,
+                          int_w_bits=8, int_a_bits=8, int_group_size=-1):
     """
     Generate a quantization configuration dictionary based on the specified parameters.
     """
@@ -54,7 +60,14 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
                     "quantization_status": "compressed"}
     quant_config.update(cache_scheme)
     qtype = "float" if is_mx else "int"
-    quant_config["config_groups"]["group_0"].update(generate_quant_group(a_num_bits=8, w_num_bits=8, qtype=qtype))
+    if is_mx:
+        quant_config["config_groups"]["group_0"].update(
+            generate_quant_group(a_num_bits=8, w_num_bits=8, qtype=qtype))
+    else:
+        _gs = int_group_size if (int_group_size and int_group_size > 0) else None
+        quant_config["config_groups"]["group_0"].update(
+            generate_quant_group(a_num_bits=int_a_bits, w_num_bits=int_w_bits, qtype=qtype,
+                                 w_group_size=_gs, quantize_activation=(int_a_bits < 16)))
     if is_mx:
         if w4a4:
             quant_config["config_groups"]["group_1"].update(
@@ -66,6 +79,21 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
                 a_num_bits=8, w_num_bits=4 if w4a8 else 8, qtype=qtype))
         quant_config["weight_block_size"] = [1, 32]
     return quant_config
+
+
+def resolve_int_linear_bits(policy):
+    """Resolve (w_bits, a_bits, group_size) describing the quantized Linear
+    config group (group_0). amct lumps every Linear into group_0 and lists the
+    non-quantized ones in ``ignore``, so this returns the bits of the quantized
+    linears: the first linear group that is actually quantized (w<16 or a<16),
+    else the top-level globals. Mixed-precision linear groups cannot be fully
+    expressed in a single group_0 entry; the quantized representative wins.
+    """
+    for group in ("moe", "moe.routed", "moe.shared", "mlp", "attn-linear"):
+        w, a = policy.linear_bits(group=group)
+        if w < 16 or a < 16:
+            return w, a, policy.group_size(group=group)
+    return policy.w_bits, policy.a_bits, policy.group_size()
 
 
 def get_quant_ignore_linear_names(block, weight_prefix):

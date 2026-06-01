@@ -32,7 +32,12 @@ from tqdm import tqdm
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
+from amct_pytorch.common.models.llm.common.deploy_export import (
+    export_block_deploy,
+    generate_quant_config,
+    resolve_int_linear_bits,
+)
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
@@ -139,8 +144,10 @@ class LlmDeployWorkflow:
                             "type": "float" if self.is_mx else "int",
                             "num_bits": 8,
                         }}
+        int_w, int_a, int_g = resolve_int_linear_bits(ensure_bit_policy(self.args))
         quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
+            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx,
+            int_w_bits=int_w, int_a_bits=int_a, int_group_size=int_g)
         config['quantization_config'] = quantization_config
 
         new_config_file = os.path.join(self.output_dir, "config.json")
