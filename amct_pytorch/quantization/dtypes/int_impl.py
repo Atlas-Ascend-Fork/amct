@@ -50,6 +50,22 @@ def scale_fp32_to_u64(weight_scale):
     return scale_uint64
 
 
+def pack_int4_to_int32(q_int: torch.Tensor):
+    """Pack symmetric int4 weights (values in [-7, 7]) into int32, 8 per word.
+
+    Matches the infer-side CompressedTensorW4A16Int4 unpack convention: nibble
+    i occupies bits [4i, 4i+4); stored unsigned = signed + 8.
+    Input [rows, cols] (cols % 8 == 0); output [rows, cols // 8] int32.
+    """
+    assert q_int.dim() == 2 and q_int.shape[1] % 8 == 0
+    rows, cols = q_int.shape
+    u = ((q_int.to(torch.int32) + 8) & 0xF).reshape(rows, cols // 8, 8)
+    packed = torch.zeros(rows, cols // 8, dtype=torch.int32, device=q_int.device)
+    for i in range(8):
+        packed = packed | (u[:, :, i] << (4 * i))
+    return packed
+
+
 def pack_4bit(x: torch.Tensor):
     """
     Pack int4 weight for W4A8 MoEGMM. Each two int4 numbers are packed into one byte.
@@ -69,14 +85,32 @@ def pack_4bit(x: torch.Tensor):
     return y.T.contiguous()
 
 
-def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor = 0.0):
+def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor = 0.0,
+                 group_size: int = -1):
     assert tensor.dim() == 2
     qmax = 2 ** (bits - 1) - 1
+    rows, cols = tensor.shape
+    if isinstance(v, torch.Tensor):
+        v = v.to(device=tensor.device, dtype=tensor.dtype)
+    use_group = group_size is not None and group_size > 0 and cols % group_size == 0
+    if use_group:
+        # group-wise symmetric (W4A16 weight-only): one scale per group of
+        # input channels instead of one per full output row.
+        n_groups = cols // group_size
+        grouped = tensor.reshape(rows, n_groups, group_size)
+        abs_max = torch.abs(grouped).amax(dim=2, keepdim=True)
+        scale = (abs_max / qmax).clamp_min(1e-9)
+        quantized = torch.clamp(round_ste(grouped / scale + v), -qmax, qmax)
+        if real_quant:
+            assert bits == 4, "group-wise real_quant export only supports 4-bit (W4A16)"
+            q_int = quantized.reshape(rows, cols).round().to(torch.int32)
+            qweight = pack_int4_to_int32(q_int)
+            weight_scale = scale.reshape(rows, n_groups).to(torch.float32)
+            return qweight, weight_scale, None
+        return (quantized * scale).reshape(rows, cols)
     abs_max = torch.abs(tensor).max(dim=1, keepdim=True)[0]
     scale = (abs_max / qmax).clamp_min(1e-9)
     assert scale.shape == (tensor.shape[0], 1)
-    if isinstance(v, torch.Tensor):
-        v = v.to(device=tensor.device, dtype=tensor.dtype)
     quantized = round_ste(tensor / scale + v)
     quantized = torch.clamp(quantized, -qmax, qmax)
     if real_quant:

@@ -141,13 +141,15 @@ class ActivationQuantizer(torch.nn.Module):
 
 class WeightQuantizer(torch.nn.Module):
 
-    def __init__(self, args, w_bits=None):
+    def __init__(self, args, w_bits=None, group_size: int = -1):
         super(WeightQuantizer, self).__init__()
         self.args = args
         self.bits = w_bits if w_bits is not None else args.w_bits
         self.algorithms = nn.ModuleDict()
         self._init_algo()
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits)
+        if hasattr(self.quant_obj, "group_size"):
+            self.quant_obj.group_size = int(group_size)
         self.enable = False
 
     def algo_forward(self, x):
@@ -165,7 +167,9 @@ class WeightQuantizer(torch.nn.Module):
     def export_deploy(self, x):
         x, quantize_algo = self.algo_forward(x)
         if quantize_algo is not None:
-            raise NotImplementedError("export_deploy() does not support custom weight quantize() hooks yet.")
+            # Calibration algos carry an already-quantized weight; export that
+            # so deploy weights reflect the calibration result.
+            x = quantize_algo.quantize(x, self.quant_obj)
         export_fn = getattr(self.quant_obj, "export_deploy", None)
         if not callable(export_fn):
             raise NotImplementedError(
