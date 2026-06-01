@@ -75,14 +75,6 @@ class BaseModel(metaclass=ABCMeta):
 
     def init_cls(self):
         pass
-    
-    def _embed_base_prefix(self) -> str:
-        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
-
-        Override in adapters whose checkpoint nests the text backbone under a
-        multimodal wrapper (e.g. return `"model.language_model."`).
-        """
-        return "model."
 
     def get_embed_load_specs(self):
         """Default (embed_tokens, norm, lm_head) load specs.
@@ -349,3 +341,11 @@ class BaseModel(metaclass=ABCMeta):
 
     def _dispatch_block(self, module):
         return module.to(self.args.device)
+    
+    def _embed_base_prefix(self) -> str:
+        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
+
+        Override in adapters whose checkpoint nests the text backbone under a
+        multimodal wrapper (e.g. return `"model.language_model."`).
+        """
+        return "model."
