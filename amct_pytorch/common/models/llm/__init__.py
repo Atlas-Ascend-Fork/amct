@@ -15,7 +15,25 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import importlib
+
 _REGISTERED = False
+
+# (module suffix under this package, label) per LLM adapter. Importing the
+# module triggers its @register decorator (classes are import-for-side-effect).
+_LLM_ADAPTERS = (
+    (".deepseek.deepseek_v3_2.deepseekv3_2", "DeepseekV32"),
+    (".deepseek.deepseek_v4.deepseekv4", "DeepseekV4"),
+    (".longcat.longcat_lite.longcat_lite", "LongcatLite"),
+    (".longcat.longcat_next.longcat_next", "LongcatNext"),
+    (".qwen.qwen3_5.qwen3_5", "Qwen3_5"),
+    (".qwen.qwen3_5.qwen3_5_moe", "Qwen3_5Moe"),
+    (".qwen.qwen3_6.qwen3_6_moe", "Qwen3_6Moe"),
+    (".qwen.qwen3.qwen3", "Qwen3"),
+    (".qwen.qwen3_next.qwen3_next", "Qwen3Next"),
+    (".qwen.qwen3.qwen3_moe", "Qwen3Moe"),
+    (".glm.glm5.glm5", "GLM5"),
+)
 
 
 def register_llm_models():
@@ -23,17 +41,13 @@ def register_llm_models():
     if _REGISTERED:
         return
 
-    from .deepseek.deepseek_v3_2.deepseekv3_2 import DeepseekV32  # noqa: F401
-    from .deepseek.deepseek_v4.deepseekv4 import DeepseekV4  # noqa: F401
-    from .longcat.longcat_lite.longcat_lite import LongcatLite  # noqa: F401
-    from .longcat.longcat_next.longcat_next import LongcatNext  # noqa: F401
-    from .qwen.qwen3_5.qwen3_5 import Qwen3_5  # noqa: F401
-    from .qwen.qwen3_5.qwen3_5_moe import Qwen3_5Moe  # noqa: F401
-    from .qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe  # noqa: F401
-    from .qwen.qwen3.qwen3 import Qwen3  # noqa: F401
-    from .qwen.qwen3_next.qwen3_next import Qwen3Next  # noqa: F401
-    from .qwen.qwen3.qwen3_moe import Qwen3Moe  # noqa: F401
-    from .glm.glm5.glm5 import GLM5
+    for module_suffix, label in _LLM_ADAPTERS:
+        try:
+            importlib.import_module(module_suffix, __name__)
+        except ModuleNotFoundError as exc:
+            # An optional adapter dependency is missing; skip just this adapter
+            # rather than taking down registration of every other model.
+            print(f"[WARN] Skip LLM model adapter {label!r}: {exc}")
 
     _REGISTERED = True
 

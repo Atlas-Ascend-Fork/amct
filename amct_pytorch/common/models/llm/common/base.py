@@ -114,7 +114,7 @@ class BaseModel(metaclass=ABCMeta):
     def load_layer_weight(self, prefix):
         weight_map = getattr(self, "_weight_map", None)
         if weight_map is None:
-            weight_map = get_weight_mappings(self.model_path)
+            weight_map = self._get_weight_mappings()
         file_list = set()
         for weight_name, file_name in weight_map.items():
             if weight_name.startswith(prefix):
@@ -129,6 +129,18 @@ class BaseModel(metaclass=ABCMeta):
                         state_dict[new_key] = f.get_tensor(key)
         state_dict.pop('self_attn.rotary_emb.inv_freq', None)
         return state_dict
+
+    def _get_weight_mappings(self):
+        try:
+            return get_weight_mappings(self.model_path)
+        except FileNotFoundError:
+            # Models exported as a single model.safetensors carry no
+            # *.index.json; enumerate the file's keys directly.
+            model_file = os.path.join(self.model_path, "model.safetensors")
+            if not os.path.exists(model_file):
+                raise
+            with safe_open(model_file, framework="pt", device="cpu") as f:
+                return {key: "model.safetensors" for key in f.keys()}
 
 
     def block(self, layer_idx):
