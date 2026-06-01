@@ -97,7 +97,7 @@ class BaseModel(metaclass=ABCMeta):
         """
         base = self._embed_base_prefix()
         tie = bool(getattr(self.config, "tie_word_embeddings", False))
-        lm_head_prefix = f"{self.base_prefix}embed_tokens." if tie else "lm_head."
+        lm_head_prefix = f"{base}embed_tokens." if tie else "lm_head."
         return [
             (self.model.model.embed_tokens, f"{base}embed_tokens."),
             (self.model.model.norm, f"{base}norm."),
