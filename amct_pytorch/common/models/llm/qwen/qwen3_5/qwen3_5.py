@@ -42,6 +42,7 @@ from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
 class Qwen3_5(BaseModel):
     def __init__(self, args):
         super().__init__(args)
+        self.base_prefix = self._embed_base_prefix()
         self.textconfig = Qwen3_5TextConfig
         self._update_config()
         self.num_layers = self.config.num_hidden_layers
