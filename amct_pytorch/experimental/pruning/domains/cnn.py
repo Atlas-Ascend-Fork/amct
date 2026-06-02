@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
+import torch.nn as nn
+
+from ..config import PruneConfig
+from ..utils import (
+    expand_flatten_channel_indices,
+    get_submodule,
+    iter_direct_named_modules,
+    prune_batchnorm2d,
+    prune_conv2d_in_channels,
+    prune_conv2d_out_channels,
+    prune_linear_in_features,
+    replace_submodule,
+)
+from .base import BasePruningDomain
+
+
+@dataclass(slots=True)
+class CNNChannelTarget:
+    producer_path: str
+    bn_path: Optional[str]
+    consumer_path: str
+
+
+class CNNPruningDomain(BasePruningDomain):
+    name = "cnn"
+
+    def _find_consumer(
+        self, parent: nn.Module, items: List[Tuple[str, nn.Module]], start_idx: int
+    ) -> Tuple[Optional[str], Optional[nn.Module], Optional[str], Optional[nn.Module]]:
+        bn_name: Optional[str] = None
+        bn_module: Optional[nn.Module] = None
+        consumer_name: Optional[str] = None
+        consumer_module: Optional[nn.Module] = None
+
+        for j in range(start_idx + 1, len(items)):
+            name, mod = items[j]
+            if isinstance(mod, nn.BatchNorm2d) and bn_module is None:
+                bn_name, bn_module = name, mod
+                continue
+            if isinstance(mod, (nn.ReLU, nn.GELU, nn.SiLU, nn.Identity, nn.Dropout, nn.MaxPool2d, nn.AvgPool2d, nn.AdaptiveAvgPool2d, nn.AdaptiveMaxPool2d)):
+                continue
+            if isinstance(mod, (nn.Conv2d, nn.Linear)):
+                consumer_name, consumer_module = name, mod
+                break
+            break
+        return bn_name, bn_module, consumer_name, consumer_module
+
+    def _find_root_linear_consumer(self, model: nn.Module, out_channels: int) -> Tuple[Optional[str], Optional[nn.Linear]]:
+        candidates: List[Tuple[str, nn.Linear]] = []
+        for name, child in iter_direct_named_modules(model):
+            if isinstance(child, nn.Linear) and child.in_features % out_channels == 0:
+                candidates.append((name, child))
+        if len(candidates) == 1:
+            return candidates[0]
+        return None, None
+
+    def find_targets(self, model: nn.Module, config: PruneConfig) -> List[CNNChannelTarget]:
+        targets: List[CNNChannelTarget] = []
+        for parent_name, parent in list(model.named_modules()):
+            items = iter_direct_named_modules(parent)
+            if not items:
+                continue
+
+            for i, (name, mod) in enumerate(items):
+                if not isinstance(mod, nn.Conv2d):
+                    continue
+                if mod.groups != 1:
+                    continue
+                if mod.out_channels <= config.min_channels:
+                    continue
+
+                bn_name, bn_module, consumer_name, consumer_module = self._find_consumer(parent, items, i)
+                if consumer_module is None or consumer_name is None:
+                    root_consumer_name, root_consumer_module = self._find_root_linear_consumer(model, mod.out_channels)
+                    if root_consumer_module is None or root_consumer_name is None:
+                        continue
+                    consumer_name, consumer_module = root_consumer_name, root_consumer_module
+                if isinstance(consumer_module, nn.Conv2d) and consumer_module.groups != 1:
+                    continue
+                if isinstance(consumer_module, nn.Conv2d) and consumer_module.in_channels != mod.out_channels:
+                    continue
+                if isinstance(consumer_module, nn.Linear) and consumer_module.in_features % mod.out_channels != 0:
+                    continue
+                if bn_module is not None and isinstance(bn_module, nn.BatchNorm2d) and bn_module.num_features != mod.out_channels:
+                    continue
+
+                producer_path = f"{parent_name}.{name}" if parent_name else name
+                bn_path = f"{parent_name}.{bn_name}" if parent_name and bn_name else bn_name
+                consumer_path = (
+                    consumer_name
+                    if consumer_name in dict(iter_direct_named_modules(model))
+                    else (f"{parent_name}.{consumer_name}" if parent_name else consumer_name)
+                )
+                targets.append(CNNChannelTarget(producer_path=producer_path, bn_path=bn_path, consumer_path=consumer_path))
+        return targets
+
+    def channel_count(self, model: nn.Module, target: CNNChannelTarget) -> int:
+        producer = get_submodule(model, target.producer_path)
+        if not isinstance(producer, nn.Conv2d):
+            raise TypeError(f"Target producer '{target.producer_path}' is not Conv2d.")
+        return int(producer.out_channels)
+
+    def apply_keep_indices(self, model: nn.Module, target: CNNChannelTarget, keep_idx: List[int]) -> None:
+        producer = get_submodule(model, target.producer_path)
+        consumer = get_submodule(model, target.consumer_path)
+        if not isinstance(producer, nn.Conv2d):
+            raise TypeError(f"Target producer '{target.producer_path}' is not Conv2d.")
+        if not isinstance(consumer, (nn.Conv2d, nn.Linear)):
+            raise TypeError(f"Target consumer '{target.consumer_path}' must be Conv2d or Linear.")
+
+        replace_submodule(model, target.producer_path, prune_conv2d_out_channels(producer, keep_idx))
+
+        if target.bn_path is not None:
+            bn_module = get_submodule(model, target.bn_path)
+            if isinstance(bn_module, nn.BatchNorm2d):
+                replace_submodule(model, target.bn_path, prune_batchnorm2d(bn_module, keep_idx))
+
+        if isinstance(consumer, nn.Conv2d):
+            replace_submodule(model, target.consumer_path, prune_conv2d_in_channels(consumer, keep_idx))
+        else:
+            flat_keep = expand_flatten_channel_indices(
+                keep_idx,
+                old_channels=producer.out_channels,
+                linear_in_features=consumer.in_features,
+            )
+            replace_submodule(model, target.consumer_path, prune_linear_in_features(consumer, flat_keep))
