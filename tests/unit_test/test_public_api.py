@@ -47,13 +47,19 @@ GRAPH_INIT = (
 # Module whose ``__all__`` must reach the top level via wildcard re-export.
 GRAPH_MODULE = "amct_pytorch.classic.graph_based.amct_pytorch"
 
-# Interfaces users call as ``amct_pytorch.<name>``; the original bug hid these.
-EXPECTED_INTERFACES = (
+# Baseline anchor: a hand-picked subset that MUST always be public. This guards
+# against the ``__all__`` list being accidentally emptied or gutted -- in that
+# case deriving the expected set purely from ``__all__`` would vacuously pass,
+# so we assert these names are always present (see the subset test below).
+BASELINE_INTERFACES = (
     "create_quant_config",
     "quantize_model",
+    "save_model",
     "create_quant_cali_config",
     "create_quant_retrain_config",
     "accuracy_based_auto_calibration",
+    "create_distill_config",
+    "auto_channel_prune_search",
 )
 
 
@@ -99,32 +105,37 @@ def test_top_init_reexports_graph_based_module():
     )
 
 
-@pytest.mark.parametrize("name", EXPECTED_INTERFACES)
-def test_expected_interfaces_declared_in_graph_module(name):
-    """Each guarded interface is still declared in the graph module ``__all__``.
+def test_graph_module_all_covers_baseline_interfaces():
+    """The graph module ``__all__`` must contain every baseline interface.
 
-    Together with the re-export check above, this proves the names will land in
-    ``amct_pytorch.*`` without importing the (build-dependent) package.
+    Deriving the "expected top-level API" from ``__all__`` alone would pass
+    vacuously if ``__all__`` were emptied. This anchors a known-good subset so
+    that silently dropping any of these names fails the suite.
     """
-    exported = _module_dunder_all(GRAPH_INIT)
-    assert name in exported, (
-        f"'{name}' is no longer in __all__ of {GRAPH_MODULE}; the public "
-        f"top-level API would lose it. Declared names: {exported}"
+    exported = set(_module_dunder_all(GRAPH_INIT))
+    missing = [name for name in BASELINE_INTERFACES if name not in exported]
+    assert not missing, (
+        f"Baseline public interfaces missing from __all__ of {GRAPH_MODULE}: "
+        f"{missing}. Declared names: {sorted(exported)}"
     )
 
 
 def test_top_level_interfaces_importable_when_built():
-    """Behavioural guard: real attribute access on the imported package.
+    """Behavioural guard: every ``__all__`` name is reachable as ``amct_pytorch.*``.
 
     Skipped on an unbuilt source tree (generated ``*_pb2.py`` missing); runs as a
-    true regression test wherever the package is installed/built.
+    true regression test wherever the package is installed/built. Covers the full
+    graph-module ``__all__`` (not just the baseline), so any interface dropped
+    from the top-level namespace is caught.
     """
     try:
         import amct_pytorch
     except ImportError as exc:
         pytest.skip(f"amct_pytorch not importable in this environment: {exc}")
 
-    missing = [n for n in EXPECTED_INTERFACES if not hasattr(amct_pytorch, n)]
+    expected = _module_dunder_all(GRAPH_INIT)
+    assert expected, "graph module __all__ unexpectedly empty"
+    missing = [name for name in expected if not hasattr(amct_pytorch, name)]
     assert not missing, (
         f"amct_pytorch is missing top-level interfaces {missing}; the "
         f"graph-based wildcard re-export in __init__.py was likely dropped."
