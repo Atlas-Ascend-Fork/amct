@@ -52,6 +52,15 @@ class BaseModel(metaclass=ABCMeta):
             self.model_path, trust_remote_code=True)
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(self.ptq_param_handler, self.iter_ptq_units)
+    
+    @staticmethod
+    def _embed_base_prefix(self) -> str:
+        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
+
+        Override in adapters whose checkpoint nests the text backbone under a
+        multimodal wrapper (e.g. return `"model.language_model."`).
+        """
+        return "model."
 
     @staticmethod
     def load_unit_inputs(data_dir, unit: PtqUnit):
@@ -341,12 +350,3 @@ class BaseModel(metaclass=ABCMeta):
 
     def _dispatch_block(self, module):
         return module.to(self.args.device)
-    
-    @staticmethod
-    def _embed_base_prefix(self) -> str:
-        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
-
-        Override in adapters whose checkpoint nests the text backbone under a
-        multimodal wrapper (e.g. return `"model.language_model."`).
-        """
-        return "model."
