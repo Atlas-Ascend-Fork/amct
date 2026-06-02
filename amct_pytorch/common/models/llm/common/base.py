@@ -58,7 +58,7 @@ class BaseModel(metaclass=ABCMeta):
         return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
     
     @staticmethod
-    def _embed_base_prefix(self) -> str:
+    def _embed_base_prefix() -> str:
         """Checkpoint-side public prefix for `embed_tokens` / `norm`.
 
         Override in adapters whose checkpoint nests the text backbone under a
