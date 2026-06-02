@@ -103,14 +103,12 @@ def _module_dunder_all(init_path):
     """Return the literal ``__all__`` list defined in ``init_path``."""
     tree = ast.parse(init_path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "__all__":
-                    return [
-                        elt.value
-                        for elt in node.value.elts
-                        if isinstance(elt, ast.Constant)
-                    ]
+        if not isinstance(node, ast.Assign):
+            continue
+        names = {t.id for t in node.targets if isinstance(t, ast.Name)}
+        if "__all__" not in names:
+            continue
+        return [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
     return []
 
 
