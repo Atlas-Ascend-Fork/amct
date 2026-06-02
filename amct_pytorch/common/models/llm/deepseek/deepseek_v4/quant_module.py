@@ -248,7 +248,7 @@ class QuantV4Attention(nn.Module):
         self.attn_sink = module.attn_sink
         self.q_norm = module.q_norm
         self.kv_norm = module.kv_norm
-        self.freqs_cis = module.freqs_cis
+        self.register_buffer("freqs_cis", module.freqs_cis, persistent=False)
 
         if self.enable_attn_linear:
             bits = quant_args.bit_policy["attn-linear"]
