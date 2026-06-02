@@ -56,7 +56,7 @@ class BaseModel(metaclass=ABCMeta):
     @staticmethod
     def load_unit_inputs(data_dir, unit: PtqUnit):
         return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
-    
+
     @staticmethod
     def _embed_base_prefix() -> str:
         """Checkpoint-side public prefix for `embed_tokens` / `norm`.
