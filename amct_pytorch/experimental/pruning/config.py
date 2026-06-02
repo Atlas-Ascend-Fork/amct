@@ -24,34 +24,6 @@ class PruneConfig:
     missing_data_policy: str = "warn_skip"
     stage_error_policy: str = "raise"
 
-    def validate(self) -> None:
-        if self.min_channels < 1:
-            raise ValueError("min_channels must be >= 1")
-        if self.min_neurons < 1:
-            raise ValueError("min_neurons must be >= 1")
-        if self.min_experts < 1:
-            raise ValueError("min_experts must be >= 1")
-        if self.missing_data_policy not in {"warn_skip", "raise"}:
-            raise ValueError("missing_data_policy must be one of {'warn_skip', 'raise'}")
-        if self.stage_error_policy not in {"raise", "warn_skip"}:
-            raise ValueError("stage_error_policy must be one of {'raise', 'warn_skip'}")
-
-        for spec in self.methods.values():
-            normalized = self._normalize_method_spec(spec)
-            self._validate_method_kwargs(normalized)
-
-    def resolved_methods(self) -> Dict[str, MethodSpec]:
-        resolved: Dict[str, MethodSpec] = {
-            "cnn": MethodSpec("variance_channel", {"prune_ratio": 0.30}),
-            "dense": MethodSpec("low_variance", {"prune_ratio": 0.50}),
-            "moe": MethodSpec("activation_count", {"prune_ratio": 0.50}),
-        }
-        for domain, spec in self.methods.items():
-            resolved[domain] = self._normalize_method_spec(spec)
-        for spec in resolved.values():
-            self._validate_method_kwargs(spec)
-        return resolved
-
     @staticmethod
     def _normalize_method_spec(spec: MethodSpec | Dict[str, Any] | str) -> MethodSpec:
         if isinstance(spec, MethodSpec):
@@ -83,3 +55,31 @@ class PruneConfig:
                 int(spec.kwargs["seed"])
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"seed for method '{spec.name}' must be an integer-like value.") from exc
+
+    def validate(self) -> None:
+        if self.min_channels < 1:
+            raise ValueError("min_channels must be >= 1")
+        if self.min_neurons < 1:
+            raise ValueError("min_neurons must be >= 1")
+        if self.min_experts < 1:
+            raise ValueError("min_experts must be >= 1")
+        if self.missing_data_policy not in {"warn_skip", "raise"}:
+            raise ValueError("missing_data_policy must be one of {'warn_skip', 'raise'}")
+        if self.stage_error_policy not in {"raise", "warn_skip"}:
+            raise ValueError("stage_error_policy must be one of {'raise', 'warn_skip'}")
+
+        for spec in self.methods.values():
+            normalized = self._normalize_method_spec(spec)
+            self._validate_method_kwargs(normalized)
+
+    def resolved_methods(self) -> Dict[str, MethodSpec]:
+        resolved: Dict[str, MethodSpec] = {
+            "cnn": MethodSpec("variance_channel", {"prune_ratio": 0.30}),
+            "dense": MethodSpec("low_variance", {"prune_ratio": 0.50}),
+            "moe": MethodSpec("activation_count", {"prune_ratio": 0.50}),
+        }
+        for domain, spec in self.methods.items():
+            resolved[domain] = self._normalize_method_spec(spec)
+        for spec in resolved.values():
+            self._validate_method_kwargs(spec)
+        return resolved

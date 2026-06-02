@@ -48,48 +48,12 @@ class CNNPruningDomain(BasePruningDomain):
             items = iter_direct_named_modules(parent)
             if not items:
                 continue
-
             for i, (name, mod) in enumerate(items):
-                if not isinstance(mod, nn.Conv2d):
-                    continue
-                if mod.groups != 1:
-                    continue
-                if mod.out_channels <= config.min_channels:
-                    continue
-
-                bn_name, bn_module, consumer_name, consumer_module = self._find_consumer(parent, items, i)
-                if consumer_module is None or consumer_name is None:
-                    root_consumer_name, root_consumer_module = self._find_root_linear_consumer(model, mod.out_channels)
-                    if root_consumer_module is None or root_consumer_name is None:
-                        continue
-                    consumer_name, consumer_module = root_consumer_name, root_consumer_module
-                if isinstance(consumer_module, nn.Conv2d) and consumer_module.groups != 1:
-                    continue
-                if isinstance(consumer_module, nn.Conv2d) and consumer_module.in_channels != mod.out_channels:
-                    continue
-                if isinstance(consumer_module, nn.Linear) and consumer_module.in_features % mod.out_channels != 0:
-                    continue
-                if (
-                    bn_module is not None
-                    and isinstance(bn_module, nn.BatchNorm2d)
-                    and bn_module.num_features != mod.out_channels
-                ):
-                    continue
-
-                producer_path = f"{parent_name}.{name}" if parent_name else name
-                bn_path = f"{parent_name}.{bn_name}" if parent_name and bn_name else bn_name
-                consumer_path = (
-                    consumer_name
-                    if consumer_name in dict(iter_direct_named_modules(model))
-                    else (f"{parent_name}.{consumer_name}" if parent_name else consumer_name)
+                target = self._build_target_for_conv(
+                    model, parent_name, parent, items, i, name, mod, config
                 )
-                targets.append(
-                    CNNChannelTarget(
-                        producer_path=producer_path,
-                        bn_path=bn_path,
-                        consumer_path=consumer_path,
-                    )
-                )
+                if target is not None:
+                    targets.append(target)
         return targets
 
     def channel_count(self, model: nn.Module, target: CNNChannelTarget) -> int:
@@ -154,3 +118,62 @@ class CNNPruningDomain(BasePruningDomain):
         if len(candidates) == 1:
             return candidates[0]
         return None, None
+
+    def _build_target_for_conv(
+        self,
+        model: nn.Module,
+        parent_name: str,
+        parent: nn.Module,
+        items: List[Tuple[str, nn.Module]],
+        idx: int,
+        name: str,
+        mod: nn.Module,
+        config: PruneConfig,
+    ) -> Optional[CNNChannelTarget]:
+        if not isinstance(mod, nn.Conv2d) or mod.groups != 1 or mod.out_channels <= config.min_channels:
+            return None
+        bn_name, bn_module, consumer_name, consumer_module = self._find_consumer(parent, items, idx)
+        if consumer_module is None or consumer_name is None:
+            root_name, root_module = self._find_root_linear_consumer(model, mod.out_channels)
+            if root_module is None or root_name is None:
+                return None
+            consumer_name, consumer_module = root_name, root_module
+        if not self._is_consumer_compat(mod, bn_module, consumer_module):
+            return None
+        return self._make_target(model, parent_name, name, bn_name, consumer_name)
+
+    @staticmethod
+    def _is_consumer_compat(
+        conv: nn.Conv2d, bn_module: Optional[nn.Module], consumer_module: nn.Module
+    ) -> bool:
+        if isinstance(consumer_module, nn.Conv2d):
+            if consumer_module.groups != 1:
+                return False
+            if consumer_module.in_channels != conv.out_channels:
+                return False
+        elif isinstance(consumer_module, nn.Linear):
+            if consumer_module.in_features % conv.out_channels != 0:
+                return False
+        if isinstance(bn_module, nn.BatchNorm2d) and bn_module.num_features != conv.out_channels:
+            return False
+        return True
+
+    @staticmethod
+    def _make_target(
+        model: nn.Module,
+        parent_name: str,
+        name: str,
+        bn_name: Optional[str],
+        consumer_name: str,
+    ) -> CNNChannelTarget:
+        producer_path = f"{parent_name}.{name}" if parent_name else name
+        bn_path = f"{parent_name}.{bn_name}" if parent_name and bn_name else bn_name
+        if consumer_name in dict(iter_direct_named_modules(model)):
+            consumer_path = consumer_name
+        else:
+            consumer_path = f"{parent_name}.{consumer_name}" if parent_name else consumer_name
+        return CNNChannelTarget(
+            producer_path=producer_path,
+            bn_path=bn_path,
+            consumer_path=consumer_path,
+        )

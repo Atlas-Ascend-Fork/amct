@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AMCT Pruning Comprehensive Test (NPU 14)
+AMCT Pruning Comprehensive Test
 HuggingFace-style mini models: MLP, CNN, MoE
 """
 import os
-import torch
-import tempfile
 import shutil
-
-# Set NPU 14
-os.environ['ASCEND_RT_VISIBLE_DEVICES'] = '14'
-
 import sys
+import tempfile
+
+import torch
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from mini_models import create_mini_mlp, create_mini_cnn, create_mini_moe
@@ -25,7 +23,7 @@ from amct_pytorch.experimental.pruning import (
 )
 
 print("=" * 80)
-print("AMCT Pruning Comprehensive Test (NPU 14)")
+print("AMCT Pruning Comprehensive Test")
 print("=" * 80)
 
 # ============================================================================
@@ -257,11 +255,11 @@ print(f"  • CNN (Channel): {cnn_reduction:.2f}% reduction")
 print(f"  • MoE (Expert):  {moe_reduction:.2f}% reduction")
 
 print("\n" + "=" * 80)
-print("✓ All tests passed!")
-print("✓ AMCT Pruning verified on NPU 14")
-print("  - Dense Layer Pruning: ✓")
-print("  - CNN Channel Pruning: ✓")
-print("  - MoE Expert Pruning: ✓")
-print("  - Model save/load: ✓")
-print("  - Various prune_ratio: ✓")
+print("All tests passed.")
+print("AMCT Pruning verified:")
+print("  - Dense Layer Pruning")
+print("  - CNN Channel Pruning")
+print("  - MoE Expert Pruning")
+print("  - Model save/load")
+print("  - Various prune_ratio")
 print("=" * 80)

@@ -24,6 +24,31 @@ class PruningStage:
     method: BasePruningMethod
     spec: MethodSpec
 
+    @staticmethod
+    def _warn(report: PruneReport, message: str) -> None:
+        warnings.warn(message, RuntimeWarning, stacklevel=3)
+        report.add_warning(message)
+
+    @staticmethod
+    def _target_paths(target) -> list[str]:
+        paths: list[str] = []
+        for attr in ("producer_path", "consumer_path", "gate_path", "up_path",
+                      "down_path", "module_path", "router_path", "experts_path"):
+            val = getattr(target, attr, None)
+            if isinstance(val, str):
+                paths.append(val)
+        return paths
+
+    @staticmethod
+    def _is_skipped(target, skip_layers: list[str]) -> bool:
+        if not skip_layers:
+            return False
+        for path in PruningStage._target_paths(target):
+            for pattern in skip_layers:
+                if pattern in path:
+                    return True
+        return False
+
     def apply(self, model: nn.Module, context: PruneContext, report: PruneReport, config: PruneConfig) -> None:
         targets = self.domain.find_targets(model, config)
         if config.skip_layers:
@@ -50,31 +75,6 @@ class PruningStage:
                 )
                 return
             raise
-
-    @staticmethod
-    def _warn(report: PruneReport, message: str) -> None:
-        warnings.warn(message, RuntimeWarning, stacklevel=3)
-        report.add_warning(message)
-
-    @staticmethod
-    def _target_paths(target) -> list[str]:
-        paths: list[str] = []
-        for attr in ("producer_path", "consumer_path", "gate_path", "up_path",
-                      "down_path", "module_path", "router_path", "experts_path"):
-            val = getattr(target, attr, None)
-            if isinstance(val, str):
-                paths.append(val)
-        return paths
-
-    @staticmethod
-    def _is_skipped(target, skip_layers: list[str]) -> bool:
-        if not skip_layers:
-            return False
-        for path in PruningStage._target_paths(target):
-            for pattern in skip_layers:
-                if pattern in path:
-                    return True
-        return False
 
 
 class AutoPruner:

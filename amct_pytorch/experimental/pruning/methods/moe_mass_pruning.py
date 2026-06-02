@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -118,23 +118,7 @@ class MassMoEPruningMethod(BasePruningMethod):
         if prune_ratio <= 0:
             return
 
-        collectors: Dict[str, ActivationCounter] = {}
-        hooks: List[torch.utils.hooks.RemovableHandle] = []
-
-        for target in targets:
-            if target.router_path is None:
-                continue
-            router = get_submodule(model, target.router_path)
-            collector = ActivationCounter()
-            collectors[target.router_path] = collector
-
-            def _make_hook(coll: ActivationCounter, k: int):
-                def hook(module, inputs, output):
-                    coll.update(output, top_k=k)
-                return hook
-
-            hooks.append(router.register_forward_hook(_make_hook(collector, top_k)))
-
+        collectors, hooks = self._register_router_hooks(model, targets, top_k)
         try:
             num_batches = self._run_one_epoch(model, context)
         finally:
@@ -147,46 +131,57 @@ class MassMoEPruningMethod(BasePruningMethod):
             report.add_warning(msg)
             return
 
-        last_num_experts = None
+        last_num_experts = self._prune_layers(
+            model, domain, targets, collectors, config, report, prune_ratio, top_k
+        )
+
+        if last_num_experts is not None:
+            meta = getattr(model, "_amct_prune_meta", {})
+            meta["moe_num_experts"] = int(last_num_experts)
+            setattr(model, "_amct_prune_meta", meta)
+
+    @staticmethod
+    def _make_router_hook(collector: ActivationCounter, k: int):
+        def hook(module, inputs, output):
+            _ = module
+            _ = inputs
+            collector.update(output, top_k=k)
+        return hook
+
+    def _register_router_hooks(
+        self,
+        model: nn.Module,
+        targets: List[MoETarget],
+        top_k: int,
+    ):
+        collectors: Dict[str, ActivationCounter] = {}
+        hooks: List[torch.utils.hooks.RemovableHandle] = []
         for target in targets:
-            if target.router_path is None or target.router_path not in collectors:
+            if target.router_path is None:
                 continue
+            router = get_submodule(model, target.router_path)
+            collector = ActivationCounter()
+            collectors[target.router_path] = collector
+            hooks.append(router.register_forward_hook(self._make_router_hook(collector, top_k)))
+        return collectors, hooks
 
-            collector = collectors[target.router_path]
-            if collector.counts is None:
+    def _prune_layers(
+        self,
+        model: nn.Module,
+        domain: MoEPruningDomain,
+        targets: List[MoETarget],
+        collectors: Dict[str, ActivationCounter],
+        config: PruneConfig,
+        report: PruneReport,
+        prune_ratio: float,
+        top_k: int,
+    ) -> Optional[int]:
+        last_num_experts: Optional[int] = None
+        for target in targets:
+            keep_idx, num_experts = self._select_keep_indices(target, collectors, domain, model, config, prune_ratio)
+            if keep_idx is None:
                 continue
-
-            num_experts = domain.num_experts(model, target)
-            if num_experts <= config.min_experts:
-                continue
-
-            mass = collector.counts[:num_experts].float()
-
-            keep_idx = topk_keep_indices(mass, prune_ratio, config.min_experts)
-            if len(keep_idx) == num_experts:
-                continue
-
-            experts = domain.get_experts(model, target)
-            new_experts = nn.ModuleList([experts[idx] for idx in keep_idx])
-            domain.replace_experts(model, target, new_experts)
-            domain.prune_router(model, target, keep_idx)
-            domain.update_moe_attributes(model, target, len(keep_idx))
-
-            moe_module = get_submodule(model, target.module_path) if target.module_path else model
-            router = getattr(moe_module, "gate", None) or getattr(moe_module, "router", None)
-            if router is not None:
-                if hasattr(router, "group_limited_topk"):
-                    def _simple_topk(scores, _router=router):
-                        k = min(getattr(_router, "top_k", top_k), scores.shape[-1])
-                        return torch.topk(scores, k=k, dim=-1)
-                    router.group_limited_topk = _simple_topk
-
-                if hasattr(router, "expert_bias"):
-                    device = infer_model_device(model)
-                    router.expert_bias = torch.zeros(
-                        len(keep_idx), device=device, dtype=router.expert_bias.dtype
-                    )
-
+            self._prune_one_layer(model, domain, target, keep_idx, top_k)
             report.add(
                 domain.name,
                 self.name,
@@ -195,11 +190,67 @@ class MassMoEPruningMethod(BasePruningMethod):
             )
             report.record_layer_sparsity(target.module_path or target.experts_path, num_experts, len(keep_idx))
             last_num_experts = len(keep_idx)
+        return last_num_experts
 
-        if last_num_experts is not None:
-            meta = getattr(model, "_amct_prune_meta", {})
-            meta["moe_num_experts"] = int(last_num_experts)
-            setattr(model, "_amct_prune_meta", meta)
+    @staticmethod
+    def _select_keep_indices(
+        target: MoETarget,
+        collectors: Dict[str, ActivationCounter],
+        domain: MoEPruningDomain,
+        model: nn.Module,
+        config: PruneConfig,
+        prune_ratio: float,
+    ):
+        if target.router_path is None or target.router_path not in collectors:
+            return None, 0
+        collector = collectors[target.router_path]
+        if collector.counts is None:
+            return None, 0
+        num_experts = domain.num_experts(model, target)
+        if num_experts <= config.min_experts:
+            return None, num_experts
+        mass = collector.counts[:num_experts].float()
+        keep_idx = topk_keep_indices(mass, prune_ratio, config.min_experts)
+        if len(keep_idx) == num_experts:
+            return None, num_experts
+        return keep_idx, num_experts
+
+    def _prune_one_layer(
+        self,
+        model: nn.Module,
+        domain: MoEPruningDomain,
+        target: MoETarget,
+        keep_idx: List[int],
+        top_k: int,
+    ) -> None:
+        experts = domain.get_experts(model, target)
+        new_experts = nn.ModuleList([experts[idx] for idx in keep_idx])
+        domain.replace_experts(model, target, new_experts)
+        domain.prune_router(model, target, keep_idx)
+        domain.update_moe_attributes(model, target, len(keep_idx))
+        self._patch_router_module(model, target, keep_idx, top_k)
+
+    @staticmethod
+    def _patch_router_module(
+        model: nn.Module,
+        target: MoETarget,
+        keep_idx: List[int],
+        top_k: int,
+    ) -> None:
+        moe_module = get_submodule(model, target.module_path) if target.module_path else model
+        router = getattr(moe_module, "gate", None) or getattr(moe_module, "router", None)
+        if router is None:
+            return
+        if hasattr(router, "group_limited_topk"):
+            def _simple_topk(scores, _router=router, _k=top_k):
+                k = min(getattr(_router, "top_k", _k), scores.shape[-1])
+                return torch.topk(scores, k=k, dim=-1)
+            router.group_limited_topk = _simple_topk
+        if hasattr(router, "expert_bias"):
+            device = infer_model_device(model)
+            router.expert_bias = torch.zeros(
+                len(keep_idx), device=device, dtype=router.expert_bias.dtype
+            )
 
     def _run_one_epoch(self, model: nn.Module, context: PruneContext) -> int:
         device = infer_model_device(model)

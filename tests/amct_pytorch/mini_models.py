@@ -4,10 +4,11 @@
 HuggingFace-style mini model definitions
 - CNN, MoE, MLP models
 """
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple
 
 
 # ============================================================================
@@ -74,11 +75,11 @@ class MiniMLPModel(nn.Module):
 class MiniCNNConfig:
     def __init__(
         self,
-        num_channels=[64, 128, 256],
+        num_channels=None,
         num_classes=10,
         input_channels=3,
     ):
-        self.num_channels = num_channels
+        self.num_channels = num_channels if num_channels is not None else [64, 128, 256]
         self.num_classes = num_classes
         self.input_channels = input_channels
 
@@ -222,7 +223,7 @@ class MiniMoELayer(nn.Module):
         final_output = torch.zeros_like(hidden_states_flat)
         for i in range(self.num_experts_per_tok):
             expert_idx = topk_indices[:, i]
-            expert_weight = topk_weights[:, i:i+1]
+            expert_weight = topk_weights[:, i:i + 1]
 
             # Simple routing (route each token to corresponding expert)
             for expert_id in range(self.num_experts):
