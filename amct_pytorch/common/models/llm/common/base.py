@@ -52,6 +52,10 @@ class BaseModel(metaclass=ABCMeta):
             self.model_path, trust_remote_code=True)
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(self.ptq_param_handler, self.iter_ptq_units)
+
+    @staticmethod
+    def load_unit_inputs(data_dir, unit: PtqUnit):
+        return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
     
     @staticmethod
     def _embed_base_prefix(self) -> str:
@@ -61,10 +65,6 @@ class BaseModel(metaclass=ABCMeta):
         multimodal wrapper (e.g. return `"model.language_model."`).
         """
         return "model."
-
-    @staticmethod
-    def load_unit_inputs(data_dir, unit: PtqUnit):
-        return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
 
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
