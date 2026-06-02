@@ -103,7 +103,7 @@ class PrunePass:
     用法::
 
         from amct_pytorch.classic.ptq.optimizer.model_optimizer import ModelOptimizer
-        from amct_pytorch.pruning import PrunePass
+        from amct_pytorch.experimental.pruning import PrunePass
 
         opt = ModelOptimizer()
         opt.add_pass(PrunePass(prune_cfg, data=calib))

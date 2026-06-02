@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from mini_models import create_mini_mlp, create_mini_cnn, create_mini_moe
-from amct_pytorch.pruning import (
+from amct_pytorch.experimental.pruning import (
     DENSE_LOWVAR_PRUNE_CFG,
     CNN_VARIANCE_PRUNE_CFG,
     MOE_MASSVAR_PRUNE_CFG,
