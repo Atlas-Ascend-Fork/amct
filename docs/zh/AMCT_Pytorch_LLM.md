@@ -115,7 +115,7 @@ python -m amct_pytorch.eval \
 
 参数详细解释请参见[参数说明](#3-参数说明)。
 
-`eval`相关启动指令也可参考[eval.sh](../examples/eval.sh)
+`eval`相关启动指令也可参考[eval.sh](../../examples/eval.sh)
 
 ### 2.2 `extract_ptq_data`
 
@@ -153,7 +153,7 @@ python -m amct_pytorch.extract_ptq_data \
 
 参数详细解释请参见[参数说明](#3-参数说明)。
 
-`extract_ptq_data`相关启动指令也可参考[extract_ptq_data.sh](../examples/extract_ptq_data.sh)
+`extract_ptq_data`相关启动指令也可参考[extract_ptq_data.sh](../../examples/extract_ptq_data.sh)
 
 ### 2.3 `ptq`
 
@@ -218,8 +218,8 @@ python -m amct_pytorch.ptq \
 - 模块粒度：当前仅支持以block 为粒度的处理（`granularity=block`） 。
 - 自定义 hook 限制：若使用了自定义的 `quantize()` hook（用于权重量化算法），则当前版本不支持通过 `export_deploy()` 功能进行部署。
 
-`ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../examples/ptq_single_npu.sh)
-`ptq`多卡相关启动指令也可参考[ptq_multi_npu.sh](../examples/ptq_multi_npu.sh)
+`ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../../examples/ptq_single_npu.sh)
+`ptq`多卡相关启动指令也可参考[ptq_multi_npu.sh](../../examples/ptq_multi_npu.sh)
 
 #### 2.4.1 导出部署权重
 
@@ -287,15 +287,15 @@ python -m amct_pytorch.deploy \
 
 | 文件 | 含义 |
 |------|------|
-| [bf16.yaml](../amct_pytorch/configs/bf16.yaml) | 全部保持 16 bit。 |
-| [w8a8.yaml](../amct_pytorch/configs/w8a8.yaml) | 全局 W8A8（权重激活都为8bit）。 |
-| [w4a8.yaml](../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重8bit，激活4bit）。 |
-| [w4a4.yaml](../amct_pytorch/configs/w4a4.yaml) | 全局 W4A4（权重激活都为4bit）。 |
-| [example_w4a8.yaml](../amct_pytorch/configs/example_w4a8.yaml) | 自定义量化方案示例。 |
+| [bf16.yaml](../../amct_pytorch/configs/bf16.yaml) | 全部保持 16 bit。 |
+| [w8a8.yaml](../../amct_pytorch/configs/w8a8.yaml) | 全局 W8A8（权重激活都为8bit）。 |
+| [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重8bit，激活4bit）。 |
+| [w4a4.yaml](../../amct_pytorch/configs/w4a4.yaml) | 全局 W4A4（权重激活都为4bit）。 |
+| [example_w4a8.yaml](../../amct_pytorch/configs/example_w4a8.yaml) | 自定义量化方案示例。 |
 
 - `bit_config` 支持顶层 `w_bits`、`a_bits`，也支持按 `attn-linear`、`mlp`、`moe`、`attn-cache` 分组覆盖。linear 组内如果写 `w_bits` 或 `a_bits`，必须两者同时出现。
 - `quant_dtype`传入`int`时，权重采用`per-channel`量化，激活采用`dynamic-per-token`量化，均采用**对称量化**。
-- `bit_config`需要传入yaml，推荐用户在本地自行配置yaml，可参考[configs路径下的yaml样例](../amct_pytorch/configs/)或直接点进上方软连接跳转
+- `bit_config`需要传入yaml，推荐用户在本地自行配置yaml，可参考[configs路径下的yaml样例](../../amct_pytorch/configs/)或直接点进上方软连接跳转
 
 ### 3.5 PTQ 参数
 
@@ -340,4 +340,4 @@ layer_{layer_idx}_{unit_name}.pt
 
 ## 5. 一站式样例
 
-本章节提供一站式样例，帮助开发者更好熟悉本特性的流程，以`qwen3.6moe`模型为例，可参考[Qwen-3.6-MoE一站式样例](../examples/models/qwen3.6/Qwen3.6-Moe.md)
+本章节提供一站式样例，帮助开发者更好熟悉本特性的流程，以`qwen3.6moe`模型为例，可参考[Qwen-3.6-MoE一站式样例](../../examples/models/qwen3.6/Qwen3.6-Moe.md)。

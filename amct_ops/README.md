@@ -55,7 +55,7 @@ amct_ops/
 | GCC / CMake | ≥ 7.3 / ≥ 3.16（推荐 3.20） |
 | CANN（Toolkit & Ops） | ≥ 9.0.0（需提前安装 NPU 驱动 / 固件） |
 
-完整环境部署请参见 [快速安装](../docs/quick_install.md)
+完整环境部署请参见 [快速安装](../docs/zh/quick_install.md)
 
 ### 构建命令
 

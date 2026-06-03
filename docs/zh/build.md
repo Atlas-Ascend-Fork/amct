@@ -70,4 +70,4 @@ bash build.sh --torch
   pip3 uninstall amct_pytorch
   ```
 
- 安装完成后，可以参考[样例运行](../examples/README.md)运行样例。
+ 安装完成后，可以参考[样例运行](../../examples/README.md)运行样例。

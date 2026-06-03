@@ -63,7 +63,7 @@ model, changes = auto_decomposition(model, decompose_info_path=None)
 
 -   用户输入的模型需为torch.nn.Module类型的对象。
 -   本接口函数仅对通过torch.nn.Conv2d\(\)构建的卷积进行分解。
--   用户调用本接口函数，接口函数对符合分解条件的卷积层进行自动分解，约束请参见[分解约束](../README.md)。
+-   用户调用本接口函数，接口函数对符合分解条件的卷积层进行自动分解，约束请参见[分解约束](../../README.md)。
 
 ## 调用示例<a name="section179052217494"></a>
 

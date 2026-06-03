@@ -167,7 +167,7 @@ quant\_calibration\_config\_pytorch.proto文件参数说明如下表所示，该
 </td>
 <td class="cellrowborder" valign="top" width="14.558544145585442%" headers="mcps1.2.6.1.4 "><p id="zh-cn_topic_0240188735_p1984611242417"><a name="zh-cn_topic_0240188735_p1984611242417"></a><a name="zh-cn_topic_0240188735_p1984611242417"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="54.13458654134586%" headers="mcps1.2.6.1.5 "><p id="zh-cn_topic_0240188735_p58460292417"><a name="zh-cn_topic_0240188735_p58460292417"></a><a name="zh-cn_topic_0240188735_p58460292417"></a>FMR数据量化算法配置。算法介绍请参见<a href="IFMR数据量化算法.md">IFMR数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="54.13458654134586%" headers="mcps1.2.6.1.5 "><p id="zh-cn_topic_0240188735_p58460292417"><a name="zh-cn_topic_0240188735_p58460292417"></a><a name="zh-cn_topic_0240188735_p58460292417"></a>FMR数据量化算法配置。算法介绍请参见<a href="../algorithm_brief.md#ifmr数据量化算法">IFMR数据量化算法</a>。</p>
 <p id="p1877244707"><a name="p1877244707"></a><a name="p1877244707"></a>该参数与HFMGQuantize参数不能同时配置。</p>
 </td>
 </tr>
@@ -246,7 +246,7 @@ quant\_calibration\_config\_pytorch.proto文件参数说明如下表所示，该
 </td>
 <td class="cellrowborder" valign="top" width="14.558544145585442%" headers="mcps1.2.6.1.4 "><p id="p196910310511"><a name="p196910310511"></a><a name="p196910310511"></a>-</p>
 </td>
-<td class="cellrowborder" valign="top" width="54.13458654134586%" headers="mcps1.2.6.1.5 "><p id="p16989132195213"><a name="p16989132195213"></a><a name="p16989132195213"></a>HFMG数据量化算法配置。算法介绍请参见<a href="HFMG数据量化算法.md">HFMG数据量化算法</a>。</p>
+<td class="cellrowborder" valign="top" width="54.13458654134586%" headers="mcps1.2.6.1.5 "><p id="p16989132195213"><a name="p16989132195213"></a><a name="p16989132195213"></a>HFMG数据量化算法配置。算法介绍请参见<a href="../algorithm_brief.md#hfmg数据量化算法">HFMG数据量化算法</a>。</p>
 <p id="p0610538149"><a name="p0610538149"></a><a name="p0610538149"></a>该参数与FMRQuantize参数不能同时配置。</p>
 </td>
 </tr>
