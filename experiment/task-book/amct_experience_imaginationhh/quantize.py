@@ -48,7 +48,7 @@ import os
 import time
 
 import torch
-import torch_npu  # noqa: F401  注册 NPU 后端
+import torch_npu  # 注册 NPU 后端，并用于读取版本号
 
 import amct_pytorch as amct
 from eval_common import get_model, get_wikitext2_test, eval_ppl
