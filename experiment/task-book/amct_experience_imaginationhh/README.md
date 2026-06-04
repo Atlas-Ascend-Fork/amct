@@ -1,4 +1,4 @@
-# Qwen2.5-3B HiFloat8 量化体验（CANN 体验官）
+# Qwen2.5-3B HiFloat8 量化体验
 
 使用 AMCT（Ascend Model Compression Toolkit）对 **Qwen2.5-3B-Instruct** 执行
 **HiFloat8** 量化，对比量化前后在 wikitext2 上的困惑度（PPL），完成从环境搭建、

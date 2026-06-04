@@ -41,6 +41,7 @@
     - npu_op 后端需要 torch_npu==2.7.1.post4（注册 hifloat8 dtype）。
     - wikitext2 默认从本地 parquet 读取（WIKITEXT2_PARQUET 或 --dataset_path）。
 """
+
 import argparse
 import json
 import os
@@ -50,7 +51,7 @@ import torch
 import torch_npu  # noqa: F401  注册 NPU 后端
 
 import amct_pytorch as amct
-from eval_common import get_model, get_wikitext2_test, eval_ppl, get_calib_data
+from eval_common import get_model, get_wikitext2_test, eval_ppl
 
 # HiFloat8 高精度表示范围
 HIF8_RANGE = 16.0
@@ -58,51 +59,67 @@ HIF8_RANGE = 16.0
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Qwen2.5-3B HiFloat8 量化全流程（AMCT）'
+        description="Qwen2.5-3B HiFloat8 量化全流程（AMCT）"
     )
-    parser.add_argument('--model_path', type=str, required=True,
-                        help='Qwen2.5-3B-Instruct 本地模型路径')
-    parser.add_argument('--backend', type=str, default='npu_op',
-                        choices=['npu_op', 'cpu_sim', 'amct'],
-                        help='量化后端，默认 npu_op（NPU 自定义算子伪量化）')
-    parser.add_argument('--dataset_path', type=str, default=None,
-                        help='wikitext2 测试集 parquet 本地路径（可选）')
-    parser.add_argument('--seqlen', type=int, default=2048,
-                        help='评估序列长度，默认 2048')
-    parser.add_argument('--max_samples', type=int, default=None,
-                        help='限制评估段数（冒烟用），默认全量')
-    parser.add_argument('--device', type=str, default='npu:0',
-                        help='推理设备，默认 npu:0')
-    parser.add_argument('--output', type=str, default='result.json',
-                        help='结果输出 JSON 路径')
-    parser.add_argument('--skip_baseline', action='store_true',
-                        help='跳过量化前 baseline 评估')
+    parser.add_argument(
+        "--model_path", type=str, required=True, help="Qwen2.5-3B-Instruct 本地模型路径"
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="npu_op",
+        choices=["npu_op", "cpu_sim", "amct"],
+        help="量化后端，默认 npu_op（NPU 自定义算子伪量化）",
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        default=None,
+        help="wikitext2 测试集 parquet 本地路径（可选）",
+    )
+    parser.add_argument(
+        "--seqlen", type=int, default=2048, help="评估序列长度，默认 2048"
+    )
+    parser.add_argument(
+        "--max_samples", type=int, default=None, help="限制评估段数（冒烟用），默认全量"
+    )
+    parser.add_argument(
+        "--device", type=str, default="npu:0", help="推理设备，默认 npu:0"
+    )
+    parser.add_argument(
+        "--output", type=str, default="result.json", help="结果输出 JSON 路径"
+    )
+    parser.add_argument(
+        "--skip_baseline", action="store_true", help="跳过量化前 baseline 评估"
+    )
     return parser.parse_args()
 
 
 def quantize_model(model, backend, device):
     """对模型应用 HiFloat8 量化，返回（量化后模型, 配置描述）。"""
-    if backend == 'amct':
+    if backend == "amct":
         cfg = amct.HIFP8_CAST_CFG
         amct.quantize(model, cfg)
         return model, _jsonable(cfg)
 
-    if backend == 'npu_op':
+    if backend == "npu_op":
         from npu_hifloat8_fakequant_linear import NpuHifloat8FakequantLinear
-        algo, mod = 'npu_hif8_fakequant', NpuHifloat8FakequantLinear
+
+        algo, mod = "npu_hif8_fakequant", NpuHifloat8FakequantLinear
     else:  # cpu_sim
         from hifloat8_fakequant_linear import Hifloat8FakequantLinear
-        algo, mod = 'hifloat8_fakequant', Hifloat8FakequantLinear
+
+        algo, mod = "hifloat8_fakequant", Hifloat8FakequantLinear
 
     cfg = {
-        'quant_cfg': {
-            'weights': {'type': 'hifloat8', 'symmetric': True, 'strategy': 'channel'},
-            'inputs': {'type': 'hifloat8', 'symmetric': True, 'strategy': 'tensor'},
+        "quant_cfg": {
+            "weights": {"type": "hifloat8", "symmetric": True, "strategy": "channel"},
+            "inputs": {"type": "hifloat8", "symmetric": True, "strategy": "tensor"},
         },
-        'algorithm': {algo},
-        'skip_layers': {'lm_head'},
+        "algorithm": {algo},
+        "skip_layers": {"lm_head"},
     }
-    amct.algorithm_register(algo, 'Linear', mod, None)
+    amct.algorithm_register(algo, "Linear", mod, None)
     amct.quantize(model, cfg)
     return model, _jsonable(cfg)
 
@@ -110,84 +127,88 @@ def quantize_model(model, backend, device):
 def main():
     args = parse_args()
     if args.dataset_path:
-        os.environ['WIKITEXT2_PARQUET'] = args.dataset_path
+        os.environ["WIKITEXT2_PARQUET"] = args.dataset_path
 
-    dev_id = int(args.device.split(':')[-1]) if ':' in args.device else 0
+    dev_id = int(args.device.split(":")[-1]) if ":" in args.device else 0
     torch.npu.set_device(dev_id)
-    device = f'npu:{dev_id}'
+    device = f"npu:{dev_id}"
 
     result = {
-        'model_path': args.model_path,
-        'backend': args.backend,
-        'seqlen': args.seqlen,
-        'max_samples': args.max_samples,
-        'device': device,
-        'torch_npu': torch_npu.__version__,
+        "model_path": args.model_path,
+        "backend": args.backend,
+        "seqlen": args.seqlen,
+        "max_samples": args.max_samples,
+        "device": device,
+        "torch_npu": torch_npu.__version__,
     }
 
     # ---- Phase 0：加载模型与数据集 ----
-    print('=' * 60)
-    print(f'[Phase 0] 加载模型与数据集，backend = {args.backend}')
-    print('=' * 60)
+    print("=" * 60)
+    print(f"[Phase 0] 加载模型与数据集，backend = {args.backend}")
+    print("=" * 60)
     model, tokenizer = get_model(args.model_path, seqlen=args.seqlen)
     testenc = get_wikitext2_test(tokenizer)
 
     # ---- Phase 1：量化前 baseline PPL ----
     if not args.skip_baseline:
-        print('=' * 60)
-        print('[Phase 1] 量化前 baseline（FP16）PPL 评估')
-        print('=' * 60)
+        print("=" * 60)
+        print("[Phase 1] 量化前 baseline（FP16）PPL 评估")
+        print("=" * 60)
         fp16_model = model.eval().to(device)
         t0 = time.time()
-        result['baseline_ppl'] = eval_ppl(fp16_model, testenc, device,
-                                          max_samples=args.max_samples)
-        result['baseline_eval_sec'] = round(time.time() - t0, 1)
+        result["baseline_ppl"] = eval_ppl(
+            fp16_model, testenc, device, max_samples=args.max_samples
+        )
+        result["baseline_eval_sec"] = round(time.time() - t0, 1)
         fp16_model = fp16_model.cpu()
         del fp16_model
         torch.npu.empty_cache()
         model, tokenizer = get_model(args.model_path, seqlen=args.seqlen)
 
     # ---- Phase 2：HiFloat8 量化 ----
-    print('=' * 60)
-    print(f'[Phase 2] HiFloat8 量化（backend={args.backend}）')
-    print('=' * 60)
+    print("=" * 60)
+    print(f"[Phase 2] HiFloat8 量化（backend={args.backend}）")
+    print("=" * 60)
     quant_model = model.eval().to(device)
     t0 = time.time()
     quant_model, cfg_desc = quantize_model(quant_model, args.backend, device)
-    result['quant_config'] = cfg_desc
-    result['quantize_sec'] = round(time.time() - t0, 1)
-    print(f'[Phase 2] 量化完成，耗时 {result["quantize_sec"]}s')
+    result["quant_config"] = cfg_desc
+    result["quantize_sec"] = round(time.time() - t0, 1)
+    print(f"[Phase 2] 量化完成，耗时 {result['quantize_sec']}s")
 
     # ---- Phase 3：量化后 PPL ----
-    print('=' * 60)
-    print('[Phase 3] 量化后 HiFloat8 模型 PPL 评估')
-    print('=' * 60)
+    print("=" * 60)
+    print("[Phase 3] 量化后 HiFloat8 模型 PPL 评估")
+    print("=" * 60)
     t0 = time.time()
-    result['quant_ppl'] = eval_ppl(quant_model, testenc, device,
-                                   max_samples=args.max_samples)
-    result['quant_eval_sec'] = round(time.time() - t0, 1)
+    result["quant_ppl"] = eval_ppl(
+        quant_model, testenc, device, max_samples=args.max_samples
+    )
+    result["quant_eval_sec"] = round(time.time() - t0, 1)
 
     # ---- 汇总 ----
-    if 'baseline_ppl' in result:
-        delta = result['quant_ppl'] - result['baseline_ppl']
-        result['ppl_delta'] = round(delta, 6)
-        result['ppl_delta_pct'] = round(delta / result['baseline_ppl'] * 100, 3)
+    if "baseline_ppl" in result:
+        delta = result["quant_ppl"] - result["baseline_ppl"]
+        result["ppl_delta"] = round(delta, 6)
+        result["ppl_delta_pct"] = round(delta / result["baseline_ppl"] * 100, 3)
 
-    print('=' * 60)
-    print('[结果汇总]')
-    print(f'  模型      : {args.model_path}')
-    print(f'  后端      : {args.backend}')
-    if 'baseline_ppl' in result:
-        print(f'  量化前 PPL: {result["baseline_ppl"]:.6f}')
-    print(f'  量化后 PPL: {result["quant_ppl"]:.6f}')
-    if 'ppl_delta' in result:
-        print(f'  PPL 变化  : {result["ppl_delta"]:+.6f} '
-              f'({result["ppl_delta_pct"]:+.3f}%)')
-    print('=' * 60)
+    print("=" * 60)
+    print("[结果汇总]")
+    print(f"  模型      : {args.model_path}")
+    print(f"  后端      : {args.backend}")
+    if "baseline_ppl" in result:
+        print(f"  量化前 PPL: {result['baseline_ppl']:.6f}")
+    print(f"  量化后 PPL: {result['quant_ppl']:.6f}")
+    if "ppl_delta" in result:
+        print(
+            f"  PPL 变化  : {result['ppl_delta']:+.6f} "
+            f"({result['ppl_delta_pct']:+.3f}%)"
+        )
+    print("=" * 60)
 
-    with open(args.output, 'w', encoding='utf-8') as f:
+    with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
-    print(f'结果已写入 {args.output}')
+    print(f"结果已写入 {args.output}")
 
 
 def _jsonable(obj):
@@ -201,5 +222,5 @@ def _jsonable(obj):
     return obj
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -30,6 +30,7 @@ ascendc kernel（LUT 实现），不依赖该内核，因此可在本环境跑�
 - 权重：per-tensor 对称量化，scale = max(|W|) / 16（HiFloat8 高精度范围 16）
 - 激活：直转（cast），不缩放
 """
+
 import torch
 import torch.nn.functional as F
 
@@ -46,7 +47,9 @@ def _encode_decode(x, encode_fn, decode_fn):
     保持与原 dtype 一致。
     """
     ori_dtype = x.dtype
-    work_dtype = ori_dtype if ori_dtype in (torch.float16, torch.bfloat16) else torch.float16
+    work_dtype = (
+        ori_dtype if ori_dtype in (torch.float16, torch.bfloat16) else torch.float16
+    )
     codes = encode_fn(x.to(work_dtype))
     deq = decode_fn(codes, work_dtype)
     return deq.to(ori_dtype)
@@ -62,6 +65,7 @@ class NpuHifloat8FakequantLinear(BaseQuantizeModule):
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__(ori_module, layer_name, quant_config)
         from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+
         self._encode = encode_to_hifloat8
         self._decode = decode_from_hifloat8
         self.layer_name = layer_name
@@ -74,7 +78,7 @@ class NpuHifloat8FakequantLinear(BaseQuantizeModule):
         scaled = weight / scale_w
         fq_w = _encode_decode(scaled.to(device), self._encode, self._decode) * scale_w
         # 用 fakequant 后的权重替换（保持原 dtype/device）
-        self.register_buffer('fakequant_weight', fq_w.to(weight.dtype))
+        self.register_buffer("fakequant_weight", fq_w.to(weight.dtype))
         self.scale_w = scale_w
         self.bias = ori_module.bias
 
