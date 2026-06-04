@@ -49,9 +49,9 @@ import time
 
 import torch
 import torch_npu  # 注册 NPU 后端，并用于读取版本号
+from eval_common import get_model, get_wikitext2_test, eval_ppl
 
 import amct_pytorch as amct
-from eval_common import get_model, get_wikitext2_test, eval_ppl
 
 # HiFloat8 高精度表示范围
 HIF8_RANGE = 16.0
@@ -138,16 +138,9 @@ def quantize_model(model, backend, device):
     return model, _jsonable(cfg)
 
 
-def main():
-    args = parse_args()
-    if args.dataset_path:
-        os.environ["WIKITEXT2_PARQUET"] = args.dataset_path
-
-    dev_id = int(args.device.split(":")[-1]) if ":" in args.device else 0
-    torch.npu.set_device(dev_id)
-    device = f"npu:{dev_id}"
-
-    result = {
+def _build_result(args, device):
+    """构造结果字典的初始字段。"""
+    return {
         "model_path": args.model_path,
         "backend": args.backend,
         "seqlen": args.seqlen,
@@ -156,51 +149,21 @@ def main():
         "torch_npu": torch_npu.__version__,
     }
 
-    # ---- Phase 0：加载模型与数据集 ----
-    print("=" * 60)
-    print(f"[Phase 0] 加载模型与数据集，backend = {args.backend}")
-    print("=" * 60)
-    model, tokenizer = get_model(args.model_path, seqlen=args.seqlen)
-    testenc = get_wikitext2_test(tokenizer)
 
-    # ---- Phase 1：量化前 baseline PPL ----
-    if not args.skip_baseline:
-        print("=" * 60)
-        print("[Phase 1] 量化前 baseline（FP16）PPL 评估")
-        print("=" * 60)
-        fp16_model = model.eval().to(device)
-        t0 = time.time()
-        result["baseline_ppl"] = eval_ppl(
-            fp16_model, testenc, device, max_samples=args.max_samples
-        )
-        result["baseline_eval_sec"] = round(time.time() - t0, 1)
-        fp16_model = fp16_model.cpu()
-        del fp16_model
-        torch.npu.empty_cache()
-        model, tokenizer = get_model(args.model_path, seqlen=args.seqlen)
-
-    # ---- Phase 2：HiFloat8 量化 ----
-    print("=" * 60)
-    print(f"[Phase 2] HiFloat8 量化（backend={args.backend}）")
-    print("=" * 60)
-    quant_model = model.eval().to(device)
+def _eval_baseline(model, testenc, device, args):
+    """量化前 FP16 baseline PPL 评估，返回 (ppl, 耗时秒)。"""
+    fp16_model = model.eval().to(device)
     t0 = time.time()
-    quant_model, cfg_desc = quantize_model(quant_model, args.backend, device)
-    result["quant_config"] = cfg_desc
-    result["quantize_sec"] = round(time.time() - t0, 1)
-    print(f"[Phase 2] 量化完成，耗时 {result['quantize_sec']}s")
+    ppl = eval_ppl(fp16_model, testenc, device, max_samples=args.max_samples)
+    elapsed = round(time.time() - t0, 1)
+    fp16_model = fp16_model.cpu()
+    del fp16_model
+    torch.npu.empty_cache()
+    return ppl, elapsed
 
-    # ---- Phase 3：量化后 PPL ----
-    print("=" * 60)
-    print("[Phase 3] 量化后 HiFloat8 模型 PPL 评估")
-    print("=" * 60)
-    t0 = time.time()
-    result["quant_ppl"] = eval_ppl(
-        quant_model, testenc, device, max_samples=args.max_samples
-    )
-    result["quant_eval_sec"] = round(time.time() - t0, 1)
 
-    # ---- 汇总 ----
+def _summarize(args, result):
+    """计算 PPL 变化、打印汇总并写出结果 JSON。"""
     if "baseline_ppl" in result:
         delta = result["quant_ppl"] - result["baseline_ppl"]
         result["ppl_delta"] = round(delta, 6)
@@ -225,6 +188,59 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print(f"结果已写入 {args.output}")
+
+
+def main():
+    args = parse_args()
+    if args.dataset_path:
+        os.environ["WIKITEXT2_PARQUET"] = args.dataset_path
+
+    dev_id = int(args.device.split(":")[-1]) if ":" in args.device else 0
+    torch.npu.set_device(dev_id)
+    device = f"npu:{dev_id}"
+
+    result = _build_result(args, device)
+
+    # ---- Phase 0：加载模型与数据集 ----
+    print("=" * 60)
+    print(f"[Phase 0] 加载模型与数据集，backend = {args.backend}")
+    print("=" * 60)
+    model, tokenizer = get_model(args.model_path, seqlen=args.seqlen)
+    testenc = get_wikitext2_test(tokenizer)
+
+    # ---- Phase 1：量化前 baseline PPL ----
+    if not args.skip_baseline:
+        print("=" * 60)
+        print("[Phase 1] 量化前 baseline（FP16）PPL 评估")
+        print("=" * 60)
+        result["baseline_ppl"], result["baseline_eval_sec"] = _eval_baseline(
+            model, testenc, device, args
+        )
+        model, tokenizer = get_model(args.model_path, seqlen=args.seqlen)
+
+    # ---- Phase 2：HiFloat8 量化 ----
+    print("=" * 60)
+    print(f"[Phase 2] HiFloat8 量化（backend={args.backend}）")
+    print("=" * 60)
+    quant_model = model.eval().to(device)
+    t0 = time.time()
+    quant_model, cfg_desc = quantize_model(quant_model, args.backend, device)
+    result["quant_config"] = cfg_desc
+    result["quantize_sec"] = round(time.time() - t0, 1)
+    print(f"[Phase 2] 量化完成，耗时 {result['quantize_sec']}s")
+
+    # ---- Phase 3：量化后 PPL ----
+    print("=" * 60)
+    print("[Phase 3] 量化后 HiFloat8 模型 PPL 评估")
+    print("=" * 60)
+    t0 = time.time()
+    result["quant_ppl"] = eval_ppl(
+        quant_model, testenc, device, max_samples=args.max_samples
+    )
+    result["quant_eval_sec"] = round(time.time() - t0, 1)
+
+    # ---- 汇总 ----
+    _summarize(args, result)
 
 
 def _jsonable(obj):
