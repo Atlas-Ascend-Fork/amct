@@ -48,7 +48,9 @@ def _encode_decode(x, encode_fn, decode_fn):
     """
     ori_dtype = x.dtype
     work_dtype = (
-        ori_dtype if ori_dtype in (torch.float16, torch.bfloat16) else torch.float16
+        ori_dtype
+        if ori_dtype in (torch.float16, torch.bfloat16)
+        else torch.float16
     )
     codes = encode_fn(x.to(work_dtype))
     deq = decode_fn(codes, work_dtype)
@@ -64,7 +66,10 @@ class NpuHifloat8FakequantLinear(BaseQuantizeModule):
 
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__(ori_module, layer_name, quant_config)
-        from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+        from amct_ops.hifloat8_cast import (
+            encode_to_hifloat8,
+            decode_from_hifloat8,
+        )
 
         self._encode = encode_to_hifloat8
         self._decode = decode_from_hifloat8
@@ -76,7 +81,10 @@ class NpuHifloat8FakequantLinear(BaseQuantizeModule):
         scale_w = weight.abs().max() / HIF8_HIGH_PRECISION_RANGE
         scale_w = torch.clamp(scale_w, min=torch.finfo(torch.float16).tiny)
         scaled = weight / scale_w
-        fq_w = _encode_decode(scaled.to(device), self._encode, self._decode) * scale_w
+        fq_w = (
+            _encode_decode(scaled.to(device), self._encode, self._decode)
+            * scale_w
+        )
         # 用 fakequant 后的权重替换（保持原 dtype/device）
         self.register_buffer("fakequant_weight", fq_w.to(weight.dtype))
         self.scale_w = scale_w

@@ -62,7 +62,10 @@ def parse_args():
         description="Qwen2.5-3B HiFloat8 量化全流程（AMCT）"
     )
     parser.add_argument(
-        "--model_path", type=str, required=True, help="Qwen2.5-3B-Instruct 本地模型路径"
+        "--model_path",
+        type=str,
+        required=True,
+        help="Qwen2.5-3B-Instruct 本地模型路径",
     )
     parser.add_argument(
         "--backend",
@@ -81,7 +84,10 @@ def parse_args():
         "--seqlen", type=int, default=2048, help="评估序列长度，默认 2048"
     )
     parser.add_argument(
-        "--max_samples", type=int, default=None, help="限制评估段数（冒烟用），默认全量"
+        "--max_samples",
+        type=int,
+        default=None,
+        help="限制评估段数（冒烟用），默认全量",
     )
     parser.add_argument(
         "--device", type=str, default="npu:0", help="推理设备，默认 npu:0"
@@ -113,8 +119,16 @@ def quantize_model(model, backend, device):
 
     cfg = {
         "quant_cfg": {
-            "weights": {"type": "hifloat8", "symmetric": True, "strategy": "channel"},
-            "inputs": {"type": "hifloat8", "symmetric": True, "strategy": "tensor"},
+            "weights": {
+                "type": "hifloat8",
+                "symmetric": True,
+                "strategy": "channel",
+            },
+            "inputs": {
+                "type": "hifloat8",
+                "symmetric": True,
+                "strategy": "tensor",
+            },
         },
         "algorithm": {algo},
         "skip_layers": {"lm_head"},
@@ -190,7 +204,9 @@ def main():
     if "baseline_ppl" in result:
         delta = result["quant_ppl"] - result["baseline_ppl"]
         result["ppl_delta"] = round(delta, 6)
-        result["ppl_delta_pct"] = round(delta / result["baseline_ppl"] * 100, 3)
+        result["ppl_delta_pct"] = round(
+            delta / result["baseline_ppl"] * 100, 3
+        )
 
     print("=" * 60)
     print("[结果汇总]")

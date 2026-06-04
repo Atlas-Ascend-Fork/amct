@@ -48,7 +48,9 @@ def get_model(model_path, seqlen=2048, dtype=torch.float16):
 
 def get_wikitext2_test(tokenizer):
     """加载 wikitext2 测试集并编码为单条长序列（与官方样例一致）。"""
-    parquet_path = os.environ.get("WIKITEXT2_PARQUET", DEFAULT_WIKITEXT2_PARQUET)
+    parquet_path = os.environ.get(
+        "WIKITEXT2_PARQUET", DEFAULT_WIKITEXT2_PARQUET
+    )
     if os.path.isfile(parquet_path):
         print(f"Loading wikitext2 test set from local parquet: {parquet_path}")
         import pandas as pd
@@ -58,7 +60,9 @@ def get_wikitext2_test(tokenizer):
         print("Loading wikitext2 test set via datasets.load_dataset")
         from datasets import load_dataset
 
-        texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")["text"]
+        texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")[
+            "text"
+        ]
     testenc = tokenizer("\n\n".join(texts), return_tensors="pt")
     return testenc
 
@@ -69,7 +73,9 @@ def get_calib_data(tokenizer, calib_path, device, batch_num=1, seqlen=2048):
     优先读本地 parquet（calib_path 或 wikitext2 训练集），切分为 batch_num
     个长度为 seqlen 的序列。校准只需少量代表性数据。
     """
-    path = calib_path or os.environ.get("WIKITEXT2_PARQUET", DEFAULT_WIKITEXT2_PARQUET)
+    path = calib_path or os.environ.get(
+        "WIKITEXT2_PARQUET", DEFAULT_WIKITEXT2_PARQUET
+    )
     if path and os.path.isfile(path):
         import pandas as pd
 
@@ -77,11 +83,17 @@ def get_calib_data(tokenizer, calib_path, device, batch_num=1, seqlen=2048):
     else:
         from datasets import load_dataset
 
-        texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")["text"]
+        texts = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")[
+            "text"
+        ]
     enc = tokenizer("\n\n".join(texts), return_tensors="pt").input_ids
     total = enc.numel() // seqlen
     n = min(batch_num, total)
-    return [enc[:, i * seqlen : (i + 1) * seqlen].to(device) for i in range(n)]
+    out = []
+    for i in range(n):
+        seg = enc[:, i * seqlen:(i + 1) * seqlen]
+        out.append(seg.to(device))
+    return out
 
 
 @torch.no_grad()
@@ -104,10 +116,10 @@ def eval_ppl(model, testenc, device, max_samples=None):
     loss_fct = nn.CrossEntropyLoss()
     start = time.time()
     for i in tqdm.tqdm(range(nsamples), desc="evaluating ppl"):
-        batch = input_ids[:, i * seqlen : (i + 1) * seqlen].to(device)
+        batch = input_ids[:, i * seqlen:(i + 1) * seqlen].to(device)
         logits = model(batch).logits
         shift_logits = logits[:, :-1, :].contiguous().float()
-        shift_labels = input_ids[:, i * seqlen : (i + 1) * seqlen][:, 1:].to(
+        shift_labels = input_ids[:, i * seqlen:(i + 1) * seqlen][:, 1:].to(
             shift_logits.device
         )
         loss = loss_fct(
@@ -116,5 +128,8 @@ def eval_ppl(model, testenc, device, max_samples=None):
         nlls.append(loss.float() * seqlen)
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * seqlen))
     elapsed = time.time() - start
-    print(f"PPL eval: {nsamples} samples, {elapsed:.1f}s, score = {ppl.item():.6f}")
+    print(
+        f"PPL eval: {nsamples} samples, {elapsed:.1f}s, "
+        f"score = {ppl.item():.6f}"
+    )
     return ppl.item()
