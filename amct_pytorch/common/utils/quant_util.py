@@ -331,7 +331,6 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
         dequantize_tensor = dq.to(ori_dtype) * scale.to(ori_dtype).to(dq.device)
         return dequantize_tensor.to(ori_dtype)
 
-    import torch_npu
     quantized_tensor, shared_exponent = quant_tensor(tensor, dst_dtype, scale, offset, group_size)
     scale = shared_exponent if scale is None else scale.to(quantized_tensor.device)
 
