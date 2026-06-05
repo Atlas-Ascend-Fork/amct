@@ -51,7 +51,15 @@ def _hifloat8_fake_quant(fp_tensor):
         import torch_npu
         hif8 = torch_npu.npu_dtype_cast(fp_tensor, torch_npu.hifloat8)
         return torch_npu.npu_dtype_cast(hif8, fp_tensor.dtype, input_dtype=torch_npu.hifloat8)
-    from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+    try:
+        from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+    except ImportError as exc:
+        raise ImportError(
+            "current torch_npu does not support hifloat8, so amct_pytorch falls back to "
+            "the amct_ops hifloat8_cast operator, but amct_ops is not installed. "
+            "Please install amct_ops (see amct_ops/README.md), or use a torch_npu build "
+            "with native hifloat8 support."
+        ) from exc
     work_dtype = fp_tensor.dtype if fp_tensor.dtype in (torch.float16, torch.bfloat16) else torch.bfloat16
     codes = encode_to_hifloat8(fp_tensor.to(work_dtype).npu())
     return decode_from_hifloat8(codes, work_dtype).to(fp_tensor.dtype)

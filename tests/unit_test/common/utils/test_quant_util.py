@@ -424,3 +424,15 @@ def test_quant_dequant_tensor_hifloat8_self_contained(monkeypatch):
     assert torch.allclose(captured["scaled"], t / scale)
     assert torch.allclose(out, t)
     assert out.dtype == t.dtype
+
+
+def test_fake_quant_fallback_raises_clear_error_when_amct_ops_missing(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setattr(qu, "_hifloat8_supported", lambda: False)
+    # 模拟 amct_ops 未安装：import 触发 ImportError
+    monkeypatch.setitem(sys.modules, "amct_ops", None)
+    monkeypatch.setitem(sys.modules, "amct_ops.hifloat8_cast", None)
+
+    x = torch.randn(2, 4, dtype=torch.float16)
+    with pytest.raises(ImportError, match="amct_ops is not installed"):
+        qu._hifloat8_fake_quant(x)
