@@ -53,17 +53,24 @@ amct_ops 子项目提供了纯类型编解码算子（运行在昇腾 NPU 上）
 
 ### 4.1 新增 helper（`common/utils/quant_util.py`）
 
+探测沿用代码库既有规范——`common/utils/check_params.py` 的 `check_parameters_in_schema`，与 `npu_hif8_quantization_linear.py:39`、`npu_quantization_linear.py:185`、`weight_npu_quant_module.py:76` 保持一致（不自创 `hasattr` 探测）。
+
 ```python
 import functools
+from amct_pytorch.common.utils.check_params import check_parameters_in_schema
 
 @functools.lru_cache(maxsize=1)
 def _hifloat8_supported():
-    """探测 torch_npu 是否提供 hifloat8 能力，进程内缓存一次。"""
+    """探测 torch_npu 是否提供 hifloat8 能力，进程内缓存一次。
+
+    沿用代码库既有判据：npu_quant_matmul 的 schema 是否含 x1_dtype 参数
+    （新版 torch_npu 才有，对应 hifloat8 量化 matmul 能力）。
+    """
     try:
         import torch_npu
-        return hasattr(torch_npu, 'hifloat8')
     except ImportError:
         return False
+    return check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype')
 
 
 @torch.no_grad()
@@ -84,7 +91,7 @@ def _hifloat8_fake_quant(fp_tensor):
 ```
 
 设计要点：
-- `_hifloat8_supported` 用 `lru_cache` 缓存探测结果，避免每次 cast 重复 `hasattr`。
+- `_hifloat8_supported` 复用 `check_parameters_in_schema`，与现有 deploy_op 探测口径统一；用 `lru_cache` 缓存结果，避免每次 cast 重复反射 schema。
 - `_hifloat8_fake_quant` 只负责「cast 往返」这一语义单元；scale 的乘除留在各调用点，职责清晰、可独立测试。
 - float32：amct_ops 算子不接受 fp32（`ALLOWED_WEIGHT_DTYPES` 中 `hifloat8 hifloat8` 允许 fp32），故先降 bf16 往返再还原。这是 fallback 分支特有的精度近似，原生分支不受影响。
 
@@ -139,7 +146,7 @@ per-token 维度：`dst_type_max=15` 对应 HiF8 高精度范围上界（与 `ca
 
 新增单测（沿用现有 `tests/ut` 布局与风格）：
 
-1. **`_hifloat8_supported` 探测**：mock `torch_npu` 有/无 `hifloat8` 属性、mock `ImportError`，验证三种返回。
+1. **`_hifloat8_supported` 探测**：mock `torch_npu.npu_quant_matmul` 的 schema 含/不含 `x1_dtype`、mock `import torch_npu` 抛 `ImportError`，验证三种返回；并验证 `lru_cache` 只探测一次。
 2. **`_hifloat8_fake_quant` 分支选择**：
    - mock `_hifloat8_supported=True`，断言走 `npu_dtype_cast` 往返。
    - mock `_hifloat8_supported=False` 且 mock amct_ops 的 encode/decode，断言被调用且 fp32 输入按 bf16 往返。
