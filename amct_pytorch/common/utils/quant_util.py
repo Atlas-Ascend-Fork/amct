@@ -14,14 +14,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import functools
 import math
 import torch
 
 from amct_pytorch.common.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4
 from amct_pytorch.common.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
 from amct_pytorch.common.utils.data_utils import float_to_fp4e2m1
+from amct_pytorch.common.utils.check_params import check_parameters_in_schema
 
 FP4E2M1_MAX_EXP = 2
+
+
+@functools.lru_cache(maxsize=1)
+def _hifloat8_supported():
+    """探测 torch_npu 是否提供 hifloat8 能力，进程内缓存一次。
+
+    沿用代码库既有判据（与 deploy_op 一致）：npu_quant_matmul 的 schema
+    是否含 x1_dtype 参数（新版 torch_npu 才有，对应 hifloat8 量化 matmul 能力）。
+    """
+    try:
+        import torch_npu
+    except ImportError:
+        return False
+    return check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype')
 
 
 def pad_zero_by_group(tensor, group_size):

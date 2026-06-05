@@ -317,3 +317,31 @@ def test_quant_weight_no_group_size_with_offset():
     q = qu.quant_weight(w, INT8, scale=scale, offset=offset, group_size=None)
     assert q.shape == w.shape
     assert q.dtype == torch.int8
+
+
+# ---- _hifloat8_supported / _hifloat8_fake_quant ---------------------------
+
+import sys
+from unittest import mock
+
+
+def test_hifloat8_supported_true_when_schema_has_x1_dtype(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    fake_npu = mock.MagicMock()
+    monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
+    monkeypatch.setattr(qu, "check_parameters_in_schema", lambda func, name: True)
+    assert qu._hifloat8_supported() is True
+
+
+def test_hifloat8_supported_false_when_schema_missing(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    fake_npu = mock.MagicMock()
+    monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
+    monkeypatch.setattr(qu, "check_parameters_in_schema", lambda func, name: False)
+    assert qu._hifloat8_supported() is False
+
+
+def test_hifloat8_supported_false_when_torch_npu_missing(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setitem(sys.modules, "torch_npu", None)  # import triggers ImportError
+    assert qu._hifloat8_supported() is False

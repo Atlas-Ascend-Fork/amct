@@ -17,11 +17,34 @@
 # ----------------------------------------------------------------------------
 import random
 import shutil
+import sys
+import types
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
 import torch
+
+# ---------------------------------------------------------------------------
+# Stub out optional heavy dependencies that are not installed in the CPU CI
+# environment.  These stubs must be inserted before any amct_pytorch imports
+# are collected so that the package-level __init__.py can resolve them.
+# ---------------------------------------------------------------------------
+
+def _make_transformers_stub():
+    """Return a minimal sys.modules stub for `transformers` and the
+    `transformers.cache_utils` sub-module that deepseekv3_attention_quant_module
+    imports at the top level."""
+    transformers = types.ModuleType("transformers")
+    cache_utils = types.ModuleType("transformers.cache_utils")
+    cache_utils.DynamicCache = mock.MagicMock(name="DynamicCache")
+    transformers.cache_utils = cache_utils
+    sys.modules.setdefault("transformers", transformers)
+    sys.modules.setdefault("transformers.cache_utils", cache_utils)
+
+
+_make_transformers_stub()
 
 SAFETENSORS_TMP_DIR = Path(__file__).resolve().parent / "tmp"
 
