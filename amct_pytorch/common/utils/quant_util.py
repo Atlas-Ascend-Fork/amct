@@ -40,6 +40,23 @@ def _hifloat8_supported():
     return check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype')
 
 
+@torch.no_grad()
+def _hifloat8_fake_quant(fp_tensor):
+    """FP -> HiF8 -> FP 伪量化往返。
+
+    torch_npu 支持 hifloat8 时走原生 cast；否则走 amct_ops 的 encode/decode。
+    amct_ops 仅支持 float16/bfloat16，float32 输入先降到 bfloat16 往返再还原回原 dtype。
+    """
+    if _hifloat8_supported():
+        import torch_npu
+        hif8 = torch_npu.npu_dtype_cast(fp_tensor, torch_npu.hifloat8)
+        return torch_npu.npu_dtype_cast(hif8, fp_tensor.dtype, input_dtype=torch_npu.hifloat8)
+    from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+    work_dtype = fp_tensor.dtype if fp_tensor.dtype in (torch.float16, torch.bfloat16) else torch.bfloat16
+    codes = encode_to_hifloat8(fp_tensor.to(work_dtype).npu())
+    return decode_from_hifloat8(codes, work_dtype).to(fp_tensor.dtype)
+
+
 def pad_zero_by_group(tensor, group_size):
     """
     Function: Pads the input tensor so that the size of its last dimension is divisible by group_size.

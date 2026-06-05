@@ -345,3 +345,57 @@ def test_hifloat8_supported_false_when_torch_npu_missing(monkeypatch):
     qu._hifloat8_supported.cache_clear()
     monkeypatch.setitem(sys.modules, "torch_npu", None)  # import triggers ImportError
     assert qu._hifloat8_supported() is False
+
+
+def test_fake_quant_native_path_uses_npu_dtype_cast(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setattr(qu, "_hifloat8_supported", lambda: True)
+
+    calls = []
+    fake_npu = mock.MagicMock()
+    fake_npu.hifloat8 = "HIF8"
+
+    def fake_cast(t, dtype, input_dtype=None):
+        calls.append((dtype, input_dtype))
+        return t  # 透传，验证调用次序
+
+    fake_npu.npu_dtype_cast = fake_cast
+    monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
+
+    x = torch.randn(4, 8, dtype=torch.float16)
+    out = qu._hifloat8_fake_quant(x)
+    # 先 FP->HIF8，再 HIF8->FP
+    assert calls[0] == ("HIF8", None)
+    assert calls[1] == (torch.float16, "HIF8")
+    assert out.shape == x.shape
+
+
+def test_fake_quant_fallback_uses_amct_ops_and_bf16_for_fp32(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setattr(qu, "_hifloat8_supported", lambda: False)
+
+    seen = {}
+
+    def fake_encode(t):
+        seen["encode_dtype"] = t.dtype
+        return t.to(torch.uint8)
+
+    def fake_decode(codes, dtype):
+        seen["decode_dtype"] = dtype
+        return codes.to(dtype)
+
+    fake_mod = mock.MagicMock()
+    fake_mod.encode_to_hifloat8 = fake_encode
+    fake_mod.decode_from_hifloat8 = fake_decode
+    monkeypatch.setitem(sys.modules, "amct_ops", mock.MagicMock())
+    monkeypatch.setitem(sys.modules, "amct_ops.hifloat8_cast", fake_mod)
+    # CPU CI 上 .npu() 不可用，替换为 no-op
+    monkeypatch.setattr(torch.Tensor, "npu", lambda self: self, raising=False)
+
+    x = torch.randn(4, 8, dtype=torch.float32)
+    out = qu._hifloat8_fake_quant(x)
+    # fp32 输入应降到 bf16 往返
+    assert seen["encode_dtype"] == torch.bfloat16
+    assert seen["decode_dtype"] == torch.bfloat16
+    assert out.dtype == torch.float32  # 还原回原 dtype
+    assert out.shape == x.shape
