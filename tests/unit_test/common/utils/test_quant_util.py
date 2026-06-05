@@ -326,19 +326,19 @@ import sys
 from unittest import mock
 
 
-def test_hifloat8_supported_true_when_schema_has_x1_dtype(monkeypatch):
+def test_hifloat8_supported_true_when_torch_npu_has_hifloat8(monkeypatch):
     qu._hifloat8_supported.cache_clear()
     fake_npu = mock.MagicMock()
+    fake_npu.hifloat8 = "HIF8"  # dtype 属性存在
     monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
-    monkeypatch.setattr(qu, "check_parameters_in_schema", lambda func, name: True)
     assert qu._hifloat8_supported() is True
 
 
-def test_hifloat8_supported_false_when_schema_missing(monkeypatch):
+def test_hifloat8_supported_false_when_hifloat8_attr_missing(monkeypatch):
     qu._hifloat8_supported.cache_clear()
-    fake_npu = mock.MagicMock()
+    # spec=[] 的 mock 不暴露任何属性，hasattr(..., 'hifloat8') 为 False
+    fake_npu = mock.MagicMock(spec=[])
     monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
-    monkeypatch.setattr(qu, "check_parameters_in_schema", lambda func, name: False)
     assert qu._hifloat8_supported() is False
 
 

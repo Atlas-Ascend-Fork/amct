@@ -21,23 +21,23 @@ import torch
 from amct_pytorch.common.utils.vars import INT8_MAX, INT8_MIN, INT4_MIN, INT4_MAX, INT8, INT4
 from amct_pytorch.common.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, MXFP8_E4M3FN, FLOAT4_E2M1
 from amct_pytorch.common.utils.data_utils import float_to_fp4e2m1
-from amct_pytorch.common.utils.check_params import check_parameters_in_schema
 
 FP4E2M1_MAX_EXP = 2
 
 
 @functools.lru_cache(maxsize=1)
 def _hifloat8_supported():
-    """探测 torch_npu 是否提供 hifloat8 能力，进程内缓存一次。
+    """探测 torch_npu 的 cast 算子是否支持 hifloat8，进程内缓存一次。
 
-    沿用代码库既有判据（与 deploy_op 一致）：npu_quant_matmul 的 schema
-    是否含 x1_dtype 参数（新版 torch_npu 才有，对应 hifloat8 量化 matmul 能力）。
+    量化阶段实际调用 npu_dtype_cast / npu_dynamic_quant 把张量 cast 到
+    torch_npu.hifloat8，这条路径的前提是 torch_npu 暴露了 hifloat8 这个
+    dtype。该属性不存在时（旧版 torch_npu）cast 无法调用，需回退 amct_ops。
     """
     try:
         import torch_npu
     except ImportError:
         return False
-    return check_parameters_in_schema(torch_npu.npu_quant_matmul, 'x1_dtype')
+    return hasattr(torch_npu, 'hifloat8')
 
 
 @torch.no_grad()
