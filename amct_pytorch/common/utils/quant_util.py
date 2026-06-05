@@ -320,16 +320,22 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
     Returns:
         torch.tensor
     """
-    import torch_npu    
     ori_dtype = tensor.dtype
     ori_shape = tensor.shape
+
+    if dst_dtype == HIFLOAT8:
+        # 自包含 hif8 伪量化：÷scale -> FP->HiF8->FP 往返 -> ×scale。
+        # 不依赖 quant_tensor 的 npu_quantize，torch_npu 缺 hif8 支持时走 amct_ops。
+        scaled = tensor / scale.to(tensor.device)
+        dq = _hifloat8_fake_quant(scaled)
+        dequantize_tensor = dq.to(ori_dtype) * scale.to(ori_dtype).to(dq.device)
+        return dequantize_tensor.to(ori_dtype)
+
+    import torch_npu
     quantized_tensor, shared_exponent = quant_tensor(tensor, dst_dtype, scale, offset, group_size)
     scale = shared_exponent if scale is None else scale.to(quantized_tensor.device)
 
-    if dst_dtype == HIFLOAT8:
-        quantized_tensor = torch_npu.npu_dtype_cast(quantized_tensor, ori_dtype, input_dtype=torch_npu.hifloat8)
-        dequantize_tensor = quantized_tensor * scale
-    elif dst_dtype == FLOAT8_E4M3FN:
+    if dst_dtype == FLOAT8_E4M3FN:
         quantized_tensor = quantized_tensor.to(scale.dtype)
         dequantize_tensor = quantized_tensor * scale
     elif dst_dtype == MXFP4_E2M1:

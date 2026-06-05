@@ -23,6 +23,7 @@ import torch
 from amct_pytorch.common.utils import quant_util as qu
 from amct_pytorch.common.utils.vars import (
     FLOAT4_E2M1,
+    HIFLOAT8,
     INT4,
     INT4_MAX,
     INT4_MIN,
@@ -399,3 +400,27 @@ def test_fake_quant_fallback_uses_amct_ops_and_bf16_for_fp32(monkeypatch):
     assert seen["decode_dtype"] == torch.bfloat16
     assert out.dtype == torch.float32  # 还原回原 dtype
     assert out.shape == x.shape
+
+
+def test_quant_dequant_tensor_hifloat8_self_contained(monkeypatch):
+    # hif8 分支应自包含：÷scale -> _hifloat8_fake_quant -> ×scale，
+    # 不调用 quant_tensor 的 npu_quantize。
+    captured = {}
+
+    def fake_fake_quant(t):
+        captured["scaled"] = t.clone()
+        return t  # 透传，等价于无损 cast，便于断言数值
+
+    monkeypatch.setattr(qu, "_hifloat8_fake_quant", fake_fake_quant)
+    # 若 hif8 分支错误地走了 quant_tensor，会触发断言
+    monkeypatch.setattr(qu, "quant_tensor",
+                        mock.MagicMock(side_effect=AssertionError("should not call quant_tensor")))
+
+    t = torch.tensor([[2.0, 4.0, 8.0, 16.0]])
+    scale = torch.tensor([[2.0]])
+    out = qu.quant_dequant_tensor(t, HIFLOAT8, scale=scale)
+
+    # 透传 fake_quant 下：out = (t/scale)*scale = t
+    assert torch.allclose(captured["scaled"], t / scale)
+    assert torch.allclose(out, t)
+    assert out.dtype == t.dtype
