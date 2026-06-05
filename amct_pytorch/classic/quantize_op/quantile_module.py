@@ -121,11 +121,20 @@ class QuantileQuant(BaseQuantizeModule):
         if self.weight_compress_only:
             dq_x = inputs
         elif self.dynamic is True:
-            import torch_npu
-            quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
-                inputs.npu(), dst_type=torch_npu.hifloat8, dst_type_max=15)
-            quant_x_fp = torch_npu.npu_dtype_cast(quant_x, inputs.dtype, input_dtype=torch_npu.hifloat8)
-            dq_x = quant_x_fp * pertoken_scale.unsqueeze(-1).to(quant_x_fp.dtype)
+            from amct_pytorch.common.utils.quant_util import (
+                _hifloat8_supported, _hifloat8_fake_quant)
+            if _hifloat8_supported():
+                import torch_npu
+                quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
+                    inputs.npu(), dst_type=torch_npu.hifloat8, dst_type_max=15)
+                quant_x_fp = torch_npu.npu_dtype_cast(
+                    quant_x, inputs.dtype, input_dtype=torch_npu.hifloat8)
+                dq_x = quant_x_fp * pertoken_scale.unsqueeze(-1).to(quant_x_fp.dtype)
+            else:
+                amax = inputs.abs().amax(dim=-1, keepdim=True)
+                pertoken_scale = (amax / 15).to(torch.float32)
+                dq_x = _hifloat8_fake_quant(inputs / pertoken_scale).to(inputs.dtype) \
+                    * pertoken_scale.to(inputs.dtype)
         else:
             dq_x = quant_dequant_tensor(inputs, self.act_type, self.scale_d, self.offset_d)
         return F.linear(dq_x, self.cached_dq_w, self.bias)
