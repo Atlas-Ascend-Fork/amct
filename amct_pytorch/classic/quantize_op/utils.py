@@ -23,10 +23,10 @@ from amct_pytorch.common.utils.quant_util import convert_to_per_group_shape
 from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8, QUANTILE_EMA_ALPHA, QUANTILE_EMA_BETA
 
 FLT_EPSILON = 1.192092896e-7
-QUANT_MAX_SCOPE = {
+QUANT_SCOPE = {
     FLOAT4_E2M1: 6.0,
     FLOAT8_E4M3FN: 448.0, # 256 * 1.75
-    HIFLOAT8: 32768.0, # 2^15
+    HIFLOAT8: 16.0,
 }
 
 
@@ -146,6 +146,29 @@ def get_weight_min_max_by_granularity(weight_data, quant_config):
     return weight_min, weight_max
 
 
+def calculate_hifloat8_weight_scale(weight_data, quant_config):
+    """
+    Function: compute the per-output-channel HiFloat8 weight scale.
+
+    HiFloat8 cast scales weight_max into the HiF8 normal range (weight_max / 16),
+    which differs from the generic calculate_scale_offset path. Both the cast
+    quantize op (HIF8CastQuant) and the deploy op (NpuHIF8CastLinear) share this
+    helper so their scales stay in lockstep.
+
+    Parameters:
+        weight_data (Tensor): weight data
+        quant_config (dict): quantization configuration
+    Returns:
+        Tensor: HiFloat8 weight scale flattened to 1-D
+    """
+    _, weight_max = get_weight_min_max_by_granularity(weight_data, quant_config)
+    scale_w = (weight_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
+    scale_w, _ = process_scale(scale_w, None, quant_config.get('weights_cfg').get('symmetric'))
+    scale_w = scale_w.reshape(-1, 1) if len(scale_w.shape) == 1 else scale_w
+    scale_w = scale_w.repeat(weight_data.shape[0], 1) if scale_w.shape[0] == 1 else scale_w
+    return scale_w.reshape(-1)
+
+
 def convert_to_dst_shape(input_tensor, dst_shape):
     """
     Converts a flattened tensor back to its destination 2D shape by truncating excess elements.
@@ -196,7 +219,7 @@ def get_float_quant_scope(data_type):
     Returns:
         quantization step
     """
-    return QUANT_MAX_SCOPE[data_type]
+    return QUANT_SCOPE[data_type]
 
 
 def calculate_progressive_weights_scale_factor(weight, group_size=32):

@@ -19,7 +19,7 @@ import torch
 from amct_pytorch.common.utils.vars import HIFLOAT8
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.quant_util import convert_dtype, quant_tensor
-from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity, process_scale
+from amct_pytorch.classic.quantize_op.utils import calculate_hifloat8_weight_scale
 
 
 class NpuHIF8CastLinear(torch.nn.Module):
@@ -31,7 +31,7 @@ class NpuHIF8CastLinear(torch.nn.Module):
         3. Support HIF8 data types
     APIs: forward.
     """
-    def __init__(self, ori_module, layer_name, quant_config):
+    def __init__(self, ori_module, layer_name, quant_config, scale_w=None):
         """
         Function: init objective.
         Args:
@@ -40,6 +40,8 @@ class NpuHIF8CastLinear(torch.nn.Module):
             quant_config: dict. Calibration algorithm parameters.
                           - weights_cfg: weight quantization config
                           - inputs_cfg: activation quantization config
+            scale_w: torch.tensor or None. Pre-computed weight scale from the quantize op;
+                     recomputed from the weight when None (cast scale is deterministic).
         """
         super().__init__()
         self.ori_module_type = type(ori_module).__name__
@@ -53,13 +55,9 @@ class NpuHIF8CastLinear(torch.nn.Module):
         if quant_config.get('inputs_cfg').get('enable_quant') is None or \
             quant_config.get('inputs_cfg').get('enable_quant') == True:
             self.weight_compress_only = False
-        
-        weight_min, weight_max = get_weight_min_max_by_granularity(self.weight, quant_config)
-        scale_w = (weight_max / 16).to(torch.float32)
-        scale_w, _ = process_scale(scale_w, None, quant_config.get('weights_cfg').get('symmetric'))
-        scale_w = scale_w.reshape(-1, 1) if len(scale_w.shape) == 1 else scale_w
-        scale_w = scale_w.repeat(self.weight.shape[0], 1) if scale_w.shape[0] == 1 else scale_w
-        scale_w = scale_w.reshape(-1)
+
+        if scale_w is None:
+            scale_w = calculate_hifloat8_weight_scale(self.weight, quant_config)
         weight, _ = quant_tensor(self.weight.transpose(1, 0), self.wts_type, scale=scale_w)
         self.register_buffer('quantized_weight', weight.to(self.device))
         self.register_buffer('scale_w', scale_w)

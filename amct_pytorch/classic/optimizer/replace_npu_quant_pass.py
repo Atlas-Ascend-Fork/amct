@@ -15,12 +15,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from torch import nn
+
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.model_util import ModuleHelper
 from amct_pytorch.classic.deploy_op import NpuQuantizationLinear
 from amct_pytorch.classic.deploy_op import NpuWeightQuantizedLinear
 from amct_pytorch.classic.deploy_op import NpuQuantizationConv2d
+from amct_pytorch.classic.deploy_op import NpuHIF8CastLinear
 from amct_pytorch.classic.quantize_op import MinMaxQuant
 from amct_pytorch.classic.quantize_op import OfmrQuant
 from amct_pytorch.algorithms import AlgorithmRegistry
@@ -99,10 +102,29 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         if isinstance(deploy_ops, list):
             for deploy_op in deploy_ops:
                 if self._should_use_deploy_op(object_module, deploy_op):
-                    return deploy_op(object_module)
-            return deploy_ops[0](object_module)
+                    return self._build_deploy_op(deploy_op, object_module)
+            return self._build_deploy_op(deploy_ops[0], object_module)
         else:
-            return deploy_ops(object_module)
+            return self._build_deploy_op(deploy_ops, object_module)
+
+    @staticmethod
+    def _build_deploy_op(deploy_op, object_module):
+        """Instantiate a deploy op from a quant module.
+
+        Most deploy ops read quant factors off the quant module via a single-arg
+        constructor. NpuHIF8CastLinear keeps its native 3-arg constructor
+        (ori_module, layer_name, quant_config) unchanged, so the cast quant module
+        (HIF8CastQuant) is unwrapped back into those three args here.
+        """
+        if deploy_op is NpuHIF8CastLinear:
+            ori_module = nn.Linear(object_module.weight.shape[1], object_module.weight.shape[0],
+                                   bias=object_module.bias is not None)
+            ori_module.weight = nn.Parameter(object_module.weight.data, requires_grad=False)
+            if object_module.bias is not None:
+                ori_module.bias = nn.Parameter(object_module.bias.data, requires_grad=False)
+            return deploy_op(ori_module, object_module.layer_name, object_module.quant_config,
+                             scale_w=object_module.scale_w)
+        return deploy_op(object_module)
     
     def _should_use_deploy_op(self, object_module, deploy_op):
         """
