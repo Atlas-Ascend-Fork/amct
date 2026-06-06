@@ -45,11 +45,10 @@ class HIF8CastQuant(BaseQuantizeModule):
                           to reconstruct itself at convert time).
         """
         super().__init__(ori_module, layer_name, quant_config)
-        self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         self.bias = ori_module.bias
         self.layer_name = layer_name
-        # Retained so the convert pass can rebuild NpuHIF8CastLinear(ori, name, cfg).
+        # Retained so the deploy op can read inputs_cfg.quant_type when rebuilding from this module.
         self.quant_config = quant_config
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
 
@@ -57,15 +56,11 @@ class HIF8CastQuant(BaseQuantizeModule):
         if quant_config.get('inputs_cfg').get('enable_quant') is None or \
                 quant_config.get('inputs_cfg').get('enable_quant') is True:
             self.weight_compress_only = False
-            self.act_type = quant_config.get('inputs_cfg').get('quant_type')
 
-        self._calculate_weight_scale(quant_config)
-        self.cached_dq_w = None
-
-    def _calculate_weight_scale(self, quant_config):
-        """Compute the per-output-channel weight scale, mirroring NpuHIF8CastLinear."""
-        self.scale_w = calculate_hifloat8_weight_scale(self.weight, quant_config)
-        self.offset_w = None
+        # Channel/tensor weight scale (1-D), mirroring NpuHIF8CastLinear.
+        strategy = quant_config.get('weights_cfg').get('strategy')
+        self.scale_w = calculate_hifloat8_weight_scale(self.weight, strategy)
+        self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w)
         LOGGER.logd("Calculate cast quant params of layer '{}' success!".format(self.layer_name), 'HIF8CastQuant')
 
     @torch.no_grad()
@@ -73,8 +68,6 @@ class HIF8CastQuant(BaseQuantizeModule):
         """Fake-quant forward: dequantized weight matmul, optional activation cast round trip."""
         check_linear_input_dim(inputs)
         inputs = inputs.to(self.weight.device)
-        if self.cached_dq_w is None:
-            self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w, self.offset_w)
         if self.weight_compress_only:
             dq_x = inputs
         else:

@@ -146,25 +146,26 @@ def get_weight_min_max_by_granularity(weight_data, quant_config):
     return weight_min, weight_max
 
 
-def calculate_hifloat8_weight_scale(weight_data, quant_config):
+def calculate_hifloat8_weight_scale(weight_data, strategy):
     """
-    Function: compute the per-output-channel HiFloat8 weight scale.
+    Function: compute the HiFloat8 weight scale (channel/tensor, flattened to 1-D).
 
-    HiFloat8 cast scales weight_max into the HiF8 normal range (weight_max / 16),
-    which differs from the generic calculate_scale_offset path. Both the cast
-    quantize op (HIF8CastQuant) and the deploy op (NpuHIF8CastLinear) share this
-    helper so their scales stay in lockstep.
+    Scales weight_max into the HiF8 normal range (weight_max / 16). HiFloat8 is always
+    symmetric (the config layer rejects asymmetric). Shared by the cast quantize op
+    (HIF8CastQuant) and deploy op (NpuHIF8CastLinear) to keep scales aligned.
 
     Parameters:
         weight_data (Tensor): weight data
-        quant_config (dict): quantization configuration
+        strategy (str): weight quant granularity, 'channel' or 'tensor'
     Returns:
         Tensor: HiFloat8 weight scale flattened to 1-D
     """
-    _, weight_max = get_weight_min_max_by_granularity(weight_data, quant_config)
+    if strategy == 'tensor':
+        weight_max = weight_data.max().reshape(1, 1)
+    else:
+        weight_max = weight_data.max(dim=1, keepdim=True).values
     scale_w = (weight_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
-    scale_w, _ = process_scale(scale_w, None, quant_config.get('weights_cfg').get('symmetric'))
-    scale_w = scale_w.reshape(-1, 1) if len(scale_w.shape) == 1 else scale_w
+    scale_w, _ = process_scale(scale_w, None, symmetric=True)
     scale_w = scale_w.repeat(weight_data.shape[0], 1) if scale_w.shape[0] == 1 else scale_w
     return scale_w.reshape(-1)
 
