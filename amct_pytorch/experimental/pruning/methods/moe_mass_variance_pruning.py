@@ -35,7 +35,7 @@ Validated on LLaDA2.1-mini: boundary=10 gives best ACC.
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import torch
@@ -44,7 +44,7 @@ import torch.nn as nn
 from ..config import MethodSpec, PruneConfig
 from ..context import PruneContext
 from ..domains.base import BasePruningDomain
-from ..domains.moe import MoEPruningDomain, MoETarget
+from ..domains.moe import MoEPruningDomain, MoETarget, route_topk_from_output
 from ..report import PruneReport
 from ..utils import (
     get_submodule,
@@ -70,15 +70,10 @@ def _make_router_hook(stats: "LayerRoutingStats", k: int):
     def hook(module, inputs, output):
         _ = module
         _ = inputs
-        if isinstance(output, tuple) and len(output) >= 3:
-            topk_idx = output[0].detach().cpu()
-            topk_wt = output[1].detach().float().cpu()
-        elif torch.is_tensor(output):
-            logits = output.detach().float().cpu()
-            flat = logits.reshape(-1, logits.shape[-1])
-            probs = torch.softmax(flat, dim=-1)
-            topk_wt, topk_idx = torch.topk(probs, min(k, flat.shape[-1]), dim=-1)
-        else:
+        # 结构无关地解析 (topk_idx, topk_wt)：兼容 logits 张量 / 旧式 (idx,wt) /
+        # 现代 *TopKRouter 的 (logits, topk_wt, topk_idx) 元组。
+        topk_idx, topk_wt = route_topk_from_output(output, stats.num_experts, k)
+        if topk_idx is None:
             return
 
         topk_idx = topk_idx.reshape(-1, topk_idx.shape[-1])
@@ -206,11 +201,8 @@ def _prune_one_layer(
     keep_idx: List[int],
     top_k: int,
 ) -> None:
-    experts = domain.get_experts(model, target)
-    new_experts = nn.ModuleList([experts[i] for i in keep_idx])
-    domain.replace_experts(model, target, new_experts)
-    domain.prune_router(model, target, keep_idx)
-    domain.update_moe_attributes(model, target, len(keep_idx))
+    # 统一落地（ModuleList 重建 / 融合张量切片，由域按 target.fused 分派）
+    domain.prune_experts(model, target, keep_idx, top_k)
     _patch_router_module(model, target, keep_idx, top_k)
 
 

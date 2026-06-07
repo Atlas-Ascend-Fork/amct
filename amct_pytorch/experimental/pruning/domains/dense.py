@@ -75,10 +75,16 @@ def _find_gated_by_shape_inference(
     for down_name, down_mod in linear_children:
         if down_mod.in_features <= config.min_neurons:
             continue
+        if _looks_like_attention_proj(down_name):
+            continue
+        # gate/up：输出维 == down 的输入维（中间维），且其输入维 == down 的输出维
+        # （门控 FFN 复原残差流维度 in→inter→in）。后一条可排除注意力 q/o→k 的误配。
         same_hidden = [
             (n, m)
             for n, m in linear_children
             if m.out_features == down_mod.in_features and n != down_name
+            and m.in_features == down_mod.out_features
+            and not _looks_like_attention_proj(n)
         ]
         if len(same_hidden) >= 2:
             (gate_name, _), (up_name, _) = same_hidden[:2]
@@ -100,21 +106,47 @@ def _find_gated_pattern(
     return _find_gated_by_shape_inference(parent_name, children, config)
 
 
+# 注意力投影命名（用于额外的安全排除；结构判据为主，命名为辅）
+_ATTENTION_PROJ_HINTS = (
+    "q_proj", "k_proj", "v_proj", "o_proj", "query", "key", "value",
+    "out_proj", "wq", "wk", "wv", "wo", "qkv",
+)
+
+
+def _looks_like_attention_proj(name: str) -> bool:
+    low = name.lower()
+    return any(h in low for h in _ATTENTION_PROJ_HINTS)
+
+
 def _find_two_layer_patterns(
     parent_name: str, parent: nn.Module, config: PruneConfig
 ) -> List[TwoLayerDenseTarget]:
     items = iter_direct_named_modules(parent)
+    # 并列投影判据：注意力的 q/k/v/o 都读取同一输入(hidden)，故父模块内会有多个
+    # in_features 相同的 Linear；它们不是“producer→consumer 顺序 FFN”，必须排除，
+    # 否则会把 q_proj→k_proj 误当两层 FFN 剪掉而破坏注意力。
+    in_feature_counts: dict = {}
+    for _, m in items:
+        if isinstance(m, nn.Linear):
+            in_feature_counts[m.in_features] = in_feature_counts.get(m.in_features, 0) + 1
+
     patterns: List[TwoLayerDenseTarget] = []
     for i, (name1, mod1) in enumerate(items):
         if not isinstance(mod1, nn.Linear):
             continue
         if mod1.out_features <= config.min_neurons:
             continue
+        # mod1 与至少一个兄弟共享输入 → 并列投影（如注意力），跳过
+        if in_feature_counts.get(mod1.in_features, 0) >= 2:
+            continue
+        if _looks_like_attention_proj(name1):
+            continue
         for j in range(i + 1, len(items)):
             name2, mod2 = items[j]
             if is_activation_like(mod2) or is_norm_like(mod2):
                 continue
-            if isinstance(mod2, nn.Linear) and mod1.out_features == mod2.in_features:
+            if isinstance(mod2, nn.Linear) and mod1.out_features == mod2.in_features \
+                    and not _looks_like_attention_proj(name2):
                 producer_path = f"{parent_name}.{name1}" if parent_name else name1
                 consumer_path = f"{parent_name}.{name2}" if parent_name else name2
                 patterns.append(TwoLayerDenseTarget(producer_path=producer_path, consumer_path=consumer_path))
