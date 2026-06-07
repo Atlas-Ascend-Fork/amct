@@ -68,7 +68,8 @@ class PruningStage:
         targets = self.domain.find_targets(model, config)
         if config.skip_layers:
             targets = [t for t in targets if not _is_skipped(t, config.skip_layers)]
-        if not targets:
+        # 基于依赖图的方法(requires_targets=False)自行分析整图，即便域无目标也要运行。
+        if not targets and getattr(self.method, "requires_targets", True):
             report.add(self.domain_name, self.method.name, "<none>", "No compatible pruning targets were found")
             return
         if self.method.requires_data and context.data is None:

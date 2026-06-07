@@ -34,7 +34,7 @@ Key findings (LLaDA2.1-mini, 256 -> 128 experts, GSM8K zero-shot):
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import torch
@@ -43,7 +43,7 @@ import torch.nn as nn
 from ..config import MethodSpec, PruneConfig
 from ..context import PruneContext
 from ..domains.base import BasePruningDomain
-from ..domains.moe import MoEPruningDomain, MoETarget
+from ..domains.moe import MoEPruningDomain, MoETarget, route_topk_from_output
 from ..report import PruneReport
 from ..utils import (
     get_submodule,
@@ -61,27 +61,17 @@ class ActivationCounter:
     num_experts: int = 0
 
     def update(self, router_output: torch.Tensor, top_k: int = 8) -> None:
-        """Update counts from router output (logits or tuple)."""
-        if isinstance(router_output, tuple):
-            if len(router_output) >= 3:
-                topk_idx = router_output[0]
-            else:
-                topk_idx = None
-        else:
-            topk_idx = None
-
-        if topk_idx is not None:
-            flat_idx = topk_idx.detach().reshape(-1)
-        else:
-            logits = router_output.detach() if torch.is_tensor(router_output) else router_output[0].detach()
-            flat_logits = logits.reshape(-1, logits.shape[-1])
-            k = min(top_k, flat_logits.shape[-1])
-            _, flat_idx = torch.topk(flat_logits, k, dim=-1)
-            flat_idx = flat_idx.reshape(-1)
+        """Update counts from router output (logits / tuple / fused TopKRouter)."""
+        # 结构无关解析 top-k 专家索引（兼容融合路由器的 (logits, wt, idx) 元组）
+        topk_idx, _ = route_topk_from_output(router_output, self.num_experts, top_k)
+        if topk_idx is None:
+            return
+        flat_idx = topk_idx.reshape(-1)
 
         if self.counts is None:
-            self.num_experts = max(int(flat_idx.max().item()) + 1, self.num_experts)
-            self.counts = torch.zeros(self.num_experts, dtype=torch.long)
+            n = self.num_experts or (int(flat_idx.max().item()) + 1)
+            self.num_experts = n
+            self.counts = torch.zeros(n, dtype=torch.long)
 
         max_idx = int(flat_idx.max().item())
         if max_idx >= len(self.counts):
@@ -105,6 +95,7 @@ def _make_router_hook(collector: ActivationCounter, k: int):
 
 def _register_router_hooks(
     model: nn.Module,
+    domain: MoEPruningDomain,
     targets: List[MoETarget],
     top_k: int,
 ):
@@ -115,6 +106,11 @@ def _register_router_hooks(
             continue
         router = get_submodule(model, target.router_path)
         collector = ActivationCounter()
+        # 预置专家数（融合结构无法从索引推断全量专家数，且利于路由输出消歧）
+        try:
+            collector.num_experts = domain.num_experts(model, target)
+        except (TypeError, ValueError):
+            pass
         collectors[target.router_path] = collector
         hooks.append(router.register_forward_hook(_make_router_hook(collector, top_k)))
     return collectors, hooks
@@ -188,11 +184,8 @@ def _prune_one_layer(
     keep_idx: List[int],
     top_k: int,
 ) -> None:
-    experts = domain.get_experts(model, target)
-    new_experts = nn.ModuleList([experts[idx] for idx in keep_idx])
-    domain.replace_experts(model, target, new_experts)
-    domain.prune_router(model, target, keep_idx)
-    domain.update_moe_attributes(model, target, len(keep_idx))
+    # 统一落地（ModuleList 重建 / 融合张量切片，由域按 target.fused 分派）
+    domain.prune_experts(model, target, keep_idx, top_k)
     _patch_router_module(model, target, keep_idx, top_k)
 
 
@@ -263,7 +256,7 @@ class MassMoEPruningMethod(BasePruningMethod):
         if prune_ratio <= 0:
             return
 
-        collectors, hooks = _register_router_hooks(model, targets, top_k)
+        collectors, hooks = _register_router_hooks(model, domain, targets, top_k)
         try:
             num_batches = _run_one_epoch(model, context)
         finally:

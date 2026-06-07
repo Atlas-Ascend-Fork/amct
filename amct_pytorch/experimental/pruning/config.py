@@ -67,8 +67,6 @@ class PruneConfig:
     skip_layers: List[str] = field(default_factory=list)
     copy_model: bool = True
     verbose: bool = True
-    save_dtype: str = "state_dict"
-    backend_overrides: Dict[str, Any] = field(default_factory=dict)
     missing_data_policy: str = "warn_skip"
     stage_error_policy: str = "raise"
 

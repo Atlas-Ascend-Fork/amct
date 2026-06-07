@@ -24,6 +24,15 @@ CNN_VARIANCE_PRUNE_CFG = {
 }
 
 
+# 依赖图(DepGraph)通道剪枝：支持 ResNet/ConvNext/MobileNet 等残差/下采样结构。
+CNN_DEPGRAPH_PRUNE_CFG = {
+    "methods": {
+        "cnn": {"name": "depgraph", "kwargs": {"prune_ratio": 0.30, "importance": "magnitude"}},
+    },
+    "missing_data_policy": "warn_skip",
+}
+
+
 DENSE_LOWVAR_PRUNE_CFG = {
     "methods": {
         "dense": {"name": "low_variance", "kwargs": {"prune_ratio": 0.50}},

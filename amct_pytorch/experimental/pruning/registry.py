@@ -17,13 +17,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable
+from typing import Dict
 
 from .domains.base import BasePruningDomain
 from .domains.cnn import CNNPruningDomain
 from .domains.dense import DensePruningDomain
 from .domains.moe import MoEPruningDomain
 from .methods.base import BasePruningMethod
+from .methods.cnn_depgraph import DepGraphChannelPruningMethod
 from .methods.cnn_variance import VarianceChannelPruningMethod
 from .methods.dense_low_variance import LowVarianceDensePruningMethod
 from .methods.moe_mass_pruning import MassMoEPruningMethod
@@ -79,6 +80,7 @@ def create_default_registry() -> MethodRegistry:
     registry.register_domain(MoEPruningDomain())
 
     registry.register_method(VarianceChannelPruningMethod())
+    registry.register_method(DepGraphChannelPruningMethod())
     registry.register_method(LowVarianceDensePruningMethod())
     registry.register_method(MassMoEPruningMethod())
     registry.register_method(MassVarianceMoEPruningMethod())

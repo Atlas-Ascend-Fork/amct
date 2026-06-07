@@ -31,6 +31,9 @@ class BasePruningMethod(ABC):
     domain: str = "base"
     name: str = "base"
     requires_data: bool = False
+    # 方法是否依赖域的 find_targets 结果。基于依赖图的方法自行分析整图、
+    # 不使用域的“兄弟卷积”目标，故置 False，使其在域无目标时仍被调用。
+    requires_targets: bool = True
 
     @abstractmethod
     def apply(

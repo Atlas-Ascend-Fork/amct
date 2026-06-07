@@ -39,13 +39,22 @@ __all__ = [
     "prune",
     "PrunePass",
     "get_last_report",
+    "get_last_auto_prune",
+    "accuracy_based_auto_prune",
+    "AutoTuneResult",
+    "TrialResult",
+    "diagnose",
+    "DiagnosisReport",
     "CNN_VARIANCE_PRUNE_CFG",
+    "CNN_DEPGRAPH_PRUNE_CFG",
     "DENSE_LOWVAR_PRUNE_CFG",
     "MOE_MASSVAR_PRUNE_CFG",
     "FULL_STRUCTURED_PRUNE_CFG",
 ]
 
-from .api import prune, PrunePass, get_last_report
+from .api import prune, PrunePass, get_last_report, get_last_auto_prune
+from .accuracy_based_auto_prune import AutoTuneResult, TrialResult, accuracy_based_auto_prune
+from .diagnostics import DiagnosisReport, diagnose
 from .config import MethodSpec, PruneConfig
 from .context import BatchAdapter, PruneContext
 from .methods import (
@@ -56,6 +65,7 @@ from .methods import (
     VarianceChannelPruningMethod,
 )
 from .presets import (
+    CNN_DEPGRAPH_PRUNE_CFG,
     CNN_VARIANCE_PRUNE_CFG,
     DENSE_LOWVAR_PRUNE_CFG,
     FULL_STRUCTURED_PRUNE_CFG,
