@@ -39,13 +39,18 @@ __all__ = [
     "prune",
     "PrunePass",
     "get_last_report",
+    "get_last_autotune",
+    "prune_to_tolerance",
+    "AutoTuneResult",
+    "TrialResult",
     "CNN_VARIANCE_PRUNE_CFG",
     "DENSE_LOWVAR_PRUNE_CFG",
     "MOE_MASSVAR_PRUNE_CFG",
     "FULL_STRUCTURED_PRUNE_CFG",
 ]
 
-from .api import prune, PrunePass, get_last_report
+from .api import prune, PrunePass, get_last_report, get_last_autotune
+from .autotune import AutoTuneResult, TrialResult, prune_to_tolerance
 from .config import MethodSpec, PruneConfig
 from .context import BatchAdapter, PruneContext
 from .methods import (
