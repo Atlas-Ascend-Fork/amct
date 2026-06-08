@@ -41,5 +41,5 @@
 
 ## 已有个案
 
-- [LongCat-Flash-Lite](longcat-flash-lite.md)
-- [LongCat-Next](longcat-next.md)
+- [LongCat-Flash-Lite](../moe/longcat-flash-lite.md)
+- [LongCat-Next](../moe/longcat-next.md)

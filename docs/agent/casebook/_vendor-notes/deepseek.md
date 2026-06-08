@@ -10,7 +10,7 @@
 
 ## 默认参考路径
 
-- 新模型进入时优先参考：[deepseekv3_2.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/deepseekv3_2.py)、[quant_dsa.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/quant_dsa.py)
+- 新模型进入时优先参考：[deepseekv3_2.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/deepseekv3_2.py)、[quant_module.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/quant_module.py)
 - 适配优先顺序：先拿 BF16 blockwise baseline，确认 `position_ids` / `attention_mask` 路径一致，再分别打通 attention 侧和 MoE 侧的最小闭环
 - 默认优先复用的抽象：`BaseModel`、`PtqUnit`、现有 quant-apply helper、`QuantDeepseekV3MLP`
 
@@ -38,4 +38,4 @@
 
 ## 已有个案
 
-- [deepseekv4](deepseekv4.md) — DeepSeek-V4-Pro。MLA + Compressor + Indexer + HC + grouped wo + 自定义 forward 签名。代码侧适配完成,等权重补 BF16/PTQ。
+- [deepseekv4](../mla-moe/deepseekv4.md) — DeepSeek-V4-Pro。MLA + Compressor + Indexer + HC + grouped wo + 自定义 forward 签名。代码侧适配完成,等权重补 BF16/PTQ。

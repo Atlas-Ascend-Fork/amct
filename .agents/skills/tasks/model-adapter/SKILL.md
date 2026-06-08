@@ -9,7 +9,7 @@ description: 在 amct_llm 中适配新模型族，并保持 workflow、quantizer
 
 按下面顺序阅读：
 
-1. [../../../docs/agent/repo-map.md](../../../docs/agent/repo-map.md)
+1. [../../../../docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
 2. [references/model-adapter.md](references/model-adapter.md)
 3. [references/validation-checklist.md](references/validation-checklist.md)
 

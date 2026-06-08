@@ -31,7 +31,7 @@ description: 验证指定量化算法在当前模型上的实际效果。适用�
 1. [../../tasks/quantization/references/metrics-and-thresholds.md](../../tasks/quantization/references/metrics-and-thresholds.md)
 2. [../../tasks/quantization/references/direct-quant.md](../../tasks/quantization/references/direct-quant.md)
 3. 如需确认当前可用算法名，再读 `amct_pytorch/quantization/algorithms/__init__.py` 和 `amct_pytorch/quantization/algorithms/*.py`
-4. 如需确认当前能力边界，再读 [../../../docs/agent/repo-map.md](../../../docs/agent/repo-map.md)
+4. 如需确认当前能力边界，再读 [../../../../docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
 
 ## 固定流程
 
