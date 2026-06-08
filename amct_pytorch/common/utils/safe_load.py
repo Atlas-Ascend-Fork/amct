@@ -15,6 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import inspect
+import logging
 
 import torch
 
@@ -27,15 +28,23 @@ def _supports_weights_only():
 
 def safe_torch_load(file_path, **kwargs):
     """
-    Load tensor-only PyTorch artifacts with safe deserialization by default.
+    Load PyTorch artifacts with safe deserialization by default.
 
-    Supported PyTorch versions provide the weights_only argument. Do not fall
-    back to unsafe pickle loading when the runtime does not support it.
+    On PyTorch versions that provide the weights_only argument (>= 1.13),
+    enable it by default to avoid unsafe pickle deserialization. On older
+    versions that AMCT still supports (torch 1.5 ~ 1.12), weights_only is
+    unavailable, so it is stripped and the load falls back to torch's native
+    behaviour with a warning, rather than failing outright.
     """
-    if not _supports_weights_only():
-        raise RuntimeError(
-            "safe_torch_load requires torch.load to support weights_only, "
-            f"but current PyTorch {torch.__version__} does not."
+    if _supports_weights_only():
+        kwargs.setdefault(WEIGHTS_ONLY, True)
+    else:
+        kwargs.pop(WEIGHTS_ONLY, None)
+        logging.warning(
+            "Current PyTorch %s does not support torch.load(weights_only=...); "
+            "falling back to unsafe pickle loading for %s. Only load trusted "
+            "files, and upgrade to PyTorch >= 1.13 for safe deserialization.",
+            torch.__version__,
+            file_path,
         )
-    kwargs.setdefault(WEIGHTS_ONLY, True)
     return torch.load(file_path, **kwargs)

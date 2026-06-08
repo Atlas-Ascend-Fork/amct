@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import pytest
+import logging
 
 from amct_pytorch.common.utils import safe_load
 
@@ -48,11 +48,20 @@ def test_safe_torch_load_preserves_explicit_weights_only(monkeypatch):
     assert captured_kwargs["weights_only"] is False
 
 
-def test_safe_torch_load_rejects_missing_weights_only_support(monkeypatch):
+def test_safe_torch_load_falls_back_when_weights_only_unsupported(monkeypatch, caplog):
+    captured = {}
+
     def fake_load_without_weights_only(path, **kwargs):
-        return {"path": path, "kwargs": kwargs}
+        captured["path"] = path
+        captured["kwargs"] = kwargs
+        return {"path": path}
 
     monkeypatch.setattr(safe_load.torch, "load", fake_load_without_weights_only)
 
-    with pytest.raises(RuntimeError, match="support weights_only"):
-        safe_load.safe_torch_load("params.pth")
+    with caplog.at_level(logging.WARNING):
+        result = safe_load.safe_torch_load("params.pth", weights_only=True)
+
+    assert result == {"path": "params.pth"}
+    # weights_only must be stripped so the legacy torch.load does not raise.
+    assert "weights_only" not in captured["kwargs"]
+    assert any("weights_only" in record.message for record in caplog.records)
