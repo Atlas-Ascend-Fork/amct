@@ -148,7 +148,9 @@ def print_summary(result):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model_path", required=True)
-    p.add_argument("--mmlu_root", default="/mnt/workspace/gitCode/cann/datasets/mmlu")
+    p.add_argument("--mmlu_root",
+                   default=os.environ.get("MMLU_ROOT",
+                                          "/mnt/workspace/gitCode/cann/datasets/mmlu"))
     p.add_argument("--device", default="npu:0")
     p.add_argument("--quant", default="none",
                    choices=["none", "hif8_w8a8", "both"],

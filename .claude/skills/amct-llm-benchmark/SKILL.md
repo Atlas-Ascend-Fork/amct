@@ -69,7 +69,7 @@ cp build/lib/amct_pytorch/classic/graph_based/amct_pytorch/proto/*_pb2.py \
 ## 快速命令
 
 ```bash
-SK=/mnt/workspace/gitCode/cann/amct/.claude/skills/amct-llm-benchmark/scripts
+SK="$(git rev-parse --show-toplevel)/.claude/skills/amct-llm-benchmark/scripts"
 MODEL=/path/to/Qwen3-8B
 cd /tmp  # 见上面"从哪儿跑"
 
@@ -201,14 +201,14 @@ PPL 衡量的是语言建模能力，但量化对**下游任务准确率**的影
 判别式评估：拼 5 个 dev 样例做 few-shot，对测试题取最后一个位置在 ` A`/` B`/` C`/` D` 四个 token 上的 logits，argmax 即预测。单次前向、无生成，所以很快。
 
 ```bash
-SK=/mnt/workspace/gitCode/cann/amct/.claude/skills/amct-llm-benchmark/scripts
+SK="$(git rev-parse --show-toplevel)/.claude/skills/amct-llm-benchmark/scripts"
 python $SK/mmlu_eval.py --model_path $MODEL                      # FP16 baseline
 python $SK/mmlu_eval.py --model_path $MODEL --quant both         # FP16 + HiFloat8 W8A8 一次加载
 python $SK/mmlu_eval.py --model_path $MODEL --subjects abstract_algebra,anatomy  # 抽几科探速
 ```
 
 - `--quant` 取值：`none`（默认，仅 FP16）/ `hif8_w8a8`（仅量化）/ `both`（两者一次加载，省一次 reload）
-- `--mmlu_root` 默认 `/mnt/workspace/gitCode/cann/datasets/mmlu`，读 `all/dev-*.parquet` 和 `all/test-*.parquet`
+- `--mmlu_root` 指向 MMLU 数据集目录，读 `all/dev-*.parquet` 和 `all/test-*.parquet`；脚本默认值是 NPU 机器上的实际路径，换环境时显式传 `--mmlu_root /your/path/to/mmlu` 覆盖
 - `--subjects` 逗号分隔指定科目，调试时只跑几科
 
 ### MATH-500（`math500_eval.py`）
@@ -221,7 +221,7 @@ python $SK/math500_eval.py --model_path $MODEL --quant both                # 全
 python $SK/math500_eval.py --model_path $MODEL --stratified_sample 50      # 按难度分层抽 50 题
 ```
 
-- `--data_path` 默认 `/mnt/workspace/gitCode/cann/datasets/math500/test.jsonl`（500 题，7 类 5 难度）
+- `--data_path` 指向 MATH-500 的 `test.jsonl`（500 题，7 类 5 难度）；脚本默认值是 NPU 机器上的实际路径，换环境时显式传 `--data_path /your/path/to/math500/test.jsonl` 覆盖
 - 依赖 `math_verify`（`pip install math_verify`）；缺了会在评分处 import 失败
 - 生成式 + 长 CoT，比 MMLU/PPL 慢得多，全量 500 题要按 600s timeout 切分或放主会话后台跑（见上面 ⚠️ 约束）
 

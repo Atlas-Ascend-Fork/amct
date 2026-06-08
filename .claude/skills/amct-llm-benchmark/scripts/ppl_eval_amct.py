@@ -35,8 +35,6 @@ Usage:
         --start_chunk 0 --max_chunks 73 --nll_dump part1.json  # half eval for subagent timeout
 """
 import argparse
-import os
-import sys
 import time
 
 import torch
@@ -44,23 +42,8 @@ import torch_npu  # noqa: F401
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Import the canonical PPL impl BEFORE the protobuf-fallback sys.path strip below —
-# this scripts dir path contains 'gitCode/cann/amct' and would otherwise be removed.
-from ppl_core import eval_ppl  # single source of truth
-
-# Try direct import first; if protobuf _pb2.py missing (source tree without build),
-# fall back to the installed wheel by stripping repo from sys.path.
-try:
-    import amct_pytorch as amct
-except ImportError as _e:
-    print(f"[amct] direct import failed ({str(_e)[:120]}); "
-          f"falling back to installed wheel - run `bash build.sh --pkg` for proper fix")
-    sys.path = [p for p in sys.path if "gitCode/cann/amct" not in p and p != ""]
-    os.chdir("/tmp")
-    for mod in list(sys.modules):
-        if mod.startswith("amct_pytorch"):
-            del sys.modules[mod]
-    import amct_pytorch as amct  # noqa: E402
+from ppl_core import eval_ppl
+import amct_pytorch as amct
 
 
 def main():

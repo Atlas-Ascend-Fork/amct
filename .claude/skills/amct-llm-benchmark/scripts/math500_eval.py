@@ -24,7 +24,6 @@ import time
 from collections import defaultdict
 
 import torch
-import torch.nn as nn
 import torch_npu  # noqa: F401
 import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -157,7 +156,9 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model_path", required=True)
     p.add_argument("--data_path",
-                   default="/mnt/workspace/gitCode/cann/datasets/math500/test.jsonl")
+                   default=os.environ.get(
+                       "MATH500_DATA",
+                       "/mnt/workspace/gitCode/cann/datasets/math500/test.jsonl"))
     p.add_argument("--device", default="npu:0")
     p.add_argument("--quant", default="none",
                    choices=["none", "hif8_w8a8", "both"])
