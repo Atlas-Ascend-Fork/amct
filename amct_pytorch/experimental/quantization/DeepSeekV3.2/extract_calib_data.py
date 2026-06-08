@@ -13,23 +13,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import shutil
 import functools
-import os
 import json
+import os
+import shutil
+
 import torch
-from torch import nn
-from tqdm import tqdm
+from accelerate import init_empty_weights
 from datasets import load_dataset
 from loguru import logger
-from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM
-from accelerate import init_empty_weights
+from torch import nn
+from tqdm import tqdm
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
-from cores.utils import args_utils as args_utils
+from cores.models.deepseek_v3_2.indexer import ModelArgs
 from cores.models.deepseek_v3_2.quant_utils import get_float_block
+from cores.utils import args_utils as args_utils
+from cores.utils.safe_load import safe_torch_load
 from cores.utils.utils import load_embed_state_dict
 from pp.forward.infer import prepare_layer
-from cores.models.deepseek_v3_2.indexer import ModelArgs
 
 
 def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
@@ -147,12 +149,9 @@ def get_act_stat(args, model, samples, tokenizer, layer_idx, output_dir, dtype=t
         layer = get_float_block(args.model, layer_idx, 'cpu', model_args=args.model_args)
         layer = prepare_layer(args, layer, layer_idx)
         layer = layer.to(device)
-        inps = torch.load(os.path.join(output_dir, f'layer_{layer_idx - 1}_out.pkl'),
-                          weights_only=False, map_location=device)
-        attention_mask = torch.load(
-            os.path.join(output_dir, 'attention_mask.pkl'), weights_only=False, map_location=device)
-        position_ids = torch.load(
-            os.path.join(output_dir, 'position_ids.pkl'), weights_only=False, map_location=device)
+        inps = safe_torch_load(os.path.join(output_dir, f'layer_{layer_idx - 1}_out.pkl'), map_location=device)
+        attention_mask = safe_torch_load(os.path.join(output_dir, 'attention_mask.pkl'), map_location=device)
+        position_ids = safe_torch_load(os.path.join(output_dir, 'position_ids.pkl'), map_location=device)
         for i in tqdm(range(len(inps)), desc='obtain activation stat'):
             data = inps[i].to(device)
             out = layer(data.to(device), position_ids=position_ids,
@@ -175,8 +174,8 @@ def get_act_stat(args, model, samples, tokenizer, layer_idx, output_dir, dtype=t
 def dump(input_dir, output_dir, num_layer):
     os.makedirs(output_dir, exist_ok=True)
     for layer_idx in range(num_layer):
-        inp_tensors = torch.load(os.path.join(input_dir, f'layer_{layer_idx - 1}_out.pkl'))
-        out_tensors = torch.load(os.path.join(input_dir, f'layer_{layer_idx}_out.pkl'))
+        inp_tensors = safe_torch_load(os.path.join(input_dir, f'layer_{layer_idx - 1}_out.pkl'))
+        out_tensors = safe_torch_load(os.path.join(input_dir, f'layer_{layer_idx}_out.pkl'))
         for batch_idx, (inp, out) in enumerate(zip(inp_tensors, out_tensors)):
             torch.save(inp, os.path.join(output_dir, f'layer_{layer_idx}_batch_{batch_idx}_inp.pth'))
             torch.save(out, os.path.join(output_dir, f'layer_{layer_idx}_batch_{batch_idx}_out.pth'))

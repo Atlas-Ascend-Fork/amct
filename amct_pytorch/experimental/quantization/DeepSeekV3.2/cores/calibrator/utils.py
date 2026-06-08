@@ -13,12 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import functools
+import os
 from collections import defaultdict
+
 import torch
 
 from cores.models.deepseek_v3_2.quant_utils import _prepare_4d_causal_attention_mask
+from cores.utils.safe_load import safe_torch_load
 
 
 def load_block_inps_outs(save_dir, layer_idx):
@@ -33,8 +35,8 @@ def load_block_inps_outs(save_dir, layer_idx):
         if not os.path.exists(out_file):
             raise ValueError(f"{out_file} not found!")
 
-        inp = torch.load(inp_file)
-        out = torch.load(out_file)
+        inp = safe_torch_load(inp_file)
+        out = safe_torch_load(out_file)
 
         cached_inps.append(inp)
         cached_outs.append(out)

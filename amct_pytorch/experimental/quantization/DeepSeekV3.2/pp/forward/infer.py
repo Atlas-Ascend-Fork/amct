@@ -13,17 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import types
 import os
-from loguru import logger
+import types
+
 import torch
+from loguru import logger
 from torch import nn
 from tqdm import tqdm
 
 from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
-from cores.utils.utils import get_device_map, load_embed_state_dict
-from cores.quantization.utils import load_quant_params
 from cores.models.deepseek_v3_2.quant_utils import apply_quant_to_moe, get_float_block, apply_quant_to_mla
+from cores.quantization.utils import load_quant_params
+from cores.utils.safe_load import safe_torch_load
+from cores.utils.utils import get_device_map, load_embed_state_dict
 from pp.forward.custom import model_causal_forward_only_pre, model_causal_forward_only_post, model_forward_only_post, \
     model_forward_only_pre
 
@@ -32,7 +34,7 @@ def load_file(param_dir, layer_idx):
     param_path = os.path.join(param_dir, f"quant_parameters_{layer_idx}.pth")
     if not os.path.exists(param_path):
         logger.warning(f'{param_path} not found.')
-    quant_params = torch.load(param_path)
+    quant_params = safe_torch_load(param_path)
     return quant_params
 
 
@@ -130,12 +132,9 @@ def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_di
         get_device_map(layer, f'npu:{layer_idx % num_npus}', num_npus=num_npus)
 
     device = torch.device(f'npu:{layer_idxes[0] % num_npus}')
-    inps = torch.load(os.path.join(output_dir, f'layer_{layer_idxes[0] - 1}_out.pkl'),
-                      weights_only=False, map_location=device)
-    attention_mask = torch.load(
-        os.path.join(output_dir, 'attention_mask.pkl'), weights_only=False, map_location=device)
-    position_ids = torch.load(
-        os.path.join(output_dir, 'position_ids.pkl'), weights_only=False, map_location=device)
+    inps = safe_torch_load(os.path.join(output_dir, f'layer_{layer_idxes[0] - 1}_out.pkl'), map_location=device)
+    attention_mask = safe_torch_load(os.path.join(output_dir, 'attention_mask.pkl'), map_location=device)
+    position_ids = safe_torch_load(os.path.join(output_dir, 'position_ids.pkl'), map_location=device)
 
     outs = [[] for _ in range(len(layer_idxes))]
 

@@ -28,6 +28,8 @@ import torch
 from safetensors.torch import load_file, save_file
 from tqdm import tqdm
 
+from cores.utils.safe_load import safe_torch_load
+
 
 def get_had_pow2(n, norm=True):
     """
@@ -277,15 +279,15 @@ def load_clip_params(num_hidden_layers, num_nextn_predict_layers, mla_param_path
                 # For layer >= num_hidden_layers, if not found, use num_hidden_layers-1's quant params with factor 1.0
                 expected_file = os.path.join(
                     mla_param_path, f'quant_parameters_{num_hidden_layers - 1}.pth')
-                old_quant_params = torch.load(expected_file)
-                old_quant_params.update(torch.load(expected_file.replace(mla_param_path, moe_param_path)))
+                old_quant_params = safe_torch_load(expected_file)
+                old_quant_params.update(safe_torch_load(expected_file.replace(mla_param_path, moe_param_path)))
                 old_quant_params = convert_clip_factors(layer_idx, old_quant_params)
                 quant_params = {
                     k.replace(f'layers.{num_hidden_layers - 1}', f'layers.{layer_idx}'): torch.tensor(1.0).to(v.dtype)
                     for k, v in old_quant_params.items()}
         else:
-            quant_params = torch.load(expected_file)
-            quant_params.update(torch.load(expected_file.replace(mla_param_path, moe_param_path)))
+            quant_params = safe_torch_load(expected_file)
+            quant_params.update(safe_torch_load(expected_file.replace(mla_param_path, moe_param_path)))
             quant_params = convert_clip_factors(layer_idx, quant_params)
         for name, factor in quant_params.items():
             complete_name = f"model.layers.{layer_idx}.{name}"
