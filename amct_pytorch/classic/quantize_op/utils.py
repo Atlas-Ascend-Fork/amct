@@ -257,3 +257,25 @@ def calculate_quantile_ema_scale(previous_scale, current_scale, alpha=QUANTILE_E
         ema_scale: exponential moving average scale
     """
     return alpha * previous_scale + beta * current_scale
+
+
+def apply_progressive_quant_dequant(weight, scale_w1, scale_w2, group_size=32):
+    if list(scale_w1.shape) != [weight.shape[0]]:
+        raise RuntimeError("scale_w1.shape should be [{}] current shape is {}"
+                        .format(weight.shape[0], list(scale_w1.shape)))
+    group = int(weight.shape[0] * weight.shape[1] / group_size)
+    if list(scale_w2.shape) != [group, 1]:
+        raise RuntimeError("scale_w2.shape should be [{}, 1] current shape is {}".format(group, list(scale_w2.shape)))
+
+    # scale_w2 is fitted in fp8-quantized space, so fp4 stage must consume fp8
+    # quantized values (cast to float), not dequantized weights.
+    q_w_fp8, _ = quant_tensor(weight.transpose(-1, -2), FLOAT8_E4M3FN, scale_w1)
+    q_w_fp8 = q_w_fp8.transpose(-1, -2).to(weight.dtype)
+
+    q_w_grouped = q_w_fp8.reshape(-1, group_size)
+    dq_w_fp4 = quant_dequant_tensor(q_w_grouped, FLOAT4_E2M1, scale_w2)
+    dq_w_fp4 = dq_w_fp4.reshape(weight.shape).to(weight.dtype)
+
+    dq_w = (dq_w_fp4.transpose(-1, -2) * scale_w1.to(dq_w_fp4.device, dq_w_fp4.dtype)
+            ).transpose(-1, -2)
+    return dq_w.to(weight.dtype)

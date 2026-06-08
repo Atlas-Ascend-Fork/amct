@@ -139,6 +139,26 @@ def test_extract_setup_returns_sink_id(monkeypatch, tmp_path):
     assert wf.pipeline is not None
 
 
+def test_extract_setup_enables_sharded_block(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None)
+
+    class FakePipeline:
+        sharded_block = False
+
+        def __init__(self, args):
+            pass
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.MODEL_REGISTRY",
+        SimpleNamespace(get=lambda k: FakePipeline),
+    )
+
+    wf = _make_extract_workflow(output_dir=str(tmp_path))
+    wf.setup()
+    assert wf.pipeline.sharded_block is True
+
+
 def test_run_completes(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_extract_ptq_data.register_llm_models", lambda: None)

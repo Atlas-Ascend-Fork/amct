@@ -18,7 +18,7 @@ set(TEST_FILES_DIR ${AMCT_TOP_DIR}/tests/amct_pytorch)
 
 # compile proto
 set(CMAKE_VERBOSE_MAKEFILE on)
-set(PROTOC_PROGRAM ${AMCT_TOP_DIR}/build/protobuf_host/bin/protoc)
+set(PROTOC_PROGRAM $<TARGET_FILE:host_protoc>)
 set(AMCT_TORCH_PROTO_DIR ${AMCT_TOP_DIR}/amct_pytorch/graph_based_compression/amct_pytorch/proto)
 
 execute_process(COMMAND ${Python3_EXECUTABLE} -c "import torch;print(torch.__path__[0])"  OUTPUT_VARIABLE TORCH_PATH)
@@ -26,7 +26,7 @@ execute_process(COMMAND ${Python3_EXECUTABLE} -c "import torch;print(torch.__pat
 string(STRIP "${TORCH_PATH}" PYTORCH_PATH)
 
 add_custom_target(amct_pytorch_proto_compile
-  DEPENDS protobuf_host_build ascend_protobuf_static
+  DEPENDS host_protoc ascend_protobuf_static
   COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/basic_info.proto
   COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/calibration_config_pytorch.proto
   COMMAND cd ${AMCT_TOP_DIR} && ${PROTOC_PROGRAM} -I=./ -I=./amct_pytorch/graph_based_compression/amct_pytorch/proto/ --python_out=./ amct_pytorch/graph_based_compression/amct_pytorch/proto/scale_offset_record_pytorch.proto

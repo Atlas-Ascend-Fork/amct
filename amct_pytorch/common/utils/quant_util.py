@@ -149,6 +149,22 @@ def quant_weight(tensor, wts_type, scale, offset=None, group_size=None):
     return quantized_tensor
 
 
+@torch.no_grad()
+def quant_dequant_weight(tensor, wts_type, scale, offset=None, group_size=None):
+    """
+    Function: weight quant -> dequant. Mirrors the shape handling of
+    quant_weight so per-channel scale (shape [Cout]) broadcasts correctly
+    against weight (shape [Cout, Cin, ...]).
+    """
+    if not group_size:
+        tensor = tensor.transpose(-1, -2).contiguous()
+        scale = scale.reshape(-1)
+        offset = offset.reshape(-1) if offset is not None else None
+        dq = quant_dequant_tensor(tensor, wts_type, scale, offset)
+        return dq.transpose(-1, -2).contiguous()
+    return quant_dequant_tensor(tensor, wts_type, scale, offset, group_size)
+
+
 def apply_smooth_weight(smooth_factor, ori_weight):
     """
     Function: apply smooth factor to scale weight
@@ -254,7 +270,8 @@ def quant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=None):
             quantized_tensor = quantized_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
         elif dst_dtype == INT4:
             quantized_tensor = quantized_tensor.round().clamp(INT4_MIN, INT4_MAX).to(torch.int32)
-        quantized_tensor = quantized_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+        if group_size is not None:
+            quantized_tensor = quantized_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     return quantized_tensor, shared_exponent
 
 
@@ -296,5 +313,6 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
         quantized_tensor = quantized_tensor.to(scale.dtype)
         dequantize_tensor = quantized_tensor if offset is None else quantized_tensor - offset
         dequantize_tensor = dequantize_tensor * scale
-        dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
+        if group_size is not None:
+            dequantize_tensor = dequantize_tensor.reshape(ori_shape[0], -1)[:, :ori_shape[1]]
     return dequantize_tensor.to(ori_dtype)

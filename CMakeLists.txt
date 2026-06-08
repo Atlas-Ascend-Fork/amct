@@ -56,7 +56,7 @@ else()
 endif()
 
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
-    include(./cmake/third_party/protobuf.cmake)
+    add_cann_third_party(protobuf)
 endif()
 
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG AND ENABLE_TEST)
@@ -67,10 +67,10 @@ else()
         add_custom_target(default_target ALL
             COMMAND echo "This runs by default"
             DEPENDS amct_pytorch
-    )
-endif()
+        )
+    endif()
 
-if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
-add_dependencies(default_target protobuf_host_build ascend_protobuf_static)
-endif()
+    if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
+        add_dependencies(default_target host_protoc ascend_protobuf_static)
+    endif()
 endif()

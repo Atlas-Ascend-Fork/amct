@@ -40,7 +40,6 @@ class BaseModel(metaclass=ABCMeta):
 
     def __init__(self, args):
         self.args = args
-        self.base_prefix = "model."
         self.quant_target = args.quant_target
         self.position_ids = None
         self.attention_mask = None
@@ -57,6 +56,15 @@ class BaseModel(metaclass=ABCMeta):
     @staticmethod
     def load_unit_inputs(data_dir, unit: PtqUnit):
         return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
+
+    @staticmethod
+    def _embed_base_prefix() -> str:
+        """Checkpoint-side public prefix for `embed_tokens` / `norm`.
+
+        Override in adapters whose checkpoint nests the text backbone under a
+        multimodal wrapper (e.g. return `"model.language_model."`).
+        """
+        return "model."
 
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
@@ -88,11 +96,12 @@ class BaseModel(metaclass=ABCMeta):
         is safer than silently loading the wrong tensor).
         Adapters that need extra entries can extend `super().get_embed_load_specs()`.
         """
+        base = self._embed_base_prefix()
         tie = bool(getattr(self.config, "tie_word_embeddings", False))
-        lm_head_prefix = f"{self.base_prefix}embed_tokens." if tie else "lm_head."
+        lm_head_prefix = f"{base}embed_tokens." if tie else "lm_head."
         return [
-            (self.model.model.embed_tokens, f"{self.base_prefix}embed_tokens."),
-            (self.model.model.norm, f"{self.base_prefix}norm."),
+            (self.model.model.embed_tokens, f"{base}embed_tokens."),
+            (self.model.model.norm, f"{base}norm."),
             (self.model.lm_head, lm_head_prefix),
         ]
 
