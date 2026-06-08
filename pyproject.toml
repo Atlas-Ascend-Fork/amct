@@ -43,3 +43,11 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+
+[tool.ruff]
+# Vendored third-party code (Torch-Pruning, MIT) is kept VERBATIM upstream and must not be
+# reformatted/relinted — exclude it from ruff so codecheck does not modify vendored OSS
+# (which would also trip the SCA third-party-OSS check). force-exclude makes the exclude
+# apply even when pre-commit passes explicit filenames.
+extend-exclude = ["amct_pytorch/experimental/pruning/_vendor"]
+force-exclude = true
