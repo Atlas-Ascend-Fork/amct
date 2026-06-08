@@ -100,11 +100,6 @@ def _prepare_model_util(monkeypatch):
     _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.utils")
     _install_module(
         monkeypatch,
-        "amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util",
-        version_higher_than=lambda *_: True,
-    )
-    _install_module(
-        monkeypatch,
         "amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration",
         Configuration=type("Configuration", (), {"get_quant_config": lambda self: {}}),
     )
@@ -147,7 +142,7 @@ def test_get_layer_quant_params_uses_safe_load_with_mmap(monkeypatch, tmp_path):
     }
 
 
-def test_load_pth_file_uses_safe_load_with_weights_only(monkeypatch, tmp_path):
+def test_load_pth_file_uses_safe_load_for_deserialization(monkeypatch, tmp_path):
     model_util = _prepare_model_util(monkeypatch)
     model = torch.nn.Linear(LINEAR_IN_FEATURES, LINEAR_OUT_FEATURES)
     checkpoint = {
@@ -164,13 +159,14 @@ def test_load_pth_file_uses_safe_load_with_weights_only(monkeypatch, tmp_path):
         return checkpoint
 
     monkeypatch.setattr(model_util, "safe_torch_load", fake_safe_torch_load)
-    monkeypatch.setattr(model_util, "version_higher_than", lambda *_: True)
 
     model_util.load_pth_file(model, str(tmp_path / "model.pth"), MODEL_STATE_DICT_NAME)
 
+    # weights_only is handled inside safe_torch_load, so the caller only passes
+    # map_location and lets the safe wrapper apply the secure default.
     assert captured == {
         "file_path": str(tmp_path / "model.pth"),
-        "kwargs": {"map_location": torch.device("cpu"), "weights_only": True},
+        "kwargs": {"map_location": torch.device("cpu")},
     }
     assert torch.equal(model.weight, checkpoint[MODEL_STATE_DICT_NAME]["weight"])
     assert torch.equal(model.bias, checkpoint[MODEL_STATE_DICT_NAME]["bias"])

@@ -23,7 +23,6 @@ import torch
 from amct_pytorch.common.utils.safe_load import safe_torch_load
 
 from ...amct_pytorch.configuration.configuration import Configuration
-from ...amct_pytorch.common.utils.util import version_higher_than
 from ...amct_pytorch.utils.vars import AMCT_OPERATIONS
 from ...amct_pytorch.utils.vars import AMCT_DISTILL_OPERATIONS
 from ...amct_pytorch.utils.vars import AMCT_RETRAIN_OPERATIONS
@@ -139,8 +138,6 @@ def load_pth_file(model, pth_file, state_dict_name):
         model: model loaded parameters
     """
     load_kwargs = {'map_location': torch.device('cpu')}
-    if version_higher_than(torch.__version__, '2.1.0'):
-        load_kwargs['weights_only'] = True
     checkpoint = safe_torch_load(pth_file, **load_kwargs)
     if state_dict_name:
         if checkpoint.get(state_dict_name):
