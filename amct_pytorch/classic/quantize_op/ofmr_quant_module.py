@@ -15,7 +15,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 
 EC_CAND = tuple(range(-5, 6))
@@ -90,7 +90,7 @@ class OfmrQuant(BaseQuantizeModule):
 
             self.cur_batch += 1
             if self.cur_batch > self.batch_num:
-                return fp_out
+                return self.fake_quant_forward(inputs)
 
             self._calc_weight_quant_loss(inputs, fp_out)
             if not self.weight_compress_only: 
@@ -102,6 +102,23 @@ class OfmrQuant(BaseQuantizeModule):
                     self.scale_d = self._calc_scale_d()
 
             return fp_out
+
+    @torch.no_grad()
+    def fake_quant_forward(self, inputs):
+        if not getattr(self, 'fake_quant_cache_ready', False):
+            self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w,
+                                                    self.offset_w, getattr(self, 'group_size', None))
+            self.fake_quant_cache_ready = True
+
+        if self.scale_d is not None:
+            dq_x = quant_dequant_tensor(inputs, self.act_type, self.scale_d, self.offset_d)
+        else:
+            dq_x = inputs
+
+        if isinstance(self.ori_module, nn.Conv2d):
+            c = self.ori_module
+            return F.conv2d(dq_x, self.cached_dq_w, self.bias, c.stride, c.padding, c.dilation, c.groups)
+        return F.linear(dq_x, self.cached_dq_w, self.bias)
 
     def _calc_scale_d(self):
         """

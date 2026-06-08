@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity, calculate_quantile_ema_scale
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.common.utils.vars import HIFLOAT8
 from amct_pytorch.common.utils.log import LOGGER
 
@@ -78,10 +79,10 @@ class QuantileQuant(BaseQuantizeModule):
         inputs = inputs.to(self.weight.device)
         fp_out = F.linear(inputs, self.weight, self.bias)
         if self.weight_compress_only or self.dynamic is True:
-            return fp_out
+            return self.fake_quant_forward(inputs)
         self.cur_batch += 1
         if self.cur_batch > self.batch_num:
-            return fp_out
+            return self.fake_quant_forward(inputs)
         batch_max = self._compute_batch_max(inputs)
         self._update_act_scale_tensor(batch_max)
         if self.cur_batch == self.batch_num:
@@ -110,6 +111,24 @@ class QuantileQuant(BaseQuantizeModule):
             return (tensor_max / 16.0).to(torch.float32)
         else:
             return tensor_max
+
+    @torch.no_grad()
+    def fake_quant_forward(self, inputs):
+        if not getattr(self, 'fake_quant_cache_ready', False):
+            self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w,
+                                                    self.offset_w, getattr(self, 'group_size', None))
+            self.fake_quant_cache_ready = True
+        if self.weight_compress_only:
+            dq_x = inputs
+        elif self.dynamic is True:
+            import torch_npu
+            quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
+                inputs.npu(), dst_type=torch_npu.hifloat8, dst_type_max=15)
+            quant_x_fp = torch_npu.npu_dtype_cast(quant_x, inputs.dtype, input_dtype=torch_npu.hifloat8)
+            dq_x = quant_x_fp * pertoken_scale.unsqueeze(-1).to(quant_x_fp.dtype)
+        else:
+            dq_x = quant_dequant_tensor(inputs, self.act_type, self.scale_d, self.offset_d)
+        return F.linear(dq_x, self.cached_dq_w, self.bias)
 
     def _compute_batch_max(self, inputs):
         if self.act_granularity == 'tensor':

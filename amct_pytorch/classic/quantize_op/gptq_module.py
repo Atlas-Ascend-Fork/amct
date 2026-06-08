@@ -22,7 +22,7 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset, get_weight_min_max_by_granularity
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.common.utils.vars import MXFP4_E2M1, FLOAT8_E4M3FN, HIFLOAT8
 from amct_pytorch.common.utils.log import LOGGER
 
@@ -87,7 +87,17 @@ class GPTQuant(BaseQuantizeModule):
             optimized_weight, self.scale_w, self.offset_w = self.get_opt_weight_and_quant_factor()
             self.weight.data = optimized_weight
             LOGGER.logd("Calculate gptq quant params of layer '{}' success!".format(self.layer_name), 'GPTQuant')
+        if self.cur_batch > self.quant_config.get('batch_num'):
+            return self.fake_quant_forward(inputs)
         return F.linear(inputs, self.weight, self.bias)
+
+    @torch.no_grad()
+    def fake_quant_forward(self, inputs):
+        if not getattr(self, 'fake_quant_cache_ready', False):
+            self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w,
+                                                    self.offset_w, self.group_size)
+            self.fake_quant_cache_ready = True
+        return F.linear(inputs, self.cached_dq_w, self.bias)
 
 
     def get_opt_weight_and_quant_factor(self):

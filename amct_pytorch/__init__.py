@@ -31,3 +31,5 @@ from amct_pytorch.common.config import (
     HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG,
     MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
 )
+
+from amct_pytorch.classic.graph_based.amct_pytorch import *
