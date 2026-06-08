@@ -24,11 +24,10 @@ from tqdm import tqdm
 from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
 from cores.models.deepseek_v3_2.quant_utils import apply_quant_to_moe, get_float_block, apply_quant_to_mla
 from cores.quantization.utils import load_quant_params
+from cores.utils.safe_load import safe_torch_load
 from cores.utils.utils import get_device_map, load_embed_state_dict
 from pp.forward.custom import model_causal_forward_only_pre, model_causal_forward_only_post, model_forward_only_post, \
     model_forward_only_pre
-
-from amct_pytorch.common.utils.safe_load import safe_torch_load
 
 
 def load_file(param_dir, layer_idx):

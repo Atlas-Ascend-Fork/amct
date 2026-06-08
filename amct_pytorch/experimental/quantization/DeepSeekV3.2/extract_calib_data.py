@@ -29,10 +29,9 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from cores.models.deepseek_v3_2.indexer import ModelArgs
 from cores.models.deepseek_v3_2.quant_utils import get_float_block
 from cores.utils import args_utils as args_utils
+from cores.utils.safe_load import safe_torch_load
 from cores.utils.utils import load_embed_state_dict
 from pp.forward.infer import prepare_layer
-
-from amct_pytorch.common.utils.safe_load import safe_torch_load
 
 
 def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):

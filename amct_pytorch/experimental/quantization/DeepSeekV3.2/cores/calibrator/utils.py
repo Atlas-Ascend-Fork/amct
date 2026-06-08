@@ -20,8 +20,7 @@ from collections import defaultdict
 import torch
 
 from cores.models.deepseek_v3_2.quant_utils import _prepare_4d_causal_attention_mask
-
-from amct_pytorch.common.utils.safe_load import safe_torch_load
+from cores.utils.safe_load import safe_torch_load
 
 
 def load_block_inps_outs(save_dir, layer_idx):

@@ -28,7 +28,7 @@ import torch
 from safetensors.torch import load_file, save_file
 from tqdm import tqdm
 
-from amct_pytorch.common.utils.safe_load import safe_torch_load
+from cores.utils.safe_load import safe_torch_load
 
 
 def get_had_pow2(n, norm=True):
