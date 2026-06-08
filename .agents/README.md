@@ -1,12 +1,12 @@
-# amct_llm 大模型量化 Agent Skills
+# amct 大模型量化 Agent Skills
 
 ## 项目概述
 
 ### 项目定位
 
-面向昇腾 NPU 大模型量化压缩场景的 Agent Skills 集合。基于 amct_llm（AMCT 9.0，`amct_pytorch` 包）的 LLM 量化能力（`eval / extract_ptq_data / ptq / deploy` 四步 CLI + blockwise PTQ），把量化方案选择、算法升级、直转评测、部署导出等知识与流程模块化，支持 Agent 按流程完成「模型 → 量化方案 → 权重产物」的端到端工作。
+面向昇腾 NPU 大模型量化压缩场景的 Agent Skills 集合。基于 amct（AMCT 9.0，`amct_pytorch` 包）的 LLM 量化能力（`eval / extract_ptq_data / ptq / deploy` 四步 CLI + blockwise PTQ），把量化方案选择、算法升级、直转评测、部署导出等知识与流程模块化，支持 Agent 按流程完成「模型 → 量化方案 → 权重产物」的端到端工作。
 
-本能力源自内部研发框架 AMCT-Q 的 `skills/` + `docs/agent/`，迁移进 amct_llm 后：命令体已全部改写为 amct_llm 真实接口（`python -m amct_pytorch.*` + yaml `--bit_config`），并按 Claude/OpenCode 双客户端的 `.agents/` 玩法重组（参考 cann-recipes-infer）。最终目标是随 amct_llm 一并回合到上游 `cann/amct`。
+本能力的命令体基于 amct 真实接口（`python -m amct_pytorch.*` + yaml `--bit_config`），按 Claude/OpenCode 双客户端的 `.agents/` 玩法组织（参考 cann-recipes-infer），随 amct 量化能力落地在上游 `cann/amct`。
 
 ### 量化能力概览
 

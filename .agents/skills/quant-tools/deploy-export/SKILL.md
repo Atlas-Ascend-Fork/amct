@@ -1,6 +1,6 @@
 ---
 name: deploy-export
-description: 在 amct_llm 中导出 deploy-ready 的量化模型目录。适用于用户已经明确模型、quant_target、bit、dtype，并希望把直转或 PTQ 结果导出成 HuggingFace safetensors 权重目录；同时由 skill 按模板补齐对 infer 仓及通用下游消费者可直接使用的量化说明文档。
+description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于用户已经明确模型、quant_target、bit、dtype，并希望把直转或 PTQ 结果导出成 HuggingFace safetensors 权重目录；同时由 skill 按模板补齐对 infer 仓及通用下游消费者可直接使用的量化说明文档。
 ---
 
 # Deploy 导出

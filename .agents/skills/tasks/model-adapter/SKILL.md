@@ -1,9 +1,9 @@
 ---
 name: model-adapter
-description: 在 amct_llm 中适配新模型族，并保持 workflow、quantizer、algorithm、solver 的边界稳定。适用于新增 Dense 或 MoE 模型适配器、为新模型定义 PTQ unit、接 quant block、补模型专属 attention/MLP wrapper，但不重写主 PTQ 流程。
+description: 在 amct 中适配新模型族，并保持 workflow、quantizer、algorithm、solver 的边界稳定。适用于新增 Dense 或 MoE 模型适配器、为新模型定义 PTQ unit、接 quant block、补模型专属 attention/MLP wrapper，但不重写主 PTQ 流程。
 ---
 
-# amct_llm 模型适配
+# amct 模型适配
 
 这个 skill 只用于**新模型适配**。
 
