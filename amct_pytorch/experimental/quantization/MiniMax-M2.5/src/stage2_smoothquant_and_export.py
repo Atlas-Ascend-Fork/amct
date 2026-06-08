@@ -1,0 +1,460 @@
+"""
+Stage 2: apply SmoothQuant using recorded activations, then export MXFP4 weights.
+
+This stage does not perform any calibration forward pass. It only:
+1. loads the bf16 model,
+2. loads Stage 1 activation records,
+3. computes SmoothQuant scales,
+4. fuses scales into weights,
+5. quantizes eligible linear weights to MXFP4,
+6. exports a HuggingFace safetensors checkpoint.
+"""
+
+from __future__ import annotations
+
+import argparse
+import gc
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+import torch
+from safetensors.torch import save_file as safe_save_file
+from tqdm import tqdm
+from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
+from transformers.utils.hub import convert_file_size_to_int
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from common import (
+    ALPHA as DEFAULT_ALPHA,
+    ATTN_IMPLEMENTATION,
+    EXCLUDE_PATTERNS,
+    GROUP_SIZE,
+    IGNORE_STATE_DICT_KEYS,
+    NUM_ATTENTION_HEADS,
+    NUM_KEY_VALUE_HEADS,
+    SCALE_CLAMP_MIN,
+    SCALING_LAYERS,
+    load_device_map as load_device_map_config,
+    matches_exclude,
+)
+from mxfp4_quantizer import mxfp4_quantize
+
+
+COPY_FILES = [
+    "chat_template.jinja",
+    "configuration_minimax_m2.py",
+    "generation_config.json",
+    "modeling_minimax_m2.py",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.json",
+    "added_tokens.json",
+    "special_tokens_map.json",
+    "merges.txt",
+]
+
+QUARK_VERSION = "0.11.1+210bbb7"
+
+
+def get_module(model, path: str):
+    module = model
+    for part in path.split("."):
+        module = getattr(module, part)
+    return module
+
+
+def load_act_scales(record_dir: str, num_layers: int) -> dict[str, torch.Tensor]:
+    act_scales = {}
+    for layer_idx in range(num_layers):
+        for cfg in SCALING_LAYERS:
+            for linear_name in cfg["layers"]:
+                key = f"layers.{layer_idx}.{linear_name}"
+                filename = os.path.join(record_dir, f"{key.replace('.', '_')}.pt")
+                if not os.path.exists(filename):
+                    raise FileNotFoundError(f"Missing activation record: {filename}")
+                act_scales[key] = torch.load(
+                    filename, map_location="cpu", weights_only=True
+                )
+    return act_scales
+
+
+def apply_smoothquant_to_layer(
+    layer,
+    layer_idx: int,
+    act_scales: dict[str, torch.Tensor],
+    alpha: float,
+) -> None:
+    # Group 1: input_layernorm -> q_proj, k_proj, v_proj
+    ln = get_module(layer, "input_layernorm")
+    q_w = get_module(layer, "self_attn.q_proj").weight
+    k_w = get_module(layer, "self_attn.k_proj").weight
+    v_w = get_module(layer, "self_attn.v_proj").weight
+
+    act_scale_q = (
+        act_scales[f"layers.{layer_idx}.self_attn.q_proj"].to(q_w.device).to(q_w.dtype)
+    )
+    weight_scales_g1 = (
+        torch.cat(
+            [
+                q_w.abs().max(dim=0, keepdim=True)[0],
+                k_w.abs().max(dim=0, keepdim=True)[0],
+                v_w.abs().max(dim=0, keepdim=True)[0],
+            ],
+            dim=0,
+        )
+        .max(dim=0)[0]
+        .clamp(min=1e-5)
+    )
+    best_scale1 = (act_scale_q.pow(alpha) / weight_scales_g1.pow(1 - alpha)).clamp(
+        min=SCALE_CLAMP_MIN
+    )
+
+    ln.weight.data.div_(best_scale1.to(ln.weight.device))
+    get_module(layer, "self_attn.q_proj").weight.data.mul_(
+        best_scale1.to(q_w.device).view(1, -1)
+    )
+    get_module(layer, "self_attn.k_proj").weight.data.mul_(
+        best_scale1.to(k_w.device).view(1, -1)
+    )
+    get_module(layer, "self_attn.v_proj").weight.data.mul_(
+        best_scale1.to(v_w.device).view(1, -1)
+    )
+
+    # Group 2: v_proj -> o_proj (GQA-aware)
+    v_proj = get_module(layer, "self_attn.v_proj")
+    o_proj = get_module(layer, "self_attn.o_proj")
+    act_scale_o = (
+        act_scales[f"layers.{layer_idx}.self_attn.o_proj"]
+        .to(o_proj.weight.device)
+        .to(o_proj.weight.dtype)
+    )
+    o_weight_scale = (
+        o_proj.weight.abs().max(dim=0, keepdim=True)[0].squeeze(0).clamp(min=1e-5)
+    )
+    best_scale2 = (act_scale_o.pow(alpha) / o_weight_scale.pow(1 - alpha)).clamp(
+        min=SCALE_CLAMP_MIN
+    )
+
+    num_head_repeats = NUM_ATTENTION_HEADS // NUM_KEY_VALUE_HEADS
+    if v_proj.weight.shape[0] != best_scale2.numel() and num_head_repeats != 1:
+        head_dim = best_scale2.numel() // NUM_ATTENTION_HEADS
+        grouped = best_scale2.view(NUM_KEY_VALUE_HEADS, num_head_repeats, head_dim)
+        prev_scales_tmp = grouped.max(dim=1, keepdim=True)[0]
+        v_scales = prev_scales_tmp.reshape(-1)
+        o_scales = prev_scales_tmp.expand(
+            NUM_KEY_VALUE_HEADS, num_head_repeats, head_dim
+        ).reshape(-1)
+        v_proj.weight.data.div_(v_scales.to(v_proj.weight.device).view(-1, 1))
+        if v_proj.bias is not None:
+            v_proj.bias.data.div_(v_scales.to(v_proj.bias.device))
+        o_proj.weight.data.mul_(o_scales.to(o_proj.weight.device).view(1, -1))
+    else:
+        v_proj.weight.data.div_(best_scale2.to(v_proj.weight.device).view(-1, 1))
+        if v_proj.bias is not None:
+            v_proj.bias.data.div_(best_scale2.to(v_proj.bias.device))
+        o_proj.weight.data.mul_(best_scale2.to(o_proj.weight.device).view(1, -1))
+
+
+def clear_accelerator_cache() -> None:
+    if hasattr(torch, "cuda") and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    if hasattr(torch, "npu") and torch.npu.is_available():
+        torch.npu.empty_cache()
+
+
+def iter_export_tensors(model):
+    exported_names: set[str] = set()
+
+    for name, param in model.named_parameters():
+        if name in IGNORE_STATE_DICT_KEYS:
+            continue
+        exported_names.add(name)
+        if name.endswith(".weight") and param.dim() == 2:
+            module_name = name.rsplit(".weight", 1)[0]
+            module = get_module(model, module_name)
+            if isinstance(module, torch.nn.Linear) and not matches_exclude(
+                module_name, EXCLUDE_PATTERNS
+            ):
+                packed, scale_e8m0 = mxfp4_quantize(
+                    param.data.detach().cpu().float(), axis=-1
+                )
+                yield name, packed.contiguous()
+                yield name.replace(".weight", ".weight_scale"), scale_e8m0.contiguous()
+                continue
+        yield name, param.data.detach().cpu().clone()
+
+    for name, buf in model.named_buffers():
+        if name in IGNORE_STATE_DICT_KEYS or name in exported_names:
+            continue
+        yield name, buf.data.detach().cpu().clone()
+
+
+def count_unique_parameters(model) -> int:
+    total = 0
+    seen: set[tuple[int, int, int, tuple[int, ...], tuple[int, ...]]] = set()
+
+    for name, param in model.named_parameters():
+        if name in IGNORE_STATE_DICT_KEYS:
+            continue
+
+        # MiniMax remote code can expose aliased parameters via distinct wrappers.
+        # Deduplicate by underlying storage + view metadata so exported metadata
+        # matches the actual unique parameter count.
+        storage = param.untyped_storage()
+        key = (
+            storage.data_ptr(),
+            storage.nbytes(),
+            param.storage_offset(),
+            tuple(param.size()),
+            tuple(param.stride()),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        total += param.numel()
+
+    return total
+
+
+class StreamingShardWriter:
+    def __init__(
+        self,
+        output_dir: str,
+        max_shard_size: str = "5GB",
+        total_parameters: int | None = None,
+    ) -> None:
+        self.output_dir = output_dir
+        self.max_shard_size_bytes = convert_file_size_to_int(max_shard_size)
+        self.total_parameters = total_parameters
+        self.current_tensors: dict[str, torch.Tensor] = {}
+        self.current_size_bytes = 0
+        self.total_size_bytes = 0
+        self.shard_files: list[str] = []
+        self.shard_tensor_names: list[list[str]] = []
+
+    @staticmethod
+    def _tensor_size_bytes(tensor: torch.Tensor) -> int:
+        return tensor.numel() * tensor.element_size()
+
+    def add_tensor(self, name: str, tensor: torch.Tensor) -> None:
+        tensor_size = self._tensor_size_bytes(tensor)
+        if (
+            self.current_tensors
+            and self.current_size_bytes + tensor_size > self.max_shard_size_bytes
+        ):
+            self.flush()
+        self.current_tensors[name] = tensor
+        self.current_size_bytes += tensor_size
+        self.total_size_bytes += tensor_size
+
+    def flush(self) -> None:
+        if not self.current_tensors:
+            return
+
+        shard_idx = len(self.shard_files) + 1
+        tmp_name = f"model-{shard_idx:05d}.safetensors.tmp"
+        tmp_path = os.path.join(self.output_dir, tmp_name)
+        print(
+            f"[Stage 2] Saving temporary shard {shard_idx} "
+            f"({len(self.current_tensors)} tensors, {self.current_size_bytes / 1e9:.2f} GB)"
+        )
+        safe_save_file(self.current_tensors, tmp_path, metadata={"format": "pt"})
+        self.shard_files.append(tmp_path)
+        self.shard_tensor_names.append(list(self.current_tensors.keys()))
+        self.current_tensors.clear()
+        self.current_size_bytes = 0
+        gc.collect()
+        clear_accelerator_cache()
+
+    def finalize(self) -> None:
+        self.flush()
+        num_shards = len(self.shard_files)
+        if num_shards == 0:
+            raise RuntimeError("No tensors were exported.")
+
+        weight_map: dict[str, str] = {}
+        for shard_idx, tmp_path in enumerate(self.shard_files, start=1):
+            final_name = f"model-{shard_idx:05d}-of-{num_shards:05d}.safetensors"
+            final_path = os.path.join(self.output_dir, final_name)
+            os.replace(tmp_path, final_path)
+            for tensor_name in self.shard_tensor_names[shard_idx - 1]:
+                weight_map[tensor_name] = final_name
+
+        metadata = {"total_size": self.total_size_bytes}
+        if self.total_parameters is not None:
+            metadata["total_parameters"] = int(self.total_parameters)
+        index = {"metadata": metadata, "weight_map": weight_map}
+        with open(
+            os.path.join(self.output_dir, SAFE_WEIGHTS_INDEX_NAME),
+            "w",
+            encoding="utf-8",
+        ) as f:
+            json.dump(index, f, ensure_ascii=False, indent=2)
+
+
+def build_quantization_config(alpha: float) -> dict:
+    tensor_quant_cfg = {
+        "ch_axis": -1,
+        "dtype": "fp4",
+        "group_size": GROUP_SIZE,
+        "is_dynamic": False,
+        "is_scale_quant": False,
+        "mx_element_dtype": None,
+        "observer_cls": "PerBlockMXObserver",
+        "qscheme": "per_group",
+        "round_method": "half_even",
+        "scale_calculation_mode": "even",
+        "scale_format": "e8m0",
+        "scale_type": "float",
+        "symmetric": None,
+    }
+    input_quant_cfg = dict(tensor_quant_cfg)
+    input_quant_cfg["is_dynamic"] = True
+
+    return {
+        "algo_config": [
+            {
+                "name": "smooth",
+                "alpha": alpha,
+                "scale_clamp_min": SCALE_CLAMP_MIN,
+                "model_decoder_layers": "model.layers",
+                "scaling_layers": SCALING_LAYERS,
+            }
+        ],
+        "exclude": EXCLUDE_PATTERNS,
+        "export": {
+            "kv_cache_group": [],
+            "min_kv_scale": 0.0,
+            "pack_method": "reorder",
+            "weight_format": "real_quantized",
+            "weight_merge_groups": None,
+        },
+        "global_quant_config": {
+            "bias": None,
+            "input_tensors": input_quant_cfg,
+            "output_tensors": None,
+            "target_device": None,
+            "weight": tensor_quant_cfg,
+        },
+        "kv_cache_post_rope": False,
+        "kv_cache_quant_config": {},
+        "layer_quant_config": {},
+        "layer_type_quant_config": {},
+        "quant_method": "quark",
+        "quant_mode": "eager_mode",
+        "softmax_quant_spec": None,
+        "version": QUARK_VERSION,
+    }
+
+
+def resolve_load_device_map(
+    load_device_mode: str, device_map_file: str | None
+) -> str | dict[str, str | int]:
+    if device_map_file is not None:
+        return load_device_map_config(device_map_file)
+    if load_device_mode == "auto":
+        return "auto"
+    return {"": "cpu"}
+
+
+def export_model(
+    model_dir: str,
+    record_dir: str,
+    output_dir: str,
+    load_device_mode: str = "cpu",
+    device_map_file: str | None = None,
+    alpha: float = DEFAULT_ALPHA,
+) -> None:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    device_map = resolve_load_device_map(load_device_mode, device_map_file)
+
+    print(f"[Stage 2] Loading model from {model_dir}...")
+    model = AutoModelForCausalLM.from_pretrained(
+        model_dir,
+        torch_dtype=torch.bfloat16,
+        device_map=device_map,
+        trust_remote_code=True,
+        attn_implementation=ATTN_IMPLEMENTATION,
+        low_cpu_mem_usage=True,
+    )
+    model.eval()
+    total_parameters = count_unique_parameters(model)
+
+    decoder_layers = get_module(model, "model.layers")
+    act_scales = load_act_scales(record_dir, len(decoder_layers))
+    print(f"[Stage 2] Loaded {len(act_scales)} activation scale tensors")
+
+    print(f"[Stage 2] Applying SmoothQuant with alpha={alpha}...")
+    for layer_idx, layer in enumerate(tqdm(decoder_layers, desc="SmoothQuant")):
+        apply_smoothquant_to_layer(layer, layer_idx, act_scales, alpha)
+
+    if os.path.isdir(output_dir) and os.listdir(output_dir):
+        raise FileExistsError(f"Output directory is not empty: {output_dir}")
+    os.makedirs(output_dir, exist_ok=True)
+    model.config.quantization_config = build_quantization_config(alpha)
+    model.config.save_pretrained(output_dir)
+    if getattr(model, "generation_config", None) is not None:
+        model.generation_config.save_pretrained(output_dir)
+
+    del act_scales
+    gc.collect()
+    clear_accelerator_cache()
+
+    print(
+        "[Stage 2] Quantizing weights to MXFP4 and streaming shards to safetensors..."
+    )
+    shard_writer = StreamingShardWriter(
+        output_dir=output_dir, max_shard_size="5GB", total_parameters=total_parameters
+    )
+    export_pbar = tqdm(iter_export_tensors(model), desc="Export tensors", unit="tensor")
+    for name, tensor in export_pbar:
+        shard_writer.add_tensor(name, tensor)
+        export_pbar.set_postfix_str(
+            f"current_shard={shard_writer.current_size_bytes / 1e9:.2f}GB"
+        )
+    shard_writer.finalize()
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_dir, padding_side="left", trust_remote_code=True
+    )
+    tokenizer.save_pretrained(output_dir)
+
+    for filename in COPY_FILES:
+        src = os.path.join(model_dir, filename)
+        dst = os.path.join(output_dir, filename)
+        if os.path.exists(src) and not os.path.exists(dst):
+            shutil.copy2(src, dst)
+
+    print(f"[Stage 2] Exporting to {output_dir}...")
+    print(f"[Stage 2] Done. Exported model to {output_dir}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Stage 2: SmoothQuant + MXFP4 export")
+    parser.add_argument("--model_dir", required=True)
+    parser.add_argument("--record_dir", required=True)
+    parser.add_argument("--output_dir", required=True)
+    parser.add_argument("--load_device_map", default="cpu", choices=["cpu", "auto"])
+    parser.add_argument("--device_map_file", default=None)
+    parser.add_argument("--alpha", type=float, default=DEFAULT_ALPHA)
+    args = parser.parse_args()
+    if not 0.0 <= args.alpha <= 1.0:
+        raise ValueError("--alpha must be in [0, 1]")
+
+    export_model(
+        model_dir=args.model_dir,
+        record_dir=args.record_dir,
+        output_dir=args.output_dir,
+        load_device_mode=args.load_device_map,
+        device_map_file=args.device_map_file,
+        alpha=args.alpha,
+    )
+
+
+if __name__ == "__main__":
+    main()
