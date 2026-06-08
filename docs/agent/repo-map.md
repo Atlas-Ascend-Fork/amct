@@ -11,7 +11,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 最近校验日期 | `2026-04-17` |
+| 最近校验日期 | `2026-06-08` |
 | 使用方式 | `先读 repo-map -> 抽查锚点 -> 只更新受影响 section` |
 | 适用场景 | `新模型适配与 PTQ 流程定位` |
 
@@ -37,7 +37,7 @@
 | Workflow | `amct_pytorch/workflows/` | 编排 eval、PTQ 数据提取、PTQ 训练 | 不放模型细节 |
 | Model adapter | `amct_pytorch/common/models/llm/...` | 构建 block、quant block、拆 `PtqUnit`、加载 unit 输入和参数 | 新模型适配主入口 |
 | Quant modules | `amct_pytorch/quantization/modules/` | 提供通用量化 wrapper，如 `ActivationQuantizer`、`WeightQuantizer`、`QuantLinear` | 保持通用 |
-| Algorithms | `amct_pytorch/quantization/algorithms/` | 实现 activation / weight / structure 算法 | 通过 `targets` 注册 |
+| Algorithms | `amct_pytorch/algorithms/` | 实现 activation / weight / structure 算法 | 通过 `targets` 注册 |
 | Optimization | `amct_pytorch/common/optimization/` | 管 optimizer、epoch 循环、重建训练 | 不混入模型分支 |
 | Data | `amct_pytorch/common/datasets/` | 提供 PTQ 输入、GT 生成、dataloader | 优先复用现有 provider |
 
@@ -81,13 +81,13 @@
 
 `amct_pytorch/common/models/llm/common/base.py` 目前提供最关键的复用抽象：
 
-- `PtqUnit`
+- `PtqUnit`（定义在 `amct_pytorch/common/models/llm/common/ptq_units.py`，base.py import 并驱动）
 - `BaseModel.build_quant_block()`
 - `BaseModel.iter_ptq_units()`
 - `BaseModel.ptq_param_handler`
 - `BaseModel.ptq_param_store`
 - `BaseModel.do_block_forward()` 已支持 per-sample state:除已有 `position_ids / position_embeddings / attention_mask`(整批共用)外,新增 `self.input_ids`(per-sample list,默认 None);adapter 在 `do_embedding_forward` 末尾设 `self.input_ids = list(samples)`,`do_block_forward` 的 forward loop 会在每次迭代把对应 entry 注入 kwargs(用于 v4 这类 MoE hash routing 需要 token-id 路由的场景)。其它 adapter 不设 `self.input_ids` 时行为完全不变
-- `QuantGatedMLP`
+- `QuantGatedMLP`（实际定义在 `amct_pytorch/common/models/llm/common/quant_apply.py`）
 
 ### 3. 当前 quant wrapper 形态
 
