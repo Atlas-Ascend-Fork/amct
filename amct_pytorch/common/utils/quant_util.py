@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import functools
 import math
 import torch
 
@@ -22,6 +23,46 @@ from amct_pytorch.common.utils.vars import HIFLOAT8, FLOAT8_E4M3FN, MXFP4_E2M1, 
 from amct_pytorch.common.utils.data_utils import float_to_fp4e2m1
 
 FP4E2M1_MAX_EXP = 2
+
+
+@functools.lru_cache(maxsize=1)
+def _hifloat8_supported():
+    """探测 torch_npu 的 cast 算子是否支持 hifloat8，进程内缓存一次。
+
+    量化阶段实际调用 npu_dtype_cast / npu_dynamic_quant 把张量 cast 到
+    torch_npu.hifloat8，这条路径的前提是 torch_npu 暴露了 hifloat8 这个
+    dtype。该属性不存在时（旧版 torch_npu）cast 无法调用，需回退 amct_ops。
+    """
+    try:
+        import torch_npu
+    except ImportError:
+        return False
+    return hasattr(torch_npu, 'hifloat8')
+
+
+@torch.no_grad()
+def _hifloat8_fake_quant(fp_tensor):
+    """FP -> HiF8 -> FP 伪量化往返。
+
+    torch_npu 支持 hifloat8 时走原生 cast；否则走 amct_ops 的 encode/decode。
+    amct_ops 仅支持 float16/bfloat16，float32 输入先降到 bfloat16 往返再还原回原 dtype。
+    """
+    if _hifloat8_supported():
+        import torch_npu
+        hif8 = torch_npu.npu_dtype_cast(fp_tensor, torch_npu.hifloat8)
+        return torch_npu.npu_dtype_cast(hif8, fp_tensor.dtype, input_dtype=torch_npu.hifloat8)
+    try:
+        from amct_ops.hifloat8_cast import encode_to_hifloat8, decode_from_hifloat8
+    except ImportError as exc:
+        raise ImportError(
+            "current torch_npu does not support hifloat8, so amct_pytorch falls back to "
+            "the amct_ops hifloat8_cast operator, but amct_ops is not installed. "
+            "Please install amct_ops (see amct_ops/README.md), or use a torch_npu build "
+            "with native hifloat8 support."
+        ) from exc
+    work_dtype = fp_tensor.dtype if fp_tensor.dtype in (torch.float16, torch.bfloat16) else torch.bfloat16
+    codes = encode_to_hifloat8(fp_tensor.to(work_dtype).npu())
+    return decode_from_hifloat8(codes, work_dtype).to(fp_tensor.dtype)
 
 
 def pad_zero_by_group(tensor, group_size):
@@ -287,16 +328,21 @@ def quant_dequant_tensor(tensor, dst_dtype, scale=None, offset=None, group_size=
     Returns:
         torch.tensor
     """
-    import torch_npu    
     ori_dtype = tensor.dtype
     ori_shape = tensor.shape
+
+    if dst_dtype == HIFLOAT8:
+        # 自包含 hif8 伪量化：÷scale -> FP->HiF8->FP 往返 -> ×scale。
+        # 不依赖 quant_tensor 的 npu_quantize，torch_npu 缺 hif8 支持时走 amct_ops。
+        scaled = tensor / scale.to(tensor.device)
+        dq = _hifloat8_fake_quant(scaled)
+        dequantize_tensor = dq.to(ori_dtype) * scale.to(ori_dtype).to(dq.device)
+        return dequantize_tensor.to(ori_dtype)
+
     quantized_tensor, shared_exponent = quant_tensor(tensor, dst_dtype, scale, offset, group_size)
     scale = shared_exponent if scale is None else scale.to(quantized_tensor.device)
 
-    if dst_dtype == HIFLOAT8:
-        quantized_tensor = torch_npu.npu_dtype_cast(quantized_tensor, ori_dtype, input_dtype=torch_npu.hifloat8)
-        dequantize_tensor = quantized_tensor * scale
-    elif dst_dtype == FLOAT8_E4M3FN:
+    if dst_dtype == FLOAT8_E4M3FN:
         quantized_tensor = quantized_tensor.to(scale.dtype)
         dequantize_tensor = quantized_tensor * scale
     elif dst_dtype == MXFP4_E2M1:

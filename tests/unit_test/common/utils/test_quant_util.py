@@ -23,6 +23,7 @@ import torch
 from amct_pytorch.common.utils import quant_util as qu
 from amct_pytorch.common.utils.vars import (
     FLOAT4_E2M1,
+    HIFLOAT8,
     INT4,
     INT4_MAX,
     INT4_MIN,
@@ -317,3 +318,121 @@ def test_quant_weight_no_group_size_with_offset():
     q = qu.quant_weight(w, INT8, scale=scale, offset=offset, group_size=None)
     assert q.shape == w.shape
     assert q.dtype == torch.int8
+
+
+# ---- _hifloat8_supported / _hifloat8_fake_quant ---------------------------
+
+import sys
+from unittest import mock
+
+
+def test_hifloat8_supported_true_when_torch_npu_has_hifloat8(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    fake_npu = mock.MagicMock()
+    fake_npu.hifloat8 = "HIF8"  # dtype 属性存在
+    monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
+    assert qu._hifloat8_supported() is True
+
+
+def test_hifloat8_supported_false_when_hifloat8_attr_missing(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    # spec=[] 的 mock 不暴露任何属性，hasattr(..., 'hifloat8') 为 False
+    fake_npu = mock.MagicMock(spec=[])
+    monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
+    assert qu._hifloat8_supported() is False
+
+
+def test_hifloat8_supported_false_when_torch_npu_missing(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setitem(sys.modules, "torch_npu", None)  # import triggers ImportError
+    assert qu._hifloat8_supported() is False
+
+
+def test_fake_quant_native_path_uses_npu_dtype_cast(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setattr(qu, "_hifloat8_supported", lambda: True)
+
+    calls = []
+    fake_npu = mock.MagicMock()
+    fake_npu.hifloat8 = "HIF8"
+
+    def fake_cast(t, dtype, input_dtype=None):
+        calls.append((dtype, input_dtype))
+        return t  # 透传，验证调用次序
+
+    fake_npu.npu_dtype_cast = fake_cast
+    monkeypatch.setitem(sys.modules, "torch_npu", fake_npu)
+
+    x = torch.randn(4, 8, dtype=torch.float16)
+    out = qu._hifloat8_fake_quant(x)
+    # 先 FP->HIF8，再 HIF8->FP
+    assert calls[0] == ("HIF8", None)
+    assert calls[1] == (torch.float16, "HIF8")
+    assert out.shape == x.shape
+
+
+def test_fake_quant_fallback_uses_amct_ops_and_bf16_for_fp32(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setattr(qu, "_hifloat8_supported", lambda: False)
+
+    seen = {}
+
+    def fake_encode(t):
+        seen["encode_dtype"] = t.dtype
+        return t.to(torch.uint8)
+
+    def fake_decode(codes, dtype):
+        seen["decode_dtype"] = dtype
+        return codes.to(dtype)
+
+    fake_mod = mock.MagicMock()
+    fake_mod.encode_to_hifloat8 = fake_encode
+    fake_mod.decode_from_hifloat8 = fake_decode
+    monkeypatch.setitem(sys.modules, "amct_ops", mock.MagicMock())
+    monkeypatch.setitem(sys.modules, "amct_ops.hifloat8_cast", fake_mod)
+    # CPU CI 上 .npu() 不可用，替换为 no-op
+    monkeypatch.setattr(torch.Tensor, "npu", lambda self: self, raising=False)
+
+    x = torch.randn(4, 8, dtype=torch.float32)
+    out = qu._hifloat8_fake_quant(x)
+    # fp32 输入应降到 bf16 往返
+    assert seen["encode_dtype"] == torch.bfloat16
+    assert seen["decode_dtype"] == torch.bfloat16
+    assert out.dtype == torch.float32  # 还原回原 dtype
+    assert out.shape == x.shape
+
+
+def test_quant_dequant_tensor_hifloat8_self_contained(monkeypatch):
+    # hif8 分支应自包含：÷scale -> _hifloat8_fake_quant -> ×scale，
+    # 不调用 quant_tensor 的 npu_quantize。
+    captured = {}
+
+    def fake_fake_quant(t):
+        captured["scaled"] = t.clone()
+        return t  # 透传，等价于无损 cast，便于断言数值
+
+    monkeypatch.setattr(qu, "_hifloat8_fake_quant", fake_fake_quant)
+    # 若 hif8 分支错误地走了 quant_tensor，会触发断言
+    monkeypatch.setattr(qu, "quant_tensor",
+                        mock.MagicMock(side_effect=AssertionError("should not call quant_tensor")))
+
+    t = torch.tensor([[2.0, 4.0, 8.0, 16.0]])
+    scale = torch.tensor([[2.0]])
+    out = qu.quant_dequant_tensor(t, HIFLOAT8, scale=scale)
+
+    # 透传 fake_quant 下：out = (t/scale)*scale = t
+    assert torch.allclose(captured["scaled"], t / scale)
+    assert torch.allclose(out, t)
+    assert out.dtype == t.dtype
+
+
+def test_fake_quant_fallback_raises_clear_error_when_amct_ops_missing(monkeypatch):
+    qu._hifloat8_supported.cache_clear()
+    monkeypatch.setattr(qu, "_hifloat8_supported", lambda: False)
+    # 模拟 amct_ops 未安装：import 触发 ImportError
+    monkeypatch.setitem(sys.modules, "amct_ops", None)
+    monkeypatch.setitem(sys.modules, "amct_ops.hifloat8_cast", None)
+
+    x = torch.randn(2, 4, dtype=torch.float16)
+    with pytest.raises(ImportError, match="amct_ops is not installed"):
+        qu._hifloat8_fake_quant(x)
