@@ -1,0 +1,23 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# ----------------------------------------------------------------------------
+
+# W4A16 MoE-only: only MoE-expert Linears go to weight-only INT4; everything
+# else (attention q/k/v/o_proj, dense MLP, lm_head) stays BF16.
+#
+#   python -m amct_pytorch.deploy --quant_target moe --quant_dtype int \
+#       --bit_config amct_pytorch/configs/w4a16-moe.yaml --algos gptq ...
+#
+# a_bits=16 means activations stay unquantized (weight-only). Top-level w/a are
+# omitted, so all non-moe roles default to 16 (BF16).
+#
+# NOTE: the MoE-GMM int4 path groups weights by a framework-internal group size;
+# the LLM CLI does not expose group_size through this yaml (only classic
+# graph-quant deploy_op does). See docs/agent/casebook/moe/qwen3-30b-a3b.md.
+
+moe:
+  w_bits: 4
+  a_bits: 16
