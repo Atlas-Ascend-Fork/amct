@@ -20,7 +20,7 @@ import os
 import stat
 import unittest
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import patch, mock_open, MagicMock
 
 import torch
 
@@ -30,6 +30,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import (
     Parser,
     _export_to_onnx,
+    _export_oversize_model,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
@@ -243,4 +244,29 @@ class TestParser(unittest.TestCase):
     def test_validate_export_setting_invalid_dynamic_axes_7(self):
         export_setting = {'dynamic_axes': {"inputs": {-4: '32'}}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
+
+    @patch('amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.copyfileobj')
+    @patch('amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.os.path.exists')
+    @patch('amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.torch.onnx.export')
+    def test_export_oversize_model_closes_handle_on_error(
+            self, mock_export, mock_exists, mock_copy):
+        # 回归测试: _export_oversize_model 中 copyfileobj 抛异常时,
+        # 本地 onnx 文件句柄仍需经由 with 上下文正确关闭, 避免资源泄露。
+        mock_export.return_value = None
+        mock_exists.return_value = True
+        mock_copy.side_effect = RuntimeError('copy failed')
+
+        fake_handle = MagicMock()
+        m_open = mock_open()
+        m_open.return_value.__enter__.return_value = fake_handle
+        onnx_file = BytesIO()
+
+        with patch(
+                'amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.open',
+                m_open, create=True):
+            with self.assertRaises(RuntimeError):
+                _export_oversize_model(torch.nn.Identity(), self.args, onnx_file, {})
+
+        # with 语句保证异常路径下句柄被关闭(__exit__ 被调用)。
+        m_open.return_value.__exit__.assert_called()
 

@@ -288,7 +288,7 @@ def _export_oversize_model(model, args, onnx_file, export_setting):
     if not os.path.exists(TMP_PATH):
         os.mkdir(TMP_PATH)
     torch_out = torch.onnx.export(model, args, onnx_local_file, **export_setting)
-    f = open(onnx_local_file, 'rb')
-    copyfileobj(f, onnx_file)
+    with open(onnx_local_file, 'rb') as f:
+        copyfileobj(f, onnx_file)
     onnx_file.seek(0)
     return torch_out

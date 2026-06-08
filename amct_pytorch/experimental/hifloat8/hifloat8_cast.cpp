@@ -119,6 +119,10 @@ void GetHiF8BitsNum(int32_t expNoBias, uint32_t& dotValue, uint32_t& expBits, ui
         //d4:    2    |    4    |    1
         expBits = 4;
         fracBits = 1;
+    } else { // absExpNoBias > 15: d4 e:[16, ...]
+        dotValue = 0x0C; // d4 0b1100
+        expBits = 4;
+        fracBits = 1;
     }
 }
 
