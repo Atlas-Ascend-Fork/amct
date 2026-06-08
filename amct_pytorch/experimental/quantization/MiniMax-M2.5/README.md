@@ -248,3 +248,19 @@ o_proj.weight  *=  s     (沿 input_channel 维度)
 ### 总结
 
 通过上述两组融合，stage2 实现了"零运行时开销"的 SmoothQuant：所有缩放操作都在离线阶段融入了现有权重，推理时无需额外算子。融合后的权重再经过 MXFP4 量化打包，最终导出为可直接部署的 safetensors 格式。
+
+## 量化损失测试结果
+
+为评估 SmoothQuant + MXFP4 量化方案对模型精度的影响，我们在多个主流评测集上对比了 BF16 基线（Baseline）与 PTQ 量化模型（PTQ）的表现，并给出 PTQ 相对 Baseline 的精度保持比例（比例 = PTQ / Baseline）。
+
+| Task     | drop   | gpqa_diamond | gsm8k  | humaneval+ | math500 | lcb    | longbenchV2 |
+|----------|--------|--------------|--------|------------|---------|--------|-------------|
+| Baseline | 90.478 | 85.15        | 96.01  | 91.33      | 93.06   | 62.8   | 56.76       |
+| PTQ      | 90.04  | 84.64        | 95.89  | 91.21      | 92.92   | 63.83  | 55.09       |
+| 比例     | 0.99   | 0.99         | 0.99   | 0.99       | 0.99    | 1.0    | 0.97        |
+
+### 说明
+
+- 上述精度评测使用的推理框架为 [cann-recipes-infer / minimax_m2.5_mxfp4](https://gitcode.com/cann/cann-recipes-infer/tree/master/contrib/minimax_m2.5_mxfp4)，该框架提供了 MiniMax-M2.5 MXFP4 量化模型在昇腾 NPU 上的端到端推理参考实现。
+- 从结果可以看出，PTQ 量化模型在 drop、gpqa_diamond、gsm8k、humaneval+、math500 等任务上的精度保持比例均达到 **0.99** 及以上，lcb 任务上 PTQ 略优于 Baseline（比例 1.0），longbenchV2 任务上比例为 **0.97**，整体精度损失可控。
+- 评测过程中受采样温度、随机性、推理后端实现差异等因素影响，**部分结果可能存在一定波动**，复现时同一配置下数值可能与上表存在小幅差异，建议以多次取均值或在相同框架版本下复现为准。
