@@ -224,7 +224,7 @@ The earlier `attn-moe` W4A16 artifact was therefore re-exported as MoE-only.
 - Command: `python -m amct_pytorch.deploy --model_name qwen3_moe --quant_target moe --quant_dtype int
   --bit_config amct_pytorch/configs/w4a16-moe.yaml --algos gptq
   --moe_mlp_param_dir <moe-w4a16-g64-gptq ptq_params dir>`
-- ⚠️ 待补特性（迁移注记）：本 W4A16 weight-only + group-wise INT4 路径来自 AMCT-Q `qwen3-adapter` 分支的**未合入提交**（`1324bea` group-wise INT4 + `54486c0` W4A16 weight-only deploy，~78 行 / 6 文件），AMCT-Q `main` 与 amct_llm 任何分支均**无此代码**。amct_llm `bit_policy` 可表达 `w4/a16`（顶层留 16、`moe` 块 `w_bits:4,a_bits:16`，即 `configs/w4a16-moe.yaml`），但 int4 分组打包与 W4A16 deploy 导出尚未移植，且 LLM CLI `--bit_config` 无 `group_size` 字段——**本案例在 amct_llm 当前不可直接跑通**。要启用需先把 `1324bea`+`54486c0` 移植/上游进 amct_llm（再随 amct_llm 回合 amct）。
+- ⚠️ 待补特性（迁移注记）：本 W4A16 weight-only + group-wise INT4 路径来自 AMCT-Q `qwen3-adapter` 分支的**未合入提交**（`1324bea` group-wise INT4 + `54486c0` W4A16 weight-only deploy，~78 行 / 6 文件），AMCT-Q `main` 与 amct_llm 任何分支均**无此代码**。amct_llm `bit_policy` 可表达 `w4/a16`（顶层留 16、`moe` 块 `w_bits:4,a_bits:16`，即 `amct_pytorch/configs/w4a16-moe.yaml`），但 int4 分组打包与 W4A16 deploy 导出尚未移植，且 LLM CLI `--bit_config` 无 `group_size` 字段——**本案例在 amct_llm 当前不可直接跑通**。要启用需先把 `1324bea`+`54486c0` 移植/上游进 amct_llm（再随 amct_llm 回合 amct）。
 - `--quant_target moe` only: `build_quant_block` wraps just `mlp.experts`; attention
   Linears stay float `nn.Linear` and are auto-collected into `quantization_config.ignore`
   (192 entries = 48 layers x q/k/v/o_proj), exported BF16 in `rest_00000.safetensors`.

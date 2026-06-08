@@ -46,7 +46,7 @@ python -m amct_pytorch.deploy --model <path> --model_name <name> --quant_target 
   --moe_mlp_param_dir <param_dir> --output_dir <deploy_dir>
 ```
 
-- **bit 配置一律 yaml**：`configs/w8a8.yaml`、`configs/w4a8.yaml`、`configs/w4a16-moe.yaml` 等；不存在 `--a_bits/--w_bits/--group_size` 扁平开关
+- **bit 配置一律 yaml**：`amct_pytorch/configs/w8a8.yaml`、`amct_pytorch/configs/w4a8.yaml`、`amct_pytorch/configs/w4a16-moe.yaml` 等；不存在 `--a_bits/--w_bits/--group_size` 扁平开关
 - **deploy 必须带与 ptq 一致的 `--algos`**：GPTQ PTQ 参数携带 `algorithms.gptq` 子模块，deploy 块缺失会在 `load_module` 报 `KeyError`
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `*_param_dir`
 
