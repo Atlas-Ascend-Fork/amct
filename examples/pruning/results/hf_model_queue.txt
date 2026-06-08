@@ -1,0 +1,10 @@
+# 추가 HF 소형 인과 LM. resumable: 이미 끝난 건 스킵.
+# 제외(안 됨/무의미): sshleifer/tiny-gpt2(랜덤), roneneldan/TinyStories-33M(도메인밖 ppl≈5e4),
+#   bigscience/bigscience-small-testing(랜덤).
+# 주: Qwen2.5-0.5B 는 격리 검증 결과 int8 quant 정상(원래 실패는 동시-스윕 race 아티팩트) → 재추가.
+EleutherAI/pythia-410m
+facebook/opt-125m
+HuggingFaceTB/SmolLM-360M
+cerebras/Cerebras-GPT-111M
+EleutherAI/pythia-31m
+Qwen/Qwen2.5-0.5B
