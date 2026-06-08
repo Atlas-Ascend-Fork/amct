@@ -261,6 +261,6 @@ o_proj.weight  *=  s     (沿 input_channel 维度)
 
 ### 说明
 
-- 上述精度评测使用的推理框架为 [cann-recipes-infer / minimax_m2.5_mxfp4](https://gitcode.com/cann/cann-recipes-infer/tree/master/contrib/minimax_m2.5_mxfp4)，该框架提供了 MiniMax-M2.5 MXFP4 量化模型在昇腾 NPU 上的端到端推理参考实现。
+- 上述精度评测使用的推理框架为 [cann-recipes-infer / minimax_m2.5_mxfp4](https://gitcode.com/cann/cann-recipes-infer/tree/master/contrib/minimax_m2.5_mxfp4)，该框架在昇腾 NPU 上对 MiniMax-M2.5 的 MXFP4 量化推理进行**模拟实现**（即按 MXFP4 的量化/反量化规则在高精度算子上等价计算，并非真正调用 MXFP4 低比特硬件算子），用于在端到端推理流程中评估量化方案的精度表现。
 - 从结果可以看出，PTQ 量化模型在 drop、gpqa_diamond、gsm8k、humaneval+、math500 等任务上的精度保持比例均达到 **0.99** 及以上，lcb 任务上 PTQ 略优于 Baseline（比例 1.0），longbenchV2 任务上比例为 **0.97**，整体精度损失可控。
 - 评测过程中受采样温度、随机性、推理后端实现差异等因素影响，**部分结果可能存在一定波动**，复现时同一配置下数值可能与上表存在小幅差异，建议以多次取均值或在相同框架版本下复现为准。
