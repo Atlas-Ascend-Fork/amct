@@ -1,0 +1,833 @@
+{
+  "runs": [
+    {
+      "id": "cnn_w16_d3",
+      "family": "cnn",
+      "seconds": 56.4,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "acc",
+          "value": 0.8671,
+          "params": 24058,
+          "mb": 0.048,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "acc",
+          "value": 0.6405,
+          "params": 11593,
+          "mb": 0.023,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "acc",
+          "value": 0.6409,
+          "params": 11593,
+          "mb": 0.012,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "cnn_w16_d4",
+      "family": "cnn",
+      "seconds": 53.4,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "acc",
+          "value": 0.9785,
+          "params": 98682,
+          "mb": 0.197,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "acc",
+          "value": 0.9331,
+          "params": 47465,
+          "mb": 0.095,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "acc",
+          "value": 0.9324,
+          "params": 47465,
+          "mb": 0.047,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "cnn_w24_d3",
+      "family": "cnn",
+      "seconds": 53.8,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "acc",
+          "value": 0.9242,
+          "params": 53362,
+          "mb": 0.107,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "acc",
+          "value": 0.7655,
+          "params": 25707,
+          "mb": 0.051,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "acc",
+          "value": 0.7644,
+          "params": 25707,
+          "mb": 0.026,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "cnn_w24_d4",
+      "family": "cnn",
+      "seconds": 55.1,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "acc",
+          "value": 0.9801,
+          "params": 220594,
+          "mb": 0.441,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "acc",
+          "value": 0.9666,
+          "params": 107447,
+          "mb": 0.215,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "acc",
+          "value": 0.9665,
+          "params": 107447,
+          "mb": 0.107,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "cnn_w32_d3",
+      "family": "cnn",
+      "seconds": 50.3,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "acc",
+          "value": 0.9362,
+          "params": 94186,
+          "mb": 0.188,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "acc",
+          "value": 0.8429,
+          "params": 45364,
+          "mb": 0.091,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "acc",
+          "value": 0.8426,
+          "params": 45364,
+          "mb": 0.045,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "cnn_w32_d4",
+      "family": "cnn",
+      "seconds": 50.3,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "acc",
+          "value": 0.9831,
+          "params": 390890,
+          "mb": 0.782,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "acc",
+          "value": 0.9616,
+          "params": 190001,
+          "mb": 0.38,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "acc",
+          "value": 0.9617,
+          "params": 190001,
+          "mb": 0.19,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "lm_L2_d96",
+      "family": "lm",
+      "seconds": 15.2,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 1181.712725478031,
+          "params": 9747840,
+          "mb": 19.496,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 1184.5782341416348,
+          "params": 9681140,
+          "mb": 19.362,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 1184.4593990275073,
+          "params": 9681140,
+          "mb": 9.681,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "lm_L2_d160",
+      "family": "lm",
+      "seconds": 9.6,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 972.3648456844603,
+          "params": 16574080,
+          "mb": 33.148,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 975.4533356747068,
+          "params": 16388992,
+          "mb": 32.778,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 975.5636727839975,
+          "params": 16388992,
+          "mb": 16.389,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "lm_L4_d96",
+      "family": "lm",
+      "seconds": 12.6,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 1103.872317614821,
+          "params": 10046016,
+          "mb": 20.092,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 1106.8606441739607,
+          "params": 9912616,
+          "mb": 19.825,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 1106.9629691260254,
+          "params": 9912616,
+          "mb": 9.913,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "lm_L4_d160",
+      "family": "lm",
+      "seconds": 16.2,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 926.0443839381328,
+          "params": 17398720,
+          "mb": 34.797,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 929.3808845135711,
+          "params": 17028544,
+          "mb": 34.057,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 929.3910235877769,
+          "params": 17028544,
+          "mb": 17.029,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "lm_L6_d96",
+      "family": "lm",
+      "seconds": 17.3,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 1082.1620085482118,
+          "params": 10344192,
+          "mb": 20.688,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 1084.696895362266,
+          "params": 10144092,
+          "mb": 20.288,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 1084.642108492885,
+          "params": 10144092,
+          "mb": 10.144,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "lm_L6_d160",
+      "family": "lm",
+      "seconds": 23.9,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 919.0676573350121,
+          "params": 18223360,
+          "mb": 36.447,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 923.5231243502274,
+          "params": 17668096,
+          "mb": 35.336,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 923.3876084754988,
+          "params": 17668096,
+          "mb": 17.668,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "moe_E4_L2",
+      "family": "moe",
+      "seconds": 50.4,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 1009.0409377891266,
+          "params": 14315776,
+          "mb": 28.632,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 1164.9417801610646,
+          "params": 13128960,
+          "mb": 26.258,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 1164.9149351140688,
+          "params": 13128960,
+          "mb": 13.129,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "moe_E4_L4",
+      "family": "moe",
+      "seconds": 100.8,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 973.9256759355654,
+          "params": 16032000,
+          "mb": 32.064,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 1479.1193347390868,
+          "params": 13658368,
+          "mb": 27.317,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 1479.0488198424525,
+          "params": 13658368,
+          "mb": 13.658,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "moe_E8_L2",
+      "family": "moe",
+      "seconds": 85.1,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 1008.2306187588138,
+          "params": 15898880,
+          "mb": 31.798,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 1380.9397830040048,
+          "params": 13525248,
+          "mb": 27.05,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 1380.671753388006,
+          "params": 13525248,
+          "mb": 13.525,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "moe_E8_L4",
+      "family": "moe",
+      "seconds": 165.6,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 974.1067152261328,
+          "params": 19198208,
+          "mb": 38.396,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 1747.7474249279549,
+          "params": 14450944,
+          "mb": 28.902,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 1748.303520298432,
+          "params": 14450944,
+          "mb": 14.451,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_SmolLM-135M",
+      "family": "hf",
+      "seconds": 68.3,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 43.47678657173139,
+          "params": 134515008,
+          "mb": 269.03,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 68.65790571152391,
+          "params": 118600128,
+          "mb": 237.2,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 69.79344095165496,
+          "params": 118600128,
+          "mb": 118.6,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_pythia-70m",
+      "family": "hf",
+      "seconds": 24.6,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 103.80422872473514,
+          "params": 70426624,
+          "mb": 140.853,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 158.8257751820803,
+          "params": 67905124,
+          "mb": 135.81,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 162.9011523068911,
+          "params": 67905124,
+          "mb": 67.905,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_pythia-160m",
+      "family": "hf",
+      "seconds": 20.7,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 64.45993446869977,
+          "params": 162322944,
+          "mb": 324.646,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 166.59304272967822,
+          "params": 150998328,
+          "mb": 301.997,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 169.6938054973971,
+          "params": 150998328,
+          "mb": 150.998,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_pythia-410m",
+      "family": "hf",
+      "seconds": 121.4,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 41.179482336053006,
+          "params": 405334016,
+          "mb": 810.668,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 77.52764429894374,
+          "params": 365058872,
+          "mb": 730.118,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 77.81231510468486,
+          "params": 365058872,
+          "mb": 365.059,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_opt-125m",
+      "family": "hf",
+      "seconds": 18.5,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 70.16134160594125,
+          "params": 125239296,
+          "mb": 250.479,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 88.41905310117289,
+          "params": 113914680,
+          "mb": 227.829,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 88.28513870671989,
+          "params": 113914680,
+          "mb": 113.915,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_SmolLM-360M",
+      "family": "hf",
+      "seconds": 209.9,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 33.90249175618918,
+          "params": 361821120,
+          "mb": 723.642,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 55.63520996671954,
+          "params": 314635200,
+          "mb": 629.27,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 55.82557265231708,
+          "params": 314635200,
+          "mb": 314.635,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_pythia-31m",
+      "family": "hf",
+      "seconds": 16.7,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 140.70094415858827,
+          "params": 30494720,
+          "mb": 60.989,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 170.9910346663477,
+          "params": 29863730,
+          "mb": 59.727,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 171.26845854773808,
+          "params": 29863730,
+          "mb": 29.864,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_distilgpt2",
+      "family": "hf",
+      "seconds": 18.8,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 88.17797270679868,
+          "params": 81912576,
+          "mb": 163.825,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 107.74511414532367,
+          "params": 76250268,
+          "mb": 152.501,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 113.92754617469541,
+          "params": 76250268,
+          "mb": 76.25,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_gpt2",
+      "family": "hf",
+      "seconds": 31.4,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 60.92423306452213,
+          "params": 124439808,
+          "mb": 248.88,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 81.95760365811982,
+          "params": 113115192,
+          "mb": 226.23,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 82.21375036373206,
+          "params": 113115192,
+          "mb": 113.115,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_Cerebras-GPT-111M",
+      "family": "hf",
+      "seconds": 19.0,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 101.93826623208071,
+          "params": 111050496,
+          "mb": 222.101,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 110.43707552672245,
+          "params": 101613316,
+          "mb": 203.227,
+          "quant": "none"
+        },
+        {
+          "stage": "prune+int8",
+          "metric": "ppl",
+          "value": 110.45250555090459,
+          "params": 101613316,
+          "mb": 101.613,
+          "quant": "int8"
+        }
+      ]
+    },
+    {
+      "id": "hf_Qwen2.5-0.5B",
+      "family": "hf",
+      "seconds": 107.6,
+      "stages": [
+        {
+          "stage": "baseline",
+          "metric": "ppl",
+          "value": 32.141464840296514,
+          "params": 494032768,
+          "mb": 988.066,
+          "quant": "none"
+        },
+        {
+          "stage": "prune",
+          "metric": "ppl",
+          "value": 75.68553312670862,
+          "params": 431262592,
+          "mb": 862.525,
+          "quant": "none"
+        }
+      ]
+    }
+  ]
+}
