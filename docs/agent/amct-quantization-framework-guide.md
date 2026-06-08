@@ -720,12 +720,6 @@ infer 侧的工作重点应该是：
 - `amct_pytorch/common/models/llm/common/deploy_export.py`
 - `skills/quant-tools/deploy-export/reference/deploy_quantization_template.md`
 
-### 对接 infer 时建议一起读
-
-- 在 `cann-recipes-infer-bot_3785` 仓中，建议重点阅读：
-  - `module/quantization/__init__.py`
-  - `.claude/skills/model-infer-quantization/references/quantized-artifact-integration-contract.md`
-
 ### 主流框架官方文档
 
 - Hugging Face Compressed Tensors: [https://huggingface.co/docs/transformers/en/quantization/compressed_tensors](https://huggingface.co/docs/transformers/en/quantization/compressed_tensors)
