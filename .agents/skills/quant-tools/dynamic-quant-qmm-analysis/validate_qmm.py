@@ -14,6 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import argparse
+from collections import namedtuple
 from datetime import datetime
 
 import torch
@@ -147,6 +148,19 @@ def int_w4a4_matmul(x, weight_int4_t, weight_scale):
     return qmm_matmul(x_int4, x_pertoken_scale, weight_int4_t, weight_scale, m, n)
 
 
+Case = namedtuple(
+    "Case",
+    [
+        "x",
+        "weight",
+        "weight_int8_t",
+        "weight_int8_scale",
+        "weight_int4_t",
+        "weight_int4_scale",
+    ],
+)
+
+
 def prepare_case(shape, device):
     m, k, n = shape
     x = torch.randn(m, k, dtype=torch.bfloat16, device=device)
@@ -160,7 +174,7 @@ def prepare_case(shape, device):
     weight_int4_t = weight_int4.T
     weight_int4_scale = weight_scale.view(-1)
 
-    return (
+    return Case(
         x,
         weight,
         weight_int8_t,
@@ -171,18 +185,9 @@ def prepare_case(shape, device):
 
 
 def run_case(case):
-    (
-        x,
-        weight,
-        weight_int8_t,
-        weight_int8_scale,
-        weight_int4_t,
-        weight_int4_scale,
-    ) = case
-
-    out_gold = bf16_matmul(x, weight)
-    out_int_w8a8 = int_w8a8_matmul(x, weight_int8_t, weight_int8_scale)
-    out_int_w4a4 = int_w4a4_matmul(x, weight_int4_t, weight_int4_scale)
+    out_gold = bf16_matmul(case.x, case.weight)
+    out_int_w8a8 = int_w8a8_matmul(case.x, case.weight_int8_t, case.weight_int8_scale)
+    out_int_w4a4 = int_w4a4_matmul(case.x, case.weight_int4_t, case.weight_int4_scale)
     return out_gold, out_int_w8a8, out_int_w4a4
 
 
