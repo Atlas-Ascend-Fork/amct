@@ -32,4 +32,17 @@ from amct_pytorch.common.config import (
     MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
 )
 
-from amct_pytorch.classic.graph_based.amct_pytorch import *
+# Lazily load the classic graph-based API. Importing it eagerly pulls in onnx
+# and compiled protobufs, which LLM-only workflows (amct_pytorch.cli.llm /
+# common.models) never use; deferring keeps "import amct_pytorch" working in
+# environments without those deps. Classic top-level symbols are resolved on
+# first attribute access via PEP 562.
+def __getattr__(name):
+    import importlib
+    _classic = importlib.import_module(
+        "amct_pytorch.classic.graph_based.amct_pytorch")
+    try:
+        return getattr(_classic, name)
+    except AttributeError:
+        raise AttributeError(
+            f"module 'amct_pytorch' has no attribute '{name}'") from None
