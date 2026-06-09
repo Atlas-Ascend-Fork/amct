@@ -49,6 +49,7 @@ python -m amct_pytorch.deploy --model <path> --model_name <name> --quant_target 
 - **bit 配置一律 yaml**：`amct_pytorch/configs/w8a8.yaml`、`amct_pytorch/configs/w4a8.yaml` 等
 - **deploy 必须带与 ptq 一致的 `--algos`**：GPTQ PTQ 参数携带 `algorithms.gptq` 子模块，deploy 块缺失会在 `load_module` 报 `KeyError`
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `*_param_dir`
+- **长命令防超时**：大模型 eval / PTQ 训练 / deploy 会超过 agent runtime 单条 Bash 的超时上限（如 ~600s）被直接杀掉。这几类命令**必须后台跑 + 轮询**：`nohup <完整命令> > run.log 2>&1 &` 启动（Bash 调用立即返回、不计超时），再用**多次短** Bash 调用 `grep -E "PPL:|Error|Saved PTQ" run.log` + `ps -p <pid>` 轮询到结束；不要让一条 Bash 既启动又阻塞等到结束。ptq 被中断可用 `--start_block_idx <下一未完成层>` 续跑（逐层存参不重复）。经验：8B eval ~3min、30B+/35B ~20min/段、ptq ~1min/层
 
 ## 工作场景识别
 
