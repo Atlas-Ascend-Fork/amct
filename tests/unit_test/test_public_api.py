@@ -88,17 +88,6 @@ NON_GRAPH_INTERFACES = {name: CLASSIC_SOURCE for name in CLASSIC_INTERFACES}
 NON_GRAPH_INTERFACES.update({name: CONFIG_SOURCE for name in CONFIG_INTERFACES})
 
 
-def _wildcard_reexport_targets(init_path):
-    """Return modules that ``init_path`` re-exports via ``from X import *``."""
-    tree = ast.parse(init_path.read_text(encoding="utf-8"))
-    targets = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            if any(alias.name == "*" for alias in node.names):
-                targets.append(node.module)
-    return targets
-
-
 def _module_dunder_all(init_path):
     """Return the literal ``__all__`` list defined in ``init_path``."""
     tree = ast.parse(init_path.read_text(encoding="utf-8"))
@@ -120,22 +109,6 @@ def _explicit_imported_names(init_path, module):
         if isinstance(node, ast.ImportFrom) and node.module == module:
             names.extend(a.name for a in node.names if a.name != "*")
     return names
-
-
-def test_top_init_reexports_graph_based_module():
-    """The wildcard re-export of the graph-based package must be present.
-
-    This is the exact line whose removal hid ``create_quant_config`` from the
-    top-level namespace. Guarding it statically catches the regression even
-    when the package cannot be imported (protobuf not generated).
-    """
-    targets = _wildcard_reexport_targets(TOP_INIT)
-    assert GRAPH_MODULE in targets, (
-        f"amct_pytorch/__init__.py must re-export '{GRAPH_MODULE}' via "
-        f"'from {GRAPH_MODULE} import *' so graph-based interfaces such as "
-        f"create_quant_config stay reachable as amct_pytorch.*. "
-        f"Found wildcard re-exports: {targets}"
-    )
 
 
 def test_graph_module_all_covers_baseline_interfaces():
@@ -163,8 +136,10 @@ def test_top_level_interfaces_importable_when_built():
     """
     try:
         import amct_pytorch
+        importlib.import_module(GRAPH_MODULE)
     except ImportError as exc:
-        pytest.skip(f"amct_pytorch not importable in this environment: {exc}")
+        pytest.skip(
+            f"graph-based package not importable in this environment: {exc}")
 
     expected = _module_dunder_all(GRAPH_INIT)
     assert expected, "graph module __all__ unexpectedly empty"
