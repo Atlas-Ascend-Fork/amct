@@ -71,3 +71,7 @@
 - 关闭量化后 wrapper 还不等价
 - 当前实验没有提供新的定位信息
 - 新增复杂度带来的收益不明显
+
+## 长命令防超时
+
+PTQ 训练（extract_ptq_data / ptq）在大模型上会超过 agent runtime 单条 Bash 超时上限被杀。执行时务必**后台 `nohup ... &` + 轮询**，ptq 被中断用 `--start_block_idx` 续跑。详见 [reference/long-running-commands.md](../../../reference/long-running-commands.md)。

@@ -139,3 +139,7 @@ description: 评测用户已指定的直转量化方案。适用于用户已经�
 - 是否复用旧结果：
 - 如果没有复用，原因：
 ```
+
+## 长命令防超时
+
+大模型（30B+/35B）的 eval 单段约 20min+，会超过 agent runtime 单条 Bash 超时上限被杀。**必须后台 `nohup ... > run.log 2>&1 &` + 多次短轮询**执行，不要阻塞式单跑。详见 [reference/long-running-commands.md](../../reference/long-running-commands.md)。

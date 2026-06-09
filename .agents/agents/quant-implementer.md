@@ -49,6 +49,7 @@ python -m amct_pytorch.deploy --model <path> --model_name <name> --quant_target 
 - **bit 配置一律 yaml**：`amct_pytorch/configs/w8a8.yaml`、`amct_pytorch/configs/w4a8.yaml`、`amct_pytorch/configs/w4a16-moe.yaml` 等
 - **deploy 必须带与 ptq 一致的 `--algos`**：GPTQ PTQ 参数携带 `algorithms.gptq` 子模块，deploy 块缺失会在 `load_module` 报 `KeyError`
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `*_param_dir`
+- **长命令防超时**：大模型 eval / PTQ 训练 / deploy 会超过 agent runtime 单条 Bash 的超时上限（如 ~600s）被杀；这几类命令**必须后台 `nohup ... > run.log 2>&1 &` + 多次短轮询日志**执行，不要阻塞式单跑；ptq 被中断可用 `--start_block_idx` 续跑。详见 `../skills/reference/long-running-commands.md`
 
 ## 工作场景识别
 
