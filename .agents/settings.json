@@ -33,7 +33,20 @@
       "Edit(file_path:./**)",
       "Write(file_path:./**)",
       "NotebookEdit(file_path:./**)",
-      "Bash"
+      "Bash",
+      "Task(subagent_type=quant-analyzer)",
+      "Task(subagent_type=quant-implementer)",
+      "Task(subagent_type=quant-reviewer)",
+      "Skill(amct-quantization)",
+      "Skill(quantization)",
+      "Skill(model-adapter)",
+      "Skill(model-workflow)",
+      "Skill(scheme-recommendation)",
+      "Skill(direct-quant-eval)",
+      "Skill(algorithm-recommendation)",
+      "Skill(algorithm-validation)",
+      "Skill(deploy-export)",
+      "Skill(dynamic-quant-qmm-analysis)"
     ],
     "deny": [],
     "ask": [

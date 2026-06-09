@@ -34,3 +34,9 @@ tmp/
 # Local Claude state
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.lock
+
+# Generated agent views (source of truth: .agents/)
+/.claude/
+/.opencode/skills
+/.opencode/agents
+/CLAUDE.md
