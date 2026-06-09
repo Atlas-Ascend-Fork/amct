@@ -32,4 +32,11 @@ from amct_pytorch.common.config import (
     MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
 )
 
-from amct_pytorch.classic.graph_based.amct_pytorch import *
+# Classic graph-based interfaces (create_quant_config et al.) are re-exported
+# here. The eager wildcard pulls in onnx + compiled protobufs; guard it so
+# LLM-only workflows (amct_pytorch.cli.llm / common.models) can still
+# `import amct_pytorch` when those deps are absent.
+try:
+    from amct_pytorch.classic.graph_based.amct_pytorch import *
+except ImportError:
+    pass
