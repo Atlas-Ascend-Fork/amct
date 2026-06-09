@@ -151,11 +151,30 @@ class LlmDeployWorkflow:
         with open(config_file, "r") as f:
             config = json.load(f)
 
-        cache_scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
-                        "li_cache_scheme": {
-                            "type": "float" if self.is_mx else "int",
-                            "num_bits": 8,
-                        }}
+        cache_scheme = {}
+        if "attn-cache" in self.args.quant_target:
+            # KV cache quantization scheme. Consumed downstream by cann-recipes-infer
+            # as `kv_cache_quant_mode` (type+num_bits, e.g. "int8") and by vLLM's
+            # CompressedTensorsKVCacheMethod. Use type=int on the int path so infer's
+            # `== "int8"` gate actually fires (the old hardcoded type="float" produced
+            # "float8" and never triggered infer's KV int8 path).
+            cache_scheme["kv_cache_scheme"] = {
+                "type": "float" if self.is_mx else "int",
+                "num_bits": 8,
+            }
+            # li_cache_scheme is the DSA lightning-indexer cache scheme, only meaningful
+            # for indexer (DSA) architectures -- DeepSeek-V3.2 / GLM-5 -- detected here
+            # the same way vLLM does, via `index_topk` on the HF config. Standard-attention
+            # models (e.g. Qwen3) have no indexer, so it is not emitted there (previously
+            # it was always emitted, an unconditional spurious overload).
+            #
+            # Downstream contract: cann-recipes-infer does NOT read this field from
+            # config.json. The indexer int8 path is hardcoded per-model (GLM-5
+            # `update_kv_quant_settings` forces li_cache_quant_mode="int8"; DeepSeek-V3.2
+            # reuses `kv_cache_quant_mode`); vLLM hardcodes the indexer to fp8. So this is
+            # an intent marker fixed to the int8 that infer's indexer actually applies.
+            if hasattr(self.pipeline.config, "index_topk"):
+                cache_scheme["li_cache_scheme"] = {"type": "int", "num_bits": 8}
         quantization_config = generate_quant_config(
             cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
         config['quantization_config'] = quantization_config
