@@ -42,7 +42,7 @@ description: 为已适配模型推荐下一步值得尝试的量化算法。适�
 2. 如已有个案，再读最相近的 `<series>/<case>.md`
 3. 如需确认当前量化口径，再读 [../../tasks/quantization/references/metrics-and-thresholds.md](../../tasks/quantization/references/metrics-and-thresholds.md)
 4. 如需确认当前直转判读规则，再读 [../../tasks/quantization/references/direct-quant.md](../../tasks/quantization/references/direct-quant.md)
-5. 如需确认当前可用算法名，再读 `amct_pytorch/quantization/algorithms/__init__.py` 和 `amct_pytorch/quantization/algorithms/*.py`
+5. 如需确认当前可用算法名，再读 `amct_pytorch/algorithms/quant/__init__.py` 和 `amct_pytorch/algorithms/quant/*.py`
 
 ## 当前算法分组
 

@@ -76,7 +76,7 @@ flowchart LR
     WF --> DATA["amct_pytorch/common/datasets/*<br/>PTQ 输入/GT"]
     WF --> SOLVER["amct_pytorch/common/optimization/*<br/>PTQ solver"]
     MODEL --> QMOD["amct_pytorch/quantization/modules/*<br/>QuantLinear / Quantizer"]
-    QMOD --> ALGO["amct_pytorch/quantization/algorithms/*<br/>AWQ / GPTQ / SmoothQuant / FlatQuant ..."]
+    QMOD --> ALGO["amct_pytorch/algorithms/*<br/>AWQ / GPTQ / SmoothQuant / FlatQuant ..."]
     QMOD --> DTYPE["amct_pytorch/quantization/dtypes/*<br/>int / mxfp / hifx"]
     MODEL --> EXPORT["amct_pytorch/common/models/llm/common/deploy_export.py"]
     EXPORT --> OUT["deploy-ready artifacts"]
@@ -90,7 +90,7 @@ flowchart LR
 | Workflow | `amct_pytorch/workflows/` | 编排 eval / extract / ptq / deploy | 不放模型细节 |
 | Model adapter | `amct_pytorch/common/models/llm/...` | 按层加载 block、构建 quant block、拆 `PtqUnit`、做模型特有映射 | 新模型适配主入口 |
 | Quant modules | `amct_pytorch/quantization/modules/` | 通用量化 wrapper，如 `QuantLinear`、`WeightQuantizer`、`ActivationQuantizer` | 保持通用、可复用 |
-| Algorithms | `amct_pytorch/quantization/algorithms/` | 具体量化算法和结构变换 | 通过 registry 以 target 维度挂接 |
+| Algorithms | `amct_pytorch/algorithms/` | 具体量化算法和结构变换 | 通过 registry 以 target 维度挂接 |
 | DType | `amct_pytorch/quantization/dtypes/` | 定义实际 fake-quant / export-deploy 格式 | 和算法解耦 |
 | Optimization | `amct_pytorch/common/optimization/` | 训练型或统计型 PTQ 求解 | 不混入模型特例 |
 | Export | `amct_pytorch/common/models/llm/common/deploy_export.py`、`amct_pytorch/workflows/llm_deploy.py` | 导出权重、索引、量化配置 | 输出面向下游消费 |
@@ -719,12 +719,6 @@ infer 侧的工作重点应该是：
 - `amct_pytorch/common/models/llm/common/base.py`
 - `amct_pytorch/common/models/llm/common/deploy_export.py`
 - `skills/quant-tools/deploy-export/reference/deploy_quantization_template.md`
-
-### 对接 infer 时建议一起读
-
-- 在 `cann-recipes-infer-bot_3785` 仓中，建议重点阅读：
-  - `module/quantization/__init__.py`
-  - `.claude/skills/model-infer-quantization/references/quantized-artifact-integration-contract.md`
 
 ### 主流框架官方文档
 
