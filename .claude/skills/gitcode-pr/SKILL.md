@@ -66,8 +66,12 @@ else
   repo=$(echo $repo_url | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\2|')
 fi
 
+# URL 编码（用于 API 路径）
+encoded_repo=$(printf '%s' "${owner}/${repo}" | jq -sRr @uri)
+
 echo "Owner: $owner"
 echo "Repo: $repo"
+echo "Encoded: $encoded_repo"  # 例如: cann%2Fge
 ```
 
 **后续所有 API 调用都应使用这些变量**：
@@ -274,7 +278,7 @@ curl -X POST \
 curl -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/2805/comments?access_token=$GITCODE_API_TOKEN" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
     "body": "第70行需要重构",
     "path": "runtime/v1/opskernel_executor/ops_kernel_executor_manager.cc",
@@ -287,7 +291,7 @@ curl -X POST \
 curl -X POST \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/2805/comments?access_token=$GITCODE_API_TOKEN" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
     "body": "第70-75行需要优化",
     "path": "runtime/v1/opskernel_executor/ops_kernel_executor_manager.cc",
@@ -388,16 +392,19 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<R
 **重要**：只能删除自己创建的评论，或具有仓库管理权限。
 
 ```bash
-# 获取评论 ID（使用 v5 API）
+# 1. 获取评论的数字 id（使用 v5 API）
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
   jq '.[] | {id: .id, body: .body}'
 
-# 删除评论（使用 v5 API）
+# 2. 删除评论（<COMMENT_ID> 使用上一步列表返回的数字 id）
 curl -X DELETE \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
-**注意**：评论 ID 是哈希字符串，不是数字。
+**注意**：DELETE 接口的 `<COMMENT_ID>` 必须是评论列表（`/pulls/<PR_NUMBER>/comments`）
+返回的**数字 `id`**（如 `171431239`），`references/gitcode_api.md` 中该 `id` 字段类型为 integer。
+而 POST 创建评论时立即返回的**哈希字符串**（如 `b227720346...`）是 `discussion_id`/临时返回标识，
+**不能**直接作为删除接口的 `COMMENT_ID`——需先按上文「获取真正的数字 ID」查列表拿到数字 `id`。
 
 详细 API 参数、响应码和权限说明请参考 `references/gitcode_api.md` 的「删除 PR 评论」章节。
 
@@ -439,12 +446,25 @@ git push hgjupstream fix/gcc13-link-error -u
 
 **重要**：PR 描述必须严格遵循仓库中的模板文件，不要使用硬编码模板。
 
+按以下优先级查找仓库中存在的 PR 模板（取第一个命中的文件）：
+
 ```bash
-# 读取仓库 PR 模板
-cat .gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md
+# 按候选路径顺序查找 PR 模板，使用第一个存在的
+for tpl in \
+  .gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md \
+  .gitcode/PULL_REQUEST_TEMPLATE.en-US.md \
+  .gitcode/PULL_REQUEST_TEMPLATE.md \
+  .gitcode/pull_request_template.md \
+  .github/PULL_REQUEST_TEMPLATE.md \
+  .github/pull_request_template.md \
+  docs/PULL_REQUEST_TEMPLATE.md; do
+  if [ -f "$tpl" ]; then echo "使用模板: $tpl"; cat "$tpl"; break; fi
+done
 ```
 
-模板文件路径固定为 `.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`。根据模板结构填充各字段内容。
+根据命中的模板结构填充各字段内容。多语言模板共存时（如同时有 zh-CN 与 en-US），
+优先使用与 PR 描述语言一致的模板（本仓优先 `zh-CN`）。若仓库无任何模板，
+再回退到本 skill 末尾「PR 描述模板」一节的通用结构。
 
 #### 10.2 使用 API 创建 PR
 
@@ -454,7 +474,7 @@ curl -s -X POST "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "docs: 优化文档描述(#32)",
-    "head": "source_owner/source_repo:fix/issue-32-description",
+    "head": "username:fix/issue-32-description",
     "base": "develop",
     "body": "按模板填充的PR描述"
   }'
@@ -462,14 +482,9 @@ curl -s -X POST "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls" \
 
 **参数说明**：
 - `title`: PR 标题（必填）
-- `head`: 源分支（必填）。
-  - **同仓库 PR**：直接用分支名，如 `fix/issue-32-description`。
-  - **跨 fork PR**（源仓库是目标仓库的 fork）：必须用**完整仓库路径**前缀，
-    格式 `source_owner/source_repo:branch`，如 `fujun19/amct_open:docs/fix-xxx`。
-    ⚠️ 注意：此处**不能**只用 `username:branch`——经实测会返回 `400 BAD_REQUEST`；
-    而只用纯分支名时 API 会去目标仓库找分支并报 `404 Can not find the branch`。
+- `head`: 源分支，格式 `username:branch`（必填）
 - `base`: 目标分支，**默认为 `develop`**，除非用户明确要求合入其他分支
-- `body`: PR 描述（Markdown 格式，按 `.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md` 模板填充）
+- `body`: PR 描述（Markdown 格式，按 10.1 节查找到的仓库 PR 模板填充）
 
 ### 11. PR URL 格式
 
@@ -519,16 +534,17 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 
 ## PR 描述模板
 
-创建 PR 时**必须读取并使用**仓库中的模板文件：`.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`
+创建 PR 时**必须读取并使用**仓库中的 PR 模板（按 10.1 节的候选路径查找）。
 
 **步骤**：
-1. 使用 `read` 工具读取 `.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md` 文件内容
+1. 按 10.1 节的候选路径查找并读取仓库中存在的 PR 模板文件
 2. 根据实际变更填充模板中的各字段（描述、测试项、测试结果等）
 3. 将对应选项的 `[ ]` 改为 `[x]` 勾选
 4. Checklist 默认全部勾选 `[x]`
 5. 将填充后的模板内容作为 `body` 参数传入创建 PR 的 API
 
-**不要使用硬编码的模板内容**，始终以仓库中的模板文件为准。
+**不要使用硬编码的模板内容**，始终以仓库中实际存在的模板文件为准；
+若仓库无任何模板，再回退到通用结构。
 
 ---
 
