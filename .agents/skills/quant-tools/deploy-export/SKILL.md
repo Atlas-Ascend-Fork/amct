@@ -149,7 +149,6 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 - 如果用户本意是 PTQ 导出，但实际某个 target 回退成了直转，必须在结论里显式指出。
 - 如果用户本意是纯 PTQ 导出，但最终只能做混合导出或直转导出，不能静默继续。
 - `config.json` 刷新（`generate_quant_config`）会透传 `w_bits`/`a_bits`，W8A8 等 int 路径写出正确的 `num_bits`/`input_activations`，无需按 bit 额外核对。
-- ⚠️ **W4A16 weight-only + `group_size` 分组导出**依赖 AMCT-Q `qwen3-adapter` 未合入特性（`1324bea` group-wise INT4 + `54486c0` W4A16 deploy），amct_llm 当前 deploy 路径**尚未移植**该能力，`--bit_config` 亦无 `group_size` 字段——**W4A16 导出在 amct_llm 暂不可用**，需先移植上述代码特性。
 - 注意 `is_mx`（mxfp）分支仍硬编码 8-bit，与 int 路径无关。
 - 如果输出目录中已有旧结果，不要默认覆盖。
 - 引用仓库内路径时，一律使用仓库相对路径。
