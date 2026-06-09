@@ -66,12 +66,8 @@ else
   repo=$(echo $repo_url | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\2|')
 fi
 
-# URL 编码（用于 API 路径）
-encoded_repo=$(printf '%s' "${owner}/${repo}" | jq -sRr @uri)
-
 echo "Owner: $owner"
 echo "Repo: $repo"
-echo "Encoded: $encoded_repo"  # 例如: cann%2Fge
 ```
 
 **后续所有 API 调用都应使用这些变量**：
