@@ -74,4 +74,4 @@
 
 ## 长命令防超时
 
-PTQ 训练（extract_ptq_data / ptq）在大模型上会超过 agent runtime 单条 Bash 超时上限被杀。执行时务必**后台 `nohup ... &` + 轮询**，ptq 被中断用 `--start_block_idx` 续跑。详见 [reference/long-running-commands.md](../../../reference/long-running-commands.md)。
+extract_ptq_data / ptq 在大模型上会超过 agent runtime 单条 Bash 超时上限（如 ~600s）被杀。务必**后台跑 + 轮询**：`nohup <命令> > run.log 2>&1 &` 启动后用多次短 Bash 调用轮询 run.log 到结束，不要阻塞式单跑。ptq 被中断用 `--start_block_idx <下一未完成层>` 续跑（逐层存参不重复），也可 `--start_block_idx/--end_block_idx` 主动分块，每块控制在超时窗口内。

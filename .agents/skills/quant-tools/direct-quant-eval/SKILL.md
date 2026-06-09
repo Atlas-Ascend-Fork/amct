@@ -142,4 +142,4 @@ description: 评测用户已指定的直转量化方案。适用于用户已经�
 
 ## 长命令防超时
 
-大模型（30B+/35B）的 eval 单段约 20min+，会超过 agent runtime 单条 Bash 超时上限被杀。**必须后台 `nohup ... > run.log 2>&1 &` + 多次短轮询**执行，不要阻塞式单跑。详见 [reference/long-running-commands.md](../../reference/long-running-commands.md)。
+大模型（30B+/35B）单段 eval ~20min+，会超过 agent runtime 单条 Bash 超时上限（如 ~600s）被杀。务必**后台跑 + 轮询**：`nohup <命令> > run.log 2>&1 &` 启动后用多次短 Bash 调用 `grep PPL:/报错 run.log` + `ps -p <pid>` 轮询到结束，不要阻塞式单跑。
