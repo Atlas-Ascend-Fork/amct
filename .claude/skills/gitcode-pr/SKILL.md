@@ -66,12 +66,8 @@ else
   repo=$(echo $repo_url | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\2|')
 fi
 
-# URL 编码（用于 API 路径）
-encoded_repo=$(printf '%s' "${owner}/${repo}" | jq -sRr @uri)
-
 echo "Owner: $owner"
 echo "Repo: $repo"
-echo "Encoded: $encoded_repo"  # 例如: cann%2Fge
 ```
 
 **后续所有 API 调用都应使用这些变量**：
@@ -206,11 +202,15 @@ curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<C
     "old_line": 212,
     "new_line": 212
   },
-  "comment_type": "DiffNote",
+  "comment_type": null,
   "user": "username",
   "created_at": "2026-05-14T16:06:24+08:00"
 }
 ```
+
+> ⚠️ 单条评论接口（`/pulls/comments/:id`）返回的 `comment_type` 实测为 `null`，
+> 不能依赖它判断行内/普通评论。评论类型只能从列表接口
+> （`/pulls/<PR_NUMBER>/comments`，其 `comment_type` 字段有正确值）关联获取。
 
 **关键位置字段**：
 | 字段 | 说明 |
@@ -317,11 +317,19 @@ curl -X POST \
 ```
 
 **获取真正的数字 ID**：
-创建评论后，需要查询评论列表获取数字 ID（用于后续删除等操作）：
+创建评论后，需要查询评论列表获取数字 ID（用于后续删除等操作）。
+⚠️ 不要用 `contains(.body)` 做宽匹配定位——若 PR 中已有包含相同文本的评论，
+会匹配到错误的评论 ID，导致误删/误操作他人评论。应满足以下任一精确条件：
+- 在评论正文里嵌入一个**唯一标记**（如随机串/时间戳），用 `==` 或 `contains(唯一标记)` 精确匹配；
+- 或结合**当前用户**（`.user.login`）、**创建时间**（`.created_at`）、POST 返回的
+  **`discussion_id`** 共同过滤，缩小到唯一一条。
+
 ```bash
-# 查询评论列表，匹配创建的评论内容
+# 推荐：用 POST 返回的 discussion_id 精确定位（最可靠）
+DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80"   # POST 返回的哈希串
 curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
-  jq '.[] | select(.body | contains("评论内容")) | {id: .id, discussion_id: .discussion_id, comment_type: .comment_type}'
+  jq --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" \
+    '.[] | select(.discussion_id == $did or (.user.login == $me and .body == "唯一标记内容")) | {id, discussion_id, comment_type}'
 
 # 返回：
 # {
@@ -469,12 +477,14 @@ done
 #### 10.2 使用 API 创建 PR
 
 ```bash
-curl -s -X POST "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls" \
+# 注意：endpoint 的 ${owner}/${repo} 必须是 PR 要合入的【目标仓库】；
+# 跨 fork 时目标仓库是上游仓库，而非你的 fork
+curl -s -X POST "https://gitcode.com/api/v5/repos/${target_owner}/${target_repo}/pulls" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "docs: 优化文档描述(#32)",
-    "head": "username:fix/issue-32-description",
+    "head": "source_owner/source_repo:fix/issue-32-description",
     "base": "develop",
     "body": "按模板填充的PR描述"
   }'
@@ -482,7 +492,13 @@ curl -s -X POST "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls" \
 
 **参数说明**：
 - `title`: PR 标题（必填）
-- `head`: 源分支，格式 `username:branch`（必填）
+- `head`: 源分支（必填）。需按场景区分填写：
+  - **同仓库 PR**（源分支与目标在同一仓库）：直接用分支名，如 `fix/issue-32-description`。
+  - **跨 fork PR**（从 fork 向上游提）：必须用**完整源仓库路径**前缀，
+    格式 `source_owner/source_repo:branch`，如 `fujun19/amct_open:docs/fix-xxx`。
+    ⚠️ 仅用 `username:branch` 经实测会返回 `400 BAD_REQUEST`；只用纯分支名时
+    API 会去目标仓库找该分支并报 `404 Can not find the branch`。
+  - endpoint 路径里的 owner/repo 始终用**目标仓库**（跨 fork 时为上游仓库）。
 - `base`: 目标分支，**默认为 `develop`**，除非用户明确要求合入其他分支
 - `body`: PR 描述（Markdown 格式，按 10.1 节查找到的仓库 PR 模板填充）
 
@@ -545,6 +561,32 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 
 **不要使用硬编码的模板内容**，始终以仓库中实际存在的模板文件为准；
 若仓库无任何模板，再回退到通用结构。
+
+---
+
+## PR 代码审查
+
+当用户说"检视 PR"、"审查 PR"、"review PR"、"给 PR 提意见"时触发。
+
+### 执行步骤
+
+1. **读取 `commands/review.md`** —— 使用 Read 工具获取完整审查流程（本 skill 目录下的 `commands/review.md`）。
+
+2. **执行 review.md 中的审查流程**：
+   - 步骤 1: 前置检查（PR 状态、草稿、是否已审查）
+   - 步骤 2: 获取项目规范上下文
+   - 步骤 3: 获取 PR 变更摘要
+   - 步骤 4: 代码审查（Bug 扫描、规范合规性）
+   - 步骤 5: 验证问题
+   - 步骤 6: 过滤问题
+   - 步骤 7: 输出审查摘要
+   - 步骤 8: 准备评论列表（仅当提供 `--comment` 时）
+   - 步骤 9: 发布行内评论（仅当提供 `--comment` 时）
+
+**注意**：
+- `commands/review.md` 中包含每个步骤的详细说明和 API 示例。
+- 其中的评论获取/发布 API 须遵循本文档前述的 GitCode v5 约定
+  （`/repos/${owner}/${repo}/...` + `access_token`；评论定位用数字 `id` 等）。
 
 ---
 
