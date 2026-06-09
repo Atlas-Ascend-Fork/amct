@@ -71,3 +71,7 @@
 - 关闭量化后 wrapper 还不等价
 - 当前实验没有提供新的定位信息
 - 新增复杂度带来的收益不明显
+
+## 长命令防超时
+
+extract_ptq_data / ptq 在大模型上会超过 agent runtime 单条 Bash 超时上限（如 ~600s）被杀。务必**后台跑 + 轮询**：`nohup <命令> > run.log 2>&1 &` 启动后用多次短 Bash 调用轮询 run.log 到结束，不要阻塞式单跑。ptq 被中断用 `--start_block_idx <下一未完成层>` 续跑（逐层存参不重复），也可 `--start_block_idx/--end_block_idx` 主动分块，每块控制在超时窗口内。
