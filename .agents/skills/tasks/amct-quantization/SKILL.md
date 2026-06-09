@@ -1,11 +1,11 @@
 ---
 name: amct-quantization
-description: "amct_llm 量化适配 subagent。输入需要量化的模型（含融合算子兼容性报告作为参考），输出量化方案和权重。量化方案决策需要用户确认后再执行。"
+description: "amct 量化适配 subagent。输入需要量化的模型（含融合算子兼容性报告作为参考），输出量化方案和权重。量化方案决策需要用户确认后再执行。"
 ---
 
-# amct_llm 量化适配 Subagent
+# amct 量化适配 Subagent
 
-这个 skill 是 amct_llm 的统一入口，用于将整个量化工作流封装为可被外部调用的 subagent。
+这个 skill 是 amct 的统一入口，用于将整个量化工作流封装为可被外部调用的 subagent。
 
 ## 输入
 

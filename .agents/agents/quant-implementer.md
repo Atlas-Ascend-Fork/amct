@@ -21,7 +21,7 @@ skills:
 
 > **状态文件读写规则**：progress.md 直接 Read；progress_history.md 禁止 Read 全文，需要历史信息时用 Grep 关键字查找。
 
-## 命令接口（amct_llm LLM CLI）
+## 命令接口（amct LLM CLI）
 
 四步均以模块入口运行，bit 配置走 yaml：
 
@@ -46,7 +46,7 @@ python -m amct_pytorch.deploy --model <path> --model_name <name> --quant_target 
   --moe_mlp_param_dir <param_dir> --output_dir <deploy_dir>
 ```
 
-- **bit 配置一律 yaml**：`configs/w8a8.yaml`、`configs/w4a8.yaml` 等；不存在 `--a_bits/--w_bits/--group_size` 扁平开关
+- **bit 配置一律 yaml**：`amct_pytorch/configs/w8a8.yaml`、`amct_pytorch/configs/w4a8.yaml` 等
 - **deploy 必须带与 ptq 一致的 `--algos`**：GPTQ PTQ 参数携带 `algorithms.gptq` 子模块，deploy 块缺失会在 `load_module` 报 `KeyError`
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `*_param_dir`
 

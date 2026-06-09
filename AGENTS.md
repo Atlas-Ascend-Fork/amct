@@ -64,7 +64,7 @@ pre-commit install
 |------|------|
 | `amct_pytorch/` | PyTorch 量化压缩核心源码 |
 | `amct_pytorch/experimental/` | 实验特性（HiFloat8、DeepSeek 等） |
-| `amct_pytorch/graph_based_compression/` | 基于计算图的压缩优化（张量分解等） |
+| `amct_pytorch/classic/graph_based/` | 基于计算图的压缩优化（张量分解等） |
 | `npu_ops/` | 量化相关的昇腾 NPU 算子代码 |
 | `tests/` | 单元测试 |
 | `examples/` | 端到端样例开发和调用示例 |
