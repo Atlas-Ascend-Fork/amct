@@ -119,8 +119,7 @@ python3 -c "import amct_pytorch as amct; print('successfully installed AMCT')"
 
 ### Issue / PR 模板
 提交 Issue 和 PR 时必须参照本仓的对应模板填写：
-- **PR 模板**：`.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`（中文）、
-  `.gitcode/PULL_REQUEST_TEMPLATE.en-US.md`（英文）
+- **PR 模板**：`.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`
 - **Issue 模板**（位于 `.gitcode/ISSUE_TEMPLATE/`，按类型选择）：
   - `bug_report.yaml` — Bug 报告
   - `feature_requeset.yaml` — 新特性需求
