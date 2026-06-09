@@ -1,9 +1,9 @@
 ---
 name: model-workflow
-description: 在 amct_llm 中以总控方式串联新模型适配、量化实验、deploy 导出与交付归档。适用于用户想从“新模型导入”一路推进到“量化验证、deploy 交付、文档归档”，或者需要先判断当前模型处于哪个阶段、下一步该调用哪个 skill。
+description: 在 amct 中以总控方式串联新模型适配、量化实验、deploy 导出与交付归档。适用于用户想从“新模型导入”一路推进到“量化验证、deploy 交付、文档归档”，或者需要先判断当前模型处于哪个阶段、下一步该调用哪个 skill。
 ---
 
-# amct_llm 模型全流程
+# amct 模型全流程
 
 这个 skill 是模型生命周期的总控 skill。
 

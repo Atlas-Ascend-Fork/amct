@@ -25,11 +25,11 @@ casebook/
 
 ### 个案导航（按结构）
 
-- **dense/**：`qwen3-4b`、`qwen3-8b`、`pangu-7b`
+- **dense/**：`qwen3-4b`、`qwen3-8b`
 - **moe/**：`qwen3-30b-a3b`、`qwen3-235b-a22b`、`qwen3-next-80b-a3b-instruct`、`longcat-flash-lite`、`longcat-next`
 - **mla-moe/**：`deepseekv4`
 - **vl-moe/**：`qwen3.5-35b-a3b`
-- **_vendor-notes/**：`qwen`、`deepseek`、`glm`、`longcat`、`pangu`
+- **_vendor-notes/**：`qwen`、`deepseek`、`glm`、`longcat`
 
 ## 维护规则
 
@@ -46,26 +46,6 @@ casebook/
 
 | 结构 | 网络                 | 数据类型 | 量化配置                                              | 量化算法        | ppl            | mmlu | GPQA  | math500 | aime24 | humaneval+ | liveCodeBench | gsm8k | drop | mmlu_pro |
 | --- |--------------------|------|---------------------------------------------------|-------------|----------------|------|-------|---------|--------|-------|-------|-------|-------|-------|
-| dense | Pangu-7B           | BF16 | 无                                                 | 无           | 12.716         |  |       |     |      |  
-| dense |                    | INT  | A4w4: mlp, attn-linear                            | 无           | 42268.0117     |      |       |     |      |
-| dense |                    | INT  | A8w4: mlp, attn-linear                            | 无           | 20.853         |      |       |     |      |
-| dense |                    | INT  | A8w8: mlp, attn-linear                            | 无           | 13.23          |      |       |     |      |
-| dense |                    | MXFP  | A4w4: mlp, attn-linear                            | 无           | 20.3654/17.69  |      |       |     |      |
-| dense |                    | MXFP  | A8w4: mlp, attn-linear                            | 无           | 15.1952/15.41  |      |       |     |      |
-| dense |                    | MXFP  | A8w8: mlp, attn-linear                            | 无           | 12.935/13.093  |      |       |     |      |
-| dense |                    | HiFP  | A4w4: mlp, attn-linear                            | 无           | 14.444         |      |       |     |      |
-| dense |                    | HiFP  | A8w4: mlp, attn-linear                            | 无           | 13.7646        |      |       |     |      |
-| dense |                    | HiFP  | A8w8: mlp, attn-linear                            | 无           | 13.542         |      |       |     |      |
-| dense | Qwen3.5-4b         | BF16 | 无                                                 | 无           | 8.8445         |  |       |     |      |  
-| dense |                    | INT  | A4w4: mlp, attn-linear                            | 无           | 4836.4731      |  |       |     |      | 
-| dense |                    | INT  | A8w4: mlp, attn-linear                            | 无           | 12.4741        |  |       |     |      | 
-| dense |                    | INT  | A8w8: mlp, attn-linear                            | 无           | 9.022          |  |       |     |      | 
-| dense |                    | MXFP  | A4w4: mlp, attn-linear                            | 无           | 11.08/10.357   |  |       |     |      | 
-| dense |                    | MXFP  | A8w4: mlp, attn-linear                            | 无           | 9.5715/9.255   |  |       |     |      | 
-| dense |                    | MXFP  | A8w8: mlp, attn-linear                            | 无           | 8.972/8.879    |  |       |     |      | 
-| dense |                    | HiFP  | A4w4: mlp, attn-linear                            | 无           | 9.84           |  |       |     |      | 
-| dense |                    | HiFP  | A8w4: mlp, attn-linear                            | 无           | 9.5166         |  |       |     |      | 
-| dense |                    | HiFP  | A8w8: mlp, attn-linear                            | 无           | 9.0552         |  |       |     |      | 
 | dense | Qwen3-4b           | BF16 | 无                                                 | 无           | 12.377         |  |       |     |      |  
 | dense |                    | INT  | A4w4: mlp, attn-linear                            | 无           | 9942.9922      |  |       |     |      | 
 | dense |                    | INT  | A8w4: mlp, attn-linear                            | 无           | 19.9143        |  |       |     |      | 

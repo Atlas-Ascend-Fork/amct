@@ -33,7 +33,7 @@ description: 评测用户已指定的直转量化方案。适用于用户已经�
 
 1. [../../tasks/quantization/references/metrics-and-thresholds.md](../../tasks/quantization/references/metrics-and-thresholds.md)
 2. [../../tasks/quantization/references/direct-quant.md](../../tasks/quantization/references/direct-quant.md)
-3. 如需确认当前能力边界，再读 [../../../docs/agent/repo-map.md](../../../docs/agent/repo-map.md)
+3. 如需确认当前能力边界，再读 [../../../../docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
 
 ## 命令模板
 

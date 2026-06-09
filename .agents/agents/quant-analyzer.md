@@ -35,7 +35,7 @@ skills:
 
 1. **不替用户做决策**：方案推荐输出候选 + 风险 + 回退路径，由主 Agent 交用户确认；不擅自选定位宽/算法
 2. **优先复用 casebook**：同系列已有实测优先复用其起点方案与阈值，不从零推断
-3. **方案必须落到可执行命令**：每个候选方案给出 `--quant_target / --quant_dtype / --bit_config(yaml) / --algos / --granularity`，bit 配置一律用 yaml（顶层 `w_bits/a_bits` + `moe.routed/shared` 分组），不用已废弃的扁平 `--a_bits/--w_bits`
+3. **方案必须落到可执行命令**：每个候选方案给出 `--quant_target / --quant_dtype / --bit_config(yaml) / --algos / --granularity`，bit 配置一律用 yaml（顶层 `w_bits/a_bits` + `moe.routed/shared` 分组）
 4. **证据优先**：遇到异常或质疑，先用工具读 config/权重/casebook 调查，不凭记忆作答
 5. **完成后更新 progress.md**：写入「方案分析」「候选方案」「风险与回退」section
 

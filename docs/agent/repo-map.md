@@ -11,7 +11,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 最近校验日期 | `2026-04-17` |
+| 最近校验日期 | `2026-06-08` |
 | 使用方式 | `先读 repo-map -> 抽查锚点 -> 只更新受影响 section` |
 | 适用场景 | `新模型适配与 PTQ 流程定位` |
 
@@ -37,7 +37,7 @@
 | Workflow | `amct_pytorch/workflows/` | 编排 eval、PTQ 数据提取、PTQ 训练 | 不放模型细节 |
 | Model adapter | `amct_pytorch/common/models/llm/...` | 构建 block、quant block、拆 `PtqUnit`、加载 unit 输入和参数 | 新模型适配主入口 |
 | Quant modules | `amct_pytorch/quantization/modules/` | 提供通用量化 wrapper，如 `ActivationQuantizer`、`WeightQuantizer`、`QuantLinear` | 保持通用 |
-| Algorithms | `amct_pytorch/quantization/algorithms/` | 实现 activation / weight / structure 算法 | 通过 `targets` 注册 |
+| Algorithms | `amct_pytorch/algorithms/` | 实现 activation / weight / structure 算法 | 通过 `targets` 注册 |
 | Optimization | `amct_pytorch/common/optimization/` | 管 optimizer、epoch 循环、重建训练 | 不混入模型分支 |
 | Data | `amct_pytorch/common/datasets/` | 提供 PTQ 输入、GT 生成、dataloader | 优先复用现有 provider |
 
@@ -62,15 +62,16 @@
 
 - 当前已注册的 LLM 模型适配器：
   - `qwen3`
-  - `qwen3_5`
-  - `qwen3_5moe`
   - `qwen3_moe`
+  - `qwen3_5`
+  - `qwen3_5_moe`
+  - `qwen3_6_moe`
   - `qwen3_next`
-  - `deepseekv32`
-  - `deepseekv4`
-  - `longcat-lite`
-  - `longcat-next`
-  - `pangu-7b`
+  - `deepseek_v3_2`
+  - `deepseek_v4`
+  - `longcat_lite`
+  - `longcat_next`
+  - `glm5`
 - 当前已注册的 solver：
   - `block`
 - `amct_pytorch/common/optimization/global_solver.py` 文件存在，但当前没有注册到 solver 主链。
@@ -80,13 +81,13 @@
 
 `amct_pytorch/common/models/llm/common/base.py` 目前提供最关键的复用抽象：
 
-- `PtqUnit`
+- `PtqUnit`（定义在 `amct_pytorch/common/models/llm/common/ptq_units.py`，base.py import 并驱动）
 - `BaseModel.build_quant_block()`
 - `BaseModel.iter_ptq_units()`
 - `BaseModel.ptq_param_handler`
 - `BaseModel.ptq_param_store`
 - `BaseModel.do_block_forward()` 已支持 per-sample state:除已有 `position_ids / position_embeddings / attention_mask`(整批共用)外,新增 `self.input_ids`(per-sample list,默认 None);adapter 在 `do_embedding_forward` 末尾设 `self.input_ids = list(samples)`,`do_block_forward` 的 forward loop 会在每次迭代把对应 entry 注入 kwargs(用于 v4 这类 MoE hash routing 需要 token-id 路由的场景)。其它 adapter 不设 `self.input_ids` 时行为完全不变
-- `QuantGatedMLP`
+- `QuantGatedMLP`（实际定义在 `amct_pytorch/common/models/llm/common/quant_apply.py`）
 
 ### 3. 当前 quant wrapper 形态
 
@@ -159,19 +160,13 @@
 - 输入路径和 decoder block 拓扑可以很特殊
 - 但模型专属的输入重放、quant wrapper 注入和 PTQ unit 路由仍应优先放在 `amct_pytorch/common/models/llm/...`
 
-`amct_pytorch/common/models/llm/pangu/pangu_7b/pangu_7b.py` 说明了第四种适配形态：
-
-- 模型本体来自 `trust_remote_code` 的自定义实现
-- 当前运行环境与模型导出的 `transformers` 接口不完全一致时，可以把最小兼容补丁收在 adapter 内
-- 这类兼容应优先局限在模型目录，不要扩散到 workflow、solver 和通用 quant module
-
-`amct_pytorch/common/models/llm/qwen/qwen3_next/qwen3_next.py` 说明了第五种适配形态：
+`amct_pytorch/common/models/llm/qwen/qwen3_next/qwen3_next.py` 说明了第四种适配形态：
 
 - 同一模型家族内部同时混有 `linear_attention` 和 `full_attention`
 - blockwise 路径不能只复用 layer0 捕获到的 mask，需要在 adapter 内分别维护 linear-attn mask 和 full-attn causal mask
 - 当前 `transformers==5.3.0` 环境下，checkpoint 仍是展开的 per-expert 权重，而运行时 MoE 模块是 packed experts；这类重组优先留在模型 adapter 内
 
-`amct_pytorch/common/models/llm/longcat/longcat_next/longcat_next.py` 说明了第六种适配形态：
+`amct_pytorch/common/models/llm/longcat/longcat_next/longcat_next.py` 说明了第五种适配形态：
 
 - 顶层 `trust_remote_code` 模型可能因为额外依赖（例如 `flash_attn`）而无法直接空载
 - 如果 blockwise PTQ 只需要 text-only backbone，可以在 adapter 内直接实例化动态模块中的文本模型类
