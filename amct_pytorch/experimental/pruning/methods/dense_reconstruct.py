@@ -64,6 +64,34 @@ def _fake_quant_per_outchannel(w: torch.Tensor, bits: int) -> torch.Tensor:
     return (w / scale).round().clamp(-qmax - 1, qmax) * scale
 
 
+def _fake_quant_amct(w: torch.Tensor, quant_cfg: dict) -> torch.Tensor:
+    """用 AMCT 自身的 min-max scale/offset（与 calibrate 完全同式）做假量化显著度。
+
+    quant_cfg 与 amct.quantize 权重配置同构：{"weights_cfg": {"strategy": "channel"|"tensor",
+    "symmetric": bool, "dtype": "INT8"|"INT4", ...}}；不可用时回退对称 per-channel int8。
+    """
+    try:
+        from amct_pytorch.classic.quantize_op.utils import (
+            calculate_scale_offset,
+            get_weight_min_max_by_granularity,
+        )
+
+        wmin, wmax = get_weight_min_max_by_granularity(w, quant_cfg)
+        wc = quant_cfg.get("weights_cfg", {})
+        bits = 4 if "4" in str(wc.get("dtype", "int8")) else 8
+        scale, offset = calculate_scale_offset(
+            wmax, wmin, wc.get("symmetric", True), f"int{bits}"
+        )
+        if offset is None:
+            offset = torch.zeros_like(scale)
+        qmax = 2 ** (bits - 1) - 1
+        q = (w / scale + offset).round().clamp(-qmax - 1, qmax)
+        return (q - offset) * scale
+    except Exception as exc:  # AMCT 量化 helper 不可用时显式告警回退（不可静默）
+        warnings.warn(f"quant_cfg saliency unavailable ({exc}); fallback per-channel int8")
+        return _fake_quant_per_outchannel(w, 8)
+
+
 @torch.no_grad()
 def _reconstruct_one_target(
     model,
@@ -76,6 +104,7 @@ def _reconstruct_one_target(
     ridge: float,
     quant_aware: bool,
     quant_aware_bits: int,
+    quant_cfg: Optional[dict],
     report: PruneReport,
     method_name: str,
 ) -> None:
@@ -87,9 +116,12 @@ def _reconstruct_one_target(
     cons = get_submodule(model, cp)
     w_cons = linear_like_weight_oi(cons).data.float()  # [out, M] (Conv1D 转置已归一)
     # 显著度权重：量化感知时用假量化后的权重打分（GETA），否则原 fp 权重
-    w_sal = (
-        _fake_quant_per_outchannel(w_cons, quant_aware_bits) if quant_aware else w_cons
-    )
+    if quant_cfg is not None:
+        w_sal = _fake_quant_amct(w_cons, quant_cfg)
+    elif quant_aware:
+        w_sal = _fake_quant_per_outchannel(w_cons, quant_aware_bits)
+    else:
+        w_sal = w_cons
     saliency = w_sal.norm(dim=0) * acts_h.pow(2).mean(0).sqrt()  # [M]
     keep_idx = topk_keep_indices(saliency, prune_ratio, config.min_neurons)
     if len(keep_idx) >= hidden:
@@ -189,6 +221,8 @@ class ReconstructDensePruningMethod(BasePruningMethod):
         # 使"剪谁"也对齐部署量化方案，而不仅是搜索阶段。int8 影响小、int4/低位才显著。
         quant_aware = bool(spec.kwargs.get("quant_aware", False))
         quant_aware_bits = int(spec.kwargs.get("quant_aware_bits", 8))
+        # AMCT 量化配置直传：显著度假量化与 amct.quantize 的 calibrate 完全同式（scale/offset/粒度）
+        quant_cfg = spec.kwargs.get("quant_cfg")
         device = infer_model_device(model)
 
         # 1) 用 hook 收集每个 target 的 consumer 输入激活（中间神经元的激活 H）
@@ -218,6 +252,7 @@ class ReconstructDensePruningMethod(BasePruningMethod):
                 ridge,
                 quant_aware,
                 quant_aware_bits,
+                quant_cfg,
                 report,
                 self.name,
             )

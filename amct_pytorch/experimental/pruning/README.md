@@ -88,7 +88,7 @@ amct.prune(model, CNN_RECONSTRUCT_PRUNE_CFG, data=calib)   # calib 提供样例�
 
 ## 性能测量（真实训练模型 + NPU 实测 int8）
 
-22 个**从头训练**的小模型（CNN@MNIST / Dense-LM·MoE-LM@WikiText）+ 6 个真实预训练 HF，
+16 个**从头训练**的小模型（CNN@MNIST / Dense-LM·MoE-LM@WikiText）+ 20 个真实预训练 HF（11 架构系），
 4 种压缩预算 × AMCT 真 int8（Ascend NPU）。预算驱动指标 = **top-1 保真度**（无标签，对原模型预测的一致率）；
 报告任务指标（CNN = test acc↑，LM/MoE/HF = perplexity↓）。
 
@@ -104,24 +104,46 @@ amct.prune(model, CNN_RECONSTRUCT_PRUNE_CFG, data=calib)   # calib 提供样例�
 
 → **int8 下量化感知剪枝可省略**（差异在小数点末位）。
 
-### 结论 2：跨层 sensitivity 分配 > 均匀（FFN 同等削减下）
+### 结论 2：敏感度分配高度依赖深度 — 守卫必选（FFN 同等削减下）
 
-逐层实测敏感度（单独剪该层时的 fidelity 下降）→ robust 层多剪、敏感（早期）层少剪；总削减与均匀相同。
-12 个 dense 模型中 **11 个 sensitivity 胜**：
+逐层实测敏感度（单独剪该层时的 fidelity 下降）做 water-fill 分配：**浅模型（<10 层）6/6 全胜；
+深模型（≥10 层）仅 4/19** — 深网 robust 层多剪会破坏可达性。整体 10/25。
+因此 allocation 不设为默认，且 `guard='calib_nll'` 强制 A/B 比较，劣于 uniform 自动回退并告警。
 
-| 模型 | uniform ppl | **sensitivity ppl** |
-|------|:-----------:|:-------------------:|
-| SmolLM-135M (Llama) | 70.7 | **45.8** |
-| Qwen2.5-0.5B (Qwen2) | 76.4 | **56.6** |
-| SmolLM-360M (Llama) | 59.8 | **39.8** |
-| opt-125m / gpt2 | 101.9 / 105.4 | **93.0 / 96.4** |
-| pythia-160m (GPTNeoX) | 218 | 403（唯一反例） |
+| 模型 (层数) | uniform ppl | sensitivity ppl | 胜 |
+|------|:---:|:---:|:---:|
+| lm_L6_d160 (6) | 919.8 | **914.0** | sens |
+| SmolLM-135M (30) | 120.2 | **117.4** | sens |
+| Cerebras-GPT-111M (10) | 134.1 | **128.9** | sens |
+| gpt2 (12) | **116.6** | 121.9 | uniform |
+| pythia-410m (24) | **132.5** | 157.5 | uniform |
 
-> 注：敏感度信号须为**实测 fidelity 下降**；原始激活 saliency 不可跨层比较（用它做分配反而不如均匀）。
+> 须用**实测 fidelity 下降**作信号（raw saliency 跨层不可比、更差）。早期 bench 因 skip 前缀
+> 无尾点（layers.1 误隔离 layers.10+）曾高估收益至 23/25；修正后为上表。
 
 ### 边界
 - 小型 LM/MoE 受 **embedding 主导**，仅剪 FFN/专家难达 25%+ 总参数削减；
 - 紧 acc 预算（−5%）对脆弱小模型常**无可行率**（剪一点保真度就掉超阈值）。
+
+## 进阶配置（v0.4 新增）
+
+```python
+# 跨层敏感度分配（默认 uniform；guard 在劣化时自动回退 uniform 并告警）
+P.prune(model, SENSITIVITY_ALLOC_PRUNE_CFG, data=calib)
+# config["allocation"] = {"strategy": "sensitivity", "ref_ratio": 0.5,
+#                          "min_ratio": 0.05, "max_ratio": 0.9, "guard": "calib_nll"}
+
+# MoE 输出空间专家合并（LS 残差配对 + 丢弃回退；calib NLL 与 activation_count A/B 自动择优）
+P.prune(model, MOE_OUTPUT_MERGE_PRUNE_CFG, data=calib)
+# moe kwargs: keep_ratio=0.5, selector='calib_nll'|'none'
+
+# 量化感知显著度：直接复用 AMCT calibrate 同式 scale/offset
+cfg["methods"]["dense"]["kwargs"]["quant_cfg"] = {
+    "weights_cfg": {"strategy": "channel", "symmetric": True, "dtype": "int8"}}
+
+# 预算口径：budget_scope='total'（默认）|'prunable'；不可达时告警 + report.budget_unreachable
+size_budget_prune(model, data=calib, target_keep_ratio=0.7, budget_scope="prunable")
+```
 
 ## 与量化联合使用（prune → quantize → convert）
 
@@ -181,9 +203,14 @@ amct.accuracy_based_auto_calibration(model, ev, quant_cfg, ...)              # �
 
 | 域 | 支持 | 说明 |
 |----|------|------|
-| dense | ✅ | LLM 的 FFN（`gate/up/down_proj` 或相邻两层 Linear）。dense 域结构化排除并列的注意力投影（q/k/v/o 共享输入、且不满足 in→inter→in 残差维度复原），Llama/Qwen2/Mistral/Qwen3 **无需手动 `skip_layers`** 即可安全剪枝。 |
+| dense | ✅ | LLM 的 FFN：`gate/up/down_proj` 三 Linear、**融合 `gate_up_proj`**（Phi-3/GLM-4 风格，前半 gate 后半 up）、相邻两层 Linear/Conv1D（含 Bloom 风格自定义无参激活间隔）。dense 域结构化排除并列的注意力投影（q/k/v/o 共享输入、且不满足 in→inter→in 残差维度复原），Llama/Qwen2/Mistral/Qwen3 **无需手动 `skip_layers`** 即可安全剪枝。 |
 | cnn | ✅ | `variance_channel`(启发式) 朴素切片；**`reconstruct`(im2col 最小二乘) 输出保留、低破坏**（实测已训练 MNIST CNN @prune0.3：variance 0.343 → reconstruct 0.574）。ResNet 等独立 block 结构不被同级检测识别（已知边界）。 |
 | moe | ✅ | 同时支持 `nn.ModuleList` experts + `nn.Linear` gate 的老式结构，**与现代 transformers 的融合(批处理)专家**（`MixtralExperts`/`Qwen3MoeExperts` + `*TopKRouter`，沿专家维切片批张量）。 |
+
+**架构覆盖矩阵**（config 缩小为 2 层微型模型实测，权重随机仅验证机械可剪）：25/28 家族 OK —
+llama/llama3/qwen2/qwen3/qwen2_moe/mixtral/mistral/gemma1-3/phi/phi3/glm4/falcon-naming(bloom)/
+gpt2/gpt_neox/gpt_neo/gpt_bigcode/starcoder2/opt/xglm/olmo/olmo2/stablelm/smollm3/bloom；
+不支持：mamba（SSM 无 FFN）、granite MoE 变体、falcon（fused QKV 形状）。
 
 回归基线见 `tests/amct_pytorch/test_pruning_real_hf_models.py`、容差功能见
 `tests/amct_pytorch/test_pruning_auto_prune.py`（需 transformers，用 `.venv` 运行）。

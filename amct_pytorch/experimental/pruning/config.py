@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, List, Mapping, Optional
 
 
 @dataclass(slots=True)
@@ -64,6 +64,27 @@ def _validate_method_kwargs(spec: MethodSpec) -> None:
             ) from exc
 
 
+def _validate_allocation(alloc: Optional[Mapping[str, Any]]) -> None:
+    """校验 allocation 配置；None 表示 uniform（现行行为，零变化）。"""
+    if alloc is None:
+        return
+    if not isinstance(alloc, Mapping):
+        raise TypeError(f"allocation must be a dict or None, got {type(alloc)!r}")
+    if alloc.get("strategy", "uniform") not in {"uniform", "sensitivity"}:
+        raise ValueError("allocation.strategy must be 'uniform' or 'sensitivity'")
+    if alloc.get("guard", "calib_nll") not in {"calib_nll", "none"}:
+        raise ValueError("allocation.guard must be 'calib_nll' or 'none'")
+    for key in ("ref_ratio", "min_ratio", "max_ratio"):
+        if key in alloc:
+            val = float(alloc[key])
+            if not (0.0 <= val < 1.0):
+                raise ValueError(f"allocation.{key} must be in [0.0, 1.0). Got {val}.")
+    lo = float(alloc.get("min_ratio", 0.05))
+    hi = float(alloc.get("max_ratio", 0.9))
+    if lo > hi:
+        raise ValueError(f"allocation.min_ratio ({lo}) must be <= max_ratio ({hi}).")
+
+
 @dataclass(slots=True)
 class PruneConfig:
     methods: Dict[str, MethodSpec | Dict[str, Any] | str] = field(default_factory=dict)
@@ -75,6 +96,10 @@ class PruneConfig:
     verbose: bool = True
     missing_data_policy: str = "warn_skip"
     stage_error_policy: str = "raise"
+    #: 按层剪枝率分配；None = uniform（现行默认，零行为变化）。形如
+    #: {"strategy": "sensitivity", "ref_ratio": 0.5, "min_ratio": 0.05,
+    #:  "max_ratio": 0.9, "guard": "calib_nll"}。新增字段保持在 __slots__ 末位。
+    allocation: Optional[Dict[str, Any]] = None
 
     def validate(self) -> None:
         if self.min_channels < 1:
@@ -89,6 +114,7 @@ class PruneConfig:
             )
         if self.stage_error_policy not in {"raise", "warn_skip"}:
             raise ValueError("stage_error_policy must be one of {'raise', 'warn_skip'}")
+        _validate_allocation(self.allocation)
 
         for spec in self.methods.values():
             normalized = _normalize_method_spec(spec)

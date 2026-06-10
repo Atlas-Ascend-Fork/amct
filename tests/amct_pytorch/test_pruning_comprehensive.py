@@ -298,5 +298,92 @@ class TestDomainPruning(unittest.TestCase):
         self.assertEqual(out.shape, (2, 20, config.vocab_size))
 
 
+class _FusedMlp(torch.nn.Module):
+    """Phi-3/GLM-4 风格融合 FFN：gate_up_proj 输出前半 gate、后半 up。"""
+
+    def __init__(self, hidden=32, inter=48):
+        super().__init__()
+        self.gate_up_proj = torch.nn.Linear(hidden, 2 * inter)
+        self.down_proj = torch.nn.Linear(inter, hidden)
+
+    def forward(self, x):
+        gate, up = self.gate_up_proj(x).chunk(2, dim=-1)
+        return self.down_proj(torch.nn.functional.silu(gate) * up)
+
+
+class _ParamlessAct(torch.nn.Module):
+    """Bloom 风格自定义激活（无参模块），不应中断 two-layer FFN 链。"""
+
+    def forward(self, x):
+        return torch.nn.functional.gelu(x)
+
+
+class _TwoLayerCustomActMlp(torch.nn.Module):
+    def __init__(self, hidden=32, inter=48):
+        super().__init__()
+        self.dense_h_to_4h = torch.nn.Linear(hidden, inter)
+        self.act = _ParamlessAct()
+        self.dense_4h_to_h = torch.nn.Linear(inter, hidden)
+
+    def forward(self, x):
+        return self.dense_4h_to_h(self.act(self.dense_h_to_4h(x)))
+
+
+class TestDenseLayoutVariants(unittest.TestCase):
+    CFG = {
+        "methods": {"dense": {"name": "reconstruct", "kwargs": {"prune_ratio": 0.5}}},
+        "missing_data_policy": "warn_skip",
+    }
+
+    def _run(self, model, hidden=32):
+        calib = [torch.randn(4, hidden) for _ in range(4)]
+        p0 = sum(p.numel() for p in model.parameters())
+        prune(model, self.CFG, data=calib)
+        self.assertLess(sum(p.numel() for p in model.parameters()), p0)
+        with torch.no_grad():
+            out = model(torch.randn(2, hidden))
+        self.assertEqual(out.shape, (2, hidden))
+
+    def test_fused_gate_up_pruned(self):
+        model = _FusedMlp().eval()
+        self._run(model)
+        self.assertEqual(
+            model.gate_up_proj.out_features, 2 * model.down_proj.in_features
+        )
+
+    def test_two_layer_custom_activation_pruned(self):
+        self._run(_TwoLayerCustomActMlp().eval())
+
+    def test_quant_cfg_amct_scale_saliency(self):
+        """quant_cfg 直接给出 AMCT 量化配置 → 显著度用 AMCT 同式 scale/offset 假量化（不静默回退）。"""
+        import warnings
+
+        from amct_pytorch.experimental.pruning.methods.dense_reconstruct import (
+            _fake_quant_amct,
+        )
+
+        w = torch.randn(16, 32)
+        cfg = {"weights_cfg": {"strategy": "channel", "symmetric": True, "dtype": "int8"}}
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # 回退会 warn → 视为失败
+            wq = _fake_quant_amct(w, cfg)
+        self.assertLess(float((wq - w).abs().max() / w.abs().max()), 0.02)
+        model = _TwoLayerCustomActMlp().eval()
+        prune(
+            model,
+            {
+                "methods": {
+                    "dense": {
+                        "name": "reconstruct",
+                        "kwargs": {"prune_ratio": 0.5, "quant_cfg": cfg},
+                    }
+                },
+                "missing_data_policy": "warn_skip",
+            },
+            data=[torch.randn(4, 32) for _ in range(4)],
+        )
+        self.assertEqual(model.dense_h_to_4h.out_features, 24)
+
+
 if __name__ == "__main__":
     unittest.main()
