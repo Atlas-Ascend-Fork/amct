@@ -21,8 +21,6 @@ from amct_pytorch.common.utils.model_util import ModuleHelper
 from amct_pytorch.classic.deploy_op import NpuQuantizationLinear
 from amct_pytorch.classic.deploy_op import NpuWeightQuantizedLinear
 from amct_pytorch.classic.deploy_op import NpuQuantizationConv2d
-from amct_pytorch.classic.quantize_op import MinMaxQuant
-from amct_pytorch.classic.quantize_op import OfmrQuant
 from amct_pytorch.algorithms import AlgorithmRegistry
 
 
@@ -103,7 +101,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
             return deploy_ops[0](object_module)
         else:
             return deploy_ops(object_module)
-    
+
     def _should_use_deploy_op(self, object_module, deploy_op):
         """
         Function: Check if should use specific deploy op based on object module attributes

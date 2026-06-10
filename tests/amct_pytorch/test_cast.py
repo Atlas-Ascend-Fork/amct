@@ -33,6 +33,7 @@ from utils import TestModel, TestModelBias
 from amct_pytorch import convert, quantize
 
 NPU_HIF8_CAST_LINEAR = 'NpuHIF8CastLinear'
+HIF8_CAST_QUANT = 'HIF8CastQuant'
 HIFLOAT8 = 'hifloat8'
 CAST_ALGO = 'cast'
 
@@ -83,8 +84,9 @@ class TestCast(unittest.TestCase):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
-        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, HIF8_CAST_QUANT)
         convert(model)
+        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
         quant_out = model(self.inputs.npu())
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
@@ -107,10 +109,11 @@ class TestCast(unittest.TestCase):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
-        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, HIF8_CAST_QUANT)
         convert(model)
+        self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
         quant_out = model(self.inputs.npu())
-    
+
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
@@ -136,12 +139,15 @@ class TestCast(unittest.TestCase):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
+        self.assertEqual(type(model.linear1).__name__, HIF8_CAST_QUANT)
+        self.assertEqual(type(model.linear2).__name__, HIF8_CAST_QUANT)
+        self.assertEqual(type(model.linear3).__name__, HIF8_CAST_QUANT)
+        convert(model)
         self.assertEqual(type(model.linear1).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
-        convert(model)
         quant_out = model(self.inputs.npu())
-    
+
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
@@ -167,8 +173,11 @@ class TestCast(unittest.TestCase):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs.to(torch.bfloat16))
+        self.assertEqual(type(model.linear1).__name__, HIF8_CAST_QUANT)
+        self.assertEqual(type(model.linear2).__name__, HIF8_CAST_QUANT)
+        self.assertEqual(type(model.linear3).__name__, HIF8_CAST_QUANT)
+        convert(model)
         self.assertEqual(type(model.linear1).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
-        convert(model)
         quant_out = model(self.inputs.npu())
