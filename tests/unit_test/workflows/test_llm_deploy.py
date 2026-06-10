@@ -62,6 +62,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
         model_name=MODEL_NAME_QWEN3,
         model=model_path,
         quant_dtype=quant_dtype,
+        quant_target=["mlp", "attn-linear"],
         output_dir=output_dir,
     )
     workflow.args = args
@@ -69,6 +70,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
     workflow.model_name = args.model_name
     workflow.model_path = args.model
     workflow.quant_dtype = args.quant_dtype
+    workflow.quant_target = args.quant_target
     workflow.output_dir = args.output_dir
     workflow.is_mx = quant_dtype.startswith("mx")
     workflow.is_int = quant_dtype.startswith("int")
@@ -318,7 +320,7 @@ def test_llm_deploy_setup(monkeypatch):
 def _make_deploy_workflow(**overrides):
     defaults = dict(
         model="/tmp/fake", model_name=MODEL_NAME_QWEN3, quant_dtype="int4",
-        granularity=GRANULARITY_BLOCK, output_dir="/tmp/fake",
+        quant_target=["mlp", "attn-linear"], granularity=GRANULARITY_BLOCK, output_dir="/tmp/fake",
     )
     defaults.update(overrides)
     args = SimpleNamespace(**defaults)
@@ -328,6 +330,7 @@ def _make_deploy_workflow(**overrides):
     wf.model_name = args.model_name
     wf.model_path = args.model
     wf.quant_dtype = args.quant_dtype
+    wf.quant_target = args.quant_target
     wf.output_dir = args.output_dir
     wf.pipeline = None
     wf.is_mx = wf.quant_dtype.startswith("mx")
@@ -436,7 +439,7 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
 def test_deploy_init_sets_all_attrs():
     args = SimpleNamespace(
         granularity=GRANULARITY_BLOCK, model_name=MODEL_NAME_QWEN3, model=FAKE_MODEL,
-        quant_dtype="int8", output_dir=TMP_DEPLOY_OUT,
+        quant_dtype="int8", quant_target=["mlp", "attn-linear"], output_dir=TMP_DEPLOY_OUT,
     )
     wf = LlmDeployWorkflow(args)
     assert wf.args is args
@@ -445,6 +448,7 @@ def test_deploy_init_sets_all_attrs():
     assert wf.model_name == MODEL_NAME_QWEN3
     assert wf.model_path == FAKE_MODEL
     assert wf.quant_dtype == "int8"
+    assert wf.quant_target == ["mlp", "attn-linear"]
     assert wf.output_dir == TMP_DEPLOY_OUT
     assert wf.is_mx is False
     assert wf.is_int is True
@@ -454,7 +458,7 @@ def test_deploy_init_sets_all_attrs():
 def test_deploy_init_mx_flag():
     wf = LlmDeployWorkflow(SimpleNamespace(
         granularity=GRANULARITY_BLOCK, model_name="q", model="/m", quant_dtype="mxfp8",
-        output_dir="/out",
+        quant_target=["mlp"], output_dir="/out",
     ))
     assert wf.is_mx is True
     assert wf.is_int is False
@@ -464,7 +468,7 @@ def test_deploy_init_mx_flag():
 def test_deploy_init_hif_flag():
     wf = LlmDeployWorkflow(SimpleNamespace(
         granularity=GRANULARITY_BLOCK, model_name="q", model="/m", quant_dtype="hifp8",
-        output_dir="/out",
+        quant_target=["mlp"], output_dir="/out",
     ))
     assert wf.is_hif is True
 
