@@ -25,4 +25,3 @@ python amct_pytorch/cli/llm/deploy.py \
   --quant_dtype int \
   --bit_config amct_pytorch/configs/w8a8.yaml \
   --output_dir ./deploy_out
-
