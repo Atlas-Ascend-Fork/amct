@@ -62,6 +62,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
         model_name=MODEL_NAME_QWEN3,
         model=model_path,
         quant_dtype=quant_dtype,
+        quant_target=["mlp", "attn-linear"],
         output_dir=output_dir,
     )
     workflow.args = args
