@@ -62,6 +62,15 @@ def _register_two_layer_hook(model, target, stats, hooks) -> None:
     hooks.append(producer.register_forward_hook(_make_hook(rv)))
 
 
+def _register_fused_hook(model, target, stats, hooks) -> None:
+    gate_up = get_submodule(model, target.gate_up_path)
+    if not isinstance(gate_up, nn.Linear):
+        return
+    rv = RunningVariance()
+    stats[target.down_path] = rv
+    hooks.append(gate_up.register_forward_hook(_make_hook(rv)))
+
+
 def _register_gated_hooks(model, target, stats, hooks) -> None:
     gate = get_submodule(model, target.gate_path)
     up = get_submodule(model, target.up_path)
@@ -86,6 +95,8 @@ def _register_hooks(
     for target in targets:
         if isinstance(target, TwoLayerDenseTarget):
             _register_two_layer_hook(model, target, stats, hooks)
+        elif hasattr(target, "gate_up_path"):
+            _register_fused_hook(model, target, stats, hooks)
         else:
             _register_gated_hooks(model, target, stats, hooks)
     return stats, hooks
@@ -114,6 +125,13 @@ def _score_for_target(target, stats) -> Optional[Tuple[torch.Tensor, str]]:
             return None
         return rv.variance(), target.producer_path
     gated_stats = stats.get(target.down_path)
+    if isinstance(gated_stats, RunningVariance):  # 融合 gate_up：前半 gate + 后半 up 方差相加
+        if gated_stats.count == 0:
+            return None
+        v = gated_stats.variance()
+        inter = v.shape[0] // 2
+        report_module = target.down_path.rpartition(".")[0] or target.down_path
+        return v[:inter] + v[inter:], report_module
     if not isinstance(gated_stats, tuple):
         return None
     gate_rv, up_rv = gated_stats

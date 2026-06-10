@@ -55,6 +55,36 @@ MOE_MASSVAR_PRUNE_CFG = {
 }
 
 
+# 按层敏感度分配剪枝：总削减量与 uniform 相同，robust 层多剪、敏感层少剪；
+# 守卫 calib_nll —— 劣于 uniform 时自动回退并告警。需要校准数据（data=）。
+SENSITIVITY_ALLOC_PRUNE_CFG = {
+    "methods": {
+        "dense": {"name": "low_variance", "kwargs": {"prune_ratio": 0.50}},
+    },
+    "allocation": {
+        "strategy": "sensitivity",
+        "ref_ratio": 0.50,
+        "min_ratio": 0.05,
+        "max_ratio": 0.90,
+        "guard": "calib_nll",
+    },
+    "missing_data_policy": "warn_skip",
+}
+
+
+# MoE 输出空间专家合并：LS 残差贪心配对 + 丢弃回退，calib NLL 选择器
+# 保证不劣于 activation_count 基线（选择结果写入 report，绝不静默）。
+MOE_OUTPUT_MERGE_PRUNE_CFG = {
+    "methods": {
+        "moe": {
+            "name": "output_merge",
+            "kwargs": {"keep_ratio": 0.50, "selector": "calib_nll"},
+        },
+    },
+    "missing_data_policy": "warn_skip",
+}
+
+
 FULL_STRUCTURED_PRUNE_CFG = {
     "methods": {
         "cnn": {"name": "variance_channel", "kwargs": {"prune_ratio": 0.30}},

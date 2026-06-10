@@ -1,6 +1,19 @@
 # -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-# Licensed under the Apache License, Version 2.0 (the "License").
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 """真·量化 E2E（NPU）：SmolLM-135M(fp16) 上量化**实际发火**，测真实 perplexity。
 
 CPU 上 amct 量化是 no-op（fp32 被 dtype 约束跳过；且 fake-quant 需 torch_npu）。
@@ -116,9 +129,10 @@ def main():
     )
     ids = tok(TEXT, return_tensors="pt").input_ids[:, :256].to(DEV)
     calib = []
-    for i in range(0, 256, 64):
-        end = i + 64
-        calib.append(ids[:, i:end])
+    for i in range(0, int(ids.shape[1]), 64):  # 实际长度截取，避免空块
+        chunk = ids[:, i : i + 64]
+        if chunk.numel():
+            calib.append(chunk)
 
     base_ppl = ppl(base, ids)
     print(f"[NPU-E2E] baseline(fp16): params={nparams(base):,}  ppl={base_ppl:.4f}")

@@ -38,6 +38,7 @@ def _target_paths(target) -> list[str]:
         "producer_path",
         "consumer_path",
         "gate_path",
+        "gate_up_path",
         "up_path",
         "down_path",
         "module_path",
