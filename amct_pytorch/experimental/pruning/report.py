@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 @dataclass(slots=True)
@@ -36,6 +36,12 @@ class PruneReport:
     events: List[StageEvent] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     per_layer_sparsity: Dict[str, float] = field(default_factory=dict)
+    #: 预算诚实性：尺寸预算低于"不可剪质量"下限时置 True（见 size_budget_prune）。
+    budget_unreachable: bool = False
+    #: 可剪参数占总参数比例（未计算时为 None）。
+    prunable_fraction: float | None = None
+    #: 按层分配剪枝时的最终选择（'sensitivity' / 'uniform'）；非分配路径为 None。
+    allocation_choice: Optional[str] = None
 
     def add(self, stage: str, method: str, module: str, detail: str) -> None:
         self.events.append(
@@ -65,6 +71,9 @@ class PruneReport:
                 }
                 for e in self.events
             ],
+            "budget_unreachable": self.budget_unreachable,
+            "prunable_fraction": self.prunable_fraction,
             "warnings": list(self.warnings),
             "per_layer_sparsity": dict(self.per_layer_sparsity),
+            "allocation_choice": self.allocation_choice,
         }

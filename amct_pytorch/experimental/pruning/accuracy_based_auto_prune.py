@@ -36,7 +36,8 @@ from __future__ import annotations
 
 import copy
 import warnings
-from dataclasses import dataclass, field
+from collections import namedtuple
+from dataclasses import dataclass, field, fields
 from typing import Any, Callable, List, Mapping, Optional, Sequence
 
 import torch
@@ -59,6 +60,10 @@ DEFAULT_TOLERANCE: float = 0.02
 #: 并列的 q/k/v 投影误判为可剪的 FFN，破坏注意力；默认把这些路径排除，
 #: 让不了解内部结构的用户也能安全地对 LLM 做 FFN 剪枝。
 ATTENTION_NAME_HINTS: tuple = ("self_attn", "attention", "attn")
+
+#: 尺寸预算口径：'total'=预算针对全模型参数（现行语义，默认）；
+#: 'prunable'=预算只针对"可剪质量"（embedding 等不可剪部分不计入分母）。
+BUDGET_SCOPES: tuple = ("total", "prunable")
 
 
 @dataclass(slots=True)
@@ -86,6 +91,10 @@ class AutoTuneResult:
     applied: bool
     report: Optional[PruneReport]
     trials: List[TrialResult] = field(default_factory=list)
+    #: 预算诚实性：尺寸预算低于"不可剪质量"下限（剪光所有可剪目标也达不到）时为 True。
+    budget_unreachable: bool = False
+    #: 可剪参数质量占总参数比例（仅 budget 入口计算；其余入口为 None）。
+    prunable_fraction: Optional[float] = None
 
     def summary(self) -> str:
         """面向用户的一段式可读摘要。"""
@@ -152,6 +161,109 @@ def _merge_attention_skips(config_dict: dict) -> dict:
             skips.append(hint)
     cfg["skip_layers"] = skips
     return cfg
+
+
+# ---------------------------------------------------------------------------
+# 预算诚实性（budget honesty）：可剪质量 = diagnose 同源三域 find_targets 命中的模块参数和
+# ---------------------------------------------------------------------------
+def _target_module_paths(target) -> List[str]:
+    """收集目标 dataclass 的全部模块路径字段（``*_path`` 且非空）。"""
+    paths: List[str] = []
+    for f in fields(target):
+        if not f.name.endswith("_path"):
+            continue
+        value = getattr(target, f.name)
+        if value:
+            paths.append(str(value))
+    return paths
+
+
+def _dedup_nested_paths(paths) -> List[str]:
+    """去掉嵌套重复：若 A 是 B 的祖先模块路径，仅保留 A，避免双重计参。"""
+    kept: List[str] = []
+    for path in sorted(set(paths)):
+        if not any(path == k or path.startswith(k + ".") for k in kept):
+            kept.append(path)
+    return kept
+
+
+def _prunable_param_count(model: nn.Module, base_cfg: dict) -> int:
+    """用与 diagnose 相同的三域 find_targets 估计模型的"可剪参数质量"（上界）。"""
+    from .domains.cnn import CNNPruningDomain
+    from .domains.dense import DensePruningDomain
+    from .domains.moe import MoEPruningDomain
+    from .utils import get_submodule
+
+    cfg = PruneConfig(**copy.deepcopy(base_cfg))
+    paths: List[str] = []
+    for domain in (CNNPruningDomain(), DensePruningDomain(), MoEPruningDomain()):
+        try:
+            targets = domain.find_targets(model, cfg)
+        except Exception as exc:  # 不静默：识别失败要让用户知道质量被低估
+            warnings.warn(
+                f"[budget] {domain.name} 域 find_targets 失败，可剪质量可能被低估："
+                f"{type(exc).__name__}: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
+        for target in targets:
+            paths.extend(_target_module_paths(target))
+    return sum(count_parameters(get_submodule(model, p)) for p in _dedup_nested_paths(paths))
+
+
+def _resolve_size_target(
+    params_before, prunable_mass, target_keep_ratio, target_params, budget_scope, max_ratio
+):
+    """按口径换算目标参数量，并做"预算可达性"诚实检查。返回 (target_params, unreachable)。
+
+    - 'total'：目标 = 总参数 × keep_ratio（现行语义），可达下限 = 不可剪质量。
+    - 'prunable'：目标 = 不可剪质量 + 可剪质量 × keep_ratio（embedding 等不计入分母）；
+      直接给 target_params 时解释为"可剪部分的参数上界"。可达下限镜像 'total' 逻辑：
+      即使按最激进网格率 ``max_ratio`` 剪，仍约保留 (1-max_ratio) 的可剪质量，
+      keep 低于该比例同样不可达，需告警而非静默。
+    """
+    if budget_scope not in BUDGET_SCOPES:
+        raise ValueError(f"budget_scope must be one of {BUDGET_SCOPES}, got {budget_scope!r}.")
+    if target_params is None and target_keep_ratio is None:
+        raise ValueError("give target_keep_ratio (0<r<=1) or target_params.")
+    non_prunable = params_before - prunable_mass
+    if target_params is None:
+        if not (0.0 < float(target_keep_ratio) <= 1.0):
+            raise ValueError("target_keep_ratio must be in (0, 1].")
+        if budget_scope == "prunable":
+            target_params = non_prunable + int(round(prunable_mass * float(target_keep_ratio)))
+        else:
+            target_params = int(round(params_before * float(target_keep_ratio)))
+    elif budget_scope == "prunable":
+        target_params = non_prunable + int(target_params)
+    # 可达下限：'total' 口径 = 不可剪质量；'prunable' 口径还要加上最激进网格率剪后仍保留的可剪质量
+    floor = non_prunable
+    if budget_scope == "prunable":
+        floor = non_prunable + int(prunable_mass * (1.0 - float(max_ratio)))
+    unreachable = target_params < floor
+    if unreachable:
+        warnings.warn(
+            f"[budget] 尺寸预算不可达：目标 {target_params:,} 低于可达下限 {floor:,}"
+            f"（不可剪质量 {non_prunable:,}，可剪质量 {prunable_mass:,}，占总参数 "
+            f"{prunable_mass / params_before * 100 if params_before else 0.0:.2f}%；"
+            f"'prunable' 口径按最激进网格率 {float(max_ratio):.2f} 估算剪后保留下限）。"
+            f"即使按最激进可行率剪也无法达标；将继续搜索，不抛异常。"
+            f"可放宽预算或调整 budget_scope / ratio_grid。",
+            UserWarning,
+            stacklevel=4,
+        )
+    return target_params, unreachable
+
+
+def _attach_budget_honesty(result: AutoTuneResult, unreachable: bool, fraction) -> AutoTuneResult:
+    """把预算诚实性字段写入结果（含其内嵌 PruneReport，若存在）。"""
+    result.budget_unreachable = bool(unreachable)
+    result.prunable_fraction = fraction
+    if result.report is not None:
+        result.report.budget_unreachable = bool(unreachable)
+        result.report.prunable_fraction = fraction
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +387,79 @@ def _resolve_quality(
         return qf, qf(model)
     qf = _make_fidelity_quality(model, eval_batches, batch_adapter)
     return qf, 1.0
+
+
+def _prepare_search_inputs(model, config, safe_skip_attention, ratio_grid, data, eval_data):
+    """两个搜索入口共用的准备：校验网格、构造基础配置、计参、收集评估批。"""
+    grid = sorted(set(float(r) for r in ratio_grid if 0.0 <= float(r) < 1.0))
+    if not grid:
+        raise ValueError("ratio_grid must contain at least one ratio in [0.0, 1.0).")
+    base_cfg = _config_to_dict(config)
+    if safe_skip_attention:
+        base_cfg = _merge_attention_skips(base_cfg)
+    if eval_data is not None:
+        eval_batches = list(eval_data)
+    else:
+        eval_batches = list(data) if data is not None else []
+    return grid, base_cfg, count_parameters(model), eval_batches
+
+
+def _make_trial_fn(
+    model,
+    base_cfg,
+    params_before,
+    *,
+    data,
+    batch_adapter,
+    finetune_fn,
+    quant_fn,
+    quality_fn,
+    baseline_quality,
+    accept_fn,
+    warn_tag,
+):
+    """构造单个剪枝率的试探函数（容差/尺寸两种模式共用）。
+
+    每次试探都在副本上进行（copy_model=True），原模型不动。
+    - finetune_fn：评估前对剪枝副本做(轻量)微调，使搜索衡量"剪枝+恢复后"的可达精度，
+      而非剪枝直后的崩溃值（否则一次性结构剪枝崩到接近随机，搜索会过度保守）。
+    - quant_fn：评估前把目标量化方案施加到剪枝副本上，搜索在量化态下决策。
+    - 剪枝/前向出错时不静默：明确告警并判为不可接受，不向外抛异常。
+    """
+
+    def trial(ratio: float) -> TrialResult:
+        cfg = PruneConfig(**_with_ratio(base_cfg, ratio))
+        cfg.copy_model = True  # 在副本上试探，原模型不动
+        cfg.verbose = False
+        try:
+            pruner = AutoPruner(cfg)
+            pruned = pruner(model, data=data, batch_adapter=batch_adapter)
+            pa = count_parameters(pruned)
+            if finetune_fn is not None:
+                finetune_fn(pruned)
+            if quant_fn is not None:
+                quant_fn(pruned)
+            q = float(quality_fn(pruned))
+        except Exception as exc:
+            # 该剪枝率剪枝/前向**出错**（不是正常拒绝）。不静默：避免把"错误"伪装成
+            # "该率被正常拒绝"，否则用户只看到"找不到可行率"而不知是 bug/不兼容。
+            warnings.warn(
+                f"[{warn_tag}] ratio={ratio} 试探发生错误（非正常拒绝）：{type(exc).__name__}: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return TrialResult(ratio, float("-inf"), float("inf"), params_before, 0.0, False)
+        drop = baseline_quality - q
+        return TrialResult(
+            prune_ratio=ratio,
+            quality=q,
+            quality_drop=drop,
+            params_after=pa,
+            weight_reduction=1.0 - pa / params_before if params_before else 0.0,
+            accepted=accept_fn(drop, pa),
+        )
+
+    return trial
 
 
 def _search_max_ratio(grid, trial_fn, tolerance):
@@ -477,81 +662,72 @@ def accuracy_based_auto_prune(
     """
     if not (0.0 <= tolerance):
         raise ValueError("tolerance must be >= 0.")
-    grid = sorted(set(float(r) for r in ratio_grid if 0.0 <= float(r) < 1.0))
-    if not grid:
-        raise ValueError("ratio_grid must contain at least one ratio in [0.0, 1.0).")
-
-    eval_batches = (
-        list(eval_data)
-        if eval_data is not None
-        else (list(data) if data is not None else [])
+    grid, base_cfg, params_before, eval_batches = _prepare_search_inputs(
+        model, config, safe_skip_attention, ratio_grid, data, eval_data
     )
-    base_cfg = _config_to_dict(config)
-    if safe_skip_attention:
-        base_cfg = _merge_attention_skips(base_cfg)
-    params_before = count_parameters(model)
-
     # 精度来源优先级：quality_fn > evaluator > 默认 top-1 保真度
     quality_fn, baseline_quality = _resolve_quality(
         model, quality_fn, evaluator, eval_iterations, eval_batches, batch_adapter
     )
-
-    def trial(ratio: float) -> TrialResult:
-        cfg = PruneConfig(**_with_ratio(base_cfg, ratio))
-        cfg.copy_model = True  # 在副本上试探，原模型不动
-        cfg.verbose = False
-        try:
-            pruner = AutoPruner(cfg)
-            pruned = pruner(model, data=data, batch_adapter=batch_adapter)
-            pa = count_parameters(pruned)
-            # 关键：若给定 finetune_fn，则在评估前对**剪枝副本**做(轻量)微调，
-            # 使搜索衡量的是"剪枝+恢复后"的可达精度，而非剪枝直后的崩溃值
-            # （否则一次性结构剪枝崩到接近随机，搜索会过度保守、几乎选不出率）。
-            if finetune_fn is not None:
-                finetune_fn(pruned)
-            # 量化感知：若给定 quant_fn，则在评估前把目标量化方案施加到**剪枝副本**上，
-            # 于是搜索衡量的是"剪枝(+恢复)后再按该量化部署"的质量，所选剪枝率与即将到来的
-            # 量化方案是 *协同* 的（在量化态下决策），而非只在浮点态决策后再量化。
-            if quant_fn is not None:
-                quant_fn(pruned)
-            q = float(quality_fn(pruned))
-        except Exception as exc:
-            # 该剪枝率剪枝/前向**出错**（不是质量不达标）。不静默：明确告警，避免把"错误"
-            # 伪装成"该率被正常拒绝"，否则用户只看到"找不到可行率"而不知是 bug/不兼容。
-            warnings.warn(
-                f"[auto-prune] ratio={ratio} 试探发生错误（非质量拒绝）：{type(exc).__name__}: {exc}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-            return TrialResult(
-                prune_ratio=ratio,
-                quality=float("-inf"),
-                quality_drop=float("inf"),
-                params_after=params_before,
-                weight_reduction=0.0,
-                accepted=False,
-            )
-        drop = baseline_quality - q
-        return TrialResult(
-            prune_ratio=ratio,
-            quality=q,
-            quality_drop=drop,
-            params_after=pa,
-            weight_reduction=1.0 - pa / params_before if params_before else 0.0,
-            accepted=drop <= tolerance,
-        )
-
+    trial = _make_trial_fn(
+        model, base_cfg, params_before,
+        data=data, batch_adapter=batch_adapter, finetune_fn=finetune_fn, quant_fn=quant_fn,
+        quality_fn=quality_fn, baseline_quality=baseline_quality,
+        accept_fn=lambda drop, pa: drop <= tolerance, warn_tag="auto-prune",
+    )
     # 在网格上二分：寻找“损失 ≤ tolerance”的最大剪枝率（单调假设）。
     best_idx, ordered_trials, trials = _search_max_ratio(grid, trial, tolerance)
-
     return _finalize_autotune(
+        model, base_cfg, grid, best_idx, trials, ordered_trials,
+        tolerance=tolerance, baseline_quality=baseline_quality, params_before=params_before,
+        data=data, batch_adapter=batch_adapter, finetune_fn=finetune_fn, apply=apply,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 尺寸预算驱动（标准 §1 的 "budget = target size" 模式）
+# ---------------------------------------------------------------------------
+# 尺寸预算搜索的解析结果（具名封装，避免长元组返回）
+_BudgetSetup = namedtuple(
+    "_BudgetSetup",
+    "grid base_cfg params_before eval_batches target_params unreachable prunable_fraction",
+)
+
+
+def _resolve_budget_config(
+    model, config, safe_skip_attention, ratio_grid, data, eval_data,
+    target_keep_ratio, target_params, budget_scope,
+):
+    """尺寸预算入口的解析：搜索准备 + 可剪质量核算 + 目标换算与可达性检查。
+
+    返回 (grid, base_cfg, params_before, eval_batches, target_params, unreachable,
+    prunable_fraction)。预算诚实性：可剪质量来自与 diagnose 同源的三域目标识别。
+    """
+    grid, base_cfg, params_before, eval_batches = _prepare_search_inputs(
+        model, config, safe_skip_attention, ratio_grid, data, eval_data
+    )
+    prunable_mass = _prunable_param_count(model, base_cfg)
+    prunable_fraction = prunable_mass / params_before if params_before else 0.0
+    target_params, unreachable = _resolve_size_target(
+        params_before, prunable_mass, target_keep_ratio, target_params, budget_scope, grid[-1]
+    )
+    return _BudgetSetup(grid, base_cfg, params_before, eval_batches, target_params, unreachable, prunable_fraction)
+
+
+def _build_budget_report(
+    model, base_cfg, grid, best_idx, trials, ordered_trials, *,
+    baseline_quality, params_before, data, batch_adapter, finetune_fn, apply,
+    unreachable, prunable_fraction,
+):
+    """搜索结束后组装尺寸预算结果：tolerance 记为 -1（标识非容差模式）+ 预算诚实性字段。"""
+    result = _finalize_autotune(
         model,
         base_cfg,
         grid,
         best_idx,
         trials,
         ordered_trials,
-        tolerance=tolerance,
+        tolerance=-1.0,
         baseline_quality=baseline_quality,
         params_before=params_before,
         data=data,
@@ -559,11 +735,9 @@ def accuracy_based_auto_prune(
         finetune_fn=finetune_fn,
         apply=apply,
     )
+    return _attach_budget_honesty(result, unreachable, prunable_fraction)
 
 
-# ---------------------------------------------------------------------------
-# 尺寸预算驱动（标准 §1 的 "budget = target size" 模式）
-# ---------------------------------------------------------------------------
 def size_budget_prune(
     model: nn.Module,
     config=None,
@@ -581,6 +755,7 @@ def size_budget_prune(
     finetune_fn: Optional[Callable[[nn.Module], Any]] = None,
     quant_fn: Optional[Callable[[nn.Module], Any]] = None,
     apply: bool = True,
+    budget_scope: str = "total",
 ) -> AutoTuneResult:
     """剪枝到**尺寸预算**：找到能把参数量压到目标以内的**最小**剪枝率，并报告该点的(尺寸, 精度)。
 
@@ -592,6 +767,12 @@ def size_budget_prune(
         保留参数比例（0.7 = 保留 70% = 削减 30%）。与 ``target_params`` 二选一。
     target_params : int | None
         直接给目标参数量上界。
+    budget_scope : str
+        预算口径，默认 ``'total'``（现行语义：预算针对全模型参数）。``'prunable'`` 时预算只
+        针对*可剪质量*（diagnose 三域目标命中的模块参数和），embedding 等不可剪部分不计入
+        分母 —— 适合 embedding 占主导的小 LM。任一口径下，若预算低于"不可剪质量"下限
+        （剪光所有可剪目标也达不到），都会发出中文告警并在结果上置
+        ``budget_unreachable=True``、记录 ``prunable_fraction``，不抛异常。
     其余参数与 :func:`accuracy_based_auto_prune` 同义（quality_fn/evaluator/finetune_fn/quant_fn…）。
 
     Returns
@@ -600,77 +781,28 @@ def size_budget_prune(
         ``weight_reduction`` 为实际削减比例；``quality_drop`` 为该尺寸下实测精度损失；
         ``tolerance`` 记为 -1（标识非容差模式）。找不到满足预算的率时 ``chosen_ratio`` 为 None。
     """
-    grid = sorted(set(float(r) for r in ratio_grid if 0.0 <= float(r) < 1.0))
-    if not grid:
-        raise ValueError("ratio_grid must contain at least one ratio in [0.0, 1.0).")
-    params_before = count_parameters(model)
-    if target_params is None and target_keep_ratio is None:
-        raise ValueError("give target_keep_ratio (0<r<=1) or target_params.")
-    if target_params is None:
-        if not (0.0 < float(target_keep_ratio) <= 1.0):
-            raise ValueError("target_keep_ratio must be in (0, 1].")
-        target_params = int(round(params_before * float(target_keep_ratio)))
-
-    eval_batches = (
-        list(eval_data)
-        if eval_data is not None
-        else (list(data) if data is not None else [])
+    (grid, base_cfg, params_before, eval_batches, target_params, unreachable,
+     prunable_fraction) = _resolve_budget_config(
+        model, config, safe_skip_attention, ratio_grid, data, eval_data,
+        target_keep_ratio, target_params, budget_scope,
     )
-    base_cfg = _config_to_dict(config)
-    if safe_skip_attention:
-        base_cfg = _merge_attention_skips(base_cfg)
-
     quality_fn, baseline_quality = _resolve_quality(
         model, quality_fn, evaluator, eval_iterations, eval_batches, batch_adapter
     )
-
-    def trial(ratio: float) -> TrialResult:
-        cfg = PruneConfig(**_with_ratio(base_cfg, ratio))
-        cfg.copy_model = True
-        cfg.verbose = False
-        try:
-            pruner = AutoPruner(cfg)
-            pruned = pruner(model, data=data, batch_adapter=batch_adapter)
-            pa = count_parameters(pruned)
-            if finetune_fn is not None:
-                finetune_fn(pruned)
-            if quant_fn is not None:
-                quant_fn(pruned)
-            q = float(quality_fn(pruned))
-        except Exception as exc:
-            warnings.warn(
-                f"[size-budget] ratio={ratio} 试探发生错误（非尺寸不达标）：{type(exc).__name__}: {exc}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-            return TrialResult(
-                ratio, float("-inf"), float("inf"), params_before, 0.0, False
-            )
-        return TrialResult(
-            prune_ratio=ratio,
-            quality=q,
-            quality_drop=baseline_quality - q,
-            params_after=pa,
-            weight_reduction=1.0 - pa / params_before if params_before else 0.0,
-            accepted=pa <= target_params,  # 这里 accepted = "达到尺寸预算"
-        )
-
+    trial = _make_trial_fn(
+        model, base_cfg, params_before,
+        data=data, batch_adapter=batch_adapter, finetune_fn=finetune_fn, quant_fn=quant_fn,
+        quality_fn=quality_fn, baseline_quality=baseline_quality,
+        accept_fn=lambda drop, pa: pa <= target_params,  # 这里 accepted = "达到尺寸预算"
+        warn_tag="size-budget",
+    )
     # 单调假设：剪枝率越大 → 参数越少。二分找"参数 ≤ 目标"的最小率（够用即止）。
     best_idx, ordered_trials, trials = _search_min_ratio(grid, trial, target_params)
-    return _finalize_autotune(
-        model,
-        base_cfg,
-        grid,
-        best_idx,
-        trials,
-        ordered_trials,
-        tolerance=-1.0,
-        baseline_quality=baseline_quality,
-        params_before=params_before,
-        data=data,
-        batch_adapter=batch_adapter,
-        finetune_fn=finetune_fn,
-        apply=apply,
+    return _build_budget_report(
+        model, base_cfg, grid, best_idx, trials, ordered_trials,
+        baseline_quality=baseline_quality, params_before=params_before,
+        data=data, batch_adapter=batch_adapter, finetune_fn=finetune_fn, apply=apply,
+        unreachable=unreachable, prunable_fraction=prunable_fraction,
     )
 
 
@@ -699,6 +831,43 @@ class JointBudget:
         )
 
 
+def _joint_budget_honesty(model, config, safe_skip_attention, prune_budget):
+    """联合预算的可剪质量核算（与 size_budget_prune / diagnose 同源）。
+
+    零可剪质量时（分给剪枝的预算永远花不出去）发中文告警，不抛异常。
+    返回 (unreachable, prunable_fraction)。
+    """
+    honesty_cfg = _config_to_dict(config)
+    if safe_skip_attention:
+        honesty_cfg = _merge_attention_skips(honesty_cfg)
+    params_before = count_parameters(model)
+    prunable_mass = _prunable_param_count(model, honesty_cfg)
+    prunable_fraction = prunable_mass / params_before if params_before else 0.0
+    unreachable = prunable_mass == 0
+    if unreachable:
+        warnings.warn(
+            "[joint-budget] 预算不可达：模型无任何可剪质量（三域均未识别到目标），"
+            f"分给剪枝的预算 {prune_budget:.3f} 永远花不出去；"
+            "将照常返回（剪枝损失=0，剩余预算全给量化），不抛异常。",
+            UserWarning,
+            stacklevel=3,
+        )
+    return unreachable, prunable_fraction
+
+
+def _split_remaining_budget(res, total_tolerance, prune_tol):
+    """按剪枝**实测**损失给量化分剩余预算：未剪（applied=False / 无损失值）视为 0。"""
+    spent = res.quality_drop if (res.applied and res.quality_drop is not None) else 0.0
+    spent = max(0.0, float(spent))
+    return JointBudget(
+        total_tolerance=total_tolerance,
+        prune_tolerance=prune_tol,
+        prune_drop=spent,
+        remaining_tolerance=max(0.0, total_tolerance - spent),
+        prune_result=res,
+    )
+
+
 def accuracy_based_auto_prune_with_budget(
     model: nn.Module,
     config=None,
@@ -716,6 +885,7 @@ def accuracy_based_auto_prune_with_budget(
     finetune_fn: Optional[Callable[[nn.Module], Any]] = None,
     quant_fn: Optional[Callable[[nn.Module], Any]] = None,
     apply: bool = True,
+    budget_scope: str = "total",
 ) -> JointBudget:
     """在 *剪枝+量化* 两步间分割一个**联合精度预算**，并顺序测量（README 所述流程的代码实现）。
 
@@ -734,14 +904,25 @@ def accuracy_based_auto_prune_with_budget(
         剪枝与量化**合计**可接受的精度损失上界。
     prune_fraction : float
         分给剪枝的预算占比（0~1）。默认 0.5（均分）；设 1.0 则贪心多剪、量化拿剩余。
+    budget_scope : str
+        预算诚实性口径（与 :func:`size_budget_prune` 同名参数对齐，默认 ``'total'``）。
+        本入口的预算是精度容差，与口径无关；该参数用于*可剪质量核算*：始终在
+        ``prune_result`` 上记录 ``prunable_fraction``，且当模型无任何可剪质量时
+        （分给剪枝的预算永远花不出去）发中文告警并置 ``budget_unreachable=True``，不抛异常。
     其余参数透传给 :func:`accuracy_based_auto_prune`。
     """
     if not (0.0 <= total_tolerance):
         raise ValueError("total_tolerance must be >= 0.")
     if not (0.0 <= prune_fraction <= 1.0):
         raise ValueError("prune_fraction must be in [0.0, 1.0].")
+    if budget_scope not in BUDGET_SCOPES:
+        raise ValueError(f"budget_scope must be one of {BUDGET_SCOPES}, got {budget_scope!r}.")
 
     prune_tol = total_tolerance * prune_fraction
+    # 预算诚实性：可剪质量核算（与 size_budget_prune / diagnose 同源）
+    unreachable, prunable_fraction = _joint_budget_honesty(
+        model, config, safe_skip_attention, prune_tol
+    )
     res = accuracy_based_auto_prune(
         model,
         config,
@@ -758,14 +939,6 @@ def accuracy_based_auto_prune_with_budget(
         quant_fn=quant_fn,
         apply=apply,
     )
+    _attach_budget_honesty(res, unreachable, prunable_fraction)
     # 实测剪枝损失：未剪（applied=False / chosen_ratio=None）则视为 0。
-    spent = res.quality_drop if (res.applied and res.quality_drop is not None) else 0.0
-    spent = max(0.0, float(spent))
-    remaining = max(0.0, total_tolerance - spent)
-    return JointBudget(
-        total_tolerance=total_tolerance,
-        prune_tolerance=prune_tol,
-        prune_drop=spent,
-        remaining_tolerance=remaining,
-        prune_result=res,
-    )
+    return _split_remaining_budget(res, total_tolerance, prune_tol)

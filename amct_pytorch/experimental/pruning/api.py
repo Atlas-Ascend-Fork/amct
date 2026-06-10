@@ -130,6 +130,17 @@ def prune(
         return
 
     cfg = _coerce_config(config)
+    cfg.validate()
+    # 按层敏感度分配路径：allocation.strategy='sensitivity' 时逐层测敏感度后
+    # water-fill 分配剪枝率（默认带 calib_nll 守卫）；uniform/None 走现行路径不变。
+    if cfg.allocation and cfg.allocation.get("strategy", "uniform") == "sensitivity":
+        from .allocation import prune_with_allocation  # 延迟导入避免循环依赖
+
+        _LAST_REPORT = prune_with_allocation(
+            model, cfg, data=data, batch_adapter=batch_adapter
+        )
+        _LAST_AUTO_PRUNE = None
+        return
     # AutoPruner 默认 copy_model=True，会克隆模型；
     # 为对齐 amct.quantize 的 in-place 语义，这里强制关闭克隆。
     cfg.copy_model = False

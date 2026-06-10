@@ -30,6 +30,7 @@ from .methods.dense_low_variance import LowVarianceDensePruningMethod
 from .methods.dense_reconstruct import ReconstructDensePruningMethod
 from .methods.moe_mass_pruning import MassMoEPruningMethod
 from .methods.moe_mass_variance_pruning import MassVarianceMoEPruningMethod
+from .methods.moe_output_merge import OutputMergeMoEPruningMethod
 
 
 @dataclass(slots=True)
@@ -98,4 +99,5 @@ def create_default_registry() -> MethodRegistry:
     registry.register_method(ReconstructDensePruningMethod())
     registry.register_method(MassMoEPruningMethod())
     registry.register_method(MassVarianceMoEPruningMethod())
+    registry.register_method(OutputMergeMoEPruningMethod())
     return registry

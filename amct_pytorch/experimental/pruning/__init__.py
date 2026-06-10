@@ -35,11 +35,13 @@ __all__ = [
     "finetune",
     "diagnose",
     # pre-defined configs
-    "CNN_VARIANCE_PRUNE_CFG",
     "CNN_RECONSTRUCT_PRUNE_CFG",
+    "CNN_VARIANCE_PRUNE_CFG",
     "DENSE_LOWVAR_PRUNE_CFG",
-    "MOE_MASSVAR_PRUNE_CFG",
     "FULL_STRUCTURED_PRUNE_CFG",
+    "MOE_MASSVAR_PRUNE_CFG",
+    "MOE_OUTPUT_MERGE_PRUNE_CFG",
+    "SENSITIVITY_ALLOC_PRUNE_CFG",
 ]
 
 from .api import prune, PrunePass, get_last_report, get_last_auto_prune
@@ -55,5 +57,7 @@ from .presets import (
     CNN_VARIANCE_PRUNE_CFG,
     DENSE_LOWVAR_PRUNE_CFG,
     FULL_STRUCTURED_PRUNE_CFG,
+    MOE_OUTPUT_MERGE_PRUNE_CFG,
     MOE_MASSVAR_PRUNE_CFG,
+    SENSITIVITY_ALLOC_PRUNE_CFG,
 )
