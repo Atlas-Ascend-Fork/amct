@@ -564,6 +564,32 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 
 ---
 
+## PR 代码审查
+
+当用户说"检视 PR"、"审查 PR"、"review PR"、"给 PR 提意见"时触发。
+
+### 执行步骤
+
+1. **读取 `commands/review.md`** —— 使用 Read 工具获取完整审查流程（本 skill 目录下的 `commands/review.md`）。
+
+2. **执行 review.md 中的审查流程**：
+   - 步骤 1: 前置检查（PR 状态、草稿、是否已审查）
+   - 步骤 2: 获取项目规范上下文
+   - 步骤 3: 获取 PR 变更摘要
+   - 步骤 4: 代码审查（Bug 扫描、规范合规性）
+   - 步骤 5: 验证问题
+   - 步骤 6: 过滤问题
+   - 步骤 7: 输出审查摘要
+   - 步骤 8: 准备评论列表（仅当提供 `--comment` 时）
+   - 步骤 9: 发布行内评论（仅当提供 `--comment` 时）
+
+**注意**：
+- `commands/review.md` 中包含每个步骤的详细说明和 API 示例。
+- 其中的评论获取/发布 API 须遵循本文档前述的 GitCode v5 约定
+  （`/repos/${owner}/${repo}/...` + `access_token`；评论定位用数字 `id` 等）。
+
+---
+
 ## Resources
 
 ### references/gitcode_api.md
