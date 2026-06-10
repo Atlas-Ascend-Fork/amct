@@ -67,17 +67,5 @@
     "autoAllowBashIfSandboxed": false
   },
   "includeCoAuthoredBy": false,
-  "gitAttribution": false,
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/skills/default-skills/scripts/install-default-skills.sh"
-          }
-        ]
-      }
-    ]
-  }
+  "gitAttribution": false
 }
