@@ -34,3 +34,17 @@ tmp/
 # Local Claude state
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.lock
+
+# pruning 示例运行时输出（不提交）
+examples/pruning/results/
+examples/pruning/mnist_data/
+examples/pruning/results/
+*.pptx
+AUDIT_TODAY.md
+PR140_SUMMARY.md
+PRESENTATION*.md
+PRUNING_STANDARD.md
+PRUNING_SUBSYSTEM_COMPARISON.md
+PR_REVISION.md
+SESSION_HANDOFF.md
+build_presentation.py
