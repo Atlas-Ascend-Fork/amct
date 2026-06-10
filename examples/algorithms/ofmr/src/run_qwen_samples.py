@@ -39,6 +39,8 @@ if __name__ == '__main__':
     torch_npu.npu.empty_cache()
 
     # Phase3: convert deploy model
+    # please make sure that the torch_npu supports hifloat8 operations
+    # otherwise, please use the quantized model for simulation testing.
     amct.convert(quant_model)
     torch_npu.npu.empty_cache()
 

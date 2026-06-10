@@ -32,6 +32,8 @@ if __name__ == '__main__':
     amct.quantize(quant_model, cfg)
 
     # Phase2: convert to deployment model (HIF8CastQuant -> NpuHIF8CastLinear)
+    # please make sure that the torch_npu supports hifloat8 operations
+    # otherwise, please use the quantized model for simulation testing.
     amct.convert(quant_model)
 
     # Phase3: Test ppl result
