@@ -1,6 +1,19 @@
 # -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
-# Licensed under the Apache License, Version 2.0 (the "License").
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 """真·E2E（带标签的真实任务精度）：在 MNIST 上训练一个小 CNN，然后
    训练精度 → 剪枝(掉精度) → 微调(恢复) → 量化(NPU) 全程用**真实 test accuracy** 衡量。
 
@@ -60,14 +73,17 @@ def loaders():
     tf = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,))])
     tr = torchvision.datasets.MNIST(DATA, train=True, download=True, transform=tf)
     te = torchvision.datasets.MNIST(DATA, train=False, download=True, transform=tf)
-    tr = torch.utils.data.Subset(tr, range(12000))  # 子集，CPU 训练快
+    tr = torch.utils.data.Subset(tr, range(12000))  # 子集，训练快（NPU 可用时自动上 NPU）
     trl = torch.utils.data.DataLoader(tr, batch_size=128, shuffle=True)
     tel = torch.utils.data.DataLoader(te, batch_size=512)
     return trl, tel
 
 
 @torch.no_grad()
-def accuracy(model, loader, dev="cpu"):
+def accuracy(model, loader, dev=None):
+    if dev is None:
+        dev = "npu" if HAS_NPU else "cpu"
+    model = model.to(dev)
     model.eval()
     ok = tot = 0
     for x, y in loader:
@@ -81,12 +97,14 @@ def accuracy(model, loader, dev="cpu"):
 
 
 def train(model, trl, epochs=3, lr=1e-3):
+    dev = "npu" if HAS_NPU else "cpu"  # NPU 可用时训练也上 NPU（CPU 训练过慢）
+    model.to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     model.train()
     for _ in range(epochs):
         for x, y in trl:
             opt.zero_grad()
-            F.cross_entropy(model(x), y).backward()
+            F.cross_entropy(model(x.to(dev)), y.to(dev)).backward()
             opt.step()
     model.eval()
 

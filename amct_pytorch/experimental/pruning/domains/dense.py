@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional
 
+import torch
 import torch.nn as nn
 
 from ..config import PruneConfig
@@ -50,6 +51,40 @@ class GatedDenseTarget:
     gate_path: str
     up_path: str
     down_path: str
+
+
+@dataclass(slots=True)
+class FusedGatedDenseTarget:
+    """gate 与 up 融合为单个 Linear（前半 gate、后半 up，如 Phi-3/GLM-4 的 gate_up_proj）。"""
+
+    gate_up_path: str
+    down_path: str
+
+
+def _find_fused_gated(
+    parent_name: str, children: dict, config: PruneConfig
+) -> Optional[FusedGatedDenseTarget]:
+    for du_name in ("down_proj", "dense_4h_to_h", "fc2", "w2"):
+        down = children.get(du_name)
+        if isinstance(down, nn.Linear):
+            break
+    else:
+        return None
+    if down.in_features <= config.min_neurons:
+        return None
+    for gu_name, gu in children.items():
+        if gu_name == du_name or not isinstance(gu, nn.Linear):
+            continue
+        if (
+            gu.out_features == 2 * down.in_features
+            and gu.in_features == down.out_features
+            and not _looks_like_attention_proj(gu_name)
+        ):
+            prefix = f"{parent_name}." if parent_name else ""
+            return FusedGatedDenseTarget(
+                gate_up_path=f"{prefix}{gu_name}", down_path=f"{prefix}{du_name}"
+            )
+    return None
 
 
 def _find_gated_by_canonical_names(
@@ -113,6 +148,9 @@ def _find_gated_pattern(
     gated = _find_gated_by_canonical_names(parent_name, children, config)
     if gated is not None:
         return gated
+    fused = _find_fused_gated(parent_name, children, config)
+    if fused is not None:
+        return fused
     return _find_gated_by_shape_inference(parent_name, children, config)
 
 
@@ -137,6 +175,55 @@ _ATTENTION_PROJ_HINTS = (
 def _looks_like_attention_proj(name: str) -> bool:
     low = name.lower()
     return any(h in low for h in _ATTENTION_PROJ_HINTS)
+
+
+def _is_shape_transparent(module: nn.Module, num_features: int) -> bool:
+    """无参模块透明性探针：CPU 零张量试前向，末维不变才视为对通道维透明。
+
+    GLU/halver 等无参模块会改变末维（通道语义被重排/折半），不能当作透明跳过；
+    前向失败或输出非张量同样判为不透明，由调用方中断 producer→consumer 链。
+    """
+    probe = torch.zeros(1, int(num_features))
+    try:
+        with torch.no_grad():
+            out = module(probe)
+    except Exception:  # 任意前向失败 → 不透明（结构未知，宁可不剪）
+        return False
+    if not torch.is_tensor(out):
+        return False
+    return out.shape[-1] == num_features
+
+
+def _match_two_layer_pair(
+    parent_name: str, items: list, idx: int
+) -> Optional[TwoLayerDenseTarget]:
+    """以 items[idx] 为 producer，向后找首个非透明模块并判定是否衔接为两层 FFN。
+
+    透明性规则：激活/归一化直接跳过；其余无参模块（自定义激活如 BloomGelu、Dropout 等）
+    需先做形状探针 —— 末维保持不变才视为透明并跳过；GLU/halver 等改变末维 → 中断链。
+    """
+    name1, mod1 = items[idx]
+    out1 = linear_like_out_features(mod1)
+    for j in range(idx + 1, len(items)):
+        name2, mod2 = items[j]
+        if is_activation_like(mod2) or is_norm_like(mod2):
+            continue
+        paramless = not any(True for _ in mod2.parameters(recurse=False))
+        if not is_linear_like(mod2) and paramless:
+            if _is_shape_transparent(mod2, out1):
+                continue
+            return None  # 不透明 → 中断 producer→consumer 链
+        if (
+            is_linear_like(mod2)
+            and out1 == linear_like_in_features(mod2)
+            and not _looks_like_attention_proj(name2)
+        ):
+            prefix = f"{parent_name}." if parent_name else ""
+            return TwoLayerDenseTarget(
+                producer_path=f"{prefix}{name1}", consumer_path=f"{prefix}{name2}"
+            )
+        return None  # 首个非透明模块不衔接 → 该 producer 无配对
+    return None
 
 
 def _find_two_layer_patterns(
@@ -164,23 +251,9 @@ def _find_two_layer_patterns(
             continue
         if _looks_like_attention_proj(name1):
             continue
-        for j in range(i + 1, len(items)):
-            name2, mod2 = items[j]
-            if is_activation_like(mod2) or is_norm_like(mod2):
-                continue
-            if (
-                is_linear_like(mod2)
-                and linear_like_out_features(mod1) == linear_like_in_features(mod2)
-                and not _looks_like_attention_proj(name2)
-            ):
-                producer_path = f"{parent_name}.{name1}" if parent_name else name1
-                consumer_path = f"{parent_name}.{name2}" if parent_name else name2
-                patterns.append(
-                    TwoLayerDenseTarget(
-                        producer_path=producer_path, consumer_path=consumer_path
-                    )
-                )
-            break
+        pair = _match_two_layer_pair(parent_name, items, i)
+        if pair is not None:
+            patterns.append(pair)
     return patterns
 
 
@@ -189,8 +262,8 @@ class DensePruningDomain(BasePruningDomain):
 
     def find_targets(
         self, model: nn.Module, config: PruneConfig
-    ) -> List[TwoLayerDenseTarget | GatedDenseTarget]:
-        targets: List[TwoLayerDenseTarget | GatedDenseTarget] = []
+    ) -> List[TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget]:
+        targets: List[TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget] = []
         for parent_name, parent in list(model.named_modules()):
             gated = _find_gated_pattern(parent_name, parent, config)
             if gated is not None:
@@ -202,7 +275,7 @@ class DensePruningDomain(BasePruningDomain):
     def apply_keep_indices(
         self,
         model: nn.Module,
-        target: TwoLayerDenseTarget | GatedDenseTarget,
+        target: TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget,
         keep_idx: List[int],
     ) -> None:
         if isinstance(target, TwoLayerDenseTarget):
@@ -219,6 +292,21 @@ class DensePruningDomain(BasePruningDomain):
                 model,
                 target.consumer_path,
                 prune_linear_like_in_features(consumer, keep_idx),
+            )
+            return
+
+        if isinstance(target, FusedGatedDenseTarget):
+            gate_up = get_submodule(model, target.gate_up_path)
+            down = get_submodule(model, target.down_path)
+            if not isinstance(gate_up, nn.Linear) or not isinstance(down, nn.Linear):
+                raise TypeError("Fused gated dense target must be Linear layers.")
+            inter = down.in_features
+            fused_keep = list(keep_idx) + [inter + i for i in keep_idx]
+            replace_submodule(
+                model, target.gate_up_path, prune_linear_out_features(gate_up, fused_keep)
+            )
+            replace_submodule(
+                model, target.down_path, prune_linear_in_features(down, keep_idx)
             )
             return
 
@@ -242,7 +330,7 @@ class DensePruningDomain(BasePruningDomain):
         )
 
     def hidden_size(
-        self, model: nn.Module, target: TwoLayerDenseTarget | GatedDenseTarget
+        self, model: nn.Module, target: TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget
     ) -> int:
         if isinstance(target, TwoLayerDenseTarget):
             producer = get_submodule(model, target.producer_path)
