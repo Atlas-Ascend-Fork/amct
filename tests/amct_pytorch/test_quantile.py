@@ -381,15 +381,6 @@ class TestQuantileDynamicFallback(unittest.TestCase):
     def tearDown(self):
         sys.modules.pop('torch_npu', None)
 
-    def _make_dynamic_module(self):
-        cfg = {
-            'batch_num': 1,
-            'inputs_cfg': {'enable_quant': True, 'quant_type': 'hifloat8',
-                           'symmetric': True, 'strategy': 'token', 'dynamic': True},
-            'weights_cfg': {'quant_type': 'hifloat8', 'strategy': 'tensor'},
-        }
-        return QuantileQuant(nn.Linear(64, 64).to(torch.bfloat16), 'linear', cfg)
-
     def test_dynamic_token_without_native_hif8_uses_fake_quant(self):
         qq = self._make_dynamic_module()
         self.assertTrue(qq.dynamic)
@@ -401,6 +392,15 @@ class TestQuantileDynamicFallback(unittest.TestCase):
         self.assertEqual(out.shape[0], 64)
         # fake-quant cache built on first forward, so the second call reuses it.
         self.assertTrue(qq.fake_quant_cache_ready)
+
+    def _make_dynamic_module(self):
+        cfg = {
+            'batch_num': 1,
+            'inputs_cfg': {'enable_quant': True, 'quant_type': 'hifloat8',
+                           'symmetric': True, 'strategy': 'token', 'dynamic': True},
+            'weights_cfg': {'quant_type': 'hifloat8', 'strategy': 'tensor'},
+        }
+        return QuantileQuant(nn.Linear(64, 64).to(torch.bfloat16), 'linear', cfg)
 
 
 if __name__ == '__main__':
