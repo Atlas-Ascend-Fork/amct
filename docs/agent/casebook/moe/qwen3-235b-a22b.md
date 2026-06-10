@@ -128,3 +128,24 @@
 |--------|-----|-----|
 | Attention Linear | A8W8 INT| Per Token |
 | MoE Expert（exclude gate） | A8W8 INT | Per Channel |
+
+## 精度速查表
+
+> ppl 口径 seq_len=4096。 MXFP 双值为两次评测口径 a/b。
+
+| 数据类型 | 量化配置 | 量化算法 | ppl |
+| --- | --- | --- | --- |
+| BF16 | 无 | 无 | 5.09 |
+| INT | A4w4: moe, attn-linear | 无 | 46.3021 |
+| INT | A8w4: moe, attn-linear | 无 | 5.71 |
+| INT | A8w8: moe, attn-linear | 无 | 5.1427 |
+| MXFP | MoE Expert A8W8 | 无 | 5.115 |
+| MXFP | Attn A8W8 | 无 | 5.12 |
+| MXFP | MoE Expert A4W4 | 无 | 5.52 |
+| MXFP | Attn A4W4 | 无 | 5.40 |
+| MXFP | A4w4: moe, attn-linear | 无 | 5.82/5.656 |
+| MXFP | A8w4: moe, attn-linear | 无 | 5.417/5.368 |
+| MXFP | A8w8: moe, attn-linear | 无 | 5.1267/5.135 |
+| HiFP | A4w4: moe, attn-linear | 无 | 5.3359 |
+| HiFP | A8w4: moe, attn-linear | 无 |  |
+| HiFP | A8w8: moe, attn-linear | 无 |  |

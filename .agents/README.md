@@ -67,7 +67,7 @@ SubAgent 之间通过共享状态文件 `progress.md` 传递上下文。
 ## 案例库与文档
 
 - `docs/agent/casebook/<series>/`：7+ 模型实测精度归档（Qwen3 系列 / LongCat / DeepSeek-V4 等，含 BF16/Quant PPL Δ + 部署产物清单），方案推荐优先复用
-- `docs/agent/`：`amct-onepage.md`（一页速查）、`amct-10min-quickstart.md`（10 分钟上手）、`amct-quantization-framework-guide.md`（完整框架原理）、`repo-map.md`（仓内导航）、`amct-to-infer-execution-flow.md` + `infer-integration-checklist.md`（交付 infer 推理仓）
+- `docs/agent/`：`repo-map.md`（仓内导航）
 
 ## 目录结构
 

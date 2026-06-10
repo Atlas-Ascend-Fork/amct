@@ -80,3 +80,20 @@
 - 下一个 LongCat 系列模型，优先先看它能不能直接复用 `longcat_lite.py` 的 block 拓扑。
 - 如果顶层模型只是在外层多包了一层依赖，但 text-only backbone 已经足够支持 PTQ 主链，优先把兼容收在 adapter 内。
 - `LongCat-Next` 这一条目前已经完成 model-adapter skill 要求的稳定闭环；量化实验应单独走 quantization skill。
+
+## 精度速查表
+
+> ppl 口径 seq_len=4096（2048→4096 后精度反而变差）。 MXFP 双值为两次评测口径 a/b。
+
+| 数据类型 | 量化配置 | 量化算法 | ppl |
+| --- | --- | --- | --- |
+| BF16 | 无 | 无 | 17.518 |
+| INT | A4w4: mlp, moe, attn-linear | 无 | 3302.094 |
+| INT | A8w4: mlp, moe, attn-linear | 无 | 24.8581 |
+| INT | A8w8: mlp, moe, attn-linear | 无 | 15.718 |
+| MXFP | A4w4: mlp, moe, attn-linear | 无 | 19.0125/18.266 |
+| MXFP | A8w4: mlp, moe, attn-linear | 无 | 17.5067/16.899 |
+| MXFP | A8w8: mlp, moe, attn-linear | 无 | 18.3902/19.2 |
+| HiFP | A4w4: mlp, moe, attn-linear | 无 | 16.9826 |
+| HiFP | A8w4: mlp, moe, attn-linear | 无 |  |
+| HiFP | A8w8: mlp, moe, attn-linear | 无 |  |

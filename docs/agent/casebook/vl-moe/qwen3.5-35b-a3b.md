@@ -94,3 +94,20 @@
 - 先确认 checkpoint 上的 experts 是 packed 还是展开，再决定是否需要重组 loader。
 - 先把 BF16 baseline 和关闭量化等价验证做干净，再进入量化。
 - 对这条模型分支，attention 侧要先把 `linear_attention` 和 `full_attention` 分开看，不要默认一把梭。
+
+## 精度速查表
+
+> ppl 口径 seq_len=4096。 MXFP 双值为两次评测口径 a/b。
+
+| 数据类型 | 量化配置 | 量化算法 | ppl |
+| --- | --- | --- | --- |
+| BF16 | 无 | 无 | 6.2486 |
+| INT | A4w4: moe, attn-linear | 无 | 3839.2734 |
+| INT | A8w4: moe, attn-linear | 无 | 7.1928 |
+| INT | A8w8: moe, attn-linear | 无 | 6.3781 |
+| MXFP | A4w4: moe, attn-linear | 无 | 6.9814/6.826 |
+| MXFP | A8w4: moe, attn-linear | 无 | 6.508/6.436 |
+| MXFP | A8w8: moe, attn-linear | 无 | 6.3168/6.285 |
+| HiFP | A4w4: moe, attn-linear | 无 | 6.617 |
+| HiFP | A8w4: moe, attn-linear | 无 |  |
+| HiFP | A8w8: moe, attn-linear | 无 |  |

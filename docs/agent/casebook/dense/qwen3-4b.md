@@ -3,7 +3,7 @@
 ## 结论
 
 - 这是仓库里第一条稳定接通的 `qwen3` dense 适配案例。
-- 当前模型路径：`/data4/models/Qwen3-4B`
+- 当前模型路径：`<path-to>/Qwen3-4B`
 - 当前 adapter：`amct_pytorch/common/models/llm/qwen/qwen3/qwen3.py`
 - 已完成：
   - BF16 blockwise baseline
@@ -79,3 +79,20 @@
 - `lm_head` tied 到 `embed_tokens`，不要按独立 `lm_head.weight` 去找 index。
 - 如果 `attn-linear` 的 step8 爆掉，优先检查 wrapper 是否把官方 attention interface 提前替换成了自定义 attention kernel。
 - `quant_target=moe` 对 dense `qwen3` 不应该允许进入。
+
+## 精度速查表
+
+> ppl 口径 seq_len=4096。 MXFP 双值为两次评测口径 a/b。
+
+| 数据类型 | 量化配置 | 量化算法 | ppl |
+| --- | --- | --- | --- |
+| BF16 | 无 | 无 | 12.377 |
+| INT | A4w4: mlp, attn-linear | 无 | 9942.9922 |
+| INT | A8w4: mlp, attn-linear | 无 | 19.9143 |
+| INT | A8w8: mlp, attn-linear | 无 | 12.4327 |
+| MXFP | A4w4: mlp, attn-linear | 无 | 16.043/14.1 |
+| MXFP | A8w4: mlp, attn-linear | 无 | 13.808/13.066 |
+| MXFP | A8w8: mlp, attn-linear | 无 | 12.6976/12.365 |
+| HiFP | A4w4: mlp, attn-linear | 无 |  |
+| HiFP | A8w4: mlp, attn-linear | 无 |  |
+| HiFP | A8w8: mlp, attn-linear | 无 |  |

@@ -3,9 +3,9 @@
 ## Summary
 
 - This is the `qwen3` dense adapter validation case under the current amct_llm flow with `seq_len=4096`.
-- Model path: `/home/xyj/dev/models/Qwen/Qwen3-8B`
+- Model path: `<path-to>/Qwen3-8B`
 - Adapter: `amct_pytorch/common/models/llm/qwen/qwen3/qwen3.py`
-- Fixed Wikitext parquet: `/home/xyj/dev/datasets/wikitext/wikitext-2-raw-v1/test-00000-of-00001.parquet`
+- Fixed Wikitext parquet: `<path-to>/wikitext-2-raw-v1/test-00000-of-00001.parquet`
 - Completed: BF16 baseline, quant-disabled equivalence, minimum PTQ smoke, first-round direct quant eval, deploy artifact review, and dynamic-quant-qmm theoretical performance review.
 
 ## Structure

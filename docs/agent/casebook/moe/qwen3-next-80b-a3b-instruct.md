@@ -100,3 +100,23 @@
 - 在当前环境里，先把 `transformers==5.3.0` 当成适配基线，再去判断 expert 结构。
 - 只要模型内部混有 `linear_attention` 和 `full_attention`，就不要默认一套 mask 路径打到底。
 - 先把 BF16 baseline、关闭量化验证和最小 PTQ smoke 做干净，再进入量化 skill。
+
+## 精度速查表
+
+> ppl 口径 seq_len=4096。 MXFP 双值为两次评测口径 a/b。
+
+| 数据类型 | 量化配置 | 量化算法 | ppl | mmlu |
+| --- | --- | --- | --- | --- |
+| BF16 | 无 | 无 | 5.4483 | 85.4 |
+| INT | A4w4: moe, attn-linear | 无 | 561.4258 |  |
+| INT | A8w4: moe, attn-linear | 无 | 6.0114 |  |
+| INT | A8w8: moe, attn-linear | 无 |  |  |
+| INT | MOE A8W8 | 无 |  | 85.5 |
+| INT | MOE A8W4 | 无 |  |  |
+| INT | MOE A8W4 | LWC |  |  |
+| MXFP | A4w4: moe, attn-linear | 无 | 6.123/5.901 |  |
+| MXFP | A8w4: moe, attn-linear | 无 | 5.7337/5.609 |  |
+| MXFP | A8w8: moe, attn-linear | 无 | 5.451 |  |
+| HiFP | A4w4: moe, attn-linear | 无 | 5.6854 |  |
+| HiFP | A8w4: moe, attn-linear | 无 |  |  |
+| HiFP | A8w8: moe, attn-linear | 无 |  |  |

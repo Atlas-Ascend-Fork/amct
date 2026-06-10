@@ -150,3 +150,20 @@
 - 第一轮的 `attn+mlp+moe`(seq_len=2048)与第二轮的 `mlp+moe`(seq_len=4096)在 prefill 性能上**几乎无差**;选 attn 进/不进量化,首要决策依据应当是 **精度 delta** 与 **下游 infer 路径覆盖**,不是 prefill 性能
 - 在 prefill 视角下,**MoE 量化不一定是性能加分项**,需要先确认 inference 仓的 MoE INT 路径
 - 同一系列下次再做直转量化时,建议先用 `dynamic-quant-qmm-analysis` 跑一遍方案推荐前的可行性,避免在精度过关但性能反向的方案上走完整 pipeline
+
+## 精度速查表
+
+> ppl 口径 seq_len=4096（2048→4096 后精度反而变差）。 MXFP 双值为两次评测口径 a/b。
+
+| 数据类型 | 量化配置 | 量化算法 | ppl |
+| --- | --- | --- | --- |
+| BF16 | 无 | 无 | 14.6133 |
+| INT | A4w4: mlp, moe, attn-linear | 无 | 1053.832 |
+| INT | A8w4: mlp, moe, attn-linear | 无 | 13.1681 |
+| INT | A8w8: mlp, moe, attn-linear | 无 | 14.0334 |
+| MXFP | A4w4: mlp, moe, attn-linear | 无 | 13.2715/12.283 |
+| MXFP | A8w4: mlp, moe, attn-linear | 无 | 10.4672/10.061 |
+| MXFP | A8w8: mlp, moe, attn-linear | 无 | 14.8785/15.091 |
+| HiFP | A4w4: mlp, moe, attn-linear | 无 | 14.258 |
+| HiFP | A8w4: mlp, moe, attn-linear | 无 |  |
+| HiFP | A8w8: mlp, moe, attn-linear | 无 |  |
