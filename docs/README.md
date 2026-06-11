@@ -1702,6 +1702,74 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 
 组合压缩后，模型精度不满足要求，则需要参见[稀疏](#稀疏)下的手动调优章节和[量化感知训练](#量化感知训练)下的章节分别进行调优。
 
+## 结构化剪枝
+
+AMCT 提供面向已实例化 PyTorch 模型（torch.nn.Module）的结构化剪枝特性 `amct_pytorch.pruning`。与基于图/ONNX 的[通道稀疏](#稀疏)不同，该特性在 eager 模式下**直接对 PyTorch 模块原地剪除冗余结构**，并同步改写模型 config 的相关维度，因此剪枝后的模型可直接 `save`/`load`，无需额外转换步骤。
+
+当前支持以下三类可剪枝结构：
+
+- **稠密 FFN 中间维**：收窄 `gate`/`up_proj` 的输出通道与 `down_proj` 的输入通道，隐藏维、残差宽度以及注意力 q/k/v/o 投影保持不变。
+- **CNN 通道**：沿“生产者卷积输出通道 →（可选 BatchNorm）→ 消费者输入通道”整链改尺寸；喂入残差 `add` 的卷积、Concat（Inception）消费方、分组/深度可分离卷积保守跳过。
+- **MoE 专家**：整块移除被路由的专家并同步收缩路由器，共享（始终激活）专家保留。
+
+使用时用户给定一个已加载权重的模型与少量校准数据，工具在校准数据上前向一遍、为每个可剪结构打重要性分数、移除低分部分，必要时对保留权重做一次轻量恢复补偿，并可选地串联量化。支持仅指定可接受精度损失、在剪枝率上自动二分搜索满足容差的最大剪枝率。主要接口如下：
+
+- [prune](./zh/api/prune.md)：结构化剪枝主入口，对已实例化模型原地剪枝；传入 `tolerance` 时自动搜索满足精度容差的最大剪枝率。
+- [accuracy\_based\_auto\_prune](./zh/api/accuracy_based_auto_prune.md)：按可接受精度损失自动二分搜索并应用满足容差的最大剪枝率。
+- [size\_budget\_prune](./zh/api/size_budget_prune.md)：按目标尺寸/保留比例反推并应用各域剪枝率。
+
+详细的接口参数、预定义配置与端到端示例请参见[结构化剪枝使用说明](../amct_pytorch/pruning/README.md)。
+
+### 剪枝流程
+
+剪枝流程分为四步：打分 → 剪枝 → 恢复 →（可选）量化，详情如下：
+
+1. 打分，用户构造已加载权重的PyTorch原始模型并准备少量校准数据，工具在校准数据上前向一遍，为每个可剪结构（FFN中间维 / CNN通道 / MoE专家）计算重要性分数。
+2. 剪枝，调用[prune](./zh/api/prune.md)接口按剪枝率移除低分结构，并原地改写模型`config`的相关维度（`intermediate_size` / `num_experts`等），保证张量形状自洽。
+3. 恢复，对保留下来的权重做一次轻量补偿（朴素切片 / bias折叠 / 最小二乘重建），降低剪枝带来的精度损失。
+4. （可选）量化，在剪枝后的模型上接续[quantize](./zh/api/quantize.md)与[convert](./zh/api/convert.md)，在同一精度预算下串联剪枝与量化。
+
+若仅指定可接受的精度损失，可调用[accuracy\_based\_auto\_prune](./zh/api/accuracy_based_auto_prune.md)在剪枝率网格上二分搜索满足容差的最大剪枝率；若按目标尺寸 / 保留比例反推各域剪枝率，则使用[size\_budget\_prune](./zh/api/size_budget_prune.md)。
+
+### 调用示例
+
+> [!NOTE]说明
+>
+>- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+
+1. 导入AMCT包。
+
+   ```python
+   import amct_pytorch as amct
+   from amct_pytorch import FULL_STRUCTURED_PRUNE_CFG
+   ```
+
+2. （由用户补充处理）实例化并加载待剪枝模型的权重，准备少量校准数据。
+
+   ```python
+   model = build_model()          # 由用户补充处理：构建模型并加载权重
+   calib = get_calib_batches()    # 由用户补充处理：少量前向批次
+   ```
+
+3. 调用[accuracy\_based\_auto\_prune](./zh/api/accuracy_based_auto_prune.md)接口，按精度容差自动搜索并应用剪枝率。
+
+   ```python
+   res = amct.accuracy_based_auto_prune(
+       model,
+       FULL_STRUCTURED_PRUNE_CFG,
+       data=calib,
+       tolerance=0.02)
+   print(res.summary())
+   ```
+
+4. （可选）在剪枝后的模型上接续量化并导出部署模型。
+
+   ```python
+   amct.quantize(model, quant_cfg)   # 由用户补充处理：量化配置
+   amct.convert(model)
+   ```
+
 ## 逐层蒸馏
 
 AMCT提供了基于图的torch模型量化蒸馏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行蒸馏优化，最后生成onnx量化模型。
