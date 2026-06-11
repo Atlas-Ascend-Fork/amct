@@ -25,6 +25,15 @@ def float4_e2m1fn_x2():
     return
 
 
+# int4 weight dtype marker for the int8*int4 path, mirroring the real
+# torch_npu.int4 attribute. mock_npu_quant_matmul detects it by identity
+# (x2_dtype is int4) rather than str(), since a property object has no
+# meaningful str() representation.
+@property
+def int4():
+    return
+
+
 @property
 def float8_e8m0fnu():
     return
@@ -74,6 +83,26 @@ def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
     return out
 
 
+def _unpack_int4_from_int8(packed):
+    """Inverse of NpuQuantizationLinear._pack_int4_to_int8.
+
+    packed: int8 tensor of shape [k, n // 2], two int4 per byte along the last
+        (cout) axis -- low nibble is the even-indexed element, high nibble the
+        odd-indexed one. Returns a float tensor of shape [k, n] with the
+        restored signed int4 values.
+    """
+    b = packed.to(torch.int16) & 0xFF
+    low = b & 0x0F
+    high = (b >> 4) & 0x0F
+    low = torch.where(low >= 8, low - 16, low)
+    high = torch.where(high >= 8, high - 16, high)
+    k, half = packed.shape
+    out = torch.empty((k, half * 2), dtype=torch.float32)
+    out[..., 0::2] = low.to(torch.float32)
+    out[..., 1::2] = high.to(torch.float32)
+    return out
+
+
 def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
     output_dtype=torch.float32, x1_dtype=None, x2_dtype=None,
     group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
@@ -88,6 +117,11 @@ def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
         new_weight[:, :k] = weight
         new_weight = new_weight.reshape(-1, int(new_weight.shape[-1] / scale.shape[-1])) * scale.reshape(-1, 1)
         weight = new_weight.reshape(n, 2 * k)
+    elif x2_dtype is not None and 'int4' in str(x2_dtype):
+        # int8 * int4: weight is int4 packed into int8 along the cout axis with
+        # shape [k, n // 2]. Unpack back to int4 values [k, n], then transpose to
+        # [n, k] for the linear so the output cout matches the deq scale.
+        weight = _unpack_int4_from_int8(weight).transpose(0, 1)
     else:
         weight = weight.transpose(0, 1)
     out = torch.nn.functional.linear(x, weight, bias)
