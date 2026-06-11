@@ -13,3 +13,4 @@ This project provides calling samples for different scenarios. After setting up 
 | Quantize model using OFMR algorithm | [OFMR](algorithms/ofmr/README_CN.md) | Output feature Min-Max quantization |
 | Quantize model using MXQuant algorithm | [MXQuant](algorithms/mxquant/README_CN.md) | Micro-scaling floating-point quantization (MXFP8/MXFP4) |
 | Quantize model using FlatQuant algorithm | [FlatQuant](algorithms/flatquant/README_CN.md) | Quantization that flattens distribution through affine transformation |
+| Compress model using structured pruning | [Pruning](algorithms/pruning/README_en.md) | Structured pruning of dense FFN / CNN channels / MoE experts |

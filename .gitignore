@@ -12,25 +12,21 @@ build_out/
 *.egg-info/
 dist/
 *_pb2.py
-
 # IDE
 .idea/
 .vscode/
 *.swp
-
 # Logs
 amct_log/
 *.log
-
 # Coverage
 .coverage
 htmlcov/
-
 # Misc
 .DS_Store
 *.bak
 tmp/
-
 # Local Claude state
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.lock
+*.pptx
