@@ -25,16 +25,16 @@
 
 | Skill | 功能 | 触发场景 |
 |-------|------|---------|
-| [amct-quantization](skills/tasks/amct-quantization/) | 量化适配统一入口（编排） | 端到端量化适配、输入模型输出方案与权重 |
-| [model-adapter](skills/tasks/model-adapter/) | 新模型适配 | 模型未适配时写 adapter 代码 |
-| [model-workflow](skills/tasks/model-workflow/) | 量化工作流总览 | 了解四步 CLI 的串联与产物流转 |
-| [quantization](skills/tasks/quantization/) | 量化实验总控 | 直转→升级 PTQ→导出的实验编排 |
-| [scheme-recommendation](skills/quant-tools/scheme-recommendation/) | 量化方案推荐 | 首轮候选方案、复用 casebook、风险/回退 |
-| [direct-quant-eval](skills/quant-tools/direct-quant-eval/) | 直转评测 | 跑 PPL，判 delta 是否可接受 |
-| [algorithm-recommendation](skills/quant-tools/algorithm-recommendation/) | 算法推荐 | 直转超阈，推荐下一步算法 |
-| [algorithm-validation](skills/quant-tools/algorithm-validation/) | 算法验证 | 验证 PTQ 算法相对直转是否真改善 |
-| [deploy-export](skills/quant-tools/deploy-export/) | 部署导出 | 导出 compressed-tensors 权重 + 文档 |
-| [dynamic-quant-qmm-analysis](skills/quant-tools/dynamic-quant-qmm-analysis/) | Linear dynamic quant + qmm 理论性能评估 | 候选方案启用动态量化时判收益方向 |
+| [amct-quantization](skills/tasks/amct-quantization/SKILL.md) | 量化适配统一入口（编排） | 端到端量化适配、输入模型输出方案与权重 |
+| [model-adapter](skills/tasks/model-adapter/SKILL.md) | 新模型适配 | 模型未适配时写 adapter 代码 |
+| [model-workflow](skills/tasks/model-workflow/SKILL.md) | 量化工作流总览 | 了解四步 CLI 的串联与产物流转 |
+| [quantization](skills/tasks/quantization/SKILL.md) | 量化实验总控 | 直转→升级 PTQ→导出的实验编排 |
+| [scheme-recommendation](skills/quant-tools/scheme-recommendation/SKILL.md) | 量化方案推荐 | 首轮候选方案、复用 casebook、风险/回退 |
+| [direct-quant-eval](skills/quant-tools/direct-quant-eval/SKILL.md) | 直转评测 | 跑 PPL，判 delta 是否可接受 |
+| [algorithm-recommendation](skills/quant-tools/algorithm-recommendation/SKILL.md) | 算法推荐 | 直转超阈，推荐下一步算法 |
+| [algorithm-validation](skills/quant-tools/algorithm-validation/SKILL.md) | 算法验证 | 验证 PTQ 算法相对直转是否真改善 |
+| [deploy-export](skills/quant-tools/deploy-export/SKILL.md) | 部署导出 | 导出 compressed-tensors 权重 + 文档 |
+| [dynamic-quant-qmm-analysis](skills/quant-tools/dynamic-quant-qmm-analysis/SKILL.md) | Linear dynamic quant + qmm 理论性能评估 | 候选方案启用动态量化时判收益方向 |
 
 ### 调度关系
 
