@@ -26,6 +26,7 @@ from mock_torch_npu import (
     mock_npu_convert_weight_to_int4pack,
     mock_npu_dtype_cast,
     mock_npu_dynamic_mx_quant,
+    mock_npu_dynamic_quant,
     mock_npu_format_cast,
     mock_npu_quant_matmul,
     mock_npu_quantize,
@@ -139,11 +140,12 @@ class TestSmoothQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
-    def test_int8_int8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
+    def test_int8_int8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
