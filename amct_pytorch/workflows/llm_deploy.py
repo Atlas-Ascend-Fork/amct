@@ -154,11 +154,19 @@ class LlmDeployWorkflow:
         with open(config_file, "r") as f:
             config = json.load(f)
 
-        cache_scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
-                        "li_cache_scheme": {
-                            "type": "float" if self.is_mx else "int",
-                            "num_bits": 8,
-                        }}
+        cache_scheme = {}
+        if "attn-cache" in self.args.quant_target:
+            # Use type=int on the int path so infer's `== "int8"` gate fires
+            # (the old hardcoded "float" produced "float8" and never matched).
+            cache_scheme["kv_cache_scheme"] = {
+                "type": "float" if self.is_mx else "int",
+                "num_bits": 8,
+            }
+            # li_cache only applies to DSA indexer archs (DSv3.2 / GLM-5, detected
+            # via index_topk, same as vLLM); infer does not read this field and
+            # hardcodes the indexer int8 per-model, so it is only an intent marker.
+            if hasattr(self.pipeline.config, "index_topk"):
+                cache_scheme["li_cache_scheme"] = {"type": "int", "num_bits": 8}
         quantization_config = generate_quant_config(
             cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
         config['quantization_config'] = quantization_config

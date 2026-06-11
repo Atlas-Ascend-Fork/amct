@@ -62,6 +62,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
         model_name=MODEL_NAME_QWEN3,
         model=model_path,
         quant_dtype=quant_dtype,
+        quant_target=["mlp", "attn-linear"],
         output_dir=output_dir,
     )
     workflow.args = args
@@ -585,3 +586,15 @@ def test_load_weight_index_missing_raises(tmp_path):
     wf = _make_workflow(model_path=str(tmp_path))
     with pytest.raises(FileNotFoundError):
         wf._load_weight_index()  # pylint: disable=protected-access
+
+
+def test_refresh_config_emits_cache_scheme_for_attn_cache(tmp_path):
+    # quant_target has attn-cache + DSA indexer (index_topk) -> emit kv/li cache scheme
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["attn-cache"]
+    wf.pipeline = SimpleNamespace(config=SimpleNamespace(index_topk=64))
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert qc["kv_cache_scheme"] == {"type": "int", "num_bits": 8}
+    assert qc["li_cache_scheme"] == {"type": "int", "num_bits": 8}
