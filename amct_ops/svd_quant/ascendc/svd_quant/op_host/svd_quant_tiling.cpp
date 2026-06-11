@@ -87,11 +87,6 @@ ge::graphStatus SvdQuantTiling::ValidateShapes() {
 }
 
 ge::graphStatus SvdQuantTiling::ReadShapes() {
-    if (context_ == nullptr) {
-        std::cout << "SvdQuantTiling::ReadShapes: context_ is null" << std::endl;
-        return ge::GRAPH_FAILED;
-    }
-
     auto inputShapeActivation = context_->GetInputShape(svd_quant::INPUT_A_IDX);
     auto inputShapeW = context_->GetInputShape(svd_quant::INPUT_W_IDX);
     auto inputShapeS = context_->GetInputShape(svd_quant::INPUT_S_IDX);
@@ -197,6 +192,13 @@ bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling& m
         return false;
     }
 
+    SetB16MatmulCubeTiling(cubeTiling, baseK, stepMN, stepK, depthVal, dbL0C);
+    return true;
+}
+
+void SvdQuantTiling::SetB16MatmulCubeTiling(TCubeTiling& cubeTiling,
+        int32_t baseK, int32_t stepMN, int32_t stepK, int32_t depthVal, int32_t dbL0C)
+{
     cubeTiling.set_baseK(baseK);
     cubeTiling.set_stepM(stepMN);
     cubeTiling.set_stepN(stepMN);
@@ -207,7 +209,6 @@ bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling& m
     cubeTiling.set_dbL0A(1);
     cubeTiling.set_dbL0B(2);
     cubeTiling.set_dbL0C(dbL0C);
-    return true;
 }
 
 bool SvdQuantTiling::CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mmTiling, TCubeTiling& cubeTiling,
@@ -267,6 +268,13 @@ bool SvdQuantTiling::CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mm
         return false;
     }
 
+    SetMxMatmulCubeTiling(cubeTiling, baseK, stepMN, stepK, depthVal, dbL0C);
+    return true;
+}
+
+void SvdQuantTiling::SetMxMatmulCubeTiling(TCubeTiling& cubeTiling,
+        int32_t baseK, int32_t stepMN, int32_t stepK, int32_t depthVal, int32_t dbL0C)
+{
     cubeTiling.set_baseK(baseK);
     cubeTiling.set_stepM(stepMN);
     cubeTiling.set_stepN(stepMN);
@@ -279,7 +287,6 @@ bool SvdQuantTiling::CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mm
     cubeTiling.set_dbL0C(dbL0C);
     ScaleFactors scaleCase = {4U, 4U, 1U, 1U};
     cubeTiling.set_mxTypePara(BuildMxTypePara(scaleCase));
-    return true;
 }
 
 bool SvdQuantTiling::GetFp4MMTiling(matmul_tiling::MultiCoreMatmulTiling& fp4MMTiling, int coreNum) {

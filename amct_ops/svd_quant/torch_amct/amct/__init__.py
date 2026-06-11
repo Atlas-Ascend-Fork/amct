@@ -7,9 +7,11 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
-import os
+import torch_npu
+import torch
 import pkgutil
 import warnings
+import os
 
 __all__ = list(module for _, module, _ in pkgutil.iter_modules([os.path.dirname(__file__)]))
 
@@ -22,10 +24,6 @@ import custom ops as torch_npu ops to support the following usage:
 'torch.ops.amct.svd_quant()'
 'torch_npu.svd_quant()'
 """
-
-# Ensure that the torch and torch_npu has been successfully imported to avoid subsequent mount operation failures
-import torch_npu
-import torch
 
 # get torch.ops.amct module
 custom_ops_module = getattr(torch.ops, 'amct', None)
@@ -42,7 +40,7 @@ if custom_ops_module is not None:
         setattr(torch_npu, op_name, custom_op_func)
 
 else:
-    warn_msg = "torch.ops.amct module is not found, mount custom ops to torch_npu failed." \
+    WARN_MSG = "torch.ops.amct module is not found, mount custom ops to torch_npu failed." \
                "Calling by torch_npu.xxx for custom ops is unsupported, please use torch.ops.amct.xxx."
-    warnings.warn(warn_msg)
-    warnings.filterwarnings("ignore", message=warn_msg)
+    warnings.warn(WARN_MSG)
+    warnings.filterwarnings("ignore", message=WARN_MSG)

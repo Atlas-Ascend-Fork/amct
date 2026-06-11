@@ -27,19 +27,19 @@ from torchair.ge import attr
 
 @register_fx_node_ge_converter(torch.ops.amct.svd_quant.default)
 def convert_svd_quant(
-    A: Tensor,
-    W: Tensor,
-    SC: Tensor,
-    DP: Tensor,
-    UP: Tensor,
+    activation: Tensor,
+    weights: Tensor,
+    scales: Tensor,
+    down: Tensor,
+    up: Tensor,
     meta_outputs: Any = None):
     return torchair.ge.custom_op(
         "svd_quant",
-        inputs={"A": A,
-                "W": W,
-                "SC": SC,
-                "DP": DP,
-                "UP": UP,
+        inputs={"activation": activation,
+                "weights": weights,
+                "scales": scales,
+                "down": down,
+                "up": up,
                 },
-        outputs=['O']
+        outputs=['output']
     )
