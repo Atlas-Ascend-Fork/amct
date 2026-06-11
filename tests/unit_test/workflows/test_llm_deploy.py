@@ -563,3 +563,25 @@ def test_refresh_config_tensor_bf16(tmp_path):
     assert refreshed["torch_dtype"] == "bfloat16"
     assert "quantization_config" not in refreshed
 
+
+
+def test_load_weight_index_single_shard_synthesizes(tmp_path):
+    # 单文件 model.safetensors（无 index.json）→ 合成等价 index
+    save_file(
+        {"a.weight": torch.zeros(2), "b.weight": torch.ones(3)},
+        str(tmp_path / MODEL_SAFETENSORS),
+    )
+    wf = _make_workflow(model_path=str(tmp_path))
+    idx = wf._load_weight_index()  # pylint: disable=protected-access
+    assert idx["weight_map"] == {
+        "a.weight": MODEL_SAFETENSORS,
+        "b.weight": MODEL_SAFETENSORS,
+    }
+    assert idx[METADATA_KEY]["total_size"] > 0
+
+
+def test_load_weight_index_missing_raises(tmp_path):
+    # 既无 index.json 也无 model.safetensors → FileNotFoundError
+    wf = _make_workflow(model_path=str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        wf._load_weight_index()  # pylint: disable=protected-access

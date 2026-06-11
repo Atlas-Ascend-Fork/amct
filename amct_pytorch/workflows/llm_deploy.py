@@ -27,6 +27,7 @@ import torch
 from loguru import logger
 from safetensors import safe_open
 from safetensors.torch import save_file
+from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 from tqdm import tqdm
 
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -125,9 +126,26 @@ class LlmDeployWorkflow:
                 shutil.copy2(src_path, dst_path)
 
     def _load_weight_index(self):
-        index_path = Path(self.model_path) / "model.safetensors.index.json"
-        with open(index_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        # 对齐 HF/vLLM 的 checkpoint 加载：优先读 index.json；无 index.json 即单分片
+        # 模型，把全部张量映射到唯一的 safetensors 文件、合成等价 index。文件名沿用
+        # transformers 生态常量，避免硬编码漂移。
+        index_path = Path(self.model_path) / SAFE_WEIGHTS_INDEX_NAME
+        if index_path.exists():
+            with open(index_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        single_path = Path(self.model_path) / SAFE_WEIGHTS_NAME
+        if not single_path.exists():
+            raise FileNotFoundError(
+                f"在 {self.model_path} 下既无 {SAFE_WEIGHTS_INDEX_NAME} "
+                f"也无 {SAFE_WEIGHTS_NAME}"
+            )
+        with safe_open(str(single_path), framework="pt") as f:
+            weight_map = {key: SAFE_WEIGHTS_NAME for key in f.keys()}
+        # total_size 是占位值，_refresh_weight_index() 会按输出分片重算并覆盖。
+        return {
+            "metadata": {"total_size": single_path.stat().st_size},
+            "weight_map": weight_map,
+        }
 
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
