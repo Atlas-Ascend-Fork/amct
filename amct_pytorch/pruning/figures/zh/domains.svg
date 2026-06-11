@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 424" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','WenQuanYi Micro Hei',sans-serif">
+  <rect x="0" y="0" width="900" height="424" fill="#ffffff"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5f6368"/></marker>
+    <style>
+      text{font-size:13px;fill:#111;text-anchor:middle}
+      .s{font-size:11px;fill:#444}
+      .ttl{font-size:13px;fill:#188038;text-anchor:start;font-weight:bold}
+      .edge{stroke:#5f6368;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .grp{fill:#F8FBF9;stroke:#CEEAD6;stroke-width:1.5}
+      .box{fill:#E6F4EA;stroke:#34A853;stroke-width:1.5}
+      .keep{fill:#F1F3F4;stroke:#9AA0A6;stroke-width:1.5}
+    </style>
+  </defs>
+
+  <rect class="grp" x="12" y="10" width="876" height="118" rx="8"/>
+  <text class="ttl" x="30" y="32">稠密 FFN —— 收窄中间维</text>
+  <path class="edge" d="M244,80 L296,80"/>
+  <rect class="box" x="44" y="52" width="200" height="52" rx="7"/>
+  <text x="144" y="74">gate_proj / up_proj</text><text class="s" x="144" y="92">out_features &#8595;</text>
+  <rect class="box" x="300" y="52" width="180" height="52" rx="7"/>
+  <text x="390" y="74">down_proj</text><text class="s" x="390" y="92">in_features &#8595;</text>
+  <rect class="keep" x="536" y="52" width="326" height="52" rx="7"/>
+  <text x="699" y="74">隐藏 / 残差宽度保留</text><text class="s" x="699" y="92">注意力 q/k/v/o 投影排除</text>
+
+  <rect class="grp" x="12" y="148" width="876" height="118" rx="8"/>
+  <text class="ttl" x="30" y="170">CNN —— 沿“生产者 &#8594; 消费者”对收窄通道</text>
+  <path class="edge" d="M244,218 L286,218"/>
+  <path class="edge" d="M430,218 L472,218"/>
+  <rect class="box" x="44" y="190" width="200" height="52" rx="7"/>
+  <text x="144" y="212">生产者 Conv2d</text><text class="s" x="144" y="230">out_channels &#8595;</text>
+  <rect class="box" x="290" y="190" width="140" height="52" rx="7"/>
+  <text x="360" y="220">（BatchNorm2d）</text>
+  <rect class="box" x="476" y="190" width="240" height="52" rx="7"/>
+  <text x="596" y="212">消费者 Conv2d / Linear</text><text class="s" x="596" y="230">in_channels &#8595;</text>
+
+  <rect class="grp" x="12" y="286" width="876" height="118" rx="8"/>
+  <text class="ttl" x="30" y="308">MoE —— 整块移除被路由的专家</text>
+  <path class="edge" d="M244,356 L296,356"/>
+  <rect class="box" x="44" y="328" width="200" height="52" rx="7"/>
+  <text x="144" y="350">路由器</text><text class="s" x="144" y="368">num_experts &#8595;</text>
+  <rect class="box" x="300" y="328" width="240" height="52" rx="7"/>
+  <text x="420" y="350">expert_0 ... expert_N</text><text class="s" x="420" y="368">丢弃低价值专家</text>
+  <rect class="keep" x="596" y="328" width="266" height="52" rx="7"/>
+  <text x="729" y="350">共享 / 常驻专家</text><text class="s" x="729" y="368">保留</text>
+</svg>

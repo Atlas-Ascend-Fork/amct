@@ -1,0 +1,292 @@
+record {
+  key: "conv_bn1.0"
+  value {
+    scale_d: 0.64666
+    offset_d: -8
+    scale_w: 0.040333495
+    scale_w: 0.032304376
+    scale_w: 0.035413392
+    scale_w: 0.04996195
+    scale_w: 0.05097831
+    scale_w: 0.0845369
+    scale_w: 0.06436281
+    scale_w: 0.047990028
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "conv_bn2.0"
+  value {
+    scale_d: 1.6785569
+    offset_d: 2
+    scale_w: 0.046145998
+    scale_w: 0.0313362
+    scale_w: 0.042729273
+    scale_w: 0.043495145
+    scale_w: 0.048054375
+    scale_w: 0.03737161
+    scale_w: 0.042655405
+    scale_w: 0.053203486
+    scale_w: 0.04394339
+    scale_w: 0.03972227
+    scale_w: 0.023528825
+    scale_w: 0.0486559
+    scale_w: 0.042071056
+    scale_w: 0.033038642
+    scale_w: 0.04646869
+    scale_w: 0.060119152
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "depth_conv_bn1.0"
+  value {
+    scale_d: 0.7737771
+    offset_d: -8
+    scale_w: 0.046618275
+    scale_w: 0.050582383
+    scale_w: 0.045320127
+    scale_w: 0.059145797
+    scale_w: 0.043456186
+    scale_w: 0.0443021
+    scale_w: 0.050041117
+    scale_w: 0.03720394
+    scale_w: 0.050406236
+    scale_w: 0.047831364
+    scale_w: 0.047222152
+    scale_w: 0.045032244
+    scale_w: 0.047002025
+    scale_w: 0.063472524
+    scale_w: 0.05948587
+    scale_w: 0.03779682
+    scale_w: 0.047548115
+    scale_w: 0.06846197
+    scale_w: 0.060517907
+    scale_w: 0.045609936
+    scale_w: 0.03573289
+    scale_w: 0.068844385
+    scale_w: 0.04204147
+    scale_w: 0.04295512
+    scale_w: 0.04519722
+    scale_w: 0.047980007
+    scale_w: 0.046347495
+    scale_w: 0.039373018
+    scale_w: 0.041168462
+    scale_w: 0.03718117
+    scale_w: 0.044132765
+    scale_w: 0.042207267
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "depth_conv_bn2.0"
+  value {
+    scale_d: 0.7737771
+    offset_d: -8
+    scale_w: 0.073070385
+    scale_w: 0.05785845
+    scale_w: 0.07116769
+    scale_w: 0.047359716
+    scale_w: 0.050975926
+    scale_w: 0.07160471
+    scale_w: 0.0617794
+    scale_w: 0.064424746
+    scale_w: 0.075809844
+    scale_w: 0.064848416
+    scale_w: 0.054580156
+    scale_w: 0.043937027
+    scale_w: 0.060558833
+    scale_w: 0.052296937
+    scale_w: 0.067682974
+    scale_w: 0.0615462
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "group_conv1"
+  value {
+    scale_d: 2.4021637
+    offset_d: 0
+    scale_w: 0.04041966
+    scale_w: 0.036033418
+    scale_w: 0.039166898
+    scale_w: 0.029082479
+    scale_w: 0.023977492
+    scale_w: 0.025416655
+    scale_w: 0.021761024
+    scale_w: 0.033194557
+    scale_w: 0.040501285
+    scale_w: 0.03507917
+    scale_w: 0.04783884
+    scale_w: 0.046410207
+    scale_w: 0.036978725
+    scale_w: 0.02903816
+    scale_w: 0.04047626
+    scale_w: 0.039877817
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "group_conv2"
+  value {
+    scale_d: 2.361084
+    offset_d: 0
+    scale_w: 0.047454283
+    scale_w: 0.042125616
+    scale_w: 0.034082472
+    scale_w: 0.049108274
+    scale_w: 0.043819893
+    scale_w: 0.04476552
+    scale_w: 0.038026936
+    scale_w: 0.048296005
+    scale_w: 0.034771644
+    scale_w: 0.024088811
+    scale_w: 0.053369474
+    scale_w: 0.047599945
+    scale_w: 0.05199839
+    scale_w: 0.050678518
+    scale_w: 0.045220632
+    scale_w: 0.044548146
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
+record {
+  key: "fc_bn1.0"
+  value {
+    scale_d: 0.95553476
+    offset_d: -8
+    scale_w: 0.03703195
+    offset_w: 0
+  }
+}
+record {
+  key: "fc_bn2.0"
+  value {
+    scale_d: 0.19794327
+    offset_d: -8
+    scale_w: 0.03136709
+    offset_w: 0
+  }
+}
+
+record {
+  key: "upsample"
+  value {
+    scale_d: 2.1806526
+    offset_d: 0
+    scale_w: 0.050201382
+    scale_w: 0.036232624
+    scale_w: 0.047379386
+    scale_w: 0.044461932
+    scale_w: 0.05843228
+    scale_w: 0.04573082
+    scale_w: 0.050066583
+    scale_w: 0.055165943
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+    offset_w: 0
+  }
+}
