@@ -62,6 +62,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
         model_name=MODEL_NAME_QWEN3,
         model=model_path,
         quant_dtype=quant_dtype,
+        quant_target=["mlp", "attn-linear"],
         output_dir=output_dir,
     )
     workflow.args = args
@@ -563,3 +564,37 @@ def test_refresh_config_tensor_bf16(tmp_path):
     assert refreshed["torch_dtype"] == "bfloat16"
     assert "quantization_config" not in refreshed
 
+
+
+def test_load_weight_index_single_shard_synthesizes(tmp_path):
+    # 单文件 model.safetensors（无 index.json）→ 合成等价 index
+    save_file(
+        {"a.weight": torch.zeros(2), "b.weight": torch.ones(3)},
+        str(tmp_path / MODEL_SAFETENSORS),
+    )
+    wf = _make_workflow(model_path=str(tmp_path))
+    idx = wf._load_weight_index()  # pylint: disable=protected-access
+    assert idx["weight_map"] == {
+        "a.weight": MODEL_SAFETENSORS,
+        "b.weight": MODEL_SAFETENSORS,
+    }
+    assert idx[METADATA_KEY]["total_size"] > 0
+
+
+def test_load_weight_index_missing_raises(tmp_path):
+    # 既无 index.json 也无 model.safetensors → FileNotFoundError
+    wf = _make_workflow(model_path=str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        wf._load_weight_index()  # pylint: disable=protected-access
+
+
+def test_refresh_config_emits_cache_scheme_for_attn_cache(tmp_path):
+    # quant_target 含 attn-cache + DSA indexer(index_topk) → 生成 kv/li cache scheme
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["attn-cache"]
+    wf.pipeline = SimpleNamespace(config=SimpleNamespace(index_topk=64))
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert qc["kv_cache_scheme"] == {"type": "int", "num_bits": 8}
+    assert qc["li_cache_scheme"] == {"type": "int", "num_bits": 8}
