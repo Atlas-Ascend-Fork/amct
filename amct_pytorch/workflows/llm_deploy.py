@@ -152,11 +152,18 @@ class LlmDeployWorkflow:
         with open(config_file, "r") as f:
             config = json.load(f)
 
-        cache_scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
-                        "li_cache_scheme": {
-                            "type": "float" if self.is_mx else "int",
-                            "num_bits": 8,
-                        }}
+        cache_scheme = {}
+        if "attn-cache" in self.args.quant_target:
+            # int 路径用 type=int 才能命中 infer 的 `== "int8"` 门（旧 hardcode
+            # "float" 产出 "float8" 永不触发）。
+            cache_scheme["kv_cache_scheme"] = {
+                "type": "float" if self.is_mx else "int",
+                "num_bits": 8,
+            }
+            # li_cache 仅对 DSA indexer 架构（DSv3.2/GLM-5，以 index_topk 识别，同 vLLM）
+            # 有意义；infer 不读此字段、indexer int8 由其按模型硬编码，此处仅作意图标记。
+            if hasattr(self.pipeline.config, "index_topk"):
+                cache_scheme["li_cache_scheme"] = {"type": "int", "num_bits": 8}
         quantization_config = generate_quant_config(
             cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
         config['quantization_config'] = quantization_config
