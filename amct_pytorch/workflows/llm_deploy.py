@@ -126,8 +126,27 @@ class LlmDeployWorkflow:
 
     def _load_weight_index(self):
         index_path = Path(self.model_path) / "model.safetensors.index.json"
-        with open(index_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        if index_path.exists():
+            with open(index_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        # Single-shard model: no index.json. Synthesize an equivalent index that
+        # maps every tensor to the single model.safetensors file.
+        single_path = Path(self.model_path) / "model.safetensors"
+        if not single_path.exists():
+            raise FileNotFoundError(
+                f"Neither model.safetensors.index.json nor model.safetensors "
+                f"found in {self.model_path}"
+            )
+        weight_map = {}
+        with safe_open(str(single_path), framework="pt") as f:
+            for key in f.keys():
+                weight_map[key] = "model.safetensors"
+        # total_size 仅为占位：_refresh_weight_index() 会按输出分片实际
+        # 大小重算并覆盖它，故此处用磁盘文件大小即可。
+        return {
+            "metadata": {"total_size": os.path.getsize(single_path)},
+            "weight_map": weight_map,
+        }
 
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
