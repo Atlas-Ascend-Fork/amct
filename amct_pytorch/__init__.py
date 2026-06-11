@@ -33,3 +33,31 @@ from amct_pytorch.common.config import (
 )
 
 from amct_pytorch.classic.graph_based.amct_pytorch import *
+
+# Structured pruning facade -- exposed lazily (PEP 562) so ``import amct_pytorch`` stays
+# light: the pruning subpackage and its torch-heavy internals load only on first access
+# (e.g. ``amct.prune(...)``), mirroring the ``amct.quantize`` surface.
+_PRUNING_EXPORTS = (
+    'prune', 'get_last_report',
+    'accuracy_based_auto_prune', 'size_budget_prune',
+    'guarded_variance_hybrid_prune', 'guarded_recovery_hybrid_prune',
+    'prune_finetune', 'prune_diagnose',
+    'CNN_RECONSTRUCT_PRUNE_CFG', 'CNN_VARIANCE_PRUNE_CFG', 'DENSE_LOWVAR_PRUNE_CFG',
+    'FULL_STRUCTURED_PRUNE_CFG', 'MOE_MASSVAR_PRUNE_CFG',
+    'MOE_OUTPUT_MERGE_PRUNE_CFG', 'SENSITIVITY_ALLOC_PRUNE_CFG',
+)
+__all__ += list(_PRUNING_EXPORTS)
+
+
+def __getattr__(name):
+    # PEP 562 lazy lookup for the pruning facade (plus the secondary
+    # ``get_last_auto_prune`` accessor, reachable but kept out of ``__all__``).
+    if name in _PRUNING_EXPORTS or name == 'get_last_auto_prune':
+        import amct_pytorch.pruning as _pruning
+        return getattr(_pruning, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    # Surface the lazily-exposed pruning facade in dir()/REPL tab-completion.
+    return sorted(set(globals()) | set(_PRUNING_EXPORTS) | {'get_last_auto_prune'})
