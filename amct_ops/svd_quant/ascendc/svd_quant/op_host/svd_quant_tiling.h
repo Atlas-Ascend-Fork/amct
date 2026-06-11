@@ -61,6 +61,8 @@ private:
         int32_t M, int32_t N, int32_t K, int32_t coreNum);
     bool CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mmTiling, TCubeTiling& cubeTiling,
         int32_t M, int32_t N, int32_t K, int32_t coreNum);
+    void SetMatmulCubeTiling(TCubeTiling& cubeTiling,
+        int32_t K, uint64_t l0cSize, int32_t baseMN, int32_t baseK, int32_t maxDepthVal);
 };
 
 } // namespace optiling

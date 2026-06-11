@@ -87,11 +87,6 @@ ge::graphStatus SvdQuantTiling::ValidateShapes() {
 }
 
 ge::graphStatus SvdQuantTiling::ReadShapes() {
-    if (context_ == nullptr) {
-        std::cout << "SvdQuantTiling::ReadShapes: context_ is null" << std::endl;
-        return ge::GRAPH_FAILED;
-    }
-
     auto inputShapeActivation = context_->GetInputShape(svd_quant::INPUT_A_IDX);
     auto inputShapeW = context_->GetInputShape(svd_quant::INPUT_W_IDX);
     auto inputShapeS = context_->GetInputShape(svd_quant::INPUT_S_IDX);
@@ -163,20 +158,37 @@ bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling& m
     int32_t singleM = M / mLoops;
     int32_t singleN = N / nLoops;
 
+    mmTiling.SetDim(coreNumVal);
+    mmTiling.SetSingleShape(singleM, singleN, K);
+    mmTiling.SetFixSplit(baseM, baseN);
+    mmTiling.SetTraverse(matmul_tiling::MatrixTraverse::FIRSTM);
+
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context_->GetPlatformInfo());
     uint64_t l1Size, l0cSize;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::L1, l1Size);
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::L0_C, l0cSize);
-    int32_t dbFactor = 2;
 
     int32_t l1TotalSize = static_cast<int32_t>(l1Size / 2) / sizeof(int16_t);
     int32_t l0BlockSize = std::max(baseK * baseM, baseK * baseN);
     l0BlockSize = l0BlockSize == 0 ? 1 : l0BlockSize;
     int32_t maxDepthVal = l1TotalSize / l0BlockSize;
+    
+    if (mmTiling.GetTiling(cubeTiling) == -1) {
+        std::cout << "The BF16 Matmul tiling data is None" << std::endl;
+        return false;
+    }
+    SetMatmulCubeTiling(cubeTiling, K, l0cSize, baseM * baseN, baseK, maxDepthVal);
+    return true;
+}
+
+void SvdQuantTiling::SetMatmulCubeTiling(TCubeTiling& cubeTiling,
+    int32_t K, uint64_t l0cSize, int32_t baseMN, int32_t baseK, int32_t maxDepthVal)
+{
     int32_t depthVal = 1;
     while (depthVal * 2 <= maxDepthVal) {
         depthVal *= 2;
     }
+    int32_t dbFactor = 2;
     int32_t stepK = depthVal / dbFactor;
     while((stepK > K / baseK) && (stepK != 1)) {
         stepK /= 2;
@@ -184,17 +196,8 @@ bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling& m
     int32_t stepMN = (depthVal / dbFactor) / stepK;
 
     int32_t dbL0C = 1;
-    if ((l0cSize / (baseM * baseN * sizeof(float))) >= 2) {
+    if ((l0cSize / (baseMN * sizeof(float))) >= 2) {
         dbL0C = 2;
-    }
-
-    mmTiling.SetDim(coreNumVal);
-    mmTiling.SetSingleShape(singleM, singleN, K);
-    mmTiling.SetFixSplit(baseM, baseN);
-    mmTiling.SetTraverse(matmul_tiling::MatrixTraverse::FIRSTM);
-
-    if (mmTiling.GetTiling(cubeTiling) == -1) {
-        return false;
     }
 
     cubeTiling.set_baseK(baseK);
@@ -207,7 +210,6 @@ bool SvdQuantTiling::CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling& m
     cubeTiling.set_dbL0A(1);
     cubeTiling.set_dbL0B(2);
     cubeTiling.set_dbL0C(dbL0C);
-    return true;
 }
 
 bool SvdQuantTiling::CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mmTiling, TCubeTiling& cubeTiling,
@@ -231,52 +233,27 @@ bool SvdQuantTiling::CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mm
     int32_t singleM = M / mLoops;
     int32_t singleN = N / nLoops;
 
+    mmTiling.SetDim(coreNumVal);
+    mmTiling.SetSingleShape(singleM, singleN, K);
+    mmTiling.SetFixSplit(baseM, baseN);
+    mmTiling.SetTraverse(matmul_tiling::MatrixTraverse::FIRSTM);
+
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context_->GetPlatformInfo());
     uint64_t l1Size, l0cSize;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::L1, l1Size);
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::L0_C, l0cSize);
-    int32_t dbFactor = 2;
     int32_t sizeOfFp4Factor = 2;
     float scaleFactor = 1.25;
     int32_t l1TotalSize = static_cast<int32_t>(l1Size) * sizeOfFp4Factor;
     int32_t l0BlockSize = std::max(baseK * baseM, baseK * baseN);
     float fpDepthVal = static_cast<float>(l1TotalSize / 2) / (static_cast<float>(l0BlockSize) * scaleFactor);
     int32_t maxDepthVal = static_cast<int32_t>(fpDepthVal);
-    int32_t depthVal = 1;
-    while (depthVal * 2 <= maxDepthVal) {
-        depthVal *= 2;
-    }
-    int32_t stepK = depthVal / dbFactor;
-    while((stepK > K / baseK) && (stepK != 1)) {
-        stepK /= 2;
-    }
-    int32_t stepMN = (depthVal / dbFactor) / stepK;
-
-    int32_t dbL0C = 1;
-    if ((l0cSize / (baseM * baseN * sizeof(float))) >= 2) {
-        dbL0C = 2;
-    }
-
-    mmTiling.SetDim(coreNumVal);
-    mmTiling.SetSingleShape(singleM, singleN, K);
-    mmTiling.SetFixSplit(baseM, baseN);
-    mmTiling.SetTraverse(matmul_tiling::MatrixTraverse::FIRSTM);
 
     if (mmTiling.GetTiling(cubeTiling) == -1) {
         std::cout << "The Fp4 Matmul tiling data is None" << std::endl;
         return false;
     }
-
-    cubeTiling.set_baseK(baseK);
-    cubeTiling.set_stepM(stepMN);
-    cubeTiling.set_stepN(stepMN);
-    cubeTiling.set_stepKa(stepK);
-    cubeTiling.set_stepKb(stepK);
-    cubeTiling.set_depthA1(depthVal);
-    cubeTiling.set_depthB1(depthVal);
-    cubeTiling.set_dbL0A(1);
-    cubeTiling.set_dbL0B(2);
-    cubeTiling.set_dbL0C(dbL0C);
+    SetMatmulCubeTiling(cubeTiling, K, l0cSize, baseM * baseN, baseK, maxDepthVal);
     ScaleFactors scaleCase = {4U, 4U, 1U, 1U};
     cubeTiling.set_mxTypePara(BuildMxTypePara(scaleCase));
     return true;
