@@ -32,13 +32,38 @@ from amct_pytorch.common.config import (
     MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
 )
 
+# Structured pruning facade -- exposed lazily (PEP 562, below) so ``import amct_pytorch`` stays
+# light: the pruning subpackage and its torch-heavy internals load only on first access
+# (e.g. ``amct.prune(...)``), mirroring the ``amct.quantize`` surface.
+_PRUNING_EXPORTS = (
+    'prune',
+    'accuracy_based_auto_prune',
+    'CNN_RECONSTRUCT_PRUNE_CFG', 'CNN_VARIANCE_PRUNE_CFG', 'DENSE_LOWVAR_PRUNE_CFG',
+    'FULL_STRUCTURED_PRUNE_CFG', 'MOE_MASSVAR_PRUNE_CFG',
+    'MOE_OUTPUT_MERGE_PRUNE_CFG', 'SENSITIVITY_ALLOC_PRUNE_CFG',
+)
+__all__ += list(_PRUNING_EXPORTS)
+
 
 # Classic graph-based interfaces (create_quant_config et al.) live in the
 # graph_based subpackage, which pulls in onnx + compiled protobufs. Resolve them
 # lazily (PEP 562) so LLM-only workflows (amct_pytorch.cli.llm / common.models)
 # can `import amct_pytorch` without those deps; a missing dependency then
 # surfaces loudly at the point of use instead of being swallowed at import.
+# The same hook also lazily exposes the structured-pruning facade above.
 def __getattr__(name):
+    # Structured pruning facade, plus secondary accessors reachable by name but
+    # intentionally kept out of ``__all__`` (advanced, demoted from the advertised surface):
+    # the last-run accessors, the advanced menu-mode configs (driving
+    # accuracy_based_auto_prune's guarded best-of-menu search), and size_budget_prune /
+    # prune_finetune / prune_diagnose (size_budget_prune is also the prune(size_budget=...) mode).
+    if name in _PRUNING_EXPORTS or name in (
+        'get_last_auto_prune', 'get_last_report', 'PrunePass',
+        'MOE_VARIANCE_MENU_CFG', 'DENSE_RECOVERY_MENU_CFG',
+        'size_budget_prune', 'prune_finetune', 'prune_diagnose',
+    ):
+        import amct_pytorch.pruning as _pruning
+        return getattr(_pruning, name)
     if name.startswith("__"):
         raise AttributeError(name)
     import importlib
@@ -53,3 +78,8 @@ def __getattr__(name):
     # it directly and never re-trigger __getattr__ (PEP 562 caches nothing).
     globals()[name] = value
     return value
+
+
+def __dir__():
+    # Surface the lazily-exposed pruning facade in dir()/REPL tab-completion.
+    return sorted(set(globals()) | set(_PRUNING_EXPORTS) | {'get_last_auto_prune'})
