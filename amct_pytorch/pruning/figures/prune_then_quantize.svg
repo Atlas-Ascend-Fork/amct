@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" font-family="DejaVu Sans, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#5f6368"/>
+    </marker>
+    <style>
+      text{font-size:13px;fill:#111;text-anchor:middle}
+      .s{font-size:11px;fill:#444}
+      .edge{stroke:#5f6368;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .dash{stroke:#9AA0A6;stroke-width:1.5;fill:none;stroke-dasharray:5 4;marker-end:url(#a)}
+      .step{fill:#E8F0FE;stroke:#4285F4;stroke-width:1.5}
+      .done{fill:#E6F4EA;stroke:#34A853;stroke-width:1.5}
+      .note{fill:#FEF7E0;stroke:#F9AB00;stroke-width:1.5}
+    </style>
+  </defs>
+
+  <!-- edges -->
+  <path class="edge" d="M156,106 L182,106"/>
+  <path class="edge" d="M361,106 L387,106"/>
+  <path class="edge" d="M541,106 L567,106"/>
+  <path class="edge" d="M756,106 L782,106"/>
+  <path class="dash" d="M273,140 L273,172"/>
+
+  <!-- nodes -->
+  <rect class="step" x="16" y="80" width="140" height="52" rx="7"/>
+  <text x="86" y="102">model</text><text class="s" x="86" y="120">(weights loaded)</text>
+
+  <rect class="step" x="186" y="72" width="175" height="68" rx="7"/>
+  <text x="273" y="94">1) structural prune</text><text class="s" x="273" y="112">budget =</text><text class="s" x="273" y="128">tolerance &#215; 0.5</text>
+
+  <rect class="step" x="391" y="80" width="150" height="52" rx="7"/>
+  <text x="466" y="102">measure actual</text><text class="s" x="466" y="120">prune quality drop</text>
+
+  <rect class="step" x="571" y="72" width="185" height="68" rx="7"/>
+  <text x="663" y="94">2) quantize search on</text><text class="s" x="663" y="112">the pruned model</text><text class="s" x="663" y="128">budget = tolerance &#8722; drop</text>
+
+  <rect class="done" x="784" y="80" width="108" height="52" rx="7"/>
+  <text x="838" y="102">3) amct.convert</text><text class="s" x="838" y="120">&#8594; deploy</text>
+
+  <rect class="note" x="93" y="172" width="360" height="52" rx="7"/>
+  <text class="s" x="273" y="194">shapes change after pruning, so quantization</text><text class="s" x="273" y="210">calibration is only correct on pruned weights</text>
+</svg>
