@@ -43,7 +43,9 @@ class SetupTool(): # pylint: disable=R0903
     def set_packages(self):
         """ set packages based on build mode"""
         self.packages = setuptools.find_packages(
-            include=['amct_pytorch', 'amct_pytorch.*'])
+            include=['amct_pytorch', 'amct_pytorch.*'],
+            exclude=['amct_pytorch.experimental',
+                     'amct_pytorch.experimental.*'])
 
     def set_version(self):
         """ set version"""
