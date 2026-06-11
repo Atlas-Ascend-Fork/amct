@@ -11,7 +11,7 @@
 import torch
 import torch_npu
 import numpy as np
-import amct_ops
+import amct
 import pytest
 from quantize_ref import py_quantize_mx4, py_dequantize_mx4
 
@@ -107,7 +107,7 @@ def test_svd_quant(shape):
 
     # SVDQuant Graph
     w_quant, scale = torch_npu.npu_dynamic_mx_quant(w.npu(), block_size=32, round_mode="round")
-    svd_quant_out = torch.ops.amct_ops.svd_quant(x.npu(), w_quant, scale,  dp, up)
+    svd_quant_out = torch.ops.amct.svd_quant(x.npu(), w_quant, scale,  dp, up)
     np_svd_out = svd_quant_out.cpu().float().detach().numpy()
 
     result = np.allclose(np_svd_out, np_golden_out, atol=1e-07)

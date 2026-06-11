@@ -11,7 +11,7 @@
 import torch
 import torch_npu
 import numpy as np
-import amct_ops
+import amct
 import sys, os
 from pathlib import Path
 
@@ -102,7 +102,7 @@ def test_svd_quant_matmul(cases):
             for step in range(steps):
                 for idx, case in enumerate(cases):
                     x, w_quant, scale, dp, up = generate_tensors(case)
-                    svd_quant_out = torch.ops.amct_ops.svd_quant(x.npu(), w_quant, scale,  dp.npu(), up.npu())
+                    svd_quant_out = torch.ops.amct.svd_quant(x.npu(), w_quant, scale,  dp.npu(), up.npu())
                 prof.step()
 if __name__ == '__main__':
     test_svd_quant_matmul(SVD_QUANT_TEST_CASES)

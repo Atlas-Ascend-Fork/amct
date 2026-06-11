@@ -25,7 +25,7 @@ from torchair._ge_concrete_graph.utils import dtype_promote
 from torchair.ge import attr
 
 
-@register_fx_node_ge_converter(torch.ops.amct_ops.svd_quant.default)
+@register_fx_node_ge_converter(torch.ops.amct.svd_quant.default)
 def convert_svd_quant(
     A: Tensor,
     W: Tensor,

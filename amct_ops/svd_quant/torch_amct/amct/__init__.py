@@ -14,12 +14,12 @@ import warnings
 __all__ = list(module for _, module, _ in pkgutil.iter_modules([os.path.dirname(__file__)]))
 
 # 导入so 和 python
-from . import amct_ops_lib
+from . import amct_lib
 from .converter import svd_quant
 
 """
 import custom ops as torch_npu ops to support the following usage:
-'torch.ops.amct_ops.svd_quant()'
+'torch.ops.amct.svd_quant()'
 'torch_npu.svd_quant()'
 """
 
@@ -27,8 +27,8 @@ import custom ops as torch_npu ops to support the following usage:
 import torch_npu
 import torch
 
-# get torch.ops.amct_ops module
-custom_ops_module = getattr(torch.ops, 'amct_ops', None)
+# get torch.ops.amct module
+custom_ops_module = getattr(torch.ops, 'amct', None)
 
 
 if custom_ops_module is not None:
@@ -42,7 +42,7 @@ if custom_ops_module is not None:
         setattr(torch_npu, op_name, custom_op_func)
 
 else:
-    warn_msg = "torch.ops.amct_ops module is not found, mount custom ops to torch_npu failed." \
-               "Calling by torch_npu.xxx for custom ops is unsupported, please use torch.ops.amct_ops.xxx."
+    warn_msg = "torch.ops.amct module is not found, mount custom ops to torch_npu failed." \
+               "Calling by torch_npu.xxx for custom ops is unsupported, please use torch.ops.amct.xxx."
     warnings.warn(warn_msg)
     warnings.filterwarnings("ignore", message=warn_msg)

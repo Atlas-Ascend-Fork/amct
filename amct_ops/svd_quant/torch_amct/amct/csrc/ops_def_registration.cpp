@@ -11,7 +11,7 @@
 #include <torch/extension.h>
 #include <torch/library.h>
 
-TORCH_LIBRARY(amct_ops, m) {
+TORCH_LIBRARY(amct, m) {
     m.def("svd_quant(Tensor A, Tensor W, Tensor SC, Tensor DP, Tensor UP) -> Tensor");
 }
 

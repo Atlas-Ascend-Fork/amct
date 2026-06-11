@@ -20,11 +20,11 @@ PYTORCH_NPU_INSTALL_PATH = os.path.dirname(os.path.abspath(torch_npu.__file__))
 USE_NINJA = os.getenv('USE_NINJA') == '1'
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
-source_files = glob.glob(os.path.join(BASE_DIR, "amct_ops/csrc", "*.cpp"), recursive=True)
+source_files = glob.glob(os.path.join(BASE_DIR, "amct/csrc", "*.cpp"), recursive=True)
 
 exts = []
 ext = NpuExtension(
-    name="amct_ops.amct_ops_lib",
+    name="amct.amct_lib",
     sources=source_files,
     extra_compile_args=[
         '-I' + os.path.join(PYTORCH_NPU_INSTALL_PATH, "include/third_party/acl/inc"),
@@ -33,12 +33,12 @@ ext = NpuExtension(
 exts.append(ext)
 
 setup(
-    name="amct_ops",
+    name="amct",
     version='1.0',
-    keywords='amct_ops',
+    keywords='amct',
     ext_modules=exts,
     package_data={
-        'amct_ops': ['*.py', '*.so'],
+        'amct': ['*.py', '*.so'],
     },
     packages=find_packages(),
     cmdclass={"build_ext": BuildExtension},

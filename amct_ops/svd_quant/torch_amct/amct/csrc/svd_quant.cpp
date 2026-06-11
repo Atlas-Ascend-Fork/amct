@@ -38,10 +38,10 @@ at::Tensor svd_quant_meta(const at::Tensor& A, const at::Tensor& W, const at::Te
 }
 } // namespace
 
-TORCH_LIBRARY_IMPL(amct_ops, PrivateUse1, m) {
+TORCH_LIBRARY_IMPL(amct, PrivateUse1, m) {
     m.impl("svd_quant", &::svd_quant_npu);
 }
 
-TORCH_LIBRARY_IMPL(amct_ops, Meta, m) {
+TORCH_LIBRARY_IMPL(amct, Meta, m) {
     m.impl("svd_quant", &::svd_quant_meta);
 }
