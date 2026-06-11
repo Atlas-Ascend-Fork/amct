@@ -67,7 +67,7 @@ def parse_args():
 
 
 def make_profiler(profile_dir):
-    experimental_config = torch_npu.profiler._ExperimentalConfig(
+    experimental_config = torch_npu.profiler._ExperimentalConfig(  # pylint: disable=protected-access
         export_type=torch_npu.profiler.ExportType.Text,
         profiler_level=torch_npu.profiler.ProfilerLevel.Level1,
         msprof_tx=False,
