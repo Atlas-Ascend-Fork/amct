@@ -12,7 +12,7 @@
 #include <torch/library.h>
 
 TORCH_LIBRARY(amct, m) {
-    m.def("svd_quant(Tensor A, Tensor W, Tensor SC, Tensor DP, Tensor UP) -> Tensor");
+    m.def("svd_quant(Tensor activation, Tensor weights, Tensor scales, Tensor down, Tensor up) -> Tensor");
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
