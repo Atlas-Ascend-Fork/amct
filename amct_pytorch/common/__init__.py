@@ -15,4 +15,5 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-__all__ = ['config', 'utils', 'datasets', 'evaluate', 'models', 'types']
+__all__ = ['config', 'utils', 'datasets', 'evaluate', 'models', 'types', 'auto_calibration',
+           'auto_channel_prune']
