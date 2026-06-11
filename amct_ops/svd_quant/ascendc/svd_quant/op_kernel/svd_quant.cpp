@@ -136,41 +136,20 @@ struct MmStageSpec<T, MmStage::UP> {
     }
 
     __aicore__ static inline const MmTilingType& GetTiling(const SvdQuantTilingData& td)
-    {
-        return td.upProjectionTilingData;
-    }
+    { return td.upProjectionTilingData; }
 
     __aicore__ static inline uint32_t GetGBufElemCount(const SvdQuantTilingData& td, int64_t k, int64_t n)
-    {
-        return td.batchSize * k * n;
-    }
+    { return td.batchSize * k * n; }
 
-    __aicore__ static inline uint32_t GetBatchA(const SvdQuantTilingData& td)
-    {
-        return td.batchSize;
-    }
-
-    __aicore__ static inline uint32_t GetBatchB(const SvdQuantTilingData& td)
-    {
-        return td.batchSize;
-    }
-
-    __aicore__ static inline uint32_t isTransA()
-    {
-        return false;
-    }
-
-    __aicore__ static inline uint32_t isTransB()
-    {
-        return false;
-    }
+    __aicore__ static inline uint32_t GetBatchA(const SvdQuantTilingData& td) { return td.batchSize; }
+    __aicore__ static inline uint32_t GetBatchB(const SvdQuantTilingData& td) { return td.batchSize; }
+    __aicore__ static inline uint32_t isTransA() { return false; }
+    __aicore__ static inline uint32_t isTransB() { return false; }
 
     template <typename ALocal, typename BLocal>
     __aicore__ static inline void BindInputs(MatmulT& mm, ALocal aLocal, BLocal bLocal)
-    {
-        mm.SetTensorA(aLocal);
-        mm.SetTensorB(bLocal);
-    }
+    { mm.SetTensorA(aLocal);
+      mm.SetTensorB(bLocal); }
 };
 
 template <typename T, MmStage Stage>

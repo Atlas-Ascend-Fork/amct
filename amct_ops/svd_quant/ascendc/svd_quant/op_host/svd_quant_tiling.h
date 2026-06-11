@@ -57,10 +57,15 @@ private:
     bool GetFp4MMTiling(matmul_tiling::MultiCoreMatmulTiling&, int);
     bool GetDownProjectionTiling(matmul_tiling::MultiCoreMatmulTiling&, int);
     bool GetUpProjectionTiling(matmul_tiling::MultiCoreMatmulTiling&, int);
+    void CommonMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mmTiling,
+                            int32_t M, int32_t N, int32_t K, int32_t coreNum,
+                            int32_t &baseM, int32_t &baseN);
     bool CalcB16MatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mmTiling, TCubeTiling& cubeTiling,
         int32_t M, int32_t N, int32_t K, int32_t coreNum);
     bool CalcMxMatmulTiling(matmul_tiling::MultiCoreMatmulTiling& mmTiling, TCubeTiling& cubeTiling,
         int32_t M, int32_t N, int32_t K, int32_t coreNum);
+    void SetMatmulCubeTiling(TCubeTiling& cubeTiling,
+        int32_t K, uint64_t l0cSize, int32_t baseMN, int32_t baseK, int32_t maxDepthVal);
 };
 
 } // namespace optiling

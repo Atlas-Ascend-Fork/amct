@@ -100,8 +100,8 @@ def _compute_exp(
         Tensor: Shared exponent of group.
     """
     # Helpful constants.
-    MBITS_FP32 = 23
-    RAND_MASK = (1 << (MBITS_FP32 - mbits)) - 1
+    mbits_fp32 = 23
+    rand_mask = (1 << (mbits_fp32 - mbits)) - 1
     # Nearest rounding mode.
     if rounding_mode == 0:
         return torch.floor(torch.log2(group_max) + 0.5)
@@ -111,8 +111,8 @@ def _compute_exp(
     # Even pre-rounding mode.
     elif rounding_mode == 2:
         # First round to nearest even integer.
-        M_ROUND = (1 << (MBITS_FP32 - mbits - 1)) - 1
-        group_max = group_max.view(dtype=torch.int32) + M_ROUND
+        m_round = (1 << (mbits_fp32 - mbits - 1)) - 1
+        group_max = group_max.view(dtype=torch.int32) + m_round
         # Then perform floor rounding of log.
         return torch.floor(torch.log2(group_max.view(dtype=torch.float32)))
     # Stochastic rounding mode.
@@ -120,13 +120,59 @@ def _compute_exp(
         # Create random noise.
         rand_bits = torch.randint_like(group_max, high=2**31 - 1, dtype=torch.int32)
         # Add noise to group max and round down.
-        group_max = group_max.view(dtype=torch.int32) + (RAND_MASK & rand_bits)
+        group_max = group_max.view(dtype=torch.int32) + (rand_mask & rand_bits)
         # Now compute log and truncate.
         return torch.floor(torch.log2(group_max.view(dtype=torch.float32)))
     else:
         return torch.ceil(torch.log2(group_max))
 
+def construct_fp4_from_components(
+    new_biased_exp,
+    exponent_overflow_threshold,
+    sign_bit,
+    e_bits,
+    m_bits,
+    mantissa,
+    group_size,
+    shared_exp,
+    fp32_exp_bias,
+    orig_shape
+) -> torch.Tensor:
 
+    # Construct fp4 value from components.
+    new_biased_exp = torch.clamp(new_biased_exp, min=0, max=exponent_overflow_threshold)
+    mx4_value = torch.bitwise_or(
+        torch.bitwise_left_shift(new_biased_exp, m_bits - 1), mantissa
+    )
+    mx4_value = torch.bitwise_or(
+        torch.bitwise_left_shift(sign_bit, e_bits + m_bits - 1), mx4_value
+    )
+
+    # Pack int4 values into single int8 outputs.
+    low_mx4 = mx4_value[:, ::2]
+    high_mx4 = mx4_value[:, 1::2]
+    high_mx4 = torch.bitwise_left_shift(high_mx4, 4)
+    packed_mx4 = torch.bitwise_or(low_mx4, high_mx4)
+
+
+    # Ravel packed values together with shared exponent.
+    packed_mx4 = torch.concat(
+        [
+            packed_mx4.view(-1, group_size // 2),
+            (shared_exp + fp32_exp_bias).to(torch.int8).view(-1, 1),
+        ],
+        dim=1,
+    )
+
+    # Inputs are now fully quantized and ready to return.
+    # Try to return in the original shape if possible.
+    if orig_shape[-1] % group_size == 0:
+        output_shape = list(orig_shape[:-1]) + [-1]
+        return packed_mx4.view(output_shape).view(torch.uint8)
+    # If we cant, return as a flat array.
+    else:
+        return packed_mx4.view(-1).view(torch.uint8)
+        
 def py_quantize_mx4(
     a: torch.Tensor,
     group_size: int = 32,
@@ -157,23 +203,23 @@ def py_quantize_mx4(
         there are 32 groups in each row.
     """
     # Define helpful constants.
-    FP32_MIN_NORMAL = 2 ** (-126)
-    FP32_SIGN_OFFSET = 31
-    SIGN_MASK = 0x1
-    FP32_EXP_MASK = 0x7F800000
-    FP32_EXP_OFFSET = 23
-    FP32_MANTISSA_MASK = 0x007FFFFF
+    fp32_min_normal = 2 ** (-126)
+    fp32_sign_offset = 31
+    sign_mask = 0x1
+    fp32_exp_mask = 0x7F800000
+    fp32_exp_offset = 23
+    fp32_mantissa_mask = 0x007FFFFF
     # Set number of exponent bits and mantissa (plus implicit) bits.
-    EBITS = ebits
-    MBITS = mbits + 1
+    e_bits = ebits
+    m_bits = mbits + 1
     # FP32 and and FP4 have very different exponent biases, adjust to fp4.
-    FP32_EXP_BIAS = 127
-    FP4_EXP_BIAS = get_mx4_exp_bias(EBITS)
-    MAX_FP32_MANTISSA_BITS = 24
-    RAND_MASK = (1 << (FP32_EXP_OFFSET - mbits)) - 1
-    MANTISSA_OVERFLOW_THRESHOLD = (1 << MBITS) - 1
-    EXPONENT_OVERFLOW_THRESHOLD = (1 << EBITS) - 1
-    IMPLICIT_1_MASK = (1 << (MBITS - 1)) - 1
+    fp32_exp_bias = 127
+    fp4_exp_bias = get_mx4_exp_bias(e_bits)
+    max_fp32_mantissa_bits = 24
+    rand_mask = (1 << (fp32_exp_offset - mbits)) - 1
+    mantissa_overflow_threshold = (1 << m_bits) - 1
+    exponent_overflow_threshold = (1 << e_bits) - 1
+    implicit_1_mask = (1 << (m_bits - 1)) - 1
 
     # Make sure input has a supported shape.
     # If given an empty shape, return an empty tensor.
@@ -191,11 +237,11 @@ def py_quantize_mx4(
     # Now we can easily compute the shared exponents for each group.
     shared_exp, _ = torch.max(torch.abs(a), dim=1, keepdim=True)
     # Replace zero values with the minimum expressible normal value.
-    shared_exp = torch.where(shared_exp == 0, FP32_MIN_NORMAL, shared_exp)
+    shared_exp = torch.where(shared_exp == 0, fp32_min_normal, shared_exp)
     # Convert max into an integer exponent.
     shared_exp = _compute_exp(shared_exp, rounding_mode, mbits)
     # Offset exponent by largest exponent in target datatype.
-    shared_exp = shared_exp - EBITS
+    shared_exp = shared_exp - e_bits
     # Restrict to range expressible as int8.
     shared_exp = torch.clamp(shared_exp, min=-127, max=125)
     # Convert exponent to scale and apply to input.
@@ -209,27 +255,27 @@ def py_quantize_mx4(
     # When doing ceiling rounding, we apply stochastic downcasting.
     if stochastic_casting:
         rand_bits = torch.randint_like(a, high=2**31 - 1, dtype=torch.int32)
-        a = a + (rand_bits & RAND_MASK)
+        a = a + (rand_bits & rand_mask)
 
     # Quantization step: convert fp32 values to fp4.
     # Start by extracting float components.
-    sign_bit = torch.bitwise_right_shift(a, FP32_SIGN_OFFSET).to(torch.int8)
+    sign_bit = torch.bitwise_right_shift(a, fp32_sign_offset).to(torch.int8)
     # Torch does arithmetic shifts so we need to isolate sign bit.
-    sign_bit = torch.bitwise_and(sign_bit, SIGN_MASK)
+    sign_bit = torch.bitwise_and(sign_bit, sign_mask)
 
     # Next extract exponent.
-    biased_exp = torch.bitwise_and(a, FP32_EXP_MASK)
+    biased_exp = torch.bitwise_and(a, fp32_exp_mask)
     # Shift exponent over to least significant bits.
-    biased_exp = torch.bitwise_right_shift(biased_exp, FP32_EXP_OFFSET).to(torch.int8)
+    biased_exp = torch.bitwise_right_shift(biased_exp, fp32_exp_offset).to(torch.int8)
 
     # Finally extract the mantissa.
-    trailing_mantissa = torch.bitwise_and(a, FP32_MANTISSA_MASK)
-    new_biased_exp = biased_exp - FP32_EXP_BIAS + FP4_EXP_BIAS
+    trailing_mantissa = torch.bitwise_and(a, fp32_mantissa_mask)
+    new_biased_exp = biased_exp - fp32_exp_bias + fp4_exp_bias
 
     # Compute difference between ideal exponent and what can be represented.
     exp_diff = torch.where(new_biased_exp <= 0, 1 - new_biased_exp, 0)
     # Clip this difference to the maximum number of fp32 mantissa bits (23 + implicit).
-    exp_diff = torch.clamp(exp_diff, max=MAX_FP32_MANTISSA_BITS)
+    exp_diff = torch.clamp(exp_diff, max=max_fp32_mantissa_bits)
 
     # Now perform mantissa rounding down to fp4.
     is_subnorm = biased_exp == 0
@@ -240,14 +286,14 @@ def py_quantize_mx4(
     fp32_sig_bits = torch.where(is_subnorm, 23, 24).to(torch.int32)
     # Shift down to target bitwidth - 1 and efficiently represent.
     mantissa = torch.bitwise_right_shift(
-        mantissa, fp32_sig_bits + exp_diff - MBITS - 1
+        mantissa, fp32_sig_bits + exp_diff - m_bits - 1
     ).to(torch.int8)
     # Perform rounding by adding 1 then shifting down.
     mantissa = mantissa + 1
     mantissa = torch.bitwise_right_shift(mantissa, 1)
 
     # Check for overflow and adjust exponent accordingly.
-    overflow = mantissa > MANTISSA_OVERFLOW_THRESHOLD
+    overflow = mantissa > mantissa_overflow_threshold
     # Allow subnorms to overflow into normals, otherwise shift off overflow.
     mantissa = torch.where(
         torch.bitwise_and(overflow, torch.bitwise_not(is_subnorm)),
@@ -259,45 +305,16 @@ def py_quantize_mx4(
         torch.bitwise_and(new_biased_exp <= 0, mantissa == 2), 1, new_biased_exp
     )
     # Remove implicit 1.
-    mantissa = torch.bitwise_and(mantissa, IMPLICIT_1_MASK)
+    mantissa = torch.bitwise_and(mantissa, implicit_1_mask)
     # Add overflow to exponent.
     new_biased_exp = torch.where(overflow, new_biased_exp + 1, new_biased_exp)
     # If exp overflows, set mantissa so we're at max representable value.
-    mantissa = torch.where(new_biased_exp > EXPONENT_OVERFLOW_THRESHOLD, 1, mantissa)
-
-    # Construct fp4 value from components.
-    new_biased_exp = torch.clamp(new_biased_exp, min=0, max=EXPONENT_OVERFLOW_THRESHOLD)
-    mx4_value = torch.bitwise_or(
-        torch.bitwise_left_shift(new_biased_exp, MBITS - 1), mantissa
-    )
-    mx4_value = torch.bitwise_or(
-        torch.bitwise_left_shift(sign_bit, EBITS + MBITS - 1), mx4_value
-    )
-
-    # Pack int4 values into single int8 outputs.
-    low_mx4 = mx4_value[:, ::2]
-    high_mx4 = mx4_value[:, 1::2]
-    high_mx4 = torch.bitwise_left_shift(high_mx4, 4)
-    packed_mx4 = torch.bitwise_or(low_mx4, high_mx4)
-
-
-    # Ravel packed values together with shared exponent.
-    packed_mx4 = torch.concat(
-        [
-            packed_mx4.view(-1, group_size // 2),
-            (shared_exp + FP32_EXP_BIAS).to(torch.int8).view(-1, 1),
-        ],
-        dim=1,
-    )
-
-    # Inputs are now fully quantized and ready to return.
-    # Try to return in the original shape if possible.
-    if orig_shape[-1] % group_size == 0:
-        output_shape = list(orig_shape[:-1]) + [-1]
-        return packed_mx4.view(output_shape).view(torch.uint8)
-    # If we cant, return as a flat array.
-    else:
-        return packed_mx4.view(-1).view(torch.uint8)
+    mantissa = torch.where(new_biased_exp > exponent_overflow_threshold, 1, mantissa)
+    
+    return construct_fp4_from_components(new_biased_exp,
+        exponent_overflow_threshold, sign_bit, e_bits,
+        m_bits, mantissa, group_size,
+        shared_exp, fp32_exp_bias, orig_shape)
 
 
 def py_dequantize_mx4(
@@ -328,17 +345,15 @@ def py_dequantize_mx4(
     packed_input = a[:, :-1]
     shared_exp = a[:, -1:]
     # Remove fp32 exponent bias
-    FP32_EXP_BIAS = 127
-    shared_exp = shared_exp - FP32_EXP_BIAS
+    fp32_exp_bias = 127
+    shared_exp = shared_exp - fp32_exp_bias
     # First pull shared exponent off the end of each row.
-    M, K_2 = packed_input.shape
-
     # Pull out high and low mx4 values.
-    FP4_BIT_MASK = 0xF
-    low_mx4 = torch.bitwise_and(packed_input, FP4_BIT_MASK)
+    fp4_bit_mask = 0xF
+    low_mx4 = torch.bitwise_and(packed_input, fp4_bit_mask)
     high_mx4 = torch.bitwise_right_shift(packed_input, 4)
     # Remove sign bit from high values since shift was arithmetic.
-    high_mx4 = torch.bitwise_and(high_mx4, FP4_BIT_MASK)
+    high_mx4 = torch.bitwise_and(high_mx4, fp4_bit_mask)
     # Recombine into a single tensor.
     a = torch.stack([low_mx4, high_mx4], dim=0).view(2, -1).t().contiguous()
 
