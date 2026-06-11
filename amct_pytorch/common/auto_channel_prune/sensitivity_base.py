@@ -18,6 +18,6 @@
 
 __all__ = ['SensitivityBase']
 
-from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune.sensitivity_base import (
-    SensitivityBase,
-)
+from amct_pytorch.classic.graph_based.amct_pytorch.common import auto_channel_prune as _impl
+
+SensitivityBase = _impl.SensitivityBase

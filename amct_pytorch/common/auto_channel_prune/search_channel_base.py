@@ -18,6 +18,6 @@
 
 __all__ = ['SearchChannelBase']
 
-from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune.search_channel_base import (
-    SearchChannelBase,
-)
+from amct_pytorch.classic.graph_based.amct_pytorch.common import auto_channel_prune as _impl
+
+SearchChannelBase = _impl.SearchChannelBase
