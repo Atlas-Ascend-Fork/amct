@@ -303,6 +303,10 @@ class TestQuantileQuant(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
+        # 部署后调用 forward,覆盖 NpuQuantizationLinear HIF8 per-token 动态量化分支
+        deploy_out = model(torch.randn(64, 64).to(torch.bfloat16).npu())
+        self.assertTrue(mock_4.called)
+        self.assertIsNotNone(deploy_out)
 
 
 def _guard_cfg(weight_type, enable_act, act_type=None):

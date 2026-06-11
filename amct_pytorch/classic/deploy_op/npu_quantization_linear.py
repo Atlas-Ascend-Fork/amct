@@ -64,10 +64,16 @@ class NpuQuantizationLinear(torch.nn.Module):
         if hasattr(self, 'scale_factor'):
             x = x * self.scale_factor
         
-        if self.act_granularity == 'token' and self.dynamic is True and self.act_type == HIFLOAT8:
-            quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=self.npu_quantize_act_type,
-                dst_type_max=15)
-            self.pertoken_scale = pertoken_scale.view(-1)
+        if self.act_granularity == 'token':
+            # per-token activation quant is inherently dynamic: the token dim equals
+            # batch * seqlen and changes per input, so the scale must be computed at
+            # runtime. HIF8 needs dst_type_max=15; INT8 uses the default range.
+            if self.act_type == HIFLOAT8:
+                quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=self.npu_quantize_act_type,
+                    dst_type_max=15)
+            else:
+                quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(x, dst_type=self.npu_quantize_act_type)
+            self.pertoken_scale = pertoken_scale.reshape(-1).to(torch.float32)
         else:
             quant_x = torch_npu.npu_quantize(x, self.act_scale, self.act_offset, dtype=self.npu_quantize_act_type,
                 axis=self.quantize_axis, div_mode=False)
