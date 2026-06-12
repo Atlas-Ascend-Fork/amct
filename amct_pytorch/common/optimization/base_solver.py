@@ -50,6 +50,21 @@ class BaseSolver(ABC):
     def finalize(self) -> Any:
         if hasattr(self.model, "export_ptq_params"):
             return self.model.export_ptq_params()
+        # Calibration-based algos (gptq/awq) carry no trainable params; their
+        # state is exposed via export_ptq_params() on the algo submodules.
+        # Collect those so calibration survives to the load side.
+        algo_params = {}
+        for name, submodule in self.model.named_modules():
+            if not name:
+                continue
+            export_fn = getattr(submodule, "export_ptq_params", None)
+            if not callable(export_fn):
+                continue
+            sub = export_fn()
+            if isinstance(sub, dict) and len(sub) > 0:
+                algo_params[name] = sub
+        if algo_params:
+            return algo_params
         params = {}
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
