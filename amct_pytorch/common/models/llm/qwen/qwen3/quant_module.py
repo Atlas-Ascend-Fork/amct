@@ -51,24 +51,28 @@ class QuantQwen3Attn(Qwen3Attention):
     quant_args,
     attn_module.q_proj,
     w_bits=q.w,
+    group_size=q.g,
     name="q_proj") if self.enable_attn_linear else PlainLinear(
         attn_module.q_proj)
         self.k_proj = QuantLinear(
     quant_args,
     attn_module.k_proj,
     w_bits=k.w,
+    group_size=k.g,
     name="k_proj") if self.enable_attn_linear else PlainLinear(
         attn_module.k_proj)
         self.v_proj = QuantLinear(
     quant_args,
     attn_module.v_proj,
     w_bits=v.w,
+    group_size=v.g,
     name="v_proj") if self.enable_attn_linear else PlainLinear(
         attn_module.v_proj)
         self.o_proj = QuantLinear(
     quant_args,
     attn_module.o_proj,
     w_bits=o.w,
+    group_size=o.g,
     name="o_proj") if self.enable_attn_linear else PlainLinear(
         attn_module.o_proj)
         self.q_norm = attn_module.q_norm

@@ -25,14 +25,16 @@ from amct_pytorch.quantization.modules.quant_base import WeightQuantizer
 
 
 class QuantLinear(nn.Module):
-    def __init__(self, args, linear: nn.Linear, w_bits: int = None, name: str = None):
+    def __init__(self, args, linear: nn.Linear, w_bits: int = None, name: str = None,
+                 group_size: int = -1):
         super(QuantLinear, self).__init__()
         self.args = args
         self.name = name
         self.linear = linear
         self.args.w_size = self.linear.weight.data.shape
         self.w_bits = w_bits if w_bits is not None else args.w_bits
-        self.weight_quantizer = WeightQuantizer(self.args, w_bits=self.w_bits)
+        self.weight_quantizer = WeightQuantizer(self.args, w_bits=self.w_bits,
+                                                group_size=group_size)
         self.eval_mode = False
         self.cached_eval_weight = None
         self._cached_transform_key = None

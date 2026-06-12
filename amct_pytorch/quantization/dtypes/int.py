@@ -29,12 +29,13 @@ class QuantDequantInt(torch.nn.Module):
         self.bits = bits
         self.is_act = is_act
         self._deploy_mod = False
+        self.group_size = -1
 
     def fake_quant(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.is_act:
             x = dynamic_per_token_quant(x, self.bits)
         else:
-            x = weight_quant(x, self.bits, v=v)
+            x = weight_quant(x, self.bits, v=v, group_size=self.group_size)
         return x
 
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
@@ -43,9 +44,15 @@ class QuantDequantInt(torch.nn.Module):
         return self.fake_quant(x, v=v)
 
     def export_deploy(self, x: Tensor):
-        qx, scale, bias = weight_quant(x, self.bits, real_quant=True)
-        return {
+        qx, scale, bias = weight_quant(x, self.bits, real_quant=True,
+                                       group_size=self.group_size)
+        payload = {
             "qweight": qx.detach().cpu(),
             "weight_scale": scale.detach().cpu(),
-            "weight_bias": bias.detach().cpu() if bias is not None else None,
         }
+        if bias is not None:
+            payload["weight_bias"] = bias.detach().cpu()
+        elif self.group_size is not None and self.group_size > 0:
+            # symmetric group-wise (W4A16): zero antiquant offset
+            payload["weight_offset"] = torch.zeros_like(scale).detach().cpu()
+        return payload

@@ -17,7 +17,9 @@ from collections import namedtuple
 import yaml
 
 
-LayerBits = namedtuple("LayerBits", ("w", "a"))
+LayerBits = namedtuple("LayerBits", ("w", "a", "g"))
+# g: weight-quant group size along input channels; -1 = per-channel.
+LayerBits.__new__.__defaults__ = (-1,)
 
 _BIT_KEYS = ("w_bits", "a_bits")
 _ALLOWED_BITS = (4, 8, 16)
@@ -35,14 +37,18 @@ class _GroupBits:
         self._group = group
 
     def __getitem__(self, name: str) -> LayerBits:
-        return LayerBits(*self._policy.linear_bits(name=name, group=self._group))
+        w, a = self._policy.linear_bits(name=name, group=self._group)
+        g = self._policy.group_size(name=name, group=self._group)
+        return LayerBits(w, a, g)
 
     @property
     def default(self) -> LayerBits:
-        """Group-level (w, a) — falls through to top-level when the group has
-        no complete entry of its own.
+        """Group-level (w, a, g) — falls through to top-level when the group
+        has no complete entry of its own.
         """
-        return LayerBits(*self._policy.linear_bits(group=self._group))
+        w, a = self._policy.linear_bits(group=self._group)
+        g = self._policy.group_size(group=self._group)
+        return LayerBits(w, a, g)
 
 
 class BitPolicy:
@@ -114,6 +120,33 @@ class BitPolicy:
                 return int(node["w_bits"]), int(node["a_bits"])
         return self.w_bits, self.a_bits
 
+    def group_size(self, name: str | None = None, group: str | None = None) -> int:
+        """Resolve the weight-quant group size along ``group`` (dotted) / ``name``.
+
+        Walks most-specific (leaf name) to least-specific (top group) and
+        returns the first node that sets ``group_size``; falls back to the
+        top-level value, else -1 (per-channel).
+        """
+        parts: list[str] = []
+        if group:
+            parts.extend(group.split("."))
+        if name:
+            parts.append(name)
+
+        cursor = self.cfg
+        chain: list[dict] = []
+        for part in parts:
+            sub = cursor.get(part) if isinstance(cursor, dict) else None
+            if not isinstance(sub, dict):
+                break
+            chain.append(sub)
+            cursor = sub
+
+        for node in reversed(chain):
+            if "group_size" in node:
+                return int(node["group_size"])
+        return int(self.cfg.get("group_size", -1))
+
     def summary(self) -> str:
         return "BitPolicy:\n" + yaml.safe_dump(self.cfg, sort_keys=False, default_flow_style=False).rstrip()
 
@@ -170,17 +203,30 @@ def _validate_bit_value(path: str, value):
         raise ValueError(f"{path} must be one of {_ALLOWED_BITS}, but got {value}.")
 
 
+def _validate_group_size(path: str, value):
+    if type(value) is not int:
+        raise ValueError(f"{path} must be int, but got {type(value).__name__}.")
+    if value != -1 and value <= 0:
+        raise ValueError(
+            f"{path} must be a positive int or -1 (per-channel), but got {value}."
+        )
+
+
 def _validate_bit_config(node: dict, path: str = ""):
     for k, v in node.items():
         cur_path = f"{path}.{k}" if path else k
         if isinstance(v, dict):
             _validate_bit_config(v, cur_path)
+        elif k == "group_size":
+            _validate_group_size(cur_path, v)
         else:
             _validate_bit_value(cur_path, v)
 
 
 def _has_lt_16(node: dict) -> bool:
-    for v in node.values():
+    for k, v in node.items():
+        if k == "group_size":
+            continue
         if isinstance(v, dict):
             if _has_lt_16(v):
                 return True
