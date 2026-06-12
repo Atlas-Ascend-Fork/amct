@@ -33,14 +33,14 @@ description: 评测用户已指定的直转量化方案。适用于用户已经�
 
 1. [../../tasks/quantization/references/metrics-and-thresholds.md](../../tasks/quantization/references/metrics-and-thresholds.md)
 2. [../../tasks/quantization/references/direct-quant.md](../../tasks/quantization/references/direct-quant.md)
-3. 如需确认当前能力边界，再读 [../../../../docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
+3. 如需确认当前能力边界，再读 [../../../docs/repo-map.md](../../../docs/repo-map.md)
 
 ## 命令模板
 
 评测命令以 `examples/eval.sh` 为唯一权威模板（含 bf16 baseline 与 quant 两段），不要凭空拼命令。按当前方案替换：
 
 - `--model`：模型权重目录
-- `--model_name`：**必填**，已注册适配器名（dense Qwen3=`qwen3`、30B MoE=`qwen3_moe`，其余见 `docs/agent/repo-map.md`）；缺失会默认 deepseek 而误用
+- `--model_name`：**必填**，已注册适配器名（dense Qwen3=`qwen3`、30B MoE=`qwen3_moe`，其余见 `.agents/docs/repo-map.md`）；缺失会默认 deepseek 而误用
 - `--granularity block`：**必填**。默认 `model` 走 `_run_modelwise` 用原始浮点模型**完全不量化**，PPL 会与 bf16 基线一致 → 假的"无掉点"；只有 `block` 才真正量化
 - `--eval_mode`：`bf16`（基线）/ `quant`（直转评测）
 - `--quant_target`：量化模块（如 `mlp attn-linear`）

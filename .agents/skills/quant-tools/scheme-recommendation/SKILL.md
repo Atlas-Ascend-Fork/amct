@@ -30,9 +30,9 @@ description: 为已适配模型推荐第一轮量化方案。适用于用户只�
 
 按下面顺序阅读：
 
-1. `../../../docs/agent/casebook/...` 中对应系列的 `README.md`
+1. `.agents/docs/casebook/...` 中对应系列的 `README.md`
 2. 如已有个案，再读最相近的 `<series>/<case>.md`
-3. 如需确认当前能力边界，再读 [../../../../docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
+3. 如需确认当前能力边界，再读 [../../../docs/repo-map.md](../../../docs/repo-map.md)
 4. 如候选方案涉及 Linear `dynamic quant + qmm`，按 `QMM Estimator 使用规则` 调用 `$dynamic-quant-qmm-analysis` 判断收益方向
 5. 如需确认当前量化口径，再读 [../../tasks/quantization/references/metrics-and-thresholds.md](../../tasks/quantization/references/metrics-and-thresholds.md)
 

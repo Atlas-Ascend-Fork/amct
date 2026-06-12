@@ -42,7 +42,7 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 导出命令以 `examples/deploy.sh` 为唯一权威模板，不要凭空拼命令。按当前方案替换：
 
 - `--model`：原模型目录（分片或单文件 `model.safetensors`）
-- `--model_name`：**必填**，已注册适配器名（见 `docs/agent/repo-map.md`）
+- `--model_name`：**必填**，已注册适配器名（见 `.agents/docs/repo-map.md`）
 - `--granularity block`：**必填**（同 eval，默认 model 不量化）
 - `--quant_target` / `--quant_dtype`：与评测阶段一致（`--quant_dtype` 必填 `int`/`mxfp`）
 - `--bit_config`：与评测同一份 yaml

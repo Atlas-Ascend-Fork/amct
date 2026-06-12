@@ -53,7 +53,7 @@ description: 在 amct 中以总控方式推进已适配模型的量化实验与�
 ## 固定流程
 
 1. 先查现有结果：
-   - `docs/agent/casebook/...` 是否已有同模型、同口径结论
+   - `.agents/docs/casebook/...` 是否已有同模型、同口径结论
    - `outputs/`、日志或脚本目录里是否已有 BF16 baseline / quant 结果
    - 当前代码、参数口径、模型版本是否与已有结果一致
 2. 如果已有结果足够回答当前问题，先整理并输出，再决定是否需要重跑；只有在代码、模型版本、评测口径或量化目标变化时，才重跑。
@@ -149,14 +149,14 @@ description: 在 amct 中以总控方式推进已适配模型的量化实验与�
 
 ### 更新 `repo-map`
 
-只有在下面情况之一出现时，才更新 `docs/agent/repo-map.md`：
+只有在下面情况之一出现时，才更新 `.agents/docs/repo-map.md`：
 
 - 任务实际改动了 workflow、solver、数据链路、导出加载语义或模型主注册链。
 - 当前 `repo-map` 的“当前接通状态”已经和代码不一致。
 
 ### 更新 `Agent Docs`
 
-只有在下面情况之一出现时，才更新 `docs/agent/README.md`：
+只有在下面情况之一出现时，才更新 `.agents/docs/README.md`：
 
 - 文档层级或职责边界发生变化。
 - `Agent Docs` 记录的目录结构与真实目录不一致。

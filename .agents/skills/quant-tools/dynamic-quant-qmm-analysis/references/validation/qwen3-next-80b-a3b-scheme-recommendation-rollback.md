@@ -23,7 +23,7 @@
 
 参考信息：
 
-- 同系列 casebook：`docs/agent/casebook/moe/qwen3-next-80b-a3b-instruct.md`
+- 同系列 casebook：`.agents/docs/casebook/moe/qwen3-next-80b-a3b-instruct.md`
 - 模型配置：模型目录下的 `config.json`，`hidden_size=2048`，`moe_intermediate_size=512`，`num_experts=512`，`num_experts_per_tok=10`，`num_attention_heads=16`，`num_key_value_heads=2`，`head_dim=256`，`num_hidden_layers=48`
 - 调用形态核对：`amct_pytorch/common/models/llm/qwen/qwen3_next/quant_module.py`
 - 通用 MLP wrapper：`amct_pytorch/common/models/llm/common/quant_apply.py` 中 `QuantGatedMLP`

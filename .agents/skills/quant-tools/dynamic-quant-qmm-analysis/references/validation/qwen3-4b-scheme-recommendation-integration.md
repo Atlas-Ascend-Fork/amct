@@ -19,7 +19,7 @@
 
 参考信息：
 
-- 同模型 casebook：`docs/agent/casebook/dense/qwen3-4b.md`
+- 同模型 casebook：`.agents/docs/casebook/dense/qwen3-4b.md`
 - 模型配置：模型目录下的 `config.json`，`hidden_size=2560`，`intermediate_size=9728`，`num_attention_heads=32`，`num_key_value_heads=8`，`head_dim=128`，`num_hidden_layers=36`
 - 已有精度结果：`attn-linear + mlp`，`a8w8-int`，`delta=0.1736`
 

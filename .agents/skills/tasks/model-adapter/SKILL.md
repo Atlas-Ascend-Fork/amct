@@ -9,7 +9,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 
 按下面顺序阅读：
 
-1. [../../../../docs/agent/repo-map.md](../../../../docs/agent/repo-map.md)
+1. [../../../docs/repo-map.md](../../../docs/repo-map.md)
 2. [references/model-adapter.md](references/model-adapter.md)
 3. [references/validation-checklist.md](references/validation-checklist.md)
 
@@ -32,7 +32,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 1. 先读 `repo-map`，再抽查锚点文件，确认当前 map 仍有效。
 2. 先查现有结果：
    - 仓库里是否已有同模型的适配结论
-   - `docs/agent/casebook/...` 是否已有可复用经验
+   - `.agents/docs/casebook/...` 是否已有可复用经验
    - `outputs/` 或日志里是否已有 BF16 baseline / wrapper 校验 / 最小 PTQ 集成 smoke 结果
 3. 如果已有结果足够回答当前问题，先复用并说明口径；只有在代码、模型版本、评测口径或目标范围变化时，才重跑。
 4. 解析新模型结构，至少明确：
@@ -102,7 +102,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 - 除非现有接口无法表达该模型结构，否则不要改 `amct_pytorch/quantization/modules/...`。
 - 默认不要抽新基类，除非同一模式已经在多个模型族中重复出现。
 - `Agent Docs` 只在文档层级或职责边界变化时更新，不因普通模型适配而默认改动。
-- 引用仓库内代码、脚本和文档路径时，一律使用仓库相对路径，例如 `amct_pytorch/common/models/llm/...`、`docs/agent/...`；不要写绝对路径。
+- 引用仓库内代码、脚本和文档路径时，一律使用仓库相对路径，例如 `amct_pytorch/common/models/llm/...`、`.agents/docs/...`；不要写绝对路径。
 - 这里的最小 PTQ 集成 smoke 只用于验证 adapter 已接到 PTQ 主链，不在这里下 PPL、`delta`、PTQ 升级或量化方案优劣的结论；这些属于 `$quantization`。
 - 优先顺序是：
   - MLP
@@ -113,7 +113,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 
 ### 更新 `repo-map`
 
-满足下面任一条时，要更新 `docs/agent/repo-map.md`：
+满足下面任一条时，要更新 `.agents/docs/repo-map.md`：
 
 - `register_llm_models()` 的实际注册集合发生变化。
 - solver 主注册链发生变化。
@@ -141,7 +141,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 
 ### 更新 `Agent Docs`
 
-满足下面任一条时，更新 `docs/agent/README.md`：
+满足下面任一条时，更新 `.agents/docs/README.md`：
 
 - `Agent Docs` 记录的文档层级与真实目录不一致。
 - 新增或删除 `playbooks/`、`casebook/`、`repo-map.md` 等一级结构。

@@ -16,7 +16,7 @@ skills:
 ## 启动流程
 
 1. 从 dispatch prompt 中的「工作目录」确定模型路径，读取该目录下的 progress.md，了解模型信息（结构、层数、是否 MoE、是否已适配）和当前阶段
-2. 优先从 casebook（`docs/agent/casebook/<series>/`）确认同系列是否已有实测方案可复用
+2. 优先从 casebook（`.agents/docs/casebook/<series>/`）确认同系列是否已有实测方案可复用
 3. 必须调用编排层指定的 skill，按 skill 流程进行分析
 
 > **状态文件读写规则**：progress.md 直接 Read；progress_history.md 禁止 Read 全文，需要历史信息时用 Grep 关键字查找。
