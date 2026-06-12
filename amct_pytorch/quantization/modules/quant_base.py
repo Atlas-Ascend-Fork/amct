@@ -150,6 +150,10 @@ class WeightQuantizer(torch.nn.Module):
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits)
         if hasattr(self.quant_obj, "group_size"):
             self.quant_obj.group_size = int(group_size)
+        for _algo in self.algorithms.values():
+            _aq = getattr(_algo, "quant_obj", None)
+            if _aq is not None and hasattr(_aq, "group_size"):
+                _aq.group_size = int(group_size)
         self.enable = False
 
     def algo_forward(self, x):
