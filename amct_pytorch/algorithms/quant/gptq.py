@@ -75,29 +75,49 @@ class GPTQ(nn.Module):
     def trainable_params(self):
         return []
 
+    def _group_scale_for(self, weight, quant_obj):
+        """Per-group symmetric scale (mirrors quantize); (None, None) if not group-int4."""
+        bits = getattr(quant_obj, "bits", None)
+        gsize = getattr(quant_obj, "group_size", -1)
+        if bits is None or bits >= 16 or gsize is None or gsize <= 0 or self.columns % gsize != 0:
+            return None, None
+        qmax = 2 ** (bits - 1) - 1
+        n_groups = self.columns // gsize
+        scale = (weight.detach().float().abs()
+                 .reshape(self.rows, n_groups, gsize).amax(dim=2) / qmax).clamp(min=1e-9)
+        return scale, gsize
+
     def export_ptq_params(self):
-        if int(self.nsamples.item()) == 0:
+        # Only the GPTQ-corrected quantized weight is needed downstream; the
+        # Hessian H is a calibration-time intermediate (eval/deploy reuse the
+        # cached qweight and never recompute Cholesky), so it is NOT persisted.
+        # For group-wise int4 the weight is stored as int8 levels + per-group
+        # scale (q_int * scale == the fp32 dequant, bit-exact, ~4x smaller).
+        if int(self.nsamples.item()) == 0 or self._observed_weight is None:
             return {}
-        params = {
-            "H": self.H.detach().cpu(),
-            "nsamples": int(self.nsamples.item()),
-        }
-        # Run the corrected per-channel quantization once at calibration time
-        # and persist the result, so eval/deploy reuse it instead of redoing
-        # the Cholesky path on every forward.
-        if self._observed_weight is not None:
-            qweight = self.quantize(self._observed_weight, self.quant_obj)
-            params["qweight"] = qweight.detach().cpu()
-        return params
+        qweight = self.quantize(self._observed_weight, self.quant_obj)
+        scale, gsize = self._group_scale_for(self._observed_weight, self.quant_obj)
+        if scale is not None:
+            n_groups = self.columns // gsize
+            q_int = torch.round(qweight.detach().float()
+                                .reshape(self.rows, n_groups, gsize) / scale.unsqueeze(-1))
+            return {
+                "qweight_int": q_int.to(torch.int8).cpu(),
+                "qweight_scale": scale.detach().cpu(),
+                "group_size": int(gsize),
+            }
+        return {"qweight": qweight.detach().cpu()}
 
     def load_ptq_params(self, params):
-        if "nsamples" in params:
-            self.nsamples.fill_(int(params.get("nsamples", 0)))
-        if "H" in params:
-            self.H.copy_(params["H"].to(device=self.H.device, dtype=self.H.dtype))
-        # Prefer the persisted quantized weight: quantize() then hits its
-        # cache and skips the Cholesky recompute entirely.
-        if "qweight" in params:
+        # Reconstruct the cached fp32 dequant weight; quantize() then short-circuits.
+        if "qweight_int" in params:
+            q = params["qweight_int"].to(device=self.H.device).float()
+            scale = params["qweight_scale"].to(device=self.H.device)
+            gsize = int(params["group_size"])
+            n_groups = self.columns // gsize
+            self._cached_qweight = (q.reshape(self.rows, n_groups, gsize)
+                                    * scale.unsqueeze(-1)).reshape(self.rows, self.columns)
+        elif "qweight" in params:
             self._cached_qweight = params["qweight"].to(device=self.H.device)
         else:
             self._cached_qweight = torch.empty(0, device=self.H.device)
