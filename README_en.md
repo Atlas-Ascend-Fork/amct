@@ -70,9 +70,21 @@ Quantization significantly reduces deployment costs:
 | Dependency | Version |
 |------|------|
 | Python | >=3.9 |
-| PyTorch | 2.7.1 or 2.1.0 (requires matching `torch_npu`) |
+| PyTorch | 2.7.1 or 2.1.0 (**NPU path must use the CPU build of PyTorch**), plus matching `torch_npu` |
 | GCC / CMake / patch | ≥ 7.3 / ≥ 3.16 (recommended 3.20) / ≥ 2.7 |
 | CANN (Toolkit & Ops) | ≥ 8.5.0 (requires pre-installed NPU driver / firmware) |
+
+> ⚠️ **Important**: `torch_npu` cannot coexist with the CUDA build of `torch`. In an NPU environment, **you must install the CPU build of PyTorch first**, then install `torch_npu`. Otherwise you will hit errors such as `Two accelerators cannot be used at the same time in PyTorch: npu and cuda` (see Issues #140, #80). Recommended install:
+>
+> ```bash
+> # Option A: Download the CPU build of torch + matching torch_npu wheel from
+> #           the official Huawei "Ascend PyTorch User Guide":
+> #           https://hiascend.com/document/redirect/pytorchuserguide
+> #
+> # Option B: Use the PyPI CPU index for torch, then install torch_npu
+> pip3 install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+> pip3 install torch_npu==2.7.1.post4
+> ```
 
 For complete environment deployment, please refer to [Quick Installation](docs/zh/quick_install.md).
 
@@ -186,6 +198,31 @@ pip install pip==25.2
 # Solution 2: Add --no-build-isolation
 pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isolation
 ```
+
+</details>
+
+<details>
+<summary><strong>"Two accelerators cannot be used at the same time in PyTorch: npu and cuda" when importing torch_npu?</strong></summary>
+
+**Cause**: `torch_npu` is mutually exclusive with the CUDA build of `torch`. AMCT follows the NPU path, so you **must uninstall the CUDA build of torch first, then install the CPU build of torch + torch_npu**.
+
+**Solution**:
+
+```bash
+# 1. Uninstall the existing CUDA build of torch
+pip3 uninstall -y torch
+
+# 2. Install the CPU build of torch
+pip3 install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+
+# 3. Install the matching torch_npu
+pip3 install torch_npu==2.7.1.post4
+
+# 4. Verify torch is the CPU build (assertion must not fire)
+python3 -c "import torch; assert not torch.cuda.is_available(), 'must use CPU torch for NPU path'; print('OK')"
+```
+
+A more reliable option is to follow the official Huawei "Ascend PyTorch User Guide" and download pre-built wheels for the CPU build of torch and the matching torch_npu: <https://hiascend.com/document/redirect/pytorchuserguide>.
 
 </details>
 

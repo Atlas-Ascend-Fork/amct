@@ -70,9 +70,20 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 | 依赖 | 版本 |
 |------|------|
 | Python | >=3.9 |
-| PyTorch | 2.7.1 或 2.1.0（需配套 `torch_npu`） |
+| PyTorch | 2.7.1 或 2.1.0（**NPU 路径必须使用 CPU 版 PyTorch**，再配套 `torch_npu`） |
 | GCC / CMake / patch | ≥ 7.3 / ≥ 3.16（推荐 3.20） / ≥ 2.7 |
 | CANN（Toolkit & Ops） | ≥ 8.5.0（需提前安装 NPU 驱动 / 固件） |
+
+> ⚠️ **重要**：`torch_npu` 与 CUDA 版 `torch` 不能共存。在 NPU 环境下，**必须先安装 CPU 版 PyTorch**，再安装 `torch_npu`，否则会出现 `Two accelerators cannot be used at the same time in PyTorch: npu and cuda` 类错误（参见 Issue #140、#80）。推荐安装方式：
+>
+> ```bash
+> # 方式 A：通过华为官方《PyTorch 使用指南》获取 CPU 版 torch + 配套 torch_npu wheel
+> #         https://hiascend.com/document/redirect/pytorchuserguide
+> #
+> # 方式 B：使用 PyPI CPU 索引安装 torch，再安装 torch_npu
+> pip3 install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+> pip3 install torch_npu==2.7.1.post4
+> ```
 
 完整环境部署请参见 [快速安装](docs/zh/quick_install.md)。
 
@@ -186,6 +197,31 @@ pip install pip==25.2
 # 方案 2：添加 --no-build-isolation
 pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isolation
 ```
+
+</details>
+
+<details>
+<summary><strong>import torch_npu 报 "Two accelerators cannot be used at the same time in PyTorch: npu and cuda"？</strong></summary>
+
+**原因**：`torch_npu` 与 CUDA 版 `torch` 互斥。AMCT 走 NPU 路径，**必须先卸载 CUDA 版 torch，再安装 CPU 版 torch + torch_npu**。
+
+**解决方案**：
+
+```bash
+# 1. 卸载现有的 CUDA 版 torch
+pip3 uninstall -y torch
+
+# 2. 安装 CPU 版 torch
+pip3 install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+
+# 3. 安装配套的 torch_npu
+pip3 install torch_npu==2.7.1.post4
+
+# 4. 验证 torch 是 CPU 构建（应当不会抛 AssertionError）
+python3 -c "import torch; assert not torch.cuda.is_available(), 'must use CPU torch for NPU path'; print('OK')"
+```
+
+更稳妥的方式是参考华为官方《PyTorch 使用指南》直接下载 CPU 版 torch + 配套 torch_npu 的预编译 wheel：<https://hiascend.com/document/redirect/pytorchuserguide>。
 
 </details>
 

@@ -1,3 +1,32 @@
+# ----------------------------------------------------------------------------
+# AMCT 第三方依赖说明（cann/amct）
+# ----------------------------------------------------------------------------
+# 注意：AMCT 走的是 NPU 路径，torch_npu 必须配套 **CPU 版 PyTorch**（不能与
+# 同时安装的 CUDA 版 torch 共存，否则会在 import 阶段报：
+#   "Two accelerators cannot be used at the same time in PyTorch: npu and cuda"
+# 参见 Issue #140、#80。
+#
+# 推荐安装方式（任选其一）：
+#
+# 1) 通过华为官方《PyTorch 使用指南》下载 CPU 版 torch 与配套 torch_npu wheel
+#    https://hiascend.com/document/redirect/pytorchuserguide
+#
+# 2) 直接使用 PyPI CPU 索引（仅 CPU 版 torch，torch_npu 仍走 PyPI）：
+#    pip3 install --extra-index-url https://download.pytorch.org/whl/cpu \
+#        torch==2.7.1
+#    pip3 install torch_npu==2.7.1.post4
+#
+# 3) 已经误装了 CUDA 版 torch？务必先卸载再重装：
+#    pip3 uninstall -y torch
+#    pip3 install --extra-index-url https://download.pytorch.org/whl/cpu \
+#        torch==2.7.1
+#    pip3 install torch_npu==2.7.1.post4
+#
+# 验证 torch 走的是 CPU 构建：
+#   python3 -c "import torch; assert not torch.cuda.is_available(), \
+#       'AMCT NPU 路径必须使用 CPU 版 torch，请按上述方式卸载 CUDA 版后重装'"
+# ----------------------------------------------------------------------------
+
 torch==2.7.1
 torch_npu==2.7.1.post4
 setuptools

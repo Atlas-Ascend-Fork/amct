@@ -22,6 +22,36 @@
 pip3 install -r requirements.txt
 ```
 
+### ⚠️ PyTorch + torch_npu 配套安装（必读）
+
+`torch_npu` 与 CUDA 版 `torch` **互斥**。AMCT 走 NPU 路径，**必须使用 CPU 版 PyTorch** 再配套 `torch_npu`，否则运行期会触发 `Two accelerators cannot be used at the same time in PyTorch: npu and cuda`（参见 Issue #140、#80）。`requirements.txt` 已加注释说明，请按下列任一方式安装：
+
+**方式 A：通过华为官方配套表安装（推荐）**
+
+1. 打开《[PyTorch 使用指南](https://hiascend.com/document/redirect/pytorchuserguide)》。
+2. 进入 “版本说明 > 相关产品版本配套说明”，按目标 CANN 版本下载 CPU 版 torch 与配套 torch_npu wheel。
+3. 使用 `pip3 install <whl_path>` 顺序安装 CPU 版 torch，再安装 torch_npu。
+
+**方式 B：使用 PyPI CPU 索引**
+
+```bash
+# 1. 先卸载已存在的 CUDA 版 torch（如有）
+pip3 uninstall -y torch
+
+# 2. 安装 CPU 版 torch
+pip3 install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+
+# 3. 安装配套的 torch_npu
+pip3 install torch_npu==2.7.1.post4
+```
+
+**安装后验证（应当不会抛 AssertionError）**：
+
+```bash
+python3 -c "import torch; assert not torch.cuda.is_available(), 'must use CPU torch for NPU path'; print('torch OK')"
+python3 -c "import torch_npu; print('torch_npu OK')"
+```
+
 ## 环境安装
 
 1. **安装驱动与固件**
