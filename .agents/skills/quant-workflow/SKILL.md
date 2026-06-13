@@ -7,7 +7,7 @@ description: amct 量化编排入口。从“模型导入”到“适配→量�
 
 唯一的端到端编排入口。**不重写**叶子 skill 的规则，只负责：查现状 → 判阶段 → 串联/分流 → 复用已有结果 → deploy 后补交付文档。
 
-叶子 / 子任务：`$model-adapter`、`quant-tools/`（`$scheme-recommendation` / `$direct-quant-eval` / `$algorithm-recommendation` / `$algorithm-validation` / `$deploy-export` / `$dynamic-quant-qmm-analysis`）。
+叶子 / 子任务：`$model-adapter`、`quant-tools/`（`$scheme-recommendation` / `$direct-quant-eval` / `$algorithm-recommendation` / `$algorithm-validation` / `$deploy-export`）。
 
 ## 评测口径强约束
 

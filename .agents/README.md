@@ -32,14 +32,13 @@
 | [algorithm-recommendation](skills/quant-tools/algorithm-recommendation/SKILL.md) | 算法推荐 | 直转超阈，推荐下一步算法 |
 | [algorithm-validation](skills/quant-tools/algorithm-validation/SKILL.md) | 算法验证 | 验证 PTQ 算法相对直转是否真改善 |
 | [deploy-export](skills/quant-tools/deploy-export/SKILL.md) | 部署导出 | 导出 compressed-tensors 权重 + 文档 |
-| [dynamic-quant-qmm-analysis](skills/quant-tools/dynamic-quant-qmm-analysis/SKILL.md) | Linear dynamic quant + qmm 理论性能评估 | 候选方案启用动态量化时判收益方向 |
 
 ### 调度关系
 
 ```
 quant-workflow（编排入口）
   ├── Step 1: model-adapter（未适配时）
-  ├── Step 2: scheme-recommendation（首轮方案，按需 dynamic-quant-qmm-analysis 评估收益）
+  ├── Step 2: scheme-recommendation（首轮方案）
   ├── Step 3: direct-quant-eval（直转，delta ≤ 0.2 → 直接导出）
   ├── Step 4: algorithm-recommendation + algorithm-validation（直转超阈时升级 PTQ）
   └── Step 5: deploy-export（导出权重产物）

@@ -5,7 +5,6 @@ mode: subagent
 skills:
   - scheme-recommendation
   - algorithm-recommendation
-  - dynamic-quant-qmm-analysis
   - model-adapter
 ---
 
@@ -29,7 +28,6 @@ skills:
 | 2 | 模型未适配 | 调用 `model-adapter` 做适配性分析，输出缺口清单 |
 | 3 | 已适配、需首轮方案 | 调用 `scheme-recommendation`，复用 casebook 给候选方案 |
 | 4 | 直转 delta 超阈、需升级 | 调用 `algorithm-recommendation` 给下一步算法 |
-| 5 | 候选含 Linear dynamic quant + qmm | 调用 `dynamic-quant-qmm-analysis` 判断收益方向 |
 
 ## 核心原则
 

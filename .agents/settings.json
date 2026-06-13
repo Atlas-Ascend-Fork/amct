@@ -43,8 +43,7 @@
       "Skill(direct-quant-eval)",
       "Skill(algorithm-recommendation)",
       "Skill(algorithm-validation)",
-      "Skill(deploy-export)",
-      "Skill(dynamic-quant-qmm-analysis)"
+      "Skill(deploy-export)"
     ],
     "deny": [],
     "ask": [
