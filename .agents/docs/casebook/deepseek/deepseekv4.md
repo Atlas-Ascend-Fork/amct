@@ -1,6 +1,6 @@
-# DeepSeek V4 (DeepSeek-V4-Pro)
+# DeepSeek-V4 (DeepSeek-V4-Pro) · 系列 deepseek · 结构 mla-moe
 
-> 状态:**代码侧适配完成,等权重补 BF16 baseline / 浮点等价 / PTQ smoke**。本条只记录结构判断和适配设计,量化结论待权重到位后补。
+> **速览**：代码侧适配完成、**等权重**补 baseline/等价/PTQ smoke。结构最特殊：MLA 单 head 共享 KV + `o_groups` 分组低秩 `wo` + Compressor/Indexer 双子模块 + Hyper-Connections 4D hidden + 自定义 forward 签名 `(x, start_pos, input_ids)`。下次遇 MLA+Compressor+Indexer+HC 类模型，首参考本案 + `deepseek_v3_2`(MLA) + `longcat_next`(PreTrainedModel 化与 AutoModel 注册)。
 
 ## 为什么值得记录
 

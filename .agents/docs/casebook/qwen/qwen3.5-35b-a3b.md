@@ -1,16 +1,20 @@
-# Qwen3.5-35B-A3B
+# Qwen3.5-35B-A3B · 系列 qwen · 结构 moe（混合 attention）
 
-首条 `qwen3_5moe` 适配案例。adapter：`amct_pytorch/common/models/llm/qwen/qwen3_5/qwen3_5_moe.py`。
+> **速览**：首条 `qwen3_5moe` 适配。混合 `linear`+`full` attention；checkpoint MoE 已 packed（无需重组）。核心坑：误用 DeepSeek MLA 接口。
 
-## 适配重点
+## 结构与适配要点
 
-- 40 层 decoder，`layer_types` 为重复的 `linear×3 + full` 混合 attention；checkpoint MoE 已是 **packed 布局**（无需像 235B 做 per-expert 重组）。
-- 复用 `BaseModel` blockwise / `PtqUnit` / `QuantLinear` / `apply_quant_attn` / `apply_quant_moe_mlp`；新增 `qwen3_5moe` 的 `build_quant_block()` 路由、`QuantPackedExperts`、`PackedExpertView`。
+- 40 层 decoder，`layer_types` 重复 `linear×3 + full`；checkpoint MoE 已是 packed 布局（无需像 235B 重组）。
+- **复用**：`BaseModel` blockwise、`PtqUnit`、`QuantLinear`、`apply_quant_attn`、`apply_quant_moe_mlp`。**新增**：`qwen3_5moe` 的 `build_quant_block()` 路由、`QuantPackedExperts`、`PackedExpertView`。
 
-## 关键陷阱（可复用）
+## 适配验证结论
 
-- **别复用 DeepSeek 的 MLA 接口**：`qwen3_5moe` 继承自 `Qwen3_5`，旧路径误调不存在的 `apply_quant_mla()`，一进 quant block 构建就接口报错。修复：统一收回 Qwen 公共接口 `apply_quant_attn()` / `apply_quant_moe_mlp()`。**教训：Qwen 分支先看 dense adapter 的公共接口，不要直接用 DeepSeek 的 MLA 入口。**
-- **混合 attention 分开处理**：`linear_attention` 与 `full_attention` 不能套同一套 wrapper；最小闭环阶段 `linear_attention` 暂留 BF16，真正量化时单独补专属 wrapper 与验证链。
+- 三步闭环通过；关闭量化 `attn`(3/19/39) 接近、`moe`(0/20/39) 对齐；`layer0/shared_expert` 最小 PTQ smoke 打通。
+
+## 关键陷阱（模型/框架内在，可复用）
+
+- **误用 DeepSeek 的 MLA 接口** —— 现象：进 quant block 构建即接口报错（调到不存在的 `apply_quant_mla()`）。根因：`qwen3_5moe` 继承 `Qwen3_5`，应复用 Qwen 公共接口而非 DeepSeek MLA 专用入口。处理：统一收回 `apply_quant_attn()`/`apply_quant_moe_mlp()`。**教训：Qwen 分支先看 dense adapter 公共接口，勿直接用 DeepSeek MLA 入口。**
+- **混合 attention 分开处理** —— `linear_attention` 与 `full_attention` 不能套同一 wrapper；最小闭环阶段 `linear_attention` 暂留 BF16，真正量化时单独补专属 wrapper 与验证链。
 
 ## 精度速查表
 

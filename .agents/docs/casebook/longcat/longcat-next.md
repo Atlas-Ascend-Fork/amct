@@ -1,15 +1,19 @@
-# LongCat-Next
+# LongCat-Next · 系列 longcat · 结构 moe
 
-第二个 LongCat 系列适配案例。adapter：`amct_pytorch/common/models/llm/longcat/longcat_next/longcat_next.py`（+ `llm/__init__.py`）。
+> **速览**：第二个 LongCat 适配，拓扑近 Flash-Lite。核心坑：`trust_remote_code` 顶层走多模态入口，需切 text-only backbone。
 
-## 适配重点
+## 结构与适配要点
 
-- 结构同 `LongCat-Flash-Lite`：`ngram_embeddings` 输入、双 self-attn + 双 dense MLP + MoE shortcut；`PtqUnit` 拆 `attn→self_attn_0/1`、`mlp→mlp_0/1`、`moe→expert_<idx>`；checkpoint 逐 expert，运行时重组 packed。
-- 复用 `LongcatLite` 的 blockwise 工作流与 PTQ unit 路由 + `QuantLinear`/`QuantGatedMLP`；唯一新增兼容点：adapter 内直接实例化 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM`，并把 `lm_head` 对齐到 `text_vocab_plus_multimodal_special_token_size`。
+- 结构同 Flash-Lite：`ngram_embeddings` 输入、双 self-attn + 双 dense MLP + MoE shortcut；`PtqUnit` 拆 `attn→self_attn_0/1`、`mlp→mlp_0/1`、`moe→expert_<i>`；checkpoint 逐 expert，运行时重组 packed。
+- **复用**：`LongcatLite` blockwise 工作流与 PTQ unit 路由 + `QuantLinear`/`QuantGatedMLP`。**新增（唯一兼容点）**：adapter 内实例化 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM`，`lm_head` 对齐 `text_vocab_plus_multimodal_special_token_size`。
 
-## 关键陷阱（可复用）
+## 适配验证结论
 
-- **`trust_remote_code` 顶层模型空载失败**：`AutoModelForCausalLM.from_config(..., trust_remote_code=True)` 被 `flash_attn` 依赖阻塞，因顶层远端代码默认走多模态入口，而 blockwise PTQ 只需 text-only backbone。修复：adapter 内切到 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM` 并修 `lm_head` 形状。**教训：`trust_remote_code` 模型先看 blockwise PTQ 真正需要的最小 backbone，再决定是否完整加载顶层模型。**
+- 三步闭环通过；关闭量化 attn/mlp/moe 代表层 `max_abs=0` 完全对齐；`layer0/mlp_0` 最小 PTQ smoke（flatquant 1-epoch，回载 `max_abs=0`）打通。
+
+## 关键陷阱（模型/框架内在，可复用）
+
+- **`trust_remote_code` 顶层模型空载失败** —— 现象：`AutoModelForCausalLM.from_config(..., trust_remote_code=True)` 被 `flash_attn` 依赖阻塞。根因：顶层远端代码默认走多模态入口，而 blockwise PTQ 只需 text-only backbone。处理：adapter 内切到 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM` 并修 `lm_head` 形状。**教训：`trust_remote_code` 模型先看 blockwise PTQ 真正需要的最小 backbone，再决定是否完整加载顶层模型。**
 
 ## 精度速查表
 
