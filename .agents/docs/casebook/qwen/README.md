@@ -57,9 +57,9 @@
 
 ## 已有个案
 
-- [Qwen3-8B](../dense/qwen3-8b.md)
-- [Qwen3-30B-A3B](../moe/qwen3-30b-a3b.md)
-- [Qwen3-4B](../dense/qwen3-4b.md)
-- [Qwen3.5-35B-A3B](../vl-moe/qwen3.5-35b-a3b.md)
-- [Qwen3-235B-A22B](../moe/qwen3-235b-a22b.md)
-- [Qwen3-Next-80B-A3B-Instruct](../moe/qwen3-next-80b-a3b-instruct.md)
+- [Qwen3-8B](qwen3-8b.md)
+- [Qwen3-30B-A3B](qwen3-30b-a3b.md)
+- [Qwen3-4B](qwen3-4b.md)
+- [Qwen3.5-35B-A3B](qwen3.5-35b-a3b.md)
+- [Qwen3-235B-A22B](qwen3-235b-a22b.md)
+- [Qwen3-Next-80B-A3B-Instruct](qwen3-next-80b-a3b-instruct.md)

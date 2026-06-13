@@ -13,7 +13,7 @@
 
 ## 参考关系
 
-- 参考系列:DeepSeek (`.agents/docs/casebook/_vendor-notes/deepseek.md`)
+- 参考系列:DeepSeek (`.agents/docs/casebook/deepseek/README.md`)
 - 参考已有模型/案例:`deepseekv32` (MLA + DSA 结构最接近), `qwen3_moe` (MoE wrapper 形态), `longcat_next` (PreTrainedModel 化 + 不在 transformers 包里的模型怎么接)
 - 本次主要差异:
   - 没沿用 v3.2 的 `QuantDSA / QuantDeepseekV3MLP` —— v4 的 MLA / Compressor / Indexer 跟 v3.2 DSA 结构差太大,直接复用会语义错位

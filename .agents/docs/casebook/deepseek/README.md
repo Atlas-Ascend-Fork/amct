@@ -38,4 +38,4 @@
 
 ## 已有个案
 
-- [deepseekv4](../mla-moe/deepseekv4.md) — DeepSeek-V4-Pro。MLA + Compressor + Indexer + HC + grouped wo + 自定义 forward 签名。代码侧适配完成,等权重补 BF16/PTQ。
+- [deepseekv4](deepseekv4.md) — DeepSeek-V4-Pro。MLA + Compressor + Indexer + HC + grouped wo + 自定义 forward 签名。代码侧适配完成,等权重补 BF16/PTQ。
