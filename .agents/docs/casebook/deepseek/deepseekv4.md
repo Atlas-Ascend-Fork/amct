@@ -108,12 +108,6 @@
   - 修法:动 modeling 结构前**先拉 `model.safetensors.index.json` 看实际 key**(modelscope 镜像最稳,HF 直链有 LFS 重定向 + 大文件被 WebFetch 截断的问题)
   - 下次如何提前规避:skill Step 1 "结构判断"必须包含一项"列出顶层 key + 一个代表层的 key 模式 + 跟代表层不同的层签名" —— 拿这些**事实**而不是命名推断来定 modeling
 
-- **问题 4**:看到 `.scale` 配对就以为要做 FP8 dequant
-  - 现象:index.json 里每个 quant 候选 Linear 都有 `name.weight` + `name.scale` 配对,推断 checkpoint 是 FP8 量化、提议在 `load_layer_weight` 里加 weight×scale 的 dequant 路径
-  - 根因:用户最终拿到的会是已经 dequant 过的 BF16 权重(没有 `.scale`)。看到 FP8 痕迹就推 dequant 需求,等于把不属于自己阶段的事提前做了
-  - 修法:跟用户对齐 checkpoint 状态 —— 直接问"你最终拿到的权重是 FP8 还是 BF16",不要默认走 dequant
-  - 下次如何提前规避:checkpoint 是不是量化的、是什么量化格式,**问用户**,不要从 index.json 字段推断
-
 - **问题 5**:HF 字段翻译只单向,运行时 AttributeError
   - 现象:Config 用 `if hidden_size is not None: dim = hidden_size` 把 HF 名翻成 ModelArgs 名,但**没有把 HF 名也存回 self**;HF 通用工具(generation / tokenizer max-length / transformers internals)直接读 `config.max_position_embeddings`,挂 AttributeError
   - 根因:翻译只做了"输入归一化",没做"双向暴露"。`super().__init__(**kwargs)` 只会接住 PretrainedConfig 通用的少数字段,不会把所有原始 kwargs 都存为 attr
@@ -125,12 +119,6 @@
   - 根因:HF 的 `dtype` 是 runtime 加载 dtype(`torch.bfloat16` 这种 torch.dtype 对象),v4 ModelArgs 的 `dtype` 是架构 quant 格式选项(`"fp8"` / `"bf16"` 字符串)。两个语义同名却不同义,在同一 config 上互斥
   - 修法:把 v4 的语义重命名 `arch_dtype`,modeling 里 `config.dtype == "fp8"` 改成 `config.arch_dtype == "fp8"`。HF 的 `cfg.dtype / cfg.torch_dtype` 维持原义。这条只影响 v4 modeling 的一行 + Config 的字段绑定,不影响 ModelArgs 输入参数名(仍然是 `dtype="fp8"`,内部翻译到 `arch_dtype`)
   - 下次如何提前规避:写双向 Config 时,**先列出 modern HF PretrainedConfig 已经占用的 attribute slot**(`dtype / torch_dtype / hidden_size / num_hidden_layers / num_attention_heads / max_position_embeddings / vocab_size / pad_token_id / bos_token_id / eos_token_id / use_cache / tie_word_embeddings / rope_scaling / quantization_config / ...`),自家 ModelArgs 字段如果撞这些里任何一个,**优先在 Config 内部重命名**,不要靠"在 super 后再赋值"硬抢
-
-- **问题 7**:`from statsmodels.tools.eval_measures import bias` 这种 IDE 自动 import
-  - 现象:模块根本 import 不起来,因为 amct 环境没有 statsmodels,且 `bias` 在文件里仅作 `nn.Linear(..., bias=False)` 关键字使用
-  - 根因:上游写代码时 IDE 把 `bias` 名字补全成不相关包的 import
-  - 修法:删掉
-  - 下次如何提前规避:每接入一个上游 modeling 文件先 `python -c 'import ...'` 一次
 
 ## 最终建议
 
