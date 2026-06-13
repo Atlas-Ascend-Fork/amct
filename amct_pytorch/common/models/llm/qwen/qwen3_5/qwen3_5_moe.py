@@ -104,8 +104,8 @@ class Qwen3_5Moe(Qwen3_5):
 
         return decoder_layer
 
-    def iter_ptq_units(self, layer_idx, block):
-        yield from super().iter_ptq_units(layer_idx, block)
+    def iter_ptq_units(self, layer_idx, block, purpose="compute"):
+        yield from super().iter_ptq_units(layer_idx, block, purpose=purpose)
 
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)

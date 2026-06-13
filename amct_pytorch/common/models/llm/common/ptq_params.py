@@ -120,7 +120,7 @@ class PtqParamStore:
     def load_layer(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         loaded_units = []
         missing_units = []
-        for unit in self.iter_ptq_units_fn(layer_idx, block):
+        for unit in self.iter_ptq_units_fn(layer_idx, block, purpose="apply"):
             loaded = self.load_saved_unit(param_dir, unit, strict=strict)
             if loaded:
                 loaded_units.append(unit.name)

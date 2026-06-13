@@ -249,7 +249,7 @@ class BaseModel(metaclass=ABCMeta):
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         pass
 
-    def iter_ptq_units(self, layer_idx, block):
+    def iter_ptq_units(self, layer_idx, block, purpose="compute"):
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             layer_type = getattr(block, "layer_type", None)
             attn_name = "linear_attn" if layer_type == "linear_attention" else "self_attn"
@@ -262,7 +262,12 @@ class BaseModel(metaclass=ABCMeta):
             raise ValueError(f"Unsupported quant target '{self.quant_target}'.")
         if "moe" in self.quant_target:
             experts = getattr(mlp, "experts", [])
-            if hasattr(experts, "iter_ptq_expert_modules"):
+            # purpose="compute" (PTQ): movable materialized experts, device-safe.
+            # purpose="apply" (load/eval/deploy): the forward-path expert_modules,
+            # so calibration params (e.g. GPTQ qweight) take effect at inference.
+            if purpose == "apply" and hasattr(experts, "expert_modules"):
+                experts = experts.expert_modules
+            elif hasattr(experts, "iter_ptq_expert_modules"):
                 experts = experts.iter_ptq_expert_modules()
             elif hasattr(experts, "expert_modules"):
                 experts = experts.expert_modules

@@ -112,8 +112,8 @@ class Qwen3_5(BaseModel):
             cls=QuantQwen35MLP,
         )
 
-    def iter_ptq_units(self, layer_idx, block):
-        yield from super().iter_ptq_units(layer_idx, block)
+    def iter_ptq_units(self, layer_idx, block, purpose="compute"):
+        yield from super().iter_ptq_units(layer_idx, block, purpose=purpose)
 
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)
