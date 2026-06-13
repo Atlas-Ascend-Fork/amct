@@ -28,6 +28,11 @@ class GPTQ(nn.Module):
     def __init__(self, args, w_bits):
         super().__init__()
         self.args = args
+        if getattr(args, "quant_dtype", "int") != "int":
+            raise NotImplementedError(
+                f"GPTQ currently supports only quant_dtype='int' (symmetric integer "
+                f"grid); got '{args.quant_dtype}'. mxfp-GPTQ is not yet implemented."
+            )
         self.blocksize = int(getattr(args, "gptq_blocksize", 128))
         self.percdamp = float(getattr(args, "gptq_percdamp", 0.01))
         self.actorder = bool(getattr(args, "gptq_actorder", False))
