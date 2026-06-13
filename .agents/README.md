@@ -19,16 +19,14 @@
 
 ## Skills 列表
 
-### 量化主流程 Skills（`skills/quant-tools/` + `skills/tasks/`）
+### 量化主流程 Skills
 
-由 `amct-quantization` 编排入口调度：
+由 `quant-workflow` 编排入口调度：
 
 | Skill | 功能 | 触发场景 |
 |-------|------|---------|
-| [amct-quantization](skills/tasks/amct-quantization/SKILL.md) | 量化适配统一入口（编排） | 端到端量化适配、输入模型输出方案与权重 |
-| [model-adapter](skills/tasks/model-adapter/SKILL.md) | 新模型适配 | 模型未适配时写 adapter 代码 |
-| [model-workflow](skills/tasks/model-workflow/SKILL.md) | 量化工作流总览 | 了解四步 CLI 的串联与产物流转 |
-| [quantization](skills/tasks/quantization/SKILL.md) | 量化实验总控 | 直转→升级 PTQ→导出的实验编排 |
+| [quant-workflow](skills/quant-workflow/SKILL.md) | 量化编排入口 | 端到端：判阶段→串联/分流→复用 casebook→deploy 交付 |
+| [model-adapter](skills/model-adapter/SKILL.md) | 新模型适配 | 模型未适配时写 adapter 代码 |
 | [scheme-recommendation](skills/quant-tools/scheme-recommendation/SKILL.md) | 量化方案推荐 | 首轮候选方案、复用 casebook、风险/回退 |
 | [direct-quant-eval](skills/quant-tools/direct-quant-eval/SKILL.md) | 直转评测 | 跑 PPL，判 delta 是否可接受 |
 | [algorithm-recommendation](skills/quant-tools/algorithm-recommendation/SKILL.md) | 算法推荐 | 直转超阈，推荐下一步算法 |
@@ -39,7 +37,7 @@
 ### 调度关系
 
 ```
-amct-quantization（编排入口）
+quant-workflow（编排入口）
   ├── Step 1: model-adapter（未适配时）
   ├── Step 2: scheme-recommendation（首轮方案，按需 dynamic-quant-qmm-analysis 评估收益）
   ├── Step 3: direct-quant-eval（直转，delta ≤ 0.2 → 直接导出）

@@ -9,15 +9,15 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 
 按下面顺序阅读：
 
-1. [../../../docs/repo-map.md](../../../docs/repo-map.md)
+1. [../../docs/repo-map.md](../../docs/repo-map.md)
 2. [references/model-adapter.md](references/model-adapter.md)
 3. [references/validation-checklist.md](references/validation-checklist.md)
 
 ## 用户调用格式
 
 - 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成主流程；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$model-workflow`。
-- 固定输入模板见：[../../reference/skill-input-template.md](../../reference/skill-input-template.md)
+- 不替用户改成主流程；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
+- 固定输入模板见：[../reference/skill-input-template.md](../reference/skill-input-template.md)
 
 ## 评测口径强约束
 
@@ -103,7 +103,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 - 默认不要抽新基类，除非同一模式已经在多个模型族中重复出现。
 - `Agent Docs` 只在文档层级或职责边界变化时更新，不因普通模型适配而默认改动。
 - 引用仓库内代码、脚本和文档路径时，一律使用仓库相对路径，例如 `amct_pytorch/common/models/llm/...`、`.agents/docs/...`；不要写绝对路径。
-- 这里的最小 PTQ 集成 smoke 只用于验证 adapter 已接到 PTQ 主链，不在这里下 PPL、`delta`、PTQ 升级或量化方案优劣的结论；这些属于 `$quantization`。
+- 这里的最小 PTQ 集成 smoke 只用于验证 adapter 已接到 PTQ 主链，不在这里下 PPL、`delta`、PTQ 升级或量化方案优劣的结论；这些属于 `$quant-workflow`。
 - 优先顺序是：
   - MLP
   - attention

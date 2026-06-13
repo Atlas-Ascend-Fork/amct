@@ -98,7 +98,7 @@
 - 量化方案变更原因:
   - 业务侧调整,Longcat-Flash-Lite 量化范围由全量 `attn+mlp+moe` 收窄为仅 `mlp+moe`
 - 第二轮直转量化方案:
-  - Wikitext PPL,blockwise,`seq_len=4096`(SKILL `quantization` 强约束)
+  - Wikitext PPL,blockwise,`seq_len=4096`(SKILL `quant-workflow` 强约束)
   - `quant_target = mlp moe`
   - `quant_dtype = int`
   - `a_bits = 8`,`w_bits = 8`

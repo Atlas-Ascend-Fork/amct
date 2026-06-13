@@ -18,12 +18,12 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 - 跑 PTQ
 - 评测量化精度
 
-精度是否可行，应由 `$direct-quant-eval` 或 `$quantization` 先完成。
+精度是否可行，应由 `$direct-quant-eval` 或 `$quant-workflow` 先完成。
 
 ## 用户调用格式
 
 - 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$model-workflow` 或 `$quantization`。
+- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
 - 固定输入模板见：[../../reference/skill-input-template.md](../../reference/skill-input-template.md)
 
 ## 先看哪些文件
@@ -53,7 +53,7 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 ## 固定流程
 
 1. 先确认用户目标是“只做 deploy 导出”。
-   - 如果用户还没拿到量化方案，回到 `$quantization`
+   - 如果用户还没拿到量化方案，回到 `$quant-workflow`
    - 如果用户只想评测当前量化方案，回到 `$direct-quant-eval`
 2. 先判定导出模式。
    - 用户期望模式：直转 / PTQ / 未明确

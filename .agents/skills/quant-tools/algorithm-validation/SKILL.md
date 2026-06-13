@@ -8,7 +8,7 @@ description: 验证指定量化算法在当前模型上的实际效果。适用�
 ## 用户调用格式
 
 - 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$model-workflow` 或 `$quantization`。
+- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
 - 固定输入模板见：[../../reference/skill-input-template.md](../../reference/skill-input-template.md)
 
 这个 skill 只用于**验证指定量化算法的实际效果**。
@@ -28,8 +28,8 @@ description: 验证指定量化算法在当前模型上的实际效果。适用�
 
 按下面顺序阅读：
 
-1. [../../tasks/quantization/references/metrics-and-thresholds.md](../../tasks/quantization/references/metrics-and-thresholds.md)
-2. [../../tasks/quantization/references/direct-quant.md](../../tasks/quantization/references/direct-quant.md)
+1. [../../quant-workflow/references/metrics-and-thresholds.md](../../quant-workflow/references/metrics-and-thresholds.md)
+2. [../../quant-workflow/references/direct-quant.md](../../quant-workflow/references/direct-quant.md)
 3. 如需确认当前可用算法名，再读 `amct_pytorch/algorithms/quant/__init__.py` 和 `amct_pytorch/algorithms/quant/*.py`
 4. 如需确认当前能力边界，再读 [../../../docs/repo-map.md](../../../docs/repo-map.md)
 
