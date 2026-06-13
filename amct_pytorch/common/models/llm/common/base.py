@@ -262,7 +262,13 @@ class BaseModel(metaclass=ABCMeta):
             raise ValueError(f"Unsupported quant target '{self.quant_target}'.")
         if "moe" in self.quant_target:
             experts = getattr(mlp, "experts", [])
-            if hasattr(experts, "iter_ptq_expert_modules"):
+            # PTQ compute needs movable materialized experts (iter_ptq_expert_modules);
+            # load/apply must target the forward-path expert_modules so calibration
+            # params (e.g. GPTQ qweight) take effect at eval/deploy. _units_for_apply
+            # selects the forward instances during load.
+            if getattr(self, "_units_for_apply", False) and hasattr(experts, "expert_modules"):
+                experts = experts.expert_modules
+            elif hasattr(experts, "iter_ptq_expert_modules"):
                 experts = experts.iter_ptq_expert_modules()
             elif hasattr(experts, "expert_modules"):
                 experts = experts.expert_modules
@@ -288,7 +294,12 @@ class BaseModel(metaclass=ABCMeta):
             yield f"{weight_prefix}{name}.weight", module
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
-        return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
+        prev = getattr(self, "_units_for_apply", False)
+        self._units_for_apply = True
+        try:
+            return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
+        finally:
+            self._units_for_apply = prev
 
     def load_selected_layer_ptq_params(self, layer_idx: int, block, strict: bool = False):
         results = {}
