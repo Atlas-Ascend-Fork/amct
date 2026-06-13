@@ -28,11 +28,6 @@ class GPTQ(nn.Module):
     def __init__(self, args, w_bits):
         super().__init__()
         self.args = args
-        if getattr(args, "quant_dtype", "int") != "int":
-            raise NotImplementedError(
-                f"GPTQ currently supports only quant_dtype='int' (symmetric integer "
-                f"grid); got '{args.quant_dtype}'. mxfp-GPTQ is not yet implemented."
-            )
         self.blocksize = int(getattr(args, "gptq_blocksize", 128))
         self.percdamp = float(getattr(args, "gptq_percdamp", 0.01))
         self.actorder = bool(getattr(args, "gptq_actorder", False))
@@ -135,27 +130,22 @@ class GPTQ(nn.Module):
         if int(self.nsamples.item()) == 0:
             return quant_obj(weight)
 
-        # Fixed per-output-channel scale from the full weight. Feeding a single
-        # column to quant_obj degenerates the scale to per-element (identity);
-        # GPTQ needs one scale per row, computed once and applied per column.
+        # GPTQ freezes a fixed per-group/block quantizer from the original
+        # weight (computed once) and applies it column by column; the Hessian
+        # error compensation below is dtype-agnostic. The grid itself (int
+        # symmetric / mxfp shared-exponent) is owned by the dtype, which
+        # exposes freeze_column_quantizer + quant_column.
         bits = getattr(quant_obj, "bits", None)
-        gsize = getattr(quant_obj, "group_size", -1)
-        if bits is None or bits >= 16:
-            qmax = None
-            group_scale = None
-            eff_group = self.columns
-        else:
-            qmax = 2 ** (bits - 1) - 1
-            if gsize is not None and gsize > 0 and self.columns % gsize == 0:
-                eff_group = gsize
-            else:
-                eff_group = self.columns
-            n_groups = self.columns // eff_group
-            group_scale = (
-                weight.detach().float().abs()
-                .reshape(self.rows, n_groups, eff_group)
-                .amax(dim=2) / qmax
-            ).clamp(min=1e-9)
+        real_quant = bits is not None and bits < 16
+        has_col_api = (hasattr(quant_obj, "freeze_column_quantizer")
+                       and hasattr(quant_obj, "quant_column"))
+        if real_quant and not has_col_api:
+            raise NotImplementedError(
+                f"GPTQ needs the dtype to implement freeze_column_quantizer/"
+                f"quant_column for faithful column quantization; "
+                f"{type(quant_obj).__name__} does not."
+            )
+        qstate = quant_obj.freeze_column_quantizer(weight) if has_col_api else None
 
         W = weight.detach().float().clone()
         H = self.H.to(device=weight.device, dtype=torch.float32).clone()
@@ -194,11 +184,10 @@ class GPTQ(nn.Module):
             for i in range(count):
                 w = W1[:, i]
                 d = Hinv1[i, i]
-                if group_scale is None:
-                    q = quant_obj(w.unsqueeze(1)).flatten().to(W1)
+                if qstate is not None:
+                    q = quant_obj.quant_column(w, i1 + i, qstate).to(W1)
                 else:
-                    s = group_scale[:, (i1 + i) // eff_group]
-                    q = (torch.clamp(torch.round(w / s), -qmax, qmax) * s).to(W1)
+                    q = quant_obj(w.unsqueeze(1)).flatten().to(W1)
                 Q[:, i1 + i] = q
 
                 err1 = (w - q) / d

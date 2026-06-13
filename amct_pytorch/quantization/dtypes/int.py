@@ -56,3 +56,31 @@ class QuantDequantInt(torch.nn.Module):
             # symmetric group-wise (W4A16): zero antiquant offset
             payload["weight_offset"] = torch.zeros_like(scale).detach().cpu()
         return payload
+
+    def freeze_column_quantizer(self, weight: Tensor):
+        """GPTQ helper: precompute a fixed per-group symmetric scale from the
+        original weight [rows, cols]. Returns None for non-quant (bits>=16)."""
+        if self.bits is None or self.bits >= 16:
+            return None
+        qmax = 2 ** (self.bits - 1) - 1
+        rows, cols = weight.shape
+        gsize = self.group_size
+        if gsize is not None and gsize > 0 and cols % gsize == 0:
+            eff = gsize
+        else:
+            eff = cols
+        n_groups = cols // eff
+        scale = (
+            weight.detach().float().abs()
+            .reshape(rows, n_groups, eff).amax(dim=2) / qmax
+        ).clamp(min=1e-9)
+        return {"qmax": qmax, "scale": scale, "eff_group": eff}
+
+    def quant_column(self, w_col: Tensor, col_idx: int, state) -> Tensor:
+        """GPTQ helper: quantize one input-channel column [rows] with the frozen
+        per-group symmetric scale."""
+        if state is None:
+            return w_col
+        s = state["scale"][:, col_idx // state["eff_group"]]
+        qmax = state["qmax"]
+        return torch.clamp(torch.round(w_col / s), -qmax, qmax) * s

@@ -70,6 +70,31 @@ class QuantDequantMx(torch.nn.Module):
         ex_mx = quantize_elewise(x, self.min_exp, self.max_norm, self.shift_val, v=v)
         return e8m0, ex_mx
 
+    def freeze_column_quantizer(self, weight: Tensor):
+        """GPTQ helper: precompute the per-block shared exponent (E8M0) from the
+        original weight [rows, cols]; MX groups block_size along input channels."""
+        if self.bits is None or self.bits >= 16:
+            return None
+        rows, cols = weight.shape
+        bs = self.block_size
+        if cols % bs != 0:
+            raise ValueError(
+                f"mxfp-GPTQ needs in_features {cols} divisible by block_size {bs}"
+            )
+        x = weight.detach().float().reshape(rows, cols // bs, bs)
+        e8m0 = shared_exponents(x, self.emax).squeeze(-1)  # [rows, n_blocks]
+        return {"e8m0": e8m0, "block_size": bs}
+
+    def quant_column(self, w_col: Tensor, col_idx: int, state) -> Tensor:
+        """GPTQ helper: quantize one input-channel column [rows] with the frozen
+        per-block shared exponent (matches fake_quant applied block-wise)."""
+        if state is None:
+            return w_col
+        e8m0 = state["e8m0"][:, col_idx // state["block_size"]]
+        scale = 2 ** e8m0
+        qn = quantize_elewise(w_col / scale, self.min_exp, self.max_norm, self.shift_val)
+        return scale * qn
+
     def _get_format_params(self):
         if self.bits == 8:
             self.ebits, self.mbits, self.emax, self.max_norm, self.shift_val, self.min_exp = 4, 5, 8, 448.0, 8, -6
