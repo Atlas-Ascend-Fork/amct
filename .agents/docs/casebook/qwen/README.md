@@ -36,8 +36,8 @@
 - `qwen3_5moe` 当前的 `linear_attention` 仍应先保持 BF16，不要在模型适配阶段默认把它纳入 attention 量化闭环
 - 只有在直转量化 `delta > 0.2` 或已经做过粗粒度定位后，才考虑升级到 PTQ
 
-- `Qwen3-8B` validates `attn-linear + mlp` W8A8 Int8 direct quant at `seq_len=4096`; precision passes and measured AMCT qmm validation is positive.
-- `Qwen3-30B-A3B` validates `attn-linear + moe` W8A8 Int8 direct quant at `seq_len=4096`; precision passes; measured AMCT qmm validation is positive for attention projection and negative for average routed MoE per-expert path, so MoE remains `Conditional Go` pending infer MoEGMM runtime validation.
+- `Qwen3-8B`：`attn-linear + mlp` W8A8 Int8 直转 @ `seq_len=4096`，精度达标（delta ≤ 0.2）。
+- `Qwen3-30B-A3B`：`attn-linear + moe` W8A8 Int8 直转 @ `seq_len=4096`，精度达标。性能注意：MoE per-expert 路径在小 M_eff 下收益存疑，须 infer 侧 packed `MoEGMM` 实测确认；attention 路径正常。
 - `Qwen3-30B-A3B` also validates a W4A16 weight-only INT4 path: per-channel INT4 fails (`delta` up to `+0.815`); `GPTQ + group_size=64` passes with `delta = +0.088`. Group-wise and GPTQ are both required; AWQ (minimal in-repo impl) degrades precision and is not used. （⚠️ 该 W4A16 weight-only + group-wise INT4 为 AMCT-Q `qwen3-adapter` 未合入特性 `1324bea`+`54486c0`，amct_llm 暂无此代码、不可直接跑通；详见 `qwen3-30b-a3b.md`「待补特性」注记。）
 
 ## 常见问题
