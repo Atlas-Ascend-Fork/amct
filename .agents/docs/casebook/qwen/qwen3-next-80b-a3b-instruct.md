@@ -4,6 +4,7 @@
 
 ## 结构与适配要点
 
+- **参考与差异**：参考 `qwen3_5_moe`（混合 attention 路由）+ `qwen3_moe`（MoE 重组）；差异：linear+full 混合 attention、`transformers==5.3.0` 下 packed/展开布局差异。
 - 48 层 decoder，block 内**混合 `linear_attention` 与 `full_attention`**；运行时 packed experts，磁盘展开（`transformers==5.3.0` 下 `Qwen3NextExperts` 运行/存储布局不同）。
 - **复用**：`BaseModel` blockwise、`PtqUnit`（attn/moe/mlp）、`QuantLinear`。**新增**：`QuantQwen3NextAttn`、`QuantQwen3NextMLP`、`QuantPackedExperts`、`PackedExpertView` + causal mask 路由与 expert 重组。参考 `qwen3_5_moe.py`（混合 attention）+ `qwen3_moe.py`（MoE 重组）。
 
@@ -15,6 +16,12 @@
 
 - **混合 attention 的 causal mask 丢失** —— 现象：BF16 PPL 低得离谱（像“看到后文”）。根因：`do_embedding_forward()` 只捕 layer0 mask，而 layer0 是 `linear_attention` 捕到 `None`，后续 `full_attention` 复用即丢 causal mask。处理：adapter 内分别维护 `linear_attention_mask` 与 `full_attention_mask`（后者 `create_causal_mask(...)` 显式构造），wrapper 已显式传 mask 时保持 `is_causal=False`。**教训：混合 attention 家族 BF16 PPL 好得反常，先查 blockwise mask 传递链。**
 - **expert 布局 packed vs 展开** —— 处理：adapter 内重组为 packed experts；先确认运行环境 `transformers` 版本再定 expert 路径（逐 expert / packed）。
+
+## 适配建议（下次同系列/同结构）
+
+- 先参考：本案 + Qwen 系列 README。
+- 先做什么：先把 `transformers==5.3.0` 当基线，再判 expert 结构与 mask 路由。
+- **不建议**：混合 attention 家族默认一套 mask 打到底。
 
 ## 精度速查表
 

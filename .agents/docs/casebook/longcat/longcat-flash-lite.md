@@ -4,6 +4,7 @@
 
 ## 结构与适配要点
 
+- **参考与差异**：参考 Qwen dense/MoE wrapper；差异：`ngram_embeddings` 输入路径 + 双 attn/双 MLP/packed MoE shortcut 特殊拓扑，需自有 attention/packed expert wrapper。
 - 输入路径非普通 token embedding，而是 `ngram_embeddings`；每 block = 双 `self_attn` + 双 dense `mlp` + 一条 packed MoE shortcut。输入路径与拓扑特殊，必须**源码公式重放 + 逐层 stepwise 校验**。
 - **复用**：`BaseModel`、`PtqUnit`（attn/mlp/moe）、`QuantLinear`、`QuantGatedMLP`。**新增**：`QuantLongcatMLA`、`LongcatPackedExperts`、`LongcatPackedExpertView` + LongCat 专属 embedding 加载与 expert 重组。
 
@@ -23,6 +24,12 @@
 
 - prefill(M=4096)视角：**MoE 量化常为负收益**（per-expert 单 expert M≈384 过小，dynamic_quant + 头开销 > BF16 matmul，每层 ×128 放大）；**MLP 唯一明显正收益**；量化 attn 几乎无增益无损益。
 - “attn 进不进量化”首要看**精度 delta 与下游 infer 路径覆盖**，非 prefill 性能；MoE 性能须 infer 侧 packed `MoEGMM` 实测确认（INT 部署若 per-expert 则负收益）。decode(M=1) 未测，weight-bound 下可能翻正。
+
+## 适配建议（下次同系列/同结构）
+
+- 先参考：本案 + LongCat 系列 README。
+- 先做什么：先验证自定义输入路径 → 逐层 block 等价 → 再直转。
+- **不建议**：最简方案（近无损）前急上 PTQ。
 
 ## 精度速查表
 

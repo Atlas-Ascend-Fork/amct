@@ -4,6 +4,7 @@
 
 ## 结构与适配要点
 
+- **参考与差异**：参考 Qwen dense 适配 + LongCat packed-expert 处理；差异：config 深度造假、磁盘展开 expert vs 运行时 packed。
 - 结构：`Qwen3MoeDecoderLayer` / `Qwen3MoeAttention` / `Qwen3MoeSparseMoeBlock`；运行时 packed experts，磁盘展开 expert 权重。
 - **复用**：`BaseModel` blockwise、`PtqUnit`（attn/moe 路由）、`QuantLinear`；只动 `models/llm/...`，不改 workflow/solver。**新增**：`QuantQwen3MoeAttn`、`QuantPackedExperts`、`PackedExpertView` + adapter 内层数修正与 expert 重组。
 
@@ -21,6 +22,12 @@
 ## 量化结论
 
 - 首轮直转 `attn+moe` W8A8-int8 即较稳：`delta=0.0363`（≤0.2，无需 PTQ）。已落地粒度：Attention Linear A8W8 INT Per-Token；MoE Expert（不含 gate）A8W8 INT Per-Channel。
+
+## 适配建议（下次同系列/同结构）
+
+- 先参考：本案 + Qwen 系列 README。
+- 先做什么：先验 checkpoint 真实深度 + expert 布局，再排数值；BF16 离谱先查 blockwise `attention_mask`；首轮 `attn+moe` a8w8-int8 较稳。
+- **不建议**：盲信 `config.num_hidden_layers`；动手写 expert loader 前不比对磁盘 key。
 
 ## 精度速查表
 

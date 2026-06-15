@@ -4,6 +4,7 @@
 
 ## 结构与适配要点
 
+- **参考与差异**：系列首条，无前置参考；后续 dense Qwen3 以本案为起点。
 - 标准 dense Qwen3 decoder（无 MoE）。attention 沿用官方 `Qwen3Attention`；quant wrapper 拆为 `attn-linear`（q/k/v/o 投影）+ `attn-cache`（KV）两类目标。
 - **复用**：`BaseModel` blockwise 工作流、`QuantLinear`、`QuantGatedMLP`。**新增**：无（dense 路径纯复用）。
 - **起步复用清单**（下一条 dense Qwen3）：从 `qwen3.py`、`quant_module.py` 起步，首轮直接 `attn-linear + mlp` W8A8-int。
@@ -18,6 +19,12 @@
 - **`lm_head` 与 `embed_tokens` 权重共享（tied）** —— 现象：找不到独立 `lm_head.weight`。处理：adapter 内把 `lm_head` 绑回 `model.embed_tokens`，勿按独立 key 去 checkpoint index 查找。
 - **`Catcher` 未透传 `attention_type`** —— 现象：替换 `layer0` 后官方 forward 在 embedding 阶段报错。处理：`Catcher` 显式透传 `attention_type`。
 - **`attn-linear` wrapper 替换了官方 attention kernel** —— 现象：step8 关闭量化等价明显漂移。根因：仅量化 q/k/v/o 时不应改 `attention_interface`。处理：继续复用官方 interface。
+
+## 适配建议（下次同系列/同结构）
+
+- 先参考：本案 + Qwen 系列 README。
+- 先做什么：BF16 baseline → step8 拆 `mlp`/`attn-linear` 验等价 → 合并直转。
+- **不建议**：dense Qwen3 误开 `quant_target=moe`。
 
 ## 精度速查表
 

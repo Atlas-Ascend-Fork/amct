@@ -4,6 +4,7 @@
 
 ## 结构与适配要点
 
+- **参考与差异**：参考 `longcat_lite`（block 拓扑近同）；差异：顶层 `trust_remote_code` 走多模态、依赖 `flash_attn`，需切 text-only backbone。
 - 结构同 Flash-Lite：`ngram_embeddings` 输入、双 self-attn + 双 dense MLP + MoE shortcut；`PtqUnit` 拆 `attn→self_attn_0/1`、`mlp→mlp_0/1`、`moe→expert_<i>`；checkpoint 逐 expert，运行时重组 packed。
 - **复用**：`LongcatLite` blockwise 工作流与 PTQ unit 路由 + `QuantLinear`/`QuantGatedMLP`。**新增（唯一兼容点）**：adapter 内实例化 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM`，`lm_head` 对齐 `text_vocab_plus_multimodal_special_token_size`。
 
@@ -14,6 +15,12 @@
 ## 关键陷阱（模型/框架内在，可复用）
 
 - **`trust_remote_code` 顶层模型空载失败** —— 现象：`AutoModelForCausalLM.from_config(..., trust_remote_code=True)` 被 `flash_attn` 依赖阻塞。根因：顶层远端代码默认走多模态入口，而 blockwise PTQ 只需 text-only backbone。处理：adapter 内切到 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM` 并修 `lm_head` 形状。**教训：`trust_remote_code` 模型先看 blockwise PTQ 真正需要的最小 backbone，再决定是否完整加载顶层模型。**
+
+## 适配建议（下次同系列/同结构）
+
+- 先参考：`longcat_lite`。
+- 先做什么：先看能否直接复用 `longcat_lite` 的 block 拓扑；兼容收在 adapter 内。
+- **不建议**：直接空载顶层多模态模型。
 
 ## 精度速查表
 

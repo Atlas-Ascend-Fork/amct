@@ -4,6 +4,7 @@
 
 ## 结构与适配要点
 
+- **参考与差异**：参考 `qwen3_5` attention/blockwise + `qwen3_moe` MoE 路由；差异：checkpoint MoE 已 packed，无需 per-expert 重组。
 - 40 层 decoder，`layer_types` 重复 `linear×3 + full`；checkpoint MoE 已是 packed 布局（无需像 235B 重组）。
 - **复用**：`BaseModel` blockwise、`PtqUnit`、`QuantLinear`、`apply_quant_attn`、`apply_quant_moe_mlp`。**新增**：`qwen3_5moe` 的 `build_quant_block()` 路由、`QuantPackedExperts`、`PackedExpertView`。
 
@@ -15,6 +16,12 @@
 
 - **误用 DeepSeek 的 MLA 接口** —— 现象：进 quant block 构建即接口报错（调到不存在的 `apply_quant_mla()`）。根因：`qwen3_5moe` 继承 `Qwen3_5`，应复用 Qwen 公共接口而非 DeepSeek MLA 专用入口。处理：统一收回 `apply_quant_attn()`/`apply_quant_moe_mlp()`。**教训：Qwen 分支先看 dense adapter 公共接口，勿直接用 DeepSeek MLA 入口。**
 - **混合 attention 分开处理** —— `linear_attention` 与 `full_attention` 不能套同一 wrapper；最小闭环阶段 `linear_attention` 暂留 BF16，真正量化时单独补专属 wrapper 与验证链。
+
+## 适配建议（下次同系列/同结构）
+
+- 先参考：本案 + Qwen 系列 README。
+- 先做什么：先确认 experts 是 packed 还是展开。
+- **不建议**：Qwen 分支误用 DeepSeek MLA 入口；`linear`/`full` attention 一把梭。
 
 ## 精度速查表
 
