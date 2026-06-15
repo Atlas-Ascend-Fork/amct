@@ -9,6 +9,8 @@ description: amct 量化编排入口。从“模型导入”到“适配→量�
 
 叶子 / 子任务：`$model-adapter`、`quant-tools/`（`$scheme-recommendation` / `$direct-quant-eval` / `$algorithm-recommendation` / `$algorithm-validation` / `$deploy-export`）。
 
+**编排为 supervisor**：分析类委派 `quant-analyzer`（只读、不改代码/方案）、实施类委派 `quant-implementer`（改 adapter / 跑命令 / 导出）、审查类委派 `quant-reviewer`（只跑评测不改方案），按各自 `description` 匹配；编排自身只做判阶段 / 路由 / 汇总 / 交互确认，不直接改 adapter 代码或量化方案。
+
 ## 评测口径强约束
 
 - 所有通过 skill 触发的 Wikitext PPL 统一 `seq_len=4096`；用户未显式指定即按 4096。
