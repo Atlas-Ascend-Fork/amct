@@ -790,7 +790,7 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 
       用户在简易配置文件_dmp\_quant.cfg_中设置dmq参数，并将配置文件通过config\_defination参数传入[create\_quant\_config](./zh/api/create_quant_config.md)。
 
-      ```python
+      ```python<ins></ins>
       config_defination = os.path.join(PATH, 'dmp_quant.cfg')
       config_file = './tmp/config.json'
       skip_layers = []
@@ -1020,7 +1020,7 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
    amct\_pytorch/auto\_channel\_prune\_search.py下的TaylorLossSensitivity方法，简要流程如下：
 
    ```python
-   from amct_pytorch.common.auto_channel_prune.sensitivity_base import SensitivityBase
+   from amct.common.auto_channel_prune.sensitivity_base import SensitivityBase
    
    class Sensitivity(SensitivityBase)
        def __init__(self)
