@@ -4,13 +4,13 @@
 
 ## 系列概览
 
-- 当前已覆盖模型：`deepseekv32`
+- 当前已覆盖模型：`deepseek_v3_2`、`deepseek_v4`（`glm5` 亦继承 `DeepseekV32`）
 - 整体结构特点：这一系列的 decoder block 同时包含 attention 侧和 MoE 侧，attention 路径内部还会分成不同分支，量化时通常需要把 `mla` 和 `moe` 分开看
 - 与其他系列最接近的是：MoE 侧能复用通用 `PtqUnit` 和 `apply_quant_to_moe_mlp`，attention 侧则更依赖 DeepSeek 专属的 wrapper 与 target 路由
 
 ## 默认参考路径
 
-- 新模型进入时优先参考：[deepseekv3_2.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/deepseekv3_2.py)、[quant_module.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/quant_module.py)
+- 新模型进入时优先参考：[deepseekv3_2.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/deepseekv3_2.py)、[quant_module.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v3_2/quant_module.py)；更复杂的 MLA+Compressor+Indexer+HC 见 [deepseekv4.py](../../../../amct_pytorch/common/models/llm/deepseek/deepseek_v4/deepseekv4.py)
 - 适配优先顺序：先拿 BF16 blockwise baseline，确认 `position_ids` / `attention_mask` 路径一致，再分别打通 attention 侧和 MoE 侧的最小闭环
 - 默认优先复用的抽象：`BaseModel`、`PtqUnit`、现有 quant-apply helper、`QuantDeepseekV3MLP`
 
@@ -38,4 +38,5 @@
 
 ## 已有个案
 
-- [deepseekv4](deepseekv4.md) — DeepSeek-V4-Pro。MLA + Compressor + Indexer + HC + grouped wo + 自定义 forward 签名。代码侧适配完成,等权重补 BF16/PTQ。
+- [DeepSeek-V3.2](deepseek-v3.2.md) — 待补（DeepseekV32 基类：MLA+MoE+DSA，moe-only，仅精度）
+- [deepseekv4](deepseekv4.md) — 厚（MLA + Compressor + Indexer + HC + grouped wo + 自定义 forward；代码侧适配完成，等权重补 BF16/PTQ）

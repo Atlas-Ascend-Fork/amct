@@ -4,7 +4,7 @@
 
 ## 系列概览
 
-- 当前已覆盖模型：`qwen3`、`qwen3_5`、`qwen3_5moe`、`qwen3_moe`、`qwen3_next`
+- 当前已覆盖模型：`qwen3`、`qwen3_moe`、`qwen3_5`、`qwen3_5moe`、`qwen3_6moe`、`qwen3_next`
 - 整体结构特点：这一系列同时覆盖 dense 和多条 MoE 路径，attention 路径整体接近标准 Qwen，但不同检查点的层数配置、attention 形态、expert 布局和 rotary 上下文可能不同
 - 当前已确认的 2 条 MoE 适配分支：
   - `qwen3_moe`：checkpoint 上是展开的 per-expert 权重，运行时期待 packed experts
@@ -38,7 +38,6 @@
 
 - `Qwen3-8B`：`attn-linear + mlp` W8A8 Int8 直转 @ `seq_len=4096`，精度达标（delta ≤ 0.2）。
 - `Qwen3-30B-A3B`：`attn-linear + moe` W8A8 Int8 直转 @ `seq_len=4096`，精度达标。性能注意：MoE per-expert 路径在小 M_eff 下收益存疑，须 infer 侧 packed `MoEGMM` 实测确认；attention 路径正常。
-- `Qwen3-30B-A3B` also validates a W4A16 weight-only INT4 path: per-channel INT4 fails (`delta` up to `+0.815`); `GPTQ + group_size=64` passes with `delta = +0.088`. Group-wise and GPTQ are both required; AWQ (minimal in-repo impl) degrades precision and is not used. （⚠️ 该 W4A16 weight-only + group-wise INT4 为 AMCT-Q `qwen3-adapter` 未合入特性 `1324bea`+`54486c0`，amct_llm 暂无此代码、不可直接跑通；详见 `qwen3-30b-a3b.md`「待补特性」注记。）
 
 ## 常见问题
 
@@ -57,9 +56,10 @@
 
 ## 已有个案
 
-- [Qwen3-8B](qwen3-8b.md)
-- [Qwen3-30B-A3B](qwen3-30b-a3b.md)
-- [Qwen3-4B](qwen3-4b.md)
-- [Qwen3.5-35B-A3B](qwen3.5-35b-a3b.md)
-- [Qwen3-235B-A22B](qwen3-235b-a22b.md)
-- [Qwen3-Next-80B-A3B-Instruct](qwen3-next-80b-a3b-instruct.md)
+- [Qwen3-4B](qwen3-4b.md) — 厚（dense 起点）
+- [Qwen3-8B](qwen3-8b.md) — 厚（dense 纯复用）
+- [Qwen3-30B-A3B](qwen3-30b-a3b.md) — 厚（MoE）
+- [Qwen3-235B-A22B](qwen3-235b-a22b.md) — 厚（MoE，4 个关键 bug）
+- [Qwen3-Next-80B-A3B-Instruct](qwen3-next-80b-a3b-instruct.md) — 厚（混合 attention）
+- [Qwen3.5-35B-A3B](qwen3.5-35b-a3b.md) — 厚（混合 attention，packed MoE）
+- [Qwen3.6-35B](qwen3.6-35b.md) — 待补（继承 Qwen3_5Moe，仅精度）

@@ -1,6 +1,16 @@
-# GLM-5.1 · 系列 glm · 结构 moe
+# GLM-5.1 · 系列 glm · 结构 mla-moe（继承 DeepseekV32）
 
-> **速览**：`glm5` 已适配（源码就绪），**适配经验待补**——参考同结构 MoE 厚案例（如 `qwen/qwen3-30b-a3b`）。精度见下表。
+> **速览**：adapter `glm/glm5/glm5.py` = `GLM5(DeepseekV32)`，结构上复用 DeepSeek V3.2 的 MLA+MoE 适配；**适配经验（验证/陷阱）待补**——参考 `deepseek/deepseek-v3.2`、`deepseek/deepseekv4`。精度见下表。
+
+## 结构与适配要点
+
+- `GLM5(DeepseekV32)` —— **直接继承 DeepSeek V3.2 adapter**：MLA attention + MoE，量化复用 `QuantDeepseekV3Attention` / `QuantDeepseekV3MLP` / `apply_quant_to_attn` / `apply_quant_to_moe_mlp`，几乎无模型专属新增代码。
+- **参考与差异**：最近参考 `deepseek-v3.2`（同 `DeepseekV32` 基类）；差异：GLM5 适配器**不含 DSA indexer 代码**（indexer 为 DSv3.2 专属；`llm_deploy` 以 `hasattr(config,index_topk)` 门控 li_cache，glm5 不走该路径，非缺陷）。
+- **起步复用清单**：下一条 GLM 从 `glm5.py`（即 DeepseekV32 路径）+ `deepseek_v3_2/quant_module.py` 起步。
+
+## 适配验证结论 / 关键陷阱
+
+- **待补**：源码已适配，BF16 baseline / 关闭量化等价 / 最小 PTQ smoke 的实测记录与踩坑待补；MLA/MoE 通用陷阱见 DeepSeek 系列 README。
 
 ## 精度速查表
 

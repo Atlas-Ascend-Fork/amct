@@ -32,8 +32,6 @@
 
 ## 常见问题
 
-- 问题 1：NPU 在第一个量化 block 之前初始化失败
-  - 优先检查：`ASCEND_COMPILER_PATH`、`TBE_IMPL_PATH`、`AOE_DIR`
 - 问题 2：int 直转量化一开始就报错，或者激活行为明显异常
   - 优先检查：`ActivationQuantizer` 是否传了 `is_act=True`，以及 activation quant 是否错误地把带符号值当成纯正数处理
 - 问题 3：LongCat-Next 顶层模型不能直接空载
@@ -41,5 +39,5 @@
 
 ## 已有个案
 
-- [LongCat-Flash-Lite](longcat-flash-lite.md)
-- [LongCat-Next](longcat-next.md)
+- [LongCat-Flash-Lite](longcat-flash-lite.md) — 厚（首个 LongCat，ngram 输入）
+- [LongCat-Next](longcat-next.md) — 厚（text-only backbone）

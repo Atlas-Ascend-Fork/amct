@@ -1,6 +1,17 @@
 # DeepSeek-V3.2 · 系列 deepseek · 结构 mla-moe（DSA）
 
-> **速览**：`deepseek_v3_2` 已适配（源码就绪），**适配经验待补**——参考 `deepseekv4`（MLA/Compressor/Indexer 设计）。精度见下表。
+> **速览**：adapter `deepseek/deepseek_v3_2/{deepseekv3_2.py,quant_module.py}` = `DeepseekV32(BaseModel)`，MLA + MoE + DSA indexer，**moe-only**（不支持 `quant_target=mlp`）。**适配经验（验证/陷阱）待补**——参考 `deepseekv4`。精度见下表。
+
+## 结构与适配要点
+
+- `DeepseekV32(BaseModel)`：MLA attention + MoE，含 **DSA indexer**（`QuantIndexer`）；`quant_target` 走 `moe` / attn 路径，**不支持 `mlp`**。
+- **复用**：`BaseModel` blockwise、`apply_quant_to_attn` / `apply_quant_to_moe_mlp`、`QuantGatedMLP`。**新增**：`QuantDeepseekV3Attention`、`QuantDeepseekV3MLP(QuantGatedMLP)`、`QuantIndexer`（DSA）。
+- **参考与差异**：本案是 DeepSeek 系列基类——`glm5` 继承它、`deepseekv4` 是更复杂的下一代（MLA + Compressor + Indexer + Hyper-Connections）。
+- **起步复用清单**：下一条 MLA+MoE(+DSA) 从 `deepseekv3_2.py`、`quant_module.py` 起步。
+
+## 适配验证结论 / 关键陷阱
+
+- **待补**：实测记录与踩坑待补；DSA indexer 的部署门控见 deploy 侧 `hasattr(config,index_topk)`（同源记录见 [[amct-deploy-infer-schema-interlock]]）。
 
 ## 精度速查表
 

@@ -1,6 +1,16 @@
 # Qwen3.6-35B · 系列 qwen · 结构 moe（混合 attention）
 
-> **速览**：`qwen3_6_moe` 已适配（源码就绪），**适配经验待补**——参考同系列厚案例 `qwen3.5-35b-a3b`（混合 attention + packed MoE）。精度见下表。
+> **速览**：adapter `qwen/qwen3_6/qwen3_6_moe.py` = `Qwen3_6Moe(Qwen3_5Moe)`，**近乎纯复用** Qwen3.5-MoE（混合 `linear`+`full` attention + packed MoE）。**适配经验（验证/陷阱）待补**——参考 `qwen3.5-35b-a3b`。精度见下表。
+
+## 结构与适配要点
+
+- `Qwen3_6Moe(Qwen3_5Moe)` —— **直接继承 Qwen3.5-MoE adapter**，结构同：block 内混合 `linear_attention` + `full_attention`、checkpoint MoE 已 packed；当前近乎子类化复用、无显著模型专属新增。
+- **参考与差异**：最近参考 `qwen3.5-35b-a3b`（同 `Qwen3_5Moe` 基类）；差异：暂无显著结构差异。
+- **起步复用清单**：下一条 Qwen3.5/3.6 MoE 从 `qwen3_5_moe.py` 起步。
+
+## 适配验证结论 / 关键陷阱
+
+- **待补**：实测记录与踩坑待补；混合 attention 的 causal mask 路由陷阱见 `qwen3-next` 与 Qwen 系列 README。
 
 ## 精度速查表
 
