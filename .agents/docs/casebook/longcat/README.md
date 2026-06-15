@@ -1,6 +1,6 @@
 # LongCat Casebook
 
-这一页是 **LongCat 系列总览页**，不是具体模型个案。
+这一页是 **LongCat 系列总览页**，不是具体模型个案。通用坑先读 [L1 跨网络](../common-pitfalls.md) + [L2 结构家族](../family-pitfalls.md)。
 
 ## 系列概览
 
@@ -37,7 +37,6 @@
 - 问题 3：LongCat-Next 顶层模型不能直接空载
   - 优先检查：是否误走了带 `flash_attn` 依赖的顶层多模态模型，而没有切到 text-only 的 `modeling_longcat_ngram` 路径
 
-## 已有个案
+## 已有个案（同结构已合并）
 
-- [LongCat-Flash-Lite](longcat-flash-lite.md) — 厚（首个 LongCat，ngram 输入）
-- [LongCat-Next](longcat-next.md) — 厚（text-only backbone）
+- [longcat](longcat.md) — `LongcatLite` + `LongcatNext`：LongCat-Flash-Lite（首个，ngram 输入）+ LongCat-Next（`LongcatNext(LongcatLite)`，唯一 delta = `empty_weights_model` 切 text-only backbone）

@@ -1,6 +1,7 @@
 # DeepSeek-V4 (DeepSeek-V4-Pro) · 系列 deepseek · 结构 mla-moe
 
-> **速览**：代码侧适配完成、**等权重**补 baseline/等价/PTQ smoke。结构最特殊：MLA 单 head 共享 KV + `o_groups` 分组低秩 `wo` + Compressor/Indexer 双子模块 + Hyper-Connections 4D hidden + 自定义 forward 签名 `(x, start_pos, input_ids)`。下次遇 MLA+Compressor+Indexer+HC 类模型，首参考本案 + `deepseek_v3_2`(MLA) + `longcat_next`(PreTrainedModel 化与 AutoModel 注册)。
+> **速览**：代码侧适配完成、**等权重**补 baseline/等价/PTQ smoke。结构最特殊：MLA 单 head 共享 KV + `o_groups` 分组低秩 `wo` + Compressor/Indexer 双子模块 + Hyper-Connections 4D hidden + 自定义 forward 签名 `(x, start_pos, input_ids)`。下次遇 MLA+Compressor+Indexer+HC 类模型，首参考本案 + `deepseek_v3_2`(MLA) + `longcat`(Next：PreTrainedModel 化与 AutoModel 注册)。**本案是仓内"接非 transformers 自定义 modeling"L2 经验的首遇例**——下方 L3 只留 v4 独有结构坑，通用接入坑见 L2。
+> **触发信号**：`architectures:["DeepseekV4ForCausalLM"]` 不在 transformers（需自实现注册）；config `kv_lora_rank`（MLA）+ `n_routed_experts`（MoE）。读 [L2 · 接非 transformers 自定义 modeling + MLA 类 + MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
 
 ## 为什么值得记录
 
@@ -83,6 +84,8 @@
 - **命名验证**(全部跟我们 modeling 对得上):`attn`(不是 self_attn),`ffn`(不是 mlp),`ffn.experts.{e}` 显式逐 expert,`ffn.shared_experts` 单数模块名
 
 ## 典型问题
+
+> 问题 0/1/2/3/5/6 已上抽为 L2「接非 transformers 自定义 modeling」+ L1「checkpoint 是唯一事实源」的通用条目（本案即首遇例）；通用规避读 L2/L1。此处**保留 v4 完整 repro** 作为该家族最详尽的参考（问题 4 的 wo_a/HC/扁平布局是 v4 专属 L3，见上文「为什么值得记录」与「官方 checkpoint 实际布局」）。
 
 - **问题 0**(已修):`block(layer_idx).to(device)` 报 "Cannot copy out of meta tensor; no data!"
   - 现象:`empty_weights_model()` 之后,任何 `do_block_forward / build_quant_block` 路径走到 `block = block.to(self.args.device)` 这一行就报错,即使 layer 是单独在真 CPU 上下文里 `Block(config, layer_idx)` 构造出来的

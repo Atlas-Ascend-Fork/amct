@@ -1,6 +1,6 @@
 # Qwen Casebook
 
-这一页是 **Qwen 系列总览页**，不是具体模型个案。
+这一页是 **Qwen 系列总览页**，不是具体模型个案。通用坑先读 [L1 跨网络](../common-pitfalls.md) + [L2 结构家族](../family-pitfalls.md)；本页只留 Qwen 系列特有的取向。
 
 ## 系列概览
 
@@ -54,12 +54,9 @@
   - 现象：unit 能枚举出来，但没有任何可训练 PTQ 参数，训练后也不会导出有效结果
   - 优先检查：当前 unit 是否真的暴露了 `trainable_params()` 或 `export_ptq_params()`；对于 packed expert 路径，必要时先用 `shared_expert` 打通 smoke
 
-## 已有个案
+## 已有个案（同结构已合并）
 
-- [Qwen3-4B](qwen3-4b.md) — 厚（dense 起点）
-- [Qwen3-8B](qwen3-8b.md) — 厚（dense 纯复用）
-- [Qwen3-30B-A3B](qwen3-30b-a3b.md) — 厚（MoE）
-- [Qwen3-235B-A22B](qwen3-235b-a22b.md) — 厚（MoE，4 个关键 bug）
-- [Qwen3-Next-80B-A3B-Instruct](qwen3-next-80b-a3b-instruct.md) — 厚（混合 attention）
-- [Qwen3.5-35B-A3B](qwen3.5-35b-a3b.md) — 厚（混合 attention，packed MoE）
-- [Qwen3.6-35B](qwen3.6-35b.md) — 待补（继承 Qwen3_5Moe，仅精度）
+- [Qwen3-dense](qwen3-dense.md) — `Qwen3` dense：Qwen3-4B（起点）+ Qwen3-8B（纯复用）
+- [Qwen3-moe](qwen3-moe.md) — `Qwen3Moe`：Qwen3-30B-A3B + Qwen3-235B-A22B
+- [Qwen3.5-3.6](qwen3.5-3.6.md) — `Qwen3_5Moe`：Qwen3.5-35B-A3B + Qwen3.6-35B（`Qwen3_6Moe(Qwen3_5Moe): pass`，零 delta）
+- [Qwen3-Next-80B-A3B-Instruct](qwen3-next-80b-a3b-instruct.md) — `Qwen3Next`：MoE + 混合 attention

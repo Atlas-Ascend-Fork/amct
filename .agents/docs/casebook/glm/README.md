@@ -1,6 +1,6 @@
 # GLM Casebook
 
-这一页是 **GLM 系列总览页**，不是具体模型个案。
+这一页是 **GLM 系列总览页**，不是具体模型个案。通用坑先读 [L1 跨网络](../common-pitfalls.md) + [L2 结构家族（MLA / MoE）](../family-pitfalls.md)；GLM5 继承 DeepseekV32，结构经验参考 DeepSeek 系列。
 
 ## 系列概览
 

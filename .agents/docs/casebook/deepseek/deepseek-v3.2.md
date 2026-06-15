@@ -1,6 +1,7 @@
 # DeepSeek-V3.2 · 系列 deepseek · 结构 mla-moe（DSA）
 
-> **速览**：adapter `deepseek/deepseek_v3_2/{deepseekv3_2.py,quant_module.py}` = `DeepseekV32(BaseModel)`，MLA + MoE + DSA indexer，**moe-only**（不支持 `quant_target=mlp`）。**适配经验（验证/陷阱）待补**——参考 `deepseekv4`。精度见下表。
+> **速览**：adapter `deepseek/deepseek_v3_2/{deepseekv3_2.py,quant_module.py}` = `DeepseekV32(BaseModel)`，MLA + MoE + DSA indexer，**moe-only**（不支持 `quant_target=mlp`）。是 DeepSeek 系列基类（`glm5` 继承它、`deepseekv4` 是更复杂下一代）。**适配实测（验证/陷阱）待补**。精度见下表。
+> **触发信号**：config 有 `kv_lora_rank`（MLA）+ `num_experts`（MoE）+ `index_topk`（DSA indexer）。读 [L2 · MLA 类 + MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
 
 ## 结构与适配要点
 
