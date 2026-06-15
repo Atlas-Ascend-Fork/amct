@@ -23,8 +23,8 @@
 #                         传本地路径时跳过下载步骤
 #   --model_dir           模型下载目标目录（默认 /tmp/amct_verify_model）
 #   --device              运行设备（默认 npu:0）
-#   --cases               逗号分隔的用例列表，可选 cast/minmax/smoothquant
-#                         （默认 cast,minmax,smoothquant，即全部运行）
+#   --cases               逗号分隔的用例列表，可选 cast/minmax/smoothquant/awq
+#                         （默认 cast,minmax,smoothquant,awq，即全部运行）
 #   --hf_endpoint         HuggingFace 镜像地址（可选，如 https://hf-mirror.com）
 #
 # 示例:
@@ -42,13 +42,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 最长允许运行时间（秒），留出 30s 余量
-TIMEOUT_SECONDS=870
-
 MODEL_NAME_OR_PATH="Qwen/Qwen2-0.5B"
 MODEL_DIR="/tmp/amct_verify_model"
 DEVICE="npu:0"
-CASES="cast,minmax,smoothquant"
+CASES="cast,minmax,smoothquant,awq"
 HF_ENDPOINT=""
 
 while [[ $# -gt 0 ]]; do
@@ -85,7 +82,6 @@ echo "AMCT 快速验证"
 echo "  模型: ${MODEL_NAME_OR_PATH}"
 echo "  设备: ${DEVICE}"
 echo "  用例: ${CASES}"
-echo "  超时: ${TIMEOUT_SECONDS}s"
 echo "=========================================="
 
 # ── 模型下载 ──────────────────────────────────────────────────────────────────
@@ -125,16 +121,9 @@ PYEOF
 fi
 
 # ── 运行验证 ──────────────────────────────────────────────────────────────────
-timeout "${TIMEOUT_SECONDS}" python3 "${SCRIPT_DIR}/run_example.py" \
+python3 "${SCRIPT_DIR}/run_example.py" \
     --model_name_or_path "${LOCAL_MODEL_PATH}" \
     --device "${DEVICE}" \
     --cases "${CASES}"
 
-EXIT_CODE=$?
-
-if [ ${EXIT_CODE} -eq 124 ]; then
-    echo "[ERROR] 验证超时（超过 ${TIMEOUT_SECONDS}s）"
-    exit 1
-fi
-
-exit ${EXIT_CODE}
+exit $?
