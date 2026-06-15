@@ -145,8 +145,13 @@ class LlmDeployWorkflow:
                             "num_bits": 8,
                         }}
         int_w, int_a, int_g = resolve_int_linear_bits(ensure_bit_policy(self.args))
+        # For MX, a 4-bit quantized weight group is the W4A8 mxfp4 scheme (mxfp4
+        # weights + dynamic mxfp8 activations); 8-bit is mxfp8. Derive the flag
+        # from the resolved bits so MXFP4 emits num_bits=4 rather than the mxfp8
+        # default.
+        mx_w4a8 = self.is_mx and int_w == 4
         quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx,
+            cache_scheme, quant_ignore_layers, w4a8=mx_w4a8, w4a4=False, is_mx=self.is_mx,
             int_w_bits=int_w, int_a_bits=int_a, int_group_size=int_g)
         config['quantization_config'] = quantization_config
 
