@@ -85,7 +85,7 @@ def _free(model, device):
     del model
     gc.collect()
     if device.startswith("npu"):
-        import torch_npu  # noqa: F401
+        import torch_npu
         torch_npu.npu.empty_cache()
 
 
