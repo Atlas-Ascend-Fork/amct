@@ -16,7 +16,7 @@
 
 """AMCT 快速验证
 
-验证 cast / minmax / smoothquant 三种算法的完整量化流程（quantize -> calibrate -> convert -> forward）。
+验证 cast / minmax / smoothquant / awq 四种算法的完整量化流程（quantize -> calibrate -> convert -> forward）。
 使用随机校准数据，无需下载数据集。模型默认从 HuggingFace 实时下载 Qwen2-0.5B（~1GB）。
 """
 
@@ -32,7 +32,7 @@ import torch
 _SEQLEN = 128
 _CALIB_BATCH = 1
 
-_ALL_CASES = ("cast", "minmax", "smoothquant")
+_ALL_CASES = ("cast", "minmax", "smoothquant", "awq")
 
 
 def _parse_args():
@@ -149,6 +149,21 @@ def main():
         'skip_layers': {'lm_head', 'down_proj'},
     }
 
+    # awq INT4 group 量化，grids_num=1 降低搜索耗时（验证流程正确性，不追求精度）
+    _awq_cfg = {
+        'batch_num': 1,
+        'quant_cfg': {
+            'weights': {
+                'type': 'int4',
+                'symmetric': False,
+                'strategy': 'group',
+                'group_size': 32,
+            },
+        },
+        'algorithm': {'awq': {'grids_num': 1}},
+        'skip_layers': {'lm_head'},
+    }
+
     all_cases = [
         # cast: convert() 依赖原生 hifloat8，环境不支持时跳过 convert，只验证仿真量化前向
         {"name": "cast",        "cfg": amct.HIFP8_CAST_CFG, "needs_calib": True, "skip_convert": True},
@@ -156,6 +171,8 @@ def main():
         {"name": "minmax",      "cfg": _minmax_cfg,          "needs_calib": True, "skip_convert": False},
         # smoothquant W8A8 全量化，自定义 cfg 跳过 lm_head + down_proj
         {"name": "smoothquant", "cfg": _smoothquant_cfg,     "needs_calib": True, "skip_convert": False},
+        # awq INT4 group 量化，grids_num=1 仅验证流程完整性
+        {"name": "awq",         "cfg": _awq_cfg,             "needs_calib": True, "skip_convert": False},
     ]
     cases = [c for c in all_cases if c["name"] in requested]
 
