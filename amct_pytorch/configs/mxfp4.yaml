@@ -1,0 +1,38 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
+# MXFP4 weight-only (microscaling FP4) on the MoE experts. Run with
+# `--quant_dtype mxfp`: every block of 32 input-channel weights shares one
+# E8M0 (power-of-two) scale, and within a block weights map to the E2M1 4-bit
+# grid. The block size is fixed at 32 by the MX format, so the group_size
+# field below is NOT used by mxfp (kept only for parity with the int W4A16
+# config); each quantized weight's input-channel dim must be a multiple of 32.
+#
+# a_bits: 16 keeps activations in fp16/bf16 (weight-only). w_bits selects the
+# MX element width: 4 -> MXFP4 (E2M1), 8 -> MXFP8 (E4M3).
+#
+# Pairs with `--algos gptq`: GPTQ is dtype-agnostic and applies its Hessian
+# error compensation directly on the MX grid. On Qwen3-30B-A3B (wikitext2 PPL,
+# weight-only): moe mxfp4 direct 8.22 -> GPTQ 8.15; attn mxfp4 8.40 -> 8.10.
+
+# Attention + dense MLP stay fp16; MXFP4 targets the MoE experts.
+w_bits: 16
+a_bits: 16
+
+moe:
+  w_bits: 4
+  a_bits: 16
+  group_size: 32
