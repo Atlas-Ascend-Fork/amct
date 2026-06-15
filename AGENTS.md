@@ -30,6 +30,12 @@ bash build.sh --torch
 # 构建完整 amct 包（amct_pytorch + graph，产物位于 build_out/）
 bash build.sh --pkg
 
+# 构建包含实验特性的 amct_pytorch 包（含 amct_pytorch/experimental/）
+bash build.sh --torch --experimental
+
+# 构建包含实验特性的完整 amct 包
+bash build.sh --pkg --experimental
+
 # Debug 模式构建（需配合 --torch 或 --pkg）
 bash build.sh --torch --build-type=Debug
 
