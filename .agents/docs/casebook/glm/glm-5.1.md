@@ -6,7 +6,7 @@
 ## 结构与适配要点
 
 - `GLM5(DeepseekV32)` —— **直接继承 DeepSeek V3.2 adapter**：MLA attention + MoE，量化复用 `QuantDeepseekV3Attention` / `QuantDeepseekV3MLP` / `apply_quant_to_attn` / `apply_quant_to_moe_mlp`，几乎无模型专属新增代码。
-- **参考与差异（即本案 L3）**：最近参考 `deepseek-v3.2`（同 `DeepseekV32` 基类）；唯一差异：GLM5 适配器**不含 DSA indexer 代码**（indexer 为 DSv3.2 专属；`llm_deploy` 以 `hasattr(config,index_topk)` 门控 li_cache，glm5 不走该路径，**非缺陷**，记录见 [[amct-deploy-infer-schema-interlock]]）。
+- **参考与差异（即本案 L3）**：最近参考 `deepseek-v3.2`（同 `DeepseekV32` 基类）；唯一差异：GLM5 适配器**不含 DSA indexer 代码**（indexer 为 DSv3.2 专属；`llm_deploy` 以 `hasattr(config,index_topk)` 门控 li_cache，glm5 不走该路径，**非缺陷**；deploy↔infer schema 互锁细节见 DeepSeek 系列与 deploy 侧分析）。
 - **起步复用清单**：下一条 GLM 从 `glm5.py`（即 DeepseekV32 路径）+ `deepseek_v3_2/quant_module.py` 起步。
 
 ## 适配验证结论 / 关键陷阱

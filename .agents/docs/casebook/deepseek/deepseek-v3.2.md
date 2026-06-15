@@ -12,7 +12,7 @@
 
 ## 适配验证结论 / 关键陷阱
 
-- **待补**：实测记录与踩坑待补；DSA indexer 的部署门控见 deploy 侧 `hasattr(config,index_topk)`（同源记录见 [[amct-deploy-infer-schema-interlock]]）。
+- **待补**：实测记录与踩坑待补；DSA indexer 的部署门控见 deploy 侧 `hasattr(config,index_topk)`（deploy↔infer schema 字段级互锁）。
 
 ## 精度速查表
 
