@@ -66,16 +66,11 @@ else
   repo=$(echo $repo_url | sed 's|.*gitcode\.com/\([^/]*\)/\([^/]*\)\.git$|\2|')
 fi
 
-# URL 编码（用于 API 路径）
-encoded_repo=$(printf '%s' "${owner}/${repo}" | jq -sRr @uri)
-
 echo "Owner: $owner"
 echo "Repo: $repo"
-echo "Encoded: $encoded_repo"  # 例如: cann%2Fge
 ```
 
 **后续所有 API 调用都应使用这些变量**：
-- GitLab API v4 格式：`/projects/${encoded_repo}/...`
 - GitHub API v5 格式：`/repos/${owner}/${repo}/...`
 
 #### 2.3 查询 Fork 的原仓库（当当前仓库是 fork 时）
@@ -121,158 +116,307 @@ curl -s -H "Authorization: Bearer $GITCODE_API_TOKEN" \
 
 #### 获取 PR 讨论列表（包含行内评论）
 
-GitCode 使用 GitLab API v4 格式获取 PR 讨论和评论：
+GitCode 使用 v5 API 获取 PR 评论：
 
 ```bash
-# 获取 PR 的所有讨论（包括行内评论）
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions"
+# 获取 PR 的所有评论（包括行内评论）
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN"
 ```
 
-**关键说明**：
-- 认证头使用 `PRIVATE-TOKEN:`（不是 `Authorization: Bearer`）
-- 项目路径需要 URL 编码：`${encoded_repo}` = `owner%2Frepo`
-- 使用 `merge_requests` 而不是 `pulls`
-- 使用 GitLab API v4: `/api/v4/projects/`
+## GitCode API v5 说明
+**认证头**：
+- 推荐使用 query 参数：`?access_token=$GITCODE_API_TOKEN`
+- 也可使用 Header：`PRIVATE-TOKEN: $GITCODE_API_TOKEN`
 
-#### 解析讨论数据
+#### 解析评论数据
 
-返回的讨论数据包含以下关键字段：
+v5 API 返回**直接数组**，不是包装对象。评论数据包含以下关键字段：
 
 | 字段 | 说明 |
 |------|------|
-| `notes[].type` | 评论类型：`DiffNote` 表示行内评论，`DiscussionNote` 表示普通讨论 |
-| `notes[].body` | 评论内容 |
-| `notes[].author` | 评论作者信息 |
-| `notes[].position` | 行内评论的位置信息 |
-| `notes[].diff_file` | 被评论的文件路径 |
-| `notes[].new_line` | 新代码行号 |
-| `notes[].content` | 被评论的具体代码行内容 |
-| `notes[].resolved` | 评论是否已解决 |
-| `notes[].created_at` | 评论创建时间 |
+| `id` | 评论 ID |
+| `discussion_id` | 讨论 ID（用于回复） |
+| `body` | 评论内容 |
+| `user.login` | 评论作者用户名 |
+| `created_at` | 评论创建时间 |
+| `updated_at` | 评论更新时间 |
+| `comment_type` | 评论类型：`pr_comment` 表示普通评论，其他表示行内评论 |
+| `path` | 行内评论的文件路径（仅行内评论） |
+| `position` | 行内评论的行号（仅行内评论） |
 
-**行内评论的 position 字段结构**：
+**示例返回结构**：
+```json
+[
+  {
+    "id": 171409022,
+    "discussion_id": "b4ecb001ec8af59d02c3ffeffeb83fb7a8226c84",
+    "body": "评论内容",
+    "user": {
+      "login": "username",
+      "name": "显示名称"
+    },
+    "created_at": "2026-05-14T15:25:32+08:00",
+    "comment_type": "pr_comment"
+  }
+]
+```
+
+**行内评论示例**：
 ```json
 {
-  "base_sha": "base提交SHA",
-  "start_sha": "start提交SHA",
-  "head_sha": "head提交SHA",
-  "old_path": "旧文件路径",
-  "new_path": "新文件路径",
-  "old_line": null,
-  "new_line": 46,
-  "diff_id": 5664724
+  "id": 123456,
+  "body": "这段代码需要优化",
+  "path": null,
+  "position": null,
+  "comment_type": "DiffNote"
 }
 ```
+
+**重要说明**：列表接口返回的 `path` 和 `position` 字段为 `null`。要获取完整位置信息，需要使用单条评论接口。
+
+#### 获取单条评论详情（包含完整位置信息）
+
+**端点**：
+```
+GET /repos/:owner/:repo/pulls/comments/:id
+```
+
+**示例**：
+```bash
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
+```
+
+**返回完整字段**：
+```json
+{
+  "id": 171419900,
+  "body": "行内评论内容",
+  "path": null,
+  "position": {
+    "base_sha": "d8eb570...",
+    "start_sha": "d8eb570...",
+    "head_sha": "e54ef3...",
+    "old_path": "runtime/v1/executor.cc",
+    "new_path": "runtime/v1/executor.cc",
+    "position_type": "text",
+    "old_line": 212,
+    "new_line": 212
+  },
+  "comment_type": null,
+  "user": "username",
+  "created_at": "2026-05-14T16:06:24+08:00"
+}
+```
+
+> ⚠️ 单条评论接口（`/pulls/comments/:id`）返回的 `comment_type` 实测为 `null`，
+> 不能依赖它判断行内/普通评论。评论类型只能从列表接口
+> （`/pulls/<PR_NUMBER>/comments`，其 `comment_type` 字段有正确值）关联获取。
+
+**关键位置字段**：
+| 字段 | 说明 |
+|------|------|
+| `position.new_path` | 文件路径 |
+| `position.new_line` | 行号（新代码） |
+| `position.old_line` | 行号（旧代码） |
+| `position.base_sha` | Base 提交 SHA |
+| `position.head_sha` | Head 提交 SHA |
+
+**接口对比**：
+| 接口 | 位置信息 | comment_type | 用途 |
+|------|---------|-------------|------|
+| `/pulls/:number/comments` | `path`/`position` 为 `null` | 有正确类型 | 获取评论列表 |
+| `/pulls/comments/:id` | 完整 `position` 对象 | 为 `null` | 获取单条评论详情 |
+
+**注意**：单条评论接口返回的 `comment_type` 字段为 `null`，要获取评论类型，需要使用列表接口。
 
 ### 4. 获取 PR 文件变更
 
 ```bash
-# 基本查询
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/changes"
+# 使用 v5 API（files.json）
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json?access_token=$GITCODE_API_TOKEN"
 
-# 每页 100 条
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/changes?per_page=100"
+# 解析第一个文件路径
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/files.json?access_token=$GITCODE_API_TOKEN" | \
+  jq -r '.diffs[0].statistic.new_path'
 ```
+
+**响应字段说明**：
+- `diffs[].statistic.new_path` - 新文件路径
+- `diffs[].statistic.old_path` - 旧文件路径
+- `diff_refs.base_sha` - Base SHA
+- `diff_refs.head_sha` - Head SHA
+- `diff_refs.start_sha` - Start SHA
 
 ### 5. 提交行内评论（支持多行选择）
 
-#### 创建新的 Discussion（推荐）
+#### 使用 v5 API（推荐）
 
 ```bash
-curl -s -X POST \
-  -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
+curl -X POST \
   -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions" \
+  -H "Accept: application/json" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
-    "repoId": "'"${encoded_repo}"'",
-    "iid": <PR_NUMBER>,
     "body": "评论内容",
-    "line_types": "new",
-    "position": {
-      "base_sha": "<base_commit_sha>",
-      "start_sha": "<start_commit_sha>",
-      "head_sha": "<head_commit_sha>",
-      "position_type": "text",
-      "old_path": "文件路径",
-      "new_path": "文件路径",
-      "old_line": null,
-      "new_line": <结束行号>,
-      "start_old_line": null,
-      "start_new_line": <起始行号>,
-      "ignore_whitespace_change": false
-    },
-    "assignee_id": <用户ID>,
-    "proposer_id": <用户ID>,
-    "severity": "suggestion"
+    "path": "文件相对路径",
+    "position": <结束行号>,
+    "start_position": <起始行号>
   }'
 ```
-
-**多行选择说明**：
-- `start_new_line`: 选中的起始行号（多行选择时设置）
-- `new_line`: 选中的结束行号
-- 单行评论时，`start_new_line` 和 `new_line` 设置为相同值
 
 **参数说明**：
 
 | 参数 | 说明 | 必需 |
 |------|------|------|
 | `body` | 评论内容 | ✅ |
-| `line_types` | `"new"` 选择新代码（右侧），`"old"` 选择旧代码（左侧） | ✅ |
-| `position.base_sha` | base 提交 SHA | ✅ |
-| `position.start_sha` | start 提交 SHA | ✅ |
-| `position.head_sha` | head 提交 SHA | ✅ |
-| `position.new_path` | 文件相对路径 | ✅ |
-| `position.new_line` | 结束行号 | ✅ |
-| `position.start_new_line` | 起始行号（多行选择） | 多行时 |
-| `severity` | 严重程度：`suggestion`、`warning` | ❌ |
+| `path` | 文件相对路径 | ✅ |
+| `position` | 结束行号 | ✅ |
+| `start_position` | 起始行号（多行选择） | 多行时 |
 
-#### 回复已有 Discussion
+**单行评论示例**：
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
+  -d '{
+    "body": "第70行需要重构",
+    "path": "runtime/v1/opskernel_executor/ops_kernel_executor_manager.cc",
+    "position": 70
+  }'
+```
+
+**多行评论示例**：
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
+  -d '{
+    "body": "第70-75行需要优化",
+    "path": "runtime/v1/opskernel_executor/ops_kernel_executor_manager.cc",
+    "position": 75,
+    "start_position": 70
+  }'
+```
+
+**注意**：`start_position` 参数是未文档化的参数，但测试证明可能有效。
+
+#### 创建评论的返回值问题
+
+**重要**：POST 创建评论 API 立即返回的是**哈希字符串格式 ID**，不是数字 ID。
+
+**返回示例**：
+```json
+{
+  "id": "b227720346ef5a37e410d17e76a1c1e1f60d5d80",  // 哈希字符串
+  "discussion_id": null,
+  "body": "评论内容",
+  "created_at": null
+}
+```
+
+**获取真正的数字 ID**：
+创建评论后，需要查询评论列表获取数字 ID（用于后续删除等操作）。
+⚠️ 不要用 `contains(.body)` 做宽匹配定位——若 PR 中已有包含相同文本的评论，
+会匹配到错误的评论 ID，导致误删/误操作他人评论。应满足以下任一精确条件：
+- 在评论正文里嵌入一个**唯一标记**（如随机串/时间戳），用 `==` 或 `contains(唯一标记)` 精确匹配；
+- 或结合**当前用户**（`.user.login`）、**创建时间**（`.created_at`）、POST 返回的
+  **`discussion_id`** 共同过滤，缩小到唯一一条。
 
 ```bash
-curl -s -X POST \
-  -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/discussions/<DISCUSSION_ID>/notes" \
-  -d '{
-    "body": "回复内容"
-  }'
+# 推荐：用 POST 返回的 discussion_id 精确定位（最可靠）
+DISCUSSION_ID="b227720346ef5a37e410d17e76a1c1e1f60d5d80"   # POST 返回的哈希串
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
+  jq --arg did "$DISCUSSION_ID" --arg me "$MY_LOGIN" \
+    '.[] | select(.discussion_id == $did or (.user.login == $me and .body == "唯一标记内容")) | {id, discussion_id, comment_type}'
+
+# 返回：
+# {
+#   "id": 171431239,  // 数字 ID
+#   "discussion_id": "b227720346ef5a37e410d17e76a1c1e1f60d5d80",
+#   "comment_type": "DiffNote"
+# }
 ```
 
 ### 6. 提交普通评论
 
 ```bash
-curl -s -X POST \
-  -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
+curl -X POST \
   -H "Content-Type: application/json" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/notes" \
+  -H "Accept: application/json" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" \
   -d '{
     "body": "评论内容"
   }'
 ```
 
-### 7. 删除 PR 评论
+### 7. 回复已有评论
+
+v5 API 回复评论需要使用 `discussions` 端点：
+
+```
+POST /repos/:owner/:repo/pulls/:number/discussions/:discussion_id/comments
+```
+
+**步骤**：
+
+1. **获取 discussion_id**：
+```bash
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
+  jq '.[] | {id: .id, discussion_id: .discussion_id}'
+```
+
+2. **回复评论**：
+```bash
+curl -s -X POST \
+  -H "Content-Type: application/json" \
+  "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/discussions/<DISCUSSION_ID>/comments?access_token=$GITCODE_API_TOKEN" \
+  -d '{
+    "body": "回复内容"
+  }'
+```
+
+3. **验证回复成功**：
+```bash
+# 使用单条评论接口验证 discussion_id 是否匹配
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<REPLY_ID>?access_token=$GITCODE_API_TOKEN" | \
+  jq '{discussion_id: .discussion_id, comment_type: .comment_type}'
+```
+
+**参数**：
+- `discussion_id`（URL 中）：要回复的讨论 ID
+- `body`：回复内容
+
+**注意**：
+- 回复评论不在 `/pulls/:number/comments` 列表显示，需要用单条接口验证
+- 回复行内评论返回 `comment_type: "DiffNote"`
+- 回复普通评论返回 `comment_type: "DiscussionNote"`
+
+### 8. 删除 PR 评论
 
 当用户需要删除 PR 中的评论时使用此功能。
 
 **重要**：只能删除自己创建的评论，或具有仓库管理权限。
 
 ```bash
-# 获取评论 ID
-curl -s -H "PRIVATE-TOKEN: $GITCODE_API_TOKEN" \
-  "https://api.gitcode.com/api/v4/projects/${encoded_repo}/merge_requests/<PR_NUMBER>/notes" | \
-  jq '.[] | {id: .id, author: .author.username, body: .body}'
+# 1. 获取评论的数字 id（使用 v5 API）
+curl -s "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/<PR_NUMBER>/comments?access_token=$GITCODE_API_TOKEN" | \
+  jq '.[] | {id: .id, body: .body}'
 
-# 删除评论
-curl -s -X DELETE \
+# 2. 删除评论（<COMMENT_ID> 使用上一步列表返回的数字 id）
+curl -X DELETE \
   "https://api.gitcode.com/api/v5/repos/${owner}/${repo}/pulls/comments/<COMMENT_ID>?access_token=$GITCODE_API_TOKEN"
 ```
 
+**注意**：DELETE 接口的 `<COMMENT_ID>` 必须是评论列表（`/pulls/<PR_NUMBER>/comments`）
+返回的**数字 `id`**（如 `171431239`），`references/gitcode_api.md` 中该 `id` 字段类型为 integer。
+而 POST 创建评论时立即返回的**哈希字符串**（如 `b227720346...`）是 `discussion_id`/临时返回标识，
+**不能**直接作为删除接口的 `COMMENT_ID`——需先按上文「获取真正的数字 ID」查列表拿到数字 `id`。
+
 详细 API 参数、响应码和权限说明请参考 `references/gitcode_api.md` 的「删除 PR 评论」章节。
 
-### 8. 创建 PR 的正确流程
+### 9. 创建 PR 的正确流程
 
 **关键**：源分支必须基于目标分支，确保PR只包含期望的变更。
 
@@ -298,45 +442,67 @@ git fetch origin 9.0.0
 git checkout -b fix/gcc13-link-error origin/9.0.0
 git cherry-pick 4fbf3b183
 git push hgjupstream fix/gcc13-link-error -u
-```
+  ```
 
-### 9. 创建 PR
+### 10. 创建 PR
 
 **目标分支策略**：
 - **默认合入 `develop` 分支**（日常开发、新功能、bugfix）
 - 仅当用户明确要求时，才合入其他分支（如 `master`、`release/x.y`）
 
-**PR 描述模板规则**：
-- 创建或更新 PR 描述前，必须先查找并读取当前代码仓库的 PR 模板。
-- 优先使用仓库模板，常见路径包括：
-  - `.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`
-  - `.gitcode/PULL_REQUEST_TEMPLATE.md`
-  - `.github/pull_request_template.md`
-  - `PULL_REQUEST_TEMPLATE.md`
-- 只有当前仓库不存在 PR 模板时，才允许使用本 skill 里的兜底模板。
-- 不要把本 skill 的兜底模板字段混入仓库模板；仓库模板有哪些章节，PR 描述就按这些章节填写。
+#### 10.1 读取 PR 模板
 
-使用 GitCode API 创建 PR：
+**重要**：PR 描述必须严格遵循仓库中的模板文件，不要使用硬编码模板。
+
+按以下优先级查找仓库中存在的 PR 模板（取第一个命中的文件）：
 
 ```bash
-curl -s -X POST "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls" \
+# 按候选路径顺序查找 PR 模板，使用第一个存在的
+for tpl in \
+  .gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md \
+  .gitcode/PULL_REQUEST_TEMPLATE.en-US.md \
+  .gitcode/PULL_REQUEST_TEMPLATE.md \
+  .gitcode/pull_request_template.md \
+  .github/PULL_REQUEST_TEMPLATE.md \
+  .github/pull_request_template.md \
+  docs/PULL_REQUEST_TEMPLATE.md; do
+  if [ -f "$tpl" ]; then echo "使用模板: $tpl"; cat "$tpl"; break; fi
+done
+```
+
+根据命中的模板结构填充各字段内容。多语言模板共存时（如同时有 zh-CN 与 en-US），
+优先使用与 PR 描述语言一致的模板（本仓优先 `zh-CN`）。若仓库无任何模板，
+再回退到本 skill 末尾「PR 描述模板」一节的通用结构。
+
+#### 10.2 使用 API 创建 PR
+
+```bash
+# 注意：endpoint 的 ${owner}/${repo} 必须是 PR 要合入的【目标仓库】；
+# 跨 fork 时目标仓库是上游仓库，而非你的 fork
+curl -s -X POST "https://gitcode.com/api/v5/repos/${target_owner}/${target_repo}/pulls" \
   -H "Authorization: Bearer $GITCODE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "docs: 优化文档描述(#32)",
-    "head": "username:fix/issue-32-description",
+    "head": "source_owner/source_repo:fix/issue-32-description",
     "base": "develop",
-    "body": "PR描述内容（见下方模板）"
+    "body": "按模板填充的PR描述"
   }'
 ```
 
 **参数说明**：
 - `title`: PR 标题（必填）
-- `head`: 源分支，格式 `username:branch`（必填）
+- `head`: 源分支（必填）。需按场景区分填写：
+  - **同仓库 PR**（源分支与目标在同一仓库）：直接用分支名，如 `fix/issue-32-description`。
+  - **跨 fork PR**（从 fork 向上游提）：必须用**完整源仓库路径**前缀，
+    格式 `source_owner/source_repo:branch`，如 `fujun19/amct_open:docs/fix-xxx`。
+    ⚠️ 仅用 `username:branch` 经实测会返回 `400 BAD_REQUEST`；只用纯分支名时
+    API 会去目标仓库找该分支并报 `404 Can not find the branch`。
+  - endpoint 路径里的 owner/repo 始终用**目标仓库**（跨 fork 时为上游仓库）。
 - `base`: 目标分支，**默认为 `develop`**，除非用户明确要求合入其他分支
-- `body`: PR 描述（Markdown 格式）
+- `body`: PR 描述（Markdown 格式，按 10.1 节查找到的仓库 PR 模板填充）
 
-### 10. PR URL 格式
+### 11. PR URL 格式
 
 创建 PR 后，PR 的访问地址格式为（注意是 `/pull/` 而非 `/pulls/`）：
 
@@ -344,66 +510,13 @@ curl -s -X POST "https://gitcode.com/api/v5/repos/${owner}/${repo}/pulls" \
 https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 ```
 
-**示例**：`https://gitcode.com/cann/ge/pull/1807`
+**示例**：`https://gitcode.com/${owner}/${repo}/pull/1807`
 
-### 11. 后续跟进
+### 12. 后续跟进
 
 - 检查 CI/CD 运行结果
 - 回复审查者意见
 - 根据反馈更新代码
-
----
-
-## PR 代码审查
-
-当用户说"检视 PR"、"审查 PR"、"review PR"、"给 PR 提意见"时触发。
-
-### 执行步骤
-
-1. **读取 commands/review.md** - 使用 Read 工具获取完整审查流程
-
-2. **执行 review.md 中的审查流程**：
-   - 步骤 1: 前置检查（PR 状态、草稿、是否已审查）
-   - 步骤 2: 获取项目规范上下文
-   - 步骤 3: 获取 PR 变更摘要
-   - 步骤 4: 代码审查（Bug 扫描、规范合规性）
-   - 步骤 5: 验证问题
-   - 步骤 6: 过滤问题
-   - 步骤 7: 输出审查摘要
-   - 步骤 8: 准备评论列表（仅当提供 `--comment` 时）
-   - 步骤 9: 发布行内评论（仅当提供 `--comment` 时）
-
-**注意**：review.md 中包含每个步骤的详细说明和 API 示例。
-
----
-
-## 输出格式
-
-### 评论列表格式
-
-获取 PR 评论后，使用以下格式输出：
-
-```markdown
-# PR 评论摘要
-
-## 总体统计
-- 讨论数量: X
-- 行内评论: Y
-- 已解决评论: Z
-
-## 行内评论详情
-
-### 1. 文件路径 - 第 N 行
-
-**评论内容**: ...
-**评论者**: @username
-**时间**: YYYY-MM-DD HH:mm
-**状态**: 未解决/已解决
-
-**代码片段**:
-```cpp
-// 被评论的代码行
-```
 
 ---
 
@@ -437,44 +550,43 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 
 ## PR 描述模板
 
-创建 PR 时优先使用当前仓库的 PR 模板。以下模板仅用于仓库没有模板文件时兜底。
+创建 PR 时**必须读取并使用**仓库中的 PR 模板（按 10.1 节的候选路径查找）。
 
-**重要**：
-- **先读仓库模板**：创建或更新 PR 前必须执行模板查找，例如 `find . -maxdepth 3 -type f \( -iname '*pull*template*' -o -path './.gitcode/PULL_REQUEST_TEMPLATE*' -o -path './.github/pull_request_template*' \)`，并按找到的仓库模板填写。
-- **变更类型**：根据实际变更内容，将对应选项的 `[ ]` 改为 `[x]` 勾选
-- **核对清单**：提交 PR 前所有项都应满足，默认全部勾选 `[x]`
+**步骤**：
+1. 按 10.1 节的候选路径查找并读取仓库中存在的 PR 模板文件
+2. 根据实际变更填充模板中的各字段（描述、测试项、测试结果等）
+3. 将对应选项的 `[ ]` 改为 `[x]` 勾选
+4. Checklist 默认全部勾选 `[x]`
+5. 将填充后的模板内容作为 `body` 参数传入创建 PR 的 API
 
-```markdown
-# Pull Request
+**不要使用硬编码的模板内容**，始终以仓库中实际存在的模板文件为准；
+若仓库无任何模板，再回退到通用结构。
 
-## 描述
-<!-- 根据代码变更内容填写描述 -->
+---
 
-## 变更类型
-请选择本次引入的变更类型（勾选对应项）：
-- [ ] 🐛 Bug 修复
-- [ ] ✨ 新功能
-- [ ] 💄 代码风格更新（格式化，局部变量）
-- [ ] ♻️ 重构（既不修复错误也不增加功能的代码变动）
-- [ ] 📦 构建过程或辅助工具的变动
-- [ ] 📝 文档内容更新
+## PR 代码审查
 
-## 关联的Issue
-Closes #<issue_number>
+当用户说"检视 PR"、"审查 PR"、"review PR"、"给 PR 提意见"时触发。
 
-## 如何测试
-描述测试此变更的步骤和前提条件：
+### 执行步骤
 
-## 核对清单
-- [ ] 我的代码遵循了项目的代码风格
-- [ ] 我已对代码进行了自测
-- [ ] 我已更新了相关的文档
-- [ ] 我在标题中使用了合适的类型标签（如：`feat:`, `fix:`）
-- [ ] 我已经详细阅读了贡献指南（CONTRIBUTING.md）
+1. **读取 `commands/review.md`** —— 使用 Read 工具获取完整审查流程（本 skill 目录下的 `commands/review.md`）。
 
-## 其他信息
-在此添加任何其他关于本次 PR 的说明。
-```
+2. **执行 review.md 中的审查流程**：
+   - 步骤 1: 前置检查（PR 状态、草稿、是否已审查）
+   - 步骤 2: 获取项目规范上下文
+   - 步骤 3: 获取 PR 变更摘要
+   - 步骤 4: 代码审查（Bug 扫描、规范合规性）
+   - 步骤 5: 验证问题
+   - 步骤 6: 过滤问题
+   - 步骤 7: 输出审查摘要
+   - 步骤 8: 准备评论列表（仅当提供 `--comment` 时）
+   - 步骤 9: 发布行内评论（仅当提供 `--comment` 时）
+
+**注意**：
+- `commands/review.md` 中包含每个步骤的详细说明和 API 示例。
+- 其中的评论获取/发布 API 须遵循本文档前述的 GitCode v5 约定
+  （`/repos/${owner}/${repo}/...` + `access_token`；评论定位用数字 `id` 等）。
 
 ---
 
