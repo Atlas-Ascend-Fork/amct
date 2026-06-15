@@ -51,9 +51,7 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 5. 为什么单编排入口（依据）
 
-- **业界主流范式**：Anthropic *orchestrator-workers / routing*、OpenAI Agents SDK *triage + handoffs*、LangGraph *supervisor*、CrewAI *hierarchical manager*、Claude Code *主 agent + subagents* —— 同为「单编排/路由 + 工作者 + 工具」；Anthropic 并强调“不为分层而分层”。
-- **内部对齐**：同源脚手架 cann-recipes-infer 即「单编排入口 skill + 3 子代理 + 叶子 skill」，无中间编排层。
-- **反模式**：多个职责重叠的编排入口 = 路由歧义 + 规则重复；本设计将原 `amct-quantization / model-workflow / quantization` 三合一以消除之。
+采用业界主流的「单编排 / 路由 + 工作者 + 工具」范式：Anthropic *orchestrator-workers / routing*、OpenAI Agents SDK *triage + handoffs*、LangGraph *supervisor*、CrewAI *hierarchical manager*、Claude Code *主 agent + subagents* 均如此；Anthropic 并强调“按需才分层，不为分层而分层”。本 agent 的「单 `quant-workflow` + 三子代理 + 叶子技能」即此形态，也与同源脚手架 cann-recipes-infer 的 `.agents` 布局一致。
 
 ## 6. casebook 设计
 
@@ -66,9 +64,3 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 - 启动：`bash scripts/init-agent.sh` 生成视图后，在 Claude Code 或 OpenCode 中启动。
 - 已实测（OpenCode + glm-5）：执行流（W8A8 直转）、分析流（方案推荐）、PTQ 流（extract → ptq → eval）三类端到端均由 agent 自主跑通且结果核实准确。
-
-## 8. 演进记录
-
-- 原 4 个 tasks（amct-quantization / model-workflow / quantization / model-adapter）→ 收敛为 1 个编排入口 + model-adapter 叶子。
-- 移除 `dynamic-quant-qmm-analysis`（理论性能估计），`scheme-recommendation` 回退为 casebook / 结构经验推荐。
-- casebook 由「按网络结构」改为「按 vendor 系列」，模板升级为 hybrid，内容剪枝为 hard-bug 导向。
