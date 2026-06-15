@@ -35,6 +35,7 @@ def register_algorithms():
     from .auto_clip import LAC, LWC
     from .auto_round import AutoRound
     from .omniquant import OmniQuant
+    from .flatquant import FlatQuant
 
     _REGISTERED = True
 
