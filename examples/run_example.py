@@ -189,6 +189,11 @@ def main():
         if result != "PASS":
             all_pass = False
 
+    if all_pass:
+        print("[AMCT_EXAMPLE_ALL_PASS]")
+    else:
+        print("[AMCT_EXAMPLE_FAILED]")
+
     sys.exit(0 if all_pass else 1)
 
 
