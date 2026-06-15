@@ -18,6 +18,8 @@
 
 __all__ = ['QuantCalibrationOp']
 
-from amct_pytorch.classic.graph_based.amct_pytorch.nn.module import quantization as _impl
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization import (
+    quant_calibration_op as _impl,
+)
 
-QuantCalibrationOp = _impl.quant_calibration_op.QuantCalibrationOp
+QuantCalibrationOp = _impl.QuantCalibrationOp
