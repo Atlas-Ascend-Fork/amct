@@ -15,7 +15,7 @@ import argparse
 import torch
 import torch_npu
 
-from utils import get_test_dataset, get_qwen, get_calib_dataset, infer_model, test_ppl
+from utils import get_test_dataset, get_qwen, test_ppl
 import amct_pytorch as amct
 
 if __name__ == '__main__':
@@ -31,9 +31,12 @@ if __name__ == '__main__':
     cfg = amct.HIFP8_CAST_CFG
     amct.quantize(quant_model, cfg)
 
-    # The quantized model is already a deployment model, no need to convert
+    # Phase2: convert to deployment model (HIF8CastQuant -> NpuHIF8CastLinear)
+    # please make sure that the torch_npu supports hifloat8 operations
+    # otherwise, please use the quantized model for simulation testing.
+    amct.convert(quant_model)
 
-    # Phase2: Test ppl result
+    # Phase3: Test ppl result
     testenc = get_test_dataset(enc=enc, seqlen=model.seqlen)
     testenc = testenc.input_ids.npu()
     test_ppl(quant_model, testenc)

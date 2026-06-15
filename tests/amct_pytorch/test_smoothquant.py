@@ -26,6 +26,7 @@ from mock_torch_npu import (
     mock_npu_convert_weight_to_int4pack,
     mock_npu_dtype_cast,
     mock_npu_dynamic_mx_quant,
+    mock_npu_dynamic_quant,
     mock_npu_format_cast,
     mock_npu_quant_matmul,
     mock_npu_quantize,
@@ -139,11 +140,12 @@ class TestSmoothQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
-    def test_int8_int8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
+    def test_int8_int8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -180,8 +182,53 @@ class TestSmoothQuant(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_int8_int8_token_deploy_uses_dynamic_quant(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+        '''
+        INT8 per-token 激活量化部署后,forward 必须走运行时 npu_dynamic_quant 分支
+        (而非定长静态 npu_quantize),否则推理 seqlen 与校准不同会维度不匹配报错。
+        本用例断言部署算子确实调用了 npu_dynamic_quant,且推理 seqlen 不同于校准时仍正常。
+        '''
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'int8',
+                    'symmetric': True,
+                    'strategy': 'token',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.4}}
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        torch.Tensor.npu = mock_npu
+        convert(model)
+        self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
+        # 推理 batch(行数)故意不同于校准的 64,验证 per-token 动态量化不绑定校准维度
+        infer_inputs = torch.randn(16, 64).to(torch.bfloat16)
+        quant_out = model(infer_inputs.npu())
+        # mock_1 是 npu_dynamic_quant(最靠近函数的 wraps 装饰器);
+        # check_parameters_in_schema 用 MagicMock(new=...) 不注入参数。
+        self.assertTrue(mock_1.called)
+        self.assertEqual(quant_out.shape[0], 16)
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
     @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param)
-    @patch('amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema', 
+    @patch('amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
            MagicMock(return_value=True))
     def test_int8_int4_tensor_tensor_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
         self._run_a8w4_smooth_case('tensor', True)
