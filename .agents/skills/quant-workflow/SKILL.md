@@ -26,7 +26,7 @@ description: amct 量化编排入口。从“模型导入”到“适配→量�
 
 ## 固定流程
 
-1. **先查现有结果**：`.agents/docs/casebook/...` 同模型/系列结论；`outputs/`、日志、脚本目录的 BF16 / quant / deploy 结果；当前代码、模型版本、量化目标、口径是否一致。足够则复用并说明口径，仅在变化时重跑。
+1. **先查现有结果**：casebook 按三层读——L1 `docs/casebook/common-pitfalls.md`（跨网络通用，先通读）→ 按 config/checkpoint 触发信号读 L2 `docs/casebook/family-pitfalls.md` 命中的结构家族 → L3 `docs/casebook/<series>/<case>.md` 同模型/系列结论；再查 `outputs/`、日志、脚本目录的 BF16 / quant / deploy 结果；当前代码、模型版本、量化目标、口径是否一致。足够则复用并说明口径，仅在变化时重跑。
 2. 阶段 1 / 2 → `$model-adapter`。
 3. 阶段 3 → 进入**量化实验环**（见下节）。
 4. 阶段 4 → `$deploy-export`。
@@ -77,7 +77,8 @@ description: amct 量化编排入口。从“模型导入”到“适配→量�
 ## 文档写回触发
 
 - 系列 `casebook README`：某模型首次拿到稳定 BF16 baseline + 第一轮可复现结论；默认起点 / 敏感模块 / 升级策略 / 常见问题需修订；新结果推翻系列默认经验。
-- 个案 `<series>/<case>.md`：新直转或 PTQ 升级路线；代表性问题 / 排障结论；明显偏离系列经验；已有个案需按新结果修订。
+- 个案 L3 `<series>/<case>.md`：新直转或 PTQ 升级路线；代表性问题 / 排障结论；明显偏离系列经验；已有个案需按新结果修订；**仅本模型独有、不可迁移**的坑留这层。
+- 经验库 L1/L2（`common-pitfalls.md` / `family-pitfalls.md`）：发现跨网络通用、或某结构家族通用的可复用坑/陷阱时写回。**晋升护栏：单模型新发现先留 L3，同家族 ≥2 模型复现才升 L2、跨家族复现才升 L1**（防单例过度泛化）；新增 L2 家族须配触发信号。
 - `.agents/docs/repo-map.md`：实际改动 workflow / solver / 数据链路 / 导出加载语义 / 主注册链，或现状已与代码不一致。
 - `.agents/docs/README.md`：文档层级 / 职责边界变化，或记录的目录结构与真实不一致。
 - 默认不写：单次失败 / 不稳定结果；BF16 baseline 自身不稳定；本轮无新增可复用信息（需说明无需更新）。

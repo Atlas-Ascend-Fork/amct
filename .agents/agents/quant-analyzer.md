@@ -15,7 +15,7 @@ skills:
 ## 启动流程
 
 1. 从 dispatch prompt 中的「工作目录」确定模型路径，读取该目录下的 progress.md，了解模型信息（结构、层数、是否 MoE、是否已适配）和当前阶段
-2. 优先从 casebook（`.agents/docs/casebook/<series>/`）确认同系列是否已有实测方案可复用
+2. 按 casebook 三层读取：先 L1 `docs/casebook/common-pitfalls.md`（跨网络通用 + 适配前自检清单）→ 按模型 config/checkpoint 触发信号读 L2 `docs/casebook/family-pitfalls.md` 对应结构家族（可多属）→ 再看 L3 `docs/casebook/<series>/` 同系列实测方案可复用
 3. 必须调用编排层指定的 skill，按 skill 流程进行分析
 
 > **状态文件读写规则**：progress.md 直接 Read；progress_history.md 禁止 Read 全文，需要历史信息时用 Grep 关键字查找。
@@ -32,7 +32,7 @@ skills:
 ## 核心原则
 
 1. **不替用户做决策**：方案推荐输出候选 + 风险 + 回退路径，由主 Agent 交用户确认；不擅自选定位宽/算法
-2. **优先复用 casebook**：同系列已有实测优先复用其起点方案与阈值，不从零推断
+2. **优先复用 casebook（三层）**：先过 L1 自检清单 + 命中的 L2 结构家族陷阱，再复用 L3 同系列起点方案与阈值，不从零推断
 3. **方案必须落到可执行命令**：每个候选方案给出 `--quant_target / --quant_dtype / --bit_config(yaml) / --algos / --granularity`，bit 配置一律用 yaml（顶层 `w_bits/a_bits` + `moe.routed/shared` 分组）
 4. **证据优先**：遇到异常或质疑，先用工具读 config/权重/casebook 调查，不凭记忆作答
 5. **完成后更新 progress.md**：写入「方案分析」「候选方案」「风险与回退」section
