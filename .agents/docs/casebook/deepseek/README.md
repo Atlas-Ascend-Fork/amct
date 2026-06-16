@@ -4,7 +4,7 @@
 
 ## 系列概览
 
-- 当前已覆盖模型：`deepseek_v3_2`、`deepseek_v4`（`glm5` 亦继承 `DeepseekV32`）
+- 当前已覆盖模型：`deepseek_v2`(V2-Lite)、`deepseek_v3_2`、`deepseek_v4`（`glm5` 亦继承 `DeepseekV32`）
 - 整体结构特点：这一系列的 decoder block 同时包含 attention 侧和 MoE 侧，attention 路径内部还会分成不同分支，量化时通常需要把 `mla` 和 `moe` 分开看
 - 与其他系列最接近的是：MoE 侧能复用通用 `PtqUnit` 和 `apply_quant_to_moe_mlp`，attention 侧则更依赖 DeepSeek 专属的 wrapper 与 target 路由
 
@@ -38,5 +38,6 @@
 
 ## 已有个案
 
+- [DeepSeek-V2-Lite](deepseek-v2.md) — 厚（MLA+MoE 无 DSA；agent 自主适配实测；三步闭环 + W8A8 直转 delta 0.134 达标）
 - [DeepSeek-V3.2](deepseek-v3.2.md) — 待补（DeepseekV32 基类：MLA+MoE+DSA，moe-only，仅精度）
 - [deepseekv4](deepseekv4.md) — 厚（MLA + Compressor + Indexer + HC + grouped wo + 自定义 forward；代码侧适配完成，等权重补 BF16/PTQ）

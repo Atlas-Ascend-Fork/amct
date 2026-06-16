@@ -1,4 +1,4 @@
-﻿# Repo Map
+# Repo Map
 
 ## 作用
 
@@ -11,7 +11,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 最近校验日期 | `2026-06-08` |
+| 最近校验日期 | `2026-06-16` |
 | 使用方式 | `先读 repo-map -> 抽查锚点 -> 只更新受影响 section` |
 | 适用场景 | `新模型适配与 PTQ 流程定位` |
 
@@ -61,17 +61,18 @@
 这一节只记录**当前已经接通的主链**，避免把目录存在但尚未真正纳入主流程的内容写得过满。
 
 - 当前已注册的 LLM 模型适配器：
+  - `deepseek_v2`
+  - `deepseek_v3_2`
+  - `deepseek_v4`
+  - `longcat_lite`
+  - `longcat_next`
+  - `glm5`
   - `qwen3`
   - `qwen3_moe`
   - `qwen3_5`
   - `qwen3_5_moe`
   - `qwen3_6_moe`
   - `qwen3_next`
-  - `deepseek_v3_2`
-  - `deepseek_v4`
-  - `longcat_lite`
-  - `longcat_next`
-  - `glm5`
 - 当前已注册的 solver：
   - `block`
 - `amct_pytorch/common/optimization/global_solver.py` 文件存在，但当前没有注册到 solver 主链。
