@@ -23,8 +23,9 @@
 #     .agents/settings.json - Claude Code settings (permissions + hook registration)
 #
 # Generated (gitignored):
-#     .claude/{skills,agents,hooks,settings.json} - Claude Code view
-#     .opencode/{skills,agents}                    - OpenCode view
+#     .claude/{skills,agents,hooks,docs,settings.json} - Claude Code view
+#     .opencode/{skills,agents,docs}                    - OpenCode view
+#     ({claude,opencode}/docs symlink .agents/docs so skill→doc relative links resolve in both views)
 #     CLAUDE.md -> AGENTS.md                       - Claude Code entry
 #
 # Usage:
@@ -78,11 +79,12 @@ install_claude() {
     link_children "$SRC/skills" "$base/skills"
     link_children "$SRC/agents" "$base/agents"
     link_children "$SRC/hooks"  "$base/hooks"
+    [ -d "$SRC/docs" ] && ln -sfn "$(realpath "$SRC/docs")" "$base/docs"
     if [ -f "$SRC/settings.json" ]; then
         cp "$SRC/settings.json" "$base/settings.json"
     fi
     ln -sfn AGENTS.md "$REPO_ROOT/CLAUDE.md"
-    echo "  + $base/{skills,agents,hooks,settings.json}"
+    echo "  + $base/{skills,agents,hooks,docs,settings.json}"
     echo "  + $REPO_ROOT/CLAUDE.md -> AGENTS.md"
 }
 
@@ -91,7 +93,8 @@ install_opencode() {
     echo "Installing OpenCode -> $base/"
     link_children "$SRC/skills" "$base/skills"
     link_children "$SRC/agents" "$base/agents"
-    echo "  + $base/{skills,agents} linked"
+    [ -d "$SRC/docs" ] && ln -sfn "$(realpath "$SRC/docs")" "$base/docs"
+    echo "  + $base/{skills,agents,docs} linked"
 }
 
 case "$target" in
