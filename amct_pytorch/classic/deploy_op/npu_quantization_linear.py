@@ -81,24 +81,13 @@ class NpuQuantizationLinear(torch.nn.Module):
             if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
                 ori_shape = quant_x.shape
                 quant_x = quant_x.reshape(-1, x.shape[-1])
-            if self.bias_for_npu_op and self.bias is not None:
-                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                    bias=self.bias, output_dtype=self.output_dtype,
-                    x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-                    group_sizes=self.group_sizes, y_scale=self.y_scale)
-                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                    output = output.reshape(*ori_shape[:-1], -1)
-            else:
-                output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
-                    scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
-                    output_dtype=self.output_dtype,
-                    x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
-                    group_sizes=self.group_sizes, y_scale=self.y_scale)
-                if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-                    output = output.reshape(*ori_shape[:-1], -1)
-                if self.bias is not None:
-                    output = output + self.bias
+            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
+                scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
+                bias=self.bias, output_dtype=self.output_dtype,
+                x1_dtype=self.x1_dtype, x2_dtype=self.x2_dtype,
+                group_sizes=self.group_sizes, y_scale=self.y_scale)
+            if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
+                output = output.reshape(*ori_shape[:-1], -1)
         else:
             output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight,
                 scale=self.deq_scale, pertoken_scale=self.pertoken_scale,
@@ -144,8 +133,11 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.register_buffer('quantized_weight', weight_tensor)
         self.offset_bias = None
         if quant_module.offset_d is not None:
+            # offset_bias is a per-cout correction, so it must use the real int4 weight
+            # values [cin, cout] rather than the int8-packed bytes [cin, cout // 2].
+            offset_weight = getattr(self, 'weight_before_pack', weight_tensor)
             offset_reshape = quant_module.offset_d.float().repeat(1, quant_module.weight.shape[-1])
-            self.offset_bias = offset_reshape.float() @ weight_tensor.float()
+            self.offset_bias = offset_reshape.float() @ offset_weight.float()
             self.offset_bias = -1 * self.offset_bias.round().to(torch.int32).reshape(-1)
 
     def _init_deq_act_scale(self, quant_module, device):
@@ -206,34 +198,19 @@ class NpuQuantizationLinear(torch.nn.Module):
             self.x2_dtype = torch_npu.hifloat8
         elif self.wts_type == FLOAT4_E2M1:
             self.x2_dtype = torch_npu.float4_e2m1fn_x2
+        elif self.wts_type == INT4:
+            # int8 * int4: npu_quant_matmul requires x2_dtype be int4 while the packed
+            # quantized_weight is physically stored as int8 (two int4 per byte).
+            self.x2_dtype = torch_npu.int4
 
     def _init_bias(self, module):
-        """Decide bias form and whether forward should pass it to npu_quant_matmul:
-          - INT8 PER_TENSOR + non-dynamic: quantize bias to INT32, pass to op
-          - FP8*FP8 / HIFLOAT8*HIFLOAT8: keep fp, add outside op (preserves master behavior)
-          - INT8 PER_TOKEN / dynamic: keep fp, pass to op
+        """Decide bias form and set self.bias (passed to npu_quant_matmul, may be None):
+          - INT8 PER_TENSOR + non-dynamic: quantize bias to INT32
+          - FP8*FP8 / HIFLOAT8*HIFLOAT8 / INT8 PER_TOKEN / dynamic: keep fp
           - module.bias is None: handle offset_bias if present
-        Sets self.bias_for_npu_op accordingly.
         """
-        self.bias_for_npu_op = False
         if module.bias is None:
-            if self.offset_bias is None:
-                self.bias = None
-            else:
-                self.bias = self.offset_bias
-                self.bias_for_npu_op = True
-            return
-
-        is_fp8_fp8 = (self.act_type == FLOAT8_E4M3FN
-                      and self.wts_type == FLOAT8_E4M3FN)
-        is_hif8_hif8 = (self.act_type == HIFLOAT8
-                        and self.wts_type == HIFLOAT8)
-
-        if is_fp8_fp8 or is_hif8_hif8:
-            bias = module.bias
-            if self.offset_bias is not None:
-                bias = bias + self.offset_bias.to(bias.dtype)
-            self.register_buffer('bias', bias)
+            self.bias = self.offset_bias
             return
 
         if (self.act_granularity == 'tensor'
@@ -247,7 +224,6 @@ class NpuQuantizationLinear(torch.nn.Module):
 
         if self.offset_bias is not None:
             self.bias = self.bias + self.offset_bias
-        self.bias_for_npu_op = True
 
     def _get_quantize_wts(self, quant_module, weight, device):
         """
@@ -273,7 +249,33 @@ class NpuQuantizationLinear(torch.nn.Module):
             weight_tensor = quant_weight(weight, self.wts_type, self.scale_w_tensor, group_size=self.group_size)
             weight_tensor = torch.transpose(weight_tensor, 1, 0)
             if self.wts_type == INT4:
-                weight_tensor = torch_npu.npu_convert_weight_to_int4pack(
-                    weight_tensor.contiguous().npu()).to(device=device)
+                # int8 * int4 (the only int4 combo reaching this op): npu_quant_matmul requires
+                # the int4 weight packed into int8 (two int4 spliced into one byte) along the
+                # cout axis. The packed weight is passed with shape [k, n // 2] (k=cin, n=cout).
+                # Keep the unpacked [k, n] int4 values for the offset_bias computation, which
+                # needs the real per-cout weight rather than the packed bytes.
+                self.weight_before_pack = weight_tensor
+                weight_tensor = self._pack_int4_to_int8(weight_tensor).to(device=device)
             self.scale_w_tensor = self.scale_w_tensor.reshape(-1)
         return weight_tensor
+
+    def _pack_int4_to_int8(self, weight_tensor):
+        """
+        Function: pack int4 weight (values in [-8, 7]) into int8, splicing two adjacent
+            int4 elements along the cout (last) axis into one byte. The low nibble holds
+            the even-indexed element and the high nibble holds the odd-indexed element.
+        Args:
+            weight_tensor: torch.tensor of int4 values stored as int32, shape [k, n] (cin, cout)
+        Returns:
+            torch.tensor of dtype int8, shape [k, n // 2]
+        """
+        if weight_tensor.shape[-1] % 2 != 0:
+            raise RuntimeError(
+                "int8 * int4 packing requires an even cout dim, current is {}".format(
+                    weight_tensor.shape[-1]))
+        # keep only the low 4 bits so negative values map to their two's-complement nibble
+        vals = (weight_tensor & 0x0F).to(torch.int16)
+        low = vals[..., 0::2]
+        high = vals[..., 1::2]
+        combined = (low | (high << 4)).to(torch.int8)
+        return combined.contiguous()
