@@ -166,13 +166,13 @@ def main():
 
     all_cases = [
         # cast: convert() 依赖原生 hifloat8，环境不支持时跳过 convert，只验证仿真量化前向
-        {"name": "cast",        "cfg": amct.HIFP8_CAST_CFG, "needs_calib": True, "skip_convert": True},
+        {"name": "cast", "cfg": amct.HIFP8_CAST_CFG, "needs_calib": True, "skip_convert": True},
         # minmax 仅权重量化，自定义 cfg 跳过 lm_head（vocab 超 NPU 算子 n<=65535 限制）
-        {"name": "minmax",      "cfg": _minmax_cfg,          "needs_calib": True, "skip_convert": False},
+        {"name": "minmax", "cfg": _minmax_cfg, "needs_calib": True, "skip_convert": False},
         # smoothquant W8A8 全量化，自定义 cfg 跳过 lm_head + down_proj
-        {"name": "smoothquant", "cfg": _smoothquant_cfg,     "needs_calib": True, "skip_convert": False},
+        {"name": "smoothquant", "cfg": _smoothquant_cfg, "needs_calib": True, "skip_convert": False},
         # awq INT4 group 量化，grids_num=1 仅验证流程完整性
-        {"name": "awq",         "cfg": _awq_cfg,             "needs_calib": True, "skip_convert": False},
+        {"name": "awq", "cfg": _awq_cfg, "needs_calib": True, "skip_convert": False},
     ]
     cases = [c for c in all_cases if c["name"] in requested]
 
