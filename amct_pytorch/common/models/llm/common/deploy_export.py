@@ -21,6 +21,7 @@ from safetensors.torch import load_file
 
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -73,10 +74,20 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
 
 
 def get_quant_ignore_linear_names(block, weight_prefix):
+    """Return weight names of non-quantized Linear modules in a block.
+
+    QuantLinear modules are skipped (already quantized). PlainLinear and
+    raw nn.Linear modules are collected as ignore entries.
+    """
     quant_linear_prefixes = tuple(
         f"{name}."
         for name, module in block.named_modules()
         if isinstance(module, QuantLinear)
+    )
+    plain_linear_prefixes = tuple(
+        f"{name}."
+        for name, module in block.named_modules()
+        if isinstance(module, PlainLinear)
     )
 
     names = []
@@ -85,7 +96,17 @@ def get_quant_ignore_linear_names(block, weight_prefix):
             continue
         if any(name.startswith(prefix) for prefix in quant_linear_prefixes):
             continue
+        # Skip inner .linear of PlainLinear (e.g. "q_a_proj.linear") —
+        # collected below via PlainLinear's own path ("q_a_proj")
+        if any(name.startswith(prefix) for prefix in plain_linear_prefixes):
+            continue
         names.append(f"{weight_prefix}{name}")
+
+    # Collect PlainLinear via wrapper path to avoid ".linear" suffix
+    for name, module in block.named_modules():
+        if isinstance(module, PlainLinear):
+            names.append(f"{weight_prefix}{name}")
+
     return names
 
 

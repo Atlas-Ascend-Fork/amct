@@ -31,7 +31,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import torch
-from safetensors.torch import save_file
+from safetensors.torch import load_file, save_file
 
 from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
 
@@ -53,6 +53,16 @@ QUANTIZATION_CONFIG = 'quantization_config'
 KEY_SHARD1_SAFETENSORS = 'shard1.safetensors'
 KEY_SUBDIR = 'subdir'
 KEY_UNKNOWN_WEIGHT = 'unknown.weight'
+
+
+def _make_pipeline_mock(num_layers=2, **overrides):
+    """Create a SimpleNamespace pipeline mock with required deploy methods."""
+    defaults = dict(
+        num_layers=num_layers,
+        get_kv_cache_scheme=lambda: {"num_bits": 8, "type": "float"},
+    )
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
 
 
 def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype="int8"):
@@ -413,7 +423,7 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
     )
 
     wf = _make_workflow(output_dir=str(tmp_path))
-    wf.pipeline = SimpleNamespace(num_layers=2)
+    wf.pipeline = _make_pipeline_mock(num_layers=2)
     wf._copy_support_files = MagicMock()
     wf._load_weight_index = MagicMock(return_value={"weight_map": {
         LAYER_WEIGHT: KEY_SHARD1_SAFETENSORS,
@@ -515,7 +525,7 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     )
 
     wf = _make_workflow(output_dir=str(tmp_path))
-    wf.pipeline = SimpleNamespace(num_layers=2)
+    wf.pipeline = _make_pipeline_mock(num_layers=2)
     wf._copy_support_files = MagicMock()
     wf._load_weight_index = MagicMock(return_value={"weight_map": {}})
     wf._write_block_file = MagicMock()
@@ -671,4 +681,3 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     assert result["num_output_files"] == 1
     # quant_payload produces qweight + weight_scale + weight_bias
     assert "layer.weight" in refreshed_index["weight_map"]
-

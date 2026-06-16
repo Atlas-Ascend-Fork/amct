@@ -34,6 +34,7 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     generate_quant_group,
     get_quant_ignore_linear_names,
 )
+from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 CONFIG_GROUPS_KEY = 'config_groups'
@@ -321,4 +322,34 @@ def test_quant_payload_skips_none_extras():
     result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=4)
     assert "layer.weight" in result
     assert "layer.bias" not in result
+
+
+# ---- get_quant_ignore_linear_names: PlainLinear filtering -----------------
+
+
+@pytest.mark.cpu
+def test_get_quant_ignore_linear_names_skips_inner_linear_of_plain_linear():
+    block = nn.Module()
+    block.q_a_proj = PlainLinear(nn.Linear(4, 4))
+    names = get_quant_ignore_linear_names(block, "model.layers.0.")
+    assert "model.layers.0.q_a_proj.linear" not in names
+    assert "model.layers.0.q_a_proj" in names
+
+
+@pytest.mark.cpu
+def test_get_quant_ignore_linear_names_collects_plain_linear_wrapper_path():
+    block = nn.Module()
+    block.q_a_proj = PlainLinear(nn.Linear(4, 4))
+    block.q_b_proj = PlainLinear(nn.Linear(4, 4))
+    names = get_quant_ignore_linear_names(block, "prefix.")
+    assert sorted(names) == ["prefix.q_a_proj", "prefix.q_b_proj"]
+
+
+@pytest.mark.cpu
+def test_get_quant_ignore_linear_names_mixed_plain_and_plain_linear():
+    block = nn.Module()
+    block.plain_fc = nn.Linear(4, 4)
+    block.wrapped = PlainLinear(nn.Linear(4, 4))
+    names = get_quant_ignore_linear_names(block, "")
+    assert sorted(names) == ["plain_fc", "wrapped"]
 

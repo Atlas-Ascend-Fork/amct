@@ -35,6 +35,7 @@ def register_llm_models():
     from .qwen.qwen3.qwen3_moe import Qwen3Moe  # noqa: F401
     from .glm.glm5.glm5 import GLM5
     from .hyv3.hyv3 import HyV3  # noqa: F401
+    from .glm.glm5_2.glm5_2 import GLM5_2  # noqa: F401
 
     _REGISTERED = True
 
