@@ -2,7 +2,8 @@
 # Copyright 2023 DeepSeek-AI and The HuggingFace Inc. team. All rights reserved.
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #
-# Adapted from the DeepSeek-V2 HuggingFace implementation for AMCT quantization.
+# Adapted from
+# https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite/blob/main/configuration_deepseek.py
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

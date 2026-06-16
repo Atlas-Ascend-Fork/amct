@@ -13,7 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Adapted from DeepSeek-V2 HuggingFace implementation (no Indexer)
+# Adapted from
+# https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite/blob/main/modeling_deepseek.py
+# Attention forward derived from DeepSeek-V2 MLA; Indexer removed for V2-Lite.
 from typing import Optional
 import torch
 import torch.nn as nn
