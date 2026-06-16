@@ -201,21 +201,16 @@ public:
             auto aLocal = aGlobal_[offsetA];
             auto bLocal = bGlobal_[offsetB];
             auto cLocal = cGlobal_[offsetC];
+
             mm_.SetSubBlockIdx(0);
             mm_.Init(&t, pipe_);
             mm_.SetSingleShape(tailM, tailN, t.Ka);
 
-            if (Spec::GetBatchB(tiling_) == 1) {
-                for (int batch = 0; batch < Spec::GetBatchA(tiling_); batch++) {
-                    Spec::BindInputs(mm_, aLocal[static_cast<size_t>(batch) * m_ * k_], bLocal);
-                    mm_.IterateAll(cLocal[static_cast<size_t>(batch) * m_ * n_]);
-                }
-            } else {
-                for (int batch = 0; batch < Spec::GetBatchA(tiling_); batch++) {
-                    Spec::BindInputs(mm_, aLocal[static_cast<size_t>(batch) * m_ * k_], bLocal[static_cast<size_t>(batch) * k_ * n_]);
-                    mm_.IterateAll(cLocal[static_cast<size_t>(batch) * m_ * n_]);
-                }
+            for (int32_t batch = 0; batch < batchSize_; batch++) {
+                Spec::BindInputs(mm_, aLocal[static_cast<size_t>(batch) * m_ * k_], bLocal);
+                mm_.IterateAll(cLocal[static_cast<size_t>(batch) * m_ * n_]);
             }
+
             mm_.End();
         }
     }
@@ -276,9 +271,11 @@ public:
                         AscendC::Impl::Detail::MatmulWithScalePolicy>
         matmulObj;
 
-    __aicore__ inline void Init(GM_ADDR a, GM_ADDR b, GM_ADDR as, GM_ADDR bs, GM_ADDR c, const TCubeTiling& tiling)
+    __aicore__ inline void Init(GM_ADDR a, GM_ADDR b, GM_ADDR as, GM_ADDR bs, GM_ADDR c,
+                                const TCubeTiling& tiling, int32_t batchSize)
     {
         this->tiling = tiling;
+        batchSize_ = batchSize;
         kM = tiling.M;
         kN = tiling.N;
         kK = tiling.Ka;
@@ -327,13 +324,13 @@ public:
             int32_t tailN = nCoreIndex == (nSingleBlocks - 1) ? tiling.N - (nSingleBlocks - 1) * tiling.singleCoreN : tiling.singleCoreN;
 
             matmulObj.SetSingleShape(tailM, tailN, kK);
-            matmulObj.SetTensorA(aGlobal, false);
             matmulObj.SetTensorB(bGlobal, true);
-            matmulObj.SetTensorScaleA(asGlobal, false);
             matmulObj.SetTensorScaleB(bsGlobal, true);
-            AscendC::SetAtomicAdd<bfloat16_t>();
-            matmulObj.IterateAll(cGlobal);
-            AscendC::DisableDmaAtomic();
+            for (int32_t batch = 0; batch < batchSize_; batch++) {
+                matmulObj.SetTensorA(aGlobal[batch * kM * kK], false);
+                matmulObj.SetTensorScaleA(asGlobal[batch * kM * kScaleK], false);
+                matmulObj.IterateAll(cGlobal[batch * kM * kN], 1);
+            }
             matmulObj.End();
         }
     }
@@ -348,6 +345,7 @@ private:
     uint32_t kScaleNumber;
     uint32_t kCoreBlocksM;
     uint32_t kCoreNum;
+    int32_t batchSize_;
 
     __aicore__ inline void CalcOffset(
         int32_t blockIdx, int32_t& offsetA, int32_t& offsetB, int32_t& offsetAscale, int32_t& offsetBscale,
@@ -418,8 +416,9 @@ extern "C" __global__ __aicore__ void svd_quant(
 
     // Fp4 Gate Projection
     {
+        int32_t batchSize = tilingData.batchSize;
         Fp4MatmulKernel mmFP4;
-        mmFP4.Init(quantOutputPtr, W, scaleOutputPtr, SC, O, tilingData.fp4MMTilingData);
+        mmFP4.Init(quantOutputPtr, W, scaleOutputPtr, SC, O, tilingData.fp4MMTilingData, batchSize);
         mmFP4.Process(&pipe);
     }
 }

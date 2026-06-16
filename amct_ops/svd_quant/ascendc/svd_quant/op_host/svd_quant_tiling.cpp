@@ -188,7 +188,7 @@ void SvdQuantTiling::SetMatmulCubeTiling(TCubeTiling& cubeTiling,
     cubeTiling.set_stepKb(stepK);
     cubeTiling.set_depthA1(depthVal);
     cubeTiling.set_depthB1(depthVal);
-    cubeTiling.set_dbL0A(1);
+    cubeTiling.set_dbL0A(2);
     cubeTiling.set_dbL0B(2);
     cubeTiling.set_dbL0C(dbL0C);
 }
