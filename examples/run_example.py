@@ -115,23 +115,10 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     print(f"[{name}] PASS  耗时 {time.time() - t0:.1f}s")
 
 
-def main():
-    args = _parse_args()
-
-    requested = [c.strip() for c in args.cases.split(",") if c.strip()]
-    unknown = [c for c in requested if c not in _ALL_CASES]
-    if unknown:
-        print(f"[ERROR] 未知用例: {unknown}，可选: {_ALL_CASES}")
-        sys.exit(1)
-
-    if args.device.startswith("npu"):
-        import torch_npu  # noqa: F401
-
-    import amct_pytorch as amct
-
-    # lm_head 的 vocab 维度（151936）超过 NPU weight-quant 算子 n<=65535 限制，必须跳过。
+def _build_cases(amct):
+    # lm_head vocab 维度（151936）超过 NPU weight-quant 算子 n<=65535 限制，必须跳过。
     # 内置 INT8_MINMAX_WEIGHT_QUANT_CFG / INT8_SMOOTHQUANT_CFG 无 skip_layers，不能直接用。
-    _minmax_cfg = {
+    minmax_cfg = {
         'batch_num': 1,
         'quant_cfg': {
             'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
@@ -139,7 +126,7 @@ def main():
         'algorithm': {'minmax'},
         'skip_layers': {'lm_head'},
     }
-    _smoothquant_cfg = {
+    smoothquant_cfg = {
         'batch_num': 1,
         'quant_cfg': {
             'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
@@ -148,9 +135,8 @@ def main():
         'algorithm': {'smoothquant': {'smooth_strength': 0.77}},
         'skip_layers': {'lm_head', 'down_proj'},
     }
-
     # awq INT4 group 量化，grids_num=1 降低搜索耗时（验证流程正确性，不追求精度）
-    _awq_cfg = {
+    awq_cfg = {
         'batch_num': 1,
         'quant_cfg': {
             'weights': {
@@ -163,21 +149,21 @@ def main():
         'algorithm': {'awq': {'grids_num': 1}},
         'skip_layers': {'lm_head'},
     }
-
-    all_cases = [
+    return [
         # cast: convert() 依赖原生 hifloat8，环境不支持时跳过 convert，只验证仿真量化前向
         {"name": "cast", "cfg": amct.HIFP8_CAST_CFG, "needs_calib": True, "skip_convert": True},
         # minmax 仅权重量化，自定义 cfg 跳过 lm_head（vocab 超 NPU 算子 n<=65535 限制）
-        {"name": "minmax", "cfg": _minmax_cfg, "needs_calib": True, "skip_convert": False},
+        {"name": "minmax", "cfg": minmax_cfg, "needs_calib": True, "skip_convert": False},
         # smoothquant W8A8 全量化，自定义 cfg 跳过 lm_head + down_proj
-        {"name": "smoothquant", "cfg": _smoothquant_cfg, "needs_calib": True, "skip_convert": False},
+        {"name": "smoothquant", "cfg": smoothquant_cfg, "needs_calib": True, "skip_convert": False},
         # awq INT4 group 量化，grids_num=1 仅验证流程完整性
-        {"name": "awq", "cfg": _awq_cfg, "needs_calib": True, "skip_convert": False},
+        {"name": "awq", "cfg": awq_cfg, "needs_calib": True, "skip_convert": False},
     ]
-    cases = [c for c in all_cases if c["name"] in requested]
 
+
+def _run_all(cases, model_name_or_path, device):
     total_start = time.time()
-    base_model = _load_base_model(args.model_name_or_path)
+    base_model = _load_base_model(model_name_or_path)
 
     results = {}
     for case in cases:
@@ -186,7 +172,7 @@ def main():
                 case["name"],
                 base_model,
                 case["cfg"],
-                args.device,
+                device,
                 case["needs_calib"],
                 case["skip_convert"],
             )
@@ -205,6 +191,27 @@ def main():
         print(f"  [{tag}] {name}")
         if result != "PASS":
             all_pass = False
+    return all_pass
+
+
+def main():
+    args = _parse_args()
+
+    requested = [c.strip() for c in args.cases.split(",") if c.strip()]
+    unknown = [c for c in requested if c not in _ALL_CASES]
+    if unknown:
+        print(f"[ERROR] 未知用例: {unknown}，可选: {_ALL_CASES}")
+        sys.exit(1)
+
+    if args.device.startswith("npu"):
+        import torch_npu  # noqa: F401
+
+    import amct_pytorch as amct
+
+    all_cases = _build_cases(amct)
+    cases = [c for c in all_cases if c["name"] in requested]
+
+    all_pass = _run_all(cases, args.model_name_or_path, args.device)
 
     if all_pass:
         print("[AMCT_EXAMPLE_ALL_PASS]")
