@@ -25,7 +25,7 @@ This project provides calling samples for different scenarios. After setting up 
 bash examples/run_example.sh
 
 # Use a local model (skip download)
-bash examples/run_example.sh --model_name_or_path /data/Qwen2-0.5B
+bash examples/run_example.sh --model /data/Qwen2-0.5B
 
 # Use a mirror to speed up download
 bash examples/run_example.sh --hf_endpoint https://hf-mirror.com
@@ -38,7 +38,7 @@ bash examples/run_example.sh --cases minmax,smoothquant --device npu:0
 
 | Parameter | Default | Description |
 | --- | --- | --- |
-| `--model_name_or_path` | `Qwen/Qwen2-0.5B` | HuggingFace model name or local path; skips download when a local path is given |
+| `--model` | `Qwen/Qwen2-0.5B` | HuggingFace model name or local path; skips download when a local path is given |
 | `--model_dir` | `/tmp/amct_verify_model` | Target directory for model download |
 | `--device` | `npu:0` | Device to run on |
 | `--cases` | `cast,minmax,smoothquant,awq` | Comma-separated list of cases to run |

@@ -25,7 +25,7 @@
 bash examples/run_example.sh
 
 # 使用本地模型（跳过下载）
-bash examples/run_example.sh --model_name_or_path /data/Qwen2-0.5B
+bash examples/run_example.sh --model /data/Qwen2-0.5B
 
 # 指定镜像加速下载
 bash examples/run_example.sh --hf_endpoint https://hf-mirror.com
@@ -38,7 +38,7 @@ bash examples/run_example.sh --cases minmax,smoothquant --device npu:0
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--model_name_or_path` | `Qwen/Qwen2-0.5B` | HuggingFace 模型名或本地路径，本地路径时跳过下载 |
+| `--model` | `Qwen/Qwen2-0.5B` | HuggingFace 模型名或本地路径，本地路径时跳过下载 |
 | `--model_dir` | `/tmp/amct_verify_model` | 模型下载目标目录 |
 | `--device` | `npu:0` | 运行设备 |
 | `--cases` | `cast,minmax,smoothquant,awq` | 逗号分隔的用例列表 |

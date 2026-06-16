@@ -38,7 +38,7 @@ _ALL_CASES = ("cast", "minmax", "smoothquant", "awq")
 def _parse_args():
     p = argparse.ArgumentParser(description="AMCT 快速验证")
     p.add_argument(
-        "--model_name_or_path",
+        "--model",
         default="Qwen/Qwen2-0.5B",
         help="HuggingFace 模型名或本地路径（默认 Qwen/Qwen2-0.5B）",
     )
@@ -217,7 +217,7 @@ def main():
     all_cases = _build_cases(amct)
     cases = [c for c in all_cases if c["name"] in requested]
 
-    all_pass = _run_all(cases, args.model_name_or_path, args.device)
+    all_pass = _run_all(cases, args.model, args.device)
 
     if all_pass:
         print("[AMCT_EXAMPLE_ALL_PASS]")
