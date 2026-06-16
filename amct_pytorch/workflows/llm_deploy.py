@@ -52,6 +52,12 @@ class LlmDeployWorkflow:
         self.is_mx = self.quant_dtype.startswith("mx")
         self.is_int = self.quant_dtype.startswith("int")
         self.is_hif = self.quant_dtype.startswith("hif")
+        raw = getattr(args, "layer_range", None)
+        if raw:
+            start, end = map(int, raw.split(","))
+            self.deploy_layers = range(start, end + 1)
+        else:
+            self.deploy_layers = None
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
@@ -180,7 +186,9 @@ class LlmDeployWorkflow:
         original_weight_map = dict(original_index.get("weight_map", {}))
         updated_weight_map = {}
         replaced_original_weights = set()
-        for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):
+        deploy_layers = self.deploy_layers if self.deploy_layers is not None else range(self.pipeline.num_layers)
+        is_partial = self.deploy_layers is not None
+        for layer_idx in tqdm(deploy_layers, desc="Block Processing..."):
             layer_tensors, tensor_routes = export_block_deploy(
                 self.pipeline,
                 layer_idx,
@@ -197,16 +205,25 @@ class LlmDeployWorkflow:
                 )
             )
 
-        updated_weight_map.update(
-            self._write_remaining_original_weights(
-                original_weight_map,
-                replaced_original_weights,
+        if is_partial:
+            # Partial deploy: only export the requested layers.
+            # Remaining weights stay in the original model directory.
+            # Still generate a minimal index.json so downstream tools
+            # (e.g. decompress scripts) can locate the layer files.
+            index_path = self._refresh_weight_index(original_index, updated_weight_map)
+            logger.info("Exported {} deploy layers to {}", len(list(deploy_layers)),
+                         self.output_dir)
+        else:
+            updated_weight_map.update(
+                self._write_remaining_original_weights(
+                    original_weight_map,
+                    replaced_original_weights,
+                )
             )
-        )
-        index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
-        logger.info("Exported deploy model to {}", self.output_dir)
-        logger.info("Refreshed weight index at {}", index_path)
+            index_path = self._refresh_weight_index(original_index, updated_weight_map)
+            self._refresh_config(quant_ignore_layers)
+            logger.info("Exported deploy model to {}", self.output_dir)
+            logger.info("Refreshed weight index at {}", index_path)
         return {
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
@@ -222,6 +239,7 @@ class LlmDeployWorkflow:
             weights_by_file[file_name].append(weight_name)
 
         updated_weight_map = {}
+        new_weight_map = {}
         model_dir = Path(self.model_path)
         loaded_files = {}
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):

@@ -102,3 +102,56 @@ def int4_assistance_bias(weight, weight_scale):
     # 8 is the max value of INT4, for normalizing the quantization range of assistance bias.
     weight_assistant_matrix = (expanded_scale * weight * 8).sum(dim=1).float()
     return weight_assistant_matrix
+
+
+def unpack_4bit(packed: torch.Tensor) -> torch.Tensor:
+    """Reverse of :func:`pack_4bit`. Unpacks int8 bytes back to int8 pairs."""
+    assert packed.dtype == torch.int8, f"Expected int8 packed, got {packed.dtype}"
+    x = packed.T.contiguous()
+    x = x.view(-1)
+    low = (x & 0x0F).to(torch.int8)
+    low = torch.where(low > 7, low - 16, low)
+    high = ((x.to(torch.uint8) >> 4).to(torch.int8))
+    high = torch.where(high > 7, high - 16, high)
+    shape = packed.T.shape
+    y = torch.stack([low, high], dim=-1).view(shape[0], shape[1] * 2)
+    return y.T.contiguous()
+
+
+def decode_scale(encoded: torch.Tensor) -> torch.Tensor:
+    """Reverse of :func:`scale_fp32_to_u64`. Each uint64 contains two uint32,
+    with the actual float32 stored at the even-indexed uint32 position."""
+    assert encoded.dtype == torch.uint64, f"Expected uint64, got {encoded.dtype}"
+    import numpy as np
+    arr = encoded.detach().cpu().numpy()
+    arr_uint32 = arr.view(np.uint32)
+    arr_fp32 = np.frombuffer(arr_uint32.tobytes(), dtype=np.float32)
+    arr_fp32 = arr_fp32.reshape(encoded.shape[0], 2)
+    return torch.from_numpy(arr_fp32[:, 0].copy()).reshape(-1, 1).float()
+
+
+def weight_dequant_int(qweight: torch.Tensor, scale: torch.Tensor,
+                       bias: torch.Tensor | None = None, bits: int = 8) -> torch.Tensor:
+    """Dequantize INT-quantized weights back to float32.
+
+    Args:
+        qweight: Quantized weight from :func:`weight_quant` with ``real_quant=True``.
+        scale:   Per-channel scale tensor.
+        bias:    Optional per-channel assistance bias (INT4 only).
+        bits:    Quantization bit-width (4 or 8).
+
+    Returns:
+        Dequantized float32 tensor with the same shape as the original weight.
+    """
+    if bits == 4:
+        unpacked = unpack_4bit(qweight).float()
+        if scale.dtype == torch.uint64:
+            scale = decode_scale(scale)
+        bf16 = unpacked * scale
+        if bias is not None:
+            bf16 = bf16 + bias.unsqueeze(1)
+    elif bits == 8:
+        bf16 = qweight.float() * scale
+    else:
+        raise ValueError(f"Unsupported bits={bits}, expected 4 or 8")
+    return bf16

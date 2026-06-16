@@ -21,6 +21,8 @@ from loguru import logger
 
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.optimization.factory import build_lr_scheduler, build_optimizer, set_require_grad_all
+from amct_pytorch.quantization.modules.quant_base import WeightQuantizer, ActivationQuantizer
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 from .base_solver import BaseSolver
 
@@ -71,11 +73,61 @@ class BlockwiseSolver(BaseSolver):
                 raise ValueError("Expected PTQ dataloader to yield (inputs, targets).")
             unit_inp, unit_gt = data_batch
             self.optimizer.zero_grad()
+
+            # [DBG] quantizer enable status on first batch of each layer
+            if num_batches == 0:
+                wq_enabled = sum(
+                    1 for m in self.model.modules()
+                    if isinstance(m, WeightQuantizer) and m.enable
+                )
+                wq_total = sum(
+                    1 for m in self.model.modules()
+                    if isinstance(m, WeightQuantizer)
+                )
+                aq_enabled = sum(
+                    1 for m in self.model.modules()
+                    if isinstance(m, ActivationQuantizer) and m.enable
+                )
+                aq_total = sum(
+                    1 for m in self.model.modules()
+                    if isinstance(m, ActivationQuantizer)
+                )
+                logger.info(
+                    "[DBG] L{} batch0 WQ enabled={}/{} AQ enabled={}/{}",
+                    self.layer_idx, wq_enabled, wq_total, aq_enabled, aq_total,
+                )
+
             outputs = self.model(unit_inp, **kwargs)
             if isinstance(outputs, tuple):
                 outputs = outputs[0]
             loss = self._reconstruction_loss(outputs, unit_gt)
             total_loss += loss.detach().cpu()
+
+            # [DBG] output/gt stats + first QuantLinear weight quant error
+            if num_batches == 0:
+                logger.info(
+                    "[DBG] L{} batch0 out_mean={:.6e} gt_mean={:.6e} loss={:.6e}",
+                    self.layer_idx,
+                    outputs.abs().mean().item(),
+                    unit_gt.abs().mean().item(),
+                    loss.item(),
+                )
+                with torch.no_grad():
+                    for name, m in self.model.named_modules():
+                        if not isinstance(m, QuantLinear):
+                            continue
+                        if m.weight_quantizer.enable and m.linear is not None:
+                            float_w = m.linear.weight
+                            q_w = m.weight_quantizer(float_w)
+                            w_diff = (q_w - float_w).abs().mean().item()
+                            w_rel = w_diff / (float_w.abs().mean().item() + 1e-12)
+                            logger.info(
+                                "[DBG] L{} batch0 {} w_bits={} w_mean={:.6e} rel_err={:.6f}",
+                                self.layer_idx, name, m.w_bits,
+                                float_w.abs().mean().item(), w_rel,
+                            )
+                            break
+
             loss = loss / loss.clone().detach()
             loss.backward()
             self.step()

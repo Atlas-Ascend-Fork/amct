@@ -121,9 +121,27 @@ class ActivationQuantizer(torch.nn.Module):
     def forward(self, x):
         if not self.enable:
             return x
+        x_pre = x
         for algo in self.algorithms.values():
             x = algo(x)
-        return self.fake_quant(x)
+        if not hasattr(self, '_dbg_aq_count'):
+            self._dbg_aq_count = 0
+        self._dbg_aq_count += 1
+        if self._dbg_aq_count == 1:
+            algo_diff = (x - x_pre).abs().mean().item()
+            logger.info(
+                "[DBG-AQ] forward bits={} enable={} x_mean={:.6e} algo_diff={:.6e}",
+                self.bits, self.enable, x_pre.abs().mean().item(), algo_diff,
+            )
+        out = self.fake_quant(x)
+        if self._dbg_aq_count == 1:
+            quant_diff = (out - x).abs().mean().item()
+            total_diff = (out - x_pre).abs().mean().item()
+            logger.info(
+                "[DBG-AQ] quant_diff={:.6e} total_diff={:.6e}",
+                quant_diff, total_diff,
+            )
+        return out
 
     def load_deploy(self, scale, zero):
         pass
@@ -179,10 +197,29 @@ class WeightQuantizer(torch.nn.Module):
     def forward(self, x):
         if not self.enable:
             return x
+        x_pre = x
         x, quantize_algo = self.algo_forward(x)
+        if not hasattr(self, '_dbg_wq_count'):
+            self._dbg_wq_count = 0
+        self._dbg_wq_count += 1
+        if self._dbg_wq_count == 1:
+            algo_diff = (x - x_pre).abs().mean().item()
+            logger.info(
+                "[DBG-WQ] forward bits={} enable={} x_mean={:.6e} algo_diff={:.6e}",
+                self.bits, self.enable, x_pre.abs().mean().item(), algo_diff,
+            )
         if quantize_algo is not None:
-            return quantize_algo.quantize(x, self.quant_obj)
-        return self.fake_quant(x)
+            out = quantize_algo.quantize(x, self.quant_obj)
+        else:
+            out = self.fake_quant(x)
+        if self._dbg_wq_count == 1:
+            quant_diff = (out - x).abs().mean().item()
+            total_diff = (out - x_pre).abs().mean().item()
+            logger.info(
+                "[DBG-WQ] quant_diff={:.6e} total_diff={:.6e}",
+                quant_diff, total_diff,
+            )
+        return out
 
     def observe_input(self, x, weight=None):
         for algo in self.algorithms.values():

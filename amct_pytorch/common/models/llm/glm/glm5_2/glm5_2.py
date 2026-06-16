@@ -26,7 +26,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     QuantGatedMLP,
     apply_quant_to_attn,
 )
-from amct_pytorch.common.models.llm.glm.glm5_1_1.quant_module import QuantGlmMoeDsaAttention
+from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
 from amct_pytorch.common.models.llm.qwen.moe_common import (
     QuantGatedExperts,
     is_packed_experts,
@@ -36,13 +36,13 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 @MODEL_REGISTRY.register(
-    name="glm_5_1_ex",
+    name="glm_5_2",
     task="llm",
     family="glm",
-    description="GLM-5.1 MoE DSA model adapter",
+    description="GLM-5.2 MoE DSA model adapter",
 )
-class GLM5_1_EX(BaseModel):
-    """Adapter for GLM-5.1 MoE model with DeepSeek Sparse Attention (DSA).
+class GLM5_2(BaseModel):
+    """Adapter for GLM-5.2 MoE model with DeepSeek Sparse Attention (DSA) + IndexShare.
 
     A completely independent adapter (does NOT inherit from DeepseekV32).
     Handles MLA attention, DSA indexer, MoE gated experts (packed), and
@@ -51,17 +51,19 @@ class GLM5_1_EX(BaseModel):
 
     def __init__(self, args):
         super().__init__(args)
+        self.config._attn_implementation = "eager"
         self.textconfig = GlmMoeDsaConfig
         self._weight_map = get_weight_mappings(self.model_path)
         self.num_layers = self.config.num_hidden_layers
         self.cls = GlmMoeDsaDecoderLayer
         self.model = self.empty_weights_model()
+        self._dsa_topk_indices = None
         self.parse_quant_mode()
 
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
             raise ValueError(
-                "GLM-5.1 is a moe model and does not support quant_target='mlp'."
+                "GLM-5.2 is a moe model and does not support quant_target='mlp'."
             )
 
     def float_model(self):
@@ -84,19 +86,44 @@ class GLM5_1_EX(BaseModel):
         return super().load_embed_state_dict()
 
     def block(self, layer_idx):
-        return super().block(layer_idx)
+        decoder_layer = self.cls(self.config, layer_idx)
+        state_dict = self.load_layer_weight(self.get_layer_weight_prefix(layer_idx))
+        decoder_layer.load_state_dict(state_dict, strict=True)
+        decoder_layer.eval().bfloat16()
+        return decoder_layer
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def _build_block_for_forward(self, layer_idx, use_quant_block=False):
+        block = super()._build_block_for_forward(
+            layer_idx, use_quant_block=use_quant_block
+        )
+        _orig = block.forward
+
+        def _capture(*args, **kwargs):
+            out = _orig(*args, **kwargs)
+            if isinstance(out, (tuple, list)) and len(out) >= 2:
+                self._dsa_topk_indices = out[1]
+            return out
+
+        block.forward = _capture
+        return block
+
+    def do_block_forward(self, layer_idx, samples, hook_name=None,
+                         use_quant_block=False, enable_quant=False):
         return super().do_block_forward(
-            layer_idx,
-            samples,
+            layer_idx, samples,
             hook_name=hook_name,
             use_quant_block=use_quant_block,
             enable_quant=enable_quant,
         )
+
+    def get_block_forward_kwargs(self):
+        kwargs = super().get_block_forward_kwargs()
+        if self._dsa_topk_indices is not None:
+            kwargs["prev_topk_indices"] = self._dsa_topk_indices
+        return kwargs
 
     def do_head_forward(self, inps):
         return super().do_head_forward(inps)

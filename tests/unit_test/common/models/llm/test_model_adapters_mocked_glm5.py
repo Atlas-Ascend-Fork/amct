@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Tests for GLM5_1_EX adapter with mocked HuggingFace model loading."""
+"""Tests for GLM5_2 adapter with mocked HuggingFace model loading."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -112,57 +112,64 @@ def _mock_base_deps(monkeypatch, cfg):
         "compressed_tensors.utils.safetensors_load.get_weight_mappings",
         lambda path: {},
     )
+    # GLM5_2 imports get_weight_mappings at module level via "from X import Y".
+    # Patching the source module alone does NOT affect the local reference in
+    # glm5_2.py's namespace — we must patch the adapter module directly.
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.glm.glm5_2.glm5_2.get_weight_mappings",
+        lambda path: {},
+    )
 
 
 class TestGLM5_1Mocked:
-    """Tests for GLM5_1_EX adapter with mocked HF dependencies."""
+    """Tests for GLM5_2 adapter with mocked HF dependencies."""
 
     def test_glm5_1_init(self, monkeypatch):
-        """Verify GLM5_1_EX.__init__ sets num_layers, cls, and quant_target."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        """Verify GLM5_2.__init__ sets num_layers, cls, and quant_target."""
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
-        model = GLM5_1_EX(args)
+        model = GLM5_2(args)
         assert model.num_layers == 2
         assert model.cls is GlmMoeDsaDecoderLayer
         assert model.quant_target == [QUANT_TARGET_MOE]
 
     def test_glm5_1_reject_mlp_quant(self, monkeypatch):
         """Verify parse_quant_mode raises ValueError for quant_target=['mlp']."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
-            GLM5_1_EX(args)
+            GLM5_2(args)
 
     def test_glm5_1_accept_moe_quant(self, monkeypatch):
         """Verify quant_target=['moe'] works without error."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
-        model = GLM5_1_EX(args)
+        model = GLM5_2(args)
         assert model.quant_target == [QUANT_TARGET_MOE]
 
     def test_glm5_1_get_layer_weight_prefix(self, monkeypatch):
         """Verify get_layer_weight_prefix returns model.layers.{idx}."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
-        model = GLM5_1_EX(args)
+        model = GLM5_2(args)
         assert model.get_layer_weight_prefix(0) == "model.layers.0."
         assert model.get_layer_weight_prefix(1) == "model.layers.1."
 
     def test_glm5_1_load_layer_weight_calls_pack_experts(self, monkeypatch):
         """Verify load_layer_weight calls pack_gated_expert_weights with expert_prefix."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
-        model = GLM5_1_EX(args)
+        model = GLM5_2(args)
 
         fake_sd = {"some.weight": torch.randn(4, 4)}
         monkeypatch.setattr(
@@ -177,7 +184,7 @@ class TestGLM5_1Mocked:
             return dict(state_dict)
 
         monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1.pack_gated_expert_weights",
+            "amct_pytorch.common.models.llm.glm.glm5_2.glm5_2.pack_gated_expert_weights",
             _mock_pack,
         )
         result = model.load_layer_weight("model.layers.0.")
@@ -188,34 +195,34 @@ class TestGLM5_1Mocked:
     def test_glm5_1_register(self, monkeypatch):
         """Verify the adapter is registered in MODEL_REGISTRY with correct name/family."""
         from amct_pytorch.common.models import MODEL_REGISTRY
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
 
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
-        model = GLM5_1_EX(args)
+        model = GLM5_2(args)
 
-        assert "glm_5_1_ex" in MODEL_REGISTRY
-        item = MODEL_REGISTRY.get_item("glm_5_1_ex")
-        assert item.name == "glm_5_1_ex"
-        assert item.target is GLM5_1_EX
+        assert "glm_5_2" in MODEL_REGISTRY
+        item = MODEL_REGISTRY.get_item("glm_5_2")
+        assert item.name == "glm_5_2"
+        assert item.target is GLM5_2
         assert item.metadata.get("family") == "glm"
         assert item.metadata.get("task") == "llm"
 
     def test_glm5_1_not_subclass_of_deepseek_v32(self):
-        """Verify GLM5_1_EX is NOT a subclass of DeepseekV32."""
+        """Verify GLM5_2 is NOT a subclass of DeepseekV32."""
         from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.deepseekv3_2 import DeepseekV32
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
 
-        assert not issubclass(GLM5_1_EX, DeepseekV32)
+        assert not issubclass(GLM5_2, DeepseekV32)
 
     def test_glm5_1_build_quant_block_moe_packed(self, monkeypatch):
         """Verify build_quant_block replaces packed experts with QuantGatedExperts."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
-        model = GLM5_1_EX(args)
+        model = GLM5_2(args)
 
         dl = nn.Module()
         packed = type("PE", (), {"gate_up_proj": None, "down_proj": None})()
@@ -224,7 +231,7 @@ class TestGLM5_1Mocked:
         dl.mlp = moe
         monkeypatch.setattr(model, "block", lambda idx: dl)
         monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1.QuantGatedExperts",
+            "amct_pytorch.common.models.llm.glm.glm5_2.glm5_2.QuantGatedExperts",
             lambda args_in, experts: setattr(experts, "_q", True) or experts,
         )
         result = model.build_quant_block(0)
@@ -233,11 +240,11 @@ class TestGLM5_1Mocked:
 
     def test_glm5_1_build_quant_block_moe_shared_experts(self, monkeypatch):
         """Verify build_quant_block creates QuantGatedMLP for shared experts."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
-        model = GLM5_1_EX(args)
+        model = GLM5_2(args)
 
         dl = nn.Module()
         packed = type("PE", (), {"gate_up_proj": None, "down_proj": None})()
@@ -248,7 +255,7 @@ class TestGLM5_1Mocked:
         dl.mlp = moe
         monkeypatch.setattr(model, "block", lambda idx: dl)
         monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1.QuantGatedExperts",
+            "amct_pytorch.common.models.llm.glm.glm5_2.glm5_2.QuantGatedExperts",
             lambda args_in, experts: experts,
         )
         captured = {}
@@ -257,7 +264,7 @@ class TestGLM5_1Mocked:
             captured["module"] = module
             return module
         monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1.QuantGatedMLP",
+            "amct_pytorch.common.models.llm.glm.glm5_2.glm5_2.QuantGatedMLP",
             _mock_quant_gated_mlp,
         )
         model.build_quant_block(0)
@@ -266,10 +273,10 @@ class TestGLM5_1Mocked:
 
     def test_glm5_1_float_model_delegates(self, monkeypatch):
         """Verify float_model delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_1_EX(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
+        model = GLM5_2(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
         mock_result = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.float_model",
@@ -277,58 +284,12 @@ class TestGLM5_1Mocked:
         )
         assert model.float_model() is mock_result
 
-    def test_glm5_1_block_delegates(self, monkeypatch):
-        """Verify block delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
-        cfg = _make_glm5_config(num_layers=2)
-        _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_1_EX(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
-        mock_result = MagicMock()
-        monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.common.base.BaseModel.block",
-            lambda self, idx: mock_result,
-        )
-        assert model.block(0) is mock_result
-
-    def test_glm5_1_do_embedding_forward_delegates(self, monkeypatch):
-        """Verify do_embedding_forward delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
-        cfg = _make_glm5_config(num_layers=2)
-        _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_1_EX(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
-        mock_result = [torch.randn(2, 4, 8)]
-        monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.common.base.BaseModel.do_embedding_forward",
-            lambda self, samples, dtype=torch.bfloat16, hook_name=None: mock_result,
-        )
-        result = model.do_embedding_forward([torch.randn(2, 4)])
-        assert result is mock_result
-
-    def test_glm5_1_do_block_forward_delegates(self, monkeypatch):
-        """Verify do_block_forward delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
-        cfg = _make_glm5_config(num_layers=2)
-        _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_1_EX(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
-        mock_result = [torch.randn(2, 4, 8)]
-
-        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
-                                   use_quant_block=False, enable_quant=False):
-            return mock_result
-
-        monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            _mock_do_block_forward,
-        )
-        result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
-        assert result is mock_result
-
     def test_glm5_1_do_head_forward_delegates(self, monkeypatch):
         """Verify do_head_forward delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_1_EX(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
+        model = GLM5_2(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
         mock_result = [torch.randn(2, 4, 100)]
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.BaseModel.do_head_forward",
