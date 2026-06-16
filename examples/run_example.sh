@@ -86,7 +86,7 @@ echo "=========================================="
 
 # ── 模型下载 ──────────────────────────────────────────────────────────────────
 # 本地路径直接使用，跳过下载
-if [[ "${MODEL_NAME_OR_PATH}" == /* ]] || [[ "${MODEL_NAME_OR_PATH}" == ./* ]]; then
+if [[ "${MODEL_NAME_OR_PATH}" == /* ]] || [[ "${MODEL_NAME_OR_PATH}" == ./* ]] || [[ "${MODEL_NAME_OR_PATH}" == ~* ]]; then
     LOCAL_MODEL_PATH="${MODEL_NAME_OR_PATH}"
     echo "[*] 使用本地模型: ${LOCAL_MODEL_PATH}"
 else
@@ -98,8 +98,8 @@ else
         echo "    HF_ENDPOINT=${HF_ENDPOINT}"
     fi
 
-    LOCAL_MODEL_PATH=$(python3 - <<PYEOF
-import sys
+    LOCAL_MODEL_PATH=$(MODEL_NAME_OR_PATH="${MODEL_NAME_OR_PATH}" MODEL_DIR="${MODEL_DIR}" python3 - <<'PYEOF'
+import os, sys
 try:
     from huggingface_hub import snapshot_download
 except ImportError:
@@ -109,8 +109,8 @@ except ImportError:
 import time
 t0 = time.time()
 path = snapshot_download(
-    repo_id="${MODEL_NAME_OR_PATH}",
-    local_dir="${MODEL_DIR}",
+    repo_id=os.environ["MODEL_NAME_OR_PATH"],
+    local_dir=os.environ["MODEL_DIR"],
     ignore_patterns=["*.msgpack", "*.h5", "flax_model*", "tf_model*"],
 )
 print(f"    下载完成，耗时 {time.time() - t0:.1f}s", file=sys.stderr)

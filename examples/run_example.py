@@ -62,6 +62,7 @@ def _load_base_model(model_name_or_path):
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
+    # 验证 tokenizer 可正常加载，提前暴露词表文件缺失等问题
     AutoTokenizer.from_pretrained(
         model_name_or_path, use_fast=False, trust_remote_code=True
     )
@@ -79,14 +80,6 @@ def _verify_forward(model, device):
     logits = out.logits
     if torch.isnan(logits).any() or torch.isinf(logits).any():
         raise ValueError("模型输出含有 NaN / Inf")
-
-
-def _free(model, device):
-    del model
-    gc.collect()
-    if device.startswith("npu"):
-        import torch_npu
-        torch_npu.npu.empty_cache()
 
 
 def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
@@ -110,7 +103,11 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
         amct.convert(model)
         _verify_forward(model, device)
 
-    _free(model, device)
+    del model
+    gc.collect()
+    if device.startswith("npu"):
+        import torch_npu
+        torch_npu.npu.empty_cache()
 
     print(f"[{name}] PASS  耗时 {time.time() - t0:.1f}s")
 
@@ -119,35 +116,35 @@ def _build_cases(amct):
     # lm_head vocab 维度（151936）超过 NPU weight-quant 算子 n<=65535 限制，必须跳过。
     # 内置 INT8_MINMAX_WEIGHT_QUANT_CFG / INT8_SMOOTHQUANT_CFG 无 skip_layers，不能直接用。
     minmax_cfg = {
-        'batch_num': 1,
-        'quant_cfg': {
-            'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
+        "batch_num": 1,
+        "quant_cfg": {
+            "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
         },
-        'algorithm': {'minmax'},
-        'skip_layers': {'lm_head'},
+        "algorithm": {"minmax"},
+        "skip_layers": {"lm_head"},
     }
     smoothquant_cfg = {
-        'batch_num': 1,
-        'quant_cfg': {
-            'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
-            'inputs': {'type': 'int8', 'symmetric': False, 'strategy': 'tensor'},
+        "batch_num": 1,
+        "quant_cfg": {
+            "weights": {"type": "int8", "symmetric": True, "strategy": "channel"},
+            "inputs": {"type": "int8", "symmetric": False, "strategy": "tensor"},
         },
-        'algorithm': {'smoothquant': {'smooth_strength': 0.77}},
-        'skip_layers': {'lm_head', 'down_proj'},
+        "algorithm": {"smoothquant": {"smooth_strength": 0.77}},
+        "skip_layers": {"lm_head", "down_proj"},
     }
     # awq INT4 group 量化，grids_num=1 降低搜索耗时（验证流程正确性，不追求精度）
     awq_cfg = {
-        'batch_num': 1,
-        'quant_cfg': {
-            'weights': {
-                'type': 'int4',
-                'symmetric': False,
-                'strategy': 'group',
-                'group_size': 32,
+        "batch_num": 1,
+        "quant_cfg": {
+            "weights": {
+                "type": "int4",
+                "symmetric": False,
+                "strategy": "group",
+                "group_size": 32,
             },
         },
-        'algorithm': {'awq': {'grids_num': 1}},
-        'skip_layers': {'lm_head'},
+        "algorithm": {"awq": {"grids_num": 1}},
+        "skip_layers": {"lm_head"},
     }
     return [
         # cast: 依赖原生 hifloat8 或 amct_ops，环境不满足时整个用例 SKIP
