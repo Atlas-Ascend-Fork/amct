@@ -11,7 +11,7 @@ AMCT（Ascend Model Compression Toolkit）是一款昇腾 AI 处理器亲和的�
 - **HiFloat8**：支持 HiFloat8/FP8/FP4 数据量化和分位量化
 - **图压缩**：基于计算图的压缩优化（张量分解等）
 - **NPU 算子**：量化相关的昇腾 NPU 算子实现
-- **实验特性**：DeepSeekV3.2/V4 等前沿模型的量化支持
+- **试验特性**：DeepSeekV3.2/V4 等前沿模型的量化支持
 
 ## 构建命令
 
@@ -30,10 +30,10 @@ bash build.sh --torch
 # 构建完整 amct 包（amct_pytorch + graph，产物位于 build_out/）
 bash build.sh --pkg
 
-# 构建包含实验特性的 amct_pytorch 包（含 amct_pytorch/experimental/）
+# 构建包含试验特性的 amct_pytorch 包（含 amct_pytorch/experimental/）
 bash build.sh --torch --experimental
 
-# 构建包含实验特性的完整 amct 包
+# 构建包含试验特性的完整 amct 包
 bash build.sh --pkg --experimental
 
 # Debug 模式构建（需配合 --torch 或 --pkg）
@@ -95,7 +95,7 @@ python3 -c "import amct_pytorch as amct; print('successfully installed AMCT')"
 | 目录 | 用途 |
 |------|------|
 | `amct_pytorch/` | PyTorch 量化压缩核心源码 |
-| `amct_pytorch/experimental/` | 实验特性（HiFloat8、DeepSeek 等） |
+| `amct_pytorch/experimental/` | 试验特性（HiFloat8、DeepSeek 等） |
 | `amct_pytorch/classic/graph_based/` | 基于计算图的压缩优化（张量分解等） |
 | `amct_ops/` | 量化相关的昇腾 NPU 算子代码 |
 | `tests/` | 单元测试 |
