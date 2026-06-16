@@ -16,3 +16,38 @@ This project provides calling samples for different scenarios. After setting up 
 
 > **Note**: Samples marked as "Experimental" depend on content under `amct_pytorch/experimental/`.
 > Build the package with `bash build.sh --torch --experimental` (or `--pkg --experimental`) before use.
+
+## Quick Verification
+
+`run_example.sh` provides one-command end-to-end verification covering the full quantization pipeline (quantize → calibrate → convert → forward) for four algorithms: cast, minmax, smoothquant, and awq. It uses random calibration data — no dataset download required.
+
+**Usage**
+
+```bash
+# Default: download Qwen2-0.5B and run all cases
+bash examples/run_example.sh
+
+# Use a local model (skip download)
+bash examples/run_example.sh --model /data/Qwen2-0.5B
+
+# Use a mirror to speed up download
+bash examples/run_example.sh --hf_endpoint https://hf-mirror.com
+
+# Run specific cases only
+bash examples/run_example.sh --cases minmax,smoothquant --device npu:0
+```
+
+**Parameters**
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `--model` | `Qwen/Qwen2-0.5B` | HuggingFace model name or local path; skips download when a local path is given |
+| `--model_dir` | `/tmp/amct_verify_model` | Target directory for model download |
+| `--device` | `npu:0` | Device to run on |
+| `--cases` | `cast,minmax,smoothquant,awq` | Comma-separated list of cases to run |
+| `--hf_endpoint` | (none) | HuggingFace mirror endpoint |
+
+**Notes**
+
+- The cast case requires native hifloat8 support or amct_ops. It is automatically marked `SKIP` when the environment does not meet the requirement, without affecting the overall result.
+- Prints `[AMCT_EXAMPLE_ALL_PASS]` when all cases pass, or `[AMCT_EXAMPLE_FAILED]` if any case fails.
