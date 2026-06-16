@@ -23,6 +23,7 @@ def register_llm_models():
     if _REGISTERED:
         return
 
+    from .deepseek.deepseek_v2.deepseekv2 import DeepseekV2  # noqa: F401
     from .deepseek.deepseek_v3_2.deepseekv3_2 import DeepseekV32  # noqa: F401
     from .deepseek.deepseek_v4.deepseekv4 import DeepseekV4  # noqa: F401
     from .longcat.longcat_lite.longcat_lite import LongcatLite  # noqa: F401
