@@ -62,6 +62,7 @@ class BitPolicy:
             )
         self.w_bits = int(self.cfg.get("w_bits", 16))
         self.a_bits = int(self.cfg.get("a_bits", 16))
+        self._group_size = -1
         self._validate()
 
     def __getitem__(self, group: str) -> _GroupBits:
@@ -120,32 +121,19 @@ class BitPolicy:
                 return int(node["w_bits"]), int(node["a_bits"])
         return self.w_bits, self.a_bits
 
-    def group_size(self, name: str | None = None, group: str | None = None) -> int:
-        """Resolve the weight-quant group size along ``group`` (dotted) / ``name``.
-
-        Walks most-specific (leaf name) to least-specific (top group) and
-        returns the first node that sets ``group_size``; falls back to the
-        top-level value, else -1 (per-channel).
+    def set_group_size(self, group_size: int) -> None:
+        """Set the global weight-quant group size (from the ``--group_size`` CLI
+        arg). group_size is a quantization-granularity knob, not a per-layer
+        bit-width, so it lives on the CLI rather than the bit_config yaml.
         """
-        parts: list[str] = []
-        if group:
-            parts.extend(group.split("."))
-        if name:
-            parts.append(name)
+        self._group_size = int(group_size)
 
-        cursor = self.cfg
-        chain: list[dict] = []
-        for part in parts:
-            sub = cursor.get(part) if isinstance(cursor, dict) else None
-            if not isinstance(sub, dict):
-                break
-            chain.append(sub)
-            cursor = sub
-
-        for node in reversed(chain):
-            if "group_size" in node:
-                return int(node["group_size"])
-        return int(self.cfg.get("group_size", -1))
+    def group_size(self, name: str | None = None, group: str | None = None) -> int:
+        """The global weight-quant group size along input channels; -1 =
+        per-channel. Set via ``--group_size``; ``name``/``group`` are accepted
+        for call-site compatibility but the value is uniform.
+        """
+        return self._group_size
 
     def summary(self) -> str:
         return "BitPolicy:\n" + yaml.safe_dump(self.cfg, sort_keys=False, default_flow_style=False).rstrip()
@@ -162,21 +150,22 @@ class BitPolicy:
 
 def ensure_bit_policy(args) -> BitPolicy:
     policy = getattr(args, "bit_policy", None)
-    if policy is not None:
-        return policy
-
-    cfg = {
-        "w_bits": int(getattr(args, "w_bits", 16)),
-        "a_bits": int(getattr(args, "a_bits", 16)),
-        _CACHE_GROUP: {
-            "q": int(getattr(args, "q_bits", 16)),
-            "k": int(getattr(args, "k_bits", 16)),
-            "p": int(getattr(args, "p_bits", 16)),
-            "v": int(getattr(args, "v_bits", 16)),
-        },
-    }
-    policy = BitPolicy(cfg)
-    setattr(args, "bit_policy", policy)
+    if policy is None:
+        cfg = {
+            "w_bits": int(getattr(args, "w_bits", 16)),
+            "a_bits": int(getattr(args, "a_bits", 16)),
+            _CACHE_GROUP: {
+                "q": int(getattr(args, "q_bits", 16)),
+                "k": int(getattr(args, "k_bits", 16)),
+                "p": int(getattr(args, "p_bits", 16)),
+                "v": int(getattr(args, "v_bits", 16)),
+            },
+        }
+        policy = BitPolicy(cfg)
+        setattr(args, "bit_policy", policy)
+    gs = getattr(args, "group_size", None)
+    if gs is not None:
+        policy.set_group_size(int(gs))
     return policy
 
 
@@ -203,30 +192,22 @@ def _validate_bit_value(path: str, value):
         raise ValueError(f"{path} must be one of {_ALLOWED_BITS}, but got {value}.")
 
 
-def _validate_group_size(path: str, value):
-    if type(value) is not int:
-        raise ValueError(f"{path} must be int, but got {type(value).__name__}.")
-    if value != -1 and value <= 0:
-        raise ValueError(
-            f"{path} must be a positive int or -1 (per-channel), but got {value}."
-        )
-
-
 def _validate_bit_config(node: dict, path: str = ""):
     for k, v in node.items():
         cur_path = f"{path}.{k}" if path else k
         if isinstance(v, dict):
             _validate_bit_config(v, cur_path)
         elif k == "group_size":
-            _validate_group_size(cur_path, v)
+            raise ValueError(
+                f"'group_size' is no longer a bit_config field (at {cur_path!r}); "
+                f"the yaml only assigns per-layer bit-widths. Pass --group_size instead."
+            )
         else:
             _validate_bit_value(cur_path, v)
 
 
 def _has_lt_16(node: dict) -> bool:
     for k, v in node.items():
-        if k == "group_size":
-            continue
         if isinstance(v, dict):
             if _has_lt_16(v):
                 return True

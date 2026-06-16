@@ -92,6 +92,9 @@ def parser_gen(command=None):
     parser.add_argument('--bit_config', type=str, default=None,
                         help='Path to a yaml file describing per-role bit-widths. '
                              'See configs/ for examples.')
+    parser.add_argument('--group_size', type=int, default=-1,
+                        help='Weight-quant group size along input channels for '
+                             'weight-only INT4; -1 = per-channel. Global, not per-layer.')
 
     parser.add_argument('--attn_linear_param_dir', default="")
     parser.add_argument('--attn_cache_param_dir', default="")
@@ -104,6 +107,7 @@ def parser_gen(command=None):
         args.bit_policy = BitPolicy.from_yaml(args.bit_config)
     else:
         args.bit_policy = BitPolicy()
+    args.bit_policy.set_group_size(args.group_size)
 
     if command == "eval":
         _validate_eval_mode(args)
