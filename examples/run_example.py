@@ -88,26 +88,34 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
     print(f"\n[{name}] 开始")
     t0 = time.time()
 
-    model = copy.deepcopy(base_model).eval().to(device)
+    # Phase0: prepare model
+    quant_model = copy.deepcopy(base_model).eval().to(device)
 
-    amct.quantize(model, cfg)
+    # Phase1: quantize model
+    amct.quantize(quant_model, cfg)
 
+    # Phase2: inference calibration model to cal quantized factors
     if needs_calib:
         with torch.no_grad():
-            model(_dummy_input(model.config.vocab_size, device))
+            quant_model(_dummy_input(quant_model.config.vocab_size, device))
+    if device.startswith("npu"):
+        import torch_npu
+        torch_npu.npu.empty_cache()
 
+    # Phase3: convert deploy model
     if skip_convert:
         # convert() 依赖原生 hifloat8，环境不支持时跳过，仅验证仿真量化前向
         print("    convert() 已跳过（当前环境无原生 hifloat8 支持）")
     else:
-        amct.convert(model)
-        _verify_forward(model, device)
+        amct.convert(quant_model)
+        if device.startswith("npu"):
+            torch_npu.npu.empty_cache()
 
-    del model
+        # Phase4: verify forward pass
+        _verify_forward(quant_model, device)
+
+    del quant_model
     gc.collect()
-    if device.startswith("npu"):
-        import torch_npu
-        torch_npu.npu.empty_cache()
 
     print(f"[{name}] PASS  耗时 {time.time() - t0:.1f}s")
 
