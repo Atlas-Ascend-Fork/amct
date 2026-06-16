@@ -54,7 +54,11 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
                     "quantization_status": "compressed"}
     quant_config.update(cache_scheme)
     qtype = "float" if is_mx else "int"
-    quant_config["config_groups"]["group_0"].update(generate_quant_group(a_num_bits=8, w_num_bits=8, qtype=qtype))
+    # int path: when the quantized Linear/MoE weights are int4 (w4a8), describe group_0
+    # weights as 4-bit so infer resolves the W4A8 method (exported weights are int4-packed).
+    group0_w_bits = 4 if (w4a8 and not is_mx) else 8
+    quant_config["config_groups"]["group_0"].update(
+        generate_quant_group(a_num_bits=8, w_num_bits=group0_w_bits, qtype=qtype))
     if is_mx:
         if w4a4:
             quant_config["config_groups"]["group_1"].update(

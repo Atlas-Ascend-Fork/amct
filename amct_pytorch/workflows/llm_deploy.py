@@ -139,8 +139,22 @@ class LlmDeployWorkflow:
                             "type": "float" if self.is_mx else "int",
                             "num_bits": 8,
                         }}
+        from amct_pytorch.quantization.bit_policy import BitPolicy, ensure_bit_policy
+        bit_policy = (BitPolicy.from_yaml(self.args.bit_config)
+                      if getattr(self.args, "bit_config", None) else ensure_bit_policy(self.args))
+        targets = getattr(self.args, "quant_target", []) or []
+        if "moe" in targets:
+            w_bits, a_bits = bit_policy.linear_bits(name="gate_proj", group="moe.routed")
+        elif "attn-linear" in targets:
+            w_bits, a_bits = bit_policy.linear_bits(group="attn-linear")
+        elif "mlp" in targets:
+            w_bits, a_bits = bit_policy.linear_bits(group="mlp")
+        else:
+            w_bits, a_bits = bit_policy.w_bits, bit_policy.a_bits
+        w4a8 = (w_bits == 4 and a_bits == 8)
+        w4a4 = (w_bits == 4 and a_bits == 4)
         quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
+            cache_scheme, quant_ignore_layers, w4a8=w4a8, w4a4=w4a4, is_mx=self.is_mx)
         config['quantization_config'] = quantization_config
 
         new_config_file = os.path.join(self.output_dir, "config.json")
