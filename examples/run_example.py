@@ -150,8 +150,12 @@ def _build_cases(amct):
         'skip_layers': {'lm_head'},
     }
     return [
-        # cast: convert() 依赖原生 hifloat8，环境不支持时跳过 convert，只验证仿真量化前向
-        {"name": "cast", "cfg": amct.HIFP8_CAST_CFG, "needs_calib": True, "skip_convert": True},
+        # cast: 依赖原生 hifloat8 或 amct_ops，环境不满足时整个用例 SKIP
+        {
+            "name": "cast", "cfg": amct.HIFP8_CAST_CFG, "needs_calib": True,
+            "skip_convert": True,
+            "skip_on": ("hifloat8", "amct_ops"),
+        },
         # minmax 仅权重量化，自定义 cfg 跳过 lm_head（vocab 超 NPU 算子 n<=65535 限制）
         {"name": "minmax", "cfg": minmax_cfg, "needs_calib": True, "skip_convert": False},
         # smoothquant W8A8 全量化，自定义 cfg 跳过 lm_head + down_proj
@@ -167,6 +171,7 @@ def _run_all(cases, model_name_or_path, device):
 
     results = {}
     for case in cases:
+        skip_on = case.get("skip_on", ())
         try:
             _run_case(
                 case["name"],
@@ -178,8 +183,13 @@ def _run_all(cases, model_name_or_path, device):
             )
             results[case["name"]] = "PASS"
         except Exception as exc:
-            print(f"[{case['name']}] FAIL: {exc}")
-            results[case["name"]] = "FAIL"
+            msg = str(exc)
+            if skip_on and any(kw in msg for kw in skip_on):
+                print(f"[{case['name']}] SKIP: {msg}")
+                results[case["name"]] = "SKIP"
+            else:
+                print(f"[{case['name']}] FAIL: {exc}")
+                results[case["name"]] = "FAIL"
 
     total = time.time() - total_start
     print(f"\n{'=' * 55}")
@@ -187,9 +197,8 @@ def _run_all(cases, model_name_or_path, device):
     print("验证结果汇总:")
     all_pass = True
     for name, result in results.items():
-        tag = "PASS" if result == "PASS" else "FAIL"
-        print(f"  [{tag}] {name}")
-        if result != "PASS":
+        print(f"  [{result}] {name}")
+        if result == "FAIL":
             all_pass = False
     return all_pass
 
