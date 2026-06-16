@@ -34,6 +34,14 @@ from amct_pytorch.common.models.llm.qwen.moe_common import (
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
+_INDEXER_KEYS = frozenset({
+    "self_attn.indexer.wq_b.weight",
+    "self_attn.indexer.wk.weight",
+    "self_attn.indexer.k_norm.weight",
+    "self_attn.indexer.k_norm.bias",
+    "self_attn.indexer.weights_proj.weight",
+})
+
 
 @MODEL_REGISTRY.register(
     name="glm_5_1_ex",
@@ -84,7 +92,26 @@ class GLM5_1_EX(BaseModel):
         return super().load_embed_state_dict()
 
     def block(self, layer_idx):
-        return super().block(layer_idx)
+        decoder_layer = self.cls(self.config, layer_idx)
+        state_dict = self.load_layer_weight(self.get_layer_weight_prefix(layer_idx))
+        missing, unexpected = decoder_layer.load_state_dict(
+            state_dict, strict=False
+        )
+        non_indexer_missing = [k for k in missing if k not in _INDEXER_KEYS]
+        if non_indexer_missing:
+            raise RuntimeError(
+                f"Missing keys in state_dict for layer {layer_idx}: "
+                f"{non_indexer_missing}"
+            )
+        indexer_missing = [k for k in missing if k in _INDEXER_KEYS]
+        is_shared = self.config.indexer_types[layer_idx] == "shared"
+        if indexer_missing and not is_shared:
+            raise RuntimeError(
+                f"Layer {layer_idx} is indexer_types='full' but missing "
+                f"indexer weights: {indexer_missing}"
+            )
+        decoder_layer.eval().bfloat16()
+        return decoder_layer
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
