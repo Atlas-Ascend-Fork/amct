@@ -790,7 +790,7 @@ validate_onnx('./outputs/resnet101_fake_quant_model.onnx', val_data)
 
       用户在简易配置文件_dmp\_quant.cfg_中设置dmq参数，并将配置文件通过config\_defination参数传入[create\_quant\_config](./zh/api/create_quant_config.md)。
 
-      ```python
+      ```python<ins></ins>
       config_defination = os.path.join(PATH, 'dmp_quant.cfg')
       config_file = './tmp/config.json'
       skip_layers = []
@@ -1034,10 +1034,10 @@ AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模
            pass
    ```
 
-3. （可选，由用户补充处理）实现搜索算法search\_alg模块，需要用户实现channel\_prune\_search回调接口，根据通道敏感度与通道稀疏收益进行稀疏通道搜索。可参考系统默认search\_alg模块：_AMCT安装目录_/amct\_pytorch/common/auto\_prune/search\_channel\_base.py文件中GreedySearch方法。
+3. （可选，由用户补充处理）实现搜索算法search\_alg模块，需要用户实现channel\_prune\_search回调接口，根据通道敏感度与通道稀疏收益进行稀疏通道搜索。可参考系统默认search\_alg模块：_AMCT安装目录_/amct\_pytorch/common/auto\_channel\_prune/search\_channel\_base.py文件中GreedySearch方法。
 
    ```python
-   from amct.common.auto_prune.search_channel_base import SearchChannelBase
+   from amct.common.auto_channel_prune.search_channel_base import SearchChannelBase
    
    class Search(SearchChannelBase)
        def __init__(self)
