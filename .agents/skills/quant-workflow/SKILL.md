@@ -28,7 +28,7 @@ description: amct 量化编排入口。从“模型导入”到“适配→量�
 
 ## 固定流程
 
-1. **先查现有结果**：casebook 按三层读——L1 `docs/casebook/common-pitfalls.md`（跨网络通用，先通读）→ 按 config/checkpoint 触发信号读 L2 `docs/casebook/family-pitfalls.md` 命中的结构家族 → L3 `docs/casebook/<series>/<case>.md` 同模型/系列结论；再查 `outputs/`、日志、脚本目录的 BF16 / quant / deploy 结果；当前代码、模型版本、量化目标、口径是否一致。足够则复用并说明口径，仅在变化时重跑。
+1. **先查现有结果**：casebook 按三层读——L1 `.agents/docs/casebook/common-pitfalls.md`（跨网络通用，先通读）→ 按 config/checkpoint 触发信号读 L2 `.agents/docs/casebook/family-pitfalls.md` 命中的结构家族 → L3 `.agents/docs/casebook/<series>/<case>.md` 同模型/系列结论；再查 `outputs/`、日志、脚本目录的 BF16 / quant / deploy 结果；当前代码、模型版本、量化目标、口径是否一致。足够则复用并说明口径，仅在变化时重跑。
 2. 阶段 1 / 2 → `$model-adapter`。
 3. 阶段 3 → 进入**量化实验环**（见下节）。
 4. 阶段 4 → `$deploy-export`。

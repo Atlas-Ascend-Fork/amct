@@ -15,7 +15,7 @@ skills:
 ## 启动流程
 
 1. 从 dispatch prompt 中的「工作目录」确定模型路径，读取该目录下的 progress.md，了解模型信息（结构、层数、是否 MoE、是否已适配）和当前阶段
-2. 按 casebook 三层读取：先 L1 `docs/casebook/common-pitfalls.md`（跨网络通用 + 适配前自检清单）→ 按模型 config/checkpoint 触发信号读 L2 `docs/casebook/family-pitfalls.md` 对应结构家族（可多属）→ 再看 L3 `docs/casebook/<series>/` 同系列实测方案可复用
+2. 按 casebook 三层读取：先 L1 `.agents/docs/casebook/common-pitfalls.md`（跨网络通用 + 适配前自检清单）→ 按模型 config/checkpoint 触发信号读 L2 `.agents/docs/casebook/family-pitfalls.md` 对应结构家族（可多属）→ 再看 L3 `.agents/docs/casebook/<series>/` 同系列实测方案可复用
 3. 必须调用编排层指定的 skill，按 skill 流程进行分析
 
 > **状态文件读写规则**：progress.md 直接 Read；progress_history.md 禁止 Read 全文，需要历史信息时用 Grep 关键字查找。
