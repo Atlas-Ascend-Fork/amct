@@ -1,5 +1,8 @@
 # AMCT大模型对于LLAMA2/Qwen3的FlatQuant量化
 
+> **注意（试验特性）**：本样例依赖 `amct_pytorch/experimental/flatquant/`，需使用
+> `bash build.sh --torch --experimental` 构建并安装含试验特性的包后方可运行。
+
 ## 1 量化前提
 
 ### 1.1 安装依赖

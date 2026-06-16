@@ -1,5 +1,8 @@
 # AMCT Large Model FlatQuant Quantization for LLAMA2/Qwen3
 
+> **Note (Experimental feature)**: This sample depends on `amct_pytorch/experimental/flatquant/`.
+> Build and install the package with `bash build.sh --torch --experimental` before running.
+
 ## 1 Quantization Prerequisites
 
 ### 1.1 Install Dependencies

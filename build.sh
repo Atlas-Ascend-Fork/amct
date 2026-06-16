@@ -36,6 +36,7 @@ usage() {
   echo "                      Specify build type (TYPE options: Release/Debug), Default: Release"
   echo "    --pkg             Build full amct package (amct_pytorch + graph)"
   echo "    --torch           Build amct_pytorch package only"
+  echo "    --experimental    Include experimental features in the package (use with --pkg or --torch)"
   echo "    --cann_3rd_lib_path=<PATH>"
   echo "                      Set ascend third_party package install path, default ./third_party"
   echo "    --output_path=<PATH>"
@@ -56,7 +57,7 @@ checkopts() {
   OUTPUT_PATH="${BASEPATH}/build_out/"
 
   # Process the options
-  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
+  parsed_args=$(getopt -a -o j:hvt -l help,verbose,pkg,torch,experimental,utest,cov,asan,build-type:,cann_3rd_lib_path:,output_path: -- "$@") || {
     usage
     exit 1
   }
@@ -91,6 +92,10 @@ checkopts() {
         ;;
       --torch)
         ENABLE_PYTORCH_PACKAGE=TRUE
+        shift
+        ;;
+      --experimental)
+        ENABLE_EXPERIMENTAL=TRUE
         shift
         ;;
       --output_path)
@@ -218,6 +223,7 @@ assemble_cmake_args() {
   CMAKE_ARGS="$CMAKE_ARGS -DENABLE_TEST=${ENABLE_TEST}"
   CMAKE_ARGS="$CMAKE_ARGS -DENABLE_UT_EXEC=${ENABLE_UT_EXEC}"
   CMAKE_ARGS="$CMAKE_ARGS -DENABLE_COVERAGE=${ENABLE_COVERAGE}"
+  CMAKE_ARGS="$CMAKE_ARGS -DENABLE_EXPERIMENTAL=${ENABLE_EXPERIMENTAL}"
   CMAKE_ARGS="$CMAKE_ARGS -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}"
   CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
   CMAKE_ARGS="$CMAKE_ARGS -DTOP_DIR=${BASEPATH}"

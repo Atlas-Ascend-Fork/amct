@@ -33,6 +33,7 @@ add_custom_target(amct_pytorch_package
   COMMAND cd ${BASE_DIR} && chmod 640 `find ./ -type f` && chmod 750 `find ./ -type d` && cd ${BASE_DIR}/.. &&
           export AMCT_PYTORCH_PLATFORM=linux_${CMAKE_HOST_SYSTEM_PROCESSOR} &&
           export BEP_CGTLIST="$BEP_CGTLIST ${HI_PYTHON}" &&
+          export AMCT_EXPERIMENTAL=${ENABLE_EXPERIMENTAL} &&
           ${HI_PYTHON} setup.py sdist --formats=gztar
   # delete tmp files
   COMMAND rm -rf ${AMCT_TORCH_BUILD_DIR}
