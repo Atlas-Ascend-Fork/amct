@@ -19,7 +19,7 @@
 #   bash examples/run_example.sh [选项]
 #
 # 参数说明:
-#   --model_name_or_path  HuggingFace 模型名或本地路径（默认 Qwen/Qwen2-0.5B）
+#   --model               HuggingFace 模型名或本地路径（默认 Qwen/Qwen2-0.5B）
 #                         传本地路径时跳过下载步骤
 #   --model_dir           模型下载目标目录（默认 /tmp/amct_verify_model）
 #   --device              运行设备（默认 npu:0）
@@ -32,7 +32,7 @@
 #   bash examples/run_example.sh
 #
 #   # 使用本地模型，只运行 cast 和 minmax
-#   bash examples/run_example.sh --model_name_or_path /data/Qwen2-0.5B \
+#   bash examples/run_example.sh --model /data/Qwen2-0.5B \
 #       --cases cast,minmax --device npu:0
 #
 #   # 使用镜像加速下载
@@ -50,7 +50,7 @@ HF_ENDPOINT=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --model_name_or_path)
+        --model)
             MODEL_NAME_OR_PATH="$2"
             shift 2
             ;;
@@ -122,7 +122,7 @@ fi
 
 # ── 运行验证 ──────────────────────────────────────────────────────────────────
 python3 "${SCRIPT_DIR}/run_example.py" \
-    --model_name_or_path "${LOCAL_MODEL_PATH}" \
+    --model "${LOCAL_MODEL_PATH}" \
     --device "${DEVICE}" \
     --cases "${CASES}"
 
