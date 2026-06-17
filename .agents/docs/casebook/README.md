@@ -27,7 +27,7 @@ casebook/
 ### L3 个案导航（按系列）
 
 - **qwen/**：`qwen3-dense`(4B/8B)、`qwen3-moe`(30B-A3B/235B-A22B)、`qwen3.5-3.6`(35B-A3B/35B)、`qwen3-next-80b-a3b-instruct`
-- **deepseek/**：`deepseekv4`、`deepseek-v3.2`、`deepseek-v2`(V2-Lite，MLA+MoE 无 DSA)
+- **deepseek/**：`deepseekv4`、`deepseek-v3.2`
 - **glm/**：`glm-5.1`（继承 DeepseekV32，瘦案例）
 - **longcat/**：`longcat`(Flash-Lite/Next)
 
@@ -55,7 +55,6 @@ casebook/
 | qwen | Qwen3-Next | ppl 5.4483 | 12 | [↗](qwen/qwen3-next-80b-a3b-instruct.md) |
 | qwen | Qwen3.5-35B-A3B | ppl 6.2486 | 9 | [↗](qwen/qwen3.5-3.6.md) |
 | qwen | Qwen3.6-35B | ppl 6.2731 | 9 | [↗](qwen/qwen3.5-3.6.md) |
-| deepseek | DeepSeek-V2-Lite | ppl 9.103 | W8A8 直转 delta 0.134 | [↗](deepseek/deepseek-v2.md) |
 | deepseek | DeepSeek-V3.2 | ppl 3.2133 | 3 | [↗](deepseek/deepseek-v3.2.md) |
 | deepseek | DeepSeek-V4 | 待权重 | 0 | [↗](deepseek/deepseekv4.md) |
 | glm | GLM-5.1 | ppl 2.5658 | 2 | [↗](glm/glm-5.1.md) |

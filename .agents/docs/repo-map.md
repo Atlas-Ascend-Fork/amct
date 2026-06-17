@@ -61,7 +61,6 @@
 这一节只记录**当前已经接通的主链**，避免把目录存在但尚未真正纳入主流程的内容写得过满。
 
 - 当前已注册的 LLM 模型适配器：
-  - `deepseek_v2`
   - `deepseek_v3_2`
   - `deepseek_v4`
   - `longcat_lite`
