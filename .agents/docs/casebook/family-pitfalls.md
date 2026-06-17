@@ -51,4 +51,3 @@
 > **触发信号**：config 有 `kv_lora_rank` / `q_lora_rank`；attention 低秩压缩 KV（共享 KV、`wkv_a/wkv_b`、Compressor）。
 
 - MLA attention 量化分 `attn-linear`（投影）与 `attn-cache`（q/k/v cache）两路；cache 位宽通常更敏感（常 q/k 16-bit 起步）。MLA 单 head 共享 KV、低秩 `wo`、Compressor/Indexer 等结构细节因模型而异，见各个案（`deepseek/deepseekv4`、`deepseek/deepseek-v3.2`）。
-</content>

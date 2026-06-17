@@ -51,4 +51,3 @@
 | INT | A8W8: attn-linear（等价校验，bits=16） | 无 | 9.103 |
 | INT | A8W8: moe（等价校验，bits=16） | 无 | 9.103 |
 | INT | A8W8: attn-linear + moe（直转） | 无 | 9.2374 |
-</content>

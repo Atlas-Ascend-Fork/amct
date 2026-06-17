@@ -63,4 +63,3 @@
 | MXFP | A8w4: mlp, moe, attn-linear | 无 | 17.5067/16.899 |
 | MXFP | A8w8: mlp, moe, attn-linear | 无 | 18.3902/19.2 |
 | HiFP | A4w4: mlp, moe, attn-linear | 无 | 16.9826 |
-</content>

@@ -51,4 +51,3 @@
 - 上游 modeling 文件原样保留，只改明显坏掉的 import；接入前先 `python -c "import ..."` 一次。
 - 模型专属逻辑收在 `amct_pytorch/common/models/llm/<vendor>/...`，默认不改 workflow / solver / 通用 quant module。
 - 量化方案默认：先直转再 PTQ；先整网再缩 block/unit；误差定位只做粗粒度；`delta <= 0.2` 为默认接受阈值；评测口径统一 Wikitext PPL `seq_len=4096`。
-</content>

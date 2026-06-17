@@ -50,4 +50,3 @@ agent 在无人干预下正确完成：
 ## 6. 总评
 
 agent 把全新模型从"读 config"到"W8A8 量化达标"基本自主走通；人接管的多是环境（数据集墙、NPU 占用）与一处既有代码潜伏 bug。**casebook 三层 + supervisor + human-in-the-loop 在真实新模型上验证有效。**
-</content>

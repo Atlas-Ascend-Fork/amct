@@ -82,4 +82,3 @@ bash scripts/init-agent.sh --opencode # 仅 OpenCode
 ```
 
 > 说明：`agents / skills / docs` 为指向 `.agents/` 的符号链接，`.claude/settings.json` 为拷贝；`.agents/` 不含 `hooks/`，故视图中也无 `hooks/`。
-</content>

@@ -35,10 +35,7 @@ tmp/
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.lock
 
-# Generated agent views (source of truth: .agents/).
-# .claude is fully generated (skills/agents/hooks/settings.json + CLAUDE.md) -> ignore whole dir.
-# .opencode keeps hand-maintained opencode.json + README.md tracked, so only its
-# init-agent.sh-generated subdirs (skills/agents/docs) are ignored.
+# Generated agent views (source of truth: .agents/)
 /.claude/
 /.opencode/skills
 /.opencode/agents
