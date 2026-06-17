@@ -38,27 +38,69 @@ class QuantDeepseekV2Attention(nn.Module):
         self.quant_args = quant_args
         ensure_bit_policy(quant_args)
         bits = quant_args.bit_policy["attn-linear"]
+
         self.enable_attn_linear = "attn-linear" in quant_args.quant_target
         self.enable_attn_cache = "attn-cache" in quant_args.quant_target
 
-        self._copy_attn_dims(module)
-        self._build_q_proj(quant_args, module, bits)
+        self.q_lora_rank = module.q_lora_rank
+        self.value_dim = module.n_heads * module.v_head_dim
+        self.n_heads = module.n_heads
+        self.qk_nope_head_dim = module.qk_nope_head_dim
+        self.qk_rope_head_dim = module.qk_rope_head_dim
+        self.qk_head_dim = module.qk_head_dim
+        self.v_head_dim = module.v_head_dim
+        self.kv_lora_rank = module.kv_lora_rank
 
-        # KV projection (MLA) kept float for now, same as DeepSeek-V3.2
+        # Query projection: can be direct or LoRA
+        if self.q_lora_rank is None:
+            # Direct q_proj (when q_lora_rank is None)
+            self.q_proj = QuantLinear(
+                quant_args,
+                module.q_proj,
+                w_bits=bits["q_proj"].w,
+                name="q_proj"
+            ) if self.enable_attn_linear else PlainLinear(module.q_proj)
+        else:
+            # LoRA q_a_proj + q_b_proj
+            self.q_a_proj = module.q_a_proj
+            self.q_a_layernorm = module.q_a_layernorm
+            self.q_b_proj = QuantLinear(
+                quant_args,
+                module.q_b_proj,
+                w_bits=bits["q_b_proj"].w,
+                name="q_b_proj"
+            ) if self.enable_attn_linear else PlainLinear(module.q_b_proj)
+
+        # KV projection (MLA) - keep as float for now (same as V3_2)
         self.kv_a_proj_with_mqa = module.kv_a_proj_with_mqa
         self.kv_a_layernorm = module.kv_a_layernorm
         self.kv_b_proj = module.kv_b_proj
 
-        self.o_proj = self._wrap_linear(quant_args, module.o_proj, bits["o_proj"].w, "o_proj")
+        # Output projection
+        self.o_proj = QuantLinear(
+            quant_args,
+            module.o_proj,
+            w_bits=bits["o_proj"].w,
+            name="o_proj"
+        ) if self.enable_attn_linear else PlainLinear(module.o_proj)
+
         self.register_buffer("freqs_cis", module.freqs_cis, persistent=False)
         self.softmax_scale = module.softmax_scale
 
-        # default None so forward stays valid when attn-linear is disabled
-        self.input_transform = None
-        self.out_transform = None
         if self.enable_attn_linear:
             self._init_structure_transforms()
-        self._build_act_quantizers(quant_args, bits)
+            # Activation quantizers
+            if self.q_lora_rank is None:
+                self.q_proj_afq = ActivationQuantizer(quant_args, bits["q_proj"].a)
+            else:
+                self.q_b_proj_afq = ActivationQuantizer(quant_args, bits["q_b_proj"].a)
+            self.o_proj_afq = ActivationQuantizer(quant_args, bits["o_proj"].a)
+        else:
+            if self.q_lora_rank is None:
+                self.q_proj_afq = nn.Identity()
+            else:
+                self.q_b_proj_afq = nn.Identity()
+            self.o_proj_afq = nn.Identity()
 
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         bsz, seqlen, _ = x.size()
@@ -72,7 +114,7 @@ class QuantDeepseekV2Attention(nn.Module):
         # Rotary embeddings
         freqs_cis = self.freqs_cis[start_pos:end_pos]
 
-        # query projection
+        # Query
         if self.q_lora_rank is None:
             # Direct q_proj
             if self.input_transform is not None:
@@ -95,17 +137,17 @@ class QuantDeepseekV2Attention(nn.Module):
         kv = self.kv_a_proj_with_mqa(x)
         kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
         kv = self.kv_a_layernorm(kv)
-        k_pe = k_pe.unsqueeze(2)  # -> bsz, seqlen, 1, qk_rope_head_dim
-        k_pe = apply_rotary_emb(k_pe, freqs_cis)  # -> bsz, seqlen, 1, qk_rope_head_dim
-        k_pe = k_pe.expand(-1, -1, self.n_heads, -1)  # -> bsz, seqlen, n_heads, qk_rope_head_dim
+        k_pe = k_pe.unsqueeze(2)  # (bsz, seqlen, 1, qk_rope_head_dim)
+        k_pe = apply_rotary_emb(k_pe, freqs_cis)  # (bsz, seqlen, 1, qk_rope_head_dim)
+        k_pe = k_pe.expand(-1, -1, self.n_heads, -1)  # (bsz, seqlen, n_heads, qk_rope_head_dim)
 
         kv = self.kv_b_proj(kv)
         kv = kv.view(bsz, seqlen, self.n_heads, self.qk_nope_head_dim + self.v_head_dim)
         k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
 
         # Assemble query and key
-        q = torch.cat([q_nope, q_pe], dim=-1)  # -> bsz, seqlen, n_heads, qk_head_dim
-        k = torch.cat([k_nope, k_pe], dim=-1)  # -> bsz, seqlen, n_heads, qk_head_dim
+        q = torch.cat([q_nope, q_pe], dim=-1)  # (bsz, seqlen, n_heads, qk_head_dim)
+        k = torch.cat([k_nope, k_pe], dim=-1)  # (bsz, seqlen, n_heads, qk_head_dim)
 
         # Attention scores: einsum produces (bsz, n_heads, seqlen, seqlen) for proper mask broadcast
         scores = torch.einsum("bshd,bthd->bhst", q, k).mul_(self.softmax_scale)
@@ -133,36 +175,6 @@ class QuantDeepseekV2Attention(nn.Module):
         # Output transform
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-
-    def _wrap_linear(self, quant_args, linear, w_bits, name):
-        if self.enable_attn_linear:
-            return QuantLinear(quant_args, linear, w_bits=w_bits, name=name)
-        return PlainLinear(linear)
-
-    def _copy_attn_dims(self, module):
-        self.q_lora_rank = module.q_lora_rank
-        self.value_dim = module.n_heads * module.v_head_dim
-        self.n_heads = module.n_heads
-        self.qk_nope_head_dim = module.qk_nope_head_dim
-        self.qk_rope_head_dim = module.qk_rope_head_dim
-        self.qk_head_dim = module.qk_head_dim
-        self.v_head_dim = module.v_head_dim
-        self.kv_lora_rank = module.kv_lora_rank
-
-    def _build_q_proj(self, quant_args, module, bits):
-        # query projection: direct q_proj, or LoRA q_a_proj + q_b_proj when q_lora_rank set
-        if self.q_lora_rank is None:
-            self.q_proj = self._wrap_linear(quant_args, module.q_proj, bits["q_proj"].w, "q_proj")
-        else:
-            self.q_a_proj = module.q_a_proj
-            self.q_a_layernorm = module.q_a_layernorm
-            self.q_b_proj = self._wrap_linear(quant_args, module.q_b_proj, bits["q_b_proj"].w, "q_b_proj")
-
-    def _build_act_quantizers(self, quant_args, bits):
-        q_key = "q_proj" if self.q_lora_rank is None else "q_b_proj"
-        for key, attr in ((q_key, q_key + "_afq"), ("o_proj", "o_proj_afq")):
-            afq = ActivationQuantizer(quant_args, bits[key].a) if self.enable_attn_linear else nn.Identity()
-            setattr(self, attr, afq)
 
 
 class QuantDeepseekV2MLP(QuantGatedMLP):
