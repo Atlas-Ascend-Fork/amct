@@ -116,7 +116,7 @@ class GLM5_2(BaseModel):
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         self.load_embed_state_dict()
-        layers = self.model.layers
+        layers = self.model.model.layers
         layers[0] = self.block(0)
         layers[0] = layers[0].bfloat16()
 
