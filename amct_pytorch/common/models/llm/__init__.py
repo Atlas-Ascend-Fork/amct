@@ -23,6 +23,9 @@ def register_llm_models():
     if _REGISTERED:
         return
 
+    # Each adapter is imported only for its @MODEL_REGISTRY.register side-effect;
+    # the names are not referenced here, so F401 (imported-but-unused) is suppressed.
+    from .deepseek.deepseek_v2.deepseekv2 import DeepseekV2  # noqa: F401
     from .deepseek.deepseek_v3_2.deepseekv3_2 import DeepseekV32  # noqa: F401
     from .deepseek.deepseek_v4.deepseekv4 import DeepseekV4  # noqa: F401
     from .longcat.longcat_lite.longcat_lite import LongcatLite  # noqa: F401
@@ -33,7 +36,7 @@ def register_llm_models():
     from .qwen.qwen3.qwen3 import Qwen3  # noqa: F401
     from .qwen.qwen3_next.qwen3_next import Qwen3Next  # noqa: F401
     from .qwen.qwen3.qwen3_moe import Qwen3Moe  # noqa: F401
-    from .glm.glm5.glm5 import GLM5
+    from .glm.glm5.glm5 import GLM5  # noqa: F401
 
     _REGISTERED = True
 
