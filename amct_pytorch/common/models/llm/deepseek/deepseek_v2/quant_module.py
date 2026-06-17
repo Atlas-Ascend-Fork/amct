@@ -38,10 +38,34 @@ class QuantDeepseekV2Attention(nn.Module):
         self.quant_args = quant_args
         ensure_bit_policy(quant_args)
         bits = quant_args.bit_policy["attn-linear"]
-
         self.enable_attn_linear = "attn-linear" in quant_args.quant_target
         self.enable_attn_cache = "attn-cache" in quant_args.quant_target
 
+        self._copy_attn_dims(module)
+        self._build_q_proj(quant_args, module, bits)
+
+        # KV projection (MLA) kept float for now, same as DeepSeek-V3.2
+        self.kv_a_proj_with_mqa = module.kv_a_proj_with_mqa
+        self.kv_a_layernorm = module.kv_a_layernorm
+        self.kv_b_proj = module.kv_b_proj
+
+        self.o_proj = self._wrap_linear(quant_args, module.o_proj, bits["o_proj"].w, "o_proj")
+        self.register_buffer("freqs_cis", module.freqs_cis, persistent=False)
+        self.softmax_scale = module.softmax_scale
+
+        # default None so forward stays valid when attn-linear is disabled
+        self.input_transform = None
+        self.out_transform = None
+        if self.enable_attn_linear:
+            self._init_structure_transforms()
+        self._build_act_quantizers(quant_args, bits)
+
+    def _wrap_linear(self, quant_args, linear, w_bits, name):
+        if self.enable_attn_linear:
+            return QuantLinear(quant_args, linear, w_bits=w_bits, name=name)
+        return PlainLinear(linear)
+
+    def _copy_attn_dims(self, module):
         self.q_lora_rank = module.q_lora_rank
         self.value_dim = module.n_heads * module.v_head_dim
         self.n_heads = module.n_heads
@@ -51,56 +75,20 @@ class QuantDeepseekV2Attention(nn.Module):
         self.v_head_dim = module.v_head_dim
         self.kv_lora_rank = module.kv_lora_rank
 
-        # query projection projection: can be direct or LoRA
+    def _build_q_proj(self, quant_args, module, bits):
+        # query projection: direct q_proj, or LoRA q_a_proj + q_b_proj when q_lora_rank set
         if self.q_lora_rank is None:
-            # Direct q_proj (when q_lora_rank is None)
-            self.q_proj = QuantLinear(
-                quant_args,
-                module.q_proj,
-                w_bits=bits["q_proj"].w,
-                name="q_proj"
-            ) if self.enable_attn_linear else PlainLinear(module.q_proj)
+            self.q_proj = self._wrap_linear(quant_args, module.q_proj, bits["q_proj"].w, "q_proj")
         else:
-            # LoRA q_a_proj + q_b_proj
             self.q_a_proj = module.q_a_proj
             self.q_a_layernorm = module.q_a_layernorm
-            self.q_b_proj = QuantLinear(
-                quant_args,
-                module.q_b_proj,
-                w_bits=bits["q_b_proj"].w,
-                name="q_b_proj"
-            ) if self.enable_attn_linear else PlainLinear(module.q_b_proj)
+            self.q_b_proj = self._wrap_linear(quant_args, module.q_b_proj, bits["q_b_proj"].w, "q_b_proj")
 
-        # KV projection (MLA) - keep as float for now (same as V3_2)
-        self.kv_a_proj_with_mqa = module.kv_a_proj_with_mqa
-        self.kv_a_layernorm = module.kv_a_layernorm
-        self.kv_b_proj = module.kv_b_proj
-
-        # Output projection
-        self.o_proj = QuantLinear(
-            quant_args,
-            module.o_proj,
-            w_bits=bits["o_proj"].w,
-            name="o_proj"
-        ) if self.enable_attn_linear else PlainLinear(module.o_proj)
-
-        self.register_buffer("freqs_cis", module.freqs_cis, persistent=False)
-        self.softmax_scale = module.softmax_scale
-
-        if self.enable_attn_linear:
-            self._init_structure_transforms()
-            # Activation quantizers
-            if self.q_lora_rank is None:
-                self.q_proj_afq = ActivationQuantizer(quant_args, bits["q_proj"].a)
-            else:
-                self.q_b_proj_afq = ActivationQuantizer(quant_args, bits["q_b_proj"].a)
-            self.o_proj_afq = ActivationQuantizer(quant_args, bits["o_proj"].a)
-        else:
-            if self.q_lora_rank is None:
-                self.q_proj_afq = nn.Identity()
-            else:
-                self.q_b_proj_afq = nn.Identity()
-            self.o_proj_afq = nn.Identity()
+    def _build_act_quantizers(self, quant_args, bits):
+        q_key = "q_proj" if self.q_lora_rank is None else "q_b_proj"
+        for key, attr in ((q_key, q_key + "_afq"), ("o_proj", "o_proj_afq")):
+            afq = ActivationQuantizer(quant_args, bits[key].a) if self.enable_attn_linear else nn.Identity()
+            setattr(self, attr, afq)
 
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         bsz, seqlen, _ = x.size()
