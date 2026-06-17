@@ -171,7 +171,11 @@ class DeepseekV2Attention(nn.Module):
         # KV projection (MLA)
         self.kv_a_proj_with_mqa = nn.Linear(self.dim, self.kv_lora_rank + self.qk_rope_head_dim, bias=False)
         self.kv_a_layernorm = RMSNorm(self.kv_lora_rank)
-        self.kv_b_proj = nn.Linear(self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim), bias=False)
+        self.kv_b_proj = nn.Linear(
+            self.kv_lora_rank,
+            self.n_heads * (self.qk_nope_head_dim + self.v_head_dim),
+            bias=False,
+        )
 
         # Output projection
         self.o_proj = nn.Linear(self.n_heads * self.v_head_dim, self.dim, bias=False)
@@ -197,7 +201,7 @@ class DeepseekV2Attention(nn.Module):
         # Rotary embeddings
         freqs_cis = self.freqs_cis[start_pos:end_pos]
 
-        # Query
+        # query projection
         if self.q_lora_rank is None:
             q = self.q_proj(x)
         else:
@@ -208,22 +212,22 @@ class DeepseekV2Attention(nn.Module):
         q_nope, q_pe = torch.split(q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
         q_pe = apply_rotary_emb(q_pe, freqs_cis)
 
-        # KV (MLA)
+        # KV projection (MLA latent)
         kv = self.kv_a_proj_with_mqa(x)
         kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
         kv = self.kv_a_layernorm(kv)
         # k_pe: (bsz, seqlen, qk_rope_head_dim) -> apply RoPE after unsqueeze and expand
-        k_pe = k_pe.unsqueeze(2)  # (bsz, seqlen, 1, qk_rope_head_dim)
-        k_pe = apply_rotary_emb(k_pe, freqs_cis)  # (bsz, seqlen, 1, qk_rope_head_dim)
-        k_pe = k_pe.expand(-1, -1, self.n_heads, -1)  # (bsz, seqlen, n_heads, qk_rope_head_dim)
+        k_pe = k_pe.unsqueeze(2)  # -> bsz, seqlen, 1, qk_rope_head_dim
+        k_pe = apply_rotary_emb(k_pe, freqs_cis)  # -> bsz, seqlen, 1, qk_rope_head_dim
+        k_pe = k_pe.expand(-1, -1, self.n_heads, -1)  # -> bsz, seqlen, n_heads, qk_rope_head_dim
 
         kv = self.kv_b_proj(kv)
         kv = kv.view(bsz, seqlen, self.n_heads, self.qk_nope_head_dim + self.v_head_dim)
         k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
 
         # Assemble query and key
-        q = torch.cat([q_nope, q_pe], dim=-1)  # (bsz, seqlen, n_heads, qk_head_dim)
-        k = torch.cat([k_nope, k_pe], dim=-1)  # (bsz, seqlen, n_heads, qk_head_dim)
+        q = torch.cat([q_nope, q_pe], dim=-1)  # -> bsz, seqlen, n_heads, qk_head_dim
+        k = torch.cat([k_nope, k_pe], dim=-1)  # -> bsz, seqlen, n_heads, qk_head_dim
 
         # Attention scores: einsum produces (bsz, seqlen, n_heads, seqlen)
         # We need scores shape (bsz, n_heads, seqlen, seqlen) to match standard attention
