@@ -36,5 +36,6 @@ class GLM5_2_EX(DeepseekV32):
     """GLM-5.2 adapter inheriting DeepseekV32.  Uses a translated config.json."""
     def __init__(self, args):
         super().__init__(args)
+        self.base_prefix = "model."
         self.config = AutoConfig.from_pretrained(os.path.join(CUR_DIR, "config.json"))
         self.model = self.empty_weights_model()
