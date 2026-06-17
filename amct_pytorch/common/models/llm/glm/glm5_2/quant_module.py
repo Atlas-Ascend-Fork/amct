@@ -70,18 +70,75 @@ class QuantGlmMoeDsaAttention(nn.Module):
 
         # ---------- MLA linear projections ----------
         bits = args.bit_policy.get("attn-linear", {})
-        self.q_a_proj = self._make_linear(args, use_quant, attn_module.q_a_proj, bits, "q_a_proj")
-        self.q_b_proj = self._make_linear(args, use_quant, attn_module.q_b_proj, bits, "q_b_proj")
-        self.kv_a_proj_with_mqa = self._make_linear(args, use_quant, attn_module.kv_a_proj_with_mqa, bits, "kv_a_proj_with_mqa")
-        self.kv_b_proj = self._make_linear(args, use_quant, attn_module.kv_b_proj, bits, "kv_b_proj")
-        self.o_proj = self._make_linear(args, use_quant, attn_module.o_proj, bits, "o_proj")
+        q_a, q_b, kv_a, o = (
+            bits.get("q_a_proj"),
+            bits.get("q_b_proj"),
+            bits.get("kv_a_proj_with_mqa"),
+            bits.get("o_proj"),
+        )
+        q_a_w = q_a.w if q_a else None
+        q_b_w = q_b.w if q_b else None
+        kv_a_w = kv_a.w if kv_a else None
+        o_w = o.w if o else None
+        self.q_a_proj = (
+            QuantLinear(args, attn_module.q_a_proj, w_bits=q_a_w, name="q_a_proj")
+            if use_quant
+            else PlainLinear(attn_module.q_a_proj)
+        )
+        self.q_b_proj = (
+            QuantLinear(args, attn_module.q_b_proj, w_bits=q_b_w, name="q_b_proj")
+            if use_quant
+            else PlainLinear(attn_module.q_b_proj)
+        )
+        self.kv_a_proj_with_mqa = (
+            QuantLinear(
+                args,
+                attn_module.kv_a_proj_with_mqa,
+                w_bits=kv_a_w,
+                name="kv_a_proj_with_mqa",
+            )
+            if use_quant
+            else PlainLinear(attn_module.kv_a_proj_with_mqa)
+        )
+        # kv_b_proj is never quantized (see GLM5.0-W4A8C16.md → all layers in "ignore" list)
+        self.kv_b_proj = PlainLinear(attn_module.kv_b_proj)
+        self.o_proj = (
+            QuantLinear(args, attn_module.o_proj, w_bits=o_w, name="o_proj")
+            if use_quant
+            else PlainLinear(attn_module.o_proj)
+        )
 
         # ---------- DSA Indexer (None for shared layers in transformers >= 5.12) ----------
         self.indexer = attn_module.indexer
         if self.indexer is not None:
-            self.indexer.wq_b = self._make_linear(args, use_quant, attn_module.indexer.wq_b, bits, "wq_b")
-            self.indexer.wk = self._make_linear(args, use_quant, attn_module.indexer.wk, bits, "wk")
-            self.indexer.weights_proj = self._make_linear(args, use_quant, attn_module.indexer.weights_proj, bits, "weights_proj")
+            wq_b_bits, wk_bits, wp_bits = (
+                bits.get("wq_b"),
+                bits.get("wk"),
+                bits.get("weights_proj"),
+            )
+            wq_b_w = wq_b_bits.w if wq_b_bits else None
+            wk_w = wk_bits.w if wk_bits else None
+            wp_w = wp_bits.w if wp_bits else None
+            self.indexer.wq_b = (
+                QuantLinear(args, attn_module.indexer.wq_b, w_bits=wq_b_w, name="wq_b")
+                if use_quant
+                else PlainLinear(attn_module.indexer.wq_b)
+            )
+            self.indexer.wk = (
+                QuantLinear(args, attn_module.indexer.wk, w_bits=wk_w, name="wk")
+                if use_quant
+                else PlainLinear(attn_module.indexer.wk)
+            )
+            self.indexer.weights_proj = (
+                QuantLinear(
+                    args,
+                    attn_module.indexer.weights_proj,
+                    w_bits=wp_w,
+                    name="weights_proj",
+                )
+                if use_quant
+                else PlainLinear(attn_module.indexer.weights_proj)
+            )
 
         # ---------- Structure transforms ----------
         if self.enable_attn_linear:
@@ -92,41 +149,57 @@ class QuantGlmMoeDsaAttention(nn.Module):
         else:
             self.o_proj_afq = nn.Identity()
 
-    @staticmethod
-    def _make_linear(quant_args, use_quant, linear, bits, name):
-        bit_entry = bits.get(name, None)
-        w_bits = bit_entry.w if bit_entry is not None and hasattr(bit_entry, "w") else None
-        if use_quant:
-            return QuantLinear(quant_args, linear, w_bits=w_bits, name=name)
-        return PlainLinear(linear)
-
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
-        self.q_input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.num_heads * self.v_head_dim)
-        self.o_output_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.q_input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
+        ctx = AlgoBuildContext(
+            matrix_size=128, dim_size=self.num_heads * self.v_head_dim
+        )
+        self.o_output_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
 
-    def forward(self, hidden_states, position_embeddings, attention_mask=None,
-                prev_topk_indices=None, **_kwargs):
+    def forward(
+        self,
+        hidden_states,
+        position_embeddings,
+        attention_mask=None,
+        prev_topk_indices=None,
+        **_kwargs,
+    ):
         batch_size, seq_length = hidden_states.shape[:-1]
         cos, sin = position_embeddings
 
         # ===== Query path (MLA with LoRA) =====
-        q_resid = self.q_a_layernorm(self.q_a_proj(hidden_states, structure_transform=None))
+        q_resid = self.q_a_layernorm(
+            self.q_a_proj(hidden_states, structure_transform=None)
+        )
         if self.enable_attn_linear and self.q_input_transform is not None:
             q_resid = self.q_input_transform(q_resid)
         query_states = self.q_b_proj(q_resid, structure_transform=None)
-        query_states = query_states.view(batch_size, seq_length, -1, self.qk_head_dim).transpose(1, 2)
-        q_nope, q_pe = torch.split(query_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
+        query_states = query_states.view(
+            batch_size, seq_length, -1, self.qk_head_dim
+        ).transpose(1, 2)
+        q_nope, q_pe = torch.split(
+            query_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1
+        )
         q_pe = apply_rotary_pos_emb(q_pe, cos, sin, unsqueeze_dim=1)
 
         # ===== KV path (MLA compressed) =====
         compressed_kv = self.kv_a_proj_with_mqa(hidden_states, structure_transform=None)
-        k_compressed, k_pe = torch.split(compressed_kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
+        k_compressed, k_pe = torch.split(
+            compressed_kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1
+        )
         k_compressed = self.kv_a_layernorm(k_compressed)
         kv_expanded = self.kv_b_proj(k_compressed, structure_transform=None)
-        kv_expanded = kv_expanded.view(batch_size, seq_length, -1, self.qk_nope_head_dim + self.v_head_dim)
-        k_nope, value_states = torch.split(kv_expanded, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
+        kv_expanded = kv_expanded.view(
+            batch_size, seq_length, -1, self.qk_nope_head_dim + self.v_head_dim
+        )
+        k_nope, value_states = torch.split(
+            kv_expanded, [self.qk_nope_head_dim, self.v_head_dim], dim=-1
+        )
         k_nope = k_nope.transpose(1, 2)
         value_states = value_states.transpose(1, 2)
 
@@ -141,7 +214,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
 
         # ===== DSA Indexer (IndexShare: shared layers reuse, full layers compute) =====
         if self.indexer is not None:
-            topk_indices = self.indexer(hidden_states, q_resid, position_embeddings, attention_mask)
+            topk_indices = self.indexer(
+                hidden_states, q_resid, position_embeddings, attention_mask
+            )
         else:
             topk_indices = prev_topk_indices
 
@@ -164,8 +239,13 @@ class QuantGlmMoeDsaAttention(nn.Module):
 
         # ===== Eager attention =====
         attn_output, _ = eager_attention_forward(
-            self, query_states, key_states, value_states,
-            combined_mask, self.scaling, dropout=0.0,
+            self,
+            query_states,
+            key_states,
+            value_states,
+            combined_mask,
+            self.scaling,
+            dropout=0.0,
         )
         attn_output = attn_output.reshape(batch_size, seq_length, -1).contiguous()
 
