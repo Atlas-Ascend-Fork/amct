@@ -76,11 +76,12 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.kv_b_proj = self._make_linear(args, use_quant, attn_module.kv_b_proj, bits, "kv_b_proj")
         self.o_proj = self._make_linear(args, use_quant, attn_module.o_proj, bits, "o_proj")
 
-        # ---------- DSA Indexer ----------
+        # ---------- DSA Indexer (None for shared layers in transformers >= 5.12) ----------
         self.indexer = attn_module.indexer
-        self.indexer.wq_b = self._make_linear(args, use_quant, attn_module.indexer.wq_b, bits, "wq_b")
-        self.indexer.wk = self._make_linear(args, use_quant, attn_module.indexer.wk, bits, "wk")
-        self.indexer.weights_proj = self._make_linear(args, use_quant, attn_module.indexer.weights_proj, bits, "weights_proj")
+        if self.indexer is not None:
+            self.indexer.wq_b = self._make_linear(args, use_quant, attn_module.indexer.wq_b, bits, "wq_b")
+            self.indexer.wk = self._make_linear(args, use_quant, attn_module.indexer.wk, bits, "wk")
+            self.indexer.weights_proj = self._make_linear(args, use_quant, attn_module.indexer.weights_proj, bits, "weights_proj")
 
         # ---------- Structure transforms ----------
         if self.enable_attn_linear:
@@ -139,7 +140,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         key_states = torch.cat([k_nope, k_pe], dim=-1)
 
         # ===== DSA Indexer (IndexShare: shared layers reuse, full layers compute) =====
-        if not self.skip_topk or prev_topk_indices is None:
+        if self.indexer is not None:
             topk_indices = self.indexer(hidden_states, q_resid, position_embeddings, attention_mask)
         else:
             topk_indices = prev_topk_indices
@@ -173,4 +174,4 @@ class QuantGlmMoeDsaAttention(nn.Module):
             attn_output = self.o_output_transform(attn_output)
         attn_output = self.o_proj_afq(attn_output)
         attn_output = self.o_proj(attn_output, structure_transform=None)
-        return attn_output, None, (topk_indices if self.next_skip_topk else None)
+        return attn_output, None, topk_indices
