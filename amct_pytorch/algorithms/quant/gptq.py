@@ -2,6 +2,13 @@
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 #
+# The GPTQ quantization core (Hessian dead-column handling, act-order, damping,
+# the three-step Cholesky inverse, and the blocked column-wise error-compensation
+# loop) is adapted from IST-DASLab/gptq (https://github.com/IST-DASLab/gptq),
+# Copyright (c) 2022 IST-DASLab, licensed under the Apache License, Version 2.0.
+# Huawei modifications: framework registry integration, dtype-agnostic per-column
+# quantization, Hessian accumulation, and calibration-param export/load.
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
