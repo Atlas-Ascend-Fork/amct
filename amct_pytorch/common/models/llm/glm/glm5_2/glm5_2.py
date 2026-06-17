@@ -60,6 +60,7 @@ class GLM5_2(BaseModel):
 
     def __init__(self, args):
         super().__init__(args)
+        self.config._attn_implementation = "eager"
         self.textconfig = GlmMoeDsaConfig
         self._weight_map = get_weight_mappings(self.model_path)
         self.num_layers = self.config.num_hidden_layers
@@ -144,10 +145,16 @@ class GLM5_2(BaseModel):
                 past_key_values=None,
                 position_ids=self.position_ids,
             )
-            logger.info(
-                f"[GLM5_2] computed attention_mask: "
-                f"shape={self.attention_mask.shape}"
-            )
+            if self.attention_mask is None:
+                seq_len = first_sample.shape[1]
+                self.attention_mask = torch.triu(
+                    torch.full((1, 1, seq_len, seq_len), float("-inf"),
+                               device=first_sample.device, dtype=first_sample.dtype),
+                    diagonal=1,
+                )
+                logger.info(f"[GLM5_2] fallback causal mask shape={self.attention_mask.shape}")
+            else:
+                logger.info(f"[GLM5_2] causal mask shape={self.attention_mask.shape}")
 
         logger.info(
             f"[GLM5_2] embed_forward: pos_emb={'set' if self.position_embeddings is not None else 'None'}, "
