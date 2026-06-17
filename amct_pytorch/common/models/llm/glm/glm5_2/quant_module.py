@@ -31,10 +31,6 @@ from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     apply_rotary_pos_emb,
     eager_attention_forward,
 )
-from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
-    GlmMoeDsaRMSNorm,
-    GlmMoeDsaIndexer,
-)
 
 
 class QuantGlmMoeDsaAttention(nn.Module):
@@ -64,6 +60,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.v_head_dim = attn_module.v_head_dim
         self.scaling = attn_module.scaling
         self.is_causal = True
+        self.skip_topk = attn_module.skip_topk
+        self.next_skip_topk = attn_module.next_skip_topk
+        self.num_key_value_groups = attn_module.num_key_value_groups
 
         # Norm layers (not quantized) -- kept as-is
         self.q_a_layernorm = attn_module.q_a_layernorm
@@ -106,44 +105,8 @@ class QuantGlmMoeDsaAttention(nn.Module):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.num_heads * self.v_head_dim)
         self.o_output_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
-    def _dsa_indexer(self, hidden_states, q_resid, position_embeddings, attention_mask):
-        """Simplified DSA indexer -- replica of GlmMoeDsaIndexer.forward without cache."""
-        batch_size, seq_len = hidden_states.shape[:2]
-        cos, sin = position_embeddings
-
-        # Query path: wq_b(q_resid) -> split nope/rope -> RoPE -> recombine
-        q = self.indexer.wq_b(q_resid, structure_transform=None)
-        q = q.view(batch_size, seq_len, self.indexer.n_heads, self.indexer.head_dim)
-        q_pe, q_nope = torch.split(q, [self.qk_rope_head_dim, self.indexer.head_dim - self.qk_rope_head_dim], dim=-1)
-        q_pe = apply_rotary_pos_emb(q_pe, cos, sin, unsqueeze_dim=2)
-        q = torch.cat([q_pe, q_nope], dim=-1)
-
-        # Key path: wk(hidden_states) -> k_norm -> split nope/rope -> RoPE -> recombine
-        k = self.indexer.k_norm(self.indexer.wk(hidden_states, structure_transform=None))
-        k_pe, k_nope = torch.split(k, [self.qk_rope_head_dim, self.indexer.head_dim - self.qk_rope_head_dim], dim=-1)
-        k_pe = apply_rotary_pos_emb(k_pe.unsqueeze(2), cos, sin, unsqueeze_dim=2).squeeze(2)
-        k = torch.cat([k_pe, k_nope], dim=-1)
-
-        # Scores: einsum -> relu -> weighted by weights_proj
-        weights = self.indexer.weights_proj(
-            hidden_states, structure_transform=None
-        ).float() * (self.indexer.n_heads ** -0.5)
-        scores = torch.einsum("bshd,btd->bsht", q.float(), k.float()) * self.indexer.softmax_scale
-        scores = F.relu(scores)
-        index_scores = torch.einsum("bsht,bsh->bst", scores, weights)
-
-        # Apply causal / attention mask
-        if attention_mask is not None:
-            if attention_mask.dim() == 4:
-                index_scores = index_scores + attention_mask[:, 0, :, :]
-            else:
-                index_scores = index_scores + attention_mask
-
-        total_len = index_scores.shape[-1]
-        topk = min(self.indexer.index_topk, total_len)
-        return index_scores.topk(topk, dim=-1).indices
-
-    def forward(self, hidden_states, position_embeddings, attention_mask=None):
+    def forward(self, hidden_states, position_embeddings, attention_mask=None,
+                prev_topk_indices=None, **_kwargs):
         batch_size, seq_length = hidden_states.shape[:-1]
         cos, sin = position_embeddings
 
@@ -175,8 +138,11 @@ class QuantGlmMoeDsaAttention(nn.Module):
         query_states = torch.cat([q_nope, q_pe], dim=-1)
         key_states = torch.cat([k_nope, k_pe], dim=-1)
 
-        # ===== DSA Indexer =====
-        topk_indices = self._dsa_indexer(hidden_states, q_resid, position_embeddings, attention_mask)
+        # ===== DSA Indexer (IndexShare: shared layers reuse, full layers compute) =====
+        if not self.skip_topk or prev_topk_indices is None:
+            topk_indices = self.indexer(hidden_states, q_resid, position_embeddings, attention_mask)
+        else:
+            topk_indices = prev_topk_indices
 
         # Build combined DSA + causal mask
         total_len = key_states.shape[2]
@@ -207,4 +173,4 @@ class QuantGlmMoeDsaAttention(nn.Module):
             attn_output = self.o_output_transform(attn_output)
         attn_output = self.o_proj_afq(attn_output)
         attn_output = self.o_proj(attn_output, structure_transform=None)
-        return attn_output
+        return attn_output, None, (topk_indices if self.next_skip_topk else None)

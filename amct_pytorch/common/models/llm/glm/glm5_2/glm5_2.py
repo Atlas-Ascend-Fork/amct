@@ -26,7 +26,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     QuantGatedMLP,
     apply_quant_to_attn,
 )
-from amct_pytorch.common.models.llm.glm.glm5_1_1.quant_module import QuantGlmMoeDsaAttention
+from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
 from amct_pytorch.common.models.llm.qwen.moe_common import (
     QuantGatedExperts,
     is_packed_experts,
@@ -44,13 +44,13 @@ _INDEXER_KEYS = frozenset({
 
 
 @MODEL_REGISTRY.register(
-    name="glm_5_1_ex",
+    name="glm_5_2",
     task="llm",
     family="glm",
-    description="GLM-5.1 MoE DSA model adapter",
+    description="GLM-5.2 MoE DSA model adapter",
 )
-class GLM5_1_EX(BaseModel):
-    """Adapter for GLM-5.1 MoE model with DeepSeek Sparse Attention (DSA).
+class GLM5_2(BaseModel):
+    """Adapter for GLM-5.2 MoE model with DeepSeek Sparse Attention (DSA) + IndexShare.
 
     A completely independent adapter (does NOT inherit from DeepseekV32).
     Handles MLA attention, DSA indexer, MoE gated experts (packed), and
@@ -70,7 +70,7 @@ class GLM5_1_EX(BaseModel):
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
             raise ValueError(
-                "GLM-5.1 is a moe model and does not support quant_target='mlp'."
+                "GLM-5.2 is a moe model and does not support quant_target='mlp'."
             )
 
     def float_model(self):
