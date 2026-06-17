@@ -133,15 +133,26 @@ class GLM5_2(BaseModel):
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         result = super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
-        pe_ok = self.position_embeddings is not None
-        am_ok = self.attention_mask is not None
-        pi_ok = self.position_ids is not None
-        logger.info(f"[DEBUG] embed_forward done: pos_emb={pe_ok}, attn_mask={am_ok}, pos_ids={pi_ok}")
-        if pe_ok:
-            logger.info(f"[DEBUG]   pos_emb cos shape={self.position_embeddings[0].shape}, sin shape={self.position_embeddings[1].shape}")
-        if am_ok:
-            logger.info(f"[DEBUG]   attn_mask shape={self.attention_mask.shape}, dtype={self.attention_mask.dtype}")
-        logger.info(f"[DEBUG]   inter_io samples={len(result)}, first sample shape={result[0].shape}")
+
+        if self.attention_mask is None and self.position_ids is not None:
+            from transformers.masking_utils import create_causal_mask
+            first_sample = result[0].unsqueeze(0)
+            self.attention_mask = create_causal_mask(
+                config=self.config,
+                inputs_embeds=first_sample,
+                attention_mask=None,
+                past_key_values=None,
+                position_ids=self.position_ids,
+            )
+            logger.info(
+                f"[GLM5_2] computed attention_mask: "
+                f"shape={self.attention_mask.shape}"
+            )
+
+        logger.info(
+            f"[GLM5_2] embed_forward: pos_emb={'set' if self.position_embeddings is not None else 'None'}, "
+            f"attn_mask={'set' if self.attention_mask is not None else 'None'}"
+        )
         return result
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
