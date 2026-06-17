@@ -17,7 +17,6 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
@@ -28,7 +27,7 @@ from amct_pytorch.quantization.modules.quant_base import (
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
-    apply_rotary_pos_emb,
+    apply_rotary_pos_emb_interleave,
     eager_attention_forward,
 )
 
@@ -61,7 +60,6 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.scaling = attn_module.scaling
         self.is_causal = True
         self.skip_topk = attn_module.skip_topk
-        self.next_skip_topk = attn_module.next_skip_topk
         self.num_key_value_groups = attn_module.num_key_value_groups
 
         # Norm layers (not quantized) -- kept as-is
@@ -69,12 +67,12 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.kv_a_layernorm = attn_module.kv_a_layernorm
 
         # ---------- MLA linear projections ----------
-        bits = args.bit_policy.get("attn-linear", {})
+        bits = args.bit_policy["attn-linear"]
         q_a, q_b, kv_a, o = (
-            bits.get("q_a_proj"),
-            bits.get("q_b_proj"),
-            bits.get("kv_a_proj_with_mqa"),
-            bits.get("o_proj"),
+            bits["q_a_proj"],
+            bits["q_b_proj"],
+            bits["kv_a_proj_with_mqa"],
+            bits["o_proj"],
         )
         q_a_w = q_a.w if q_a else None
         q_b_w = q_b.w if q_b else None
@@ -112,9 +110,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.indexer = attn_module.indexer
         if self.indexer is not None:
             wq_b_bits, wk_bits, wp_bits = (
-                bits.get("wq_b"),
-                bits.get("wk"),
-                bits.get("weights_proj"),
+                bits["wq_b"],
+                bits["wk"],
+                bits["weights_proj"],
             )
             wq_b_w = wq_b_bits.w if wq_b_bits else None
             wk_w = wk_bits.w if wk_bits else None
@@ -143,8 +141,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         # ---------- Structure transforms ----------
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            o_bits = bits.get("o_proj", None)
-            o_a = o_bits.a if o_bits is not None and hasattr(o_bits, "a") else None
+            o_a = o.a if o is not None and hasattr(o, "a") else None
             self.o_proj_afq = ActivationQuantizer(args, o_a)
         else:
             self.o_proj_afq = nn.Identity()
@@ -167,6 +164,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         position_embeddings,
         attention_mask=None,
         prev_topk_indices=None,
+        position_ids=None,
         **_kwargs,
     ):
         batch_size, seq_length = hidden_states.shape[:-1]
@@ -185,7 +183,6 @@ class QuantGlmMoeDsaAttention(nn.Module):
         q_nope, q_pe = torch.split(
             query_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1
         )
-        q_pe = apply_rotary_pos_emb(q_pe, cos, sin, unsqueeze_dim=1)
 
         # ===== KV path (MLA compressed) =====
         compressed_kv = self.kv_a_proj_with_mqa(hidden_states, structure_transform=None)
@@ -203,9 +200,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
         k_nope = k_nope.transpose(1, 2)
         value_states = value_states.transpose(1, 2)
 
-        # RoPE on k_pe (single-head rope stream, broadcast to all heads)
+        # RoPE on q_pe and k_pe together
         k_pe = k_pe.view(batch_size, 1, seq_length, self.qk_rope_head_dim)
-        k_pe = apply_rotary_pos_emb(k_pe, cos, sin, unsqueeze_dim=1)
+        q_pe, k_pe = apply_rotary_pos_emb_interleave(q_pe, k_pe, cos, sin)
         k_pe = k_pe.expand(-1, k_nope.shape[1], -1, -1)
 
         # Assemble full Q and K
@@ -214,8 +211,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
 
         # ===== DSA Indexer (IndexShare: shared layers reuse, full layers compute) =====
         if self.indexer is not None:
+            indexer_mask = attention_mask[:, 0, :, :] if attention_mask is not None else None
             topk_indices = self.indexer(
-                hidden_states, q_resid, position_embeddings, attention_mask
+                hidden_states, q_resid, position_embeddings, indexer_mask, position_ids
             )
         else:
             topk_indices = prev_topk_indices
