@@ -82,3 +82,11 @@ bash scripts/init-agent.sh --opencode # 仅 OpenCode
 ```
 
 > 说明：`agents / skills / docs` 为指向 `.agents/` 的符号链接，`.claude/settings.json` 为拷贝；`.agents/` 不含 `hooks/`，故视图中也无 `hooks/`。
+
+## 触发方式
+
+安装后，Claude Code / OpenCode 会自动发现各自视图（`.claude/` `.opencode/`）下的 skills 与 agents，**无需手动注册**。调用为模型驱动：客户端依据每个 skill / agent frontmatter 的 `description` 匹配用户请求，自动选用对应能力。
+
+- **量化任务**直接用自然语言描述即可（如「把 Qwen3-30B-A3B 量化到 W8A8」「直转 delta 超阈、下一步怎么升级」），客户端据此进入编排入口 `quant-workflow`，由它判阶段、串联叶子 skill、委派子代理。
+- **子代理**（quant-analyzer / implementer / reviewer）由编排层按各自 `description` 的职责（分析 / 实施 / 审查）按需委派。
+- 也可**显式点名**某个 skill（如只需直转评测 → `direct-quant-eval`）。
