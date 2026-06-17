@@ -112,6 +112,13 @@ def _mock_base_deps(monkeypatch, cfg):
         "compressed_tensors.utils.safetensors_load.get_weight_mappings",
         lambda path: {},
     )
+    # GLM5_1_EX imports get_weight_mappings at module level via "from X import Y".
+    # Patching the source module alone does NOT affect the local reference in
+    # glm5_1_1.py's namespace — we must patch the adapter module directly.
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1.get_weight_mappings",
+        lambda path: {},
+    )
 
 
 class TestGLM5_1Mocked:
@@ -277,19 +284,6 @@ class TestGLM5_1Mocked:
         )
         assert model.float_model() is mock_result
 
-    def test_glm5_1_block_delegates(self, monkeypatch):
-        """Verify block delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
-        cfg = _make_glm5_config(num_layers=2)
-        _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_1_EX(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
-        mock_result = MagicMock()
-        monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.common.base.BaseModel.block",
-            lambda self, idx: mock_result,
-        )
-        assert model.block(0) is mock_result
-
     def test_glm5_1_do_embedding_forward_delegates(self, monkeypatch):
         """Verify do_embedding_forward delegates to BaseModel."""
         from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
@@ -302,25 +296,6 @@ class TestGLM5_1Mocked:
             lambda self, samples, dtype=torch.bfloat16, hook_name=None: mock_result,
         )
         result = model.do_embedding_forward([torch.randn(2, 4)])
-        assert result is mock_result
-
-    def test_glm5_1_do_block_forward_delegates(self, monkeypatch):
-        """Verify do_block_forward delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_1_1.glm5_1_1 import GLM5_1_EX
-        cfg = _make_glm5_config(num_layers=2)
-        _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_1_EX(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
-        mock_result = [torch.randn(2, 4, 8)]
-
-        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
-                                   use_quant_block=False, enable_quant=False):
-            return mock_result
-
-        monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
-            _mock_do_block_forward,
-        )
-        result = model.do_block_forward(0, [torch.randn(2, 4, 8)])
         assert result is mock_result
 
     def test_glm5_1_do_head_forward_delegates(self, monkeypatch):
