@@ -59,10 +59,10 @@ class DeepseekV32(BaseModel):
 
     def get_embed_load_specs(self):
         tie = bool(getattr(self.config, "tie_word_embeddings", False))
-        lm_head_prefix = f"{self._embed_base_prefix()}embed_tokens." if tie else "lm_head."
+        lm_head_prefix = f"{self.base_prefix}embed_tokens." if tie else "lm_head."
         return [
-            (self.model.embed, f"{self._embed_base_prefix()}embed_tokens."),
-            (self.model.norm, f"{self._embed_base_prefix()}norm."),
+            (self.model.embed, f"{self.base_prefix}embed_tokens."),
+            (self.model.norm, f"{self.base_prefix}norm."),
             (self.model.head, lm_head_prefix),
         ]
 
