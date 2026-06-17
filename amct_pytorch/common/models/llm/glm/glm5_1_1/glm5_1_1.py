@@ -64,6 +64,7 @@ class GLM5_1_EX(BaseModel):
         self.num_layers = self.config.num_hidden_layers
         self.cls = GlmMoeDsaDecoderLayer
         self.model = self.empty_weights_model()
+        self._dsa_topk_indices = None
         self.parse_quant_mode()
 
     def parse_quant_mode(self):
@@ -116,14 +117,35 @@ class GLM5_1_EX(BaseModel):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def _build_block_for_forward(self, layer_idx, use_quant_block=False):
+        block = super()._build_block_for_forward(
+            layer_idx, use_quant_block=use_quant_block
+        )
+        _orig = block.forward
+
+        def _capture(*args, **kwargs):
+            out = _orig(*args, **kwargs)
+            if isinstance(out, (tuple, list)) and len(out) >= 2:
+                self._dsa_topk_indices = out[1]
+            return out
+
+        block.forward = _capture
+        return block
+
+    def do_block_forward(self, layer_idx, samples, hook_name=None,
+                         use_quant_block=False, enable_quant=False):
         return super().do_block_forward(
-            layer_idx,
-            samples,
+            layer_idx, samples,
             hook_name=hook_name,
             use_quant_block=use_quant_block,
             enable_quant=enable_quant,
         )
+
+    def get_block_forward_kwargs(self):
+        kwargs = super().get_block_forward_kwargs()
+        if self._dsa_topk_indices is not None:
+            kwargs["prev_topk_indices"] = self._dsa_topk_indices
+        return kwargs
 
     def do_head_forward(self, inps):
         return super().do_head_forward(inps)
