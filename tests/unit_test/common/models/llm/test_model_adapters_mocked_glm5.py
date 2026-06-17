@@ -284,20 +284,6 @@ class TestGLM5_1Mocked:
         )
         assert model.float_model() is mock_result
 
-    def test_glm5_1_do_embedding_forward_delegates(self, monkeypatch):
-        """Verify do_embedding_forward delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
-        cfg = _make_glm5_config(num_layers=2)
-        _mock_base_deps(monkeypatch, cfg)
-        model = GLM5_2(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
-        mock_result = [torch.randn(2, 4, 8)]
-        monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.common.base.BaseModel.do_embedding_forward",
-            lambda self, samples, dtype=torch.bfloat16, hook_name=None: mock_result,
-        )
-        result = model.do_embedding_forward([torch.randn(2, 4)])
-        assert result is mock_result
-
     def test_glm5_1_do_head_forward_delegates(self, monkeypatch):
         """Verify do_head_forward delegates to BaseModel."""
         from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2

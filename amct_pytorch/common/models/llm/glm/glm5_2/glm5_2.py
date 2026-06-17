@@ -115,7 +115,54 @@ class GLM5_2(BaseModel):
         return decoder_layer
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
-        return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
+        self.load_embed_state_dict()
+        layers = self.model.layers
+        layers[0] = self.block(0)
+        layers[0] = layers[0].bfloat16()
+
+        # GlmMoeDsaDecoderLayer does not set position_embeddings /
+        # attention_mask as attributes (unlike DeepSeek V3.2's Block).
+        # Hook the underlying attention so the Catcher can discover them.
+        _orig_attn_forward = layers[0].self_attn.forward
+
+        def _capturing_attn_forward(hidden_states, position_embeddings,
+                                     attention_mask=None, **kwargs):
+            layers[0].position_embeddings = position_embeddings
+            layers[0].attention_mask = attention_mask
+            return _orig_attn_forward(
+                hidden_states,
+                position_embeddings=position_embeddings,
+                attention_mask=attention_mask,
+                **kwargs,
+            )
+
+        layers[0].self_attn.forward = _capturing_attn_forward
+
+        from amct_pytorch.common.models.llm.common.capture import Catcher
+        outs = []
+        layers[0] = Catcher(layers[0], outs)
+
+        with torch.no_grad():
+            for sample in samples:
+                try:
+                    self.model(sample)
+                except ValueError:
+                    pass
+
+        self.position_ids = layers[0].position_ids
+        self.position_embeddings = layers[0].position_embeddings
+        self.attention_mask = layers[0].attention_mask
+
+        if hook_name is not None:
+            from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
+            save_ptq_kwargs(
+                self.position_ids, self.position_embeddings,
+                self.attention_mask, self.args.data_dir
+            )
+
+        layers[0] = layers[0].module
+        layers[0].self_attn.forward = _orig_attn_forward
+        return outs
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
         block = super()._build_block_for_forward(
