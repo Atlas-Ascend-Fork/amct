@@ -128,9 +128,15 @@ class QuantGlmMoeDsaAttention(nn.Module):
         # ---------- Structure transforms ----------
         if self.enable_attn_linear:
             self._init_structure_transforms()
+            q_b_a = q_b.a if q_b is not None and hasattr(q_b, "a") else None
+            kv_a_a = kv_a.a if kv_a is not None and hasattr(kv_a, "a") else None
             o_a = o.a if o is not None and hasattr(o, "a") else None
+            self.inp_afq = ActivationQuantizer(args, kv_a_a)
+            self.q_b_proj_afq = ActivationQuantizer(args, q_b_a)
             self.o_proj_afq = ActivationQuantizer(args, o_a)
         else:
+            self.inp_afq = nn.Identity()
+            self.q_b_proj_afq = nn.Identity()
             self.o_proj_afq = nn.Identity()
 
     def _init_structure_transforms(self):
@@ -156,6 +162,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
     ):
         batch_size, seq_length = hidden_states.shape[:-1]
         cos, sin = position_embeddings
+        hidden_states = self.inp_afq(hidden_states)
 
         # ===== Query path (MLA with LoRA) =====
         q_resid = self.q_a_layernorm(
@@ -163,6 +170,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         )
         if self.enable_attn_linear and self.q_input_transform is not None:
             q_resid = self.q_input_transform(q_resid)
+        q_resid = self.q_b_proj_afq(q_resid)
         query_states = self.q_b_proj(q_resid, structure_transform=None)
         query_states = query_states.view(
             batch_size, seq_length, -1, self.qk_head_dim
