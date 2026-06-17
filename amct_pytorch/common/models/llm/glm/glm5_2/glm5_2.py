@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 
 import torch
+from loguru import logger
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from transformers.models.glm_moe_dsa.configuration_glm_moe_dsa import GlmMoeDsaConfig
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaDecoderLayer
@@ -66,6 +67,18 @@ class GLM5_2(BaseModel):
         self.model = self.empty_weights_model()
         self._dsa_topk_indices = None
         self.parse_quant_mode()
+        # Dump indexer config summary
+        types = self.config.indexer_types
+        full_cnt = sum(1 for t in types if t == "full")
+        shared_cnt = sum(1 for t in types if t == "shared")
+        logger.info(
+            f"[GLM5_2] init: layers={self.num_layers}, "
+            f"indexer full={full_cnt}, shared={shared_cnt}, "
+            f"kv_lora={self.config.kv_lora_rank}, "
+            f"qk_rope={self.config.qk_rope_head_dim}, "
+            f"qk_nope={self.config.qk_nope_head_dim}"
+        )
+        logger.info(f"[GLM5_2]   indexer_types[:12]={types[:12]}")
 
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
@@ -106,6 +119,10 @@ class GLM5_2(BaseModel):
             )
         indexer_missing = [k for k in missing if k in _INDEXER_KEYS]
         is_shared = self.config.indexer_types[layer_idx] == "shared"
+        if indexer_missing:
+            logger.info(f"[GLM5_2] layer {layer_idx} ({'shared' if is_shared else 'full'}): "
+                        f"indexer keys missing={len(indexer_missing)}, "
+                        f"non_indexer_missing={len(non_indexer_missing)}")
         if indexer_missing and not is_shared:
             raise RuntimeError(
                 f"Layer {layer_idx} is indexer_types='full' but missing "
@@ -115,60 +132,25 @@ class GLM5_2(BaseModel):
         return decoder_layer
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
-        self.load_embed_state_dict()
-        layers = self.model.model.layers
-        layers[0] = self.block(0)
-        layers[0] = layers[0].bfloat16()
-
-        # GlmMoeDsaDecoderLayer does not set position_embeddings /
-        # attention_mask as attributes (unlike DeepSeek V3.2's Block).
-        # Hook the underlying attention so the Catcher can discover them.
-        _orig_attn_forward = layers[0].self_attn.forward
-
-        def _capturing_attn_forward(hidden_states, position_embeddings,
-                                     attention_mask=None, **kwargs):
-            layers[0].position_embeddings = position_embeddings
-            layers[0].attention_mask = attention_mask
-            return _orig_attn_forward(
-                hidden_states,
-                position_embeddings=position_embeddings,
-                attention_mask=attention_mask,
-                **kwargs,
-            )
-
-        layers[0].self_attn.forward = _capturing_attn_forward
-
-        from amct_pytorch.common.models.llm.common.capture import Catcher
-        outs = []
-        layers[0] = Catcher(layers[0], outs)
-
-        with torch.no_grad():
-            for sample in samples:
-                try:
-                    self.model(sample)
-                except ValueError:
-                    pass
-
-        self.position_ids = layers[0].position_ids
-        self.position_embeddings = layers[0].position_embeddings
-        self.attention_mask = layers[0].attention_mask
-
-        if hook_name is not None:
-            from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
-            save_ptq_kwargs(
-                self.position_ids, self.position_embeddings,
-                self.attention_mask, self.args.data_dir
-            )
-
-        layers[0] = layers[0].module
-        layers[0].self_attn.forward = _orig_attn_forward
-        return outs
+        result = super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
+        pe_ok = self.position_embeddings is not None
+        am_ok = self.attention_mask is not None
+        pi_ok = self.position_ids is not None
+        logger.info(f"[DEBUG] embed_forward done: pos_emb={pe_ok}, attn_mask={am_ok}, pos_ids={pi_ok}")
+        if pe_ok:
+            logger.info(f"[DEBUG]   pos_emb cos shape={self.position_embeddings[0].shape}, sin shape={self.position_embeddings[1].shape}")
+        if am_ok:
+            logger.info(f"[DEBUG]   attn_mask shape={self.attention_mask.shape}, dtype={self.attention_mask.dtype}")
+        logger.info(f"[DEBUG]   inter_io samples={len(result)}, first sample shape={result[0].shape}")
+        return result
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
         block = super()._build_block_for_forward(
             layer_idx, use_quant_block=use_quant_block
         )
         _orig = block.forward
+        ltype = self.config.indexer_types[layer_idx]
+        prev_was = self._dsa_topk_indices
 
         def _capture(*args, **kwargs):
             out = _orig(*args, **kwargs)
@@ -177,6 +159,11 @@ class GLM5_2(BaseModel):
             return out
 
         block.forward = _capture
+        prev_str = "None"
+        if prev_was is not None:
+            prev_str = f"shape={prev_was.shape}"
+        logger.info(f"[GLM5_2] build_fwd layer {layer_idx:3d} ({ltype:6s}): "
+                    f"prev_topk_before={prev_str}")
         return block
 
     def do_block_forward(self, layer_idx, samples, hook_name=None,
@@ -190,8 +177,15 @@ class GLM5_2(BaseModel):
 
     def get_block_forward_kwargs(self):
         kwargs = super().get_block_forward_kwargs()
-        if self._dsa_topk_indices is not None:
+        has_topk = self._dsa_topk_indices is not None
+        if has_topk:
             kwargs["prev_topk_indices"] = self._dsa_topk_indices
+            topk_shape = self._dsa_topk_indices.shape
+            logger.info(f"[GLM5_2] get_block_kwargs: injecting prev_topk shape={topk_shape}")
+        else:
+            logger.info(f"[GLM5_2] get_block_kwargs: prev_topk=None, "
+                        f"pos_emb={'yes' if 'position_embeddings' in kwargs else 'no'}, "
+                        f"attn_mask={'yes' if 'attention_mask' in kwargs else 'no'}")
         return kwargs
 
     def do_head_forward(self, inps):

@@ -178,6 +178,11 @@ class BaseModel(metaclass=ABCMeta):
         self.position_ids = layers[0].position_ids
         self.position_embeddings = layers[0].position_embeddings
         self.attention_mask = layers[0].attention_mask
+        logger.info(
+            f"[BaseModel] embed_fwd: pos_ids={'set' if self.position_ids is not None else 'None'}, "
+            f"pos_emb={'set' if self.position_embeddings is not None else 'None'}, "
+            f"attn_mask={'set' if self.attention_mask is not None else 'None'}"
+        )
         if hook_name is not None:
             save_ptq_kwargs(self.position_ids, self.position_embeddings, self.attention_mask, self.args.data_dir)
         layers[0] = layers[0].module
@@ -222,6 +227,10 @@ class BaseModel(metaclass=ABCMeta):
 
         block_kwargs = self.get_block_forward_kwargs()
         input_ids_list = self.input_ids if self.input_ids is not None else [None] * len(samples)
+        # Log kwargs for first layer only
+        if layer_idx == 0:
+            kw_summary = {k: (v.shape if hasattr(v, 'shape') else type(v).__name__) for k, v in block_kwargs.items()}
+            logger.info(f"[BaseModel] block_fwd layer_0 block_kwargs: {kw_summary}")
         with torch.no_grad():
             for sample, ids in zip(samples, input_ids_list):
                 sample = sample.to(self.args.device)
