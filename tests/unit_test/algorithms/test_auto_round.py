@@ -168,3 +168,14 @@ def test_auto_round_quantize_with_group_size():
     weight = torch.randn(2, 12)
     result = ar.quantize(weight, mock_quant_obj)
     assert result.shape == weight.shape
+
+
+def test_auto_round_export_deploy_returns_packed_int4_dict():
+    # int autoround deploy export: applies learned rounding then real int4 export
+    from amct_pytorch.quantization.dtypes.int import QuantDequantInt
+    args = _auto_round_args(w_size=(8, 8), quant_dtype="int")
+    ar = AutoRound(args, w_bits=4)
+    out = ar.export_deploy(torch.randn(8, 8), QuantDequantInt(bits=4))
+    assert "qweight" in out
+    assert "weight_scale" in out
+    assert "bias" in out
