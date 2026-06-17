@@ -88,8 +88,28 @@ def test_generate_quant_config_int_path_only_has_group_0():
     assert "weight_block_size" not in cfg
 
 
+def test_generate_quant_config_int_moe_only_w4a8_single_group():
+    # MoE-only W4A8: experts fall back to "Linear" target -> one group at w4/a8
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], linear_bits=(4, 8))
+    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0}
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_0][WEIGHTS][NUM_BITS] == 4
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_0][INPUT_ACTIVATIONS][NUM_BITS] == 8
+
+
+def test_generate_quant_config_int_mixed_attn_w8_moe_w4():
+    # mixed bit-width: attn "Linear" W8A8 + MoE "MoEGMM" W4A8
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], linear_bits=(8, 8), moe_bits=(4, 8))
+    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1}
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_0]["targets"] == ["Linear"]
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_0][WEIGHTS][NUM_BITS] == 8
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_1]["targets"] == ["MoEGMM"]
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 8
+    assert cfg["format"] == "int-quantized"
+
+
 def test_generate_quant_config_mx_w8_adds_moegmm_group():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True)
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, moe_bits=(8, 8))
     assert cfg["format"] == "float-quantized"
     assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1}
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1]["targets"] == ["MoEGMM"]
@@ -98,13 +118,13 @@ def test_generate_quant_config_mx_w8_adds_moegmm_group():
 
 
 def test_generate_quant_config_mx_w4a8_uses_4bit_weights_in_moegmm():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a8=True, is_mx=True)
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, moe_bits=(4, 8))
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 8
 
 
 def test_generate_quant_config_mx_w4a4_splits_up_gate_and_down():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a4=True, is_mx=True)
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, moe_bits=(4, 4), moe_split=True)
     assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1, GROUP_2}
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1]["targets"] == ["MoEGMMUpGate"]
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4

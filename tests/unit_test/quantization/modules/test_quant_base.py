@@ -42,6 +42,7 @@ UT_DOUBLE_ALGO = '_ut_double'
 UT_QUANT_HOOK_ALGO = '_ut_quant_hook'
 UT_QH_A_ALGO = '_ut_qh_a'
 UT_QH_EXPORT_ALGO = '_ut_qh_export'
+UT_QH_EXPORT_ALGO2 = '_ut_qh_export_ok'
 
 UT_QH_B = '_ut_qh_b'
 
@@ -316,10 +317,34 @@ def test_weight_quantizer_export_deploy_rejects_quantize_hook_path():
             return x
     try:
         wq = WeightQuantizer(_args(algos=[UT_QH_EXPORT_ALGO], w_bits=8), w_bits=8)
-        with pytest.raises(NotImplementedError, match="custom weight quantize"):
+        with pytest.raises(NotImplementedError, match="does not implement export_deploy"):
             wq.export_deploy(torch.zeros(4, 8))
     finally:
         ALGO_REGISTRY._items.pop(UT_QH_EXPORT_ALGO, None)
+
+
+def test_weight_quantizer_export_deploy_delegates_to_algo_export():
+    called = {"v": False}
+
+    @ALGO_REGISTRY.register(name=UT_QH_EXPORT_ALGO2, targets=("weight",))
+    class _QE(nn.Module):
+        def __init__(self, args, *_):
+            super().__init__()
+
+        def quantize(self, x, q):
+            return x
+
+        def export_deploy(self, x, quant_obj):
+            called["v"] = True
+            return {"qweight": x}
+
+    try:
+        wq = WeightQuantizer(_args(algos=[UT_QH_EXPORT_ALGO2], w_bits=8), w_bits=8)
+        out = wq.export_deploy(torch.zeros(4, 8))
+        assert called["v"] is True
+        assert "qweight" in out
+    finally:
+        ALGO_REGISTRY._items.pop(UT_QH_EXPORT_ALGO2, None)
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
