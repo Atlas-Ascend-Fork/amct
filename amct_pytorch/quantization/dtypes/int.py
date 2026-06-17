@@ -47,5 +47,8 @@ class QuantDequantInt(torch.nn.Module):
         return {
             "qweight": qx.detach().cpu(),
             "weight_scale": scale.detach().cpu(),
-            "weight_bias": bias.detach().cpu() if bias is not None else None,
+            # NOTE: exported as ".bias" (not ".weight_bias") so infer's generic expert
+            # remap experts.{id}.{proj}.bias -> experts.w13_bias / w2_bias matches
+            # CompressedTensorW4A8Int8MoEGMMMethod's registered w13_bias/w2_bias param.
+            "bias": bias.detach().cpu() if bias is not None else None,
         }
