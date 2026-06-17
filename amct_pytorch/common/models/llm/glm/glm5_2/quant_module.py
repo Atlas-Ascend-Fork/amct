@@ -109,14 +109,10 @@ class QuantGlmMoeDsaAttention(nn.Module):
         # ---------- DSA Indexer (None for shared layers in transformers >= 5.12) ----------
         self.indexer = attn_module.indexer
         if self.indexer is not None:
-            wq_b_bits, wk_bits, wp_bits = (
-                bits["wq_b"],
-                bits["wk"],
-                bits["weights_proj"],
-            )
+            wq_b_bits = bits["wq_b"]
+            wk_bits = bits["wk"]
             wq_b_w = wq_b_bits.w if wq_b_bits else None
             wk_w = wk_bits.w if wk_bits else None
-            wp_w = wp_bits.w if wp_bits else None
             self.indexer.wq_b = (
                 QuantLinear(args, attn_module.indexer.wq_b, w_bits=wq_b_w, name="wq_b")
                 if use_quant
@@ -127,16 +123,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
                 if use_quant
                 else PlainLinear(attn_module.indexer.wk)
             )
-            self.indexer.weights_proj = (
-                QuantLinear(
-                    args,
-                    attn_module.indexer.weights_proj,
-                    w_bits=wp_w,
-                    name="weights_proj",
-                )
-                if use_quant
-                else PlainLinear(attn_module.indexer.weights_proj)
-            )
+            # weights_proj is kept as raw nn.Linear — indexer.forward accesses .weight.dtype directly
 
         # ---------- Structure transforms ----------
         if self.enable_attn_linear:
