@@ -51,7 +51,7 @@ class QuantDeepseekV2Attention(nn.Module):
         self.v_head_dim = module.v_head_dim
         self.kv_lora_rank = module.kv_lora_rank
 
-        # Query projection: can be direct or LoRA
+        # query projection projection: can be direct or LoRA
         if self.q_lora_rank is None:
             # Direct q_proj (when q_lora_rank is None)
             self.q_proj = QuantLinear(
@@ -114,7 +114,7 @@ class QuantDeepseekV2Attention(nn.Module):
         # Rotary embeddings
         freqs_cis = self.freqs_cis[start_pos:end_pos]
 
-        # Query
+        # query projection
         if self.q_lora_rank is None:
             # Direct q_proj
             if self.input_transform is not None:
@@ -137,17 +137,17 @@ class QuantDeepseekV2Attention(nn.Module):
         kv = self.kv_a_proj_with_mqa(x)
         kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
         kv = self.kv_a_layernorm(kv)
-        k_pe = k_pe.unsqueeze(2)  # (bsz, seqlen, 1, qk_rope_head_dim)
-        k_pe = apply_rotary_emb(k_pe, freqs_cis)  # (bsz, seqlen, 1, qk_rope_head_dim)
-        k_pe = k_pe.expand(-1, -1, self.n_heads, -1)  # (bsz, seqlen, n_heads, qk_rope_head_dim)
+        k_pe = k_pe.unsqueeze(2)  # -> bsz, seqlen, 1, qk_rope_head_dim
+        k_pe = apply_rotary_emb(k_pe, freqs_cis)  # -> bsz, seqlen, 1, qk_rope_head_dim
+        k_pe = k_pe.expand(-1, -1, self.n_heads, -1)  # -> bsz, seqlen, n_heads, qk_rope_head_dim
 
         kv = self.kv_b_proj(kv)
         kv = kv.view(bsz, seqlen, self.n_heads, self.qk_nope_head_dim + self.v_head_dim)
         k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
 
         # Assemble query and key
-        q = torch.cat([q_nope, q_pe], dim=-1)  # (bsz, seqlen, n_heads, qk_head_dim)
-        k = torch.cat([k_nope, k_pe], dim=-1)  # (bsz, seqlen, n_heads, qk_head_dim)
+        q = torch.cat([q_nope, q_pe], dim=-1)  # -> bsz, seqlen, n_heads, qk_head_dim
+        k = torch.cat([k_nope, k_pe], dim=-1)  # -> bsz, seqlen, n_heads, qk_head_dim
 
         # Attention scores: einsum produces (bsz, n_heads, seqlen, seqlen) for proper mask broadcast
         scores = torch.einsum("bshd,bthd->bhst", q, k).mul_(self.softmax_scale)
