@@ -35,8 +35,8 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 `.agents/` 是**唯一源**（git tracked）；`scripts/init-agent.sh` 把它符号链接投影成两套 runtime 视图：
 
-- Claude Code：`.claude/{skills,agents,hooks,settings.json}` + `CLAUDE.md → AGENTS.md`
-- OpenCode：`.opencode/{skills,agents}`
+- Claude Code：`.claude/{skills,agents,docs,settings.json}` + `CLAUDE.md → AGENTS.md`
+- OpenCode：`.opencode/{skills,agents,docs}`（保留手维护的 `opencode.json`/`README.md`）
 
 这些视图 **gitignored**，clone 后跑 `bash scripts/init-agent.sh` 生成。一处源、双端一致，避免提交生成物与双份维护。
 
@@ -51,7 +51,7 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 5. 为什么单编排入口（依据）
 
-采用业界主流的「单编排 / 路由 + 工作者 + 工具」范式：Anthropic *orchestrator-workers / routing*、OpenAI Agents SDK *triage + handoffs*、LangGraph *supervisor*、CrewAI *hierarchical manager*、Claude Code *主 agent + subagents* 均如此；Anthropic 并强调“按需才分层，不为分层而分层”。本 agent 的「单 `quant-workflow` + 三子代理 + 叶子技能」即此形态，也与同源脚手架 cann-recipes-infer 的 `.agents` 布局一致。
+采用业界主流的「单编排 / 路由 + 工作者 + 工具」范式：Anthropic *orchestrator-workers / routing*、OpenAI Agents SDK *triage + handoffs*、LangGraph *supervisor*、CrewAI *hierarchical manager*、Claude Code *主 agent + subagents* 均如此；Anthropic 并强调“按需才分层，不为分层而分层”。本 agent 的「单 `quant-workflow` + 三子代理 + 叶子技能」即此形态。
 
 ## 6. casebook 设计
 

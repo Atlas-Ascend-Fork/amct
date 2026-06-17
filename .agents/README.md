@@ -1,93 +1,85 @@
 # amct 大模型量化 Agent Skills
 
-## 项目概述
+面向昇腾 NPU 大模型量化压缩的 Agent Skills 集合。基于 amct（`amct_pytorch` 包）的 LLM 量化能力（`eval / extract_ptq_data / ptq / deploy` 四步 CLI + blockwise PTQ），将量化方案选择、算法升级、直转评测、部署导出等流程模块化，支持 Agent 完成「模型 → 量化方案 → 部署权重」的端到端工作。命令体基于 amct 真实接口（`python -m amct_pytorch.*` + yaml `--bit_config`），同时适配 Claude Code 与 OpenCode 两类客户端。
 
-### 项目定位
+## 量化能力概览
 
-面向昇腾 NPU 大模型量化压缩场景的 Agent Skills 集合。基于 amct（`amct_pytorch` 包）的 LLM 量化能力（`eval / extract_ptq_data / ptq / deploy` 四步 CLI + blockwise PTQ），把量化方案选择、算法升级、直转评测、部署导出等知识与流程模块化，支持 Agent 按流程完成「模型 → 量化方案 → 权重产物」的端到端工作。
+- **量化目标**：`mlp` / `moe` / `attn-linear` / `attn-cache`
+- **位宽 / 数据类型**：W8A8 / W4A8 / W4A4，`int` / `mxfp`；bit 配置经 yaml `--bit_config`（顶层 `w_bits/a_bits` + `moe.routed/shared` + `attn-cache` 的 q/k/p/v）
+- **算法**：直转（minmax / smoothquant / awq / gptq 等）与可训练 PTQ（lwc / lac / autoround / omniquant）
+- **粒度**：`block`（默认）/ `model`
+- **评测**：Wikitext PPL，默认接受阈值 `delta ≤ 0.2`
+- **产物**：compressed-tensors 格式（`config.json` + `model.safetensors.index.json` + 分片权重 + `deploy_quantization.md`）
 
-本能力的命令体基于 amct 真实接口（`python -m amct_pytorch.*` + yaml `--bit_config`），按 Claude/OpenCode 双客户端的 `.agents/` 玩法组织（参考 cann-recipes-infer），随 amct 量化能力落地在上游 `cann/amct`。
+## Skills
 
-### 量化能力概览
+量化主流程由 `quant-workflow` 编排入口调度：
 
-- **量化目标**：`mlp` / `moe` / `attn-linear` / `attn-cache`，一次聚焦一个角色
-- **位宽与数据类型**：W8A8 / W4A8 / W4A4，`int` / `mxfp`；bit 配置走 yaml `--bit_config`（顶层 `w_bits/a_bits` + `moe.routed/shared` 分组 + `attn-cache` q/k/p/v）
-- **算法**：直转（minmax/smoothquant/awq/gptq…）与可训练 PTQ（lwc/lac/autoround/omniquant）
-- **粒度**：`block`（主流）/ `model`
-- **评测**：Wikitext PPL，默认阈值 `delta ≤ 0.2`
-- **产物**：compressed-tensors 格式 `config.json` + `model.safetensors.index.json` + 分片权重 + `deploy_quantization.md`
+| Skill | 功能 |
+|---|---|
+| [quant-workflow](skills/quant-workflow/SKILL.md) | 编排入口：判阶段 → 串联 / 分流 → 复用 casebook → deploy 交付 |
+| [model-adapter](skills/model-adapter/SKILL.md) | 新模型适配（编写 adapter 代码） |
+| [scheme-recommendation](skills/quant-tools/scheme-recommendation/SKILL.md) | 首轮量化方案推荐 |
+| [direct-quant-eval](skills/quant-tools/direct-quant-eval/SKILL.md) | 直转评测（PPL / delta） |
+| [algorithm-recommendation](skills/quant-tools/algorithm-recommendation/SKILL.md) | 直转超阈时的算法推荐 |
+| [algorithm-validation](skills/quant-tools/algorithm-validation/SKILL.md) | 验证 PTQ 算法相对直转的收益 |
+| [deploy-export](skills/quant-tools/deploy-export/SKILL.md) | 部署导出（compressed-tensors 权重 + 文档） |
 
-## Skills 列表
+通用辅助 skill（非量化主流程）：`gitcode-pr` / `gitcode-issue`（gitcode 协作）、`default-skills`（按需安装必备 skill）、`reference`（子 skill 共享输入模板）。
 
-### 量化主流程 Skills
+### 编排流程
 
-由 `quant-workflow` 编排入口调度：
+`quant-workflow` 按阶段推进：model-adapter（未适配）→ scheme-recommendation（首轮方案）→ direct-quant-eval（直转，`delta ≤ 0.2` 即可导出）→ algorithm-recommendation + algorithm-validation（超阈时升级 PTQ）→ deploy-export（导出产物）。
 
-| Skill | 功能 | 触发场景 |
-|-------|------|---------|
-| [quant-workflow](skills/quant-workflow/SKILL.md) | 量化编排入口 | 端到端：判阶段→串联/分流→复用 casebook→deploy 交付 |
-| [model-adapter](skills/model-adapter/SKILL.md) | 新模型适配 | 模型未适配时写 adapter 代码 |
-| [scheme-recommendation](skills/quant-tools/scheme-recommendation/SKILL.md) | 量化方案推荐 | 首轮候选方案、复用 casebook、风险/回退 |
-| [direct-quant-eval](skills/quant-tools/direct-quant-eval/SKILL.md) | 直转评测 | 跑 PPL，判 delta 是否可接受 |
-| [algorithm-recommendation](skills/quant-tools/algorithm-recommendation/SKILL.md) | 算法推荐 | 直转超阈，推荐下一步算法 |
-| [algorithm-validation](skills/quant-tools/algorithm-validation/SKILL.md) | 算法验证 | 验证 PTQ 算法相对直转是否真改善 |
-| [deploy-export](skills/quant-tools/deploy-export/SKILL.md) | 部署导出 | 导出 compressed-tensors 权重 + 文档 |
+### Agent 协作
 
-### 调度关系
+编排入口为 supervisor，按分析 / 实施 / 审查职责委派三类 SubAgent，经共享状态文件 `progress.md` 传递上下文：
 
-```
-quant-workflow（编排入口）
-  ├── Step 1: model-adapter（未适配时）
-  ├── Step 2: scheme-recommendation（首轮方案）
-  ├── Step 3: direct-quant-eval（直转，delta ≤ 0.2 → 直接导出）
-  ├── Step 4: algorithm-recommendation + algorithm-validation（直转超阈时升级 PTQ）
-  └── Step 5: deploy-export（导出权重产物）
-```
-
-### Agent 协作架构
-
-主流程采用「编排 Agent + 三类专业 SubAgent」协作，按分析/实施/验证职责隔离：
-
-| Agent | 角色 | 职责 |
-|-------|------|------|
-| 主 Agent | 编排者 | 阶段推进、用户确认、进度管理，不直接跑命令改代码 |
-| [quant-analyzer](agents/quant-analyzer.md) | 分析专家 | 适配性分析、方案/算法推荐、收益评估；只读代码，只写 progress.md |
-| [quant-implementer](agents/quant-implementer.md) | 实施工程师 | 跑 eval/extract/ptq/deploy、adapter 改造、产物导出；读写全部文件 |
-| [quant-reviewer](agents/quant-reviewer.md) | 审查专家 | 精度/收益验证、与 casebook 对比；运行评测但不改代码与方案 |
-
-SubAgent 之间通过共享状态文件 `progress.md` 传递上下文。
-
-### 通用辅助 Skills（随仓既有，非量化主流程）
-
-`skills/default-skills/`（会话启动自安装通用 skill）、`skills/gitcode-pr/`、`skills/gitcode-issue/`（gitcode PR / issue 协作）。
+| Agent | 职责 |
+|---|---|
+| [quant-analyzer](agents/quant-analyzer.md) | 适配性分析、方案 / 算法推荐；只读代码，仅写 progress.md |
+| [quant-implementer](agents/quant-implementer.md) | 执行 eval / extract / ptq / deploy、adapter 改造、产物导出；读写文件 |
+| [quant-reviewer](agents/quant-reviewer.md) | 精度 / 收益验证、与 casebook 对比；运行评测，不改代码与方案 |
 
 ## 案例库与文档
 
-- `.agents/docs/casebook/<series>/`：7+ 模型实测精度归档（Qwen3 系列 / LongCat / DeepSeek-V4 等，含 BF16/Quant PPL Δ + 部署产物清单），方案推荐优先复用
-- `.agents/docs/`：`architecture.md`（架构与设计依据）、`repo-map.md`（仓内导航）
+- `docs/casebook/`：按厂商系列（qwen / deepseek / glm / longcat）归档已适配模型的适配要点与实测精度，按「L1 跨网络 / L2 结构家族 / L3 模型专属」三层组织，方案推荐优先复用；部分模型仅完成代码适配、实测待补（如 DeepSeek-V4）。
+- `docs/architecture.md`：架构与设计依据。`docs/repo-map.md`：仓内导航。
 
 ## 目录结构
 
+`.agents/` 为唯一可信源（tracked）：
+
 ```
 .agents/
-├── README.md                 # 本文件
-├── agents/                   # SubAgent 角色定义（Claude/OpenCode 共用）
-│   ├── quant-analyzer.md
-│   ├── quant-implementer.md
-│   └── quant-reviewer.md
-├── hooks/                    # Hook 脚本（可选）
-├── settings.json            # Claude Code 设置（权限 + hook 注册）
-└── skills/                   # Skills 源（quant-tools / tasks / reference + 通用 skills）
+├── README.md
+├── agents/         # SubAgent 定义：quant-analyzer / quant-implementer / quant-reviewer
+├── skills/         # Skill 源：quant-workflow / quant-tools / model-adapter /
+│                   #            gitcode-pr / gitcode-issue / default-skills / reference
+├── docs/           # casebook / architecture.md / repo-map.md / samples
+└── settings.json   # Claude Code 权限白名单
 ```
 
-`.agents/` 为唯一可信源（tracked）；`.claude/` 与 `.opencode/` 由 `init-agent.sh` 生成（gitignored）。
-
-## 使用方式
+## 安装
 
 ```bash
-bash scripts/init-agent.sh --claude     # Claude Code 用户
-bash scripts/init-agent.sh --opencode   # OpenCode 用户
-bash scripts/init-agent.sh              # 两个客户端都装（默认）
+bash scripts/init-agent.sh            # 两客户端（默认）
+bash scripts/init-agent.sh --claude   # 仅 Claude Code
+bash scripts/init-agent.sh --opencode # 仅 OpenCode
 ```
 
-安装后：`.claude/{skills,agents,hooks,settings.json}` 与 `.opencode/{skills,agents}` 指向 `.agents/` 源，根 `CLAUDE.md -> AGENTS.md`。
+`init-agent.sh` 由 `.agents/` 生成各客户端视图（gitignored）。`.claude/` 全量生成；`.opencode/` 保留手维护的 `opencode.json` 与 `README.md`，仅生成 `skills / agents / docs`。执行后实际结构：
+
+```
+.claude/                            .opencode/
+├── agents/      -> .agents/agents  ├── opencode.json   (tracked，手维护)
+├── skills/      -> .agents/skills  ├── README.md       (tracked，手维护)
+├── docs/        -> .agents/docs    ├── agents/   -> .agents/agents
+└── settings.json (copy)            ├── skills/   -> .agents/skills
+                                    └── docs/     -> .agents/docs
+
+根 CLAUDE.md -> AGENTS.md
+```
+
+> 说明：`agents / skills / docs` 为指向 `.agents/` 的符号链接，`.claude/settings.json` 为拷贝；`.agents/` 不含 `hooks/`，故视图中也无 `hooks/`。
+</content>
