@@ -52,7 +52,6 @@
 | MXFP | A4w4: moe, attn-linear | 无 | 6.9814/6.826 |
 | MXFP | A8w4: moe, attn-linear | 无 | 6.508/6.436 |
 | MXFP | A8w8: moe, attn-linear | 无 | 6.3168/6.285 |
-| HiFP | A4w4: moe, attn-linear | 无 | 6.617 |
 
 ### Qwen3.6-35B（BF16 6.2799 / 复测 6.2731）
 

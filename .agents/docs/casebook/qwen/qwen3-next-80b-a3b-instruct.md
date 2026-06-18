@@ -39,4 +39,3 @@
 | MXFP | A4w4: moe, attn-linear | 无 | 6.123/5.901 |  |
 | MXFP | A8w4: moe, attn-linear | 无 | 5.7337/5.609 |  |
 | MXFP | A8w8: moe, attn-linear | 无 | 5.451 |  |
-| HiFP | A4w4: moe, attn-linear | 无 | 5.6854 |  |

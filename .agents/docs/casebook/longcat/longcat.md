@@ -49,7 +49,6 @@
 | MXFP | A4w4: mlp, moe, attn-linear | 无 | 13.2715/12.283 |
 | MXFP | A8w4: mlp, moe, attn-linear | 无 | 10.4672/10.061 |
 | MXFP | A8w8: mlp, moe, attn-linear | 无 | 14.8785/15.091 |
-| HiFP | A4w4: mlp, moe, attn-linear | 无 | 14.258 |
 
 ### LongCat-Next（BF16 17.518）
 
@@ -62,4 +61,3 @@
 | MXFP | A4w4: mlp, moe, attn-linear | 无 | 19.0125/18.266 |
 | MXFP | A8w4: mlp, moe, attn-linear | 无 | 17.5067/16.899 |
 | MXFP | A8w8: mlp, moe, attn-linear | 无 | 18.3902/19.2 |
-| HiFP | A4w4: mlp, moe, attn-linear | 无 | 16.9826 |
