@@ -154,12 +154,15 @@ class LongcatLite(BaseModel):
             if experts is None:
                 raise TypeError("LongCat MoE PTQ expected 'experts' on the located MoE module.")
 
-            if hasattr(experts, "iter_ptq_expert_modules"):
+            loading = getattr(self, "_loading_ptq_params", False)
+            if not loading and hasattr(experts, "iter_ptq_expert_modules"):
                 ptq_items = experts.iter_ptq_expert_modules()
             elif hasattr(experts, "expert_modules"):
                 num_routed = getattr(experts, "num_routed_experts", None)
                 expert_modules = experts.expert_modules
                 ptq_items = expert_modules if num_routed is None else expert_modules[:num_routed]
+            elif hasattr(experts, "iter_ptq_expert_modules"):
+                ptq_items = experts.iter_ptq_expert_modules()
             else:
                 raise TypeError("LongCat MoE PTQ expects experts to expose PTQ iterable expert modules.")
 

@@ -131,6 +131,16 @@ class AutoRound(nn.Module):
         clipped_weight, v = self.prepare_deploy_weight(weight)
         return quant_obj(clipped_weight, v=v)
 
+    def export_deploy(self, weight: torch.Tensor, quant_obj):
+        # apply the learned clip range + per-group rounding offset, then real-quant export
+        grouped_weight, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(weight, self.group_size)
+        clip_min, clip_max = self._compute_clip_range(grouped_weight)
+        clipped_weight = torch.clamp(grouped_weight, min=clip_min, max=clip_max)
+        v = self.value.to(grouped_weight.device, grouped_weight.dtype)
+        clipped_weight = _revert_tensor_by_pad(clipped_weight, orig_shape, pad_len)
+        v = _revert_tensor_by_pad(v, orig_shape, pad_len)
+        return quant_obj.export_deploy(clipped_weight, v=v)
+
     def forward(self, weight: torch.Tensor):
         return weight
 

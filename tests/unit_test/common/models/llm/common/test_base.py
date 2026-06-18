@@ -1397,3 +1397,40 @@ def test_generate_tensorwise_ignore_layers_raises_not_implemented():
     with pytest.raises(NotImplementedError):
         stub.generate_tensorwise_ignore_layers()
 
+
+
+def test_iter_ptq_units_moe_load_state_prefers_persistent_expert_modules():
+    # Load state must route to the persistent expert_modules used by
+    # forward/export, not the fresh PTQ-only iter_ptq_expert_modules instances.
+    stub = _StubModel(quant_target=["moe"])
+    block = nn.Module()
+    block.mlp = nn.Module()
+
+    class _Experts:
+        def __init__(self):
+            self.expert_modules = [nn.Linear(4, 4), nn.Linear(4, 4)]
+
+        def iter_ptq_expert_modules(self):
+            yield nn.Linear(4, 4)  # different count proves this path is not taken
+
+    block.mlp.experts = _Experts()
+    stub._loading_ptq_params = True
+    units = list(stub.iter_ptq_units(layer_idx=0, block=block))
+    assert [u.name for u in units] == ["expert_0", "expert_1"]
+
+
+def test_iter_ptq_units_moe_load_state_falls_back_to_iter_without_expert_modules():
+    # Load state but experts only expose iter_ptq_expert_modules -> use it.
+    stub = _StubModel(quant_target=["moe"])
+    block = nn.Module()
+    block.mlp = nn.Module()
+
+    class _IterOnly:
+        def iter_ptq_expert_modules(self):
+            yield nn.Linear(4, 4)
+            yield nn.Linear(4, 4)
+
+    block.mlp.experts = _IterOnly()
+    stub._loading_ptq_params = True
+    units = list(stub.iter_ptq_units(layer_idx=0, block=block))
+    assert [u.name for u in units] == ["expert_0", "expert_1"]

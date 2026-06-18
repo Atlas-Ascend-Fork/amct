@@ -110,3 +110,55 @@ class TestLongcatLiteAdapter:
 
         assert torch.equal(cached_inps, expected)
         assert kwargs == {"mask": "kept"}
+
+
+@patch("amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained")
+@patch("amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained")
+@patch("amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM.from_config")
+@patch("amct_pytorch.common.models.llm.common.base.init_empty_weights")
+def test_longcat_lite_iter_ptq_units_moe_load_prefers_routed_persistent(
+    mock_init_empty, mock_from_config, mock_tokenizer, mock_config
+):
+    import torch.nn as nn
+    _mock_hf_deps(mock_config, mock_tokenizer, mock_from_config, mock_init_empty)
+    model = LongcatLite(_make_args(quant_target=["moe"]))
+
+    class _Experts:
+        def __init__(self):
+            self.num_routed_experts = 2
+            # 2 routed + 1 identity padding; load must drop the padding via [:num_routed]
+            self.expert_modules = [nn.Linear(4, 4), nn.Linear(4, 4), nn.Identity()]
+
+        def iter_ptq_expert_modules(self):
+            yield nn.Linear(4, 4)  # fresh path, must not be used in load state
+
+    block = nn.Module()
+    block.mlp = nn.Module()
+    block.mlp.experts = _Experts()
+    model._loading_ptq_params = True
+    units = list(model.iter_ptq_units(layer_idx=0, block=block))
+    assert [u.name for u in units] == ["expert_0", "expert_1"]
+
+
+@patch("amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained")
+@patch("amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained")
+@patch("amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM.from_config")
+@patch("amct_pytorch.common.models.llm.common.base.init_empty_weights")
+def test_longcat_lite_iter_ptq_units_moe_load_falls_back_to_iter(
+    mock_init_empty, mock_from_config, mock_tokenizer, mock_config
+):
+    import torch.nn as nn
+    _mock_hf_deps(mock_config, mock_tokenizer, mock_from_config, mock_init_empty)
+    model = LongcatLite(_make_args(quant_target=["moe"]))
+
+    class _IterOnly:
+        def iter_ptq_expert_modules(self):
+            yield nn.Linear(4, 4)
+            yield nn.Linear(4, 4)
+
+    block = nn.Module()
+    block.mlp = nn.Module()
+    block.mlp.experts = _IterOnly()
+    model._loading_ptq_params = True
+    units = list(model.iter_ptq_units(layer_idx=0, block=block))
+    assert [u.name for u in units] == ["expert_0", "expert_1"]
