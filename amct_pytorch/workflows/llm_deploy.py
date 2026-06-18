@@ -139,8 +139,27 @@ class LlmDeployWorkflow:
                             "type": "float" if self.is_mx else "int",
                             "num_bits": 8,
                         }}
+        from amct_pytorch.quantization.bit_policy import BitPolicy, ensure_bit_policy
+        bit_policy = (BitPolicy.from_yaml(self.args.bit_config)
+                      if getattr(self.args, "bit_config", None) else ensure_bit_policy(self.args))
+        targets = getattr(self.args, "quant_target", []) or []
+        attn_bits = tuple(bit_policy.linear_bits(group="attn-linear"))
+        moe_bits = tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed"))
+        linear_quantized = any(t in targets for t in ("attn-linear", "mlp"))
+        moe_quantized = "moe" in targets
+        if self.is_mx:
+            # mx always emits a separate MoE group; split when MoE activations are 4-bit
+            group_kwargs = dict(linear_bits=(8, 8), moe_bits=moe_bits, moe_split=(moe_bits[1] == 4))
+        elif moe_quantized and linear_quantized:
+            group_kwargs = dict(linear_bits=attn_bits, moe_bits=moe_bits)  # mixed bit-width
+        elif moe_quantized:
+            group_kwargs = dict(linear_bits=moe_bits)  # MoE-only: experts fall back to "Linear"
+        elif linear_quantized:
+            group_kwargs = dict(linear_bits=attn_bits)
+        else:
+            group_kwargs = dict(linear_bits=(bit_policy.w_bits, bit_policy.a_bits))
         quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
+            cache_scheme, quant_ignore_layers, is_mx=self.is_mx, **group_kwargs)
         config['quantization_config'] = quantization_config
 
         new_config_file = os.path.join(self.output_dir, "config.json")
