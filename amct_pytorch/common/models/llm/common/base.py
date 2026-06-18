@@ -262,10 +262,13 @@ class BaseModel(metaclass=ABCMeta):
             raise ValueError(f"Unsupported quant target '{self.quant_target}'.")
         if "moe" in self.quant_target:
             experts = getattr(mlp, "experts", [])
-            if hasattr(experts, "iter_ptq_expert_modules"):
+            loading = getattr(self, "_loading_ptq_params", False)
+            if not loading and hasattr(experts, "iter_ptq_expert_modules"):
                 experts = experts.iter_ptq_expert_modules()
             elif hasattr(experts, "expert_modules"):
                 experts = experts.expert_modules
+            elif hasattr(experts, "iter_ptq_expert_modules"):
+                experts = experts.iter_ptq_expert_modules()
             yield from iter_indexed_units(
                 kind="moe",
                 name_prefix="expert",
@@ -305,6 +308,8 @@ class BaseModel(metaclass=ABCMeta):
             target_specs.append(("moe", self.args.moe_mlp_param_dir))
 
         original_quant_target = self.quant_target
+        original_loading = getattr(self, "_loading_ptq_params", False)
+        self._loading_ptq_params = True
         try:
             for target_name, param_dir in target_specs:
                 if not param_dir:
@@ -339,6 +344,7 @@ class BaseModel(metaclass=ABCMeta):
                     )
         finally:
             self.quant_target = original_quant_target
+            self._loading_ptq_params = original_loading
         return results
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
