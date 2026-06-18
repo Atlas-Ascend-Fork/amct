@@ -563,3 +563,33 @@ def test_refresh_config_tensor_bf16(tmp_path):
     assert refreshed["torch_dtype"] == "bfloat16"
     assert "quantization_config" not in refreshed
 
+
+
+def test_refresh_config_moe_only_single_group(tmp_path):
+    # quant_target=moe: experts fall back to "Linear" -> single group
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["moe"]
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert set(qc["config_groups"]) == {"group_0"}
+
+
+def test_refresh_config_attn_linear_only_single_group(tmp_path):
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["attn-linear"]
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert set(qc["config_groups"]) == {"group_0"}
+
+
+def test_refresh_config_mixed_attn_and_moe_two_groups(tmp_path):
+    # mixed bit-width: attn "Linear" + MoE "MoEGMM" as two separate groups
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["attn-linear", "moe"]
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert set(qc["config_groups"]) == {"group_0", "group_1"}
+    assert qc["config_groups"]["group_1"]["targets"] == ["MoEGMM"]
