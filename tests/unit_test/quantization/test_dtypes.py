@@ -312,3 +312,12 @@ def test_weight_dequant_block_size_one_direct_multiply():
     expected = weight * scale
     assert result.shape == weight.shape
     assert torch.allclose(result, expected.to(torch.get_default_dtype()))
+
+
+def test_quant_dequant_int_export_deploy_uses_bias_key():
+    # int export emits the assistance bias under ".bias" (not ".weight_bias") so infer's
+    # generic expert remap matches the registered w13_bias / w2_bias params.
+    qdq = QuantDequantInt(bits=4)
+    out = qdq.export_deploy(torch.randn(8, 8))
+    assert "qweight" in out and "weight_scale" in out
+    assert "bias" in out and "weight_bias" not in out
