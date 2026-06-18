@@ -67,7 +67,11 @@ link_children() {
         [ -e "$entry" ] || continue
         local target="$dst/$(basename "$entry")"
         if [ -e "$target" ] && [ ! -L "$target" ]; then
-            rm -rf "$target"
+            # Non-symlink at target (possibly user-created): back it up instead of
+            # silently deleting it, then replace with our symlink.
+            echo "  ! $target is not a symlink; backed up to $target.bak before replacing" >&2
+            rm -rf "$target.bak"
+            mv "$target" "$target.bak"
         fi
         ln -sfn "$(realpath "$entry")" "$target"
     done
