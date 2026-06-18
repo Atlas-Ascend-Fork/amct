@@ -20,6 +20,8 @@ skills:
 5. 必须调用编排层指定的 skill，按 skill 流程实施
 
 > **状态文件读写规则**：progress.md 直接 Read；progress_history.md 禁止 Read 全文，需要历史信息时用 Grep 关键字查找。
+>
+> **前置自检 + 状态块**：启动先自检 `amct_pytorch` 可导入 / NPU `--device` 可用 / 模型与数据可达，不满足按 quant-workflow「progress.md 状态协议」写 `STATUS: BLOCKED` + 一行回退 hint 并停止；本轮完成后更新顶部状态块 `STATUS`（达标交付写 `DONE` + `DELTA` + `ARTIFACTS`）。
 
 ## 命令接口（amct LLM CLI）
 

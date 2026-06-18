@@ -14,18 +14,25 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 
 客户端据此进入编排入口 `quant-workflow`，自动判阶段、串联子能力，并在方案选择、PTQ 升级、导出等关键决策处与你确认。
 
-## 用法：典型场景 → 对应能力
+> 前置：`amct_pytorch` 可导入；NPU 设备由你的环境提供（命令以 `--device` 指定）；评测数据可达（不可达时可设 `HF_ENDPOINT` 镜像 / 用 modelscope / 指本地路径）。
 
-无需记命令；客户端按各 skill / 子代理 frontmatter 的 `description` 匹配诉求自动选用。
+## 用法：自然语言示例 → 自动进入
 
-| 你的诉求 | 对应能力 |
+无需记命令；客户端按各 skill / 子代理 frontmatter 的 `description` 匹配诉求自动选用。换个说法、换个模型都行，例如：
+
+| 你这样说（示例） | 自动进入 |
 |---|---|
-| 端到端量化 + 导出 | `quant-workflow`（编排入口，下列各步按需调度）|
-| 新模型还没适配 | `model-adapter` |
-| 要第一轮量化方案 | `scheme-recommendation` |
-| 跑直转、看 PPL / delta | `direct-quant-eval` |
-| 直转 delta 超阈、要升级 | `algorithm-recommendation` → `algorithm-validation` |
-| 导出部署权重 + 交付文档 | `deploy-export` |
+| 「把 Qwen3-30B-A3B 量化到 W8A8 并导出部署权重」 | `quant-workflow` 全程编排（含确认门）|
+| 「DeepSeek-V2-Lite 还没适配，先接进来」 | `model-adapter` 适配 |
+| 「给我这个模型第一轮量化方案」/「W4A8 大概到多少 delta」 | `scheme-recommendation` 方案推荐 |
+| 「跑下 W8A8 直转，看 PPL 和 delta」 | `direct-quant-eval` 直转评测 |
+| 「直转 delta 超 0.2 了怎么升级」/「要不要上 GPTQ」 | `algorithm-recommendation` → `algorithm-validation` |
+| 「PTQ 跑完了，比直转有没有真改善」 | `algorithm-validation` 收益验证 |
+| 「达标了，导出权重 + 写交付文档」 | `deploy-export` 导出 + `deploy_quantization.md` |
+| 「deploy 目录有了，就差交付文档」 | `deploy-export`（阶段 5 补文档）|
+| 「量化后 PPL 比 BF16 还低，正常吗」 | `quant-workflow` 先查链路再判定 |
+
+整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。
 
 编排顺序：适配（未适配时）→ 方案 → 直转（`delta ≤ 0.2` 可直接导出）→ 超阈则升级 PTQ → 导出。
 
@@ -61,3 +68,7 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 ```
 
 `scripts/init-agent.sh` 据此生成 `.claude/`、`.opencode/` 客户端视图（均 gitignored；`.opencode/` 另保留手维护的 `opencode.json`、`README.md`）。架构与设计依据见 [docs/architecture.md](docs/architecture.md)。
+
+## 面向 agent 集成
+
+多 agent / 上游集成只需对接唯一入口 `quant-workflow`（黑盒）；契约（输入 / 状态面 / 确认门 / 前置）见 [docs/architecture.md](docs/architecture.md) 第 8 节。

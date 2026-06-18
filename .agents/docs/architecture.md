@@ -64,3 +64,14 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 - 启动：`bash scripts/init-agent.sh` 生成视图后，在 Claude Code 或 OpenCode 中启动。
 - 已实测（OpenCode + glm-5）：执行流（W8A8 直转）、分析流（方案推荐）、PTQ 流（extract → ptq → eval）三类端到端均由 agent 自主跑通且结果核实准确。
+
+## 8. 面向 agent 集成（黑盒契约）
+
+上游 / 多 agent 集成**只对接唯一入口 `quant-workflow`**，不直接调子代理或叶子技能（封装；对应 orchestrator-workers / handoff 范式）。最小契约：
+
+- **能力 + 触发**：见 `quant-workflow` frontmatter `description`（机读接口；README 面向人）。
+- **输入**：模型路径 + 工作目录；可选 `quant_target / bits / device`。
+- **输出 / 状态面**：`progress.md` 顶部机读状态块（`STAGE / STATUS / DELTA / ARTIFACTS / BLOCKED`）可轮询；deploy 产物为终态交付物。同框架委派则另取子代理返回摘要。
+- **交互模式**：human-in-the-loop——方案选择 / PTQ 升级 / 算法选择 / 是否导出 四个强制确认门，非全自动。
+- **前置**：`amct_pytorch` 可导入、NPU device 由调用方 `--device` 提供、模型与数据可达；不满足则 fail-fast 写 `BLOCKED`（环境是调用方责任，agent 不自行排障）。
+- **重入安全**：重复对接先复用 `progress.md` 已有结果，不重跑。

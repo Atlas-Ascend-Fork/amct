@@ -1,6 +1,6 @@
 ---
 name: quant-workflow
-description: amct 量化编排入口。从“模型导入”到“适配→量化实验→deploy 交付→归档”的全生命周期总控：先查现状判阶段、复用 casebook、串联叶子 skill，单段需求直接分流。量化方案与升级决策需用户确认。
+description: amct 大模型量化的唯一编排入口（多 agent 集成只需对接此入口）。输入模型路径与工作目录（可选 quant_target / bits / device），完成 适配→量化实验→deploy 交付→归档 全生命周期：先查现状判阶段、复用 casebook、串联叶子 skill，单段需求直接分流；方案选择 / PTQ 升级 / 是否导出等关键决策停下与用户确认（human-in-the-loop）；重入安全，复用已有结果不重跑。
 ---
 
 # amct 量化编排入口
@@ -10,6 +10,23 @@ description: amct 量化编排入口。从“模型导入”到“适配→量�
 叶子 / 子任务：`$model-adapter`、`quant-tools/`（`$scheme-recommendation` / `$direct-quant-eval` / `$algorithm-recommendation` / `$algorithm-validation` / `$deploy-export`）。
 
 **编排为 supervisor**：分析类委派 `quant-analyzer`（只读、不改代码/方案）、实施类委派 `quant-implementer`（改 adapter / 跑命令 / 导出）、审查类委派 `quant-reviewer`（只跑评测不改方案），按各自 `description` 匹配；编排自身只做判阶段 / 路由 / 汇总 / 交互确认，不直接改 adapter 代码或量化方案。
+
+## progress.md 状态协议（机读，供轮询 / 多 agent 集成）
+
+progress.md 顶部维护一个机读状态块：编排入口负责初始化与收尾更新，子代理在各自轮次更新。**上游 / 多 agent 集成只需轮询此块判断进度，无需读全文。** 格式（`key: value` 逐行可解析）：
+
+```text
+STAGE: <1-6 阶段号>
+STATUS: IN_PROGRESS | DONE | BLOCKED
+DELTA: ppl_bf16=<> ppl_quant=<> delta=<>     # 拿到量化结果后
+ARTIFACTS: <deploy 目录 / 关键产物路径>        # DONE 时
+BLOCKED: <原因> — <一行回退 hint>              # 仅 BLOCKED 时
+UPDATED_BY: orchestrator | analyzer | implementer | reviewer
+```
+
+- **前置自检（任一子代理启动即做）**：`amct_pytorch` 可导入、NPU device 由调用方 `--device` 指定且可用、模型与评测数据可达；任一不满足 → 写 `STATUS: BLOCKED` + `BLOCKED: <缺失项> — <回退 hint>`（如数据不可达：`set HF_ENDPOINT 镜像 / 用 modelscope / 指本地路径`）**并停止**，不臆造继续。环境是调用方责任，编排只 fail-fast 暴露、不自行排障。
+- **终态**：达标可交付写 `STATUS: DONE` + `DELTA` + `ARTIFACTS`。
+- **重入安全**：再次进入先读此块，复用已有结果，不重跑。
 
 ## 评测口径强约束
 
