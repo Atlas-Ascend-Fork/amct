@@ -278,3 +278,12 @@ def test_weight_dequant_asserts_scale_mismatch():
     scale = torch.randn(3, 4)
     with pytest.raises(AssertionError):
         weight_dequant(weight, scale, block_size=8)
+
+
+def test_quant_dequant_int_export_deploy_uses_bias_key():
+    # int export emits the assistance bias under ".bias" (not ".weight_bias") so infer's
+    # generic expert remap matches the registered w13_bias / w2_bias params.
+    qdq = QuantDequantInt(bits=4)
+    out = qdq.export_deploy(torch.randn(8, 8))
+    assert "qweight" in out and "weight_scale" in out
+    assert "bias" in out and "weight_bias" not in out
