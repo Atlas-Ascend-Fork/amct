@@ -45,21 +45,12 @@ bf16 baseline = 命令 1 把 `--eval_mode` 换 `bf16`。
 - **算法只认 new-path（LLM）`ALGO_REGISTRY`**：当前 = `autoround / lac / lwc / omniquant`（gptq/awq/mxfp 视分支移植）；跑前确认算法在 new-path（忽略 classic 图量化名册，详见 L1 `cross-model-pitfalls.md`）。
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `--*_param_dir`。
 - 离线容器用 `cli_wrapper.py` 包一层（patch get_wikitext2/get_pileval 到本地数据）。
-- **数据集/依赖前置**：默认 `export HF_ENDPOINT=https://hf-mirror.com`（或用本地缓存 / modelscope）；pileval 走 zstd，缺则 `pip install zstandard`；数据仍不可达则写 `BLOCKED` + 一行回退 hint。
 - **extract↔ptq 数据目录一致**：`extract_ptq_data --output_dir <D>` 与对应 `ptq --data_dir <D>` 必须**同一目录**（每个 quant_target 一份）；产物名 `block_<idx>_<target>_in.pkl`。报 `PTQ input file not found: <dir>/block_*_<target>_in.pkl` → 先核对 ptq 的 `--data_dir` 是否就是 extract 的 `--output_dir`（路径不一致最常见），用 `find -name 'block_*_in.pkl'` 确认真实位置，**不要直接判 extract 未生成 / 有 bug**（同 `--algos`：漏检自身用法别甩锅框架）。
 - 引用仓库内路径一律相对路径。
-
-## 选卡（跑前必做，短板实证）
-
-- 跑任何 NPU 任务前先 `npu-smi info` 选 **HBM 占用低、AICore 空闲** 的卡；不要默认/硬编码 `npu:0`。
-- **选卡方式二选一、不可混用**：要么 `--device npu:N`，要么 `ASCEND_RT_VISIBLE_DEVICES=N` + `--device npu:0`（置 VISIBLE 后该卡重映射为 index 0，再传 `--device npu:N(N≠0)` 会越界报 `Invalid device ID`）。
-- 任务**固定了卡**而该卡显存不足时，写 `BLOCKED: NPU 显存不可用` 报阻塞，**不要反复换卡 / pkill 重试**（环境是调用方责任）。
 
 ## 长命令防超时（必须）
 
 大模型 eval（30B+/35B 单段 ~20min+）、PTQ 训练（~1min/层）会超过 agent 单条 Bash 超时上限（如 ~600s）被杀。**必须后台跑 + 轮询**：`nohup <命令> > run.log 2>&1 &` 启动（Bash 立即返回、不计超时），再用多次短 Bash 调用 `grep -E "PPL:|Error|Saved" run.log` + `ps -p <pid>` 轮询到结束；**不要一条命令既启动又阻塞等到结束**。PTQ 被中断用 `--start_block_idx <下一未完成层>` 续跑（逐层存参不重复）。
-
-**进程存活判断（避免误杀重跑）**：Bash 工具超时 **≠** 后台进程已死。轮询只用 `ps -p <pid>`（不要 `ps aux | grep`，会漏判 / 匹配到 grep 自身）；工具超时后先 `ps -p <pid>` 或 `cat /proc/<pid>/status` 确认，存活就继续等，**禁止 pkill 后在同一张卡重启**（与原进程争显存会撞 OOM）。同一配置的 baseline / 中间产物**单轮内只跑一次**：在后台存活则等待、已落盘则复用（eval/extract 优先复用，ptq 用 `--start_block_idx` 续跑），不重启。
 
 ## 产物与内循环自审
 
