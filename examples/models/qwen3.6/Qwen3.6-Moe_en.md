@@ -163,3 +163,20 @@ python -m amct_pytorch.eval \
   ```
 Required parameter explanation:
 - attn_linear_param_dir: When `quant_target` is `attn-linear`, quantization algorithm parameter save path
+
+### Quantized Weight Exporting
+After all the preceding steps are complete, export the quantized weigths for loading. The weight_map corresponding to the weigths is consistent with taht on the huggingface official website.
+  ```shell
+python -m amct_pytorch.deploy \
+  --model /data/models/Qwen3.6-35B-A3B \
+  --model_name qwen3_6_moe \
+  --granularity block \
+  --quant_target attn-linear \
+  --bit_config amct_pytorch/configs/w4a8.yaml \
+  --quant_dtype int \
+  --algos autoround \
+  --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear \
+  --output_dir ./output/Qwen3.6-35B-A8W4-INT
+  ```
+Required parameter explanation:
+- output_dir：Path for saving the exported weights
