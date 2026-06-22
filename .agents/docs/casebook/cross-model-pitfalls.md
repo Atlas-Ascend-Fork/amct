@@ -46,6 +46,9 @@
 ### 通用 PTQ provider tensor-only，不覆盖 attention unit
 - 现象：`materialize_gt()` 只转发 tensor batch，但 attention unit 还需 `position_embeddings`/`attention_mask`。处理：最小 PTQ smoke 先用 expert/mlp 单元闭环；做 attention unit PTQ 需把 provider 泛化为支持额外上下文。例：`qwen/qwen3-moe`（235B）。
 
+### PTQ 前先确认算法在 new-path（LLM）ALGO_REGISTRY 中
+- 现象：指定 `--algos gptq`（或 awq/smooth_quant）跑 PTQ，算法名「看似登记」却选择失败/不生效。根因：classic 图量化 path 的算法名册 与 LLM new quantization path 的 `ALGO_REGISTRY`（`amct_pytorch/quantization/modules/quant_base.py`）是**两套**——classic 列了名 ≠ LLM PTQ 路径实现了。处理：跑 PTQ 前先确认所选算法在 **new-path `ALGO_REGISTRY`** 内（当前 = `autoround / lac / lwc / omniquant`；gptq/awq/mxfp 视分支移植）；**只认 new-path、忽略 classic 名册**。例：Qwen3-4B PTQ 验证（误选 gptq → 查 new-path 缺 → 自纠改 LWC）。
+
 ## 通用纪律
 
 - 上游 modeling 文件原样保留，只改明显坏掉的 import；接入前先 `python -c "import ..."` 一次。
