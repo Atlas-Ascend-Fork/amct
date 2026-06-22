@@ -118,14 +118,37 @@ echo "[2/4] 编译算子 (HOST=${HOST_MACHINE}, CANN_ARCH_DIR=${CANN_ARCH_DIR}, 
 build_op() {
     local op_name="$1"
     local op_dir="$SCRIPT_DIR/$op_name"
-
+    
     echo "  编译 $op_name ..."
-    rm -rf "$op_dir/build" && mkdir "$op_dir/build"
-    cmake -S "$op_dir" -B "$op_dir/build" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DNPU_ARCH="${NPU_ARCH}" \
-        -DASCEND_ARCH_DIR="${CANN_ARCH_DIR}" > /dev/null
-    cmake --build "$op_dir/build" -j"$(nproc)"
+    if [ $op_name == "svd_quant" ]; then
+        if [ ${SOC} != "ascend950" ]; then
+            echo "Error: 'svd_quant' operator builds for ascend950 socket only"
+            exit 1
+        fi
+        rm -rf "build" "output"
+        mkdir -p "build" "output" && cd "build"
+        cmake .. \
+            -DBUILD_OPEN_PROJECT=ON \
+            -DCMAKE_CXX_FLAGS="-w" \
+            -DCMAKE_C_FLAGS="-w" \
+            -DASCEND_COMPUTE_UNIT="${SOC}" \
+            -DASCEND_OP_NAME="$op_name" \
+            -DCUSTOM_ASCEND_CANN_PACKAGE_PATH="$ASCEND_HOME_PATH" \
+            -DCHECK_COMPATIBLE=true
+        cmake --build . --target package -j"$(nproc)"
+        cd "-"
+        rm -rf "$op_dir/python/build" "$op_dir/python/amct.egg-info" "$op_dir/python/build"
+        cd "$op_dir/python"
+        python3 "$op_dir/python/setup.py" build bdist_wheel
+        cd "-"
+    else
+        rm -rf "$op_dir/build" && mkdir "$op_dir/build"
+        cmake -S "$op_dir" -B "$op_dir/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNPU_ARCH="${NPU_ARCH}" \
+            -DASCEND_ARCH_DIR="${CANN_ARCH_DIR}" > /dev/null
+        cmake --build "$op_dir/build" -j"$(nproc)"
+    fi
 }
 
 if [ -n "$OP_NAME" ]; then
@@ -185,6 +208,9 @@ fi
 echo "[4/4] 构建 wheel..."
 rm -rf dist amct_ops.egg-info build
 mkdir -p dist
+if [ $OP_NAME == "svd_quant" ]; then
+    cp "$SCRIPT_DIR/$OP_NAME/python/dist/amct-"*.whl "${SCRIPT_DIR}/dist/"
+fi
 pip wheel . -w dist/ --no-deps --no-build-isolation -q
 
 echo ""
