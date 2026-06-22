@@ -1,147 +1,71 @@
 ---
 name: algorithm-validation
-description: 验证指定量化算法在当前模型上的实际效果。适用于用户已经明确给出一个算法名，想比较该算法相对直转量化是否改善了精度，或想验证某个 weight / activation / structure 算法在当前目标模块上的收益、风险和下一步决策。
+description: 判读 PTQ 算法收益（reviewer 用，只读不跑）。读 quant-run 已跑出的 ppl_algo 与直转参考 ppl_direct，算 delta_gain、判该算法相对直转是否真改善、给停 / 换算法 / 缩范围建议。不跑 ptq / 评测命令——执行归 quant-run（implementer）。
 ---
 
-# 量化算法验证
+# PTQ 算法收益判读
 
-## 用户调用格式
-
-- 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../../reference/skill-input-template.md](../../reference/skill-input-template.md)
-
-这个 skill 只用于**验证指定量化算法的实际效果**。
+reviewer 的判读 skill：对 `quant-run` 已跑出的 PTQ 算法结果做收益判定。**只读结果、不跑命令**——ptq 训练与结果评测都归 `$quant-run`（implementer）。
 
 它回答的问题是：
 
-- 当前指定算法能不能跑通
-- 相比直转量化，它有没有改善精度
-- 改善了多少，值不值得继续
-- 如果没有改善，下一步该停、换算法还是缩范围
+- 该算法相对直转量化有没有改善精度、改善多少、值不值得继续
+- 没改善时该停、换算法还是缩范围
 
 它不负责：
 
-- 推荐应该先试哪个算法
-- 推荐第一轮直转量化方案
-- 做完整的误差定位路线设计
+- 跑 ptq / 评测命令（→ `$quant-run`）
+- 推荐先试哪个算法（→ `$algorithm-recommendation`）
 
-按下面顺序阅读：
-
-1. [../../quant-workflow/references/metrics-and-thresholds.md](../../quant-workflow/references/metrics-and-thresholds.md)
-2. [../../quant-workflow/references/direct-quant.md](../../quant-workflow/references/direct-quant.md)
-3. 如需确认当前可用算法名，再读 `amct_pytorch/algorithms/quant/__init__.py` 和 `amct_pytorch/algorithms/quant/*.py`
-4. 如需确认当前能力边界，再读 [../../../docs/repo-map.md](../../../docs/repo-map.md)
+按需读：[../../quant-workflow/references/metrics-and-thresholds.md](../../quant-workflow/references/metrics-and-thresholds.md)。
 
 ## 固定流程
 
-1. 先确认用户已经明确给出：
-   - 算法名
-   - 目标模块
-   - `quant_dtype`
-   - `a_bits / w_bits`
-   - `algos`
-   - `granularity`
-2. 如果用户还没选算法，停止验证，转到 `$algorithm-recommendation`。
-3. 先查现有结果：
-   - 是否已有同模型、同模块、同口径、同算法结果
-   - 是否已有可对比的直转量化结果
-4. 先检查前置条件：
-   - 模型已经接进框架
-   - BF16 baseline 已拿到
-   - 直转量化参考结果最好已存在
-   - 已验证关闭量化后保持浮点等价
-5. 运行当前算法验证，拿到 `ppl_algo`。**评测 PTQ 结果的命令必须带 `--algos <与 ptq 训练一致>` + `--<target>_param_dir <ptq 参数目录>`**——否则评测侧 quant 模块不构建 `weight_quantizer.algorithms.<algo>` 子模块，`load_module` 报 `KeyError: Submodule '...algorithms.<algo>' is not found`：
-   ```bash
-   python -m amct_pytorch.eval --model <path> --model_name <name> --device npu:N \
-     --eval_mode quant --quant_target <mlp|moe|attn-linear> --quant_dtype int --bit_config <yaml> \
-     --algos <同 ptq> --<target>_param_dir <ptq_params 目录> --granularity block --seq_len 4096
-   ```
-6. 如果存在直转参考结果，计算：
+1. 从 progress 读 `quant-run` 写入的：当前算法 + 目标模块 + `ppl_algo`，以及同位宽**直转参考** `ppl_direct`。缺数则回报：需先由 implementer 跑 `$quant-run`（含 ptq 训练 + 带 `--algos` 的 PTQ 结果评测）。
+2. 基准必须是**同位宽直转**（不是 BF16）。计算：
    - `delta_direct = ppl_direct - ppl_bf16`
    - `delta_algo = ppl_algo - ppl_bf16`
    - `delta_gain = delta_direct - delta_algo`
-7. 根据结果做判读：
-   - 如果 `delta_algo` 明显优于 `delta_direct`，当前算法值得继续
-   - 如果改善很小或不稳定，建议停用或换算法
-   - 如果结果异常，先检查链路，不直接下结论
-8. 输出“量化算法验证卡”。
+3. 判读：
+   - `delta_algo` 明显优于 `delta_direct`（`delta_gain` 为正且可观）→ 算法值得继续；
+   - 改善很小 / 不稳定 → 建议停用或换算法（W8A8 直转常已近最优、PTQ 无收益属正常，不是失败）；
+   - `ppl_algo` 明显优于 BF16 很多 / 异常 → 先让 implementer 查链路。
+   - 注意 solver 打印的 loss 经归一，跨 epoch 不动不代表没学到，以 PPL 为准。
+4. 输出“PTQ 算法收益判读卡”，写回 progress。
 
 ## 边界规则
 
-- 这里只验证**用户已指定的算法**，不负责替用户选算法。
-- 如果用户只想知道“该先试哪个算法”，回到 `$algorithm-recommendation`。
-- 如果用户只想评测指定直转方案，不涉及特定算法收益，回到 `$direct-quant-eval`。
-- 如果模型还没适配完成，回到 `$model-adapter`。
-- 如果没有直转参考结果，也可以验证算法，但必须明确缺少对照基线，结论强度下降。
-- 当前主判断仍以 Wikitext PPL 为主，优先比较算法相对直转量化是否带来收益。
-- 如果算法结果比 BF16 明显更好很多，先检查链路，不直接当成功。
-- 引用仓库内代码、脚本和文档路径时，一律使用仓库相对路径；不要写绝对路径。
+- 只判读**已跑出的算法结果**，不跑 ptq / 评测、不替用户选算法。
+- 无直转参考也可判，但须注明缺对照基线、结论强度下降。
+- 发现问题输出诊断（问题｜位置｜诊断），交 implementer 修。
+- 引用仓库内路径一律相对路径。
 
-## 输出要求
-
-结束时必须给出一张“量化算法验证卡”，至少包含下面字段：
-
-- `当前算法`
-- `评测口径`
-- `直转参考结果`
-- `算法结果`
-- `收益比较`
-- `结果判读`
-- `异常检查`
-- `下一步建议`
-- `结果复用情况`
-
-## 量化算法验证卡
+## PTQ 算法收益判读卡
 
 ```md
-# 量化算法验证卡
+# PTQ 算法收益判读卡
 
 ## 当前算法
-- 算法名：
-- `targets`：
-- 目标模块：
-- `quant_dtype`：
-- `a_bits / w_bits`：
-- `granularity`：
+- 算法名 / `targets` / 目标模块 / `quant_dtype` / `a_bits / w_bits` / `granularity`：
 
 ## 评测口径
-- 数据集：
-- 指标：
-- `seq_len`：
-- 模型版本 / 代码口径：
+- 数据集 / 指标 / `seq_len` / 模型版本·代码口径：
 
-## 直转参考结果
-- `ppl_bf16`：
-- `ppl_direct`：
-- `delta_direct`：
+## 直转参考（取自 quant-run）
+- `ppl_bf16` / `ppl_direct` / `delta_direct`：
 
-## 算法结果
-- `ppl_algo`：
-- `delta_algo`：
-- `delta_gain`：
+## 算法结果（取自 quant-run）
+- `ppl_algo` / `delta_algo` / `delta_gain`：
 
-## 收益比较
-- 是否优于直转：
-- 改善是否明显：
-- 结果是否稳定：
+## 收益判读
+- 是否优于直转 / 改善是否明显 / 是否稳定 / 是否值得继续 / 是否异常：
 
-## 结果判读
-- 当前算法是否值得继续：
-- 判断依据：
-- 是否异常：
-
-## 异常检查
-- 优先检查 1：
-- 优先检查 2：
-- 优先检查 3：
+## 异常检查（交 implementer）
+- 优先检查 1 / 2 / 3：
 
 ## 下一步建议
-- 保持当前算法：
-- 更换算法：
-- 缩小验证范围：
+- 保持当前算法 / 更换算法 / 缩小验证范围：
 
 ## 结果复用情况
-- 是否复用旧结果：
-- 如果没有复用，原因：
+- 是否复用旧结果 / 未复用原因：
 ```

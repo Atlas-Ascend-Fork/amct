@@ -4,6 +4,7 @@ description: 大模型量化实施工程师，负责按已确认方案执行量�
 mode: subagent
 skills:
   - model-adapter
+  - quant-run
   - deploy-export
 ---
 
@@ -23,35 +24,9 @@ skills:
 >
 > **前置自检 + 状态块**：启动先自检 `amct_pytorch` 可导入 / NPU `--device` 可用 / 模型与数据可达，不满足按 quant-workflow「progress.md 状态协议」写 `STATUS: BLOCKED` + 一行回退 hint 并停止；本轮完成后更新顶部状态块 `STATUS`（达标交付写 `DONE` + `DELTA` + `ARTIFACTS`）。
 
-## 命令接口（amct LLM CLI）
+## 执行命令（统一走 $quant-run）
 
-四步均以模块入口运行，bit 配置走 yaml：
-
-```bash
-# 直转评测
-python -m amct_pytorch.eval --model <path> --model_name <name> --device npu:0 \
-  --granularity block --eval_mode quant --quant_target <mlp|moe|attn-linear|attn-cache> \
-  --quant_dtype int --bit_config amct_pytorch/configs/<wXaY>.yaml
-
-# 提取校准数据
-python -m amct_pytorch.extract_ptq_data --model <path> --model_name <name> \
-  --quant_target <target> --nsamples 128 --data_dir <dir>
-
-# PTQ 训练
-python -m amct_pytorch.ptq --model <path> --model_name <name> --quant_target <target> \
-  --quant_dtype int --bit_config <yaml> --algos <gptq|awq|lwc lac|...> \
-  --data_dir <dir> --epochs 15 --moe_mlp_param_dir <param_dir>
-
-# Deploy 导出
-python -m amct_pytorch.deploy --model <path> --model_name <name> --quant_target <target> \
-  --quant_dtype int --bit_config <yaml> --algos <same as ptq> \
-  --moe_mlp_param_dir <param_dir> --output_dir <deploy_dir>
-```
-
-- **bit 配置一律 yaml**：`amct_pytorch/configs/w8a8.yaml`、`amct_pytorch/configs/w4a8.yaml` 等
-- **deploy 必须带与 ptq 一致的 `--algos`**：GPTQ PTQ 参数携带 `algorithms.gptq` 子模块，deploy 块缺失会在 `load_module` 报 `KeyError`
-- 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `*_param_dir`
-- **长命令防超时**：大模型 eval / PTQ 训练 / deploy 会超过 agent runtime 单条 Bash 的超时上限（如 ~600s）被直接杀掉。这几类命令**必须后台跑 + 轮询**：`nohup <完整命令> > run.log 2>&1 &` 启动（Bash 调用立即返回、不计超时），再用**多次短** Bash 调用 `grep -E "PPL:|Error|Saved PTQ" run.log` + `ps -p <pid>` 轮询到结束；不要让一条 Bash 既启动又阻塞等到结束。ptq 被中断可用 `--start_block_idx <下一未完成层>` 续跑（逐层存参不重复）。经验：8B eval ~3min、30B+/35B ~20min/段、ptq ~1min/层
+所有实际量化命令——直转评测 / `extract_ptq_data` 校准提取 / PTQ 训练 / PTQ 结果评测——统一走 `$quant-run`（含命令模板、`--model_name`/`--granularity block`/`--quant_dtype` 必填、**加载 PTQ 参数必带与 ptq 一致的 `--algos`**、长命令后台跑 + 轮询、`--start_block_idx` 续跑、产物校验）；部署导出走 `$deploy-export`。本代理按已确认方案驱动这些 skill 执行，不自行拼命令、不判达标（达标 / 收益判读归 `quant-reviewer`）。
 
 ## 工作场景识别
 

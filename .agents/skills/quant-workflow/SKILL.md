@@ -7,9 +7,9 @@ description: amct 大模型量化的唯一编排入口（多 agent 集成只需�
 
 唯一的端到端编排入口。**不重写**叶子 skill 的规则，只负责：查现状 → 判阶段 → 串联/分流 → 复用已有结果 → deploy 后补交付文档。
 
-叶子 / 子任务：`$model-adapter`、`quant-tools/`（`$scheme-recommendation` / `$direct-quant-eval` / `$algorithm-recommendation` / `$algorithm-validation` / `$deploy-export`）。
+叶子 / 子任务：`$model-adapter`、`quant-tools/`（**执行** `$quant-run`；**推荐** `$scheme-recommendation` / `$algorithm-recommendation`；**判读** `$direct-quant-eval` / `$algorithm-validation`；**导出** `$deploy-export`）。
 
-**编排为 supervisor**：分析类委派 `quant-analyzer`（只读、不改代码/方案）、实施类委派 `quant-implementer`（改 adapter / 跑命令 / 导出）、审查类委派 `quant-reviewer`（只跑评测不改方案），按各自 `description` 匹配；编排自身只做判阶段 / 路由 / 汇总 / 交互确认，不直接改 adapter 代码或量化方案。
+**编排为 supervisor**：分析类委派 `quant-analyzer`（只读、不改代码/方案）、实施类委派 `quant-implementer`（改 adapter / 跑 `$quant-run` 执行全部命令 / 导出）、审查类委派 `quant-reviewer`（只读 quant-run 结果判读，不跑评测/ptq、不改方案），按各自 `description` 匹配；编排自身只做判阶段 / 路由 / 汇总 / 交互确认，不直接改 adapter 代码或量化方案。
 
 ## progress.md 状态协议（机读，供轮询 / 多 agent 集成）
 
@@ -45,7 +45,7 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 
 ## 固定流程
 
-1. **先查现有结果**：casebook 按三层读——L1 `.agents/docs/casebook/common-pitfalls.md`（跨网络通用，先通读）→ 按 config/checkpoint 触发信号读 L2 `.agents/docs/casebook/family-pitfalls.md` 命中的结构家族 → L3 `.agents/docs/casebook/<series>/<case>.md` 同模型/系列结论；再查 `outputs/`、日志、脚本目录的 BF16 / quant / deploy 结果；当前代码、模型版本、量化目标、口径是否一致。足够则复用并说明口径，仅在变化时重跑。
+1. **先查现有结果**：casebook 按三层读——L1 `.agents/docs/casebook/cross-model-pitfalls.md`（跨网络通用，先通读）→ 按 config/checkpoint 触发信号读 L2 `.agents/docs/casebook/structure-family-pitfalls.md` 命中的结构家族 → L3 `.agents/docs/casebook/<series>/<case>.md` 同模型/系列结论；再查 `outputs/`、日志、脚本目录的 BF16 / quant / deploy 结果；当前代码、模型版本、量化目标、口径是否一致。足够则复用并说明口径，仅在变化时重跑。
 2. 阶段 1 / 2 → `$model-adapter`。
 3. 阶段 3 → 进入**量化实验环**（见下节）。
 4. 阶段 4 → `$deploy-export`。
@@ -59,8 +59,8 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 先读 `references/metrics-and-thresholds.md` → `references/direct-quant.md`；需升级 PTQ 再读 `references/ptq-escalation.md`；网络结构特殊再读 `references/network-strategies.md`。
 
 1. 无可执行的第一轮直转方案 → `$scheme-recommendation` 产出“量化方案推荐卡”（融合算子兼容性作参考输入，见下节）。
-2. `$direct-quant-eval` 跑第一轮直转 → `ppl_bf16` / `ppl_quant` / `delta`。
-3. `delta <= 0.2` → 可接受、可停止升级；`delta > 0.2` → 未选算法走 `$algorithm-recommendation`，已选算法走 `$algorithm-validation`。
+2. implementer 跑 `$quant-run` 出第一轮直转 `ppl_bf16` / `ppl_quant`，reviewer 用 `$direct-quant-eval` 判 `delta`。
+3. `delta <= 0.2` → 可接受、可停止升级；`delta > 0.2` → 未选算法走 `$algorithm-recommendation`，已选算法由 implementer 跑 `$quant-run`（含 ptq + 带 `--algos` 的结果评测）、reviewer 用 `$algorithm-validation` 判收益。
 4. 直转 + 算法验证后仍不达标 → 做一轮**粗粒度**误差定位；只有粗定位之后才允许在**最小范围**引入 PTQ。
 5. 每轮结束必须输出下一步决策：停止 / 补定位 / 小幅升级。
 6. 默认：先直转再 PTQ；先整网方案再缩到 block / unit；误差定位只做粗粒度；PTQ 先最小范围。
@@ -70,10 +70,10 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 
 用户只覆盖其中一段时，直接转对应叶子 skill，不默认走完整流程：
 - 只要方案 → `$scheme-recommendation`
-- 已指定方案、只看 delta → `$direct-quant-eval`
+- 已指定方案、只看 delta → implementer 跑 `$quant-run` + reviewer `$direct-quant-eval` 判读
 - 只导出 → `$deploy-export`（不在此重做评测/PTQ/精度判定）
 - 只推荐算法 → `$algorithm-recommendation`
-- 只验证算法 → `$algorithm-validation`
+- 只验证算法 → implementer 跑 `$quant-run`（含 ptq）+ reviewer `$algorithm-validation` 判读
 
 ## 融合算子兼容性（参考输入）
 
@@ -97,7 +97,7 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 
 - 系列 `casebook README`：某模型首次拿到稳定 BF16 baseline + 第一轮可复现结论；默认起点 / 敏感模块 / 升级策略 / 常见问题需修订；新结果推翻系列默认经验。
 - 个案 L3 `<series>/<case>.md`：新直转或 PTQ 升级路线；代表性问题 / 排障结论；明显偏离系列经验；已有个案需按新结果修订；**仅本模型独有、不可迁移**的坑留这层。
-- 经验库 L1/L2（`common-pitfalls.md` / `family-pitfalls.md`）：发现跨网络通用、或某结构家族通用的可复用坑/陷阱时写回。**晋升护栏：单模型新发现先留 L3，同家族 ≥2 模型复现才升 L2、跨家族复现才升 L1**（防单例过度泛化）；新增 L2 家族须配触发信号。
+- 经验库 L1/L2（`cross-model-pitfalls.md` / `structure-family-pitfalls.md`）：发现跨网络通用、或某结构家族通用的可复用坑/陷阱时写回。**晋升护栏：单模型新发现先留 L3，同家族 ≥2 模型复现才升 L2、跨家族复现才升 L1**（防单例过度泛化）；新增 L2 家族须配触发信号。
 - `.agents/docs/repo-map.md`：实际改动 workflow / solver / 数据链路 / 导出加载语义 / 主注册链，或现状已与代码不一致。
 - `.agents/docs/README.md`：文档层级 / 职责边界变化，或记录的目录结构与真实不一致。
 - 默认不写：单次失败 / 不稳定结果；BF16 baseline 自身不稳定；本轮无新增可复用信息（需说明无需更新）。
