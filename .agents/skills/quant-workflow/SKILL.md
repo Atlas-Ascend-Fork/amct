@@ -28,6 +28,19 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 - **终态**：达标可交付写 `STATUS: DONE` + `DELTA` + `ARTIFACTS`。
 - **重入安全**：再次进入先读此块，复用已有结果，不重跑。
 
+### 两段式结构（防上下文膨胀）
+
+机读状态块之下分两段，用标记分隔：
+
+```text
+<!-- ===== 以上为常驻区，不清除 ===== -->
+<!-- ===== 以下为工作区，阶段推进时归档并清空 ===== -->
+```
+
+- **常驻区**（机读状态块 + 产物契约结论 + 阶段概览）：编排维护，只追加不清空。
+- **工作区**（各子代理按角色追加：方案分析 / 实施记录 / 验证·判读 / 诊断）：阶段推进时由编排跑 `python3 scripts/archive_progress.py <progress.md>` 归档到 `progress_history.md` 并清空工作区。
+- **历史只 Grep**：`progress_history.md` 禁止全文 Read，按关键字 Grep 取历史。
+
 ## 评测口径强约束
 
 - 所有通过 skill 触发的 Wikitext PPL 统一 `seq_len=4096`；用户未显式指定即按 4096。

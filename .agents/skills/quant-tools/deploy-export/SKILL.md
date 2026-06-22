@@ -85,6 +85,15 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 9. 在 deploy 代码导出完成后，由 skill 继续生成：
    - `deploy_quantization.md`
 
+## 产物自检（probe，静态、不碰 infer runtime）
+
+导出后做静态产物核验，**贴输出、不空打勾**；infer 运行期消费（前向/算子）由 infer 仓负责，本处不跑推理：
+
+- **object 级**：抽查本次 `--quant_target` 对应模块在 `config.json` 的 `quantization_config` 中确为量化（`format`/`num_bits` 非空、未误入 `ignore`），与方案一致。
+- **权重级对账**：safetensors 中量化层的 `*.weight_scale`（int 路径 + `*.weight` int 化 / mxfp + `*.weight_packed`）键数与目标量化层数匹配；`model.safetensors.index.json` 0 missing、shard 齐全。
+- **PTQ 参数**：带 `--algos` 时核对导出已消费 ptq 参数（对应层 scale 非占位/非全 0），且 deploy 的 `--algos` 与 ptq 一致（否则 load_module KeyError，详见 `$quant-run`）。
+- **范围**：自检止于产物结构与 config 契约；不验证 infer 前向 / 算子生效（交 infer 仓）。
+
 ## 关键边界
 
 这一点必须明确：

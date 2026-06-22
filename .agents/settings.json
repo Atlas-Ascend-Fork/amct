@@ -43,7 +43,8 @@
       "Skill(direct-quant-eval)",
       "Skill(algorithm-recommendation)",
       "Skill(algorithm-validation)",
-      "Skill(deploy-export)"
+      "Skill(deploy-export)",
+      "Skill(quant-run)"
     ],
     "deny": [],
     "ask": [
@@ -64,5 +65,49 @@
     "autoAllowBashIfSandboxed": false
   },
   "includeCoAuthoredBy": false,
-  "gitAttribution": false
+  "gitAttribution": false,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre_tool_use.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/time_reminder.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post_tool_use.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "quant-implementer|quant-reviewer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent_stop.py"
+          }
+        ]
+      }
+    ]
+  }
 }
