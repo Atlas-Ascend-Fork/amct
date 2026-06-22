@@ -49,6 +49,9 @@
 ### PTQ 前先确认算法在 new-path（LLM）ALGO_REGISTRY 中
 - 现象：指定 `--algos gptq`（或 awq/smooth_quant）跑 PTQ，算法名「看似登记」却选择失败/不生效。根因：classic 图量化 path 的算法名册 与 LLM new quantization path 的 `ALGO_REGISTRY`（`amct_pytorch/quantization/modules/quant_base.py`）是**两套**——classic 列了名 ≠ LLM PTQ 路径实现了。处理：跑 PTQ 前先确认所选算法在 **new-path `ALGO_REGISTRY`** 内（当前 = `autoround / lac / lwc / omniquant`；gptq/awq/mxfp 视分支移植）；**只认 new-path、忽略 classic 名册**。例：Qwen3-4B PTQ 验证（误选 gptq → 查 new-path 缺 → 自纠改 LWC）。
 
+### 加载 PTQ 参数（eval / deploy）必带与 ptq 一致的 `--algos`
+- 现象：评测/部署 PTQ 结果时带了 `--<target>_param_dir` 却漏 `--algos`，`load_module` 报 `KeyError: Submodule '...weight_quantizer.algorithms.<algo>' is not found`。根因：PTQ 保存的参数含 `algorithms.<algo>` 子模块，加载侧 quant 模块只有按相同 `--algos` 构建才会有该子模块，缺则结构不匹配。处理：**eval 与 deploy 加载 PTQ 参数都必须带与 ptq 训练一致的 `--algos`**（不只 deploy）。例：Qwen3-4B PTQ 验证（eval 漏 `--algos lwc` → KeyError）。
+
 ## 通用纪律
 
 - 上游 modeling 文件原样保留，只改明显坏掉的 import；接入前先 `python -c "import ..."` 一次。

@@ -51,7 +51,12 @@ description: 验证指定量化算法在当前模型上的实际效果。适用�
    - BF16 baseline 已拿到
    - 直转量化参考结果最好已存在
    - 已验证关闭量化后保持浮点等价
-5. 运行当前算法验证，拿到 `ppl_algo`。
+5. 运行当前算法验证，拿到 `ppl_algo`。**评测 PTQ 结果的命令必须带 `--algos <与 ptq 训练一致>` + `--<target>_param_dir <ptq 参数目录>`**——否则评测侧 quant 模块不构建 `weight_quantizer.algorithms.<algo>` 子模块，`load_module` 报 `KeyError: Submodule '...algorithms.<algo>' is not found`：
+   ```bash
+   python -m amct_pytorch.eval --model <path> --model_name <name> --device npu:N \
+     --eval_mode quant --quant_target <mlp|moe|attn-linear> --quant_dtype int --bit_config <yaml> \
+     --algos <同 ptq> --<target>_param_dir <ptq_params 目录> --granularity block --seq_len 4096
+   ```
 6. 如果存在直转参考结果，计算：
    - `delta_direct = ppl_direct - ppl_bf16`
    - `delta_algo = ppl_algo - ppl_bf16`
