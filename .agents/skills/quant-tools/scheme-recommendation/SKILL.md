@@ -32,7 +32,8 @@ description: 为已适配模型推荐第一轮量化方案。适用于用户只�
 1. `.agents/docs/casebook/...` 中对应系列的 `README.md`
 2. 如已有个案，再读最相近的 `<series>/<case>.md`
 3. 如需确认当前能力边界，再读 [../../../docs/repo-map.md](../../../docs/repo-map.md)
-4. 如需确认当前量化口径，再读 [../../quant-workflow/references/metrics-and-thresholds.md](../../quant-workflow/references/metrics-and-thresholds.md)
+4. 如需确认当前量化口径，再读 [../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)
+5. 网络结构特殊（MoE / MLA / 混合 attention 等）需定制量化方案，再读 [../references/network-strategies.md](../references/network-strategies.md)
 
 ## 固定流程
 

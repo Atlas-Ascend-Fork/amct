@@ -19,7 +19,7 @@ reviewer 的判读 skill：对 `quant-run` 已跑出的直转结果做判定。*
 - 推荐 / 重新设计方案（→ `$scheme-recommendation`）
 - PTQ 收益判读（→ `$algorithm-validation`）
 
-按需读：[../../quant-workflow/references/metrics-and-thresholds.md](../../quant-workflow/references/metrics-and-thresholds.md)。
+按需读：[../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)。
 
 ## 固定流程
 

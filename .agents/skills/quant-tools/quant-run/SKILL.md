@@ -9,7 +9,7 @@ implementer 的**统一执行 skill**：把"跑命令拿数 / 出产物"的所�
 
 **只执行与记录，不判达标**：`delta` 是否达标、PTQ 相对直转是否真改善，由 `quant-reviewer` 判读；第一轮方案 / 算法选择由 `quant-analyzer` 设计；本 skill 不改 adapter 逻辑、不改方案。
 
-按需先读：[../../quant-workflow/references/direct-quant.md](../../quant-workflow/references/direct-quant.md)；PTQ 升级读 [../../quant-workflow/references/ptq-escalation.md](../../quant-workflow/references/ptq-escalation.md)。
+按需先读：[../references/direct-quant.md](../references/direct-quant.md)；PTQ 升级读 [../references/ptq-escalation.md](../references/ptq-escalation.md)。
 
 ## 命令模板
 

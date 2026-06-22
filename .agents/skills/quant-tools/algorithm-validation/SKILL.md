@@ -17,7 +17,7 @@ reviewer 的判读 skill：对 `quant-run` 已跑出的 PTQ 算法结果做收�
 - 跑 ptq / 评测命令（→ `$quant-run`）
 - 推荐先试哪个算法（→ `$algorithm-recommendation`）
 
-按需读：[../../quant-workflow/references/metrics-and-thresholds.md](../../quant-workflow/references/metrics-and-thresholds.md)。
+按需读：[../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)。
 
 ## 固定流程
 

@@ -69,7 +69,7 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 
 ### 量化实验环（阶段 3）
 
-先读 `references/metrics-and-thresholds.md` → `references/direct-quant.md`；需升级 PTQ 再读 `references/ptq-escalation.md`；网络结构特殊再读 `references/network-strategies.md`。
+先读 `../quant-tools/references/metrics-and-thresholds.md` → `../quant-tools/references/direct-quant.md`；需升级 PTQ 再读 `../quant-tools/references/ptq-escalation.md`。
 
 1. 无可执行的第一轮直转方案 → `$scheme-recommendation` 产出“量化方案推荐卡”（融合算子兼容性作参考输入，见下节）。
 2. implementer 跑 `$quant-run` 出第一轮直转 `ppl_bf16` / `ppl_quant`，reviewer 用 `$direct-quant-eval` 判 `delta`。
