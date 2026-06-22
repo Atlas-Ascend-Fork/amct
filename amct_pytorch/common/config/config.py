@@ -165,6 +165,24 @@ HIFP8_CAST_CFG = {
 }
 
 
+HIFP4_CAST_CFG = {
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat4',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat4',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'cast'},
+    'skip_layers': {'lm_head'}
+}
+
+
 HIFP8_QUANTILE_CFG = {
     'batch_num': 1,
     'quant_cfg': {
