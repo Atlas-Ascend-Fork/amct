@@ -76,26 +76,6 @@
             "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre_tool_use.py"
           }
         ]
-      },
-      {
-        "matcher": "Edit|Write|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/time_reminder.py"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post_tool_use.py"
-          }
-        ]
       }
     ],
     "SubagentStop": [
