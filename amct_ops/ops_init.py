@@ -43,6 +43,7 @@ Quick start
 >>> z = decode_from_hifloat8(y)         # → bfloat16, same shape
 """
 
-__all__ = ['hifloat8_cast']
+__all__ = ['hifloat8_cast', 'svd_quant']
 
 from . import hifloat8_cast
+from . import svd_quant
