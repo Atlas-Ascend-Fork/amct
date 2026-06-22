@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 
 # 使用方法:
-#   bash examples/run_example.sh [选项]
+#   bash tests/smoke/run_smoke.sh [选项]
 #
 # 参数说明:
 #   --model               HuggingFace 模型名或本地路径（默认 Qwen/Qwen3-0.6B）
@@ -30,17 +30,17 @@
 #
 # 示例:
 #   # 默认下载 Qwen3-0.6B 并运行全部用例
-#   bash examples/run_example.sh
+#   bash tests/smoke/run_smoke.sh
 #
 #   # 使用本地模型，只运行 cast 和 minmax
-#   bash examples/run_example.sh --model /data/Qwen3-0.6B \
+#   bash tests/smoke/run_smoke.sh --model /data/Qwen3-0.6B \
 #       --cases cast,minmax --device npu:0
 #
 #   # 使用镜像加速下载
-#   bash examples/run_example.sh --hf_endpoint https://hf-mirror.com
+#   bash tests/smoke/run_smoke.sh --hf_endpoint https://hf-mirror.com
 #
 #   # 使用 ModelScope 下载（国内推荐）
-#   bash examples/run_example.sh --model_source modelscope
+#   bash tests/smoke/run_smoke.sh --model_source modelscope
 
 set -e
 
@@ -143,7 +143,7 @@ PYEOF
 fi
 
 # ── 运行验证 ──────────────────────────────────────────────────────────────────
-TORCH_DEVICE_BACKEND_AUTOLOAD=0 python3 "${SCRIPT_DIR}/run_example.py" \
+TORCH_DEVICE_BACKEND_AUTOLOAD=0 python3 "${SCRIPT_DIR}/run_smoke.py" \
     --model "${LOCAL_MODEL_PATH}" \
     --device "${DEVICE}" \
     --cases "${CASES}"
