@@ -46,6 +46,7 @@ bf16 baseline = 命令 1 把 `--eval_mode` 换 `bf16`。
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `--*_param_dir`。
 - 离线容器用 `cli_wrapper.py` 包一层（patch get_wikitext2/get_pileval 到本地数据）。
 - **数据集/依赖前置**：默认 `export HF_ENDPOINT=https://hf-mirror.com`（或用本地缓存 / modelscope）；pileval 走 zstd，缺则 `pip install zstandard`；数据仍不可达则写 `BLOCKED` + 一行回退 hint。
+- **extract↔ptq 数据目录一致**：`extract_ptq_data --output_dir <D>` 与对应 `ptq --data_dir <D>` 必须**同一目录**（每个 quant_target 一份）；产物名 `block_<idx>_<target>_in.pkl`。报 `PTQ input file not found: <dir>/block_*_<target>_in.pkl` → 先核对 ptq 的 `--data_dir` 是否就是 extract 的 `--output_dir`（路径不一致最常见），用 `find -name 'block_*_in.pkl'` 确认真实位置，**不要直接判 extract 未生成 / 有 bug**（同 `--algos`：漏检自身用法别甩锅框架）。
 - 引用仓库内路径一律相对路径。
 
 ## 选卡（跑前必做，短板实证）
