@@ -1,7 +1,7 @@
 # Qwen3-4B / Qwen3-8B · 系列 qwen · 结构 dense
 
 > **速览**：`Qwen3` 标准 dense decoder（无 MoE），纯复用主链（不改 workflow/solver）。首推 `attn-linear + mlp` W8A8-int 直转（达标，可直接 deploy）。4B 是仓内 dense Qwen3 起点、8B 同类纯复用。
-> **触发信号**：config 无 `num_experts`（dense）→ 无需 L2 家族；通用坑见 [L1](../common-pitfalls.md)。
+> **触发信号**：config 无 `num_experts`（dense）→ 无需 L2 家族；通用坑见 [L1](../cross-model-pitfalls.md)。
 
 ## 结构与适配要点
 
@@ -19,9 +19,9 @@
 
 > 无 dense 专属、不可迁移的 L3 坑——以下都是后续任何网络复用的 L1 经验，4B 是首遇例。
 
-- `lm_head` 与 `embed_tokens` tied → 见 [L1 · 入口与权重](../common-pitfalls.md)。
-- `Catcher` 未透传 `attention_type` → 见 [L1 · 入口与权重](../common-pitfalls.md)。
-- `attn-linear` wrapper 误替换官方 attention kernel（关闭量化等价漂移）→ 见 [L1 · 量化通用](../common-pitfalls.md)。
+- `lm_head` 与 `embed_tokens` tied → 见 [L1 · 入口与权重](../cross-model-pitfalls.md)。
+- `Catcher` 未透传 `attention_type` → 见 [L1 · 入口与权重](../cross-model-pitfalls.md)。
+- `attn-linear` wrapper 误替换官方 attention kernel（关闭量化等价漂移）→ 见 [L1 · 量化通用](../cross-model-pitfalls.md)。
 
 ## 量化结论
 

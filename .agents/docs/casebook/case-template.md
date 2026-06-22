@@ -1,7 +1,7 @@
 # <模型名> · 系列 <vendor> · 结构 <dense/moe/mla-moe/vl-moe/混合>
 
 > **速览**：<adapter 路径 / 是否纯复用主链 / 首推方案+delta / 核心坑或状态——一句话>。<同源类/纯子类的不同尺寸合并到一个文件，多尺寸分小节>。
-> **触发信号**：<config/checkpoint 上可检测的特征——据此判断属哪些 L2 家族>。读 L2 `../family-pitfalls.md`（命中家族）+ L1 `../common-pitfalls.md`。（路径以个案实际所在 `<vendor>/` 子目录为基准，即 `../`。）
+> **触发信号**：<config/checkpoint 上可检测的特征——据此判断属哪些 L2 家族>。读 L2 `../structure-family-pitfalls.md`（命中家族）+ L1 `../cross-model-pitfalls.md`。（路径以个案实际所在 `<vendor>/` 子目录为基准，即 `../`。）
 
 ## 结构与适配要点
 
@@ -17,10 +17,10 @@
 
 ## 关键陷阱（L3 模型专属；通用见 L1/L2）
 
-> 只记**本模型独有、不可迁移**的坑（L3）。跨网络通用的引 L1 `../common-pitfalls.md`、结构家族通用的引 L2 `../family-pitfalls.md`（本案是否为其首遇例）；同家族 ≥2 模型复现的坑应上抽到 L2，别留在这里重复。agent 环境配置类、一次性小问题不入库。
+> 只记**本模型独有、不可迁移**的坑（L3）。跨网络通用的引 L1 `../cross-model-pitfalls.md`、结构家族通用的引 L2 `../structure-family-pitfalls.md`（本案是否为其首遇例）；同家族 ≥2 模型复现的坑应上抽到 L2，别留在这里重复。agent 环境配置类、一次性小问题不入库。
 
 - **<L3 陷阱一句话>** —— 现象：<报错/异常>。根因：<本模型独有原因>。处理：<修法>。教训：<一句>。
-- <通用坑> → 见 L1 `../common-pitfalls.md` · <条目> / L2 `../family-pitfalls.md` · <家族>。
+- <通用坑> → 见 L1 `../cross-model-pitfalls.md` · <条目> / L2 `../structure-family-pitfalls.md` · <家族>。
 
 ## 量化结论（+ 性能注意，可选）
 

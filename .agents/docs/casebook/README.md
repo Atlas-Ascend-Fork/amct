@@ -6,8 +6,8 @@
 
 经验按"普适程度"分三层，agent 适配新模型时**自外向内**取用：
 
-1. **L1 跨网络通用** [`common-pitfalls.md`](common-pitfalls.md) —— 与具体结构无关，**任何新模型都先通读**。
-2. **L2 结构家族通用** [`family-pitfalls.md`](family-pitfalls.md) —— 仅对某类结构成立（MoE / 混合 attention / 自定义 modeling / MLA）。按**触发信号**判断新模型属哪几类（可多属），**叠加** L1 读对应小节。
+1. **L1 跨网络通用** [`cross-model-pitfalls.md`](cross-model-pitfalls.md) —— 与具体结构无关，**任何新模型都先通读**。
+2. **L2 结构家族通用** [`structure-family-pitfalls.md`](structure-family-pitfalls.md) —— 仅对某类结构成立（MoE / 混合 attention / 自定义 modeling / MLA）。按**触发信号**判断新模型属哪几类（可多属），**叠加** L1 读对应小节。
 3. **L3 模型专属** —— 各 `<vendor>/<model>.md` 个案，只放该模型/家族独有、不可迁移的坑。
 
 > agent 用法：新模型进来 → 读 L1 → 按 config/checkpoint 信号选中的 L2 家族（取并集）→ 找结构最近的 L3 个案起步。没有专属个案时，L1+L2 仍给强先验。
@@ -18,8 +18,8 @@ L3 个案**按厂商系列**组织，与源码 `amct_pytorch/common/models/llm/<
 
 ```text
 casebook/
-  common-pitfalls.md   # L1
-  family-pitfalls.md   # L2
+  cross-model-pitfalls.md   # L1
+  structure-family-pitfalls.md   # L2
   case-template.md     # L3 模板
   qwen/      deepseek/      glm/      longcat/    # L3 + 各系列 README
 ```

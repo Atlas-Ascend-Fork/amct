@@ -1,7 +1,7 @@
 # LongCat-Flash-Lite / LongCat-Next · 系列 longcat · 结构 moe（自定义 modeling）
 
 > **速览**：LongCat 特殊拓扑——`ngram_embeddings` 输入 + block = 双 self-attn + 双 dense MLP + packed MoE shortcut；接非 transformers 包内自定义 modeling。`LongcatNext(LongcatLite)` **仅 override 一个方法**（`empty_weights_model`：切 ngram text-only backbone + 多模态 lm_head 词表），其余逐方法复用 Lite。首推 `mlp+moe` a8w8-int8 直转（Lite 达标）。
-> **触发信号**：`architectures` 不在 transformers 需 `trust_remote_code`（自定义 modeling）；`ngram_embeddings` 输入。读 [L2 · 接非 transformers 自定义 modeling + MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
+> **触发信号**：`architectures` 不在 transformers 需 `trust_remote_code`（自定义 modeling）；`ngram_embeddings` 输入。读 [L2 · 接非 transformers 自定义 modeling + MoE 类](../structure-family-pitfalls.md) + [L1](../cross-model-pitfalls.md)。
 
 ## 结构与适配要点
 
@@ -20,13 +20,13 @@
 
 ## 关键陷阱（L3 + 通用引 L2/L1）
 
-- **int activation quant 的 `is_act` / signed clamp**（Lite 首遇） —— 现象：首个 MLP block `weight_quant()` 收到 activation tensor 触发 shape 断言。→ 见 [L1 · 量化通用](../common-pitfalls.md)。
-- **`trust_remote_code` 顶层走多模态、需切 text-only backbone**（Next 首遇） —— 现象：`from_config(..., trust_remote_code=True)` 被 `flash_attn` 阻塞。处理：adapter 内切 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM` + 修 `lm_head`。→ 见 [L2 · 接非 transformers 自定义 modeling](../family-pitfalls.md)。
+- **int activation quant 的 `is_act` / signed clamp**（Lite 首遇） —— 现象：首个 MLP block `weight_quant()` 收到 activation tensor 触发 shape 断言。→ 见 [L1 · 量化通用](../cross-model-pitfalls.md)。
+- **`trust_remote_code` 顶层走多模态、需切 text-only backbone**（Next 首遇） —— 现象：`from_config(..., trust_remote_code=True)` 被 `flash_attn` 阻塞。处理：adapter 内切 `modeling_longcat_ngram.LongcatFlashNgramForCausalLM` + 修 `lm_head`。→ 见 [L2 · 接非 transformers 自定义 modeling](../structure-family-pitfalls.md)。
 
 ## 量化结论（+ 性能注意）
 
 - **Lite**：`mlp+moe` a8w8-int8 直转 `ppl_bf16=14.6243 / ppl_quant=14.8006 / delta=0.1763`（≤0.2 达标，无需 PTQ）。
-- 性能注意：prefill MoE per-expert 常负收益、MLP 唯一明显正收益、attn 几乎无损益 → 见 [L2 · MoE 类](../family-pitfalls.md)；MoE 性能须 infer 侧 packed `MoEGMM` 实测。
+- 性能注意：prefill MoE per-expert 常负收益、MLP 唯一明显正收益、attn 几乎无损益 → 见 [L2 · MoE 类](../structure-family-pitfalls.md)；MoE 性能须 infer 侧 packed `MoEGMM` 实测。
 
 ## 适配建议（下次同系列/同结构）
 

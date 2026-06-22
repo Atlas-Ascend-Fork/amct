@@ -1,7 +1,7 @@
 # DeepSeek-V4 (DeepSeek-V4-Pro) · 系列 deepseek · 结构 mla-moe
 
-> **速览**：代码侧适配完成、**等权重**补 baseline/等价/PTQ smoke。结构最特殊：MLA 单 head 共享 KV + `o_groups` 分组低秩 `wo` + Compressor/Indexer 双子模块 + Hyper-Connections 4D hidden + 自定义 forward 签名 `(x, start_pos, input_ids)`。下次遇 MLA+Compressor+Indexer+HC 类模型，首参考本案 + `deepseek_v3_2`(MLA) + `longcat`(Next：PreTrainedModel 化与 AutoModel 注册)。**本案是仓内"接非 transformers 自定义 modeling"L2 经验的首遇例**——下方 L3 只留 v4 独有结构坑，通用接入坑见 L2。
-> **触发信号**：`architectures:["DeepseekV4ForCausalLM"]` 不在 transformers（需自实现注册）；config `kv_lora_rank`（MLA）+ `n_routed_experts`（MoE）。读 [L2 · 接非 transformers 自定义 modeling + MLA 类 + MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
+> **速览**：代码侧适配完成、**等权重**补 baseline/等价/PTQ smoke。结构最特殊：MLA 单 head 共享 KV + `o_groups` 分组低秩 `wo` + Compressor/Indexer 双子模块 + Hyper-Connections 4D hidden + 自定义 forward 签名 `(x, start_pos, input_ids)`。下次遇 MLA+Compressor+Indexer+HC 类模型，首参考本案 + `deepseek_v3_2`(MLA) + `longcat`(Next：PreTrainedModel 化与 AutoModel 注册)。**本案是仓内"接非 transformers 自定义 modeling"L2 经验的首遇例**——下方 L3 只留 v4 独有结构坑，通用接入坑见 L2。modeling 上游源自 DeepSeek-V4-Flash `inference/model.py`，Pro/Flash 结构同源、共用本 adapter（Pro BF16 ppl 1.9946 / Flash 4.1517）。
+> **触发信号**：`architectures:["DeepseekV4ForCausalLM"]` 不在 transformers（需自实现注册）；config `kv_lora_rank`（MLA）+ `n_routed_experts`（MoE）。读 [L2 · 接非 transformers 自定义 modeling + MLA 类 + MoE 类](../structure-family-pitfalls.md) + [L1](../cross-model-pitfalls.md)。
 
 ## 为什么值得记录
 
@@ -36,10 +36,11 @@
   - `init_empty_weights(include_buffers=True)`(空载构图;v4 的 `register_buffer(torch.zeros / -inf, ...)` 不少,必须 include_buffers)
 
 - **新增的最小适配**(全部限制在 `amct_pytorch/common/models/llm/deepseek/deepseek_v4/`):
-  - `configuration_deepseek_v4.py`:`DeepseekV4Config(PretrainedConfig)`,双向命名翻译 + 嵌套 `rope_scaling` / `quantization_config` 拆包
-  - `modeling_deepseek_v4.py`:`Transformer(nn.Module)` → `DeepseekV4ForCausalLM(DeepseekV4PreTrainedModel)`,**其他类(Block/Attention/Compressor/Indexer/MoE/Expert/Gate/RMSNorm/ParallelHead) 完全保持上游风格**,做浮点对照基准
+  - `modeling/configuration_deepseek_v4.py`:`DeepseekV4Config(PretrainedConfig)`,双向命名翻译 + 嵌套 `rope_scaling` / `quantization_config` 拆包
+  - `modeling/modeling_deepseek_v4.py`:`Transformer(nn.Module)` → `DeepseekV4ForCausalLM(DeepseekV4PreTrainedModel)`,**其他类(Block/Attention/Compressor/Indexer/MoE/Expert/Gate/RMSNorm/ParallelHead) 完全保持上游风格**,做浮点对照基准
   - `quant_module.py`:`QuantV4Attention / QuantV4Compressor / QuantV4Indexer / QuantV4Expert`,prefill-only,wrapper 内不持有 cache buffer
   - `deepseekv4.py`:adapter 主体 — `empty_weights_model` / 嵌入与头部加载(含顶层 `hc_head_*` 参数)/ `do_embedding_forward / do_block_forward / do_head_forward` 按 v4 4D HC + start_pos=0 + per-sample input_ids 重写 / `apply_quant_attn / apply_quant_moe_mlp / iter_ptq_units / iter_deploy_bindings` v4 命名 override
+  - **sharded 多卡加载（eval 用，真权重大模型）**：`block()` override 双路分流——`sharded_block=True` 走 `_block_sharded`（`_build_block_device_map` + `_dispatch_block` + `_NoMoveAlignDevicesHook`，把单层参数/各 expert 钉在多张 NPU 上、加载即就位，绕开 BaseModel `block()` 的 ~35GB CPU staging；per-tensor 只对浮点 `.to(bf16)`）；`sharded_block=False`（PTQ）仍走 `super().block()` 的 CPU staging。**两路不可统一**：PTQ 要 CPU staging 逐 expert 上卡（per-MLP 学习），而 sharded 的 `AlignDevicesHook` 把 expert 钉死在固定卡，会和 PTQ 的 `.to(device)`/`.cpu()` 循环打架。
   - `__init__.py`:`AutoConfig.register("deepseek_v4", ...)` + `AutoModelForCausalLM.register(DeepseekV4Config, DeepseekV4ForCausalLM, exist_ok=True)`
 
 - **wo_a 单点例外**:wo_a 用 `weight.view(g, r, d_in)` 做 grouped einsum,不能套 `QuantLinear.forward` 的 `F.linear` 调用方式。`QuantV4Attention` 里把 wo_a 保留为原 `nn.Linear`,旁路挂一个 `WeightQuantizer`,在 `_wo_a_apply` 里手动跑 `observe_input + weight_quantizer + 重塑 + einsum`。其他 4 个 MLA Linear 都正常 `QuantLinear`。
@@ -53,19 +54,19 @@
 - **已知风险(等权重到位后修)**:
   - `BaseModel.block()` 末尾的 `decoder_layer.eval().bfloat16()` 把 v4 里 `set_dtype(fp32)` 声明的子参数(`Block.hc_attn_fn / hc_ffn_fn / hc_*_base / hc_*_scale`、`RMSNorm.weight`、`ParallelHead.weight` 等)也一并 cast 到 bf16。forward 时 `hc_pre` 里 `F.linear(x.float(), hc_fn)` 会撞到 `float != BFloat16` 的 dtype 不匹配。空载 smoke 不触发(没真跑过 forward),真权重跑 BF16 baseline 那一步会立刻报。
   - **现状(已部分缓解)**:`empty_weights_model()` 这条路径已经修好 —— 改用 `AutoModelForCausalLM.from_config(self.config, torch_dtype=torch.bfloat16)`(走 `__init__.py` 里 register 的路由),`from_config` 内部 `set_default_dtype(bf16)` 包住实例化,Block.__init__ 里 `with set_dtype(fp32):` 嵌套生效,fp32 子参数正确停在 fp32(smoke 验证通过:`hc_attn_fn / attn_norm.weight / attn_sink` 等仍 fp32,`wq_a.weight` 仍 bf16,所有 buffer 在 meta)。**仍有 bug 的是 `BaseModel.block(layer_idx)` 的单层构造**,它还显式调 `.bfloat16()`,blockwise PTQ 里 `do_block_forward / build_quant_block` 拿到的就是这条路径出来的 block。
-  - **修法**(等权重再做):v4 adapter 里 override `block(layer_idx)`,内部去掉 `.bfloat16()`,改成 `with torch.set_default_dtype(torch.bfloat16):` 包住 `self.cls(self.config, layer_idx)` 实例化,跟 `empty_weights_model` 路径对齐;`load_state_dict` 在 dtype 已正确的模块上灌权重,不需要再 cast。**当前不修**,因为没有真权重无法验证。
+  - **现状更新**：`block()` 已 override 为双路分流（见上「新增的最小适配」）——**eval（sharded）路径 per-tensor 只对浮点 `.to(bf16)`、dtype 正确，V4-Pro/Flash BF16 baseline 已在此路径跑出**；**PTQ 路径仍走 `super().block()` → BaseModel `.eval().bfloat16()` 全量 cast，该 bug 未修**。真权重现已可加载、具备验证条件，待进 PTQ 时在 PTQ 分支按 `set_default_dtype` 方式修（当时「无权重无法验证」已不成立）。
 
 - **最终是否完成**:
-  - BF16 baseline:**未做** — 权重未下载
+  - BF16 baseline:**已出** — DeepSeek-V4-Pro ppl **1.9946**（同一 modeling/Config 也覆盖 V4-Flash，DP-Flash ppl **4.1517**；两变体结构同源、仅 config.json 不同，共用本 adapter）
   - 关闭量化后保持浮点等价:**未做** — 权重未下载
   - 最小 PTQ unit 闭环:**部分** — 在小 config(`n_layers=2, dim=128, n_routed_experts=4`)上跑通空载 smoke:Block 构建(meta + CPU 都过)→ apply_quant_attn / apply_quant_moe_mlp → 25 个 QuantLinear + 19 个 ActivationQuantizer → `iter_ptq_units(attn-linear)` 1 个 unit、`iter_ptq_units(moe)` 4 个 unit → `iter_deploy_bindings` 16 个 binding → `expert.export_ptq_params()` 返回 3 keys。**真权重 + GT 路径未跑过**
 
 ## 量化结论
 
-- BF16 baseline:待权重
+- BF16 baseline:V4-Pro **1.9946** / V4-Flash（DP-Flash）**4.1517**（同一 adapter，加载各自官方 config）
 - 第一版直转量化方案:暂未确定;预计起点跟 v3.2 类似(attn-linear w8a8 / attn-cache q/k 16-bit / moe routed w8 + shared w8)
-- 直转结果:待权重
-- 是否进入 PTQ:待 baseline
+- 直转结果:待跑（权重已可加载）
+- 是否进入 PTQ:待直转结果
 - 最终采用方案:待
 - 最终结果:待
 

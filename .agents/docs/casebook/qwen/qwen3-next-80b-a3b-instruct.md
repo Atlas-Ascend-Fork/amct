@@ -1,7 +1,7 @@
 # Qwen3-Next-80B-A3B-Instruct · 系列 qwen · 结构 moe（混合 attention）
 
 > **速览**：`Qwen3Next` —— block 内混合 `linear_attention`+`full_attention`、packed expert 重组。首推 `attn-linear + moe`（A8W8 INT MoE mmlu 85.5 ≈ BF16 85.4）。核心坑（均通用）：混合 attention causal mask 路由 + expert packed/展开。
-> **触发信号**：`layer_types` 含 `linear_attention`+`full_attention`；config `num_experts>0`。读 [L2 · 混合 attention 类 + MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
+> **触发信号**：`layer_types` 含 `linear_attention`+`full_attention`；config `num_experts>0`。读 [L2 · 混合 attention 类 + MoE 类](../structure-family-pitfalls.md) + [L1](../cross-model-pitfalls.md)。
 
 ## 结构与适配要点
 
@@ -17,8 +17,8 @@
 
 > 无 `Qwen3Next` 专属、不可迁移的 L3 坑。
 
-- 混合 attention causal mask 丢失（layer0 `linear_attention` 捕到 `None` mask 误传后续 `full_attention`，BF16 PPL 低得离谱）→ [L2 · 混合 attention 类](../family-pitfalls.md)。
-- expert 布局 packed vs 展开（先确认 `transformers` 版本再定 expert 路径）→ [L2 · MoE 类](../family-pitfalls.md)。
+- 混合 attention causal mask 丢失（layer0 `linear_attention` 捕到 `None` mask 误传后续 `full_attention`，BF16 PPL 低得离谱）→ [L2 · 混合 attention 类](../structure-family-pitfalls.md)。
+- expert 布局 packed vs 展开（先确认 `transformers` 版本再定 expert 路径）→ [L2 · MoE 类](../structure-family-pitfalls.md)。
 
 ## 适配建议（下次同系列/同结构）
 

@@ -1,7 +1,7 @@
 # GLM-5.1 · 系列 glm · 结构 mla-moe（继承 DeepseekV32）
 
 > **速览**：adapter `glm/glm5/glm5.py` = `GLM5(DeepseekV32)`，结构复用 DeepSeek V3.2 的 MLA+MoE 适配；**结构通用坑见 `deepseek/deepseek-v3.2` + L2 · MLA 类**，本案 L3 仅 = "不含 DSA indexer"。适配实测（验证/陷阱）待补。精度见下表。
-> **触发信号**：`GLM5(DeepseekV32)`，config 有 `kv_lora_rank`（MLA）+ `num_experts`（MoE），**无 `index_topk`**（不走 DSA）。读 [L2 · MLA 类 + MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
+> **触发信号**：`GLM5(DeepseekV32)`，config 有 `kv_lora_rank`（MLA）+ `num_experts`（MoE），**无 `index_topk`**（不走 DSA）。读 [L2 · MLA 类 + MoE 类](../structure-family-pitfalls.md) + [L1](../cross-model-pitfalls.md)。
 
 ## 结构与适配要点
 

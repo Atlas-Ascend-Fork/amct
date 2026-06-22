@@ -1,7 +1,7 @@
 # Qwen3.5-35B-A3B / Qwen3.6-35B · 系列 qwen · 结构 moe（混合 attention）
 
 > **速览**：`Qwen3_5Moe` 混合 `linear`+`full` attention、checkpoint MoE 已 packed（无需重组）。`Qwen3_6Moe(Qwen3_5Moe): pass` —— **3.6 与 3.5 结构完全相同（零 override）**，仅注册名/权重不同。首推 `attn-linear + moe` W8A8-int 直转（达标）。核心坑：误用 DeepSeek MLA 接口（L3）。
-> **触发信号**：`layer_types` 含 `linear_attention`+`full_attention`；checkpoint experts 已 packed。读 [L2 · 混合 attention 类 + MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
+> **触发信号**：`layer_types` 含 `linear_attention`+`full_attention`；checkpoint experts 已 packed。读 [L2 · 混合 attention 类 + MoE 类](../structure-family-pitfalls.md) + [L1](../cross-model-pitfalls.md)。
 
 ## 结构与适配要点
 
@@ -25,7 +25,7 @@
 ## 关键陷阱（L3 模型/家族专属；通用见 L1/L2）
 
 - **误用 DeepSeek 的 MLA 接口**（L3，Qwen3_5/3_6 专属） —— 现象：进 quant block 构建即调到不存在的 `apply_quant_mla()` 报错。根因：`qwen3_5moe` 继承 `Qwen3_5`，应复用 Qwen 公共接口而非 DeepSeek MLA 专用入口。处理：统一收回 `apply_quant_attn()`/`apply_quant_moe_mlp()`。**教训：Qwen 分支先看 dense adapter 公共接口，勿直接用 DeepSeek MLA 入口。**
-- 混合 attention causal mask 路由 / `linear` vs `full` 分开处理（`linear_attention` kernel 未就绪先留 BF16，仍可量化其投影 Linear）→ 见 [L2 · 混合 attention 类](../family-pitfalls.md)。
+- 混合 attention causal mask 路由 / `linear` vs `full` 分开处理（`linear_attention` kernel 未就绪先留 BF16，仍可量化其投影 Linear）→ 见 [L2 · 混合 attention 类](../structure-family-pitfalls.md)。
 
 ## 量化结论
 

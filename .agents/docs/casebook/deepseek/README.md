@@ -1,6 +1,6 @@
 # DeepSeek Casebook
 
-这一页是 **DeepSeek 系列总览页**，不是具体模型个案。通用坑先读 [L1 跨网络](../common-pitfalls.md) + [L2 结构家族（MLA / MoE / 自定义 modeling）](../family-pitfalls.md)。
+这一页是 **DeepSeek 系列总览页**，不是具体模型个案。通用坑先读 [L1 跨网络](../cross-model-pitfalls.md) + [L2 结构家族（MLA / MoE / 自定义 modeling）](../structure-family-pitfalls.md)。
 
 ## 系列概览
 

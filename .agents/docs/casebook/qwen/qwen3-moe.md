@@ -1,7 +1,7 @@
 # Qwen3-30B-A3B / Qwen3-235B-A22B · 系列 qwen · 结构 moe
 
 > **速览**：`Qwen3Moe` MoE decoder，checkpoint 逐 expert 展开、运行时 packed（adapter 内经 `pack_gated_expert_weights`/`QuantGatedExperts` 重组）。首推 `attn-linear + moe` W8A8-int8 直转（达标）。30B 与 235B 同 `Qwen3Moe` 类，仅规模不同。
-> **触发信号**：config `num_experts>0`；checkpoint `mlp.experts.<i>.*`。读 [L2 · MoE 类](../family-pitfalls.md) + [L1](../common-pitfalls.md)。
+> **触发信号**：config `num_experts>0`；checkpoint `mlp.experts.<i>.*`。读 [L2 · MoE 类](../structure-family-pitfalls.md) + [L1](../cross-model-pitfalls.md)。
 
 ## 结构与适配要点
 
@@ -19,16 +19,16 @@
 
 > 无 `Qwen3Moe` 专属、不可迁移的 L3 坑——全部为同类网络复用经验。
 
-- config 层数 ≠ checkpoint 真实层数（235B：config=5 / 真实 94）→ [L1 · checkpoint 是唯一事实源](../common-pitfalls.md)。
-- expert 磁盘展开 vs 运行时 packed → [L2 · MoE 类](../family-pitfalls.md)。
-- MoE activation capture 误命中 `mlp.gate`（30B：tuple 无 detach）→ [L2 · MoE 类](../family-pitfalls.md)。
-- 初始 BF16 PPL 离谱（235B：466，漏传 `attention_mask`，chunk0 loss 5.47→1.23）→ [L1 · BF16 PPL 异常](../common-pitfalls.md)。
-- 通用 PTQ provider tensor-only，不覆盖 attention unit → [L1 · 量化通用](../common-pitfalls.md)。
+- config 层数 ≠ checkpoint 真实层数（235B：config=5 / 真实 94）→ [L1 · checkpoint 是唯一事实源](../cross-model-pitfalls.md)。
+- expert 磁盘展开 vs 运行时 packed → [L2 · MoE 类](../structure-family-pitfalls.md)。
+- MoE activation capture 误命中 `mlp.gate`（30B：tuple 无 detach）→ [L2 · MoE 类](../structure-family-pitfalls.md)。
+- 初始 BF16 PPL 离谱（235B：466，漏传 `attention_mask`，chunk0 loss 5.47→1.23）→ [L1 · BF16 PPL 异常](../cross-model-pitfalls.md)。
+- 通用 PTQ provider tensor-only，不覆盖 attention unit → [L1 · 量化通用](../cross-model-pitfalls.md)。
 
 ## 量化结论（+ 性能注意）
 
 - 首推 `attn+moe` W8A8-int8 直转：30B `delta=-0.016`、235B `delta=0.0363`（均 ≤0.2 无需 PTQ）。已落地粒度：Attention Linear A8W8 INT Per-Token；MoE Expert（不含 gate）A8W8 INT Per-Channel。
-- 性能注意：MoE per-expert 动态量化在小 `M_eff`（30B ≈ 4096×8/128 ≈ 256）收益存疑甚至负，须 infer 侧 packed `MoEGMM` 实测确认；attention 路径正常 → 见 [L2 · MoE 类](../family-pitfalls.md)。
+- 性能注意：MoE per-expert 动态量化在小 `M_eff`（30B ≈ 4096×8/128 ≈ 256）收益存疑甚至负，须 infer 侧 packed `MoEGMM` 实测确认；attention 路径正常 → 见 [L2 · MoE 类](../structure-family-pitfalls.md)。
 
 ## 适配建议（下次同系列/同结构）
 
