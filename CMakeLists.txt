@@ -61,6 +61,7 @@ endif()
 
 if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG AND ENABLE_TEST)
     add_subdirectory(tests)
+    add_subdirectory(amct_ops)
 else()
     add_subdirectory(amct_pytorch)
     if(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG)
