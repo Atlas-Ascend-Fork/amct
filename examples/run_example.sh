@@ -107,7 +107,7 @@ else
         echo "    HF_ENDPOINT=${HF_ENDPOINT}"
     fi
 
-    LOCAL_MODEL_PATH=$(MODEL_NAME_OR_PATH="${MODEL_NAME_OR_PATH}" MODEL_DIR="${MODEL_DIR}" MODEL_SOURCE="${MODEL_SOURCE}" python3 - <<'PYEOF'
+    LOCAL_MODEL_PATH=$(MODEL_NAME_OR_PATH="${MODEL_NAME_OR_PATH}" MODEL_DIR="${MODEL_DIR}" MODEL_SOURCE="${MODEL_SOURCE}" TORCH_DEVICE_BACKEND_AUTOLOAD=0 python3 - <<'PYEOF'
 import os, sys, time
 
 model_id = os.environ["MODEL_NAME_OR_PATH"]
@@ -121,7 +121,9 @@ if source == "modelscope":
     except ImportError:
         print("[ERROR] modelscope 未安装，请执行: pip install modelscope", file=sys.stderr)
         sys.exit(1)
-    path = snapshot_download(model_id, local_dir=local_dir)
+    import contextlib
+    with contextlib.redirect_stdout(sys.stderr):
+        path = snapshot_download(model_id, local_dir=local_dir)
 else:
     try:
         from huggingface_hub import snapshot_download
@@ -141,7 +143,7 @@ PYEOF
 fi
 
 # ── 运行验证 ──────────────────────────────────────────────────────────────────
-python3 "${SCRIPT_DIR}/run_example.py" \
+TORCH_DEVICE_BACKEND_AUTOLOAD=0 python3 "${SCRIPT_DIR}/run_example.py" \
     --model "${LOCAL_MODEL_PATH}" \
     --device "${DEVICE}" \
     --cases "${CASES}"
