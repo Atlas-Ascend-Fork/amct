@@ -121,7 +121,7 @@ if source == "modelscope":
     except ImportError:
         print("[ERROR] modelscope 未安装，请执行: pip install modelscope", file=sys.stderr)
         sys.exit(1)
-    path = snapshot_download(model_id, cache_dir=local_dir)
+    path = snapshot_download(model_id, local_dir=local_dir)
 else:
     try:
         from huggingface_hub import snapshot_download
