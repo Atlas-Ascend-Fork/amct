@@ -31,6 +31,7 @@ reviewer 的判读 skill：对 `quant-run` 已跑出的 PTQ 算法结果做收�
    - 改善很小 / 不稳定 → 建议停用或换算法（W8A8 直转常已近最优、PTQ 无收益属正常，不是失败）；
    - `ppl_algo` 明显优于 BF16 很多 / 异常 → 先让 implementer 查链路。
    - 注意 solver 打印的 loss 经归一，跨 epoch 不动不代表没学到，以 PPL 为准。
+   - **`KeyError: Submodule '...weight_quantizer.algorithms.<algo>' is not found`**：先查 eval/deploy 是否**漏带与 ptq 一致的 `--algos`**（quant-run 内建），**不要误判为框架闭环/结构 bug**。
 4. 输出“PTQ 算法收益判读卡”，写回 progress。
 
 ## 边界规则

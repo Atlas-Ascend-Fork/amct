@@ -42,7 +42,7 @@ description: 为已适配模型推荐下一步值得尝试的量化算法。适�
 2. 如已有个案，再读最相近的 `<series>/<case>.md`
 3. 如需确认当前量化口径，再读 [../../quant-workflow/references/metrics-and-thresholds.md](../../quant-workflow/references/metrics-and-thresholds.md)
 4. 如需确认当前直转判读规则，再读 [../../quant-workflow/references/direct-quant.md](../../quant-workflow/references/direct-quant.md)
-5. 如需确认当前可用算法名，再读 `amct_pytorch/algorithms/quant/__init__.py` 和 `amct_pytorch/algorithms/quant/*.py`
+5. 可用算法**以 new-path `register_algorithms()` 实际 import 的为准** = `autoround / lac / lwc / omniquant`（gptq/awq/mxfp 视分支移植，先确认在 ALGO_REGISTRY）；**别用 `grep amct_pytorch/algorithms` 命中名册判定可用**——classic 图量化 path 列了 gptq/awq 等但 LLM PTQ 不走，据此选会运行期 `KeyError: '...' is not registered in 'algo'`。
 
 ## 当前算法分组
 

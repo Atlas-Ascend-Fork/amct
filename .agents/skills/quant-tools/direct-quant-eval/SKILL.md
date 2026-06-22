@@ -30,6 +30,7 @@ reviewer 的判读 skill：对 `quant-run` 已跑出的直转结果做判定。*
    - `delta <= 0.2`：当前方案可接受；
    - `delta > 0.2`：不可接受，建议缩量化范围或转 PTQ 升级；
    - 量化后 PPL 明显优于 BF16 很多 / 数值异常：先让 implementer 查链路，不直接下结论。
+   - **`delta ≈ 0` 或 quant PPL 与 bf16 逐位相同**：量化很可能**未真正生效**（如 `granularity=model` 没真量化、`quant_target` 未落到算子），**不可直接判达标**——让 implementer 复核 `--granularity block` + BitPolicy + quant_target 是否落到算子。
 5. 输出“直转量化判读卡”，把判定结论写回 progress。
 
 ## 边界规则
