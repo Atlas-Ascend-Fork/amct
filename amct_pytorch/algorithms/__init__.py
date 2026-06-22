@@ -28,7 +28,7 @@ from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.classic.quantize_op.minmax_module import MinMaxQuant
 from amct_pytorch.classic.quantize_op.ofmr_quant_module import OfmrQuant
 from amct_pytorch.classic.quantize_op.quantile_module import QuantileQuant
-from amct_pytorch.classic.quantize_op.cast_module import HIF8CastQuant
+from amct_pytorch.classic.quantize_op.cast_module import HIF8CastQuant, CastQuant
 from amct_pytorch.classic.quantize_op.deepseekv3_attention_quant_module import DeepseekV3AttentionQuant
 from amct_pytorch.classic.quantize_op.longcat_flashmla_quant_module import LongcatFlashMLAQuant
 from amct_pytorch.classic.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear
@@ -53,6 +53,14 @@ AlgorithmRegistry.register('mxquant', 'Linear', NpuMXQuantizationLinear, NpuMXQu
 AlgorithmRegistry.register('ofmr', 'Linear', OfmrQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
 AlgorithmRegistry.register('ofmr', 'Conv2d', OfmrQuant, NpuQuantizationConv2d)
 AlgorithmRegistry.register('cast', 'Linear', HIF8CastQuant, NpuHIF8CastLinear)
+# 'cast' serves both HiFloat8 and HiFloat4. The registry keys a quant op by
+# (algo, original_module_class) only, so route cast/Linear through the CastQuant dtype
+# dispatcher while keeping the concrete HIF8CastQuant -> NpuHIF8CastLinear deploy mapping
+# registered above intact (convert() looks up the deploy op by the instance's actual class).
+# HiFloat4 is fake-quant only for now (no native deploy op), so convert() of a HIF4CastQuant
+# layer will raise until the HiFloat4 NPU operator (Path 2) is added; run the quantized model
+# directly for simulation. See HIFP4_CAST_CFG.
+AlgorithmRegistry.algo['cast']['Linear'] = CastQuant
 AlgorithmRegistry.register('quantile', 'Linear', QuantileQuant, [NpuWeightQuantizedLinear, NpuQuantizationLinear])
 AlgorithmRegistry.register('cast', None, 'FP8Linear', NpuHIF8Linear)
 AlgorithmRegistry.register('quantile', 'DeepseekV3Attention', DeepseekV3AttentionQuant, NpuDeepseekV3AttentionQuant)

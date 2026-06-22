@@ -34,6 +34,20 @@ cast只转算法支持仅权重量化和全量化，支持的量化类型以及�
 |inputs.strategy|str|量化粒度|'tensor'/'token'|/|
 |algorithm|dict|量化使用的算法配置|{'cast'}|/|
 
+### 1.4 HiFloat4（hifloat4）直转配置
+
+cast 算法同时支持 HiFloat4 直转，内置配置为：
+
+`from amct_pytorch import HIFP4_CAST_CFG`
+
+与 HiFloat8 的区别：当前 torch_npu 没有原生的 hifloat4 dtype 和低比特 matmul，因此 HiFloat4 直转是
+**纯 FP 仿真（fake-quant）**，用于离线评估精度/PPL。其量化类型字段 `weights.type` / `inputs.type` 取值为
+`'hifloat4'`，其余字段（symmetric=True、strategy=tensor/channel）与 HiFloat8 一致。
+
+> ⚠️ **HiFloat4 不要调用 `amct.convert()`。** convert 会去查找尚不存在的 HiFloat4 NPU 部署算子并报错。
+> 请直接对 `amct.quantize()` 之后的（仿真）模型做前向 / 测 PPL。原生 NPU 算子属于后续工作（Path 2，
+> 参见 `HiFloat4_migration_guide.md`）。
+
 ## 2 量化示例
 
 ### 2.1 使用接口方式调用
@@ -42,6 +56,12 @@ cast只转算法支持仅权重量化和全量化，支持的量化类型以及�
 
 ```python
 python3 src/run_llama2_samples.py --model_path=/data/Llama2_7b_hf/
+```
+
+HiFloat4 仿真示例（使用 `HIFP4_CAST_CFG`，不调用 convert）：
+
+```python
+python3 src/run_llama2_hifloat4_samples.py --model_path=/data/Llama2_7b_hf/
 ```
 
 ```python

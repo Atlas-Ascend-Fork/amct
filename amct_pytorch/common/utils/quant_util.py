@@ -77,6 +77,22 @@ def hifloat8_fake_quant(fp_tensor):
     return decode_from_hifloat8(codes, work_dtype).to(fp_tensor.dtype)
 
 
+@torch.no_grad()
+def hifloat4_fake_quant(fp_tensor, qdim=-1):
+    """FP -> HiFloat4 (hifx4) -> FP fake-quant round trip via the vendored simulation kernel.
+
+    Unlike hifloat8 there is no native torch_npu hifloat4 dtype, so this always uses the
+    pure-python hifx4 quant-dequant simulation (no compiled kernel, runs on any device).
+    The hifx4 format does its own 64-element block scaling along ``qdim`` -- so, unlike
+    hifloat8_fake_quant, no external scale factor is computed or applied here. ``qdim``
+    defaults to the last (reduction) dim, matching how HiFloat4's reference QLinear
+    quantizes both weights ([Cout, Cin] along Cin) and activations ([..., Cin] along Cin).
+    """
+    from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
+    qtype = QType('hifx4').dim(qdim)
+    return quant_dequant_float(fp_tensor, qtype, force_py=True, force_fp32=True).to(fp_tensor.dtype)
+
+
 def pad_zero_by_group(tensor, group_size):
     """
     Function: Pads the input tensor so that the size of its last dimension is divisible by group_size.

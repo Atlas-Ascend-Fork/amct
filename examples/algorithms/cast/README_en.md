@@ -34,6 +34,21 @@ The cast algorithm supports weight-only quantization and full quantization. The 
 |inputs.strategy|str|Quantization granularity|'tensor'/'token'|/|
 |algorithm|dict|Quantization algorithm configuration used|{'cast'}|/|
 
+### 1.4 HiFloat4 (hifloat4) Direct-Cast Configuration
+
+The cast algorithm also supports HiFloat4 direct-cast. The built-in config is:
+
+`from amct_pytorch import HIFP4_CAST_CFG`
+
+Difference from HiFloat8: the current torch_npu has no native hifloat4 dtype or low-bit matmul, so
+HiFloat4 direct-cast is a **pure-FP simulation (fake-quant)** used for offline accuracy/PPL evaluation.
+Set `weights.type` / `inputs.type` to `'hifloat4'`; the other fields (symmetric=True,
+strategy=tensor/channel) are the same as HiFloat8.
+
+> ⚠️ **Do NOT call `amct.convert()` for HiFloat4.** convert() would look for a HiFloat4 NPU deploy op
+> that does not exist yet and raise. Run the (simulated) model directly after `amct.quantize()` to
+> measure PPL. The native NPU operator is future work (Path 2, see `HiFloat4_migration_guide.md`).
+
 ## 2 Quantization Example
 
 ### 2.1 Use Interface Method to Call
@@ -42,6 +57,12 @@ The cast algorithm supports weight-only quantization and full quantization. The 
 
 ```python
 python3 src/run_llama2_samples.py --model_path=/data/Llama2_7b_hf/
+```
+
+HiFloat4 simulation example (uses `HIFP4_CAST_CFG`, no convert):
+
+```python
+python3 src/run_llama2_hifloat4_samples.py --model_path=/data/Llama2_7b_hf/
 ```
 
 ```python
