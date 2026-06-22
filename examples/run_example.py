@@ -17,7 +17,7 @@
 """AMCT 快速验证
 
 验证 cast / minmax / smoothquant / awq 四种算法的完整量化流程（quantize -> calibrate -> convert -> forward）。
-使用随机校准数据，无需下载数据集。模型默认从 HuggingFace 实时下载 Qwen2-0.5B（~1GB）。
+使用随机校准数据，无需下载数据集。模型默认从 HuggingFace 实时下载 Qwen3-0.6B（~0.6GB）。
 """
 
 import argparse
@@ -39,8 +39,8 @@ def _parse_args():
     p = argparse.ArgumentParser(description="AMCT 快速验证")
     p.add_argument(
         "--model",
-        default="Qwen/Qwen2-0.5B",
-        help="HuggingFace 模型名或本地路径（默认 Qwen/Qwen2-0.5B）",
+        default="Qwen/Qwen3-0.6B",
+        help="HuggingFace 模型名或本地路径（默认 Qwen/Qwen3-0.6B）",
     )
     p.add_argument("--device", default="npu:0", help="运行设备（默认 npu:0）")
     p.add_argument(

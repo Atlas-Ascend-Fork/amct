@@ -19,34 +19,39 @@
 #   bash examples/run_example.sh [选项]
 #
 # 参数说明:
-#   --model               HuggingFace 模型名或本地路径（默认 Qwen/Qwen2-0.5B）
+#   --model               HuggingFace 模型名或本地路径（默认 Qwen/Qwen3-0.6B）
 #                         传本地路径时跳过下载步骤
 #   --model_dir           模型下载目标目录（默认 /tmp/amct_verify_model）
 #   --device              运行设备（默认 npu:0）
 #   --cases               逗号分隔的用例列表，可选 cast/minmax/smoothquant/awq
 #                         （默认 cast,minmax,smoothquant,awq，即全部运行）
+#   --model_source        模型下载来源：huggingface（默认）或 modelscope
 #   --hf_endpoint         HuggingFace 镜像地址（可选，如 https://hf-mirror.com）
 #
 # 示例:
-#   # 默认下载 Qwen2-0.5B 并运行全部用例
+#   # 默认下载 Qwen3-0.6B 并运行全部用例
 #   bash examples/run_example.sh
 #
 #   # 使用本地模型，只运行 cast 和 minmax
-#   bash examples/run_example.sh --model /data/Qwen2-0.5B \
+#   bash examples/run_example.sh --model /data/Qwen3-0.6B \
 #       --cases cast,minmax --device npu:0
 #
 #   # 使用镜像加速下载
 #   bash examples/run_example.sh --hf_endpoint https://hf-mirror.com
+#
+#   # 使用 ModelScope 下载（国内推荐）
+#   bash examples/run_example.sh --model_source modelscope
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-MODEL_NAME_OR_PATH="Qwen/Qwen2-0.5B"
+MODEL_NAME_OR_PATH="Qwen/Qwen3-0.6B"
 MODEL_DIR="/tmp/amct_verify_model"
 DEVICE="npu:0"
 CASES="cast,minmax,smoothquant,awq"
 HF_ENDPOINT=""
+MODEL_SOURCE="huggingface"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -64,6 +69,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --cases)
             CASES="$2"
+            shift 2
+            ;;
+        --model_source)
+            MODEL_SOURCE="$2"
             shift 2
             ;;
         --hf_endpoint)
@@ -98,21 +107,32 @@ else
         echo "    HF_ENDPOINT=${HF_ENDPOINT}"
     fi
 
-    LOCAL_MODEL_PATH=$(MODEL_NAME_OR_PATH="${MODEL_NAME_OR_PATH}" MODEL_DIR="${MODEL_DIR}" python3 - <<'PYEOF'
-import os, sys
-try:
-    from huggingface_hub import snapshot_download
-except ImportError:
-    print("[ERROR] huggingface_hub 未安装，请执行: pip install huggingface_hub", file=sys.stderr)
-    sys.exit(1)
+    LOCAL_MODEL_PATH=$(MODEL_NAME_OR_PATH="${MODEL_NAME_OR_PATH}" MODEL_DIR="${MODEL_DIR}" MODEL_SOURCE="${MODEL_SOURCE}" python3 - <<'PYEOF'
+import os, sys, time
 
-import time
+model_id = os.environ["MODEL_NAME_OR_PATH"]
+local_dir = os.environ["MODEL_DIR"]
+source = os.environ.get("MODEL_SOURCE", "huggingface")
+
 t0 = time.time()
-path = snapshot_download(
-    repo_id=os.environ["MODEL_NAME_OR_PATH"],
-    local_dir=os.environ["MODEL_DIR"],
-    ignore_patterns=["*.msgpack", "*.h5", "flax_model*", "tf_model*"],
-)
+if source == "modelscope":
+    try:
+        from modelscope.hub.snapshot_download import snapshot_download
+    except ImportError:
+        print("[ERROR] modelscope 未安装，请执行: pip install modelscope", file=sys.stderr)
+        sys.exit(1)
+    path = snapshot_download(model_id, cache_dir=local_dir)
+else:
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        print("[ERROR] huggingface_hub 未安装，请执行: pip install huggingface_hub", file=sys.stderr)
+        sys.exit(1)
+    path = snapshot_download(
+        repo_id=model_id,
+        local_dir=local_dir,
+        ignore_patterns=["*.msgpack", "*.h5", "flax_model*", "tf_model*"],
+    )
 print(f"    下载完成，耗时 {time.time() - t0:.1f}s", file=sys.stderr)
 print(path)
 PYEOF

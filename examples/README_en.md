@@ -24,14 +24,17 @@ This project provides calling samples for different scenarios. After setting up 
 **Usage**
 
 ```bash
-# Default: download Qwen2-0.5B and run all cases
+# Default: download Qwen3-0.6B and run all cases
 bash examples/run_example.sh
 
 # Use a local model (skip download)
-bash examples/run_example.sh --model /data/Qwen2-0.5B
+bash examples/run_example.sh --model /data/Qwen3-0.6B
 
 # Use a mirror to speed up download
 bash examples/run_example.sh --hf_endpoint https://hf-mirror.com
+
+# Use ModelScope for download (recommended in China)
+bash examples/run_example.sh --model_source modelscope
 
 # Run specific cases only
 bash examples/run_example.sh --cases minmax,smoothquant --device npu:0
@@ -41,11 +44,12 @@ bash examples/run_example.sh --cases minmax,smoothquant --device npu:0
 
 | Parameter | Default | Description |
 | --- | --- | --- |
-| `--model` | `Qwen/Qwen2-0.5B` | HuggingFace model name or local path; skips download when a local path is given |
+| `--model` | `Qwen/Qwen3-0.6B` | HuggingFace model name or local path; skips download when a local path is given |
 | `--model_dir` | `/tmp/amct_verify_model` | Target directory for model download |
 | `--device` | `npu:0` | Device to run on |
 | `--cases` | `cast,minmax,smoothquant,awq` | Comma-separated list of cases to run |
-| `--hf_endpoint` | (none) | HuggingFace mirror endpoint |
+| `--model_source` | `huggingface` | Download source: `huggingface` or `modelscope` (recommended in China) |
+| `--hf_endpoint` | (none) | HuggingFace mirror endpoint (only used when `--model_source huggingface`) |
 
 **Notes**
 
