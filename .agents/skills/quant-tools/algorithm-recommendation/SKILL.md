@@ -46,21 +46,13 @@ description: 为已适配模型推荐下一步值得尝试的量化算法。适�
 
 ## 当前算法分组
 
-当前仓库里，推荐时至少按下面三类理解算法：
+**可用算法 = new-path `ALGO_REGISTRY` 已注册的四个**（`register_algorithms()` 实际 import），按类型理解：
 
-- `weight` 类：
-  - `lwc`
-  - `awq`
-  - `autoround`
-  - `gptq`
-  - `svdquant`
-- `activation` 类：
-  - `lac`
-- `structure` 类：
-  - `smoothquant`
-  - `flatquant`
-  - `omniquant`
-  - `learnable_had`
+- `weight` 类：`lwc`、`autoround`
+- `activation` 类：`lac`
+- `structure` 类：`omniquant`
+
+> **不要推荐以下未注册算法**：`awq` / `gptq` / `svdquant` / `smoothquant` / `flatquant` / `learnable_had`（源在 AMCT-Q，需分支移植后才进 `ALGO_REGISTRY`；当前 `--algos` 传入会运行期 `KeyError: '...' is not registered in 'algo'`）。upstream 示例脚本里出现这些名字也不代表可用。
 
 推荐时必须考虑当前模块类型和 registry `targets` 是否匹配。
 

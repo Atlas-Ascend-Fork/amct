@@ -22,21 +22,23 @@ python -m amct_pytorch.eval --model <path> --model_name <name> --device npu:N \
   --quant_dtype <int|mxfp> --bit_config amct_pytorch/configs/<wXaY>.yaml --seq_len 4096
 
 # 2) 校准数据提取（PTQ 前置）
-python -m amct_pytorch.extract_ptq_data --model <path> --model_name <name> \
-  --quant_target <target> --nsamples 128 --data_dir <dir>
+python -m amct_pytorch.extract_ptq_data --model <path> --model_name <name> --device npu:N \
+  --quant_target <target> --nsamples 128 --data_dir <dir> --granularity block
 
 # 3) PTQ 算法训练
-python -m amct_pytorch.ptq --model <path> --model_name <name> --quant_target <target> \
+python -m amct_pytorch.ptq --model <path> --model_name <name> --device npu:N --quant_target <target> \
   --quant_dtype <int|mxfp> --bit_config <yaml> --algos <algo> \
-  --data_dir <dir> --<target>_param_dir <param_dir> --granularity block
+  --data_dir <dir> --<param_dir_flag> <param_dir> --granularity block
 
 # 4) PTQ 结果评测（加载训练参数）
 python -m amct_pytorch.eval --model <path> --model_name <name> --device npu:N \
   --granularity block --eval_mode quant --quant_target <target> --quant_dtype <int|mxfp> \
-  --bit_config <yaml> --algos <同 ptq> --<target>_param_dir <param_dir> --seq_len 4096
+  --bit_config <yaml> --algos <同 ptq> --<param_dir_flag> <param_dir> --seq_len 4096
 ```
 
 bf16 baseline = 命令 1 把 `--eval_mode` 换 `bf16`。
+
+`<param_dir_flag>` 按 quant_target 取（**无 `--mlp_param_dir`**）：**mlp / moe → `--moe_mlp_param_dir`（二者共用）**；attn-linear → `--attn_linear_param_dir`；attn-cache → `--attn_cache_param_dir`。ptq 与对应 eval/deploy 用同一个。
 
 ## 硬规则
 
