@@ -31,7 +31,7 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 | 共享 | `skills/quant-tools/references/skill-input-template.md` | 4 个 skill 共享的用户输入模板 |
 | 协作 | `skills/gitcode-pr`、`gitcode-issue`、`default-skills` | 通用协作（PR/issue/按需装 skill），非量化功能 |
 
-## 3. Model-X 投影机制
+## 3. 单一源投影机制（Single Source of Truth）
 
 `.agents/` 是**唯一源**（git tracked）；`scripts/init-agent.sh` 把它符号链接投影成两套 runtime 视图：
 

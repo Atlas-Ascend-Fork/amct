@@ -1,7 +1,7 @@
 # AMCT 仓 Agent Skills 总览与规划
 
 > 本仓 agent 的 skills 清单与演进规划。`[x]` 已实现、`[ ]` 规划中。
-> 分发见下「Model-X」；入口见根 `AGENTS.md` 与 [../README.md](../README.md)，架构见 [architecture.md](architecture.md)。
+> 分发见下「单一源投影」；入口见根 `AGENTS.md` 与 [../README.md](../README.md)，架构见 [architecture.md](architecture.md)。
 
 ## 已实现 —— 量化 agent（本仓主体）
 
@@ -36,7 +36,7 @@
 
 规划流程：需求/问题单/Issue → （设计）→ 编码 → `amct-builder` UT/ST + `amct-reviewer` 检视 + `amct-tester` 真机验证 → `gitcode-pr` 提 PR → `gitcode-pipeline` 触发并轮询流水线 → 失败取日志、本地修、再提。
 
-## Model-X 分发
+## 分发：单一源投影（Single Source of Truth）
 
 `.agents/` 为**唯一源**（git tracked，含 skills/agents/hooks/docs + `settings.json`/`opencode.json`）；`scripts/init-agent.sh` 投影生成 `.claude/`（Claude Code）与 `.opencode/`（OpenCode）视图，**均 gitignored**，clone 后跑一次 `bash scripts/init-agent.sh` 生成。一处源、双端一致，不提交生成物、不双份维护。
 

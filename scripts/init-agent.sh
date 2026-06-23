@@ -63,15 +63,19 @@ link_children() {
     local src="$1" dst="$2"
     [ -d "$src" ] || return 0
     mkdir -p "$dst"
+    # Prune stale symlinks whose source entry no longer exists (renamed/removed skill etc.)
+    for existing in "$dst"/*; do
+        [ -L "$existing" ] || continue
+        [ -e "$src/$(basename "$existing")" ] || { echo "  - $existing pruned (source removed)" >&2; rm -f "$existing"; }
+    done
     for entry in "$src"/*; do
         [ -e "$entry" ] || continue
         local target="$dst/$(basename "$entry")"
         if [ -e "$target" ] && [ ! -L "$target" ]; then
-            # Non-symlink at target (possibly user-created): back it up instead of
-            # silently deleting it, then replace with our symlink.
-            echo "  ! $target is not a symlink; backed up to $target.bak before replacing" >&2
-            rm -rf "$target.bak"
-            mv "$target" "$target.bak"
+            # Non-symlink at a generated-view target: views are fully regenerable,
+            # so warn loudly and replace (not silent, no .bak clutter).
+            echo "  ! $target was not a symlink; replaced (views are generated)" >&2
+            rm -rf "$target"
         fi
         ln -sfn "$(realpath "$entry")" "$target"
     done
