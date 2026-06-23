@@ -50,17 +50,10 @@ PY
 mkdir -p "${RECORD_DIR}"
 
 if [[ -d "${VLLM_REPO_DIR}/.git/rebase-apply" ]]; then
-  if vllm_patch_is_functionally_present; then
-    echo "Detected stale git am state for an already-integrated MiniMax Ascend patch, cleaning it up."
-    git -C "${VLLM_REPO_DIR}" am --abort >/dev/null 2>&1 || git -C "${VLLM_REPO_DIR}" am --skip >/dev/null 2>&1
-  elif git -C "${VLLM_REPO_DIR}" apply --reverse --check "${VLLM_PATCH_PATH}" >/dev/null 2>&1; then
-    echo "Detected stale git am state for an already-applied patch, cleaning it up."
-    git -C "${VLLM_REPO_DIR}" am --skip >/dev/null 2>&1 || git -C "${VLLM_REPO_DIR}" am --abort
-  else
-    echo "Detected an unfinished git am session in ${VLLM_REPO_DIR}." >&2
-    echo "Please resolve it with 'git am --continue', 'git am --skip', or 'git am --abort' first." >&2
-    exit 1
-  fi
+  echo "Detected an unfinished git am session in ${VLLM_REPO_DIR} (.git/rebase-apply exists)." >&2
+  echo "To avoid disturbing any in-progress git am that may belong to you, this script will not touch it automatically." >&2
+  echo "Please resolve it manually with 'git am --continue', 'git am --skip', or 'git am --abort' first, then re-run this script." >&2
+  exit 1
 fi
 
 if vllm_patch_is_functionally_present; then
