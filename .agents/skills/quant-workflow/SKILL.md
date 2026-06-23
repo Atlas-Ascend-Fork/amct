@@ -118,17 +118,3 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 ## 输出要求
 
 结束时至少说明：当前模型阶段；本轮复用了哪些已有结果；调用了哪些子 skill；本轮量化方案与 `ppl_bf16 / ppl_quant / delta`；是否达标、是否粗定位、是否进 PTQ；下一步决策；若重跑为何旧结果不可复用；若进 deploy：权重是否导出、`deploy_quantization.md` 是否补齐；是否更新 casebook / repo-map / Agent Docs（不更新需说明理由）。
-
-## 使用示例
-
-```bash
-# 直转评测
-python -m amct_pytorch.eval --model /path/to/model --model_name qwen3_5 \
-  --quant_target mlp --quant_dtype int --bit_config amct_pytorch/configs/w8a8.yaml --eval_mode quant
-# PTQ 训练
-python -m amct_pytorch.ptq --model /path/to/model --model_name qwen3_5 \
-  --quant_target mlp --quant_dtype int --bit_config amct_pytorch/configs/w8a8.yaml
-# Deploy 导出
-python -m amct_pytorch.deploy --model /path/to/model --model_name qwen3_5 \
-  --quant_target mlp --quant_dtype int --bit_config amct_pytorch/configs/w8a8.yaml --output_dir ./deploy_out
-```
