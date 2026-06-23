@@ -9,7 +9,7 @@ description: 为已适配模型推荐第一轮量化方案。适用于用户只�
 
 - 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
 - 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../../reference/skill-input-template.md](../../reference/skill-input-template.md)
+- 固定输入模板见：[../references/skill-input-template.md](../references/skill-input-template.md)
 
 这个 skill 只用于**推荐第一轮量化方案**。
 

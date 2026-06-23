@@ -14,7 +14,7 @@ quant-workflow（唯一编排入口）          判阶段 → 串联/分流 → 
    ┌────┴───────────────┐
 quant-analyzer  quant-implementer  quant-reviewer    三类专职子代理（分析 / 实施 / 审查）
         │  各自 skills: 挂载
-quant-tools/*   +   model-adapter      叶子技能（真正干活的最小单元）
+quant-tools/*（含 model-adapter 等叶子技能，真正干活的最小单元）
         │  消费
 docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航）
 ```
@@ -26,9 +26,9 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 | 入口 | `AGENTS.md` / `.agents/README.md` | 说明与路由：端到端 → quant-workflow；单点需求 → 对应叶子 |
 | 编排 | `skills/quant-workflow/` | **唯一编排入口**：阶段判断、串联/分流、复用已有结果、deploy 交付边界、文档写回规则——薄，不重写叶子逻辑 |
 | 工作者 | `agents/quant-{analyzer,implementer,reviewer}.md` | 按 **分析 / 实施 / 审查** 隔离：analyzer 只读+设计方案、implementer 跑 CLI+改 adapter、reviewer 验证不改 |
-| 叶子 | `skills/quant-tools/*`、`skills/model-adapter/` | 最小可执行技能：方案推荐 / 直转评测 / 算法推荐 / 算法验证 / 部署导出、新模型适配 |
+| 叶子 | `skills/quant-tools/*`（含 `model-adapter`）| 最小可执行技能：方案推荐 / 直转评测 / 算法推荐 / 算法验证 / 部署导出、新模型适配 |
 | 知识 | `docs/casebook/`、`docs/repo-map.md` | 模型适配经验（hard bug/陷阱/精度）与仓内导航，供方案推荐复用 |
-| 共享 | `skills/reference/skill-input-template.md` | 6 个 skill 共享的用户输入模板 |
+| 共享 | `skills/quant-tools/references/skill-input-template.md` | 6 个 skill 共享的用户输入模板 |
 | 协作 | `skills/gitcode-pr`、`gitcode-issue`、`default-skills` | 通用协作（PR/issue/按需装 skill），非量化功能 |
 
 ## 3. Model-X 投影机制

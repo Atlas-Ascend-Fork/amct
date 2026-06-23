@@ -62,7 +62,7 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 ```
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
-├── skills/        # quant-workflow / quant-tools / model-adapter / gitcode-pr / gitcode-issue / default-skills / reference
+├── skills/        # quant-workflow / quant-tools（叶子含 model-adapter + references 共享）/ gitcode-pr / gitcode-issue / default-skills
 ├── docs/          # casebook（L1/L2/L3 三层量化经验）/ architecture.md / repo-map.md
 └── settings.json  # Claude Code 权限白名单
 ```

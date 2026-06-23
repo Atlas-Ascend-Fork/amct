@@ -9,7 +9,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 
 按下面顺序阅读：
 
-1. [../../docs/repo-map.md](../../docs/repo-map.md)
+1. [../../../docs/repo-map.md](../../../docs/repo-map.md)
 2. [references/model-adapter.md](references/model-adapter.md)
 3. [references/validation-checklist.md](references/validation-checklist.md)
 
@@ -17,7 +17,7 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
 
 - 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
 - 不替用户改成主流程；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../reference/skill-input-template.md](../reference/skill-input-template.md)
+- 固定输入模板见：[../references/skill-input-template.md](../references/skill-input-template.md)
 
 ## 评测口径强约束
 

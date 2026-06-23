@@ -24,7 +24,7 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 
 - 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
 - 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../../reference/skill-input-template.md](../../reference/skill-input-template.md)
+- 固定输入模板见：[../references/skill-input-template.md](../references/skill-input-template.md)
 
 ## 先看哪些文件
 
@@ -34,7 +34,7 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 2. `amct_pytorch/common/models/llm/common/deploy_export.py`
 3. 如需确认 PTQ 参数按 target 的加载方式，再看 `amct_pytorch/common/models/llm/common/base.py`
 4. 生成说明文档时，参考：
-   - `reference/deploy_quantization_template.md`
+   - `references/deploy_quantization_template.md`
    - 文档需要能被下游推理仓或其他消费者直接理解和接入
 
 ## 命令模板
@@ -137,7 +137,7 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 ## 文档生成要求
 
 `deploy_quantization.md` 使用：
-- `reference/deploy_quantization_template.md`
+- `references/deploy_quantization_template.md`
 
 生成时遵守下面规则：
 
@@ -167,7 +167,7 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 默认需要产出：
 
 - `deploy_quantization.md`
-  - 使用 `reference/deploy_quantization_template.md`
+  - 使用 `references/deploy_quantization_template.md`
   - 作为下游消费者和 agent 共用的主说明文档
   - 默认需要覆盖最小交付物、模块映射、运行时契约、回退策略
 
