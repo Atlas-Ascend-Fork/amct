@@ -63,11 +63,13 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
 ├── skills/        # quant-workflow / quant-tools（叶子含 model-adapter + references 共享）/ gitcode-pr / gitcode-issue / default-skills
-├── docs/          # casebook（L1/L2/L3 三层量化经验）/ architecture.md / repo-map.md
-└── settings.json  # Claude Code 权限白名单
+├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md / roadmap.md
+├── hooks/         # pre_tool_use / subagent_stop（Claude Code）
+├── settings.json  # Claude Code 配置（权限 + hooks）
+└── opencode.json  # OpenCode 配置（plugins + 权限）
 ```
 
-`scripts/init-agent.sh` 据此生成 `.claude/`、`.opencode/` 客户端视图（均 gitignored；`.opencode/` 另保留手维护的 `opencode.json`、`README.md`）。架构与设计依据见 [docs/architecture.md](docs/architecture.md)。
+`scripts/init-agent.sh` 据此生成 `.claude/`、`.opencode/` 客户端视图（均 gitignored、全量生成）：`settings.json`→`.claude/`、`opencode.json`→`.opencode/`，skills/agents/hooks/docs 投影到两端。技能清单与规划见 [docs/roadmap.md](docs/roadmap.md)，架构与设计见 [docs/architecture.md](docs/architecture.md)。
 
 ## 面向 agent 集成
 

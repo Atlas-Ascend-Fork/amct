@@ -98,7 +98,8 @@ install_opencode() {
     link_children "$SRC/skills" "$base/skills"
     link_children "$SRC/agents" "$base/agents"
     [ -d "$SRC/docs" ] && ln -sfn "$(realpath "$SRC/docs")" "$base/docs"
-    echo "  + $base/{skills,agents,docs} linked"
+    [ -f "$SRC/opencode.json" ] && cp "$SRC/opencode.json" "$base/opencode.json"
+    echo "  + $base/{skills,agents,docs,opencode.json}"
 }
 
 case "$target" in

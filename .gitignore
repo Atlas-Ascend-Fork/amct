@@ -37,7 +37,5 @@ tmp/
 
 # Generated agent views (source of truth: .agents/)
 /.claude/
-/.opencode/skills
-/.opencode/agents
-/.opencode/docs
+/.opencode/
 /CLAUDE.md
