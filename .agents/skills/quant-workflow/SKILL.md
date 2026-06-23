@@ -38,7 +38,7 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 ```
 
 - **常驻区**（机读状态块 + 产物契约结论 + 阶段概览）：编排维护，只追加不清空。
-- **工作区**（各子代理按角色追加：方案分析 / 实施记录 / 验证·判读 / 诊断）：阶段推进时由编排跑 `python3 scripts/archive_progress.py <progress.md>` 归档到 `progress_history.md` 并清空工作区。
+- **工作区**（各子代理按角色追加：方案分析 / 实施记录 / 验证·判读 / 诊断）：阶段推进时由编排跑 quant-workflow skill 自带的归档脚本（`scripts/archive_progress.py`，相对**本 skill 目录**、非仓库根）把工作区归档到 `progress_history.md` 并清空。
 - **历史只 Grep**：`progress_history.md` 禁止全文 Read，按关键字 Grep 取历史。
 
 ## 评测口径强约束

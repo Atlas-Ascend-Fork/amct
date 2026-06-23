@@ -383,7 +383,7 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 
 获取 PR 评论后，使用以下格式输出：
 
-```markdown
+~~~markdown
 # PR 评论摘要
 
 ## 总体统计
@@ -406,6 +406,7 @@ https://gitcode.com/${owner}/${repo}/pull/<PR_NUMBER>
 ```
 
 ---
+~~~
 
 ## PR 标题格式
 
