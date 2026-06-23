@@ -42,7 +42,7 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 |---|---|
 | 量化目标 | `mlp` / `moe` / `attn-linear` / `attn-cache` |
 | 位宽·数据类型 | W8A8 / W4A8 / W4A4；`int` / `mxfp` |
-| 算法 | 直转（minmax / smoothquant / awq / gptq 等）、可训练 PTQ（lwc / lac / autoround / omniquant）|
+| 算法 | 直转（minmax 等）、可训练 PTQ（lwc / lac / autoround / omniquant；其余如 gptq/awq 视分支移植）|
 | bit 配置 | yaml `--bit_config`（顶层 `w_bits/a_bits` + `moe.routed/shared` + `attn-cache` 的 q/k/p/v）|
 | 评测·阈值 | Wikitext PPL；默认接受 `delta ≤ 0.2` |
 | 产物 | compressed-tensors（`config.json` + 分片权重 + `deploy_quantization.md`）|
@@ -52,8 +52,8 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 编排入口 `quant-workflow` 按职责委派三个子代理，经共享状态文件 `progress.md` 传递上下文：
 
 - `quant-analyzer` —— 适配性分析、方案 / 算法推荐（只读代码）
-- `quant-implementer` —— 执行 eval / ptq / deploy、adapter 改造（读写文件）
-- `quant-reviewer` —— 精度 / 收益验证、与 casebook 对比（只跑评测，不改方案）
+- `quant-implementer` —— 执行全部量化命令（统一走 `quant-run`：直转评测 / 校准 / ptq / 导出）、adapter 改造（读写文件）
+- `quant-reviewer` —— 精度 / 收益判读、与 casebook 对比（只读 `quant-run` 跑出的结果判定，不跑评测/ptq、不改方案）
 
 ## 仓内组织
 
