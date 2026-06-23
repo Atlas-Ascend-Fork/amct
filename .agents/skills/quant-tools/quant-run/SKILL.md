@@ -45,7 +45,7 @@ bf16 baseline = 命令 1 把 `--eval_mode` 换 `bf16`。
 - **算法只认 new-path（LLM）`ALGO_REGISTRY`**：当前 = `autoround / lac / lwc / omniquant`（gptq/awq/mxfp 视分支移植）；跑前确认算法在 new-path（忽略 classic 图量化名册，详见 L1 `cross-model-pitfalls.md`）。
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `--*_param_dir`。
 - 离线容器用 `cli_wrapper.py` 包一层（patch get_wikitext2/get_pileval 到本地数据）。
-- **extract↔ptq 数据目录一致**：`extract_ptq_data --output_dir <D>` 与对应 `ptq --data_dir <D>` 必须**同一目录**（每个 quant_target 一份）；产物名 `block_<idx>_<target>_in.pkl`。报 `PTQ input file not found: <dir>/block_*_<target>_in.pkl` → 先核对 ptq 的 `--data_dir` 是否就是 extract 的 `--output_dir`（路径不一致最常见），用 `find -name 'block_*_in.pkl'` 确认真实位置，**不要直接判 extract 未生成 / 有 bug**（同 `--algos`：漏检自身用法别甩锅框架）。
+- **extract↔ptq 数据目录一致**：`extract_ptq_data` 把校准数据写到 **`--data_dir`**（不是 `--output_dir`！），与对应 `ptq --data_dir <D>` 必须是**同一个 `--data_dir`**；产物名 `block_<idx>_<target>_in.pkl`。报 `PTQ input file not found: <dir>/block_*_<target>_in.pkl` → 先核对 extract 与 ptq 的 `--data_dir` 是否同一目录、`find -name 'block_*_in.pkl'` 确认真实位置，**不要直接判 extract 未生成 / 有 bug**（同 `--algos`：漏检自身用法别甩锅框架）。
 - 引用仓库内路径一律相对路径。
 
 ## 长命令防超时（必须）
