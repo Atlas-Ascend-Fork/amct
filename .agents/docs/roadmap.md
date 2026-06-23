@@ -39,3 +39,86 @@
 ## Model-X 分发
 
 `.agents/` 为**唯一源**（git tracked，含 skills/agents/hooks/docs + `settings.json`/`opencode.json`）；`scripts/init-agent.sh` 投影生成 `.claude/`（Claude Code）与 `.opencode/`（OpenCode）视图，**均 gitignored**，clone 后跑一次 `bash scripts/init-agent.sh` 生成。一处源、双端一致，不提交生成物、不双份维护。
+
+## 附录：规划中 dev-workflow 流程图
+
+> 下图为规划中的仓级研发流（需求/问题单/Issue → 编码 → 验证 → PR → 流水线）；待 `amct-reviewer` / `amct-builder` / `amct-tester` / `gitcode-pipeline` 等 skill 实现后接入（当前仅 `gitcode-pr` / `gitcode-issue` 已实现）。
+
+```mermaid
+flowchart TB
+    subgraph 入口节点
+        A1[需求开发]
+        A2[问题单修改]
+        A3[Issue处理]
+    end
+
+    subgraph 判断
+        B1{是否需要<br/>代码修改?}
+        B2{是否需要<br/>设计阶段?}
+    end
+
+    subgraph 设计阶段
+        C1[软件设计<br/>需求规格]
+    end
+
+    subgraph 编码验证阶段
+        D1[编写代码]
+        D2[执行ut/st]
+        D3[amct-reviewer<br/>agent检视代码]
+        D4[amct-tester<br/>本地验证]
+    end
+
+    subgraph PR流程
+        E1[gitcode-pr<br/>创建PR]
+        E2[个人代码检视]
+        E3[gitcode-pipeline<br/>触发流水线]
+        E4[gitcode-pipeline<br/>定时获取<br/>流水线结果]
+    end
+
+    subgraph 流水线结果处理
+        F1{gitcode-pipeline<br/>流水线<br/>是否通过?}
+        F2[gitcode-pipeline<br/>获取失败<br/>任务日志]
+        F3[Agent本地修复]
+    end
+
+   subgraph 推送代码
+        I1[gitcode-pr<br/>提交代码]
+    end
+
+    subgraph 完成
+        H1[流程结束]
+    end
+
+    %% 入口到判断
+    A1 --> B2
+    A2 --> B1
+    A3 --> B1
+
+    %% 设计判断
+    B2 -->|是| C1
+    B2 -->|否| D1
+    C1 --> D1
+
+    %% 编码判断
+    B1 -->|是| D1
+    B1 -->|否| H1
+
+    %% 编码到PR
+    D1 --> D2
+    D2 --> D3
+    D3 --> D4
+    D4 --> E1
+
+    %% PR流程
+    E1 --> E2
+    E2 --> E3
+    E3 --> E4
+    E4 --> F1
+
+    %% 流水线结果处理
+    F1 -->|通过| H1
+    F1 -->|失败| F2
+    F2 --> F3
+    F3 --> I1
+    I1 --> E3
+```
