@@ -109,49 +109,9 @@ description: 在 amct 中适配新模型族，并保持 workflow、quantizer、a
   - attention
   - MoE / packed experts
 
-## 文档写回触发条件
+## 文档写回触发
 
-### 更新 `repo-map`
-
-满足下面任一条时，要更新 `.agents/docs/repo-map.md`：
-
-- `register_llm_models()` 的实际注册集合发生变化。
-- solver 主注册链发生变化。
-- workflow 主路径语义发生变化。
-- `BaseModel`、`PtqUnit`、`quant_apply`、`quant_base` 等核心复用边界发生变化。
-- `repo-map` 的“当前接通状态”已经和代码不一致。
-
-### 更新系列 `casebook README`
-
-满足下面任一条时，至少更新所属系列页：
-
-- 新模型首次完成 BF16 baseline、关闭量化浮点等价和最小 PTQ 集成 smoke 这一套稳定闭环。
-- 系列当前的“已覆盖模型”“默认参考路径”“通用适配经验”“通用量化经验”“常见问题”需要补充或修正。
-- 新结果推翻了系列页里的默认结论。
-
-### 新增或更新个案文件
-
-满足下面任一条时，新增或更新 `<series>/<case>.md`：
-
-- 出现新的结构模式。
-- 出现新的量化路径。
-- 出现值得复用的典型问题。
-- 明显偏离该系列已有经验。
-- 已有个案需要按新结论修订。
-
-### 更新 `Agent Docs`
-
-满足下面任一条时，更新 `.agents/docs/README.md`：
-
-- `Agent Docs` 记录的文档层级与真实目录不一致。
-- 新增或删除 `playbooks/`、`casebook/`、`repo-map.md` 等一级结构。
-- 文档职责边界发生变化。
-
-### 默认不做
-
-- 只修局部 wrapper bug，不默认重写 `repo-map`。
-- 只做一次不稳定 smoke，不默认写 `casebook` 结论。
-- 如果当前任务只是复核旧结果，且文档与代码仍一致，可以只说明无需更新。
+适配完成后的文档写回（repo-map / 系列 casebook README / 个案 / Agent Docs，及默认不做）统一见 [../../../docs/README.md](../../../docs/README.md) 的「文档写回触发」。
 
 ## 完成标准
 
