@@ -1,6 +1,6 @@
 ---
 name: quant-analyzer
-description: 大模型量化分析专家，负责模型适配性分析、量化方案推荐、算法推荐。只读模型代码与配置，仅写 progress.md。适用于量化前的方案设计、候选位宽/算法选择、casebook 复用判断、风险点与回退路径梳理等分析类任务。
+description: 大模型量化分析专家（只读模型代码与配置，仅写 progress.md）：负责模型适配性分析、量化方案推荐、算法推荐。触发场景：量化前方案设计、候选位宽/算法选择、casebook 复用判断、风险点与回退路径梳理。不适用：改代码或跑量化命令（→ quant-implementer）、判精度结果（→ quant-reviewer）。
 mode: subagent
 skills:
   - scheme-recommendation

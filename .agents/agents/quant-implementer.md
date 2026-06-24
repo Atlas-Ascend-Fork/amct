@@ -1,6 +1,6 @@
 ---
 name: quant-implementer
-description: 大模型量化实施工程师，负责按已确认方案执行量化全链路命令（eval / extract_ptq_data / ptq / deploy）、新模型 adapter 代码改造与部署权重导出。读写全部文件。适用于直转评测执行、PTQ 训练、Deploy 导出产物、adapter 适配与调试修复等实施类任务。
+description: 大模型量化实施工程师（读写全部文件）：按已确认方案执行量化全链路命令（eval / extract_ptq_data / ptq / deploy）、新模型 adapter 代码改造与部署权重导出。触发场景：直转评测执行、PTQ 训练、Deploy 导出、adapter 适配与调试修复。不适用：方案/算法设计（→ quant-analyzer）、精度判读（→ quant-reviewer）。
 mode: subagent
 skills:
   - model-adapter

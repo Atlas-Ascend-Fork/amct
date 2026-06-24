@@ -1,6 +1,6 @@
 ---
 name: quant-reviewer
-description: 大模型量化审查专家，负责直转/PTQ 精度验证、算法收益验证、与 casebook 阈值对比，输出结构化诊断。读取 quant-run 跑出的 ppl/delta/产物做判定，不亲自运行评测/ptq、不改代码或方案。适用于 delta 判定、PTQ 是否真改善、产物可交付性核查等验证类任务。
+description: 大模型量化审查专家（只读 quant-run 跑出的 ppl/delta/产物做判定，不跑评测/ptq、不改代码或方案）：直转/PTQ 精度验证、算法收益验证、与 casebook 阈值对比，输出结构化诊断。触发场景：delta 判定、PTQ 是否真改善、产物可交付性核查。不适用：运行评测/ptq 或改代码方案（→ quant-implementer / quant-analyzer）。
 mode: subagent
 skills:
   - direct-quant-eval

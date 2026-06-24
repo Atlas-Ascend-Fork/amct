@@ -1,6 +1,6 @@
 ---
 name: quant-run
-description: 量化执行 skill（implementer 用）。按已确认方案跑全部实际量化命令——直转评测 / 校准数据提取 / PTQ 算法训练 / PTQ 结果评测，按 algo 参数化（直转无 algo；PTQ 走 autoround/lac/lwc/omniquant 等）。只执行 + 把结果写 progress，不做达标判读（判读归 quant-reviewer），不设计方案（归 quant-analyzer）。
+description: 量化执行 skill（implementer 用）：按已确认方案跑全部实际量化命令——直转评测 / 校准数据提取 / PTQ 算法训练 / PTQ 结果评测，按 algo 参数化（直转无 algo；PTQ 走 lwc/lac/omniquant/autoround）。触发场景：方案已确认后执行 eval / extract_ptq_data / ptq / 结果评测。不适用：判达标（→ $direct-quant-eval / $algorithm-validation）、设计方案（→ $scheme-recommendation）、改 adapter（→ $model-adapter）。
 ---
 
 # 量化执行（quant-run）

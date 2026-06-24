@@ -1,6 +1,6 @@
 ---
 name: quant-workflow
-description: amct 大模型量化的唯一编排入口（多 agent 集成只需对接此入口）。输入模型路径与工作目录（可选 quant_target / bits / device），完成 适配→量化实验→deploy 交付→归档 全生命周期：先查现状判阶段、复用 casebook、串联叶子 skill，单段需求直接分流；方案选择 / PTQ 升级 / 是否导出等关键决策停下与用户确认（human-in-the-loop）；重入安全，复用已有结果不重跑。
+description: amct 大模型量化的唯一编排入口（多 agent 集成只需对接此入口）：输入模型路径与工作目录（可选 quant_target / bits / device），按阶段完成 适配→量化实验→deploy 交付→归档 全生命周期，重入安全、复用已有结果不重跑。触发场景：端到端量化任意 amct 模型 / 单段需求（只适配 / 只方案 / 只评测 / 只导出，自动分流到对应叶子 skill）。约束：方案选择 / PTQ 升级 / 是否导出等关键决策停下与用户确认（human-in-the-loop）。
 ---
 
 # amct 量化编排入口

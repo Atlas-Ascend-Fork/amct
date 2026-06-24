@@ -1,6 +1,6 @@
 ---
 name: algorithm-validation
-description: 判读 PTQ 算法收益（reviewer 用，只读不跑）。读 quant-run 已跑出的 ppl_algo 与直转参考 ppl_direct，算 delta_gain、判该算法相对直转是否真改善、给停 / 换算法 / 缩范围建议。不跑 ptq / 评测命令——执行归 quant-run（implementer）。
+description: 判读 PTQ 算法收益（reviewer 用，只读不跑）：读 quant-run 跑出的 ppl_algo 与直转参考 ppl_direct，算 delta_gain、判该算法相对直转是否真改善。触发场景：PTQ 算法结果已出、要判相对直转的收益并给停 / 换算法 / 缩范围建议。不适用：跑 ptq / 评测命令（→ $quant-run）。
 ---
 
 # PTQ 算法收益判读

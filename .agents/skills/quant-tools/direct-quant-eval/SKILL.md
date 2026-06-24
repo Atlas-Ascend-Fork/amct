@@ -1,6 +1,6 @@
 ---
 name: direct-quant-eval
-description: 判读直转量化结果（reviewer 用，只读不跑）。读 quant-run 已跑出的 ppl_bf16 / ppl_quant，算 delta、判是否达标（默认 delta ≤ 0.2）、给下一步建议（保持 / 缩范围 / 转 PTQ）。不跑评测命令——评测执行归 quant-run（implementer）。
+description: 判读直转量化结果（reviewer 用，只读不跑）：读 quant-run 跑出的 ppl_bf16 / ppl_quant，算 delta、判是否达标（默认 delta ≤ 0.2）、给下一步建议（保持 / 缩范围 / 转 PTQ）。触发场景：直转 ppl 已出、要判 delta 是否达标并定下一步。不适用：跑评测命令（→ $quant-run）。
 ---
 
 # 直转量化判读
