@@ -58,9 +58,4 @@
 - 掉点离谱且和已有经验完全不符
 - 同一方案多次复现不稳定
 
-优先检查：
-
-- 评测链路
-- wrapper 等价性
-- mask / forward 实现
-- 保存 / 加载路径
+优先检查清单（按 PPL 偏低 / 偏高分两类）见 [metrics-and-thresholds.md](metrics-and-thresholds.md) 的「结果异常时的默认解释」。
