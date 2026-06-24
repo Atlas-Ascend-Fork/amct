@@ -5,19 +5,25 @@ description: 在 amct 中适配新模型族（注册模型 / 定义 PTQ unit / �
 
 # amct 模型适配
 
-这个 skill 只用于**新模型适配**。
+## 概述
 
-按下面顺序阅读：
+在 amct 中适配新模型族（注册模型 / 定义 `PtqUnit` / 接 quant block / 补模型专属 attention·MLP wrapper），保持 workflow·quantizer·algorithm·solver 边界稳定；**只做适配，不重写主 PTQ 流程**。
+
+---
+
+## 用户调用格式
+
+- 用户明确点名调用，先返回本 skill 固定输入模板再执行。
+- 不替用户改成主流程；仅当用户没指定 skill、只描述目标时，才建议是否回 `$quant-workflow`。
+- 固定输入模板见 [../references/skill-input-template.md](../references/skill-input-template.md)。
+
+---
+
+## 先读哪些文件
 
 1. [../../../docs/repo-map.md](../../../docs/repo-map.md)
 2. [references/model-adapter.md](references/model-adapter.md)
 3. [references/validation-checklist.md](references/validation-checklist.md)
-
-## 用户调用格式
-
-- 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成主流程；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../references/skill-input-template.md](../references/skill-input-template.md)
 
 ## 评测口径强约束
 

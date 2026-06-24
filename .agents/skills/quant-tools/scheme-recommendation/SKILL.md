@@ -5,35 +5,29 @@ description: 为已适配模型推荐第一轮量化方案（方案推荐卡：�
 
 # 量化方案推荐
 
+## 概述
+
+为已适配模型推荐**第一轮量化方案**（只推荐、不跑实验）：回答“第一枪先量哪些模块 / 用什么 `dtype·bits·algos·granularity` / 为什么这么起步 / 失败先缩哪里查哪里”。**不负责**：跑量化实验、产出 `ppl_bf16·ppl_quant·delta`、误差定位、下“最终最优方案”结论。
+
+---
+
 ## 用户调用格式
 
-- 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../references/skill-input-template.md](../references/skill-input-template.md)
+- 用户明确点名调用，先返回本 skill 固定输入模板再执行。
+- 不替用户改成别的 skill；仅当用户没指定 skill、只描述目标时，才建议是否回 `$quant-workflow`。
+- 固定输入模板见 [../references/skill-input-template.md](../references/skill-input-template.md)。
 
-这个 skill 只用于**推荐第一轮量化方案**。
+---
 
-它回答的问题是：
+## 先读哪些文件
 
-- 第一枪先量哪些模块
-- 用什么 `dtype / bits / algos / granularity`
-- 为什么先从这个方案起步
-- 如果失败，先缩哪里、查哪里
+按顺序：
 
-它不负责：
-
-- 真正跑量化实验
-- 产出 `ppl_bf16 / ppl_quant / delta`
-- 做误差定位
-- 下“最终最优方案”结论
-
-按下面顺序阅读：
-
-1. `.agents/docs/casebook/...` 中对应系列的 `README.md`
-2. 如已有个案，再读最相近的 `<series>/<case>.md`
-3. 如需确认当前能力边界，再读 [../../../docs/repo-map.md](../../../docs/repo-map.md)
-4. 如需确认当前量化口径，再读 [../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)
-5. 网络结构特殊（MoE / MLA / 混合 attention 等）需定制量化方案，再读 [../references/network-strategies.md](../references/network-strategies.md)
+1. `.agents/docs/casebook/...` 对应系列 `README.md`
+2. 已有个案再读最相近 `<series>/<case>.md`
+3. 确认能力边界读 [../../../docs/repo-map.md](../../../docs/repo-map.md)
+4. 确认量化口径读 [../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)
+5. 特殊结构（MoE / MLA / 混合 attention）定制方案读 [../references/network-strategies.md](../references/network-strategies.md)
 
 ## 固定流程
 

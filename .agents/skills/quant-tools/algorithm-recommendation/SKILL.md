@@ -5,43 +5,26 @@ description: 为已适配模型推荐下一步值得尝试的量化算法（仅�
 
 # 量化算法推荐
 
+## 概述
+
+为已适配模型推荐**下一步值得尝试的量化算法**（只推荐、不跑实验）：回答“先试哪一类 / 哪个具体算法、各适合什么掉点特征与模块、先试失败切哪个更合理”。支持两种输入：**已知直转结果**（有 `ppl/delta`，按掉点 + 目标模块推荐）或 **先验推荐**（无直转结果，据 casebook + 结构 + 仓库算法能力给候选）。**不负责**：运行算法实验、产出 `ppl/delta`、误差定位、下“最终最优算法”结论。
+
+---
+
 ## 用户调用格式
 
-- 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../references/skill-input-template.md](../references/skill-input-template.md)
+- 用户明确点名调用，先返回本 skill 固定输入模板再执行。
+- 不替用户改成别的 skill；仅当用户没指定 skill、只描述目标时，才建议是否回 `$quant-workflow`。
+- 固定输入模板见 [../references/skill-input-template.md](../references/skill-input-template.md)。
 
-这个 skill 只用于**推荐下一步值得尝试的量化算法**。
+---
 
-它支持两种输入模式：
+## 先读哪些文件
 
-- 已知直转量化结果：
-  - 用户已经知道 `ppl_bf16 / ppl_quant / delta`
-  - 想根据当前掉点和目标模块推荐下一步算法
-- 先验经验推荐：
-  - 当前还没有直转结果
-  - 只想根据 casebook、模型结构和仓库现有算法能力，先拿一个算法候选列表
-
-它回答的问题是：
-
-- 当前更值得先试哪一类算法
-- 应该优先试哪个具体算法名
-- 这些算法分别适合什么掉点特征和模块类型
-- 如果先试失败，下一步切到哪个算法更合理
-
-它不负责：
-
-- 真正运行算法实验
-- 产出 `ppl_bf16 / ppl_quant / delta`
-- 做误差定位
-- 直接给出最终最优算法结论
-
-按下面顺序阅读：
-
-1. `.agents/docs/casebook/...` 中对应系列的 `README.md`
-2. 如已有个案，再读最相近的 `<series>/<case>.md`
-3. 如需确认当前量化口径，再读 [../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)
-4. 如需确认当前直转判读规则，再读 [../references/direct-quant.md](../references/direct-quant.md)
+1. `.agents/docs/casebook/...` 对应系列 `README.md`
+2. 已有个案再读最相近 `<series>/<case>.md`
+3. 确认量化口径读 [../references/metrics-and-thresholds.md](../references/metrics-and-thresholds.md)
+4. 确认直转判读规则读 [../references/direct-quant.md](../references/direct-quant.md)
 5. 可用算法**以 new-path `register_algorithms()` 实际 import 的为准** = `autoround / lac / lwc / omniquant`（gptq/awq/mxfp 视分支移植，先确认在 ALGO_REGISTRY）；**别用 `grep amct_pytorch/algorithms` 命中名册判定可用**——classic 图量化 path 列了 gptq/awq 等但 LLM PTQ 不走，据此选会运行期 `KeyError: '...' is not registered in 'algo'`。
 
 ## 当前算法分组
