@@ -88,22 +88,29 @@ def load_act_scales(record_dir: str, num_layers: int) -> dict[str, torch.Tensor]
     }
 
 
-def apply_smoothquant_to_layer(
-    layer,
-    layer_idx: int,
-    act_scales: dict[str, torch.Tensor],
-    alpha: float,
-) -> None:
-    # Group 1: input_layernorm -> q_proj, k_proj, v_proj
-    ln = get_module(layer, "input_layernorm")
-    q_w = get_module(layer, "self_attn.q_proj").weight
-    k_w = get_module(layer, "self_attn.k_proj").weight
-    v_w = get_module(layer, "self_attn.v_proj").weight
-
-    act_scale_q = (
-        act_scales[f"layers.{layer_idx}.self_attn.q_proj"].to(q_w.device).to(q_w.dtype)
+def _compute_smooth_scale(
+    act_scale: torch.Tensor, weight_scale: torch.Tensor, alpha: float
+) -> torch.Tensor:
+    return (act_scale.pow(alpha) / weight_scale.pow(1 - alpha)).clamp(
+        min=SCALE_CLAMP_MIN
     )
-    weight_scales_g1 = (
+
+
+def _smooth_attn_input(
+    layer, layer_idx: int, act_scales: dict[str, torch.Tensor], alpha: float
+) -> None:
+    ln = get_module(layer, "input_layernorm")
+    q_proj = get_module(layer, "self_attn.q_proj")
+    k_proj = get_module(layer, "self_attn.k_proj")
+    v_proj = get_module(layer, "self_attn.v_proj")
+    q_w, k_w, v_w = q_proj.weight, k_proj.weight, v_proj.weight
+
+    act_scale = (
+        act_scales[f"layers.{layer_idx}.self_attn.q_proj"]
+        .to(q_w.device)
+        .to(q_w.dtype)
+    )
+    weight_scale = (
         torch.cat(
             [
                 q_w.abs().max(dim=0, keepdim=True)[0],
@@ -115,54 +122,68 @@ def apply_smoothquant_to_layer(
         .max(dim=0)[0]
         .clamp(min=1e-5)
     )
-    best_scale1 = (act_scale_q.pow(alpha) / weight_scales_g1.pow(1 - alpha)).clamp(
-        min=SCALE_CLAMP_MIN
-    )
+    best_scale = _compute_smooth_scale(act_scale, weight_scale, alpha)
 
-    ln.weight.data.div_(best_scale1.to(ln.weight.device))
-    get_module(layer, "self_attn.q_proj").weight.data.mul_(
-        best_scale1.to(q_w.device).view(1, -1)
-    )
-    get_module(layer, "self_attn.k_proj").weight.data.mul_(
-        best_scale1.to(k_w.device).view(1, -1)
-    )
-    get_module(layer, "self_attn.v_proj").weight.data.mul_(
-        best_scale1.to(v_w.device).view(1, -1)
-    )
+    ln.weight.data.div_(best_scale.to(ln.weight.device))
+    for proj, w in ((q_proj, q_w), (k_proj, k_w), (v_proj, v_w)):
+        proj.weight.data.mul_(best_scale.to(w.device).view(1, -1))
 
-    # Group 2: v_proj -> o_proj (GQA-aware)
+
+def _apply_gqa_aware_v_o(v_proj, o_proj, best_scale: torch.Tensor) -> None:
+    head_dim = best_scale.numel() // NUM_ATTENTION_HEADS
+    num_head_repeats = NUM_ATTENTION_HEADS // NUM_KEY_VALUE_HEADS
+    grouped = best_scale.view(NUM_KEY_VALUE_HEADS, num_head_repeats, head_dim)
+    prev_scales_tmp = grouped.max(dim=1, keepdim=True)[0]
+    v_scales = prev_scales_tmp.reshape(-1)
+    o_scales = prev_scales_tmp.expand(
+        NUM_KEY_VALUE_HEADS, num_head_repeats, head_dim
+    ).reshape(-1)
+    v_proj.weight.data.div_(v_scales.to(v_proj.weight.device).view(-1, 1))
+    if v_proj.bias is not None:
+        v_proj.bias.data.div_(v_scales.to(v_proj.bias.device))
+    o_proj.weight.data.mul_(o_scales.to(o_proj.weight.device).view(1, -1))
+
+
+def _apply_plain_v_o(v_proj, o_proj, best_scale: torch.Tensor) -> None:
+    v_proj.weight.data.div_(best_scale.to(v_proj.weight.device).view(-1, 1))
+    if v_proj.bias is not None:
+        v_proj.bias.data.div_(best_scale.to(v_proj.bias.device))
+    o_proj.weight.data.mul_(best_scale.to(o_proj.weight.device).view(1, -1))
+
+
+def _smooth_v_to_o(
+    layer, layer_idx: int, act_scales: dict[str, torch.Tensor], alpha: float
+) -> None:
     v_proj = get_module(layer, "self_attn.v_proj")
     o_proj = get_module(layer, "self_attn.o_proj")
-    act_scale_o = (
+    act_scale = (
         act_scales[f"layers.{layer_idx}.self_attn.o_proj"]
         .to(o_proj.weight.device)
         .to(o_proj.weight.dtype)
     )
-    o_weight_scale = (
+    weight_scale = (
         o_proj.weight.abs().max(dim=0, keepdim=True)[0].squeeze(0).clamp(min=1e-5)
     )
-    best_scale2 = (act_scale_o.pow(alpha) / o_weight_scale.pow(1 - alpha)).clamp(
-        min=SCALE_CLAMP_MIN
-    )
+    best_scale = _compute_smooth_scale(act_scale, weight_scale, alpha)
 
     num_head_repeats = NUM_ATTENTION_HEADS // NUM_KEY_VALUE_HEADS
-    if v_proj.weight.shape[0] != best_scale2.numel() and num_head_repeats != 1:
-        head_dim = best_scale2.numel() // NUM_ATTENTION_HEADS
-        grouped = best_scale2.view(NUM_KEY_VALUE_HEADS, num_head_repeats, head_dim)
-        prev_scales_tmp = grouped.max(dim=1, keepdim=True)[0]
-        v_scales = prev_scales_tmp.reshape(-1)
-        o_scales = prev_scales_tmp.expand(
-            NUM_KEY_VALUE_HEADS, num_head_repeats, head_dim
-        ).reshape(-1)
-        v_proj.weight.data.div_(v_scales.to(v_proj.weight.device).view(-1, 1))
-        if v_proj.bias is not None:
-            v_proj.bias.data.div_(v_scales.to(v_proj.bias.device))
-        o_proj.weight.data.mul_(o_scales.to(o_proj.weight.device).view(1, -1))
+    is_gqa = (
+        v_proj.weight.shape[0] != best_scale.numel() and num_head_repeats != 1
+    )
+    if is_gqa:
+        _apply_gqa_aware_v_o(v_proj, o_proj, best_scale)
     else:
-        v_proj.weight.data.div_(best_scale2.to(v_proj.weight.device).view(-1, 1))
-        if v_proj.bias is not None:
-            v_proj.bias.data.div_(best_scale2.to(v_proj.bias.device))
-        o_proj.weight.data.mul_(best_scale2.to(o_proj.weight.device).view(1, -1))
+        _apply_plain_v_o(v_proj, o_proj, best_scale)
+
+
+def apply_smoothquant_to_layer(
+    layer,
+    layer_idx: int,
+    act_scales: dict[str, torch.Tensor],
+    alpha: float,
+) -> None:
+    _smooth_attn_input(layer, layer_idx, act_scales, alpha)
+    _smooth_v_to_o(layer, layer_idx, act_scales, alpha)
 
 
 def clear_accelerator_cache() -> None:
@@ -302,8 +323,8 @@ class StreamingShardWriter:
             json.dump(index, f, ensure_ascii=False, indent=2)
 
 
-def build_quantization_config(alpha: float) -> dict:
-    tensor_quant_cfg = {
+def _build_tensor_quant_cfg() -> dict:
+    return {
         "ch_axis": -1,
         "dtype": "fp4",
         "group_size": GROUP_SIZE,
@@ -318,34 +339,50 @@ def build_quantization_config(alpha: float) -> dict:
         "scale_type": "float",
         "symmetric": None,
     }
-    input_quant_cfg = dict(tensor_quant_cfg)
-    input_quant_cfg["is_dynamic"] = True
 
+
+def _build_algo_config(alpha: float) -> list[dict]:
+    return [
+        {
+            "name": "smooth",
+            "alpha": alpha,
+            "scale_clamp_min": SCALE_CLAMP_MIN,
+            "model_decoder_layers": "model.layers",
+            "scaling_layers": SCALING_LAYERS,
+        }
+    ]
+
+
+def _build_export_cfg() -> dict:
     return {
-        "algo_config": [
-            {
-                "name": "smooth",
-                "alpha": alpha,
-                "scale_clamp_min": SCALE_CLAMP_MIN,
-                "model_decoder_layers": "model.layers",
-                "scaling_layers": SCALING_LAYERS,
-            }
-        ],
+        "kv_cache_group": [],
+        "min_kv_scale": 0.0,
+        "pack_method": "reorder",
+        "weight_format": "real_quantized",
+        "weight_merge_groups": None,
+    }
+
+
+def _build_global_quant_cfg(tensor_cfg: dict, input_cfg: dict) -> dict:
+    return {
+        "bias": None,
+        "input_tensors": input_cfg,
+        "output_tensors": None,
+        "target_device": None,
+        "weight": tensor_cfg,
+    }
+
+
+def build_quantization_config(alpha: float) -> dict:
+    tensor_quant_cfg = _build_tensor_quant_cfg()
+    input_quant_cfg = {**tensor_quant_cfg, "is_dynamic": True}
+    return {
+        "algo_config": _build_algo_config(alpha),
         "exclude": EXCLUDE_PATTERNS,
-        "export": {
-            "kv_cache_group": [],
-            "min_kv_scale": 0.0,
-            "pack_method": "reorder",
-            "weight_format": "real_quantized",
-            "weight_merge_groups": None,
-        },
-        "global_quant_config": {
-            "bias": None,
-            "input_tensors": input_quant_cfg,
-            "output_tensors": None,
-            "target_device": None,
-            "weight": tensor_quant_cfg,
-        },
+        "export": _build_export_cfg(),
+        "global_quant_config": _build_global_quant_cfg(
+            tensor_quant_cfg, input_quant_cfg
+        ),
         "kv_cache_post_rope": False,
         "kv_cache_quant_config": {},
         "layer_quant_config": {},
@@ -367,17 +404,8 @@ def resolve_load_device_map(
     return {"": "cpu"}
 
 
-def export_model(
-    model_dir: str,
-    record_dir: str,
-    output_dir: str,
-    load_device_mode: str = "cpu",
-    device_map_file: str | None = None,
-    alpha: float = DEFAULT_ALPHA,
-) -> None:
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
-    device_map = resolve_load_device_map(load_device_mode, device_map_file)
+def _load_bf16_model(model_dir: str, device_map):
+    from transformers import AutoModelForCausalLM
 
     print(f"[Stage 2] Loading model from {model_dir}...")
     model = AutoModelForCausalLM.from_pretrained(
@@ -389,16 +417,16 @@ def export_model(
         low_cpu_mem_usage=True,
     )
     model.eval()
-    total_parameters = count_unique_parameters(model)
+    return model
 
-    decoder_layers = get_module(model, "model.layers")
-    act_scales = load_act_scales(record_dir, len(decoder_layers))
-    print(f"[Stage 2] Loaded {len(act_scales)} activation scale tensors")
 
+def _apply_smoothquant_all_layers(decoder_layers, act_scales, alpha: float) -> None:
     print(f"[Stage 2] Applying SmoothQuant with alpha={alpha}...")
     for layer_idx, layer in enumerate(tqdm(decoder_layers, desc="SmoothQuant")):
         apply_smoothquant_to_layer(layer, layer_idx, act_scales, alpha)
 
+
+def _prepare_output_dir(output_dir: str, model, alpha: float) -> None:
     if os.path.isdir(output_dir) and os.listdir(output_dir):
         raise FileExistsError(f"Output directory is not empty: {output_dir}")
     os.makedirs(output_dir, exist_ok=True)
@@ -407,15 +435,15 @@ def export_model(
     if getattr(model, "generation_config", None) is not None:
         model.generation_config.save_pretrained(output_dir)
 
-    del act_scales
-    gc.collect()
-    clear_accelerator_cache()
 
+def _stream_export_weights(model, output_dir: str, total_parameters: int) -> None:
     print(
         "[Stage 2] Quantizing weights to MXFP4 and streaming shards to safetensors..."
     )
     shard_writer = StreamingShardWriter(
-        output_dir=output_dir, max_shard_size="5GB", total_parameters=total_parameters
+        output_dir=output_dir,
+        max_shard_size="5GB",
+        total_parameters=total_parameters,
     )
     export_pbar = tqdm(iter_export_tensors(model), desc="Export tensors", unit="tensor")
     for name, tensor in export_pbar:
@@ -424,6 +452,10 @@ def export_model(
             f"current_shard={shard_writer.current_size_bytes / 1e9:.2f}GB"
         )
     shard_writer.finalize()
+
+
+def _copy_aux_files(model_dir: str, output_dir: str) -> None:
+    from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_dir, padding_side="left", trust_remote_code=True
@@ -435,6 +467,33 @@ def export_model(
         dst = os.path.join(output_dir, filename)
         if os.path.exists(src) and not os.path.exists(dst):
             shutil.copy2(src, dst)
+
+
+def export_model(
+    model_dir: str,
+    record_dir: str,
+    output_dir: str,
+    load_device_mode: str = "cpu",
+    device_map_file: str | None = None,
+    alpha: float = DEFAULT_ALPHA,
+) -> None:
+    device_map = resolve_load_device_map(load_device_mode, device_map_file)
+    model = _load_bf16_model(model_dir, device_map)
+    total_parameters = count_unique_parameters(model)
+
+    decoder_layers = get_module(model, "model.layers")
+    act_scales = load_act_scales(record_dir, len(decoder_layers))
+    print(f"[Stage 2] Loaded {len(act_scales)} activation scale tensors")
+
+    _apply_smoothquant_all_layers(decoder_layers, act_scales, alpha)
+    _prepare_output_dir(output_dir, model, alpha)
+
+    del act_scales
+    gc.collect()
+    clear_accelerator_cache()
+
+    _stream_export_weights(model, output_dir, total_parameters)
+    _copy_aux_files(model_dir, output_dir)
 
     print(f"[Stage 2] Exporting to {output_dir}...")
     print(f"[Stage 2] Done. Exported model to {output_dir}")

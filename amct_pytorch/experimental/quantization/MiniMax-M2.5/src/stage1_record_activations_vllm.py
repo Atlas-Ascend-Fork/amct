@@ -315,6 +315,248 @@ def save_recorded_scales(
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
 
+def _validate_world_size(env_world_size: int, tensor_parallel_size: int) -> None:
+    if env_world_size > 1 and env_world_size != tensor_parallel_size:
+        raise ValueError(
+            f"WORLD_SIZE({env_world_size}) must match "
+            f"--tensor_parallel_size({tensor_parallel_size}) when using torchrun."
+        )
+
+
+def _resolve_max_num_batched_tokens(max_num_batched_tokens: int, seq_len: int) -> int:
+    effective = max(max_num_batched_tokens, seq_len + 1)
+    if effective != max_num_batched_tokens:
+        print(
+            "[vLLM Stage 1] Bumping max_num_batched_tokens from "
+            f"{max_num_batched_tokens} to {effective} "
+            f"to cover seq_len={seq_len} plus one decode token."
+        )
+    return effective
+
+
+def _load_tokenizer_and_prompts(
+    model_dir: str, calib_data_path: str, num_calib_data: int, seq_len: int
+) -> list[dict[str, Any]]:
+    from transformers import AutoTokenizer
+
+    print(f"[vLLM Stage 1] Loading tokenizer from {model_dir}...")
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_dir,
+        padding_side="left",
+        trust_remote_code=True,
+    )
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    print(f"[vLLM Stage 1] Building calibration prompts from {calib_data_path}...")
+    prompts = load_calib_prompts(calib_data_path, tokenizer, num_calib_data, seq_len)
+    print(f"[vLLM Stage 1] Loaded {len(prompts)} prompts")
+    if not prompts:
+        raise RuntimeError("No valid calibration prompts were built.")
+    return prompts
+
+
+def _build_vllm_engine(
+    *,
+    model_dir: str,
+    tensor_parallel_size: int,
+    gpu_memory_utilization: float,
+    seq_len: int,
+    enforce_eager: bool,
+    max_num_seqs: int,
+    effective_max_num_batched_tokens: int,
+    enable_expert_parallel: bool,
+    compilation_config_dict: dict[str, Any] | None,
+    executor_backend: str | None,
+):
+    from vllm import LLM
+
+    print("[vLLM Stage 1] Initializing vLLM engine...")
+    return LLM(
+        model=model_dir,
+        tokenizer=model_dir,
+        trust_remote_code=True,
+        tensor_parallel_size=tensor_parallel_size,
+        dtype="bfloat16",
+        enforce_eager=enforce_eager,
+        max_model_len=seq_len + 1,
+        gpu_memory_utilization=gpu_memory_utilization,
+        max_num_seqs=max_num_seqs,
+        max_num_batched_tokens=effective_max_num_batched_tokens,
+        enable_expert_parallel=enable_expert_parallel,
+        compilation_config=compilation_config_dict,
+        distributed_executor_backend=executor_backend,
+    )
+
+
+def _make_output_hook(
+    target_dict: dict[int, torch.Tensor], layer_idx: int, unwrap_tuple: bool = False
+):
+    def hook(_module, _inputs, output):
+        if unwrap_tuple and isinstance(output, tuple):
+            output = output[0]
+        if isinstance(output, torch.Tensor):
+            update_max(target_dict, layer_idx, output)
+
+    return hook
+
+
+def _make_pre_hook(target_dict: dict[int, torch.Tensor], layer_idx: int):
+    def hook(_module, inputs):
+        if inputs and isinstance(inputs[0], torch.Tensor):
+            update_max(target_dict, layer_idx, inputs[0])
+
+    return hook
+
+
+def _register_activation_hooks(
+    decoder_layers,
+    qkv_inputs: dict[int, torch.Tensor],
+    o_proj_inputs: dict[int, torch.Tensor],
+) -> list:
+    print("[vLLM Stage 1] Registering activation hooks...")
+    handles = []
+    for layer_idx, layer in enumerate(decoder_layers):
+        handles.append(
+            layer.input_layernorm.register_forward_hook(
+                _make_output_hook(qkv_inputs, layer_idx, unwrap_tuple=True)
+            )
+        )
+        handles.append(
+            layer.self_attn.qkv_proj.register_forward_pre_hook(
+                _make_pre_hook(qkv_inputs, layer_idx)
+            )
+        )
+        handles.append(
+            layer.self_attn.attn.register_forward_hook(
+                _make_output_hook(o_proj_inputs, layer_idx)
+            )
+        )
+        handles.append(
+            layer.self_attn.o_proj.register_forward_pre_hook(
+                _make_pre_hook(o_proj_inputs, layer_idx)
+            )
+        )
+    return handles
+
+
+def _run_calibration(llm, prompts: list[dict[str, Any]], handles: list) -> None:
+    from vllm import SamplingParams
+    from vllm.sampling_params import RequestOutputKind
+
+    sampling_params = SamplingParams(
+        temperature=0.0,
+        max_tokens=1,
+        detokenize=False,
+        skip_special_tokens=False,
+        output_kind=RequestOutputKind.FINAL_ONLY,
+    )
+    print("[vLLM Stage 1] Running calibration prompts through vLLM...")
+    try:
+        llm.generate(prompts, sampling_params=sampling_params, use_tqdm=tqdm)
+    finally:
+        for handle in handles:
+            handle.remove()
+        release_accelerator_cache()
+
+
+def _reduce_recorded_activations(
+    num_layers: int,
+    qkv_inputs: dict[int, torch.Tensor],
+    o_proj_inputs: dict[int, torch.Tensor],
+) -> None:
+    print("[vLLM Stage 1] Reducing activation statistics across ranks...")
+    for layer_idx in range(num_layers):
+        if layer_idx not in qkv_inputs:
+            raise RuntimeError(f"Layer {layer_idx} qkv hook was never triggered.")
+        if layer_idx not in o_proj_inputs:
+            raise RuntimeError(f"Layer {layer_idx} o_proj hook was never triggered.")
+        qkv_inputs[layer_idx] = reduce_max_in_place(qkv_inputs[layer_idx])
+        o_proj_inputs[layer_idx] = gather_and_concat(o_proj_inputs[layer_idx])
+
+
+def _record_and_reduce(
+    llm, prompts: list[dict[str, Any]]
+) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor], int]:
+    model = get_worker_model(llm)
+    decoder_layers = model.model.layers
+    num_layers = len(decoder_layers)
+    qkv_inputs: dict[int, torch.Tensor] = {}
+    o_proj_inputs: dict[int, torch.Tensor] = {}
+    handles = _register_activation_hooks(decoder_layers, qkv_inputs, o_proj_inputs)
+    _run_calibration(llm, prompts, handles)
+    _reduce_recorded_activations(num_layers, qkv_inputs, o_proj_inputs)
+    return qkv_inputs, o_proj_inputs, num_layers
+
+
+def _build_metadata(
+    *,
+    model_dir: str,
+    calib_data_path: str,
+    num_calib_data: int,
+    seq_len: int,
+    num_layers: int,
+    vllm_repo_dir: str,
+    vllm_patch_path: str | None,
+    tensor_parallel_size: int,
+    world_size: int,
+    rank: int,
+    executor_backend: str | None,
+    max_num_seqs: int,
+    effective_max_num_batched_tokens: int,
+    enable_expert_parallel: bool,
+    compilation_config_dict: dict[str, Any] | None,
+    enforce_eager: bool,
+) -> dict[str, Any]:
+    return {
+        "model_dir": model_dir,
+        "calib_data_path": calib_data_path,
+        "num_calib_data": num_calib_data,
+        "seq_len": seq_len,
+        "num_layers": num_layers,
+        "scaling_layers": SCALING_LAYERS,
+        "backend": "vllm",
+        "vllm_repo_dir": str(Path(vllm_repo_dir).expanduser().resolve()),
+        "vllm_patch_path": vllm_patch_path,
+        "tensor_parallel_size": tensor_parallel_size,
+        "world_size": world_size,
+        "rank": rank,
+        "executor_backend": executor_backend,
+        "engine_max_model_len": seq_len + 1,
+        "engine_max_num_seqs": max_num_seqs,
+        "engine_max_num_batched_tokens": effective_max_num_batched_tokens,
+        "enable_expert_parallel": enable_expert_parallel,
+        "compilation_config": compilation_config_dict,
+        "enforce_eager": enforce_eager,
+        "vllm_ascend_enable_flashcomm1": os.environ.get(
+            "VLLM_ASCEND_ENABLE_FLASHCOMM1"
+        ),
+        "notes": {
+            "qkv_record_source": "input_layernorm output / qkv_proj input fallback",
+            "o_proj_record_source": (
+                "self_attn.attn output / o_proj input fallback "
+                "concatenated across TP ranks"
+            ),
+            "decode_note": (
+                "generation uses max_tokens=1, so prompt prefill dominates "
+                "but one decode step is also executed"
+            ),
+        },
+    }
+
+
+def _save_results(
+    output_dir: str,
+    num_layers: int,
+    qkv_inputs: dict[int, torch.Tensor],
+    o_proj_inputs: dict[int, torch.Tensor],
+    metadata: dict[str, Any],
+) -> None:
+    print(f"[vLLM Stage 1] Saving activation scales to {output_dir}...")
+    save_recorded_scales(output_dir, num_layers, qkv_inputs, o_proj_inputs, metadata)
+    print(f"[vLLM Stage 1] Done. Recorded {num_layers * 4} activation scale tensors.")
+
+
 def record_activations_vllm(
     model_dir: str,
     calib_data_path: str,
@@ -334,188 +576,54 @@ def record_activations_vllm(
 ) -> None:
     prepare_vllm_runtime(vllm_repo_dir, vllm_patch_path, flashcomm1)
 
-    from transformers import AutoTokenizer
-    from vllm import LLM, SamplingParams
-    from vllm.sampling_params import RequestOutputKind
-
     env_world_size = int(os.environ.get("WORLD_SIZE", "1"))
-    if env_world_size > 1 and env_world_size != tensor_parallel_size:
-        raise ValueError(
-            f"WORLD_SIZE({env_world_size}) must match "
-            f"--tensor_parallel_size({tensor_parallel_size}) when using torchrun."
-        )
-
+    _validate_world_size(env_world_size, tensor_parallel_size)
     compilation_config_dict = parse_compilation_config(compilation_config)
-    effective_max_num_batched_tokens = max(max_num_batched_tokens, seq_len + 1)
-    if effective_max_num_batched_tokens != max_num_batched_tokens:
-        print(
-            "[vLLM Stage 1] Bumping max_num_batched_tokens from "
-            f"{max_num_batched_tokens} to {effective_max_num_batched_tokens} "
-            f"to cover seq_len={seq_len} plus one decode token."
-        )
-
-    print(f"[vLLM Stage 1] Loading tokenizer from {model_dir}...")
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_dir,
-        padding_side="left",
-        trust_remote_code=True,
+    effective_max_num_batched_tokens = _resolve_max_num_batched_tokens(
+        max_num_batched_tokens, seq_len
     )
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    print(f"[vLLM Stage 1] Building calibration prompts from {calib_data_path}...")
-    prompts = load_calib_prompts(calib_data_path, tokenizer, num_calib_data, seq_len)
-    print(f"[vLLM Stage 1] Loaded {len(prompts)} prompts")
-    if not prompts:
-        raise RuntimeError("No valid calibration prompts were built.")
-
+    prompts = _load_tokenizer_and_prompts(
+        model_dir, calib_data_path, num_calib_data, seq_len
+    )
     executor_backend = "external_launcher" if env_world_size > 1 else None
 
-    print("[vLLM Stage 1] Initializing vLLM engine...")
-    llm = LLM(
-        model=model_dir,
-        tokenizer=model_dir,
-        trust_remote_code=True,
+    llm = _build_vllm_engine(
+        model_dir=model_dir,
         tensor_parallel_size=tensor_parallel_size,
-        dtype="bfloat16",
-        enforce_eager=enforce_eager,
-        max_model_len=seq_len + 1,
         gpu_memory_utilization=gpu_memory_utilization,
+        seq_len=seq_len,
+        enforce_eager=enforce_eager,
         max_num_seqs=max_num_seqs,
-        max_num_batched_tokens=effective_max_num_batched_tokens,
+        effective_max_num_batched_tokens=effective_max_num_batched_tokens,
         enable_expert_parallel=enable_expert_parallel,
-        compilation_config=compilation_config_dict,
-        distributed_executor_backend=executor_backend,
+        compilation_config_dict=compilation_config_dict,
+        executor_backend=executor_backend,
     )
-
-    model = get_worker_model(llm)
-    decoder_layers = model.model.layers
-    num_layers = len(decoder_layers)
+    qkv_inputs, o_proj_inputs, num_layers = _record_and_reduce(llm, prompts)
     rank = get_rank()
     world_size = get_world_size()
-
-    qkv_inputs: dict[int, torch.Tensor] = {}
-    o_proj_inputs: dict[int, torch.Tensor] = {}
-    handles = []
-
-    def input_layernorm_output_hook(layer_idx: int):
-        def hook(_module, _inputs, output):
-            if isinstance(output, tuple):
-                output = output[0]
-            if isinstance(output, torch.Tensor):
-                update_max(qkv_inputs, layer_idx, output)
-
-        return hook
-
-    def qkv_pre_hook(layer_idx: int):
-        def hook(_module, inputs):
-            if inputs and isinstance(inputs[0], torch.Tensor):
-                update_max(qkv_inputs, layer_idx, inputs[0])
-
-        return hook
-
-    def attn_output_hook(layer_idx: int):
-        def hook(_module, _inputs, output):
-            if isinstance(output, torch.Tensor):
-                update_max(o_proj_inputs, layer_idx, output)
-
-        return hook
-
-    def o_proj_pre_hook(layer_idx: int):
-        def hook(_module, inputs):
-            if inputs and isinstance(inputs[0], torch.Tensor):
-                update_max(o_proj_inputs, layer_idx, inputs[0])
-
-        return hook
-
-    print("[vLLM Stage 1] Registering activation hooks...")
-    for layer_idx, layer in enumerate(decoder_layers):
-        handles.append(
-            layer.input_layernorm.register_forward_hook(
-                input_layernorm_output_hook(layer_idx)
-            )
-        )
-        handles.append(
-            layer.self_attn.qkv_proj.register_forward_pre_hook(qkv_pre_hook(layer_idx))
-        )
-        handles.append(
-            layer.self_attn.attn.register_forward_hook(attn_output_hook(layer_idx))
-        )
-        handles.append(
-            layer.self_attn.o_proj.register_forward_pre_hook(o_proj_pre_hook(layer_idx))
-        )
-
-    sampling_params = SamplingParams(
-        temperature=0.0,
-        max_tokens=1,
-        detokenize=False,
-        skip_special_tokens=False,
-        output_kind=RequestOutputKind.FINAL_ONLY,
-    )
-
-    print("[vLLM Stage 1] Running calibration prompts through vLLM...")
-    try:
-        llm.generate(prompts, sampling_params=sampling_params, use_tqdm=tqdm)
-    finally:
-        for handle in handles:
-            handle.remove()
-        release_accelerator_cache()
-
-    print("[vLLM Stage 1] Reducing activation statistics across ranks...")
-    for layer_idx in range(num_layers):
-        if layer_idx not in qkv_inputs:
-            raise RuntimeError(f"Layer {layer_idx} qkv hook was never triggered.")
-        if layer_idx not in o_proj_inputs:
-            raise RuntimeError(f"Layer {layer_idx} o_proj hook was never triggered.")
-
-        qkv_inputs[layer_idx] = reduce_max_in_place(qkv_inputs[layer_idx])
-        o_proj_inputs[layer_idx] = gather_and_concat(o_proj_inputs[layer_idx])
-
     barrier()
 
     if rank == 0:
-        metadata = {
-            "model_dir": model_dir,
-            "calib_data_path": calib_data_path,
-            "num_calib_data": num_calib_data,
-            "seq_len": seq_len,
-            "num_layers": num_layers,
-            "scaling_layers": SCALING_LAYERS,
-            "backend": "vllm",
-            "vllm_repo_dir": str(Path(vllm_repo_dir).expanduser().resolve()),
-            "vllm_patch_path": vllm_patch_path,
-            "tensor_parallel_size": tensor_parallel_size,
-            "world_size": world_size,
-            "rank": rank,
-            "executor_backend": executor_backend,
-            "engine_max_model_len": seq_len + 1,
-            "engine_max_num_seqs": max_num_seqs,
-            "engine_max_num_batched_tokens": effective_max_num_batched_tokens,
-            "enable_expert_parallel": enable_expert_parallel,
-            "compilation_config": compilation_config_dict,
-            "enforce_eager": enforce_eager,
-            "vllm_ascend_enable_flashcomm1": os.environ.get(
-                "VLLM_ASCEND_ENABLE_FLASHCOMM1"
-            ),
-            "notes": {
-                "qkv_record_source": "input_layernorm output / qkv_proj input fallback",
-                "o_proj_record_source": (
-                    "self_attn.attn output / o_proj input fallback "
-                    "concatenated across TP ranks"
-                ),
-                "decode_note": (
-                    "generation uses max_tokens=1, so prompt prefill dominates "
-                    "but one decode step is also executed"
-                ),
-            },
-        }
-        print(f"[vLLM Stage 1] Saving activation scales to {output_dir}...")
-        save_recorded_scales(
-            output_dir, num_layers, qkv_inputs, o_proj_inputs, metadata
+        metadata = _build_metadata(
+            model_dir=model_dir,
+            calib_data_path=calib_data_path,
+            num_calib_data=num_calib_data,
+            seq_len=seq_len,
+            num_layers=num_layers,
+            vllm_repo_dir=vllm_repo_dir,
+            vllm_patch_path=vllm_patch_path,
+            tensor_parallel_size=tensor_parallel_size,
+            world_size=world_size,
+            rank=rank,
+            executor_backend=executor_backend,
+            max_num_seqs=max_num_seqs,
+            effective_max_num_batched_tokens=effective_max_num_batched_tokens,
+            enable_expert_parallel=enable_expert_parallel,
+            compilation_config_dict=compilation_config_dict,
+            enforce_eager=enforce_eager,
         )
-        print(
-            f"[vLLM Stage 1] Done. Recorded {num_layers * 4} activation scale tensors."
-        )
+        _save_results(output_dir, num_layers, qkv_inputs, o_proj_inputs, metadata)
 
     barrier()
 
