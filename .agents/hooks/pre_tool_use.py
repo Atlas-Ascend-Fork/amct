@@ -18,6 +18,9 @@ PROTECTED_PATTERNS = {
 
 
 def matches_any(basename, full_path, patterns):
+    # 必须用 fnmatch（不是 pathlib.PurePath.match）：fnmatch 的 `*` 跨 `/`，
+    # 故 `*/common/models/llm/*` 对绝对路径 /ws/.../common/models/llm/x.py 也匹配（实测 True）。
+    # 改 pathlib.match 会让 `*` 不跨 `/`，反而漏掉深层绝对路径 —— 削弱越界保护，勿改。
     for pat in patterns:
         if fnmatch.fnmatch(basename, pat) or fnmatch.fnmatch(full_path, pat):
             return True
