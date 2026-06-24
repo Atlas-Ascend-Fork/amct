@@ -27,7 +27,7 @@ skills:
 | 优先级 | 判断条件 | 执行动作 |
 |--------|---------|---------|
 | 1 | 主 Agent 明确指定 skill | 按指定执行 |
-| 2 | 模型未适配 | 调用 `model-adapter` 做适配性分析，输出缺口清单 |
+| 2 | 模型未适配 | 调用 `model-adapter` **仅做适配性分析**（结构解析 / 复用计划 / 改动范围，即其步骤 1-7），输出缺口清单；代码改造与 BF16·PTQ smoke（步骤 8-10）交 quant-implementer |
 | 3 | 已适配、需首轮方案 | 调用 `scheme-recommendation`，复用 casebook 给候选方案 |
 | 4 | 直转 delta 超阈、需升级 | 调用 `algorithm-recommendation` 给下一步算法 |
 

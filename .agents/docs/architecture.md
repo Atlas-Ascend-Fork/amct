@@ -33,12 +33,12 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 3. 单一源投影机制（Single Source of Truth）
 
-`.agents/` 是**唯一源**（git tracked）；`scripts/init-agent.sh` 把它符号链接投影成两套 runtime 视图：
+`.agents/` 是**唯一源**（git tracked）；`scripts/init-agent.sh` 把它投影成两套 runtime 视图，分两种方式：
 
-- Claude Code：`.claude/{skills,agents,docs,settings.json}` + `CLAUDE.md → AGENTS.md`
-- OpenCode：`.opencode/{skills,agents,docs}`（保留手维护的 `opencode.json`/`README.md`）
+- **符号链接**（源改即时生效）：`skills` / `agents` / `hooks` / `docs`，及 `CLAUDE.md → AGENTS.md`。
+- **拷贝**（源改后须重跑 `init-agent.sh` 才同步）：`settings.json → .claude/`、`opencode.json → .opencode/`。
 
-这些视图 **gitignored**，clone 后跑 `bash scripts/init-agent.sh` 生成。一处源、双端一致，避免提交生成物与双份维护。
+视图分布：`.claude/{skills,agents,docs,settings.json}` + `CLAUDE.md`；`.opencode/{skills,agents,docs,opencode.json}`。两端视图 **全 gitignored、全量生成**，clone 后跑 `bash scripts/init-agent.sh` 生成。一处源、双端一致，不提交生成物、不双份维护。
 
 ## 4. 设计原则
 

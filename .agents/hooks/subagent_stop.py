@@ -67,21 +67,29 @@ def check_self_verification(data, content):
 
 def check_retry_limit(data, content):
     """检查 2：外循环重试限制（阻断）"""
+    import fcntl
     if data.get("agent_type", "") not in ("quant-implementer", "quant-reviewer"):
         return None
-    session_id = data.get("session_id", "unknown")
     stage = get_current_stage(content)
+    if stage == "0":
+        # 无 STAGE 标记（编排初始化前 / 格式异常）：不计入共享 "0" 计数器，
+        # 避免跨阶段累加误触发上限阻断
+        return None
+    session_id = data.get("session_id", "unknown")
     counter_file = f"/tmp/hook_retry_{session_id}_{stage}.count"
-    count = 0
-    if os.path.exists(counter_file):
+    # flock 保护读-改-写原子性（防极端并发下计数丢失）
+    with open(counter_file, "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
         try:
-            with open(counter_file) as f:
-                count = int(f.read().strip())
-        except (ValueError, OSError):
+            count = int(f.read().strip() or "0")
+        except ValueError:
             count = 0
-    count += 1
-    with open(counter_file, "w") as f:
+        count += 1
+        f.seek(0)
+        f.truncate()
         f.write(str(count))
+        fcntl.flock(f, fcntl.LOCK_UN)
     if count > MAX_RETRY_COUNT:
         return RETRY_LIMIT_MSG.format(n=count // 2)
     return None

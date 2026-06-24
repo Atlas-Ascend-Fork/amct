@@ -46,7 +46,7 @@ bf16 baseline = 命令 1 把 `--eval_mode` 换 `bf16`。
 - **`--algos` 一致性**：加载 PTQ 参数（**评测 与 deploy 都**）必带与 ptq 训练一致的 `--algos`，否则加载侧 quant 模块不构建 `weight_quantizer.algorithms.<algo>` 子模块、`load_module` 报 `KeyError: Submodule '...algorithms.<algo>' is not found`。
 - **算法只认 new-path（LLM）`ALGO_REGISTRY`**：当前 = `autoround / lac / lwc / omniquant`（gptq/awq/mxfp 视分支移植）；跑前确认算法在 new-path（忽略 classic 图量化名册，详见 L1 `cross-model-pitfalls.md`）。
 - 一次 `--quant_target` 聚焦一个角色；多角色分别跑、分别给 `--*_param_dir`。
-- 离线容器用 `cli_wrapper.py` 包一层（patch get_wikitext2/get_pileval 到本地数据）。
+- **评测数据不可达（离线容器）= 环境/调用方责任**：设 `HF_ENDPOINT` 镜像 / 用 modelscope / 指本地数据路径（或调用方自备 wrapper patch `get_wikitext2`/`get_pileval`）；仍不可达按 progress 协议写 `BLOCKED` 停下，不臆造继续。
 - **extract↔ptq 数据目录一致**：`extract_ptq_data` 把校准数据写到 **`--data_dir`**（不是 `--output_dir`！），与对应 `ptq --data_dir <D>` 必须是**同一个 `--data_dir`**；产物名 `block_<idx>_<target>_in.pkl`。报 `PTQ input file not found: <dir>/block_*_<target>_in.pkl` → 先核对 extract 与 ptq 的 `--data_dir` 是否同一目录、`find -name 'block_*_in.pkl'` 确认真实位置，**不要直接判 extract 未生成 / 有 bug**（同 `--algos`：漏检自身用法别甩锅框架）。
 - 引用仓库内路径一律相对路径。
 

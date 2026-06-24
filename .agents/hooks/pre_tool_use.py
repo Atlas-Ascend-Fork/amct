@@ -25,7 +25,11 @@ def matches_any(basename, full_path, patterns):
 
 
 def main():
-    data = json.load(sys.stdin)
+    try:
+        data = json.load(sys.stdin)
+    except (json.JSONDecodeError, ValueError):
+        # stdin JSON 异常（管道截断/编码错误）：放行，避免误阻断正常操作
+        sys.exit(0)
     agent_type = data.get("agent_type", "")
     file_path = data.get("tool_input", {}).get("file_path", "")
     patterns = PROTECTED_PATTERNS.get(agent_type)

@@ -48,20 +48,30 @@ def archive_progress(progress_path: str) -> None:
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     archive_entry = f"\n\n---\n\n## 归档于 {timestamp}\n\n{work_section}\n"
 
-    if not os.path.exists(history_path):
-        header = (
-            "<!-- 本文件默认禁止全文读取。需要历史信息时请用 Grep 按关键字查找。 -->\n"
-            "# 进度历史归档\n"
-        )
-        with open(history_path, "w", encoding="utf-8") as f:
-            f.write(header)
+    # 幂等：若该工作区内容已在历史中（上次 progress 清空失败后的重跑），跳过重复归档
+    already_archived = False
+    if os.path.exists(history_path):
+        with open(history_path, "r", encoding="utf-8") as f:
+            if work_section in f.read():
+                already_archived = True
+                logger.info("工作区内容已在历史中，跳过重复归档。")
+    if not already_archived:
+        if not os.path.exists(history_path):
+            header = (
+                "<!-- 本文件默认禁止全文读取。需要历史信息时请用 Grep 按关键字查找。 -->\n"
+                "# 进度历史归档\n"
+            )
+            with open(history_path, "w", encoding="utf-8") as f:
+                f.write(header)
+        with open(history_path, "a", encoding="utf-8") as f:
+            f.write(archive_entry)
 
-    with open(history_path, "a", encoding="utf-8") as f:
-        f.write(archive_entry)
-
+    # 原子写 progress.md：先写临时文件再 os.replace，崩溃（磁盘满/OOM）不会丢失常驻区/工作区
     new_content = f"{persistent_section}\n\n{SEPARATOR_START}\n\n"
-    with open(progress_path, "w", encoding="utf-8") as f:
+    tmp_path = progress_path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         f.write(new_content)
+    os.replace(tmp_path, progress_path)
 
     logger.info("归档完成：%d 行 → %s", len(work_section.splitlines()), history_path)
 

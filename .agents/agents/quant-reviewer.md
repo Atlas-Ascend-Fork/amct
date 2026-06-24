@@ -29,7 +29,7 @@ skills:
 | 1 | 主 Agent 明确指定验证类型 | 按指定执行 |
 | 2 | 直转评测完成 | 调用 `direct-quant-eval`，判 delta ≤ 阈值（默认 0.2）|
 | 3 | PTQ 完成 | 调用 `algorithm-validation`，对比直转判断 PTQ 是否真改善 |
-| 4 | 待导出前 | 核查产物可交付性（index 完整、config 符合方案）|
+| 4 | 待导出前 | 确认 implementer 自验证结果，并独立抽查**静态产物契约**（`index.json` 0-missing / `config.json` `quantization_config` 字段符合方案）；产物自检清单见 `$deploy-export`「产物自检」 |
 
 ## 核心原则
 
