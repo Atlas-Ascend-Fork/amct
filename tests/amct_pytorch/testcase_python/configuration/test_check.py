@@ -901,6 +901,28 @@ class TestCheckGraph(unittest.TestCase):
         mod_name = "lstm"
         self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
 
+    def test_check_retrain_data_type_decouples_weight(self):
+        from unittest.mock import MagicMock
+
+        from amct_pytorch.classic.graph_based.common.retrain_config.retrain_proto import (
+            RetrainProtoConfig,
+        )
+
+        cfg = RetrainProtoConfig.__new__(RetrainProtoConfig)
+        from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
+
+        # 权重路放行 INT4（使用真实 CAPACITY，不依赖 INT4_RETRAIN）
+        cfg.capacity = CAPACITY
+        cfg._check_retrain_data_type("INT4", is_weight=True)  # 不抛错
+
+        # 激活路仍拦 INT4：显式 mock capacity，使 INT4_RETRAIN 未开启（返回 None），
+        # 保证测试不依赖 CAPACITY 全局默认值
+        mock_cap = MagicMock()
+        mock_cap.get_value.return_value = None  # 显式：INT4_RETRAIN 未开启
+        cfg.capacity = mock_cap
+        with self.assertRaises(ValueError):
+            cfg._check_retrain_data_type("INT4", is_weight=False)
+
     def test_a8w4_in_retrain_whitelist(self):
         from amct_pytorch.classic.graph_based.common.utils.vars_util import (
             RETRAIN_ACT_WTS_TYPES,

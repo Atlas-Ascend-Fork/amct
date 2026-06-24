@@ -55,3 +55,28 @@ for _pb2 in [
     _m = MagicMock()
     _m.__spec__ = MagicMock()
     sys.modules.setdefault(f"{_proto_base}.{_pb2}", _m)
+
+# Mock compiled protobuf modules under amct_pytorch.classic.graph_based.proto.
+# retrain_proto.py imports from ...proto (i.e. amct_pytorch.classic.graph_based.proto)
+# which is also a build-time generated package not present in the source tree.
+_gb_proto_base = "amct_pytorch.classic.graph_based.proto"
+_gb_proto_pkg = MagicMock()
+_gb_proto_pkg.__spec__ = MagicMock()
+sys.modules.setdefault(_gb_proto_base, _gb_proto_pkg)
+for _pb2 in [
+    "retrain_config_pb2",
+]:
+    _m2 = MagicMock()
+    _m2.__spec__ = MagicMock()
+    sys.modules.setdefault(f"{_gb_proto_base}.{_pb2}", _m2)
+
+# Mock amct_pytorch.classic.graph_based.utils (build-time package, not in source tree).
+# retrain_proto.py imports from ...utils.log for LOGGER.
+_gb_utils_base = "amct_pytorch.classic.graph_based.utils"
+_gb_utils_pkg = MagicMock()
+_gb_utils_pkg.__spec__ = MagicMock()
+sys.modules.setdefault(_gb_utils_base, _gb_utils_pkg)
+for _util_mod in ["log"]:
+    _m3 = MagicMock()
+    _m3.__spec__ = MagicMock()
+    sys.modules.setdefault(f"{_gb_utils_base}.{_util_mod}", _m3)
