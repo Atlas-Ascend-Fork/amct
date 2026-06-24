@@ -1,6 +1,6 @@
 ---
 name: algorithm-recommendation
-description: 为已适配模型推荐下一步值得尝试的量化算法。适用于用户已知直转量化的精度损失、想根据掉点特征推荐后续算法，或在还没有直转结果时先基于 casebook、模型结构和仓库已有算法能力给出先验算法候选。
+description: 为已适配模型推荐下一步值得尝试的量化算法（仅限已注册：lwc/lac/omniquant/autoround）。触发场景：已知直转掉点想按特征选后续算法 / 无直转结果时先据 casebook+结构+仓库算法能力给先验候选。不适用于：跑算法训练、判算法收益（执行→ $quant-run，判读→ $algorithm-validation）。
 ---
 
 # 量化算法推荐

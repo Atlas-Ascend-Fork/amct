@@ -1,41 +1,30 @@
 ---
 name: deploy-export
-description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于用户已经明确模型、quant_target、bit、dtype，并希望把直转或 PTQ 结果导出成 HuggingFace safetensors 权重目录；同时由 skill 按模板补齐对 infer 仓及通用下游消费者可直接使用的量化说明文档。
+description: 导出 deploy-ready 量化模型目录（HuggingFace safetensors 权重）+ 按模板补齐 deploy_quantization.md 交付文档。触发场景：已明确 模型/quant_target/bit/dtype，要把直转或 PTQ 结果导出给 infer 仓等下游消费。不适用于：模型适配、方案/算法推荐、跑 PTQ、判精度（各→对应 skill）。
 ---
 
 # Deploy 导出
 
-这个 skill 只用于导出 deploy-ready 的量化模型目录。
+## 概述
 
-调用这个 skill，默认表示：
-- 当前量化方案已经接受
-- 当前任务已经进入导出阶段
-- 导出结果默认面向 infer 仓及通用下游消费者
+把已接受的量化方案导出成 deploy-ready 模型目录（HuggingFace safetensors 权重 + `config.json` + `index.json`），并由本 skill 按模板补齐 `deploy_quantization.md` 交付文档。
 
-这个 skill 不负责：
-- 新模型适配
-- 推荐量化方案
-- 跑 PTQ
-- 评测量化精度
+调用即默认：量化方案已接受、任务已进入导出阶段、产物面向 infer 仓及通用下游消费者。**精度是否可行须先由 `$direct-quant-eval` 或 `$quant-workflow` 完成。**
 
-精度是否可行，应由 `$direct-quant-eval` 或 `$quant-workflow` 先完成。
+不负责：新模型适配 / 推荐方案 / 跑 PTQ / 评测精度（各 → 对应 skill）。
 
 ## 用户调用格式
 
-- 如果用户明确点名调用这个 skill，先返回这个 skill 对应的固定输入模板，再开始执行。
-- 不替用户改成别的 skill；只有当用户没有指定 skill、只是描述目标时，才建议是否回到 `$quant-workflow`。
-- 固定输入模板见：[../references/skill-input-template.md](../references/skill-input-template.md)
+- 用户明确点名调用，先返回本 skill 的固定输入模板再执行。
+- 不替用户改成别的 skill；仅当用户没指定 skill、只描述目标时，才建议是否回 `$quant-workflow`。
+- 固定输入模板见 [../references/skill-input-template.md](../references/skill-input-template.md)。
 
-## 先看哪些文件
-
-按下面顺序阅读：
+## 先读哪些文件
 
 1. `amct_pytorch/workflows/llm_deploy.py`
 2. `amct_pytorch/common/models/llm/common/deploy_export.py`
-3. 如需确认 PTQ 参数按 target 的加载方式，再看 `amct_pytorch/common/models/llm/common/base.py`
-4. 生成说明文档时，参考：
-   - `references/deploy_quantization_template.md`
-   - 文档需要能被下游推理仓或其他消费者直接理解和接入
+3. 确认 PTQ 参数按 target 的加载方式，再看 `amct_pytorch/common/models/llm/common/base.py`
+4. 生成说明文档时参考 `references/deploy_quantization_template.md`（文档须能被下游推理仓或其他消费者直接理解接入）。
 
 ## 命令模板
 
@@ -48,128 +37,50 @@ description: 在 amct 中导出 deploy-ready 的量化模型目录。适用于�
 - `--bit_config`：与评测同一份 yaml
 - `--output_dir`：导出目录
 
-> `deploy.py` 只产出权重 + `config.json` + `model.safetensors.index.json`；`deploy_quantization.md` 由本 skill 另行生成。
-
 ## 固定流程
 
 1. 先确认用户目标是“只做 deploy 导出”。
-   - 如果用户还没拿到量化方案，回到 `$quant-workflow`
-   - 如果用户只想评测当前量化方案，回到 `$direct-quant-eval`
-2. 先判定导出模式。
-   - 用户期望模式：直转 / PTQ / 未明确
-   - 实际导出模式：直转 / PTQ / 混合
-   - 如果两者不一致，必须在执行前说明，并在结论中保留这个差异
-3. 检查前置条件。
-   - 模型已经适配
-   - 目标 `quant_target` 的量化通路已经能正常构图
-   - 当前请求使用 `granularity=block`
-   - 当前 `quant_dtype` 已实现 `export_deploy()`
-4. 明确导出配置。
-   - `model`
-   - `model_name`
-   - `quant_target`
-   - `quant_dtype`
-   - bit 配置
-   - `output_dir`
-5. 如果用户没给 `output_dir`，优先使用稳定默认值：
-   - `outputs/deploy/<model_name>/<quant_dtype>/<target-tag>`
-6. 如果目标目录已经存在，先判断能否复用旧结果。
-   - 能回答当前问题则先复用
-   - 需要重跑则不要静默覆盖
+   - 还没拿到量化方案 → 回 `$quant-workflow`
+   - 只想评测当前方案 → 回 `$direct-quant-eval`
+2. 先判定导出模式：用户期望（直转 / PTQ / 未明确）vs 实际（直转 / PTQ / 混合）；**两者不一致必须在执行前说明，并在结论保留差异**。
+3. 检查前置：模型已适配 / 目标 `quant_target` 量化通路能正常构图 / 用 `granularity=block` / `quant_dtype` 已实现 `export_deploy()`。
+4. 明确导出配置：`model` / `model_name` / `quant_target` / `quant_dtype` / bit 配置 / `output_dir`。
+5. 用户没给 `output_dir` → 用稳定默认 `outputs/deploy/<model_name>/<quant_dtype>/<target-tag>`。
+6. 目标目录已存在 → 先判能否复用；**需重跑不要静默覆盖**。
 7. 运行 `amct_pytorch/cli/llm/deploy.py` 完成权重导出。
-8. 导出后至少检查：
-   - 非权重支持文件已复制到输出目录
-   - `model.safetensors.index.json` 已刷新
-   - index 中引用的 shard 文件都存在
-   - `config.json` 已刷新
-9. 在 deploy 代码导出完成后，由 skill 继续生成：
-   - `deploy_quantization.md`
+8. 导出后至少检查：非权重支持文件已复制 / `model.safetensors.index.json` 已刷新且引用 shard 都在 / `config.json` 已刷新。
+9. 导出完成后由 skill 继续生成 `deploy_quantization.md`。
 
 ## 产物自检（probe，静态、不碰 infer runtime）
 
-导出后做静态产物核验，**贴输出、不空打勾**；infer 运行期消费（前向/算子）由 infer 仓负责，本处不跑推理：
+导出后做静态产物核验，**贴输出、不空打勾**；infer 运行期消费（前向 / 算子）由 infer 仓负责，本处不跑推理：
 
 - **object 级**：抽查本次 `--quant_target` 对应模块在 `config.json` 的 `quantization_config` 中确为量化（`format`/`num_bits` 非空、未误入 `ignore`），与方案一致。
-- **权重级对账**：safetensors 中量化层的 `*.weight_scale`（int 路径 + `*.weight` int 化 / mxfp + `*.weight_packed`）键数与目标量化层数匹配；`model.safetensors.index.json` 0 missing、shard 齐全。
-- **PTQ 参数**：带 `--algos` 时核对导出已消费 ptq 参数（对应层 scale 非占位/非全 0），且 deploy 的 `--algos` 与 ptq 一致（否则 load_module KeyError，详见 `$quant-run`）。
-- **范围**：自检止于产物结构与 config 契约；不验证 infer 前向 / 算子生效（交 infer 仓）。
-
-## 关键边界
-
-这一点必须明确：
-
-- deploy 代码只负责导出权重目录。
-- `amct_pytorch/workflows/llm_deploy.py` 不生成 `deploy_quantization.md`（早期内嵌的自动 stub 已移除）。
-- `deploy_quantization.md` 由当前 skill 按模板生成；裸跑 `amct_pytorch/cli/llm/deploy.py` 不会产出该文档。
-- 生成后的文档放在导出目录根下，与本次权重目录一一对应。
-
-换句话说：
-
-1. `llm_deploy.py` 负责“导出什么”
-2. `deploy-export` skill 负责“如何把这次导出说明清楚”
-
-不要把文档生成逻辑混进 deploy 核心代码。
-
-## 主交付文档
-
-`deploy_quantization.md` 是本次导出的主说明文档。
-
-它同时服务两类使用者：
-- 下游消费者：读取量化说明，用于完成量化接入
-- agent：复用导出结论，不再重复整理同一份信息
-
-这份文档重点回答：
-- 量化系数是什么
-- 算法原理是什么
-- 这些系数怎么使用
-- 下游如何据此实现推理
-- `quantization_config` 是否可以被下游直接复用
-- 量化目标如何映射到下游运行对象（如 `Linear`、`MoEGMM`、KVCache）
-- 哪些模块允许回退，哪些场景必须停止接入
-
-注意：
-- 不要贴当前代码仓源码
-- 不要写成当前代码仓的实现注释
-- 要写成对通用下游消费者可直接使用的部署规格说明
-- 不能只停留在“总结”层，必须写到下游可以据此实现量化推理为止
-- 必须显式给出“最小交付物是否齐备”和“下游接入边界”
-
-## 文档生成要求
-
-`deploy_quantization.md` 使用：
-- `references/deploy_quantization_template.md`
-
-生成时遵守下面规则：
-
-1. 内容基于这次实际导出的权重目录，不要脱离产物空写模板。
-2. 如果是直转导出，就明确写“当前系数来自直转量化”。
-3. 如果是 PTQ 导出，就明确写“当前系数来自 PTQ 参数加载后导出”。
-4. 如果是混合导出，就明确写清：
-   - 哪些 target 是 PTQ
-   - 哪些 target 回退成了直转
-5. 如果某一路当前只是预留语义，例如 `attn-cache`，要明确写“预留”，不要伪装成已完全定义。
-6. 文档内容必须与当前导出目录绑定；不要引用其它 run 的结果。
+- **权重级对账**：safetensors 中量化层的 `*.weight_scale`（int 路径 + `*.weight` int 化 / mxfp + `*.weight_packed`）键数与目标量化层数匹配；`index.json` 0 missing、shard 齐全。
+- **PTQ 参数**：带 `--algos` 时核对已消费 ptq 参数（对应层 scale 非占位 / 非全 0），且 deploy 的 `--algos` 与 ptq 一致（否则 load_module KeyError，详见 `$quant-run`）。
+- **范围**：止于产物结构与 config 契约；不验证 infer 前向 / 算子生效（交 infer 仓）。
 
 ## 边界规则
 
-- 这个 skill 只负责导出，不负责量化方案设计、PTQ 训练和精度判读。
+- **deploy 代码只导权重目录**：`llm_deploy.py` 不生成 `deploy_quantization.md`（早期内嵌 stub 已移除）；该文档由本 skill 按模板生成、放导出目录根、与本次权重一一对应。即 `llm_deploy.py` 管“导出什么”、本 skill 管“把这次导出说清楚”，两者不混。
+- 只负责导出，不做方案设计 / PTQ 训练 / 精度判读。
 - 当前 deploy 主流程只支持 `granularity=block`。
-- 缺少 `attn_linear_param_dir`、`attn_cache_param_dir`、`moe_mlp_param_dir` 不应直接报错；这意味着对应 target 按直转导出。
-- 如果用户本意是 PTQ 导出，但实际某个 target 回退成了直转，必须在结论里显式指出。
-- 如果用户本意是纯 PTQ 导出，但最终只能做混合导出或直转导出，不能静默继续。
-- `config.json` 刷新（`generate_quant_config`）会透传 `w_bits`/`a_bits`，W8A8 等 int 路径写出正确的 `num_bits`/`input_activations`，无需按 bit 额外核对。
-- 注意 `is_mx`（mxfp）分支仍硬编码 8-bit，与 int 路径无关。
-- 如果输出目录中已有旧结果，不要默认覆盖。
-- 引用仓库内路径时，一律使用仓库相对路径。
+- 缺 `attn_linear_param_dir` / `attn_cache_param_dir` / `moe_mlp_param_dir` **不应报错**：意味着对应 target 按直转导出。
+- **本意 PTQ 但某 target 回退直转 → 结论必须显式指出；本意纯 PTQ 但只能混合 / 直转 → 不能静默继续。**
+- `config.json` 刷新（`generate_quant_config`）透传 `w_bits`/`a_bits`，W8A8 等 int 路径写出正确 `num_bits`/`input_activations`，无需按 bit 额外核对；注意 `is_mx`（mxfp）分支仍硬编码 8-bit，与 int 路径无关。
+- 输出目录已有旧结果不默认覆盖；引用仓库内路径一律用相对路径。
 
-## 对外说明要求
+## deploy_quantization.md 交付
 
-默认需要产出：
+本次导出的主说明文档，用 `references/deploy_quantization_template.md`，同时服务下游消费者（完成量化接入）与 agent（复用导出结论）。
 
-- `deploy_quantization.md`
-  - 使用 `references/deploy_quantization_template.md`
-  - 作为下游消费者和 agent 共用的主说明文档
-  - 默认需要覆盖最小交付物、模块映射、运行时契约、回退策略
+**内容要点**（写到下游可据此实现量化推理为止，不停留在“总结”层）：量化系数是什么 / 算法原理 / 系数怎么用 / 下游如何据此实现推理 / `quantization_config` 能否被下游直接复用 / 量化目标 → 下游运行对象映射（`Linear` / `MoEGMM` / KVCache）/ 哪些模块可回退、哪些场景必须停止接入；并显式给出“最小交付物是否齐备”与“下游接入边界”。
+
+**生成规则**：
+1. 基于本次实际导出产物，不脱离产物空写模板；内容与当前导出目录绑定，不引用其它 run。
+2. 直转导出写“系数来自直转量化”；PTQ 导出写“系数来自 PTQ 参数加载后导出”；混合导出写清哪些 target 是 PTQ、哪些回退直转。
+3. `attn-cache` 等仅预留语义的要明确写“预留”，不伪装成已完全定义。
+4. 不贴源码、不写成实现注释；写成对通用下游可直接使用的部署规格说明。
 
 ## 输出要求
 

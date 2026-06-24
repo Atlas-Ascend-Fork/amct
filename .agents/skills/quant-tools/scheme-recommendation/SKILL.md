@@ -1,6 +1,6 @@
 ---
 name: scheme-recommendation
-description: 为已适配模型推荐第一轮量化方案。适用于用户只想先拿量化方案参考、想基于 casebook 选择直转起点、或在正式量化实验前先确定候选方案、风险点、升级条件和回退路径。
+description: 为已适配模型推荐第一轮量化方案（方案推荐卡：目标/位宽/dtype/algos/粒度 + 理由/风险/升级/回退）。触发场景：用户想先拿量化方案参考 / 基于 casebook 选直转起点 / 实验前定候选方案与风险回退。不适用于：跑量化实验、产出 ppl/delta、误差定位、下最终最优结论（执行→ $quant-run，判读→ $direct-quant-eval）。
 ---
 
 # 量化方案推荐
