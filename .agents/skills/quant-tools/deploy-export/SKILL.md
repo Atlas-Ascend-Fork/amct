@@ -67,7 +67,7 @@ description: 导出 deploy-ready 量化模型目录（HuggingFace safetensors �
 - 当前 deploy 主流程只支持 `granularity=block`。
 - 缺 `attn_linear_param_dir` / `attn_cache_param_dir` / `moe_mlp_param_dir` **不应报错**：意味着对应 target 按直转导出。
 - **本意 PTQ 但某 target 回退直转 → 结论必须显式指出；本意纯 PTQ 但只能混合 / 直转 → 不能静默继续。**
-- `config.json` 刷新（`generate_quant_config`）透传 `w_bits`/`a_bits`，W8A8 等 int 路径写出正确 `num_bits`/`input_activations`，无需按 bit 额外核对；注意 `is_mx`（mxfp）分支仍硬编码 8-bit，与 int 路径无关。
+- `config.json` 刷新（`generate_quant_config`）对 Linear group **硬编码 `num_bits=8/8`**（不按 `bit_config` 透传 `w_bits`/`a_bits`，`llm_deploy.py` 调用还硬编码 `w4a8=False/w4a4=False`）：**W8A8 恰好正确，但 int W4A8/W4A4 的 `num_bits` 会被错标成 w8**——非 W8A8 的 int 路径**必须**在产物自检里核对 `config.json` 的 `num_bits` 与方案一致（对应已知 deploy↔infer config 误标 bug）。`is_mx`（mxfp）分支另走、亦硬编码 8-bit。
 - 输出目录已有旧结果不默认覆盖；引用仓库内路径一律用相对路径。
 
 ## deploy_quantization.md 交付
