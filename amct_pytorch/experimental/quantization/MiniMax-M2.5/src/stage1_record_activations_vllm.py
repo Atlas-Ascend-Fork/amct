@@ -499,8 +499,14 @@ def record_activations_vllm(
             ),
             "notes": {
                 "qkv_record_source": "input_layernorm output / qkv_proj input fallback",
-                "o_proj_record_source": "self_attn.attn output / o_proj input fallback concatenated across TP ranks",
-                "decode_note": "generation uses max_tokens=1, so prompt prefill dominates but one decode step is also executed",
+                "o_proj_record_source": (
+                    "self_attn.attn output / o_proj input fallback "
+                    "concatenated across TP ranks"
+                ),
+                "decode_note": (
+                    "generation uses max_tokens=1, so prompt prefill dominates "
+                    "but one decode step is also executed"
+                ),
             },
         }
         print(f"[vLLM Stage 1] Saving activation scales to {output_dir}...")
@@ -514,7 +520,7 @@ def record_activations_vllm(
     barrier()
 
 
-def main() -> None:
+def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Stage 1: record activation statistics via vLLM"
     )
@@ -563,8 +569,11 @@ def main() -> None:
         "--flashcomm1",
         default=os.environ.get("VLLM_ASCEND_ENABLE_FLASHCOMM1", "1"),
     )
-    args = parser.parse_args()
+    return parser
 
+
+def main() -> None:
+    args = _build_arg_parser().parse_args()
     record_activations_vllm(
         model_dir=args.model_dir,
         calib_data_path=args.calib_data_path,

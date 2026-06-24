@@ -67,19 +67,25 @@ def get_module(model, path: str):
     return module
 
 
-def load_act_scales(record_dir: str, num_layers: int) -> dict[str, torch.Tensor]:
-    act_scales = {}
+def _iter_scale_keys(num_layers: int):
     for layer_idx in range(num_layers):
         for cfg in SCALING_LAYERS:
             for linear_name in cfg["layers"]:
-                key = f"layers.{layer_idx}.{linear_name}"
-                filename = os.path.join(record_dir, f"{key.replace('.', '_')}.pt")
-                if not os.path.exists(filename):
-                    raise FileNotFoundError(f"Missing activation record: {filename}")
-                act_scales[key] = torch.load(
-                    filename, map_location="cpu", weights_only=True
-                )
-    return act_scales
+                yield f"layers.{layer_idx}.{linear_name}"
+
+
+def _load_one_scale(record_dir: str, key: str) -> torch.Tensor:
+    filename = os.path.join(record_dir, f"{key.replace('.', '_')}.pt")
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"Missing activation record: {filename}")
+    return torch.load(filename, map_location="cpu", weights_only=True)
+
+
+def load_act_scales(record_dir: str, num_layers: int) -> dict[str, torch.Tensor]:
+    return {
+        key: _load_one_scale(record_dir, key)
+        for key in _iter_scale_keys(num_layers)
+    }
 
 
 def apply_smoothquant_to_layer(

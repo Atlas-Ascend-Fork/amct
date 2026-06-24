@@ -11,7 +11,6 @@
 - `src/`：stage1/stage2 核心实现
 - `mxfp4_quantizer/`：MXFP4 量化与打包逻辑
 - `patches/`：MiniMax 在 Ascend vLLM 上运行所需 patch
-- `minimax2.5/`：MiniMax-M2.5 相关 config/remote code 参考文件
 
 ## 环境
 
@@ -194,7 +193,6 @@ stage2 完成后，`OUTPUT_DIR` 下会生成 HuggingFace safetensors 导出结�
 - 先完成 stage1，再运行 stage2；stage2 依赖 stage1 输出的激活统计文件。
 - `SEQ_LEN`、`NUM_CALIB_DATA`、`TP_SIZE` 会显著影响 stage1 的显存占用和运行时长，应根据实际卡数和显存情况调整。
 - 若 stage1 启动时报 patch 不匹配，需要先确认 `VLLM_REPO_DIR` 指向的 vLLM 版本与 `patches/` 中 patch 兼容。
-- `minimax2.5/` 目录中的配置和 remote code 主要作为参考与导出补充，实际运行仍以 `MODEL_DIR` 中的模型文件为准。
 
 ## SmoothQuant 原理
 
