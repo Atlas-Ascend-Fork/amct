@@ -75,7 +75,11 @@ def check_retry_limit(data, content):
         # 无 STAGE 标记（编排初始化前 / 格式异常）：不计入共享 "0" 计数器，
         # 避免跨阶段累加误触发上限阻断
         return None
-    session_id = data.get("session_id", "unknown")
+    session_id = data.get("session_id")
+    if not session_id:
+        # 无 session_id：跳过计数，不退化到共享 "unknown" key
+        # （否则不同会话/任务的重试计数互相累加，误触发上限阻断）
+        return None
     counter_file = f"/tmp/hook_retry_{session_id}_{stage}.count"
     # flock 保护读-改-写原子性（防极端并发下计数丢失）
     with open(counter_file, "a+") as f:
