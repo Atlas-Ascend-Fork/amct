@@ -94,11 +94,14 @@ UPDATED_BY: orchestrator | analyzer | implementer | reviewer
 
 ## 交互节点（必须停下与用户确认）
 
-1. 从 `$model-adapter` 切到量化前：说明拟用方案；未锁定则问是否改 `quant_target / bits / quant_dtype / algos`。
+1. **方案确认契约（硬门，未确认绝不进实施层）**：
+   - 用户已显式指定方案（`quant_target / bits / quant_dtype / algos` 任一组合）→ 视为「已确认」，直接执行。
+   - 用户未指定 → **必须先 `$scheme-recommendation` 产出「方案推荐卡」、停下让用户确认后**才委派 implementer；CLI 的 `quant_target` 等 default 只能作为推荐卡里的建议值，**不得当作自动执行值**默默起跑。
+   - 无人机交互（无头 / 批处理）且方案未经用户确认 → **fail-fast 写 `BLOCKED: 方案未确认，拒绝用 default 执行`**，不默认执行。
 2. 查到已有 BF16 / quant / deploy 结果：先汇报；足够回答则不默认重跑，先确认。
 3. 第一轮直转结果出来后：不默认升级，确认 接受 / 改方案重测 / 升级。
 4. 直转 → PTQ 前：先说明为何不能停在直转，确认后再升级。
-5. 进 deploy 前：确认已接受当前方案；“实验结束”不等同“自动 deploy”。
+5. 进 deploy 前（精度门）：必须已产出 `ppl_bf16 / ppl_quant / delta` 精度结论并由用户确认接受；**缺 PPL 精度结论不得进 deploy**。“实验结束”不等同“自动 deploy”。
 
 ## deploy 交付边界
 
