@@ -12,9 +12,22 @@
 ### MoE activation capture 误命中 `gate`
 - 现象：capture 报 `AttributeError: 'tuple' object has no attribute 'detach'`。根因：宽泛 `hook_name="mlp"` 同时匹配 `mlp.gate`，gate 返回 tuple。处理：用真实 hidden states 过 gate、选实际命中的 expert 单元做 capture/PTQ，不按名宽抓。例：`qwen/qwen3-moe`（30B）。
 
+### packed-expert PTQ 的 device 迁移（惰性视图 weight 留 CPU）
+- 现象：PTQ 训练报 `RuntimeError: Expected all tensors to be on the same device, npu:x and cpu`（quant_linear `F.linear` 处）。根因：自写 experts 量化类只用 `GatedExpertView(materialize=False)` 惰性切 packed 张量，block `.to(npu)` 不迁移该视图引用 → PTQ 时 weight 仍在 CPU。处理：复用 `qwen/moe_common.py` 的 `QuantGatedExperts`（含 `build_ptq_expert_module(materialize=True)` 实体化为真 Parameter 的 PTQ 路径），不要自写只做 `materialize=False` 的 experts 类。例：`hunyuan/hy3-preview`。
+
+### 冷 expert（calib 未路由到）无校准输入
+- 现象：PTQ 报 `AttributeError: 'NoneType' object has no attribute 'size'`（`TensorDataset(inps)`），已写出部分 expert 参数后崩。根因：稀疏激活下少样本 calib 覆盖不到全部 expert，未命中的 expert 输入为 None。处理：blockwise 驱动里 `inps is None` 时跳过该 unit（deploy fallback 直转）；要全覆盖则放大 calib 样本。例：`hunyuan/hy3-preview`。
+
 ### MoE per-expert 动态量化的 prefill 性能
 - 结论：per-expert 动态量化在 prefill 下平均路由 `M_eff`（≈ `seq*topk/experts`）偏小，单 expert `dynamic_quant + 头开销 > BF16 matmul`，每层 ×experts 放大 → **常为负收益**；attention projection / MLP 多为正。
 - 规避：MoE 是否进量化首要看**精度 delta + 下游 infer 路径覆盖**，性能须 infer 侧 packed `MoEGMM` 实测确认；decode(M=1) weight-bound 可能翻正。例：`qwen/qwen3-moe`（30B）、`longcat/longcat`（Flash-Lite）。
+
+## attention wrapper（sdpa 复用）通用
+
+> **触发信号**：adapter 自写 attention wrapper 调用共享 `scaled_dot_product_attention` helper。
+
+### sdpa 同时传 attn_mask 与 is_causal=True
+- 现象：量化 attn-linear 路径报 `AssertionError`（`attention_forward.py` 的 `assert attn_mask is None`，仅 `is_causal=True` 分支）。根因：wrapper 把 `attn_mask=attention_mask` 和 `is_causal=self.is_causal` 同时传给 helper，二者互斥。处理：因果 LM 无 padding 时用 `attn_mask=None, is_causal=True`（让 helper 自建因果 mask），对齐 `qwen3` wrapper 写法。例：`hunyuan/hy3-preview`。
 
 ## 混合 attention 类（`linear_attention` + `full_attention`）
 

@@ -160,6 +160,10 @@ class LlmPtqWorkflow:
             inps, kwargs = unit_inputs
         else:
             inps, kwargs = unit_inputs, {}
+        if inps is None or (hasattr(inps, "size") and inps.size(0) == 0):
+            # Cold MoE expert: never routed during calibration -> no inputs. Skip it
+            # (deploy will fall back to direct quant for this expert).
+            return None
         unit.module = unit.module.float().to(self.device)
         inps = self._move_to_device(inps)
         kwargs = self._move_to_device(kwargs)
@@ -200,6 +204,12 @@ class LlmPtqWorkflow:
                     )
                     continue
                 unit_batch = self._prepare_unit_batch(unit)
+                if unit_batch is None:
+                    logger.warning(
+                        f"Skip PTQ unit '{unit.name}' in layer {layer_idx}: "
+                        f"no calibration inputs (cold expert)"
+                    )
+                    continue
                 solver = self._build_block_solver(solver_cls, layer_idx, unit.module)
                 logger.info(f"PTQ unit '{unit.name}' ({unit.kind}) in layer {layer_idx}")
                 solver.solve(unit_batch.data_loader, forward_kwargs=unit_batch.kwargs)

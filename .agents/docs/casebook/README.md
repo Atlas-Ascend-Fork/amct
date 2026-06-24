@@ -21,7 +21,7 @@ casebook/
   cross-model-pitfalls.md   # L1
   structure-family-pitfalls.md   # L2
   case-template.md     # L3 模板
-  qwen/      deepseek/      glm/      longcat/    # L3 + 各系列 README
+  qwen/   deepseek/   glm/   longcat/   hunyuan/   # L3 + 各系列 README
 ```
 
 ### L3 个案导航（按系列）
@@ -30,6 +30,7 @@ casebook/
 - **deepseek/**：`deepseekv4`、`deepseek-v3.2`
 - **glm/**：`glm-5.1`（继承 DeepseekV32，瘦案例）
 - **longcat/**：`longcat`(Flash-Lite/Next)
+- **hunyuan/**：`hy3-preview`（Tencent Hy3，278B sigmoid-route MoE + shared expert）
 
 > 个案均对应源码 `register_llm_models()` 已注册的 adapter（casebook ⊆ 已适配）。
 
