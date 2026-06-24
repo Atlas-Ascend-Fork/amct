@@ -36,6 +36,5 @@ python -m amct_pytorch.eval \
   --granularity block \
   --eval_mode quant \
   --quant_target mlp attn-linear \
-  --quant_dtype int \
   --bit_config amct_pytorch/configs/w8a8.yaml \
   --seq_len 4096
