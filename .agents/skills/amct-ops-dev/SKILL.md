@@ -153,7 +153,7 @@ A2/A3 编译产物相同；UB 差异由运行时 `GetCoreMemSize()` 决定 `tile
 5. **写 Python wrapper**：`python/<new_op>/__init__.py` 加载 `.so` 并 re-export；`ops.py` 写薄包装 + docstring。
 6. **更新顶层 README**：在 `amct_ops/README.md` 的「支持的算子」表里加一行。
 7. **构建验证**：`bash ops_build.sh <new_op>`，期望产出 `dist/amct_ops-*.whl` 且 `pip install` 后 `import amct_ops.<new_op>` 成功。
-8. **端到端验证**：在 NPU 机器上用一个最小输入跑一次，对照 CPU 参考实现校验数值。
+8. **加单测验证**：在 `tests/amct_ops/` 下加 `test_<op>.py`，在 NPU 机器上跑（详见下方「验证」小节），用最小输入对照 CPU 参考实现校验数值。
 
 ## 实现注意事项
 
@@ -166,11 +166,18 @@ A2/A3 编译产物相同；UB 差异由运行时 `GetCoreMemSize()` 决定 `tile
 
 ## 验证
 
-amct_ops 没有独立单测目录。验证按以下顺序做：
+amct_ops 的单测在独立目录 `tests/amct_ops/`（用 `unittest` 写，如 `test_hifloat8_cast.py`，运行方式见 `tests/amct_ops/README.md`）。验证按以下顺序做：
 
 1. **构建产物 sanity**：`bash ops_build.sh <op>` 成功 + `unzip -l dist/amct_ops-*.whl | grep <op>` 能看到 `.so` 和 Python 文件。
 2. **导入测试**：在 NPU 机器上 `python -c "import amct_ops.<op>; print(torch.ops.amct.<fn>)"`，确认 schema 注册成功。
-3. **数值验证**：写一个最小 Python 脚本，造一个小张量，调算子，把结果和 CPU 参考实现（可以是纯 PyTorch / numpy）对比 —— 参考 `amct_pytorch/experimental/hifloat8/test.py` 这种端到端测试的写法。
+3. **跑单测**：在 `tests/amct_ops/` 下给新算子加一个 `test_<op>.py`（参考 `test_hifloat8_cast.py`：`unittest.TestCase` + `setUpClass` 里 `torch.npu.set_device(0)`，造小张量调算子、和 CPU 参考实现对比）。运行用 staging（开发推荐）或装 wheel 后：
+
+   ```bash
+   bash amct_ops/ops_build.sh <op>
+   PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_<op>
+   ```
+
+   需先 source CANN 环境、当前机器可访问 NPU（测试会 `torch.npu.set_device(0)`）。
 
    > **延伸：脱离 torch 独立验 kernel。** 想不依赖 torch 环境、直接用 `<<<>>>` 直调跑 kernel 验数值，可参考官方 Kernel 直调模板 [cann/cannbot-skills `ops/ascendc-direct-invoke-template`](https://gitcode.com/cann/cannbot-skills/blob/master/ops/ascendc-direct-invoke-template/SKILL.md)。它是独立直调工程，与本 skill 的 amct_ops 集成算子（`torch.ops.amct.*` + wheel）形态不同，但 kernel 写法、TPipe/TQue 管 UB、CopyIn→Compute→CopyOut 三段式是通用的。本 skill 的 Ascend C 分层心智模型也借鉴自该模板。
 4. **平台覆盖**：A2 上 `bash ops_build.sh --soc ascend910b <op>`，A3 上 `--soc ascend910_93`，A5 上 `--soc ascend950`。即使只有 A2 机器，至少保证 A3/A5 编译通过（产物文件存在）。
