@@ -4,6 +4,9 @@
  
 在源码编译前，请先完成基础环境搭建，具体操作请参见[快速安装](quick_install.md)。
 
+> [!NOTE]说明
+> 源码编译 `amct_tensor_decompose` 算子库依赖 `securec.h`/`libc_sec`（随 CANN Toolkit 提供）。若仅执行 `bash build.sh --torch` 而未安装完整 CANN，需自行提供该库，例如在 openEuler 上 `dnf install libboundscheck`（华为开源 libsecurec），否则会报 `fatal error: securec.h: No such file or directory`。
+
 ## 源码编译
 
 ### 下载源码

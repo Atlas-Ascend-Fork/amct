@@ -12,6 +12,8 @@
 
   请确保该依赖已安装，注意满足版本要求。
 
+- securec.h / libc_sec：源码编译 `amct_tensor_decompose` 算子库时需要（`amct_pytorch/classic/graph_based/amct_tensor_decompose/CMakeLists.txt` 中 `#include "securec.h"` 与 `target_link_libraries(... c_sec)`）。安装完整 CANN Toolkit 后该依赖自动满足；若仅执行 `bash build.sh --torch`（pytorch-only 构建）而未安装完整 CANN，可使用发行版等价包提供，例如 openEuler 的 `libboundscheck`（即华为开源 libsecurec，`dnf install libboundscheck`，提供 `/usr/include/securec.h`）。
+
 - PyTorch：2.7.1、2.1.0
 
 - Ascend Extension for PyTorch：版本配套关系请单击[Link](https://hiascend.com/document/redirect/pytorchuserguide)，查看“版本说明 >相关产品版本配套说明”章节。
