@@ -142,6 +142,8 @@ amct.create_quant_retrain_config(config_file="./configs/config.json",
 
 落盘文件说明：生成JSON格式的量化感知训练配置文件，样例如下（重新执行量化感知训练时，该接口输出的配置文件将会被覆盖），参数解释请参见[量化感知训练配置参数](../context/qat_config_param.md)。
 
+默认 A8W8（激活INT8+权重INT8）样例：
+
 ```json
 {
     "version":1,
@@ -175,6 +177,72 @@ amct.create_quant_retrain_config(config_file="./configs/config.json",
         "retrain_data_config":{
             "algo":"ulq_quantize",
             "dst_type":"INT8"
+        },
+        "retrain_weight_config":{
+            "algo":"arq_retrain",
+            "channel_wise":false,
+            "dst_type":"INT8"
+        }
+    }
+}
+```
+
+A8W4（激活INT8+权重INT4）样例（支持 Conv1d/Conv2d/ConvTranspose1d/ConvTranspose2d/Linear；激活量化不支持配置为INT4）：
+
+```json
+{
+    "version":1,
+    "batch_num":1,
+    "conv1":{
+        "retrain_enable":true,
+        "retrain_data_config":{
+            "algo":"ulq_quantize",
+            "dst_type":"INT8"
+        },
+        "retrain_weight_config":{
+            "algo":"arq_retrain",
+            "channel_wise":true,
+            "dst_type":"INT4"
+        }
+    },
+    "fc":{
+        "retrain_enable":true,
+        "retrain_data_config":{
+            "algo":"ulq_quantize",
+            "dst_type":"INT8"
+        },
+        "retrain_weight_config":{
+            "algo":"arq_retrain",
+            "channel_wise":false,
+            "dst_type":"INT4"
+        }
+    }
+}
+```
+
+A16W8（激活INT16+权重INT8）样例（支持 Conv1d/Conv2d/ConvTranspose1d/ConvTranspose2d/Linear/LSTM/GRU）：
+
+```json
+{
+    "version":1,
+    "batch_num":1,
+    "conv1":{
+        "retrain_enable":true,
+        "retrain_data_config":{
+            "algo":"ulq_quantize",
+            "dst_type":"INT16"
+        },
+        "retrain_weight_config":{
+            "algo":"arq_retrain",
+            "channel_wise":true,
+            "dst_type":"INT8"
+        }
+    },
+    "lstm1":{
+        "retrain_enable":true,
+        "retrain_data_config":{
+            "algo":"ulq_quantize",
+            "dst_type":"INT16"
         },
         "retrain_weight_config":{
             "algo":"arq_retrain",

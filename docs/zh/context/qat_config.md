@@ -57,7 +57,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p2833113013443"><a name="p2833113013443"></a><a name="p2833113013443"></a>override_layer_configs</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p7833193064415"><a name="p7833193064415"></a><a name="p7833193064415"></a>按层名重写哪些层，即对哪些层进行差异化压缩。</p>
-<p id="p14204438183011"><a name="p14204438183011"></a><a name="p14204438183011"></a>例如全局量化配置参数配置的量化位宽为INT8，可以通过该参数对部分层进行差异化量化，可以配置为INT4量化。当前版本仅支持INT8量化。</p>
+<p id="p14204438183011"><a name="p14204438183011"></a><a name="p14204438183011"></a>例如全局量化配置参数配置的量化位宽为INT8，可以通过该参数对部分层进行差异化量化，权重可配置为INT4（A8W4）。注意：激活量化不支持配置为INT4。</p>
 <p id="p3289174615465"><a name="p3289174615465"></a><a name="p3289174615465"></a>参数优先级为：</p>
 <a name="ul471255217464"></a><a name="ul471255217464"></a><ul id="ul471255217464"><li>量化场景：override_layer_configs&gt;override_layer_types&gt;retrain_data_quant_config/retrain_weight_quant_config</li><li>稀疏场景：override_layer_configs&gt;override_layer_types&gt;prune_config</li></ul>
 </td>
@@ -69,7 +69,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p5894153819449"><a name="p5894153819449"></a><a name="p5894153819449"></a>override_layer_types</p>
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p6894938144418"><a name="p6894938144418"></a><a name="p6894938144418"></a>按层类型重写哪些层，即对哪些层进行差异化压缩。</p>
-<p id="p24851712113217"><a name="p24851712113217"></a><a name="p24851712113217"></a>例如全局量化配置参数配置的量化位宽为INT8，可以通过该参数对部分层进行差异化量化，可以配置为INT4量化。当前版本仅支持INT8量化。</p>
+<p id="p24851712113217"><a name="p24851712113217"></a><a name="p24851712113217"></a>例如全局量化配置参数配置的量化位宽为INT8，可以通过该参数对部分层进行差异化量化，权重可配置为INT4（A8W4）。注意：激活量化不支持配置为INT4。</p>
 <p id="p79981423114814"><a name="p79981423114814"></a><a name="p79981423114814"></a>参数优先级为：</p>
 <a name="ul1765922611489"></a><a name="ul1765922611489"></a><ul id="ul1765922611489"><li>量化场景：override_layer_configs&gt;override_layer_types&gt;retrain_data_quant_config/retrain_weight_quant_config</li><li>稀疏场景：override_layer_configs&gt;override_layer_types&gt;prune_config</li></ul>
 </td>
@@ -200,7 +200,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p14156172421615"><a name="p14156172421615"></a><a name="p14156172421615"></a>dst_type</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p9542423532"><a name="p9542423532"></a><a name="p9542423532"></a>数据量化位宽，支持如下配置（当前版本仅支持INT8量化）：</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p9542423532"><a name="p9542423532"></a><a name="p9542423532"></a>数据量化位宽，支持如下配置（激活量化支持 INT8 或 INT16，其中 INT16 适用于 LSTM/GRU 等循环网络层；激活量化不支持 INT4）：</p>
 <a name="ul883322015534"></a><a name="ul883322015534"></a><ul id="ul883322015534"><li>INT4</li><li>INT8，默认为INT8。</li><li>INT16</li></ul>
 </td>
 </tr>
@@ -298,7 +298,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p201954368449"><a name="p201954368449"></a><a name="p201954368449"></a>dst_type</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p47171749181715"><a name="p47171749181715"></a><a name="p47171749181715"></a>用以选择INT8或INT4量化位宽，默认为INT8。当前版本仅支持INT8量化。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p47171749181715"><a name="p47171749181715"></a><a name="p47171749181715"></a>用以选择INT8或INT4量化位宽，默认为INT8。权重量化支持INT4（A8W4）；激活量化不支持INT4。</p>
 </td>
 </tr>
 <tr id="row123036212479"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p1995313815164"><a name="p1995313815164"></a><a name="p1995313815164"></a>optional</p>
@@ -327,7 +327,7 @@ retrain\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_024018873
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p4406383306"><a name="p4406383306"></a><a name="p4406383306"></a>dst_type</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p187026176455"><a name="p187026176455"></a><a name="p187026176455"></a>用以选择INT8或INT4量化位宽，默认为INT8。当前版本仅支持INT8量化。</p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p187026176455"><a name="p187026176455"></a><a name="p187026176455"></a>用以选择INT8或INT4量化位宽，默认为INT8。权重量化支持INT4（A8W4）；激活量化不支持INT4。</p>
 </td>
 </tr>
 <tr id="row4910023103012"><td class="cellrowborder" valign="top" headers="mcps1.2.6.1.1 "><p id="p1540193803019"><a name="p1540193803019"></a><a name="p1540193803019"></a>optional</p>

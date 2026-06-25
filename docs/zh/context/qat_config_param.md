@@ -387,7 +387,7 @@
 </tr>
 <tr id="row159801151604"><th class="firstcol" valign="top" width="30.84%" id="mcps1.2.3.3.1"><p id="p129801715706"><a name="p129801715706"></a><a name="p129801715706"></a>取值范围</p>
 </th>
-<td class="cellrowborder" valign="top" width="69.16%" headers="mcps1.2.3.3.1 "><p id="p1684619615"><a name="p1684619615"></a><a name="p1684619615"></a>INT8或INT4，默认为INT8。当前版本仅支持INT8。</p>
+<td class="cellrowborder" valign="top" width="69.16%" headers="mcps1.2.3.3.1 "><p id="p1684619615"><a name="p1684619615"></a><a name="p1684619615"></a>INT8或INT4，默认为INT8。权重量化支持INT4（A8W4）；激活量化不支持配置为INT4。</p>
 </td>
 </tr>
 <tr id="row179807151805"><th class="firstcol" valign="top" width="30.84%" id="mcps1.2.3.4.1"><p id="p169806156011"><a name="p169806156011"></a><a name="p169806156011"></a>参数说明</p>

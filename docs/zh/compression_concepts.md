@@ -100,6 +100,10 @@ FP4_E2M1能够表达的数值有16个，分别为`{±0，±0.5，±1，±1.5，�
 
 使用4比特的int4数据来表示比如32比特的float32数据。相较于int8量化，int4量化可以实现更优的量化效果，但可能带来更大的精度损失。
 
+当前版本支持权重INT4量化（A8W4，即激活INT8+权重INT4），支持的算子类型包括：Conv1d、Conv2d、ConvTranspose1d、ConvTranspose2d、Linear。注意：激活量化不支持配置为INT4（A4W4、A4W8 均不支持）。
+
+此外，支持激活INT16量化（A16W8，即激活INT16+权重INT8），支持的算子类型包括：Conv1d、Conv2d、ConvTranspose1d、ConvTranspose2d、Linear、LSTM、GRU。激活量化仅支持 INT8/INT16，不支持 INT4。
+
 #### 总体说明
 
 - HiF8相比于float8能更好的兼顾精度和动态范围，而MXFP8和MXFP4可以减少大模型显存占用。

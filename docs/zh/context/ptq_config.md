@@ -447,7 +447,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p1764710503474"><a name="p1764710503474"></a><a name="p1764710503474"></a>dst_type</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p164710507471"><a name="p164710507471"></a><a name="p164710507471"></a>量化位宽，数据量化是采用INT8量化还是INT16量化，默认为INT8量化。<strong id="b7442433134911"><a name="b7442433134911"></a><a name="b7442433134911"></a>当前版本仅支持INT8量化。</strong></p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p164710507471"><a name="p164710507471"></a><a name="p164710507471"></a>量化位宽，数据量化是采用INT8量化还是INT16量化，默认为INT8量化。支持INT8（A8W8）和INT16（A16W8）两种配置；LSTM/GRU等循环网络层支持配置为INT16。<strong id="b7442433134911"><a name="b7442433134911"></a><a name="b7442433134911"></a>注意：激活量化不支持配置为INT4。</strong></p>
 </td>
 </tr>
 <tr id="row11961131163419"><td class="cellrowborder" rowspan="4" valign="top" width="11.148885111488852%" headers="mcps1.2.6.1.1 "><p id="p18771725134917"><a name="p18771725134917"></a><a name="p18771725134917"></a>HFMGQuantize</p>
@@ -491,7 +491,7 @@ calibration\_config\_pytorch.proto文件参数说明如[表1](#zh-cn_topic_02401
 </td>
 <td class="cellrowborder" valign="top" headers="mcps1.2.6.1.3 "><p id="p16126537175117"><a name="p16126537175117"></a><a name="p16126537175117"></a>dst_type</p>
 </td>
-<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p47171749181715"><a name="p47171749181715"></a><a name="p47171749181715"></a>数据量化位宽，数据量化是采用INT8量化还是INT16量化，默认为INT8量化。<strong id="b1284153614327"><a name="b1284153614327"></a><a name="b1284153614327"></a>当前版本仅支持INT8量化。</strong></p>
+<td class="cellrowborder" valign="top" headers="mcps1.2.6.1.4 "><p id="p47171749181715"><a name="p47171749181715"></a><a name="p47171749181715"></a>数据量化位宽，数据量化是采用INT8量化还是INT16量化，默认为INT8量化。支持INT8（A8W8）和INT16（A16W8）两种配置；LSTM/GRU等循环网络层支持配置为INT16。<strong id="b1284153614327"><a name="b1284153614327"></a><a name="b1284153614327"></a>注意：激活量化不支持配置为INT4。</strong></p>
 </td>
 </tr>
 </tbody>

@@ -388,12 +388,12 @@
 </tr>
 <tr id="row2434105415594"><th class="firstcol" valign="top" width="20.52%" id="mcps1.2.3.3.1"><p id="p13434115405916"><a name="p13434115405916"></a><a name="p13434115405916"></a><span>取值范围</span></p>
 </th>
-<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.3.1 "><p id="p8434854105914"><a name="p8434854105914"></a><a name="p8434854105914"></a>8或16</p>
+<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.3.1 "><p id="p8434854105914"><a name="p8434854105914"></a><a name="p8434854105914"></a>4或8</p>
 </td>
 </tr>
 <tr id="row10434135414594"><th class="firstcol" valign="top" width="20.52%" id="mcps1.2.3.4.1"><p id="p743495495913"><a name="p743495495913"></a><a name="p743495495913"></a><span>参数说明</span></p>
 </th>
-<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.4.1 "><p id="p135891417116"><a name="p135891417116"></a><a name="p135891417116"></a>当前仅支持配置为8，表示采用INT8量化位宽。</p>
+<td class="cellrowborder" valign="top" width="79.47999999999999%" headers="mcps1.2.3.4.1 "><p id="p135891417116"><a name="p135891417116"></a><a name="p135891417116"></a>权重量化位宽支持配置为8（INT8）或4（INT4）。配置为4时，表示采用INT4权重量化（A8W4组合，激活仍为INT8）。注意：激活量化不支持配置为INT4。</p>
 </td>
 </tr>
 <tr id="row18435125416596"><th class="firstcol" valign="top" width="20.52%" id="mcps1.2.3.5.1"><p id="p11435954165919"><a name="p11435954165919"></a><a name="p11435954165919"></a><span>推荐配置</span></p>
