@@ -61,13 +61,13 @@ clone 本仓即可直接使用：`.claude/`、`.opencode/` 是 git-tracked 符�
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
 ├── skills/        # quant-workflow / quant-tools（叶子含 model-adapter + references 共享）/ gitcode-pr / gitcode-issue / default-skills
-├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md / roadmap.md
+├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md
 ├── hooks/         # pre_tool_use / subagent_stop（Claude Code）
 ├── settings.json  # Claude Code 配置（权限 + hooks）
 └── opencode.json  # OpenCode 配置（plugins + 权限）
 ```
 
-`.claude/`、`.opencode/` 客户端视图均为 git-tracked 符号链接指向 `.agents/`（`settings.json`/`opencode.json`/skills/agents/hooks/docs 全部 symlink），随 clone 自动还原，无需投影脚本。技能清单与规划见 [docs/roadmap.md](docs/roadmap.md)，架构与设计见 [docs/architecture.md](docs/architecture.md)。
+`.claude/`、`.opencode/` 客户端视图均为 git-tracked 符号链接指向 `.agents/`（`settings.json`/`opencode.json`/skills/agents/hooks/docs 全部 symlink），随 clone 自动还原，无需投影脚本。架构与设计见 [docs/architecture.md](docs/architecture.md)。
 
 ## 面向 agent 集成
 
