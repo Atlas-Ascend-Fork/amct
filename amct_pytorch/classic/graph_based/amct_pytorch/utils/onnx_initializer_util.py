@@ -97,7 +97,7 @@ class TensorProtoHelper:
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.data_location_id]
 
-        raise ValueError("The data_type{proto_value} is UNEXCEPTED")
+        raise ValueError(f"The data_type{proto_value} is UNEXPECTED")
 
     @classmethod
     def map_np_type(cls, proto_value):
@@ -107,7 +107,7 @@ class TensorProtoHelper:
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.np_type_id]
 
-        raise ValueError("The data_type{proto_value} is UNEXCEPTED")
+        raise ValueError(f"The data_type{proto_value} is UNEXPECTED")
 
     @classmethod
     def cast_ori_data(cls, value, tensor_np_type):

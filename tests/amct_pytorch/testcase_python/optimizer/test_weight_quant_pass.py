@@ -288,3 +288,88 @@ class TestWeightQuantPass(unittest.TestCase):
                 actual_dtype
             ),
         )
+
+    # ------------------------------------------------------------------
+    # C-1 regression: non-RNN (Conv) A8W4 finalize must not crash
+    # ------------------------------------------------------------------
+    def test_conv_int4_finalize_deploy_and_fakequant_no_crash(self):
+        """C-1 regression: Conv A8W4 finalize loops must not crash.
+
+        This test directly exercises the two INT4 finalize loops from
+        _generate_model (deploy pack and fakequant native-INT4 paths) for a
+        Conv node.  Before the fix, get_recurrence_weight_node raised an
+        exception for non-RNN nodes because it passed None to
+        get_input_anchor.  After the fix it returns None and the loop skips
+        cleanly.
+
+        Assertions:
+        - No exception is raised.
+        - get_recurrence_weight_node returns None for a Conv node.
+        - The main weight is finalized correctly (deploy: packed INT8 with
+          half the elements; fakequant: native INT4 with same element count).
+        """
+        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
+            finalize_int4_weight_for_deploy,
+            finalize_int4_weight_for_fakequant,
+        )
+        from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
+            QuantOpInfo,
+        )
+
+        # Use the Conv graph already built in setUpClass (Net001 has Conv2d layers).
+        # Pick the first Conv node from the graph.
+        conv_node = None
+        for node in self.graph.nodes:
+            if node.type == "Conv":
+                conv_node = node
+                break
+        self.assertIsNotNone(
+            conv_node, "Expected at least one Conv node in Net001 graph"
+        )
+
+        # ---- assert get_recurrence_weight_node returns None, not crash ----
+        rw_node = QuantOpInfo.get_recurrence_weight_node(conv_node)
+        self.assertIsNone(
+            rw_node,
+            "get_recurrence_weight_node must return None for a Conv node, not crash",
+        )
+
+        # ---- get the weight node and set up INT4 data ----
+        weight_node = QuantOpInfo.get_weight_node(conv_node)
+        self.assertIsNotNone(weight_node, "Conv node must have a weight node")
+
+        weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+        # Read the real weight data from the graph, then cast to int8 to simulate
+        # INT4 quantized values (clamp to [-8, 7] so finalize_int4_weight_for_fakequant
+        # does not raise an out-of-range error).
+        raw_data = weight_helper.get_data()
+        n_elements = raw_data.size
+        int4_vals = np.clip(raw_data.flatten().astype(np.int8), -8, 7)
+
+        # ---- deploy path: finalize_int4_weight_for_deploy ----
+        packed_deploy, dtype_deploy = finalize_int4_weight_for_deploy(int4_vals)
+        self.assertEqual(dtype_deploy, "INT8", "deploy dtype must be INT8")
+        self.assertEqual(
+            packed_deploy.size,
+            n_elements // 2,
+            "deploy packed size must be half the INT4 element count",
+        )
+
+        # ---- fakequant path: finalize_int4_weight_for_fakequant ----
+        data_fq, dtype_fq = finalize_int4_weight_for_fakequant(int4_vals)
+        self.assertEqual(dtype_fq, "INT4", "fakequant dtype must be INT4")
+        self.assertEqual(
+            data_fq.size,
+            n_elements,
+            "fakequant data must preserve the original element count",
+        )
+
+        # ---- simulate the full finalize loop body (no save) ----
+        # deploy side: clear + set_data must not raise
+        weight_helper.clear_data()
+        weight_helper.set_data(packed_deploy, dtype_deploy)  # must not raise
+
+        # fakequant side: a fresh helper on the same proto, clear + set_data
+        weight_helper_fq = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+        weight_helper_fq.clear_data()
+        weight_helper_fq.set_data(data_fq, dtype_fq)  # must not raise

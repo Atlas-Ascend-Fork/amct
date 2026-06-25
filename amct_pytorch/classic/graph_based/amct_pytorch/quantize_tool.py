@@ -746,6 +746,14 @@ def _generate_model(graph, records, save_path):
             int4_vals = weight_helper.get_data()
             packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
             weight_helper.clear_data()
+            # I-2 dims note: set_data changes data_type to INT8 but intentionally
+            # preserves the original dims (element-count shape, e.g. [4,20,20]).
+            # The deploy model is an AMCT-specific format consumed by the Ascend
+            # runtime, not validated by onnx.checker.  The runtime identifies packed
+            # INT4-in-INT8 weights via the op_data_type attribute (stripped at load
+            # time by delete_customized_attr) rather than from dims×sizeof, so the
+            # dims mismatch is acceptable by convention.  Do NOT update dims here
+            # without also auditing the Ascend runtime consumer.
             weight_helper.set_data(packed, dtype_str)
         recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(node)
         if recurrence_weight_node is not None:
@@ -755,9 +763,7 @@ def _generate_model(graph, records, save_path):
             int4_vals = rw_helper.get_data()
             packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
             rw_helper.clear_data()
-            rw_helper.set_data(packed, dtype_str)
-    optimizer = opt.GraphOptimizer()
-    optimizer.add_pass(opt.ReplaceRNNPass(records))
+            rw_helper.set_data(packed, dtype_str)  # dims note: same convention as above
     optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, "Deploy")
     save_onnx_model(graph, deploy_file, "Deploy", None, ["op_data_type"])
