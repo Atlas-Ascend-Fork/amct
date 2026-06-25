@@ -223,3 +223,5 @@ pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isol
 ## 📝 许可证
 
 本项目基于 [Apache 2.0](LICENSE) 协议开源。使用前请阅读 [安全声明](SECURITY.md) 与 [免责声明](DISCLAIMER.md)。
+
+<!-- TTFHW CI tmpl probe -->
