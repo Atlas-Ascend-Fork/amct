@@ -1,0 +1,16 @@
+task: wikitext_local
+dataset_path: /user/anjiangze/Datasets/wikitext
+dataset_name: wikitext-2-raw-v1
+output_type: loglikelihood_rolling
+test_split: test
+doc_to_text: ""
+doc_to_target: !function preprocess_wikitext_local.wikitext_detokenizer
+process_results: !function preprocess_wikitext_local.process_results
+metric_list:
+  - metric: word_perplexity
+  - metric: byte_perplexity
+  - metric: bits_per_byte
+metadata:
+  version: 1.0
+dataset_kwargs:
+  trust_remote_code: true
