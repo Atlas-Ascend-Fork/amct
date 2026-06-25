@@ -38,7 +38,7 @@
 
 ## 分发：单一源投影（Single Source of Truth）
 
-`.agents/` 为**唯一源**（git tracked，含 skills/agents/hooks/docs + `settings.json`/`opencode.json`）；`scripts/init-agent.sh` 投影生成 `.claude/`（Claude Code）与 `.opencode/`（OpenCode）视图，**均 gitignored**，clone 后跑一次 `bash scripts/init-agent.sh` 生成。一处源、双端一致，不提交生成物、不双份维护。
+`.agents/` 为**唯一源**（git tracked，含 skills/agents/hooks/docs + `settings.json`/`opencode.json`）；`.claude/`（Claude Code）与 `.opencode/`（OpenCode）视图均为 **git-tracked 符号链接**指向 `.agents/`，随 clone 自动还原，clone 即可用，无需投影脚本。一处源、双端一致，不双份维护。
 
 ## 附录：规划中 dev-workflow 流程图
 
