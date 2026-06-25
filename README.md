@@ -93,6 +93,8 @@ pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --u
 ```
 
 > ⚠️ **注意**：若 pip 版本 > 25.2，安装命令需追加 `--no-build-isolation`，否则可能出现 `ModuleNotFoundError: No module named 'torch'`。
+>
+> 使用 `--no-build-isolation` 时，pip 不再自动安装构建依赖，需确保当前环境已安装 `wheel`（`pip install wheel`），否则会报 `error: invalid command 'bdist_wheel'`。若改用默认安装（不加 `--no-build-isolation`），pip 会在构建隔离环境中自动安装 `setuptools`/`wheel`，无需手动处理。
 
 ```bash
 # 验证 AMCT 安装
@@ -183,7 +185,8 @@ amct/
 # 方案 1：降低 pip 版本
 pip install pip==25.2
 
-# 方案 2：添加 --no-build-isolation
+# 方案 2：添加 --no-build-isolation（需先安装 wheel，否则会报 invalid command 'bdist_wheel'）
+pip3 install wheel
 pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isolation
 ```
 
