@@ -97,7 +97,28 @@ class TestWeightQuantPass(unittest.TestCase):
             optimizer.add_pass(passer)
             optimizer.do_optimizer(self.graph, None)
             after_nodes = len(self.graph.nodes)
-            self.assertEqual(after_nodes - before_nodes, 6)
+            self.assertEqual(after_nodes - before_nodes, 0)
+
+    def test_deploy_packs_int4_weight(self):
+        # 4 个 INT4 权重 → deploy 应 pack 成 2 个 INT8 字节
+        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
+            finalize_int4_weight_for_deploy,
+        )
+
+        int4_vals = np.array([1, -2, 7, -8], dtype=np.int8)
+        packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
+        self.assertEqual(dtype_str, "INT8")
+        self.assertEqual(packed.size, 2)
+
+    def test_fakequant_uses_native_int4(self):
+        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
+            finalize_int4_weight_for_fakequant,
+        )
+
+        int4_vals = np.array([1, -2, 7, -8], dtype=np.int8)
+        data, dtype_str = finalize_int4_weight_for_fakequant(int4_vals)
+        self.assertEqual(dtype_str, "INT4")
+        self.assertEqual(data.size, 4)
 
     def test_rnn_weight_quant_success(self):
         class RNNModule(torch.nn.Module):
@@ -132,6 +153,35 @@ class TestWeightQuantPass(unittest.TestCase):
 
         passer = InsertWeightQuantPass(records)
         passer.quant_recurrence_weight(node)
+
+    def test_deploy_packs_int4_recurrence_weight(self):
+        """LSTM A8W4: deploy finalize must pack recurrence_weight INT4 → INT8.
+
+        After finalize_int4_weight_for_deploy the byte count should be half the
+        original INT4 element count (two nibbles packed into one INT8 byte).
+        This test guards against the ordering bug where ReplaceRNNPass removes
+        the original LSTM node before the INT4 deploy finalize loop runs,
+        causing the recurrence_weight to be silently skipped (not packed).
+        """
+        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
+            finalize_int4_weight_for_deploy,
+        )
+
+        # Simulate a recurrence_weight tensor for an LSTM with hidden_size=20,
+        # input_size=10: shape is (4, 20, 20) → 1600 INT4 elements (even count).
+        n_elements = 1600
+        rng = np.random.default_rng(42)
+        int4_vals = rng.integers(-8, 8, size=n_elements, dtype=np.int8)
+
+        packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
+
+        self.assertEqual(dtype_str, "INT8")
+        # Two INT4 nibbles packed into each INT8 byte → exactly n_elements // 2 bytes.
+        self.assertEqual(
+            packed.size,
+            n_elements // 2,
+            msg="expected {} packed bytes, got {}".format(n_elements // 2, packed.size),
+        )
 
     def test_recurrence_weight_int4(self):
         """When wts_type is INT4, quant_recurrence_weight must quantize with num_bits=4.

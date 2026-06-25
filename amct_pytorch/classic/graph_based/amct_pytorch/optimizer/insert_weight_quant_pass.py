@@ -22,6 +22,7 @@ from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.custom_op.arq.arq import weight_quant_np
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
+from ...amct_pytorch.utils.onnx_initializer_util import pack_int4_to_int8
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
@@ -29,6 +30,34 @@ from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
 WEIGHT_QUANT = "weight_quant"
+
+
+def finalize_int4_weight_for_deploy(int4_weight):
+    """deploy 模型：两个 INT4 pack 成一个 INT8。返回 (packed_int8_array, 'INT8')。"""
+    packed = pack_int4_to_int8(np.asarray(int4_weight).reshape(-1))
+    return packed, "INT8"
+
+
+def finalize_int4_weight_for_fakequant(int4_weight):
+    """fakequant 模型：原生 INT4。返回 (int4_array, 'INT4')。
+
+    对输入做 INT4 有符号值域 [-8, 7] 校验。超范围的元素会被 clip 到合法值域并记录
+    警告，防止上游量化 bug 静默写入非法 nibble。
+    """
+    arr = np.asarray(int4_weight).reshape(-1)
+    INT4_MIN, INT4_MAX = -8, 7
+    out_of_range = (arr < INT4_MIN) | (arr > INT4_MAX)
+    if out_of_range.any():
+        n_bad = int(out_of_range.sum())
+        LOGGER.logw(
+            "finalize_int4_weight_for_fakequant: {} element(s) outside INT4 range "
+            "[{}, {}]; clipping to valid range. Check upstream quantization.".format(
+                n_bad, INT4_MIN, INT4_MAX
+            ),
+            "WeightQuantPass",
+        )
+        arr = np.clip(arr, INT4_MIN, INT4_MAX).astype(arr.dtype)
+    return arr, "INT4"
 
 
 class InsertWeightQuantPass(BaseFusionPass):
@@ -96,37 +125,6 @@ class InsertWeightQuantPass(BaseFusionPass):
 
         if object_node.type in RNN_LAYER_TYPE:
             self.quant_recurrence_weight(object_node)
-        if num_bits == 4:
-            # Step1: add a new_node
-            node_proto = construct_weight_quant_node(
-                inputs=[
-                    ".".join([object_node.name, WEIGHT_QUANT, "input0"]),
-                    ".".join([object_node.name, WEIGHT_QUANT, "input1"]),
-                ],
-                outputs=[".".join([object_node.name, WEIGHT_QUANT, "output0"])],
-                attrs={"dst_type": "INT{:d}".format(num_bits)},
-                layer_name=object_node.name,
-            )
-            weight_quant_node = graph.add_node(node_proto)
-            weight_quant_node.set_attr("object_node", object_node.name)
-            weight_offset_node = graph.add_node(
-                construct_weight_offset(
-                    layer_name=object_node.name, weight_offset=offset_w
-                )
-            )
-
-            # Step2: Relink nodes in th graph
-            # remove output links
-            input_anchor = object_node.get_input_anchor(1)
-            peer_output_anchor = input_anchor.get_peer_output_anchor()
-            peer_node = peer_output_anchor.node
-
-            peer_output_anchor_index = peer_output_anchor.index
-            graph.remove_edge(peer_node, peer_output_anchor_index, object_node, 1)
-            # add links
-            graph.add_edge(peer_node, peer_output_anchor_index, weight_quant_node, 0)
-            graph.add_edge(weight_offset_node, 0, weight_quant_node, 1)
-            graph.add_edge(weight_quant_node, 0, object_node, 1)
 
         LOGGER.logd(
             "Quant weight from int32 to int8 for layer '{}' success!".format(
