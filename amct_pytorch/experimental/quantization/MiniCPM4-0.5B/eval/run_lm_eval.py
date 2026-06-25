@@ -155,6 +155,14 @@ def _patched_create(self, pretrained, *args, **kwargs):
 
 _HFLM._create_model = _patched_create
 
-from lm_eval.__main__ import cli_evaluate  # noqa: E402
 
-sys.exit(cli_evaluate())
+def main():
+    # cli_evaluate 必须在上述所有 monkey-patch 生效后再导入。放进函数体内既
+    # 保证了 patch→import 的先后顺序，又使其不再是 module-level import
+    # （消除 E402，无需 noqa 抑制）。
+    from lm_eval.__main__ import cli_evaluate
+    sys.exit(cli_evaluate())
+
+
+if __name__ == "__main__":
+    main()
