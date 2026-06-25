@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+#
+# Licensed under the MIT License.
+
 import fnmatch
 import json
 import os
