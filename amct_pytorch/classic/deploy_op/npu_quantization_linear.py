@@ -206,7 +206,8 @@ class NpuQuantizationLinear(torch.nn.Module):
     def _init_bias(self, module):
         """Decide bias form and set self.bias (passed to npu_quant_matmul, may be None):
           - INT8 PER_TENSOR + non-dynamic: quantize bias to INT32
-          - FP8*FP8 / HIFLOAT8*HIFLOAT8 / INT8 PER_TOKEN / dynamic: keep fp
+          - HIF8*HIF8 / FP8*FP8 pertensor-perchannel: pre-divide by deq_scale (float32)
+          - INT8 PER_TOKEN / dynamic: keep fp (operator adds bias after scaling)
           - module.bias is None: handle offset_bias if present
         """
         if module.bias is None:
@@ -220,7 +221,17 @@ class NpuQuantizationLinear(torch.nn.Module):
             bias_tensor = (module.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX).to(torch.int32)
             self.register_buffer('bias', bias_tensor)
         else:
-            self.register_buffer('bias', module.bias.to(torch.float32))
+            bias_tensor = module.bias.to(torch.float32)
+            if (self.act_granularity == 'tensor' and self.dynamic is not True
+                    and self.act_type in (HIFLOAT8, FLOAT8_E4M3FN)
+                    and self.wts_type == self.act_type):
+                # npu_quant_matmul adds bias BEFORE applying deq_scale in the
+                # pertensor/perchannel 8-bit-float path (HIF8*HIF8, FP8*FP8), so
+                # pre-divide by deq_scale to preserve the original bias magnitude
+                # after the operator's internal dequantization.  Per-token/dynamic
+                # paths add bias after scaling, so no pre-division is needed there.
+                bias_tensor = bias_tensor / self.deq_scale.to(torch.float32)
+            self.register_buffer('bias', bias_tensor)
 
         if self.offset_bias is not None:
             self.bias = self.bias + self.offset_bias
