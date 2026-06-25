@@ -65,7 +65,7 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
 ├── skills/
-│   │  # 量化编排链路
+│   │  # LLM量化编排链路
 │   ├── quant-workflow/    # LLM 量化流程入口（调度）
 │   ├── quant-tools/       # 被调度的量化叶子技能（含 model-adapter + references 共享）
 │   │  # 编排外的独立 skill（用户直接点名调用）
