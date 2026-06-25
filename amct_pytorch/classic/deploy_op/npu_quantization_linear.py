@@ -220,7 +220,7 @@ class NpuQuantizationLinear(torch.nn.Module):
             bias_tensor = (module.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX).to(torch.int32)
             self.register_buffer('bias', bias_tensor)
         else:
-            self.register_buffer('bias', module.bias)
+            self.register_buffer('bias', module.bias.to(torch.float32))
 
         if self.offset_bias is not None:
             self.bias = self.bias + self.offset_bias
