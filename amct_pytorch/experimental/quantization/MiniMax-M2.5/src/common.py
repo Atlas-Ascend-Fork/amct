@@ -1,5 +1,7 @@
-# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Modifications Copyright (c) 2026 Modelbest and Huawei
 #
+# This file is adapted from upstream open-source code.
 # Licensed under the MIT License.
 
 import fnmatch
