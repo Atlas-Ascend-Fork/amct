@@ -4,9 +4,7 @@
 
 ## 快速开始
 
-```bash
-bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencode 可单装
-```
+clone 本仓即可直接使用：`.claude/`、`.opencode/` 是 git-tracked 符号链接，随 clone 自动指向 `.agents/`，无需额外脚本。
 
 装好后直接用自然语言描述任务，例如：
 
@@ -69,7 +67,7 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 └── opencode.json  # OpenCode 配置（plugins + 权限）
 ```
 
-`scripts/init-agent.sh` 据此生成 `.claude/`、`.opencode/` 客户端视图（均 gitignored、全量生成）：`settings.json`→`.claude/`、`opencode.json`→`.opencode/`，skills/agents/hooks/docs 投影到两端。技能清单与规划见 [docs/roadmap.md](docs/roadmap.md)，架构与设计见 [docs/architecture.md](docs/architecture.md)。
+`.claude/`、`.opencode/` 客户端视图均为 git-tracked 符号链接指向 `.agents/`（`settings.json`/`opencode.json`/skills/agents/hooks/docs 全部 symlink），随 clone 自动还原，无需投影脚本。技能清单与规划见 [docs/roadmap.md](docs/roadmap.md)，架构与设计见 [docs/architecture.md](docs/architecture.md)。
 
 ## 面向 agent 集成
 
