@@ -15,6 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import json
 import os
 from abc import ABCMeta
 import gc
@@ -30,6 +31,10 @@ from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, sa
 from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
 from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
+
+# compressed-tensors format name for FP8 quantized models
+_CT_FP8_FORMATS = {"float-quantized", "naive-quantized"}
+_CT_QUANT_METHOD = "compressed-tensors"
 
 
 class BaseModel(metaclass=ABCMeta):
@@ -52,6 +57,55 @@ class BaseModel(metaclass=ABCMeta):
             self.model_path, trust_remote_code=True)
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(self.ptq_param_handler, self.iter_ptq_units)
+        self._source_is_fp8 = self._detect_source_fp8()
+
+    def _detect_source_fp8(self) -> bool:
+        """Return True if the checkpoint uses HF compressed-tensors FP8 format."""
+        cfg_path = os.path.join(self.model_path, "config.json")
+        try:
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return False
+        qcfg = cfg.get("quantization_config", {})
+        return (
+            qcfg.get("format") in _CT_FP8_FORMATS
+            and qcfg.get("quant_method") == _CT_QUANT_METHOD
+        )
+
+    def _dequant_fp8_state_dict(self, state_dict: dict) -> dict:
+        """Dequantize FP8 weights in a layer state_dict to BF16.
+
+        Expects HF compressed-tensors layout:
+          - quantized weight key:  <name>          (dtype float8_e4m3fn, element_size=1)
+          - scale key (primary):   <name>_scale    (CT standard)
+          - scale key (fallback):  <name>_scale_inv (DeepSeek convention, reciprocal)
+        Scale may be per-tensor (scalar), per-channel (1-D), or per-group (2-D);
+        broadcasting is handled by torch naturally.
+        """
+        clean = {}
+        for name, tensor in state_dict.items():
+            # Skip quantization parameter tensors (scale, zero_point, g_idx).
+            if name.endswith("_scale") or name.endswith("_scale_inv") or name.endswith("zero_point"):
+                continue
+            if tensor.element_size() == 1:
+                # FP8 weight — find its scale.
+                scale = state_dict.get(name + "_scale")
+                if scale is not None:
+                    # CT standard: dequant = weight * scale (broadcast over channel/group).
+                    tensor = tensor.float() * scale.float()
+                else:
+                    scale_inv = state_dict.get(name + "_scale_inv")
+                    if scale_inv is not None:
+                        # DeepSeek convention: scale_inv = 1/scale stored as reciprocal.
+                        tensor = tensor.float() / scale_inv.float()
+                    else:
+                        logger.warning(
+                            "FP8 weight '{}' has no scale tensor; casting directly to BF16.", name
+                        )
+                tensor = tensor.to(torch.bfloat16)
+            clean[name] = tensor
+        return clean
 
     @staticmethod
     def load_unit_inputs(data_dir, unit: PtqUnit):
@@ -115,6 +169,7 @@ class BaseModel(metaclass=ABCMeta):
         weight_map = getattr(self, "_weight_map", None)
         if weight_map is None:
             weight_map = get_weight_mappings(self.model_path)
+        # Collect all files that contain weights (or their scales) under this prefix.
         file_list = set()
         for weight_name, file_name in weight_map.items():
             if weight_name.startswith(prefix):
@@ -128,6 +183,8 @@ class BaseModel(metaclass=ABCMeta):
                         new_key = key[len(prefix):]
                         state_dict[new_key] = f.get_tensor(key)
         state_dict.pop('self_attn.rotary_emb.inv_freq', None)
+        if self._source_is_fp8:
+            state_dict = self._dequant_fp8_state_dict(state_dict)
         return state_dict
 
 
