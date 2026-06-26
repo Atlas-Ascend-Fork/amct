@@ -35,7 +35,7 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 `.agents/` 是**唯一源**（git tracked）；`.claude/`、`.opencode/` 下的对应文件均为 **git-tracked 符号链接**，直接指向 `../.agents/...`（源改即时生效，无投影脚本、无拷贝）。
 
-视图分布：`.claude/{skills,agents,hooks,docs,settings.json}` + `CLAUDE.md`；`.opencode/{skills,agents,hooks,docs,opencode.json}`。两端视图 **symlink 随 git clone 自动还原，clone 即可用**。一处源、双端一致，不双份维护。
+视图分布：`.claude/{skills,agents,hooks,docs,settings.json}` + `CLAUDE.md`；`.opencode/{skills,agents,docs,opencode.json}`。两端视图 **symlink 随 git clone 自动还原，clone 即可用**。一处源、双端一致，不双份维护。
 
 ## 4. 设计原则
 
