@@ -89,9 +89,6 @@ def parser_gen(command=None):
     parser.add_argument("--start_block_idx", type=int, default=0)
     parser.add_argument("--end_block_idx", type=int, default=61)
 
-    parser.add_argument("--layer_range", type=str, default=None,
-                        help='Deploy only specified layers, e.g. "0,3" (inclusive).')
-
     parser.add_argument('--bit_config', type=str, default=None,
                         help='Path to a yaml file describing per-role bit-widths. '
                              'See configs/ for examples.')
