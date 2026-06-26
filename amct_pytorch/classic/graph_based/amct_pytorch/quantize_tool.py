@@ -40,12 +40,6 @@ from ..amct_pytorch.utils.model_util import get_node_output_info
 from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 from ..amct_pytorch.utils.vars import NUM_BITS
 from ..amct_pytorch.ada_round.ada_round_optimize import optimize_alpha
-from ..amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from ..amct_pytorch.utils.quant_node import QuantOpInfo
-from ..amct_pytorch.optimizer.insert_weight_quant_pass import (
-    finalize_int4_weight_for_deploy,
-    finalize_int4_weight_for_fakequant,
-)
 
 
 @check_params(
@@ -728,49 +722,15 @@ def _generate_model(graph, records, save_path):
     graph_copy = graph.deep_copy()
 
     # generate and save deploy model
-    # finalize INT4 weights BEFORE ReplaceRNNPass: pack two INT4 nibbles into one INT8
-    # byte. This must happen while original LSTM/GRU nodes are still in the graph so
-    # that QuantOpInfo.get_weight_node / get_recurrence_weight_node can locate the
-    # weight tensors. ReplaceRNNPass removes the original RNN nodes and inserts new
-    # node types that QuantOpInfo does not recognise, causing finalize to silently skip
-    # LSTM/GRU INT4 weights if the order were reversed.
-    for node in graph.nodes:
-        if node.name not in records:
-            continue
-        layer_record = records[node.name]
-        if layer_record.get("wts_type") != "INT4":
-            continue
-        weight_node = QuantOpInfo.get_weight_node(node)
-        if weight_node is not None:
-            weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-            int4_vals = weight_helper.get_data()
-            packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
-            weight_helper.clear_data()
-            # I-2 dims note: set_data changes data_type to INT8 but intentionally
-            # preserves the original dims (element-count shape, e.g. [4,20,20]).
-            # The deploy model is an AMCT-specific format consumed by the Ascend
-            # runtime, not validated by onnx.checker.  The runtime identifies packed
-            # INT4-in-INT8 weights via the op_data_type attribute (stripped at load
-            # time by delete_customized_attr) rather than from dims×sizeof, so the
-            # dims mismatch is acceptable by convention.  Do NOT update dims here
-            # without also auditing the Ascend runtime consumer.
-            weight_helper.set_data(packed, dtype_str)
-        recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(node)
-        if recurrence_weight_node is not None:
-            rw_helper = TensorProtoHelper(
-                recurrence_weight_node.proto, recurrence_weight_node.model_path
-            )
-            int4_vals = rw_helper.get_data()
-            packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
-            rw_helper.clear_data()
-            rw_helper.set_data(packed, dtype_str)  # dims note: same convention as above
-    # Use a dedicated deploy optimizer holding ONLY ReplaceRNNPass. Do NOT reuse the
-    # common-pass optimizer above: GraphOptimizer.do_optimizer does not clear its pass
-    # list, so reusing it would re-run every common pass a second time -- re-quantizing
-    # the already-finalized (packed) INT4 weights and corrupting them, while also never
-    # running ReplaceRNNPass. ReplaceRNNPass must run AFTER the INT4 finalize loop above
-    # (which needs the original LSTM/GRU nodes still present).
+    # FinalizeInt4WeightPass (deploy) must run BEFORE ReplaceRNNPass: it packs two INT4
+    # nibbles into one INT8 byte for every INT4 layer (main weight + RNN
+    # recurrence_weight). This must happen while the original LSTM/GRU nodes are still
+    # in the graph so QuantOpInfo can locate the weight tensors -- ReplaceRNNPass
+    # removes the original RNN nodes and inserts new node types QuantOpInfo does not
+    # recognise. A dedicated deploy optimizer is used (NOT the common-pass optimizer
+    # above) so the common passes are not re-run on the already-finalized weights.
     deploy_optimizer = opt.GraphOptimizer()
+    deploy_optimizer.add_pass(opt.FinalizeInt4WeightPass(records, "deploy"))
     deploy_optimizer.add_pass(opt.ReplaceRNNPass(records))
     deploy_optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, "Deploy")
@@ -792,30 +752,12 @@ def _generate_model(graph, records, save_path):
     optimizer.add_pass(opt.ReplaceDequantPass(records))
     optimizer.add_pass(opt.ReplaceAntiQuantPass(records))
     optimizer.add_pass(opt.ReplaceBiasQuantPass(records))
+    # FinalizeInt4WeightPass (fakequant) stores INT4 weights as native INT4 (ONNX
+    # nibble-packed) for every INT4 layer (main weight + RNN recurrence_weight). RNN
+    # nodes are NOT replaced on the fakequant path, so this can run in the same
+    # optimizer after the other fakequant passes.
+    optimizer.add_pass(opt.FinalizeInt4WeightPass(records, "fakequant"))
     optimizer.do_optimizer(graph_copy)
-    # finalize INT4 weights: store as native INT4 (ONNX nibble-packed)
-    for node in graph_copy.nodes:
-        if node.name not in records:
-            continue
-        layer_record = records[node.name]
-        if layer_record.get("wts_type") != "INT4":
-            continue
-        weight_node = QuantOpInfo.get_weight_node(node)
-        if weight_node is not None:
-            weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-            int4_vals = weight_helper.get_data()
-            data, dtype_str = finalize_int4_weight_for_fakequant(int4_vals)
-            weight_helper.clear_data()
-            weight_helper.set_data(data, dtype_str)
-        recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(node)
-        if recurrence_weight_node is not None:
-            rw_helper = TensorProtoHelper(
-                recurrence_weight_node.proto, recurrence_weight_node.model_path
-            )
-            int4_vals = rw_helper.get_data()
-            data, dtype_str = finalize_int4_weight_for_fakequant(int4_vals)
-            rw_helper.clear_data()
-            rw_helper.set_data(data, dtype_str)
     fakequant_file = generate_onnx_file_name(save_dir, save_prefix, "Fakequant")
     save_onnx_model(graph_copy, fakequant_file, "Fakequant", None, ["op_data_type"])
 
