@@ -33,7 +33,7 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 3. 单一源投影机制（Single Source of Truth）
 
-`.agents/` 是**唯一源**（git tracked）；`.claude/`、`.opencode/` 下的对应文件均为 **git-tracked 符号链接**，直接指向 `../.agents/...`（源改即时生效，无投影脚本、无拷贝）。
+`.agents/` 是**唯一源**（git tracked）；`.claude/`、`.opencode/` 下的对应文件均为 **git-tracked 符号链接**，直接指向 `../.agents/...`，源改即时生效。
 
 视图分布：`.claude/{skills,agents,hooks,docs,settings.json}` + `CLAUDE.md`；`.opencode/{skills,agents,docs,opencode.json}`。两端视图 **symlink 随 git clone 自动还原，clone 即可用**。一处源、双端一致，不双份维护。
 
@@ -59,7 +59,7 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 7. 运行与验证
 
-- 启动：clone 仓库后即可直接在 Claude Code 或 OpenCode 中启动（symlink 视图随 clone 自动还原，无需额外脚本）。
+- 启动：clone 仓库后即可直接在 Claude Code 或 OpenCode 中启动（symlink 视图随 clone 自动生效）。
 - 已实测（OpenCode + glm-5）：执行流（W8A8 直转）、分析流（方案推荐）、PTQ 流（extract → ptq → eval）三类端到端均由 agent 自主跑通且结果核实准确。
 
 ## 8. 面向 agent 集成（黑盒契约）
