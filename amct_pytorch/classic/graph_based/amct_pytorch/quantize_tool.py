@@ -764,7 +764,15 @@ def _generate_model(graph, records, save_path):
             packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
             rw_helper.clear_data()
             rw_helper.set_data(packed, dtype_str)  # dims note: same convention as above
-    optimizer.do_optimizer(graph)
+    # Use a dedicated deploy optimizer holding ONLY ReplaceRNNPass. Do NOT reuse the
+    # common-pass optimizer above: GraphOptimizer.do_optimizer does not clear its pass
+    # list, so reusing it would re-run every common pass a second time -- re-quantizing
+    # the already-finalized (packed) INT4 weights and corrupting them, while also never
+    # running ReplaceRNNPass. ReplaceRNNPass must run AFTER the INT4 finalize loop above
+    # (which needs the original LSTM/GRU nodes still present).
+    deploy_optimizer = opt.GraphOptimizer()
+    deploy_optimizer.add_pass(opt.ReplaceRNNPass(records))
+    deploy_optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, "Deploy")
     save_onnx_model(graph, deploy_file, "Deploy", None, ["op_data_type"])
 
