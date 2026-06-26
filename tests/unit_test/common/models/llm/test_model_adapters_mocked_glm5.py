@@ -202,9 +202,9 @@ class TestGLM5_1Mocked:
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
         model = GLM5_2(args)
 
-        assert "glm_5_2" in MODEL_REGISTRY
-        item = MODEL_REGISTRY.get_item("glm_5_2")
-        assert item.name == "glm_5_2"
+        assert "glm5_2" in MODEL_REGISTRY
+        item = MODEL_REGISTRY.get_item("glm5_2")
+        assert item.name == "glm5_2"
         assert item.target is GLM5_2
         assert item.metadata.get("family") == "glm"
         assert item.metadata.get("task") == "llm"
@@ -297,6 +297,419 @@ class TestGLM5_1Mocked:
         )
         result = model.do_head_forward([torch.randn(2, 4, 8)])
         assert result is mock_result
+
+
+
+# ---------------------------------------------------------------------------
+# Helpers for quant_module tests
+# ---------------------------------------------------------------------------
+
+QUANT_TARGET_ATTN_LINEAR = 'attn-linear'
+
+
+def _register_dtype_once():
+    """Register dtype entries (idempotent)."""
+    from amct_pytorch.quantization.dtypes import register_dtype
+    register_dtype()
+
+
+def _make_quant_args(quant_target=("attn-linear",)):
+    """Construct args for QuantGlmMoeDsaAttention.__init__."""
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+    cfg = {
+        "w_bits": 8,
+        "a_bits": 8,
+        "attn-linear": {
+            "q_a_proj": {"w_bits": 16, "a_bits": 16},
+            "q_b_proj": {"w_bits": 8, "a_bits": 8},
+            "kv_a_proj_with_mqa": {"w_bits": 16, "a_bits": 16},
+            "o_proj": {"w_bits": 8, "a_bits": 8},
+            "wq_b": {"w_bits": 8, "a_bits": 8},
+            "wk": {"w_bits": 16, "a_bits": 16},
+        },
+    }
+    policy = BitPolicy(cfg)
+    return SimpleNamespace(
+        quant_target=list(quant_target),
+        bit_policy=policy,
+        algos=[],
+        device="cpu",
+        w_bits=8,
+        a_bits=8,
+        quant_dtype="int",
+    )
+
+
+def _make_mock_attn_module(with_indexer=True):
+    """Construct a mock GlmMoeDsaAttention with all required attributes."""
+    attn = SimpleNamespace(
+        config=SimpleNamespace(hidden_size=64),
+        num_heads=4,
+        q_lora_rank=64,
+        kv_lora_rank=32,
+        qk_head_dim=32,
+        qk_nope_head_dim=16,
+        qk_rope_head_dim=16,
+        v_head_dim=16,
+        scaling=1.0,
+        skip_topk=False,
+        num_key_value_groups=1,
+        q_a_layernorm=nn.LayerNorm(64),
+        kv_a_layernorm=nn.LayerNorm(32),
+        q_a_proj=nn.Linear(64, 64, bias=False),
+        q_b_proj=nn.Linear(64, 4 * 32, bias=False),
+        kv_a_proj_with_mqa=nn.Linear(64, 32 + 16, bias=False),
+        kv_b_proj=nn.Linear(32, 4 * 32, bias=False),
+        o_proj=nn.Linear(4 * 16, 64, bias=False),
+        indexer=None,
+    )
+    if with_indexer:
+        indexer = SimpleNamespace(
+            wq_b=nn.Linear(64, 32, bias=False),
+            wk=nn.Linear(64, 32, bias=False),
+            weights_proj=nn.Linear(64, 8, bias=False),
+        )
+        attn.indexer = indexer
+    return attn
+
+
+def _make_real_quant_linear(in_f=4, out_f=4, name="test_ql"):
+    """Create a real QuantLinear for isinstance checks in iter_deploy_bindings."""
+    _register_dtype_once()
+    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+    args = SimpleNamespace(
+        quant_dtype="int", algos=[], w_bits=8, w_size=(out_f, in_f),
+    )
+    linear = nn.Linear(in_f, out_f, bias=False)
+    return QuantLinear(args, linear, w_bits=8, name=name)
+
+
+# ---------------------------------------------------------------------------
+# A. GLM5_2 block-level methods (A1-A10)
+# ---------------------------------------------------------------------------
+
+class TestGLM5_2BlockMethods:
+    """Tests for GLM5_2 block-level methods."""
+
+    def _make_model(self, monkeypatch, quant_target=None):
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
+        if quant_target is None:
+            quant_target = [QUANT_TARGET_MOE]
+        cfg = _make_glm5_config(num_layers=2)
+        _mock_base_deps(monkeypatch, cfg)
+        args = _make_mock_args(quant_target=quant_target)
+        return GLM5_2(args)
+
+    def test_block_loads_layer(self, monkeypatch):
+        """block() loads weights via load_state_dict(strict=True)."""
+        model = self._make_model(monkeypatch)
+        fake_layer = MagicMock()
+        monkeypatch.setattr(model, "cls", lambda *a, **kw: fake_layer)
+        fake_sd = {"some.weight": torch.randn(4, 4)}
+        monkeypatch.setattr(model, "load_layer_weight", lambda prefix: fake_sd)
+        result = model.block(0)
+        assert result is fake_layer
+        fake_layer.load_state_dict.assert_called_once_with(fake_sd, strict=True)
+        fake_layer.eval.assert_called_once()
+        fake_layer.eval.return_value.bfloat16.assert_called_once()
+
+    def test_build_block_for_forward_captures_topk(self, monkeypatch):
+        """_build_block_for_forward hooks forward to capture topk_indices."""
+        model = self._make_model(monkeypatch)
+        fake_topk = torch.tensor([[1, 2], [3, 4]])
+        fake_hidden = torch.randn(2, 4, 8)
+        fake_block = MagicMock()
+        fake_block.forward = lambda *a, **kw: (fake_hidden, fake_topk)
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.common.base.BaseModel._build_block_for_forward",
+            lambda self, layer_idx, use_quant_block=False: fake_block,
+        )
+        result = model._build_block_for_forward(0)
+        result.forward()
+        assert model._dsa_topk_indices is fake_topk
+
+    def test_get_block_forward_kwargs_injects_topk(self, monkeypatch):
+        """get_block_forward_kwargs injects prev_topk_indices when available."""
+        model = self._make_model(monkeypatch)
+        fake_topk = torch.tensor([[1, 2], [3, 4]])
+        model._dsa_topk_indices = fake_topk
+        kwargs = model.get_block_forward_kwargs()
+        assert "prev_topk_indices" in kwargs
+        assert kwargs["prev_topk_indices"] is fake_topk
+
+    def test_get_block_forward_kwargs_no_topk(self, monkeypatch):
+        """get_block_forward_kwargs omits prev_topk_indices when None."""
+        model = self._make_model(monkeypatch)
+        model._dsa_topk_indices = None
+        kwargs = model.get_block_forward_kwargs()
+        assert "prev_topk_indices" not in kwargs
+
+    def test_build_quant_block_attn_linear(self, monkeypatch):
+        """build_quant_block applies attn quantization for attn-linear target."""
+        model = self._make_model(monkeypatch, quant_target=["attn-linear"])
+        dl = nn.Module()
+        dl.mlp = nn.Linear(4, 4)
+        monkeypatch.setattr(model, "block", lambda idx: dl)
+        called = {"attn": False}
+
+        def _fake_apply(args, layer, cls):
+            called["attn"] = True
+
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.glm.glm5_2.glm5_2.apply_quant_to_attn",
+            _fake_apply,
+        )
+        model.build_quant_block(0)
+        assert called["attn"] is True
+
+    def test_build_quant_block_mlp_none_raises(self, monkeypatch):
+        """build_quant_block raises ValueError when mlp is missing."""
+        model = self._make_model(monkeypatch, quant_target=["moe"])
+        dl = nn.Module()
+        monkeypatch.setattr(model, "block", lambda idx: dl)
+        with pytest.raises(ValueError, match="MLP not found"):
+            model.build_quant_block(0)
+
+    def test_build_quant_block_dense_mlp(self, monkeypatch):
+        """build_quant_block uses QuantGatedMLP for dense MLP (no experts)."""
+        model = self._make_model(monkeypatch, quant_target=["moe"])
+        dl = nn.Module()
+        dl.mlp = nn.Linear(4, 4)
+        monkeypatch.setattr(model, "block", lambda idx: dl)
+        captured = {}
+
+        def _mock_qgmlp(args, module, group=None):
+            captured["group"] = group
+            captured["module"] = module
+            return module
+
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.glm.glm5_2.glm5_2.QuantGatedMLP",
+            _mock_qgmlp,
+        )
+        model.build_quant_block(0)
+        assert captured.get("group") == "mlp"
+
+    def test_iter_deploy_bindings_moe_path(self, monkeypatch):
+        """iter_deploy_bindings translates MoE expert paths correctly."""
+        model = self._make_model(monkeypatch)
+        block = nn.Module()
+        block.mlp = nn.Module()
+        block.mlp.experts = nn.Module()
+        experts_list = nn.ModuleList()
+        expert0 = nn.Module()
+        expert0.gate_proj = _make_real_quant_linear(name="gate_proj")
+        experts_list.append(expert0)
+        block.mlp.experts.expert_modules = experts_list
+        bindings = list(model.iter_deploy_bindings(0, block))
+        paths = [b[0] for b in bindings]
+        assert "model.layers.0.mlp.experts.0.gate_proj.weight" in paths
+
+    def test_iter_deploy_bindings_non_moe_path(self, monkeypatch):
+        """iter_deploy_bindings yields non-MoE QuantLinear paths directly."""
+        model = self._make_model(monkeypatch)
+        block = nn.Module()
+        block.self_attn = nn.Module()
+        block.self_attn.q_a_proj = _make_real_quant_linear(name="q_a_proj")
+        bindings = list(model.iter_deploy_bindings(0, block))
+        paths = [b[0] for b in bindings]
+        assert "model.layers.0.self_attn.q_a_proj.weight" in paths
+
+    def test_trivial_delegations(self, monkeypatch):
+        """Verify trivial delegation methods call super()."""
+        model = self._make_model(monkeypatch)
+        # load_embed_state_dict
+        mock_result = MagicMock()
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.common.base.BaseModel.load_embed_state_dict",
+            lambda self: mock_result,
+        )
+        assert model.load_embed_state_dict() is mock_result
+        # do_embedding_forward
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.common.base.BaseModel.do_embedding_forward",
+            lambda self, *a, **kw: mock_result,
+        )
+        assert model.do_embedding_forward(None) is mock_result
+        # do_block_forward
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.common.base.BaseModel.do_block_forward",
+            lambda self, *a, **kw: mock_result,
+        )
+        assert model.do_block_forward(0, None) is mock_result
+        # iter_ptq_units
+        yielded = [("unit0", MagicMock())]
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.common.base.BaseModel.iter_ptq_units",
+            lambda self, *a, **kw: iter(yielded),
+        )
+        assert list(model.iter_ptq_units(0, MagicMock())) == yielded
+        # load_unit_inputs
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.common.base.BaseModel.load_unit_inputs",
+            lambda self, *a, **kw: mock_result,
+        )
+        assert model.load_unit_inputs("/tmp", MagicMock()) is mock_result
+
+
+# ---------------------------------------------------------------------------
+# B. QuantGlmMoeDsaAttention tests (B1-B6)
+# ---------------------------------------------------------------------------
+
+class TestQuantGlmMoeDsaAttention:
+    """Tests for QuantGlmMoeDsaAttention init and forward."""
+
+    @staticmethod
+    def _patch_structure_transforms(monkeypatch):
+        """Mock build_algorithms_by_target to return None for structure target."""
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.glm.glm5_2.quant_module.build_algorithms_by_target",
+            lambda args, target, *ctor_args: None if target == "structure" else nn.ModuleDict(),
+        )
+
+    @staticmethod
+    def _mock_rotary_and_attention(monkeypatch, batch=2, heads=4, seq=4, v_dim=16):
+        """Mock apply_rotary_pos_emb_interleave and eager_attention_forward."""
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.glm.glm5_2.quant_module.apply_rotary_pos_emb_interleave",
+            lambda q, k, cos, sin: (q, k),
+        )
+        fake_attn_out = torch.randn(batch, heads, seq, v_dim)
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.glm.glm5_2.quant_module.eager_attention_forward",
+            lambda *a, **kw: (fake_attn_out, None),
+        )
+
+    def test_init_with_quant_and_indexer(self, monkeypatch):
+        """__init__ with attn-linear target creates QuantLinear for quantized projections."""
+        _register_dtype_once()
+        self._patch_structure_transforms(monkeypatch)
+        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+
+        args = _make_quant_args(quant_target=["attn-linear"])
+        attn_module = _make_mock_attn_module(with_indexer=True)
+        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
+
+        assert isinstance(quant_attn.q_a_proj, QuantLinear)
+        assert isinstance(quant_attn.q_b_proj, QuantLinear)
+        assert isinstance(quant_attn.kv_a_proj_with_mqa, QuantLinear)
+        assert isinstance(quant_attn.o_proj, QuantLinear)
+        assert isinstance(quant_attn.kv_b_proj, PlainLinear)
+        assert isinstance(quant_attn.indexer.wq_b, QuantLinear)
+        assert isinstance(quant_attn.indexer.wk, QuantLinear)
+        assert isinstance(quant_attn.indexer.weights_proj, nn.Linear)
+        assert hasattr(quant_attn, "inp_afq")
+        assert hasattr(quant_attn, "q_b_proj_afq")
+        assert hasattr(quant_attn, "o_proj_afq")
+
+    def test_init_without_quant(self, monkeypatch):
+        """__init__ without attn-linear creates PlainLinear for all projections."""
+        _register_dtype_once()
+        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+
+        args = _make_quant_args(quant_target=["moe"])
+        attn_module = _make_mock_attn_module(with_indexer=True)
+        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
+
+        assert isinstance(quant_attn.q_a_proj, PlainLinear)
+        assert isinstance(quant_attn.q_b_proj, PlainLinear)
+        assert isinstance(quant_attn.kv_a_proj_with_mqa, PlainLinear)
+        assert isinstance(quant_attn.kv_b_proj, PlainLinear)
+        assert isinstance(quant_attn.o_proj, PlainLinear)
+        assert isinstance(quant_attn.indexer.wq_b, PlainLinear)
+        assert isinstance(quant_attn.indexer.wk, PlainLinear)
+        assert isinstance(quant_attn.inp_afq, nn.Identity)
+        assert isinstance(quant_attn.q_b_proj_afq, nn.Identity)
+        assert isinstance(quant_attn.o_proj_afq, nn.Identity)
+
+    def test_init_shared_layer_no_indexer(self, monkeypatch):
+        """__init__ with indexer=None (shared layer) skips indexer quantization."""
+        _register_dtype_once()
+        self._patch_structure_transforms(monkeypatch)
+        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+
+        args = _make_quant_args(quant_target=["attn-linear"])
+        attn_module = _make_mock_attn_module(with_indexer=False)
+        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
+
+        assert quant_attn.indexer is None
+
+    def test_forward_full_layer(self, monkeypatch):
+        """forward with indexer and 4D attention_mask."""
+        _register_dtype_once()
+        self._patch_structure_transforms(monkeypatch)
+        self._mock_rotary_and_attention(monkeypatch)
+        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+
+        args = _make_quant_args(quant_target=["attn-linear"])
+        attn_module = _make_mock_attn_module(with_indexer=True)
+        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
+
+        fake_topk = torch.zeros(2, 4, 2, dtype=torch.long)
+        quant_attn.indexer = MagicMock(return_value=fake_topk)
+
+        hidden = torch.randn(2, 4, 64)
+        pos_emb = (torch.randn(2, 4, 16), torch.randn(2, 4, 16))
+        mask = torch.zeros(2, 1, 4, 4)
+
+        out, _, topk = quant_attn.forward(hidden, pos_emb, attention_mask=mask)
+
+        assert out.shape == (2, 4, 64)
+        assert topk is fake_topk
+
+    def test_forward_shared_layer(self, monkeypatch):
+        """forward without indexer uses prev_topk_indices."""
+        _register_dtype_once()
+        self._patch_structure_transforms(monkeypatch)
+        self._mock_rotary_and_attention(monkeypatch)
+        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+
+        args = _make_quant_args(quant_target=["attn-linear"])
+        attn_module = _make_mock_attn_module(with_indexer=False)
+        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
+
+        fake_topk = torch.zeros(2, 4, 2, dtype=torch.long)
+        hidden = torch.randn(2, 4, 64)
+        pos_emb = (torch.randn(2, 4, 16), torch.randn(2, 4, 16))
+        mask = torch.zeros(2, 1, 4, 4)
+
+        out, _, topk = quant_attn.forward(
+            hidden, pos_emb, attention_mask=mask, prev_topk_indices=fake_topk,
+        )
+
+        assert out.shape == (2, 4, 64)
+        assert topk is fake_topk
+
+    def test_forward_attention_mask_variants(self, monkeypatch):
+        """forward handles non-4D mask and None mask."""
+        _register_dtype_once()
+        self._patch_structure_transforms(monkeypatch)
+        self._mock_rotary_and_attention(monkeypatch)
+        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+
+        args = _make_quant_args(quant_target=["attn-linear"])
+        fake_topk = torch.zeros(2, 4, 2, dtype=torch.long)
+        hidden = torch.randn(2, 4, 64)
+        pos_emb = (torch.randn(2, 4, 16), torch.randn(2, 4, 16))
+
+        # Non-4D mask (2D) — shared layer
+        attn_2d = QuantGlmMoeDsaAttention(args, _make_mock_attn_module(with_indexer=False))
+        out_2d, _, _ = attn_2d.forward(
+            hidden, pos_emb, attention_mask=torch.zeros(4, 4),
+            prev_topk_indices=fake_topk,
+        )
+        assert out_2d.shape == (2, 4, 64)
+
+        # None mask — shared layer
+        attn_none = QuantGlmMoeDsaAttention(args, _make_mock_attn_module(with_indexer=False))
+        out_none, _, _ = attn_none.forward(
+            hidden, pos_emb, attention_mask=None,
+            prev_topk_indices=fake_topk,
+        )
+        assert out_none.shape == (2, 4, 64)
 
 
 if __name__ == "__main__":

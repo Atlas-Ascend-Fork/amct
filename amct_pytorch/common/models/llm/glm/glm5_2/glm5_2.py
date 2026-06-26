@@ -36,7 +36,7 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 @MODEL_REGISTRY.register(
-    name="glm_5_2",
+    name="glm5_2",
     task="llm",
     family="glm",
     description="GLM-5.2 MoE DSA model adapter",
