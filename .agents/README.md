@@ -1,6 +1,12 @@
-# amct 大模型量化 Agent Skills
+# amct Agent Skills
 
-面向昇腾 NPU 大模型量化压缩的 Agent Skills：封装 amct（`amct_pytorch`）的 LLM 量化全流程（`eval / extract_ptq_data / ptq / deploy` + blockwise PTQ），让你用自然语言完成「模型 → 量化方案 → 部署权重」。同时适配 Claude Code 与 OpenCode。
+amct 仓的 Agent Skills 基础设施（`.agents/`），以 skill 为单元封装各类研发能力，自然语言触发、agent 自主执行，clone 即可用。
+
+当前内置：
+- **quant-workflow**：LLM 量化全流程编排主入口（方案推荐 → PTQ → 部署导出，见下文）
+- **gitcode-pr / gitcode-issue**：GitCode 仓库协作操作
+
+后续按需扩充。适配 Claude Code 与 OpenCode。
 
 ## 快速开始
 
