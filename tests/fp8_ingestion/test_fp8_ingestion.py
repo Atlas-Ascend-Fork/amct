@@ -140,17 +140,17 @@ class TestS3DeepSeekScaleInv:
 
 class TestEdgeCases:
 
-    def test_no_scale_logs_warning(self, ct_fp8_model_dir, caplog):
-        """FP8 weight without any scale tensor → warning, output still BF16."""
+    def test_no_scale_logs_warning(self, ct_fp8_model_dir, capsys):
+        """FP8 weight without any scale tensor → warning on stderr, output still BF16."""
         model_dir, *_ = ct_fp8_model_dir
         m = _StubModel(model_dir)
         w_fp8 = torch.zeros(4, 8, dtype=torch.float8_e4m3fn)
         sd = {"weight": w_fp8}   # deliberately no scale key
-        import logging
-        with caplog.at_level(logging.WARNING):
-            out = m._dequant_fp8_state_dict(sd)
+        out = m._dequant_fp8_state_dict(sd)
         assert out["weight"].dtype == torch.bfloat16
-        assert any("no scale" in r.message.lower() for r in caplog.records)
+        # loguru writes to stderr; capsys captures it
+        captured = capsys.readouterr()
+        assert "no scale" in captured.err.lower()
 
     def test_mixed_bf16_and_fp8(self, ct_fp8_model_dir):
         """State dict with mixed dtypes: FP8 dequanted, BF16 passed through."""

@@ -91,18 +91,24 @@ class BaseModel(metaclass=ABCMeta):
             if tensor.element_size() == 1:
                 # FP8 weight — find its scale.
                 scale = state_dict.get(name + "_scale")
+                scale_inv = state_dict.get(name + "_scale_inv")
                 if scale is not None:
-                    # CT standard: dequant = weight * scale (broadcast over channel/group).
-                    tensor = tensor.float() * scale.float()
+                    # CT standard: dequant = weight * scale.
+                    # Per-channel scale has shape (out,); unsqueeze to (out, 1) for broadcast.
+                    s = scale.float()
+                    if s.ndim == 1:
+                        s = s.unsqueeze(-1)
+                    tensor = tensor.float() * s
+                elif scale_inv is not None:
+                    # DeepSeek convention: weight_scale_inv = 1/scale (reciprocal).
+                    s = scale_inv.float()
+                    if s.ndim == 1:
+                        s = s.unsqueeze(-1)
+                    tensor = tensor.float() / s
                 else:
-                    scale_inv = state_dict.get(name + "_scale_inv")
-                    if scale_inv is not None:
-                        # DeepSeek convention: scale_inv = 1/scale stored as reciprocal.
-                        tensor = tensor.float() / scale_inv.float()
-                    else:
-                        logger.warning(
-                            "FP8 weight '{}' has no scale tensor; casting directly to BF16.", name
-                        )
+                    logger.warning(
+                        "FP8 weight '{}' has no scale tensor; casting directly to BF16.", name
+                    )
                 tensor = tensor.to(torch.bfloat16)
             clean[name] = tensor
         return clean
