@@ -17,10 +17,8 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from onnx import onnx_pb  # pylint: disable=import-error
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.custom_op.arq.arq import weight_quant_np
-from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.onnx_initializer_util import pack_int4_to_int8
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
@@ -28,8 +26,6 @@ from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-
-WEIGHT_QUANT = "weight_quant"
 
 
 def finalize_int4_weight_for_deploy(int4_weight):
@@ -168,50 +164,3 @@ class InsertWeightQuantPass(BaseFusionPass):
             ),
             "WeightQuantPass",
         )
-
-
-def construct_weight_quant_node(
-    inputs,  # pylint: disable=no-member
-    outputs,
-    attrs,
-    layer_name,
-):
-    """
-    Function: construct quant node in onnx
-    Inputs:
-        input: a list of inputs' name
-        output: a list of outputs' name
-        attrs: a dict of attrs including
-            scale: numpy.array
-            offset: numpy.array
-            dst_type: a string
-        quantize_layer: a string, layer to be quantized
-    """
-    node_proto = onnx_pb.NodeProto()
-
-    node_proto.name = ".".join([layer_name, WEIGHT_QUANT])
-    node_proto.op_type = "AscendWeightQuant"
-    node_proto.input.extend(inputs)  # pylint: disable=E1101
-    node_proto.output.extend(outputs)  # pylint: disable=E1101
-
-    attr_helper = AttributeProtoHelper(node_proto)
-    attr_helper.set_attr_value("dst_type", "STRING", bytes(attrs["dst_type"], "utf-8"))
-
-    return node_proto
-
-
-def construct_weight_offset(layer_name, weight_offset):
-    """construct weight_offset op"""
-    node_proto = onnx_pb.NodeProto()
-    node_proto.name = ".".join([layer_name, "weight_offset"])
-    node_proto.op_type = "Constant"
-    node_proto.doc_string = "weight offset"
-    node_proto.output.extend(  # pylint: disable=E1101
-        [".".join([layer_name, "weight_offset", "output0"])]
-    )
-
-    AttributeProtoHelper(node_proto).set_attr_value("value", "TENSOR", None)
-    attr = node_proto.attribute[0]  # pylint: disable=E1101
-    TensorProtoHelper(attr.t).set_data(weight_offset, "INT8", list(weight_offset.shape))
-
-    return node_proto

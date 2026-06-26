@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 import os
 import numpy as np
+import ml_dtypes
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto  # pylint: disable=E0401
 
@@ -110,14 +111,22 @@ class TensorProtoHelper:
         raise ValueError(f"The data_type{proto_value} is UNEXPECTED")
 
     @classmethod
+    def resolve_np_dtype(cls, np_type):
+        """Resolve a np dtype string to a numpy/ml_dtypes type.
+        'int4' has no numpy attribute, so map it to ml_dtypes.int4."""
+        if np_type == "int4":
+            return ml_dtypes.int4
+        return getattr(np, np_type)
+
+    @classmethod
     def cast_ori_data(cls, value, tensor_np_type):
         """cast ori-data to numpy type"""
         if tensor_np_type == "float16":
             value = np.array(value).astype(np.uint16).tobytes()
-            np_value = np.frombuffer(value, getattr(np, tensor_np_type))
+            np_value = np.frombuffer(value, cls.resolve_np_dtype(tensor_np_type))
             np_value = np.array(np_value)
         else:
-            np_value = np.array(value, getattr(np, tensor_np_type))
+            np_value = np.array(value, cls.resolve_np_dtype(tensor_np_type))
         return np_value
 
     def check_external_data(self):
@@ -147,7 +156,7 @@ class TensorProtoHelper:
                 count = int(np.prod(self.tensor.dims))
                 np_value = unpack_int8_to_int4(packed, count)
             else:
-                np_dtype = getattr(np, np_type)
+                np_dtype = self.resolve_np_dtype(np_type)
                 np_value = np.frombuffer(byte_value, np_dtype)
             # to modify np_value.flags['WRITEABLE'] as True
             np_value = np.array(np_value)
@@ -297,7 +306,7 @@ class TensorProtoHelper:
         tensor_dtype = self.tensor.data_type
         np_type = self.map_np_type(tensor_dtype)
         data_location = self.map_data_location(tensor_dtype)
-        byte_size = np.dtype(np_type).itemsize
+        byte_size = np.dtype(self.resolve_np_dtype(np_type)).itemsize
         # the list is index of TensorProto.Datetype
         if (
             tensor_dtype not in TensorProtoHelper.data_type.values()
@@ -314,12 +323,14 @@ class TensorProtoHelper:
             raw_data = self.tensor.raw_data
             if raw_data:
                 data_length = len(self.tensor.raw_data)
-                np_value = np.frombuffer(self.tensor.raw_data, getattr(np, np_type))
+                np_value = np.frombuffer(
+                    self.tensor.raw_data, self.resolve_np_dtype(np_type)
+                )
                 self.tensor.ClearField(RAW_DATA)
             else:
                 data_length = len(getattr(self.tensor, data_location)) * byte_size
                 np_value = np.array(
-                    getattr(self.tensor, data_location), getattr(np, np_type)
+                    getattr(self.tensor, data_location), self.resolve_np_dtype(np_type)
                 )
                 self.tensor.ClearField(data_location)
             self.export_external_data(np_value, external_file, data_length)
@@ -330,7 +341,9 @@ class TensorProtoHelper:
                 self.tensor.ClearField(data_location)
             else:
                 data_length = len(self.tensor.raw_data)
-                np_value = np.frombuffer(self.tensor.raw_data, getattr(np, np_type))
+                np_value = np.frombuffer(
+                    self.tensor.raw_data, self.resolve_np_dtype(np_type)
+                )
                 self.tensor.ClearField(RAW_DATA)
             self.export_external_data(np_value, external_file, data_length)
             return
