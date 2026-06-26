@@ -24,6 +24,7 @@
 - BF16 baseline（seq_len=4096）= **3.9036**；首轮直转 **moe+attn-linear**，全 80 层，granularity block，无 PTQ：
   - **int W8A8**：ppl 3.9203，`delta=+0.0167`（达标，略优）
   - **mxfp8**：ppl 3.9455，`delta=+0.0419`（达标）
+  - **mxfp W4A8**（routed W4A8 / shared+attn W8A8）：ppl 4.1163，`delta=+0.2127`（routed 专家降至 4bit 精度损耗明显，可接受性视业务而定）
 - 性能注意：MoE per-expert 路径在小 M_eff 下收益存疑，须 infer 侧 packed `MoEGMM` 实测确认（见 L2 MoE 类）。mxfp8 为 amct 伪量化 eval（A3 可行）；真 MX GEMM 推理需 A5（ascend910_95）。
 
 ## 适配建议（下次同系列/同结构）
@@ -41,3 +42,4 @@
 | BF16 | 无 | 无 | 3.9036 |
 | int W8A8 | moe+attn-linear | 直转 | 3.9203 |
 | mxfp8 | moe+attn-linear | 直转 | 3.9455 |
+| mxfp W4A8 | moe+attn-linear（routed W4A8 / shared+attn W8A8） | 直转 | 4.1163 |
