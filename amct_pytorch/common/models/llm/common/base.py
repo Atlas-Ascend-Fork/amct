@@ -30,6 +30,7 @@ from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, sa
 from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
 from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 class BaseModel(metaclass=ABCMeta):
@@ -198,6 +199,22 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
+    def build_empty_quant_block(self, layer_idx):
+        """构建空权重的 quant block，不加载实际权重。
+
+        用于 deploy --only_config、tensor 模式 ignore 列表收集、
+        get_quant_weight_specs 等只需模块结构不需要实际权重的场景。
+        """
+        with init_empty_weights():
+            decoder_layer = self.cls(self.config, layer_idx)
+        original_block = self.block
+        try:
+            self.block = lambda idx, _dl=decoder_layer: _dl
+            block = self.build_quant_block(layer_idx)
+        finally:
+            self.block = original_block
+        return block
+
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
@@ -212,7 +229,6 @@ class BaseModel(metaclass=ABCMeta):
 
         block = self._dispatch_block(block).eval()
         if use_quant_block and hook_name is None:
-            from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
                     mod.eval_mode = True
@@ -279,13 +295,46 @@ class BaseModel(metaclass=ABCMeta):
             return
 
     def iter_deploy_bindings(self, layer_idx, block):
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         for name, module in block.named_modules():
             if not isinstance(module, QuantLinear):
                 continue
             yield f"{weight_prefix}{name}.weight", module
+
+    def get_scale_name(self, weight_name):
+        """返回 (scale_prefix, scale_inv_name)，用于 FP8→BF16 反量化时定位 scale_inv 张量。
+
+        默认用 .scale 替换 .weight 命名。模型 scale_inv 命名不同时 override。
+        """
+        scale_prefix = ".scale"
+        scale_inv_name = weight_name.replace(".weight", ".scale")
+        return scale_prefix, scale_inv_name
+
+    def get_kv_cache_scheme(self):
+        """返回 KV cache 量化配置，None 表示不量化。
+
+        各模型根据 quant_dtype 和 quant 方案决定，例如：
+        - c16 方案返回 None（KV cache 保持 16-bit）
+        - c8 方案返回 {"num_bits": 8, "type": "int", ...}
+        - mxfp 方案返回 {"num_bits": 8, "type": "float", ...}
+        """
+        return {"num_bits": 8, "type": "float"}
+
+    def get_quant_weight_specs(self):
+        """返回 {safetensors权重名: w_bits}，供 tensor 模式直转量化使用。
+
+        默认实现通过 build_empty_quant_block 构建空 block，遍历 QuantLinear
+        拿 w_bits。bits 来自 bit_policy，和 quant_module.py 解析方式一致。
+        有 packed expert 等路径映射需求的模型需 override。
+        """
+        specs = {}
+        for layer_idx in range(self.num_layers):
+            block = self.build_empty_quant_block(layer_idx)
+            weight_prefix = self.get_layer_weight_prefix(layer_idx)
+            for name, module in block.named_modules():
+                if isinstance(module, QuantLinear) and module.w_bits is not None:
+                    specs[f"{weight_prefix}{name}.weight"] = module.w_bits
+        return specs
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)

@@ -581,7 +581,7 @@ class TestQuantGlmMoeDsaAttention:
         )
 
     def test_init_with_quant_and_indexer(self, monkeypatch):
-        """__init__ with attn-linear target creates QuantLinear for quantized projections."""
+        """__init__ with attn-linear target: INT mode quantizes q_b/o/wq_b, not q_a/kv_a/wk."""
         _register_dtype_once()
         self._patch_structure_transforms(monkeypatch)
         from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
@@ -592,13 +592,13 @@ class TestQuantGlmMoeDsaAttention:
         attn_module = _make_mock_attn_module(with_indexer=True)
         quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
 
-        assert isinstance(quant_attn.q_a_proj, QuantLinear)
+        assert isinstance(quant_attn.q_a_proj, PlainLinear)
         assert isinstance(quant_attn.q_b_proj, QuantLinear)
-        assert isinstance(quant_attn.kv_a_proj_with_mqa, QuantLinear)
+        assert isinstance(quant_attn.kv_a_proj_with_mqa, PlainLinear)
         assert isinstance(quant_attn.o_proj, QuantLinear)
         assert isinstance(quant_attn.kv_b_proj, PlainLinear)
         assert isinstance(quant_attn.indexer.wq_b, QuantLinear)
-        assert isinstance(quant_attn.indexer.wk, QuantLinear)
+        assert isinstance(quant_attn.indexer.wk, PlainLinear)
         assert isinstance(quant_attn.indexer.weights_proj, nn.Linear)
         assert hasattr(quant_attn, "inp_afq")
         assert hasattr(quant_attn, "q_b_proj_afq")

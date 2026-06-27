@@ -151,6 +151,59 @@ class GLM5_2(BaseModel):
 
         return decoder_layer
 
+    def get_kv_cache_scheme(self):
+        """对齐 infer 仓 convert_model.py：c16 方案返回 None，mxfp 方案返回 8-bit float。"""
+        if self.args.quant_dtype == "mxfp":
+            return {"num_bits": 8, "type": "float", "strategy": "group",
+                    "group_size": 128, "dynamic": True, "symmetric": True}
+        return None
+
+    def get_extra_ignore_names(self):
+        """Static ignore entries not discoverable by block traversal.
+
+        Covers three categories the generic get_quant_ignore_linear_names
+        can't reach:
+          - mlp.gate (GlmMoeDsaTopkRouter, not nn.Linear)
+          - MTP layer (layer >= num_hidden_layers, not in num_layers range)
+          - lm_head (model-level, outside any block)
+        """
+        ignore = []
+        num_hidden = self.config.num_hidden_layers
+        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
+        first_k_dense = self.config.first_k_dense_replace
+        num_layers = num_hidden + num_nextn
+
+        for i in range(num_layers):
+            if i >= first_k_dense:
+                ignore.append(f"model.layers.{i}.mlp.gate")
+            if i >= num_hidden:
+                ignore.append(f"model.layers.{i}.self_attn.indexer.wk")
+                ignore.append(f"model.layers.{i}.self_attn.indexer.weights_proj")
+                ignore.append(f"model.layers.{i}.self_attn.kv_a_proj_with_mqa")
+                ignore.append(f"model.layers.{i}.self_attn.q_a_proj")
+                ignore.append(f"model.layers.{i}.self_attn.kv_b_proj")
+                ignore.append(f"model.layers.{i}.eh_proj")
+                ignore.append(f"model.layers.{i}.shared_head.head")
+
+        ignore.append("lm_head")
+        return ignore
+
+    def get_quant_weight_specs(self):
+        """返回 {safetensors权重名: w_bits}，override 做 packed expert 路径映射。
+
+        BaseModel 默认实现产出 packed 路径 mlp.experts.expert_modules.{idx}.gate_proj，
+        但 safetensors 里是 unpacked 路径 mlp.experts.{idx}.gate_proj，需要替换。
+        """
+        specs = super().get_quant_weight_specs()
+        # Map packed expert paths to unpacked safetensors keys:
+        #   mlp.experts.expert_modules.{idx}.gate_proj  ->  mlp.experts.{idx}.gate_proj
+        fixed = {}
+        for name, bits in specs.items():
+            if ".expert_modules." in name:
+                name = name.replace(".expert_modules.", ".")
+            fixed[name] = bits
+        return fixed
+
     def iter_ptq_units(self, layer_idx, block):
         yield from super().iter_ptq_units(layer_idx, block)
 
