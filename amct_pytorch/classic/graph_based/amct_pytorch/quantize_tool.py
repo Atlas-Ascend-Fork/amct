@@ -335,7 +335,6 @@ def save_model(modfied_onnx_file, record_file, save_path):
     records, _ = record_parser.parse()
 
     Parser.write_node_attrs_extracted_from_onnx(graph, modfied_onnx_file, ['op_data_type'])
-    quant_config = Configuration().get_quant_config()
     _generate_model(graph, records, save_path)
 
 
@@ -711,9 +710,11 @@ def _generate_model(graph, records, save_path):
     graph_copy = graph.deep_copy()
 
     # generate and save deploy model
-    optimizer = opt.GraphOptimizer()
-    optimizer.add_pass(opt.ReplaceRNNPass(records))
-    optimizer.do_optimizer(graph)
+    # FinalizeInt4WeightPass must run BEFORE ReplaceRNNPass to pack INT4 while RNN nodes are still present.
+    deploy_optimizer = opt.GraphOptimizer()
+    deploy_optimizer.add_pass(opt.FinalizeInt4WeightPass(records))
+    deploy_optimizer.add_pass(opt.ReplaceRNNPass(records))
+    deploy_optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, 'Deploy')
     save_onnx_model(graph, deploy_file, 'Deploy', None, ['op_data_type'])
 
@@ -721,11 +722,13 @@ def _generate_model(graph, records, save_path):
     optimizer = opt.GraphOptimizer()
     optimizer.add_pass(opt.InsertRNNFakeQuantPass(records))
     optimizer.add_pass(opt.ReplaceQuantPass(records))
-    optimizer.add_pass(opt.ReplaceWeightQuantPass(records)) # AscendWeightQuant op only
-    optimizer.add_pass(opt.WeightFakequantPass(records)) # int8 case only
+    optimizer.add_pass(opt.WeightFakequantPass(records))
     optimizer.add_pass(opt.ReplaceDequantPass(records))
     optimizer.add_pass(opt.ReplaceAntiQuantPass(records))
     optimizer.add_pass(opt.ReplaceBiasQuantPass(records))
+    # INT4 weights are dequantized to float by WeightFakequantPass above (like INT8),
+    # so the fakequant model carries float weights loadable by generic runtimes.
+    # Native tensor(int4) must NOT reach op inputs (e.g. LSTM rejects int4 weights).
     optimizer.do_optimizer(graph_copy)
     fakequant_file = generate_onnx_file_name(save_dir, save_prefix, 'Fakequant')
     save_onnx_model(graph_copy, fakequant_file, 'Fakequant', None, ['op_data_type'])
