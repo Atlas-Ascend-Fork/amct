@@ -40,12 +40,11 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
     Generate a quantization configuration dictionary based on the specified parameters.
     """
     config_groups = {"group_0": {"targets": ["Linear"]}}
-    if is_mx:
-        if w4a4:
-            config_groups.update({"group_1": {"targets": ["MoEGMMUpGate"]}})
-            config_groups.update({"group_2": {"targets": ["MoEGMMDown"]}})
-        else:
-            config_groups.update({"group_1": {"targets": ["MoEGMM"]}})
+    if is_mx and w4a4:
+        config_groups.update({"group_1": {"targets": ["MoEGMMUpGate"]}})
+        config_groups.update({"group_2": {"targets": ["MoEGMMDown"]}})
+    elif is_mx or w4a8:
+        config_groups.update({"group_1": {"targets": ["MoEGMM"]}})
     quant_config = {"config_groups": config_groups,
                     "format": "float-quantized" if is_mx else "int-quantized",
                     "global_compression_ratio": 1,
@@ -55,24 +54,31 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
     quant_config.update(cache_scheme)
     qtype = "float" if is_mx else "int"
     quant_config["config_groups"]["group_0"].update(generate_quant_group(a_num_bits=8, w_num_bits=8, qtype=qtype))
+    if is_mx and w4a4:
+        quant_config["config_groups"]["group_1"].update(
+            generate_quant_group(a_num_bits=4, w_num_bits=4, qtype=qtype))
+        quant_config["config_groups"]["group_2"].update(
+            generate_quant_group(a_num_bits=8, w_num_bits=4, qtype=qtype))
+    elif is_mx or w4a8:
+        quant_config["config_groups"]["group_1"].update(generate_quant_group(
+            a_num_bits=8, w_num_bits=4 if w4a8 else 8, qtype=qtype))
     if is_mx:
-        if w4a4:
-            quant_config["config_groups"]["group_1"].update(
-                generate_quant_group(a_num_bits=4, w_num_bits=4, qtype=qtype))
-            quant_config["config_groups"]["group_2"].update(
-                generate_quant_group(a_num_bits=8, w_num_bits=4, qtype=qtype))
-        else:
-            quant_config["config_groups"]["group_1"].update(generate_quant_group(
-                a_num_bits=8, w_num_bits=4 if w4a8 else 8, qtype=qtype))
         quant_config["weight_block_size"] = [1, 32]
     return quant_config
 
 
 def get_quant_ignore_linear_names(block, weight_prefix):
+    from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+
     quant_linear_prefixes = tuple(
         f"{name}."
         for name, module in block.named_modules()
         if isinstance(module, QuantLinear)
+    )
+    plain_linear_prefixes = tuple(
+        f"{name}."
+        for name, module in block.named_modules()
+        if isinstance(module, PlainLinear)
     )
 
     names = []
@@ -81,7 +87,15 @@ def get_quant_ignore_linear_names(block, weight_prefix):
             continue
         if any(name.startswith(prefix) for prefix in quant_linear_prefixes):
             continue
+        # Skip PlainLinear's inner .linear — emit PlainLinear by its own path below.
+        if any(name.startswith(prefix) for prefix in plain_linear_prefixes):
+            continue
         names.append(f"{weight_prefix}{name}")
+
+    for name, module in block.named_modules():
+        if isinstance(module, PlainLinear):
+            names.append(f"{weight_prefix}{name}")
+
     return names
 
 

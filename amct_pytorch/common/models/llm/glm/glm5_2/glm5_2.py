@@ -151,6 +151,85 @@ class GLM5_2(BaseModel):
 
         return decoder_layer
 
+    def get_extra_ignore_names(self):
+        """Static ignore entries not discoverable by block traversal.
+
+        Covers three categories the generic get_quant_ignore_linear_names
+        can't reach:
+          - mlp.gate (GlmMoeDsaTopkRouter, not nn.Linear)
+          - MTP layer (layer >= num_hidden_layers, not in num_layers range)
+          - lm_head (model-level, outside any block)
+        """
+        ignore = []
+        num_hidden = self.config.num_hidden_layers
+        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
+        first_k_dense = self.config.first_k_dense_replace
+        num_layers = num_hidden + num_nextn
+
+        for i in range(num_layers):
+            if i >= first_k_dense:
+                ignore.append(f"model.layers.{i}.mlp.gate")
+            if i >= num_hidden:
+                ignore.append(f"model.layers.{i}.self_attn.indexer.wk")
+                ignore.append(f"model.layers.{i}.self_attn.indexer.weights_proj")
+                ignore.append(f"model.layers.{i}.self_attn.kv_a_proj_with_mqa")
+                ignore.append(f"model.layers.{i}.self_attn.q_a_proj")
+                ignore.append(f"model.layers.{i}.self_attn.kv_b_proj")
+                ignore.append(f"model.layers.{i}.eh_proj")
+                ignore.append(f"model.layers.{i}.shared_head.head")
+
+        ignore.append("lm_head")
+        return ignore
+
+    def get_quant_weight_specs(self):
+        """Return {safetensors_weight_name: w_bits} for tensor-mode quantization.
+
+        Only layers that are QuantLinear in block-mode INT path are listed.
+        Layers not listed (q_a_proj, kv_a_proj_with_mqa, kv_b_proj, indexer.wk,
+        indexer.weights_proj, mlp.gate, layernorm, embed, lm_head) are not quantized.
+        """
+        specs = {}
+        num_hidden = self.config.num_hidden_layers
+        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
+        first_k_dense = self.config.first_k_dense_replace
+        num_layers = num_hidden + num_nextn
+        indexer_types = self.config.__dict__.get("indexer_types")
+
+        bp = self.args.bit_policy
+        attn_bits = bp["attn-linear"]
+        q_b_w = attn_bits["q_b_proj"].w if attn_bits["q_b_proj"] else None
+        o_w = attn_bits["o_proj"].w if attn_bits["o_proj"] else None
+        wq_b_w = attn_bits["wq_b"].w if attn_bits["wq_b"] else None
+
+        for i in range(num_layers):
+            is_full = (
+                indexer_types is None
+                or i >= num_hidden
+                or indexer_types[i] == "full"
+            )
+
+            if q_b_w is not None:
+                specs[f"model.layers.{i}.self_attn.q_b_proj.weight"] = q_b_w
+            if o_w is not None:
+                specs[f"model.layers.{i}.self_attn.o_proj.weight"] = o_w
+            if is_full and wq_b_w is not None:
+                specs[f"model.layers.{i}.self_attn.indexer.wq_b.weight"] = wq_b_w
+
+            if i >= first_k_dense and i < num_hidden:
+                moe_w = bp.linear_bits(group="moe.routed")[0]
+                for j in range(self.config.n_routed_experts):
+                    for proj in ("gate_proj", "up_proj", "down_proj"):
+                        specs[f"model.layers.{i}.mlp.experts.{j}.{proj}.weight"] = moe_w
+                shared_w = bp.linear_bits(group="moe.shared")[0]
+                for proj in ("gate_proj", "up_proj", "down_proj"):
+                    specs[f"model.layers.{i}.mlp.shared_experts.{proj}.weight"] = shared_w
+            elif i < first_k_dense:
+                mlp_w = bp.linear_bits(group="mlp")[0]
+                for proj in ("gate_proj", "up_proj", "down_proj"):
+                    specs[f"model.layers.{i}.mlp.{proj}.weight"] = mlp_w
+
+        return specs
+
     def iter_ptq_units(self, layer_idx, block):
         yield from super().iter_ptq_units(layer_idx, block)
 

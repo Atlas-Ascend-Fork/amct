@@ -26,13 +26,13 @@ from pathlib import Path
 import torch
 from loguru import logger
 from safetensors import safe_open
-from safetensors.torch import save_file
+from safetensors.torch import load_file, save_file
 from tqdm import tqdm
 
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
+from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config, get_quant_ignore_linear_names
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
@@ -78,7 +78,9 @@ class LlmDeployWorkflow:
 
     def run(self):
         sink_id = self.setup()
-        if self.granularity == "block":
+        if getattr(self.args, "only_config", False):
+            results = self._run_only_config()
+        elif self.granularity == "block":
             results = self._run_blockwise()
         elif self.granularity == "tensor":
             results = self._run_tensorwise()
@@ -129,18 +131,37 @@ class LlmDeployWorkflow:
         with open(index_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def _is_w4a8(self):
+        """Infer W4A8: moe.routed.w_bits == 4 in bit_policy."""
+        bit_policy = getattr(self.args, "bit_policy", None)
+        if bit_policy is None:
+            return False
+        try:
+            w_bits, _ = bit_policy.linear_bits(group="moe.routed")
+            return w_bits == 4
+        except Exception:
+            return False
+
+    def _collect_extra_ignore_names(self):
+        method = getattr(self.pipeline, "get_extra_ignore_names", None)
+        if method is None:
+            return []
+        return method()
+
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
 
-        cache_scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
+        # infer c16: KV cache stays 16-bit (null); li_cache is int 8-bit.
+        cache_scheme = {"kv_cache_scheme": None,
                         "li_cache_scheme": {
                             "type": "float" if self.is_mx else "int",
                             "num_bits": 8,
                         }}
+        w4a8 = self._is_w4a8()
         quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
+            cache_scheme, quant_ignore_layers, w4a8=w4a8, w4a4=False, is_mx=self.is_mx)
         config['quantization_config'] = quantization_config
 
         new_config_file = os.path.join(self.output_dir, "config.json")
@@ -173,6 +194,35 @@ class LlmDeployWorkflow:
             json.dump(output_index, f, ensure_ascii=False, indent=2, sort_keys=True)
         return index_path
 
+    def _run_only_config(self):
+        """Generate only config.json, bypassing all weight loading and export.
+
+        Builds quant blocks with empty weights (init_empty_weights) to
+        determine the ignore list via get_quant_ignore_linear_names, then
+        writes config.json with the quantization_config.
+        """
+        self._copy_support_files()
+        quant_ignore_layers = []
+        from accelerate import init_empty_weights
+        for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Config-only..."):
+            with init_empty_weights():
+                decoder_layer = self.pipeline.cls(self.pipeline.config, layer_idx)
+            original_block = self.pipeline.block
+            try:
+                self.pipeline.block = lambda idx, _dl=decoder_layer: _dl
+                block = self.pipeline.build_quant_block(layer_idx)
+            finally:
+                self.pipeline.block = original_block
+            weight_prefix = self.pipeline.get_layer_weight_prefix(layer_idx)
+            quant_ignore_layers.extend(
+                get_quant_ignore_linear_names(block, weight_prefix)
+            )
+        quant_ignore_layers.extend(self._collect_extra_ignore_names())
+        self._refresh_config(quant_ignore_layers)
+        config_path = os.path.join(self.output_dir, "config.json")
+        logger.info("Generated config-only deploy at {}", config_path)
+        return {"index_path": None, "num_output_files": 0}
+
     def _run_blockwise(self):
         self._copy_support_files()
         quant_ignore_layers = []
@@ -204,6 +254,7 @@ class LlmDeployWorkflow:
             )
         )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
+        quant_ignore_layers.extend(self._collect_extra_ignore_names())
         self._refresh_config(quant_ignore_layers)
         logger.info("Exported deploy model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
@@ -212,10 +263,36 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
         }
 
+    def _get_quant_weight_specs(self):
+        method = getattr(self.pipeline, "get_quant_weight_specs", None)
+        if method is None:
+            return {}
+        return method()
+
+    def _build_ignore_layers(self):
+        quant_ignore_layers = []
+        from accelerate import init_empty_weights
+        for layer_idx in range(self.pipeline.num_layers):
+            with init_empty_weights():
+                decoder_layer = self.pipeline.cls(self.pipeline.config, layer_idx)
+            original_block = self.pipeline.block
+            try:
+                self.pipeline.block = lambda idx, _dl=decoder_layer: _dl
+                block = self.pipeline.build_quant_block(layer_idx)
+            finally:
+                self.pipeline.block = original_block
+            weight_prefix = self.pipeline.get_layer_weight_prefix(layer_idx)
+            quant_ignore_layers.extend(get_quant_ignore_linear_names(block, weight_prefix))
+        return quant_ignore_layers
+
     def _run_tensorwise(self):
+        from amct_pytorch.quantization.dtypes.int_impl import weight_quant
+
         self._copy_support_files()
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
+
+        quant_specs = self._get_quant_weight_specs() if self.is_int else {}
 
         weights_by_file = defaultdict(list)
         for weight_name, file_name in original_weight_map.items():
@@ -231,13 +308,12 @@ class LlmDeployWorkflow:
 
             new_state_dict = {}
             for weight_name, weight in current_state_dict.items():
-                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
-                if weight_name.endswith(scale_prefix):
+                if weight_name.endswith("_scale_inv"):
                     continue
-                elif weight.element_size() == 1:
-                    # FP8 weight
+
+                if self.args.dequantize and weight.element_size() == 1:
+                    scale_inv_name = f"{weight_name}_scale_inv"
                     try:
-                        # Get scale_inv from the correct file
                         file_name = original_weight_map[scale_inv_name]
                         if file_name not in loaded_files:
                             file_path = model_dir / file_name
@@ -248,20 +324,40 @@ class LlmDeployWorkflow:
                         else:
                             weight = weight_dequant(weight, scale_inv)
                     except KeyError:
-                        print(
-                            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
-                    new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
+                        logger.warning("Missing scale_inv for {}, skipping", weight_name)
+
+                if weight_name in quant_specs:
+                    bits = quant_specs[weight_name]
+                    qx, scale, bias = weight_quant(weight, bits, real_quant=True)
+                    new_state_dict[weight_name] = qx
+                    scale_name = weight_name.replace(".weight", ".weight_scale")
+                    new_state_dict[scale_name] = scale
+                    updated_weight_map[weight_name] = source_file
+                    updated_weight_map[scale_name] = source_file
+                    if bias is not None:
+                        bias_name = weight_name.replace(".weight", ".weight_bias")
+                        new_state_dict[bias_name] = bias
+                        updated_weight_map[bias_name] = source_file
                 else:
                     new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
+                    updated_weight_map[weight_name] = source_file
 
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file
 
+            if len(loaded_files) > 2:
+                oldest_file = next(iter(loaded_files))
+                if oldest_file != source_file:
+                    del loaded_files[oldest_file]
+
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config_tensor()
+        if self.is_int:
+            quant_ignore_layers = self._build_ignore_layers()
+            quant_ignore_layers.extend(self._collect_extra_ignore_names())
+            self._refresh_config(quant_ignore_layers)
+        else:
+            self._refresh_config_tensor()
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {

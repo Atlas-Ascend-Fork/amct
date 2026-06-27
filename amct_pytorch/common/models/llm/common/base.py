@@ -287,6 +287,32 @@ class BaseModel(metaclass=ABCMeta):
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
+    def get_quant_weight_specs(self):
+        """Return {safetensors_weight_name: w_bits} for tensor-mode quantization.
+
+        Default: build empty-weight quant blocks and collect all QuantLinear
+        modules' w_bits. Adapters with complex structures (e.g. MoE packed
+        experts) may override this for efficiency or correctness.
+        """
+        from accelerate import init_empty_weights
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+        specs = {}
+        for layer_idx in range(self.num_layers):
+            with init_empty_weights():
+                decoder_layer = self.cls(self.config, layer_idx)
+            original_block = self.block
+            try:
+                self.block = lambda idx, _dl=decoder_layer: _dl
+                block = self.build_quant_block(layer_idx)
+            finally:
+                self.block = original_block
+            weight_prefix = self.get_layer_weight_prefix(layer_idx)
+            for name, module in block.named_modules():
+                if isinstance(module, QuantLinear) and module.w_bits is not None:
+                    specs[f"{weight_prefix}{name}.weight"] = module.w_bits
+        return specs
+
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
 
