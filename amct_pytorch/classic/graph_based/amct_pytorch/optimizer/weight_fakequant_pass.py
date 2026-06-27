@@ -26,7 +26,7 @@ from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
-WTS_FAKEQUANT_NUM_BITS = (6, 7, 8)
+WTS_FAKEQUANT_NUM_BITS = (4, 6, 7, 8)
 
 
 class WeightFakequantPass(BaseFusionPass):
