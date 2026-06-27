@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 import os
 import numpy as np
+import ml_dtypes
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto # pylint: disable=E0401
 
@@ -24,6 +25,31 @@ from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.common.utils import files as files_util
 
 RAW_DATA = 'raw_data'
+
+
+def pack_int4_to_int8(arr):
+    """把每两个 INT4 值（值域 [-8,7]）打包成一个 int8 字节：低 4 位存第一个、高 4 位存第二个。
+    奇数长度末尾补 0。返回 np.int8 数组。"""
+    flat = np.asarray(arr).reshape(-1).astype(np.int8)
+    if flat.size % 2 == 1:
+        flat = np.append(flat, np.int8(0))
+    low = flat[0::2] & 0x0F
+    high = flat[1::2] & 0x0F
+    packed = (low | (high << 4)).astype(np.uint8)
+    return packed.astype(np.int8)
+
+
+def unpack_int8_to_int4(packed, count):
+    """把打包的 int8 还原成 count 个 INT4 值（值域 [-8,7]，np.int8 数组）。"""
+    raw = np.asarray(packed).reshape(-1).astype(np.uint8)
+    low = raw & 0x0F
+    high = (raw >> 4) & 0x0F
+    out = np.empty(raw.size * 2, dtype=np.int8)
+    out[0::2] = low
+    out[1::2] = high
+    # 4-bit 有符号还原：>7 的值减 16
+    out = np.where(out > 7, out - 16, out).astype(np.int8)
+    return out[:count]
 
 
 class TensorProtoHelper():
@@ -50,6 +76,7 @@ class TensorProtoHelper():
         'COMPLEX64': [data_type.COMPLEX64, 'float_data', 'complex64'],
         'COMPLEX128': [data_type.COMPLEX128, 'double_data', 'complex128'],
         'BFLOAT16': [data_type.BFLOAT16, RAW_DATA, 'float32'],
+        'INT4': [data_type.INT4, RAW_DATA, 'int4'],  # ml_dtypes.int4
     }
     proto_value_id = 0
     data_location_id = 1
@@ -70,7 +97,7 @@ class TensorProtoHelper():
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.data_location_id]
 
-        raise ValueError(f'The data_type{{proto_value}} is UNEXCEPTED')
+        raise ValueError(f'The data_type{proto_value} is UNEXPECTED')
 
     @classmethod
     def map_np_type(cls, proto_value):
@@ -80,17 +107,25 @@ class TensorProtoHelper():
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.np_type_id]
 
-        raise ValueError(f'The data_type{{proto_value}} is UNEXCEPTED')
+        raise ValueError(f'The data_type{proto_value} is UNEXPECTED')
+
+    @classmethod
+    def resolve_np_dtype(cls, np_type):
+        """Resolve a np dtype string to a numpy/ml_dtypes type.
+        'int4' has no numpy attribute, so map it to ml_dtypes.int4."""
+        if np_type == 'int4':
+            return ml_dtypes.int4
+        return getattr(np, np_type)
 
     @classmethod
     def cast_ori_data(cls, value, tensor_np_type):
         ''' cast ori-data to numpy type '''
         if tensor_np_type == 'float16':
             value = np.array(value).astype(np.uint16).tobytes()
-            np_value = np.frombuffer(value, getattr(np, tensor_np_type))
+            np_value = np.frombuffer(value, cls.resolve_np_dtype(tensor_np_type))
             np_value = np.array(np_value)
         else:
-            np_value = np.array(value, getattr(np, tensor_np_type))
+            np_value = np.array(value, cls.resolve_np_dtype(tensor_np_type))
         return np_value
 
     def check_external_data(self):
@@ -116,7 +151,13 @@ class TensorProtoHelper():
 
         np_type = self.map_np_type(tensor_data_type)
         if byte_value:
-            np_value = np.frombuffer(byte_value, getattr(np, np_type))
+            if np_type == 'int4':
+                packed = np.frombuffer(byte_value, np.uint8)
+                count = int(np.prod(self.tensor.dims))
+                np_value = unpack_int8_to_int4(packed, count)
+            else:
+                np_dtype = self.resolve_np_dtype(np_type)
+                np_value = np.frombuffer(byte_value, np_dtype)
             # to modify np_value.flags['WRITEABLE'] as True
             np_value = np.array(np_value)
         else:
@@ -163,7 +204,12 @@ class TensorProtoHelper():
         if self.externel_data:
             return self.set_external_data(data)
         if data_location == RAW_DATA:
-            setattr(self.tensor, data_location, bytes(data.flatten()))
+            # INT4: nibble-pack two INT4 values into each INT8 byte
+            if self.tensor.data_type == self.data_type_maps['INT4'][self.proto_value_id]:
+                packed = pack_int4_to_int8(data)
+                setattr(self.tensor, RAW_DATA, bytes(packed.flatten().astype('uint8')))
+            else:
+                setattr(self.tensor, data_location, bytes(data.flatten()))
         else:
             self.tensor.ClearField(data_location)
             if data_location_new == RAW_DATA:

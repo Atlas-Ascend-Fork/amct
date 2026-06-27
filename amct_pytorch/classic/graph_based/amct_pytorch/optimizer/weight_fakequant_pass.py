@@ -63,7 +63,10 @@ class WeightFakequantPass(BaseFusionPass):
             num_bits = QuantOpInfo.get_dst_num_bits(self.records, node.name, 'wts')
         else:
             num_bits = QuantOpInfo.get_dst_num_bits(self.records, node.name)
-        if num_bits not in WTS_FAKEQUANT_NUM_BITS:
+        # INT4 (4) is also dequantized to float here so the fakequant model carries
+        # float weights loadable by generic runtimes (ONNX ops like LSTM reject
+        # tensor(int4) weight inputs); deploy model packs INT4 separately.
+        if num_bits not in WTS_FAKEQUANT_NUM_BITS and num_bits != 4:
             return False
         return True
 
