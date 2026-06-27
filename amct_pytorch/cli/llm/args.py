@@ -98,6 +98,11 @@ def parser_gen(command=None):
     parser.add_argument('--moe_mlp_param_dir', default="")
     parser.add_argument('--wikitext_final_out', default="")
 
+    parser.add_argument('--only_config', action="store_true", default=False,
+                        help='Only generate config.json with quantization_config, '
+                             'skip weight export. Bypasses weight loading by '
+                             'building quant blocks with empty weights.')
+
     args = parser.parse_args()
 
     if args.bit_config:
