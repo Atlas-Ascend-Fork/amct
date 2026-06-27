@@ -280,11 +280,12 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         scale_r, offset_r, calied_weight_r = weight_cali_tensor(object_module.weight_hh_l0.data,
                                                             wts_param)
         
-        record_weights_scale_offset(self.records, object_name, 
+        record_weights_scale_offset(self.records, object_name,
                                     self._reorganize_rnn_quant_factor(tensor(scale), object_name,
                                                                       type(object_module).__name__),
                                     self._reorganize_rnn_quant_factor(tensor(offset, dtype=torch.int32), object_name,
                                                                       type(object_module).__name__),
+                                    num_bits=wts_param.get('num_bits'),
                                     scale_r=self._reorganize_rnn_quant_factor(tensor(scale_r), object_name,
                                                                             type(object_module).__name__),
                                     offset_r=self._reorganize_rnn_quant_factor(tensor(offset_r, dtype=torch.int32),
