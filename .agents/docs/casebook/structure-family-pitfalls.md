@@ -16,7 +16,11 @@
 - 现象：PTQ 训练报 `RuntimeError: Expected all tensors to be on the same device, npu:x and cpu`（quant_linear `F.linear` 处）。根因：自写 experts 量化类只用 `GatedExpertView(materialize=False)` 惰性切 packed 张量，block `.to(npu)` 不迁移该视图引用 → PTQ 时 weight 仍在 CPU。处理：复用 `qwen/moe_common.py` 的 `QuantGatedExperts`（含 `build_ptq_expert_module(materialize=True)` 实体化为真 Parameter 的 PTQ 路径），不要自写只做 `materialize=False` 的 experts 类。例：`hunyuan/hy3-preview`。
 
 ### 冷 expert（calib 未路由到）无校准输入
-- 现象：PTQ 报 `AttributeError: 'NoneType' object has no attribute 'size'`（`TensorDataset(inps)`），已写出部分 expert 参数后崩。根因：稀疏激活下少样本 calib 覆盖不到全部 expert，未命中的 expert 输入为 None。处理：blockwise 驱动里 `inps is None` 时跳过该 unit（deploy fallback 直转）；要全覆盖则放大 calib 样本。例：`hunyuan/hy3-preview`。
+- 现象：PTQ报 `AttributeError: 'NoneType' object has no attribute 'size'`（`TensorDataset(inps)`），已写出部分 expert 参数后崩。根因：稀疏激活下少样本 calib 覆盖不到全部 expert，未命中的 expert 输入为 None。处理：blockwise 驱动里 `inps is None` 时跳过该 unit（deploy fallback 直转）；要全覆盖则放大 calib 样本。例：`hunyuan/hy3-preview`。
+
+### shared_experts PTQ 策略不一致（design contradiction）
+- 现象：PTQ报 `WARNING - PTQ input file not found: block_*_moe.shared_in.pkl`；或 `Skip PTQ unit 'shared_experts': no calibration inputs`；**训练 epoch loss 恒为 0**；参数虽有保存但无实际优化。根因：quant_module 层使用 `build_no_algo_args(args)`（清空 `algos`，意图跳过 PTQ），但 adapter 层 `iter_ptq_units` 显式 `yield make_ptq_unit("moe.shared", ...)`（要求 PTQ）→ 两层设计矛盾。处理：两者必须一致——要么都用 `build_no_algo_args` + 不 yield（**推荐**，shared_experts 密集激活、直接量化效果好），要么都不用 + yield（少数场景需 PTQ 优化）。**优先用通用函数 `apply_quant_to_moe_mlp`**（自动对 shared_experts 调 `build_no_algo_args`）；自写 MoE wrapper 时检查：quant_module 用 `build_no_algo_args` → adapter 不 yield shared_experts。参考：`qwen/qwen3_5_moe.py`、`deepseek/deepseek_v3_2/deepseekv3_2.py`。例：`hunyuan/hy3-preview`（已修复：注释掉 yield，hyv3.py:133-136）。
+- **诊断信号**：训练 loss 恒为 0 或 NaN → 立即停止检查适配逻辑（见 model-adapter.md Step 7）。
 
 ### MoE per-expert 动态量化的 prefill 性能
 - 结论：per-expert 动态量化在 prefill 下平均路由 `M_eff`（≈ `seq*topk/experts`）偏小，单 expert `dynamic_quant + 头开销 > BF16 matmul`，每层 ×experts 放大 → **常为负收益**；attention projection / MLP 多为正。

@@ -130,9 +130,10 @@ class HyV3(BaseModel):
                     metadata_fn=lambda idx, _: {"expert_idx": idx},
                 )
             
-            if hasattr(mlp, "shared_experts"):
-                shared_experts = mlp.shared_experts
-                yield make_ptq_unit("moe.shared", "shared_experts", layer_idx, shared_experts)
+            # shared_experts uses direct quantization (build_no_algo_args), skip PTQ
+            # if hasattr(mlp, "shared_experts"):
+            #     shared_experts = mlp.shared_experts
+            #     yield make_ptq_unit("moe.shared", "shared_experts", layer_idx, shared_experts)
 
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
