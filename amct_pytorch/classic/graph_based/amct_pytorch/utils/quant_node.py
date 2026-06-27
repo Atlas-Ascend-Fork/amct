@@ -152,6 +152,10 @@ class QuantOpInfo():
             recurrence_weight_param: a node, it's quantizable rnn node's recurrence weight
         '''
         recurrence_weight_index = QuantOpInfo.get_quant_index(quantizable_node).get('recurrence_weight_index')
+        if recurrence_weight_index is None:
+            # Non-RNN ops (Conv, Gemm, etc.) have no recurrence_weight_index in
+            # QUANT_INDEXES_MAP.  Return None so callers can skip cleanly.
+            return None
         recurrence_weight_in_anchor = quantizable_node.get_input_anchor(recurrence_weight_index)
         recurrence_weight_param = recurrence_weight_in_anchor.get_peer_output_anchor().node
         return recurrence_weight_param
