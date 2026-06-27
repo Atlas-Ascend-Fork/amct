@@ -30,6 +30,7 @@ from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, sa
 from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
 from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 class BaseModel(metaclass=ABCMeta):
@@ -198,6 +199,23 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
+    def build_empty_quant_block(self, layer_idx):
+        """Build an empty quant block without loading actual weights.
+
+        Used by deploy --only_config, tensor-mode ignore list collection,
+        get_quant_weight_specs, and other scenarios that only need module
+        structure without actual weights.
+        """
+        with init_empty_weights():
+            decoder_layer = self.cls(self.config, layer_idx)
+        original_block = self.block
+        try:
+            self.block = lambda idx, _dl=decoder_layer: _dl
+            block = self.build_quant_block(layer_idx)
+        finally:
+            self.block = original_block
+        return block
+
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
@@ -212,7 +230,6 @@ class BaseModel(metaclass=ABCMeta):
 
         block = self._dispatch_block(block).eval()
         if use_quant_block and hook_name is None:
-            from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
                     mod.eval_mode = True
@@ -279,13 +296,48 @@ class BaseModel(metaclass=ABCMeta):
             return
 
     def iter_deploy_bindings(self, layer_idx, block):
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         for name, module in block.named_modules():
             if not isinstance(module, QuantLinear):
                 continue
             yield f"{weight_prefix}{name}.weight", module
+
+    def get_scale_name(self, weight_name):
+        """Return (scale_prefix, scale_inv_name) for locating scale tensors during dequantization."""
+        scale_prefix = ".scale"
+        scale_inv_name = weight_name.replace(".weight", ".scale")
+        return scale_prefix, scale_inv_name
+
+    def get_kv_cache_scheme(self):
+        """Return KV cache quantization config, or None to skip quantization."""
+        return {"num_bits": 8, "type": "float"}
+
+    def get_quant_weight_specs(self):
+        """Return {safetensors_weight_name: w_bits} for tensor-mode quantization.
+
+        Default implementation builds empty quant blocks and collects QuantLinear
+        w_bits from bit_policy. Override for path mapping (e.g. packed experts).
+        """
+        specs = {}
+        for layer_idx in range(self.num_layers):
+            block = self.build_empty_quant_block(layer_idx)
+            weight_prefix = self.get_layer_weight_prefix(layer_idx)
+            for name, module in block.named_modules():
+                if isinstance(module, QuantLinear) and module.w_bits is not None:
+                    specs[f"{weight_prefix}{name}.weight"] = module.w_bits
+        return specs
+
+    def get_extra_ignore_names(self, quant_mode="block", quant_specs=None):
+        """Return ignore entries not discoverable by regular block traversal.
+
+        Default implementation returns empty list. Adapters override this to
+        handle model-specific cases like MTP layers, non-Linear modules, etc.
+
+        Args:
+            quant_mode: "block" or "tensor".
+            quant_specs: {weight_name: w_bits} dict. Required when quant_mode="tensor".
+        """
+        return []
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)

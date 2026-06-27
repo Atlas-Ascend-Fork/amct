@@ -47,6 +47,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.enable_attn_linear = "attn-linear" in args.quant_target
         self.enable_attn_cache = "attn-cache" in args.quant_target
         use_quant = self.enable_attn_linear or self.enable_attn_cache
+        is_mxfp = args.quant_dtype == "mxfp"
 
         # Dimensional attributes (copied from source module)
         self.hidden_size = attn_module.config.hidden_size
@@ -67,6 +68,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.kv_a_layernorm = attn_module.kv_a_layernorm
 
         # ---------- MLA linear projections ----------
+        # Align with infer repo convert_model.py:
+        #   q_a_proj / kv_a_proj_with_mqa / indexer.wk: PlainLinear in INT, QuantLinear in mxfp
+        #   q_b_proj / o_proj: always quantized; kv_b_proj: never quantized
         bits = args.bit_policy["attn-linear"]
         q_a, q_b, kv_a, o = (
             bits["q_a_proj"],
@@ -78,9 +82,10 @@ class QuantGlmMoeDsaAttention(nn.Module):
         q_b_w = q_b.w if q_b else None
         kv_a_w = kv_a.w if kv_a else None
         o_w = o.w if o else None
+        quant_q_a = use_quant and is_mxfp
         self.q_a_proj = (
             QuantLinear(args, attn_module.q_a_proj, w_bits=q_a_w, name="q_a_proj")
-            if use_quant
+            if quant_q_a
             else PlainLinear(attn_module.q_a_proj)
         )
         self.q_b_proj = (
@@ -95,10 +100,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
                 w_bits=kv_a_w,
                 name="kv_a_proj_with_mqa",
             )
-            if use_quant
+            if quant_q_a
             else PlainLinear(attn_module.kv_a_proj_with_mqa)
         )
-        # kv_b_proj is never quantized (see GLM5.0-W4A8C16.md → all layers in "ignore" list)
         self.kv_b_proj = PlainLinear(attn_module.kv_b_proj)
         self.o_proj = (
             QuantLinear(args, attn_module.o_proj, w_bits=o_w, name="o_proj")
@@ -107,6 +111,8 @@ class QuantGlmMoeDsaAttention(nn.Module):
         )
 
         # ---------- DSA Indexer (None for shared layers in transformers >= 5.12) ----------
+        # indexer.wk: PlainLinear in INT, QuantLinear in mxfp; wq_b: always quantized
+        # weights_proj: kept as raw nn.Linear (forward accesses .weight.dtype directly)
         self.indexer = attn_module.indexer
         if self.indexer is not None:
             wq_b_bits = bits["wq_b"]
@@ -120,10 +126,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
             )
             self.indexer.wk = (
                 QuantLinear(args, attn_module.indexer.wk, w_bits=wk_w, name="wk")
-                if use_quant
+                if quant_q_a
                 else PlainLinear(attn_module.indexer.wk)
             )
-            # weights_proj is kept as raw nn.Linear — indexer.forward accesses .weight.dtype directly
 
         # ---------- Structure transforms ----------
         if self.enable_attn_linear:
@@ -131,7 +136,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
             q_b_a = q_b.a if q_b is not None and hasattr(q_b, "a") else None
             kv_a_a = kv_a.a if kv_a is not None and hasattr(kv_a, "a") else None
             o_a = o.a if o is not None and hasattr(o, "a") else None
-            self.inp_afq = ActivationQuantizer(args, kv_a_a)
+            self.inp_afq = ActivationQuantizer(args, kv_a_a) if is_mxfp else nn.Identity()
             self.q_b_proj_afq = ActivationQuantizer(args, q_b_a)
             self.o_proj_afq = ActivationQuantizer(args, o_a)
         else:
