@@ -59,8 +59,6 @@ class _InvFlatSingleTransform(nn.Module):
 class _InvFlatDecomposeTransform(nn.Module):
     def __init__(self, left_size: int, right_size: int, add_diag: bool):
         super().__init__()
-        self.left_size = left_size
-        self.right_size = right_size
         self.add_diag = add_diag
 
         self.linear_left = nn.Linear(left_size, left_size, bias=False)
@@ -126,7 +124,7 @@ class FlatQuant(nn.Module):
         else:
             self.transform = _InvFlatSingleTransform(self.dim_size)
 
-    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str | None = None) -> torch.Tensor:
         return self.transform(x, inv_t=inv_t)
 
     def transform_weight(self, weight: torch.Tensor) -> torch.Tensor:
