@@ -21,7 +21,7 @@ import torch.nn as nn
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
-def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="float", activation_use_clip=False):
+def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="int", activation_use_clip=False):
     quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": True,
                                          "group_size": None, "num_bits": a_num_bits,
                                          "observer": "memoryless", "observer_kwargs": {},
@@ -45,7 +45,9 @@ def generate_quant_config(cache_scheme, ignores, *, is_mx=False,
       - linear_bits=(w, a): the "Linear" group (attn / dense; MoE experts also
         fall back to this target when no separate MoE group is emitted).
       - moe_bits=(w, a): emit a separate "MoEGMM" group; None => MoE shares "Linear".
-      - moe_split=True: split MoE into "MoEGMMUpGate" + "MoEGMMDown" (mx W4A4).
+      - moe_split=True: split MoE into "MoEGMMUpGate" (uses moe_bits[1] activations)
+        and "MoEGMMDown" (always 8-bit activations). Used for mx W4A4 mixed-precision MoE
+        where the fused UpGate kernel requires 4-bit activations but Down uses 8-bit.
 
     Examples:
       MoE-only W4A8        : linear_bits=(4, 8)
@@ -62,8 +64,8 @@ def generate_quant_config(cache_scheme, ignores, *, is_mx=False,
     if moe_bits is not None:
         moe_w, moe_a = moe_bits
         if moe_split:
-            config_groups["group_1"] = _group(["MoEGMMUpGate"], moe_w, 4)
-            config_groups["group_2"] = _group(["MoEGMMDown"], moe_w, 8)
+            config_groups["group_1"] = _group(["MoEGMMUpGate"], moe_w, moe_a)
+            config_groups["group_2"] = _group(["MoEGMMDown"], moe_w, 8)  # Down always 8-bit activations
         else:
             config_groups["group_1"] = _group(["MoEGMM"], moe_w, moe_a)
 
@@ -114,5 +116,3 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
             deploy_tensors[extra_key] = extra_tensor
             tensor_routes[extra_key] = weight_key
     return deploy_tensors, tensor_routes
-
-    
