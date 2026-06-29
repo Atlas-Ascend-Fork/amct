@@ -180,6 +180,49 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
             )
 
 
+def _check_linear_shape_constraint(mod, layer_name, quant_data_comb):
+    """Check Linear shape constraints for specific quant dtype combinations."""
+    support_fp8_fp4 = ["float8_e4m3fn float4_e2m1"]
+    if quant_data_comb in support_fp8_fp4 and mod.weight.shape[1] % 64 != 0:
+        LOGGER.logd(
+            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
+            "cin length should be integer multiple of 64".format(layer_name, quant_data_comb)
+        )
+        return False
+    if quant_data_comb in support_fp8_fp4 and mod.bias is not None:
+        LOGGER.logd(
+            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
+            "bias is not supported".format(layer_name, quant_data_comb)
+        )
+        return False
+    if (
+        quant_data_comb == "mxfp8_e4m3fn mxfp8_e4m3fn"
+        and ((mod.weight.shape[1] + 31) // 32) % 2 != 0
+    ):
+        LOGGER.logd(
+            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
+            "cin length ceildiv(cin, 32) must be even number".format(layer_name, quant_data_comb)
+        )
+        return False
+    if quant_data_comb in ["NOT_QUANTIZE mxfp4_e2m1", "NOT_QUANTIZE float4_e2m1"]:
+        if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
+            LOGGER.logd(
+                "layer:{} cannot be quantized, act_dtype and wts dtype {} "
+                "has shape requirement cin and cout should be multiple of 64".format(
+                    layer_name, quant_data_comb)
+            )
+            return False
+    if quant_data_comb in ["NOT_QUANTIZE int4", "int8 int4"]:
+        if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
+            LOGGER.logd(
+                "layer:{} cannot be quantized, act_dtype and wts dtype {} "
+                "has shape requirement cin and cout should be multiple of 8".format(
+                    layer_name, quant_data_comb)
+            )
+            return False
+    return True
+
+
 def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     """
     Check whether the current layer fits requirements of deploy op
@@ -189,66 +232,13 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     quant_config: quant parameters
     Return: bool, Indicates whether the current layer is supported to quantization
     """
-    mod_type = type(mod).__name__
-    if mod_type != "Linear":
+    if type(mod).__name__ != "Linear":
         return True
-
-    # npu op check cin length be integer multiple of 64
-    support_quant_dtype_comb = ["float8_e4m3fn float4_e2m1"]
-    if quant_data_comb in support_quant_dtype_comb and mod.weight.shape[1] % 64 != 0:
-        LOGGER.logd(
-            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
-            "cin length should be integer multiple of 64".format(
-                layer_name, quant_data_comb
-            )
-        )
+    if not _check_linear_shape_constraint(mod, layer_name, quant_data_comb):
         return False
-    # npu op check no bias
-    if quant_data_comb in support_quant_dtype_comb and mod.bias is not None:
-        LOGGER.logd(
-            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
-            "bias is not supported".format(layer_name, quant_data_comb)
-        )
-        return False
-
-    # npu op check cin length ceildiv(cin, 32) must be even number
-    if (
-        quant_data_comb == "mxfp8_e4m3fn mxfp8_e4m3fn"
-        and ((mod.weight.shape[1] + 31) // 32) % 2 != 0
-    ):
-        LOGGER.logd(
-            "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
-            "cin length ceildiv(cin, 32) must be even number".format(
-                layer_name, quant_data_comb
-            )
-        )
-        return False
-
-    # npu op check cin length be integer multiple of 32b
-    if quant_data_comb in ["NOT_QUANTIZE mxfp4_e2m1", "NOT_QUANTIZE float4_e2m1"]:
-        if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
-            LOGGER.logd(
-                "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement"
-                "cin and cout length should be integer multiple of 64".format(
-                    layer_name, quant_data_comb
-                )
-            )
-            return False
-
-    if quant_data_comb in ["NOT_QUANTIZE int4", "int8 int4"]:
-        if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
-            LOGGER.logd(
-                "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement"
-                " cin and cout length should be integer multiple of 8".format(
-                    layer_name, quant_data_comb
-                )
-            )
-            return False
-
     group_size = quant_config.quant_cfg.weights_cfg.group_size
     if group_size is None:
         return True
-
     if group_size >= mod.weight.shape[1]:
         LOGGER.logd(
             f"group size should less than cout, current group_size is {group_size}, "

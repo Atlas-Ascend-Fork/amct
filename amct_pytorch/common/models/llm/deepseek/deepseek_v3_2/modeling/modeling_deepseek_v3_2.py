@@ -464,6 +464,43 @@ class DeepseekV3Attention(nn.Module):
         self.register_buffer("freqs_cis", precompute_freqs_cis(args), persistent=False)
         self.dequant_wkv_b = None
 
+    def _prefill_attn(self, x, qr, bsz, seqlen, q_nope, q_pe, kv, k_pe, start_pos, freqs_cis, mask):
+        """MHA prefill attention path."""
+        q = torch.cat([q_nope, q_pe], dim=-1)
+        kv = self.kv_b_proj(kv)
+        kv = kv.view(bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim)
+        k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
+        k = torch.cat([k_nope, k_pe.expand(-1, -1, self.n_local_heads, -1)], dim=-1)
+        scores = torch.einsum("bshd,bthd->bsht", q, k).mul_(self.softmax_scale)
+        topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
+        index_mask = torch.full(
+            (bsz, seqlen, seqlen), float("-inf"), device=x.device
+        ).scatter_(-1, topk_indices, 0)
+        index_mask += mask
+        scores += index_mask.unsqueeze(2)
+        scores = scores.softmax(dim=-1)
+        return torch.einsum("bsht,bthd->bshd", scores, v)
+
+    def _decode_attn(self, x, qr, bsz, end_pos, q_nope, q_pe, kv, k_pe, start_pos, freqs_cis):
+        """MQA decode attention path."""
+        if self.dequant_wkv_b is None and self.kv_b_proj.scale is not None:
+            self.dequant_wkv_b = weight_dequant(self.kv_b_proj.weight, self.kv_b_proj.scale)
+        wkv_b = self.kv_b_proj.weight if self.dequant_wkv_b is None else self.dequant_wkv_b
+        wkv_b = wkv_b.view(self.n_local_heads, -1, self.kv_lora_rank)
+        q_nope = torch.einsum("bshd,hdc->bshc", q_nope, wkv_b[:, : self.qk_nope_head_dim])
+        scores = (
+            torch.einsum("bshc,btc->bsht", q_nope, kv)
+            + torch.einsum("bshr,btr->bsht", q_pe, k_pe.squeeze(2))
+        ) * self.softmax_scale
+        topk_indices = self.indexer(x, qr, start_pos, freqs_cis, None)
+        index_mask = torch.full(
+            (bsz, 1, end_pos), float("-inf"), device=x.device
+        ).scatter_(-1, topk_indices, 0)
+        scores += index_mask.unsqueeze(2)
+        scores = scores.softmax(dim=-1)
+        x = torch.einsum("bsht,btc->bshc", scores, kv)
+        return torch.einsum("bshc,hdc->bshd", x, wkv_b[:, -self.v_head_dim:])
+
     def forward(self, x: torch.Tensor, start_pos: int = 0):
         """
         Forward pass for the Multi-Head Latent Attention (DeepseekV3Attention) Layer.
@@ -488,65 +525,16 @@ class DeepseekV3Attention(nn.Module):
         qr = self.q_a_layernorm(self.q_a_proj(x))
         q = self.q_b_proj(qr)
         q = q.view(bsz, seqlen, self.n_local_heads, self.qk_head_dim)
-        q_nope, q_pe = torch.split(
-            q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1
-        )
+        q_nope, q_pe = torch.split(q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
         q_pe = apply_rotary_emb(q_pe, freqs_cis)
         kv = self.kv_a_proj_with_mqa(x)
         kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
         kv = self.kv_a_layernorm(kv)
         k_pe = apply_rotary_emb(k_pe.unsqueeze(2), freqs_cis)
-        if mask is not None:  # MHA prefill
-            q = torch.cat([q_nope, q_pe], dim=-1)
-            kv = self.kv_b_proj(kv)
-            kv = kv.view(
-                bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim
-            )
-            k_nope, v = torch.split(
-                kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1
-            )
-            k = torch.cat([k_nope, k_pe.expand(-1, -1, self.n_local_heads, -1)], dim=-1)
-            scores = torch.einsum("bshd,bthd->bsht", q, k).mul_(self.softmax_scale)
-
-            # indexer
-            topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
-            index_mask = torch.full(
-                (bsz, seqlen, seqlen), float("-inf"), device=x.device
-            ).scatter_(-1, topk_indices, 0)
-            index_mask += mask
-            scores += index_mask.unsqueeze(2)
-
-            scores = scores.softmax(dim=-1)
-            x = torch.einsum("bsht,bthd->bshd", scores, v)
-        else:  # MQA decode
-            if self.dequant_wkv_b is None and self.kv_b_proj.scale is not None:
-                self.dequant_wkv_b = weight_dequant(
-                    self.kv_b_proj.weight, self.kv_b_proj.scale
-                )
-            wkv_b = (
-                self.kv_b_proj.weight
-                if self.dequant_wkv_b is None
-                else self.dequant_wkv_b
-            )
-            wkv_b = wkv_b.view(self.n_local_heads, -1, self.kv_lora_rank)
-            q_nope = torch.einsum(
-                "bshd,hdc->bshc", q_nope, wkv_b[:, : self.qk_nope_head_dim]
-            )
-            scores = (
-                torch.einsum("bshc,btc->bsht", q_nope, kv)
-                + torch.einsum("bshr,btr->bsht", q_pe, k_pe.squeeze(2))
-            ) * self.softmax_scale
-
-            # indexer
-            topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
-            index_mask = torch.full(
-                (bsz, 1, end_pos), float("-inf"), device=x.device
-            ).scatter_(-1, topk_indices, 0)
-            scores += index_mask.unsqueeze(2)
-
-            scores = scores.softmax(dim=-1)
-            x = torch.einsum("bsht,btc->bshc", scores, kv)
-            x = torch.einsum("bshc,hdc->bshd", x, wkv_b[:, -self.v_head_dim :])
+        if mask is not None:
+            x = self._prefill_attn(x, qr, bsz, seqlen, q_nope, q_pe, kv, k_pe, start_pos, freqs_cis, mask)
+        else:
+            x = self._decode_attn(x, qr, bsz, end_pos, q_nope, q_pe, kv, k_pe, start_pos, freqs_cis)
         x = self.o_proj(x.flatten(2))
         return x
 
