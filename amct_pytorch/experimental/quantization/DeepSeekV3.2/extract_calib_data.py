@@ -65,71 +65,6 @@ def get_pileval(tokenizer, n_samples, seq_len=512):
     return samples
 
 
-def _collect_embed_layer_outputs(args, model, samples, layers, nsamples, bs, dtype, output_dir):
-    """Collect outputs of the embedding layer (layer_idx == -1)."""
-
-    class Catcher(nn.Module):
-        def __init__(self, module, dataset):
-            super().__init__()
-            self.module = module
-            self.dataset = dataset
-            self.attention_mask = None
-            self.position_ids = None
-
-        def forward(self, inp, **kwargs):
-            self.dataset.append(inp.to("cpu"))
-            if self.attention_mask is None:
-                self.attention_mask = kwargs["attention_mask"]
-            if self.position_ids is None:
-                self.position_ids = kwargs["position_ids"]
-            raise ValueError
-
-    outs = []
-    load_embed_state_dict(model, args.model)
-    layers[0] = get_float_block(args.model, 0, "cpu", model_args=args.model_args)
-    layers[0] = layers[0].bfloat16()
-    layers[0] = Catcher(layers[0], outs)
-    with torch.no_grad():
-        for i in tqdm(range(0, nsamples, bs)):
-            logger.info(f"index : {(i + 1) // bs}/{nsamples // bs}")
-            try:
-                model(samples[i].cpu())
-            except ValueError:
-                pass
-    position_ids = layers[0].position_ids
-    attention_mask = layers[0].attention_mask
-    attention_mask = attention_mask.to(dtype) if attention_mask is not None else None
-    torch.save(position_ids, os.path.join(output_dir, "position_ids.pkl"))
-    torch.save(attention_mask, os.path.join(output_dir, "attention_mask.pkl"))
-    torch.save(outs, os.path.join(output_dir, "layer_-1_out.pkl"))
-    layers[0] = layers[0].module
-
-
-def _collect_layer_outputs(args, layer_idx, layers, device, output_dir):
-    """Collect outputs for a regular (non-embed) layer."""
-    layer = get_float_block(args.model, layer_idx, "cpu", model_args=args.model_args)
-    layer = prepare_layer(args, layer, layer_idx)
-    layer = layer.to(device)
-    inps = safe_torch_load(
-        os.path.join(output_dir, f"layer_{layer_idx - 1}_out.pkl"), map_location=device
-    )
-    attention_mask = safe_torch_load(
-        os.path.join(output_dir, "attention_mask.pkl"), map_location=device
-    )
-    position_ids = safe_torch_load(
-        os.path.join(output_dir, "position_ids.pkl"), map_location=device
-    )
-    outs = []
-    for i in tqdm(range(len(inps)), desc="obtain activation stat"):
-        out = layer(inps[i].to(device), position_ids=position_ids, attention_mask=attention_mask)
-        outs.append(out[0].to("cpu"))
-    torch.save(outs, os.path.join(output_dir, f"layer_{layer_idx}_out.pkl"))
-    layers[layer_idx] = None
-    layer.to("cpu")
-    del layer
-    torch.npu.empty_cache()
-
-
 @torch.no_grad()
 def get_act_stat(
     args,
@@ -167,11 +102,84 @@ def get_act_stat(
                 m.register_forward_hook(functools.partial(stat_input_hook, name=name))
             )
 
+    class Catcher(nn.Module):
+        def __init__(self, module, dataset):
+            super().__init__()
+            self.module = module
+            self.dataset = dataset
+            self.index = 0
+            self.attention_mask = None
+            self.position_ids = None
+
+        def forward(self, inp, **kwargs):
+            self.dataset.append(inp.to("cpu"))
+            self.index += 1
+            if self.attention_mask is None:
+                self.attention_mask = kwargs["attention_mask"]
+            if self.position_ids is None:
+                self.position_ids = kwargs["position_ids"]
+
+            raise ValueError
+
+    outs = []
     layers = model.model.layers
+
     if layer_idx == -1:
-        _collect_embed_layer_outputs(args, model, samples, layers, nsamples, bs, dtype, output_dir)
+        load_embed_state_dict(model, args.model)
+        layers[0] = get_float_block(args.model, 0, "cpu", model_args=args.model_args)
+        layers[0] = layers[0].bfloat16()
+
+        # record attention and position_ids
+        layers[0] = Catcher(layers[0], outs)
+
+        with torch.no_grad():
+            # Loop through each batch
+            for i in tqdm(range(0, nsamples, bs)):
+                logger.info(f"index : {(i + 1) // bs}/{nsamples // bs}")
+                inputs = samples[i].cpu()
+                try:
+                    model(inputs)
+                except ValueError:
+                    pass
+        position_ids = layers[0].position_ids
+        attention_mask = layers[0].attention_mask
+        attention_mask = (
+            attention_mask.to(dtype) if attention_mask is not None else None
+        )
+        torch.save(position_ids, os.path.join(output_dir, "position_ids.pkl"))
+        torch.save(attention_mask, os.path.join(output_dir, "attention_mask.pkl"))
+        torch.save(outs, os.path.join(output_dir, "layer_-1_out.pkl"))
+        layers[0] = layers[0].module
     else:
-        _collect_layer_outputs(args, layer_idx, layers, device, output_dir)
+        layer = get_float_block(
+            args.model, layer_idx, "cpu", model_args=args.model_args
+        )
+        layer = prepare_layer(args, layer, layer_idx)
+        layer = layer.to(device)
+        inps = safe_torch_load(
+            os.path.join(output_dir, f"layer_{layer_idx - 1}_out.pkl"),
+            map_location=device,
+        )
+        attention_mask = safe_torch_load(
+            os.path.join(output_dir, "attention_mask.pkl"), map_location=device
+        )
+        position_ids = safe_torch_load(
+            os.path.join(output_dir, "position_ids.pkl"), map_location=device
+        )
+        for i in tqdm(range(len(inps)), desc="obtain activation stat"):
+            data = inps[i].to(device)
+            out = layer(
+                data.to(device),
+                position_ids=position_ids,
+                attention_mask=attention_mask,
+            )
+            out = out[0]
+            outs.append(out.to("cpu"))
+        torch.save(outs, os.path.join(output_dir, f"layer_{layer_idx}_out.pkl"))
+        layers[layer_idx] = None
+        layer.to("cpu")
+        del layer
+        torch.npu.empty_cache()
     for h in hooks:
         h.remove()
     torch.save(act_stat, os.path.join(output_dir, f"layer_{layer_idx}_act_stat.pkl"))

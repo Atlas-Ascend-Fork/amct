@@ -277,37 +277,6 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
             "WeightsCalibrationPass",
         )
 
-    def _rnn_record_scale_offset(self, object_name, object_module, scale, offset, scale_r, offset_r):
-        """Record scale/offset for RNN ih and hh weights."""
-        mod_type = type(object_module).__name__
-        record_weights_scale_offset(
-            self.records,
-            object_name,
-            self._reorganize_rnn_quant_factor(tensor(scale), object_name, mod_type),
-            self._reorganize_rnn_quant_factor(
-                tensor(offset, dtype=torch.int32), object_name, mod_type),
-            scale_r=self._reorganize_rnn_quant_factor(tensor(scale_r), object_name, mod_type),
-            offset_r=self._reorganize_rnn_quant_factor(
-                tensor(offset_r, dtype=torch.int32), object_name, mod_type),
-        )
-
-    def _rnn_write_weights(self, object_module, object_node, calied_weight, calied_weight_r):
-        """Write calibrated RNN weights back to onnx nodes."""
-        mod_type = type(object_module).__name__
-        calied_weight = self.rearrange_torch2onnx(calied_weight, mod_type)
-        calied_weight_r = self.rearrange_torch2onnx(calied_weight_r, mod_type)
-        weight_node = QuantOpInfo.get_weight_node(object_node)
-        weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-        recurrence_weights_node = QuantOpInfo.get_recurrence_weight_node(object_node)
-        recurrence_weight_helper = TensorProtoHelper(
-            recurrence_weights_node.proto, recurrence_weights_node.model_path
-        )
-        set_data_type = "FLOAT16" if object_module.weight_ih_l0.dtype is torch.float16 else "FLOAT"
-        weight_helper.clear_data()
-        weight_helper.set_data(calied_weight.flatten().cpu().numpy(), set_data_type)
-        recurrence_weight_helper.clear_data()
-        recurrence_weight_helper.set_data(calied_weight_r.flatten().cpu().numpy(), set_data_type)
-
     def _rnn_process(self, object_name, object_module, object_node, wts_param):
         """
         Function: process rnn weight. write weight scale and offset.
@@ -316,60 +285,69 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         Args:
         object_name: name of object_module.
         """
+        scale = [1.0]
+        offset = [0]
+        scale_r = [1.0]
+        offset_r = [0]
         scale, offset, calied_weight = weight_cali_tensor(
             object_module.weight_ih_l0.data, wts_param
         )
         scale_r, offset_r, calied_weight_r = weight_cali_tensor(
             object_module.weight_hh_l0.data, wts_param
         )
-        self._rnn_record_scale_offset(
-            object_name, object_module, scale, offset, scale_r, offset_r
+
+        record_weights_scale_offset(
+            self.records,
+            object_name,
+            self._reorganize_rnn_quant_factor(
+                tensor(scale), object_name, type(object_module).__name__
+            ),
+            self._reorganize_rnn_quant_factor(
+                tensor(offset, dtype=torch.int32),
+                object_name,
+                type(object_module).__name__,
+            ),
+            scale_r=self._reorganize_rnn_quant_factor(
+                tensor(scale_r), object_name, type(object_module).__name__
+            ),
+            offset_r=self._reorganize_rnn_quant_factor(
+                tensor(offset_r, dtype=torch.int32),
+                object_name,
+                type(object_module).__name__,
+            ),
         )
-        self._rnn_write_weights(object_module, object_node, calied_weight, calied_weight_r)
+
+        calied_weight = self.rearrange_torch2onnx(
+            calied_weight, type(object_module).__name__
+        )
+        calied_weight_r = self.rearrange_torch2onnx(
+            calied_weight_r, type(object_module).__name__
+        )
+
+        weight_node = QuantOpInfo.get_weight_node(object_node)
+        weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+
+        recurrence_weights_node = QuantOpInfo.get_recurrence_weight_node(object_node)
+        recurrence_weight_helper = TensorProtoHelper(
+            recurrence_weights_node.proto, recurrence_weights_node.model_path
+        )
+
+        calied_weight_raw = calied_weight.flatten().cpu().numpy()
+        calied_weight_r_raw = calied_weight_r.flatten().cpu().numpy()
+        if object_module.weight_ih_l0.dtype is torch.float16:
+            set_data_type = "FLOAT16"
+        else:
+            set_data_type = "FLOAT"
+
+        weight_helper.clear_data()
+        weight_helper.set_data(calied_weight_raw, set_data_type)
+        recurrence_weight_helper.clear_data()
+        recurrence_weight_helper.set_data(calied_weight_r_raw, set_data_type)
+
         LOGGER.logd(
             "Do layer:'{}' weights calibration success!".format(object_name),
             "WeightsCalibrationPass",
         )
-
-    def _apply_dmq_to_tensor(self, object_module, object_node, data_tensor):
-        """Apply DMQ balance scale to weight tensor. Returns adjusted tensor."""
-        if not self.record_dict.get(object_node.name) or not self.record_dict.get(
-            object_node.name
-        ).get("tensor_balance_factor"):
-            raise ValueError(
-                "config indicates dmq_balancer in layer: %s, "
-                "but no tensor_balance_factor found in record."
-                "please check quant_preprocess and calibration is done!"
-                % object_node.name
-            )
-        tensor_balance_factor = self.record_dict.get(object_node.name).get(
-            "tensor_balance_factor"
-        )
-        data_tensor = WeightsCalibrationPass.apply_balance_scale_to_weight(
-            object_module, object_node, tensor_balance_factor, data_tensor
-        )
-        return data_tensor, tensor_balance_factor
-
-    def _compute_scale_offset(self, object_module, object_node, data_tensor,
-                              tensor_balance_factor, wts_param, model):
-        """Compute scale and offset for weight quantization."""
-        scale = [1.0]
-        offset = [0]
-        calied_weight = data_tensor
-        if wts_param.get("wts_algo") == "arq_quantize":
-            scale, offset, calied_weight = weight_cali_tensor(data_tensor, wts_param)
-        elif wts_param.get("wts_algo") == "ada_quantize":
-            if tensor_balance_factor is not None:
-                tensor_balance_factor = torch.tensor(
-                    tensor_balance_factor, dtype=data_tensor.dtype
-                )
-                if type(object_module).__name__ in ("ConvTranspose2d", CONV2D):
-                    tensor_balance_factor = tensor_balance_factor.reshape([1, -1, 1, 1])
-            adaround_module = replace_adaround_module(
-                object_node.name, model, data_tensor, tensor_balance_factor
-            )
-            scale, offset = adaround_module.get_scale_offset()
-        return scale, offset, calied_weight
 
     def _weight_calibration_process(
         self, object_module, object_node, wts_param, dmq_param, model
@@ -386,20 +364,67 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         Notes, `auto_mixed_precision_search` is original weight. NOT FAKE.
         """
         data_tensor = object_module.weight.data
+        calied_weight = data_tensor
         tensor_balance_factor = None
+        # broadcast tensor_balance_factor to weight shape and apply to weight
         if dmq_param:
-            data_tensor, tensor_balance_factor = self._apply_dmq_to_tensor(
-                object_module, object_node, data_tensor
+            if not self.record_dict.get(object_node.name) or not self.record_dict.get(
+                object_node.name
+            ).get("tensor_balance_factor"):
+                raise ValueError(
+                    "config indicates dmq_balancer in layer: %s, "
+                    "but no tensor_balance_factor found in record."
+                    "please check quant_preprocess and calibration is done!"
+                    % object_node.name
+                )
+
+            tensor_balance_factor = self.record_dict.get(object_node.name).get(
+                "tensor_balance_factor"
             )
-        if type(object_module).__name__ in ("ConvTranspose1d", "ConvTranspose2d", "ConvTranspose3d"):
-            data_tensor = adjust_deconv_weight_shape(object_module.groups, data_tensor)
-        scale, offset, calied_weight = self._compute_scale_offset(
-            object_module, object_node, data_tensor, tensor_balance_factor, wts_param, model
-        )
+            data_tensor = WeightsCalibrationPass.apply_balance_scale_to_weight(
+                object_module, object_node, tensor_balance_factor, data_tensor
+            )
+
+        # find scale and offset
+        if type(object_module).__name__ in (
+            "ConvTranspose1d",
+            "ConvTranspose2d",
+            "ConvTranspose3d",
+        ):
+            group = object_module.groups
+            data_tensor = adjust_deconv_weight_shape(group, data_tensor)
+        scale = [1.0]
+        offset = [0]
+        if wts_param.get("wts_algo") == "arq_quantize":
+            scale, offset, calied_weight = weight_cali_tensor(data_tensor, wts_param)
+        elif wts_param.get("wts_algo") == "ada_quantize":
+            if tensor_balance_factor is not None:
+                tensor_balance_factor = torch.tensor(
+                    tensor_balance_factor, dtype=data_tensor.dtype
+                )
+                if type(object_module).__name__ in ("ConvTranspose2d", CONV2D):
+                    tensor_balance_factor = tensor_balance_factor.reshape([1, -1, 1, 1])
+            adaround_module = replace_adaround_module(
+                object_node.name, model, data_tensor, tensor_balance_factor
+            )
+            scale, offset = adaround_module.get_scale_offset()
+            calied_weight = data_tensor
+        else:
+            pass
+
+        # FOR AMC Feature, weight do not need fake quant.
         if not self.weight_fakequant:
             calied_weight = data_tensor
-        if type(object_module).__name__ in ("ConvTranspose1d", "ConvTranspose2d", "ConvTranspose3d"):
-            calied_weight = adjust_deconv_weight_shape(object_module.groups, data_tensor)
+
+        if type(object_module).__name__ in (
+            "ConvTranspose1d",
+            "ConvTranspose2d",
+            "ConvTranspose3d",
+        ):
+            group = object_module.groups
+            calied_weight = adjust_deconv_weight_shape(group, data_tensor)
+
+        # save the quantize information
         record_weights_scale_offset(
             self.records, object_node.name, scale, offset, wts_param.get("num_bits")
         )
