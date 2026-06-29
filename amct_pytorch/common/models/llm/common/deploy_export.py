@@ -35,7 +35,7 @@ def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="float", activation_u
     return quant_group
 
 
-def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=False):
+def generate_quant_config(cache_scheme, ignores, ignored_layers=None, w4a8=False, w4a4=False, is_mx=False):
     """
     Generate a quantization configuration dictionary based on the specified parameters.
     """
@@ -51,6 +51,8 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
                     "ignore": ignores,
                     "quant_method": "compressed-tensors",
                     "quantization_status": "compressed"}
+    if ignored_layers:
+        quant_config["ignored_layers"] = ignored_layers
     quant_config.update(cache_scheme)
     qtype = "float" if is_mx else "int"
     quant_config["config_groups"]["group_0"].update(generate_quant_group(a_num_bits=8, w_num_bits=8, qtype=qtype))

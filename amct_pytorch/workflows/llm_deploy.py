@@ -24,6 +24,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import torch
+
 from loguru import logger
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
@@ -36,6 +37,7 @@ from amct_pytorch.common.models.llm.common.deploy_export import export_block_dep
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.dtypes import int_impl
 
 
 class LlmDeployWorkflow:
@@ -145,6 +147,13 @@ class LlmDeployWorkflow:
             return []
         return method()
 
+    def _collect_ignored_layers(self):
+        method = getattr(self.pipeline, "get_ignored_layers", None)
+        if method is None:
+            return None
+        return method()
+        return method()
+
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
@@ -157,8 +166,11 @@ class LlmDeployWorkflow:
                             "num_bits": 8,
                         }}
         w4a8 = self._is_w4a8()
+        ignored_layers = self._collect_ignored_layers()
         quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, w4a8=w4a8, w4a4=False, is_mx=self.is_mx)
+            cache_scheme, quant_ignore_layers,
+            ignored_layers=ignored_layers,
+            w4a8=w4a8, w4a4=False, is_mx=self.is_mx)
         config['quantization_config'] = quantization_config
 
         new_config_file = os.path.join(self.output_dir, "config.json")
@@ -252,12 +264,6 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
         }
 
-    def _get_quant_weight_specs(self):
-        method = getattr(self.pipeline, "get_quant_weight_specs", None)
-        if method is None:
-            return {}
-        return method()
-
     def _build_ignore_layers(self):
         quant_ignore_layers = []
         for layer_idx in range(self.pipeline.num_layers):
@@ -267,13 +273,12 @@ class LlmDeployWorkflow:
         return quant_ignore_layers
 
     def _run_tensorwise(self):
-        from amct_pytorch.quantization.dtypes.int_impl import weight_quant
+        if self.quant_dtype in ("int", "mxfp"):
+            return self._run_tensorwise_quant()
 
         self._copy_support_files()
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
-
-        quant_specs = self._get_quant_weight_specs() if self.is_int else {}
 
         weights_by_file = defaultdict(list)
         for weight_name, file_name in original_weight_map.items():
@@ -289,12 +294,13 @@ class LlmDeployWorkflow:
 
             new_state_dict = {}
             for weight_name, weight in current_state_dict.items():
-                if weight_name.endswith("_scale_inv"):
+                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
+                if weight_name.endswith(scale_prefix):
                     continue
-
-                if self.args.dequantize and weight.element_size() == 1:
-                    scale_inv_name = f"{weight_name}_scale_inv"
+                elif weight.element_size() == 1:
+                    # FP8 weight
                     try:
+                        # Get scale_inv from the correct file
                         file_name = original_weight_map[scale_inv_name]
                         if file_name not in loaded_files:
                             file_path = model_dir / file_name
@@ -305,20 +311,10 @@ class LlmDeployWorkflow:
                         else:
                             weight = weight_dequant(weight, scale_inv)
                     except KeyError:
-                        logger.warning("Missing scale_inv for {}, skipping", weight_name)
-
-                if weight_name in quant_specs:
-                    bits = quant_specs[weight_name]
-                    qx, scale, bias = weight_quant(weight, bits, real_quant=True)
-                    new_state_dict[weight_name] = qx
-                    scale_name = weight_name.replace(".weight", ".weight_scale")
-                    new_state_dict[scale_name] = scale
+                        print(
+                            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
+                    new_state_dict[weight_name] = weight
                     updated_weight_map[weight_name] = source_file
-                    updated_weight_map[scale_name] = source_file
-                    if bias is not None:
-                        bias_name = weight_name.replace(".weight", ".weight_bias")
-                        new_state_dict[bias_name] = bias
-                        updated_weight_map[bias_name] = source_file
                 else:
                     new_state_dict[weight_name] = weight
                     updated_weight_map[weight_name] = source_file
@@ -327,18 +323,114 @@ class LlmDeployWorkflow:
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file
 
+        index_path = self._refresh_weight_index(original_index, updated_weight_map)
+        self._refresh_config_tensor()
+        logger.info("Exported tensor-converted model to {}", self.output_dir)
+        logger.info("Refreshed weight index at {}", index_path)
+        return {
+            "index_path": index_path,
+            "num_output_files": len(set(updated_weight_map.values())),
+        }
+
+    def _run_tensorwise_quant(self):
+        """tensor 粒度 int/mxfp 权重量化（不走前向传播，不构建 block 网络）。
+
+        与 _run_tensorwise（FP8→BF16 反量化）不同，本函数直接对 BF16 权重
+        做 per-channel min-max 量化，产出 int8 或 packed int4 + scale + bias。
+
+        ===== 老逻辑（与 _run_tensorwise 相同的文件遍历框架）=====
+        1. 复制非权重辅助文件（tokenizer、config 等）
+        2. 读取 model.safetensors.index.json，按文件分组
+        3. 逐文件加载 safetensors，逐权重处理，写回新 safetensors
+        4. 缓存最近 2 个文件控制内存
+        5. 刷新 index.json
+
+        ===== 新逻辑（int/mxfp 量化独有）=====
+        A. get_quant_weight_specs: 适配器返回 {权重名: w_bits}，
+           告诉框架哪些权重量化、用几位。bits 来自 bit_policy，
+           和 quant_module.py 里 QuantLinear 的解析方式一致。
+        B. 量化权重: 按 quant_dtype 分流
+           - int: weight_quant(real_quant=True) -> (qweight, scale, bias)
+             bits=8: qweight 为 int8, scale 为 float32, bias 为 None
+             bits=4: qweight 为 packed int4, scale 为 uint64, bias 为 float32
+           - mxfp: QuantDequantMx.deploy() -> (qweight, scale)
+             bits=8: qweight 为 float8_e4m3, scale 为 uint8(e8m0)
+             bits=4: qweight 为 packed f4, scale 为 uint8(e8m0)
+        C. _build_ignore_layers + _refresh_config: 生成 quantization_config，
+           和 block 模式产出一致的 config.json。
+        """
+        # --- 老逻辑：复制辅助文件、读取权重索引 ---
+        self._copy_support_files()
+        original_index = self._load_weight_index()
+        original_weight_map = dict(original_index.get("weight_map", {}))
+
+        # --- 老逻辑：按文件分组权重 ---
+        weights_by_file = defaultdict(list)
+        for weight_name, file_name in original_weight_map.items():
+            weights_by_file[file_name].append(weight_name)
+
+        # --- 新逻辑 A: 适配器返回需要量化的权重及对应位宽 ---
+        quant_specs = self.pipeline.get_quant_weight_specs()
+
+        # --- 新逻辑 B: 按 quant_dtype 创建量化器（和 block 模式同一个 export_deploy）---
+        # int: QuantDequantInt(bits).export_deploy -> {qweight, weight_scale, weight_bias}
+        # mxfp: QuantDequantMx(bits).export_deploy -> {qweight, weight_scale}
+        from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
+        quant_objs = {}
+
+        def quantize_fn(weight, bits):
+            if bits not in quant_objs:
+                quant_objs[bits] = DTYPE_REGISTRY.get(self.quant_dtype)(bits=bits)
+            payload = quant_objs[bits].export_deploy(weight)
+            return payload["qweight"], payload["weight_scale"], payload.get("weight_bias")
+
+        # --- 老逻辑：逐文件加载、处理、写回 ---
+        updated_weight_map = {}
+        model_dir = Path(self.model_path)
+        loaded_files = {}
+        for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
+            source_path = model_dir / source_file
+            current_state_dict = load_file(source_path, device="cpu")
+            loaded_files[source_file] = current_state_dict
+
+            new_state_dict = {}
+            for weight_name, weight in current_state_dict.items():
+                if weight_name in quant_specs:
+                    # --- 新逻辑 B: 对权重做量化（int 或 mxfp）---
+                    qx, scale, bias = quantize_fn(weight, quant_specs[weight_name])
+                    new_state_dict[weight_name] = qx
+                    # scale 命名: xxx.weight -> xxx.weight_scale
+                    scale_name = weight_name.replace(".weight", ".weight_scale")
+                    new_state_dict[scale_name] = scale
+                    updated_weight_map[weight_name] = source_file
+                    updated_weight_map[scale_name] = source_file
+                    if bias is not None:
+                        # int W4 路径产出 assistance bias，供 infer 仓 MoEGMM 算子使用
+                        bias_name = weight_name.replace(".weight", ".weight_bias")
+                        new_state_dict[bias_name] = bias
+                        updated_weight_map[bias_name] = source_file
+                else:
+                    # 不在 quant_specs 中的权重原样保留
+                    new_state_dict[weight_name] = weight
+                    updated_weight_map[weight_name] = source_file
+
+            self._write_safetensor_file(source_file, new_state_dict)
+            for weight_name in new_state_dict:
+                updated_weight_map[weight_name] = source_file
+
+            # --- 老逻辑：缓存控制，只保留最近 2 个文件 ---
             if len(loaded_files) > 2:
                 oldest_file = next(iter(loaded_files))
                 if oldest_file != source_file:
                     del loaded_files[oldest_file]
 
+        # --- 老逻辑：刷新 index.json ---
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        if self.is_int:
-            quant_ignore_layers = self._build_ignore_layers()
-            quant_ignore_layers.extend(self._collect_extra_ignore_names())
-            self._refresh_config(quant_ignore_layers)
-        else:
-            self._refresh_config_tensor()
+
+        # --- 新逻辑 C: 生成 quantization_config（与 block 模式一致）---
+        quant_ignore_layers = self._build_ignore_layers()
+        quant_ignore_layers.extend(self._collect_extra_ignore_names())
+        self._refresh_config(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {

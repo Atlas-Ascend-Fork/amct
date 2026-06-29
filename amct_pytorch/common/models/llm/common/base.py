@@ -30,6 +30,7 @@ from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, sa
 from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
 from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 class BaseModel(metaclass=ABCMeta):
@@ -199,12 +200,6 @@ class BaseModel(metaclass=ABCMeta):
         return self.block(layer_idx)
 
     def build_empty_quant_block(self, layer_idx):
-        """Build a quant block with empty weights (no actual weight loading).
-
-        Used by deploy --only_config, tensor-mode ignore list, and
-        get_quant_weight_specs to inspect quant module structure without
-        loading real weights into memory.
-        """
         with init_empty_weights():
             decoder_layer = self.cls(self.config, layer_idx)
         original_block = self.block
@@ -229,7 +224,6 @@ class BaseModel(metaclass=ABCMeta):
 
         block = self._dispatch_block(block).eval()
         if use_quant_block and hook_name is None:
-            from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
                     mod.eval_mode = True
@@ -296,23 +290,18 @@ class BaseModel(metaclass=ABCMeta):
             return
 
     def iter_deploy_bindings(self, layer_idx, block):
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         for name, module in block.named_modules():
             if not isinstance(module, QuantLinear):
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
+    def get_scale_name(self, weight_name):
+        scale_prefix = "_scale_inv"
+        scale_inv_name = f"{weight_name}_scale_inv"
+        return scale_prefix, scale_inv_name
+
     def get_quant_weight_specs(self):
-        """Return {safetensors_weight_name: w_bits} for tensor-mode quantization.
-
-        Default: build empty-weight quant blocks and collect all QuantLinear
-        modules' w_bits. Adapters with complex structures (e.g. MoE packed
-        experts) may override this for efficiency or correctness.
-        """
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
         specs = {}
         for layer_idx in range(self.num_layers):
             block = self.build_empty_quant_block(layer_idx)

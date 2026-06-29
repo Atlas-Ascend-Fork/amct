@@ -103,10 +103,6 @@ def parser_gen(command=None):
                              'skip weight export. Bypasses weight loading by '
                              'building quant blocks with empty weights.')
 
-    parser.add_argument('--dequantize', action="store_true", default=False,
-                        help='For tensor granularity: dequantize FP8 weights to BF16 '
-                             'before int quantization. Use when input model is FP8.')
-
     args = parser.parse_args()
 
     if args.bit_config:
