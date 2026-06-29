@@ -1,9 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Skill(install-default-skills)",
-      "Skill(planning-with-files)",
-      "Skill(skill-creator)",
       "Skill(gitcode-pr)",
       "Skill(gitcode-issue)",
       "Task(subagent_type=code-analyzer)",
