@@ -78,7 +78,7 @@ class LlmDeployWorkflow:
 
     def run(self):
         sink_id = self.setup()
-        if getattr(self.args, "only_config", False):
+        if self.args.only_config:
             results = self._run_only_config()
         elif self.granularity == "block":
             results = self._run_blockwise()
@@ -133,13 +133,10 @@ class LlmDeployWorkflow:
 
     def _is_w4a8(self):
         """Infer W4A8: moe.routed.w_bits == 4 in bit_policy."""
-        bit_policy = getattr(self.args, "bit_policy", None)
-        if bit_policy is None:
-            return False
         try:
-            w_bits, _ = bit_policy.linear_bits(group="moe.routed")
+            w_bits, _ = self.args.bit_policy.linear_bits(group="moe.routed")
             return w_bits == 4
-        except Exception:
+        except (AttributeError, KeyError):
             return False
 
     def _collect_extra_ignore_names(self):
@@ -203,16 +200,8 @@ class LlmDeployWorkflow:
         """
         self._copy_support_files()
         quant_ignore_layers = []
-        from accelerate import init_empty_weights
         for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Config-only..."):
-            with init_empty_weights():
-                decoder_layer = self.pipeline.cls(self.pipeline.config, layer_idx)
-            original_block = self.pipeline.block
-            try:
-                self.pipeline.block = lambda idx, _dl=decoder_layer: _dl
-                block = self.pipeline.build_quant_block(layer_idx)
-            finally:
-                self.pipeline.block = original_block
+            block = self.pipeline.build_empty_quant_block(layer_idx)
             weight_prefix = self.pipeline.get_layer_weight_prefix(layer_idx)
             quant_ignore_layers.extend(
                 get_quant_ignore_linear_names(block, weight_prefix)
@@ -271,16 +260,8 @@ class LlmDeployWorkflow:
 
     def _build_ignore_layers(self):
         quant_ignore_layers = []
-        from accelerate import init_empty_weights
         for layer_idx in range(self.pipeline.num_layers):
-            with init_empty_weights():
-                decoder_layer = self.pipeline.cls(self.pipeline.config, layer_idx)
-            original_block = self.pipeline.block
-            try:
-                self.pipeline.block = lambda idx, _dl=decoder_layer: _dl
-                block = self.pipeline.build_quant_block(layer_idx)
-            finally:
-                self.pipeline.block = original_block
+            block = self.pipeline.build_empty_quant_block(layer_idx)
             weight_prefix = self.pipeline.get_layer_weight_prefix(layer_idx)
             quant_ignore_layers.extend(get_quant_ignore_linear_names(block, weight_prefix))
         return quant_ignore_layers

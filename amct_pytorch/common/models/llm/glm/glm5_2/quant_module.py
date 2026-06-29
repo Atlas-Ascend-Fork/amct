@@ -47,7 +47,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.enable_attn_linear = "attn-linear" in args.quant_target
         self.enable_attn_cache = "attn-cache" in args.quant_target
         use_quant = self.enable_attn_linear or self.enable_attn_cache
-        is_mx = args.quant_dtype.startswith("mx")
+        is_mxfp = args.quant_dtype == "mxfp"
 
         # Dimensional attributes (copied from source module)
         self.hidden_size = attn_module.config.hidden_size
@@ -84,7 +84,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         q_b_w = q_b.w if q_b else None
         kv_a_w = kv_a.w if kv_a else None
         o_w = o.w if o else None
-        quant_q_a = use_quant and is_mx
+        quant_q_a = use_quant and is_mxfp
         self.q_a_proj = (
             QuantLinear(args, attn_module.q_a_proj, w_bits=q_a_w, name="q_a_proj")
             if quant_q_a
@@ -141,7 +141,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
             q_b_a = q_b.a if q_b is not None and hasattr(q_b, "a") else None
             kv_a_a = kv_a.a if kv_a is not None and hasattr(kv_a, "a") else None
             o_a = o.a if o is not None and hasattr(o, "a") else None
-            self.inp_afq = ActivationQuantizer(args, kv_a_a) if is_mx else nn.Identity()
+            self.inp_afq = ActivationQuantizer(args, kv_a_a) if is_mxfp else nn.Identity()
             self.q_b_proj_afq = ActivationQuantizer(args, q_b_a)
             self.o_proj_afq = ActivationQuantizer(args, o_a)
         else:

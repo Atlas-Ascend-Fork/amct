@@ -198,6 +198,23 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
+    def build_empty_quant_block(self, layer_idx):
+        """Build a quant block with empty weights (no actual weight loading).
+
+        Used by deploy --only_config, tensor-mode ignore list, and
+        get_quant_weight_specs to inspect quant module structure without
+        loading real weights into memory.
+        """
+        with init_empty_weights():
+            decoder_layer = self.cls(self.config, layer_idx)
+        original_block = self.block
+        try:
+            self.block = lambda idx, _dl=decoder_layer: _dl
+            block = self.build_quant_block(layer_idx)
+        finally:
+            self.block = original_block
+        return block
+
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
@@ -294,19 +311,11 @@ class BaseModel(metaclass=ABCMeta):
         modules' w_bits. Adapters with complex structures (e.g. MoE packed
         experts) may override this for efficiency or correctness.
         """
-        from accelerate import init_empty_weights
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
         specs = {}
         for layer_idx in range(self.num_layers):
-            with init_empty_weights():
-                decoder_layer = self.cls(self.config, layer_idx)
-            original_block = self.block
-            try:
-                self.block = lambda idx, _dl=decoder_layer: _dl
-                block = self.build_quant_block(layer_idx)
-            finally:
-                self.block = original_block
+            block = self.build_empty_quant_block(layer_idx)
             weight_prefix = self.get_layer_weight_prefix(layer_idx)
             for name, module in block.named_modules():
                 if isinstance(module, QuantLinear) and module.w_bits is not None:
