@@ -111,6 +111,18 @@ def test_int_weight_quant_error_smaller_for_higher_bits():
     assert err_8 < err_4
 
 
+def test_int_export_deploy_uses_rounding_offset_when_provided():
+    qdq = QuantDequantInt(bits=8)
+    x = torch.tensor([[0.0, 0.49, 1.0]], dtype=torch.float32)
+    v = torch.tensor([[0.0, 0.6, 0.0]], dtype=torch.float32)
+
+    without_v = qdq.export_deploy(x)["qweight"]
+    with_v = qdq.export_deploy(x, v=v)["qweight"]
+
+    assert without_v[0, 1].item() == 62
+    assert with_v[0, 1].item() == 63
+
+
 def test_int_act_quant_error_smaller_for_higher_bits():
     x = torch.randn(4, 32, dtype=torch.float32)
     err_8 = (QuantDequantInt(bits=8, is_act=True)(x) - x).abs().mean()
