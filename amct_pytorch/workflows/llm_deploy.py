@@ -34,8 +34,8 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.quantization.bit_policy import BitPolicy, ensure_bit_policy
 from amct_pytorch.quantization.dtypes import register_dtype
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
 class LlmDeployWorkflow:
@@ -101,6 +101,29 @@ class LlmDeployWorkflow:
         model_cls = MODEL_REGISTRY.get(self.model_name)
         return model_cls(self.args)
 
+    def _resolve_quant_group_kwargs(self, bit_policy: BitPolicy) -> dict:
+        """Translate quant_target + bit_policy into group kwargs for generate_quant_config."""
+        if self.is_mx:
+            moe_bits = tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed"))
+            # mx W4A4: 4-bit MoE activations trigger UpGate/Down split; W4A8 keeps a single group.
+            return dict(linear_bits=(8, 8), moe_bits=moe_bits, moe_split=(moe_bits[1] == 4))
+
+        targets = getattr(self.args, "quant_target", []) or []
+        moe_quantized = "moe" in targets
+        linear_quantized = any(t in targets for t in ("attn-linear", "mlp"))
+
+        if moe_quantized and linear_quantized:
+            return dict(
+                linear_bits=tuple(bit_policy.linear_bits(group="attn-linear")),
+                moe_bits=tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed")),
+            )
+        if moe_quantized:
+            # MoE-only: compressed-tensors has no dedicated MoE target, experts fall back to "Linear".
+            return dict(linear_bits=tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed")))
+        if linear_quantized:
+            return dict(linear_bits=tuple(bit_policy.linear_bits(group="attn-linear")))
+        return dict(linear_bits=(bit_policy.w_bits, bit_policy.a_bits))
+
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":
             return tensor.to(torch.bfloat16)
@@ -134,36 +157,21 @@ class LlmDeployWorkflow:
         with open(config_file, "r") as f:
             config = json.load(f)
 
-        cache_scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
-                        "li_cache_scheme": {
-                            "type": "float" if self.is_mx else "int",
-                            "num_bits": 8,
-                        }}
-        from amct_pytorch.quantization.bit_policy import BitPolicy, ensure_bit_policy
-        bit_policy = (BitPolicy.from_yaml(self.args.bit_config)
-                      if getattr(self.args, "bit_config", None) else ensure_bit_policy(self.args))
-        targets = getattr(self.args, "quant_target", []) or []
-        attn_bits = tuple(bit_policy.linear_bits(group="attn-linear"))
-        moe_bits = tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed"))
-        linear_quantized = any(t in targets for t in ("attn-linear", "mlp"))
-        moe_quantized = "moe" in targets
-        if self.is_mx:
-            # mx always emits a separate MoE group; split when MoE activations are 4-bit
-            group_kwargs = dict(linear_bits=(8, 8), moe_bits=moe_bits, moe_split=(moe_bits[1] == 4))
-        elif moe_quantized and linear_quantized:
-            group_kwargs = dict(linear_bits=attn_bits, moe_bits=moe_bits)  # mixed bit-width
-        elif moe_quantized:
-            group_kwargs = dict(linear_bits=moe_bits)  # MoE-only: experts fall back to "Linear"
-        elif linear_quantized:
-            group_kwargs = dict(linear_bits=attn_bits)
-        else:
-            group_kwargs = dict(linear_bits=(bit_policy.w_bits, bit_policy.a_bits))
-        quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, is_mx=self.is_mx, **group_kwargs)
-        config['quantization_config'] = quantization_config
-
-        new_config_file = os.path.join(self.output_dir, "config.json")
-        with open(new_config_file, "w") as f:
+        # KV/LI cache is always 8-bit in block-granularity deploy; calibrated separately.
+        cache_scheme = {
+            "kv_cache_scheme": {"num_bits": 8, "type": "float"},
+            "li_cache_scheme": {"type": "float" if self.is_mx else "int", "num_bits": 8},
+        }
+        bit_policy = (
+            BitPolicy.from_yaml(self.args.bit_config)
+            if getattr(self.args, "bit_config", None)
+            else ensure_bit_policy(self.args)
+        )
+        config['quantization_config'] = generate_quant_config(
+            cache_scheme, quant_ignore_layers,
+            is_mx=self.is_mx, **self._resolve_quant_group_kwargs(bit_policy)
+        )
+        with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
     def _refresh_config_tensor(self):
@@ -232,6 +240,7 @@ class LlmDeployWorkflow:
         }
 
     def _run_tensorwise(self):
+        from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant  # torchao optional dep
         self._copy_support_files()
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))

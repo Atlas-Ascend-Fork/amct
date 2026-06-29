@@ -51,7 +51,7 @@ P_KEY_WEIGHT = 'p.key.weight'
 WEIGHTS = 'weights'
 
 
-def test_generate_quant_group_default_int():
+def test_generate_quant_group_default_is_int():
     group = generate_quant_group()
     assert group[INPUT_ACTIVATIONS][NUM_BITS] == 8
     assert group[INPUT_ACTIVATIONS]["strategy"] == "token"
@@ -61,7 +61,7 @@ def test_generate_quant_group_default_int():
     assert group[WEIGHTS]["dynamic"] is False
     assert group["activation_use_clip"] is False
     assert group["output_activations"] is None
-    assert group[INPUT_ACTIVATIONS]["type"] == "float"
+    assert group[INPUT_ACTIVATIONS]["type"] == INT
 
 
 def test_generate_quant_group_custom_bits_and_qtype():
@@ -160,6 +160,8 @@ def test_get_quant_ignore_linear_names_no_quant_linear_all_plain():
 
 
 def test_get_quant_ignore_linear_names_skips_quant_linear_prefix():
+    pytest.importorskip("torchao", reason="torchao not installed; skipping QuantLinear-dependent test")
+
     class _NestedQL(QuantLinear):
         def __init__(self):
             from types import SimpleNamespace
