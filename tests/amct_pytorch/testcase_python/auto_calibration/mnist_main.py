@@ -236,7 +236,7 @@ def main():
     if use_cuda:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         random_input = random_input.to(device)
-    torch_out = torch.onnx._export(model, random_input,
+    torch.onnx._export(model, random_input,
                                    "./model/mnist_cnn.onnx",
                                    export_params=True)
 
@@ -280,7 +280,7 @@ def test_model():
 
     dataset1 = CustomDataset(6000)
     dataset2 = CustomDataset(200)
-    train_loader = torch.utils.data.DataLoader(dataset1, **kwargs)
+    torch.utils.data.DataLoader(dataset1, **kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **kwargs)
 
     model = Net().to(device)

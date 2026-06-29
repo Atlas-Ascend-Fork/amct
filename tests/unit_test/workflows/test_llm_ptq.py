@@ -252,7 +252,7 @@ def test_build_block_solver_supports_block_kwarg_alias():
 
 
 def test_init_sets_solver_key_default_and_custom():
-    bp = SimpleNamespace()
+    SimpleNamespace()
     args = SimpleNamespace(
         quant_target=[QUANT_TARGET_MLP], granularity="block",
         output_dir="/tmp/ptq", model_name="qwen3",

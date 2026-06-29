@@ -84,7 +84,7 @@ class TestQuantizeModel(unittest.TestCase):
 
         data = self.args[0]
         for _ in range(2):
-            ans_2 = new_model(data)
+            new_model(data)
 
         self.assertTrue(os.path.exists(modfied_onnx_file))
         self.assertTrue(os.path.exists(record_file))

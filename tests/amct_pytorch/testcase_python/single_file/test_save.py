@@ -91,7 +91,7 @@ class TestSave(unittest.TestCase):
         model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
                                     torch.nn.BatchNorm2d(3, 3))
         model.eval()
-        tmp_onnx = BytesIO()
+        BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
@@ -121,7 +121,7 @@ class TestSave(unittest.TestCase):
         model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
                                     torch.nn.BatchNorm2d(3, 3))
         model.eval()
-        tmp_onnx = BytesIO()
+        BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {

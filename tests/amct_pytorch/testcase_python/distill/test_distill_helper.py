@@ -93,13 +93,13 @@ class TestDistillHelper(unittest.TestCase):
 
 
     def test_get_distill_modules(self):
-        distill_helper = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
+        DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
         layer_names = ['conv']
         modules = DistillHelper.get_distill_modules(self.torch_model, layer_names)
         self.assertIsNotNone(modules)
 
     def test_get_distill_modules_invalid_layer(self):
-        distill_helper = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
+        DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
         layer_names = ['conv_invalid']
         self.assertRaises(RuntimeError, DistillHelper.get_distill_modules, self.torch_model, layer_names)
 

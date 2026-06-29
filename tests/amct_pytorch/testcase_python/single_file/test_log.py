@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,13 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import (
     LOG_FILE_SET_ENV,
@@ -36,16 +32,17 @@ class TestLog(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_log')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_log")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
         cls.log_file = "amct_log.txt"
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
         pass
 
     def setUp(self):
@@ -55,21 +52,21 @@ class TestLog(unittest.TestCase):
         pass
 
     def test_info_level(self):
-        os.environ[LOG_SET_ENV] = 'info'
+        os.environ[LOG_SET_ENV] = "info"
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logi("this is info test"))
 
     def test_debug_level(self):
-        os.environ[LOG_SET_ENV] = 'debug'
+        os.environ[LOG_SET_ENV] = "debug"
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logd("this is debug test"))
 
     def test_file_info_level(self):
-        os.environ[LOG_FILE_SET_ENV] = 'info'
+        os.environ[LOG_FILE_SET_ENV] = "info"
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logi("this is info test"))
 
     def test_debug_debug_level(self):
-        os.environ[LOG_FILE_SET_ENV] = 'debug'
+        os.environ[LOG_FILE_SET_ENV] = "debug"
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logi("this is debug test"))

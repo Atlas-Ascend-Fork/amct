@@ -144,9 +144,9 @@ def record_file_data(layers_length, scale_value, offset_value, record_weight, re
             if err_length:
                 scale_length_except += 1
             if unmatch_length[1]:
-                n_length_except = scale_length_except + 1
+                scale_length_except + 1
             else:
-                n_length_except = scale_length_except
+                pass
         if layer_name not in no_fusion_layers:
             if layer_name in skip_fusion_layers:
                 record_do_fusion(records, layer_name, True)

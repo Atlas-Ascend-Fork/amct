@@ -224,7 +224,7 @@ class TestConfigParse(unittest.TestCase):
 
         }
         try:
-            detail_config = parse_config(self.test_model, invalid_batch_num_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_batch_num_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Batch num only support positive int, but got', str(e))
@@ -245,7 +245,7 @@ class TestConfigParse(unittest.TestCase):
         }
 
         try:
-            detail_config = parse_config(self.test_model, invalid_quant_type_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_quant_type_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Weights quant_dtype only support', str(e))
@@ -266,7 +266,7 @@ class TestConfigParse(unittest.TestCase):
         }
 
         try:
-            detail_config = parse_config(self.test_model, invalid_symmetric_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_symmetric_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Weights symmetric only support bool [True, False], but got', str(e))
@@ -287,7 +287,7 @@ class TestConfigParse(unittest.TestCase):
         }
 
         try:
-            detail_config = parse_config(self.test_model, invalid_strategy_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_strategy_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Weights strategy only support', str(e))
@@ -313,7 +313,7 @@ class TestConfigParse(unittest.TestCase):
         }
 
         try:
-            detail_config = parse_config(self.test_model, invalid_strategy_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_strategy_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Inputs strategy only support', str(e))
@@ -338,7 +338,7 @@ class TestConfigParse(unittest.TestCase):
 
         }
         try:
-            detail_config = parse_config(self.test_model, invalid_quant_type_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_quant_type_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Inputs quant_dtype only support', str(e))
@@ -357,7 +357,7 @@ class TestConfigParse(unittest.TestCase):
         }
 
         try:
-            detail_config = parse_config(self.test_model, invalid_regist_algo_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_regist_algo_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Not support algorithm', str(e))
@@ -376,7 +376,7 @@ class TestConfigParse(unittest.TestCase):
         }
 
         try:
-            detail_config = parse_config(self.test_model, invalid_awq_param_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_awq_param_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Awq grids_num is necessary param, pls check and set', str(e))
@@ -394,7 +394,7 @@ class TestConfigParse(unittest.TestCase):
             ALGORITHM_KEY: {'awq': {'grids_num': -20}},
         }
         try:
-            detail_config = parse_config(self.test_model, invalid_awq_param_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_awq_param_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Awq grids_num only support positive int, but got', str(e))
@@ -412,7 +412,7 @@ class TestConfigParse(unittest.TestCase):
             ALGORITHM_KEY: {SMOOTH_QUANT: {SMOOTH_STRENGTH: 0}},
         }
         try:
-            detail_config = parse_config(self.test_model, invalid_smooth_param_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, invalid_smooth_param_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Smoothquant smooth_strength only support float (0, 1), but got', str(e))
@@ -435,7 +435,7 @@ class TestConfigParse(unittest.TestCase):
             ALGORITHM_KEY: {'minmax'},
         }
         try:
-            detail_config = parse_config(self.test_model, unsupported_quant_type_comb_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, unsupported_quant_type_comb_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Do not support combination int8 int4 of act and weight quant dtype', str(e))
@@ -458,7 +458,7 @@ class TestConfigParse(unittest.TestCase):
             ALGORITHM_KEY: {'gptq'},
         }
         try:
-            detail_config = parse_config(self.test_model, unsupported_algo_quant_type_comb_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, unsupported_algo_quant_type_comb_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Algorithm gptq do not support act and weight quant dtype int8 int8', str(e))
@@ -495,7 +495,7 @@ class TestConfigParse(unittest.TestCase):
             ALGORITHM_KEY: {'minmax'},
 
         }
-        detail_config = parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
+        parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
         
 
     def test_group_size_none_strategy_group(self):
@@ -512,7 +512,7 @@ class TestConfigParse(unittest.TestCase):
 
         }
         try:
-            detail_config = parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Weights group_size is necessary, when weights strategy is group', str(e))
@@ -532,7 +532,7 @@ class TestConfigParse(unittest.TestCase):
 
         }
         try:
-            detail_config = parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('Weights group_size only support strategy group, but got ', str(e))
@@ -552,7 +552,7 @@ class TestConfigParse(unittest.TestCase):
 
         }
         try:
-            detail_config = parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('only support group_size larger than 32 and', str(e))
@@ -572,7 +572,7 @@ class TestConfigParse(unittest.TestCase):
 
         }
         try:
-            detail_config = parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
+            parse_config(self.test_model, int4_group_cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('group_size only support positive int, but got ', str(e))       
@@ -597,7 +597,7 @@ class TestConfigParse(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         try:
-            detail_config = parse_config(model, cfg, AlgorithmRegistry)
+            parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
             
             self.assertIn('int8 int8 only support symmetric weight quantization', str(e))
@@ -622,7 +622,7 @@ class TestConfigParse(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         try:
-            detail_config = parse_config(model, cfg, AlgorithmRegistry)
+            parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
             self.assertIn('Not support algorithm AA, pls regiter it first', str(e))  
 
@@ -670,7 +670,7 @@ class TestConfigParse(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         try:
-            detail_config = parse_config(model, cfg, AlgorithmRegistry)
+            parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
     
             self.assertIn('Inputs strategy token do not support asymmetric quantization', str(e))
@@ -694,7 +694,7 @@ class TestConfigParse(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         try:
-            detail_config = parse_config(model, cfg, AlgorithmRegistry)
+            parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
             self.assertIn('Inputs strategy token do not support asymmetric quantization', str(e))
 
@@ -1075,24 +1075,6 @@ class TestConfigParse(unittest.TestCase):
             },
             ALGORITHM_KEY: {SMOOTH_QUANT: {SMOOTH_STRENGTH: 0.5}}
         }
-        cfg_inputs_groupsize = {
-            KEY_BATCH_NUM: 1,
-            QUANT_CFG: {
-                WEIGHTS_KEY: {
-                    KEY_TYPE: FLOAT4_E2M1,
-                    KEY_SYMMETRIC: True,
-                    KEY_STRATEGY: 'group',
-                    GROUP_SIZE: 32
-                },
-                INPUTS: {
-                    KEY_TYPE: FLOAT8_E4M3FN,
-                    KEY_SYMMETRIC: True,
-                    KEY_STRATEGY: STRATEGY_TENSOR,
-                    GROUP_SIZE: 32
-                },
-            },
-            ALGORITHM_KEY: {SMOOTH_QUANT: {SMOOTH_STRENGTH: 0.5}}
-        }
 
         model_bfloat16 = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
         try:
@@ -1242,6 +1224,6 @@ class TestConfigParse(unittest.TestCase):
         }
         model_bfloat16 = copy.deepcopy(TestModel()).to(torch.bfloat16)
         try:
-            detail_config = parse_config(model_bfloat16, cfg, AlgorithmRegistry)
+            parse_config(model_bfloat16, cfg, AlgorithmRegistry)
         except Exception as e:
             self.assertIn(f'One src_op only support one algorithm, current algo', str(e))
