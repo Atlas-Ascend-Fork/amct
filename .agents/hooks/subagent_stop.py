@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """SubagentStop hook: quant-implementer 自验证检查 + 外循环重试限制（amct 量化 agent）"""
 
+import glob
 import json
 import logging
 import os
 import re
 import sys
+import time
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -24,6 +26,20 @@ SELF_VERIFY_TEMPLATE = """自验证不完整：progress.md 的「### 自验证�
 
 RETRY_LIMIT_MSG = ("重试上限：当前阶段已执行 {n} 轮 implementer/reviewer 循环，超过 5 轮上限。"
                    "请回退当前阶段改动，向用户报告阻塞点。")
+
+
+COUNTER_TTL_SECONDS = 48 * 3600
+
+
+def cleanup_stale_counters():
+    """删除 /tmp 下超过 48 小时的 hook_retry_*.count 文件（懒清理，静默失败）。"""
+    cutoff = time.time() - COUNTER_TTL_SECONDS
+    for path in glob.glob("/tmp/hook_retry_*.count"):
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+        except OSError:
+            pass
 
 
 def find_progress_md(cwd):
@@ -100,6 +116,7 @@ def check_retry_limit(data, content):
 
 
 def main():
+    cleanup_stale_counters()
     data = json.load(sys.stdin)
     cwd = data.get("cwd", ".")
     progress_path = find_progress_md(cwd)
