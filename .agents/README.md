@@ -4,6 +4,7 @@ amct 仓的 Agent Skills 基础设施（`.agents/`），以 skill 为单元封�
 
 当前内置：
 - **quant-workflow**：LLM 量化全流程编排主入口（方案推荐 → PTQ → 部署导出，见下文）
+- **amct-ops-dev**：NPU 算子开发（编排外独立工具）
 - **gitcode-pr / gitcode-issue**：GitCode 仓库协作操作
 
 后续按需扩充。适配 Claude Code 与 OpenCode。
@@ -35,8 +36,10 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 | 「达标了，导出权重 + 写交付文档」 | `deploy-export` 导出 + `deploy_quantization.md` |
 | 「deploy 目录有了，就差交付文档」 | `deploy-export`（阶段 5 补文档）|
 | 「量化后 PPL 比 BF16 还低，正常吗」 | `quant-workflow` 先查链路再判定 |
+| 「在 amct_ops 里加一个 mxfp4 cast 算子」/「照 hifloat8_cast 模板写个新 NPU 算子」 | `amct-ops-dev` 算子开发 |
+| 「ops_build.sh 怎么按 A2/A3/A5 切 NPU_ARCH」/「torch.compile 报 no Meta kernel 怎么补」 | `amct-ops-dev` 构建/调试 |
 
-整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。
+整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。`amct-ops-dev` 属编排外的独立 NPU 算子开发工具，按需直接点名，不进 `quant-workflow`。
 
 编排顺序：适配（未适配时）→ 方案 → 直转（`delta ≤ 0.2` 可直接导出）→ 超阈则升级 PTQ → 导出。
 

@@ -15,7 +15,7 @@ AMCT（Ascend Model Compression Toolkit）是一款昇腾 AI 处理器亲和的�
 
 ## Agent Skills
 
-本仓内置 Agent Skills 基础设施（`.agents/`，经 git-tracked symlink 自动投影到各 AI 客户端，clone 即可用）：以 skill 为单元封装特定领域能力，自然语言触发、agent 自主执行。当前内置 **quant-workflow**（LLM 量化全流程编排主入口）与 `gitcode-pr`/`gitcode-issue`（仓库协作操作）两类技能，后续按需扩充。详见 [.agents/README.md](.agents/README.md)（快速开始）与 [.agents/docs/architecture.md](.agents/docs/architecture.md)（架构设计）。
+本仓内置 Agent Skills 基础设施（`.agents/`，经 git-tracked symlink 自动投影到各 AI 客户端，clone 即可用）：以 skill 为单元封装特定领域能力，自然语言触发、agent 自主执行。当前内置 **quant-workflow**（LLM 量化全流程编排主入口）、**amct-ops-dev**（NPU 算子开发）与 `gitcode-pr`/`gitcode-issue`（仓库协作操作）等技能，后续按需扩充。详见 [.agents/README.md](.agents/README.md)（快速开始）与 [.agents/docs/architecture.md](.agents/docs/architecture.md)（架构设计）。
 
 ## 构建命令
 
