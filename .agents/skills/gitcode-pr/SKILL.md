@@ -495,7 +495,7 @@ curl -s -X POST "https://gitcode.com/api/v5/repos/${target_owner}/${target_repo}
 - `head`: 源分支（必填）。需按场景区分填写：
   - **同仓库 PR**（源分支与目标在同一仓库）：直接用分支名，如 `fix/issue-32-description`。
   - **跨 fork PR**（从 fork 向上游提）：必须用**完整源仓库路径**前缀，
-    格式 `source_owner/source_repo:branch`，如 `fujun19/amct_open:docs/fix-xxx`。
+    格式 `source_owner/source_repo:branch`。
     ⚠️ 仅用 `username:branch` 经实测会返回 `400 BAD_REQUEST`；只用纯分支名时
     API 会去目标仓库找该分支并报 `404 Can not find the branch`。
   - endpoint 路径里的 owner/repo 始终用**目标仓库**（跨 fork 时为上游仓库）。
