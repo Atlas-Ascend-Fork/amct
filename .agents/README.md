@@ -84,7 +84,7 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 
 `.claude/`、`.opencode/` 是真实目录；其中 **配置文件**（`settings.json`、`opencode.json`）为真实文件，**内容目录**（skills/agents/hooks/docs）为 git-tracked symlink 指向 `.agents/`，随 clone 自动生效。架构与设计见 [docs/architecture.md](docs/architecture.md)。
 
-> **Windows**：`settings.json`/`opencode.json` 为真实文件，客户端可正常启动。内容目录（skills/agents/hooks/docs）为 symlink，`core.symlinks=false` 下 clone 后退化为文本文件；OpenCode 已验证 ✅ 可正常加载 skills。Claude Code 未验证，如不生效可开启开发者模式后重新 checkout。
+> **Windows**：`settings.json`/`opencode.json` 为真实文件，客户端可正常启动。内容目录（skills/agents/hooks/docs）为 symlink，如 skills 未加载，开启开发者模式后重新 checkout 即可。
 
 ## 面向 agent 集成
 
