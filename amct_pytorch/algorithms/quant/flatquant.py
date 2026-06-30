@@ -85,6 +85,7 @@ class _InvFlatDecomposeTransform(nn.Module):
             matrix_right = torch.linalg.inv(matrix_right).transpose(0, 1)
         return _kronecker_matmul(x, matrix_left, matrix_right)
 
+
 @ALGO_REGISTRY.register(
     name="flatquant",
     description="Learnable affine structure transform inspired by FlatQuant",
