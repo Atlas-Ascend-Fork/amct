@@ -75,7 +75,7 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 
 `.claude/`、`.opencode/` 客户端视图均为 git-tracked 符号链接指向 `.agents/`（`settings.json`/`opencode.json`/skills/agents/hooks/docs 全部 symlink），随 clone 自动生效。架构与设计见 [docs/architecture.md](docs/architecture.md)。
 
-> **Windows 注意**：Windows 默认不创建符号链接（`core.symlinks=false`），clone 后 `.claude/`、`.opencode/` 下各项会变成内容为路径字符串的文本文件，skills/hooks 不会自动加载。需开启开发者模式（或以管理员权限运行 git），再 `git config core.symlinks true` 后重新 checkout。主场景为 Linux/xyj 服务器，Windows 用户参照此步骤处理即可。
+> **Windows 注意**：Windows 默认不创建符号链接（`core.symlinks=false`），clone 后 `.claude/`、`.opencode/` 下各项会变成内容为路径字符串的文本文件，skills/hooks 不会自动加载。需开启开发者模式（或以管理员权限运行 git），再 `git config core.symlinks true` 后重新 checkout。主场景为 Linux 服务器，Windows 用户参照此步骤处理即可。
 
 ## 面向 agent 集成
 
