@@ -36,6 +36,7 @@ from amct_pytorch.common.models.llm.common.deploy_export import export_block_dep
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.bit_policy import BitPolicy, ensure_bit_policy
 from amct_pytorch.quantization.dtypes import register_dtype
+from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
 class LlmDeployWorkflow:
@@ -240,7 +241,6 @@ class LlmDeployWorkflow:
         }
 
     def _run_tensorwise(self):
-        from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant  # torchao optional dep
         self._copy_support_files()
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
