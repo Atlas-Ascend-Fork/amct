@@ -28,6 +28,7 @@ from safetensors.torch import save_file
 
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from tests.unit_test.conftest import SAFETENSORS_TMP_DIR
 
 QUANT_TARGET_ATTN_CACHE = 'attn-cache'
@@ -1377,4 +1378,144 @@ def test_load_unit_inputs_when_not_cached_returns_default():
     unit = make_ptq_unit("mlp", "mlp", 0, nn.Linear(4, 8))
     result = model.load_unit_inputs("/nonexistent", unit)
     assert result is not None
+
+
+# ---- build_empty_quant_block ---------------------------------------------
+
+
+@pytest.mark.cpu
+def test_build_empty_quant_block_returns_module_without_loading_weights():
+    stub = _StubModel()
+    fake_block = nn.Module()
+    fake_block.fc = nn.Linear(4, 4)
+    stub.cls = lambda config, layer_idx: fake_block
+    stub.config = SimpleNamespace()
+
+    original_block_called = False
+
+    def _fake_block(idx):
+        nonlocal original_block_called
+        original_block_called = True
+        return nn.Module()
+
+    stub.block = _fake_block
+    result = stub.build_empty_quant_block(0)
+    assert result is fake_block
+    assert not original_block_called
+
+
+@pytest.mark.cpu
+def test_build_empty_quant_block_restores_block_method():
+    stub = _StubModel()
+    fake_block = nn.Module()
+    stub.cls = lambda config, layer_idx: fake_block
+    stub.config = SimpleNamespace()
+
+    def _original_block(idx):
+        return nn.Module()
+
+    stub.block = _original_block
+    stub.build_empty_quant_block(0)
+    assert stub.block is _original_block
+
+
+# ---- get_quant_weight_specs -----------------------------------------------
+
+
+@pytest.mark.cpu
+def test_get_quant_weight_specs_collects_quant_linear_w_bits():
+    stub = _StubModel()
+    stub.num_layers = 1
+
+    ql = QuantLinear.__new__(QuantLinear)
+    ql.w_bits = 8
+    ql._parameters = {}
+    ql._buffers = {}
+    ql._modules = {}
+
+    fake_block = nn.Module()
+    fake_block.q_proj = ql
+
+    stub.build_empty_quant_block = lambda idx: fake_block
+    stub.get_layer_weight_prefix = lambda idx: "model.layers.0."
+
+    specs = stub.get_quant_weight_specs()
+    assert specs == {"model.layers.0.q_proj.weight": 8}
+
+
+@pytest.mark.cpu
+def test_get_quant_weight_specs_skips_none_w_bits():
+    stub = _StubModel()
+    stub.num_layers = 1
+
+    ql = QuantLinear.__new__(QuantLinear)
+    ql.w_bits = None
+    ql._parameters = {}
+    ql._buffers = {}
+    ql._modules = {}
+
+    fake_block = nn.Module()
+    fake_block.q_proj = ql
+
+    stub.build_empty_quant_block = lambda idx: fake_block
+    stub.get_layer_weight_prefix = lambda idx: "model.layers.0."
+
+    specs = stub.get_quant_weight_specs()
+    assert specs == {}
+
+
+@pytest.mark.cpu
+def test_get_quant_weight_specs_empty_block():
+    stub = _StubModel()
+    stub.num_layers = 1
+    stub.build_empty_quant_block = lambda idx: nn.Module()
+    stub.get_layer_weight_prefix = lambda idx: "model.layers.0."
+
+    specs = stub.get_quant_weight_specs()
+    assert specs == {}
+
+
+# ---- get_scale_name -------------------------------------------------------
+
+
+@pytest.mark.cpu
+def test_get_scale_name_replaces_weight_with_scale():
+    stub = _StubModel()
+    scale_prefix, scale_inv_name = stub.get_scale_name("model.layers.0.mlp.up_proj.weight")
+    assert scale_prefix == ".scale"
+    assert scale_inv_name == "model.layers.0.mlp.up_proj.scale"
+
+
+@pytest.mark.cpu
+def test_get_scale_name_with_simple_weight_name():
+    stub = _StubModel()
+    scale_prefix, scale_inv_name = stub.get_scale_name("lm_head.weight")
+    assert scale_prefix == ".scale"
+    assert scale_inv_name == "lm_head.scale"
+
+
+# ---- get_kv_cache_scheme --------------------------------------------------
+
+
+@pytest.mark.cpu
+def test_get_kv_cache_scheme_returns_default():
+    stub = _StubModel()
+    result = stub.get_kv_cache_scheme()
+    assert result == {"num_bits": 8, "type": "float"}
+
+
+# ---- get_extra_ignore_names -----------------------------------------------
+
+
+@pytest.mark.cpu
+def test_get_extra_ignore_names_returns_empty_list():
+    stub = _StubModel()
+    assert stub.get_extra_ignore_names() == []
+
+
+@pytest.mark.cpu
+def test_get_extra_ignore_names_accepts_kwargs():
+    stub = _StubModel()
+    result = stub.get_extra_ignore_names(quant_mode="tensor", quant_specs={"a": 8})
+    assert result == []
 
