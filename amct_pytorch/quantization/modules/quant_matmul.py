@@ -21,11 +21,12 @@ from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, bu
 
 
 class QuantizedMatmul(nn.Module):
-    def __init__(self, quant_args, l_bits=8, r_bits=8, left_dim=None, right_dim=None):
+    def __init__(self, quant_args, l_bits=8, r_bits=8, left_dim=None, right_dim=None, transpose_right=True):
         super(QuantizedMatmul, self).__init__()
         self.quant_args = quant_args
         self.l_bits = l_bits
         self.r_bits = r_bits
+        self.transpose_right = transpose_right
         self.enable_attn_cache = "attn-cache" in self.quant_args.quant_target
         self.left_transform = None
         self.right_transform = None
@@ -36,7 +37,8 @@ class QuantizedMatmul(nn.Module):
 
     def forward(self, left, right):
         if not self.enable_attn_cache:
-            right = right.transpose(-2, -1)
+            if self.transpose_right:
+                right = right.transpose(-2, -1)
             return torch.matmul(left, right)
         if self.left_transform is not None:
             left = self.left_transform(left)
@@ -44,7 +46,8 @@ class QuantizedMatmul(nn.Module):
             right = self.right_transform(right)
         left = self.l_node(left)
         right = self.r_node(right)
-        right = right.transpose(-2, -1)
+        if self.transpose_right:
+            right = right.transpose(-2, -1)
         output = torch.matmul(left, right)
         return output
 
