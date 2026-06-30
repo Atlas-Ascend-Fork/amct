@@ -59,6 +59,18 @@ def test_mxfp_forward_with_tensor_v():
     assert y.shape == x.shape
 
 
+def test_mxfp_export_deploy_accepts_rounding_offset():
+    qdq = QuantDequantMx(bits=8)
+    x = torch.randn(4, 64)
+    v = torch.randn(4, 64)
+
+    out = qdq.export_deploy(x, v=v)
+    qweight, weight_scale = qdq.deploy(x, v=v)
+
+    assert torch.equal(out["qweight"], qweight)
+    assert torch.equal(out["weight_scale"], weight_scale)
+
+
 def test_mxfp_forward_bits16_is_passthrough():
     qdq = QuantDequantMx(bits=16)
     x = torch.randn(2, 32)

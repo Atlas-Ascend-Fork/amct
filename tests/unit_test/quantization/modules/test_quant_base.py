@@ -47,13 +47,13 @@ UT_QH_EXPORT_ALGO = '_ut_qh_export'
 UT_QH_B = '_ut_qh_b'
 
 
-def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=()):
+def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=(), w_size=(4, 8)):
     return SimpleNamespace(
         algos=list(algos),
         quant_dtype=quant_dtype,
         w_bits=w_bits,
         quant_target=list(quant_target),
-        w_size=(4, 8),
+        w_size=w_size,
     )
 
 
@@ -331,6 +331,15 @@ def test_weight_quantizer_export_deploy_supports_autoround_hook():
     assert "qweight" in out
     assert "weight_scale" in out
     assert "weight_bias" in out
+
+
+def test_weight_quantizer_export_deploy_supports_autoround_hook_for_mxfp():
+    args = _args(algos=["autoround"], quant_dtype="mxfp", w_bits=4, w_size=(4, 32))
+    wq = WeightQuantizer(args, w_bits=4)
+    out = wq.export_deploy(torch.randn(4, 32))
+
+    assert "qweight" in out
+    assert "weight_scale" in out
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
