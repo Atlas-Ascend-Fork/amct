@@ -61,16 +61,22 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 
 ## 仓内组织
 
-`.agents/` 是唯一可信源（tracked）：
+`.agents/` 是内容唯一可信源（tracked）；客户端配置（`settings.json`/`opencode.json`）由各自视图目录直接持有：
 
 ```
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
-├── skills/        # quant-workflow / quant-tools（叶子含 model-adapter + references 共享）/ gitcode-pr / gitcode-issue / default-skills
+├── skills/
+│   │  # LLM 量化编排链路
+│   ├── quant-workflow/    # LLM 量化流程入口（调度）
+│   ├── quant-tools/       # 被调度的量化叶子技能（含 model-adapter + references 共享）
+│   │  # 编排外的独立 skill（用户直接点名调用）
+│   ├── amct-ops-dev/      # NPU 算子开发
+│   ├── gitcode-pr/        # PR 创建 / 评论
+│   ├── gitcode-issue/     # issue 读取
+│   └── default-skills/    # 按需装通用 skill
 ├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md
-├── hooks/         # pre_tool_use / subagent_stop（Claude Code）
-├── settings.json  # Claude Code 配置（权限 + hooks）
-└── opencode.json  # OpenCode 配置（plugins + 权限）
+└── hooks/         # pre_tool_use / subagent_stop（Claude Code）
 ```
 
 `.claude/`、`.opencode/` 是真实目录；其中 **配置文件**（`settings.json`、`opencode.json`）为真实文件，**内容目录**（skills/agents/hooks/docs）为 git-tracked symlink 指向 `.agents/`，随 clone 自动生效。架构与设计见 [docs/architecture.md](docs/architecture.md)。

@@ -33,10 +33,10 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 3. 单一源投影机制（Single Source of Truth）
 
-`.agents/` 是**唯一源**（git tracked）；`.claude/`、`.opencode/` 下按类型分两种方式投影：
+`.agents/` 是**内容唯一源**（git tracked）；`.claude/`、`.opencode/` 下按类型分两种方式投影：
 
 - **git-tracked 符号链接**（源改即时生效）：`skills` / `agents` / `hooks` / `docs` 目录
-- **git-tracked 真实文件**（各端独立）：`settings.json`（`.claude/`）、`opencode.json`（`.opencode/`）、`CLAUDE.md`（根目录）
+- **git-tracked 真实文件**（各端独立持有，不在 `.agents/` 下）：`settings.json`（`.claude/`）、`opencode.json`（`.opencode/`）、`CLAUDE.md`（根目录）
 
 视图分布：`.claude/{skills,agents,hooks,docs,settings.json}` + `CLAUDE.md`；`.opencode/{skills,agents,docs,opencode.json}`。配置文件为真实文件（兼容 Windows），内容目录为 symlink（clone 自动还原）。一处源、双端一致，不双份维护。
 
