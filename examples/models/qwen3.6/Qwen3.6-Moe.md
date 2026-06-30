@@ -141,7 +141,7 @@ python -m amct_pytorch.ptq \
 
 #### 多卡环境
 为提升训练效率，我们提供多卡下的训练脚本
-多卡环境请参照脚本[ptq_multi_npu](https://gitcode.com/fujun19/amct_llm/blob/master/examples/ptq_multi_npu.sh)
+多卡环境请参照脚本[ptq_multi_npu](../../ptq_multi_npu.sh)
 
 更多参数详细解释请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
 
