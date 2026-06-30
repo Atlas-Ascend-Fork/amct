@@ -84,7 +84,7 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 
 `.claude/`、`.opencode/` 是真实目录；其中 **配置文件**（`settings.json`、`opencode.json`）为真实文件，**内容目录**（skills/agents/hooks/docs）为 git-tracked symlink 指向 `.agents/`，随 clone 自动生效。架构与设计见 [docs/architecture.md](docs/architecture.md)。
 
-> **Windows 注意**：`settings.json`/`opencode.json` 已是真实文件，Windows 下客户端可正常启动。内容目录（skills/agents/hooks/docs）仍为 symlink，Windows 默认（`core.symlinks=false`）clone 后会退化为文本文件，skills 不会自动加载。需开启开发者模式，再 `git config core.symlinks true` 后重新 checkout 即可恢复。主场景为 Linux 服务器，Windows 按需处理。
+> **Windows**：`settings.json`/`opencode.json` 为真实文件，客户端可正常启动。内容目录（skills/agents/hooks/docs）为 symlink，`core.symlinks=false` 下 clone 后退化为文本文件；OpenCode 原生将 `.agents/skills/` 列为 skill 发现路径，无需 symlink 即可直接加载。其他客户端如 skills 未加载，开启开发者模式后重新 checkout 即可。
 
 ## 面向 agent 集成
 
