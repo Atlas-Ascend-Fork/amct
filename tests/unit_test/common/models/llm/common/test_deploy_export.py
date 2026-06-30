@@ -160,8 +160,6 @@ def test_get_quant_ignore_linear_names_no_quant_linear_all_plain():
 
 
 def test_get_quant_ignore_linear_names_skips_quant_linear_prefix():
-    pytest.importorskip("torchao", reason="torchao not installed; skipping QuantLinear-dependent test")
-
     class _NestedQL(QuantLinear):
         def __init__(self):
             from types import SimpleNamespace
