@@ -712,5 +712,508 @@ class TestQuantGlmMoeDsaAttention:
         assert out_none.shape == (2, 4, 64)
 
 
+# ---------------------------------------------------------------------------
+# C. GLM5_2 new functions (lines 156-413)
+# ---------------------------------------------------------------------------
+
+def _make_glm5_config_ext(num_layers=2, num_nextn=0, first_k_dense=0,
+                          indexer_types=None):
+    """Extended config factory with MTP and dense-replace control."""
+    kwargs = dict(
+        num_hidden_layers=num_layers,
+        hidden_size=64,
+        intermediate_size=128,
+        moe_intermediate_size=64,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        kv_lora_rank=32,
+        q_lora_rank=64,
+        qk_rope_head_dim=16,
+        qk_nope_head_dim=16,
+        v_head_dim=16,
+        rms_norm_eps=1e-6,
+        vocab_size=100,
+        max_position_embeddings=512,
+        rope_parameters={"rope_theta": 10000.0, "rope_type": "default"},
+        tie_word_embeddings=False,
+        mlp_layer_types=["dense"] * num_layers,
+        n_routed_experts=8,
+        n_shared_experts=1,
+        num_experts_per_tok=2,
+        index_topk=512,
+        index_n_heads=8,
+        index_head_dim=32,
+        indexer_types=indexer_types if indexer_types is not None
+                      else ["full"] * num_layers,
+        first_k_dense_replace=first_k_dense,
+    )
+    if num_nextn > 0:
+        kwargs["num_nextn_predict_layers"] = num_nextn
+    return GlmMoeDsaConfig(**kwargs)
+
+
+def _make_block_with_quant_plain():
+    """Build a small nn.Module block containing QuantLinear, PlainLinear,
+    and a raw nn.Linear for ignore-name tests."""
+    _register_dtype_once()
+    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+    from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+
+    block = nn.Module()
+    block.self_attn = nn.Module()
+    ql_args = SimpleNamespace(
+        quant_dtype="int", algos=[], w_bits=8, w_size=(4, 4),
+    )
+    block.self_attn.q_proj = QuantLinear(
+        ql_args, nn.Linear(4, 4, bias=False), w_bits=8, name="q_proj",
+    )
+    block.self_attn.q_a_proj = PlainLinear(nn.Linear(4, 4, bias=False))
+    block.extra_raw_linear = nn.Linear(4, 4, bias=False)
+    return block
+
+
+class TestGLM5_2NewFunctions:
+    """Tests for GLM5_2 functions at lines 156-413."""
+
+    def _make_model(self, monkeypatch, num_layers=2, num_nextn=0,
+                    first_k_dense=0, indexer_types=None,
+                    quant_target=None, quant_dtype="int8"):
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
+        if quant_target is None:
+            quant_target = [QUANT_TARGET_MOE]
+        cfg = _make_glm5_config_ext(
+            num_layers=num_layers, num_nextn=num_nextn,
+            first_k_dense=first_k_dense, indexer_types=indexer_types,
+        )
+        _mock_base_deps(monkeypatch, cfg)
+        args = _make_mock_args(
+            quant_target=quant_target, quant_dtype=quant_dtype,
+        )
+        return GLM5_2(args)
+
+    # -- get_kv_cache_scheme --
+
+    @pytest.mark.cpu
+    def test_get_kv_cache_scheme_int_returns_none(self, monkeypatch):
+        """get_kv_cache_scheme returns None for non-mxfp quant_dtype."""
+        model = self._make_model(monkeypatch, quant_dtype="int8")
+        assert model.get_kv_cache_scheme() is None
+
+    @pytest.mark.cpu
+    def test_get_kv_cache_scheme_mxfp(self, monkeypatch):
+        """get_kv_cache_scheme returns 8-bit float config for mxfp."""
+        model = self._make_model(monkeypatch, quant_dtype="mxfp")
+        result = model.get_kv_cache_scheme()
+        assert result is not None
+        assert result["num_bits"] == 8
+        assert result["type"] == "float"
+        assert result["strategy"] == "group"
+        assert result["group_size"] == 128
+        assert result["dynamic"] is True
+        assert result["symmetric"] is True
+
+    # -- _is_full_indexer_layer --
+
+    @pytest.mark.cpu
+    def test_is_full_indexer_layer_mtp(self, monkeypatch):
+        """MTP layer (idx >= num_hidden) always returns True."""
+        model = self._make_model(monkeypatch, num_layers=2)
+        assert model._is_full_indexer_layer(2, ["full", "shared"]) is True
+        assert model._is_full_indexer_layer(5, ["full", "shared"]) is True
+
+    @pytest.mark.cpu
+    def test_is_full_indexer_layer_no_indexer_types(self, monkeypatch):
+        """No indexer_types → True for any regular layer."""
+        model = self._make_model(monkeypatch, num_layers=2)
+        assert model._is_full_indexer_layer(0, None) is True
+        assert model._is_full_indexer_layer(0, []) is True
+
+    @pytest.mark.cpu
+    def test_is_full_indexer_layer_full(self, monkeypatch):
+        """indexer_types[idx] == 'full' → True."""
+        model = self._make_model(monkeypatch, num_layers=2)
+        assert model._is_full_indexer_layer(0, ["full", "shared"]) is True
+
+    @pytest.mark.cpu
+    def test_is_full_indexer_layer_shared(self, monkeypatch):
+        """indexer_types[idx] == 'shared' → False."""
+        model = self._make_model(monkeypatch, num_layers=2)
+        assert model._is_full_indexer_layer(1, ["full", "shared"]) is False
+
+    # -- _find_template_layer_idx --
+
+    @pytest.mark.cpu
+    def test_find_template_layer_idx_all_full(self, monkeypatch):
+        """All MoE layers full → returns first_k_dense_replace."""
+        model = self._make_model(
+            monkeypatch, num_layers=3, first_k_dense=1,
+            indexer_types=["full", "full", "full"],
+        )
+        assert model._find_template_layer_idx() == 1
+
+    @pytest.mark.cpu
+    def test_find_template_layer_idx_mixed(self, monkeypatch):
+        """Mixed full/shared → returns first full MoE layer."""
+        model = self._make_model(
+            monkeypatch, num_layers=3, first_k_dense=1,
+            indexer_types=["full", "shared", "full"],
+        )
+        assert model._find_template_layer_idx() == 2
+
+    @pytest.mark.cpu
+    def test_find_template_layer_idx_all_shared(self, monkeypatch):
+        """All MoE layers shared → falls back to first_k_dense_replace."""
+        model = self._make_model(
+            monkeypatch, num_layers=3, first_k_dense=1,
+            indexer_types=["full", "shared", "shared"],
+        )
+        assert model._find_template_layer_idx() == 1
+
+    # -- _collect_quant_bits --
+
+    @pytest.mark.cpu
+    def test_collect_quant_bits_mixed(self, monkeypatch):
+        """Extracts w_bits from QuantLinear, skips PlainLinear."""
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+        _register_dtype_once()
+
+        model = self._make_model(monkeypatch)
+        block = nn.Module()
+        block.self_attn = nn.Module()
+        ql_args = SimpleNamespace(
+            quant_dtype="int", algos=[], w_bits=8, w_size=(4, 4),
+        )
+        block.self_attn.q_proj = QuantLinear(
+            ql_args, nn.Linear(4, 4, bias=False), w_bits=8, name="q_proj",
+        )
+        block.self_attn.o_proj = QuantLinear(
+            ql_args, nn.Linear(4, 4, bias=False), w_bits=4, name="o_proj",
+        )
+        block.self_attn.q_a_proj = PlainLinear(nn.Linear(4, 4, bias=False))
+
+        bits = GLM5_2._collect_quant_bits(block)
+        assert bits["self_attn.q_proj"] == 8
+        assert bits["self_attn.o_proj"] == 4
+        assert "self_attn.q_a_proj" not in bits
+        assert len(bits) == 2
+
+    @pytest.mark.cpu
+    def test_collect_quant_bits_expert_path(self, monkeypatch):
+        """Packed expert path .expert_modules. is normalized."""
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+        _register_dtype_once()
+
+        model = self._make_model(monkeypatch)
+        block = nn.Module()
+        block.mlp = nn.Module()
+        block.mlp.experts = nn.Module()
+        block.mlp.experts.expert_modules = nn.ModuleList()
+        expert0 = nn.Module()
+        ql_args = SimpleNamespace(
+            quant_dtype="int", algos=[], w_bits=8, w_size=(4, 4),
+        )
+        expert0.gate_proj = QuantLinear(
+            ql_args, nn.Linear(4, 4, bias=False), w_bits=8, name="gate_proj",
+        )
+        block.mlp.experts.expert_modules.append(expert0)
+
+        bits = GLM5_2._collect_quant_bits(block)
+        assert "mlp.experts.0.gate_proj" in bits
+        assert "mlp.experts.expert_modules.0.gate_proj" not in bits
+
+    @pytest.mark.cpu
+    def test_collect_quant_bits_empty(self, monkeypatch):
+        """Empty block returns empty dict."""
+        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
+        model = self._make_model(monkeypatch)
+        assert GLM5_2._collect_quant_bits(nn.Module()) == {}
+
+    # -- get_quant_weight_specs --
+
+    @pytest.mark.cpu
+    def test_get_quant_weight_specs_no_mtp(self, monkeypatch):
+        """Regular layers only: specs from cached blocks."""
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+        _register_dtype_once()
+
+        model = self._make_model(monkeypatch, num_layers=2)
+
+        fake_block = nn.Module()
+        fake_block.self_attn = nn.Module()
+        ql_args = SimpleNamespace(
+            quant_dtype="int", algos=[], w_bits=8, w_size=(4, 4),
+        )
+        fake_block.self_attn.q_proj = QuantLinear(
+            ql_args, nn.Linear(4, 4, bias=False), w_bits=8, name="q_proj",
+        )
+        monkeypatch.setattr(model, "build_empty_quant_block", lambda idx: fake_block)
+
+        specs = model.get_quant_weight_specs()
+        assert specs["model.layers.0.self_attn.q_proj.weight"] == 8
+        assert specs["model.layers.1.self_attn.q_proj.weight"] == 8
+        assert 0 in model._cached_empty_blocks
+        assert 1 in model._cached_empty_blocks
+
+    @pytest.mark.cpu
+    def test_get_quant_weight_specs_with_mtp(self, monkeypatch):
+        """MTP layers covered via template block reuse."""
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+        _register_dtype_once()
+
+        model = self._make_model(
+            monkeypatch, num_layers=2, num_nextn=1, first_k_dense=0,
+        )
+
+        regular_block = nn.Module()
+        regular_block.self_attn = nn.Module()
+        ql_args = SimpleNamespace(
+            quant_dtype="int", algos=[], w_bits=8, w_size=(4, 4),
+        )
+        regular_block.self_attn.q_proj = QuantLinear(
+            ql_args, nn.Linear(4, 4, bias=False), w_bits=8, name="q_proj",
+        )
+
+        template_block = nn.Module()
+        template_block.self_attn = nn.Module()
+        template_block.self_attn.o_proj = QuantLinear(
+            ql_args, nn.Linear(4, 4, bias=False), w_bits=4, name="o_proj",
+        )
+
+        call_count = {"n": 0}
+
+        def mock_build(idx):
+            call_count["n"] += 1
+            if call_count["n"] <= 2:
+                return regular_block
+            return template_block
+
+        monkeypatch.setattr(model, "build_empty_quant_block", mock_build)
+
+        specs = model.get_quant_weight_specs()
+        assert specs["model.layers.0.self_attn.q_proj.weight"] == 8
+        assert specs["model.layers.1.self_attn.q_proj.weight"] == 8
+        assert specs["model.layers.2.self_attn.o_proj.weight"] == 4
+        assert "mtp_template" in model._cached_empty_blocks
+
+    # -- _get_cached_block --
+
+    @pytest.mark.cpu
+    def test_get_cached_block_hit(self, monkeypatch):
+        """Cache hit returns pre-cached block without building."""
+        model = self._make_model(monkeypatch)
+        fake_block = nn.Module()
+        model._cached_empty_blocks = {0: fake_block}
+        assert model._get_cached_block(0) is fake_block
+
+    @pytest.mark.cpu
+    def test_get_cached_block_miss(self, monkeypatch):
+        """Cache miss builds and caches a new block."""
+        model = self._make_model(monkeypatch)
+        fake_block = nn.Module()
+        dummy = nn.Module()
+        model._cached_empty_blocks = {99: dummy}
+        monkeypatch.setattr(model, "build_empty_quant_block", lambda idx: fake_block)
+        result = model._get_cached_block(0)
+        assert result is fake_block
+        assert model._cached_empty_blocks[0] is fake_block
+
+    @pytest.mark.cpu
+    def test_get_cached_block_no_cache_attr(self, monkeypatch):
+        """Missing _cached_empty_blocks creates cache dict lazily."""
+        model = self._make_model(monkeypatch)
+        if hasattr(model, "_cached_empty_blocks"):
+            delattr(model, "_cached_empty_blocks")
+        fake_block = nn.Module()
+        monkeypatch.setattr(model, "build_empty_quant_block", lambda idx: fake_block)
+        result = model._get_cached_block(0)
+        assert result is fake_block
+
+    @pytest.mark.cpu
+    def test_get_cached_block_mtp_hit(self, monkeypatch):
+        """MTP cache hit returns mtp_template."""
+        model = self._make_model(monkeypatch)
+        fake_template = nn.Module()
+        model._cached_empty_blocks = {"mtp_template": fake_template}
+        assert model._get_cached_block(2, is_mtp=True) is fake_template
+
+    @pytest.mark.cpu
+    def test_get_cached_block_mtp_miss(self, monkeypatch):
+        """MTP cache miss builds template via _find_template_layer_idx."""
+        model = self._make_model(monkeypatch, num_layers=2)
+        dummy = nn.Module()
+        model._cached_empty_blocks = {99: dummy}
+        fake_template = nn.Module()
+        monkeypatch.setattr(model, "build_empty_quant_block", lambda idx: fake_template)
+        monkeypatch.setattr(model, "_find_template_layer_idx", lambda: 0)
+        result = model._get_cached_block(2, is_mtp=True)
+        assert result is fake_template
+        assert model._cached_empty_blocks["mtp_template"] is fake_template
+
+    # -- get_extra_ignore_names dispatch --
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_dispatch_block(self, monkeypatch):
+        """quant_mode='block' dispatches to _get_extra_ignore_names_block."""
+        model = self._make_model(monkeypatch)
+        sentinel = ["block_result"]
+        monkeypatch.setattr(model, "_get_extra_ignore_names_block", lambda: sentinel)
+        assert model.get_extra_ignore_names(quant_mode="block") is sentinel
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_dispatch_tensor(self, monkeypatch):
+        """quant_mode='tensor' dispatches to _get_extra_ignore_names_tensor."""
+        model = self._make_model(monkeypatch)
+        sentinel = ["tensor_result"]
+        specs = {"some.weight": 8}
+        monkeypatch.setattr(
+            model, "_get_extra_ignore_names_tensor",
+            lambda qs: sentinel if qs is specs else None,
+        )
+        assert model.get_extra_ignore_names(
+            quant_mode="tensor", quant_specs=specs,
+        ) is sentinel
+
+    # -- _get_extra_ignore_names_block --
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_block_mtp(self, monkeypatch):
+        """Block mode: MTP modules (raw, PlainLinear, eh_proj, shared_head) ignored."""
+        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+
+        model = self._make_model(
+            monkeypatch, num_layers=2, num_nextn=1, first_k_dense=1,
+        )
+        fake_block = _make_block_with_quant_plain()
+        monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
+
+        ignore = model._get_extra_ignore_names_block()
+
+        # MTP layer 2: QuantLinear wrapper NOT double-counted (filtered by quant_linear_prefixes)
+        assert "model.layers.2.self_attn.q_proj" not in ignore
+        # MTP layer 2: PlainLinear wrapper ignored
+        assert "model.layers.2.self_attn.q_a_proj" in ignore
+        # MTP layer 2: raw nn.Linear not in any wrapper
+        assert "model.layers.2.extra_raw_linear" in ignore
+        # MTP layer 2: inner .linear of PlainLinear is NOT double-counted
+        assert "model.layers.2.self_attn.q_a_proj.linear" not in ignore
+        # MTP-specific modules
+        assert "model.layers.2.eh_proj" in ignore
+        assert "model.layers.2.shared_head.head" in ignore
+        # MoE layers (1, 2) have mlp.gate ignored
+        assert "model.layers.1.mlp.gate" in ignore
+        assert "model.layers.2.mlp.gate" in ignore
+        # lm_head always ignored
+        assert "lm_head" in ignore
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_block_regular(self, monkeypatch):
+        """Block mode: regular layer PlainLinear and raw nn.Linear ignored."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, num_nextn=0, first_k_dense=1,
+        )
+        fake_block = _make_block_with_quant_plain()
+        monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
+
+        ignore = model._get_extra_ignore_names_block()
+
+        # Regular layer: PlainLinear wrapper ignored
+        assert "model.layers.0.self_attn.q_a_proj" in ignore
+        assert "model.layers.1.self_attn.q_a_proj" in ignore
+        # Regular layer: raw nn.Linear not in wrapper ignored
+        assert "model.layers.0.extra_raw_linear" in ignore
+        assert "model.layers.1.extra_raw_linear" in ignore
+        # QuantLinear wrapper NOT ignored
+        assert "model.layers.0.self_attn.q_proj" not in ignore
+        assert "model.layers.1.self_attn.q_proj" not in ignore
+        # MoE layer 1 has mlp.gate
+        assert "model.layers.1.mlp.gate" in ignore
+        # Dense layer 0 should NOT have mlp.gate
+        assert "model.layers.0.mlp.gate" not in ignore
+        assert "lm_head" in ignore
+
+    # -- _get_extra_ignore_names_tensor --
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_tensor_in_specs_not_ignored(self, monkeypatch):
+        """Tensor mode: modules IN quant_specs are NOT ignored."""
+        model = self._make_model(
+            monkeypatch, num_layers=1, num_nextn=0, first_k_dense=1,
+        )
+        fake_block = _make_block_with_quant_plain()
+        monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
+
+        quant_specs = {
+            "model.layers.0.self_attn.q_proj.weight": 8,
+            "model.layers.0.self_attn.q_a_proj.weight": 16,
+            "model.layers.0.extra_raw_linear.weight": 8,
+        }
+        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+
+        assert "model.layers.0.self_attn.q_proj" not in ignore
+        assert "model.layers.0.self_attn.q_a_proj" not in ignore
+        assert "model.layers.0.extra_raw_linear" not in ignore
+        assert "lm_head" in ignore
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_tensor_not_in_specs_ignored(self, monkeypatch):
+        """Tensor mode: modules NOT in quant_specs ARE ignored."""
+        model = self._make_model(
+            monkeypatch, num_layers=1, num_nextn=0, first_k_dense=1,
+        )
+        fake_block = _make_block_with_quant_plain()
+        monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
+
+        quant_specs = {
+            "model.layers.0.self_attn.q_proj.weight": 8,
+        }
+        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+
+        # q_a_proj (PlainLinear) NOT in specs → ignored
+        assert "model.layers.0.self_attn.q_a_proj" in ignore
+        # extra_raw_linear NOT in specs → ignored
+        assert "model.layers.0.extra_raw_linear" in ignore
+        # q_proj IN specs → not ignored
+        assert "model.layers.0.self_attn.q_proj" not in ignore
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_tensor_mtp(self, monkeypatch):
+        """Tensor mode: MTP eh_proj/shared_head ignored when not in specs."""
+        model = self._make_model(
+            monkeypatch, num_layers=1, num_nextn=1, first_k_dense=1,
+        )
+        fake_block = _make_block_with_quant_plain()
+        monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
+
+        quant_specs = {}
+        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+
+        # MTP layer 1: eh_proj and shared_head.head not in specs → ignored
+        assert "model.layers.1.eh_proj" in ignore
+        assert "model.layers.1.shared_head.head" in ignore
+        # MoE gate for layer 1 (>= first_k_dense=1)
+        assert "model.layers.1.mlp.gate" in ignore
+
+    @pytest.mark.cpu
+    def test_get_extra_ignore_names_tensor_mtp_in_specs(self, monkeypatch):
+        """Tensor mode: MTP eh_proj NOT ignored when in quant_specs."""
+        model = self._make_model(
+            monkeypatch, num_layers=1, num_nextn=1, first_k_dense=1,
+        )
+        fake_block = _make_block_with_quant_plain()
+        monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
+
+        quant_specs = {
+            "model.layers.1.eh_proj.weight": 8,
+            "model.layers.1.shared_head.head.weight": 8,
+        }
+        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+
+        assert "model.layers.1.eh_proj" not in ignore
+        assert "model.layers.1.shared_head.head" not in ignore
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
