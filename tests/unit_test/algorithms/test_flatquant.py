@@ -31,8 +31,8 @@ from amct_pytorch.algorithms.quant.flatquant import (
 )
 
 
-def _make(dim_size=4, matrix_size=2, add_diag=True):
-    args = SimpleNamespace(flat_add_diag=add_diag)
+def _make(dim_size=4, matrix_size=2):
+    args = SimpleNamespace()
     ctx = SimpleNamespace(dim_size=dim_size, matrix_size=matrix_size)
     return FlatQuant(args=args, ctx=ctx)
 
@@ -83,14 +83,22 @@ def test_decompose_transform_is_used_when_dim_is_multiple_of_matrix_size():
 
 
 def test_decompose_transform_without_diag_has_no_diag_scale_parameter():
-    flat = _make(dim_size=8, matrix_size=4, add_diag=False)
-    assert isinstance(flat.transform, _InvFlatDecomposeTransform)
-    assert flat.transform.add_diag is False
-    assert not hasattr(flat.transform, "diag_scale")
+    transform = _InvFlatDecomposeTransform(left_size=2, right_size=4, add_diag=False)
+    assert transform.add_diag is False
+    assert not hasattr(transform, "diag_scale")
+
+
+def test_decompose_transform_without_diag_forward_runs_without_diag_scale():
+    transform = _InvFlatDecomposeTransform(left_size=2, right_size=2, add_diag=False)
+    with torch.no_grad():
+        transform.linear_left.weight.copy_(torch.eye(2))
+        transform.linear_right.weight.copy_(torch.eye(2))
+    x = torch.tensor([[1.0, 2.0, 3.0, 4.0]])
+    assert torch.equal(transform(x), x)
 
 
 def test_forward_uses_diag_scale_for_decomposed_activation_transform():
-    flat = _make(dim_size=4, matrix_size=2, add_diag=True)
+    flat = _make(dim_size=4, matrix_size=2)
     with torch.no_grad():
         flat.transform.linear_left.weight.copy_(torch.eye(2))
         flat.transform.linear_right.weight.copy_(torch.eye(2))
@@ -102,7 +110,7 @@ def test_forward_uses_diag_scale_for_decomposed_activation_transform():
 
 
 def test_forward_inv_t_divides_by_diag_scale_for_decomposed_weight_transform():
-    flat = _make(dim_size=4, matrix_size=2, add_diag=True)
+    flat = _make(dim_size=4, matrix_size=2)
     with torch.no_grad():
         flat.transform.linear_left.weight.copy_(torch.eye(2))
         flat.transform.linear_right.weight.copy_(torch.eye(2))
@@ -120,7 +128,7 @@ def test_transform_weight_matches_forward_inv_t():
 
 
 def test_flatquant_transform_keeps_linear_result_equivalent():
-    flat = _make(dim_size=4, matrix_size=2, add_diag=True)
+    flat = _make(dim_size=4, matrix_size=2)
     with torch.no_grad():
         flat.transform.linear_left.weight.copy_(torch.tensor([[0.0, 1.0], [1.0, 0.0]]))
         flat.transform.linear_right.weight.copy_(torch.tensor([[0.0, 1.0], [1.0, 0.0]]))
@@ -140,11 +148,11 @@ def test_constructor_raises_when_dim_size_is_missing():
         FlatQuant(args=args, ctx=ctx)
 
 
-def test_args_flat_matrix_size_is_used_when_ctx_matrix_size_is_none():
-    args = SimpleNamespace(flat_matrix_size=2, flat_add_diag=True)
-    ctx = SimpleNamespace(dim_size=4, matrix_size=None)
+def test_default_matrix_size_is_used_when_ctx_matrix_size_is_none():
+    args = SimpleNamespace()
+    ctx = SimpleNamespace(dim_size=256, matrix_size=None)
     flat = FlatQuant(args=args, ctx=ctx)
-    assert flat.matrix_size == 2
+    assert flat.matrix_size == 128
     assert isinstance(flat.transform, _InvFlatDecomposeTransform)
 
 
@@ -157,7 +165,7 @@ def test_trainable_params_returns_all_parameters():
 
 
 def test_export_load_round_trip_for_decomposed_transform():
-    flat = _make(dim_size=4, matrix_size=2, add_diag=True)
+    flat = _make(dim_size=4, matrix_size=2)
     with torch.no_grad():
         flat.transform.linear_left.weight.copy_(torch.tensor([[0.0, 1.0], [1.0, 0.0]]))
         flat.transform.linear_right.weight.copy_(torch.tensor([[0.0, 1.0], [1.0, 0.0]]))
@@ -170,7 +178,7 @@ def test_export_load_round_trip_for_decomposed_transform():
         "transform.diag_scale",
     }
 
-    other = _make(dim_size=4, matrix_size=2, add_diag=True)
+    other = _make(dim_size=4, matrix_size=2)
     other.load_ptq_params(params)
     for name, value in flat.named_parameters():
         assert torch.equal(dict(other.named_parameters())[name].data, value.data)

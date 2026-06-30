@@ -1,6 +1,9 @@
-# -*- coding: UTF-8 -*-
+# coding=utf-8
 # ----------------------------------------------------------------------------
+# Adapted from
+# https://github.com/ruikangliu/FlatQuant
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+# Copyright (c) 2024 ruikangliu. Licensed under MIT.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -105,7 +108,7 @@ class FlatQuant(nn.Module):
         super().__init__()
         self.args = args
         self.dim_size = ctx.dim_size
-        self.matrix_size = ctx.matrix_size or getattr(args, "flat_matrix_size", 128)
+        self.matrix_size = ctx.matrix_size or 128
         self.add_diag = bool(getattr(args, "flat_add_diag", True))
 
         if self.dim_size is None:
