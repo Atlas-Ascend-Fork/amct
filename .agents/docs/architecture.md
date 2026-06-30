@@ -33,12 +33,12 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 3. 单一源投影机制（Single Source of Truth）
 
-`.agents/` 是**唯一源**（git tracked）；`scripts/init-agent.sh` 把它投影成两套 runtime 视图，分两种方式：
+`.agents/` 是**唯一源**（git tracked）；`.claude/`、`.opencode/` 下按类型分两种方式投影：
 
-- **符号链接**（源改即时生效）：`skills` / `agents` / `hooks` / `docs`，及 `CLAUDE.md → AGENTS.md`。
-- **拷贝**（源改后须重跑 `init-agent.sh` 才同步）：`settings.json → .claude/`、`opencode.json → .opencode/`。
+- **git-tracked 符号链接**（源改即时生效）：`skills` / `agents` / `hooks` / `docs` 目录
+- **git-tracked 真实文件**（各端独立）：`settings.json`（`.claude/`）、`opencode.json`（`.opencode/`）、`CLAUDE.md`（根目录）
 
-视图分布：`.claude/{skills,agents,docs,settings.json}` + `CLAUDE.md`；`.opencode/{skills,agents,docs,opencode.json}`。两端视图 **全 gitignored、全量生成**，clone 后跑 `bash scripts/init-agent.sh` 生成。一处源、双端一致，不提交生成物、不双份维护。
+视图分布：`.claude/{skills,agents,hooks,docs,settings.json}` + `CLAUDE.md`；`.opencode/{skills,agents,docs,opencode.json}`。配置文件为真实文件（兼容 Windows），内容目录为 symlink（clone 自动还原）。一处源、双端一致，不双份维护。
 
 ## 4. 设计原则
 
@@ -62,7 +62,7 @@ docs/casebook/  +  docs/repo-map.md     知识层（适配经验 / 仓内导航�
 
 ## 7. 运行与验证
 
-- 启动：`bash scripts/init-agent.sh` 生成视图后，在 Claude Code 或 OpenCode 中启动。
+- 启动：clone 仓库后即可直接在 Claude Code 或 OpenCode 中启动（symlink 视图随 clone 自动生效）。
 - 已实测（OpenCode + glm-5）：执行流（W8A8 直转）、分析流（方案推荐）、PTQ 流（extract → ptq → eval）三类端到端均由 agent 自主跑通且结果核实准确。
 
 ## 8. 面向 agent 集成（黑盒契约）

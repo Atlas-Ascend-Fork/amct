@@ -1,12 +1,16 @@
-# amct 大模型量化 Agent Skills
+# amct Agent Skills
 
-面向昇腾 NPU 大模型量化压缩的 Agent Skills：封装 amct（`amct_pytorch`）的 LLM 量化全流程（`eval / extract_ptq_data / ptq / deploy` + blockwise PTQ），让你用自然语言完成「模型 → 量化方案 → 部署权重」。同时适配 Claude Code 与 OpenCode。
+amct 仓的 Agent Skills 基础设施（`.agents/`），以 skill 为单元封装各类研发能力，自然语言触发、agent 自主执行，clone 即可用。
+
+当前内置：
+- **quant-workflow**：LLM 量化全流程编排主入口（方案推荐 → PTQ → 部署导出，见下文）
+- **gitcode-pr / gitcode-issue**：GitCode 仓库协作操作
+
+后续按需扩充。适配 Claude Code 与 OpenCode。
 
 ## 快速开始
 
-```bash
-bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencode 可单装
-```
+clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/architecture.md](docs/architecture.md) §3）。
 
 装好后直接用自然语言描述任务，例如：
 
@@ -31,10 +35,8 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 | 「达标了，导出权重 + 写交付文档」 | `deploy-export` 导出 + `deploy_quantization.md` |
 | 「deploy 目录有了，就差交付文档」 | `deploy-export`（阶段 5 补文档）|
 | 「量化后 PPL 比 BF16 还低，正常吗」 | `quant-workflow` 先查链路再判定 |
-| 「在 amct_ops 里加一个 mxfp4 cast 算子」/「照 hifloat8_cast 模板写个新 NPU 算子」 | `amct-ops-dev` 算子开发 |
-| 「ops_build.sh 怎么按 A2/A3/A5 切 NPU_ARCH」/「torch.compile 报 no Meta kernel 怎么补」 | `amct-ops-dev` 构建/调试 |
 
-整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。`amct-ops-dev` 属编排外的独立 NPU 算子开发工具，按需直接点名，不进 `quant-workflow`。
+整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。
 
 编排顺序：适配（未适配时）→ 方案 → 直转（`delta ≤ 0.2` 可直接导出）→ 超阈则升级 PTQ → 导出。
 
@@ -64,22 +66,16 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 ```
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
-├── skills/
-│   │  # LLM量化编排链路
-│   ├── quant-workflow/    # LLM 量化流程入口（调度）
-│   ├── quant-tools/       # 被调度的量化叶子技能（含 model-adapter + references 共享）
-│   │  # 编排外的独立 skill（用户直接点名调用）
-│   ├── amct-ops-dev/      # NPU 算子开发
-│   ├── gitcode-pr/        # PR 创建 / 评论
-│   ├── gitcode-issue/     # issue 读取
-│   └── default-skills/    # 按需装通用 skill
-├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md / roadmap.md
+├── skills/        # quant-workflow / quant-tools（叶子含 model-adapter + references 共享）/ gitcode-pr / gitcode-issue / default-skills
+├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md
 ├── hooks/         # pre_tool_use / subagent_stop（Claude Code）
 ├── settings.json  # Claude Code 配置（权限 + hooks）
 └── opencode.json  # OpenCode 配置（plugins + 权限）
 ```
 
-`scripts/init-agent.sh` 据此生成 `.claude/`、`.opencode/` 客户端视图（均 gitignored、全量生成）：`settings.json`→`.claude/`、`opencode.json`→`.opencode/`，skills/agents/hooks/docs 投影到两端。技能清单与规划见 [docs/roadmap.md](docs/roadmap.md)，架构与设计见 [docs/architecture.md](docs/architecture.md)。
+`.claude/`、`.opencode/` 是真实目录；其中 **配置文件**（`settings.json`、`opencode.json`）为真实文件，**内容目录**（skills/agents/hooks/docs）为 git-tracked symlink 指向 `.agents/`，随 clone 自动生效。架构与设计见 [docs/architecture.md](docs/architecture.md)。
+
+> **Windows 注意**：`settings.json`/`opencode.json` 已是真实文件，Windows 下客户端可正常启动。内容目录（skills/agents/hooks/docs）仍为 symlink，Windows 默认（`core.symlinks=false`）clone 后会退化为文本文件，skills 不会自动加载。需开启开发者模式，再 `git config core.symlinks true` 后重新 checkout 即可恢复。主场景为 Linux 服务器，Windows 按需处理。
 
 ## 面向 agent 集成
 

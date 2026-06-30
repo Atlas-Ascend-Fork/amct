@@ -13,6 +13,10 @@ AMCT（Ascend Model Compression Toolkit）是一款昇腾 AI 处理器亲和的�
 - **NPU 算子**：量化相关的昇腾 NPU 算子实现
 - **试验特性**：DeepSeekV3.2/V4 等前沿模型的量化支持
 
+## Agent Skills
+
+本仓内置 Agent Skills 基础设施（`.agents/`，经 git-tracked symlink 自动投影到各 AI 客户端，clone 即可用）：以 skill 为单元封装特定领域能力，自然语言触发、agent 自主执行。当前内置 **quant-workflow**（LLM 量化全流程编排主入口）与 `gitcode-pr`/`gitcode-issue`（仓库协作操作）两类技能，后续按需扩充。详见 [.agents/README.md](.agents/README.md)（快速开始）与 [.agents/docs/architecture.md](.agents/docs/architecture.md)（架构设计）。
+
 ## 构建命令
 
 ### 基础构建
@@ -110,7 +114,10 @@ python3 -c "import amct_pytorch as amct; print('successfully installed AMCT')"
 ## 开发规范
 
 ### gitcode pr/issue 操作
-@.claude/skills/default-skills/SKILL.md
+@.claude/skills/gitcode-pr/SKILL.md
+@.claude/skills/gitcode-issue/SKILL.md
+
+若以上 skill 缺失，按 @.claude/skills/default-skills/SKILL.md 自动安装。
 
 ### 代码风格
 - 遵循 Google 开源代码规范（基于 `.clang-format`）
