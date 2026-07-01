@@ -46,7 +46,7 @@ z = torch.zeros(1, 64, dtype=torch.bfloat16)
 assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
 ```
 
-`tests/amct_ops/test_hifloat4_cast.py` cross-checks `reference.py` against the vendored
+`tests/amct_ops/test_hifloat4_cast.py` cross-checks `reference.py` against
 `quant_hifx` on CPU (runs anywhere) and, when an NPU is present, against the kernel.
 
 ## Build

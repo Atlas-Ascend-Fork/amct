@@ -20,7 +20,7 @@ This is the correctness oracle for the AscendC kernel (P1.6): the kernel output 
 this to ~0 error (< 1e-6), including zero-input blocks. It re-implements the same math as
 amct_pytorch/common/utils/hifx4_quant/quant_dequant.py::quant_hifx, but standalone (no
 amct_pytorch dependency) so amct_ops can ship and be validated on its own. The amct test
-(tests/amct_ops/test_hifloat4_cast.py) cross-checks this against the vendored quant_hifx.
+(tests/amct_ops/test_hifloat4_cast.py) cross-checks this against amct's quant_hifx.
 
 Format: per element S1P2 (man_bits=3); per 64 elements a 3-level scale
 (L1 scale_factor E6M2 over 64, L2 over 8, L3 over 4).

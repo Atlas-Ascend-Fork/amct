@@ -41,7 +41,7 @@ z = torch.zeros(1, 64, dtype=torch.bfloat16)
 assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
 ```
 
-`tests/amct_ops/test_hifloat4_cast.py` 在 CPU 上对拍 `reference.py` 与 vendored `quant_hifx`
+`tests/amct_ops/test_hifloat4_cast.py` 在 CPU 上对拍 `reference.py` 与 `quant_hifx`
 （任意机器可跑），并在有 NPU 时对拍 kernel。
 
 ## 构建

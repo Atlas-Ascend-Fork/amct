@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""QType: floating-point quant-format descriptor, vendored from the HiFloat4 project.
+"""QType: floating-point quant-format descriptor.
 
 For the amct cast algorithm only the ``hifx4`` format is exercised. ``hifx4`` parses to the
 universal descriptor ``e0m3K1k4B1b64Coff38`` (exp_bits=0, man_bits=3, 64-element block with
