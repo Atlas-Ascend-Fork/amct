@@ -855,7 +855,7 @@ class TestQwen35MoeMocked:
         block.mlp.experts.expert_modules = nn.ModuleList([expert0, expert1])
         bindings = list(model.iter_deploy_bindings(0, block))
         assert len(bindings) == 1
-        assert bindings[0][0] == "model.language_model.layers.0.mlp.experts.expert_modules.1.gate_proj.weight"
+        assert bindings[0][0] == "model.language_model.layers.0.mlp.experts.1.gate_proj.weight"
 
     def test_qwen3_5_moe_iter_ptq_units(self, monkeypatch):
         from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import (

@@ -35,6 +35,7 @@ from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts, is
 from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5, QuantQwen35MLP
 
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, build_no_algo_args
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 @MODEL_REGISTRY.register(
@@ -108,7 +109,20 @@ class Qwen3_5Moe(Qwen3_5):
         yield from super().iter_ptq_units(layer_idx, block)
 
     def iter_deploy_bindings(self, layer_idx, block):
-        yield from super().iter_deploy_bindings(layer_idx, block)
+        weight_prefix = self.get_layer_weight_prefix(layer_idx)
+        for name, module in block.named_modules():
+            if not isinstance(module, QuantLinear):
+                continue
+
+            if name.startswith("mlp.experts.expert_modules."):
+                parts = name.split(".")
+                if len(parts) != 5:
+                    raise ValueError(f"Unexpected Qwen3.5 MoE expert module name: {name}")
+                _, _, _, expert_idx, proj_name = parts
+                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
+                continue
+
+            yield f"{weight_prefix}{name}.weight", module
 
     def load_unit_inputs(self, data_dir, unit: PtqUnit):
         return super().load_unit_inputs(data_dir, unit)
