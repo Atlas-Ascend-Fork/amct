@@ -375,33 +375,41 @@ class GLM5_2(BaseModel):
         ignore.append("lm_head")
         return ignore
 
+    def _collect_tensor_ignore_for_layer(self, i, prefix, is_mtp, block, quant_specs):
+        """Collect ignore entries for a single layer in tensor mode."""
+        layer_ignore = []
+        for name in self._collect_raw_linear_names(block):
+            if f"{prefix}{name}.weight" not in quant_specs:
+                layer_ignore.append(f"{prefix}{name}")
+        for name in self._collect_plain_linear_names(block):
+            if f"{prefix}{name}.weight" not in quant_specs:
+                layer_ignore.append(f"{prefix}{name}")
+
+        if is_mtp:
+            mtp_names = ("eh_proj", "shared_head.head")
+            layer_ignore.extend(
+                f"{prefix}{n}" for n in mtp_names
+                if f"{prefix}{n}.weight" not in quant_specs
+            )
+
+        if i >= self.config.first_k_dense_replace:
+            layer_ignore.append(f"model.layers.{i}.mlp.gate")
+        return layer_ignore
+
     def _get_extra_ignore_names_tensor(self, quant_specs):
         """Tensor mode: ignore modules NOT in quant_specs (mutual exclusion)."""
         ignore = []
         num_hidden = self.config.num_hidden_layers
         num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
-        first_k_dense = self.config.first_k_dense_replace
         num_layers = num_hidden + num_nextn
 
         for i in range(num_layers):
             prefix = f"model.layers.{i}."
             is_mtp = i >= num_hidden
             block = self._get_cached_block(i, is_mtp=is_mtp)
-
-            for name in self._collect_raw_linear_names(block):
-                if f"{prefix}{name}.weight" not in quant_specs:
-                    ignore.append(f"{prefix}{name}")
-            for name in self._collect_plain_linear_names(block):
-                if f"{prefix}{name}.weight" not in quant_specs:
-                    ignore.append(f"{prefix}{name}")
-
-            if is_mtp:
-                for mtp_name in ("eh_proj", "shared_head.head"):
-                    if f"{prefix}{mtp_name}.weight" not in quant_specs:
-                        ignore.append(f"{prefix}{mtp_name}")
-
-            if i >= first_k_dense:
-                ignore.append(f"model.layers.{i}.mlp.gate")
+            ignore.extend(self._collect_tensor_ignore_for_layer(
+                i, prefix, is_mtp, block, quant_specs
+            ))
 
         ignore.append("lm_head")
         return ignore

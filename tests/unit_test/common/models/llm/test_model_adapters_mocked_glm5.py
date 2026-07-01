@@ -765,7 +765,6 @@ class TestGLM5_2NewFunctions:
     def _make_model(monkeypatch, num_layers=2, num_nextn=0,
                     first_k_dense=0, indexer_types=None,
                     quant_target=None, quant_dtype="int8"):
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         if quant_target is None:
             quant_target = [QUANT_TARGET_MOE]
         cfg = _make_glm5_config_ext(

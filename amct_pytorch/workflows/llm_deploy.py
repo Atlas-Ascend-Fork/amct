@@ -350,15 +350,15 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
         }
 
-    def _quantize_weight(self, weight, bits):
+    def _quantize_weight(self, weight, bits, quant_objs):
         """Quantize a single weight tensor using cached dtype object."""
-        if bits not in self._quant_objs:
-            self._quant_objs[bits] = DTYPE_REGISTRY.get(self.quant_dtype)(bits=bits)
-        payload = self._quant_objs[bits].export_deploy(weight)
+        if bits not in quant_objs:
+            quant_objs[bits] = DTYPE_REGISTRY.get(self.quant_dtype)(bits=bits)
+        payload = quant_objs[bits].export_deploy(weight)
         return payload["qweight"], payload["weight_scale"], payload.get("weight_bias")
 
     def _process_quant_file(self, source_file, model_dir, quant_specs,
-                            updated_weight_map, loaded_files):
+                            updated_weight_map, loaded_files, quant_objs):
         """Process one safetensors file: quantize matching weights, pass through others."""
         source_path = model_dir / source_file
         current_state_dict = load_file(source_path, device="cpu")
@@ -367,7 +367,9 @@ class LlmDeployWorkflow:
         new_state_dict = {}
         for weight_name, weight in current_state_dict.items():
             if weight_name in quant_specs:
-                qx, scale, bias = self._quantize_weight(weight, quant_specs[weight_name])
+                qx, scale, bias = self._quantize_weight(
+                    weight, quant_specs[weight_name], quant_objs
+                )
                 new_state_dict[weight_name] = qx
                 scale_name = weight_name.replace(".weight", ".weight_scale")
                 new_state_dict[scale_name] = scale
@@ -405,7 +407,7 @@ class LlmDeployWorkflow:
             weights_by_file[file_name].append(weight_name)
 
         quant_specs = self.pipeline.get_quant_weight_specs()
-        self._quant_objs = {}
+        quant_objs = {}
 
         updated_weight_map = {}
         model_dir = Path(self.model_path)
@@ -413,7 +415,7 @@ class LlmDeployWorkflow:
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             self._process_quant_file(
                 source_file, model_dir, quant_specs,
-                updated_weight_map, loaded_files,
+                updated_weight_map, loaded_files, quant_objs,
             )
 
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
