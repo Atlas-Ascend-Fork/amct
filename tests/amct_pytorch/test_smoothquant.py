@@ -393,8 +393,8 @@ class TestSmoothQuant(unittest.TestCase):
         # 推理 batch(行数)故意不同于校准的 64,验证 per-token 动态量化不绑定校准维度
         infer_inputs = torch.randn(16, 64).to(torch.bfloat16)
         quant_out = model(infer_inputs.npu())
-        # mock_1 是 npu_dynamic_quant,hif8 per-token 部署必须走运行时动态量化分支
-        self.assertTrue(mock_1.called)
+        # mock_5 是 npu_dynamic_quant,hif8 per-token 部署必须走运行时动态量化分支
+        self.assertTrue(mock_5.called)
         self.assertEqual(quant_out.shape[0], 16)
         self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
