@@ -26,7 +26,7 @@ from amct_pytorch.common.utils.quant_util import hifloat4_fake_quant
 class QuantDequantHiF4(torch.nn.Module):
     """HiFloat4 (hifx4) fake-quant dtype for the LLM-PTQ engine.
 
-    A thin wrapper over the vendored ``hifloat4_fake_quant``. Two things differ from
+    A thin wrapper over ``hifloat4_fake_quant``. Two things differ from
     ``QuantDequantMx`` and are deliberate:
 
     1. No explicit block-scale / shared-exponent step here. HiFloat4's hierarchical

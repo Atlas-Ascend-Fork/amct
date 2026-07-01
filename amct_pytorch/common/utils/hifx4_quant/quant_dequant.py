@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Pure-PyTorch hifx4 quant-dequant simulation, vendored from the HiFloat4 project.
+"""Pure-PyTorch hifx4 quant-dequant simulation.
 
 Only the ``force_py`` path is kept: ``quant_hifx`` (the bit-accurate torch reference) plus a
 trimmed ``quant_dequant_float`` driver that pads the quant dimension to the block size, runs
 the reference, and slices/casts back. The compiled CUDA/CCE kernels and the autograd
-``Function`` wrappers from upstream are intentionally dropped -- amct uses this purely for
-inference-time fake-quant (``@torch.no_grad``), so no speed kernel and no backward is needed.
+``Function`` wrappers are intentionally dropped -- amct uses this purely for inference-time
+fake-quant (``@torch.no_grad``), so no speed kernel and no backward is needed.
 """
 import torch
 import torch.nn.functional as F
@@ -79,8 +79,8 @@ def quant_hifx(x: Tensor, Q: QType, qdim: int) -> Tensor:
 def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32: bool = False, **kwargs) -> Tensor:
     """Fake-quantize ``x`` to the format described by ``Q`` and dequantize back to float.
 
-    ``force_py`` is accepted for API compatibility with upstream but ignored: this vendored
-    copy only ships the pure-python path. ``force_fp32`` upcasts to float32 before the round
+    ``force_py`` is accepted for API compatibility but ignored: only the pure-python path is
+    shipped. ``force_fp32`` upcasts to float32 before the round
     trip (recommended for accuracy), restoring the original dtype on the way out.
     """
     # convert to fp32 if forced
@@ -119,6 +119,6 @@ def _get_torch_func(Q: QType, qdim: int):
     if re.match(r'^hifx[0-9]*$', Q.desc):
         return partial(quant_hifx, Q=Q, qdim=qdim)
     raise ValueError(
-        f"vendored hifx4_quant only implements the 'hifx*' fake-quant path, got '{Q.desc}'. "
+        f"hifx4_quant only implements the 'hifx*' fake-quant path, got '{Q.desc}'. "
         "Add the corresponding QFuncs reference if another format is needed."
     )

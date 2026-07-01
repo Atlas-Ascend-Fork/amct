@@ -14,15 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Vendored HiFloat4 (hifx4) fake-quantization simulation.
+"""HiFloat4 (hifx4) fake-quantization simulation (pure PyTorch).
 
-This is the pure-PyTorch ("force_py") path of the HiFloat4 reference project, vendored
-into amct so that the HiFloat4 *cast* algorithm can simulate 4-bit quant-dequant without
-compiling any CUDA / Ascend CCE kernels. The math is identical to the compiled kernel
-(the upstream project asserts the two paths match to zero difference); the compiled kernel
-is only a speed optimization and is intentionally NOT vendored here.
+The pure-PyTorch ("force_py") path so the HiFloat4 *cast* algorithm can simulate 4-bit
+quant-dequant without compiling any CUDA / Ascend CCE kernels. The math matches the compiled
+kernel to zero difference; the compiled kernel is only a speed optimization and is not included
+here.
 
-Public API mirrors the upstream `quant_cy` package:
+Public API:
     from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
     w_sim = quant_dequant_float(weight, QType('hifx4').dim(-1), force_py=True, force_fp32=True)
 """
