@@ -202,9 +202,8 @@ class BaseModel(metaclass=ABCMeta):
     def build_empty_quant_block(self, layer_idx):
         """Build an empty quant block without loading actual weights.
 
-        Used by deploy --only_config, tensor-mode ignore list collection,
-        get_quant_weight_specs, and other scenarios that only need module
-        structure without actual weights.
+        Used by tensor-mode ignore list collection, get_quant_weight_specs,
+        and other scenarios that only need module structure without actual weights.
         """
         with init_empty_weights():
             decoder_layer = self.cls(self.config, layer_idx)
