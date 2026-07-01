@@ -86,8 +86,34 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 
 > **Windows**：`settings.json`/`opencode.json` 为真实文件，客户端可正常启动。内容目录（skills/agents/hooks/docs）为 symlink，`core.symlinks=false` 下 clone 后退化为文本文件：
 > - **OpenCode**：原生将 `.agents/skills/` 列为发现路径，无需 symlink，clone 即可用 ✅
-> - **Claude Code**：只扫 `.claude/skills/`，symlink 断裂后 skills 全部失效 ❌ → 修复：开启 [Windows 开发者模式](https://learn.microsoft.com/zh-cn/windows/apps/get-started/enable-your-device-for-development)（或以管理员权限运行终端），再执行 `git config core.symlinks true && git checkout HEAD -- .claude` 重建 symlink
-> - 如需同时修复 `.opencode/` 下的 symlink，将上述 checkout 命令替换为 `git checkout HEAD -- .claude .opencode`
+> - **Claude Code**：只扫 `.claude/skills/`，symlink 断裂后 skills 全部失效 ❌ → 修复如下：
+
+**修复方式（任选其一）**：
+
+1. **管理员终端**（推荐）：右键 PowerShell / Git Bash，选「以管理员身份运行」，然后执行：
+   ```bash
+   git config core.symlinks true
+   rm -rf .claude
+   git checkout HEAD -- .claude
+   ```
+
+2. **开启开发者模式**（一劳永逸，之后普通终端也可用）：打开「设置 → 系统 → 开发者选项 → 开发人员模式」，然后执行：
+   ```bash
+   git config core.symlinks true
+   rm -rf .claude
+   git checkout HEAD -- .claude
+   ```
+
+3. **手动建立目录联接**（无需管理员，但 git 不识别 junction，git 操作中可能报 warning）：
+   ```cmd
+   rmdir .claude\skills .claude\agents .claude\docs .claude\hooks
+   mklink /J .claude\skills .agents\skills
+   mklink /J .claude\agents .agents\agents
+   mklink /J .claude\docs .agents\docs
+   mklink /J .claude\hooks .agents\hooks
+   ```
+
+如需同时修复 `.opencode/`，在上述 git checkout 命令中将 `-- .claude` 替换为 `-- .claude .opencode`；或手动对 `.opencode/` 重复执行 mklink /J 命令。
 
 ## 面向 agent 集成
 
