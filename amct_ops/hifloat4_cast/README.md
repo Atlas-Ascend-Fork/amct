@@ -6,7 +6,7 @@ FP16/BF16 → HiFloat4 → FP16/BF16 仿真（fake-quant），面向昇腾 NPU�
 （**不真打包 4-bit**），是 `amct_pytorch` 中 `hifloat4_fake_quant` 的 NPU 后端，用于离线精度 / PPL 评估。
 
 与 `hifloat8_cast` 不同，**没有查找表（LUT）**：scale 是块内归约（算术），S1P2 只有 8 档幅值，
-LUT 无收益（见设计文档 P1.7）。
+LUT 无收益。
 
 ## 接口
 
@@ -23,26 +23,25 @@ y = torch.ops.amct.hifloat4_fake_quant(x, -1)  # 等价
 
 host 会把 `qdim` 移到最后一维、补零到 64 的整数倍（补零不影响块内 max）、调 kernel，再切回、还原维序。
 
-## 正确性（P1.6 —— 验收红线）
+## 正确性（验收红线）
 
-kernel 逐步复刻纯 python 参考，逐元素对齐到 ~0 误差。在设备上对拍随包发布的参考实现：
+kernel 逐步复刻纯 python 参考，逐元素对齐到 ~0 误差。在设备上对拍 amct 的 CPU 参考：
 
 ```python
 import torch
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
-from amct_ops.hifloat4_cast.reference import hifloat4_reference
+from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
 
 x = torch.randn(4, 512, dtype=torch.bfloat16)
-y_ref = hifloat4_reference(x.float()).to(x.dtype)      # CPU oracle
-y_npu = hifloat4_fake_quant(x.npu()).cpu()             # AscendC kernel
+y_ref = quant_dequant_float(x, QType('hifx4').dim(-1), force_py=True, force_fp32=True)  # CPU 参考
+y_npu = hifloat4_fake_quant(x.npu()).cpu()                                              # AscendC kernel
 assert (y_ref.float() - y_npu.float()).abs().max() < 1e-6
 # 零值不能出 NaN
 z = torch.zeros(1, 64, dtype=torch.bfloat16)
 assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
 ```
 
-`tests/amct_ops/test_hifloat4_cast.py` 在 CPU 上对拍 `reference.py` 与 `quant_hifx`
-（任意机器可跑），并在有 NPU 时对拍 kernel。
+`tests/amct_ops/test_hifloat4_cast.py` 在有 NPU 时对拍 kernel 与该 CPU 参考。
 
 ## 构建
 
@@ -56,7 +55,6 @@ pip install amct_ops/dist/amct_ops-*.whl
 
 ## 状态 / 说明
 
-- 仅仿真（阶段 2A）。真 4-bit 打包 codec + 低比特 matmul（阶段 2C）为后续工作。
-- kernel 在 fp32 下计算，并在参考的舍入点复刻 bf16 舍入。为不依赖 libm，标量浮点位运算辅助
-  （`Pow2i` / `FloorLog2Pos` / `Bf16Round`）自行实现；若某个设备数学 intrinsic 行为不同，
-  只调这些 helper 并对拍 `reference.py` 即可。
+- 仅仿真。真 4-bit 打包 codec + 低比特 matmul 为后续工作。
+- kernel 在 fp32 下做块内归约与量化（bf16 / E6M2 舍入用硬件 `vconv`）。内核体由 `__DAV_C220_VEC__`
+  守卫（A2/A3，dav-2201 = C220，覆盖 910B/910C）；其它架构为空实现，需在目标 NPU 上验证。

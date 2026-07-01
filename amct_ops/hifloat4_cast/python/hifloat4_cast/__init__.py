@@ -23,9 +23,6 @@ Usage:
     from amct_ops.hifloat4_cast import hifloat4_fake_quant
     y = hifloat4_fake_quant(x)                       # FP16/BF16 -> HiF4 -> FP16/BF16
     y = torch.ops.amct.hifloat4_fake_quant(x, -1)    # equivalent
-
-The pure-python correctness oracle is available as:
-    from amct_ops.hifloat4_cast.reference import hifloat4_reference
 """
 __all__ = [
     'hifloat4_fake_quant',
