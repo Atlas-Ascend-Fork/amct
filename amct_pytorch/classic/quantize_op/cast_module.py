@@ -20,8 +20,7 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import calculate_hifloat8_weight_scale
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
-from amct_pytorch.common.utils.quant_util import quant_dequant_weight, hifloat8_fake_quant, hifloat4_fake_quant
-from amct_pytorch.common.utils.vars import HIFLOAT4
+from amct_pytorch.common.utils.quant_util import quant_dequant_weight, hifloat8_fake_quant
 from amct_pytorch.common.utils.log import LOGGER
 
 
@@ -76,70 +75,3 @@ class HIF8CastQuant(BaseQuantizeModule):
             # mirror it with a scaleless hif8 round trip so the amct_ops fallback applies here too.
             dq_x = hifloat8_fake_quant(inputs).to(inputs.dtype)
         return F.linear(dq_x, self.cached_dq_w, self.bias)
-
-
-class HIF4CastQuant(BaseQuantizeModule):
-    """
-    Function: fake-quant operator for the HiFloat4 (hifx4) cast algorithm (no calibration).
-
-    HiFloat4 has no native torch_npu dtype, so weights and (optionally) activations are
-    simulated with the vendored hifx4 quant-dequant kernel (pure-python, 64-element block
-    scaling). Two structural differences from HIF8CastQuant:
-      1. The hifx4 format computes its own per-block scale internally, so there is no
-         explicit weight scale to precompute/store (no calculate_*_weight_scale, no scale_w).
-      2. There is no native deploy op yet (the NPU low-bit matmul is future work), so this
-         module is meant to be run directly for off-NPU simulation/accuracy eval -- i.e. run
-         the *quantized* model without calling amct.convert(). See HIFP4_CAST_CFG.
-    """
-    def __init__(self, ori_module, layer_name, quant_config):
-        """
-        Function: init objective.
-        Args:
-            ori_module: torch module. Quantized module instance.
-            layer_name: str. Original module's name.
-            quant_config: dict. Per-layer quantization config.
-        """
-        super().__init__(ori_module, layer_name, quant_config)
-        self.weight = ori_module.weight
-        self.bias = ori_module.bias
-        self.layer_name = layer_name
-        self.quant_config = quant_config
-        self.wts_type = quant_config.get('weights_cfg').get('quant_type')
-
-        self.weight_compress_only = True
-        if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-                quant_config.get('inputs_cfg').get('enable_quant') is True:
-            self.weight_compress_only = False
-
-        # Weight fake-quantized along the reduction dim (in_features), matching HiFloat4 QLinear.
-        # The hifx4 kernel derives its own block scale, so the strategy field only selects the
-        # quant dimension conceptually; per-channel vs per-tensor both reduce to per-64-block here.
-        self.cached_dq_w = hifloat4_fake_quant(self.weight.data)
-        LOGGER.logd("Calculate cast quant params of layer '{}' success!".format(self.layer_name), 'HIF4CastQuant')
-
-    @torch.no_grad()
-    def forward(self, inputs):
-        """Fake-quant forward: hifx4-dequantized weight matmul, optional activation round trip."""
-        check_linear_input_dim(inputs)
-        inputs = inputs.to(self.weight.device)
-        if self.weight_compress_only:
-            dq_x = inputs
-        else:
-            dq_x = hifloat4_fake_quant(inputs).to(inputs.dtype)
-        return F.linear(dq_x, self.cached_dq_w, self.bias)
-
-
-class CastQuant:
-    """Dtype dispatcher for the ``cast`` algorithm on Linear layers.
-
-    The algorithm registry keys a quant op by (algo_name, original_module_class) only, so a
-    single ('cast', 'Linear') entry must serve both HiFloat8 and HiFloat4. This thin factory
-    inspects the configured weight dtype and constructs the matching concrete module. It is
-    registered as the cast/Linear quant op; the concrete HIF8CastQuant -> NpuHIF8CastLinear
-    deploy mapping is preserved separately so HiFloat8 convert() is unaffected.
-    """
-    def __new__(cls, ori_module, layer_name, quant_config):
-        wts_type = quant_config.get('weights_cfg', {}).get('quant_type')
-        if wts_type == HIFLOAT4:
-            return HIF4CastQuant(ori_module, layer_name, quant_config)
-        return HIF8CastQuant(ori_module, layer_name, quant_config)

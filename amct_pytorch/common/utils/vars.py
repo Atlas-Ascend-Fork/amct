@@ -16,9 +16,8 @@
 # ----------------------------------------------------------------------------
 import torch
 
-SUPPORT_WEIGHT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'hifloat4', 'float8_e4m3fn', 'mxfp4_e2m1', 'float4_e2m1',
-                              'mxfp8_e4m3fn']
-SUPPORT_INPUT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'hifloat4', 'float8_e4m3fn', 'mxfp8_e4m3fn']
+SUPPORT_WEIGHT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp4_e2m1', 'float4_e2m1', 'mxfp8_e4m3fn']
+SUPPORT_INPUT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp8_e4m3fn']
 SUPPORT_QUANT_STRATEGY_WEIGHT = ['tensor', 'channel', 'group']
 SUPPORT_QUANT_STRATEGY_INPUT = ['tensor', 'token']
 SUPPORT_QUANT_DYNAMIC_INPUT = ['token']
@@ -33,11 +32,6 @@ INT32_MIN = torch.iinfo(torch.int32).min
 INT8 = 'int8'
 INT4 = 'int4'
 HIFLOAT8 = 'hifloat8'
-# HiFloat4 (hifx4) 4-bit direct-cast format. Unlike hifloat8 there is no native
-# torch_npu.hifloat4 dtype, so it is realized through the vendored hifx4 fake-quant
-# simulation (see amct_pytorch/common/utils/hifx4_quant/). It is a distinct format
-# from float4_e2m1 and must not be aliased to it.
-HIFLOAT4 = 'hifloat4'
 FLOAT8_E4M3FN = 'float8_e4m3fn'
 FLOAT4_E2M1 = 'float4_e2m1'
 MXFP8_E4M3FN = 'mxfp8_e4m3fn'
