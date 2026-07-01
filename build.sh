@@ -138,12 +138,19 @@ checkopts() {
 
 build() {
   echo "create build directory and build amct";
-  if [ -d "${BUILD_PATH}" ]
-  then
-    echo "${BUILD_PATH} exist, delete old path"
-    rm -rf ${BUILD_PATH}
+  local cache="${BUILD_PATH}/CMakeCache.txt"
+  if [ -f "${cache}" ]; then
+    local cached_type cached_exp cached_asan
+    cached_type=$(grep -oP '(?<=CMAKE_BUILD_TYPE:STRING=).*' "${cache}" 2>/dev/null || true)
+    cached_exp=$(grep -oP '(?<=ENABLE_EXPERIMENTAL:UNINITIALIZED=).*' "${cache}" 2>/dev/null || true)
+    cached_asan=$(grep -oP '(?<=ENABLE_ASAN:UNINITIALIZED=).*' "${cache}" 2>/dev/null || true)
+    if [ "${cached_type}" != "${BUILD_TYPE}" ] \
+    || [ "${cached_exp}" != "${ENABLE_EXPERIMENTAL:-}" ] \
+    || [ "${cached_asan}" != "${ENABLE_ASAN:-}" ]; then
+      echo "Build config changed, cleaning build cache..."
+      rm -rf "${BUILD_PATH}"
+    fi
   fi
-  echo "create path ${BUILD_PATH}"
   mkdir -p ${BUILD_PATH}
 
   cd "${BUILD_PATH}"
