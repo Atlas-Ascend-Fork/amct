@@ -86,7 +86,8 @@ clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/arc
 
 > **Windows**：`settings.json`/`opencode.json` 为真实文件，客户端可正常启动。内容目录（skills/agents/hooks/docs）为 symlink，`core.symlinks=false` 下 clone 后退化为文本文件：
 > - **OpenCode**：原生将 `.agents/skills/` 列为发现路径，无需 symlink，clone 即可用 ✅
-> - **Claude Code**：只扫 `.claude/skills/`，symlink 断裂后 skills 全部失效 ❌ → 修复：开启 [Windows 开发者模式](https://learn.microsoft.com/zh-cn/windows/apps/get-started/enable-your-device-for-development)，再执行 `git config core.symlinks true && git checkout HEAD -- .claude` 重建 symlink
+> - **Claude Code**：只扫 `.claude/skills/`，symlink 断裂后 skills 全部失效 ❌ → 修复：开启 [Windows 开发者模式](https://learn.microsoft.com/zh-cn/windows/apps/get-started/enable-your-device-for-development)（或以管理员权限运行终端），再执行 `git config core.symlinks true && git checkout HEAD -- .claude` 重建 symlink
+> - 如需同时修复 `.opencode/` 下的 symlink，将上述 checkout 命令替换为 `git checkout HEAD -- .claude .opencode`
 
 ## 面向 agent 集成
 
