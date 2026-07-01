@@ -21,10 +21,10 @@
 
 namespace AscendKernel {
 
-// FP -> HiFloat4 -> FP fake-quant. `input` must be contiguous FP16/BF16 with numel a
-// multiple of 64; every consecutive 64 elements are one shared-scale block. Returns a
-// tensor of the same shape/dtype. Block layout (permute/pad to make the quant dim last
-// and 64-aligned) is handled by the python wrapper.
-at::Tensor Hifloat4CastTorch(const at::Tensor &input);
+// FP -> HiFloat4 -> FP fake-quant. `input` is FP16/BF16 of any shape; 64-element shared-scale
+// blocks are formed along `qdim`. The host moves qdim to the last axis, pads it to a multiple
+// of 64, runs the flat block kernel, then slices/permutes back. Returns a tensor of the same
+// shape/dtype as `input`.
+at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim);
 
 }  // namespace AscendKernel

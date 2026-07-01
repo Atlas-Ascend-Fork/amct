@@ -36,6 +36,14 @@
  * dtype. Correctness-first: a scalar inner loop is fine because MTE dominates and the format
  * is a simulation aid, not a perf path.
  *
+ * UB budget (tileLength = T elements, sizeof(T) = 2 for fp16/bf16):
+ *   inQueue  : T * 2B      (input tile)
+ *   outQueue : T * 2B      (output tile)
+ *   f32Buf   : T * 4B      (fp32 work buffer)
+ *   total    : T * 8B      + small per-block stack arrays (blk[64] + max/scale[16] fp32)
+ * Single-buffered (TQue depth = 1): the inner loop is scalar, so double-buffering the queues
+ * would not overlap with MTE. Host aligns T DOWN to a multiple of 64 (a block is never split).
+ *
  * NOTE (must validate on device): the float bit-tricks below (Pow2i / FloorLog2Pos / Bf16Round)
  * assume IEEE-754 binary32 and are used instead of libm (floorf/log2f/exp2f) which is not
  * guaranteed on the AI Core scalar unit. Cross-check against reference.py on the 910C; if any

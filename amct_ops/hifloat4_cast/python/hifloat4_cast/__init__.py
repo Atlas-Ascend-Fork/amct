@@ -17,13 +17,12 @@
 """
 HiFloat4 (hifx4) FP->HiF4->FP fake-quant operator for Ascend NPU.
 
-Registers torch.ops.amct.hifloat4_cast (flat 64-block kernel) and exposes the
-layout-aware wrapper hifloat4_fake_quant(x, qdim=-1).
+Registers torch.ops.amct.hifloat4_fake_quant and exposes it as hifloat4_fake_quant(x, qdim=-1).
 
 Usage:
     from amct_ops.hifloat4_cast import hifloat4_fake_quant
-    y = hifloat4_fake_quant(x)                 # FP16/BF16 -> HiF4 -> FP16/BF16
-    y = torch.ops.amct.hifloat4_cast(flat)     # low-level: flat buffer, numel % 64 == 0
+    y = hifloat4_fake_quant(x)                       # FP16/BF16 -> HiF4 -> FP16/BF16
+    y = torch.ops.amct.hifloat4_fake_quant(x, -1)    # equivalent
 
 The pure-python correctness oracle is available as:
     from amct_ops.hifloat4_cast.reference import hifloat4_reference
