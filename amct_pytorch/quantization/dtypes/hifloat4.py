@@ -41,7 +41,7 @@ class QuantDequantHiF4(torch.nn.Module):
     fixed round-half-up-to-quarter rule, so it is accepted for interface compatibility
     and ignored.
 
-    Real 4-bit packing (``deploy`` / ``export_deploy``) is future work (stage 2C); only
+    Real 4-bit packing (``deploy`` / ``export_deploy``) is future work; only
     FP->HiF4->FP simulation is available today, which is what PPL/accuracy evaluation needs.
     """
 
@@ -60,11 +60,11 @@ class QuantDequantHiF4(torch.nn.Module):
 
     def deploy(self, x: Tensor, qdim: int = -1):
         raise NotImplementedError(
-            "HiFloat4 real 4-bit packing (deploy) is future work (stage 2C); "
+            "HiFloat4 real 4-bit packing (deploy) is future work; "
             "only the fake-quant simulation path is available."
         )
 
     def export_deploy(self, x: Tensor):
         raise NotImplementedError(
-            "HiFloat4 export_deploy (qweight/weight_scale packing) is future work (stage 2C)."
+            "HiFloat4 export_deploy (qweight/weight_scale packing) is future work."
         )
