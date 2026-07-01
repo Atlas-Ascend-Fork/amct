@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <algorithm>
+#include <vector>
 
 #include "acl/acl.h"
 #include "ops.h"
@@ -71,7 +72,7 @@ uint32_t ComputeMaxTileLength(uint32_t ubBytes)
 HiFloat4CastTilingData BuildTilingData(int64_t totalElements, uint32_t dtypeFlag)
 {
     TORCH_CHECK(totalElements > 0 && totalElements % HIF4_BLOCK_SIZE == 0,
-        "hifloat4_cast: numel must be a positive multiple of 64, got ", totalElements);
+        "hifloat4_cast: element count after padding must be a positive multiple of 64, got ", totalElements);
 
     uint32_t ubBytes = GetUbSizeBytes();
     uint32_t maxTileLen = ComputeMaxTileLength(ubBytes);
@@ -106,28 +107,52 @@ at::Tensor UploadTilingToDevice(const HiFloat4CastTilingData &tilingHost, const 
 
 namespace AscendKernel {
 
-at::Tensor Hifloat4CastTorch(const at::Tensor &input)
+// dtype/device are validated at the dispatcher entry (register.cpp). Here we own the layout:
+// move qdim to the last axis (so a 64-block along qdim is contiguous), zero-pad to a multiple
+// of 64, launch the flat block kernel, then slice off the pad and restore the dim order.
+at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
 {
-    TORCH_CHECK(input.device().type() == c10::DeviceType::PrivateUse1, "input must be on NPU device");
-    auto dtype = input.scalar_type();
-    TORCH_CHECK(dtype == at::kHalf || dtype == at::kBFloat16,
-        "hifloat4_cast: expected float16 or bfloat16, got ", input.dtype());
+    int64_t nd = input.dim();
+    TORCH_CHECK(nd > 0, "hifloat4_fake_quant: input must have at least one dimension");
+    int64_t qd = qdim >= 0 ? qdim : qdim + nd;
+    TORCH_CHECK(qd >= 0 && qd < nd, "hifloat4_fake_quant: qdim ", qdim, " out of range for ", nd, "-D input");
 
-    auto inputContiguous = input.contiguous();
-    int64_t totalElements = inputContiguous.numel();
+    std::vector<int64_t> perm;
+    perm.reserve(nd);
+    for (int64_t i = 0; i < nd; i++) {
+        if (i != qd) {
+            perm.push_back(i);
+        }
+    }
+    perm.push_back(qd);
+    at::Tensor xp = input.permute(perm).contiguous();
 
-    uint32_t dtypeFlag = (dtype == at::kBFloat16) ? HIF4_BF16 : HIF4_FP16;
-    at::Tensor output = at::empty(inputContiguous.sizes(), inputContiguous.options());
+    int64_t channels = xp.size(-1);
+    int64_t pad = (HIF4_BLOCK_SIZE - channels % HIF4_BLOCK_SIZE) % HIF4_BLOCK_SIZE;
+    if (pad > 0) {
+        xp = at::constant_pad_nd(xp, {0, pad}, 0);  // zero-pad -> padded lanes contribute 0 to block max
+    }
+
+    int64_t totalElements = xp.numel();
+    uint32_t dtypeFlag = (input.scalar_type() == at::kBFloat16) ? HIF4_BF16 : HIF4_FP16;
+    at::Tensor output = at::empty(xp.sizes(), xp.options());
 
     HiFloat4CastTilingData tilingHost = BuildTilingData(totalElements, dtypeFlag);
     at::Tensor tilingDevice = UploadTilingToDevice(tilingHost, input);
 
     auto aclStream = c10_npu::getCurrentNPUStream().stream(true);
     hifloat4_cast_kernel(tilingHost.blockNum, nullptr, aclStream,
-        reinterpret_cast<uint8_t *>(inputContiguous.data_ptr()), reinterpret_cast<uint8_t *>(output.data_ptr()),
+        reinterpret_cast<uint8_t *>(xp.data_ptr()), reinterpret_cast<uint8_t *>(output.data_ptr()),
         reinterpret_cast<uint8_t *>(tilingDevice.data_ptr()));
 
-    return output;
+    if (pad > 0) {
+        output = output.narrow(-1, 0, channels);
+    }
+    std::vector<int64_t> inv(nd);
+    for (int64_t newPos = 0; newPos < nd; newPos++) {
+        inv[perm[newPos]] = newPos;
+    }
+    return output.permute(inv).contiguous();
 }
 
 }  // namespace AscendKernel

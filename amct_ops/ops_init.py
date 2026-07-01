@@ -41,7 +41,7 @@ amct_ops.hifloat4_cast
     hifloat4_fake_quant(x, qdim=-1)          FP16/BF16 → HiF4 → FP16/BF16 (simulation)
 
     Also accessible as:
-        torch.ops.amct.hifloat4_cast          # low-level flat kernel (numel % 64 == 0)
+        torch.ops.amct.hifloat4_fake_quant(x, qdim)
 
 Quick start
 -----------
