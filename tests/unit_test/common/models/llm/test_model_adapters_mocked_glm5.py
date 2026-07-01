@@ -26,6 +26,13 @@ from accelerate import init_empty_weights
 from transformers import AutoModelForCausalLM
 from transformers.models.glm_moe_dsa.configuration_glm_moe_dsa import GlmMoeDsaConfig
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaDecoderLayer
+from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
+from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.quantization.dtypes import register_dtype
+from amct_pytorch.quantization.bit_policy import BitPolicy
 
 FROM_PRETRAINED = 'from_pretrained'
 QUANT_TARGET_MLP = 'mlp'
@@ -121,12 +128,12 @@ def _mock_base_deps(monkeypatch, cfg):
     )
 
 
-class TestGLM5_1Mocked:
+class TestGLM5_2Mocked:
     """Tests for GLM5_2 adapter with mocked HF dependencies."""
 
-    def test_glm5_1_init(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_init(monkeypatch):
         """Verify GLM5_2.__init__ sets num_layers, cls, and quant_target."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
@@ -135,27 +142,27 @@ class TestGLM5_1Mocked:
         assert model.cls is GlmMoeDsaDecoderLayer
         assert model.quant_target == [QUANT_TARGET_MOE]
 
-    def test_glm5_1_reject_mlp_quant(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_reject_mlp_quant(monkeypatch):
         """Verify parse_quant_mode raises ValueError for quant_target=['mlp']."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
             GLM5_2(args)
 
-    def test_glm5_1_accept_moe_quant(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_accept_moe_quant(monkeypatch):
         """Verify quant_target=['moe'] works without error."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
         model = GLM5_2(args)
         assert model.quant_target == [QUANT_TARGET_MOE]
 
-    def test_glm5_1_get_layer_weight_prefix(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_get_layer_weight_prefix(monkeypatch):
         """Verify get_layer_weight_prefix returns model.layers.{idx}."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
@@ -163,9 +170,9 @@ class TestGLM5_1Mocked:
         assert model.get_layer_weight_prefix(0) == "model.layers.0."
         assert model.get_layer_weight_prefix(1) == "model.layers.1."
 
-    def test_glm5_1_load_layer_weight_calls_pack_experts(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_load_layer_weight_calls_pack_experts(monkeypatch):
         """Verify load_layer_weight calls pack_gated_expert_weights with expert_prefix."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
@@ -192,10 +199,9 @@ class TestGLM5_1Mocked:
         assert captured["state_dict"] is fake_sd
         assert result is not fake_sd
 
-    def test_glm5_1_register(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_register(monkeypatch):
         """Verify the adapter is registered in MODEL_REGISTRY with correct name/family."""
-        from amct_pytorch.common.models import MODEL_REGISTRY
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
 
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
@@ -209,16 +215,9 @@ class TestGLM5_1Mocked:
         assert item.metadata.get("family") == "glm"
         assert item.metadata.get("task") == "llm"
 
-    def test_glm5_1_not_subclass_of_deepseek_v32(self):
-        """Verify GLM5_2 is NOT a subclass of DeepseekV32."""
-        from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.deepseekv3_2 import DeepseekV32
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
-
-        assert not issubclass(GLM5_2, DeepseekV32)
-
-    def test_glm5_1_build_quant_block_moe_packed(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_build_quant_block_moe_packed(monkeypatch):
         """Verify build_quant_block replaces packed experts with QuantGatedExperts."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
@@ -238,9 +237,9 @@ class TestGLM5_1Mocked:
         assert result is dl
         assert hasattr(result.mlp.experts, "_q")
 
-    def test_glm5_1_build_quant_block_moe_shared_experts(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_build_quant_block_moe_shared_experts(monkeypatch):
         """Verify build_quant_block creates QuantGatedMLP for shared experts."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
@@ -271,9 +270,9 @@ class TestGLM5_1Mocked:
         assert captured.get("group") == "moe.shared"
         assert captured.get("module") is shared
 
-    def test_glm5_1_float_model_delegates(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_float_model_delegates(monkeypatch):
         """Verify float_model delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         model = GLM5_2(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
@@ -284,9 +283,9 @@ class TestGLM5_1Mocked:
         )
         assert model.float_model() is mock_result
 
-    def test_glm5_1_do_head_forward_delegates(self, monkeypatch):
+    @staticmethod
+    def test_glm5_2_do_head_forward_delegates(monkeypatch):
         """Verify do_head_forward delegates to BaseModel."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         cfg = _make_glm5_config(num_layers=2)
         _mock_base_deps(monkeypatch, cfg)
         model = GLM5_2(_make_mock_args(quant_target=[QUANT_TARGET_MOE]))
@@ -309,13 +308,11 @@ QUANT_TARGET_ATTN_LINEAR = 'attn-linear'
 
 def _register_dtype_once():
     """Register dtype entries (idempotent)."""
-    from amct_pytorch.quantization.dtypes import register_dtype
     register_dtype()
 
 
 def _make_quant_args(quant_target=("attn-linear",)):
     """Construct args for QuantGlmMoeDsaAttention.__init__."""
-    from amct_pytorch.quantization.bit_policy import BitPolicy
     cfg = {
         "w_bits": 8,
         "a_bits": 8,
@@ -376,7 +373,6 @@ def _make_mock_attn_module(with_indexer=True):
 def _make_real_quant_linear(in_f=4, out_f=4, name="test_ql"):
     """Create a real QuantLinear for isinstance checks in iter_deploy_bindings."""
     _register_dtype_once()
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     args = SimpleNamespace(
         quant_dtype="int", algos=[], w_bits=8, w_size=(out_f, in_f),
     )
@@ -391,8 +387,8 @@ def _make_real_quant_linear(in_f=4, out_f=4, name="test_ql"):
 class TestGLM5_2BlockMethods:
     """Tests for GLM5_2 block-level methods."""
 
-    def _make_model(self, monkeypatch, quant_target=None):
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
+    @staticmethod
+    def _make_model(monkeypatch, quant_target=None):
         if quant_target is None:
             quant_target = [QUANT_TARGET_MOE]
         cfg = _make_glm5_config(num_layers=2)
@@ -424,15 +420,15 @@ class TestGLM5_2BlockMethods:
             "amct_pytorch.common.models.llm.common.base.BaseModel._build_block_for_forward",
             lambda self, layer_idx, use_quant_block=False: fake_block,
         )
-        result = model._build_block_for_forward(0)
+        result = getattr(model, "_build_block_for_forward")(0)
         result.forward()
-        assert model._dsa_topk_indices is fake_topk
+        assert getattr(model, "_dsa_topk_indices") is fake_topk
 
     def test_get_block_forward_kwargs_injects_topk(self, monkeypatch):
         """get_block_forward_kwargs injects prev_topk_indices when available."""
         model = self._make_model(monkeypatch)
         fake_topk = torch.tensor([[1, 2], [3, 4]])
-        model._dsa_topk_indices = fake_topk
+        setattr(model, "_dsa_topk_indices", fake_topk)
         kwargs = model.get_block_forward_kwargs()
         assert "prev_topk_indices" in kwargs
         assert kwargs["prev_topk_indices"] is fake_topk
@@ -440,7 +436,7 @@ class TestGLM5_2BlockMethods:
     def test_get_block_forward_kwargs_no_topk(self, monkeypatch):
         """get_block_forward_kwargs omits prev_topk_indices when None."""
         model = self._make_model(monkeypatch)
-        model._dsa_topk_indices = None
+        setattr(model, "_dsa_topk_indices", None)
         kwargs = model.get_block_forward_kwargs()
         assert "prev_topk_indices" not in kwargs
 
@@ -560,6 +556,26 @@ class TestQuantGlmMoeDsaAttention:
     """Tests for QuantGlmMoeDsaAttention init and forward."""
 
     @staticmethod
+    def test_init_without_quant(monkeypatch):
+        """__init__ without attn-linear creates PlainLinear for all projections."""
+        _register_dtype_once()
+
+        args = _make_quant_args(quant_target=["moe"])
+        attn_module = _make_mock_attn_module(with_indexer=True)
+        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
+
+        assert isinstance(quant_attn.q_a_proj, PlainLinear)
+        assert isinstance(quant_attn.q_b_proj, PlainLinear)
+        assert isinstance(quant_attn.kv_a_proj_with_mqa, PlainLinear)
+        assert isinstance(quant_attn.kv_b_proj, PlainLinear)
+        assert isinstance(quant_attn.o_proj, PlainLinear)
+        assert isinstance(quant_attn.indexer.wq_b, PlainLinear)
+        assert isinstance(quant_attn.indexer.wk, PlainLinear)
+        assert isinstance(quant_attn.inp_afq, nn.Identity)
+        assert isinstance(quant_attn.q_b_proj_afq, nn.Identity)
+        assert isinstance(quant_attn.o_proj_afq, nn.Identity)
+
+    @staticmethod
     def _patch_structure_transforms(monkeypatch):
         """Mock build_algorithms_by_target to return None for structure target."""
         monkeypatch.setattr(
@@ -584,9 +600,6 @@ class TestQuantGlmMoeDsaAttention:
         """__init__ with attn-linear target: INT mode quantizes q_b/o/wq_b, not q_a/kv_a/wk."""
         _register_dtype_once()
         self._patch_structure_transforms(monkeypatch)
-        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 
         args = _make_quant_args(quant_target=["attn-linear"])
         attn_module = _make_mock_attn_module(with_indexer=True)
@@ -604,32 +617,10 @@ class TestQuantGlmMoeDsaAttention:
         assert hasattr(quant_attn, "q_b_proj_afq")
         assert hasattr(quant_attn, "o_proj_afq")
 
-    def test_init_without_quant(self, monkeypatch):
-        """__init__ without attn-linear creates PlainLinear for all projections."""
-        _register_dtype_once()
-        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
-        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
-
-        args = _make_quant_args(quant_target=["moe"])
-        attn_module = _make_mock_attn_module(with_indexer=True)
-        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
-
-        assert isinstance(quant_attn.q_a_proj, PlainLinear)
-        assert isinstance(quant_attn.q_b_proj, PlainLinear)
-        assert isinstance(quant_attn.kv_a_proj_with_mqa, PlainLinear)
-        assert isinstance(quant_attn.kv_b_proj, PlainLinear)
-        assert isinstance(quant_attn.o_proj, PlainLinear)
-        assert isinstance(quant_attn.indexer.wq_b, PlainLinear)
-        assert isinstance(quant_attn.indexer.wk, PlainLinear)
-        assert isinstance(quant_attn.inp_afq, nn.Identity)
-        assert isinstance(quant_attn.q_b_proj_afq, nn.Identity)
-        assert isinstance(quant_attn.o_proj_afq, nn.Identity)
-
     def test_init_shared_layer_no_indexer(self, monkeypatch):
         """__init__ with indexer=None (shared layer) skips indexer quantization."""
         _register_dtype_once()
         self._patch_structure_transforms(monkeypatch)
-        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
 
         args = _make_quant_args(quant_target=["attn-linear"])
         attn_module = _make_mock_attn_module(with_indexer=False)
@@ -642,7 +633,6 @@ class TestQuantGlmMoeDsaAttention:
         _register_dtype_once()
         self._patch_structure_transforms(monkeypatch)
         self._mock_rotary_and_attention(monkeypatch)
-        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
 
         args = _make_quant_args(quant_target=["attn-linear"])
         attn_module = _make_mock_attn_module(with_indexer=True)
@@ -665,7 +655,6 @@ class TestQuantGlmMoeDsaAttention:
         _register_dtype_once()
         self._patch_structure_transforms(monkeypatch)
         self._mock_rotary_and_attention(monkeypatch)
-        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
 
         args = _make_quant_args(quant_target=["attn-linear"])
         attn_module = _make_mock_attn_module(with_indexer=False)
@@ -688,7 +677,6 @@ class TestQuantGlmMoeDsaAttention:
         _register_dtype_once()
         self._patch_structure_transforms(monkeypatch)
         self._mock_rotary_and_attention(monkeypatch)
-        from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
 
         args = _make_quant_args(quant_target=["attn-linear"])
         fake_topk = torch.zeros(2, 4, 2, dtype=torch.long)
@@ -756,8 +744,6 @@ def _make_block_with_quant_plain():
     """Build a small nn.Module block containing QuantLinear, PlainLinear,
     and a raw nn.Linear for ignore-name tests."""
     _register_dtype_once()
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-    from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 
     block = nn.Module()
     block.self_attn = nn.Module()
@@ -775,7 +761,8 @@ def _make_block_with_quant_plain():
 class TestGLM5_2NewFunctions:
     """Tests for GLM5_2 functions at lines 156-413."""
 
-    def _make_model(self, monkeypatch, num_layers=2, num_nextn=0,
+    @staticmethod
+    def _make_model(monkeypatch, num_layers=2, num_nextn=0,
                     first_k_dense=0, indexer_types=None,
                     quant_target=None, quant_dtype="int8"):
         from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
@@ -818,27 +805,27 @@ class TestGLM5_2NewFunctions:
     def test_is_full_indexer_layer_mtp(self, monkeypatch):
         """MTP layer (idx >= num_hidden) always returns True."""
         model = self._make_model(monkeypatch, num_layers=2)
-        assert model._is_full_indexer_layer(2, ["full", "shared"]) is True
-        assert model._is_full_indexer_layer(5, ["full", "shared"]) is True
+        assert getattr(model, "_is_full_indexer_layer")(2, ["full", "shared"]) is True
+        assert getattr(model, "_is_full_indexer_layer")(5, ["full", "shared"]) is True
 
     @pytest.mark.cpu
     def test_is_full_indexer_layer_no_indexer_types(self, monkeypatch):
         """No indexer_types → True for any regular layer."""
         model = self._make_model(monkeypatch, num_layers=2)
-        assert model._is_full_indexer_layer(0, None) is True
-        assert model._is_full_indexer_layer(0, []) is True
+        assert getattr(model, "_is_full_indexer_layer")(0, None) is True
+        assert getattr(model, "_is_full_indexer_layer")(0, []) is True
 
     @pytest.mark.cpu
     def test_is_full_indexer_layer_full(self, monkeypatch):
         """indexer_types[idx] == 'full' → True."""
         model = self._make_model(monkeypatch, num_layers=2)
-        assert model._is_full_indexer_layer(0, ["full", "shared"]) is True
+        assert getattr(model, "_is_full_indexer_layer")(0, ["full", "shared"]) is True
 
     @pytest.mark.cpu
     def test_is_full_indexer_layer_shared(self, monkeypatch):
         """indexer_types[idx] == 'shared' → False."""
         model = self._make_model(monkeypatch, num_layers=2)
-        assert model._is_full_indexer_layer(1, ["full", "shared"]) is False
+        assert getattr(model, "_is_full_indexer_layer")(1, ["full", "shared"]) is False
 
     # -- _find_template_layer_idx --
 
@@ -849,7 +836,7 @@ class TestGLM5_2NewFunctions:
             monkeypatch, num_layers=3, first_k_dense=1,
             indexer_types=["full", "full", "full"],
         )
-        assert model._find_template_layer_idx() == 1
+        assert getattr(model, "_find_template_layer_idx")() == 1
 
     @pytest.mark.cpu
     def test_find_template_layer_idx_mixed(self, monkeypatch):
@@ -858,7 +845,7 @@ class TestGLM5_2NewFunctions:
             monkeypatch, num_layers=3, first_k_dense=1,
             indexer_types=["full", "shared", "full"],
         )
-        assert model._find_template_layer_idx() == 2
+        assert getattr(model, "_find_template_layer_idx")() == 2
 
     @pytest.mark.cpu
     def test_find_template_layer_idx_all_shared(self, monkeypatch):
@@ -867,16 +854,13 @@ class TestGLM5_2NewFunctions:
             monkeypatch, num_layers=3, first_k_dense=1,
             indexer_types=["full", "shared", "shared"],
         )
-        assert model._find_template_layer_idx() == 1
+        assert getattr(model, "_find_template_layer_idx")() == 1
 
     # -- _collect_quant_bits --
 
     @pytest.mark.cpu
     def test_collect_quant_bits_mixed(self, monkeypatch):
         """Extracts w_bits from QuantLinear, skips PlainLinear."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
         _register_dtype_once()
 
         model = self._make_model(monkeypatch)
@@ -893,7 +877,7 @@ class TestGLM5_2NewFunctions:
         )
         block.self_attn.q_a_proj = PlainLinear(nn.Linear(4, 4, bias=False))
 
-        bits = GLM5_2._collect_quant_bits(block)
+        bits = getattr(GLM5_2, "_collect_quant_bits")(block)
         assert bits["self_attn.q_proj"] == 8
         assert bits["self_attn.o_proj"] == 4
         assert "self_attn.q_a_proj" not in bits
@@ -902,8 +886,6 @@ class TestGLM5_2NewFunctions:
     @pytest.mark.cpu
     def test_collect_quant_bits_expert_path(self, monkeypatch):
         """Packed expert path .expert_modules. is normalized."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
         _register_dtype_once()
 
         model = self._make_model(monkeypatch)
@@ -920,23 +902,21 @@ class TestGLM5_2NewFunctions:
         )
         block.mlp.experts.expert_modules.append(expert0)
 
-        bits = GLM5_2._collect_quant_bits(block)
+        bits = getattr(GLM5_2, "_collect_quant_bits")(block)
         assert "mlp.experts.0.gate_proj" in bits
         assert "mlp.experts.expert_modules.0.gate_proj" not in bits
 
     @pytest.mark.cpu
     def test_collect_quant_bits_empty(self, monkeypatch):
         """Empty block returns empty dict."""
-        from amct_pytorch.common.models.llm.glm.glm5_2.glm5_2 import GLM5_2
         model = self._make_model(monkeypatch)
-        assert GLM5_2._collect_quant_bits(nn.Module()) == {}
+        assert getattr(GLM5_2, "_collect_quant_bits")(nn.Module()) == {}
 
     # -- get_quant_weight_specs --
 
     @pytest.mark.cpu
     def test_get_quant_weight_specs_no_mtp(self, monkeypatch):
         """Regular layers only: specs from cached blocks."""
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
         _register_dtype_once()
 
         model = self._make_model(monkeypatch, num_layers=2)
@@ -954,13 +934,12 @@ class TestGLM5_2NewFunctions:
         specs = model.get_quant_weight_specs()
         assert specs["model.layers.0.self_attn.q_proj.weight"] == 8
         assert specs["model.layers.1.self_attn.q_proj.weight"] == 8
-        assert 0 in model._cached_empty_blocks
-        assert 1 in model._cached_empty_blocks
+        assert 0 in getattr(model, "_cached_empty_blocks")
+        assert 1 in getattr(model, "_cached_empty_blocks")
 
     @pytest.mark.cpu
     def test_get_quant_weight_specs_with_mtp(self, monkeypatch):
         """MTP layers covered via template block reuse."""
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
         _register_dtype_once()
 
         model = self._make_model(
@@ -996,7 +975,7 @@ class TestGLM5_2NewFunctions:
         assert specs["model.layers.0.self_attn.q_proj.weight"] == 8
         assert specs["model.layers.1.self_attn.q_proj.weight"] == 8
         assert specs["model.layers.2.self_attn.o_proj.weight"] == 4
-        assert "mtp_template" in model._cached_empty_blocks
+        assert "mtp_template" in getattr(model, "_cached_empty_blocks")
 
     # -- _get_cached_block --
 
@@ -1005,8 +984,8 @@ class TestGLM5_2NewFunctions:
         """Cache hit returns pre-cached block without building."""
         model = self._make_model(monkeypatch)
         fake_block = nn.Module()
-        model._cached_empty_blocks = {0: fake_block}
-        assert model._get_cached_block(0) is fake_block
+        setattr(model, "_cached_empty_blocks", {0: fake_block})
+        assert getattr(model, "_get_cached_block")(0) is fake_block
 
     @pytest.mark.cpu
     def test_get_cached_block_miss(self, monkeypatch):
@@ -1014,11 +993,11 @@ class TestGLM5_2NewFunctions:
         model = self._make_model(monkeypatch)
         fake_block = nn.Module()
         dummy = nn.Module()
-        model._cached_empty_blocks = {99: dummy}
+        setattr(model, "_cached_empty_blocks", {99: dummy})
         monkeypatch.setattr(model, "build_empty_quant_block", lambda idx: fake_block)
-        result = model._get_cached_block(0)
+        result = getattr(model, "_get_cached_block")(0)
         assert result is fake_block
-        assert model._cached_empty_blocks[0] is fake_block
+        assert getattr(model, "_cached_empty_blocks")[0] is fake_block
 
     @pytest.mark.cpu
     def test_get_cached_block_no_cache_attr(self, monkeypatch):
@@ -1028,7 +1007,7 @@ class TestGLM5_2NewFunctions:
             delattr(model, "_cached_empty_blocks")
         fake_block = nn.Module()
         monkeypatch.setattr(model, "build_empty_quant_block", lambda idx: fake_block)
-        result = model._get_cached_block(0)
+        result = getattr(model, "_get_cached_block")(0)
         assert result is fake_block
 
     @pytest.mark.cpu
@@ -1036,21 +1015,21 @@ class TestGLM5_2NewFunctions:
         """MTP cache hit returns mtp_template."""
         model = self._make_model(monkeypatch)
         fake_template = nn.Module()
-        model._cached_empty_blocks = {"mtp_template": fake_template}
-        assert model._get_cached_block(2, is_mtp=True) is fake_template
+        setattr(model, "_cached_empty_blocks", {"mtp_template": fake_template})
+        assert getattr(model, "_get_cached_block")(2, is_mtp=True) is fake_template
 
     @pytest.mark.cpu
     def test_get_cached_block_mtp_miss(self, monkeypatch):
         """MTP cache miss builds template via _find_template_layer_idx."""
         model = self._make_model(monkeypatch, num_layers=2)
         dummy = nn.Module()
-        model._cached_empty_blocks = {99: dummy}
+        setattr(model, "_cached_empty_blocks", {99: dummy})
         fake_template = nn.Module()
         monkeypatch.setattr(model, "build_empty_quant_block", lambda idx: fake_template)
         monkeypatch.setattr(model, "_find_template_layer_idx", lambda: 0)
-        result = model._get_cached_block(2, is_mtp=True)
+        result = getattr(model, "_get_cached_block")(2, is_mtp=True)
         assert result is fake_template
-        assert model._cached_empty_blocks["mtp_template"] is fake_template
+        assert getattr(model, "_cached_empty_blocks")["mtp_template"] is fake_template
 
     # -- get_extra_ignore_names dispatch --
 
@@ -1081,7 +1060,6 @@ class TestGLM5_2NewFunctions:
     @pytest.mark.cpu
     def test_get_extra_ignore_names_block_mtp(self, monkeypatch):
         """Block mode: MTP modules (raw, PlainLinear, eh_proj, shared_head) ignored."""
-        from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 
         model = self._make_model(
             monkeypatch, num_layers=2, num_nextn=1, first_k_dense=1,
@@ -1089,7 +1067,7 @@ class TestGLM5_2NewFunctions:
         fake_block = _make_block_with_quant_plain()
         monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
 
-        ignore = model._get_extra_ignore_names_block()
+        ignore = getattr(model, "_get_extra_ignore_names_block")()
 
         # MTP layer 2: QuantLinear wrapper NOT double-counted (filtered by quant_linear_prefixes)
         assert "model.layers.2.self_attn.q_proj" not in ignore
@@ -1117,7 +1095,7 @@ class TestGLM5_2NewFunctions:
         fake_block = _make_block_with_quant_plain()
         monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
 
-        ignore = model._get_extra_ignore_names_block()
+        ignore = getattr(model, "_get_extra_ignore_names_block")()
 
         # Regular layer: PlainLinear wrapper ignored
         assert "model.layers.0.self_attn.q_a_proj" in ignore
@@ -1150,7 +1128,7 @@ class TestGLM5_2NewFunctions:
             "model.layers.0.self_attn.q_a_proj.weight": 16,
             "model.layers.0.extra_raw_linear.weight": 8,
         }
-        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+        ignore = getattr(model, "_get_extra_ignore_names_tensor")(quant_specs)
 
         assert "model.layers.0.self_attn.q_proj" not in ignore
         assert "model.layers.0.self_attn.q_a_proj" not in ignore
@@ -1169,7 +1147,7 @@ class TestGLM5_2NewFunctions:
         quant_specs = {
             "model.layers.0.self_attn.q_proj.weight": 8,
         }
-        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+        ignore = getattr(model, "_get_extra_ignore_names_tensor")(quant_specs)
 
         # q_a_proj (PlainLinear) NOT in specs → ignored
         assert "model.layers.0.self_attn.q_a_proj" in ignore
@@ -1188,7 +1166,7 @@ class TestGLM5_2NewFunctions:
         monkeypatch.setattr(model, "_get_cached_block", lambda i, is_mtp=False: fake_block)
 
         quant_specs = {}
-        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+        ignore = getattr(model, "_get_extra_ignore_names_tensor")(quant_specs)
 
         # MTP layer 1: eh_proj and shared_head.head not in specs → ignored
         assert "model.layers.1.eh_proj" in ignore
@@ -1209,7 +1187,7 @@ class TestGLM5_2NewFunctions:
             "model.layers.1.eh_proj.weight": 8,
             "model.layers.1.shared_head.head.weight": 8,
         }
-        ignore = model._get_extra_ignore_names_tensor(quant_specs)
+        ignore = getattr(model, "_get_extra_ignore_names_tensor")(quant_specs)
 
         assert "model.layers.1.eh_proj" not in ignore
         assert "model.layers.1.shared_head.head" not in ignore

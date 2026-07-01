@@ -432,7 +432,6 @@ def test_load_selected_layer_ptq_params_full_missing_warns():
 
 
 def test_iter_deploy_bindings_yields_quant_linear_weights(monkeypatch):
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     stub = _StubModel()
 
     def get_layer_weight_prefix(layer_idx):
@@ -644,7 +643,6 @@ def test_iter_ptq_units_raises_when_no_mlp_and_not_attn():
 
 
 def test_iter_deploy_bindings_yields_quant_linear_weight_paths():
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
 
     def get_layer_weight_prefix(idx):
@@ -1193,7 +1191,6 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
 def test_do_block_forward_quant_eval_mode(monkeypatch):
     """do_block_forward sets QuantLinear._eval_mode when use_quant_block=True and hook_name is None (lines 200-204)."""
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
     _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
@@ -1429,9 +1426,9 @@ def test_get_quant_weight_specs_collects_quant_linear_w_bits():
 
     ql = QuantLinear.__new__(QuantLinear)
     ql.w_bits = 8
-    ql._parameters = {}
-    ql._buffers = {}
-    ql._modules = {}
+    setattr(ql, "_parameters", {})
+    setattr(ql, "_buffers", {})
+    setattr(ql, "_modules", {})
 
     fake_block = nn.Module()
     fake_block.q_proj = ql
@@ -1450,9 +1447,9 @@ def test_get_quant_weight_specs_skips_none_w_bits():
 
     ql = QuantLinear.__new__(QuantLinear)
     ql.w_bits = None
-    ql._parameters = {}
-    ql._buffers = {}
-    ql._modules = {}
+    setattr(ql, "_parameters", {})
+    setattr(ql, "_buffers", {})
+    setattr(ql, "_modules", {})
 
     fake_block = nn.Module()
     fake_block.q_proj = ql

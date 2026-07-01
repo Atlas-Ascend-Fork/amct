@@ -34,7 +34,11 @@ from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config, get_quant_ignore_linear_names
+from amct_pytorch.common.models.llm.common.deploy_export import (
+    export_block_deploy,
+    generate_quant_config,
+    get_quant_ignore_linear_names,
+)
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
@@ -346,6 +350,46 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
         }
 
+    def _quantize_weight(self, weight, bits):
+        """Quantize a single weight tensor using cached dtype object."""
+        if bits not in self._quant_objs:
+            self._quant_objs[bits] = DTYPE_REGISTRY.get(self.quant_dtype)(bits=bits)
+        payload = self._quant_objs[bits].export_deploy(weight)
+        return payload["qweight"], payload["weight_scale"], payload.get("weight_bias")
+
+    def _process_quant_file(self, source_file, model_dir, quant_specs,
+                            updated_weight_map, loaded_files):
+        """Process one safetensors file: quantize matching weights, pass through others."""
+        source_path = model_dir / source_file
+        current_state_dict = load_file(source_path, device="cpu")
+        loaded_files[source_file] = current_state_dict
+
+        new_state_dict = {}
+        for weight_name, weight in current_state_dict.items():
+            if weight_name in quant_specs:
+                qx, scale, bias = self._quantize_weight(weight, quant_specs[weight_name])
+                new_state_dict[weight_name] = qx
+                scale_name = weight_name.replace(".weight", ".weight_scale")
+                new_state_dict[scale_name] = scale
+                updated_weight_map[weight_name] = source_file
+                updated_weight_map[scale_name] = source_file
+                if bias is not None:
+                    bias_name = weight_name.replace(".weight", ".weight_bias")
+                    new_state_dict[bias_name] = bias
+                    updated_weight_map[bias_name] = source_file
+            else:
+                new_state_dict[weight_name] = weight
+                updated_weight_map[weight_name] = source_file
+
+        self._write_safetensor_file(source_file, new_state_dict)
+        for weight_name in new_state_dict:
+            updated_weight_map[weight_name] = source_file
+
+        if len(loaded_files) > 2:
+            oldest_file = next(iter(loaded_files))
+            if oldest_file != source_file:
+                del loaded_files[oldest_file]
+
     def _run_tensorwise_quant(self):
         """Tensor-level int/mxfp weight quantization without forward pass.
 
@@ -361,48 +405,16 @@ class LlmDeployWorkflow:
             weights_by_file[file_name].append(weight_name)
 
         quant_specs = self.pipeline.get_quant_weight_specs()
-
-        quant_objs = {}
-
-        def quantize_fn(weight, bits):
-            if bits not in quant_objs:
-                quant_objs[bits] = DTYPE_REGISTRY.get(self.quant_dtype)(bits=bits)
-            payload = quant_objs[bits].export_deploy(weight)
-            return payload["qweight"], payload["weight_scale"], payload.get("weight_bias")
+        self._quant_objs = {}
 
         updated_weight_map = {}
         model_dir = Path(self.model_path)
         loaded_files = {}
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
-            source_path = model_dir / source_file
-            current_state_dict = load_file(source_path, device="cpu")
-            loaded_files[source_file] = current_state_dict
-
-            new_state_dict = {}
-            for weight_name, weight in current_state_dict.items():
-                if weight_name in quant_specs:
-                    qx, scale, bias = quantize_fn(weight, quant_specs[weight_name])
-                    new_state_dict[weight_name] = qx
-                    scale_name = weight_name.replace(".weight", ".weight_scale")
-                    new_state_dict[scale_name] = scale
-                    updated_weight_map[weight_name] = source_file
-                    updated_weight_map[scale_name] = source_file
-                    if bias is not None:
-                        bias_name = weight_name.replace(".weight", ".weight_bias")
-                        new_state_dict[bias_name] = bias
-                        updated_weight_map[bias_name] = source_file
-                else:
-                    new_state_dict[weight_name] = weight
-                    updated_weight_map[weight_name] = source_file
-
-            self._write_safetensor_file(source_file, new_state_dict)
-            for weight_name in new_state_dict:
-                updated_weight_map[weight_name] = source_file
-
-            if len(loaded_files) > 2:
-                oldest_file = next(iter(loaded_files))
-                if oldest_file != source_file:
-                    del loaded_files[oldest_file]
+            self._process_quant_file(
+                source_file, model_dir, quant_specs,
+                updated_weight_map, loaded_files,
+            )
 
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
 

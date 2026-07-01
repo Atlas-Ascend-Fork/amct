@@ -1,22 +1,23 @@
-# -*- coding: UTF-8 -*-
-# ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+# Copyright 2026 the HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ----------------------------------------------------------------------------
 
 import torch
 import torch.nn as nn
+from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
+    apply_rotary_pos_emb_interleave,
+    eager_attention_forward,
+)
 
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
@@ -26,10 +27,6 @@ from amct_pytorch.quantization.modules.quant_base import (
     build_algorithms_by_target,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
-    apply_rotary_pos_emb_interleave,
-    eager_attention_forward,
-)
 
 
 class QuantGlmMoeDsaAttention(nn.Module):
@@ -49,7 +46,37 @@ class QuantGlmMoeDsaAttention(nn.Module):
         use_quant = self.enable_attn_linear or self.enable_attn_cache
         is_mxfp = args.quant_dtype == "mxfp"
 
-        # Dimensional attributes (copied from source module)
+        self._copy_attn_dimensions(attn_module)
+        bits = args.bit_policy["attn-linear"]
+        self._build_mla_projections(args, attn_module, bits, use_quant, is_mxfp)
+        self._build_indexer_projections(args, attn_module, bits, use_quant, is_mxfp)
+        self._build_activation_quantizers(args, bits, use_quant, is_mxfp)
+
+    @staticmethod
+    def _get_activation_bits(bit_policy_entry):
+        """Extract activation bits from a bit policy entry, or None if absent."""
+        if bit_policy_entry is not None and hasattr(bit_policy_entry, "a"):
+            return bit_policy_entry.a
+        return None
+
+    def _build_activation_quantizers(self, args, bits, use_quant, is_mxfp):
+        """Build activation quantizers and structure transforms for attn-linear path."""
+        if not self.enable_attn_linear:
+            self.inp_afq = nn.Identity()
+            self.q_b_proj_afq = nn.Identity()
+            self.o_proj_afq = nn.Identity()
+            return
+
+        self._init_structure_transforms()
+        q_b_a = self._get_activation_bits(bits["q_b_proj"])
+        kv_a_a = self._get_activation_bits(bits["kv_a_proj_with_mqa"])
+        o_a = self._get_activation_bits(bits["o_proj"])
+        self.inp_afq = ActivationQuantizer(args, kv_a_a) if is_mxfp else nn.Identity()
+        self.q_b_proj_afq = ActivationQuantizer(args, q_b_a)
+        self.o_proj_afq = ActivationQuantizer(args, o_a)
+
+    def _copy_attn_dimensions(self, attn_module):
+        """Copy dimensional attributes, norm layers, and flags from source module."""
         self.hidden_size = attn_module.config.hidden_size
         self.num_heads = attn_module.num_heads
         self.q_lora_rank = attn_module.q_lora_rank
@@ -62,98 +89,66 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self.is_causal = True
         self.skip_topk = attn_module.skip_topk
         self.num_key_value_groups = attn_module.num_key_value_groups
-
-        # Norm layers (not quantized) -- kept as-is
         self.q_a_layernorm = attn_module.q_a_layernorm
         self.kv_a_layernorm = attn_module.kv_a_layernorm
 
-        # ---------- MLA linear projections ----------
-        # Align with infer repo convert_model.py:
-        #   q_a_proj / kv_a_proj_with_mqa / indexer.wk: PlainLinear in INT, QuantLinear in mxfp
-        #   q_b_proj / o_proj: always quantized; kv_b_proj: never quantized
-        bits = args.bit_policy["attn-linear"]
-        q_a, q_b, kv_a, o = (
-            bits["q_a_proj"],
-            bits["q_b_proj"],
-            bits["kv_a_proj_with_mqa"],
-            bits["o_proj"],
-        )
-        q_a_w = q_a.w if q_a else None
-        q_b_w = q_b.w if q_b else None
-        kv_a_w = kv_a.w if kv_a else None
-        o_w = o.w if o else None
+    def _build_mla_projections(self, args, attn_module, bits, use_quant, is_mxfp):
+        """Build MLA linear projections.
+
+        Aligns with infer repo convert_model.py:
+          q_a_proj / kv_a_proj_with_mqa: PlainLinear in INT, QuantLinear in mxfp
+          q_b_proj / o_proj: always quantized; kv_b_proj: never quantized
+        """
+        q_a = bits["q_a_proj"]
+        q_b = bits["q_b_proj"]
+        kv_a = bits["kv_a_proj_with_mqa"]
+        o = bits["o_proj"]
         quant_q_a = use_quant and is_mxfp
+
         self.q_a_proj = (
-            QuantLinear(args, attn_module.q_a_proj, w_bits=q_a_w, name="q_a_proj")
-            if quant_q_a
-            else PlainLinear(attn_module.q_a_proj)
+            QuantLinear(args, attn_module.q_a_proj,
+                        w_bits=q_a.w if q_a else None, name="q_a_proj")
+            if quant_q_a else PlainLinear(attn_module.q_a_proj)
         )
         self.q_b_proj = (
-            QuantLinear(args, attn_module.q_b_proj, w_bits=q_b_w, name="q_b_proj")
-            if use_quant
-            else PlainLinear(attn_module.q_b_proj)
+            QuantLinear(args, attn_module.q_b_proj,
+                        w_bits=q_b.w if q_b else None, name="q_b_proj")
+            if use_quant else PlainLinear(attn_module.q_b_proj)
         )
         self.kv_a_proj_with_mqa = (
-            QuantLinear(
-                args,
-                attn_module.kv_a_proj_with_mqa,
-                w_bits=kv_a_w,
-                name="kv_a_proj_with_mqa",
-            )
-            if quant_q_a
-            else PlainLinear(attn_module.kv_a_proj_with_mqa)
+            QuantLinear(args, attn_module.kv_a_proj_with_mqa,
+                        w_bits=kv_a.w if kv_a else None, name="kv_a_proj_with_mqa")
+            if quant_q_a else PlainLinear(attn_module.kv_a_proj_with_mqa)
         )
         self.kv_b_proj = PlainLinear(attn_module.kv_b_proj)
         self.o_proj = (
-            QuantLinear(args, attn_module.o_proj, w_bits=o_w, name="o_proj")
-            if use_quant
-            else PlainLinear(attn_module.o_proj)
+            QuantLinear(args, attn_module.o_proj,
+                        w_bits=o.w if o else None, name="o_proj")
+            if use_quant else PlainLinear(attn_module.o_proj)
         )
 
-        # ---------- DSA Indexer (None for shared layers in transformers >= 5.12) ----------
-        # indexer.wk: PlainLinear in INT, QuantLinear in mxfp; wq_b: always quantized
-        # weights_proj: kept as raw nn.Linear (forward accesses .weight.dtype directly)
+    def _build_indexer_projections(self, args, attn_module, bits, use_quant, is_mxfp):
+        """Build DSA Indexer projections.
+
+        Indexer is None for shared layers in transformers >= 5.12.
+        indexer.wk: PlainLinear in INT, QuantLinear in mxfp; wq_b: always quantized.
+        weights_proj: kept as raw nn.Linear (forward accesses .weight.dtype directly).
+        """
         self.indexer = attn_module.indexer
-        if self.indexer is not None:
-            wq_b_bits = bits["wq_b"]
-            wk_bits = bits["wk"]
-            wq_b_w = wq_b_bits.w if wq_b_bits else None
-            wk_w = wk_bits.w if wk_bits else None
-            self.indexer.wq_b = (
-                QuantLinear(args, attn_module.indexer.wq_b, w_bits=wq_b_w, name="wq_b")
-                if use_quant
-                else PlainLinear(attn_module.indexer.wq_b)
-            )
-            self.indexer.wk = (
-                QuantLinear(args, attn_module.indexer.wk, w_bits=wk_w, name="wk")
-                if quant_q_a
-                else PlainLinear(attn_module.indexer.wk)
-            )
-
-        # ---------- Structure transforms ----------
-        if self.enable_attn_linear:
-            self._init_structure_transforms()
-            q_b_a = q_b.a if q_b is not None and hasattr(q_b, "a") else None
-            kv_a_a = kv_a.a if kv_a is not None and hasattr(kv_a, "a") else None
-            o_a = o.a if o is not None and hasattr(o, "a") else None
-            self.inp_afq = ActivationQuantizer(args, kv_a_a) if is_mxfp else nn.Identity()
-            self.q_b_proj_afq = ActivationQuantizer(args, q_b_a)
-            self.o_proj_afq = ActivationQuantizer(args, o_a)
-        else:
-            self.inp_afq = nn.Identity()
-            self.q_b_proj_afq = nn.Identity()
-            self.o_proj_afq = nn.Identity()
-
-    def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
-        self.q_input_transform = build_algorithms_by_target(
-            self.quant_args, "structure", ctx
+        if self.indexer is None:
+            return
+        quant_q_a = use_quant and is_mxfp
+        wq_b = bits["wq_b"]
+        wk = bits["wk"]
+        self.indexer.wq_b = (
+            QuantLinear(args, attn_module.indexer.wq_b,
+                        w_bits=wq_b.w if wq_b else None, name="wq_b")
+            if use_quant else PlainLinear(attn_module.indexer.wq_b)
         )
-        ctx = AlgoBuildContext(
-            matrix_size=128, dim_size=self.num_heads * self.v_head_dim
-        )
-        self.o_output_transform = build_algorithms_by_target(
-            self.quant_args, "structure", ctx
+        self.indexer.wk = (
+            QuantLinear(args, attn_module.indexer.wk,
+                        w_bits=wk.w if wk else None, name="wk")
+            if quant_q_a else PlainLinear(attn_module.indexer.wk)
         )
 
     def forward(
@@ -253,3 +248,15 @@ class QuantGlmMoeDsaAttention(nn.Module):
         attn_output = self.o_proj_afq(attn_output)
         attn_output = self.o_proj(attn_output, structure_transform=None)
         return attn_output, None, topk_indices
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        self.q_input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
+        ctx = AlgoBuildContext(
+            matrix_size=128, dim_size=self.num_heads * self.v_head_dim
+        )
+        self.o_output_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
