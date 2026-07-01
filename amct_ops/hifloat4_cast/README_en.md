@@ -8,7 +8,7 @@ the NPU backend for `amct_pytorch`'s `hifloat4_fake_quant`, used for off-NPU-equ
 / PPL evaluation.
 
 Unlike `hifloat8_cast`, there is **no lookup table**: the scale is an arithmetic per-block
-reduction and S1P2 has only 8 magnitudes, so a LUT buys nothing (see design doc P1.7).
+reduction and S1P2 has only 8 magnitudes, so a LUT buys nothing.
 
 ## API
 
@@ -27,27 +27,25 @@ y = torch.ops.amct.hifloat4_fake_quant(x, -1)   # equivalent
 The host moves `qdim` to the last axis, zero-pads to a multiple of 64 (zeros don't affect the
 block max), calls the kernel, then slices off the pad and restores the dim order.
 
-## Correctness (P1.6 — the acceptance red-line)
+## Correctness (acceptance red-line)
 
-The kernel reproduces the pure-python reference exactly. Validate on device against the bundled
-oracle:
+The kernel reproduces amct's pure-python reference exactly. Validate on device against it:
 
 ```python
 import torch
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
-from amct_ops.hifloat4_cast.reference import hifloat4_reference
+from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
 
 x = torch.randn(4, 512, dtype=torch.bfloat16)
-y_ref = hifloat4_reference(x.float()).to(x.dtype)      # CPU oracle
-y_npu = hifloat4_fake_quant(x.npu()).cpu()             # AscendC kernel
+y_ref = quant_dequant_float(x, QType('hifx4').dim(-1), force_py=True, force_fp32=True)  # CPU reference
+y_npu = hifloat4_fake_quant(x.npu()).cpu()                                              # AscendC kernel
 assert (y_ref.float() - y_npu.float()).abs().max() < 1e-6
 # zeros must not produce NaN
 z = torch.zeros(1, 64, dtype=torch.bfloat16)
 assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
 ```
 
-`tests/amct_ops/test_hifloat4_cast.py` cross-checks `reference.py` against
-`quant_hifx` on CPU (runs anywhere) and, when an NPU is present, against the kernel.
+`tests/amct_ops/test_hifloat4_cast.py` cross-checks the kernel against this CPU reference when an NPU is present.
 
 ## Build
 
@@ -61,7 +59,7 @@ pip install amct_ops/dist/amct_ops-*.whl
 
 ## Status / notes
 
-- Simulation only (stage 2A). Real 4-bit packed codec + low-bit matmul (stage 2C) is future work.
-- The kernel computes in fp32 with bf16 rounding replicated at the reference's rounding points.
-  The scalar float bit-tricks (`Pow2i` / `FloorLog2Pos` / `Bf16Round`) avoid libm; if any device
-  math intrinsic differs, adjust only those helpers and re-check against `reference.py`.
+- Simulation only. Real 4-bit packed codec + low-bit matmul is future work.
+- The kernel does the block reduction and quant in fp32 (bf16 / E6M2 rounding via the hardware
+  `vconv`). The kernel body is guarded by `__DAV_C220_VEC__` (A2/A3, dav-2201 = C220, covering
+  910B/910C); other arches compile to a no-op, so validate on the target NPU.
