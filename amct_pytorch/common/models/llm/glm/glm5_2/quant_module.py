@@ -30,7 +30,7 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 class QuantGlmMoeDsaAttention(nn.Module):
-    """Quantized attention wrapper for GLM-5.1 MoE DSA (DeepSeek Sparse Attention).
+    """Quantized attention wrapper for GLM-5.2 MoE DSA (DeepSeek Sparse Attention).
 
     Wraps GlmMoeDsaAttention with QuantLinear for weight quantization and
     adds activation quantizers. The forward path is simplified for blockwise

@@ -32,7 +32,6 @@ from tqdm import tqdm
 
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import (
     export_block_deploy,
@@ -40,9 +39,8 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     get_quant_ignore_linear_names,
 )
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.quantization.dtypes import register_dtype
+from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
-from amct_pytorch.quantization.dtypes import int_impl
 
 
 class LlmDeployWorkflow:
@@ -85,9 +83,7 @@ class LlmDeployWorkflow:
 
     def run(self):
         sink_id = self.setup()
-        if self.args.only_config:
-            results = self._run_only_config()
-        elif self.granularity == "block":
+        if self.granularity == "block":
             results = self._run_blockwise()
         elif self.granularity == "tensor":
             results = self._run_tensorwise()
@@ -215,29 +211,6 @@ class LlmDeployWorkflow:
         with open(index_path, "w", encoding="utf-8") as f:
             json.dump(output_index, f, ensure_ascii=False, indent=2, sort_keys=True)
         return index_path
-
-    def _run_only_config(self):
-        """Generate only config.json, bypassing all weight loading and export.
-
-        Builds quant blocks with empty weights (init_empty_weights) to
-        determine the ignore list via get_quant_ignore_linear_names, then
-        writes config.json with the quantization_config.
-        """
-        self._copy_support_files()
-        quant_ignore_layers = []
-        for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Config-only..."):
-            block = self.pipeline.build_empty_quant_block(layer_idx)
-            weight_prefix = self.pipeline.get_layer_weight_prefix(layer_idx)
-            quant_ignore_layers.extend(
-                get_quant_ignore_linear_names(block, weight_prefix)
-            )
-        quant_ignore_layers.extend(
-            self._collect_extra_ignore_names(quant_mode="block")
-        )
-        self._refresh_config(quant_ignore_layers)
-        config_path = os.path.join(self.output_dir, "config.json")
-        logger.info("Generated config-only deploy at {}", config_path)
-        return {"index_path": None, "num_output_files": 0}
 
     def _run_blockwise(self):
         self._copy_support_files()

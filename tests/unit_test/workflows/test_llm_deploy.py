@@ -75,7 +75,6 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
         model=model_path,
         quant_dtype=quant_dtype,
         output_dir=output_dir,
-        only_config=False,
     )
     workflow.args = args
     workflow.granularity = args.granularity
@@ -334,7 +333,6 @@ def _make_deploy_workflow(**overrides):
     defaults = dict(
         model="/tmp/fake", model_name=MODEL_NAME_QWEN3, quant_dtype="int4",
         granularity=GRANULARITY_BLOCK, output_dir="/tmp/fake",
-        only_config=False,
     )
     defaults.update(overrides)
     args = SimpleNamespace(**defaults)
@@ -846,27 +844,5 @@ def test_run_tensorwise_quant_with_bias(tmp_path, monkeypatch):
     assert torch.equal(out_tensors["test.weight_bias"], bias)
 
 
-# ---- run: only_config branch --------------------------------------------
 
-
-@pytest.mark.cpu
-def test_run_only_config_branch(monkeypatch):
-    wf = _make_workflow()
-    wf.args.only_config = True
-
-    def setup():
-        return "sink"
-
-    wf.setup = setup
-
-    def _run_only_config():
-        return {"index_path": None, "num_output_files": 0}
-
-    setattr(wf, "_run_only_config", _run_only_config)
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.logger",
-        SimpleNamespace(remove=lambda h: None),
-    )
-    result = wf.run()
-    assert result == {"index_path": None, "num_output_files": 0}
 

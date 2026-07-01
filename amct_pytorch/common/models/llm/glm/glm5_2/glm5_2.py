@@ -22,7 +22,7 @@ from transformers.models.glm_moe_dsa.configuration_glm_moe_dsa import GlmMoeDsaC
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaDecoderLayer
 
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
+from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.quant_apply import (
     PlainLinear,
     QuantGatedMLP,
@@ -256,9 +256,6 @@ class GLM5_2(BaseModel):
             return self._get_extra_ignore_names_tensor(quant_specs)
         return self._get_extra_ignore_names_block()
 
-    def iter_ptq_units(self, layer_idx, block):
-        yield from super().iter_ptq_units(layer_idx, block)
-
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         for name, module in block.named_modules():
@@ -279,9 +276,6 @@ class GLM5_2(BaseModel):
                     continue
 
             yield f"{weight_prefix}{name}.weight", module
-
-    def load_unit_inputs(self, data_dir, unit: PtqUnit):
-        return super().load_unit_inputs(data_dir, unit)
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
         block = super()._build_block_for_forward(
@@ -331,8 +325,8 @@ class GLM5_2(BaseModel):
         """Retrieve a cached empty quant block, building on demand if not cached.
 
         When get_quant_weight_specs() runs first (tensorwise quant path), blocks are
-        already cached and this is a free dict lookup. For other paths (--only_config,
-        blockwise) that call get_extra_ignore_names() without get_quant_weight_specs(),
+        already cached and this is a free dict lookup. For other paths (blockwise)
+        that call get_extra_ignore_names() without get_quant_weight_specs(),
         blocks are built lazily here.
         """
         cache = getattr(self, "_cached_empty_blocks", None) or {}
