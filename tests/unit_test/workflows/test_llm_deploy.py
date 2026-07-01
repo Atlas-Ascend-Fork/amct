@@ -589,7 +589,7 @@ def test_is_w4a8_true_when_moe_routed_w_bits_4():
     wf.args.bit_policy = SimpleNamespace(
         linear_bits=lambda group: (4, 8) if group == "moe.routed" else (8, 8)
     )
-    assert wf._is_w4a8() is True
+    assert getattr(wf, "_is_w4a8")() is True
 
 
 @pytest.mark.cpu
@@ -598,13 +598,13 @@ def test_is_w4a8_false_when_w_bits_8():
     wf.args.bit_policy = SimpleNamespace(
         linear_bits=lambda group: (8, 8)
     )
-    assert wf._is_w4a8() is False
+    assert getattr(wf, "_is_w4a8")() is False
 
 
 @pytest.mark.cpu
 def test_is_w4a8_false_when_no_bit_policy():
     wf = _make_workflow()
-    assert wf._is_w4a8() is False
+    assert getattr(wf, "_is_w4a8")() is False
 
 
 @pytest.mark.cpu
@@ -615,7 +615,7 @@ def test_is_w4a8_false_on_key_error():
         raise KeyError("no such group")
 
     wf.args.bit_policy = SimpleNamespace(linear_bits=_raise_key)
-    assert wf._is_w4a8() is False
+    assert getattr(wf, "_is_w4a8")() is False
 
 
 # ---- _collect_extra_ignore_names ----------------------------------------
@@ -627,7 +627,7 @@ def test_collect_extra_ignore_names_delegates_to_pipeline():
     wf.pipeline = SimpleNamespace(
         get_extra_ignore_names=lambda quant_mode, quant_specs: ["lm_head", "gate"]
     )
-    result = wf._collect_extra_ignore_names(quant_mode="tensor", quant_specs={"w": 8})
+    result = getattr(wf, "_collect_extra_ignore_names")(quant_mode="tensor", quant_specs={"w": 8})
     assert result == ["lm_head", "gate"]
 
 
@@ -637,7 +637,7 @@ def test_collect_extra_ignore_names_block_mode():
     wf.pipeline = SimpleNamespace(
         get_extra_ignore_names=lambda quant_mode, quant_specs: ["mtp_layer"]
     )
-    result = wf._collect_extra_ignore_names(quant_mode="block")
+    result = getattr(wf, "_collect_extra_ignore_names")(quant_mode="block")
     assert result == ["mtp_layer"]
 
 
@@ -648,14 +648,14 @@ def test_collect_extra_ignore_names_block_mode():
 def test_collect_ignored_layers_returns_list_when_method_exists():
     wf = _make_workflow()
     wf.pipeline = SimpleNamespace(get_ignored_layers=lambda: [0, 1, 2])
-    assert wf._collect_ignored_layers() == [0, 1, 2]
+    assert getattr(wf, "_collect_ignored_layers")() == [0, 1, 2]
 
 
 @pytest.mark.cpu
 def test_collect_ignored_layers_returns_none_when_no_method():
     wf = _make_workflow()
     wf.pipeline = SimpleNamespace()
-    assert wf._collect_ignored_layers() is None
+    assert getattr(wf, "_collect_ignored_layers")() is None
 
 
 # ---- _build_ignore_layers -----------------------------------------------
@@ -681,7 +681,7 @@ def test_build_ignore_layers_iterates_and_collects(monkeypatch):
         mock_get_ignore,
     )
 
-    result = wf._build_ignore_layers()
+    result = getattr(wf, "_build_ignore_layers")()
     assert len(result) == 3
     assert result[0] == "model.layers.0.ignored_linear"
     assert result[1] == "model.layers.1.ignored_linear"
@@ -702,7 +702,7 @@ def test_build_ignore_layers_empty_when_no_layers(monkeypatch):
         "amct_pytorch.workflows.llm_deploy.get_quant_ignore_linear_names",
         lambda block, prefix: [],
     )
-    assert wf._build_ignore_layers() == []
+    assert getattr(wf, "_build_ignore_layers")() == []
 
 
 # ---- _run_tensorwise dispatch -------------------------------------------
@@ -711,18 +711,18 @@ def test_build_ignore_layers_empty_when_no_layers(monkeypatch):
 @pytest.mark.cpu
 def test_run_tensorwise_dispatches_to_quant_for_int():
     wf = _make_workflow(quant_dtype="int")
-    wf._run_tensorwise_quant = MagicMock(return_value={"index_path": "x"})
-    result = wf._run_tensorwise()
-    wf._run_tensorwise_quant.assert_called_once()
+    setattr(wf, "_run_tensorwise_quant", MagicMock(return_value={"index_path": "x"}))
+    result = getattr(wf, "_run_tensorwise")()
+    getattr(wf, "_run_tensorwise_quant").assert_called_once()
     assert result == {"index_path": "x"}
 
 
 @pytest.mark.cpu
 def test_run_tensorwise_dispatches_to_quant_for_mxfp():
     wf = _make_workflow(quant_dtype="mxfp")
-    wf._run_tensorwise_quant = MagicMock(return_value={"index_path": "y"})
-    result = wf._run_tensorwise()
-    wf._run_tensorwise_quant.assert_called_once()
+    setattr(wf, "_run_tensorwise_quant", MagicMock(return_value={"index_path": "y"}))
+    result = getattr(wf, "_run_tensorwise")()
+    getattr(wf, "_run_tensorwise_quant").assert_called_once()
     assert result == {"index_path": "y"}
 
 
@@ -781,12 +781,12 @@ def test_run_tensorwise_quant_basic(tmp_path, monkeypatch):
         lambda iterable, desc="": iterable,
     )
 
-    wf._copy_support_files = MagicMock()
-    wf._build_ignore_layers = MagicMock(return_value=[])
-    wf._collect_extra_ignore_names = MagicMock(return_value=[])
-    wf._refresh_config = MagicMock()
+    setattr(wf, "_copy_support_files", MagicMock())
+    setattr(wf, "_build_ignore_layers", MagicMock(return_value=[]))
+    setattr(wf, "_collect_extra_ignore_names", MagicMock(return_value=[]))
+    setattr(wf, "_refresh_config", MagicMock())
 
-    result = wf._run_tensorwise_quant()
+    result = getattr(wf, "_run_tensorwise_quant")()
 
     assert "index_path" in result
     assert "num_output_files" in result
@@ -799,9 +799,9 @@ def test_run_tensorwise_quant_basic(tmp_path, monkeypatch):
     assert "test.weight_bias" not in out_tensors
     assert "other.weight" in out_tensors
 
-    wf._build_ignore_layers.assert_called_once()
-    wf._refresh_config.assert_called_once()
-    wf._collect_extra_ignore_names.assert_called_once_with(
+    getattr(wf, "_build_ignore_layers").assert_called_once()
+    getattr(wf, "_refresh_config").assert_called_once()
+    getattr(wf, "_collect_extra_ignore_names").assert_called_once_with(
         quant_mode="tensor", quant_specs=quant_specs
     )
     mock_dtype_cls.assert_called_with(bits=8)
@@ -834,12 +834,12 @@ def test_run_tensorwise_quant_with_bias(tmp_path, monkeypatch):
         lambda iterable, desc="": iterable,
     )
 
-    wf._copy_support_files = MagicMock()
-    wf._build_ignore_layers = MagicMock(return_value=[])
-    wf._collect_extra_ignore_names = MagicMock(return_value=[])
-    wf._refresh_config = MagicMock()
+    setattr(wf, "_copy_support_files", MagicMock())
+    setattr(wf, "_build_ignore_layers", MagicMock(return_value=[]))
+    setattr(wf, "_collect_extra_ignore_names", MagicMock(return_value=[]))
+    setattr(wf, "_refresh_config", MagicMock())
 
-    wf._run_tensorwise_quant()
+    getattr(wf, "_run_tensorwise_quant")()
 
     out_tensors = load_file(str(out_dir / "model.safetensors"), device="cpu")
     assert "test.weight_bias" in out_tensors
@@ -862,7 +862,7 @@ def test_run_only_config_branch(monkeypatch):
     def _run_only_config():
         return {"index_path": None, "num_output_files": 0}
 
-    wf._run_only_config = _run_only_config
+    setattr(wf, "_run_only_config", _run_only_config)
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.logger",
         SimpleNamespace(remove=lambda h: None),

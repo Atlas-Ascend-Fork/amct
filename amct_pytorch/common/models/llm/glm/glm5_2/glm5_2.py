@@ -62,6 +62,59 @@ class GLM5_2(BaseModel):
         self._dsa_topk_indices = None
         self.parse_quant_mode()
 
+    @staticmethod
+    def _collect_quant_bits(block):
+        """Extract {module_name: w_bits} from QuantLinear modules in a block.
+
+        Also maps packed expert paths to unpacked safetensors keys:
+          mlp.experts.expert_modules.{idx}.gate_proj  ->  mlp.experts.{idx}.gate_proj
+        """
+        bits = {}
+        for name, module in block.named_modules():
+            if isinstance(module, QuantLinear) and module.w_bits is not None:
+                name = name.replace(".expert_modules.", ".")
+                bits[name] = module.w_bits
+        return bits
+
+    @staticmethod
+    def _collect_raw_linear_names(block):
+        """Collect nn.Linear module names not nested inside QuantLinear/PlainLinear.
+
+        QuantLinear wraps nn.Linear, so block.named_modules() yields both the
+        QuantLinear wrapper AND its inner .linear (a raw nn.Linear). This method
+        filters out inner nn.Linear modules that are children of wrapper types,
+        returning only standalone nn.Linear (e.g. indexer.weights_proj).
+        """
+        quant_linear_prefixes = tuple(
+            f"{name}."
+            for name, module in block.named_modules()
+            if isinstance(module, QuantLinear)
+        )
+        plain_linear_prefixes = tuple(
+            f"{name}."
+            for name, module in block.named_modules()
+            if isinstance(module, PlainLinear)
+        )
+        names = []
+        for name, module in block.named_modules():
+            if not isinstance(module, nn.Linear):
+                continue
+            if any(name.startswith(p) for p in quant_linear_prefixes):
+                continue
+            if any(name.startswith(p) for p in plain_linear_prefixes):
+                continue
+            names.append(name)
+        return names
+
+    @staticmethod
+    def _collect_plain_linear_names(block):
+        """Collect PlainLinear wrapper module names from a quant block."""
+        return [
+            name
+            for name, module in block.named_modules()
+            if isinstance(module, PlainLinear)
+        ]
+
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
             raise ValueError(
@@ -96,21 +149,6 @@ class GLM5_2(BaseModel):
 
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
-
-    def _build_block_for_forward(self, layer_idx, use_quant_block=False):
-        block = super()._build_block_for_forward(
-            layer_idx, use_quant_block=use_quant_block
-        )
-        _orig = block.forward
-
-        def _capture(*args, **kwargs):
-            out = _orig(*args, **kwargs)
-            if isinstance(out, (tuple, list)) and len(out) >= 2:
-                self._dsa_topk_indices = out[1]
-            return out
-
-        block.forward = _capture
-        return block
 
     def do_block_forward(self, layer_idx, samples, hook_name=None,
                          use_quant_block=False, enable_quant=False):
@@ -160,49 +198,6 @@ class GLM5_2(BaseModel):
                     "group_size": 128, "dynamic": True, "symmetric": True}
         return None
 
-    def _is_full_indexer_layer(self, layer_idx, indexer_types):
-        """Check if a layer carries a full Lightning Indexer.
-
-        GLM-5.2 IndexShare: "shared" layers reuse the previous full layer's top-k
-        and have NO indexer tensors. Only "full" layers carry their own indexer weights.
-        MTP layers (layer_idx >= num_hidden_layers) always carry a full indexer.
-        """
-        if layer_idx >= self.config.num_hidden_layers:
-            return True
-        if not indexer_types:
-            return True
-        return indexer_types[layer_idx] == "full"
-
-    def _find_template_layer_idx(self):
-        """Find the first MoE layer with a full indexer for use as MTP template.
-
-        MTP layers are NOT instantiated by GlmMoeDsaDecoderLayer (which only covers
-        self_attn + mlp, no eh_proj/shared_head). But MTP's self_attn and mlp share
-        the exact same structure as a regular full-indexer MoE layer. So we pick one
-        such regular layer, build its empty quant block, and use it as the template
-        to derive which weights MTP layers should quantize or ignore.
-        """
-        first_k_dense = self.config.first_k_dense_replace
-        indexer_types = getattr(self.config, "indexer_types", None)
-        for i in range(first_k_dense, self.config.num_hidden_layers):
-            if self._is_full_indexer_layer(i, indexer_types):
-                return i
-        return first_k_dense
-
-    @staticmethod
-    def _collect_quant_bits(block):
-        """Extract {module_name: w_bits} from QuantLinear modules in a block.
-
-        Also maps packed expert paths to unpacked safetensors keys:
-          mlp.experts.expert_modules.{idx}.gate_proj  ->  mlp.experts.{idx}.gate_proj
-        """
-        bits = {}
-        for name, module in block.named_modules():
-            if isinstance(module, QuantLinear) and module.w_bits is not None:
-                name = name.replace(".expert_modules.", ".")
-                bits[name] = module.w_bits
-        return bits
-
     def get_quant_weight_specs(self):
         """Return {safetensors_weight_name: w_bits} for tensor-mode quantization.
 
@@ -248,25 +243,6 @@ class GLM5_2(BaseModel):
 
         return specs
 
-    def _get_cached_block(self, layer_idx, is_mtp=False):
-        """Retrieve a cached empty quant block, building on demand if not cached.
-
-        When get_quant_weight_specs() runs first (tensorwise quant path), blocks are
-        already cached and this is a free dict lookup. For other paths (--only_config,
-        blockwise) that call get_extra_ignore_names() without get_quant_weight_specs(),
-        blocks are built lazily here.
-        """
-        cache = getattr(self, "_cached_empty_blocks", None) or {}
-        if is_mtp:
-            if "mtp_template" not in cache:
-                cache["mtp_template"] = self.build_empty_quant_block(
-                    self._find_template_layer_idx()
-                )
-            return cache["mtp_template"]
-        if layer_idx not in cache:
-            cache[layer_idx] = self.build_empty_quant_block(layer_idx)
-        return cache[layer_idx]
-
     def get_extra_ignore_names(self, quant_mode="block", quant_specs=None):
         """Return ignore entries not discoverable by regular block traversal.
 
@@ -279,138 +255,6 @@ class GLM5_2(BaseModel):
         if quant_mode == "tensor":
             return self._get_extra_ignore_names_tensor(quant_specs)
         return self._get_extra_ignore_names_block()
-
-    def _get_extra_ignore_names_block(self):
-        """Block mode: MTP layers are never exported, so ignore all MTP modules."""
-        ignore = []
-        num_hidden = self.config.num_hidden_layers
-        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
-        first_k_dense = self.config.first_k_dense_replace
-        num_layers = num_hidden + num_nextn
-
-        for i in range(num_layers):
-            prefix = f"model.layers.{i}."
-            is_mtp = i >= num_hidden
-            block = self._get_cached_block(i, is_mtp=is_mtp)
-
-            # QuantLinear wraps nn.Linear, so block.named_modules() yields both the
-            # QuantLinear wrapper AND its inner .linear (a raw nn.Linear). We need to
-            # skip inner nn.Linear modules that are children of QuantLinear/PlainLinear.
-            quant_linear_prefixes = tuple(
-                f"{name}."
-                for name, module in block.named_modules()
-                if isinstance(module, QuantLinear)
-            )
-            plain_linear_prefixes = tuple(
-                f"{name}."
-                for name, module in block.named_modules()
-                if isinstance(module, PlainLinear)
-            )
-
-            if is_mtp:
-                # MTP layers are never processed by blockwise export — ignore all modules
-                # Raw nn.Linear not nested inside QuantLinear/PlainLinear
-                for name, module in block.named_modules():
-                    if not isinstance(module, nn.Linear):
-                        continue
-                    if any(name.startswith(p) for p in quant_linear_prefixes):
-                        continue
-                    if any(name.startswith(p) for p in plain_linear_prefixes):
-                        continue
-                    ignore.append(f"{prefix}{name}")
-
-                # PlainLinear wrappers: use the wrapper's own path
-                for name, module in block.named_modules():
-                    if isinstance(module, PlainLinear):
-                        ignore.append(f"{prefix}{name}")
-
-                # MTP-specific modules not in GlmMoeDsaDecoderLayer
-                for mtp_name in ("eh_proj", "shared_head.head"):
-                    ignore.append(f"{prefix}{mtp_name}")
-            else:
-                # Regular layers: ignore PlainLinear wrappers and raw nn.Linear
-                for name, module in block.named_modules():
-                    if not isinstance(module, nn.Linear):
-                        continue
-                    if any(name.startswith(p) for p in quant_linear_prefixes):
-                        continue
-                    if any(name.startswith(p) for p in plain_linear_prefixes):
-                        continue
-                    ignore.append(f"{prefix}{name}")
-
-                for name, module in block.named_modules():
-                    if isinstance(module, PlainLinear):
-                        ignore.append(f"{prefix}{name}")
-
-            # mlp.gate is GlmMoeDsaTopkRouter, not nn.Linear
-            if i >= first_k_dense:
-                ignore.append(f"model.layers.{i}.mlp.gate")
-
-        ignore.append("lm_head")
-        return ignore
-
-    def _get_extra_ignore_names_tensor(self, quant_specs):
-        """Tensor mode: ignore modules NOT in quant_specs (mutual exclusion)."""
-        ignore = []
-        num_hidden = self.config.num_hidden_layers
-        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
-        first_k_dense = self.config.first_k_dense_replace
-        num_layers = num_hidden + num_nextn
-
-        for i in range(num_layers):
-            prefix = f"model.layers.{i}."
-            is_mtp = i >= num_hidden
-            block = self._get_cached_block(i, is_mtp=is_mtp)
-
-            # QuantLinear wraps nn.Linear, so block.named_modules() yields both the
-            # QuantLinear wrapper AND its inner .linear (a raw nn.Linear). We need to
-            # skip inner nn.Linear modules that are children of QuantLinear/PlainLinear,
-            # otherwise we'd emit "q_a_proj.linear" instead of "q_a_proj".
-            quant_linear_prefixes = tuple(
-                f"{name}."
-                for name, module in block.named_modules()
-                if isinstance(module, QuantLinear)
-            )
-            plain_linear_prefixes = tuple(
-                f"{name}."
-                for name, module in block.named_modules()
-                if isinstance(module, PlainLinear)
-            )
-
-            # Raw nn.Linear not nested inside QuantLinear/PlainLinear:
-            # these are modules like indexer.weights_proj that quant_module.py
-            # deliberately left as plain nn.Linear.
-            for name, module in block.named_modules():
-                if not isinstance(module, nn.Linear):
-                    continue
-                if any(name.startswith(p) for p in quant_linear_prefixes):
-                    continue
-                if any(name.startswith(p) for p in plain_linear_prefixes):
-                    continue
-                if f"{prefix}{name}.weight" not in quant_specs:
-                    ignore.append(f"{prefix}{name}")
-
-            # PlainLinear wrappers: use the wrapper's own path (e.g. "q_a_proj"),
-            # not the inner ".linear" path.
-            for name, module in block.named_modules():
-                if isinstance(module, PlainLinear):
-                    if f"{prefix}{name}.weight" not in quant_specs:
-                        ignore.append(f"{prefix}{name}")
-
-            # MTP-specific modules (eh_proj, shared_head.head) are NOT part of
-            # GlmMoeDsaDecoderLayer, so the template block doesn't contain them.
-            if is_mtp:
-                for mtp_name in ("eh_proj", "shared_head.head"):
-                    if f"{prefix}{mtp_name}.weight" not in quant_specs:
-                        ignore.append(f"{prefix}{mtp_name}")
-
-            # mlp.gate is GlmMoeDsaTopkRouter, not nn.Linear, so block traversal
-            # can never discover it. Always ignored for MoE layers.
-            if i >= first_k_dense:
-                ignore.append(f"model.layers.{i}.mlp.gate")
-
-        ignore.append("lm_head")
-        return ignore
 
     def iter_ptq_units(self, layer_idx, block):
         yield from super().iter_ptq_units(layer_idx, block)
@@ -438,3 +282,126 @@ class GLM5_2(BaseModel):
 
     def load_unit_inputs(self, data_dir, unit: PtqUnit):
         return super().load_unit_inputs(data_dir, unit)
+
+    def _build_block_for_forward(self, layer_idx, use_quant_block=False):
+        block = super()._build_block_for_forward(
+            layer_idx, use_quant_block=use_quant_block
+        )
+        _orig = block.forward
+
+        def _capture(*args, **kwargs):
+            out = _orig(*args, **kwargs)
+            if isinstance(out, (tuple, list)) and len(out) >= 2:
+                self._dsa_topk_indices = out[1]
+            return out
+
+        block.forward = _capture
+        return block
+
+    def _is_full_indexer_layer(self, layer_idx, indexer_types):
+        """Check if a layer carries a full Lightning Indexer.
+
+        GLM-5.2 IndexShare: "shared" layers reuse the previous full layer's top-k
+        and have NO indexer tensors. Only "full" layers carry their own indexer weights.
+        MTP layers (layer_idx >= num_hidden_layers) always carry a full indexer.
+        """
+        if layer_idx >= self.config.num_hidden_layers:
+            return True
+        if not indexer_types:
+            return True
+        return indexer_types[layer_idx] == "full"
+
+    def _find_template_layer_idx(self):
+        """Find the first MoE layer with a full indexer for use as MTP template.
+
+        MTP layers are NOT instantiated by GlmMoeDsaDecoderLayer (which only covers
+        self_attn + mlp, no eh_proj/shared_head). But MTP's self_attn and mlp share
+        the exact same structure as a regular full-indexer MoE layer. So we pick one
+        such regular layer, build its empty quant block, and use it as the template
+        to derive which weights MTP layers should quantize or ignore.
+        """
+        first_k_dense = self.config.first_k_dense_replace
+        indexer_types = getattr(self.config, "indexer_types", None)
+        for i in range(first_k_dense, self.config.num_hidden_layers):
+            if self._is_full_indexer_layer(i, indexer_types):
+                return i
+        return first_k_dense
+
+    def _get_cached_block(self, layer_idx, is_mtp=False):
+        """Retrieve a cached empty quant block, building on demand if not cached.
+
+        When get_quant_weight_specs() runs first (tensorwise quant path), blocks are
+        already cached and this is a free dict lookup. For other paths (--only_config,
+        blockwise) that call get_extra_ignore_names() without get_quant_weight_specs(),
+        blocks are built lazily here.
+        """
+        cache = getattr(self, "_cached_empty_blocks", None) or {}
+        if is_mtp:
+            if "mtp_template" not in cache:
+                cache["mtp_template"] = self.build_empty_quant_block(
+                    self._find_template_layer_idx()
+                )
+            return cache["mtp_template"]
+        if layer_idx not in cache:
+            cache[layer_idx] = self.build_empty_quant_block(layer_idx)
+        return cache[layer_idx]
+
+
+    def _get_extra_ignore_names_block(self):
+        """Block mode: MTP layers are never exported, so ignore all MTP modules."""
+        ignore = []
+        num_hidden = self.config.num_hidden_layers
+        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
+        first_k_dense = self.config.first_k_dense_replace
+        num_layers = num_hidden + num_nextn
+
+        for i in range(num_layers):
+            prefix = f"model.layers.{i}."
+            is_mtp = i >= num_hidden
+            block = self._get_cached_block(i, is_mtp=is_mtp)
+
+            for name in self._collect_raw_linear_names(block):
+                ignore.append(f"{prefix}{name}")
+            for name in self._collect_plain_linear_names(block):
+                ignore.append(f"{prefix}{name}")
+
+            if is_mtp:
+                for mtp_name in ("eh_proj", "shared_head.head"):
+                    ignore.append(f"{prefix}{mtp_name}")
+
+            if i >= first_k_dense:
+                ignore.append(f"model.layers.{i}.mlp.gate")
+
+        ignore.append("lm_head")
+        return ignore
+
+    def _get_extra_ignore_names_tensor(self, quant_specs):
+        """Tensor mode: ignore modules NOT in quant_specs (mutual exclusion)."""
+        ignore = []
+        num_hidden = self.config.num_hidden_layers
+        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
+        first_k_dense = self.config.first_k_dense_replace
+        num_layers = num_hidden + num_nextn
+
+        for i in range(num_layers):
+            prefix = f"model.layers.{i}."
+            is_mtp = i >= num_hidden
+            block = self._get_cached_block(i, is_mtp=is_mtp)
+
+            for name in self._collect_raw_linear_names(block):
+                if f"{prefix}{name}.weight" not in quant_specs:
+                    ignore.append(f"{prefix}{name}")
+            for name in self._collect_plain_linear_names(block):
+                if f"{prefix}{name}.weight" not in quant_specs:
+                    ignore.append(f"{prefix}{name}")
+
+            if is_mtp:
+                for mtp_name in ("eh_proj", "shared_head.head"):
+                    if f"{prefix}{mtp_name}.weight" not in quant_specs:
+                        ignore.append(f"{prefix}{mtp_name}")
+
+            if i >= first_k_dense:
+                ignore.append(f"model.layers.{i}.mlp.gate")
+
+        ignore.append("lm_head")
+        return ignore
