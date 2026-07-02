@@ -15,7 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Tests for QuantHYV3Attn / QuantHYV3MoE using tiny in-memory configs."""
+"""Tests for QuantHYV3Attn / QuantHYV3MoE using tiny in-memory configs.
+
+These tests construct real ``HYV3Attention`` / ``HYV3MoE`` modules and run
+forward, so they require a real ``transformers.models.hy_v3`` (>= 5.12.1).
+When conftest has fallen back to a mock (older transformers), skip the module.
+"""
+import os
+
+import pytest
+
+if os.environ.get("HY_V3_MOCKED") == "1":
+    pytest.skip(
+        "transformers lacks real hy_v3 module; skip QuantHYV3* forward tests",
+        allow_module_level=True,
+    )
+
 import torch
 import torch.nn as nn
 from transformers.models.hy_v3.modeling_hy_v3 import HYV3Attention, HYV3MoE
