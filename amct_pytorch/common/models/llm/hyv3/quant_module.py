@@ -45,6 +45,8 @@ class QuantHYV3Attn(HYV3Attention):
         ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
         self.enable_attn_cache = "attn-cache" in self.quant_args.quant_target
+        self.hidden_size = attn_module.config.hidden_size
+        self.value_dim = self.head_dim * attn_module.config.num_attention_heads
 
         bits = quant_args.bit_policy["attn-linear"]
         q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
@@ -95,8 +97,9 @@ class QuantHYV3Attn(HYV3Attention):
             self.o_proj_afq = nn.Identity()
 
     def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.head_dim)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
         self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
         self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
 
     def forward(

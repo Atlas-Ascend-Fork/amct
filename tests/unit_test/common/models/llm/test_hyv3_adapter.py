@@ -235,6 +235,48 @@ class TestHyV3Adapter:
         assert bindings[0][1] is ql
 
 
+    def test_iter_deploy_bindings_remaps_packed_experts(self):
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+        obj = _stub(quant_target=["moe"])
+
+        def _ql():
+            q = QuantLinear.__new__(QuantLinear)
+            q._parameters, q._modules, q._buffers = {}, {}, {}
+            return q
+
+        gate_proj_0 = nn.Module()
+        gate_proj_0.quant_linear = _ql()
+        up_proj_0 = nn.Module()
+        up_proj_0.quant_linear = _ql()
+        down_proj_0 = nn.Module()
+        down_proj_0.quant_linear = _ql()
+
+        expert_0 = nn.Module()
+        expert_0.gate_proj = gate_proj_0
+        expert_0.up_proj = up_proj_0
+        expert_0.down_proj = down_proj_0
+
+        expert_modules = nn.ModuleList([expert_0])
+
+        experts_wrapper = nn.Module()
+        experts_wrapper.expert_modules = expert_modules
+
+        mlp = nn.Module()
+        mlp.experts = experts_wrapper
+
+        block = nn.Module()
+        block.mlp = mlp
+
+        bindings = sorted(obj.iter_deploy_bindings(0, block), key=lambda b: b[0])
+        expected_prefixes = [
+            "model.layers.0.mlp.experts.0.down_proj.weight",
+            "model.layers.0.mlp.experts.0.gate_proj.weight",
+            "model.layers.0.mlp.experts.0.up_proj.weight",
+        ]
+        actual_prefixes = [b[0] for b in bindings]
+        assert actual_prefixes == expected_prefixes
+
+
 # ---------------------------------------------------------------------------
 # QuantHYV3MoE.forward
 # ---------------------------------------------------------------------------

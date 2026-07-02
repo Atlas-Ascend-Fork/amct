@@ -108,6 +108,11 @@ class HyV3(BaseModel):
         for name, module in block.named_modules():
             if not isinstance(module, QuantLinear):
                 continue
+            if name.startswith("mlp.experts.expert_modules."):
+                parts = name.split(".")
+                _, _, _, expert_idx, proj_name = parts
+                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
+                continue
             yield f"{weight_prefix}{name}.weight", module
 
     def get_scale_name(self, weight_name):
