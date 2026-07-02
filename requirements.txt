@@ -1,4 +1,7 @@
-torch==2.7.1
+# NPU 场景需使用 CPU 版 PyTorch 与 torch_npu 配套，避免同时加载 CUDA 与 NPU 加速器。
+# 如已安装 CUDA 版 torch，请先执行：pip3 uninstall -y torch
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.7.1+cpu
 torch_npu==2.7.1.post4
 setuptools
 onnx==1.18.0
