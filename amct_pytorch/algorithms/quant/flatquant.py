@@ -115,8 +115,7 @@ class FlatQuant(nn.Module):
             raise ValueError("FlatQuant requires AlgoBuildContext.dim_size.")
 
         use_decompose = (
-            self.matrix_size is not None
-            and self.matrix_size > 1
+            self.matrix_size > 1
             and self.dim_size > self.matrix_size
             and self.dim_size % self.matrix_size == 0
         )
@@ -128,11 +127,8 @@ class FlatQuant(nn.Module):
         else:
             self.transform = _InvFlatSingleTransform(self.dim_size)
 
-    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str | None = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, inv_t: bool = False, name: str = None) -> torch.Tensor:
         return self.transform(x, inv_t=inv_t)
-
-    def transform_weight(self, weight: torch.Tensor) -> torch.Tensor:
-        return self.transform(weight, inv_t=True)
 
     def trainable_params(self):
         return list(self.parameters())

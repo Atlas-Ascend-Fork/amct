@@ -121,12 +121,6 @@ def test_forward_inv_t_divides_by_diag_scale_for_decomposed_weight_transform():
     assert torch.allclose(out, torch.tensor([[1.0, 0.5, 0.25, 0.125]]))
 
 
-def test_transform_weight_matches_forward_inv_t():
-    flat = _make(dim_size=4, matrix_size=2)
-    weight = torch.randn(3, 4)
-    assert torch.allclose(flat.transform_weight(weight), flat(weight, inv_t=True))
-
-
 def test_flatquant_transform_keeps_linear_result_equivalent():
     flat = _make(dim_size=4, matrix_size=2)
     with torch.no_grad():
@@ -137,7 +131,7 @@ def test_flatquant_transform_keeps_linear_result_equivalent():
     x = torch.tensor([[1.0, 2.0, 3.0, 4.0], [2.0, 3.0, 4.0, 5.0]])
     weight = torch.tensor([[1.0, 0.5, 0.25, 0.125], [2.0, 1.0, 0.5, 0.25]])
     transformed_x = flat(x)
-    transformed_weight = flat.transform_weight(weight)
+    transformed_weight = flat(weight, inv_t=True)
     assert torch.allclose(F.linear(transformed_x, transformed_weight), F.linear(x, weight), atol=1e-5)
 
 
