@@ -244,17 +244,14 @@ class TestHyV3Adapter:
             q._parameters, q._modules, q._buffers = {}, {}, {}
             return q
 
-        gate_proj_0 = nn.Module()
-        gate_proj_0.quant_linear = _ql()
-        up_proj_0 = nn.Module()
-        up_proj_0.quant_linear = _ql()
-        down_proj_0 = nn.Module()
-        down_proj_0.quant_linear = _ql()
-
+        # QuantGatedMLP stores gate/up/down_proj as QuantLinear directly, so each
+        # QuantLinear surfaces at the 5-segment name
+        # mlp.experts.expert_modules.<idx>.<proj> (no extra .quant_linear child).
+        # Mirror that real structure so the test exercises the true deploy path.
         expert_0 = nn.Module()
-        expert_0.gate_proj = gate_proj_0
-        expert_0.up_proj = up_proj_0
-        expert_0.down_proj = down_proj_0
+        expert_0.gate_proj = _ql()
+        expert_0.up_proj = _ql()
+        expert_0.down_proj = _ql()
 
         expert_modules = nn.ModuleList([expert_0])
 
