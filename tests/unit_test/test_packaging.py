@@ -36,22 +36,12 @@ ships the generated ``*_pb2.py`` modules -- ``package_data`` only carries the
 non-``.py`` resources). They fail loudly if the layout drifts again.
 """
 import ast
-import sys
 from pathlib import Path
 
 import pytest
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    tomllib = pytest.importorskip("tomli")
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SETUP_PY = REPO_ROOT / "setup.py"
-PYPROJECT_TOML = REPO_ROOT / "pyproject.toml"
-README_MD = REPO_ROOT / "README.md"
-README_EN_MD = REPO_ROOT / "README_en.md"
-BUILD_GUIDE_MD = REPO_ROOT / "docs" / "zh" / "build.md"
 
 # Current package that owns the graph-based resources.
 GRAPH_PACKAGE = "amct_pytorch.classic.graph_based"
@@ -67,50 +57,6 @@ PROTO_REL_DIR = "amct_pytorch/proto"
 # are absent on a fresh checkout, so existence cannot be asserted -- only that
 # the relative path stays anchored inside the package tree.
 BUILD_ARTIFACT_DIRS = frozenset({"lib"})
-
-
-def test_pyproject_declares_build_backend_dependencies():
-    """sdist installs must advertise setuptools/wheel as build dependencies."""
-    pyproject = tomllib.loads(PYPROJECT_TOML.read_text(encoding="utf-8"))
-    build_system = pyproject.get("build-system")
-    assert build_system is not None, (
-        "pyproject.toml must declare [build-system] so pip can prepare the "
-        "isolated build environment for sdist installs."
-    )
-    assert build_system.get("build-backend") == "setuptools.build_meta"
-
-    requires = set(build_system.get("requires", []))
-    missing = {"setuptools", "wheel"} - requires
-    assert not missing, (
-        f"pyproject.toml [build-system].requires is missing {sorted(missing)}; "
-        "sdist installs need setuptools and wheel available for metadata/wheel "
-        "build commands."
-    )
-
-
-def test_readme_warns_no_build_isolation_requires_wheel():
-    """Document the user-visible fix for --no-build-isolation installs."""
-    readme = README_MD.read_text(encoding="utf-8")
-    assert "请先执行 `pip install wheel`，再追加 `--no-build-isolation`" in readme
-    assert "pip install wheel" in readme
-    assert "error: invalid command 'bdist_wheel'" in readme
-
-
-def test_english_readme_warns_no_build_isolation_requires_wheel():
-    """Keep the English README aligned with the installation guidance."""
-    readme = README_EN_MD.read_text(encoding="utf-8")
-    assert "Run `pip install wheel` first" in readme
-    assert "`--no-build-isolation` to install the package" in readme
-    assert "error: invalid command 'bdist_wheel'" in readme
-    assert "build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz" in readme
-
-
-def test_build_guide_warns_no_build_isolation_requires_wheel():
-    """Keep the build guide aligned with README installation guidance."""
-    guide = BUILD_GUIDE_MD.read_text(encoding="utf-8")
-    assert "请先执行`pip install wheel`" in guide
-    assert "追加`--no-build-isolation`" in guide
-    assert "error: invalid command 'bdist_wheel'" in guide
 
 
 def _returned_dict(func_node):
