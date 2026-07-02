@@ -59,25 +59,29 @@ def _stub(quant_target=("moe",), **attrs):
 # ---------------------------------------------------------------------------
 
 class TestRemapHyV3Keys:
-    def test_router_gate_remapped(self):
+    @staticmethod
+    def test_router_gate_remapped():
         sd = {"model.layers.0.mlp.router.gate.weight": torch.zeros(4, 4)}
         out = remap_hyv3_keys(sd)
         assert "model.layers.0.mlp.gate.weight" in out
         assert "model.layers.0.mlp.router.gate.weight" not in out
 
-    def test_expert_bias_remapped(self):
+    @staticmethod
+    def test_expert_bias_remapped():
         sd = {"model.layers.0.mlp.expert_bias": torch.zeros(4)}
         out = remap_hyv3_keys(sd)
         assert "model.layers.0.mlp.e_score_correction_bias" in out
         assert "model.layers.0.mlp.expert_bias" not in out
 
-    def test_shared_mlp_remapped(self):
+    @staticmethod
+    def test_shared_mlp_remapped():
         sd = {"model.layers.0.mlp.shared_mlp.gate_proj.weight": torch.zeros(4, 4)}
         out = remap_hyv3_keys(sd)
         assert "model.layers.0.mlp.shared_experts.gate_proj.weight" in out
         assert "model.layers.0.mlp.shared_mlp.gate_proj.weight" not in out
 
-    def test_unrelated_keys_pass_through(self):
+    @staticmethod
+    def test_unrelated_keys_pass_through():
         sd = {
             "model.embed_tokens.weight": torch.zeros(4, 4),
             "model.norm.weight": torch.zeros(4),
@@ -85,7 +89,8 @@ class TestRemapHyV3Keys:
         out = remap_hyv3_keys(sd)
         assert set(out.keys()) == set(sd.keys())
 
-    def test_multiple_keys_all_remapped(self):
+    @staticmethod
+    def test_multiple_keys_all_remapped():
         sd = {
             "mlp.router.gate.weight": torch.zeros(4, 4),
             "mlp.expert_bias": torch.zeros(4),
@@ -105,24 +110,29 @@ class TestRemapHyV3Keys:
 # ---------------------------------------------------------------------------
 
 class TestHyV3Adapter:
-    def test_parse_quant_mode_rejects_mlp(self):
+    @staticmethod
+    def test_parse_quant_mode_rejects_mlp():
         obj = _stub(quant_target=["mlp"])
         with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
             obj.parse_quant_mode()
 
-    def test_parse_quant_mode_accepts_moe(self):
+    @staticmethod
+    def test_parse_quant_mode_accepts_moe():
         obj = _stub(quant_target=["moe"])
         obj.parse_quant_mode()  # must not raise
 
-    def test_parse_quant_mode_accepts_attn_linear(self):
+    @staticmethod
+    def test_parse_quant_mode_accepts_attn_linear():
         obj = _stub(quant_target=["attn-linear"])
         obj.parse_quant_mode()  # must not raise
 
-    def test_get_layer_weight_prefix(self):
+    @staticmethod
+    def test_get_layer_weight_prefix():
         obj = _stub()
         assert obj.get_layer_weight_prefix(3) == "model.layers.3."
 
-    def test_load_layer_weight_applies_remap_and_pack(self, monkeypatch):
+    @staticmethod
+    def test_load_layer_weight_applies_remap_and_pack(monkeypatch):
         obj = _stub()
         raw = {
             "mlp.router.gate.weight": torch.zeros(4, 4),
@@ -147,7 +157,8 @@ class TestHyV3Adapter:
         assert "mlp.gate.weight" in result
         assert captured_prefix["ep"] == "mlp.experts"
 
-    def test_load_layer_weight_skips_pack_when_no_gate_proj(self, monkeypatch):
+    @staticmethod
+    def test_load_layer_weight_skips_pack_when_no_gate_proj(monkeypatch):
         obj = _stub()
         raw = {"mlp.router.gate.weight": torch.zeros(4, 4)}
         monkeypatch.setattr(
@@ -162,7 +173,8 @@ class TestHyV3Adapter:
         obj.load_layer_weight("model.layers.0.")
         assert not pack_called
 
-    def test_iter_ptq_units_moe_yields_experts(self):
+    @staticmethod
+    def test_iter_ptq_units_moe_yields_experts():
         obj = _stub(quant_target=["moe"])
         block = nn.Module()
         block.mlp = nn.Module()
@@ -171,7 +183,8 @@ class TestHyV3Adapter:
         assert len(units) == 2
         assert all(u.kind == "moe" for u in units)
 
-    def test_iter_ptq_units_attn_linear_yields_attn(self):
+    @staticmethod
+    def test_iter_ptq_units_attn_linear_yields_attn():
         obj = _stub(quant_target=["attn-linear"])
         block = nn.Module()
         block.self_attn = nn.Linear(4, 4)
@@ -179,7 +192,8 @@ class TestHyV3Adapter:
         assert len(units) == 1
         assert units[0].kind == "attn"
 
-    def test_build_quant_block_moe_replaces_mlp(self, monkeypatch):
+    @staticmethod
+    def test_build_quant_block_moe_replaces_mlp(monkeypatch):
         obj = _stub(quant_target=["moe"])
         dl = nn.Module()
         moe = nn.Module()
@@ -194,7 +208,8 @@ class TestHyV3Adapter:
         result = obj.build_quant_block(0)
         assert result.mlp is sentinel
 
-    def test_build_quant_block_moe_fallback_to_mlp_when_no_experts(self, monkeypatch):
+    @staticmethod
+    def test_build_quant_block_moe_fallback_to_mlp_when_no_experts(monkeypatch):
         obj = _stub(quant_target=["moe"])
         dl = nn.Module()
         dl.mlp = nn.Linear(4, 4)
@@ -207,7 +222,8 @@ class TestHyV3Adapter:
         result = obj.build_quant_block(0)
         assert result.mlp is sentinel
 
-    def test_build_quant_block_attn_linear_calls_apply_quant(self, monkeypatch):
+    @staticmethod
+    def test_build_quant_block_attn_linear_calls_apply_quant(monkeypatch):
         obj = _stub(quant_target=["attn-linear"])
         dl = nn.Module()
         monkeypatch.setattr(obj, "block", lambda idx: dl)
@@ -218,9 +234,10 @@ class TestHyV3Adapter:
         )
         from amct_pytorch.common.models.llm.hyv3.quant_module import QuantHYV3Attn
         obj.build_quant_block(0)
-        assert captured["cls"] is QuantHYV3Attn
+        assert captured.get("cls") is QuantHYV3Attn
 
-    def test_iter_deploy_bindings_yields_quant_linears(self):
+    @staticmethod
+    def test_iter_deploy_bindings_yields_quant_linears():
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
         obj = _stub()
 
@@ -234,8 +251,8 @@ class TestHyV3Adapter:
         assert bindings[0][0] == "model.layers.0.proj.weight"
         assert bindings[0][1] is ql
 
-
-    def test_iter_deploy_bindings_remaps_packed_experts(self):
+    @staticmethod
+    def test_iter_deploy_bindings_remaps_packed_experts():
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
         obj = _stub(quant_target=["moe"])
 
@@ -279,13 +296,28 @@ class TestHyV3Adapter:
 # ---------------------------------------------------------------------------
 
 class TestQuantHYV3MoEForward:
-    def _make_moe(self, num_experts=4, top_k=2, enable_fp32=False):
+    @staticmethod
+    def test_forward_output_shape():
+        obj = TestQuantHYV3MoEForward._make_moe()
+        h = torch.randn(2, 4, 8)
+        out = obj.forward(h)
+        assert out.shape == (2, 4, 8)
+
+    @staticmethod
+    def test_forward_fp32_combine_path():
+        obj = TestQuantHYV3MoEForward._make_moe(enable_fp32=True)
+        h = torch.randn(1, 3, 8)
+        out = obj.forward(h)
+        assert out.shape == (1, 3, 8)
+        assert out.dtype == h.dtype
+
+    @staticmethod
+    def _make_moe(num_experts=4, top_k=2, enable_fp32=False):
         """Build a QuantHYV3MoE stub without calling __init__."""
         obj = QuantHYV3MoE.__new__(QuantHYV3MoE)
         obj.top_k = top_k
         obj.enable_moe_fp32_combine = enable_fp32
 
-        # gate: returns (logits, weights, indices)
         def _gate(hidden, bias):
             bsz = hidden.shape[0]
             weights = torch.ones(bsz, top_k) / top_k
@@ -296,25 +328,10 @@ class TestQuantHYV3MoEForward:
         obj.register_buffer = lambda name, val: setattr(obj, name, val)
         obj.e_score_correction_bias = torch.zeros(num_experts)
 
-        # experts: returns zeros of same shape as input
         mock_experts = MagicMock()
         mock_experts.return_value = torch.zeros(1, 8)
         obj.experts = mock_experts
 
-        # shared_experts: identity
         obj.shared_experts = lambda x: torch.zeros_like(x)
 
         return obj
-
-    def test_forward_output_shape(self):
-        obj = self._make_moe()
-        h = torch.randn(2, 4, 8)
-        out = obj.forward(h)
-        assert out.shape == (2, 4, 8)
-
-    def test_forward_fp32_combine_path(self):
-        obj = self._make_moe(enable_fp32=True)
-        h = torch.randn(1, 3, 8)
-        out = obj.forward(h)
-        assert out.shape == (1, 3, 8)
-        assert out.dtype == h.dtype
