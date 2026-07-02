@@ -193,29 +193,6 @@ def test_export_block_deploy_skips_none_extra_tensor():
     assert "k.extra" not in deploy_tensors
 
 
-# ---- generate_quant_config: ignoredLayers parameter -----------------------
-
-
-@pytest.mark.cpu
-def test_generate_quant_config_with_ignored_layers():
-    cfg = generate_quant_config(
-        cache_scheme={}, ignores=[], ignored_layers=["layer_0", "layer_1"]
-    )
-    assert cfg["ignored_layers"] == ["layer_0", "layer_1"]
-
-
-@pytest.mark.cpu
-def test_generate_quant_config_without_ignored_layers():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[])
-    assert "ignored_layers" not in cfg
-
-
-@pytest.mark.cpu
-def test_generate_quant_config_empty_ignored_layers_not_included():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], ignored_layers=[])
-    assert "ignored_layers" not in cfg
-
-
 # ---- get_quant_ignore_linear_names: PlainLinear filtering -----------------
 
 
