@@ -110,7 +110,9 @@ class HyV3(BaseModel):
                 continue
             if name.startswith("mlp.experts.expert_modules."):
                 parts = name.split(".")
-                _, _, _, expert_idx, proj_name, _ = parts
+                if len(parts) != 5:
+                    raise ValueError(f"Unexpected HyV3 MoE expert module name: {name}")
+                _, _, _, expert_idx, proj_name = parts
                 yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
                 continue
             yield f"{weight_prefix}{name}.weight", module
