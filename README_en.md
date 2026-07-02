@@ -113,8 +113,6 @@ The "One-Stop Platform" is an NPU environment provided for developers, internall
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | Complete Qwen3.6-MoE model quantization, data extraction, and PTQ in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience. |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | Complete DeepSeek-V4 Flash model single-card inference in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience.    |
 
-
-
 ## 📖 Documentation Samples
 
 | Topic | Content |
@@ -175,13 +173,13 @@ amct/
 
 </details>
 
-
 <details>
 <summary><strong>"ModuleNotFoundError: No module named 'torch'" during installation?</strong></summary>
 
 **Reason**: pip version > 25.2, build isolation causes torch not recognized.
 
 **Solution**:
+
 ```bash
 # Solution 1: Lower pip version
 pip install pip==25.2

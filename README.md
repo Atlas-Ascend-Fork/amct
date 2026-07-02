@@ -112,8 +112,6 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | 在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。 |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的单卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。    |
 
-
-
 ## 📖 文档样例
 
 | 主题 | 内容 |
@@ -174,13 +172,13 @@ amct/
 
 </details>
 
-
 <details>
 <summary><strong>安装时报 "ModuleNotFoundError: No module named 'torch'"？</strong></summary>
 
 **原因**：pip 版本 > 25.2，构建隔离导致 torch 未被识别。
 
 **解决方案**：
+
 ```bash
 # 方案 1：降低 pip 版本
 pip install pip==25.2
