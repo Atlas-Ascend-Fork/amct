@@ -574,6 +574,8 @@ class TestQuantGlmMoeDsaAttention:
         assert isinstance(quant_attn.inp_afq, nn.Identity)
         assert isinstance(quant_attn.q_b_proj_afq, nn.Identity)
         assert isinstance(quant_attn.o_proj_afq, nn.Identity)
+        assert isinstance(quant_attn.q_cache_quantizer, nn.Identity)
+        assert isinstance(quant_attn.k_cache_quantizer, nn.Identity)
 
     @staticmethod
     def _patch_structure_transforms(monkeypatch):
@@ -627,6 +629,19 @@ class TestQuantGlmMoeDsaAttention:
         quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
 
         assert quant_attn.indexer is None
+
+    def test_init_attn_cache_creates_cache_quantizers(self, monkeypatch):
+        """attn-cache target creates ActivationQuantizer for q/k cache."""
+        _register_dtype_once()
+        self._patch_structure_transforms(monkeypatch)
+
+        args = _make_quant_args(quant_target=["attn-cache"])
+        attn_module = _make_mock_attn_module(with_indexer=True)
+        quant_attn = QuantGlmMoeDsaAttention(args, attn_module)
+
+        from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer
+        assert isinstance(quant_attn.q_cache_quantizer, ActivationQuantizer)
+        assert isinstance(quant_attn.k_cache_quantizer, ActivationQuantizer)
 
     def test_forward_full_layer(self, monkeypatch):
         """forward with indexer and 4D attention_mask."""
