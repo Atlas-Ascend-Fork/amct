@@ -60,7 +60,6 @@ def _make_pipeline_mock(num_layers=2, **overrides):
     defaults = dict(
         num_layers=num_layers,
         get_kv_cache_scheme=lambda: {"num_bits": 8, "type": "float"},
-        get_extra_ignore_names=lambda **kwargs: [],
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -575,30 +574,5 @@ def test_refresh_config_tensor_bf16(tmp_path):
     refreshed = json.loads((tmp_path / "config.json").read_text())
     assert refreshed["torch_dtype"] == "bfloat16"
     assert "quantization_config" not in refreshed
-
-
-# ---- _collect_extra_ignore_names ----------------------------------------
-
-
-@pytest.mark.cpu
-def test_collect_extra_ignore_names_delegates_to_pipeline():
-    wf = _make_workflow()
-    wf.pipeline = SimpleNamespace(
-        get_extra_ignore_names=lambda quant_mode, quant_specs: ["lm_head", "gate"]
-    )
-    result = getattr(wf, "_collect_extra_ignore_names")(quant_mode="tensor", quant_specs={"w": 8})
-    assert result == ["lm_head", "gate"]
-
-
-@pytest.mark.cpu
-def test_collect_extra_ignore_names_block_mode():
-    wf = _make_workflow()
-    wf.pipeline = SimpleNamespace(
-        get_extra_ignore_names=lambda quant_mode, quant_specs: ["mtp_layer"]
-    )
-    result = getattr(wf, "_collect_extra_ignore_names")(quant_mode="block")
-    assert result == ["mtp_layer"]
-
-
 
 

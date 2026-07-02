@@ -199,22 +199,6 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
-    def build_empty_quant_block(self, layer_idx):
-        """Build an empty quant block without loading actual weights.
-
-        Used by tensor-mode ignore list collection, get_quant_weight_specs,
-        and other scenarios that only need module structure without actual weights.
-        """
-        with init_empty_weights():
-            decoder_layer = self.cls(self.config, layer_idx)
-        original_block = self.block
-        try:
-            self.block = lambda idx, _dl=decoder_layer: _dl
-            block = self.build_quant_block(layer_idx)
-        finally:
-            self.block = original_block
-        return block
-
     def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
         act_stat = {}
         outs, hooks = [], []
@@ -310,33 +294,6 @@ class BaseModel(metaclass=ABCMeta):
     def get_kv_cache_scheme(self):
         """Return KV cache quantization config, or None to skip quantization."""
         return {"num_bits": 8, "type": "float"}
-
-    def get_quant_weight_specs(self):
-        """Return {safetensors_weight_name: w_bits} for tensor-mode quantization.
-
-        Default implementation builds empty quant blocks and collects QuantLinear
-        w_bits from bit_policy. Override for path mapping (e.g. packed experts).
-        """
-        specs = {}
-        for layer_idx in range(self.num_layers):
-            block = self.build_empty_quant_block(layer_idx)
-            weight_prefix = self.get_layer_weight_prefix(layer_idx)
-            for name, module in block.named_modules():
-                if isinstance(module, QuantLinear) and module.w_bits is not None:
-                    specs[f"{weight_prefix}{name}.weight"] = module.w_bits
-        return specs
-
-    def get_extra_ignore_names(self, quant_mode="block", quant_specs=None):
-        """Return ignore entries not discoverable by regular block traversal.
-
-        Default implementation returns empty list. Adapters override this to
-        handle model-specific cases like MTP layers, non-Linear modules, etc.
-
-        Args:
-            quant_mode: "block" or "tensor".
-            quant_specs: {weight_name: w_bits} dict. Required when quant_mode="tensor".
-        """
-        return []
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
