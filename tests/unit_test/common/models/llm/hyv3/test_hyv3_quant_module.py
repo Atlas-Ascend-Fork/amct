@@ -138,6 +138,7 @@ class TestQuantHYV3MoE:
     def test_forward_default_combine_path():
         cfg = tiny_config()
         moe = HYV3MoE(cfg)
+        moe.enable_moe_fp32_combine = False
         qmoe = QuantHYV3MoE(quant_args(["moe"]), moe)
         h = torch.randn(2, 4, cfg.hidden_size)
         out = qmoe(h)
