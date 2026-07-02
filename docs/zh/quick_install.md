@@ -16,7 +16,28 @@
 
 - Ascend Extension for PyTorch：版本配套关系请单击[Link](https://hiascend.com/document/redirect/pytorchuserguide)，查看“版本说明 >相关产品版本配套说明”章节。
 
-此处以Python3.11、PyTorch2.7.1版本为例，安装业务运行时依赖的Python第三方库，安装命令如下，PyTorch2.1.0版本安装依赖命令请参见《[AMCT模型压缩工具](https://www.hiascend.com/document/redirect/CannCommunityToolAmctInstalDepdence)》：
+### PyTorch + torch_npu 配套安装
+
+使用 NPU 路径时，PyTorch 必须安装 CPU 版，并与 `torch_npu` 版本配套。不要在同一 Python 环境中混用非 CPU 版 PyTorch 与 `torch_npu`，否则可能在运行期出现加速器冲突。
+
+推荐按以下任一路径安装：
+
+- 路径 A：参考 Ascend 官方《[PyTorch 使用指南](https://hiascend.com/document/redirect/pytorchuserguide)》中“版本说明 > 相关产品版本配套说明”章节，下载并安装匹配的 CPU 版 PyTorch wheel 与 `torch_npu` wheel。
+- 路径 B：使用 PyTorch CPU wheel 索引安装 CPU 版 PyTorch，再安装配套 `torch_npu`。
+
+  ```bash
+  pip3 uninstall -y torch
+  pip3 install torch==2.7.1+cpu --index-url https://download.pytorch.org/whl/cpu
+  pip3 install torch_npu==2.7.1.post4
+  ```
+
+安装后可执行以下命令确认当前环境安装的是 CPU 版 PyTorch：
+
+```bash
+python3 -c "import torch; assert '+cpu' in torch.__version__, 'must use CPU torch for NPU path'"
+```
+
+此处以Python3.11、PyTorch2.7.1版本为例，安装业务运行时依赖的Python第三方库，安装命令如下。`requirements.txt` 已通过 PyTorch CPU wheel 索引固定 CPU 版 PyTorch；PyTorch2.1.0版本安装依赖命令请参见《[AMCT模型压缩工具](https://www.hiascend.com/document/redirect/CannCommunityToolAmctInstalDepdence)》：
 
 ```bash
 pip3 install -r requirements.txt
