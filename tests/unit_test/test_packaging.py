@@ -50,6 +50,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SETUP_PY = REPO_ROOT / "setup.py"
 PYPROJECT_TOML = REPO_ROOT / "pyproject.toml"
 README_MD = REPO_ROOT / "README.md"
+README_EN_MD = REPO_ROOT / "README_en.md"
 BUILD_GUIDE_MD = REPO_ROOT / "docs" / "zh" / "build.md"
 
 # Current package that owns the graph-based resources.
@@ -93,6 +94,15 @@ def test_readme_warns_no_build_isolation_requires_wheel():
     assert "请先执行 `pip install wheel`，再追加 `--no-build-isolation`" in readme
     assert "pip install wheel" in readme
     assert "error: invalid command 'bdist_wheel'" in readme
+
+
+def test_english_readme_warns_no_build_isolation_requires_wheel():
+    """Keep the English README aligned with the installation guidance."""
+    readme = README_EN_MD.read_text(encoding="utf-8")
+    assert "Run `pip install wheel` first" in readme
+    assert "`--no-build-isolation` to install the package" in readme
+    assert "error: invalid command 'bdist_wheel'" in readme
+    assert "build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz" in readme
 
 
 def test_build_guide_warns_no_build_isolation_requires_wheel():
