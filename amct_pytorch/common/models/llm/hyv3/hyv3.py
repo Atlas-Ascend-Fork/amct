@@ -101,39 +101,7 @@ class HyV3(BaseModel):
         return decoder_layer
 
     def iter_ptq_units(self, layer_idx, block):
-        from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit, iter_indexed_units
-        
-        if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
-            quant_attn = getattr(block, "self_attn", None)
-            yield make_ptq_unit("attn", "self_attn", layer_idx, quant_attn)
-            return
-        
-        mlp = getattr(block, "mlp", None)
-        if mlp is None:
-            return
-        
-        if "moe" in self.quant_target:
-            if hasattr(mlp, "experts"):
-                experts = getattr(mlp, "experts", [])
-                if hasattr(experts, "iter_ptq_expert_modules"):
-                    expert_list = experts.iter_ptq_expert_modules()
-                elif hasattr(experts, "expert_modules"):
-                    expert_list = experts.expert_modules
-                else:
-                    expert_list = list(experts)
-                
-                yield from iter_indexed_units(
-                    kind="moe",
-                    name_prefix="expert",
-                    layer_idx=layer_idx,
-                    items=expert_list,
-                    metadata_fn=lambda idx, _: {"expert_idx": idx},
-                )
-            
-            # shared_experts uses direct quantization (build_no_algo_args), skip PTQ
-            # if hasattr(mlp, "shared_experts"):
-            #     shared_experts = mlp.shared_experts
-            #     yield make_ptq_unit("moe.shared", "shared_experts", layer_idx, shared_experts)
+        yield from super().iter_ptq_units(layer_idx, block)
 
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
