@@ -51,6 +51,7 @@ class QuantGlmMoeDsaAttention(nn.Module):
         self._build_mla_projections(args, attn_module, bits, use_quant, is_mxfp)
         self._build_indexer_projections(args, attn_module, bits, use_quant, is_mxfp)
         self._build_activation_quantizers(args, bits, use_quant, is_mxfp)
+        self._build_cache_quantizers(args)
 
     @staticmethod
     def _get_activation_bits(bit_policy_entry):
@@ -112,6 +113,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
         query_states = torch.cat([q_nope, q_pe], dim=-1)
         key_states = torch.cat([k_nope, k_pe], dim=-1)
 
+        query_states = self.q_cache_quantizer(query_states)
+        key_states = self.k_cache_quantizer(key_states)
+
         # ===== DSA Indexer (IndexShare: shared layers reuse, full layers compute) =====
         if self.indexer is not None:
             indexer_mask = attention_mask[:, 0, :, :] if attention_mask is not None else None
@@ -156,6 +160,17 @@ class QuantGlmMoeDsaAttention(nn.Module):
         attn_output = self.o_proj_afq(attn_output)
         attn_output = self.o_proj(attn_output, structure_transform=None)
         return attn_output, None, topk_indices
+
+    def _build_cache_quantizers(self, args):
+        """Build KV cache activation quantizers for attn-cache target."""
+        self.q_cache_quantizer = (
+            ActivationQuantizer(args, bits=args.bit_policy.cache_bits("q"))
+            if self.enable_attn_cache else nn.Identity()
+        )
+        self.k_cache_quantizer = (
+            ActivationQuantizer(args, bits=args.bit_policy.cache_bits("k"))
+            if self.enable_attn_cache else nn.Identity()
+        )
 
     def _build_activation_quantizers(self, args, bits, use_quant, is_mxfp):
         """Build activation quantizers and structure transforms for attn-linear path."""
