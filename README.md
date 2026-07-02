@@ -92,7 +92,9 @@ bash build.sh --torch
 pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user
 ```
 
-> ⚠️ **注意**：若 pip 版本 > 25.2，安装命令需追加 `--no-build-isolation`，否则可能出现 `ModuleNotFoundError: No module named 'torch'`。
+> ⚠️ **注意**：若使用 `--no-build-isolation` 安装，pip 不会自动安装构建依赖；
+> 请先执行 `pip install wheel`，再追加 `--no-build-isolation` 安装产物包，否则可能出现
+> `error: invalid command 'bdist_wheel'`。
 
 ```bash
 # 验证 AMCT 安装
@@ -183,8 +185,9 @@ amct/
 # 方案 1：降低 pip 版本
 pip install pip==25.2
 
-# 方案 2：添加 --no-build-isolation
-pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isolation
+# 方案 2：先安装 wheel，再添加 --no-build-isolation
+pip install wheel
+pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user --no-build-isolation
 ```
 
 </details>
