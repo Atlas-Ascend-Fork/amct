@@ -133,21 +133,6 @@ class LlmDeployWorkflow:
         with open(index_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def _collect_extra_ignore_names(self, quant_mode="block", quant_specs=None):
-        """Collect adapter-specific ignore entries not discoverable by block traversal.
-
-        Typical cases: non-nn.Linear modules (e.g. MoE router mlp.gate),
-        MTP layers (outside num_layers range), lm_head, etc.
-
-        quant_mode: "block" or "tensor". In block mode, MTP modules are all ignored
-        since blockwise export never processes them. In tensor mode, only modules
-        NOT in quant_specs are ignored.
-        quant_specs: {weight_name: w_bits} dict. Required when quant_mode="tensor".
-        """
-        return self.pipeline.get_extra_ignore_names(
-            quant_mode=quant_mode, quant_specs=quant_specs
-        )
-
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
@@ -223,9 +208,6 @@ class LlmDeployWorkflow:
             )
         )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        quant_ignore_layers.extend(
-            self._collect_extra_ignore_names(quant_mode="block")
-        )
         self._refresh_config(quant_ignore_layers)
         logger.info("Exported deploy model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
