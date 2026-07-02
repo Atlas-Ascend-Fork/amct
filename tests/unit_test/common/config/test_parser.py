@@ -18,6 +18,7 @@
 import pytest
 import torch
 import torch.nn as nn
+from unittest.mock import MagicMock
 
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.common.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
@@ -645,3 +646,127 @@ def test_build_layer_types_and_quant_type_when_wts_type_is_none():
         quant_config, registed_alg
     )
     assert quant_type_comb is None
+
+
+# ---- _check_quant_dtype_comb_rules: asymmetric + int8/int4 strategy rules ---
+
+
+def _make_qc_for_comb_rules(wts_type, act_type, wts_sym, wts_strat, act_strat):
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "weights": {"type": wts_type, "symmetric": wts_sym, "strategy": wts_strat}
+            },
+            "algorithm": {MINMAX: {}},
+        },
+        AlgorithmRegistry,
+    )
+    qc.quant_cfg.inputs_cfg.quant_type = act_type
+    qc.quant_cfg.inputs_cfg.strategy = act_strat
+    return qc
+
+
+def test_comb_rules_raises_when_asymmetric_weight_for_tensor_comb():
+    from amct_pytorch.common.config.parser import _check_quant_dtype_comb_rules
+
+    # "int8 int8" is in ACT_GRANULARITY_SUPPORT_MAP["tensor"]; asymmetric weight -> error
+    qc = _make_qc_for_comb_rules("int8", "int8", False, "channel", "tensor")
+    with pytest.raises(ValueError, match="only support symmetric"):
+        _check_quant_dtype_comb_rules("int8 int8", qc)
+
+
+def test_comb_rules_raises_int8_int4_with_group_weight_strategy():
+    from amct_pytorch.common.config.parser import _check_quant_dtype_comb_rules
+
+    # Build with a valid weight strategy, then override to "group" post-construction
+    # (the QuantConfig constructor rejects strategy="group" without a group_size).
+    qc = _make_qc_for_comb_rules("int4", "int8", True, "tensor", "tensor")
+    qc.quant_cfg.weights_cfg.strategy = "group"
+    with pytest.raises(
+        ValueError, match="only support weight quant strategy tensor or channel"
+    ):
+        _check_quant_dtype_comb_rules("int8 int4", qc)
+
+
+def test_comb_rules_raises_int8_int4_with_channel_act_strategy():
+    from amct_pytorch.common.config.parser import _check_quant_dtype_comb_rules
+
+    qc = _make_qc_for_comb_rules("int4", "int8", True, "tensor", "channel")
+    with pytest.raises(ValueError, match="only support activation quant strategy tensor"):
+        _check_quant_dtype_comb_rules("int8 int4", qc)
+
+
+def test_comb_rules_passes_for_valid_int8_int4():
+    from amct_pytorch.common.config.parser import _check_quant_dtype_comb_rules
+
+    # symmetric weight, tensor weight strategy, tensor act strategy -> no raise
+    qc = _make_qc_for_comb_rules("int4", "int8", True, "tensor", "tensor")
+    _check_quant_dtype_comb_rules("int8 int4", qc)
+
+
+# ---- check_kv_config --------------------------------------------------------
+
+
+def test_check_kv_config_raises_unsupported_quant_type():
+    from amct_pytorch.common.config.parser import check_kv_config
+
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "weights": {"type": "int8", "symmetric": True, "strategy": "channel"}
+            },
+            "algorithm": {MINMAX: {}},
+        },
+        AlgorithmRegistry,
+    )
+    qc.quant_cfg.kvcache_cfg = MagicMock()
+    qc.quant_cfg.kvcache_cfg.quant_type = "unsupported_type"
+    with pytest.raises(ValueError, match="Do not support"):
+        check_kv_config(qc, MINMAX)
+
+
+def test_check_kv_config_raises_unsupported_algo():
+    from amct_pytorch.common.config.parser import check_kv_config
+    from amct_pytorch.common.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE
+
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "weights": {"type": "int8", "symmetric": True, "strategy": "channel"}
+            },
+            "algorithm": {MINMAX: {}},
+        },
+        AlgorithmRegistry,
+    )
+    qc.quant_cfg.kvcache_cfg = MagicMock()
+    valid_type = next(iter(ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE))
+    qc.quant_cfg.kvcache_cfg.quant_type = valid_type
+    with pytest.raises(ValueError, match="do not support kvcache"):
+        check_kv_config(qc, "nonexistent_algo")
+
+
+# ---- _is_layer_supported: FP8Linear early return ---------------------------
+
+
+def test_is_layer_supported_fp8linear_returns_false():
+    from amct_pytorch.common.config.parser import _is_layer_supported
+
+    class FP8Linear(nn.Module):
+        pass
+
+    mod = FP8Linear()
+    qc = QuantConfig(
+        {
+            "batch_num": 1,
+            "quant_cfg": {
+                "weights": {"type": "int8", "symmetric": True, "strategy": "channel"}
+            },
+            "algorithm": {MINMAX: {}},
+        },
+        AlgorithmRegistry,
+    )
+    result = _is_layer_supported(mod, "fp8.0", {"FP8Linear": MINMAX}, "int8 int8", qc)
+    assert result is False
