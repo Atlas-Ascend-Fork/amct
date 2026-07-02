@@ -110,7 +110,7 @@ class HyV3(BaseModel):
                 continue
             if name.startswith("mlp.experts.expert_modules."):
                 parts = name.split(".")
-                _, _, _, expert_idx, proj_name = parts
+                _, _, _, expert_idx, proj_name, _ = parts
                 yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
                 continue
             yield f"{weight_prefix}{name}.weight", module
