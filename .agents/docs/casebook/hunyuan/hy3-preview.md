@@ -12,13 +12,13 @@
 ## 适配验证结论
 
 - 标准三步闭环（BF16 baseline → 关闭量化浮点等价 → 最小 PTQ smoke）：BF16 baseline + PTQ smoke（lwc，前 2-3 block）通过。
-- **模型特定结论**：routed/shared/attn-linear 量化通路全部识别正确；冷 expert（calib 未路由到）优雅跳过、deploy fallback 直转；直转 W8A8 与 mxfp8 PPL 均近无损（见量化结论）。
+- **模型特定结论**：routed/shared/attn-linear 量化通路全部识别正确；shared_experts 走直转（不 yield PTQ，见下）；直转 W8A8 与 mxfp8 PPL 均近无损（见量化结论）。
 
 ## 关键陷阱（L3 模型专属；通用见 L1/L2）
 
 - **`eval_mode=bf16` 需带 `--bit_config`（全 ≥16bit 的 yaml，如 configs/bf16.yaml 空配置=全16）** —— 现象：不带或带 w8a8 报 `eval_mode=bf16 requires a bit_config with no <16-bit entries`。根因：bf16 校验强制非量化策略。处理：用 `configs/bf16.yaml`（空配=全 16bit）。教训：BF16 baseline 也必须显式给 bit_config。
 - **shared_experts PTQ 策略矛盾（L3，已修复）** —— 现象：PTQ 报 `PTQ input file not found: block_*_moe.shared_in.pkl`；训练 loss 恒为 0；虽有参数保存但无实际优化。根因：quant_module 用 `build_no_algo_args(args)`（清空 algos），但 adapter `iter_ptq_units` 错误 yield shared_experts → 两层设计矛盾。处理：注释掉 adapter 的 yield（hyv3.py:133-136），保持与 quant_module 一致；shared_experts 使用直接量化（密集激活，效果已够好）。教训：MoE adapter 必检查 `build_no_algo_args` 与 `iter_ptq_units` 的一致性，优先用通用函数 `apply_quant_to_moe_mlp`（自动处理）；**训练 loss 恒为 0 时立即停止检查适配逻辑**。见 L2 `../structure-family-pitfalls.md` · MoE 类 · shared_experts PTQ 策略不一致。
-- packed-expert device 迁移 / attn sdpa is_causal / 冷 expert → 见 L2 `../structure-family-pitfalls.md` · MoE 类（本案为这几条的复现例）。
+- packed-expert device 迁移 / attn sdpa is_causal / "冷 expert 无输入"误诊更正（实为 shared_experts 误 yield）→ 见 L2 `../structure-family-pitfalls.md` · MoE 类（本案为这几条的复现例）。
 
 ## 量化结论
 
