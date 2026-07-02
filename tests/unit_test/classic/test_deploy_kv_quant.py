@@ -48,25 +48,28 @@ def _make_quant_module():
     return qm
 
 
-class _KvDeployTestMixin:
+class _KvDeployTestMixin(unittest.TestCase):
     """Shared assertions for the two structurally identical deploy modules."""
 
+    __test__ = False  # base mixin: not collected directly, only its subclasses
     module_cls = None
 
     def setUp(self):
+        if self.module_cls is None:
+            self.skipTest("base mixin, no module under test")
         self._saved_npu = getattr(torch.Tensor, "npu", None)
         self._saved_torch_npu = sys.modules.get("torch_npu")
         torch.Tensor.npu = lambda self: self
         _install_fake_torch_npu()
 
     def tearDown(self):
-        if self._saved_npu is not None:
+        if getattr(self, "_saved_npu", None) is not None:
             torch.Tensor.npu = self._saved_npu
         elif hasattr(torch.Tensor, "npu"):
             delattr(torch.Tensor, "npu")
         # Restore whatever torch_npu was in sys.modules before this test
         # (e.g. the conftest mock), rather than removing it outright.
-        if self._saved_torch_npu is not None:
+        if getattr(self, "_saved_torch_npu", None) is not None:
             sys.modules["torch_npu"] = self._saved_torch_npu
         else:
             sys.modules.pop("torch_npu", None)
@@ -108,7 +111,8 @@ class _KvDeployTestMixin:
         # start un-hooked
         cache.is_hooked = False
 
-        mod._hook_kv_states(cache)
+        hook_installer = getattr(mod, "_hook_kv_states")
+        hook_installer(cache)
         self.assertTrue(cache.is_hooked)
 
         # exercise the wrapped update: quantize -> update -> anti_quant
@@ -126,12 +130,15 @@ class _KvDeployTestMixin:
         cache = MagicMock()
         original_update = cache.update
         cache.is_hooked = True
-        mod._hook_kv_states(cache)
+        hook_installer = getattr(mod, "_hook_kv_states")
+        hook_installer(cache)
         # update should be unchanged (early return)
         self.assertIs(cache.update, original_update)
 
 
-class TestDeepseekV3AttentionDeploy(_KvDeployTestMixin, unittest.TestCase):
+class TestDeepseekV3AttentionDeploy(_KvDeployTestMixin):
+    __test__ = True
+
     @classmethod
     def setUpClass(cls):
         _install_fake_torch_npu()
@@ -142,7 +149,9 @@ class TestDeepseekV3AttentionDeploy(_KvDeployTestMixin, unittest.TestCase):
         cls.module_cls = NpuDeepseekV3AttentionQuant
 
 
-class TestLongcatFlashMLADeploy(_KvDeployTestMixin, unittest.TestCase):
+class TestLongcatFlashMLADeploy(_KvDeployTestMixin):
+    __test__ = True
+
     @classmethod
     def setUpClass(cls):
         _install_fake_torch_npu()

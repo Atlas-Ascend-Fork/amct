@@ -15,10 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from unittest.mock import MagicMock
+
 import pytest
 import torch
 import torch.nn as nn
-from unittest.mock import MagicMock
 
 from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.common.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
@@ -632,8 +633,6 @@ def test_get_supported_layers_constraint_skip():
 
 
 def test_build_layer_types_and_quant_type_when_wts_type_is_none():
-    from unittest.mock import MagicMock
-
     from amct_pytorch.common.config.parser import _build_layer_types_and_quant_type
 
     quant_config = MagicMock()

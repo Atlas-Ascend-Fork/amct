@@ -41,18 +41,12 @@ def _make_inputs(module_type, hidden_size=8):
     wts_param = {"module_type": module_type, "module": module}
     tensor = torch.randn(4, 4)
     scale = torch.ones(1)
-    # symbolic reads inputs[0], inputs[1], inputs[3], inputs[5]
-    return (tensor, scale, torch.zeros(1), wts_param, torch.zeros(1), torch.zeros(1))
+    zero = torch.zeros(1)
+    # symbolic reads positional args at index 0, 1, 3 and 5
+    return [tensor, scale, zero, wts_param, zero, zero]
 
 
 class TestUlqScaleRetrainSymbolic(unittest.TestCase):
-    def _run(self, module_type):
-        g = _make_graph()
-        inputs = _make_inputs(module_type)
-        out = UlqScaleRetrainFuncQAT.symbolic(g, *inputs)
-        self.assertEqual(len(out), 3)
-        self.assertTrue(g.op.called)
-
     def test_symbolic_conv_transpose(self):
         self._run("ConvTranspose1d")
 
@@ -73,6 +67,13 @@ class TestUlqScaleRetrainSymbolic(unittest.TestCase):
 
     def test_symbolic_gru(self):
         self._run("GRU")
+
+    def _run(self, module_type):
+        g = _make_graph()
+        inputs = _make_inputs(module_type)
+        out = UlqScaleRetrainFuncQAT.symbolic(g, *inputs)
+        self.assertEqual(len(out), 3)
+        self.assertTrue(g.op.called)
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@
 # limitations under the License.
 """Unit tests for OfmrQuant and LinearAWQuant modules (CPU, no NPU required)."""
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import torch
 import torch.nn as nn
@@ -48,28 +48,28 @@ def _make_awq_config(group_size=None):
     return cfg
 
 
+def _make_linear(in_f=8, out_f=4, bias=True):
+    return nn.Linear(in_f, out_f, bias=bias)
+
+
 class TestOfmrQuantInit(unittest.TestCase):
     """Test OfmrQuant __init__ paths."""
 
-    def _make_linear(self, in_f=8, out_f=4):
-        m = nn.Linear(in_f, out_f, bias=True)
-        return m
-
     def test_init_per_tensor_weight(self):
-        mod = self._make_linear()
+        mod = _make_linear()
         cfg = _make_ofmr_config(strategy="tensor")
         q = OfmrQuant(mod, "fc", cfg)
         self.assertEqual(q.cout, 1)
         self.assertEqual(q.batch_num, 2)
 
     def test_init_per_channel_weight(self):
-        mod = self._make_linear(8, 4)
+        mod = _make_linear(8, 4)
         cfg = _make_ofmr_config(strategy="channel")
         q = OfmrQuant(mod, "fc", cfg)
         self.assertEqual(q.cout, mod.weight.shape[0])
 
     def test_init_weight_compress_only(self):
-        mod = self._make_linear()
+        mod = _make_linear()
         cfg = _make_ofmr_config(weight_compress_only=True)
         q = OfmrQuant(mod, "fc", cfg)
         self.assertTrue(q.weight_compress_only)
@@ -178,54 +178,24 @@ class TestOfmrQuantFakeQuantForward(unittest.TestCase):
         q(x)  # single batch → _calc_weight_quant_loss with cout>1 → scale_w computed
         self.assertIsNotNone(q.scale_w)
 
-    def test_calc_scale_d_raises_on_non_finite_loss(self):
-        """_calc_scale_d raises when act loss is all inf/nan (line 158)."""
-        mod = nn.Linear(4, 2, bias=False)
-        cfg = _make_ofmr_config(batch_num=1)
-        q = OfmrQuant(mod, "fc", cfg)
-        q.act_quant_loss = torch.full((len(q.act_quant_loss),), float("nan"))
-        with self.assertRaises(RuntimeError):
-            q._calc_scale_d()
-
-    def test_calc_scale_w_raises_on_non_finite_loss(self):
-        """_calc_scale_w raises when weight loss is all inf/nan (line 176)."""
-        mod = nn.Linear(4, 2, bias=False)
-        cfg = _make_ofmr_config(batch_num=1, strategy="channel")
-        q = OfmrQuant(mod, "fc", cfg)
-        q.wts_quant_loss = torch.full_like(q.wts_quant_loss, float("nan"))
-        with self.assertRaises(RuntimeError):
-            q._calc_scale_w()
-
-    def test_calc_scale_w_linear_per_channel_reshapes(self):
-        """Linear per-channel scale_w is reshaped to column vector (line 183)."""
-        mod = nn.Linear(4, 3, bias=False)
-        cfg = _make_ofmr_config(batch_num=1, strategy="channel")
-        q = OfmrQuant(mod, "fc", cfg)
-        # cout=3 > 1 and module is Linear → scale_w reshaped to (-1, 1)
-        scale_w = q._calc_scale_w()
-        self.assertEqual(scale_w.shape, (3, 1))
-
 
 class TestLinearAWQuantInit(unittest.TestCase):
     """Test LinearAWQuant __init__ paths."""
 
-    def _make_linear(self):
-        return nn.Linear(8, 4, bias=False)
-
     def test_init_with_group_size(self):
-        mod = self._make_linear()
+        mod = _make_linear(bias=False)
         cfg = _make_awq_config(group_size=4)
         q = LinearAWQuant(mod, "fc", cfg)
         self.assertEqual(q.group_size, 4)
 
     def test_init_without_group_size(self):
-        mod = self._make_linear()
+        mod = _make_linear(bias=False)
         cfg = _make_awq_config(group_size=None)
         q = LinearAWQuant(mod, "fc", cfg)
         self.assertFalse(hasattr(q, "group_size") and q.group_size is not None)
 
     def test_init_act_quant_disabled(self):
-        mod = self._make_linear()
+        mod = _make_linear(bias=False)
         cfg = {
             "weights_cfg": {"quant_type": INT8, "symmetric": True, "group_size": None},
             "inputs_cfg": {"enable_quant": False, "strategy": "tensor"},

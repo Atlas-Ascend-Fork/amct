@@ -39,7 +39,7 @@ def _make_graph():
 def _make_inputs(module_type, hidden_size=8):
     module = MagicMock()
     module.hidden_size = hidden_size
-    # inputs: [tensor, scale, offset, wts_param(dict), zero_point, ...]
+    # symbolic reads positional args tensor, scale, offset, wts_param, zero_point
     wts_param = {"module_type": module_type, "module": module}
     tensor = torch.randn(4, 4)
     scale = torch.ones(1)
@@ -49,14 +49,6 @@ def _make_inputs(module_type, hidden_size=8):
 
 
 class TestArqRetrainSymbolic(unittest.TestCase):
-    def _run(self, module_type):
-        g = _make_graph()
-        inputs = _make_inputs(module_type)
-        out = ArqRetrainFuncQAT.symbolic(g, *inputs)
-        self.assertEqual(len(out), 3)
-        self.assertTrue(g.op.called)
-        return out
-
     def test_symbolic_conv_transpose(self):
         self._run("ConvTranspose2d")
 
@@ -77,6 +69,14 @@ class TestArqRetrainSymbolic(unittest.TestCase):
 
     def test_symbolic_gru(self):
         self._run("GRU")
+
+    def _run(self, module_type):
+        g = _make_graph()
+        inputs = _make_inputs(module_type)
+        out = ArqRetrainFuncQAT.symbolic(g, *inputs)
+        self.assertEqual(len(out), 3)
+        self.assertTrue(g.op.called)
+        return out
 
 
 if __name__ == "__main__":

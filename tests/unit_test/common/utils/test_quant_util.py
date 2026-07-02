@@ -16,6 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import math
+import sys
+import types
+from unittest.mock import patch
 
 import pytest
 import torch
@@ -320,10 +323,6 @@ def test_quant_weight_no_group_size_with_offset():
 
 
 # ---- NPU-dependent paths covered via mock -----------------------------------
-
-import sys
-import types
-from unittest.mock import patch
 
 
 def _make_fake_torch_npu():
