@@ -16,7 +16,6 @@
 # ----------------------------------------------------------------------------
 
 __all__ = [
-    'awq', 'gptq', 'smooth_quant', 'minmax',
     'register_algorithms', 'AlgoBuildContext',
 ]
 
