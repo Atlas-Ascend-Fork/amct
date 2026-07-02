@@ -23,15 +23,28 @@ from unittest.mock import MagicMock
 import pytest
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # transformers.models.hy_v3 is a custom addition not present in stock transformers.
 # Mock it before any hyv3 module is imported so collection succeeds in CI.
+# HYV3Attention.__init__ is stubbed to read head_dim/scaling from config so that
+# QuantHYV3Attn (which calls super().__init__ then uses self.head_dim) works.
 _hy_v3_mod = MagicMock()
 _hy_v3_mod.HYV3Config = type("HYV3Config", (), {})
 _hy_v3_mod.HYV3DecoderLayer = type("HYV3DecoderLayer", (), {})
-_hy_v3_mod.HYV3Attention = type("HYV3Attention", (torch.nn.Module,), {
-    "__init__": lambda self, config, layer_idx: torch.nn.Module.__init__(self),
-})
+
+
+def _hyv3_attn_init(self, config, layer_idx):
+    torch.nn.Module.__init__(self)
+    self.head_dim = config.head_dim
+    self.attention_dropout = getattr(config, "attention_dropout", 0.0)
+    self.scaling = getattr(config, "scaling", 1.0)
+    nq = getattr(config, "num_attention_heads", 1)
+    nkv = getattr(config, "num_key_value_heads", nq)
+    self.num_key_value_groups = nq // nkv
+
+
+_hy_v3_mod.HYV3Attention = type("HYV3Attention", (torch.nn.Module,), {"__init__": _hyv3_attn_init})
 _hy_v3_mod.HYV3MoE = type("HYV3MoE", (torch.nn.Module,), {
     "__init__": lambda self, *a, **kw: torch.nn.Module.__init__(self),
 })
@@ -41,7 +54,102 @@ sys.modules.setdefault("transformers.models.hy_v3", _hy_v3_mod)
 sys.modules.setdefault("transformers.models.hy_v3.modeling_hy_v3", _hy_v3_mod)
 
 from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3, remap_hyv3_keys  # noqa: E402
-from amct_pytorch.common.models.llm.hyv3.quant_module import QuantHYV3MoE  # noqa: E402
+from amct_pytorch.common.models.llm.hyv3.quant_module import QuantHYV3Attn, QuantHYV3MLP, QuantHYV3MoE  # noqa: E402
+from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear  # noqa: E402
+from amct_pytorch.quantization.bit_policy import BitPolicy  # noqa: E402
+from amct_pytorch.quantization.dtypes import register_dtype  # noqa: E402
+
+register_dtype()
+
+W_BITS = "w_bits"
+A_BITS = "a_bits"
+ATTN_LINEAR = "attn-linear"
+ATTN_CACHE = "attn-cache"
+MLP = "mlp"
+
+
+def _quant_args(quant_target=(ATTN_LINEAR,)):
+    """Build a minimal quant_args with a BitPolicy covering all hyv3 groups."""
+    return SimpleNamespace(
+        algos=[],
+        quant_dtype="int",
+        w_bits=8,
+        a_bits=8,
+        q_bits=8,
+        k_bits=8,
+        p_bits=8,
+        v_bits=8,
+        quant_target=list(quant_target),
+        bit_policy=BitPolicy({
+            ATTN_LINEAR: {n: {W_BITS: 8, A_BITS: 8} for n in ("q_proj", "k_proj", "v_proj", "o_proj")},
+            ATTN_CACHE: {"q": 8, "k": 8, "p": 8, "v": 8},
+            MLP: {n: {W_BITS: 8, A_BITS: 8} for n in ("gate_proj", "up_proj", "down_proj")},
+            "moe": {
+                "routed": {n: {W_BITS: 8, A_BITS: 8} for n in ("gate_proj", "up_proj", "down_proj")},
+                "shared": {n: {W_BITS: 8, A_BITS: 8} for n in ("gate_proj", "up_proj", "down_proj")},
+            },
+        }),
+    )
+
+
+def _attn_config():
+    return SimpleNamespace(
+        hidden_size=64,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        head_dim=16,
+        attention_dropout=0.0,
+        scaling=1.0,
+    )
+
+
+def _make_attn_module(cfg):
+    """Fake HYV3Attention with real nn.Linear projections for init/forward."""
+    m = nn.Module()
+    m.config = cfg
+    m.layer_idx = 0
+    m.q_proj = nn.Linear(cfg.hidden_size, cfg.num_attention_heads * cfg.head_dim)
+    m.k_proj = nn.Linear(cfg.hidden_size, cfg.num_key_value_heads * cfg.head_dim)
+    m.v_proj = nn.Linear(cfg.hidden_size, cfg.num_key_value_heads * cfg.head_dim)
+    m.o_proj = nn.Linear(cfg.num_attention_heads * cfg.head_dim, cfg.hidden_size)
+    m.q_norm = nn.Identity()
+    m.k_norm = nn.Identity()
+    return m
+
+
+def _position_embeddings(bs, seq, head_dim):
+    return torch.randn(bs, seq, head_dim), torch.randn(bs, seq, head_dim)
+
+
+def _make_moe_module(num_experts=2, hidden=64, intermediate=32, top_k=2, fp32=False):
+    """Fake HYV3MoE with packed experts (gate_up/down) + shared GatedMLP."""
+    m = nn.Module()
+    m.top_k = top_k
+    m.enable_moe_fp32_combine = fp32
+    m.e_score_correction_bias = torch.zeros(num_experts)
+
+    def _gate(hd, bias):
+        bsz = hd.shape[0]
+        return None, torch.ones(bsz, top_k) / top_k, torch.zeros(bsz, top_k, dtype=torch.long)
+
+    m.gate = _gate
+    experts = nn.Module()
+    experts.num_experts = num_experts
+    experts.hidden_dim = hidden
+    experts.intermediate_dim = intermediate
+    experts.act_fn = F.silu
+    experts.gate_up_proj = nn.Parameter(torch.randn(num_experts, 2 * intermediate, hidden))
+    experts.down_proj = nn.Parameter(torch.randn(num_experts, hidden, intermediate))
+    m.experts = experts
+    shared = nn.Module()
+    shared.hidden_size = hidden
+    shared.intermediate_size = intermediate
+    shared.act_fn = F.silu
+    shared.gate_proj = nn.Linear(hidden, intermediate)
+    shared.up_proj = nn.Linear(hidden, intermediate)
+    shared.down_proj = nn.Linear(intermediate, hidden)
+    m.shared_experts = shared
+    return m
 
 
 def _stub(quant_target=("moe",), **attrs):
@@ -335,3 +443,121 @@ class TestQuantHYV3MoEForward:
         obj.shared_experts = lambda x: torch.zeros_like(x)
 
         return obj
+
+
+# ---------------------------------------------------------------------------
+# QuantHYV3Attn — __init__ / forward (real construction)
+# ---------------------------------------------------------------------------
+
+
+class TestQuantHYV3Attn:
+    @staticmethod
+    def test_init_attn_linear_uses_quant_linear_projections():
+        cfg = _attn_config()
+        attn = _make_attn_module(cfg)
+        qattn = QuantHYV3Attn(_quant_args([ATTN_LINEAR]), attn)
+        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+        for proj in (qattn.q_proj, qattn.k_proj, qattn.v_proj, qattn.o_proj):
+            assert isinstance(proj, QuantLinear)
+        assert not isinstance(qattn.inp_afq, nn.Identity)
+        assert not isinstance(qattn.o_proj_afq, nn.Identity)
+        assert qattn.head_dim == cfg.head_dim
+        assert qattn.value_dim == cfg.head_dim * cfg.num_attention_heads
+
+    @staticmethod
+    def test_init_cache_only_uses_plain_linear_and_identity_afq():
+        cfg = _attn_config()
+        attn = _make_attn_module(cfg)
+        qattn = QuantHYV3Attn(_quant_args([ATTN_CACHE]), attn)
+        for proj in (qattn.q_proj, qattn.k_proj, qattn.v_proj, qattn.o_proj):
+            assert isinstance(proj, PlainLinear)
+        assert qattn.input_transform is None
+        assert qattn.out_transform is None
+        assert isinstance(qattn.inp_afq, nn.Identity)
+        assert isinstance(qattn.o_proj_afq, nn.Identity)
+
+    @staticmethod
+    def test_init_builds_qk_and_pv_matmul():
+        cfg = _attn_config()
+        attn = _make_attn_module(cfg)
+        qattn = QuantHYV3Attn(_quant_args([ATTN_CACHE]), attn)
+        assert qattn.qk_matmul is not None
+        assert qattn.pv_matmul is not None
+
+    @staticmethod
+    def test_forward_attn_linear_returns_correct_shape():
+        cfg = _attn_config()
+        attn = _make_attn_module(cfg)
+        qattn = QuantHYV3Attn(_quant_args([ATTN_LINEAR]), attn)
+        bs, seq = 1, 6
+        h = torch.randn(bs, seq, cfg.hidden_size)
+        cos, sin = _position_embeddings(bs, seq, cfg.head_dim)
+        out, weights = qattn(h, position_embeddings=(cos, sin))
+        assert out.shape == h.shape
+        assert weights is None
+
+    @staticmethod
+    def test_forward_cache_only_returns_finite_output():
+        cfg = _attn_config()
+        attn = _make_attn_module(cfg)
+        qattn = QuantHYV3Attn(_quant_args([ATTN_CACHE]), attn)
+        bs, seq = 1, 4
+        h = torch.randn(bs, seq, cfg.hidden_size)
+        cos, sin = _position_embeddings(bs, seq, cfg.head_dim)
+        out, _ = qattn(h, position_embeddings=(cos, sin))
+        assert out.shape == h.shape
+        assert torch.isfinite(out).all()
+
+    @staticmethod
+    def test_forward_with_structure_transform_branches():
+        cfg = _attn_config()
+        attn = _make_attn_module(cfg)
+        qattn = QuantHYV3Attn(_quant_args([ATTN_LINEAR]), attn)
+
+        class _IdentityTransform(nn.Module):
+            def forward(self, x, **kwargs):
+                return x
+
+        qattn.input_transform = _IdentityTransform()
+        qattn.out_transform = _IdentityTransform()
+        bs, seq = 1, 4
+        h = torch.randn(bs, seq, cfg.hidden_size)
+        cos, sin = _position_embeddings(bs, seq, cfg.head_dim)
+        out, _ = qattn(h, position_embeddings=(cos, sin))
+        assert out.shape == h.shape
+
+
+# ---------------------------------------------------------------------------
+# QuantHYV3MoE — __init__ / forward (real construction)
+# ---------------------------------------------------------------------------
+
+
+class TestQuantHYV3MoEInit:
+    @staticmethod
+    def test_init_wraps_experts_and_shared():
+        moe = _make_moe_module()
+        qmoe = QuantHYV3MoE(_quant_args(["moe"]), moe)
+        assert qmoe.top_k == moe.top_k
+        assert qmoe.gate is moe.gate
+        assert qmoe.enable_moe_fp32_combine is False
+        assert torch.equal(qmoe.e_score_correction_bias, moe.e_score_correction_bias)
+        from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts
+        assert isinstance(qmoe.experts, QuantGatedExperts)
+        assert isinstance(qmoe.shared_experts, QuantHYV3MLP)
+
+    @staticmethod
+    def test_forward_default_combine_path():
+        moe = _make_moe_module()
+        qmoe = QuantHYV3MoE(_quant_args(["moe"]), moe)
+        h = torch.randn(2, 4, 64)
+        out = qmoe(h)
+        assert out.shape == h.shape
+
+    @staticmethod
+    def test_forward_fp32_combine_path():
+        moe = _make_moe_module(fp32=True)
+        qmoe = QuantHYV3MoE(_quant_args(["moe"]), moe)
+        h = torch.randn(1, 3, 64)
+        out = qmoe(h)
+        assert out.shape == h.shape
+        assert out.dtype == h.dtype
