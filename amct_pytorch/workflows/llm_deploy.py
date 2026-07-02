@@ -36,10 +36,9 @@ from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import (
     export_block_deploy,
     generate_quant_config,
-    get_quant_ignore_linear_names,
 )
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
+from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
@@ -134,14 +133,6 @@ class LlmDeployWorkflow:
         with open(index_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def _is_w4a8(self):
-        """Infer W4A8: moe.routed.w_bits == 4 in bit_policy."""
-        try:
-            w_bits, _ = self.args.bit_policy.linear_bits(group="moe.routed")
-            return w_bits == 4
-        except (AttributeError, KeyError):
-            return False
-
     def _collect_extra_ignore_names(self, quant_mode="block", quant_specs=None):
         """Collect adapter-specific ignore entries not discoverable by block traversal.
 
@@ -157,13 +148,6 @@ class LlmDeployWorkflow:
             quant_mode=quant_mode, quant_specs=quant_specs
         )
 
-    def _collect_ignored_layers(self):
-        """Collect whole-layer ignore entries from adapter. Returns None if not implemented."""
-        method = getattr(self.pipeline, "get_ignored_layers", None)
-        if method is None:
-            return None
-        return method()
-
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
@@ -174,12 +158,8 @@ class LlmDeployWorkflow:
                             "type": "float" if self.is_mx else "int",
                             "num_bits": 8,
                         }}
-        w4a8 = self._is_w4a8()
-        ignored_layers = self._collect_ignored_layers()
         quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers,
-            ignored_layers=ignored_layers,
-            w4a8=w4a8, w4a4=False, is_mx=self.is_mx)
+            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
         config['quantization_config'] = quantization_config
 
         new_config_file = os.path.join(self.output_dir, "config.json")
@@ -254,19 +234,7 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
         }
 
-    def _build_ignore_layers(self):
-        """Collect ignore list by traversing empty quant blocks."""
-        quant_ignore_layers = []
-        for layer_idx in range(self.pipeline.num_layers):
-            block = self.pipeline.build_empty_quant_block(layer_idx)
-            weight_prefix = self.pipeline.get_layer_weight_prefix(layer_idx)
-            quant_ignore_layers.extend(get_quant_ignore_linear_names(block, weight_prefix))
-        return quant_ignore_layers
-
     def _run_tensorwise(self):
-        if self.quant_dtype in ("int", "mxfp"):
-            return self._run_tensorwise_quant()
-
         self._copy_support_files()
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
@@ -305,10 +273,10 @@ class LlmDeployWorkflow:
                         print(
                             f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
                     new_state_dict[weight_name] = weight
-                    updated_weight_map[weight_name] = source_file
+                    new_weight_map[weight_name] = source_file
                 else:
                     new_state_dict[weight_name] = weight
-                    updated_weight_map[weight_name] = source_file
+                    new_weight_map[weight_name] = source_file
 
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
@@ -316,88 +284,6 @@ class LlmDeployWorkflow:
 
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
         self._refresh_config_tensor()
-        logger.info("Exported tensor-converted model to {}", self.output_dir)
-        logger.info("Refreshed weight index at {}", index_path)
-        return {
-            "index_path": index_path,
-            "num_output_files": len(set(updated_weight_map.values())),
-        }
-
-    def _quantize_weight(self, weight, bits, quant_objs):
-        """Quantize a single weight tensor using cached dtype object."""
-        if bits not in quant_objs:
-            quant_objs[bits] = DTYPE_REGISTRY.get(self.quant_dtype)(bits=bits)
-        payload = quant_objs[bits].export_deploy(weight)
-        return payload["qweight"], payload["weight_scale"], payload.get("weight_bias")
-
-    def _process_quant_file(self, source_file, model_dir, quant_specs,
-                            updated_weight_map, loaded_files, quant_objs):
-        """Process one safetensors file: quantize matching weights, pass through others."""
-        source_path = model_dir / source_file
-        current_state_dict = load_file(source_path, device="cpu")
-        loaded_files[source_file] = current_state_dict
-
-        new_state_dict = {}
-        for weight_name, weight in current_state_dict.items():
-            if weight_name in quant_specs:
-                qx, scale, bias = self._quantize_weight(
-                    weight, quant_specs[weight_name], quant_objs
-                )
-                new_state_dict[weight_name] = qx
-                scale_name = weight_name.replace(".weight", ".weight_scale")
-                new_state_dict[scale_name] = scale
-                updated_weight_map[weight_name] = source_file
-                updated_weight_map[scale_name] = source_file
-                if bias is not None:
-                    bias_name = weight_name.replace(".weight", ".weight_bias")
-                    new_state_dict[bias_name] = bias
-                    updated_weight_map[bias_name] = source_file
-            else:
-                new_state_dict[weight_name] = weight
-                updated_weight_map[weight_name] = source_file
-
-        self._write_safetensor_file(source_file, new_state_dict)
-        for weight_name in new_state_dict:
-            updated_weight_map[weight_name] = source_file
-
-        if len(loaded_files) > 2:
-            oldest_file = next(iter(loaded_files))
-            if oldest_file != source_file:
-                del loaded_files[oldest_file]
-
-    def _run_tensorwise_quant(self):
-        """Tensor-level int/mxfp weight quantization without forward pass.
-
-        Quantizes BF16 weights per-channel min-max, producing int8/packed-int4 + scale + bias.
-        Uses get_quant_weight_specs() to determine which weights to quantize.
-        """
-        self._copy_support_files()
-        original_index = self._load_weight_index()
-        original_weight_map = dict(original_index.get("weight_map", {}))
-
-        weights_by_file = defaultdict(list)
-        for weight_name, file_name in original_weight_map.items():
-            weights_by_file[file_name].append(weight_name)
-
-        quant_specs = self.pipeline.get_quant_weight_specs()
-        quant_objs = {}
-
-        updated_weight_map = {}
-        model_dir = Path(self.model_path)
-        loaded_files = {}
-        for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
-            self._process_quant_file(
-                source_file, model_dir, quant_specs,
-                updated_weight_map, loaded_files, quant_objs,
-            )
-
-        index_path = self._refresh_weight_index(original_index, updated_weight_map)
-
-        quant_ignore_layers = self._build_ignore_layers()
-        quant_ignore_layers.extend(
-            self._collect_extra_ignore_names(quant_mode="tensor", quant_specs=quant_specs)
-        )
-        self._refresh_config(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {
