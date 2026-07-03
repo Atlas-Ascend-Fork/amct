@@ -575,6 +575,7 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         {
             "layer.weight": torch.arange(6, dtype=torch.float32).reshape(2, 3),
             "layer.bias": torch.ones(3, dtype=torch.float32),
+            "fp8.weight": torch.ones(4, dtype=torch.int8),
         },
         str(src / KEY_SHARD1_SAFETENSORS),
     )
@@ -583,6 +584,7 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         "weight_map": {
             "layer.weight": KEY_SHARD1_SAFETENSORS,
             "layer.bias": KEY_SHARD1_SAFETENSORS,
+            "fp8.weight": KEY_SHARD1_SAFETENSORS,
         },
     }))
 
@@ -607,6 +609,7 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     assert refreshed_index["weight_map"] == {
         "layer.weight": KEY_SHARD1_SAFETENSORS,
         "layer.bias": KEY_SHARD1_SAFETENSORS,
+        "fp8.weight": KEY_SHARD1_SAFETENSORS,
     }
     assert json.loads((dst / CONFIG_JSON).read_text())["torch_dtype"] == "bfloat16"
 
