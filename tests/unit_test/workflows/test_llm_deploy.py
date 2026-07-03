@@ -586,22 +586,24 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         },
     }))
 
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.logger", MagicMock(),
-    )
+    logger = MagicMock()
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", logger)
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",
         lambda iterable, desc="": iterable,
     )
 
     wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    wf.granularity = "tensor"
     wf.pipeline = MagicMock()
     wf.pipeline.get_scale_name = MagicMock(return_value=(".scale_inv", "missing.scale_inv"))
+    wf.setup = MagicMock(return_value="sink")
 
-    result = wf._run_tensorwise()
+    result = wf.run()
 
     refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
     assert result["num_output_files"] == 1
+    logger.remove.assert_called_once_with("sink")
     assert refreshed_index["weight_map"] == {
         "layer.weight": KEY_SHARD1_SAFETENSORS,
         "layer.bias": KEY_SHARD1_SAFETENSORS,
