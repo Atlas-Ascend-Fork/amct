@@ -1,0 +1,79 @@
+# FP4 → BF16 → HiFloat4 Conversion Tools (Experimental)
+
+将 NVFP4 / MXFP4 checkpoint 转为经过 HiF4 fake-quant 的 BF16 权重。
+
+## 转换流程
+
+```
+NVFP4 packed  ──nvfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
+MXFP4 packed  ──mxfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
+                    (fp4_formats)              (hifx4_quant)
+```
+
+两步转换：(1) FP4 反量化 → BF16（纯 torch CPU），(2) HiF4 模拟量化 → BF16
+（复用 ``amct_pytorch.common.utils.hifx4_quant.quant_dequant_float``）。
+
+## 目录结构
+
+| 文件 | 职责 |
+|------|------|
+| `fp4_formats.py` | 格式数学：FP4→BF16 反量化 + 可选 E6M0 编解码 |
+| `ckpt_io.py` | 通用 checkpoint I/O：`walk_checkpoint` |
+| `metrics.py` | 诊断：重建误差打分 |
+| `convert_nvfp4_to_hif4.py` | NVFP4 转换 CLI |
+| `convert_mxfp4_to_hif4.py` | MXFP4 转换 CLI |
+
+## 依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+依赖 ``jian/hifloat4-cast`` 分支的 ``hifx4_quant`` 模块。
+
+## 用法
+
+### NVFP4 → HiF4
+
+```bash
+python -m amct_pytorch.experimental.fp4_convert.convert_nvfp4_to_hif4 \
+    --nvfp4-dir /path/to/nvfp4_ckpt \
+    --bf16-index /path/to/model.safetensors.index.json \
+    --out-dir /path/to/output
+```
+
+### MXFP4 → HiF4
+
+```bash
+# 自测
+python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 selftest
+
+# 列 key
+python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 list-keys \
+    --file model.safetensors --filter experts
+
+# 转换单对张量
+python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 convert-pair \
+    --packed-spec model.safetensors:weight \
+    --scale-spec  model.safetensors:weight_scale --out out.pt
+
+# 整库转换
+python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 convert-dir \
+    --mxfp4-dir /path/to/mxfp4_ckpt \
+    --bf16-index /path/to/model.safetensors.index.json \
+    --out-dir /path/to/output
+```
+
+## 架构
+
+四层分离，跨文件依赖方向（只能从上往下）：
+
+```
+convert_*.py  →  策略 + CLI（薄层）
+    ↓ 调用
+fp4_formats.py  →  格式数学（FP4→BF16）
+ckpt_io.py      →  通用分片 I/O
+metrics.py      →  诊断验证
+    ↓ 调用
+hifx4_quant     →  BF16→HiF4 fake-quant（jian/hifloat4-cast 已有）
+```
