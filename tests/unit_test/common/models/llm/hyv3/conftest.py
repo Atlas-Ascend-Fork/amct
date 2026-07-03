@@ -28,6 +28,7 @@ import os
 import sys
 from unittest.mock import MagicMock
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -68,3 +69,15 @@ def pytest_configure(config):
     sys.modules.setdefault("transformers.models.hy_v3", mod)
     sys.modules.setdefault("transformers.models.hy_v3.modeling_hy_v3", mod)
     os.environ["HY_V3_MOCKED"] = "1"
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip tests that require a real hy_v3 module when it is mocked."""
+    if os.environ.get("HY_V3_MOCKED") != "1":
+        return
+    skip_marker = pytest.mark.skip(
+        reason="transformers lacks real hy_v3 module; needs >=5.12.1"
+    )
+    for item in items:
+        if "test_hyv3_quant_module" in item.nodeid or "TestHyV3Mocked" in item.nodeid:
+            item.add_marker(skip_marker)

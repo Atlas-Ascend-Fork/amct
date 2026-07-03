@@ -16,18 +16,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Unit tests for the HyV3 adapter (key remap, deploy bindings, PTQ units)."""
-import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 import torch
 import torch.nn as nn
+from transformers.models.hy_v3.modeling_hy_v3 import HYV3Config, HYV3DecoderLayer
 
 from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3, remap_hyv3_keys
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
-HY_V3_MOCKED = os.environ.get("HY_V3_MOCKED") == "1"
 
 
 def _stub(quant_target=("moe",), **attrs):
@@ -280,11 +278,6 @@ class TestHyV3Adapter:
 # HyV3.__init__ — mock HuggingFace loading chain (needs real HYV3Config)
 # ---------------------------------------------------------------------------
 
-_mocked_init = pytest.mark.skipif(
-    HY_V3_MOCKED,
-    reason="HyV3.__init__ mocked-init requires a real transformers hy_v3 module (>=5.12.1)",
-)
-
 _FROM_PRETRAINED = "from_pretrained"
 
 
@@ -350,8 +343,6 @@ def _mock_hf_loading_chain(monkeypatch, cfg):
 
 
 def _tiny_hyv3_config():
-    from transformers.models.hy_v3.modeling_hy_v3 import HYV3Config
-
     return HYV3Config(
         num_hidden_layers=2,
         hidden_size=64,
@@ -371,16 +362,9 @@ def _tiny_hyv3_config():
     )
 
 
-@_mocked_init
 class TestHyV3Mocked:
-    def test_init_creates_model(self, monkeypatch):
-        from transformers.models.hy_v3.modeling_hy_v3 import (
-            HYV3Config,
-            HYV3DecoderLayer,
-        )
-
-        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
-
+    @staticmethod
+    def test_init_creates_model(monkeypatch):
         _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
         model = HyV3(_make_mock_args(quant_target=["moe"]))
         assert model.num_layers == 2
@@ -388,36 +372,30 @@ class TestHyV3Mocked:
         assert model.cls is HYV3DecoderLayer
         assert model.quant_target == ["moe"]
         assert model.config.num_hidden_layers == 2
-        assert model.config._attn_implementation == "eager"
+        assert getattr(model.config, "_attn_implementation") == "eager"
         assert model.tokenizer is not None
         assert model.model is not None
 
-    def test_init_rejects_mlp_quant_target(self, monkeypatch):
-        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
-
+    @staticmethod
+    def test_init_rejects_mlp_quant_target(monkeypatch):
         _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
         with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
             HyV3(_make_mock_args(quant_target=["mlp"]))
 
-    def test_init_get_layer_weight_prefix(self, monkeypatch):
-        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
-
+    @staticmethod
+    def test_init_get_layer_weight_prefix(monkeypatch):
         _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
         model = HyV3(_make_mock_args())
         assert model.get_layer_weight_prefix(0) == "model.layers.0."
 
-    def test_init_num_layers_property(self, monkeypatch):
-        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
-
+    @staticmethod
+    def test_init_num_layers_property(monkeypatch):
         _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
         model = HyV3(_make_mock_args())
         assert model.num_layers == 2
 
-    def test_init_textconfig_property(self, monkeypatch):
-        from transformers.models.hy_v3.modeling_hy_v3 import HYV3Config
-
-        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
-
+    @staticmethod
+    def test_init_textconfig_property(monkeypatch):
         _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
         model = HyV3(_make_mock_args())
         assert model.textconfig is HYV3Config
