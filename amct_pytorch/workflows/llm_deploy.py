@@ -26,7 +26,7 @@ from pathlib import Path
 import torch
 from loguru import logger
 from safetensors import safe_open
-from safetensors.torch import save_file
+from safetensors.torch import load_file, save_file
 from tqdm import tqdm
 
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -34,7 +34,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.quantization.dtypes import register_dtype
+from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
@@ -129,6 +129,11 @@ class LlmDeployWorkflow:
         with open(index_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def _load_model_config(self):
+        config_path = Path(self.model_path) / "config.json"
+        with open(config_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
@@ -154,6 +159,13 @@ class LlmDeployWorkflow:
         if self.quant_dtype == "bf16":
             config["torch_dtype"] = "bfloat16"
             config.pop("quantization_config", None)
+        else:
+            quant_config_fn = getattr(self.pipeline, "generate_tensorwise_quant_config", None)
+            if callable(quant_config_fn):
+                quantization_config = quant_config_fn(
+                    config, getattr(self, "_tensorwise_quant_layers", None))
+                if quantization_config is not None:
+                    config["quantization_config"] = quantization_config
         with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
@@ -214,8 +226,13 @@ class LlmDeployWorkflow:
 
     def _run_tensorwise(self):
         self._copy_support_files()
+        model_config = self._load_model_config()
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
+        quant_layers = None
+        if self.quant_dtype != "bf16":
+            quant_layers = self._generate_tensorwise_quant_layers(model_config, original_weight_map)
+        self._tensorwise_quant_layers = quant_layers
 
         weights_by_file = defaultdict(list)
         for weight_name, file_name in original_weight_map.items():
@@ -231,11 +248,13 @@ class LlmDeployWorkflow:
 
             new_state_dict = {}
             for weight_name, weight in current_state_dict.items():
-                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
-                if weight_name.endswith(scale_prefix):
+                deploy_info = self._get_tensorwise_deploy_info(weight_name, quant_layers)
+                if deploy_info.get("skip", False):
                     continue
-                elif weight.element_size() == 1:
+                can_export_quant = "bit" in deploy_info
+                if weight.element_size() == 1 and deploy_info.get("scale_name"):
                     # FP8 weight
+                    scale_inv_name = deploy_info["scale_name"]
                     try:
                         # Get scale_inv from the correct file
                         file_name = original_weight_map[scale_inv_name]
@@ -243,18 +262,36 @@ class LlmDeployWorkflow:
                             file_path = model_dir / file_name
                             loaded_files[file_name] = load_file(file_path, device="cpu")
                         scale_inv = loaded_files[file_name][scale_inv_name]
-                        if weight.dtype == torch.int8:
-                            weight = weight_dequant(weight, scale_inv, block_size=32, is_mx=True, is_packed=True)
-                        else:
-                            weight = weight_dequant(weight, scale_inv)
+                        block_size = deploy_info.get(
+                            "block_size", 32 if weight.dtype == torch.int8 else 128)
+                        is_mx = deploy_info.get("is_mx", weight.dtype == torch.int8)
+                        is_packed = deploy_info.get("is_packed", weight.dtype == torch.int8)
+                        weight = weight_dequant(
+                            weight,
+                            scale_inv,
+                            block_size=block_size,
+                            is_mx=is_mx,
+                            is_packed=is_packed,
+                        )
                     except KeyError:
-                        print(
-                            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
-                    new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
+                        logger.warning(
+                            "Missing scale tensor '{}' for '{}', skipping conversion.",
+                            scale_inv_name,
+                            weight_name,
+                        )
+                        can_export_quant = False
+                if can_export_quant:
+                    payload = self._export_tensorwise_quant_weight(weight, deploy_info["bit"])
+                    new_state_dict[weight_name] = payload["qweight"]
+                    for extra_name, extra_tensor in payload.items():
+                        if extra_name == "qweight" or extra_tensor is None:
+                            continue
+                        extra_key = weight_name.replace(".weight", f".{extra_name}")
+                        new_state_dict[extra_key] = extra_tensor
                 else:
+                    if self.quant_dtype == "bf16" and weight.is_floating_point():
+                        weight = weight.to(torch.bfloat16)
                     new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
 
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
@@ -268,6 +305,37 @@ class LlmDeployWorkflow:
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
         }
+
+    def _generate_tensorwise_quant_layers(self, config: dict, weight_map: dict[str, str]):
+        quant_layers_fn = getattr(self.pipeline, "generate_tensorwise_quant_layers", None)
+        if not callable(quant_layers_fn):
+            return None
+        return quant_layers_fn(config, weight_map)
+
+    def _export_tensorwise_quant_weight(self, weight: torch.Tensor, bit: int) -> dict[str, torch.Tensor]:
+        quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
+        quant_obj = quant_cls(bits=int(bit))
+        return quant_obj.export_deploy(weight)
+
+    def _get_tensorwise_deploy_info(self, weight_name: str, quant_layers=None) -> dict:
+        deploy_info_fn = getattr(self.pipeline, "get_tensorwise_deploy_info", None)
+        if callable(deploy_info_fn):
+            deploy_info = deploy_info_fn(weight_name)
+            if deploy_info is not None:
+                return dict(deploy_info)
+
+        scale_name_fn = getattr(self.pipeline, "get_scale_name", None)
+        if callable(scale_name_fn):
+            scale_prefix, scale_inv_name = scale_name_fn(weight_name)
+            if weight_name.endswith(scale_prefix):
+                return {"skip": True}
+            if quant_layers is not None:
+                layer_name = weight_name.rsplit(".", 1)[0]
+                if layer_name in quant_layers:
+                    return {"scale_name": scale_inv_name, "bit": quant_layers[layer_name]}
+                return {}
+            return {"scale_name": scale_inv_name}
+        return {}
 
     def _write_block_file(self, layer_idx: int, layer_tensors: dict[str, object]):
         width = max(3, len(str(max(self.pipeline.num_layers - 1, 0))))

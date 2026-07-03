@@ -21,17 +21,21 @@ import torch.nn as nn
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
-def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="float", activation_use_clip=False):
-    quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": True,
-                                         "group_size": None, "num_bits": a_num_bits,
-                                         "observer": "memoryless", "observer_kwargs": {},
-                                         "strategy": "token", "symmetric": True, "type": qtype},
+def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="float", activation_use_clip=False,
+                         input_group_size=None, weight_group_size=None,
+                         input_observer="memoryless", weight_observer="minmax",
+                         input_strategy="token", weight_strategy="channel",
+                         input_dynamic=True, weight_dynamic=False):
+    quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": input_dynamic,
+                                         "group_size": input_group_size, "num_bits": a_num_bits,
+                                         "observer": input_observer, "observer_kwargs": {},
+                                         "strategy": input_strategy, "symmetric": True, "type": qtype},
                    "activation_use_clip": activation_use_clip,
                    "output_activations": None,
-                   "weights": {"actorder": None, "block_structure": None, "dynamic": False,
-                               "group_size": None, "num_bits": w_num_bits,
-                               "observer": "minmax", "observer_kwargs": {},
-                               "strategy": "channel", "symmetric": True, "type": qtype}}
+                   "weights": {"actorder": None, "block_structure": None, "dynamic": weight_dynamic,
+                               "group_size": weight_group_size, "num_bits": w_num_bits,
+                               "observer": weight_observer, "observer_kwargs": {},
+                               "strategy": weight_strategy, "symmetric": True, "type": qtype}}
     return quant_group
 
 

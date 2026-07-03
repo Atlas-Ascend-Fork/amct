@@ -31,6 +31,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import torch
+from safetensors.torch import load_file as safe_load_file
 from safetensors.torch import save_file
 
 from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
@@ -526,6 +527,156 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     assert "index_path" in result
 
 
+# ---- _run_tensorwise ------------------------------------------------------
+
+
+def test_deploy_run_tensorwise_uses_pipeline_tensorwise_info(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    source_file = "model-00001-of-00001.safetensors"
+    quant_weight = "model.layers.1.mlp.experts.0.gate_proj.weight"
+    scale_name = f"{quant_weight}_scale_inv"
+    plain_weight = "lm_head.weight"
+
+    save_file(
+        {
+            quant_weight: torch.ones(2, 2, dtype=torch.uint8),
+            scale_name: torch.ones(1, 1, dtype=torch.float32),
+            plain_weight: torch.ones(2, 2, dtype=torch.bfloat16),
+        },
+        str(src / source_file),
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {"total_size": 1},
+        "weight_map": {
+            quant_weight: source_file,
+            scale_name: source_file,
+            plain_weight: source_file,
+        },
+    }))
+    (src / CONFIG_JSON).write_text(json.dumps({"quantization_config": {"old": True}}))
+
+    calls = []
+
+    def fake_weight_dequant(weight, scale, block_size=128, is_mx=False, is_packed=False):
+        calls.append((weight.clone(), scale.clone(), block_size, is_mx, is_packed))
+        return torch.full(weight.shape, 3.0, dtype=torch.float32)
+
+    class FakeQuantObj:
+        def __init__(self, bits):
+            self.bits = bits
+
+        def export_deploy(self, weight):
+            assert self.bits == 8
+            assert torch.equal(weight, torch.full((2, 2), 3.0))
+            return {
+                "qweight": torch.full(weight.shape, 7, dtype=torch.int8),
+                "weight_scale": torch.ones(1, 1, dtype=torch.float32),
+                "weight_bias": torch.full((2,), 2.0, dtype=torch.float32),
+            }
+
+    class FakeDtypeRegistry:
+        @staticmethod
+        def get(name):
+            assert name == "mxfp"
+            return FakeQuantObj
+
+    class FakePipeline:
+        @staticmethod
+        def generate_tensorwise_quant_layers(config, weight_map):
+            return {quant_weight.rsplit(".", 1)[0]: 8}
+
+        @staticmethod
+        def get_scale_name(weight_name):
+            return "_scale_inv", f"{weight_name}_scale_inv"
+
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.weight_dequant", fake_weight_dequant)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.DTYPE_REGISTRY", FakeDtypeRegistry())
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.tqdm", lambda iterable, desc="": iterable)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="mxfp")
+    wf.pipeline = FakePipeline()
+
+    result = wf._run_tensorwise()
+
+    out_tensors = safe_load_file(dst / source_file, device="cpu")
+    output_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    assert result["num_output_files"] == 1
+    output_scale = quant_weight.replace(".weight", ".weight_scale")
+    output_bias = quant_weight.replace(".weight", ".weight_bias")
+    assert torch.equal(out_tensors[quant_weight], torch.full((2, 2), 7, dtype=torch.int8))
+    assert torch.equal(out_tensors[output_scale], torch.ones(1, 1, dtype=torch.float32))
+    assert torch.equal(out_tensors[output_bias], torch.full((2,), 2.0, dtype=torch.float32))
+    assert torch.equal(out_tensors[plain_weight], torch.ones(2, 2, dtype=torch.bfloat16))
+    assert scale_name not in out_tensors
+    assert output_index["weight_map"] == {
+        quant_weight: source_file,
+        output_scale: source_file,
+        output_bias: source_file,
+        plain_weight: source_file,
+    }
+    assert len(calls) == 1
+    assert calls[0][2:] == (128, False, False)
+
+
+def test_deploy_run_tensorwise_bf16_skips_quant_layers(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    source_file = "model-00001-of-00001.safetensors"
+    quant_weight = "model.layers.1.mlp.experts.0.gate_proj.weight"
+    scale_name = f"{quant_weight}_scale_inv"
+
+    save_file(
+        {
+            quant_weight: torch.ones(2, 2, dtype=torch.uint8),
+            scale_name: torch.ones(1, 1, dtype=torch.float32),
+        },
+        str(src / source_file),
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {"total_size": 1},
+        "weight_map": {
+            quant_weight: source_file,
+            scale_name: source_file,
+        },
+    }))
+    (src / CONFIG_JSON).write_text(json.dumps({"quantization_config": {"old": True}}))
+
+    class FakePipeline:
+        @staticmethod
+        def generate_tensorwise_quant_layers(config, weight_map):
+            raise AssertionError("bf16 tensorwise deploy must not generate quant layers")
+
+        @staticmethod
+        def get_scale_name(weight_name):
+            return "_scale_inv", f"{weight_name}_scale_inv"
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.weight_dequant",
+        lambda weight, scale, **kwargs: torch.full(weight.shape, 5.0, dtype=torch.float32),
+    )
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.tqdm", lambda iterable, desc="": iterable)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    wf.pipeline = FakePipeline()
+
+    wf._run_tensorwise()
+
+    out_tensors = safe_load_file(dst / source_file, device="cpu")
+    refreshed_config = json.loads((dst / CONFIG_JSON).read_text())
+    assert out_tensors[quant_weight].dtype == torch.bfloat16
+    assert torch.equal(out_tensors[quant_weight].float(), torch.full((2, 2), 5.0))
+    assert scale_name not in out_tensors
+    assert refreshed_config["torch_dtype"] == "bfloat16"
+    assert "quantization_config" not in refreshed_config
+
+
 # ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
 
 
@@ -562,4 +713,184 @@ def test_refresh_config_tensor_bf16(tmp_path):
     refreshed = json.loads((tmp_path / "config.json").read_text())
     assert refreshed["torch_dtype"] == "bfloat16"
     assert "quantization_config" not in refreshed
+
+
+def test_refresh_config_tensor_uses_pipeline_quant_config(tmp_path):
+    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp")
+    config = {
+        "model_type": "hy_v3",
+        "num_hidden_layers": 80,
+        "num_nextn_predict_layers": 1,
+    }
+    expected_quant_config = {
+        "quant_method": "mxfp8",
+        "activation_scheme": "dynamic",
+        "weight_block_size": [128, 128],
+        "ignored_layers": ["lm_head", "model.layers.80"],
+        "kv_cache_scheme": {"type": "float", "num_bits": 8},
+    }
+    wf.pipeline = SimpleNamespace(
+        generate_tensorwise_quant_config=lambda config_dict, quant_layers: expected_quant_config
+    )
+    wf._tensorwise_quant_layers = {"model.layers.0.self_attn.q_proj": 8}
+    (tmp_path / "config.json").write_text(json.dumps(config))
+
+    wf._refresh_config_tensor()
+
+    refreshed = json.loads((tmp_path / "config.json").read_text())
+    assert refreshed["model_type"] == "hy_v3"
+    assert refreshed["quantization_config"] == expected_quant_config
+
+
+def test_hyv3_tensorwise_quant_config_uses_compressed_tensors_groups_and_weight_map_ignore():
+    from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+
+    model = HyV3.__new__(HyV3)
+    model.args = SimpleNamespace(
+        quant_dtype="mxfp",
+        quant_target=["moe", "attn-linear"],
+        bit_policy=BitPolicy({
+            "w_bits": 8,
+            "a_bits": 8,
+            "moe": {
+                "routed": {"w_bits": 4, "a_bits": 8},
+                "shared": {"w_bits": 8, "a_bits": 8},
+            },
+        }),
+    )
+    config = {
+        "num_hidden_layers": 80,
+        "num_nextn_predict_layers": 1,
+        "first_k_dense_replace": 1,
+        "num_experts": 1,
+    }
+    weight_map = {
+        "model.embed_tokens.weight": "shard.safetensors",
+        "model.layers.0.self_attn.q_proj.weight": "shard.safetensors",
+        "model.layers.0.self_attn.q_norm.weight": "shard.safetensors",
+        "model.layers.1.mlp.experts.0.down_proj.weight": "shard.safetensors",
+        "model.layers.1.mlp.router.gate.weight": "shard.safetensors",
+        "model.layers.1.mlp.experts.0.down_proj.weight_scale": "shard.safetensors",
+        "model.layers.80.input_layernorm.weight": "shard.safetensors",
+        "model.norm.weight": "shard.safetensors",
+        "lm_head.weight": "shard.safetensors",
+    }
+    quant_layers = model.generate_tensorwise_quant_layers(config, weight_map)
+
+    quant_config = model.generate_tensorwise_quant_config(
+        config,
+        quant_layers,
+    )
+
+    assert quant_config["quant_method"] == "compressed-tensors"
+    assert quant_config["format"] == "float-quantized"
+    assert quant_config["quantization_status"] == "compressed"
+    assert quant_config["weight_block_size"] == [1, 32]
+    assert quant_config["config_groups"]["group_0"]["targets"] == ["Linear"]
+    assert quant_config["config_groups"]["group_0"]["weights"]["num_bits"] == 8
+    assert quant_config["config_groups"]["group_0"]["input_activations"]["num_bits"] == 8
+    assert quant_config["config_groups"]["group_0"]["weights"]["type"] == "float"
+    assert quant_config["config_groups"]["group_1"]["targets"] == ["MoEGMM"]
+    assert quant_config["config_groups"]["group_1"]["weights"]["num_bits"] == 4
+    assert quant_config["config_groups"]["group_1"]["input_activations"]["num_bits"] == 8
+    assert quant_config["config_groups"]["group_1"]["weights"]["type"] == "float"
+    assert quant_config["kv_cache_scheme"] == {
+        "num_bits": 8,
+        "type": "float",
+        "strategy": "token",
+        "group_size": -1,
+        "dynamic": "true",
+        "symmetric": "true",
+    }
+    assert "model.layers.0.self_attn.q_proj" not in quant_config["ignore"]
+    assert "model.layers.1.mlp.experts.0.down_proj" not in quant_config["ignore"]
+    assert "model.layers.1.mlp.experts.0.down_proj.weight_scale" not in quant_config["ignore"]
+    assert quant_config["ignore"] == [
+        "model.embed_tokens",
+        "model.layers.0.self_attn.q_norm",
+        "model.layers.1.mlp.router.gate",
+        "model.layers.80.input_layernorm",
+        "model.norm",
+        "lm_head",
+    ]
+
+
+def test_hyv3_tensorwise_quant_config_uses_int_type_for_int_quant():
+    from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+
+    model = HyV3.__new__(HyV3)
+    model.args = SimpleNamespace(
+        quant_dtype="int",
+        quant_target=["attn-linear"],
+        bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}),
+    )
+    config = {"num_hidden_layers": 30}
+
+    quant_config = model.generate_tensorwise_quant_config(
+        config,
+        {"model.layers.0.self_attn.q_proj": 8},
+    )
+
+    assert quant_config["format"] == "int-quantized"
+    assert quant_config["config_groups"]["group_0"]["weights"]["type"] == "int"
+    assert quant_config["config_groups"]["group_0"]["input_activations"]["type"] == "int"
+    assert quant_config["config_groups"]["group_1"]["weights"]["type"] == "int"
+    assert quant_config["kv_cache_scheme"]["type"] == "int"
+    assert quant_config["ignore"] == ["lm_head", "model.layers.30"]
+
+
+def test_hyv3_tensorwise_quant_layers_respect_moe_target():
+    from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+
+    model = HyV3.__new__(HyV3)
+    model.args = SimpleNamespace(
+        quant_target=["moe"],
+        bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}),
+    )
+    config = {
+        "num_hidden_layers": 2,
+        "num_nextn_predict_layers": 0,
+        "first_k_dense_replace": 1,
+        "num_experts": 1,
+    }
+    weight_map = {
+        "model.layers.1.mlp.experts.0.gate_proj.weight": "shard.safetensors",
+        "model.layers.1.mlp.shared_mlp.down_proj.weight": "shard.safetensors",
+        "model.layers.1.self_attn.q_proj.weight": "shard.safetensors",
+    }
+
+    quant_layers = model.generate_tensorwise_quant_layers(config, weight_map)
+
+    assert "model.layers.1.mlp.experts.0.gate_proj" in quant_layers
+    assert "model.layers.1.mlp.shared_mlp.down_proj" in quant_layers
+    assert "model.layers.1.self_attn.q_proj" not in quant_layers
+
+
+def test_hyv3_tensorwise_quant_layers_respect_attn_linear_target():
+    from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+
+    model = HyV3.__new__(HyV3)
+    model.args = SimpleNamespace(
+        quant_target=["attn-linear"],
+        bit_policy=BitPolicy({"w_bits": 8, "a_bits": 8}),
+    )
+    config = {
+        "num_hidden_layers": 2,
+        "num_nextn_predict_layers": 0,
+        "first_k_dense_replace": 1,
+        "num_experts": 1,
+    }
+    weight_map = {
+        "model.layers.1.mlp.experts.0.gate_proj.weight": "shard.safetensors",
+        "model.layers.1.self_attn.q_proj.weight": "shard.safetensors",
+    }
+
+    quant_layers = model.generate_tensorwise_quant_layers(config, weight_map)
+
+    assert "model.layers.1.self_attn.q_proj" in quant_layers
+    assert "model.layers.1.mlp.experts.0.gate_proj" not in quant_layers
 

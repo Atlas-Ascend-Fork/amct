@@ -21,6 +21,8 @@ import sys
 
 import pytest
 
+from amct_pytorch.cli.llm.args import parser_gen
+
 
 ENTRYPOINTS = [
     ("amct_pytorch.deploy", "amct_pytorch.cli.llm.deploy"),
@@ -47,3 +49,15 @@ def test_amct_pytorch_module_executes_llm_cli_main(monkeypatch, module_name, tar
     runpy.run_module(module_name, run_name="__main__", alter_sys=True)
 
     assert calls == [target_name]
+
+
+def test_llm_deploy_parser_accepts_bf16_quant_dtype(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["deploy.py", "--granularity", "tensor", "--quant_dtype", "bf16"],
+    )
+
+    args = parser_gen(command="deploy")
+
+    assert args.quant_dtype == "bf16"

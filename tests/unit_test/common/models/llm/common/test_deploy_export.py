@@ -73,6 +73,24 @@ def test_generate_quant_group_custom_bits_and_qtype():
     assert group["activation_use_clip"] is True
 
 
+def test_generate_quant_group_allows_tensorwise_group_overrides():
+    group = generate_quant_group(
+        input_group_size=32,
+        weight_group_size=32,
+        input_observer="minmax",
+        input_strategy="group",
+        weight_strategy="group",
+    )
+    assert group[INPUT_ACTIVATIONS]["group_size"] == 32
+    assert group[INPUT_ACTIVATIONS]["observer"] == "minmax"
+    assert group[INPUT_ACTIVATIONS]["strategy"] == "group"
+    assert group[INPUT_ACTIVATIONS]["dynamic"] is True
+    assert group[WEIGHTS]["group_size"] == 32
+    assert group[WEIGHTS]["observer"] == "minmax"
+    assert group[WEIGHTS]["strategy"] == "group"
+    assert group[WEIGHTS]["dynamic"] is False
+
+
 # ---- generate_quant_config -----------------------------------------------
 
 
