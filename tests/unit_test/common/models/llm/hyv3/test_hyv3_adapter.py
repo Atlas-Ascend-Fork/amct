@@ -16,7 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Unit tests for the HyV3 adapter (key remap, deploy bindings, PTQ units)."""
+import os
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 import torch
@@ -24,6 +26,8 @@ import torch.nn as nn
 
 from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3, remap_hyv3_keys
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+HY_V3_MOCKED = os.environ.get("HY_V3_MOCKED") == "1"
 
 
 def _stub(quant_target=("moe",), **attrs):
@@ -270,3 +274,146 @@ class TestHyV3Adapter:
         ]
         actual_prefixes = [b[0] for b in bindings]
         assert actual_prefixes == expected_prefixes
+
+
+# ---------------------------------------------------------------------------
+# HyV3.__init__ — mock HuggingFace loading chain (needs real HYV3Config)
+# ---------------------------------------------------------------------------
+
+_mocked_init = pytest.mark.skipif(
+    HY_V3_MOCKED,
+    reason="HyV3.__init__ mocked-init requires a real transformers hy_v3 module (>=5.12.1)",
+)
+
+_FROM_PRETRAINED = "from_pretrained"
+
+
+def _make_mock_args(model_path="/tmp/fake_model", quant_target=("moe",), **extra):
+    base = {
+        "model": model_path,
+        "quant_target": list(quant_target),
+        "device": "cpu",
+        "data_dir": "/tmp/fake_data",
+        "output_dir": "/tmp/fake_output",
+        "quant_dtype": "int8",
+        "w_bits": 8,
+        "a_bits": 8,
+        "algos": [],
+        "cali_bsz": 2,
+    }
+    base.update(extra)
+    return SimpleNamespace(**base)
+
+
+def _mock_hf_loading_chain(monkeypatch, cfg):
+    """Mock AutoConfig/AutoTokenizer/AutoModelForCausalLM/get_weight_mappings
+    so that ``HyV3(args)`` runs ``__init__`` without real model files."""
+    from accelerate import init_empty_weights
+    from transformers import AutoModelForCausalLM
+
+    fake_tokenizer = MagicMock()
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.AutoConfig",
+        type("FakeAC", (), {_FROM_PRETRAINED: staticmethod(lambda *a, **kw: cfg)})(),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
+        type("FakeAT", (), {_FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.init_empty_weights",
+        lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
+    )
+    with init_empty_weights():
+        empty_model = AutoModelForCausalLM.from_config(
+            cfg, trust_remote_code=True, torch_dtype=torch.bfloat16
+        )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
+        type("FakeAMFCLM", (), {
+            _FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+            "from_config": staticmethod(lambda *a, **kw: empty_model),
+        })(),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
+        lambda path: {},
+    )
+    monkeypatch.setattr(
+        "compressed_tensors.utils.safetensors_load.get_weight_mappings",
+        lambda path: {},
+    )
+
+
+def _tiny_hyv3_config():
+    from transformers.models.hy_v3.modeling_hy_v3 import HYV3Config
+
+    return HYV3Config(
+        num_hidden_layers=2,
+        hidden_size=64,
+        intermediate_size=128,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        head_dim=16,
+        rms_norm_eps=1e-6,
+        vocab_size=100,
+        max_position_embeddings=512,
+        rope_theta=10000.0,
+        tie_word_embeddings=False,
+        num_experts=2,
+        num_experts_per_tok=2,
+        num_shared_experts=1,
+        moe_intermediate_size=32,
+    )
+
+
+@_mocked_init
+class TestHyV3Mocked:
+    def test_init_creates_model(self, monkeypatch):
+        from transformers.models.hy_v3.modeling_hy_v3 import (
+            HYV3Config,
+            HYV3DecoderLayer,
+        )
+
+        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+
+        _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
+        model = HyV3(_make_mock_args(quant_target=["moe"]))
+        assert model.num_layers == 2
+        assert model.textconfig is HYV3Config
+        assert model.cls is HYV3DecoderLayer
+        assert model.quant_target == ["moe"]
+        assert model.config.num_hidden_layers == 2
+        assert model.config._attn_implementation == "eager"
+        assert model.tokenizer is not None
+        assert model.model is not None
+
+    def test_init_rejects_mlp_quant_target(self, monkeypatch):
+        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+
+        _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
+        with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
+            HyV3(_make_mock_args(quant_target=["mlp"]))
+
+    def test_init_get_layer_weight_prefix(self, monkeypatch):
+        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+
+        _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
+        model = HyV3(_make_mock_args())
+        assert model.get_layer_weight_prefix(0) == "model.layers.0."
+
+    def test_init_num_layers_property(self, monkeypatch):
+        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+
+        _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
+        model = HyV3(_make_mock_args())
+        assert model.num_layers == 2
+
+    def test_init_textconfig_property(self, monkeypatch):
+        from transformers.models.hy_v3.modeling_hy_v3 import HYV3Config
+
+        from amct_pytorch.common.models.llm.hyv3.hyv3 import HyV3
+
+        _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
+        model = HyV3(_make_mock_args())
+        assert model.textconfig is HYV3Config
