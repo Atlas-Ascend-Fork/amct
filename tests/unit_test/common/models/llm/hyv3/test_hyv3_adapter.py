@@ -340,6 +340,10 @@ def _mock_hf_loading_chain(monkeypatch, cfg):
         lambda path: {},
     )
     monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.hyv3.hyv3.get_weight_mappings",
+        lambda path: {},
+    )
+    monkeypatch.setattr(
         "compressed_tensors.utils.safetensors_load.get_weight_mappings",
         lambda path: {},
     )
