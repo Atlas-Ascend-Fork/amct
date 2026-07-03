@@ -581,12 +581,12 @@ class _FakeTensorwisePipeline:
     def __init__(self, quant_weight):
         self.quant_weight = quant_weight
 
-    def generate_tensorwise_quant_layers(self, config, weight_map):
-        return {self.quant_weight.rsplit(".", 1)[0]: 8}
-
     @staticmethod
     def get_scale_name(weight_name):
         return "_scale_inv", f"{weight_name}_scale_inv"
+
+    def generate_tensorwise_quant_layers(self, config, weight_map):
+        return {self.quant_weight.rsplit(".", 1)[0]: 8}
 
 
 def _assert_tensorwise_mxfp_outputs(dst, source_file, quant_weight, plain_weight, scale_name, result):
@@ -673,12 +673,12 @@ def test_deploy_run_tensorwise_bf16_skips_quant_layers(monkeypatch, tmp_path):
 
     class FakePipeline:
         @staticmethod
-        def generate_tensorwise_quant_layers(config, weight_map):
-            raise AssertionError("bf16 tensorwise deploy must not generate quant layers")
-
-        @staticmethod
         def get_scale_name(weight_name):
             return "_scale_inv", f"{weight_name}_scale_inv"
+
+        @staticmethod
+        def generate_tensorwise_quant_layers(config, weight_map):
+            raise AssertionError("bf16 tensorwise deploy must not generate quant layers")
 
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.weight_dequant",
@@ -729,18 +729,31 @@ def test_convert_tensor_unsupported_raises():
         wf._convert_tensor("test.weight", t)
 
 
-def test_refresh_config_tensor_bf16(tmp_path):
-    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="bf16")
+def test_refresh_config_tensor_bf16(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
     config = {"torch_dtype": "float32", "quantization_config": {"old": True}}
-    (tmp_path / "config.json").write_text(json.dumps(config))
-    wf._refresh_config_tensor()
-    refreshed = json.loads((tmp_path / "config.json").read_text())
+    (src / "config.json").write_text(json.dumps(config))
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({"metadata": {}, "weight_map": {}}))
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.tqdm", lambda iterable, desc="": iterable)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+
+    _run_tensorwise_workflow(wf)
+
+    refreshed = json.loads((dst / "config.json").read_text())
     assert refreshed["torch_dtype"] == "bfloat16"
     assert "quantization_config" not in refreshed
 
 
-def test_refresh_config_tensor_uses_pipeline_quant_config(tmp_path):
-    wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp")
+def test_refresh_config_tensor_uses_pipeline_quant_config(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="mxfp")
     config = {
         "model_type": "hy_v3",
         "num_hidden_layers": 80,
@@ -757,11 +770,14 @@ def test_refresh_config_tensor_uses_pipeline_quant_config(tmp_path):
         generate_tensorwise_quant_config=lambda config_dict, quant_layers: expected_quant_config
     )
     wf.__dict__["_tensorwise_quant_layers"] = {"model.layers.0.self_attn.q_proj": 8}
-    (tmp_path / "config.json").write_text(json.dumps(config))
+    (src / "config.json").write_text(json.dumps(config))
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({"metadata": {}, "weight_map": {}}))
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.tqdm", lambda iterable, desc="": iterable)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
 
-    wf._refresh_config_tensor()
+    _run_tensorwise_workflow(wf)
 
-    refreshed = json.loads((tmp_path / "config.json").read_text())
+    refreshed = json.loads((dst / "config.json").read_text())
     assert refreshed["model_type"] == "hy_v3"
     assert refreshed["quantization_config"] == expected_quant_config
 

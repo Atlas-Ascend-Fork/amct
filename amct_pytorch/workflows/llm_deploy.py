@@ -327,8 +327,8 @@ class LlmDeployWorkflow:
             weight = weight.to(torch.bfloat16)
         return {weight_name: weight}
 
+    @staticmethod
     def _dequant_tensorwise_weight(
-        self,
         weight_name,
         weight,
         deploy_info,

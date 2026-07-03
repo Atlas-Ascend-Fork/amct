@@ -56,6 +56,18 @@ class BaseModel(metaclass=ABCMeta):
     @staticmethod
     def load_unit_inputs(data_dir, unit: PtqUnit):
         return load_ptq_inps(data_dir, unit.kind, unit.layer_idx)
+    
+    @staticmethod
+    def get_tensorwise_deploy_info(weight_name: str):
+        return None
+
+    @staticmethod
+    def generate_tensorwise_quant_layers(config: dict, weight_map=None):
+        return None
+
+    @staticmethod
+    def generate_tensorwise_quant_config(config: dict, quant_layers=None):
+        return None
 
     @staticmethod
     def _embed_base_prefix() -> str:
@@ -286,18 +298,6 @@ class BaseModel(metaclass=ABCMeta):
             if not isinstance(module, QuantLinear):
                 continue
             yield f"{weight_prefix}{name}.weight", module
-
-    @staticmethod
-    def get_tensorwise_deploy_info(weight_name: str):
-        return None
-
-    @staticmethod
-    def generate_tensorwise_quant_layers(config: dict, weight_map=None):
-        return None
-
-    @staticmethod
-    def generate_tensorwise_quant_config(config: dict, quant_layers=None):
-        return None
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
