@@ -75,6 +75,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
     workflow.is_int = quant_dtype.startswith("int")
     workflow.is_hif = quant_dtype.startswith("hif")
     workflow.pipeline = None
+    workflow.__dict__["_tensorwise_quant_layers"] = None
     return workflow
 
 # ---- dtype flag derivation ----------------------------------------------
@@ -334,6 +335,7 @@ def _make_deploy_workflow(**overrides):
     wf.is_mx = wf.quant_dtype.startswith("mx")
     wf.is_int = wf.quant_dtype.startswith("int")
     wf.is_hif = wf.quant_dtype.startswith("hif")
+    wf.__dict__["_tensorwise_quant_layers"] = None
     return wf
 
 
@@ -530,83 +532,69 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
 # ---- _run_tensorwise ------------------------------------------------------
 
 
-def test_deploy_run_tensorwise_uses_pipeline_tensorwise_info(monkeypatch, tmp_path):
-    src = tmp_path / "src"
-    dst = tmp_path / "dst"
-    src.mkdir()
-    dst.mkdir()
-    source_file = "model-00001-of-00001.safetensors"
-    quant_weight = "model.layers.1.mlp.experts.0.gate_proj.weight"
-    scale_name = f"{quant_weight}_scale_inv"
-    plain_weight = "lm_head.weight"
-
-    save_file(
-        {
-            quant_weight: torch.ones(2, 2, dtype=torch.uint8),
-            scale_name: torch.ones(1, 1, dtype=torch.float32),
-            plain_weight: torch.ones(2, 2, dtype=torch.bfloat16),
-        },
-        str(src / source_file),
-    )
+def _write_tensorwise_source_model(src, source_file, tensors, weight_map):
+    save_file(tensors, str(src / source_file))
     (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
         "metadata": {"total_size": 1},
-        "weight_map": {
-            quant_weight: source_file,
-            scale_name: source_file,
-            plain_weight: source_file,
-        },
+        "weight_map": weight_map,
     }))
     (src / CONFIG_JSON).write_text(json.dumps({"quantization_config": {"old": True}}))
 
-    calls = []
 
-    def fake_weight_dequant(weight, scale, block_size=128, is_mx=False, is_packed=False):
-        calls.append((weight.clone(), scale.clone(), block_size, is_mx, is_packed))
+def _run_tensorwise_workflow(wf):
+    wf.granularity = "tensor"
+    wf.setup = lambda: "fake_sink"
+    return wf.run()
+
+
+class _FakeWeightDequant:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, weight, scale, block_size=128, is_mx=False, is_packed=False):
+        self.calls.append((weight.clone(), scale.clone(), block_size, is_mx, is_packed))
         return torch.full(weight.shape, 3.0, dtype=torch.float32)
 
-    class FakeQuantObj:
-        def __init__(self, bits):
-            self.bits = bits
 
-        def export_deploy(self, weight):
-            assert self.bits == 8
-            assert torch.equal(weight, torch.full((2, 2), 3.0))
-            return {
-                "qweight": torch.full(weight.shape, 7, dtype=torch.int8),
-                "weight_scale": torch.ones(1, 1, dtype=torch.float32),
-                "weight_bias": torch.full((2,), 2.0, dtype=torch.float32),
-            }
+class _FakeMxfpQuantObj:
+    def __init__(self, bits):
+        self.bits = bits
 
-    class FakeDtypeRegistry:
-        @staticmethod
-        def get(name):
-            assert name == "mxfp"
-            return FakeQuantObj
+    def export_deploy(self, weight):
+        assert self.bits == 8
+        assert torch.equal(weight, torch.full((2, 2), 3.0))
+        return {
+            "qweight": torch.full(weight.shape, 7, dtype=torch.int8),
+            "weight_scale": torch.ones(1, 1, dtype=torch.float32),
+            "weight_bias": torch.full((2,), 2.0, dtype=torch.float32),
+        }
 
-    class FakePipeline:
-        @staticmethod
-        def generate_tensorwise_quant_layers(config, weight_map):
-            return {quant_weight.rsplit(".", 1)[0]: 8}
 
-        @staticmethod
-        def get_scale_name(weight_name):
-            return "_scale_inv", f"{weight_name}_scale_inv"
+class _FakeMxfpDtypeRegistry:
+    @staticmethod
+    def get(name):
+        assert name == "mxfp"
+        return _FakeMxfpQuantObj
 
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.weight_dequant", fake_weight_dequant)
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.DTYPE_REGISTRY", FakeDtypeRegistry())
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.tqdm", lambda iterable, desc="": iterable)
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
 
-    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="mxfp")
-    wf.pipeline = FakePipeline()
+class _FakeTensorwisePipeline:
+    def __init__(self, quant_weight):
+        self.quant_weight = quant_weight
 
-    result = wf._run_tensorwise()
+    def generate_tensorwise_quant_layers(self, config, weight_map):
+        return {self.quant_weight.rsplit(".", 1)[0]: 8}
 
+    @staticmethod
+    def get_scale_name(weight_name):
+        return "_scale_inv", f"{weight_name}_scale_inv"
+
+
+def _assert_tensorwise_mxfp_outputs(dst, source_file, quant_weight, plain_weight, scale_name, result):
     out_tensors = safe_load_file(dst / source_file, device="cpu")
     output_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
-    assert result["num_output_files"] == 1
     output_scale = quant_weight.replace(".weight", ".weight_scale")
     output_bias = quant_weight.replace(".weight", ".weight_bias")
+    assert result["num_output_files"] == 1
     assert torch.equal(out_tensors[quant_weight], torch.full((2, 2), 7, dtype=torch.int8))
     assert torch.equal(out_tensors[output_scale], torch.ones(1, 1, dtype=torch.float32))
     assert torch.equal(out_tensors[output_bias], torch.full((2,), 2.0, dtype=torch.float32))
@@ -618,8 +606,47 @@ def test_deploy_run_tensorwise_uses_pipeline_tensorwise_info(monkeypatch, tmp_pa
         output_bias: source_file,
         plain_weight: source_file,
     }
-    assert len(calls) == 1
-    assert calls[0][2:] == (128, False, False)
+
+
+def test_deploy_run_tensorwise_uses_pipeline_tensorwise_info(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    source_file = "model-00001-of-00001.safetensors"
+    quant_weight = "model.layers.1.mlp.experts.0.gate_proj.weight"
+    scale_name = f"{quant_weight}_scale_inv"
+    plain_weight = "lm_head.weight"
+
+    _write_tensorwise_source_model(
+        src,
+        source_file,
+        {
+            quant_weight: torch.ones(2, 2, dtype=torch.uint8),
+            scale_name: torch.ones(1, 1, dtype=torch.float32),
+            plain_weight: torch.ones(2, 2, dtype=torch.bfloat16),
+        },
+        {
+            quant_weight: source_file,
+            scale_name: source_file,
+            plain_weight: source_file,
+        },
+    )
+
+    fake_weight_dequant = _FakeWeightDequant()
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.weight_dequant", fake_weight_dequant)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.DTYPE_REGISTRY", _FakeMxfpDtypeRegistry())
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.tqdm", lambda iterable, desc="": iterable)
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="mxfp")
+    wf.pipeline = _FakeTensorwisePipeline(quant_weight)
+
+    result = _run_tensorwise_workflow(wf)
+
+    _assert_tensorwise_mxfp_outputs(dst, source_file, quant_weight, plain_weight, scale_name, result)
+    assert len(fake_weight_dequant.calls) == 1
+    assert fake_weight_dequant.calls[0][2:] == (128, False, False)
 
 
 def test_deploy_run_tensorwise_bf16_skips_quant_layers(monkeypatch, tmp_path):
@@ -631,21 +658,18 @@ def test_deploy_run_tensorwise_bf16_skips_quant_layers(monkeypatch, tmp_path):
     quant_weight = "model.layers.1.mlp.experts.0.gate_proj.weight"
     scale_name = f"{quant_weight}_scale_inv"
 
-    save_file(
+    _write_tensorwise_source_model(
+        src,
+        source_file,
         {
             quant_weight: torch.ones(2, 2, dtype=torch.uint8),
             scale_name: torch.ones(1, 1, dtype=torch.float32),
         },
-        str(src / source_file),
-    )
-    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
-        "metadata": {"total_size": 1},
-        "weight_map": {
+        {
             quant_weight: source_file,
             scale_name: source_file,
         },
-    }))
-    (src / CONFIG_JSON).write_text(json.dumps({"quantization_config": {"old": True}}))
+    )
 
     class FakePipeline:
         @staticmethod
@@ -666,7 +690,7 @@ def test_deploy_run_tensorwise_bf16_skips_quant_layers(monkeypatch, tmp_path):
     wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
     wf.pipeline = FakePipeline()
 
-    wf._run_tensorwise()
+    _run_tensorwise_workflow(wf)
 
     out_tensors = safe_load_file(dst / source_file, device="cpu")
     refreshed_config = json.loads((dst / CONFIG_JSON).read_text())
@@ -732,7 +756,7 @@ def test_refresh_config_tensor_uses_pipeline_quant_config(tmp_path):
     wf.pipeline = SimpleNamespace(
         generate_tensorwise_quant_config=lambda config_dict, quant_layers: expected_quant_config
     )
-    wf._tensorwise_quant_layers = {"model.layers.0.self_attn.q_proj": 8}
+    wf.__dict__["_tensorwise_quant_layers"] = {"model.layers.0.self_attn.q_proj": 8}
     (tmp_path / "config.json").write_text(json.dumps(config))
 
     wf._refresh_config_tensor()

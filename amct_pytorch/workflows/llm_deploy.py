@@ -38,6 +38,13 @@ from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
+def _group_weights_by_file(weight_map):
+    weights_by_file = defaultdict(list)
+    for weight_name, file_name in weight_map.items():
+        weights_by_file[file_name].append(weight_name)
+    return weights_by_file
+
+
 class LlmDeployWorkflow:
     """Export deploy-ready quantized artifacts."""
 
@@ -52,6 +59,7 @@ class LlmDeployWorkflow:
         self.is_mx = self.quant_dtype.startswith("mx")
         self.is_int = self.quant_dtype.startswith("int")
         self.is_hif = self.quant_dtype.startswith("hif")
+        self._tensorwise_quant_layers = None
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
@@ -229,70 +237,23 @@ class LlmDeployWorkflow:
         model_config = self._load_model_config()
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
-        quant_layers = None
-        if self.quant_dtype != "bf16":
-            quant_layers = self._generate_tensorwise_quant_layers(model_config, original_weight_map)
-        self._tensorwise_quant_layers = quant_layers
-
-        weights_by_file = defaultdict(list)
-        for weight_name, file_name in original_weight_map.items():
-            weights_by_file[file_name].append(weight_name)
-
+        quant_layers = self._prepare_tensorwise_quant_layers(model_config, original_weight_map)
+        weights_by_file = _group_weights_by_file(original_weight_map)
         updated_weight_map = {}
         model_dir = Path(self.model_path)
         loaded_files = {}
+
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             source_path = model_dir / source_file
             current_state_dict = load_file(source_path, device="cpu")
             loaded_files[source_file] = current_state_dict
-
-            new_state_dict = {}
-            for weight_name, weight in current_state_dict.items():
-                deploy_info = self._get_tensorwise_deploy_info(weight_name, quant_layers)
-                if deploy_info.get("skip", False):
-                    continue
-                can_export_quant = "bit" in deploy_info
-                if weight.element_size() == 1 and deploy_info.get("scale_name"):
-                    # FP8 weight
-                    scale_inv_name = deploy_info["scale_name"]
-                    try:
-                        # Get scale_inv from the correct file
-                        file_name = original_weight_map[scale_inv_name]
-                        if file_name not in loaded_files:
-                            file_path = model_dir / file_name
-                            loaded_files[file_name] = load_file(file_path, device="cpu")
-                        scale_inv = loaded_files[file_name][scale_inv_name]
-                        block_size = deploy_info.get(
-                            "block_size", 32 if weight.dtype == torch.int8 else 128)
-                        is_mx = deploy_info.get("is_mx", weight.dtype == torch.int8)
-                        is_packed = deploy_info.get("is_packed", weight.dtype == torch.int8)
-                        weight = weight_dequant(
-                            weight,
-                            scale_inv,
-                            block_size=block_size,
-                            is_mx=is_mx,
-                            is_packed=is_packed,
-                        )
-                    except KeyError:
-                        logger.warning(
-                            "Missing scale tensor '{}' for '{}', skipping conversion.",
-                            scale_inv_name,
-                            weight_name,
-                        )
-                        can_export_quant = False
-                if can_export_quant:
-                    payload = self._export_tensorwise_quant_weight(weight, deploy_info["bit"])
-                    new_state_dict[weight_name] = payload["qweight"]
-                    for extra_name, extra_tensor in payload.items():
-                        if extra_name == "qweight" or extra_tensor is None:
-                            continue
-                        extra_key = weight_name.replace(".weight", f".{extra_name}")
-                        new_state_dict[extra_key] = extra_tensor
-                else:
-                    if self.quant_dtype == "bf16" and weight.is_floating_point():
-                        weight = weight.to(torch.bfloat16)
-                    new_state_dict[weight_name] = weight
-
+            new_state_dict = self._convert_tensorwise_state_dict(
+                current_state_dict,
+                quant_layers,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+            )
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file
@@ -305,6 +266,107 @@ class LlmDeployWorkflow:
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
         }
+
+    def _prepare_tensorwise_quant_layers(self, model_config, original_weight_map):
+        quant_layers = None
+        if self.quant_dtype != "bf16":
+            quant_layers = self._generate_tensorwise_quant_layers(model_config, original_weight_map)
+        self._tensorwise_quant_layers = quant_layers
+        return quant_layers
+
+    def _convert_tensorwise_state_dict(
+        self,
+        state_dict,
+        quant_layers,
+        original_weight_map,
+        model_dir,
+        loaded_files,
+    ):
+        new_state_dict = {}
+        for weight_name, weight in state_dict.items():
+            converted = self._convert_tensorwise_weight(
+                weight_name,
+                weight,
+                quant_layers,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+            )
+            if converted is not None:
+                new_state_dict.update(converted)
+        return new_state_dict
+
+    def _convert_tensorwise_weight(
+        self,
+        weight_name,
+        weight,
+        quant_layers,
+        original_weight_map,
+        model_dir,
+        loaded_files,
+    ):
+        deploy_info = self._get_tensorwise_deploy_info(weight_name, quant_layers)
+        if deploy_info.get("skip", False):
+            return None
+
+        can_export_quant = "bit" in deploy_info
+        if weight.element_size() == 1 and deploy_info.get("scale_name"):
+            weight, can_export_quant = self._dequant_tensorwise_weight(
+                weight_name,
+                weight,
+                deploy_info,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+                can_export_quant,
+            )
+
+        if can_export_quant:
+            return self._format_tensorwise_quant_payload(weight_name, weight, deploy_info["bit"])
+        if self.quant_dtype == "bf16" and weight.is_floating_point():
+            weight = weight.to(torch.bfloat16)
+        return {weight_name: weight}
+
+    def _dequant_tensorwise_weight(
+        self,
+        weight_name,
+        weight,
+        deploy_info,
+        original_weight_map,
+        model_dir,
+        loaded_files,
+        can_export_quant,
+    ):
+        scale_inv_name = deploy_info["scale_name"]
+        try:
+            file_name = original_weight_map[scale_inv_name]
+            if file_name not in loaded_files:
+                file_path = model_dir / file_name
+                loaded_files[file_name] = load_file(file_path, device="cpu")
+            scale_inv = loaded_files[file_name][scale_inv_name]
+        except KeyError:
+            logger.warning(
+                "Missing scale tensor '{}' for '{}', skipping conversion.",
+                scale_inv_name,
+                weight_name,
+            )
+            return weight, False
+
+        block_size = deploy_info.get("block_size", 32 if weight.dtype == torch.int8 else 128)
+        is_mx = deploy_info.get("is_mx", weight.dtype == torch.int8)
+        is_packed = deploy_info.get("is_packed", weight.dtype == torch.int8)
+        weight = weight_dequant(weight, scale_inv, block_size=block_size, is_mx=is_mx, is_packed=is_packed)
+        return weight, can_export_quant
+
+    def _format_tensorwise_quant_payload(self, weight_name, weight, bit):
+        payload = self._export_tensorwise_quant_weight(weight, bit)
+        tensors = {weight_name: payload["qweight"]}
+        for extra_name, extra_tensor in payload.items():
+            if extra_name == "qweight" or extra_tensor is None:
+                continue
+            extra_key = weight_name.replace(".weight", f".{extra_name}")
+            tensors[extra_key] = extra_tensor
+        return tensors
 
     def _generate_tensorwise_quant_layers(self, config: dict, weight_map: dict[str, str]):
         quant_layers_fn = getattr(self.pipeline, "generate_tensorwise_quant_layers", None)

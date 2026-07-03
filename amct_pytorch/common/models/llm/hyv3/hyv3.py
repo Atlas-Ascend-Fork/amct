@@ -36,6 +36,22 @@ from amct_pytorch.common.models.llm.hyv3.quant_module import (
 from amct_pytorch.common.models.llm.qwen.moe_common import pack_gated_expert_weights
 
 
+def _min_supported_bit(bits):
+    resolved_bits = {int(bit) for bit in bits}
+    unsupported_bits = resolved_bits - {4, 8, 16}
+    if unsupported_bits:
+        raise ValueError(f"HY3 tensorwise deploy only supports 4-bit, 8-bit, or 16-bit config bits, "
+                         f"got {sorted(resolved_bits)}.")
+    quant_bits = [bit for bit in resolved_bits if bit < 16]
+    return min(quant_bits) if quant_bits else 8
+
+
+def _add_tensorwise_layer(quant_layers, weight_map, layer_name, bit=8):
+    if weight_map is not None and f"{layer_name}.weight" not in weight_map:
+        return
+    quant_layers[layer_name] = bit
+
+
 def remap_hyv3_keys(state_dict):
     new_state_dict = {}
     for key, tensor in state_dict.items():
@@ -141,29 +157,14 @@ class HyV3(BaseModel):
         num_experts = int(config.get("num_experts", config.get("n_routed_experts", 0)))
         quant_layers = {}
 
-        def add_layer(layer_name, bit=8):
-            if weight_map is not None and f"{layer_name}.weight" not in weight_map:
-                return
-            quant_layers[layer_name] = bit
-
         for layer_idx in range(num_layers):
             if enable_moe and layer_idx >= first_k_dense_replace:
-                for expert_idx in range(num_experts):
-                    for linear_name in self.MLP_LINEAR_NAMES:
-                        bit = bit_policy["moe.routed"][linear_name].w
-                        add_layer(f"model.layers.{layer_idx}.mlp.experts.{expert_idx}.{linear_name}", bit=bit)
-                for linear_name in self.MLP_LINEAR_NAMES:
-                    bit = bit_policy["moe.shared"][linear_name].w
-                    add_layer(f"model.layers.{layer_idx}.mlp.shared_mlp.{linear_name}", bit=bit)
+                self._add_tensorwise_moe_layers(quant_layers, weight_map, bit_policy, layer_idx, num_experts)
             elif enable_mlp and layer_idx < first_k_dense_replace:
-                for linear_name in self.MLP_LINEAR_NAMES:
-                    bit = bit_policy["mlp"][linear_name].w
-                    add_layer(f"model.layers.{layer_idx}.mlp.{linear_name}", bit=bit)
+                self._add_tensorwise_mlp_layers(quant_layers, weight_map, bit_policy, layer_idx)
 
             if enable_attn_linear:
-                for linear_name in self.ATTN_LINEAR_NAMES:
-                    bit = bit_policy["attn-linear"][linear_name].w
-                    add_layer(f"model.layers.{layer_idx}.self_attn.{linear_name}", bit=bit)
+                self._add_tensorwise_attn_layers(quant_layers, weight_map, bit_policy, layer_idx)
 
         return quant_layers
 
@@ -224,21 +225,11 @@ class HyV3(BaseModel):
             return "int"
         return "float"
 
-    @staticmethod
-    def _min_supported_bit(bits):
-        resolved_bits = {int(bit) for bit in bits}
-        unsupported_bits = resolved_bits - {4, 8, 16}
-        if unsupported_bits:
-            raise ValueError(f"HY3 tensorwise deploy only supports 4-bit, 8-bit, or 16-bit config bits, "
-                             f"got {sorted(resolved_bits)}.")
-        quant_bits = [bit for bit in resolved_bits if bit < 16]
-        return min(quant_bits) if quant_bits else 8
-
     def _get_tensorwise_attn_bits(self, bit_policy):
         layer_bits = [bit_policy["attn-linear"][name] for name in self.ATTN_LINEAR_NAMES]
         return (
-            self._min_supported_bit(bit.a for bit in layer_bits),
-            self._min_supported_bit(bit.w for bit in layer_bits),
+            _min_supported_bit(bit.a for bit in layer_bits),
+            _min_supported_bit(bit.w for bit in layer_bits),
         )
 
     def _get_tensorwise_moe_bits(self, bit_policy):
@@ -246,8 +237,8 @@ class HyV3(BaseModel):
         for group in ["moe.routed", "moe.shared"]:
             layer_bits.extend(bit_policy[group][name] for name in self.MLP_LINEAR_NAMES)
         return (
-            self._min_supported_bit(bit.a for bit in layer_bits),
-            self._min_supported_bit(bit.w for bit in layer_bits),
+            _min_supported_bit(bit.a for bit in layer_bits),
+            _min_supported_bit(bit.w for bit in layer_bits),
         )
 
     def _get_tensorwise_ignore_layers(self, config, quant_layers=None):
@@ -267,3 +258,26 @@ class HyV3(BaseModel):
 
         num_hidden_layers = int(config["num_hidden_layers"])
         return ["lm_head", f"model.layers.{num_hidden_layers}"]
+
+    def _add_tensorwise_moe_layers(self, quant_layers, weight_map, bit_policy, layer_idx, num_experts):
+        for expert_idx in range(num_experts):
+            for linear_name in self.MLP_LINEAR_NAMES:
+                bit = bit_policy["moe.routed"][linear_name].w
+                layer_name = f"model.layers.{layer_idx}.mlp.experts.{expert_idx}.{linear_name}"
+                _add_tensorwise_layer(quant_layers, weight_map, layer_name, bit=bit)
+        for linear_name in self.MLP_LINEAR_NAMES:
+            bit = bit_policy["moe.shared"][linear_name].w
+            layer_name = f"model.layers.{layer_idx}.mlp.shared_mlp.{linear_name}"
+            _add_tensorwise_layer(quant_layers, weight_map, layer_name, bit=bit)
+
+    def _add_tensorwise_mlp_layers(self, quant_layers, weight_map, bit_policy, layer_idx):
+        for linear_name in self.MLP_LINEAR_NAMES:
+            bit = bit_policy["mlp"][linear_name].w
+            layer_name = f"model.layers.{layer_idx}.mlp.{linear_name}"
+            _add_tensorwise_layer(quant_layers, weight_map, layer_name, bit=bit)
+
+    def _add_tensorwise_attn_layers(self, quant_layers, weight_map, bit_policy, layer_idx):
+        for linear_name in self.ATTN_LINEAR_NAMES:
+            bit = bit_policy["attn-linear"][linear_name].w
+            layer_name = f"model.layers.{layer_idx}.self_attn.{linear_name}"
+            _add_tensorwise_layer(quant_layers, weight_map, layer_name, bit=bit)

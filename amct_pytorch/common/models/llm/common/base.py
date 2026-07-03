@@ -287,13 +287,16 @@ class BaseModel(metaclass=ABCMeta):
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
-    def get_tensorwise_deploy_info(self, weight_name: str):
+    @staticmethod
+    def get_tensorwise_deploy_info(weight_name: str):
         return None
 
-    def generate_tensorwise_quant_layers(self, config: dict, weight_map=None):
+    @staticmethod
+    def generate_tensorwise_quant_layers(config: dict, weight_map=None):
         return None
 
-    def generate_tensorwise_quant_config(self, config: dict, quant_layers=None):
+    @staticmethod
+    def generate_tensorwise_quant_config(config: dict, quant_layers=None):
         return None
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
