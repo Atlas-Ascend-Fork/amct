@@ -71,6 +71,11 @@ class DeepseekV4(BaseModel):
         self.sharded_block = False
 
     @staticmethod
+    def block_size(weight):
+        bs = 32 if weight.dtype == torch.int8 else 128
+        return bs
+
+    @staticmethod
     def _resolve_param_device(local_name, device_map):
         best_path = None
         for path in device_map:
@@ -98,11 +103,6 @@ class DeepseekV4(BaseModel):
                 hook.execution_device = dev
                 if sub is target:
                     hook.io_same_device = True
-
-    @staticmethod
-    def block_size(weight):
-        bs = 32 if weight.dtype == torch.int8 else 128
-        return bs
 
     def apply_quant_attn(self, decoder_layer):
         decoder_layer.attn = QuantV4Attention(self.args, decoder_layer.attn)
