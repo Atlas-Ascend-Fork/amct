@@ -121,8 +121,8 @@ class TestHyV3Adapter:
     def test_get_scale_name_returns_scale_inv_suffix():
         obj = _stub()
         scale_prefix, scale_inv_name = obj.get_scale_name("mlp.experts.0.gate_proj.weight")
-        assert scale_prefix == "_scale_inv"
-        assert scale_inv_name == "mlp.experts.0.gate_proj.weight_scale_inv"
+        assert scale_prefix == "_scale"
+        assert scale_inv_name == "mlp.experts.0.gate_proj.weight_scale"
 
     @staticmethod
     def test_load_layer_weight_applies_remap_and_pack(monkeypatch):
