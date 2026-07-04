@@ -41,6 +41,7 @@ class BaseModel(metaclass=ABCMeta):
     def __init__(self, args):
         self.args = args
         self.quant_target = args.quant_target
+        self.quant_dtype = args.quant_dtype
         self.position_ids = None
         self.attention_mask = None
         self.position_embeddings = None

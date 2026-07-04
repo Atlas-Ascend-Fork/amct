@@ -358,3 +358,12 @@ class DeepseekV4(BaseModel):
             wm = get_weight_mappings(self.model_path)
             self._weight_map = wm
         return wm
+
+    def cache_scheme(self):
+        cache_type = "int" if self.quant_dtype == "int" else "float"
+        scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
+                    "li_cache_scheme": {
+                        "type": cache_type,
+                        "num_bits": 8,
+                    }}
+        return scheme

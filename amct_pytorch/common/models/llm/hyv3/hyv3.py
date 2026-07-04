@@ -26,6 +26,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.common.models.llm.hyv3.quant_module import (
     QuantHYV3Attn,
     QuantHYV3MLP,
@@ -59,6 +60,9 @@ def remap_hyv3_keys(state_dict):
     force=True,
 )
 class HyV3(BaseModel):
+    ATTN_LINEAR_NAMES = ("q_proj", "k_proj", "v_proj", "o_proj")
+    MLP_LINEAR_NAMES = ("gate_proj", "down_proj", "up_proj")
+
     def __init__(self, args):
         super().__init__(args)
         self.quant_target = args.quant_target
@@ -121,3 +125,47 @@ class HyV3(BaseModel):
         scale_prefix = "_scale_inv"
         scale_inv_name = f"{weight_name}_scale_inv"
         return scale_prefix, scale_inv_name
+
+    def generate_tensorwise_quant_layers(self,):
+        # self._tensorwise_weight_map = dict(weight_map or {})
+        bit_policy = ensure_bit_policy(self.args)
+        num_hidden_layers = self.config.num_hidden_layers
+        num_nextn_predict_layers = self.config.num_nextn_predict_layers
+        num_layers = num_hidden_layers + num_nextn_predict_layers
+        num_experts = self.config.num_experts
+        quant_layers = {}
+        for i in range(num_layers):
+            for n in self.ATTN_LINEAR_NAMES:
+                bit = bit_policy["attn-linear"][n].w
+                quant_layers[f"model.layers.{i}.self_attn.{n}"] = bit
+            if i == 0:
+                continue
+            for j in range(num_experts):
+                for n in self.MLP_LINEAR_NAMES:
+                    bit = bit_policy["moe.routed"][n].w if i < num_hidden_layers else 8
+                    quant_layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = bit
+            for n in self.MLP_LINEAR_NAMES:
+                bit = bit_policy["moe.shared"][n].w
+                quant_layers[f"model.layers.{i}.mlp.shared_mlp.{n}"] = bit
+        return quant_layers
+
+    def generate_tensorwise_ignore_layers(self):
+        ignore = []
+        for n in self.MLP_LINEAR_NAMES:
+            ignore.append(f"model.layers.0.mlp.{n}")
+        ignore.append(f"model.layers.80.eh_proj")
+        ignore.append(f"model.embed_tokens")
+        ignore.append(f"lm_head")
+        return ignore
+
+    def cache_scheme(self):
+        cache_type = "int" if self.quant_dtype == "int" else "float"
+        scheme = {"kv_cache_scheme": {
+                "num_bits": 8,
+                "type": cache_type,
+                "strategy": "token",
+                "group_size": -1,
+                "dynamic": "true",
+                "symmetric": "true",
+            }}
+        return scheme
