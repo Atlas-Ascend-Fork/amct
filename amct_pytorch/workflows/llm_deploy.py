@@ -218,10 +218,8 @@ class LlmDeployWorkflow:
 
             new_state_dict = {}
             for weight_name, weight in current_state_dict.items():
-                scale_prefix, scale_inv_name, input_scale = self.pipeline.get_scale_name(weight_name)
+                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
                 if weight_name.endswith(scale_prefix):
-                    continue
-                if weight_name == input_scale:
                     continue
                 # FP8 -> bf16
                 block_size = self.pipeline.block_size(weight)

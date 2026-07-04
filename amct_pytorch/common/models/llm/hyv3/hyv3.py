@@ -128,11 +128,7 @@ class HyV3(BaseModel):
     def get_scale_name(self, weight_name):
         scale_prefix = "_scale"
         scale_inv_name = f"{weight_name}_scale"
-        if weight_name.split(".")[-1] == "input_scale":
-            input_scale = scale_inv_name.replace("weight_scale", "input_scale")
-        else:
-            input_scale = None
-        return scale_prefix, scale_inv_name, input_scale
+        return scale_prefix, scale_inv_name
 
     def generate_tensorwise_quant_layers(self,):
         bit_policy = ensure_bit_policy(self.args)

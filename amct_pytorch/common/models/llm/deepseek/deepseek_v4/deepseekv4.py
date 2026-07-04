@@ -225,7 +225,7 @@ class DeepseekV4(BaseModel):
     def get_scale_name(self, weight_name):
         scale_prefix = ".scale"
         scale_inv_name = weight_name.replace('.weight', '.scale')
-        return scale_prefix, scale_inv_name, None
+        return scale_prefix, scale_inv_name
 
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)
