@@ -99,7 +99,7 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
-def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files):
+def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size):
     if weight.element_size() == 1:
         # FP8 weight
         try:
@@ -110,9 +110,9 @@ def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
             if weight.dtype == torch.int8:
-                weight = weight_dequant(weight, scale_inv, block_size=32, is_mx=True, is_packed=True)
+                weight = weight_dequant(weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True)
             else:
-                weight = weight_dequant(weight, scale_inv)
+                weight = weight_dequant(weight, scale_inv, block_size=block_size)
         except KeyError:
             print(
                 f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")

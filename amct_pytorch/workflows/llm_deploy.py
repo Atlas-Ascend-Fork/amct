@@ -222,9 +222,10 @@ class LlmDeployWorkflow:
                 if weight_name.endswith(scale_prefix):
                     continue
                 # FP8 -> bf16
+                block_size = self.pipeline.block_size(weight)
                 weight = convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
-                                            model_dir, loaded_files)
-                if self.quant_dtype is not None:
+                                            model_dir, loaded_files, block_size)
+                if self.quant_dtype in ["int", "mxfp"]:
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
                     new_weight_name = weight_name.rsplit(".", 1)[0]
                     if new_weight_name in list(quant_layers.keys()):

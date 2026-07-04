@@ -169,3 +169,6 @@ class HyV3(BaseModel):
                 "symmetric": "true",
             }}
         return scheme
+
+    def block_size(self, weight):
+        return 1

@@ -367,3 +367,10 @@ class DeepseekV4(BaseModel):
                         "num_bits": 8,
                     }}
         return scheme
+
+    def block_size(self, weight):
+        if weight.dtype == torch.int8:
+            bs = 32
+        else:
+            bs = 128
+        return bs

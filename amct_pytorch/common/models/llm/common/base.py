@@ -351,3 +351,6 @@ class BaseModel(metaclass=ABCMeta):
 
     def _dispatch_block(self, module):
         return module.to(self.args.device)
+
+    def block_size(self, weight):
+        return 32
