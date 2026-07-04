@@ -74,6 +74,10 @@ class HyV3(BaseModel):
         self.model = self.empty_weights_model()
         self.parse_quant_mode()
 
+    @staticmethod
+    def block_size(weight):
+        return 1
+
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
             raise ValueError("HyV3 is a MoE model and does not support quant_target='mlp'. Use 'moe' instead.")
@@ -131,7 +135,6 @@ class HyV3(BaseModel):
         return scale_prefix, scale_inv_name, input_scale
 
     def generate_tensorwise_quant_layers(self,):
-        # self._tensorwise_weight_map = dict(weight_map or {})
         bit_policy = ensure_bit_policy(self.args)
         num_hidden_layers = self.config.num_hidden_layers
         num_nextn_predict_layers = self.config.num_nextn_predict_layers
@@ -173,6 +176,3 @@ class HyV3(BaseModel):
                 "symmetric": "true",
             }}
         return scheme
-
-    def block_size(self, weight):
-        return 1

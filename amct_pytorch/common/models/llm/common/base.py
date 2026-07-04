@@ -67,6 +67,10 @@ class BaseModel(metaclass=ABCMeta):
         """
         return "model."
 
+    @staticmethod
+    def block_size(weight):
+        return 32
+
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
@@ -351,6 +355,3 @@ class BaseModel(metaclass=ABCMeta):
 
     def _dispatch_block(self, module):
         return module.to(self.args.device)
-
-    def block_size(self, weight):
-        return 32

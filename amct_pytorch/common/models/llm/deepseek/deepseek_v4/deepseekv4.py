@@ -99,6 +99,11 @@ class DeepseekV4(BaseModel):
                 if sub is target:
                     hook.io_same_device = True
 
+    @staticmethod
+    def block_size(weight):
+        bs = 32 if weight.dtype == torch.int8 else 128
+        return bs
+
     def apply_quant_attn(self, decoder_layer):
         decoder_layer.attn = QuantV4Attention(self.args, decoder_layer.attn)
         return decoder_layer
@@ -248,6 +253,15 @@ class DeepseekV4(BaseModel):
         super().load_embed_state_dict()
         self._load_top_level_hc_head_params()
 
+    def cache_scheme(self):
+        cache_type = "int" if self.quant_dtype == "int" else "float"
+        scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
+                    "li_cache_scheme": {
+                        "type": cache_type,
+                        "num_bits": 8,
+                    }}
+        return scheme
+
     def _block_sharded(self, layer_idx):
         """Meta build + per-tensor direct send to target NPU. Avoids the
         ~35 GB CPU staging + 75s Module construction of BaseModel.block."""
@@ -358,19 +372,3 @@ class DeepseekV4(BaseModel):
             wm = get_weight_mappings(self.model_path)
             self._weight_map = wm
         return wm
-
-    def cache_scheme(self):
-        cache_type = "int" if self.quant_dtype == "int" else "float"
-        scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
-                    "li_cache_scheme": {
-                        "type": cache_type,
-                        "num_bits": 8,
-                    }}
-        return scheme
-
-    def block_size(self, weight):
-        if weight.dtype == torch.int8:
-            bs = 32
-        else:
-            bs = 128
-        return bs
