@@ -122,9 +122,13 @@ class HyV3(BaseModel):
             yield f"{weight_prefix}{name}.weight", module
 
     def get_scale_name(self, weight_name):
-        scale_prefix = "_scale_inv"
-        scale_inv_name = f"{weight_name}_scale_inv"
-        return scale_prefix, scale_inv_name
+        scale_prefix = "_scale"
+        scale_inv_name = f"{weight_name}_scale"
+        if weight_name.split(".")[-1] == "input_scale":
+            input_scale = scale_inv_name.replace("weight_scale", "input_scale")
+        else:
+            input_scale = None
+        return scale_prefix, scale_inv_name, input_scale
 
     def generate_tensorwise_quant_layers(self,):
         # self._tensorwise_weight_map = dict(weight_map or {})
