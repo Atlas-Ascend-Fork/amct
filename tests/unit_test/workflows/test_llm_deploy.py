@@ -658,6 +658,10 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     wf.granularity = "tensor"
     wf.pipeline = MagicMock()
     wf.pipeline.get_scale_name = MagicMock(return_value=(".scale_inv", "missing.scale_inv"))
+    wf.pipeline.generate_tensorwise_quant_layers = MagicMock(return_value={})
+    wf.pipeline.generate_tensorwise_ignore_layers = MagicMock(return_value=[])
+    wf.pipeline.cache_scheme = MagicMock(return_value={})
+    wf.pipeline.bits_scheme = MagicMock(return_value=None)
     wf.setup = MagicMock(return_value="sink")
 
     result = wf.run()
@@ -670,5 +674,5 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         "layer.bias": KEY_SHARD1_SAFETENSORS,
         "fp8.weight": KEY_SHARD1_SAFETENSORS,
     }
-    assert json.loads((dst / CONFIG_JSON).read_text())["torch_dtype"] == "bfloat16"
+    assert json.loads((dst / CONFIG_JSON).read_text())["torch_dtype"] == "float32"
 
