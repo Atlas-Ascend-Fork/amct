@@ -34,6 +34,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.quantization.bit_policy import BitPolicy, ensure_bit_policy
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
@@ -101,6 +102,34 @@ class LlmDeployWorkflow:
         model_cls = MODEL_REGISTRY.get(self.model_name)
         return model_cls(self.args)
 
+    def _resolve_quant_group_kwargs(self, bit_policy: BitPolicy) -> dict:
+        """Translate quant_target + bit_policy into group kwargs for generate_quant_config.
+
+        mx path: attn/dense are pinned to W8A8; only MoE experts carry the
+        configured mx bit-width. This reflects the current deploy constraint
+        that mx quantization targets MoE only.
+        """
+        if self.is_mx:
+            moe_bits = bit_policy.linear_bits(name="gate_proj", group="moe.routed")
+            # mx W4A4: 4-bit MoE activations trigger UpGate/Down split; W4A8 keeps a single group.
+            return dict(linear_bits=(8, 8), moe_bits=moe_bits, moe_split=(moe_bits[1] == 4))
+
+        targets = getattr(self.args, "quant_target", []) or []
+        moe_quantized = "moe" in targets
+        linear_quantized = any(t in targets for t in ("attn-linear", "mlp"))
+
+        if moe_quantized and linear_quantized:
+            return dict(
+                linear_bits=bit_policy.linear_bits(group="attn-linear"),
+                moe_bits=bit_policy.linear_bits(name="gate_proj", group="moe.routed"),
+            )
+        if moe_quantized:
+            # MoE-only: compressed-tensors has no dedicated MoE target, experts fall back to "Linear".
+            return dict(linear_bits=bit_policy.linear_bits(name="gate_proj", group="moe.routed"))
+        if linear_quantized:
+            return dict(linear_bits=bit_policy.linear_bits(group="attn-linear"))
+        return dict(linear_bits=(bit_policy.w_bits, bit_policy.a_bits))
+
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":
             return tensor.to(torch.bfloat16)
@@ -134,17 +163,24 @@ class LlmDeployWorkflow:
         with open(config_file, "r") as f:
             config = json.load(f)
 
-        cache_scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
-                        "li_cache_scheme": {
-                            "type": "float" if self.is_mx else "int",
-                            "num_bits": 8,
-                        }}
-        quantization_config = generate_quant_config(
-            cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
-        config['quantization_config'] = quantization_config
-
-        new_config_file = os.path.join(self.output_dir, "config.json")
-        with open(new_config_file, "w") as f:
+        # KV/LI cache is always 8-bit in block-granularity deploy; calibrated separately.
+        cache_scheme = {
+            "kv_cache_scheme": {"num_bits": 8, "type": "float"},
+            "li_cache_scheme": {"type": "float" if self.is_mx else "int", "num_bits": 8},
+        }
+        bit_policy = (
+            BitPolicy.from_yaml(self.args.bit_config)
+            if getattr(self.args, "bit_config", None)
+            else ensure_bit_policy(self.args)
+        )
+        # Keep args.bit_policy in sync so later callers reuse the same instance
+        # instead of rebuilding a divergent one from args.w_bits/a_bits.
+        setattr(self.args, "bit_policy", bit_policy)
+        config['quantization_config'] = generate_quant_config(
+            cache_scheme, quant_ignore_layers,
+            is_mx=self.is_mx, **self._resolve_quant_group_kwargs(bit_policy)
+        )
+        with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
     def _refresh_config_tensor(self):
