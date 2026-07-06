@@ -35,14 +35,14 @@ class _GroupBits:
         self._group = group
 
     def __getitem__(self, name: str) -> LayerBits:
-        return LayerBits(*self._policy.linear_bits(name=name, group=self._group))
+        return self._policy.linear_bits(name=name, group=self._group)
 
     @property
     def default(self) -> LayerBits:
         """Group-level (w, a) — falls through to top-level when the group has
         no complete entry of its own.
         """
-        return LayerBits(*self._policy.linear_bits(group=self._group))
+        return self._policy.linear_bits(group=self._group)
 
 
 class BitPolicy:
@@ -87,7 +87,7 @@ class BitPolicy:
                 return True
         return False
 
-    def linear_bits(self, name: str | None = None, group: str | None = None) -> tuple[int, int]:
+    def linear_bits(self, name: str | None = None, group: str | None = None) -> LayerBits:
         """Resolve (w_bits, a_bits) along ``group`` (dotted) / ``name``.
 
         Walks from most-specific (leaf name) to least-specific (top group),
@@ -111,8 +111,8 @@ class BitPolicy:
 
         for node in reversed(chain):
             if "w_bits" in node and "a_bits" in node:
-                return int(node["w_bits"]), int(node["a_bits"])
-        return self.w_bits, self.a_bits
+                return LayerBits(int(node["w_bits"]), int(node["a_bits"]))
+        return LayerBits(self.w_bits, self.a_bits)
 
     def summary(self) -> str:
         return "BitPolicy:\n" + yaml.safe_dump(self.cfg, sort_keys=False, default_flow_style=False).rstrip()

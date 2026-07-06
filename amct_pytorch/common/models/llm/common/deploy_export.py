@@ -18,7 +18,13 @@
 
 import torch.nn as nn
 
+from amct_pytorch.quantization.bit_policy import LayerBits
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
+
+# MoE "Down" kernel requires 8-bit activations even in W4A4 mixed-precision;
+# only "UpGate" carries the configured 4-bit activations.
+_MOE_DOWN_A_BITS = 8
 
 
 def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="int", activation_use_clip=False):
@@ -36,7 +42,9 @@ def generate_quant_group(a_num_bits=8, w_num_bits=8, qtype="int", activation_use
 
 
 def generate_quant_config(cache_scheme, ignores, *, is_mx=False,
-                          linear_bits=(8, 8), moe_bits=None, moe_split=False):
+                          linear_bits: LayerBits = (8, 8),
+                          moe_bits: LayerBits | None = None,
+                          moe_split=False):
     """
     Build a compressed-tensors quantization_config.
 
@@ -45,7 +53,7 @@ def generate_quant_config(cache_scheme, ignores, *, is_mx=False,
       - linear_bits=(w, a): the "Linear" group (attn / dense; MoE experts also
         fall back to this target when no separate MoE group is emitted).
       - moe_bits=(w, a): emit a separate "MoEGMM" group; None => MoE shares "Linear".
-      - moe_split=True: split MoE into "MoEGMMUpGate" (uses moe_bits[1] activations)
+      - moe_split=True: split MoE into "MoEGMMUpGate" (uses moe_bits.a activations)
         and "MoEGMMDown" (always 8-bit activations). Used for mx W4A4 mixed-precision MoE
         where the fused UpGate kernel requires 4-bit activations but Down uses 8-bit.
 
@@ -62,12 +70,11 @@ def generate_quant_config(cache_scheme, ignores, *, is_mx=False,
 
     config_groups = {"group_0": _group(["Linear"], *linear_bits)}
     if moe_bits is not None:
-        moe_w, moe_a = moe_bits
         if moe_split:
-            config_groups["group_1"] = _group(["MoEGMMUpGate"], moe_w, moe_a)
-            config_groups["group_2"] = _group(["MoEGMMDown"], moe_w, 8)  # Down always 8-bit activations
+            config_groups["group_1"] = _group(["MoEGMMUpGate"], moe_bits.w, moe_bits.a)
+            config_groups["group_2"] = _group(["MoEGMMDown"], moe_bits.w, _MOE_DOWN_A_BITS)
         else:
-            config_groups["group_1"] = _group(["MoEGMM"], moe_w, moe_a)
+            config_groups["group_1"] = _group(["MoEGMM"], moe_bits.w, moe_bits.a)
 
     quant_config = {"config_groups": config_groups,
                     "format": "float-quantized" if is_mx else "int-quantized",

@@ -34,7 +34,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.quantization.bit_policy import BitPolicy, ensure_bit_policy
+from amct_pytorch.quantization.bit_policy import BitPolicy, LayerBits, ensure_bit_policy
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
@@ -103,11 +103,16 @@ class LlmDeployWorkflow:
         return model_cls(self.args)
 
     def _resolve_quant_group_kwargs(self, bit_policy: BitPolicy) -> dict:
-        """Translate quant_target + bit_policy into group kwargs for generate_quant_config."""
+        """Translate quant_target + bit_policy into group kwargs for generate_quant_config.
+
+        mx path: attn/dense are pinned to W8A8; only MoE experts carry the
+        configured mx bit-width. This reflects the current deploy constraint
+        that mx quantization targets MoE only.
+        """
         if self.is_mx:
-            moe_bits = tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed"))
+            moe_bits = bit_policy.linear_bits(name="gate_proj", group="moe.routed")
             # mx W4A4: 4-bit MoE activations trigger UpGate/Down split; W4A8 keeps a single group.
-            return dict(linear_bits=(8, 8), moe_bits=moe_bits, moe_split=(moe_bits[1] == 4))
+            return dict(linear_bits=(8, 8), moe_bits=moe_bits, moe_split=(moe_bits.a == 4))
 
         targets = getattr(self.args, "quant_target", []) or []
         moe_quantized = "moe" in targets
@@ -115,15 +120,15 @@ class LlmDeployWorkflow:
 
         if moe_quantized and linear_quantized:
             return dict(
-                linear_bits=tuple(bit_policy.linear_bits(group="attn-linear")),
-                moe_bits=tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed")),
+                linear_bits=bit_policy.linear_bits(group="attn-linear"),
+                moe_bits=bit_policy.linear_bits(name="gate_proj", group="moe.routed"),
             )
         if moe_quantized:
             # MoE-only: compressed-tensors has no dedicated MoE target, experts fall back to "Linear".
-            return dict(linear_bits=tuple(bit_policy.linear_bits(name="gate_proj", group="moe.routed")))
+            return dict(linear_bits=bit_policy.linear_bits(name="gate_proj", group="moe.routed"))
         if linear_quantized:
-            return dict(linear_bits=tuple(bit_policy.linear_bits(group="attn-linear")))
-        return dict(linear_bits=(bit_policy.w_bits, bit_policy.a_bits))
+            return dict(linear_bits=bit_policy.linear_bits(group="attn-linear"))
+        return dict(linear_bits=LayerBits(bit_policy.w_bits, bit_policy.a_bits))
 
     def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
         if self.quant_dtype == "bf16":
@@ -168,6 +173,9 @@ class LlmDeployWorkflow:
             if getattr(self.args, "bit_config", None)
             else ensure_bit_policy(self.args)
         )
+        # Keep args.bit_policy in sync so later callers reuse the same instance
+        # instead of rebuilding a divergent one from args.w_bits/a_bits.
+        setattr(self.args, "bit_policy", bit_policy)
         config['quantization_config'] = generate_quant_config(
             cache_scheme, quant_ignore_layers,
             is_mx=self.is_mx, **self._resolve_quant_group_kwargs(bit_policy)
