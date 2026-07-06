@@ -19,6 +19,7 @@ from torch import nn
 import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity, calculate_quantile_ema_scale
+from amct_pytorch.classic.quantize_op.utils import QUANT_SCOPE, process_scale
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
 from amct_pytorch.common.utils.vars import HIFLOAT8
@@ -108,7 +109,7 @@ class QuantileQuant(BaseQuantizeModule):
             scale: HIF8 scale factor
         """
         if tensor_max is not None:
-            return (tensor_max / 16.0).to(torch.float32)
+            return (tensor_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
         else:
             return tensor_max
 
@@ -121,11 +122,22 @@ class QuantileQuant(BaseQuantizeModule):
         if self.weight_compress_only:
             dq_x = inputs
         elif self.dynamic is True:
-            import torch_npu
-            quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
-                inputs.npu(), dst_type=torch_npu.hifloat8, dst_type_max=15)
-            quant_x_fp = torch_npu.npu_dtype_cast(quant_x, inputs.dtype, input_dtype=torch_npu.hifloat8)
-            dq_x = quant_x_fp * pertoken_scale.unsqueeze(-1).to(quant_x_fp.dtype)
+            from amct_pytorch.common.utils.quant_util import hifloat8_supported
+            if hifloat8_supported():
+                import torch_npu
+                quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
+                    inputs.npu(), dst_type=torch_npu.hifloat8, dst_type_max=15)
+                quant_x_fp = torch_npu.npu_dtype_cast(
+                    quant_x, inputs.dtype, input_dtype=torch_npu.hifloat8)
+                dq_x = quant_x_fp * pertoken_scale.unsqueeze(-1).to(quant_x_fp.dtype)
+            else:
+                # Mirror the native dst_type_max=15 above: per-token dynamic-quant target
+                # max for HiF8 activations (distinct from the /16 weight scale target).
+                pertoken_scale = (inputs.abs().amax(dim=-1, keepdim=True) / 15).to(torch.float32)
+                # Guard against all-zero tokens producing scale=0 (-> inf/nan on dequant),
+                # matching the lower-bound protection the native op applies internally.
+                pertoken_scale, _ = process_scale(pertoken_scale, None, symmetric=True)
+                dq_x = quant_dequant_tensor(inputs, HIFLOAT8, pertoken_scale)
         else:
             dq_x = quant_dequant_tensor(inputs, self.act_type, self.scale_d, self.offset_d)
         return F.linear(dq_x, self.cached_dq_w, self.bias)

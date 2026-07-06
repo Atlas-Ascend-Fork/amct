@@ -566,6 +566,7 @@ def test_refresh_config_tensor_bf16(tmp_path):
 
 
 
+
 def test_load_weight_index_single_shard_synthesizes(tmp_path):
     # Single model.safetensors (no index.json) -> synthesize equivalent index
     save_file(
@@ -598,3 +599,53 @@ def test_refresh_config_emits_cache_scheme_for_attn_cache(tmp_path):
     qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
     assert qc["kv_cache_scheme"] == {"type": "int", "num_bits": 8}
     assert qc["li_cache_scheme"] == {"type": "int", "num_bits": 8}
+
+
+def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+
+    (src / CONFIG_JSON).write_text(json.dumps({"torch_dtype": "float32"}))
+    save_file(
+        {
+            "layer.weight": torch.arange(6, dtype=torch.float32).reshape(2, 3),
+            "layer.bias": torch.ones(3, dtype=torch.float32),
+            "fp8.weight": torch.ones(4, dtype=torch.int8),
+        },
+        str(src / KEY_SHARD1_SAFETENSORS),
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {},
+        "weight_map": {
+            "layer.weight": KEY_SHARD1_SAFETENSORS,
+            "layer.bias": KEY_SHARD1_SAFETENSORS,
+            "fp8.weight": KEY_SHARD1_SAFETENSORS,
+        },
+    }))
+
+    logger = MagicMock()
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", logger)
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    wf.granularity = "tensor"
+    wf.pipeline = MagicMock()
+    wf.pipeline.get_scale_name = MagicMock(return_value=(".scale_inv", "missing.scale_inv"))
+    wf.setup = MagicMock(return_value="sink")
+
+    result = wf.run()
+
+    refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    assert result["num_output_files"] == 1
+    logger.remove.assert_called_once_with("sink")
+    assert refreshed_index["weight_map"] == {
+        "layer.weight": KEY_SHARD1_SAFETENSORS,
+        "layer.bias": KEY_SHARD1_SAFETENSORS,
+        "fp8.weight": KEY_SHARD1_SAFETENSORS,
+    }
+    assert json.loads((dst / CONFIG_JSON).read_text())["torch_dtype"] == "bfloat16"

@@ -95,6 +95,12 @@ def test_qwen3_5_moe_rejects_mlp_target():
         obj.parse_quant_mode()
 
 
+def test_qwen3_5_moe_accepts_moe_and_attn_targets():
+    for target in ([MOE], [ATTN_LINEAR], [ATTN_CACHE]):
+        obj = _stub_adapter(Qwen3_5Moe, target)
+        assert obj.parse_quant_mode() is None
+
+
 def test_qwen3_next_rejects_mlp_target():
     obj = _stub_adapter(Qwen3Next, [MLP])
     with pytest.raises(ValueError, match="does not support quant_target='mlp'"):
@@ -225,4 +231,54 @@ def test_qwen3_moe_iter_deploy_bindings_raises_on_malformed_expert_name():
         name="bad",
     )
     with pytest.raises(ValueError, match="Unexpected Qwen3 MoE expert module name"):
+        list(obj.iter_deploy_bindings(layer_idx=0, block=block))
+
+
+# ---- iter_deploy_bindings (Qwen3_5Moe) -----------------------------------
+
+
+def test_qwen3_5_moe_iter_deploy_bindings_rewrites_expert_path():
+    obj = _stub_adapter(Qwen3_5Moe, [MOE])
+    block = _build_moe_block_with_quant_linears()
+    bindings = list(obj.iter_deploy_bindings(layer_idx=4, block=block))
+    names = [b[0] for b in bindings]
+
+    assert "model.language_model.layers.4.self_attn.q_proj.weight" in names
+    assert "model.language_model.layers.4.mlp.experts.0.up_proj.weight" in names
+    assert "model.language_model.layers.4.mlp.experts.1.up_proj.weight" in names
+    assert all("expert_modules" not in n for n in names)
+
+
+def test_qwen3_5_moe_iter_deploy_bindings_keeps_non_expert_path():
+    obj = _stub_adapter(Qwen3_5Moe, [MOE])
+    block = nn.Module()
+    block.mlp = nn.Module()
+    block.mlp.shared_expert = nn.Module()
+    block.mlp.shared_expert.down_proj = QuantLinear(
+        SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
+        nn.Linear(4, 4),
+        w_bits=8,
+        name="down_proj",
+    )
+
+    bindings = list(obj.iter_deploy_bindings(layer_idx=1, block=block))
+
+    assert len(bindings) == 1
+    assert bindings[0][0] == "model.language_model.layers.1.mlp.shared_expert.down_proj.weight"
+
+
+def test_qwen3_5_moe_iter_deploy_bindings_raises_on_malformed_expert_name():
+    obj = _stub_adapter(Qwen3_5Moe, [MOE])
+    block = nn.Module()
+    block.mlp = nn.Module()
+    block.mlp.experts = nn.Module()
+    block.mlp.experts.expert_modules = nn.Module()
+    block.mlp.experts.expert_modules.bad = QuantLinear(
+        SimpleNamespace(algos=[], quant_dtype="int", w_bits=8),
+        nn.Linear(4, 4),
+        w_bits=8,
+        name="bad",
+    )
+
+    with pytest.raises(ValueError, match="Unexpected Qwen3.5 MoE expert module name"):
         list(obj.iter_deploy_bindings(layer_idx=0, block=block))

@@ -567,6 +567,44 @@ class TestGptq(unittest.TestCase):
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
+    def test_hifp8_channel_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+            },
+            'algorithm': {'gptq'},
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        torch.Tensor.npu = mock_npu
+        self.assertEqual(type(model.linear1).__name__, GPT_QUANT)
+        self.assertEqual(type(model.linear2).__name__, GPT_QUANT)
+        self.assertEqual(type(model.linear3).__name__, GPT_QUANT)
+        self.assertIsNotNone(model.linear1.scale_w)
+        self.assertIsNone(model.linear1.offset_w)
+        convert(model)
+        quant_out = model(self.inputs.npu())
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
+    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
+    @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_fp8_tensor_sym_gptq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
