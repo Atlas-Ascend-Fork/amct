@@ -18,7 +18,7 @@
 
 ### PyTorch + torch_npu 配套安装
 
-使用 NPU 路径时，PyTorch 必须安装 CPU 版，并与 `torch_npu` 版本配套。不要在同一 Python 环境中混用非 CPU 版 PyTorch 与 `torch_npu`，否则可能在运行期出现加速器冲突。
+使用 NPU 加速后端时，PyTorch 必须安装 CPU 版，并与 `torch_npu` 版本配套。不要在同一 Python 环境中混用非 CPU 版 PyTorch 与 `torch_npu`，否则可能在运行期出现加速器冲突。
 
 推荐按以下任一路径安装：
 
