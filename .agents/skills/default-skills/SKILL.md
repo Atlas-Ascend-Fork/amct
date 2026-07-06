@@ -11,7 +11,7 @@ description: |
 **场景一：补装缺失（默认）**
 1. 执行 `.claude/skills/default-skills/scripts/install-default-skills.sh`（已存在的 skill 自动跳过）
 2. 检查 `.claude/skills/` 目录是否已有所有 `DEFAULT_SKILLS`，有则结束；若脚本执行失败，执行步骤 3
-3. 兜底：使用 `git clone --depth 1 https://gitcode.com/cann-agent/skills.git` 到临时目录，将缺失的 `DEFAULT_SKILLS` 手动拷贝到 `.claude/skills/`
+3. 兜底（脚本失败时手动复刻，与脚本逻辑等价）：`git clone --depth 1 https://gitcode.com/cann-agent/skills.git` 到临时目录，将缺失的 `DEFAULT_SKILLS` 拷贝到 `.claude/skills/`
 
 **场景二：强制更新（用户明确要求更新/同步上游时）**
 1. 执行 `.claude/skills/default-skills/scripts/install-default-skills.sh --force`（从上游覆盖所有 skill）
