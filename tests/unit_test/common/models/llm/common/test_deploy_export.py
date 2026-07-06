@@ -61,7 +61,7 @@ def test_generate_quant_group_default_int():
     assert group[WEIGHTS]["dynamic"] is False
     assert group["activation_use_clip"] is False
     assert group["output_activations"] is None
-    assert group[INPUT_ACTIVATIONS]["type"] == "float"
+    assert group[INPUT_ACTIVATIONS]["type"] == INT
 
 
 def test_generate_quant_group_custom_bits_and_qtype():
@@ -89,7 +89,7 @@ def test_generate_quant_config_int_path_only_has_group_0():
 
 
 def test_generate_quant_config_mx_w8_adds_moegmm_group():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True)
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, moe_bits=(8, 8))
     assert cfg["format"] == "float-quantized"
     assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1}
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1]["targets"] == ["MoEGMM"]
@@ -98,13 +98,13 @@ def test_generate_quant_config_mx_w8_adds_moegmm_group():
 
 
 def test_generate_quant_config_mx_w4a8_uses_4bit_weights_in_moegmm():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a8=True, is_mx=True)
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, moe_bits=(4, 8))
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 8
 
 
 def test_generate_quant_config_mx_w4a4_splits_up_gate_and_down():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a4=True, is_mx=True)
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, moe_bits=(4, 4), moe_split=True)
     assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1, GROUP_2}
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1]["targets"] == ["MoEGMMUpGate"]
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
