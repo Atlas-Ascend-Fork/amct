@@ -195,3 +195,22 @@ HIFP8_KVCACHE_CFG = {
     },
     'algorithm': {'quantile'}
 }
+
+
+HIFP8_SMOOTHQUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+    'skip_layers': {'lm_head'}
+}
