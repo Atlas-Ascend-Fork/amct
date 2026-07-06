@@ -1,12 +1,17 @@
-# amct 大模型量化 Agent Skills
+# amct Agent Skills
 
-面向昇腾 NPU 大模型量化压缩的 Agent Skills：封装 amct（`amct_pytorch`）的 LLM 量化全流程（`eval / extract_ptq_data / ptq / deploy` + blockwise PTQ），让你用自然语言完成「模型 → 量化方案 → 部署权重」。同时适配 Claude Code 与 OpenCode。
+amct 仓的 Agent Skills 基础设施（`.agents/`），以 skill 为单元封装各类研发能力，自然语言触发、agent 自主执行，clone 即可用。
+
+当前内置：
+- **quant-workflow**：LLM 量化全流程编排主入口（方案推荐 → PTQ → 部署导出，见下文）
+- **amct-ops-dev**：NPU 算子开发（编排外独立工具）
+- **gitcode-pr / gitcode-issue**：GitCode 仓库协作操作
+
+后续按需扩充。适配 Claude Code 与 OpenCode。
 
 ## 快速开始
 
-```bash
-bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencode 可单装
-```
+clone 本仓即可直接使用，Agent Skills 自动加载（机制见 [docs/architecture.md](docs/architecture.md) §3）。
 
 装好后直接用自然语言描述任务，例如：
 
@@ -59,13 +64,13 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 
 ## 仓内组织
 
-`.agents/` 是唯一可信源（tracked）：
+`.agents/` 是内容唯一可信源（tracked）；客户端配置（`settings.json`/`opencode.json`）由各自视图目录直接持有：
 
 ```
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
 ├── skills/
-│   │  # LLM量化编排链路
+│   │  # LLM 量化编排链路
 │   ├── quant-workflow/    # LLM 量化流程入口（调度）
 │   ├── quant-tools/       # 被调度的量化叶子技能（含 model-adapter + references 共享）
 │   │  # 编排外的独立 skill（用户直接点名调用）
@@ -73,13 +78,42 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 │   ├── gitcode-pr/        # PR 创建 / 评论
 │   ├── gitcode-issue/     # issue 读取
 │   └── default-skills/    # 按需装通用 skill
-├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md / roadmap.md
-├── hooks/         # pre_tool_use / subagent_stop（Claude Code）
-├── settings.json  # Claude Code 配置（权限 + hooks）
-└── opencode.json  # OpenCode 配置（plugins + 权限）
+├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md
+└── hooks/         # pre_tool_use / subagent_stop（Claude Code）
 ```
 
-`scripts/init-agent.sh` 据此生成 `.claude/`、`.opencode/` 客户端视图（均 gitignored、全量生成）：`settings.json`→`.claude/`、`opencode.json`→`.opencode/`，skills/agents/hooks/docs 投影到两端。技能清单与规划见 [docs/roadmap.md](docs/roadmap.md)，架构与设计见 [docs/architecture.md](docs/architecture.md)。
+`.claude/`、`.opencode/` 是真实目录；其中 **配置文件**（`settings.json`、`opencode.json`）为真实文件，**内容目录**（skills/agents/hooks/docs）为 git-tracked symlink 指向 `.agents/`，随 clone 自动生效。架构与设计见 [docs/architecture.md](docs/architecture.md)。
+
+> **Windows**：`settings.json`/`opencode.json` 为真实文件，客户端可正常启动。内容目录（skills/agents/hooks/docs）为 symlink，`core.symlinks=false` 下 clone 后退化为文本文件：
+> - **OpenCode**：原生将 `.agents/skills/` 列为发现路径，无需 symlink，clone 即可用 ✅
+> - **Claude Code**：只扫 `.claude/skills/`，symlink 断裂后 skills 全部失效 ❌ → 修复如下：
+
+**修复方式（任选其一）**：
+
+1. **管理员终端**（推荐）：右键 PowerShell / Git Bash，选「以管理员身份运行」，然后执行：
+   ```bash
+   git config core.symlinks true
+   rm -rf .claude
+   git checkout HEAD -- .claude
+   ```
+
+2. **开启开发者模式**（一劳永逸，之后普通终端也可用）：打开「设置 → 系统 → 开发者选项 → 开发人员模式」，然后执行：
+   ```bash
+   git config core.symlinks true
+   rm -rf .claude
+   git checkout HEAD -- .claude
+   ```
+
+3. **手动建立目录联接**（无需管理员，但 git 不识别 junction，git 操作中可能报 warning）：
+   ```cmd
+   rmdir .claude\skills .claude\agents .claude\docs .claude\hooks
+   mklink /J .claude\skills .agents\skills
+   mklink /J .claude\agents .agents\agents
+   mklink /J .claude\docs .agents\docs
+   mklink /J .claude\hooks .agents\hooks
+   ```
+
+如需同时修复 `.opencode/`，在上述 git checkout 命令中将 `-- .claude` 替换为 `-- .claude .opencode`；或手动对 `.opencode/` 重复执行 mklink /J 命令。
 
 ## 面向 agent 集成
 
