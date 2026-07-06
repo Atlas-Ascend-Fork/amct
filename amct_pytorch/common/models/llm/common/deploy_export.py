@@ -24,29 +24,44 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
-    act_observer = "minmax" if qtype == "float" else "memoryless"
+    observer = "minmax" if qtype == "float" else "memoryless"
     act_strategy = "group" if qtype == "float" else "token"
     w_strategy = "group" if qtype == "float" else "channel"
     group_size = 32 if qtype == "float" else None
     quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": True,
                                          "group_size": group_size, "num_bits": a_bits,
-                                         "observer": act_observer, "observer_kwargs": {},
+                                         "observer": observer, "observer_kwargs": {},
                                          "strategy": act_strategy, "symmetric": True, "type": qtype},
                    "activation_use_clip": activation_use_clip,
                    "output_activations": None,
                    "weights": {"actorder": None, "block_structure": None, "dynamic": False,
                                "group_size": group_size, "num_bits": w_bits,
-                               "observer": act_strategy, "observer_kwargs": {},
+                               "observer": observer, "observer_kwargs": {},
                                "strategy": w_strategy, "symmetric": True, "type": qtype}}
     return quant_group
 
 
-def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=False):
+def _default_bits_scheme():
+    """Fallback group scheme matching the historical hardcoded config:
+    """
+    return [
+        {"targets": ["Linear"], "w_bits": 8, "a_bits": 8},
+        {"targets": ["MoEGMM"], "w_bits": 8, "a_bits": 8},
+    ]
+
+
+def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
     """
     Generate a quantization configuration dictionary based on the specified parameters.
     """
-    config_groups = {"group_0": {"targets": ["Linear"]}}
-    config_groups.update({"group_1": {"targets": ["MoEGMM"]}})
+    if bits_scheme is None:
+        bits_scheme = _default_bits_scheme()
+    qtype = "float" if is_mx else "int"
+    config_groups = {}
+    for idx, group in enumerate(bits_scheme):
+        entry = {"targets": group["targets"]}
+        entry.update(generate_quant_group(a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype))
+        config_groups[f"group_{idx}"] = entry
     quant_config = {"config_groups": config_groups,
                     "format": "float-quantized" if is_mx else "int-quantized",
                     "global_compression_ratio": 1,
@@ -54,9 +69,6 @@ def generate_quant_config(cache_scheme, ignores, w4a8=False, w4a4=False, is_mx=F
                     "quant_method": "compressed-tensors",
                     "quantization_status": "compressed"}
     quant_config.update(cache_scheme)
-    qtype = "float" if is_mx else "int"
-    quant_config["config_groups"]["group_0"].update(generate_quant_group(a_bits=8, w_bits=8, qtype=qtype))
-    quant_config["config_groups"]["group_1"].update(generate_quant_group(a_bits=8, w_bits=4, qtype=qtype))
     if is_mx:
         quant_config["weight_block_size"] = [1, 32]
     return quant_config

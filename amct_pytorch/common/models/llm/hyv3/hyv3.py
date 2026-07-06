@@ -161,6 +161,16 @@ class HyV3(BaseModel):
         ignore.append(f"lm_head")
         return ignore
 
+    def bits_scheme(self):
+        """Per-group (targets, w_bits, a_bits) for the deploy config groups.
+        """
+        bit_policy = ensure_bit_policy(self.args)
+        routed = bit_policy["moe.routed"].default
+        return [
+            {"targets": ["Linear"], "w_bits": bit_policy.w_bits, "a_bits": bit_policy.a_bits},
+            {"targets": ["MoEGMM"], "w_bits": routed.w, "a_bits": routed.a},
+        ]
+
     def cache_scheme(self):
         cache_type = "int" if self.quant_dtype == "int" else "float"
         scheme = {"kv_cache_scheme": {

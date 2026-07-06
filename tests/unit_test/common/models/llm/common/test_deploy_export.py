@@ -38,7 +38,6 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 CONFIG_GROUPS_KEY = 'config_groups'
 GROUP_0 = 'group_0'
 GROUP_1 = 'group_1'
-GROUP_2 = 'group_2'
 
 # ---- generate_quant_group ------------------------------------------------
 
@@ -97,21 +96,14 @@ def test_generate_quant_config_mx_w8_adds_moegmm_group():
     assert cfg["weight_block_size"] == [1, 32]
 
 
-def test_generate_quant_config_mx_w4a8_uses_4bit_weights_in_moegmm():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a8=True, is_mx=True)
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
+def test_generate_quant_config_moegmm_w4a8_via_bits_scheme():
+    scheme = [
+        {"targets": ["Linear"], "w_bits": 8, "a_bits": 8},
+        {"targets": ["MoEGMM"], "w_bits": 8, "a_bits": 8},
+    ]
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, bits_scheme=scheme)
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 8
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 8
-
-
-def test_generate_quant_config_mx_w4a4_splits_up_gate_and_down():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a4=True, is_mx=True)
-    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1, GROUP_2}
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1]["targets"] == ["MoEGMMUpGate"]
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 4
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_2]["targets"] == ["MoEGMMDown"]
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_2][WEIGHTS][NUM_BITS] == 4
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_2][INPUT_ACTIVATIONS][NUM_BITS] == 8
 
 
 def test_generate_quant_config_merges_cache_scheme_into_top_level():

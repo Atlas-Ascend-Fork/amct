@@ -135,8 +135,10 @@ class LlmDeployWorkflow:
             config = json.load(f)
         if self.quant_dtype is not None:
             cache_scheme = self.pipeline.cache_scheme()
+            bits_scheme_fn = getattr(self.pipeline, "bits_scheme", None)
+            bits_scheme = bits_scheme_fn() if callable(bits_scheme_fn) else None
             quantization_config = generate_quant_config(
-                cache_scheme, quant_ignore_layers, w4a8=False, w4a4=False, is_mx=self.is_mx)
+                cache_scheme, quant_ignore_layers, is_mx=self.is_mx, bits_scheme=bits_scheme)
             config['quantization_config'] = quantization_config
 
         new_config_file = os.path.join(self.output_dir, "config.json")
