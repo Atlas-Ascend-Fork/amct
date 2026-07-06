@@ -90,6 +90,12 @@ class BaseModel(metaclass=ABCMeta):
     def init_cls(self):
         pass
 
+    def generate_tensorwise_quant_layers(self):
+        raise NotImplementedError()
+    
+    def generate_tensorwise_ignore_layers(self):
+        raise NotImplementedError
+
     def get_embed_load_specs(self):
         """Default (embed_tokens, norm, lm_head) load specs.
 

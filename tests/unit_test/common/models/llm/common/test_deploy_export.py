@@ -53,10 +53,10 @@ WEIGHTS = 'weights'
 def test_generate_quant_group_default_int():
     group = generate_quant_group()
     assert group[INPUT_ACTIVATIONS][NUM_BITS] == 8
-    assert group[INPUT_ACTIVATIONS]["strategy"] == "token"
+    assert group[INPUT_ACTIVATIONS]["strategy"] == "group"
     assert group[INPUT_ACTIVATIONS]["dynamic"] is True
     assert group[WEIGHTS][NUM_BITS] == 8
-    assert group[WEIGHTS]["strategy"] == "channel"
+    assert group[WEIGHTS]["strategy"] == "group"
     assert group[WEIGHTS]["dynamic"] is False
     assert group["activation_use_clip"] is False
     assert group["output_activations"] is None
@@ -64,7 +64,7 @@ def test_generate_quant_group_default_int():
 
 
 def test_generate_quant_group_custom_bits_and_qtype():
-    group = generate_quant_group(a_num_bits=4, w_num_bits=4, qtype=INT, activation_use_clip=True)
+    group = generate_quant_group(a_bits=4, w_bits=4, qtype=INT, activation_use_clip=True)
     assert group[INPUT_ACTIVATIONS][NUM_BITS] == 4
     assert group[WEIGHTS][NUM_BITS] == 4
     assert group[INPUT_ACTIVATIONS]["type"] == INT
@@ -81,7 +81,7 @@ def test_generate_quant_config_int_path_only_has_group_0():
     assert cfg["ignore"] == ["lm_head"]
     assert cfg["quantization_status"] == "compressed"
     assert cfg["quant_method"] == "compressed-tensors"
-    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0}
+    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1}
     assert cfg[CONFIG_GROUPS_KEY][GROUP_0]["targets"] == ["Linear"]
     # int path: no weight_block_size key emitted.
     assert "weight_block_size" not in cfg

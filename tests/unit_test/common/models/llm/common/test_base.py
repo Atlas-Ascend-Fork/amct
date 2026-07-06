@@ -53,6 +53,8 @@ class _StubModel(BaseModel):
             args.model = "/fake/path"
         if not hasattr(args, 'quant_target'):
             args.quant_target = list(quant_target)
+        if not hasattr(args, 'quant_dtype'):
+            args.quant_dtype = 'int8'
 
         with patch(
             "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",

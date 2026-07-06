@@ -234,6 +234,7 @@ def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
 
 def test_refresh_config_attaches_quantization_block(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
+    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     # Original config that the workflow reads in.
     (tmp_path / CONFIG_JSON).write_text(json.dumps({"hidden_size": 4096}))
 
@@ -248,6 +249,7 @@ def test_refresh_config_attaches_quantization_block(tmp_path):
 
 def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp8")
+    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     (tmp_path / CONFIG_JSON).write_text("{}")
     wf._refresh_config(quant_ignore_layers=[])
     refreshed = json.loads((tmp_path / CONFIG_JSON).read_text())
@@ -554,12 +556,13 @@ def test_convert_tensor_unsupported_raises():
         wf._convert_tensor("test.weight", t)
 
 
-def test_refresh_config_tensor_bf16(tmp_path):
+def test_refresh_config_bf16_uses_pipeline_quant_config(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="bf16")
+    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     config = {"torch_dtype": "float32", "quantization_config": {"old": True}}
     (tmp_path / "config.json").write_text(json.dumps(config))
-    wf._refresh_config_tensor()
+    wf._refresh_config(quant_ignore_layers=[])
     refreshed = json.loads((tmp_path / "config.json").read_text())
-    assert refreshed["torch_dtype"] == "bfloat16"
-    assert "quantization_config" not in refreshed
+    assert refreshed["torch_dtype"] == "float32"
+    assert refreshed["quantization_config"]["format"] == "int-quantized"
 
