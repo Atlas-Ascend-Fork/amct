@@ -20,7 +20,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import torch
 
+from amct_pytorch.common.models.llm.common.base import BaseModel
+from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import LongcatLite
 
 
@@ -82,3 +85,28 @@ class TestLongcatLiteAdapter:
         _mock_hf_deps(mock_config, mock_tokenizer, mock_from_config, mock_init_empty)
         model = LongcatLite(_make_args())
         assert model.config._attn_implementation == "eager"
+
+    @patch("amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained")
+    @patch("amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained")
+    @patch("amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM.from_config")
+    @patch("amct_pytorch.common.models.llm.common.base.init_empty_weights")
+    def test_longcat_lite_load_unit_inputs_uses_named_cached_input(
+        self, mock_init_empty, mock_from_config, mock_tokenizer, mock_config, tmp_path
+    ):
+        _mock_hf_deps(mock_config, mock_tokenizer, mock_from_config, mock_init_empty)
+        model = LongcatLite(_make_args())
+        expected = torch.arange(6, dtype=torch.float32).reshape(2, 3)
+        torch.save(expected, tmp_path / "block_1_mlp_0_in.pkl")
+        unit = make_ptq_unit(
+            "mlp",
+            "mlp_0",
+            layer_idx=1,
+            module=None,
+            metadata={"input_name": "mlp_0"},
+        )
+
+        with patch.object(BaseModel, "load_unit_inputs", return_value=(None, {"mask": "kept"})):
+            cached_inps, kwargs = model.load_unit_inputs(str(tmp_path), unit)
+
+        assert torch.equal(cached_inps, expected)
+        assert kwargs == {"mask": "kept"}
