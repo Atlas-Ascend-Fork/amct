@@ -661,21 +661,21 @@ def _make_wf_for_resolve(quant_dtype="int8", quant_target=None):
 def test_resolve_no_targets_uses_global_bits():
     bp = _make_bp({"w_bits": 4, "a_bits": 8})
     wf = _make_wf_for_resolve(quant_target=[])
-    kwargs = wf._resolve_quant_group_kwargs(bp)
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
     assert kwargs == {"linear_bits": (4, 8)}
 
 
 def test_resolve_attn_linear_only():
     bp = _make_bp({"w_bits": 4, "a_bits": 8, "attn-linear": {"w_bits": 8, "a_bits": 8}})
     wf = _make_wf_for_resolve(quant_target=["attn-linear"])
-    kwargs = wf._resolve_quant_group_kwargs(bp)
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
     assert kwargs == {"linear_bits": (8, 8)}
 
 
 def test_resolve_moe_only_uses_moe_bits_as_linear():
     bp = _make_bp({"w_bits": 8, "a_bits": 8, "moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 8}}}})
     wf = _make_wf_for_resolve(quant_target=["moe"])
-    kwargs = wf._resolve_quant_group_kwargs(bp)
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
     # MoE-only: moe bits map onto "Linear" target
     assert kwargs == {"linear_bits": (4, 8)}
 
@@ -683,7 +683,7 @@ def test_resolve_moe_only_uses_moe_bits_as_linear():
 def test_resolve_mixed_attn_and_moe_two_groups():
     bp = _make_bp({"w_bits": 8, "a_bits": 8, "moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 8}}}})
     wf = _make_wf_for_resolve(quant_target=["attn-linear", "moe"])
-    kwargs = wf._resolve_quant_group_kwargs(bp)
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
     assert kwargs["linear_bits"] == (8, 8)
     assert kwargs["moe_bits"] == (4, 8)
     assert "moe_split" not in kwargs
@@ -692,7 +692,7 @@ def test_resolve_mixed_attn_and_moe_two_groups():
 def test_resolve_mx_w4a8_no_split():
     bp = _make_bp({"moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 8}}}})
     wf = _make_wf_for_resolve(quant_dtype="mxfp8")
-    kwargs = wf._resolve_quant_group_kwargs(bp)
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
     assert kwargs["linear_bits"] == (8, 8)
     assert kwargs["moe_bits"] == (4, 8)
     assert kwargs["moe_split"] is False
@@ -701,6 +701,6 @@ def test_resolve_mx_w4a8_no_split():
 def test_resolve_mx_w4a4_triggers_split():
     bp = _make_bp({"moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 4}}}})
     wf = _make_wf_for_resolve(quant_dtype="mxfp8")
-    kwargs = wf._resolve_quant_group_kwargs(bp)
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
     assert kwargs["moe_split"] is True
     assert kwargs["moe_bits"] == (4, 4)
