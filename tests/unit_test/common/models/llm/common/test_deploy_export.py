@@ -25,6 +25,7 @@ and the full pipeline; they are deferred to the tiny-config integration batch.
 import importlib
 
 import pytest
+import torch
 import torch.nn as nn
 
 from amct_pytorch.common.models.llm.common.deploy_export import (
@@ -182,4 +183,139 @@ def test_export_block_deploy_skips_none_extra_tensor():
     )
     deploy_tensors, _ = export_block_deploy(pipeline, 0, [])
     assert "k.extra" not in deploy_tensors
+
+
+# ---- convert_state_dict (new in diff) ------------------------------------
+
+
+def test_convert_state_dict_non_fp8_passthrough(tmp_path):
+    """Non-FP8 weight (element_size > 1) is returned unchanged."""
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    weight = torch.randn(4, 4, dtype=torch.float32)
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        {}, tmp_path, {}, 32,
+    )
+    assert result is weight
+
+
+def test_convert_state_dict_fp8_with_scale_inv_loaded(tmp_path):
+    """FP8 int8 weight with scale_inv present gets dequantized."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    # Create a safetensors file with scale_inv
+    scale_inv = torch.ones(1, 2, dtype=torch.float32) * 0.5
+    sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
+
+    weight = torch.ones(2, 4, dtype=torch.int8)
+    weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
+    loaded_files = {}
+
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, loaded_files, block_size=32,
+    )
+    # int8 packed dequant unpacks columns, so shape changes
+    assert result.dtype != torch.int8
+    assert result.shape[0] == weight.shape[0]
+
+
+def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, capsys):
+    """Missing scale_inv prints warning and returns original weight."""
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    weight = torch.ones(4, 4, dtype=torch.int8)
+    weight_map = {}  # no scale_inv entry
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, {}, 32,
+    )
+    captured = capsys.readouterr()
+    assert "Missing scale_inv" in captured.out
+    assert result is weight
+
+
+def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
+    """FP8 weight with non-int8 dtype uses non-packed dequant (block_size=1)."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale_inv = torch.ones(2, 4, dtype=torch.float32)
+    sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
+
+    # Use uint8 to simulate a non-int8 1-byte dtype (float8 not available on CPU)
+    weight = torch.ones(2, 4, dtype=torch.uint8)
+    weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
+    loaded_files = {}
+
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, loaded_files, block_size=1,
+    )
+    assert result.dtype != torch.uint8
+
+
+def test_convert_state_dict_reuses_loaded_file(tmp_path):
+    """Already-loaded file is reused from loaded_files cache."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale_inv = torch.ones(1, 2, dtype=torch.float32) * 2.0
+    sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
+
+    # Pre-load the file
+    from safetensors.torch import load_file as sf_load
+    loaded_files = {"shard.safetensors": sf_load(str(tmp_path / "shard.safetensors"))}
+
+    weight = torch.ones(2, 4, dtype=torch.int8)
+    weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
+
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, loaded_files, block_size=32,
+    )
+    assert result.dtype != torch.int8
+
+
+# ---- quant_payload (new in diff) -----------------------------------------
+
+
+def test_quant_payload_basic():
+    """quant_payload builds tensors dict from quant_cls.export_deploy."""
+    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+
+    class FakeQuantCls:
+        def __init__(self, bits):
+            self.bits = bits
+
+        def export_deploy(self, weight):
+            return {
+                "qweight": torch.ones(4, 4) * self.bits,
+                "weight_scale": torch.ones(4, 1),
+            }
+
+    weight = torch.randn(4, 4)
+    result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=8)
+    assert "layer.weight" in result
+    assert torch.allclose(result["layer.weight"], torch.ones(4, 4) * 8)
+    assert "layer.weight_scale" in result
+
+
+def test_quant_payload_skips_none_extras():
+    """quant_payload skips extra tensors that are None."""
+    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+
+    class FakeQuantCls:
+        def __init__(self, bits):
+            pass
+
+        def export_deploy(self, weight):
+            return {"qweight": weight, "bias": None}
+
+    weight = torch.randn(4, 4)
+    result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=4)
+    assert "layer.weight" in result
+    assert "layer.bias" not in result
 
