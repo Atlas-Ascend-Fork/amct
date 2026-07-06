@@ -26,7 +26,7 @@ from pathlib import Path
 import torch
 from loguru import logger
 from safetensors import safe_open
-from safetensors.torch import save_file
+from safetensors.torch import load_file, save_file
 from tqdm import tqdm
 
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -251,10 +251,10 @@ class LlmDeployWorkflow:
                         print(
                             f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
                     new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
+                    updated_weight_map[weight_name] = source_file
                 else:
                     new_state_dict[weight_name] = weight
-                    new_weight_map[weight_name] = source_file
+                    updated_weight_map[weight_name] = source_file
 
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
