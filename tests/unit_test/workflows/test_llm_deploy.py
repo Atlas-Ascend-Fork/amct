@@ -528,6 +528,62 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     assert "index_path" in result
 
 
+
+def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    (dst / CONFIG_JSON).write_text("{}")
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.load_file",
+        lambda path, device="cpu": {
+            MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: torch.arange(6, dtype=torch.float32).reshape(2, 3),
+        },
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.convert_state_dict",
+        lambda weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size: weight,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.logger", MagicMock(),
+    )
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    wf._copy_support_files = MagicMock()
+    original_index = {
+        METADATA_KEY: {"foo": "bar"},
+        "weight_map": {
+            MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
+        },
+    }
+    wf._load_weight_index = MagicMock(return_value=original_index)
+    wf.pipeline = MagicMock()
+    wf.pipeline.generate_tensorwise_quant_layers.return_value = {}
+    wf.pipeline.generate_tensorwise_ignore_layers.return_value = ["lm_head"]
+    wf.pipeline.get_scale_name.return_value = (".weight_scale", "unused_scale_inv")
+    wf.pipeline.block_size.return_value = 128
+    wf.pipeline.cache_scheme.return_value = {}
+    wf.pipeline.bits_scheme.return_value = None
+
+    result = wf._run_tensorwise()
+
+    saved_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    refreshed = json.loads((dst / CONFIG_JSON).read_text())
+    assert result["index_path"] == str(dst / SAFETENSORS_INDEX_JSON)
+    assert result["num_output_files"] == 1
+    assert saved_index[METADATA_KEY]["foo"] == "bar"
+    assert saved_index["weight_map"] == {
+        MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
+    }
+    assert refreshed[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
+
+
 # ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
 
 
