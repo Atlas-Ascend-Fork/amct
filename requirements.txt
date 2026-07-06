@@ -1,4 +1,6 @@
-torch==2.7.1
+# NPU 场景需使用 CPU 版 PyTorch 与 torch_npu 配套。
+# 如已安装非 CPU 版 torch，请先执行：pip3 uninstall -y torch
+torch==2.7.1+cpu
 torch_npu==2.7.1.post4
 setuptools
 onnx==1.18.0
