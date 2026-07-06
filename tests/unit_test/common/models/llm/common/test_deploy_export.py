@@ -291,6 +291,7 @@ def test_quant_payload_basic():
             self.bits = bits
 
         def export_deploy(self, weight):
+            _ = self
             return {
                 "qweight": torch.ones(4, 4) * self.bits,
                 "weight_scale": torch.ones(4, 1),
