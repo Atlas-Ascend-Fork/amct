@@ -95,7 +95,10 @@ bash build.sh --torch
 pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user
 ```
 
-> ⚠️ **Note**: If pip version > 25.2, installation command needs to add `--no-build-isolation`, otherwise may encounter `ModuleNotFoundError: No module named 'torch'`.
+> ⚠️ **Note**: If you install with `--no-build-isolation`, pip will not install
+> build dependencies automatically. Run `pip install wheel` first, and then add
+> `--no-build-isolation` to install the package. Otherwise, installation may
+> fail with `error: invalid command 'bdist_wheel'`.
 
 ```bash
 # Verify AMCT installation
@@ -113,8 +116,6 @@ The "One-Stop Platform" is an NPU environment provided for developers, internall
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | Complete Qwen3.6-MoE model quantization, data extraction, and PTQ in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience. |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | Complete DeepSeek-V4 Flash model single-card inference in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience.    |
-
-
 
 ## 📖 Documentation Samples
 
@@ -176,19 +177,20 @@ amct/
 
 </details>
 
-
 <details>
 <summary><strong>"ModuleNotFoundError: No module named 'torch'" during installation?</strong></summary>
 
 **Reason**: pip version > 25.2, build isolation causes torch not recognized.
 
 **Solution**:
+
 ```bash
 # Solution 1: Lower pip version
 pip install pip==25.2
 
-# Solution 2: Add --no-build-isolation
-pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isolation
+# Solution 2: Install wheel first, then add --no-build-isolation
+pip install wheel
+pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user --no-build-isolation
 ```
 
 </details>
