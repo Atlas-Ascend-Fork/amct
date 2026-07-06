@@ -613,3 +613,94 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     }
     assert json.loads((dst / CONFIG_JSON).read_text())["torch_dtype"] == "bfloat16"
 
+
+def test_refresh_config_moe_only_single_group(tmp_path):
+    # quant_target=moe: experts fall back to "Linear" -> single group
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["moe"]
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert set(qc["config_groups"]) == {"group_0"}
+
+
+def test_refresh_config_attn_linear_only_single_group(tmp_path):
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["attn-linear"]
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert set(qc["config_groups"]) == {"group_0"}
+
+
+def test_refresh_config_mixed_attn_and_moe_two_groups(tmp_path):
+    # mixed bit-width: attn "Linear" + MoE "MoEGMM" as two separate groups
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.args.quant_target = ["attn-linear", "moe"]
+    (tmp_path / CONFIG_JSON).write_text("{}")
+    wf._refresh_config(quant_ignore_layers=[])  # pylint: disable=protected-access
+    qc = json.loads((tmp_path / CONFIG_JSON).read_text())[QUANTIZATION_CONFIG]
+    assert set(qc["config_groups"]) == {"group_0", "group_1"}
+    assert qc["config_groups"]["group_1"]["targets"] == ["MoEGMM"]
+
+
+# ---- _resolve_quant_group_kwargs unit tests ---------------------------------
+
+def _make_bp(cfg: dict):
+    from amct_pytorch.quantization.bit_policy import BitPolicy
+    return BitPolicy(cfg)
+
+
+def _make_wf_for_resolve(quant_dtype="int8", quant_target=None):
+    wf = _make_workflow(quant_dtype=quant_dtype)
+    if quant_target is not None:
+        wf.args.quant_target = quant_target
+    return wf
+
+
+def test_resolve_no_targets_uses_global_bits():
+    bp = _make_bp({"w_bits": 4, "a_bits": 8})
+    wf = _make_wf_for_resolve(quant_target=[])
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
+    assert kwargs == {"linear_bits": (4, 8)}
+
+
+def test_resolve_attn_linear_only():
+    bp = _make_bp({"w_bits": 4, "a_bits": 8, "attn-linear": {"w_bits": 8, "a_bits": 8}})
+    wf = _make_wf_for_resolve(quant_target=["attn-linear"])
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
+    assert kwargs == {"linear_bits": (8, 8)}
+
+
+def test_resolve_moe_only_uses_moe_bits_as_linear():
+    bp = _make_bp({"w_bits": 8, "a_bits": 8, "moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 8}}}})
+    wf = _make_wf_for_resolve(quant_target=["moe"])
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
+    # MoE-only: moe bits map onto "Linear" target
+    assert kwargs == {"linear_bits": (4, 8)}
+
+
+def test_resolve_mixed_attn_and_moe_two_groups():
+    bp = _make_bp({"w_bits": 8, "a_bits": 8, "moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 8}}}})
+    wf = _make_wf_for_resolve(quant_target=["attn-linear", "moe"])
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
+    assert kwargs["linear_bits"] == (8, 8)
+    assert kwargs["moe_bits"] == (4, 8)
+    assert "moe_split" not in kwargs
+
+
+def test_resolve_mx_w4a8_no_split():
+    bp = _make_bp({"moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 8}}}})
+    wf = _make_wf_for_resolve(quant_dtype="mxfp8")
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
+    assert kwargs["linear_bits"] == (8, 8)
+    assert kwargs["moe_bits"] == (4, 8)
+    assert kwargs["moe_split"] is False
+
+
+def test_resolve_mx_w4a4_triggers_split():
+    bp = _make_bp({"moe": {"routed": {"gate_proj": {"w_bits": 4, "a_bits": 4}}}})
+    wf = _make_wf_for_resolve(quant_dtype="mxfp8")
+    kwargs = wf._resolve_quant_group_kwargs(bp)  # pylint: disable=protected-access
+    assert kwargs["moe_split"] is True
+    assert kwargs["moe_bits"] == (4, 4)
