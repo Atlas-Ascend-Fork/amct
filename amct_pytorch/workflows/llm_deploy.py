@@ -140,6 +140,8 @@ class LlmDeployWorkflow:
             quantization_config = generate_quant_config(
                 cache_scheme, quant_ignore_layers, is_mx=self.is_mx, bits_scheme=bits_scheme)
             config['quantization_config'] = quantization_config
+        else:
+            config.pop('quantization_config', None)
 
         new_config_file = os.path.join(self.output_dir, "config.json")
         with open(new_config_file, "w") as f:
@@ -227,15 +229,14 @@ class LlmDeployWorkflow:
                 block_size = self.pipeline.block_size(weight)
                 weight = convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
                                             model_dir, loaded_files, block_size)
+                new_state_dict[weight_name] = weight
                 if self.quant_dtype in ["int", "mxfp"]:
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
                     new_weight_name = weight_name.rsplit(".", 1)[0]
-                    if new_weight_name in list(quant_layers.keys()):
+                    if new_weight_name in quant_layers:
                         bit = quant_layers[new_weight_name]
                         state_dict = quant_payload(quant_cls, weight_name, weight, bit)
                         new_state_dict.update(state_dict)
-                else:
-                    new_state_dict[weight_name] = weight
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file

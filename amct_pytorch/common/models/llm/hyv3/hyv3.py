@@ -156,7 +156,7 @@ class HyV3(BaseModel):
         ignore = []
         for n in self.MLP_LINEAR_NAMES:
             ignore.append(f"model.layers.0.mlp.{n}")
-        ignore.append(f"model.layers.80.eh_proj")
+        ignore.append(f"model.layers.{self.num_layers}.eh_proj")
         ignore.append(f"model.embed_tokens")
         ignore.append(f"lm_head")
         return ignore
@@ -173,12 +173,13 @@ class HyV3(BaseModel):
 
     def cache_scheme(self):
         cache_type = "int" if self.quant_dtype == "int" else "float"
-        scheme = {"kv_cache_scheme": {
+        scheme = {
+            "kv_cache_scheme": {
                 "num_bits": 8,
                 "type": cache_type,
                 "strategy": "token",
                 "group_size": -1,
-                "dynamic": "true",
-                "symmetric": "true",
+                "dynamic": "True",
+                "symmetric": "True",
             }}
         return scheme

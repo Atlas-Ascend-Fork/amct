@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+from loguru import logger
 import torch
 import torch.nn as nn
 from safetensors.torch import load_file
@@ -42,8 +42,6 @@ def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=
 
 
 def _default_bits_scheme():
-    """Fallback group scheme matching the historical hardcoded config:
-    """
     return [
         {"targets": ["Linear"], "w_bits": 8, "a_bits": 8},
         {"targets": ["MoEGMM"], "w_bits": 8, "a_bits": 8},
@@ -126,7 +124,7 @@ def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
             else:
                 weight = weight_dequant(weight, scale_inv, block_size=block_size)
         except KeyError:
-            print(
+            logger.warning(
                 f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
     return weight
 

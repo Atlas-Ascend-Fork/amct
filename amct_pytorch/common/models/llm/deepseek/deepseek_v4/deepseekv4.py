@@ -255,11 +255,12 @@ class DeepseekV4(BaseModel):
 
     def cache_scheme(self):
         cache_type = "int" if self.quant_dtype == "int" else "float"
-        scheme = {"kv_cache_scheme": {"num_bits": 8, "type": "float"},
-                    "li_cache_scheme": {
-                        "type": cache_type,
-                        "num_bits": 8,
-                    }}
+        scheme = {
+        "kv_cache_scheme": {"num_bits": 8, "type": "float"},
+        "li_cache_scheme": {
+            "type": cache_type,
+            "num_bits": 8,
+        }}
         return scheme
 
     def _block_sharded(self, layer_idx):

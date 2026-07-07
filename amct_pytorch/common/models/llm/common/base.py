@@ -94,7 +94,7 @@ class BaseModel(metaclass=ABCMeta):
         raise NotImplementedError()
     
     def generate_tensorwise_ignore_layers(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def get_embed_load_specs(self):
         """Default (embed_tokens, norm, lm_head) load specs.
