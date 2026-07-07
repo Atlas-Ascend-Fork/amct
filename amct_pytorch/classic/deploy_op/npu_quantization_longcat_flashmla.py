@@ -55,6 +55,8 @@ class NpuLongcatFlashMLA(torch.nn.Module):
         """
         if past_key_values is None:
             past_key_values = DynamicCache()
+        # Side effect: monkey-patches past_key_values.update to inject KV quantization hook
+        self._hook_kv_states(past_key_values)
         fp_out = self.ori_module(
             hidden_states,
             position_embeddings,

@@ -20,12 +20,12 @@ from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
 from ...amct_pytorch.utils.vars import CHANNEL_WISE
+from ...amct_pytorch.utils.vars import FIXED_MIN
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.module_info import ModuleInfo
 from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_PRUNE
 from .insert_retrain_pass import REPLACE_DICT, get_node_onnx_type
 
-FIXED_MIN = "fixed_min"
 
 
 class InsertRetrainPrunePass(BaseFusionPass):

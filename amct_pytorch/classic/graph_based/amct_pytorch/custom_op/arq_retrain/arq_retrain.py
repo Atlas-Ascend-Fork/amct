@@ -62,7 +62,7 @@ class ArqRetrainFunction(Function):
             weight_tensor, wts_param.get("channel_wise"), group, axis
         )
         if group_wise:
-            adjust_axis_for_group_wise(axis, weight_tensor)
+            weight_tensor = adjust_axis_for_group_wise(axis, weight_tensor)
         scale_out, offset_out, quantized_weight = arq_retrain_forward_pytorch(
             weight_tensor_processed,
             wts_param.get("num_bits"),
@@ -79,7 +79,7 @@ class ArqRetrainFunction(Function):
 
         # transpose wts axis back in group wise
         if group_wise and axis > 0:
-            adjust_axis_for_group_wise(axis, quantized_weight)
+            quantized_weight = adjust_axis_for_group_wise(axis, quantized_weight)
 
         return quantized_weight, scale, offset
 

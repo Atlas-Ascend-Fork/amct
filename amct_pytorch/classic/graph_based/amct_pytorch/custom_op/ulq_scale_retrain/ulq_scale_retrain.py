@@ -63,7 +63,7 @@ class UlqScaleRetrainFunction(Function):
             inputs, wts_qat_param.get("channel_wise"), group, axis
         )
         if group_wise:
-            adjust_axis_for_group_wise(axis, inputs)
+            inputs = adjust_axis_for_group_wise(axis, inputs)
 
         inputs_processed = process_tensor_shape(
             inputs, wts_qat_param.get(MODULE_TYPE), wts_qat_param.get("module")
