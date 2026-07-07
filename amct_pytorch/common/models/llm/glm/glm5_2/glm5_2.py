@@ -144,28 +144,27 @@ class GLM5_2(BaseModel):
         - kv_cache_scheme: only quantized for mxfp (8-bit float, group-wise).
           For non-mxfp (c16/int) the key is kept but set to None to signal
           "no KV cache quantization".
-        - li_cache_scheme: always present, type follows is_mx
-          (mxfp -> "float", otherwise "int"), matching the original
-          llm_deploy._refresh_config assembly.
+        - li_cache_scheme: always present, type follows quant_dtype
+          (mxfp -> "float", otherwise "int").
         """
+        is_mxfp = self.args.quant_dtype == "mxfp"
         li_cache_scheme = {
-            "type": "float" if is_mx else "int",
+            "type": "float" if is_mxfp else "int",
             "num_bits": 8,
         }
-        if self.args.quant_dtype == "mxfp":
-            return {
-                "kv_cache_scheme": {
-                    "num_bits": 8,
-                    "type": "float",
-                    "strategy": "group",
-                    "group_size": 128,
-                    "dynamic": True,
-                    "symmetric": True,
-                },
-                "li_cache_scheme": li_cache_scheme,
-            }
-        return {"kv_cache_scheme": None, "li_cache_scheme": li_cache_scheme}
-
+        if not is_mxfp:
+            return {"kv_cache_scheme": None, "li_cache_scheme": li_cache_scheme}
+        return {
+            "kv_cache_scheme": {
+                "num_bits": 8,
+                "type": "float",
+                "strategy": "group",
+                "group_size": 128,
+                "dynamic": True,
+                "symmetric": True,
+            },
+            "li_cache_scheme": li_cache_scheme,
+        }
 
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
