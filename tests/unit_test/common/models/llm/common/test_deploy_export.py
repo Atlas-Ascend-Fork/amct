@@ -222,18 +222,20 @@ def test_convert_state_dict_fp8_with_scale_inv_loaded(tmp_path):
     assert result.shape[0] == weight.shape[0]
 
 
-def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, capsys):
-    """Missing scale_inv prints warning and returns original weight."""
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monkeypatch):
+    """Missing scale_inv logs warning and returns original weight."""
+    from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
+
+    warnings = []
+    monkeypatch.setattr(deploy_export_mod.logger, "warning", lambda message: warnings.append(message))
 
     weight = torch.ones(4, 4, dtype=torch.int8)
     weight_map = {}  # no scale_inv entry
-    result = convert_state_dict(
+    result = deploy_export_mod.convert_state_dict(
         weight, "layer.weight", "layer.weight_scale_inv",
         weight_map, tmp_path, {}, 32,
     )
-    captured = capsys.readouterr()
-    assert "Missing scale_inv" in captured.out
+    assert any("Missing scale_inv" in message for message in warnings)
     assert result is weight
 
 

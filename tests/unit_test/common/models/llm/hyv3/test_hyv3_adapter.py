@@ -419,6 +419,7 @@ def _stub_hyv3(**attrs):
         num_nextn_predict_layers=1,
         num_experts=2,
     )
+    obj.num_layers = obj.config.num_hidden_layers
     for k, v in attrs.items():
         setattr(obj, k, v)
     return obj
@@ -434,7 +435,7 @@ def test_hyv3_generate_tensorwise_ignore_layers():
     assert "model.layers.0.mlp.gate_proj" in ignore
     assert "model.layers.0.mlp.down_proj" in ignore
     assert "model.layers.0.mlp.up_proj" in ignore
-    assert "model.layers.80.eh_proj" in ignore
+    assert "model.layers.2.eh_proj" in ignore
     assert "model.embed_tokens" in ignore
     assert "lm_head" in ignore
 
