@@ -90,6 +90,19 @@ class BaseModel(metaclass=ABCMeta):
     def init_cls(self):
         pass
 
+    def cache_scheme(self):
+        """Default KV/LI cache scheme for deploy config.
+
+        Adapters may override to emit model-specific fields (e.g. extra
+        ``strategy``/``group_size`` keys). The base default matches the
+        pre-d5c9da6 inline scheme so historical models stay deployable.
+        """
+        cache_type = "int" if self.quant_dtype == "int" else "float"
+        return {
+            "kv_cache_scheme": {"num_bits": 8, "type": "float"},
+            "li_cache_scheme": {"type": cache_type, "num_bits": 8},
+        }
+
     def generate_tensorwise_quant_layers(self):
         raise NotImplementedError()
     
