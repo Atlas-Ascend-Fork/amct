@@ -28,7 +28,6 @@ from ...amct_pytorch.utils.module_info import ModuleInfo
 from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_PRUNE
 from .insert_retrain_pass import REPLACE_DICT, get_node_onnx_type
 
-FIXED_MIN = 'fixed_min'
 
 
 class InsertRetrainPrunePass(BaseFusionPass):

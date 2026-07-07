@@ -24,7 +24,6 @@ from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
 MODULE_NAME = 'Graph'
-RNN_LAYER_TYPE = ["GRU", "LSTM"]
 
 
 class Graph(GraphBase): # pylint: disable=no-member
