@@ -302,3 +302,13 @@ def test_weight_dequant_asserts_scale_mismatch():
     scale = torch.randn(3, 4)
     with pytest.raises(AssertionError):
         weight_dequant(weight, scale, block_size=8)
+
+
+def test_weight_dequant_block_size_one_direct_multiply():
+    """block_size=1 takes the else branch: weight * scale directly."""
+    weight = torch.tensor([[1.0, 2.0], [3.0, 4.0]], dtype=torch.float32)
+    scale = torch.tensor([[0.5, 0.5], [0.5, 0.5]], dtype=torch.float32)
+    result = weight_dequant(weight, scale, block_size=1)
+    expected = weight * scale
+    assert result.shape == weight.shape
+    assert torch.allclose(result, expected.to(torch.get_default_dtype()))

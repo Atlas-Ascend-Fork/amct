@@ -53,6 +53,8 @@ class _StubModel(BaseModel):
             args.model = "/fake/path"
         if not hasattr(args, 'quant_target'):
             args.quant_target = list(quant_target)
+        if not hasattr(args, 'quant_dtype'):
+            args.quant_dtype = 'int8'
 
         with patch(
             "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
@@ -1377,4 +1379,24 @@ def test_load_unit_inputs_when_not_cached_returns_default():
     unit = make_ptq_unit("mlp", "mlp", 0, nn.Linear(4, 8))
     result = model.load_unit_inputs("/nonexistent", unit)
     assert result is not None
+
+
+# ---- block_size (new in diff) --------------------------------------------
+
+
+def test_block_size_returns_32():
+    w = torch.randn(4, 4)
+    assert BaseModel.block_size(w) == 32
+
+
+def test_generate_tensorwise_quant_layers_raises_not_implemented():
+    stub = _StubModel()
+    with pytest.raises(NotImplementedError):
+        stub.generate_tensorwise_quant_layers()
+
+
+def test_generate_tensorwise_ignore_layers_raises_not_implemented():
+    stub = _StubModel()
+    with pytest.raises(NotImplementedError):
+        stub.generate_tensorwise_ignore_layers()
 
