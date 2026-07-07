@@ -86,13 +86,6 @@ class GLM5_2(BaseModel):
     def load_embed_state_dict(self):
         return super().load_embed_state_dict()
 
-    def block(self, layer_idx):
-        decoder_layer = self.cls(self.config, layer_idx)
-        state_dict = self.load_layer_weight(self.get_layer_weight_prefix(layer_idx))
-        decoder_layer.load_state_dict(state_dict, strict=True)
-        decoder_layer.eval().bfloat16()
-        return decoder_layer
-
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
@@ -136,6 +129,13 @@ class GLM5_2(BaseModel):
                 decoder_layer.mlp = QuantGatedMLP(self.args, mlp, group="mlp")
 
         return decoder_layer
+
+    def get_scale_name(self, weight_name):
+        """Return (scale_prefix, scale_inv_name) for locating scale tensors during dequantization."""
+        scale_prefix = ".scale"
+        scale_inv_name = weight_name.replace(".weight", ".scale")
+        return scale_prefix, scale_inv_name
+
 
     def cache_scheme(self):
         """Return cache scheme dict for deploy config.

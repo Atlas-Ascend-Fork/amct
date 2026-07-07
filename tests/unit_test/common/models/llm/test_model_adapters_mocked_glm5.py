@@ -877,6 +877,26 @@ class TestGLM5_2NewFunctions:
         )
         return GLM5_2(args)
 
+    # -- get_scale_name --
+
+    @pytest.mark.cpu
+    def test_get_scale_name_replaces_weight_with_scale(self, monkeypatch):
+        """get_scale_name returns (.scale, <name>.scale) for a layered weight."""
+        model = self._make_model(monkeypatch, quant_dtype="int8")
+        scale_prefix, scale_inv_name = model.get_scale_name(
+            "model.layers.0.mlp.up_proj.weight"
+        )
+        assert scale_prefix == ".scale"
+        assert scale_inv_name == "model.layers.0.mlp.up_proj.scale"
+
+    @pytest.mark.cpu
+    def test_get_scale_name_with_simple_weight_name(self, monkeypatch):
+        """get_scale_name handles simple weight names (no layer path)."""
+        model = self._make_model(monkeypatch, quant_dtype="int8")
+        scale_prefix, scale_inv_name = model.get_scale_name("lm_head.weight")
+        assert scale_prefix == ".scale"
+        assert scale_inv_name == "lm_head.scale"
+
     # -- cache_scheme --
 
     @pytest.mark.cpu

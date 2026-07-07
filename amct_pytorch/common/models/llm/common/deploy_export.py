@@ -92,20 +92,18 @@ def get_quant_ignore_linear_names(block, weight_prefix):
 
     names = []
     for name, module in block.named_modules():
+        if isinstance(module, PlainLinear):
+            names.append(f"{weight_prefix}{name}")
+            continue
         if not isinstance(module, nn.Linear):
             continue
         if any(name.startswith(prefix) for prefix in quant_linear_prefixes):
             continue
-        # Skip inner .linear of PlainLinear (e.g. "q_a_proj.linear") —
-        # collected below via PlainLinear's own path ("q_a_proj")
+        # Skip inner nn.Linear of PlainLinear (e.g. skip "self_attn.kv_b_proj.linear");
+        # the wrapper path "self_attn.kv_b_proj" is collected above.
         if any(name.startswith(prefix) for prefix in plain_linear_prefixes):
             continue
         names.append(f"{weight_prefix}{name}")
-
-    # Collect PlainLinear via wrapper path to avoid ".linear" suffix
-    for name, module in block.named_modules():
-        if isinstance(module, PlainLinear):
-            names.append(f"{weight_prefix}{name}")
 
     return names
 

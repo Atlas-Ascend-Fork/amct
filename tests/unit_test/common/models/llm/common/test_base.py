@@ -1398,32 +1398,3 @@ def test_generate_tensorwise_ignore_layers_raises_not_implemented():
     with pytest.raises(NotImplementedError):
         stub.generate_tensorwise_ignore_layers()
 
-
-# ---- get_scale_name -------------------------------------------------------
-
-
-@pytest.mark.cpu
-def test_get_scale_name_replaces_weight_with_scale():
-    stub = _StubModel()
-    scale_prefix, scale_inv_name = stub.get_scale_name("model.layers.0.mlp.up_proj.weight")
-    assert scale_prefix == ".scale"
-    assert scale_inv_name == "model.layers.0.mlp.up_proj.scale"
-
-
-@pytest.mark.cpu
-def test_get_scale_name_with_simple_weight_name():
-    stub = _StubModel()
-    scale_prefix, scale_inv_name = stub.get_scale_name("lm_head.weight")
-    assert scale_prefix == ".scale"
-    assert scale_inv_name == "lm_head.scale"
-
-
-# ---- cache_scheme --------------------------------------------------
-
-
-@pytest.mark.cpu
-def test_cache_scheme_raises_not_implemented():
-    stub = _StubModel()
-    with pytest.raises(NotImplementedError):
-        stub.cache_scheme()
-

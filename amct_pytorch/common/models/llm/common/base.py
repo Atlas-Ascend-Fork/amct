@@ -296,18 +296,6 @@ class BaseModel(metaclass=ABCMeta):
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
-    def get_scale_name(self, weight_name):
-        """Return (scale_prefix, scale_inv_name) for locating scale tensors during dequantization."""
-        scale_prefix = ".scale"
-        scale_inv_name = weight_name.replace(".weight", ".scale")
-        return scale_prefix, scale_inv_name
-
-    def cache_scheme(self):
-        """Return full cache scheme dict for deploy config. use to tensor mode.
-        If not implemented, it means that the model does not support tensor mode.
-        """
-        raise NotImplementedError()
-
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
 
