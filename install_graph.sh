@@ -43,7 +43,7 @@ if find "${AMCT_GRAPH_PATH}" -name "${OUTPUT_FILE}" | grep -q '.'; then
 # Download package
 else
     echo "Downloading Ascend CANN Toolkit..."
-    wget -O "${AMCT_GRAPH_FILE}" "$SOURCE_URL" --no-check-certificate
+    wget -O "${AMCT_GRAPH_FILE}" "$SOURCE_URL"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to download Ascend CANN Toolkit"
         [ -n "${BUNDLE_DIR}" ] && rm -rf "$BUNDLE_DIR"
