@@ -74,26 +74,28 @@ def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 
     M, N = weight.shape
     weight = weight.to(torch.float32)
     scale = scale.to(torch.float32)
+    if block_size != 1:
+        if is_mx:
+            scale_expanded = scale.repeat_interleave(block_size, dim=1)
+        else:
+            # Compute the effective block dimensions for scale
+            scale_m, scale_n = scale.shape
+            assert scale_m == (
+                M + block_size - 1) // block_size, "Mismatch in scale rows and weight rows."
+            assert scale_n == (
+                N + block_size - 1) // block_size, "Mismatch in scale columns and weight columns."
 
-    if is_mx:
-        scale_expanded = scale.repeat_interleave(block_size, dim=1)
+            # Expand scale to match the weight tensor's shape
+            scale_expanded = scale.repeat_interleave(
+                block_size, dim=0).repeat_interleave(block_size, dim=1)
+
+        # Trim scale_expanded to match weight's shape if necessary
+        scale_expanded = scale_expanded[:M, :N]
+
+        # Perform element-wise multiplication
+        dequantized_weight = weight * scale_expanded
     else:
-        # Compute the effective block dimensions for scale
-        scale_m, scale_n = scale.shape
-        assert scale_m == (
-            M + block_size - 1) // block_size, "Mismatch in scale rows and weight rows."
-        assert scale_n == (
-            N + block_size - 1) // block_size, "Mismatch in scale columns and weight columns."
-
-        # Expand scale to match the weight tensor's shape
-        scale_expanded = scale.repeat_interleave(
-            block_size, dim=0).repeat_interleave(block_size, dim=1)
-
-    # Trim scale_expanded to match weight's shape if necessary
-    scale_expanded = scale_expanded[:M, :N]
-
-    # Perform element-wise multiplication
-    dequantized_weight = weight * scale_expanded
+        dequantized_weight = weight * scale
 
     # Convert the output to the default dtype
     dequantized_weight = dequantized_weight.to(torch.get_default_dtype())

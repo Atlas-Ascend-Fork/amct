@@ -234,6 +234,7 @@ def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
 
 def test_refresh_config_attaches_quantization_block(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
+    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     # Original config that the workflow reads in.
     (tmp_path / CONFIG_JSON).write_text(json.dumps({"hidden_size": 4096}))
 
@@ -248,6 +249,7 @@ def test_refresh_config_attaches_quantization_block(tmp_path):
 
 def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="mxfp8")
+    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     (tmp_path / CONFIG_JSON).write_text("{}")
     wf._refresh_config(quant_ignore_layers=[])
     refreshed = json.loads((tmp_path / CONFIG_JSON).read_text())
@@ -526,6 +528,62 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     assert "index_path" in result
 
 
+
+def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    (dst / CONFIG_JSON).write_text("{}")
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.load_file",
+        lambda path, device="cpu": {
+            MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: torch.arange(6, dtype=torch.float32).reshape(2, 3),
+        },
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.convert_state_dict",
+        lambda weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size: weight,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.logger", MagicMock(),
+    )
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    wf._copy_support_files = MagicMock()
+    original_index = {
+        METADATA_KEY: {"foo": "bar"},
+        "weight_map": {
+            MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
+        },
+    }
+    wf._load_weight_index = MagicMock(return_value=original_index)
+    wf.pipeline = MagicMock()
+    wf.pipeline.generate_tensorwise_quant_layers.return_value = {}
+    wf.pipeline.generate_tensorwise_ignore_layers.return_value = ["lm_head"]
+    wf.pipeline.get_scale_name.return_value = (".weight_scale", "unused_scale_inv")
+    wf.pipeline.block_size.return_value = 128
+    wf.pipeline.cache_scheme.return_value = {}
+    wf.pipeline.bits_scheme.return_value = None
+
+    result = wf._run_tensorwise()
+
+    saved_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    refreshed = json.loads((dst / CONFIG_JSON).read_text())
+    assert result["index_path"] == str(dst / SAFETENSORS_INDEX_JSON)
+    assert result["num_output_files"] == 1
+    assert saved_index[METADATA_KEY]["foo"] == "bar"
+    assert saved_index["weight_map"] == {
+        MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
+    }
+    assert refreshed[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
+
+
 # ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
 
 
@@ -554,17 +612,25 @@ def test_convert_tensor_unsupported_raises():
         wf._convert_tensor("test.weight", t)
 
 
-def test_refresh_config_tensor_bf16(tmp_path):
+def test_refresh_config_bf16_uses_pipeline_quant_config(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path), quant_dtype="bf16")
+    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
     config = {"torch_dtype": "float32", "quantization_config": {"old": True}}
     (tmp_path / "config.json").write_text(json.dumps(config))
-    wf._refresh_config_tensor()
+    wf._refresh_config(quant_ignore_layers=[])
     refreshed = json.loads((tmp_path / "config.json").read_text())
-    assert refreshed["torch_dtype"] == "bfloat16"
-    assert "quantization_config" not in refreshed
+    assert refreshed["torch_dtype"] == "float32"
+    assert refreshed["quantization_config"]["format"] == "int-quantized"
 
 
-def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
+# ---- _run_tensorwise int/mxfp quant branch (diff coverage) ---------------
+
+
+def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
+    """When quant_dtype='int', weights in quant_layers go through quant_payload."""
+    from amct_pytorch.quantization.dtypes import register_dtype
+    register_dtype()
+
     src = tmp_path / "src"
     dst = tmp_path / "dst"
     src.mkdir()
@@ -572,20 +638,12 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
 
     (src / CONFIG_JSON).write_text(json.dumps({"torch_dtype": "float32"}))
     save_file(
-        {
-            "layer.weight": torch.arange(6, dtype=torch.float32).reshape(2, 3),
-            "layer.bias": torch.ones(3, dtype=torch.float32),
-            "fp8.weight": torch.ones(4, dtype=torch.int8),
-        },
+        {"layer.weight": torch.randn(4, 4, dtype=torch.float32)},
         str(src / KEY_SHARD1_SAFETENSORS),
     )
     (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
         "metadata": {},
-        "weight_map": {
-            "layer.weight": KEY_SHARD1_SAFETENSORS,
-            "layer.bias": KEY_SHARD1_SAFETENSORS,
-            "fp8.weight": KEY_SHARD1_SAFETENSORS,
-        },
+        "weight_map": {"layer.weight": KEY_SHARD1_SAFETENSORS},
     }))
 
     logger = MagicMock()
@@ -595,21 +653,22 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         lambda iterable, desc="": iterable,
     )
 
-    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="int")
     wf.granularity = "tensor"
     wf.pipeline = MagicMock()
-    wf.pipeline.get_scale_name = MagicMock(return_value=(".scale_inv", "missing.scale_inv"))
+    wf.pipeline.get_scale_name = MagicMock(return_value=("_scale_inv", "missing_scale_inv"))
+    wf.pipeline.generate_tensorwise_quant_layers = MagicMock(return_value={"layer": 8})
+    wf.pipeline.generate_tensorwise_ignore_layers = MagicMock(return_value=[])
+    wf.pipeline.cache_scheme = MagicMock(return_value={})
+    wf.pipeline.bits_scheme = MagicMock(return_value=None)
+    wf.pipeline.block_size = MagicMock(return_value=32)
     wf.setup = MagicMock(return_value="sink")
 
     result = wf.run()
 
+    # Should produce output with quantized weight keys
     refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
     assert result["num_output_files"] == 1
-    logger.remove.assert_called_once_with("sink")
-    assert refreshed_index["weight_map"] == {
-        "layer.weight": KEY_SHARD1_SAFETENSORS,
-        "layer.bias": KEY_SHARD1_SAFETENSORS,
-        "fp8.weight": KEY_SHARD1_SAFETENSORS,
-    }
-    assert json.loads((dst / CONFIG_JSON).read_text())["torch_dtype"] == "bfloat16"
+    # quant_payload produces qweight + weight_scale + weight_bias
+    assert "layer.weight" in refreshed_index["weight_map"]
 

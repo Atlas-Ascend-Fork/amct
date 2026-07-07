@@ -121,8 +121,8 @@ class TestHyV3Adapter:
     def test_get_scale_name_returns_scale_inv_suffix():
         obj = _stub()
         scale_prefix, scale_inv_name = obj.get_scale_name("mlp.experts.0.gate_proj.weight")
-        assert scale_prefix == "_scale_inv"
-        assert scale_inv_name == "mlp.experts.0.gate_proj.weight_scale_inv"
+        assert scale_prefix == "_scale"
+        assert scale_inv_name == "mlp.experts.0.gate_proj.weight_scale"
 
     @staticmethod
     def test_load_layer_weight_applies_remap_and_pack(monkeypatch):
@@ -399,3 +399,97 @@ class TestHyV3Mocked:
         _mock_hf_loading_chain(monkeypatch, _tiny_hyv3_config())
         model = HyV3(_make_mock_args())
         assert model.textconfig is HYV3Config
+
+
+# ---- HyV3 new methods (diff coverage) ------------------------------------
+
+
+def _stub_hyv3(**attrs):
+    """Build a minimal HyV3 stub for testing new tensorwise methods."""
+    obj = HyV3.__new__(HyV3)
+    obj.args = SimpleNamespace(
+        quant_target=["moe"],
+        w_bits=8,
+        a_bits=8,
+    )
+    obj.quant_target = ["moe"]
+    obj.quant_dtype = "int"
+    obj.config = SimpleNamespace(
+        num_hidden_layers=2,
+        num_nextn_predict_layers=1,
+        num_experts=2,
+    )
+    obj.num_layers = obj.config.num_hidden_layers
+    for k, v in attrs.items():
+        setattr(obj, k, v)
+    return obj
+
+
+def test_hyv3_block_size_returns_1():
+    assert HyV3.block_size(torch.randn(4, 4)) == 1
+
+
+def test_hyv3_generate_tensorwise_ignore_layers():
+    stub = _stub_hyv3()
+    ignore = stub.generate_tensorwise_ignore_layers()
+    assert "model.layers.0.mlp.gate_proj" in ignore
+    assert "model.layers.0.mlp.down_proj" in ignore
+    assert "model.layers.0.mlp.up_proj" in ignore
+    assert "model.layers.2.eh_proj" in ignore
+    assert "model.embed_tokens" in ignore
+    assert "lm_head" in ignore
+
+
+def test_hyv3_cache_scheme_int():
+    stub = _stub_hyv3()
+    stub.quant_dtype = "int"
+    scheme = stub.cache_scheme()
+    assert scheme["kv_cache_scheme"]["type"] == "int"
+    assert scheme["kv_cache_scheme"]["num_bits"] == 8
+
+
+def test_hyv3_cache_scheme_float():
+    stub = _stub_hyv3()
+    stub.quant_dtype = "bf16"
+    scheme = stub.cache_scheme()
+    assert scheme["kv_cache_scheme"]["type"] == "float"
+
+
+def test_hyv3_bits_scheme():
+    stub = _stub_hyv3()
+    result = stub.bits_scheme()
+    assert len(result) == 2
+    assert result[0]["targets"] == ["Linear"]
+    assert result[1]["targets"] == ["MoEGMM"]
+    assert result[0]["w_bits"] == 8
+    assert result[0]["a_bits"] == 8
+
+
+def test_hyv3_generate_tensorwise_quant_layers():
+    stub = _stub_hyv3()
+    layers = stub.generate_tensorwise_quant_layers()
+    # Layer 0: only attn (no experts, no shared_mlp)
+    assert "model.layers.0.self_attn.q_proj" in layers
+    assert "model.layers.0.self_attn.k_proj" in layers
+    assert "model.layers.0.self_attn.v_proj" in layers
+    assert "model.layers.0.self_attn.o_proj" in layers
+    # Layer 0 should NOT have experts or shared_mlp
+    assert not any("model.layers.0.mlp.experts" in k for k in layers)
+    assert not any("model.layers.0.mlp.shared_mlp" in k for k in layers)
+    # Layer 1: attn + experts + shared_mlp
+    assert "model.layers.1.self_attn.q_proj" in layers
+    assert "model.layers.1.mlp.experts.0.gate_proj" in layers
+    assert "model.layers.1.mlp.experts.1.down_proj" in layers
+    assert "model.layers.1.mlp.shared_mlp.gate_proj" in layers
+    # Layer 2 (nextn predict): attn + experts (with bit=8) + shared_mlp
+    assert "model.layers.2.self_attn.q_proj" in layers
+    assert "model.layers.2.mlp.experts.0.gate_proj" in layers
+    # nextn predict layers use bit=8 for routed experts
+    assert layers["model.layers.2.mlp.experts.0.gate_proj"] == 8
+
+
+def test_hyv3_get_scale_name_uses_scale_suffix():
+    stub = _stub_hyv3()
+    prefix, inv_name = stub.get_scale_name("model.layers.0.self_attn.q_proj.weight")
+    assert prefix == "_scale"
+    assert inv_name == "model.layers.0.self_attn.q_proj.weight_scale"
