@@ -74,7 +74,7 @@ bfloat16_tensor = hifloat8_cast.hifloat8_to_bfloat16(hifloat8_tensor)
 ### 3、 算法注册
 
 amct_pytorch 提供了灵活的算法注册机制，允许用户自定义量化算法并将其集成到量化流程中。
-通过 [`algorithm_register`](../../../docs/api/algorithm_register.md) 函数，可以将自定义的量化模块注册到系统中。
+通过 [`algorithm_register`](../../../docs/zh/api/algorithm_register.md) 函数，可以将自定义的量化模块注册到系统中。
 
 ```python
 import torch
@@ -97,7 +97,7 @@ amct.algorithm_register('hifloat8_fakequant', 'Linear', Hifloat8FakequantLinear,
 ### 5、完整使用流程
 
 #### 5.1 准备环境
-1. 安装amct工具，参考[工具构建](../../../docs/build.md)
+1. 安装amct工具，参考[工具构建](../../../docs/zh/build.md)
 2. 安装其他依赖
 ```bash
 pip install transformers datasets

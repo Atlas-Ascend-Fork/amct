@@ -18,21 +18,32 @@
 import os
 import unittest
 from unittest import mock
+
 import torch
 
+from amct_pytorch.classic.graph_based.amct_pytorch.common.prune.prune_recorder_helper import (
+    PruneRecordHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration import (
+    retrain_config,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pytorch_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.prune.filter_prune_helper import (
+    create_filter_prune_helper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+)
 
-from .utils import models
-from .utils import record_utils
+from .utils import models, record_utils
 
 DEVICE = 'cpu'
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.prune.filter_prune_helper import create_filter_prune_helper
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pytorch_pb2
-from amct_pytorch.graph_based_compression.amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration import retrain_config
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestFilterPruneHelper(unittest.TestCase):
     """
@@ -75,9 +86,9 @@ class TestFilterPruneHelper(unittest.TestCase):
         configer = FakeRetrainConfig()
         configer.set_prune_layers(['layer1.0', 'layer2.0'])
         with mock.patch.object(retrain_config, 'RetrainConfig', FakeRetrainConfig):
-                for node in graph.nodes:
-                    helper = create_filter_prune_helper(node)
-                    helper.process(record_helper)
+            for node in graph.nodes:
+                helper = create_filter_prune_helper(node)
+                helper.process(record_helper)
 
         producer_names, consumer_names = record_utils.get_producer(record.prune_record[0])
         self.assertEqual(producer_names, ['layer1.0'])
@@ -186,13 +197,14 @@ class TestFilterPruneHelper(unittest.TestCase):
 
 class FakeRetrainConfig:
     __instance = None
+
     def __new__(cls, *args, **kwargs):
         if cls.__instance is None:
             cls.__instance = object.__new__(cls, *args, **kwargs)
         return cls.__instance
 
     def __init__(self):
-        super(FakeRetrainConfig, self).__init__()
+        pass
 
     def set_prune_layers(self, prune_layers):
         self.prune_layers = prune_layers

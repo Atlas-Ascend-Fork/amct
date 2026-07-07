@@ -15,22 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import unittest
-from unittest.mock import patch
 import os
+import unittest
 from io import BytesIO
+from unittest.mock import patch
 
 import torch
-from onnx import onnx_pb, AttributeProto
+from onnx import AttributeProto, onnx_pb
+
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
+from amct_pytorch.classic.graph_based.amct_pytorch.module import quant_module
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
 from .utils import models
-from amct_pytorch.graph_based_compression.amct_pytorch.module import quant_module
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.node import Node
-
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestQuantModule(unittest.TestCase):
     @classmethod
@@ -55,7 +56,7 @@ class TestQuantModule(unittest.TestCase):
     def setUp(self):
         self.graph = Parser.parse_net_to_graph(self.onnx_model)
 
-    def testDown(self):
+    def test_down(self):
         pass
 
     def test_float16_add_quant_module(self):

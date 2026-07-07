@@ -14,18 +14,35 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import unittest
+import logging
 import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
 import torch
 import torch.nn as nn
-
-from amct_pytorch import quantize, convert
+from mock_torch_npu import (
+    mock_npu,
+    mock_npu_convert_weight_to_int4pack,
+    mock_npu_dtype_cast,
+    mock_npu_dynamic_mx_quant,
+    mock_npu_format_cast,
+    mock_npu_quant_matmul,
+    mock_npu_quantize,
+    mock_npu_weight_quant_batchmatmul,
+)
 from utils import TestModel
-from mock_torch_npu import *
-from unittest.mock import MagicMock
-from unittest.mock import patch
+
+from amct_pytorch import convert, quantize
+
+logger = logging.getLogger(__name__)
+
+LINEAR_AW_QUANT = 'LinearAWQuant'
+LINEAR = 'Linear'
+NPU_WEIGHT_QUANTIZED_LINEAR = 'NpuWeightQuantizedLinear'
 
 torch.manual_seed(0)
+
 
 class TestAwq(unittest.TestCase):
     '''
@@ -36,11 +53,11 @@ class TestAwq(unittest.TestCase):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.inputs)
-        print('TestAwq START!')
+        logger.info('TestAwq START!')
 
     @classmethod
     def tearDownClass(cls):
-        print('TestAwq END!')
+        logger.info('TestAwq END!')
 
     def setUp(self):
         mock_torch_npu = MagicMock()
@@ -53,7 +70,10 @@ class TestAwq(unittest.TestCase):
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_tensor_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -69,9 +89,9 @@ class TestAwq(unittest.TestCase):
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'LinearAWQuant')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR_AW_QUANT)
         self.assertEqual(model.linear1.scale_w.shape[0], 1)
         self.assertIsNone(model.linear1.offset_w)
         self.assertIsNone(model.linear1.scale_d)
@@ -79,15 +99,18 @@ class TestAwq(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'NpuWeightQuantizedLinear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_tensor_asym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -104,24 +127,27 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'LinearAWQuant')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR_AW_QUANT)
         self.assertEqual(model.linear1.scale_w.shape[0], 1)
         self.assertIsNotNone(model.linear1.offset_w)
         self.assertIsNone(model.linear1.scale_d)
         self.assertIsNone(model.linear1.offset_d)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'NpuWeightQuantizedLinear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_channel_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -138,24 +164,27 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'LinearAWQuant')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR_AW_QUANT)
         self.assertEqual(model.linear1.scale_w.shape[0], 64)
         self.assertIsNone(model.linear1.offset_w)
         self.assertIsNone(model.linear1.scale_d)
         self.assertIsNone(model.linear1.offset_d)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'NpuWeightQuantizedLinear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_channel_asym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -172,24 +201,27 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'LinearAWQuant')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR_AW_QUANT)
         self.assertEqual(model.linear1.scale_w.shape[0], 64)
         self.assertIsNotNone(model.linear1.offset_w)
         self.assertIsNone(model.linear1.scale_d)
         self.assertIsNone(model.linear1.offset_d)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'NpuWeightQuantizedLinear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_group_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -207,22 +239,25 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertEqual(model.linear1.scale_w.shape[0], 64)
         self.assertEqual(model.linear1.scale_w.shape[1], 2)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')    
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)    
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_group_asym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -240,23 +275,26 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertEqual(model.linear1.scale_w.shape[0], 64)
         self.assertEqual(model.linear1.scale_w.shape[1], 2)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
 
     # Not Quant - int4
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_tensor_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -273,20 +311,23 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_tensor_asym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -303,20 +344,23 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
     
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_channel_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -333,20 +377,23 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_channel_asym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -363,20 +410,23 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
     
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_group_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -394,20 +444,23 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
     @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int4_group_asym_awq_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -425,14 +478,14 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -441,7 +494,10 @@ class TestAwq(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_fp4_group_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
@@ -459,15 +515,15 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'Linear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertIsNotNone(model.linear1.scale_w)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'Linear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertIsNotNone(model.linear1.scale_w)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
@@ -477,7 +533,10 @@ class TestAwq(unittest.TestCase):
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
-    @patch('amct_pytorch.deploy_op.weight_npu_quant_module.check_parameters_in_schema', MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_mxfp4_group_sym_awq_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
         cfg = {
             'batch_num': 1,
@@ -495,13 +554,13 @@ class TestAwq(unittest.TestCase):
         quantize(model, cfg)
         model(self.inputs)
         torch.Tensor.npu = mock_npu
-        self.assertEqual(type(model.linear1).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear2).__name__, 'Linear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, LINEAR_AW_QUANT)
+        self.assertEqual(type(model.linear2).__name__, LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertIsNone(model.linear1.scale_w)
         convert(model)
         quant_out = model(self.inputs.npu())
-        self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
-        self.assertEqual(type(model.linear2).__name__, 'Linear')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, LINEAR)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
         self.assertIsNotNone(model.linear1.scale_w)

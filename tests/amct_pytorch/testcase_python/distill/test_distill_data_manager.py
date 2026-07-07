@@ -15,19 +15,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import logging
 import os
+import sys
 import unittest
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_data_manager import DistillDataManager
-from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_helper import DistillHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.distill.distill_sample import ModelSingleTensorInput
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_data_manager import (
+    DistillDataManager,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_helper import (
+    DistillHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_sample import (
+    ModelSingleTensorInput,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
+
 
 class DistillNet(nn.Module):
     def __init__(self):
@@ -38,20 +48,15 @@ class DistillNet(nn.Module):
         x = self.conv(x)
         return x
 
+
 class TestDistillDataManager(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_distill_data_manager')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
-        cls.data = torch.randn(1,2,4,4)
+        cls.data = torch.randn(1, 2, 4, 4)
         cls.train_loader = torch.utils.data.DataLoader(cls.data)
         cls.groups = [['conv']]
         cls.torch_model = DistillNet().to(torch.device("cpu"))
@@ -60,7 +65,13 @@ class TestDistillDataManager(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         os.system('rm -r ' + cls.temp_folder)
-        print("[UNITTEST END test_distill_data_manager.py]")
+        logger.info("[UNITTEST END test_distill_data_manager.py]")
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
     def test_get_norm_min_data(self):
         data_t = torch.tensor([1.0])
@@ -114,10 +125,14 @@ class TestDistillDataManager(unittest.TestCase):
         distill_manager = DistillDataManager(self.sample_ins)
 
         # infer input data
-        self.assertRaises(RuntimeError, distill_manager.get_input_data_by_inferring, self.torch_model, ['linear'], self.data)
+        self.assertRaises(
+            RuntimeError, distill_manager.get_input_data_by_inferring,
+            self.torch_model, ['linear'], self.data)
         
         # infer output data
-        self.assertRaises(RuntimeError, distill_manager.get_output_data_by_inferring, self.torch_model, ['linear'], self.data)
+        self.assertRaises(
+            RuntimeError, distill_manager.get_output_data_by_inferring,
+            self.torch_model, ['linear'], self.data)
     
 
 

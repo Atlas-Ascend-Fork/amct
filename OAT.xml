@@ -32,8 +32,7 @@
 
         </filefilterlist>
         <licensematcherlist>
-            <licensematcher name="CANN License" desc="License for CANN Open Software">
-                <licensematcher name="Apache-2.0" desc="Apache License 2.0 matching rules">
+            <licensematcher name="Apache-2.0" desc="Apache License 2.0 matching rules">
                 <licensetext name="Apache License" desc="Standard Apache 2.0 license header">
                     Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
                     you may not use this file except in compliance with the License.

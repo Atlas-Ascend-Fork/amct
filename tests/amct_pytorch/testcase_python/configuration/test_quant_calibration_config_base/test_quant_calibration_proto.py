@@ -15,14 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import sys
 import unittest
+
 import torch
 
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_proto import QuantCalibrationProtoConfig
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration \
+    .quant_calibration_config_base.quant_calibration_proto import (
+    QuantCalibrationProtoConfig,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+logger = logging.getLogger(__name__)
+
 
 class CustomizedModel(torch.nn.Module):
     def __init__(self):
@@ -37,21 +45,22 @@ class CustomizedModel(torch.nn.Module):
         y = self.matmul3(inputs)
         return y
 
+
 class TestQuantCalibrationProtoConfig(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        print('TestQuantCalibrationProtoConfig start!')
+        logger.info('TestQuantCalibrationProtoConfig start!')
         cls.proto_path = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
         cls.obj = QuantCalibrationProtoConfig(cls.proto_path, CustomizedModel())
 
     @classmethod
     def tearDownClass(cls):
-        print('TestQuantCalibrationProtoConfig end!')
+        logger.info('TestQuantCalibrationProtoConfig end!')
 
     def test_get_proto_global_config(self):
         ret = self.obj.get_proto_global_config()
         self.assertEqual(ret.get('batch_num'), 2)
-        self.assertEqual(ret.get('activation_offset'), True)
+        self.assertTrue(ret.get('activation_offset'))
 
     def test_get_quant_config(self):
         ret = self.obj.get_quant_config('kv_cache_quant_config')
@@ -76,4 +85,4 @@ class TestQuantCalibrationProtoConfig(unittest.TestCase):
 
     def test_get_activation_offset(self):
         ret = self.obj._get_activation_offset()
-        self.assertEqual(ret, True)
+        self.assertTrue(ret)

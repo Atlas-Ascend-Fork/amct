@@ -17,11 +17,17 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+
 import torch
 
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.recorder.recorder import Recorder
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
+    Recorder,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+LAYER_NAME = 'layer_name'
+
 
 class TestRecorder(unittest.TestCase):
     @classmethod
@@ -47,11 +53,11 @@ class TestRecorder(unittest.TestCase):
             with open(record_file, 'w') as f:
                 f.write('')
         record_module = Recorder(record_file, enable_kv_cache_quant=True)
-        record_module.quant_layer_names = ['layer_name']
-        record_module.record_quant_layer('layer_name')
+        record_module.quant_layer_names = [LAYER_NAME]
+        record_module.record_quant_layer(LAYER_NAME)
         scale = [0.1, 0.2]
         offset = [1, 2]
-        record_module.forward('layer_name', 'kv_cache', {'scale':scale, 'offset':offset})
+        record_module.forward(LAYER_NAME, 'kv_cache', {'scale': scale, 'offset': offset})
         self.assertTrue(os.path.exists(record_file))
 
     def test_add_kv_cache_factors_num_error(self):
@@ -63,7 +69,7 @@ class TestRecorder(unittest.TestCase):
             'offset': [1, 2]
         }
         with self.assertRaises(RuntimeError):
-            record_module._add_kv_cache_factors('layer_name', quant_factors)
+            record_module._add_kv_cache_factors(LAYER_NAME, quant_factors)
 
     def test_add_kv_cache_factors_factor_error(self):
         # recorder
@@ -72,11 +78,12 @@ class TestRecorder(unittest.TestCase):
             with open(record_file, 'w') as f:
                 f.write('')
         record_module = Recorder(record_file, enable_kv_cache_quant=True)
-        record_module.record_quant_layer('layer_name')
+        record_module.record_quant_layer(LAYER_NAME)
         record_module._read_record_file()
         quant_factors = {
             'scale': None,
             'offset': None
         }
         with self.assertRaises(ValueError):
-            record_module._add_kv_cache_factors('layer_name', quant_factors)
+            record_module._add_kv_cache_factors(LAYER_NAME, quant_factors)
+

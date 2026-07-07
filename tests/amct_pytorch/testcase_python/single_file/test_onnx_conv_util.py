@@ -16,17 +16,19 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
+import unittest
 from io import BytesIO
 
-import unittest
 import torch
 import torch.nn.functional as F
 
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
-
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_conv_util import (
+    OnnxConvUtil,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestOnnxConvUtil(unittest.TestCase):
     @classmethod
@@ -80,8 +82,8 @@ class TestOnnxConvUtil(unittest.TestCase):
         graph.model = model
 
         conv_util = OnnxConvUtil(graph.get_node_by_name('conv1'))
-        self.assertEqual(conv_util.is_depthwise_conv(), True)
+        self.assertTrue(conv_util.is_depthwise_conv())
         self.assertEqual(conv_util.get_depthwise_multiplier(), 2)
 
         conv_util = OnnxConvUtil(graph.get_node_by_name('conv2'))
-        self.assertEqual(conv_util.is_group_conv(), True)
+        self.assertTrue(conv_util.is_group_conv())

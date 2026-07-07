@@ -17,17 +17,21 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-import torch
-import numpy as np
 
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant import FakeQuantizedLinear
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant import FakeQuantizedConvTranspose
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant import FakeQuantizedConv
+import numpy as np
+import torch
+
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.fake_quant import (
+    FakeQuantizedConv,
+    FakeQuantizedConvTranspose,
+    FakeQuantizedLinear,
+)
 
 np.random.seed(0)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DEVICE = torch.device('cpu')
+
 
 class TestFakeConvModule(unittest.TestCase):
     @classmethod
@@ -50,12 +54,12 @@ class TestFakeConvModule(unittest.TestCase):
         weight_scale = np.array([0.5, 0.5, 0.5])
         quant_params = {
             "data_scale": 1,
-            "data_offset":-128,
-            "weight_scale":weight_scale}
-        sub_module = torch.nn.Conv2d(3,1,1)
+            "data_offset": -128,
+            "weight_scale": weight_scale}
+        sub_module = torch.nn.Conv2d(3, 1, 1)
         fake_conv = FakeQuantizedConv(
             sub_module, quant_params, "conv1")
-        inputs = np.random.uniform(0, 1, (1,3,32,32))
+        inputs = np.random.uniform(0, 1, (1, 3, 32, 32))
         out = fake_conv(torch.tensor(inputs).to(torch.float32))
         self.assertIsNotNone(out)
 
@@ -64,12 +68,12 @@ class TestFakeConvModule(unittest.TestCase):
         weight_scale = np.array([0.5, 0.5, 0.5])
         quant_params = {
             "data_scale": 1,
-            "data_offset":-128,
-            "weight_scale":weight_scale}
-        sub_module = torch.nn.ConvTranspose2d(3,3,3)
+            "data_offset": -128,
+            "weight_scale": weight_scale}
+        sub_module = torch.nn.ConvTranspose2d(3, 3, 3)
         fake_conv = FakeQuantizedConvTranspose(
             sub_module, quant_params, "conv_transpose1")
-        inputs = np.random.uniform(0, 1, (1,3,32,32))
+        inputs = np.random.uniform(0, 1, (1, 3, 32, 32))
         out = fake_conv(torch.tensor(inputs).to(torch.float32))
         self.assertIsNotNone(out)
 
@@ -78,12 +82,12 @@ class TestFakeConvModule(unittest.TestCase):
         weight_scale = np.array([0.5])
         quant_params = {
             "data_scale": 1,
-            "data_offset":-128,
-            "weight_scale":weight_scale}
+            "data_offset": -128,
+            "weight_scale": weight_scale}
         sub_module = torch.nn.Identity()
         fake_linear = FakeQuantizedLinear(
             sub_module, quant_params, "linear1")
-        inputs = np.random.uniform(0, 1, (32,256))
+        inputs = np.random.uniform(0, 1, (32, 256))
         out = fake_linear(torch.tensor(inputs))
         self.assertIsNotNone(out)
 
@@ -92,12 +96,12 @@ class TestFakeConvModule(unittest.TestCase):
         weight_scale = np.array([0.5, 0.5, 0.5])
         quant_params = {
             "data_scale": 1,
-            "data_offset":-128,
-            "weight_scale":weight_scale}
-        sub_module = torch.nn.Conv3d(3,1,1)
+            "data_offset": -128,
+            "weight_scale": weight_scale}
+        sub_module = torch.nn.Conv3d(3, 1, 1)
         fake_conv = FakeQuantizedConv(
             sub_module, quant_params, "conv2")
-        inputs = np.random.uniform(0, 1, (1,3,5,32,32))
+        inputs = np.random.uniform(0, 1, (1, 3, 5, 32, 32))
         out = fake_conv(torch.tensor(inputs).to(torch.float32))
         self.assertIsNotNone(out)
 
@@ -105,12 +109,12 @@ class TestFakeConvModule(unittest.TestCase):
         weight_scale = np.array([0.5, 0.5, 0.5])
         quant_params = {
             "data_scale": 1,
-            "data_offset":-128,
-            "weight_scale":weight_scale}
-        sub_module = torch.nn.ConvTranspose3d(3,3,3)
+            "data_offset": -128,
+            "weight_scale": weight_scale}
+        sub_module = torch.nn.ConvTranspose3d(3, 3, 3)
         fake_conv = FakeQuantizedConvTranspose(
             sub_module, quant_params, "conv_transpose2")
-        inputs = np.random.uniform(0, 1, (1,3,5,32,32))
+        inputs = np.random.uniform(0, 1, (1, 3, 5, 32, 32))
         out = fake_conv(torch.tensor(inputs).to(torch.float32))
         self.assertIsNotNone(out)
 
@@ -118,11 +122,11 @@ class TestFakeConvModule(unittest.TestCase):
         weight_scale = np.array([0.5, 0.5, 0.5])
         quant_params = {
             "data_scale": 1,
-            "data_offset":-128,
-            "weight_scale":weight_scale}
+            "data_offset": -128,
+            "weight_scale": weight_scale}
         sub_module = torch.nn.Conv1d(3, 3, 1)
         fake_conv = FakeQuantizedConv(
             sub_module, quant_params, "conv1")
-        inputs = np.random.uniform(0, 1, (1,3,32))
+        inputs = np.random.uniform(0, 1, (1, 3, 32))
         out = fake_conv(torch.tensor(inputs).to(torch.float))
-        self.assertTrue(isinstance(out, torch.Tensor))
+        self.assertIsInstance(out, torch.Tensor)

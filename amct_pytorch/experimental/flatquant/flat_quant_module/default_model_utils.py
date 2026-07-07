@@ -46,7 +46,7 @@ def flat_config_parser(layer_config):
 
 
 class FlatQuantAttention(nn.Module):
-    def __init__(self, module: nn.Module, layer_name: str="", layer_config = None):
+    def __init__(self, module: nn.Module, layer_name: str = "", layer_config=None):
         super().__init__()
 
         self.flat_config = flat_config_parser(layer_config)
@@ -171,9 +171,9 @@ class FlatQuantAttention(nn.Module):
         if self.module_config._attn_implementation != 'eager':
             if self.module_config._attn_implementation == 'sdpa' and kwargs.get('output_attentions', False):
                 print(
-                    "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
-                    'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
-                )
+    "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
+    'eager attention. This warning can be removed using the argument '
+    '`attn_implementation="eager"` when loading the model.')
             else:
                 attention_interface = ALL_ATTENTION_FUNCTIONS[self.module_config._attn_implementation]
 
@@ -200,7 +200,9 @@ class FlatQuantAttention(nn.Module):
             attn_shape = [-1, self.module_config.num_attention_heads, self.head_dim]
             attn_output = attn_output.reshape(attn_shape)
             if self.o_trans is None and self.vcache_trans is not None:
-                attn_output = torch.matmul(attn_output, self.vcache_trans.get_matrix(inv_t=True).T.to(attn_output)).reshape(init_shape)
+                attn_output = torch.matmul(
+    attn_output, self.vcache_trans.get_matrix(
+        inv_t=True).T.to(attn_output)).reshape(init_shape)
                 attn_output = self.o_proj(attn_output)
             else:
                 attn_output = torch.matmul(self.o_trans.get_matrix().T.to(attn_output), attn_output).reshape(init_shape)
@@ -262,7 +264,7 @@ class FlatQuantAttention(nn.Module):
 
 
 class FlatQuantMLP(nn.Module):
-    def __init__(self, module: nn.Module, layer_name: str="", layer_config = None):
+    def __init__(self, module: nn.Module, layer_name: str = "", layer_config=None):
         super().__init__()
 
         self.flat_config = flat_config_parser(layer_config)

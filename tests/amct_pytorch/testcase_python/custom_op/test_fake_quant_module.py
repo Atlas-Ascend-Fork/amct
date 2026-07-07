@@ -15,18 +15,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
-import torch
-import numpy as np
 
-import amct_pytorch.graph_based_compression.amct_pytorch
-from amct_pytorch.graph_based_compression.amct_pytorch.custom_op.fake_quant import FakeQuant
+import numpy as np
+import torch
+
+import amct_pytorch.classic.graph_based.amct_pytorch
+from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.fake_quant import (
+    FakeQuant,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 DEVICE = torch.device('cpu')
 
 np.random.seed(0)
+
+logger = logging.getLogger(__name__)
 
 
 def quant_compute(inputs, scale_d, offset_d, num_bits=8):
@@ -37,10 +43,11 @@ def quant_compute(inputs, scale_d, offset_d, num_bits=8):
     quantized_data = clamped_data - offset_d
     return quantized_data
 
+
 def compare_ndarray(ndarray1, ndarray2, name):
     if not (ndarray1 - ndarray2 < 1e-5).all():
-        print(ndarray1)
-        print(ndarray2)
+        logger.info(ndarray1)
+        logger.info(ndarray2)
         raise ValueError('{} not equal'.format(name))
 
 
@@ -64,7 +71,7 @@ class TestFakeQuantModule(unittest.TestCase):
     def test_fake_quant_module(self):
         scale_d = 1
         offset_d = -128
-        inputs = torch.tensor(np.random.uniform(0, 1, (1,3,224,224)), dtype=torch.float32)
+        inputs = torch.tensor(np.random.uniform(0, 1, (1, 3, 224, 224)), dtype=torch.float32)
         fake_quant = FakeQuant(scale_d, offset_d)
         out = fake_quant(inputs)
         np_out = quant_compute(inputs.numpy(), scale_d, offset_d)

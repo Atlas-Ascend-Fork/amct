@@ -19,13 +19,16 @@ import os
 import unittest
 from unittest.mock import patch
 
-from onnx import onnx_pb
 import numpy as np
+from onnx import onnx_pb
 
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestInitializerUtil(unittest.TestCase):
     """
@@ -60,11 +63,9 @@ class TestInitializerUtil(unittest.TestCase):
         pass
 
     def test_map_data_location(self):
-        # TensorProtoHelper.map_data_location(-1)
         self.assertRaises(ValueError, TensorProtoHelper.map_data_location, -1)
 
     def test_map_np_type(self):
-        # TensorProtoHelper.map_np_type(-1)
         self.assertRaises(ValueError, TensorProtoHelper.map_np_type, -1)
 
     def test_set_data(self):
@@ -112,14 +113,14 @@ class TestInitializerUtil(unittest.TestCase):
  
         path = os.path.dirname(os.path.abspath(__file__))
         data_path = os.path.join(path, "data.bin")
-        data = np.array([0.1]*20, np.float16)
+        data = np.array([0.1] * 20, np.float16)
         data.tofile(data_path)
  
         tensor_helper = TensorProtoHelper(tensor_proto, path)
         externel_data = tensor_helper.get_data()
        
         os.remove(data_path)
-        self.assertEqual((data == externel_data).all(), True)
+        self.assertTrue((data == externel_data).all())
  
     def test_get_external_data_failed(self):
         tensor_proto = onnx_pb.TensorProto()
@@ -145,7 +146,7 @@ class TestInitializerUtil(unittest.TestCase):
  
         path = os.path.dirname(os.path.abspath(__file__))
         data_path = os.path.join(path, "data.bin")
-        data = np.array([0.1]*20, np.float16)
+        data = np.array([0.1] * 20, np.float16)
         data.tofile(data_path)
  
         tensor_helper = TensorProtoHelper(tensor_proto, path)
@@ -169,11 +170,11 @@ class TestInitializerUtil(unittest.TestCase):
         ex_data.key = "length"
         ex_data.value = str(40)
  
-        data = np.array([0.1]*20, np.float16)
+        data = np.array([0.1] * 20, np.float16)
         tensor_helper = TensorProtoHelper(tensor_proto)
         tensor_helper.set_external_data(data)
  
         tensor_np_type = tensor_helper.map_np_type(tensor_helper.tensor.data_type)
         np_value = np.frombuffer(tensor_helper.tensor.raw_data, getattr(np, tensor_np_type))
         np_value = np.array(np_value)
-        self.assertEqual((data == np_value).all(), True)
+        self.assertTrue((data == np_value).all())

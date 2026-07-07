@@ -15,15 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 import os
 import unittest
 from io import BytesIO
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.quant_node import QuantOpInfo
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
+    QuantOpInfo,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class TestQuantOpInfo(unittest.TestCase):
@@ -32,11 +38,11 @@ class TestQuantOpInfo(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        print("TestQuantOpInfo start!")
+        logger.info("TestQuantOpInfo start!")
 
     @classmethod
     def tearDownClass(cls):
-        print("TestQuantOpInfo end!")
+        logger.info("TestQuantOpInfo end!")
         pass
 
     def setUp(self):
@@ -49,15 +55,16 @@ class TestQuantOpInfo(unittest.TestCase):
         class Conv1dModule(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1d = torch.nn.Conv1d(1,1,1)
+                self.conv1d = torch.nn.Conv1d(1, 1, 1)
+
             def forward(self, x):
                 return self.conv1d(x)
         conv1d_module = Conv1dModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(conv1d_module, torch.randn(1,1,1), tmp_onnx)
+        Parser.export_onnx(conv1d_module, torch.randn(1, 1, 1), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node = graph.get_node_by_name('conv1d')
-        self.assertEqual(QuantOpInfo.get_dequant_shape(node), [1,-1,1])
+        self.assertEqual(QuantOpInfo.get_dequant_shape(node), [1, -1, 1])
 
     def test_get_scale_shape_rnn_per_channel(self):
         class RNNModule(torch.nn.Module):
@@ -65,9 +72,10 @@ class TestQuantOpInfo(unittest.TestCase):
                 super().__init__()
                 self.lstm = torch.nn.LSTM(10, 20, 1)
                 self.gru = torch.nn.GRU(10, 20, 1)
-            def forward(self, input, hx):
-                x = self.lstm(input, hx)
-                y = self.gru(input, hx[0])
+
+            def forward(self, input_data, hx):
+                x = self.lstm(input_data, hx)
+                y = self.gru(input_data, hx[0])
                 return x, y
         model = RNNModule()
         tmp_onnx = BytesIO()
@@ -85,9 +93,10 @@ class TestQuantOpInfo(unittest.TestCase):
                 super().__init__()
                 self.lstm = nn.LSTM(10, 20, 1)
                 self.gru = nn.GRU(10, 20, 1)
-            def forward(self, input, hx):
-                x = self.lstm(input, hx)
-                y = self.gru(input, hx[0])
+
+            def forward(self, input_data, hx):
+                x = self.lstm(input_data, hx)
+                y = self.gru(input_data, hx[0])
                 return x, y
         model = RNNModule()
         tmp_onnx = BytesIO()

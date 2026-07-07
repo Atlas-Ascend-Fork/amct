@@ -15,24 +15,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
+import json
 import os
 import shutil
+import sys
 import unittest
-import json
+
 import numpy as np
 import torch
 
+import amct_pytorch.classic.graph_based.amct_pytorch
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
+    Configuration,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
+    ModuleHelper,
+    get_node_output_info,
+)
+
 from .utils import models
 
-import amct_pytorch.graph_based_compression.amct_pytorch
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.configuration import Configuration
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import ModuleHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import get_node_output_info
-from amct_pytorch.graph_based_compression.amct_pytorch.utils.model_util import get_node_output_info
-
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestModelHelper(unittest.TestCase):
     """
@@ -46,7 +51,8 @@ class TestModelHelper(unittest.TestCase):
         if not os.path.exists(cls.temp_dir):
             os.makedirs(cls.temp_dir)
         cls.config_file = os.path.join(cls.temp_dir, 'config.json')
-        amct_pytorch.graph_based_compression.amct_pytorch.create_quant_config(cls.config_file, cls.model_001, torch.randn((1, 2, 28, 28)))
+        amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
+            cls.config_file, cls.model_001, torch.randn((1, 2, 28, 28)))
 
         cls.args = torch.randn(16, 2, 28, 28)
         cls.onnx_file = os.path.join(cls.temp_dir, 'net_001.onnx')
@@ -68,7 +74,7 @@ class TestModelHelper(unittest.TestCase):
 
     def test_get_module(self):
         self.model_helper.get_module('layer1.0')
-        self.assertRaises(RuntimeError,  self.model_helper.get_module, 'error_name')
+        self.assertRaises(RuntimeError, self.model_helper.get_module, 'error_name')
 
     def test_get_parent_module(self):
         self.model_helper.get_parent_module('layer')
@@ -80,51 +86,51 @@ class TestModelHelper(unittest.TestCase):
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
 
     def test_get_node_output_info_tuple_input(self):
         input_data = (torch.randn(16, 2, 28, 28),)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
 
     def test_get_node_output_info_tuple_input_with_dict(self):
         input_data = ({'x': torch.randn(16, 2, 28, 28)},)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
 
     def test_get_node_output_info_tensor_input(self):
         input_data = torch.randn(16, 2, 28, 28)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
  
     def test_get_node_output_info_tuple_input(self):
         input_data = (torch.randn(16, 2, 28, 28),)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)
  
     def test_get_node_output_info_tuple_input_with_dict(self):
         input_data = ({'x': torch.randn(16, 2, 28, 28)},)
         ret = get_node_output_info(self.model_001, input_data)
         for _, val in ret.items():
             for item in val:
-                self.assertTrue('attr_name' in item)
-                self.assertTrue('attr_type' in item)
-                self.assertTrue('attr_val' in item)
+                self.assertIn('attr_name', item)
+                self.assertIn('attr_type', item)
+                self.assertIn('attr_val', item)

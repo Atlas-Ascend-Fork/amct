@@ -15,32 +15,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
 import json
-import numpy as np
+import logging
+import os
+import sys
+import unittest
 from io import BytesIO
-import torch
-from unittest.mock import patch
 from unittest import mock
+from unittest.mock import patch
 
-from .utils import models
-from .utils import record_file_utils
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
+import numpy as np
+import torch
 from google.protobuf import text_format
 
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_retrain_config
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import create_quant_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import restore_quant_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.quantize_tool import save_quant_retrain_model
-from amct_pytorch.graph_based_compression.amct_pytorch.configuration.retrain_config import RetrainConfig
-from amct_pytorch.graph_based_compression.amct_pytorch.parser.parser import Parser
-from amct_pytorch.graph_based_compression.amct_pytorch.utils import vars
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
+    RetrainConfig,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
+    create_quant_retrain_config,
+    create_quant_retrain_model,
+    restore_quant_retrain_model,
+    save_quant_retrain_model,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.utils import vars
 
+from .utils import models, record_file_utils
+
+logger = logging.getLogger(__name__)
+
+
+STATE_DICT = 'state_dict'
+DEPLOY_MODEL_SUFFIX = '_deploy_model.onnx'
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
 
 class TestQuantRetrainModel(unittest.TestCase):
     """
@@ -93,9 +105,9 @@ class TestQuantRetrainModel(unittest.TestCase):
         pass
 
     def setUp(self):
-        print("=*"*30)
+        logger.info("=*" * 30)
         for name, mod in self.model_001.named_modules():
-            print(name, mod)
+            logger.info('%s %s', name, mod)
         pass
 
     def tearDown(self):
@@ -134,7 +146,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.config_file, graph, self.simple_file)
         with open(self.config_file) as f:
             quant_config = json.loads(f.read())
-        for key, val in quant_config.items():
+        for _, val in quant_config.items():
             if isinstance(val, dict):
                 self.assertIn('retrain_data_config', val)
 
@@ -145,11 +157,11 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.record_file,
             self.args)
         for param in new_model.parameters():
-            print(param)
+            logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
         ans_2 = new_model(data)
-        torch.save({'state_dict': new_model.state_dict()}, self.pth)
+        torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -160,7 +172,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -175,7 +187,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -189,7 +201,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.args)
 
         self.assertTrue(
-            os.path.exists(''.join([self.save_path, '_deploy_model.onnx'])))
+            os.path.exists(''.join([self.save_path, DEPLOY_MODEL_SUFFIX])))
 
     def test_create_quant_retrain_config_002(self):
         with open(self.simple_file, 'w') as f:
@@ -209,7 +221,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.config_file, graph, self.simple_file)
         with open(self.config_file) as f:
             quant_config = json.loads(f.read())
-        for key, val in quant_config.items():
+        for _, val in quant_config.items():
             if isinstance(val, dict):
                 self.assertFalse(val['retrain_weight_config']['channel_wise'])
 
@@ -220,11 +232,11 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.record_file,
             self.args)
         for param in new_model.parameters():
-            print(param)
+            logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
         ans_2 = new_model(data)
-        torch.save({'state_dict': new_model.state_dict()}, self.pth)
+        torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -235,7 +247,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -250,7 +262,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -264,7 +276,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             self.args)
 
         self.assertTrue(
-            os.path.exists(''.join([self.save_path, '_deploy_model.onnx'])))
+            os.path.exists(''.join([self.save_path, DEPLOY_MODEL_SUFFIX])))
 
 
 class TestQuantRetrainModelDeconv(unittest.TestCase):
@@ -318,9 +330,9 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
         pass
 
     def setUp(self):
-        print("=*"*30)
+        logger.info("=*" * 30)
         for name, mod in self.model_001.named_modules():
-            print(name, mod)
+            logger.info('%s %s', name, mod)
 
     def tearDown(self):
         pass
@@ -332,11 +344,11 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
             self.record_file,
             self.args)
         for param in new_model.parameters():
-            print(param)
+            logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
         ans_2 = new_model(data)
-        torch.save({'state_dict': new_model.state_dict()}, self.pth)
+        torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -347,7 +359,7 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -362,7 +374,7 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -376,7 +388,7 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
             self.args)
 
         self.assertTrue(
-            os.path.exists(''.join([self.save_path, '_deploy_model.onnx'])))
+            os.path.exists(''.join([self.save_path, DEPLOY_MODEL_SUFFIX])))
 
 
 class TestQuantRetrainModelConvCircular(unittest.TestCase):
@@ -385,7 +397,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        TORCH_VERSION = '1.4.0'
+        torch_version = '1.4.0'
         cls.temp_folder = os.path.join(CUR_DIR, 'test_quant_retrain_conv_circular_model')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
@@ -431,9 +443,9 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
         pass
 
     def setUp(self):
-        print("=*"*30)
+        logger.info("=*" * 30)
         for name, mod in self.model_001.named_modules():
-            print(name, mod)
+            logger.info('%s %s', name, mod)
 
     def tearDown(self):
         pass
@@ -445,11 +457,11 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
             self.record_file,
             self.args)
         for param in new_model.parameters():
-            print(param)
+            logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
         ans_2 = new_model(data)
-        torch.save({'state_dict': new_model.state_dict()}, self.pth)
+        torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -460,14 +472,14 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
                 self.model_001,
                 self.record_file,
                 self.args)
-            for param in new_model.parameters():
-                print(param)
-            data = self.args[0]
-            new_model = new_model.train()
-            ans_2 = new_model(data)
-            torch.save({'state_dict': new_model.state_dict()}, self.pth)
+        for param in new_model.parameters():
+            logger.info('%s', param)
+        data = self.args[0]
+        new_model = new_model.train()
+        ans_2 = new_model(data)
+        torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
-            self.assertTrue(os.path.exists(self.record_file))
+        self.assertTrue(os.path.exists(self.record_file))
 
     def test_restore_quant_retrain_model(self):
         new_model = restore_quant_retrain_model(
@@ -476,7 +488,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -491,7 +503,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
             self.record_file,
             self.args,
             self.pth,
-            'state_dict')
+            STATE_DICT)
 
         data = self.args[0]
         new_model = new_model.eval()
@@ -505,7 +517,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
             self.args)
 
         self.assertTrue(
-            os.path.exists(''.join([self.save_path, '_deploy_model.onnx'])))
+            os.path.exists(''.join([self.save_path, DEPLOY_MODEL_SUFFIX])))
 
 
 class TestQuantRetrainQuantFusionModel(unittest.TestCase):
@@ -559,7 +571,7 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
             self.args,
             input_names=['layer1'])
 
-        graph = Parser.parse_net_to_graph(''.join([self.save_path, '_deploy_model.onnx']))
+        graph = Parser.parse_net_to_graph(''.join([self.save_path, DEPLOY_MODEL_SUFFIX]))
         quant_node_num = 0
         for node in graph.nodes:
             if node.type == 'AscendQuant':
@@ -572,7 +584,7 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
             """ args_shape: [(1, 2, 14)]
             """
             def __init__(self):
-                super(Net1d,self).__init__()
+                super(Net1d, self).__init__()
                 self.args_shape = [(1, 2, 14)]
                 # conv + bn
                 self.layer1 = torch.nn.Sequential(
@@ -594,7 +606,7 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
             """ args_shape: [(1, 2, 14)]
             """
             def __init__(self):
-                super(Net1d,self).__init__()
+                super(Net1d, self).__init__()
                 self.args_shape = [(1, 2, 14)]
                 # conv + bn
                 self.layer1 = torch.nn.Sequential(
@@ -624,4 +636,4 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
             input_data)
 
         self.assertTrue(
-            os.path.exists(''.join([save_path, '_deploy_model.onnx'])))
+            os.path.exists(''.join([save_path, DEPLOY_MODEL_SUFFIX])))

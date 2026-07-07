@@ -15,24 +15,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
-import os
-import unittest
+import copy
 import json
+import os
+import sys
+import unittest
+
 import numpy as np
 import torch
 import torch.nn as nn
-import copy
+
+from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.record_file_operator import (
+    ScaleOffsetRecordHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
+    Conv2dQAT,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.delete_qat_pass import (
+    DeleteQatPass,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer import (
+    ModelOptimizer,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
+    scale_offset_record_pb2,
+)
 
 from .utils import models
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.model_optimizer import ModelOptimizer
-from amct_pytorch.graph_based_compression.amct_pytorch.common.utils.record_file_operator import \
-    ScaleOffsetRecordHelper
-from amct_pytorch.graph_based_compression.amct_pytorch.proto import scale_offset_record_pb2
-
-from amct_pytorch.graph_based_compression.amct_pytorch.optimizer.delete_qat_pass import DeleteQatPass
-from amct_pytorch.graph_based_compression.amct_pytorch.nn.module.quantization.conv2d import Conv2dQAT
-
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -73,7 +82,7 @@ class TestDeleteQatPass(unittest.TestCase):
         mod = Conv2dQAT(2, 2, kernel_size=3, bias=False)
         self.assertTrue(DeleteQatPass(self.record_helper).match_pattern(mod, 'layer1'))
 
-    def test_delete_qat_match_pattern_not_QAT(self):
+    def test_delete_qat_match_pattern_not_qat(self):
         mod = torch.nn.Conv2d(1, 1, 1, padding_mode='zeros')
         self.assertFalse(DeleteQatPass(self.record_helper).match_pattern(mod, 'layer1'))
 
@@ -83,5 +92,5 @@ class TestDeleteQatPass(unittest.TestCase):
         model = copy.deepcopy(self.qat_model)
         optimizer.do_optimizer(model, None)
 
-        self.assertTrue(isinstance(model.conv, nn.Conv2d))
+        self.assertIsInstance(model.conv, nn.Conv2d)
 
