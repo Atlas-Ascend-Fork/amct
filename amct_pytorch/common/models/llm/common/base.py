@@ -302,9 +302,11 @@ class BaseModel(metaclass=ABCMeta):
         scale_inv_name = weight_name.replace(".weight", ".scale")
         return scale_prefix, scale_inv_name
 
-    def get_kv_cache_scheme(self):
-        """Return KV cache quantization config, or None to skip quantization."""
-        return {"num_bits": 8, "type": "float"}
+    def cache_scheme(self):
+        """Return full cache scheme dict for deploy config. use to tensor mode.
+        If not implemented, it means that the model does not support tensor mode.
+        """
+        raise NotImplementedError()
 
     def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
         return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)

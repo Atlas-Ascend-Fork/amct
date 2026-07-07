@@ -137,12 +137,35 @@ class GLM5_2(BaseModel):
 
         return decoder_layer
 
-    def get_kv_cache_scheme(self):
-        """Align with infer repo convert_model.py: c16 returns None, mxfp returns 8-bit float."""
+    def cache_scheme(self):
+        """Return cache scheme dict for deploy config.
+
+        Aligns with infer repo convert_model.py:
+        - kv_cache_scheme: only quantized for mxfp (8-bit float, group-wise).
+          For non-mxfp (c16/int) the key is kept but set to None to signal
+          "no KV cache quantization".
+        - li_cache_scheme: always present, type follows is_mx
+          (mxfp -> "float", otherwise "int"), matching the original
+          llm_deploy._refresh_config assembly.
+        """
+        li_cache_scheme = {
+            "type": "float" if is_mx else "int",
+            "num_bits": 8,
+        }
         if self.args.quant_dtype == "mxfp":
-            return {"num_bits": 8, "type": "float", "strategy": "group",
-                    "group_size": 128, "dynamic": True, "symmetric": True}
-        return None
+            return {
+                "kv_cache_scheme": {
+                    "num_bits": 8,
+                    "type": "float",
+                    "strategy": "group",
+                    "group_size": 128,
+                    "dynamic": True,
+                    "symmetric": True,
+                },
+                "li_cache_scheme": li_cache_scheme,
+            }
+        return {"kv_cache_scheme": None, "li_cache_scheme": li_cache_scheme}
+
 
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)

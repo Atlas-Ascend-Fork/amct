@@ -59,7 +59,10 @@ def _make_pipeline_mock(num_layers=2, **overrides):
     """Create a SimpleNamespace pipeline mock with required deploy methods."""
     defaults = dict(
         num_layers=num_layers,
-        get_kv_cache_scheme=lambda: {"num_bits": 8, "type": "float"},
+        cache_scheme=lambda: {
+            "kv_cache_scheme": {"num_bits": 8, "type": "float"},
+            "li_cache_scheme": {"type": "float", "num_bits": 8},
+        },
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

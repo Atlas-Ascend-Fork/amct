@@ -877,26 +877,29 @@ class TestGLM5_2NewFunctions:
         )
         return GLM5_2(args)
 
-    # -- get_kv_cache_scheme --
+    # -- cache_scheme --
 
     @pytest.mark.cpu
-    def test_get_kv_cache_scheme_int_returns_none(self, monkeypatch):
-        """get_kv_cache_scheme returns None for non-mxfp quant_dtype."""
+    def test_cache_scheme_int_skips_kv_keeps_li(self, monkeypatch):
+        """cache_scheme for non-mxfp: kv_cache_scheme is None, li_cache_scheme is int."""
         model = self._make_model(monkeypatch, quant_dtype="int8")
-        assert model.get_kv_cache_scheme() is None
+        result = model.cache_scheme()
+        assert result["kv_cache_scheme"] is None
+        assert result["li_cache_scheme"] == {"type": "int", "num_bits": 8}
 
     @pytest.mark.cpu
-    def test_get_kv_cache_scheme_mxfp(self, monkeypatch):
-        """get_kv_cache_scheme returns 8-bit float config for mxfp."""
+    def test_cache_scheme_mxfp(self, monkeypatch):
+        """cache_scheme for mxfp: both kv_cache_scheme and li_cache_scheme present."""
         model = self._make_model(monkeypatch, quant_dtype="mxfp")
-        result = model.get_kv_cache_scheme()
-        assert result is not None
-        assert result["num_bits"] == 8
-        assert result["type"] == "float"
-        assert result["strategy"] == "group"
-        assert result["group_size"] == 128
-        assert result["dynamic"] is True
-        assert result["symmetric"] is True
+        result = model.cache_scheme()
+        kv = result["kv_cache_scheme"]
+        assert kv["num_bits"] == 8
+        assert kv["type"] == "float"
+        assert kv["strategy"] == "group"
+        assert kv["group_size"] == 128
+        assert kv["dynamic"] is True
+        assert kv["symmetric"] is True
+        assert result["li_cache_scheme"] == {"type": "float", "num_bits": 8}
 
 
 if __name__ == "__main__":

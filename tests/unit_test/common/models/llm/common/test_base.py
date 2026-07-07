@@ -1418,12 +1418,12 @@ def test_get_scale_name_with_simple_weight_name():
     assert scale_inv_name == "lm_head.scale"
 
 
-# ---- get_kv_cache_scheme --------------------------------------------------
+# ---- cache_scheme --------------------------------------------------
 
 
 @pytest.mark.cpu
-def test_get_kv_cache_scheme_returns_default():
+def test_cache_scheme_raises_not_implemented():
     stub = _StubModel()
-    result = stub.get_kv_cache_scheme()
-    assert result == {"num_bits": 8, "type": "float"}
+    with pytest.raises(NotImplementedError):
+        stub.cache_scheme()
 
