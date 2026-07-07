@@ -223,7 +223,7 @@ class KVCacheRootConfig(ConfigItem):
         kv_quant_layers = extra.get('kv_cache_quant_layers')
         for layer, layer_config in value.items():
             if layer not in kv_quant_layers.keys():
-                raise ValueError('unsupported layer %s')
+                raise ValueError('unsupported layer %s' % layer)
             self.build_util(layer, KVCacheLayerConfig, layer_config,
                             (layer, kv_quant_layers[layer]))
 
