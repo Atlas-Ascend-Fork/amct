@@ -82,4 +82,4 @@ class TestLongcatFlashMLA(unittest.TestCase):
         self.assertEqual(type(model.attn).__name__, 'NpuLongcatFlashMLA')
         torch.Tensor.npu = mock_npu
         for _ in range(5):
-            model(self.hidden_states.npu(), past_key_values=self.kvcache)
+            quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)

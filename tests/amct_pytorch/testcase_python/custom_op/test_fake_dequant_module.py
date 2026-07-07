@@ -72,6 +72,7 @@ class TestFakeDeQuantModule(unittest.TestCase):
         scale_d = 1
         scale_w = np.array([0.5, 0.5, 0.5])
         deq_shape = (-1, 1, 1, 1)
+        offset_d = -128
         inputs = torch.tensor(
             np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32)
         fake_dequant = FakeDeQuant(scale_d, scale_w, deq_shape)
@@ -84,6 +85,7 @@ class TestFakeDeQuantModule(unittest.TestCase):
         scale_d = 1
         scale_w = np.array([0.5])
         deq_shape = (1, -1)
+        offset_d = -128
         inputs = torch.tensor(
             np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32)
         fake_dequant = FakeDeQuant(scale_d, scale_w, deq_shape)

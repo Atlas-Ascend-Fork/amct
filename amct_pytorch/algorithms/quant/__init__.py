@@ -16,8 +16,6 @@
 # ----------------------------------------------------------------------------
 
 __all__ = [
-    'awq', 'gptq', 'smooth_quant', 'minmax',
-    'auto_clip', 'omniquant', 'learnable_hadamard',
     'register_algorithms', 'AlgoBuildContext',
 ]
 
@@ -35,6 +33,7 @@ def register_algorithms():
     from .auto_clip import LAC, LWC
     from .auto_round import AutoRound
     from .omniquant import OmniQuant
+    from .flatquant import FlatQuant
 
     _REGISTERED = True
 

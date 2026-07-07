@@ -15,6 +15,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import torch
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
@@ -32,8 +34,8 @@ class QuantDequantMx(torch.nn.Module):
         self._get_format_params()
         self.block_size = 32
         
-    def deploy(self, x: Tensor, qdim: int = -1):
-        e8m0, ex_mx = self.quant(x, qdim)
+    def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
+        e8m0, ex_mx = self.quant(x, qdim, v=v)
         e8m0 = (e8m0 + 127).to(torch.uint8).squeeze(-1).cpu()
         ex_mx = ex_mx.flatten(qdim - 1, qdim).cpu()
         if self.bits == 8:
@@ -43,8 +45,8 @@ class QuantDequantMx(torch.nn.Module):
             ex_mx = pack_uint4(ex_mx)
         return ex_mx, e8m0
 
-    def export_deploy(self, x: Tensor):
-        qx, scale = self.deploy(x)
+    def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
+        qx, scale = self.deploy(x, v=v)
         return {
             "qweight": qx.detach().cpu(),
             "weight_scale": scale.detach().cpu(),

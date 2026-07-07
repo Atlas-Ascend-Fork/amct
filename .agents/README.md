@@ -31,8 +31,10 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 | 「达标了，导出权重 + 写交付文档」 | `deploy-export` 导出 + `deploy_quantization.md` |
 | 「deploy 目录有了，就差交付文档」 | `deploy-export`（阶段 5 补文档）|
 | 「量化后 PPL 比 BF16 还低，正常吗」 | `quant-workflow` 先查链路再判定 |
+| 「在 amct_ops 里加一个 mxfp4 cast 算子」/「照 hifloat8_cast 模板写个新 NPU 算子」 | `amct-ops-dev` 算子开发 |
+| 「ops_build.sh 怎么按 A2/A3/A5 切 NPU_ARCH」/「torch.compile 报 no Meta kernel 怎么补」 | `amct-ops-dev` 构建/调试 |
 
-整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。
+整句覆盖全流程 → 走完整编排；只说其中一段 → 直接分流到对应叶子，不强行走完整流程。`amct-ops-dev` 属编排外的独立 NPU 算子开发工具，按需直接点名，不进 `quant-workflow`。
 
 编排顺序：适配（未适配时）→ 方案 → 直转（`delta ≤ 0.2` 可直接导出）→ 超阈则升级 PTQ → 导出。
 
@@ -62,7 +64,15 @@ bash scripts/init-agent.sh        # 生成客户端视图；--claude / --opencod
 ```
 .agents/
 ├── agents/        # 子代理：quant-analyzer / quant-implementer / quant-reviewer
-├── skills/        # quant-workflow / quant-tools（叶子含 model-adapter + references 共享）/ gitcode-pr / gitcode-issue / default-skills
+├── skills/
+│   │  # LLM量化编排链路
+│   ├── quant-workflow/    # LLM 量化流程入口（调度）
+│   ├── quant-tools/       # 被调度的量化叶子技能（含 model-adapter + references 共享）
+│   │  # 编排外的独立 skill（用户直接点名调用）
+│   ├── amct-ops-dev/      # NPU 算子开发
+│   ├── gitcode-pr/        # PR 创建 / 评论
+│   ├── gitcode-issue/     # issue 读取
+│   └── default-skills/    # 按需装通用 skill
 ├── docs/          # casebook（L1/L2/L3）/ architecture.md / repo-map.md / roadmap.md
 ├── hooks/         # pre_tool_use / subagent_stop（Claude Code）
 ├── settings.json  # Claude Code 配置（权限 + hooks）

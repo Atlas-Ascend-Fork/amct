@@ -59,6 +59,18 @@ def test_mxfp_forward_with_tensor_v():
     assert y.shape == x.shape
 
 
+def test_mxfp_export_deploy_accepts_rounding_offset():
+    qdq = QuantDequantMx(bits=8)
+    x = torch.randn(4, 64)
+    v = torch.randn(4, 64)
+
+    out = qdq.export_deploy(x, v=v)
+    qweight, weight_scale = qdq.deploy(x, v=v)
+
+    assert torch.equal(out["qweight"], qweight)
+    assert torch.equal(out["weight_scale"], weight_scale)
+
+
 def test_mxfp_forward_bits16_is_passthrough():
     qdq = QuantDequantMx(bits=16)
     x = torch.randn(2, 32)
@@ -109,6 +121,18 @@ def test_int_weight_quant_error_smaller_for_higher_bits():
     err_8 = (QuantDequantInt(bits=8)(x) - x).abs().mean()
     err_4 = (QuantDequantInt(bits=4)(x) - x).abs().mean()
     assert err_8 < err_4
+
+
+def test_int_export_deploy_uses_rounding_offset_when_provided():
+    qdq = QuantDequantInt(bits=8)
+    x = torch.tensor([[0.0, 0.49, 1.0]], dtype=torch.float32)
+    v = torch.tensor([[0.0, 0.6, 0.0]], dtype=torch.float32)
+
+    without_v = qdq.export_deploy(x)["qweight"]
+    with_v = qdq.export_deploy(x, v=v)["qweight"]
+
+    assert without_v[0, 1].item() == 62
+    assert with_v[0, 1].item() == 63
 
 
 def test_int_act_quant_error_smaller_for_higher_bits():

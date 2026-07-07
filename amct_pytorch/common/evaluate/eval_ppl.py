@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import torch.nn as nn
 from loguru import logger
 import torch
@@ -20,6 +21,7 @@ from tqdm import tqdm
 
 
 def wikitext2_ppl(preds, samples, seq_len=4096):
+    bs = 1
     nlls = []
     nsamples = len(samples)
     for i, sample in tqdm(enumerate(samples), desc="Evaluating"):

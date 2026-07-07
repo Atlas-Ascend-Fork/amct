@@ -135,7 +135,7 @@ class TestFP8HIF8(unittest.TestCase):
         self.assertEqual(type(model.layer1).__name__, 'NpuHIF8Linear')
         self.assertEqual(type(model.layer2).__name__, 'NpuHIF8Linear')
         LOGGER.info("%s", model)
-        model(self.test_inputs)
+        quant_out = model(self.test_inputs)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -153,4 +153,4 @@ class TestFP8HIF8(unittest.TestCase):
         self.assertEqual(type(model.layer1).__name__, 'NpuHIF8Linear')
         self.assertEqual(type(model.layer2).__name__, 'NpuHIF8Linear')
         LOGGER.info("%s", model)
-        model(self.test_inputs)
+        quant_out = model(self.test_inputs)

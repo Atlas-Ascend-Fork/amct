@@ -69,7 +69,7 @@ from ..utils.files import create_empty_file
 from ...proto import calibration_config_pb2  # pylint: disable=import-error, relative-beyond-top-level
 try:
     from ...proto import calibration_config_ascend_pb2  # pylint: disable=import-error, relative-beyond-top-level
-except ImportError:
+except ImportError as ex:
     pass
 from ..capacity.query_capacity import ASCEND_CAPACITY_TYPE
 
