@@ -33,7 +33,19 @@
       "Edit(file_path:./**)",
       "Write(file_path:./**)",
       "NotebookEdit(file_path:./**)",
-      "Bash"
+      "Bash",
+      "Task(subagent_type=quant-analyzer)",
+      "Task(subagent_type=quant-implementer)",
+      "Task(subagent_type=quant-reviewer)",
+      "Skill(quant-workflow)",
+      "Skill(model-adapter)",
+      "Skill(scheme-recommendation)",
+      "Skill(direct-quant-eval)",
+      "Skill(algorithm-recommendation)",
+      "Skill(algorithm-validation)",
+      "Skill(deploy-export)",
+      "Skill(quant-run)",
+      "Skill(amct-ops-dev)"
     ],
     "deny": [],
     "ask": [
@@ -56,12 +68,24 @@
   "includeCoAuthoredBy": false,
   "gitAttribution": false,
   "hooks": {
-    "SessionStart": [
+    "PreToolUse": [
       {
+        "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/skills/default-skills/scripts/install-default-skills.sh"
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre_tool_use.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "quant-implementer|quant-reviewer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent_stop.py"
           }
         ]
       }

@@ -34,3 +34,4 @@ tmp/
 # Local Claude state
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.lock
+

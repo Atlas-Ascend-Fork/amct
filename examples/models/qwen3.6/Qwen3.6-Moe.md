@@ -141,7 +141,7 @@ python -m amct_pytorch.ptq \
 
 #### 多卡环境
 为提升训练效率，我们提供多卡下的训练脚本
-多卡环境请参照脚本[ptq_multi_npu](https://gitcode.com/fujun19/amct_llm/blob/master/examples/ptq_multi_npu.sh)
+多卡环境请参照脚本[ptq_multi_npu](../../ptq_multi_npu.sh)
 
 更多参数详细解释请参见[参数说明](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-参数)
 
@@ -163,3 +163,20 @@ python -m amct_pytorch.eval \
   ```
 必要传参解释：
 - attn_linear_param_dir：`quant_target`为`attn-linear`时，量化算法系数保存路径
+
+### 量化权重导出
+完成上述所有步骤后，导出量化权重用于加载，权重对应的weight_map和huggingface官方对齐
+  ```shell
+python -m amct_pytorch.deploy \
+  --model /data/models/Qwen3.6-35B-A3B \
+  --model_name qwen3_6_moe \
+  --granularity block \
+  --quant_target attn-linear \
+  --bit_config amct_pytorch/configs/w4a8.yaml \
+  --quant_dtype int \
+  --algos autoround \
+  --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear \
+  --output_dir ./output/Qwen3.6-35B-A8W4-INT
+  ```
+必要传参解释：
+- output_dir：导出权重保存路径

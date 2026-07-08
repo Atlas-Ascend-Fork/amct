@@ -79,7 +79,7 @@ quantize(model, config)
 <p id="p6410054727"><a name="p6410054727"></a><a name="p6410054727"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN</p>
 </td>
 <td class="cellrowborder" valign="top" width="37.269999999999996%" headers="mcps1.2.5.1.4 "><p id="p134301428434"><a name="p134301428434"></a><a name="p134301428434"></a>激活（数据）支持PER_TENSOR/PER_TOKEN量化，权重支持PER_TENSOR/PER_CHANNEL量化</p>
-<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>act_type: HIFLOAT8  wts_type: HIFLOAT8时，支持OFMR量化算法、Cast数据直转算法、Quantile分位量化算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置ofmr、cast、quantile选项</p>
+<p id="p1894815554584"><a name="p1894815554584"></a><a name="p1894815554584"></a>act_type: HIFLOAT8  wts_type: HIFLOAT8时，支持OFMR量化算法、Cast数据直转算法、Quantile分位量化算法、SmoothQuant算法，<a href="#section1536112219183">config详细配置</a>中必须分别配置ofmr、cast、quantile、smoothquant选项</p>
 <p id="p1144561153616"><a name="p1144561153616"></a><a name="p1144561153616"></a>act_type: FLOAT8_E4M3FN  wts_type: FLOAT8_E4M3FN时，支持OFMR量化算法，<a href="#section1536112219183">config详细配置</a>中必须配置ofmr选项</p>
 </td>
 </tr>

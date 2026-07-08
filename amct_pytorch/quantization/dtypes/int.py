@@ -15,6 +15,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import torch
 from loguru import logger
 from torch import Tensor
@@ -42,8 +44,8 @@ class QuantDequantInt(torch.nn.Module):
             return x
         return self.fake_quant(x, v=v)
 
-    def export_deploy(self, x: Tensor):
-        qx, scale, bias = weight_quant(x, self.bits, real_quant=True)
+    def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
+        qx, scale, bias = weight_quant(x, self.bits, real_quant=True, v=v)
         return {
             "qweight": qx.detach().cpu(),
             "weight_scale": scale.detach().cpu(),

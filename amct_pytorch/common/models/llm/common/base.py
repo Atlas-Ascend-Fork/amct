@@ -41,6 +41,7 @@ class BaseModel(metaclass=ABCMeta):
     def __init__(self, args):
         self.args = args
         self.quant_target = args.quant_target
+        self.quant_dtype = args.quant_dtype
         self.position_ids = None
         self.attention_mask = None
         self.position_embeddings = None
@@ -52,6 +53,10 @@ class BaseModel(metaclass=ABCMeta):
             self.model_path, trust_remote_code=True)
         self.ptq_param_handler = PtqParamHandler()
         self.ptq_param_store = PtqParamStore(self.ptq_param_handler, self.iter_ptq_units)
+
+    @staticmethod
+    def block_size(weight):
+        return 32
 
     @staticmethod
     def load_unit_inputs(data_dir, unit: PtqUnit):
@@ -84,6 +89,12 @@ class BaseModel(metaclass=ABCMeta):
 
     def init_cls(self):
         pass
+
+    def generate_tensorwise_quant_layers(self):
+        raise NotImplementedError()
+    
+    def generate_tensorwise_ignore_layers(self):
+        raise NotImplementedError()
 
     def get_embed_load_specs(self):
         """Default (embed_tokens, norm, lm_head) load specs.

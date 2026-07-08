@@ -40,6 +40,29 @@ cfg = {
     'skip_layers': {'lm_head', 'down_proj'}
 }
 ```
+量化数据类型组合hifloat8 * hifloat8的配置：
+`from amct_pytorch import HIFP8_SMOOTHQUANT_CFG`
+
+基础配置如下，可分别测试smooth_strength=0.5和0.8：
+```python
+{
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+    'skip_layers': {'lm_head'}
+}
+```
 
 如果需要修改详细配置，请参考资料构造需要的量化配置dict。
 
@@ -49,10 +72,10 @@ smoothquant算法仅支持全量化，支持的量化类型以及量化配置：
 |:--| :-: | :-- | :-: | :-- |
 |batch_num|uint32|量化使用的batch数量 |1|/|
 |skip_layers|str|跳过量化的层 |/|跳过量化层支持模糊匹配，当配置字符串为层名字串，或与层名一致时，跳过该层量化，不生成量化配置。字符串必须包含数字或字母|
-|weights.type|str|量化后权重类型|'int8'/'float4_e2m1'|/|
+|weights.type|str|量化后权重类型|'int8'/'float4_e2m1'/'hifloat8'|/|
 |weights.symmetric|bool|对称量化|TRUE/FALSE|量化数据类型为float4_e2m1时，只支持对称量化|
 |weights.strategy|str|量化粒度|'tensor'/'channel'/'group'|量化策略为group时，只支持量化数据类型为float4_e2m1，且float4_e2m1只支持配group|
-|inputs.type|str|量化后激活类型|'int8'/'float8_e4m3fn'|/|
+|inputs.type|str|量化后激活类型|'int8'/'float8_e4m3fn'/'hifloat8'|/|
 |inputs.symmetric|bool|对称量化|TRUE/FALSE|量化策略为token时，不支持非对称量化，不支持pergroup量化；量化数据类型为float8_e4m3fn时，只支持对称量化|
 |inputs.strategy|str|量化粒度|'tensor'/'token'|量化数据类型为float8_e4m3fn时，只支持量化策略为tensor|
 |algorithm|dict|量化使用的算法配置|{'smoothquant'}|/|
@@ -91,6 +114,28 @@ Score:  5.477707
 |LLAMA2-7B|pileval|wikitext2|5.472|5.673|5.589|
 |QWEN2-7B|pileval|wikitext2|7.137|7.155|7.252|
 |QWEN3-8B|pileval|wikitext2|9.715|9.861|9.931|
+
+
+### 2.2 hifloat8 * hifloat8 精度参考（Qwen3-8B + wikitext2）
+
+使用`HIFP8_SMOOTHQUANT_CFG`（weights: hifloat8/channel，inputs: hifloat8/tensor，skip_layers=`{'lm_head'}`），
+在Qwen3-8B、wikitext2-raw-v1/test上做全量PPL评估，量化前后精度对比如下：
+
+2048-token全量评估（评估段数146，量化前PPL 9.7252）：
+
+| smooth_strength | 量化后PPL | PPL delta | 相对劣化 |
+| ---: | ---: | ---: | ---: |
+| 0.5 | 9.7719 | +0.0467 | +0.4804% |
+| 0.8 | 9.7357 | +0.0105 | +0.1080% |
+
+4096-token全量评估（评估段数73，量化前PPL 8.9975）：
+
+| smooth_strength | 量化后PPL | PPL delta | 相对劣化 |
+| ---: | ---: | ---: | ---: |
+| 0.5 | 9.0288 | +0.0313 | +0.3481% |
+| 0.8 | 9.0359 | +0.0385 | +0.4276% |
+
+其中2048-token评估下`smooth_strength=0.8`精度优于默认`0.5`；4096-token评估下`smooth_strength=0.5`略优于`0.8`。实际使用时可结合序列长度调整`smooth_strength`。
 
 
 推理成功后，在当前目录会生成量化日志文件./amct_log/amct_pytorch.log

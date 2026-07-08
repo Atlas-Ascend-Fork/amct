@@ -26,6 +26,7 @@ __all__ = [
     'MXFP4_AWQ_WEIGHT_QUANT_CFG',
     'HIFP8_CAST_CFG',
     'HIFP8_QUANTILE_CFG',
+    'HIFP8_SMOOTHQUANT_CFG',
     'set_default_config',
     'parse_config',
 ]
@@ -33,6 +34,6 @@ __all__ = [
 from .config import INT4_AWQ_WEIGHT_QUANT_CFG, INT4_GPTQ_WEIGHT_QUANT_CFG
 from .config import INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG
 from .config import HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG
-from .config import HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG
+from .config import HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG, HIFP8_SMOOTHQUANT_CFG
 from .config import MXFP4_AWQ_WEIGHT_QUANT_CFG
 from .parser import set_default_config, parse_config
