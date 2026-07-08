@@ -22,7 +22,6 @@ from unittest.mock import patch
 import numpy as np
 from onnx import onnx_pb
 
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )

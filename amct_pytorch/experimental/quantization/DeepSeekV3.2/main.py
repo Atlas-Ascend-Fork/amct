@@ -23,16 +23,16 @@ from cores.models.deepseek_v3_2.quant_utils import QuantDeepseekV3MLP
 from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
 from cores.models.deepseek_v3_2.indexer import ModelArgs
 from cores.calibrator.dsv3_calib import cali_quant
-from cores.calibrator.utils import *
+from cores.calibrator.utils import *  # noqa: F403
 
 
 def train_mla_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
     logger.info(f"train_mla_layer - {layer_idx}")
     layer = get_float_block(args.model, layer_idx, dev, model_args=args.model_args)
 
-    layer_inps, layer_outs = load_block_inps_outs(data_dir, layer_idx)
+    layer_inps, layer_outs = load_block_inps_outs(data_dir, layer_idx)  # noqa: F405
 
-    inps = get_self_attn_inps_outs(layer, layer_inps)
+    inps = get_self_attn_inps_outs(layer, layer_inps)  # noqa: F405
 
     layer = apply_quant_to_mla(args, layer, cls=cls)
 
@@ -56,8 +56,8 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
 
     # replace float indexer
     layer = apply_quant_to_mla(args, layer, cls)
-    layer_inps, layer_outs = load_block_inps_outs(data_dir, layer_idx)
-    inps = get_mla_moe_inputs(layer, layer_inps, dev)
+    layer_inps, layer_outs = load_block_inps_outs(data_dir, layer_idx)  # noqa: F405
+    inps = get_mla_moe_inputs(layer, layer_inps, dev)  # noqa: F405
 
     torch.npu.empty_cache()
     layer = apply_quant_to_moe(args, layer, shared_expert_bits=8, routed_expert_bits=args.w_bits)
@@ -76,22 +76,22 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
                 if isinstance(layer.mlp.shared_experts, QuantDeepseekV3MLP):
                     logger.info(" --- train shared expert --- ")
                     part_params = cali_quant(args, layer.mlp.shared_experts, layer_idx, inps, dev)
-                    prefix = f"mlp.shared_experts."
+                    prefix = "mlp.shared_experts."
                     quant_params.update(refactor_quant_params(part_params, prefix))
 
                 logger.info(quant_params.keys())
-                torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))
+                torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))  # noqa: F405
                 logger.info(
-                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
+                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))  # noqa: F405
 
             elif isinstance(layer.mlp, QuantDeepseekV3MLP):
                 part_params = cali_quant(args, layer.mlp, layer_idx, inps, dev)
-                prefix = f"mlp."
+                prefix = "mlp."
                 quant_params.update(refactor_quant_params(part_params, prefix))
                 logger.info(quant_params.keys())
-                torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))
+                torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))  # noqa: F405
                 logger.info(
-                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
+                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))  # noqa: F405
 
 
 def main():

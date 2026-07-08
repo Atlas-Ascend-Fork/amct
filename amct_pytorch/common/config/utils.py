@@ -26,7 +26,7 @@ def get_alg_name_from_config(alg):
     elif isinstance(alg, str):
         return [alg], [None]
     else:
-        raise ValueError(f'invalid algo name, pls check config')
+        raise ValueError('invalid algo name, pls check config')
 
 
 def match_fuzzy_pattern(layer_name, pattern):

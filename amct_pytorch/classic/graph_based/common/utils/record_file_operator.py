@@ -19,12 +19,10 @@
 from collections.abc import Iterable
 import os
 import sys
-import functools
 from google.protobuf import text_format
 from .util import proto_float_to_python_float
 from .vars_util import INT16
 from .vars_util import DATA_OFFSET_RANGE, DATA_OFFSET_RANGE_INT16
-from .files import create_empty_file
 from ..config.field import ACT_SUPPORT_NUM_BITS, WTS_SUPPORT_NUM_BITS
 
 DBL_EPSILON = sys.float_info.epsilon

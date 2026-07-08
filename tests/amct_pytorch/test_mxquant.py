@@ -17,7 +17,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import torch
-import torch.nn as nn
 from mock_torch_npu import (
     mock_npu,
     mock_npu_convert_weight_to_int4pack,
@@ -28,7 +27,7 @@ from mock_torch_npu import (
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
 )
-from utils import TestModel, TestModelBias
+from utils import TestModel
 
 from amct_pytorch import convert, quantize
 
@@ -92,7 +91,7 @@ class TestMinMax(unittest.TestCase):
         self.assertTrue(model.linear1.weight_compress_only)
         self.assertIsNotNone(model.linear1.scale_w)
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -129,4 +128,4 @@ class TestMinMax(unittest.TestCase):
         self.assertFalse(model.linear1.weight_compress_only)
         self.assertIsNotNone(model.linear1.scale_w)
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())

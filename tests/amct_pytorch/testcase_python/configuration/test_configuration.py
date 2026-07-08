@@ -17,10 +17,8 @@
 # ----------------------------------------------------------------------------
 import json
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (

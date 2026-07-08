@@ -35,8 +35,6 @@ from cores.models.deepseek_v3_2.indexer import Indexer
 from transformers.activations import ACT2FN
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.modeling_attn_mask_utils import (
-    AttentionMaskConverter,
-    _prepare_4d_attention_mask,
     _prepare_4d_causal_attention_mask,
 )
 from transformers.modeling_outputs import (
@@ -529,7 +527,7 @@ class DeepseekV3MoE(nn.Module):
         orig_shape = hidden_states.shape
         topk_idx, topk_weight = self.gate(hidden_states)
         hidden_states = hidden_states.view(-1, hidden_states.shape[-1])
-        flat_topk_idx = topk_idx.view(-1)
+        _ = topk_idx.view(-1)
         if not self.training:
             y = self.moe_infer(hidden_states, topk_idx, topk_weight).view(*orig_shape)
         if self.config.n_shared_experts is not None:

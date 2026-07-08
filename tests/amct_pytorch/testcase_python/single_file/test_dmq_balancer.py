@@ -22,7 +22,6 @@ import sys
 
 sys.path.append("~/amct/llt/asl/aoetools/amct")
 
-import argparse
 import unittest
 from unittest.mock import patch
 
@@ -30,7 +29,6 @@ import numpy as np
 import onnx
 import onnxruntime
 import torch
-import torch.nn.functional as F
 
 import amct_pytorch.classic.graph_based.amct_pytorch
 from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
@@ -160,7 +158,7 @@ class TestDMQBalancer(unittest.TestCase):
         model = self.model.to(DEVICE)
         input_data = tuple([torch.randn(input_shape).to(DEVICE) for input_shape in self.args_shape])
 
-        dmq_balancer_model = do_calibration_1(model, input_data)
+        _ = do_calibration_1(model, input_data)
 
         with patch(
             ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
@@ -173,7 +171,7 @@ class TestDMQBalancer(unittest.TestCase):
         model = self.model.to(DEVICE)
         input_data = tuple([torch.randn(input_shape).to(DEVICE) for input_shape in self.args_shape])
 
-        dmq_balancer_model = do_calibration_1(model, input_data)
+        _ = do_calibration_1(model, input_data)
         with patch(
             ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
              'parse_record_file.RecordManager.get_tensor_balance_factor'),
@@ -185,7 +183,7 @@ class TestDMQBalancer(unittest.TestCase):
         model = self.model.to(DEVICE)
         input_data = tuple([torch.randn(input_shape).to(DEVICE) for input_shape in self.args_shape])
 
-        dmq_balancer_model = do_calibration_1(model, input_data)
+        _ = do_calibration_1(model, input_data)
         with patch(
             ('amct_pytorch.classic.graph_based.amct_pytorch.common.utils.'
              'parse_record_file.RecordManager.get_tensor_balance_factor'),
@@ -222,7 +220,7 @@ def do_calibration(model, args_shape, temp_folder):
     input_data = tuple([torch.randn(input_shape).to(DEVICE) for input_shape in args_shape])
     batch_num = 2
     cfg_def = os.path.join(CUR_DIR, 'utils/test_dmq_balancer/dmq_balancer.cfg')
-    modfied_onnx_file = os.path.join(temp_folder, 'dmq_balancer_modified.onnx')
+    _ = os.path.join(temp_folder, 'dmq_balancer_modified.onnx')
     fake_quant_onnx = os.path.join(temp_folder, 'dmq_balancer_fake_quant_model.onnx')
 
     amct_pytorch.classic.graph_based.amct_pytorch.create_quant_config(
@@ -329,11 +327,11 @@ def run_inference_model(model, iterations=2):
     batch_size = 16
     torch.manual_seed(1)
     device = torch.device(DEVICE)
-    kwargs = {'batch_size': batch_size}
+    _ = {'batch_size': batch_size}
 
     model.eval()
-    test_loss = 0
-    correct = 0
+    _ = 0
+    _ = 0
     iter_num = 0
     with torch.no_grad():
         for _ in range(iterations):
@@ -342,7 +340,7 @@ def run_inference_model(model, iterations=2):
                 # np.random.uniform(0, 10, (1, 2, 4, 14, 14)).astype(np.float32))
             data = data.to(device)
             model = model.to(device)
-            output = model(data)
+            _ = model(data)
             iter_num = iter_num + 1
             if iter_num == iterations:
                 break
@@ -368,10 +366,10 @@ def run_inference_onnx(onnx_file, iterations=2):
     batch_size = 16
     torch.manual_seed(1)
     device = torch.device(DEVICE)
-    kwargs = {'batch_size': batch_size}
+    _ = {'batch_size': batch_size}
 
-    test_loss = 0
-    correct = 0
+    _ = 0
+    _ = 0
     iter_num = 0
     with torch.no_grad():
         for _ in range(iterations):
@@ -382,7 +380,7 @@ def run_inference_onnx(onnx_file, iterations=2):
             # run in onnxtime
             ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(data)}
             ort_outs = ort_session.run(output_names, ort_inputs)
-            output = torch.Tensor(ort_outs[0])
+            _ = torch.Tensor(ort_outs[0])
             iter_num = iter_num + 1
             if iter_num == iterations:
                 break

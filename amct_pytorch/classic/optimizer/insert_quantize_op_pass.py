@@ -16,7 +16,6 @@
 # ----------------------------------------------------------------------------
 
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.classic.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.config.utils import get_alg_name_from_config
 from amct_pytorch.common.utils.model_util import ModuleHelper

@@ -16,5 +16,5 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from .tensor_decompose import auto_decomposition
-from .tensor_decompose import decompose_network
+from .tensor_decompose import auto_decomposition  # noqa: F401
+from .tensor_decompose import decompose_network  # noqa: F401

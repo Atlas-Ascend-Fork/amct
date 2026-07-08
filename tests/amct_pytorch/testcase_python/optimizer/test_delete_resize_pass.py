@@ -15,19 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
-from copy import deepcopy
 
-import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
-    version_higher_than,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import DeleteResizePass
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
@@ -69,7 +62,7 @@ class TestDeleteResizePass(unittest.TestCase):
     def test_do_success_01(self):
         """ now is fail"""
         graph = Parser.parse_net_to_graph(self.onnx_file)
-        ori_len = len(graph.nodes)
+        _ = len(graph.nodes)
         resize_node = None
         for node in graph.nodes:
             if node.type == 'Resize':

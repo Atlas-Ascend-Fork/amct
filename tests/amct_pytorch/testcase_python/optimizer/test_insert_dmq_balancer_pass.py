@@ -15,14 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
-from unittest import mock
-from unittest.mock import mock_open, patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
@@ -41,9 +36,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer imp
     ModelOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
-    QUANTIZABLE_TYPES,
-)
 
 from .utils import models
 

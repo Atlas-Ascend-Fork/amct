@@ -54,7 +54,7 @@ class NpuHIF8Linear(torch.nn.Module):
             if self.bias is not None:
                 output = output + self.bias
         else:
-            raise RuntimeError(f'current environment do not support hifloat8 quantize')
+            raise RuntimeError('current environment do not support hifloat8 quantize')
 
         return output
         

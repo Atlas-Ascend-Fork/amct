@@ -18,7 +18,7 @@ import re
 import torch
 import torch.nn as nn
 
-from amct_pytorch.common.models.llm.common.moe_unpack import ExpertLinearView, GatedExpertView, find_moe_module
+from amct_pytorch.common.models.llm.common.moe_unpack import GatedExpertView
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP
 
 

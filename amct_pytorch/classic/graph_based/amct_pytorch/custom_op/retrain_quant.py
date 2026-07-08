@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import numpy as np
 import torch
 from torch import nn
 
@@ -27,7 +26,7 @@ from ...amct_pytorch.custom_op.utils import copy_tensor
 from ...amct_pytorch.custom_op.utils import tensor
 from ...amct_pytorch.custom_op.utils import process_scale
 from ...amct_pytorch.utils.vars import BATCH_NUM
-from ...amct_pytorch.common.utils.vars_util import DEFAULT, FORCE_FP16_QUANT
+from ...amct_pytorch.common.utils.vars_util import FORCE_FP16_QUANT
 
 LAYERS_NAME = 'layers_name'
 DEVICE = 'device'

@@ -15,24 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import argparse
 import logging
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 
 import amct_pytorch.classic.graph_based.amct_pytorch
-import amct_pytorch.classic.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.graph_based.amct_pytorch import (
-    accuracy_based_auto_calibration,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_calibration import (
-    AutoCalibrationEvaluatorBase,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     generate_fakequant_module,
 )
@@ -108,7 +97,7 @@ def do_calibration(model, args_shape, temp_folder):
     record_file = os.path.join(temp_folder, 'mnist_record.txt')
     modfied_onnx_file = os.path.join(temp_folder, 'mnist_modified.onnx')
     fake_quant_onnx = os.path.join(temp_folder, 'mnist_fake_quant_model.onnx')
-    deploy_onnx = os.path.join(temp_folder, 'mnist_deploy_model.onnx')
+    _ = os.path.join(temp_folder, 'mnist_deploy_model.onnx')
     save_model_path = os.path.join(temp_folder, 'mnist')
 
     input_data = tuple([torch.randn(input_shape) for input_shape in args_shape])

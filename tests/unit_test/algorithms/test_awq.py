@@ -25,8 +25,6 @@ from amct_pytorch.algorithms.quant.awq import (
     process_weights_for_layers,
     search_scale,
 )
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
-from amct_pytorch.common.utils.vars import INT8
 
 
 def test_calculate_scale_offset_by_granularity_int_symmetric():

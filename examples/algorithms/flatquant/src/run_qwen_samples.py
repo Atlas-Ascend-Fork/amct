@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     model.to(args.device)
     amct.convert(model)
-    print(f'quantize model to W4A4 with FlatQuant success.')
+    print('quantize model to W4A4 with FlatQuant success.')
 
     # test quantize model
     print(f'original model content: \n{ori_content}\n')

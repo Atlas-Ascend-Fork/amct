@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import logging
 import math
-import os
 
 import numpy as np
 import torch
@@ -143,7 +142,7 @@ def convert_to_ori_shape(input_tensor, ori_shape):
     return flattened.reshape(ori_shape)
 
 
-def convert_to_ori_shape(input_tensor, ori_shape):
+def _convert_to_ori_shape(input_tensor, ori_shape):
     """
     Converts a flattened tensor back to its original 2D shape by truncating excess elements.
  
@@ -738,7 +737,7 @@ def similarity(data0, data1):
     data0[data0_nan] = 1
     data1_nan = np.isnan(data1)
     data1[data1_nan] = 1
-    similar = similarity_1 = np.sum(np.multiply(data0.astype(np.float64), data1.astype(np.float64)).astype(np.float64))\
+    similar = np.sum(np.multiply(data0.astype(np.float64), data1.astype(np.float64)).astype(np.float64))\
                     / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if (data0 == data1).all():
@@ -746,13 +745,13 @@ def similarity(data0, data1):
     if np.isnan(similar) or np.isinf(similar):
         data0 = np.divide(data0, np.power(10, 38))
         data1 = np.divide(data1, np.power(10, 38))
-        similar = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
+        similar = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
         if np.isnan(similar) or np.isinf(similar):
             data0 = np.divide(data0, np.power(10, 38))
             data1 = np.divide(data1, np.power(10, 38))
-            similar = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
+            similar = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if np.isnan(similar):

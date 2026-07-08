@@ -43,10 +43,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
     ModuleHelper,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
-    QUANTIZABLE_ONNX_TYPES,
-    QUANTIZABLE_TYPES,
-)
 
 from .utils import models
 

@@ -16,10 +16,8 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from amct_pytorch.common.utils.quant_util import pad_zero_by_group
-from amct_pytorch.classic.quantize_op.utils import convert_to_dst_shape
 from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity, calculate_scale_offset
-from amct_pytorch.common.utils.quant_util import convert_to_per_group_shape, quant_dequant_tensor
+from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
 from amct_pytorch.common.utils.vars import MXFP4_E2M1
 
 TOKENS_NUM = 512
@@ -36,7 +34,7 @@ def process_weights_for_layers(layers, scale_awq, quant_config):
         quant_config: quant parameters
     """
     wts_type = quant_config.get('weights_cfg').get("quant_type")
-    wts_granularity = quant_config.get('weights_cfg').get("strategy")
+    _ = quant_config.get('weights_cfg').get("strategy")
     group_size = quant_config.get('weights_cfg').get("group_size")
     for layer in layers:
         layer.weight.data = layer.weight.data.mul(scale_awq)
@@ -60,7 +58,7 @@ def search_scale(inputs, layers, block, quant_config, kwargs=None):
         scale: torch.tensor
     """
     algo_params = quant_config.get("algorithm")
-    wts_type = quant_config.get('weights_cfg').get("quant_type")
+    _ = quant_config.get('weights_cfg').get("quant_type")
 
     if not torch.isfinite(inputs).all():
         raise RuntimeError("Run AWQ error! Invalid value(nan or inf) in activation!")

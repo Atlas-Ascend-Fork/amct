@@ -165,7 +165,7 @@ class MatMulQAT(nn.Module):
         """
         Check if the QAT configuration meets the requirements.
         """
-        if not self.retrain_data_config.get(DST_TYPE, INT8) in [INT8]:
+        if self.retrain_data_config.get(DST_TYPE, INT8) not in [INT8]:
             raise ValueError("dst_type for activation should be in range ['INT8'], "
                              "but your input is {}".format(self.retrain_data_config.get(DST_TYPE, INT8)))
         

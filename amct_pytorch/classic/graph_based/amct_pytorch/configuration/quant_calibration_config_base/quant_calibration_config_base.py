@@ -15,10 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
 import json
-import copy
-from collections import namedtuple
 from collections import OrderedDict
 from collections import defaultdict
 
@@ -29,7 +26,6 @@ from ....amct_pytorch.common.utils.util import find_repeated_items
 from ....amct_pytorch.utils.log import LOGGER
 from ....amct_pytorch.capacity import CAPACITY
 from ....amct_pytorch.utils.model_util import ModuleHelper
-from ....amct_pytorch.common.config.config_base import ConfigBase
 from ....amct_pytorch.common.utils.check_params import check_params
 
 from ....amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_proto \

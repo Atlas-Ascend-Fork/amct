@@ -51,7 +51,7 @@ class OfmrQuant(BaseQuantizeModule):
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
         self.act_type = quant_config.get('inputs_cfg').get('quant_type')
 
-        self.weight_compress_only = True if quant_config.get('inputs_cfg').get('enable_quant') == False else False
+        self.weight_compress_only = True if quant_config.get('inputs_cfg').get('enable_quant')  is False else False
         self.device = ori_module.weight.device
         self.act_quant_loss = torch.zeros(len(EC_CAND), dtype=torch.float32, device=self.device)
         self.cout = 1
@@ -159,7 +159,7 @@ class OfmrQuant(BaseQuantizeModule):
         inputs: torch.tensor quant op's input
         fp_out: torch.tensor quant op's original output
         """
-        ori_dtype = self.ori_module.weight.dtype
+        _ = self.ori_module.weight.dtype
         for ec in EC_CAND:
             scale_weight = torch.Tensor([2 ** ec])
             quant_weights = quant_dequant_tensor(self.ori_module.weight, self.wts_type, scale=scale_weight)
@@ -184,7 +184,7 @@ class OfmrQuant(BaseQuantizeModule):
         inputs: torch.tensor quant op's input
         fp_out: torch.tensor quant op's original output
         """
-        ori_dtype = inputs.dtype
+        _ = inputs.dtype
         for ec in EC_CAND:
             scale_inputes = torch.Tensor([2 ** ec]).to(torch.float32)
             quant_inputs = quant_dequant_tensor(inputs, self.act_type, scale=scale_inputes)

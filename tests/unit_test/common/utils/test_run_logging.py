@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
-import pytest
 
 
 def test_ensure_log_dir_uses_output_dir_when_log_dir_empty(tmp_path, monkeypatch):

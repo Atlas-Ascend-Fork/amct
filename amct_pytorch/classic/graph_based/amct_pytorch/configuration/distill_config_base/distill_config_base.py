@@ -15,9 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
 import json
-import copy
 
 from collections import namedtuple
 from collections import OrderedDict
@@ -26,7 +24,6 @@ from ....amct_pytorch.common.utils.files import save_to_json
 from ....amct_pytorch.common.utils.util import check_no_repeated
 from ....amct_pytorch.common.utils.util import find_repeated_items
 from ....amct_pytorch.common.utils.vars_util import INT8
-from ....amct_pytorch.configuration.distill_config_base.distill_field import LayerConfig
 from ....amct_pytorch.configuration.distill_config_base.distill_field import DistillRootConfig
 from ....amct_pytorch.configuration.distill_config_base.distill_proto import DistillProtoConfig
 from ....amct_pytorch.utils.log import LOGGER

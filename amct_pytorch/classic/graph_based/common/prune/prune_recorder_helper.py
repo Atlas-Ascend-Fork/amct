@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 from ..utils.prune_record_attr_util import AttrProtoHelper
-from ...utils.log import LOGGER
 
 ATTR_BEGIN = 'begin'
 ATTR_END = 'end'

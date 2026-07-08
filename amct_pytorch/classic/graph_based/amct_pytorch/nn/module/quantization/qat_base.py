@@ -16,13 +16,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from abc import ABCMeta, abstractmethod
-import copy
 from collections import namedtuple
 
 import numpy as np
 import torch
-import torch.nn.functional as F
-from torch import nn, tensor
+from torch import tensor
 from torch.nn.parameter import Parameter
 
 from .....amct_pytorch.utils.log import LOGGER
@@ -380,7 +378,7 @@ class QATBase(metaclass=ABCMeta):
         Check if the QAT configuration meets the requirements.
         """
         # check params for activation
-        if not self.retrain_data_config.get(DST_TYPE, INT8) in [INT8, INT16]:
+        if self.retrain_data_config.get(DST_TYPE, INT8) not in [INT8, INT16]:
             raise ValueError("dst_type for activation should be in range ['INT8', 'INT16'], "
                              "but your input is {}".format(self.retrain_data_config.get(DST_TYPE)))
         
@@ -401,11 +399,11 @@ class QATBase(metaclass=ABCMeta):
             raise ValueError('clip_max should a float be bigger than zero, but your input is {}.'.format(clip_max))
 
         # check params for weights
-        if not self.retrain_weight_config.get(DST_TYPE, INT8) in [INT8]:
+        if self.retrain_weight_config.get(DST_TYPE, INT8) not in [INT8]:
             raise ValueError("dst_type for weight should be in range ['INT8'], "
                              "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE)))
 
-        if not self.retrain_weight_config.get('weight_retrain_algo', 'arq_retrain') in ['arq_retrain', 'ulq_retrain']:
+        if self.retrain_weight_config.get('weight_retrain_algo', 'arq_retrain') not in ['arq_retrain', 'ulq_retrain']:
             raise ValueError("weight_retrain_algo should be in range ['arq_retrain', 'ulq_retrain'], "
                              "but your input is {}".format(self.retrain_weight_config.get(DST_TYPE)))
 

@@ -34,7 +34,7 @@ def cali_flat_quant(model, dataloader, dev):
     layer_kwargs = {}
 
     def layer_input_data_hook(module, args, kwargs):
-        inps.append(args[0].squeeze(0))
+        inps.append(args[0].squeeze(0))  # noqa: F821
         layer_kwargs.update(kwargs)
         raise ValueError('early exit to break later interface')
 

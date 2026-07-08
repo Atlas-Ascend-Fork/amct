@@ -14,14 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import math
 import torch
-from torch import nn
-import torch.nn.functional as F
-from transformers.cache_utils import DynamicCache
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import calculate_quantile_ema_scale
-from amct_pytorch.common.utils.vars import HIFLOAT8
 from amct_pytorch.common.utils.log import LOGGER
 
 

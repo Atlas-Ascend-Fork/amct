@@ -34,7 +34,7 @@ class NpuMXQuantizationLinear(torch.nn.Module):
         self.weight_compress_only = True
 
         if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-            quant_config.get('inputs_cfg').get('enable_quant') == True:
+            quant_config.get('inputs_cfg').get('enable_quant')  is True:
             self.weight_compress_only = False
 
         if self.wts_type == MXFP4_E2M1:

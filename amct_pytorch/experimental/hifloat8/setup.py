@@ -17,9 +17,7 @@
 # ----------------------------------------------------------------------------
 
 import os
-import sys
 import setuptools
-import torch
 from torch.utils import cpp_extension
 
 

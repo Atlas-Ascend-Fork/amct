@@ -33,7 +33,6 @@ class NpuQuantizationLinear(torch.nn.Module):
             quant_module: quantization module containing quantization parameters
         """
         super().__init__()
-        import torch_npu
         self.output_dtype = quant_module.weight.dtype
         device = quant_module.weight.device
         self.group_size = quant_module.group_size

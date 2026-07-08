@@ -17,13 +17,11 @@
 # ----------------------------------------------------------------------------
 
 import os
-import shutil
 from shutil import copyfileobj
 from io import BytesIO
 import pathlib
 
 import torch # pylint: disable=E0401
-import onnx
 
 from onnx import onnx_pb # pylint: disable=E0401
 from onnx.onnx_pb import AttributeProto
@@ -35,7 +33,6 @@ from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.custom_op.quant_identity.quant_identity import \
     MarkedQuantizableModule
 from ...amct_pytorch.common.utils.util import version_higher_than
-from ...amct_pytorch.utils.vars import TORCH_VERSION
 from ...amct_pytorch.utils.vars import PRUNABLE_TYPES
 from ...amct_pytorch.utils.vars import PASSIVE_PRUNABLE_TYPES
 from ...amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass

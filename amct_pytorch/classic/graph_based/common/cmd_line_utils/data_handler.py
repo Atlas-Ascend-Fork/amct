@@ -17,12 +17,7 @@ Data handle functions for amct command line tools.
 
 """
 import os
-from datetime import datetime
-from datetime import timezone
-from datetime import timedelta
-import secrets
 import numpy as np
-from ..utils.files import delete_dir
 
 
 def load_data(inputs, data_paths, data_types, num=None):

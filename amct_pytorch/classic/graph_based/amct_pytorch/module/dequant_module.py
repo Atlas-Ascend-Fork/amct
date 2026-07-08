@@ -16,7 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from onnx import onnx_pb, AttributeProto # pylint: disable=E0401
+from onnx import onnx_pb # pylint: disable=E0401
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.module.quant_module import construct_fake_quant_dequant_cast_op

@@ -15,15 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
 import os
-import sys
 import unittest
 from copy import deepcopy
 
-import numpy as np
-import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node

@@ -77,7 +77,7 @@ class WeightsCfgField():
                 f'but got {self.quant_type}')
         if self.symmetric not in [True, False]:
             raise ValueError(f'Weights symmetric only support bool [True, False], but got {self.symmetric}')
-        if self.symmetric == False and self.quant_type not in WTS_ASYMMETRIC_DTYPE:
+        if self.symmetric  is False and self.quant_type not in WTS_ASYMMETRIC_DTYPE:
             raise ValueError(f'Weights symmetric only support to be True when '
                 f'weight quant_type is {self.quant_type}')
         if self.strategy not in SUPPORT_QUANT_STRATEGY_WEIGHT:
@@ -85,7 +85,7 @@ class WeightsCfgField():
         if self.group_size is not None and self.strategy != 'group':
             raise ValueError(f'Weights group_size only support strategy group, but got {self.strategy}')
         if self.group_size is None and self.strategy == 'group':
-            raise ValueError(f'Weights group_size is necessary, when weights strategy is group')
+            raise ValueError('Weights group_size is necessary, when weights strategy is group')
         if self.group_size is not None:
             self.check_group_size()
 
@@ -133,12 +133,12 @@ class InputsCfgField():
             raise ValueError(f'Inputs quant_dtype only support {SUPPORT_INPUT_QUANT_DTYPE}, but got {self.quant_type}')
         if self.symmetric not in [True, False]:
             raise ValueError(f'Inputs symmetric only support bool [True, False], but got {self.symmetric}')
-        if self.symmetric == False and self.quant_type not in ['int8']:
+        if self.symmetric  is False and self.quant_type not in ['int8']:
             raise ValueError(f'Inputs symmetric is unsupported to be False when Inputs quant_type is {self.quant_type}')
         if self.strategy not in SUPPORT_QUANT_STRATEGY_INPUT and self.quant_type not in ['mxfp8_e4m3fn']:
             raise ValueError(f'Inputs strategy only support{SUPPORT_QUANT_STRATEGY_INPUT}, but got {self.strategy}')
-        if self.strategy == 'token' and self.symmetric == False:
-            raise ValueError(f'Inputs strategy token do not support asymmetric quantization')
+        if self.strategy == 'token' and self.symmetric  is False:
+            raise ValueError('Inputs strategy token do not support asymmetric quantization')
         if self.dynamic is not None and self.strategy not in SUPPORT_QUANT_DYNAMIC_INPUT:
             raise ValueError(f'Inputs dynamic only support strategy {SUPPORT_QUANT_DYNAMIC_INPUT}, '
                 f'but got {self.strategy}')
@@ -272,7 +272,7 @@ class AwqField():
 
     def check(self):
         if self.attrs is None or self.attrs.get('grids_num') is None:
-            raise ValueError(f'Awq grids_num is necessary param, pls check and set')
+            raise ValueError('Awq grids_num is necessary param, pls check and set')
         self.grids_num = self.attrs.get('grids_num')
         if not isinstance(self.grids_num, int) or self.grids_num <= 0:
             raise ValueError(f'Awq grids_num only support positive int, but got {self.grids_num}')
@@ -305,7 +305,7 @@ class SmoothQuantField():
 
     def check(self):
         if self.attrs is None or self.attrs.get('smooth_strength') is None:
-            raise ValueError(f'Smoothquant smooth_strength is necessary param, pls check and set')
+            raise ValueError('Smoothquant smooth_strength is necessary param, pls check and set')
         self.smooth_strength = self.attrs.get('smooth_strength')
         if not isinstance(self.smooth_strength, float) or self.smooth_strength <= 0 or self.smooth_strength >= 1:
             raise ValueError(f'Smoothquant smooth_strength only support float (0, 1), but got {self.smooth_strength}')
@@ -424,7 +424,7 @@ class SkipLayersField():
     def check(self):
         for layer in self.skip_layers:
             if not isinstance(layer, str):
-                raise ValueError(f'Skip layers must be str')
+                raise ValueError('Skip layers must be str')
 
 
 
@@ -460,7 +460,7 @@ class QuantConfig:
             weights_cfg = WeightsCfgField(fuzzy_weights_cfg)
             quant_cfg['weights_cfg'] = weights_cfg.get_value()
         elif quant_cfg['weights_cfg'] is None and \
-            quant_cfg['kvcache_cfg'].get('enable_quant') == False:
+            quant_cfg['kvcache_cfg'].get('enable_quant')  is False:
             self._layer_config_cache[layer_name] = None
             return None
         

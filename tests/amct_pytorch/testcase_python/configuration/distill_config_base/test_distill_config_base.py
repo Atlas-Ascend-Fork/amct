@@ -18,13 +18,9 @@
 import logging
 import os
 import shutil
-import sys
 import unittest
-from collections import OrderedDict
-from unittest import mock
 from unittest.mock import patch
 
-import numpy as np
 import torch
 from onnx import onnx_pb
 

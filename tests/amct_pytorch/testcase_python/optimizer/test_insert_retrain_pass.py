@@ -15,16 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 
-import amct_pytorch.classic.graph_based.amct_pytorch
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config import (
     RetrainConfig,
 )
@@ -42,9 +38,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_mo
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
     CompModuleLinear,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
-    Recorder,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
@@ -160,7 +153,7 @@ class TestInsertRetrainConv3dPass(unittest.TestCase):
             if isinstance(module, CompModuleBase):
                 module.acts_clip_min_pre.data = torch.tensor(1.0)
                 module.acts_clip_max_pre.data = torch.tensor(1.0)
-        new_output = self.model_3d.forward(self.args[0])
+        _ = self.model_3d.forward(self.args[0])
         self.assertIsInstance(named_module_dict['layer1.0'], CompModuleConv3d)
 
 

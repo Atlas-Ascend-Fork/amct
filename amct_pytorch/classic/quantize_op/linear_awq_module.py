@@ -14,17 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import math
 import copy
 import torch
-from torch import nn
 import torch.nn.functional as F
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.algorithms.quant.awq import search_scale, apply_scale, calculate_scale_offset_by_granularity
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
-from amct_pytorch.common.utils.vars import INT4, INT8, FLOAT4_E2M1, MXFP4_E2M1
+from amct_pytorch.common.utils.quant_util import quant_dequant_weight
+from amct_pytorch.common.utils.vars import INT4, INT8, FLOAT4_E2M1
 from amct_pytorch.common.utils.log import LOGGER
 
 
@@ -57,7 +55,7 @@ class LinearAWQuant(BaseQuantizeModule):
             self.group_size = self.quant_config.get('weights_cfg').get("group_size")
         self.calc_done = False
         if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-            quant_config.get('inputs_cfg').get('enable_quant') == True:
+            quant_config.get('inputs_cfg').get('enable_quant')  is True:
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
     
     @torch.no_grad()

@@ -20,7 +20,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from accelerate import init_empty_weights, dispatch_model
+from accelerate import init_empty_weights
 from accelerate.hooks import AlignDevicesHook, add_hook_to_module
 from accelerate.utils import set_module_tensor_to_device
 from loguru import logger

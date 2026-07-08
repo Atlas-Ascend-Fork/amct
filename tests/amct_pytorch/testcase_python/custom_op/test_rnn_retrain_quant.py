@@ -26,7 +26,6 @@ from torch.nn.utils.rnn import pack_sequence
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
     CompModuleRNN,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )

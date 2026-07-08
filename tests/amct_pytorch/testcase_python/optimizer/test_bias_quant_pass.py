@@ -15,19 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 from unittest.mock import patch
 
 import numpy as np
 import torch
-from google.protobuf import text_format
 
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
-    Configuration,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
@@ -38,9 +32,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_bias_quant_
     ReplaceBiasQuantPass,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )

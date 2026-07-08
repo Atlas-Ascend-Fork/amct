@@ -20,7 +20,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 import torch
 import torch.nn as nn
 from transformers.models.longcat_flash.configuration_longcat_flash import (

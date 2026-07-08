@@ -18,11 +18,8 @@
 
 from abc import ABC, abstractmethod
 import numpy as np
-from google.protobuf import text_format
-from ..utils.log_base import LOG_FILE_DIR
 from ...utils.log import LOGGER
 
-from ...proto import scale_offset_record_pb2
 from ..utils.prune_record_attr_util import AttrProtoHelper
 
 from .auto_channel_prune_search_base import AutoChannelPruneSearchBase

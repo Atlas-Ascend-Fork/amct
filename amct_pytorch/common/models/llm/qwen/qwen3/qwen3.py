@@ -17,10 +17,8 @@
 
 import torch
 from transformers.models.qwen3.modeling_qwen3 import (
-    Qwen3Attention,
     Qwen3Config,
     Qwen3DecoderLayer,
-    Qwen3MLP,
 )
 
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit

@@ -24,7 +24,6 @@ and the full pipeline; they are deferred to the tiny-config integration batch.
 
 import importlib
 
-import pytest
 import torch
 import torch.nn as nn
 

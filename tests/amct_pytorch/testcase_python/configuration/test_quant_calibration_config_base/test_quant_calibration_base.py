@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import shutil
-import sys
 import unittest
 
 import torch
@@ -159,7 +158,7 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
     def test_create_config_from_proto(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
+        _ = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
         QuantCalibrationConfigBase().create_config_from_proto(config_file, model, config_proto)
 
@@ -175,7 +174,7 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
     def test_create_config_from_proto_no_quant_layer(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
+        _ = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_01.cfg')
         self.assertRaises(
             RuntimeError,
@@ -188,7 +187,7 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
     def test_parse_quant_config(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
+        _ = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
         QuantCalibrationConfigBase().create_config_from_proto(config_file, model, config_proto)
         config = QuantCalibrationConfigBase().parse_quant_config(config_file, model)

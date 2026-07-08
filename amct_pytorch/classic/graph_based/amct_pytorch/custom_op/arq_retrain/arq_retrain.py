@@ -49,7 +49,7 @@ class ArqRetrainFunction(Function):
         # trans quantized axis to 0 in group wise
         group_wise = check_group_param(weight_tensor, wts_param.get('channel_wise'), group, axis)
         if group_wise:
-            processed_tensor = adjust_axis_for_group_wise(axis, weight_tensor)
+            adjust_axis_for_group_wise(axis, weight_tensor)
         scale_out, offset_out, quantized_weight = arq_retrain_forward_pytorch(
             weight_tensor_processed,
             wts_param.get('num_bits'),
@@ -64,7 +64,7 @@ class ArqRetrainFunction(Function):
         
         # transpose wts axis back in group wise
         if group_wise and axis > 0:
-            processed_tensor = adjust_axis_for_group_wise(axis, quantized_weight)
+            _ = adjust_axis_for_group_wise(axis, quantized_weight)
 
         return quantized_weight, scale, offset
 
@@ -115,5 +115,5 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
             quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[4])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
         LOGGER.logi(
-            f'Convert ARQ op to onnx QuantizeLinear and DequantizeLinear op successfully.')
+            'Convert ARQ op to onnx QuantizeLinear and DequantizeLinear op successfully.')
         return out_node, None, None

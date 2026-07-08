@@ -62,7 +62,7 @@ def adjust_axis_for_group_wise(axis, input_tensor):
     if axis == 0:
         return input_tensor
     """Adjust weight shape to fit group as first axis """
-    dim_num = input_tensor.dim()
+    _ = input_tensor.dim()
     return torch.transpose(input_tensor, 0, axis)
 
 

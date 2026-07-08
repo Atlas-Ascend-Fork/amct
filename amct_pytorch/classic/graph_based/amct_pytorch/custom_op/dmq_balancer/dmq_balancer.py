@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from torch import nn
-import torch
 
 from ....amct_pytorch.custom_op.dmq_balancer.dmq_balancer_func import DMQBalancerFunction
 from ....amct_pytorch.utils.module_info import ModuleInfo

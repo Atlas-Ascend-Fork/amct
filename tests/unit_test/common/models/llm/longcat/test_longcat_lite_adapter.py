@@ -19,7 +19,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
 import torch
 
 from amct_pytorch.common.models.llm.common.base import BaseModel

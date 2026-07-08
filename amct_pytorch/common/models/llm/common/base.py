@@ -165,7 +165,7 @@ class BaseModel(metaclass=ABCMeta):
 
     def save_block_hook_inputs(self, act_stat, hook_name, layer_idx):
         if hook_name is None:
-            raise ValueError(f"hook_name cannot be None")
+            raise ValueError("hook_name cannot be None")
         save_target = (
             "attn"
             if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target
@@ -181,7 +181,7 @@ class BaseModel(metaclass=ABCMeta):
         layers[0] = layers[0].bfloat16()
         layers[0] = Catcher(layers[0], outs)
         with torch.no_grad():
-            for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc=f"Embedding Processing..."):
+            for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc="Embedding Processing..."):
                 try:
                     self.model(inputs)
                 except ValueError:

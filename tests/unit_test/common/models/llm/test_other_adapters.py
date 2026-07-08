@@ -20,7 +20,6 @@
 from types import SimpleNamespace
 
 import pytest
-import torch.nn as nn
 
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import LongcatLite

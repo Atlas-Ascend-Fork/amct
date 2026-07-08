@@ -25,12 +25,9 @@ from ...amct_pytorch.proto import scale_offset_record_pb2
 from ...amct_pytorch.custom_op.arq.arq import weight_cali_tensor
 
 from ...amct_pytorch.common.utils.record_file_operator import record_weights_scale_offset
-from ...amct_pytorch.common.utils.record_file_operator import \
-    read_activation_scale_offset
 from ...amct_pytorch.custom_op.utils import tensor
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.vars import QUANTIZABLE_TYPES
-from ...amct_pytorch.configuration.check import GraphChecker
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
@@ -366,7 +363,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
             scale, offset = adaround_module.get_scale_offset()
             calied_weight = data_tensor
         else:
-            weights_len = data_tensor.numel()
+            _ = data_tensor.numel()
 
         # FOR AMC Feature, weight do not need fake quant.
         if not self.weight_fakequant:

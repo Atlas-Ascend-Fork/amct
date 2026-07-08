@@ -17,7 +17,6 @@
 import unittest
 
 import torch
-import torch_npu
 
 from amct_ops.hifloat8_cast import decode_from_hifloat8, encode_to_hifloat8
 

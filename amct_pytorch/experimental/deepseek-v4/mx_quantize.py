@@ -334,7 +334,7 @@ def quantize_mx(
     assert(scale_bits > 0)
 
     # Make sure axes is a list of non-negative numbers
-    axes = [axes] if type(axes) == int else axes
+    axes = [axes] if isinstance(axes, int) else axes
     axes = [x + A.ndim if x < 0 else x for x in axes]
 
     if quant_bit == 8:

@@ -15,19 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
 import unittest
 
-import numpy as np
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config import (
     get_enable_quant_layers,
     get_quant_layer_config,
 )
 
-from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

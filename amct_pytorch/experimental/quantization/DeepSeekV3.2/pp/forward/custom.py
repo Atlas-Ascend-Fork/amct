@@ -40,7 +40,7 @@ from transformers.utils import (
 )
 from loguru import logger
 
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # noqa: F811
 
 
 def model_forward_only_pre(

@@ -15,16 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
-import math
 import os
-import sys
 import unittest
-from unittest import mock
-from unittest.mock import patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
@@ -32,9 +26,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import struct_helper
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.dump.dump import DUMP
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.auto_calibration_helper import (
-    AutoCalibrationHelper,
-)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

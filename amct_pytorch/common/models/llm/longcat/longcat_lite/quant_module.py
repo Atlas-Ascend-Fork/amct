@@ -17,11 +17,8 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from transformers.models.longcat_flash.modeling_longcat_flash import (
-    LongcatFlashDecoderLayer,
     LongcatFlashMLA,
-    LongcatFlashMLP,
     apply_rotary_pos_emb_interleave,
 )
 from amct_pytorch.algorithms.quant import AlgoBuildContext

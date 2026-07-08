@@ -15,5 +15,5 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from .qwen3 import Qwen3
-from .qwen3_moe import Qwen3Moe
+from .qwen3 import Qwen3  # noqa: F401
+from .qwen3_moe import Qwen3Moe  # noqa: F401

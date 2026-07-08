@@ -16,8 +16,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from . import calibration_config_pytorch_pb2 as calibration_config_pb2 # pylint: disable=E0611, W0406
-from . import retrain_config_pytorch_pb2 as retrain_config_pb2 # pylint: disable=E0611, W0406
-from . import distill_config_pytorch_pb2 as distill_config_pb2
-from . import scale_offset_record_pytorch_pb2 as scale_offset_record_pb2 # pylint: disable=E0611, W0406
-from . import quant_calibration_config_pytorch_pb2 as quant_calibration_config_pb2
+from . import calibration_config_pytorch_pb2 as calibration_config_pb2 # pylint: disable=E0611, W0406  # noqa: F401
+from . import retrain_config_pytorch_pb2 as retrain_config_pb2 # pylint: disable=E0611, W0406  # noqa: F401
+from . import distill_config_pytorch_pb2 as distill_config_pb2  # noqa: F401
+from . import scale_offset_record_pytorch_pb2 as scale_offset_record_pb2 # pylint: disable=E0611, W0406  # noqa: F401
+from . import quant_calibration_config_pytorch_pb2 as quant_calibration_config_pb2  # noqa: F401

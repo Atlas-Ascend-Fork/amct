@@ -22,7 +22,6 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 
 from ....amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
-from ....amct_pytorch.common.utils.util import quant_dequant_tensor
 from ....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFunction
 from ....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFunction
 from ....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFunction

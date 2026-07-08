@@ -21,7 +21,6 @@ Operation functions for scale and offset record file
 from __future__ import print_function
 
 import os
-import sys
 
 import numpy as np
 from google.protobuf import text_format
@@ -144,9 +143,9 @@ def record_file_data(layers_length, scale_value, offset_value, record_weight, re
             if err_length:
                 scale_length_except += 1
             if unmatch_length[1]:
-                n_length_except = scale_length_except + 1
+                _ = scale_length_except + 1
             else:
-                n_length_except = scale_length_except
+                _ = scale_length_except
         if layer_name not in no_fusion_layers:
             if layer_name in skip_fusion_layers:
                 record_do_fusion(records, layer_name, True)

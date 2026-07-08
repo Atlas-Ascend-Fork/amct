@@ -19,8 +19,6 @@ import os
 from pathlib import Path
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from loguru import logger
 from transformers.models.longcat_flash.modeling_longcat_flash import LongcatFlashDecoderLayer
 
 try:

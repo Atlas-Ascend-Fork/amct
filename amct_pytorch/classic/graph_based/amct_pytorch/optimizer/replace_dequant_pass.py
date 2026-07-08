@@ -23,7 +23,6 @@ from ...amct_pytorch.module.dequant_module import add_fake_dequant
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 
 
 class ReplaceDequantPass(BaseFusionPass):

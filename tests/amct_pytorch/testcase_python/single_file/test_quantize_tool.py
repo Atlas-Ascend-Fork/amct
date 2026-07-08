@@ -15,28 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 
-from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import struct_helper
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     _check_config_consistency,
-    add_dump_operations,
     create_quant_config,
     quantize_model,
-    save_model,
 )
 
-from .utils import models, record_file_utils
+from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -111,7 +105,7 @@ class TestQuantizeTool(unittest.TestCase):
 
         data = self.args[0]
         for _ in range(2):
-            ans_2 = new_model(data)
+            _ = new_model(data)
 
         self.assertTrue(os.path.exists(modfied_onnx_file))
         self.assertTrue(os.path.exists(record_file))

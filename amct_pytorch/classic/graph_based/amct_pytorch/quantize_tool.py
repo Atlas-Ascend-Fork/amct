@@ -335,7 +335,7 @@ def save_model(modfied_onnx_file, record_file, save_path):
     records, _ = record_parser.parse()
 
     Parser.write_node_attrs_extracted_from_onnx(graph, modfied_onnx_file, ['op_data_type'])
-    quant_config = Configuration().get_quant_config()
+    _ = Configuration().get_quant_config()
     _generate_model(graph, records, save_path)
 
 

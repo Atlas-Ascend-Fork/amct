@@ -22,7 +22,6 @@ from enum import Enum, unique
 from ..utils.util import find_repeated_items
 from ..utils.util import check_no_repeated
 from ...utils.log import LOGGER # pylint: disable=relative-beyond-top-level
-from ..utils.vars_util import WINOGRAD_NUM_BITS
 
 # default parameters for quant config
 # global parameters

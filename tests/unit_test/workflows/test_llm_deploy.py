@@ -23,8 +23,6 @@ cover the file-IO and helper logic in isolation.
 
 import importlib
 import json
-import os
-import shutil
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock

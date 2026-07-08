@@ -167,7 +167,7 @@ def convert_dtype(ori_tensor, quant_dtype):
     Returns:
         torch.tensor
     """
-    device = ori_tensor.device
+    _ = ori_tensor.device
     if quant_dtype == INT8:
         converted_tensor = ori_tensor.round().clamp(INT8_MIN, INT8_MAX).to(torch.int8)
     elif quant_dtype == INT4:

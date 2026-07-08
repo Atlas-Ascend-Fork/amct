@@ -15,7 +15,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from torch import nn
 import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim

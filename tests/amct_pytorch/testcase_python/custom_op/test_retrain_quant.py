@@ -16,9 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import unittest
-from unittest import mock
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.retrain_quant import (

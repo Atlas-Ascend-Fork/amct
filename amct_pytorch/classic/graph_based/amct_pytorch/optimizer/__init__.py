@@ -64,48 +64,48 @@ __all__ = [
     'DeleteQatPass'
 ]
 
-from . import base_fusion_pass
-from . import base_module_fusion_pass
-from . import conv_bn_fusion_pass
-from . import delete_circular_padding_pass
-from . import delete_retrain_pass
-from . import delete_linear_add_pass
-from . import delete_resize_pass
-from . import delete_isolated_node_pass
-from . import gemm_transb_optimize_pass
-from . import graph_optimizer
-from . import insert_cali_quant
-from . import insert_dequant_pass
-from . import insert_quant_pass
-from . import insert_weight_quant_pass
-from . import insert_bias_quant_pass
-from . import insert_retrain_pass
-from . import insert_retrain_quant_pass
-from . import insert_kv_cache_quant_pass
-from . import model_optimizer
-from . import mult_output_with_quant_optimizer
-from . import quant_fusion_pass
-from . import replace_anti_quant_pass
-from . import replace_avgpool_flatten_pass
-from . import replace_avgpool_reshape_pass
-from . import replace_dequant_pass
-from . import replace_quant_pass
-from . import replace_weight_quant_pass
-from . import replace_bias_quant_pass
-from . import replace_sync_bn_pass
-from . import set_recorder_pass
-from . import share_act_comp_pass
-from . import weight_calibration
-from . import insert_fakequant_conv_pass
-from . import insert_fakequant_convtranspose_pass
-from . import insert_fakequant_linear_pass
-from . import insert_fakequant_avgpool2d_pass
-from . import weight_fakequant_module_pass
-from . import bias_fakequant_module_pass
-from . import insert_dmq_balancer_pass
-from . import apply_dmq_balancer_pass
-from . import insert_qat_pass
-from . import delete_qat_pass
+from . import base_fusion_pass  # noqa: F401
+from . import base_module_fusion_pass  # noqa: F401
+from . import conv_bn_fusion_pass  # noqa: F401
+from . import delete_circular_padding_pass  # noqa: F401
+from . import delete_retrain_pass  # noqa: F401
+from . import delete_linear_add_pass  # noqa: F401
+from . import delete_resize_pass  # noqa: F401
+from . import delete_isolated_node_pass  # noqa: F401
+from . import gemm_transb_optimize_pass  # noqa: F401
+from . import graph_optimizer  # noqa: F401
+from . import insert_cali_quant  # noqa: F401
+from . import insert_dequant_pass  # noqa: F401
+from . import insert_quant_pass  # noqa: F401
+from . import insert_weight_quant_pass  # noqa: F401
+from . import insert_bias_quant_pass  # noqa: F401
+from . import insert_retrain_pass  # noqa: F401
+from . import insert_retrain_quant_pass  # noqa: F401
+from . import insert_kv_cache_quant_pass  # noqa: F401
+from . import model_optimizer  # noqa: F401
+from . import mult_output_with_quant_optimizer  # noqa: F401
+from . import quant_fusion_pass  # noqa: F401
+from . import replace_anti_quant_pass  # noqa: F401
+from . import replace_avgpool_flatten_pass  # noqa: F401
+from . import replace_avgpool_reshape_pass  # noqa: F401
+from . import replace_dequant_pass  # noqa: F401
+from . import replace_quant_pass  # noqa: F401
+from . import replace_weight_quant_pass  # noqa: F401
+from . import replace_bias_quant_pass  # noqa: F401
+from . import replace_sync_bn_pass  # noqa: F401
+from . import set_recorder_pass  # noqa: F401
+from . import share_act_comp_pass  # noqa: F401
+from . import weight_calibration  # noqa: F401
+from . import insert_fakequant_conv_pass  # noqa: F401
+from . import insert_fakequant_convtranspose_pass  # noqa: F401
+from . import insert_fakequant_linear_pass  # noqa: F401
+from . import insert_fakequant_avgpool2d_pass  # noqa: F401
+from . import weight_fakequant_module_pass  # noqa: F401
+from . import bias_fakequant_module_pass  # noqa: F401
+from . import insert_dmq_balancer_pass  # noqa: F401
+from . import apply_dmq_balancer_pass  # noqa: F401
+from . import insert_qat_pass  # noqa: F401
+from . import delete_qat_pass  # noqa: F401
 
 from .base_fusion_pass import BaseFusionPass
 from .base_module_fusion_pass import BaseModuleFusionPass
@@ -122,7 +122,7 @@ from .insert_cali_quant import InsertCaliQuantPass
 from .insert_dequant_pass import InsertDequantPass
 from .insert_quant_pass import InsertQuantPass
 from .insert_weight_quant_pass import InsertWeightQuantPass
-from .weight_fakequant_pass import WeightFakequantPass
+from .weight_fakequant_pass import WeightFakequantPass  # noqa: F401
 from .insert_bias_quant_pass import InsertBiasQuantPass
 from .insert_retrain_pass import InsertRetrainPass
 from .insert_retrain_quant_pass import InsertRetrainQuantPass

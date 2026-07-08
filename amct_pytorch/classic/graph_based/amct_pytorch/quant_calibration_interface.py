@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import os
 
-import torch
 from torch import nn
 
 import amct_pytorch.classic.graph_based.amct_pytorch.optimizer as opt
@@ -25,7 +24,6 @@ from ..amct_pytorch.utils.log import LOGGER
 from ..amct_pytorch.common.utils.check_params import check_params
 from ..amct_pytorch.common.utils import files as files_util
 from ..amct_pytorch.utils.model_util import ModuleHelper
-from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 from ..amct_pytorch.configuration.quant_calibration_config \
     import inner_create_quant_calibration_config
 from ..amct_pytorch.configuration.quant_calibration_config import parse_cali_quant_config

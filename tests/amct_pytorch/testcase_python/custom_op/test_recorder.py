@@ -18,7 +18,6 @@
 import os
 import unittest
 
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,

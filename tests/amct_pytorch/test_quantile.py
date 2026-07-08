@@ -33,7 +33,6 @@ from mock_torch_npu import (
 from utils import TestModel
 
 from amct_pytorch import HIFP8_QUANTILE_CFG, convert, quantize
-from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.classic.quantize_op.quantile_module import QuantileQuant
 from amct_pytorch.common.utils import quant_util
 

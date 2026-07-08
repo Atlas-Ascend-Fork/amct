@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import torch
 
 from ...amct_pytorch.capacity import CAPACITY
 from ...amct_pytorch.common.utils.check_params import check_params
@@ -24,7 +23,6 @@ from ...amct_pytorch.configuration.distill_config_base.distill_config_base \
 from ...amct_pytorch.configuration.distill_config_base.distill_config_base \
     import GraphObjects
 from ...amct_pytorch.configuration.check import GraphQuerier
-from ...amct_pytorch.configuration.check import GraphChecker
 from ...amct_pytorch.graph.graph import Graph
 from ...amct_pytorch.utils.log import LOGGER
 

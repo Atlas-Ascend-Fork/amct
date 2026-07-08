@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 
 import pytest
 
@@ -122,9 +121,9 @@ def test_logger_init_uses_env_print_level(monkeypatch):
     monkeypatch.setenv(LOG_SET_ENV, "DEBUG")
     monkeypatch.setenv(LOG_FILE_SET_ENV, "ERROR")
     with tempfile.TemporaryDirectory() as tmpdir:
-        l = Logger(tmpdir, "test_env.log")
-        assert l.console_handler.level == logging.DEBUG
-        assert l.file_handler.level == logging.ERROR
+        logger_obj = Logger(tmpdir, "test_env.log")
+        assert logger_obj.console_handler.level == logging.DEBUG
+        assert logger_obj.file_handler.level == logging.ERROR
 
 
 def test_logger_init_rejects_bad_env_print_level(monkeypatch):
@@ -149,9 +148,9 @@ def test_logger_init_defaults_when_no_env(monkeypatch):
     monkeypatch.delenv(LOG_SET_ENV, raising=False)
     monkeypatch.delenv(LOG_FILE_SET_ENV, raising=False)
     with tempfile.TemporaryDirectory() as tmpdir:
-        l = Logger(tmpdir, "test_no_env.log")
-        assert l.console_handler.level == logging.INFO
-        assert l.file_handler.level == logging.INFO
+        logger_obj = Logger(tmpdir, "test_no_env.log")
+        assert logger_obj.console_handler.level == logging.INFO
+        assert logger_obj.file_handler.level == logging.INFO
 
 
 def test_logger_logw_writes_warning_message():

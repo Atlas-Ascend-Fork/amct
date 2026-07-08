@@ -30,7 +30,6 @@ from ...amct_pytorch.custom_op.comp_module.comp_module_rnn import CompModuleRNN
 from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
 from ...amct_pytorch.utils.log import LOGGER
-from ...amct_pytorch.utils.module_info import ModuleInfo
 from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_QUANT
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.vars import FIXED_MIN, H_FIXED_MIN

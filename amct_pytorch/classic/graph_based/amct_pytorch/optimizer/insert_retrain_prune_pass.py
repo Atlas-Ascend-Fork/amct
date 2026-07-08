@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import torch.nn as nn
 from ...amct_pytorch.configuration.retrain_config import RetrainConfig as \
     Configuration
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
@@ -28,7 +27,7 @@ from ...amct_pytorch.utils.module_info import ModuleInfo
 from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_PRUNE
 from .insert_retrain_pass import REPLACE_DICT, get_node_onnx_type
 
-FIXED_MIN = 'fixed_min'
+FIXED_MIN = 'fixed_min'  # noqa: F811
 
 
 class InsertRetrainPrunePass(BaseFusionPass):

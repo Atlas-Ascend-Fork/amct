@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 from collections import OrderedDict
 from enum import Enum, unique
-from ..utils.vars_util import INT4, INT8, INT16
+from ..utils.vars_util import INT8
 from ..utils.vars_util import RETRAIN_DATA_TYPES
 from ..utils.vars_util import RETRAIN_ACT_WTS_TYPES
 

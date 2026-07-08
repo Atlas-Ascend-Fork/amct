@@ -18,7 +18,7 @@ import torch.nn as nn
 from loguru import logger
 import torch
 from tqdm import tqdm
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset
 
 
 def get_wikitext2(tokenizer):

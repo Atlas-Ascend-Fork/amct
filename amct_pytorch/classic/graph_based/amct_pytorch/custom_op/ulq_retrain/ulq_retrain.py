@@ -112,6 +112,6 @@ class UlqRetrainFuncQAT(UlqRetrainFunction):
                            inputs[5].get("acts_offset")),
                       inputs[5].get("acts_scale"),
                       inputs[5].get("acts_offset"))
-        LOGGER.logi(f'Convert ULQ op to onnx to onnx QuantizeLinear and DequantizeLinear op successfully.')
+        LOGGER.logi('Convert ULQ op to onnx to onnx QuantizeLinear and DequantizeLinear op successfully.')
         ret = (output, None, None, None, None)
         return ret

@@ -16,21 +16,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import copy
 import os
-import shutil
 import unittest
-from collections import defaultdict
 
-import numpy as np
-import onnx
-import onnxruntime as ort
 import torch
 from torch import nn
 
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils import (
-    copy_tensor,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.gru import (
     GRUQAT,
 )

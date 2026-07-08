@@ -17,10 +17,7 @@
 
 from __future__ import annotations
 
-import inspect
-import json
 import os
-from typing import Any
 from tqdm import tqdm
 import torch
 from loguru import logger
@@ -28,12 +25,10 @@ from loguru import logger
 from amct_pytorch.common.datasets.preproc import get_wiki_inputs
 from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
 from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.common.optimization import register_solvers
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.optimization import SOLVER_REGISTRY
-from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.common.utils.run_logging import setup_run_logging
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 

@@ -16,9 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import os
 
-import pytest
 import torch
 
 from amct_pytorch.common.datasets import ptq_io

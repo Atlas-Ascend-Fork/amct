@@ -71,7 +71,7 @@ class InsertRetrainQuantPass(BaseFusionPass):
         object_module = model_helper.get_module(object_node_name)
         parent_module = model_helper.get_parent_module(object_node_name)
 
-        common_config = object_module.common_config
+        _ = object_module.common_config
 
         is_next_node_bn = False
         bn_module = None

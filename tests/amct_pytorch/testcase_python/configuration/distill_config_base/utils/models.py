@@ -20,14 +20,9 @@ Generate model for ut.
 """
 from __future__ import print_function
 
-import argparse  # Python 命令行解析工具
-import copy
 
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):

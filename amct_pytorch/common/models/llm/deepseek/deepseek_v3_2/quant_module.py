@@ -21,23 +21,19 @@
 # This file is part of [OtherProject], which is released under the MIT License.
 # See the LICENSE file in the root directory of this source tree
 # or at https://opensource.org/licenses/MIT for details.
-from typing import Tuple, Optional, Literal
+from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Linear
-from torch.nn import LayerNorm
-from einops import rearrange
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
-from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import (
     rotate_activation, fp32_index)
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import (
-    DeepseekV3Attention, DeepseekV3MLP, Indexer, apply_rotary_emb,
+    DeepseekV3Attention, Indexer, apply_rotary_emb,
 )
 
 
@@ -68,7 +64,7 @@ class QuantIndexer(torch.nn.Module):
         self.weights_proj = module.weights_proj
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.wq_b_afq = ActivationQuantizer(quant_args, q_b_proj.a)
+            self.wq_b_afq = ActivationQuantizer(quant_args, q_b_proj.a)  # noqa: F821
         else:
             self.wq_b_afq = nn.Identity()
 

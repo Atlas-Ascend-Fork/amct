@@ -15,12 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -32,9 +29,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_mo
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
     CompModuleLinear,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
-    Recorder,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,

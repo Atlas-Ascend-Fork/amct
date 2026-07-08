@@ -15,4 +15,3 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule

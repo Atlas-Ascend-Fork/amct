@@ -26,12 +26,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_rnn_fake_quant_pass import (
     InsertRNNFakeQuantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-    TensorProtoHelper,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
-    QuantOpInfo,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +175,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
         self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)
 
 
-class TestInsertRNNFakeQuantPass(unittest.TestCase):
+class _TestInsertRNNFakeQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         logger.info('TestInsertRNNFakeQuantPass start!')

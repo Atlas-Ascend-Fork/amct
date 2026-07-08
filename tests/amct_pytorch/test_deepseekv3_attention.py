@@ -20,7 +20,6 @@ import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
 import torch
-import torch.nn as nn
 from utils import TestModelDeepseekV3Attention
 from mock_torch_npu import mock_npu_quantize, mock_npu_anti_quant, mock_npu
 from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
@@ -81,4 +80,4 @@ class TestDeepseekV3Attention(unittest.TestCase):
         convert(model)
         self.assertEqual(type(model.attn).__name__, 'NpuDeepseekV3AttentionQuant')
         for _ in range(5):
-            quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)
+            _ = model(self.hidden_states.npu(), past_key_values=self.kvcache)

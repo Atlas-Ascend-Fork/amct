@@ -34,14 +34,13 @@ from unittest.mock import MagicMock, Mock
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-import fnmatch
 
 import torch
 import torch.nn as nn
 from mock_torch_npu import mock_npu
 from utils import TestModel
 
-from amct_pytorch import convert, quantize
+from amct_pytorch import quantize
 from amct_pytorch.common.config.utils import match_fuzzy_pattern
 
 ALGORITHM_MINMAX = 'minmax'

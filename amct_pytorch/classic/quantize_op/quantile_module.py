@@ -15,7 +15,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from torch import nn
 import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity, calculate_quantile_ema_scale
@@ -54,7 +53,7 @@ class QuantileQuant(BaseQuantizeModule):
         self.batch_num = quant_config.get('batch_num')
         
         if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-            quant_config.get('inputs_cfg').get('enable_quant') == True:
+            quant_config.get('inputs_cfg').get('enable_quant')  is True:
             self.weight_compress_only = False
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')

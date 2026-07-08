@@ -23,7 +23,7 @@ point of PR #147 -- run hifloat8 fake-quant when torch_npu lacks a native cast.
 import sys
 import types
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import torch
 

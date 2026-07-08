@@ -18,8 +18,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-from amct_pytorch.common.datasets.ptq_io import load_ptq_inps
-from amct_pytorch.common.optimization.factory import build_lr_scheduler, build_optimizer
 
 
 class BaseSolver(ABC):

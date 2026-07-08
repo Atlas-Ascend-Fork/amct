@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-from unittest import mock
 
 import torch
 
@@ -26,7 +25,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.prune.pruner_helper import (
     PruneHelper,
 )
 
-from .utils import models, record_utils
+from .utils import models
 
 DEVICE = 'cpu'
 

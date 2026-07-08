@@ -20,7 +20,6 @@ from __future__ import division
 from __future__ import print_function
 
 from collections import OrderedDict
-from enum import IntEnum, unique
 from google.protobuf import text_format
 
 from ....amct_pytorch.common.utils.util import find_repeated_items

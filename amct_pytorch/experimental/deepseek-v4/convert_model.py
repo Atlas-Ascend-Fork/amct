@@ -29,8 +29,8 @@ CUR_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.realpath(os.path.join(CUR_DIR, "../../../"))
 sys.path.append(ROOT_DIR)
 
-from mx_quantize import quantize_mx, pack_uint4, f32_to_f4_unpacked
-from convert_config import generate_quant_config, generate_ignore_item
+from mx_quantize import quantize_mx, pack_uint4, f32_to_f4_unpacked  # noqa: E402
+from convert_config import generate_quant_config, generate_ignore_item  # noqa: E402
 
 NUM_BITS_4 = 4
 NUM_BITS_8 = 8
@@ -147,13 +147,13 @@ def generate_quant_layers(num_layers, num_experts, compress_ratios, w4a8=False, 
     for n in mlp_linears:
         quant_layers[f"mtp.0.ffn.shared_experts.{n}"] = mtp_bit
     if is_mx:
-        quant_layers[f"mtp.0.attn.wq_a"] = mtp_bit
-        quant_layers[f"mtp.0.attn.wkv"] = mtp_bit
-        quant_layers[f"mtp.0.attn.wo_a"] = mtp_bit
-    quant_layers[f"mtp.0.attn.wq_b"] = mtp_bit
-    quant_layers[f"mtp.0.attn.wo_b"] = mtp_bit
-    quant_layers[f"mtp.0.e_proj"] = mtp_bit
-    quant_layers[f"mtp.0.h_proj"] = mtp_bit
+        quant_layers["mtp.0.attn.wq_a"] = mtp_bit
+        quant_layers["mtp.0.attn.wkv"] = mtp_bit
+        quant_layers["mtp.0.attn.wo_a"] = mtp_bit
+    quant_layers["mtp.0.attn.wq_b"] = mtp_bit
+    quant_layers["mtp.0.attn.wo_b"] = mtp_bit
+    quant_layers["mtp.0.e_proj"] = mtp_bit
+    quant_layers["mtp.0.h_proj"] = mtp_bit
     return quant_layers
 
 

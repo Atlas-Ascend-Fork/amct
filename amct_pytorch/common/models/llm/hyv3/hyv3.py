@@ -157,8 +157,8 @@ class HyV3(BaseModel):
         for n in self.MLP_LINEAR_NAMES:
             ignore.append(f"model.layers.0.mlp.{n}")
         ignore.append(f"model.layers.{self.num_layers}.eh_proj")
-        ignore.append(f"model.embed_tokens")
-        ignore.append(f"lm_head")
+        ignore.append("model.embed_tokens")
+        ignore.append("lm_head")
         return ignore
 
     def bits_scheme(self):

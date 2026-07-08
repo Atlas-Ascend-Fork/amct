@@ -18,14 +18,11 @@
 import os
 import unittest
 from io import BytesIO
-from unittest.mock import patch
 
 import numpy as np
 import torch
-from onnx import AttributeProto, onnx_pb
+from onnx import onnx_pb
 
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
 from amct_pytorch.classic.graph_based.amct_pytorch.module import dequant_module
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 

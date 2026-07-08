@@ -24,7 +24,6 @@ from torch.autograd import Function
 from google.protobuf import text_format
 
 from ....amct_pytorch.custom_op import selective_mask_gen
-from ....amct_pytorch.utils.log import LOGGER
 from ....amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
 from ....amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
 from ....amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord

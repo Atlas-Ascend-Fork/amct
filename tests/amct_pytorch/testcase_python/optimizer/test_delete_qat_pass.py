@@ -16,12 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -41,7 +38,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
 
-from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

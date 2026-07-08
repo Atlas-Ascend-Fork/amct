@@ -46,14 +46,14 @@ class TestGRUPTQ(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        batch_size = 32
+        _ = 32
         time_steps = 3
         channels = 3
         height = 64
         width = 64
         num_class = 10
-        num_epochs = 10
-        learning_rate = 0.001
+        _ = 10
+        _ = 0.001
         conv1d_kernel_size = 3
         conv1d_out_channels = 16
         gru_hidden_size = 64
@@ -134,7 +134,7 @@ class TestGRUQAT(unittest.TestCase):
         height = 64
         width = 64
         cls.num_class = 10
-        num_epochs = 10
+        _ = 10
         cls.learning_rate = 0.001
         conv1d_kernel_size = 3
         conv1d_out_channels = 16

@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 import unittest
 from unittest import mock
 
@@ -24,7 +23,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-import amct_pytorch.classic.graph_based.amct_pytorch.common.cmd_line_utils.data_handler as data_handler
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.evaluator import (
     ModelEvaluator,
 )

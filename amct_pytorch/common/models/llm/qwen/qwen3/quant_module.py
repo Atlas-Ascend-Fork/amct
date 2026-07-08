@@ -20,7 +20,6 @@ import torch.nn as nn
 
 from transformers.models.qwen3.modeling_qwen3 import (
     Qwen3Attention,
-    Qwen3MLP,
     apply_rotary_pos_emb as apply_rotary_pos_emb_qwen3,
 )
 

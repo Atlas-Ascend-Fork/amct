@@ -17,7 +17,7 @@
 
 import torch
 from tqdm import tqdm
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset
 
 
 def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):

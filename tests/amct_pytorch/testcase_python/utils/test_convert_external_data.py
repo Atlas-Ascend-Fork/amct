@@ -18,17 +18,13 @@
 import copy
 import os
 import shutil
-import sys
 import unittest
 from unittest.mock import patch
 
 import numpy as np
-import onnx
 from onnx import onnx_pb
-from onnx.external_data_helper import convert_model_to_external_data
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )

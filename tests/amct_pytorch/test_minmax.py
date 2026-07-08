@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import torch
-import torch.nn as nn
 from mock_torch_npu import (
     mock_npu,
     mock_npu_convert_weight_to_int4pack,
@@ -97,7 +96,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(type(model.linear3).__name__, MINMAX_QUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
     
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -128,7 +127,7 @@ class TestMinMax(unittest.TestCase):
         self.assertIsNotNone(model.linear2.offset_w)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
     
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -157,7 +156,7 @@ class TestMinMax(unittest.TestCase):
         model(self.inputs)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -186,7 +185,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, MINMAX_QUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
     
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -217,7 +216,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, MINMAX_QUANT)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -245,7 +244,7 @@ class TestMinMax(unittest.TestCase):
         model(self.inputs)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
 
     # Not Quant - int4
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
@@ -276,7 +275,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(type(model.linear3).__name__, LINEAR)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
         
@@ -310,7 +309,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(model.linear2.scale_w.shape[0], 1)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
     
@@ -343,7 +342,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(model.linear1.scale_w.shape[0], 64)
         self.assertEqual(model.linear2.scale_w.shape[0], 32)
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
 
@@ -380,7 +379,7 @@ class TestMinMax(unittest.TestCase):
         self.assertIsNotNone(model.linear1.offset_w[0])
         self.assertIsNotNone(model.linear2.offset_w[0])
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
         self.assertEqual(type(model.linear3).__name__, LINEAR)
@@ -416,7 +415,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(model.linear1.scale_w.shape[1], 2)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
@@ -445,7 +444,7 @@ class TestMinMax(unittest.TestCase):
         model(self.inputs)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
     # Not Quant - int4
 
@@ -484,7 +483,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(type(model.linear3).__name__, MINMAX_QUANT)
         self.assertEqual(model.linear1.scale_w.shape[0], 1)
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
@@ -547,7 +546,7 @@ class TestMinMax(unittest.TestCase):
         self.assertEqual(model.linear1.scale_d.shape[0], 1)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
@@ -582,7 +581,7 @@ class TestMinMax(unittest.TestCase):
         model(self.inputs)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
@@ -668,7 +667,7 @@ class TestMinMax(unittest.TestCase):
         self.assertIsNotNone(model.linear1.scale_w)
         torch.Tensor.npu = mock_npu
         convert(model)
-        quant_out = model(self.inputs.npu())
+        _ = model(self.inputs.npu())
         self.assertEqual(type(model.linear1).__name__, NPU_WEIGHT_QUANTIZED_LINEAR)
         self.assertEqual(type(model.linear2).__name__, LINEAR)
         self.assertEqual(type(model.linear3).__name__, LINEAR)
@@ -716,7 +715,7 @@ class TestMinMax(unittest.TestCase):
         self.assertIsNotNone(model.linear2.scale_d) 
         torch.Tensor.npu = mock_npu 
         convert(model) 
-        quant_out = model(self.inputs.npu()) 
+        _ = model(self.inputs.npu()) 
         self.assertEqual(type(model.linear1).__name__, LINEAR) 
         self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear') 
         self.assertEqual(type(model.linear3).__name__, 'Linear')

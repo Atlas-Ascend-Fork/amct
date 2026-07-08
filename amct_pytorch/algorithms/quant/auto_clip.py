@@ -89,8 +89,8 @@ class LAC(torch.nn.Module):
         self.sigmoid = torch.nn.Sigmoid()
         self.clip_factor_max = torch.nn.Parameter(torch.ones((1,)) * self.init_value, requires_grad=True)
         self.clip_factor_min = torch.nn.Parameter(torch.ones((1,)) * self.init_value, requires_grad=True)
-        self.register_buffer(f'maxval', torch.zeros((1)))
-        self.register_buffer(f'minval', torch.zeros((1)))
+        self.register_buffer('maxval', torch.zeros((1)))
+        self.register_buffer('minval', torch.zeros((1)))
 
     def trainable_params(self):
         return [self.clip_factor_min, self.clip_factor_max]

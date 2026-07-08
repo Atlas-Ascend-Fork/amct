@@ -640,9 +640,9 @@ class DeepseekV32ForCausalLM(DeepseekV32PreTrainedModel):
         global world_size, rank
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         rank = dist.get_rank() if dist.is_initialized() else 0
-        default_dtype = torch.float8_e4m3fn if config.arch_dtype == "fp8" else torch.bfloat16
-        scale_fmt = "ue8m0" if config.scale_dtype == "fp8" else config.scale_fmt
-        scale_dtype = torch.float8_e8m0fnu if config.scale_dtype == "fp8" else torch.float32
+        _ = torch.float8_e4m3fn if config.arch_dtype == "fp8" else torch.bfloat16
+        _ = "ue8m0" if config.scale_dtype == "fp8" else config.scale_fmt
+        _ = torch.float8_e8m0fnu if config.scale_dtype == "fp8" else torch.float32
         super().__init__(config)
         self.max_seq_len = config.max_seq_len
         self.norm_eps = config.norm_eps

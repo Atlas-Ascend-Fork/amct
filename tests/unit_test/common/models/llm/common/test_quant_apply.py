@@ -301,7 +301,7 @@ def test_quant_gated_mlp_export_ptq_params_returns_module_params(monkeypatch):
     gated = QuantGatedMLP(args, mlp)
     result = gated.export_ptq_params()
     assert result == {"sub": {"k": 1}}
-    original = False
+    _ = False
     trainable = False
 
     from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler

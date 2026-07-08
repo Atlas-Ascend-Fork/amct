@@ -26,7 +26,6 @@ import torch.nn.functional as F
 
 from amct_pytorch.classic.graph_based.amct_pytorch.auto_channel_prune_search import (
     AutoChannelPruneSearch,
-    TaylorLossSensitivity,
     auto_channel_prune_search,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY

@@ -37,7 +37,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
     _write_node_info,
-    delete_customized_attr,
 )
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
@@ -166,7 +165,7 @@ class TestParser(unittest.TestCase):
         model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
                                     torch.nn.BatchNorm2d(3, 3))
         model.eval()
-        tmp_onnx = BytesIO()
+        _ = BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
 

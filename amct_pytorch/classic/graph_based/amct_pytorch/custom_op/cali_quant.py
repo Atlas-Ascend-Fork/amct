@@ -15,11 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from copy import deepcopy
 
 from torch import nn
 import torch
-import numpy as np
 
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 from ...amct_pytorch.custom_op.ifmr.ifmr import IFMR

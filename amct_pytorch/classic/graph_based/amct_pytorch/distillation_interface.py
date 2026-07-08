@@ -35,7 +35,6 @@ from ..amct_pytorch.distill.distill_data_manager import DistillDataManager
 from ..amct_pytorch.distill.distill_helper import DistillHelper
 from ..amct_pytorch.distill.distill_sample import DistillSampleBase
 from ..amct_pytorch.quantize_tool import _generate_model
-from ..amct_pytorch.quantize_tool import _check_config_consistency
 from ..amct_pytorch.proto import scale_offset_record_pb2
 from ..amct_pytorch.parser.parse_record_file import RecordFileParser
 

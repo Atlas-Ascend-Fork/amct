@@ -17,44 +17,23 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import sys
 import unittest
-from copy import deepcopy
 from io import BytesIO
-from unittest.mock import patch
 
 import numpy as np
 import torch
-from google.protobuf import text_format
-from onnx import onnx_pb
 
 import amct_pytorch.classic.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
-    files as files_util,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
-    Configuration,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_bias_quant_pass import (
     InsertBiasQuantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
-    construct_quant_node,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_bias_quant_pass import (
     ReplaceBiasQuantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parse_record_file import (
-    RecordFileParser,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
@@ -153,7 +132,7 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
         Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node_name = 'lstm'
-        node = graph.get_node_by_name(node_name)
+        _ = graph.get_node_by_name(node_name)
 
         records = {
             node_name: {

@@ -28,7 +28,7 @@ import numpy as np
 from google.protobuf import text_format # pylint: disable=E0401
 
 from .util import is_invalid
-from ..config.field import WTS_SUPPORT_NUM_BITS, ACT_SUPPORT_NUM_BITS
+from ..config.field import ACT_SUPPORT_NUM_BITS
 from ..utils.vars_util import DATA_OFFSET_RANGE, DATA_OFFSET_RANGE_INT16
 from ..utils.vars_util import RNN_TENSOR_NUM, RNN_LAYER_TYPE
 from ...utils.log import LOGGER

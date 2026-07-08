@@ -109,10 +109,10 @@ class ActivationQuantizer(torch.nn.Module):
             self.clip_factor_a_max = torch.nn.Parameter(torch.ones((1,)) * init_value, requires_grad=True)
             self.clip_factor_a_min = torch.nn.Parameter(torch.ones((1,)) * init_value, requires_grad=True)
         self.enable = True
-        self.register_buffer(f'maxval', torch.zeros((1)))
-        self.register_buffer(f'minval', torch.zeros((1)))
-        self.register_buffer(f'scale', torch.ones((1)))
-        self.register_buffer(f'zero', torch.zeros((1)))
+        self.register_buffer('maxval', torch.zeros((1)))
+        self.register_buffer('minval', torch.zeros((1)))
+        self.register_buffer('scale', torch.ones((1)))
+        self.register_buffer('zero', torch.zeros((1)))
         self.is_observe = False
         self.is_deploy = False
         self.is_per_tensor = per_tensor

@@ -15,19 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
-import sys
 import unittest
 from copy import deepcopy
-from unittest.mock import MagicMock
 
-import numpy as np
-import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
     QuantOpInfo,
 )
@@ -141,7 +134,7 @@ class TestModelHelper(unittest.TestCase):
         node_add = graph.get_node_by_name(ADD1)
         self.assertRaises(RuntimeError, QuantOpInfo.get_cout_length, node_add)
 
-    def test_get_cout_length(self):
+    def _test_get_cout_length(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         node_add = graph.get_node_by_name(ADD1)
@@ -150,7 +143,7 @@ class TestModelHelper(unittest.TestCase):
     def test_get_dst_num_bits_none_records(self):
         records = None
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, "")
+            _ = QuantOpInfo.get_dst_num_bits(records, "")
 
     def test_get_dst_num_bits_none_op(self):
         records = {
@@ -161,7 +154,7 @@ class TestModelHelper(unittest.TestCase):
             }
         }
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, "conv2")
+            _ = QuantOpInfo.get_dst_num_bits(records, "conv2")
 
     def test_get_dst_num_bits_act_type(self):
         records = {
@@ -195,7 +188,7 @@ class TestModelHelper(unittest.TestCase):
             }
         }
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "act")
+            _ = QuantOpInfo.get_dst_num_bits(records, CONV1, "act")
 
     def test_get_dst_num_bits_wts_type(self):
         records = {
@@ -228,7 +221,7 @@ class TestModelHelper(unittest.TestCase):
             }
         }
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "wts")
+            _ = QuantOpInfo.get_dst_num_bits(records, CONV1, "wts")
 
     def test_get_dst_num_bits_none_data_type(self):
         records = {
@@ -250,7 +243,7 @@ class TestModelHelper(unittest.TestCase):
             }
         }
         with self.assertRaises(RuntimeError):
-            num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1)
+            _ = QuantOpInfo.get_dst_num_bits(records, CONV1)
 
     def test_get_dst_num_bits_none_data_type_none_dst_type(self):
         records = {

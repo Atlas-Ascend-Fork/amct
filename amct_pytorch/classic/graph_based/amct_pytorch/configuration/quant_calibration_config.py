@@ -18,10 +18,8 @@
 
 import os
 
-import torch
 
 from ...amct_pytorch.utils.log import LOGGER
-from ...amct_pytorch.common.utils.check_params import check_params
 from ...amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_config_base \
     import QuantCalibrationConfigBase
 

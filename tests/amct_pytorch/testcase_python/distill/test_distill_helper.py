@@ -17,10 +17,8 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -28,7 +26,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_helper import
     DistillHelper,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_sample import (
-    DistillSampleBase,
     ModelSingleTensorInput,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
@@ -93,13 +90,13 @@ class TestDistillHelper(unittest.TestCase):
 
 
     def test_get_distill_modules(self):
-        distill_helper = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
+        _ = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
         layer_names = ['conv']
         modules = DistillHelper.get_distill_modules(self.torch_model, layer_names)
         self.assertIsNotNone(modules)
 
     def test_get_distill_modules_invalid_layer(self):
-        distill_helper = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
+        _ = DistillHelper(self.torch_model, self.qat_model, self.cfg_file, loss=None, sample_instance=None)
         layer_names = ['conv_invalid']
         self.assertRaises(RuntimeError, DistillHelper.get_distill_modules, self.torch_model, layer_names)
 

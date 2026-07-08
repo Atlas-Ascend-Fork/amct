@@ -20,7 +20,6 @@ from inspect import Parameter, signature
 
 import torch
 import torch.nn as nn
-from loguru import logger
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY

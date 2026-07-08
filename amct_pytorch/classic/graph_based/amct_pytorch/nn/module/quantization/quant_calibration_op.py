@@ -31,7 +31,7 @@ from .....amct_pytorch.common.utils import files as files_util
 from .....amct_pytorch.common.config.field import NUM_OF_BINS_RANGE
 from .....amct_pytorch.utils.vars import BATCH_NUM, ASYMMETRIC, QUANT_GRANULARITY, MAX_PERCENTILE,\
     MIN_PERCENTILE, SEARCH_RANGE, PER_TENSOR, PER_CHANNEL, ACT_ALGO, WITH_OFFSET, \
-    NUM_BITS, SEARCH_STEP, IFMR, HFMG
+    SEARCH_STEP, IFMR, HFMG
 from .....amct_pytorch.common.utils.vars_util import DEFAULT_MAX_PERCENTILE, DEFAULT_MIN_PERCENTILE,\
     DEFAULT_SEARCH_RANGE_START, DEFAULT_SEARCH_RANGE_END, DEFAULT_SEARCH_STEP, DEFUALT_NUM_OF_BINS,\
     PER_TENSOR_IDX, PER_CHANNEL_IDX

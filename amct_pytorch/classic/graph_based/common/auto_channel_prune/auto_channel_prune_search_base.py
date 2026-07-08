@@ -16,7 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from abc import ABC, abstractmethod, abstractstaticmethod
+from abc import ABC, abstractmethod
 from ..utils.prune_record_attr_util import AttrProtoHelper
 from ...utils.log import LOGGER
 

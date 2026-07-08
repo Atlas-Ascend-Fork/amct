@@ -130,7 +130,7 @@ def get_act_stat(args, model, samples, tokenizer, layer_idx, output_dir, dtype=t
             for i in tqdm(range(0, nsamples, bs)):
                 logger.info(f'index : {(i + 1) // bs}/{nsamples // bs}')
                 # Calculate end index
-                j = min(i + bs, nsamples)
+                _ = min(i + bs, nsamples)
                 inputs = samples[i].cpu()
                 try:
                     model(inputs)

@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from collections import OrderedDict
 
 from ....amct_pytorch.common.retrain_config.retrain_field import ConfigItem
 from ....amct_pytorch.common.retrain_config.retrain_field import Version
@@ -141,13 +140,12 @@ class DistillWeightConfig(ConfigItem):
     def build(self, val, extra):
         '''inner method'''
         self.check_type('DistillWeightConfig', val, dict, extra[0])
-        wts_algo = ''
         key = 'algo'
         if key not in val.keys():
-            wts_algo = 'arq_distill'
+            _ = 'arq_distill'  # noqa: F841
             self.build_default_util(key, WeightAlgo)
         else:
-            wts_algo = val.get(key)
+            _ = val.get(key)
             self.build_util(key, WeightAlgo, val.get(key), extra)
             del val[key]
 

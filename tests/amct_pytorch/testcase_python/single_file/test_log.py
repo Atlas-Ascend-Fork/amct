@@ -15,13 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.log import (
     LOG_FILE_SET_ENV,

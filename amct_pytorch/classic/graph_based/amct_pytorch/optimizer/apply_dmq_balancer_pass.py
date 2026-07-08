@@ -23,9 +23,6 @@ from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
-from ...amct_pytorch.utils.log import LOGGER
-from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
-from ...amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
 
 RAW_DATA_TYPE_SET = (np.float16, )
 TENSOR_BALANCE_FACTOR = 'tensor_balance_factor'

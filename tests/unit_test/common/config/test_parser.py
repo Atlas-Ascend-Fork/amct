@@ -366,7 +366,7 @@ def test_check_layer_constraints_no_weight():
     class NoWeightModule(nn.Module):
         pass
     mod = NoWeightModule()
-    lt = {"Linear": MINMAX}
+    _ = {"Linear": MINMAX}
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int8", "symmetric": True, "strategy": "channel"}},
                       "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
@@ -453,7 +453,7 @@ def test_get_supported_layers_no_weights():
     qc = QuantConfig({"batch_num": 1,
                       "quant_cfg": {"weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
                       "algorithm": {MINMAX: {}}}, AlgorithmRegistry)
-    result = get_supported_layers(model, qc, AlgorithmRegistry)
+    _ = get_supported_layers(model, qc, AlgorithmRegistry)
 
 
 def test_get_supported_layers_constraint_skip():

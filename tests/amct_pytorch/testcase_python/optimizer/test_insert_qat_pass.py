@@ -16,17 +16,13 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import json
 import os
-import sys
 import unittest
 from collections import OrderedDict
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config import (
-    get_enable_quant_layers,
     parse_distill_config,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
@@ -42,7 +38,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer imp
     ModelOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import DISTILL_TYPES
 
 from .utils import models
 

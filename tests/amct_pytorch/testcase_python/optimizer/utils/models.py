@@ -20,11 +20,9 @@ Generate model for ut.
 """
 from __future__ import print_function
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
     version_higher_than,

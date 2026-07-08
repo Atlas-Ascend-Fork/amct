@@ -37,7 +37,6 @@ from ..amct_pytorch.quantize_tool import _modify_original_model_to_quant
 from ..amct_pytorch.utils.model_util import load_pth_file
 from ..amct_pytorch.utils.save import split_dir_prefix
 from ..amct_pytorch.utils.save import generate_onnx_file_name
-from ..amct_pytorch.utils.vars import TORCH_VERSION
 from ..amct_pytorch.common.utils.util import version_higher_than
 from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 from ..amct_pytorch.custom_op.selective_prune.selective_prune \

@@ -15,16 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import copy
-import json
 import logging
 import os
-import sys
 import unittest
 from io import BytesIO
 from unittest.mock import patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.record_file_operator import (

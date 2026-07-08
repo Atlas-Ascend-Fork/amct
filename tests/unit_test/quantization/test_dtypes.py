@@ -30,7 +30,6 @@ from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
 from amct_pytorch.quantization.dtypes.mxfp_impl import (
     down_size,
     f4_unpacked_to_f32,
-    f32_to_f4_unpacked,
     pack_uint4 as mx_pack_uint4,
     quantize_elewise,
     round_to_decimal,

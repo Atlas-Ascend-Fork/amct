@@ -16,15 +16,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import json
 import os
-import sys
 import unittest
 from io import BytesIO
-from unittest import mock
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (

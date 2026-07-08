@@ -15,30 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import argparse
 import logging
 import os
-import sys
 import unittest
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 import amct_pytorch.classic.graph_based.amct_pytorch
-import amct_pytorch.classic.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.graph_based.amct_pytorch import (
-    accuracy_based_auto_calibration,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_calibration import (
-    AutoCalibrationEvaluatorBase,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     generate_fakequant_module,
-    save_model,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
-    ModuleHelper,
 )
 
 from .utils import models
@@ -57,18 +43,18 @@ def run_inference_model_auto_cali(model, iterations=2):
     batch_size = 16
     torch.manual_seed(1)
     device = torch.device(DEVICE)
-    kwargs = {'batch_size': batch_size}
+    _ = {'batch_size': batch_size}
 
     model.eval()
-    test_loss = 0
-    correct = 0
+    _ = 0
+    _ = 0
     iter_num = 0
     with torch.no_grad():
         for _ in range(iterations):
             data = torch.tensor(
                 np.random.uniform(0, 10, (4, 2, 3, 3, 3)).astype(np.float32))
             data = data.to(device)
-            output = model(data)
+            _ = model(data)
             iter_num = iter_num + 1
             if iter_num == iterations:
                 break

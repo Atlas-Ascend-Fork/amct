@@ -15,12 +15,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from torch import nn
-import torch.nn.functional as F
 from transformers.cache_utils import DynamicCache
 
-from amct_pytorch.common.utils.vars import HIFLOAT8
-from amct_pytorch.common.utils.log import LOGGER
 
 
 class NpuDeepseekV3AttentionQuant(torch.nn.Module):
@@ -53,7 +49,7 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
         """
         if past_key_values is None:
             past_key_values = DynamicCache()
-        kv_states = self._hook_kv_states(past_key_values)
+        _ = self._hook_kv_states(past_key_values)
         fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, 
                                 past_key_values=past_key_values, **kwargs)
         return fp_out

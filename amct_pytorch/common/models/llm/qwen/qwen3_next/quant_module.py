@@ -19,8 +19,6 @@ import torch.nn.functional as F
 from transformers.models.qwen3_next.modeling_qwen3_next import (
     Qwen3NextAttention,
     Qwen3NextGatedDeltaNet,
-    Qwen3NextMLP,
-    apply_mask_to_padding_states,
     apply_rotary_pos_emb,
 )
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear

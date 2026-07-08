@@ -24,7 +24,6 @@ class NpuQuantizationConv2d(torch.nn.Module):
     """
     def __init__(self, quant_module):
         super().__init__()
-        import torch_npu
         device = quant_module.weight.device
         act_type = quant_module.act_type
         wts_type = quant_module.wts_type

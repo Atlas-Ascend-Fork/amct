@@ -23,8 +23,6 @@ from ....amct_pytorch.common.utils.record_file_operator import \
 from ....amct_pytorch.common.utils.record_file_operator import \
     record_weights_scale_offset
 from ....amct_pytorch.common.utils.record_file_operator import \
-    record_shift_bits
-from ....amct_pytorch.common.utils.record_file_operator import \
     read_weights_scale_offset
 from ....amct_pytorch.common.utils.record_file_operator import \
     read_activation_scale_offset
@@ -32,8 +30,6 @@ from ....amct_pytorch.common.utils.record_file_operator import \
     record_dmq_balancer_factor
 from ....amct_pytorch.common.utils.record_file_operator import \
     record_kv_cache_scale_offset
-from ....amct_pytorch.common.utils.record_file_operator import \
-    record_quant_factors
 from ....amct_pytorch.utils.log import LOGGER
 from ....amct_pytorch.custom_op.utils import tensor
 from ....amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord

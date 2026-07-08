@@ -50,7 +50,7 @@ class UlqScaleRetrainFunction(Function):
         # trans quantized axis to 0 in group wise
         group_wise = check_group_param(inputs, wts_qat_param.get('channel_wise'), group, axis)
         if group_wise:
-            processed_tensor = adjust_axis_for_group_wise(axis, inputs)
+            adjust_axis_for_group_wise(axis, inputs)
 
         inputs_processed = process_tensor_shape(inputs, wts_qat_param.get(MODULE_TYPE),
             wts_qat_param.get('module'))
@@ -83,7 +83,7 @@ class UlqScaleRetrainFunction(Function):
             wts_qat_param.get('module'))
         # transpose wts axis back in group wise
         if group_wise and axis > 0:
-            processed_tensor = adjust_axis_for_group_wise(axis, outputs)
+            _ = adjust_axis_for_group_wise(axis, outputs)
         return outputs, scale, offset
 
     @staticmethod
@@ -145,5 +145,5 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
             reshape = g.op('Reshape', inputs[0], shape)
             quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[5])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
-        LOGGER.logi(f'Convert ULQ scale op to onnx QuantizeLinear and DequantizeLinear op successfully.')
+        LOGGER.logi('Convert ULQ scale op to onnx QuantizeLinear and DequantizeLinear op successfully.')
         return out_node, None, None

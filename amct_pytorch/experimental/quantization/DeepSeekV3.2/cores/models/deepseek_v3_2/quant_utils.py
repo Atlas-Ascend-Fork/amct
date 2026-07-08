@@ -20,8 +20,7 @@ import torch
 from loguru import logger
 from transformers import AutoConfig
 from safetensors import safe_open
-from cores.models.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer, DeepseekV3MLP, \
-    _prepare_4d_causal_attention_mask
+from cores.models.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer, DeepseekV3MLP
 from cores.quantization.node import ActivationQuantizer
 from cores.utils.utils import skip_initialization
 from cores.quantization.linear import QuantLinear
@@ -144,7 +143,7 @@ def load_layer(model_dir, rank, config, weight_map, layer_idx, cls=DeepseekV3Dec
     state_dict = load_layer_weight(model_dir, rank, weight_map, layer_idx)
     try:
         state_dict.pop('self_attn.rotary_emb.inv_freq')
-    except:
+    except Exception:
         logger.info("not find self_attn.rotary_emb.inv_freq in state_dict")
 
     decoder_layer.load_state_dict(state_dict)

@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import pytest
 
 from amct_pytorch.algorithms.register_algo import Algorithm
 

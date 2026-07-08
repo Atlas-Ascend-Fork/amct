@@ -27,7 +27,6 @@ import torch.nn.functional as F
 from amct_pytorch.classic.graph_based.amct_pytorch.auto_channel_prune_search import (
     AutoChannelPruneSearch,
     TaylorLossSensitivity,
-    auto_channel_prune_search,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
 from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune \
@@ -41,9 +40,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
     GraphQuerier,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 

@@ -1,5 +1,4 @@
 import argparse
-import torch
 from utils import get_qwen, get_test_dataset, test_ppl
 from hifloat8_fakequant_linear import Hifloat8FakequantLinear
 import amct_pytorch as amct

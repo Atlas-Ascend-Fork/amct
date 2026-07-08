@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
-import pytest
 
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.optimization.global_solver import GlobalSolver

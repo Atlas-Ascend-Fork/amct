@@ -17,15 +17,8 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import shutil
-import sys
 import unittest
-from collections import OrderedDict
-from unittest import mock
-from unittest.mock import patch
 
-import numpy as np
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (

@@ -17,10 +17,8 @@
 # ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
-import pytest
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear

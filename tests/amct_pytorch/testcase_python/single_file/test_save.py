@@ -15,14 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
 import stat
-import sys
 import unittest
 from io import BytesIO
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
@@ -91,7 +88,7 @@ class TestSave(unittest.TestCase):
         model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
                                     torch.nn.BatchNorm2d(3, 3))
         model.eval()
-        tmp_onnx = BytesIO()
+        _ = BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
@@ -121,7 +118,7 @@ class TestSave(unittest.TestCase):
         model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
                                     torch.nn.BatchNorm2d(3, 3))
         model.eval()
-        tmp_onnx = BytesIO()
+        _ = BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {

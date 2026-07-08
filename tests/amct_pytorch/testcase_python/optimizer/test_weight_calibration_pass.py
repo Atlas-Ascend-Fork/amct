@@ -15,15 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 from io import BytesIO
-from unittest import mock
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
-import numpy as np
 import torch
 from google.protobuf import text_format
 
@@ -39,9 +35,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.weight_calibration 
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-    TensorProtoHelper,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
@@ -194,7 +187,7 @@ class TestWeightsCalibrationPass(unittest.TestCase):
         tmp_onnx = BytesIO()
         Parser.export_onnx(conv1d_module, torch.randn(3, 3, 3), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
-        node = graph.get_node_by_name(CONV1D)
+        _ = graph.get_node_by_name(CONV1D)
         for name, mod in conv1d_module.named_modules():
             if name == CONV1D:
                 conv1d_mod = mod

@@ -15,12 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import os
-import json
-from pathlib import Path
 import torch
-from loguru import logger
-from safetensors import safe_open
 from tqdm import tqdm
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
@@ -87,7 +82,7 @@ class DeepseekV32(BaseModel):
         layers[0] = layers[0].bfloat16()
         layers[0] = Catcher(layers[0], outs)
         with torch.no_grad():
-            for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc=f"Embedding Processing..."):
+            for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc="Embedding Processing..."):
                 try:
                     self.model(inputs)
                 except ValueError:

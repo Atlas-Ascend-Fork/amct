@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import inspect
-import json
 import os
 from typing import Any
 
@@ -35,7 +34,7 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     set_model_act_quant_state, set_model_weight_quant_state, set_model_to_observe)
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
-from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.common.utils.run_logging import setup_run_logging
 
 
 class LlmPtqWorkflow:

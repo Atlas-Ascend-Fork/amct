@@ -16,12 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 import unittest
 
-import numpy as np
 import torch
-import torch.nn as nn
 
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.module_info import (
     ModuleInfo,

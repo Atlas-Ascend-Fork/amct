@@ -20,7 +20,6 @@ import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
 import torch
-import torch.nn as nn
 from utils import TestModelLongcatFlashMLA
 from mock_torch_npu import mock_npu_quantize, mock_npu_anti_quant, mock_npu
 
@@ -82,4 +81,4 @@ class TestLongcatFlashMLA(unittest.TestCase):
         self.assertEqual(type(model.attn).__name__, 'NpuLongcatFlashMLA')
         torch.Tensor.npu = mock_npu
         for _ in range(5):
-            quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)
+            _ = model(self.hidden_states.npu(), past_key_values=self.kvcache)

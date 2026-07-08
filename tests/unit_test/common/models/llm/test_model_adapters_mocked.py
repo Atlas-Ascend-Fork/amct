@@ -17,16 +17,15 @@
 # ----------------------------------------------------------------------------
 """Tests for model adapters with mocked HuggingFace model loading."""
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import torch
 import torch.nn as nn
 from accelerate import init_empty_weights
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from transformers.models.qwen3.modeling_qwen3 import Qwen3Config, Qwen3DecoderLayer
+from transformers import AutoModelForCausalLM
+from transformers.models.qwen3.modeling_qwen3 import Qwen3Config
 
-from amct_pytorch.quantization.bit_policy import BitPolicy
 from tests.unit_test.common.models.llm.common.test_base import (
     _make_block_with_attn_and_mlp,
 )
@@ -749,7 +748,7 @@ class TestQwen35MoeMocked:
             "amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5_moe.QuantQwen35MLP",
             _MockQwen35MLP,
         )
-        result = model.build_quant_block(0)
+        _ = model.build_quant_block(0)
         assert captured.get("called") is True
 
     def test_qwen3_5_moe_build_quant_block_moe_no_experts(self, monkeypatch):

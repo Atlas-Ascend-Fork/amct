@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import MagicMock
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.graph_based.amct_pytorch.common.config import config_base as cb
 from amct_pytorch.classic.graph_based.amct_pytorch.common.config.config_base import (
     ConfigBase,
     GraphObjects,

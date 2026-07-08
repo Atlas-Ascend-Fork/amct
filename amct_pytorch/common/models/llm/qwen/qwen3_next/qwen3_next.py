@@ -16,14 +16,9 @@
 # ----------------------------------------------------------------------------
 
 import torch
-from loguru import logger
-from safetensors import safe_open
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
-from transformers import AutoModelForCausalLM
 from transformers.models.qwen3_next.modeling_qwen3_next import (
-    Qwen3NextConfig,
     Qwen3NextDecoderLayer,
-    Qwen3NextMLP,
 )
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
 from amct_pytorch.common.models.llm.common.moe_unpack import find_moe_module

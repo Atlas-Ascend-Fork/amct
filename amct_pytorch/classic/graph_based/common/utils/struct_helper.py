@@ -21,10 +21,6 @@ from __future__ import print_function
 
 import os
 
-from ..auto_calibration.sensitivity_base import SensitivityBase
-from ..auto_calibration.sensitivity_base import MseSensitivity
-from . import files as files_util
-from . import vars_util
 
 
 class DumpConfig:

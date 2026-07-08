@@ -105,7 +105,7 @@ def do_embedding_forward(args, model, layers, samples, output_dir, dtype):
     layers[0] = Catcher(layers[0], outs)
     with torch.no_grad():
         # Loop through each batch
-        for bs, inputs in tqdm(enumerate(samples), desc=f"Layer Embedding Processing..."):
+        for bs, inputs in tqdm(enumerate(samples), desc="Layer Embedding Processing..."):
             try:
                 model(inputs)
             except ValueError:

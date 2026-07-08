@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 
 from amct_pytorch.common.utils.log import LOGGER
-from amct_pytorch.common.config.fields import QuantConfig, WeightsCfgField, InputsCfgField
+from amct_pytorch.common.config.fields import QuantConfig
 from amct_pytorch.common.config.config import INT8_MINMAX_WEIGHT_QUANT_CFG
 from amct_pytorch.common.utils.vars import ALGORITHM_SUPPORTED_QUANT_TYPE_COMB, ALLOWED_WEIGHT_DTYPES
 from amct_pytorch.common.utils.vars import WTS_GRANULARITY_SUPPORT_MAP, ACT_GRANULARITY_SUPPORT_MAP
@@ -168,7 +168,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
         return False
 
     # npu op check cin length ceildiv(cin, 32) must be even number
-    check_mxfp8_mxfp8_dtype = 'mxfp8_e4m3fn mxfp8_e4m3fn'
+    _ = 'mxfp8_e4m3fn mxfp8_e4m3fn'
     if quant_data_comb == 'mxfp8_e4m3fn mxfp8_e4m3fn' and ((mod.weight.shape[1] + 31) // 32) % 2 != 0:
         LOGGER.logd('layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement '
             'cin length ceildiv(cin, 32) must be even number'.format(layer_name, quant_data_comb))

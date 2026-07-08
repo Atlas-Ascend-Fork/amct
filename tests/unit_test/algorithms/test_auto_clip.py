@@ -18,7 +18,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 import torch
 
 from amct_pytorch.algorithms.quant.auto_clip import LAC, LWC

@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import numpy as np
 
 import amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config as config_func
 from ...amct_pytorch.capacity import CAPACITY

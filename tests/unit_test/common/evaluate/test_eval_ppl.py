@@ -36,8 +36,8 @@ def _make_perfect_preds(samples, vocab_size):
     preds = []
     for s in samples:
         labels = s[:, 1:]                       # [bs, seq_len-1]
-        bs, l = labels.shape
-        logits = torch.full((bs, l, vocab_size), -1e4)
+        bs, logger_obj = labels.shape
+        logits = torch.full((bs, logger_obj, vocab_size), -1e4)
         logits.scatter_(-1, labels.unsqueeze(-1), 1e4)
         preds.append(logits)
     return preds

@@ -16,11 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 import unittest
 from io import BytesIO
 
-import numpy as np
 import torch
 import torch.nn as nn
 
