@@ -81,7 +81,9 @@ def parser_gen(command=None):
     parser.add_argument('--epochs', type=int, default=15, help='Number of training epochs.')
 
     parser.add_argument('--algos', nargs="*", default=[],
-                        help='Enabled quantization algorithms. The framework routes them by registry targets.')
+                        help='Enabled quantization algorithms. The framework routes them by registry targets. '
+                             "'gptq'/'higptq' are special-cased to select the HiGPTQ solver instead of a "
+                             'WeightQuantizer plugin.')
     parser.add_argument('--is_per_tensor', action="store_true", default=False,
                         help='Use per-tensor statistics in activation clipping.')
     parser.add_argument('--k_size', type=int, default=128, help='Learnable hadamard-like matrix size.')
