@@ -152,7 +152,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
     def _reorganize_rnn_quant_factor(quant_factor, module_name, module_type):
         '''
         Reorganize the rnn weight quant factor from torch order to onnx order.
-        """
+        '''
         length = len(quant_factor)
         tensor_sequence = RNN_TENSOR_SEQUENCE.get(module_type)
         if length % len(tensor_sequence) != 0:
@@ -169,17 +169,17 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         return reorganized_quant_factor.tolist()
 
     def set_up(self):
-        """
+        '''
         Function: read the scale and offset from Configuration's file.
         Inputs: None
         Returns: None
-        """
+        '''
         with open(self.record_file_path, 'r') as record_read_file:
             pbtxt_string = record_read_file.read()
             text_format.Merge(pbtxt_string, self.records)
 
     def match_pattern(self, module, name, graph=None):
-        """
+        '''
         Function:Match the module to be quantized in model
         Parameters:
             module: module to be matched
@@ -187,7 +187,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
             graph: graph structure, not necessary
         Return: True: matched
                 False: mismatch
-        """
+        '''
         if type(module).__name__ not in QUANTIZABLE_TYPES:
             return False
         if name not in self.conf.get_quant_config():
@@ -195,14 +195,14 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         return True
 
     def do_pass(self, model, object_module, object_name, graph=None):
-        """
+        '''
         Function: Do actual Insert IFMR module
         Parameters: model: torch.nn.Module, the model to be modified.
                     object_module: module to process
                     object_name: name of object_module
                     graph: graph structure, not necessary
         Return: None
-        """
+        '''
         # Step0: do avgpooling calibration only by kernel shape
         object_node = graph.get_node_by_name(object_name)
         if object_node.type == 'AveragePool':
@@ -244,11 +244,11 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         )
 
     def tear_down(self):
-        """
+        '''
         Function: write the scale and offset to Configuration's file.
         Inputs: None
         Returns: None
-        """
+        '''
         with open(self.record_file_path, "w") as record_write_file:
             record_write_file.write(
                 text_format.MessageToString(self.records, as_utf8=True)
@@ -262,13 +262,13 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         return torch.cat([i, o, f, g], dim=0)
 
     def _averagegpool_process(self, object_name):
-        """
+        '''
         Function: process average pool. write weight scale and offset.
         AveragePool do not need weight calibration.
 
         Args:
         object_name: name of object_module.
-        """
+        '''
         scale = [1.0]
         offset = [0]
         record_weights_scale_offset(self.records, object_name, scale, offset)
@@ -278,13 +278,13 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         )
 
     def _rnn_process(self, object_name, object_module, object_node, wts_param):
-        """
+        '''
         Function: process rnn weight. write weight scale and offset.
         AveragePool do not need weight calibration.
 
         Args:
         object_name: name of object_module.
-        """
+        '''
         scale = [1.0]
         offset = [0]
         scale_r = [1.0]
@@ -352,7 +352,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
     def _weight_calibration_process(
         self, object_module, object_node, wts_param, dmq_param, model
     ):
-        """
+        '''
         Function: do weight calibration by specific algorithm.
         write scale and offset to records.
 
@@ -362,7 +362,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         Return:
         calied_weight: fake quant weight.
         Notes, `auto_mixed_precision_search` is original weight. NOT FAKE.
-        """
+        '''
         data_tensor = object_module.weight.data
         calied_weight = data_tensor
         tensor_balance_factor = None
