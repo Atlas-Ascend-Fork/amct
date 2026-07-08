@@ -330,7 +330,7 @@ def test_weight_quantizer_export_deploy_supports_autoround_hook():
 
     assert "qweight" in out
     assert "weight_scale" in out
-    assert "weight_bias" in out
+    assert "bias" in out
 
 
 def test_weight_quantizer_export_deploy_supports_autoround_hook_for_mxfp():

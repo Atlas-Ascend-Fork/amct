@@ -669,6 +669,6 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     # Should produce output with quantized weight keys
     refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
     assert result["num_output_files"] == 1
-    # quant_payload produces qweight + weight_scale + weight_bias
+    # quant_payload produces qweight + weight_scale + bias
     assert "layer.weight" in refreshed_index["weight_map"]
 
