@@ -47,3 +47,6 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+
+[tool.ruff.format]
+quote-style = "preserve"

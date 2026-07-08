@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -25,12 +25,6 @@ from onnx.onnx_pb import AttributeProto
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_rnn_fake_quant_pass import (
     InsertRNNFakeQuantPass,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-    TensorProtoHelper,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
-    QuantOpInfo,
 )
 
 logger = logging.getLogger(__name__)
@@ -148,7 +142,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
                 'weight_scale': np.ones(4),
                 'weight_offset': np.zeros(4),
                 'recurrence_weight_scale': np.ones(4),
-                'recurrence_weight_offset': np.zeros(4)
+                "recurrence_weight_offset": np.zeros(4),
             }
         }
 
@@ -176,19 +170,20 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
     def test_generate_fake_quant_node(self):
         lstm_0 = self.graph.get_node_by_name('lstm_0')
         quant_node, antiquant_node = InsertRNNFakeQuantPass(
-            self.records).generate_fake_quant_node(self.graph, lstm_0, 0)
+            self.records
+        ).generate_fake_quant_node(self.graph, lstm_0, 0)
         self.assertEqual(quant_node.type, ASCEND_QUANT)
         self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)
 
 
-class TestInsertRNNFakeQuantPass(unittest.TestCase):
+class TestInsertRNNFakeQuantPassWithConv(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        logger.info('TestInsertRNNFakeQuantPass start!')
+        logger.info("TestInsertRNNFakeQuantPassWithConv start!")
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestInsertRNNFakeQuantPass end!')
+        logger.info("TestInsertRNNFakeQuantPassWithConv end!")
 
     def setUp(self):
         graph_proto = onnx_pb.GraphProto()
@@ -283,7 +278,7 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
                 'weight_scale': np.ones(3),
                 'weight_offset': np.zeros(3),
                 'recurrence_weight_scale': np.ones(3),
-                'recurrence_weight_offset': np.zeros(3)
+                "recurrence_weight_offset": np.zeros(3),
             }
         }
 
@@ -306,6 +301,8 @@ class TestInsertRNNFakeQuantPass(unittest.TestCase):
 
     def test_generate_fake_quant_node(self):
         gru_0 = self.graph.get_node_by_name('gru_0')
-        quant_node, antiquant_node = InsertRNNFakeQuantPass(self.records).generate_fake_quant_node(self.graph, gru_0, 0)
+        quant_node, antiquant_node = InsertRNNFakeQuantPass(
+            self.records
+        ).generate_fake_quant_node(self.graph, gru_0, 0)
         self.assertEqual(quant_node.type, ASCEND_QUANT)
         self.assertEqual(antiquant_node.type, ASCEND_ANTI_QUANT)

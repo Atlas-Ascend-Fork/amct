@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,11 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 import unittest
 from io import BytesIO
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -36,6 +34,7 @@ class TestQuantOpInfo(unittest.TestCase):
     """
     The UT for evaluator helper
     """
+
     @classmethod
     def setUpClass(cls):
         logger.info("TestQuantOpInfo start!")
@@ -59,6 +58,7 @@ class TestQuantOpInfo(unittest.TestCase):
 
             def forward(self, x):
                 return self.conv1d(x)
+
         conv1d_module = Conv1dModule()
         tmp_onnx = BytesIO()
         Parser.export_onnx(conv1d_module, torch.randn(1, 1, 1), tmp_onnx)
@@ -77,9 +77,14 @@ class TestQuantOpInfo(unittest.TestCase):
                 x = self.lstm(input_data, hx)
                 y = self.gru(input_data, hx[0])
                 return x, y
+
         model = RNNModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
+        Parser.export_onnx(
+            model,
+            (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))),
+            tmp_onnx,
+        )
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node1 = graph.get_node_by_name('lstm')
         node2 = graph.get_node_by_name('gru')
@@ -98,9 +103,14 @@ class TestQuantOpInfo(unittest.TestCase):
                 x = self.lstm(input_data, hx)
                 y = self.gru(input_data, hx[0])
                 return x, y
+
         model = RNNModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
+        Parser.export_onnx(
+            model,
+            (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))),
+            tmp_onnx,
+        )
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node1 = graph.get_node_by_name('lstm')
         node2 = graph.get_node_by_name('gru')
@@ -118,7 +128,10 @@ class TestQuantOpInfo(unittest.TestCase):
                 self.register_buffer('add_tensor1', torch.randn(1))
 
             def forward(self, x):
-                return self.linear(x) + self.add_tensor, self.linear1(x) + self.add_tensor1
+                return self.linear(x) + self.add_tensor, self.linear1(
+                    x
+                ) + self.add_tensor1
+
         model = MatmulAddModel().to(torch.device("cpu"))
         tmp_onnx = BytesIO()
         Parser.export_onnx(model, torch.randn(5, 3), tmp_onnx)
@@ -139,6 +152,7 @@ class TestQuantOpInfo(unittest.TestCase):
                 z = torch.matmul(x, y)
                 z = z + self.add_tensor
                 return z
+
         model = Model().to(torch.device("cpu"))
         tmp_onnx = BytesIO()
         input_data = torch.randn(3, 3)

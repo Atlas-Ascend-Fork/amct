@@ -549,7 +549,7 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
         return {}
 
     stub.load_selected_layer_ptq_params = load_selected_layer_ptq_params  # noqa: E1111
-    result = stub._build_block_for_forward(3, use_quant_block=True)
+    stub._build_block_for_forward(3, use_quant_block=True)
     assert captured["quant_idx"] == 3
 
 
@@ -975,7 +975,7 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
     batch, seq_len = 2, 4
     samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
 
-    outs = model.do_embedding_forward(samples)
+    model.do_embedding_forward(samples)
 
     assert model.position_ids is not None
     assert model.position_embeddings is not None
@@ -1272,7 +1272,6 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
     )
 
     mock_hook = MagicMock()
-    hooks_list = []
 
     def _fake_register_hooks(block, target_name, hooks, act_stat):
         hooks.append(mock_hook)

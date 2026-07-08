@@ -101,7 +101,7 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -122,7 +122,7 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -143,7 +143,7 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
@@ -164,7 +164,7 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -186,5 +186,5 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 

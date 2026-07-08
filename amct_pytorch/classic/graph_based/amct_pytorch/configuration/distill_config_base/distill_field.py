@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from collections import OrderedDict
 
 from ....amct_pytorch.common.retrain_config.retrain_field import ConfigItem
 from ....amct_pytorch.common.retrain_config.retrain_field import Version
@@ -34,6 +33,7 @@ from ....amct_pytorch.utils.vars import FIXED_MIN
 
 class GroupSize(ConfigItem):
     '''an object for GroupSize filed'''
+
     def build(self, val):
         '''inner method'''
         self.check_type("GroupSize", val, int)
@@ -48,6 +48,7 @@ class GroupSize(ConfigItem):
 
 class DataDump(ConfigItem):
     '''an object for DataDump filed'''
+
     def build(self, val):
         '''inner method'''
         self.check_type("DataDump", val, bool)
@@ -60,6 +61,7 @@ class DataDump(ConfigItem):
 
 class QuantEnable(ConfigItem):
     '''an object for QuantEnable filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type("QuantEnable", val, bool, extra[0])
@@ -72,12 +74,12 @@ class QuantEnable(ConfigItem):
 
 class DataType(ConfigItem):
     '''an object for DataType filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type(DST_TYPE, val, str, extra[0])
         if val not in [INT4, INT8]:
-            raise ValueError(
-                "now only support ['INT4', 'INT8'], but is {}".format(val))
+            raise ValueError("now only support ['INT4', 'INT8'], but is {}".format(val))
         self.value = val
 
     def build_default(self, extra=None):
@@ -87,6 +89,7 @@ class DataType(ConfigItem):
 
 class DistillDataConfig(ConfigItem):
     '''an object for DistillDataConfig filed'''
+
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type('DistillDataConfig', val, dict, extra[0])
@@ -113,7 +116,11 @@ class DistillDataConfig(ConfigItem):
             self.build_default_util(DST_TYPE, DataType)
 
         if val.keys():
-            raise ValueError('Invalid keys{} in data config for layer {}'.format(list(val.keys()), extra[0]))
+            raise ValueError(
+                "Invalid keys{} in data config for layer {}".format(
+                    list(val.keys()), extra[0]
+                )
+            )
 
     def build_default(self):
         '''inner method'''
@@ -123,12 +130,16 @@ class DistillDataConfig(ConfigItem):
 
 class WeightAlgo(ConfigItem):
     '''an object for WeightAlgo filed'''
+
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type('WeightAlgo', val, str, extra[0])
         if val not in ['arq_distill', 'ulq_distill']:
             raise ValueError(
-                'WeightAlgo only supports [arq_distill, ulq_distill] for layer {}'.format(extra[0]))
+                "WeightAlgo only supports [arq_distill, ulq_distill] for layer {}".format(
+                    extra[0]
+                )
+            )
         self.value = val
 
     def build_default(self, extra=None):
@@ -138,16 +149,14 @@ class WeightAlgo(ConfigItem):
 
 class DistillWeightConfig(ConfigItem):
     '''an object for DistillWeightConfig filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('DistillWeightConfig', val, dict, extra[0])
-        wts_algo = ''
         key = 'algo'
         if key not in val.keys():
-            wts_algo = 'arq_distill'
             self.build_default_util(key, WeightAlgo)
         else:
-            wts_algo = val.get(key)
             self.build_util(key, WeightAlgo, val.get(key), extra)
             del val[key]
 
@@ -155,7 +164,11 @@ class DistillWeightConfig(ConfigItem):
         self.build_config_by_key(DST_TYPE, DataType, val, extra)
 
         if val.keys():
-            raise ValueError('Invalid keys{} in weight config for layer {}'.format(list(val.keys()), extra[0]))
+            raise ValueError(
+                "Invalid keys{} in weight config for layer {}".format(
+                    list(val.keys()), extra[0]
+                )
+            )
 
     def build_default(self, extra):
         '''inner method'''
@@ -174,6 +187,7 @@ class DistillWeightConfig(ConfigItem):
 
 class LayerConfig(ConfigItem):
     '''an object for LayerConfig filed'''
+
     fields = {
         'quant_enable': QuantEnable,
         'distill_data_config': DistillDataConfig,
@@ -199,7 +213,7 @@ class LayerConfig(ConfigItem):
     def build_default(self, extra):
         '''inner method'''
         for key, cls in self.fields.items():
-            if key == 'distill_weight_config':
+            if key == "distill_weight_config":
                 self.build_default_util(key, cls, extra)
             else:
                 self.build_default_util(key, cls)
@@ -207,6 +221,7 @@ class LayerConfig(ConfigItem):
 
 class DistillGroup(ConfigItem):
     '''an object for DistillGroup filed'''
+
     def build(self, val):
         '''inner method'''
         self.check_type('DistillGroup', val, list)
@@ -215,10 +230,15 @@ class DistillGroup(ConfigItem):
 
 class DistillRootConfig(ConfigItem):
     '''an object for DistillRootConfig filed'''
+
     def check_layer_config_legal(self, layer):
         '''check layer config legal'''
-        weight_config = self.children.get(layer).children.get('distill_weight_config').children
-        act_config = self.children.get(layer).children.get('distill_data_config').children
+        weight_config = (
+            self.children.get(layer).children.get("distill_weight_config").children
+        )
+        act_config = (
+            self.children.get(layer).children.get("distill_data_config").children
+        )
         if DST_TYPE in weight_config:
             weight_dst = weight_config.get(DST_TYPE).value
             act_dst = act_config.get(DST_TYPE).value
@@ -226,7 +246,8 @@ class DistillRootConfig(ConfigItem):
                 raise ValueError(
                     "Now do not support activation and weights with"
                     " different data_type, activation is {} and weight "
-                    "is {}".format(act_dst, weight_dst))
+                    "is {}".format(act_dst, weight_dst)
+                )
 
     def build(self, value, extra):
         '''inner method'''
@@ -255,15 +276,13 @@ class DistillRootConfig(ConfigItem):
                 raise ValueError("unsupported layer {} for distillation".format(layer))
             if layer_config.get('quant_enable'):
                 all_disable = False
-            self.build_util(layer, LayerConfig, layer_config,
-                            (layer, extra[layer]))
+            self.build_util(layer, LayerConfig, layer_config, (layer, extra[layer]))
             self.check_layer_config_legal(layer)
             del extra[layer]
         disable_config = {}
         for layer, layer_type in extra.items():
             disable_config['quant_enable'] = False
-            self.build_util(layer, LayerConfig, disable_config,
-                            (layer, layer_type))
+            self.build_util(layer, LayerConfig, disable_config, (layer, layer_type))
 
         if all_disable:
             raise ValueError('No layer enabled distillation')
@@ -279,10 +298,12 @@ class DistillRootConfig(ConfigItem):
             self.build_default_util(layer, LayerConfig, (layer, layer_type))
 
     def _build(self, key, value):
-        class_dict = {"version": Version,
-                      "batch_num": BatchNum,
-                      "group_size": GroupSize,
-                      "data_dump": DataDump}
+        class_dict = {
+            "version": Version,
+            "batch_num": BatchNum,
+            "group_size": GroupSize,
+            "data_dump": DataDump,
+        }
         if key not in value and self.strong_check:
             raise ValueError("must has {}".format(key))
         if key not in value:

@@ -96,10 +96,10 @@ class TestPruneInterface(unittest.TestCase):
         for input_shape in args_shape:
             args.append(torch.randn(input_shape))
         args = tuple(args)
-        ori_output = ori_model.forward(args[0])
+        ori_model.forward(args[0])
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
-        new_output = new_model.forward(args[0])
+        new_model.forward(args[0])
 
         self.assertEqual(new_model.layer1[0].out_channels, 120)
 
@@ -310,7 +310,7 @@ class TestPruneInterface(unittest.TestCase):
         ori_output = ori_model.forward(args[0])
 
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
-        new_output = new_model.forward(args[0])
+        new_model.forward(args[0])
 
         new_model.eval()
         new_model(args[0])
@@ -337,9 +337,9 @@ class TestPruneInterface(unittest.TestCase):
         for input_shape in args_shape:
             args.append(torch.randn(input_shape))
         args = tuple(args)
-        ori_output = ori_model.forward(args[0])
+        ori_model.forward(args[0])
         new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
-        new_output = new_model.forward(args[0])
+        new_model.forward(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
         new_model2 = restore_prune_retrain_model(
@@ -379,7 +379,7 @@ class TestPruneInterface(unittest.TestCase):
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(
+        restore_compressed_retrain_model(
             ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
@@ -413,7 +413,7 @@ class TestPruneInterface(unittest.TestCase):
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(
+        restore_compressed_retrain_model(
             ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
@@ -447,7 +447,7 @@ class TestPruneInterface(unittest.TestCase):
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(
+        restore_compressed_retrain_model(
             ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
@@ -470,16 +470,16 @@ class TestPruneInterface(unittest.TestCase):
             args.append(torch.randn(input_shape))
         args = tuple(args)
 
-        ori_output = ori_model.forward(args[0])
+        ori_model.forward(args[0])
 
         new_model = create_compressed_retrain_model(ori_model, args, config_defination, record_file)
-        new_output = new_model.forward(args[0])
+        new_model.forward(args[0])
 
         new_model.eval()
         new_model(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
-        restore_model = restore_compressed_retrain_model(
+        restore_compressed_retrain_model(
             ori_model, args, config_defination, record_file, pth_file, 'state_dict')
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
