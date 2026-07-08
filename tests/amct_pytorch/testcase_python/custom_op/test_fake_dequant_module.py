@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,7 +22,6 @@ import unittest
 import numpy as np
 import torch
 
-import amct_pytorch.classic.graph_based.amct_pytorch
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.fake_quant import (
     FakeDeQuant,
 )
@@ -30,7 +29,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.fake_quant import (
 np.random.seed(0)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
-DEVICE = torch.device('cpu')
+DEVICE = torch.device("cpu")
 S16_BASE = 16
 S32_BASE = 32
 
@@ -41,7 +40,7 @@ def compare_ndarray(ndarray1, ndarray2, name):
     if not (ndarray1 - ndarray2 < 1e-5).all():
         logger.info(ndarray1)
         logger.info(ndarray2)
-        raise ValueError('{} not equal'.format(name))
+        raise ValueError("{} not equal".format(name))
 
 
 def dequant_compute(inputs, scale_d, scale_w, deq_shape):
@@ -54,13 +53,13 @@ def dequant_compute(inputs, scale_d, scale_w, deq_shape):
 class TestFakeDeQuantModule(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_fake_dequant_module')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_fake_dequant_module")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -72,24 +71,22 @@ class TestFakeDeQuantModule(unittest.TestCase):
         scale_d = 1
         scale_w = np.array([0.5, 0.5, 0.5])
         deq_shape = (-1, 1, 1, 1)
-        offset_d = -128
         inputs = torch.tensor(
-            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32)
+            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32
+        )
         fake_dequant = FakeDeQuant(scale_d, scale_w, deq_shape)
         out = fake_dequant(inputs)
-        np_out = dequant_compute(
-            inputs.numpy(), scale_d, scale_w, deq_shape)
-        compare_ndarray(np_out, out.detach().numpy(), 'fake_dequant')
+        np_out = dequant_compute(inputs.numpy(), scale_d, scale_w, deq_shape)
+        compare_ndarray(np_out, out.detach().numpy(), "fake_dequant")
 
     def test_fake_dequant_module_per_tensor(self):
         scale_d = 1
         scale_w = np.array([0.5])
         deq_shape = (1, -1)
-        offset_d = -128
         inputs = torch.tensor(
-            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32)
+            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32
+        )
         fake_dequant = FakeDeQuant(scale_d, scale_w, deq_shape)
         out = fake_dequant(inputs)
-        np_out = dequant_compute(
-            inputs.numpy(), scale_d, scale_w, deq_shape)
-        compare_ndarray(np_out, out.detach().numpy(), 'fake_dequant')
+        np_out = dequant_compute(inputs.numpy(), scale_d, scale_w, deq_shape)
+        compare_ndarray(np_out, out.detach().numpy(), "fake_dequant")

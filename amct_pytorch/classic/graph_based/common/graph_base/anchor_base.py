@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,12 +17,13 @@
 # ----------------------------------------------------------------------------
 
 
-class InputAnchorBase():
+class InputAnchorBase:
     """
     Function: Data structure of anchor which contains graph topologic info
     APIs: node, index, name, set_name, add_link, del_link,
           get_peer_output_anchor
     """
+
     def __init__(self, node, index, anchor_name):
         """
         Function: init object
@@ -37,8 +38,7 @@ class InputAnchorBase():
         self.__peer_anchor = None
 
     def __repr__(self):
-        anchor_info = '< index: {}, name: {} >'.format(
-            self._index, self._anchor_name)
+        anchor_info = "< index: {}, name: {} >".format(self._index, self._anchor_name)
         return anchor_info
 
     @property
@@ -76,7 +76,7 @@ class InputAnchorBase():
         """
         self._anchor_name = name
 
-    def add_link(self, output_anchor: 'OutputAnchorBase'):
+    def add_link(self, output_anchor: "OutputAnchorBase"):
         """
         Function: Add link from current anchor to output_anchor
         Parameter: None
@@ -101,12 +101,13 @@ class InputAnchorBase():
         return self.__peer_anchor
 
 
-class OutputAnchorBase():
+class OutputAnchorBase:
     """
     Function: Data structure of anchor which contains graph topologic info
     APIs: node, index, name, set_name, add_link, del_link,
           get_peer_input_anchor, get_reused_info
     """
+
     def __init__(self, node, index, anchor_name):
         """
         Function: init object
@@ -125,8 +126,7 @@ class OutputAnchorBase():
         self._peer_anchors = []
 
     def __repr__(self):
-        anchor_info = '< index: {}, name: {} >'.format(
-            self._index, self._anchor_name)
+        anchor_info = "< index: {}, name: {} >".format(self._index, self._anchor_name)
         return anchor_info
 
     @property
@@ -164,7 +164,7 @@ class OutputAnchorBase():
         """
         self._anchor_name = name
 
-    def add_link(self, input_anchor: 'InputAnchorBase'):
+    def add_link(self, input_anchor: "InputAnchorBase"):
         """
         Function: Add link from input_anchor to current anchor
         Parameter: None
@@ -172,7 +172,7 @@ class OutputAnchorBase():
         """
         self._peer_anchors.append(input_anchor)
 
-    def del_link(self, src_anchor: 'InputAnchorBase'):
+    def del_link(self, src_anchor: "InputAnchorBase"):
         """
         Function: Delete link from input_anchor to current anchor
         Parameter: None

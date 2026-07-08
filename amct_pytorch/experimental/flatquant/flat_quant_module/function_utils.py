@@ -30,7 +30,9 @@ def get_random_orthg(size):
     return torch.from_numpy(Q_modified)
 
 
-def get_init_weight(dim, ):
+def get_init_weight(
+    dim,
+):
     return get_random_orthg(dim)
 
 
@@ -50,7 +52,7 @@ def get_n_set_parameters_byname(model, required_names):
     return iter(params)
 
 
-def get_paras_dict_by_name(model, required_names, destination=None, prefix=''):
+def get_paras_dict_by_name(model, required_names, destination=None, prefix=""):
     if destination is None:
         destination = OrderedDict()
     for r_name in required_names:
@@ -58,6 +60,7 @@ def get_paras_dict_by_name(model, required_names, destination=None, prefix=''):
             if name.find(r_name) > -1:
                 destination[prefix + name] = param.detach()
     return destination
+
 
 def print_trainable_parameters(model):
     """
@@ -70,8 +73,10 @@ def print_trainable_parameters(model):
         if param.requires_grad:
             trainable_params += param.numel()
     print(
-    f"trainable params: {trainable_params} || all params: {all_param} || trainable: {
-        100 * trainable_params / all_param:.2f}%")
+        f"trainable params: {trainable_params} || all params: {
+            all_param
+        } || trainable: {100 * trainable_params / all_param:.2f}%"
+    )
 
 
 def set_require_grad_all(model, requires_grad):

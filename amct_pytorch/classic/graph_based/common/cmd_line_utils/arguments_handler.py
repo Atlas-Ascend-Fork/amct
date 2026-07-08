@@ -21,7 +21,7 @@ import os
 
 
 def process_data_shape(values):
-    """ Process data_shape to several shape info.
+    """Process data_shape to several shape info.
     For example, "input_name1:n1,c1,h1,w1;input_name2:n1,c1,h1,w1" to
     {"input_name1": [n1,c1,h1,w1], "input_name2": [n1,c1,h1,w1]},
 
@@ -38,18 +38,19 @@ def process_data_shape(values):
     Returns:
         dict: new shape info, key is input_name and value is shape(list)
     """
-    data_shapes_str = values.split(';')
+    data_shapes_str = values.split(";")
     input_dict = {}
     for data_item in data_shapes_str:
-        data_list = data_item.split(':')
-        data_name = ':'.join(data_list[:-1])
+        data_list = data_item.split(":")
+        data_name = ":".join(data_list[:-1])
         data_shape_str = data_list[-1]
-        dims = data_shape_str.split(',')
+        dims = data_shape_str.split(",")
         if len(data_list) < 2 or len(data_name) == 0 or len(dims) == 0:
             raise ValueError(
                 "Invalid input_shape. Input name and shapes of each input node"
                 " should be ':' split. E.g.: input_name1:n1,c1,h1,w1"
-                " or input_name2:0:n1,c1,h1,w1")
+                " or input_name2:0:n1,c1,h1,w1"
+            )
         data_shape = [int(shape_dim) for shape_dim in dims]
         input_dict[data_name] = data_shape
 
@@ -65,6 +66,6 @@ def process_multi_data_path(values):
     Returns:
         list of string: new path info.
     """
-    data_paths = values.split(';')
+    data_paths = values.split(";")
     data_paths = [os.path.realpath(data_path) for data_path in data_paths]
     return data_paths

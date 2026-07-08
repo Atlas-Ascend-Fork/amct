@@ -18,21 +18,18 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-from amct_pytorch.common.datasets.ptq_io import load_ptq_inps
-from amct_pytorch.common.optimization.factory import build_lr_scheduler, build_optimizer
-
 
 class BaseSolver(ABC):
     granularity = "block"
 
     def __init__(
-            self,
-            args: Any,
-            layer_idx: int,
-            model: Any,
-            optimizer: Optional[Any] = None,
-            lr_scheduler: Optional[Any] = None,
-            max_iters: int = 100,
+        self,
+        args: Any,
+        layer_idx: int,
+        model: Any,
+        optimizer: Optional[Any] = None,
+        lr_scheduler: Optional[Any] = None,
+        max_iters: int = 100,
     ):
         self.args = args
         self.quant_target = args.quant_target
@@ -66,7 +63,9 @@ class BaseSolver(ABC):
     def quant_forward(self, *args, **kwargs):
         pass
 
-    def step(self,):
+    def step(
+        self,
+    ):
         if self.optimizer:
             self.optimizer.step()
             self.optimizer.zero_grad()

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -34,30 +34,31 @@ from setuptools.dist import Distribution
 
 class BinaryDistribution(Distribution):
     """强制生成平台相关 wheel（包含编译 .so）"""
+
     def has_ext_modules(self):
         return True
 
 
-STAGING = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'staging')
+STAGING = os.path.join(os.path.dirname(os.path.abspath(__file__)), "staging")
 
 # 收集 staging/amct_ops/<sub>/ 下的 .so 文件作为 package_data
 package_data = {}
-amct_ops_dir = os.path.join(STAGING, 'amct_ops')
+amct_ops_dir = os.path.join(STAGING, "amct_ops")
 if os.path.isdir(amct_ops_dir):
     for sub in os.listdir(amct_ops_dir):
         sub_path = os.path.join(amct_ops_dir, sub)
-        if not os.path.isdir(sub_path) or sub.startswith(('.', '_')):
+        if not os.path.isdir(sub_path) or sub.startswith((".", "_")):
             continue
-        so_files = [f for f in os.listdir(sub_path) if f.endswith('.so')]
+        so_files = [f for f in os.listdir(sub_path) if f.endswith(".so")]
         if so_files:
-            package_data[f'amct_ops.{sub}'] = so_files
+            package_data[f"amct_ops.{sub}"] = so_files
 
 setup(
     name="amct_ops",
     version="1.0.0",
     description="NPU custom operators for Ascend NPU (HiFloat8, ...)",
-    packages=find_packages(where='staging'),
-    package_dir={'': 'staging'},
+    packages=find_packages(where="staging"),
+    package_dir={"": "staging"},
     package_data=package_data,
     python_requires=">=3.9",
     install_requires=[

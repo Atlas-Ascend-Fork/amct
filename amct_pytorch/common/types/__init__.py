@@ -15,5 +15,5 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-__all__ = ['QuantConfig']
+__all__ = ["QuantConfig"]
 from .quant_config import QuantConfig

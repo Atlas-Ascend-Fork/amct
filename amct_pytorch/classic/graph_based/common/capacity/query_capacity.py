@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,16 +17,17 @@
 # ----------------------------------------------------------------------------
 import csv
 
-DEFAULT_CAPACITY_TYPE = 'default'
-ASCEND_CAPACITY_TYPE = 'ascend'
+DEFAULT_CAPACITY_TYPE = "default"
+ASCEND_CAPACITY_TYPE = "ascend"
 SUPPORTED_CAPACITY_TYPES = [DEFAULT_CAPACITY_TYPE, ASCEND_CAPACITY_TYPE]
 
 
-class Capacity():
+class Capacity:
     """
     Function: Query capacity from csv config file
     APIs: is_enable, get_all_items
     """
+
     def __init__(self, config, ascend_config=None):
         self._capacity = {}
         self._ascend_capacity = {}
@@ -40,22 +41,25 @@ class Capacity():
 
     @property
     def capacity(self):
-        ''' get capacity'''
+        """get capacity"""
         type2capacity = {
             DEFAULT_CAPACITY_TYPE: self._capacity,
-            ASCEND_CAPACITY_TYPE: self._ascend_capacity
+            ASCEND_CAPACITY_TYPE: self._ascend_capacity,
         }
         return type2capacity.get(self.capacity_type)
 
     def set_capacity_type(self, capacity_type):
-        ''' get current capacity's type'''
+        """get current capacity's type"""
         if capacity_type not in SUPPORTED_CAPACITY_TYPES:
-            raise ValueError('capacity_type {} is unsupported, only support types {}'.format(capacity_type,
-                                                                                             SUPPORTED_CAPACITY_TYPES))
+            raise ValueError(
+                "capacity_type {} is unsupported, only support types {}".format(
+                    capacity_type, SUPPORTED_CAPACITY_TYPES
+                )
+            )
         self.capacity_type = capacity_type
 
     def get_capacity_type(self):
-        ''' get current capacity's type'''
+        """get current capacity's type"""
         return self.capacity_type
 
     def is_enable(self, item):
@@ -78,29 +82,29 @@ class Capacity():
                 if len(line) == 0:
                     continue
                 if len(line) < 3:
-                    raise ValueError('Invalid line {}'.format(','.join(line)))
+                    raise ValueError("Invalid line {}".format(",".join(line)))
 
                 item = line[0].strip()
                 item_type = line[1].strip()
 
                 type2func = {
-                    'bool': self._parser_bool,
-                    'list': self._parser_list,
-                    'string': self._parser_string
+                    "bool": self._parser_bool,
+                    "list": self._parser_list,
+                    "string": self._parser_string,
                 }
                 if item_type not in type2func:
-                    raise ValueError('Unknown type {}'.format(item_type))
+                    raise ValueError("Unknown type {}".format(item_type))
                 type2func[item_type](item, line[2:])
 
     def _parser_bool(self, item, values):
         value = values[0]
         value = value.strip()
-        if value.upper() == 'True'.upper():
+        if value.upper() == "True".upper():
             self.capacity[item] = True
-        elif value.upper() == 'False'.upper():
+        elif value.upper() == "False".upper():
             self.capacity[item] = False
         else:
-            raise ValueError('Unknown value {} for {}'.format(value, item))
+            raise ValueError("Unknown value {} for {}".format(value, item))
 
     def _parser_list(self, item, values):
         self.capacity[item] = [value.strip() for value in values]

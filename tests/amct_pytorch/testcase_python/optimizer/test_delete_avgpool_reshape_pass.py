@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -33,7 +33,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 class TestReplaceAvgpoolReshapePass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_delete_avgpool_reshape_pass')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_delete_avgpool_reshape_pass")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -44,13 +44,12 @@ class TestReplaceAvgpoolReshapePass(unittest.TestCase):
             cls.args.append(torch.randn(input_shape))
         cls.args = tuple(cls.args)
 
-        cls.onnx_file = os.path.join(cls.temp_folder, 'mobilenet_tail.onnx')
+        cls.onnx_file = os.path.join(cls.temp_folder, "mobilenet_tail.onnx")
         Parser.export_onnx(cls.model, cls.args, cls.onnx_file)
-
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
         pass
 
     def setUp(self):
@@ -64,13 +63,12 @@ class TestReplaceAvgpoolReshapePass(unittest.TestCase):
         ori_len = len(graph.nodes)
         avgpool_node = None
         for node in graph.nodes:
-            if node.type == 'GlobalAveragePool':
+            if node.type == "GlobalAveragePool":
                 avgpool_node = node
                 break
         passer = ReplaceAvgpoolReshapePass()
         is_matched = passer.match_pattern(avgpool_node)
-        if '1.10' not in torch.__version__:
+        if "1.10" not in torch.__version__:
             self.assertTrue(is_matched)
             passer.do_pass(graph, avgpool_node)
             self.assertEqual(5, ori_len - len(graph.nodes))
-

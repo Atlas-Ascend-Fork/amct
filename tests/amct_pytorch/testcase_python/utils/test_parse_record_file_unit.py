@@ -34,7 +34,7 @@ RM = prf.RecordManager
 REC = pb.ScaleOffsetRecord
 
 
-def _mgr(record=None, node_type='Conv2d', node_name='l1', capacity=None):
+def _mgr(record=None, node_type="Conv2d", node_name="l1", capacity=None):
     if record is None:
         recs = REC()
         record = recs.record.add()
@@ -42,7 +42,7 @@ def _mgr(record=None, node_type='Conv2d', node_name='l1', capacity=None):
     node = MagicMock()
     node.name = node_name
     node.type = node_type
-    cap = capacity or {'SHIFT_N_TYPES': ['Conv2d'], 'NO_WEIGHT_QUANT_TYPES': []}
+    cap = capacity or {"SHIFT_N_TYPES": ["Conv2d"], "NO_WEIGHT_QUANT_TYPES": []}
     return RM(record, node, cap, MagicMock())
 
 
@@ -56,9 +56,9 @@ class TestRecordManagerStatic(unittest.TestCase):
         self.assertFalse(RM.is_in_range(np.array([0, 2]), 0, 5, included=False))
 
     def test_get_range(self):
-        self.assertEqual(RM.get_range('INT16'), [-32768, 32767])
-        self.assertEqual(RM.get_range('INT8'), [-128, 127])
-        self.assertEqual(RM.get_range('unknown'), [-128, 127])
+        self.assertEqual(RM.get_range("INT16"), [-32768, 32767])
+        self.assertEqual(RM.get_range("INT8"), [-128, 127])
+        self.assertEqual(RM.get_range("unknown"), [-128, 127])
 
     def test_check_cluster_center_ok(self):
         RM.check_cluster_center([1] * 16)
@@ -71,77 +71,77 @@ class TestRecordManagerStatic(unittest.TestCase):
 
     def test_check_layer_params_range_ok(self):
         params = {
-            'act_type': 'INT8',
-            'data_offset': np.array([0]),
-            'weight_offset': np.array([0]),
-            'data_scale': np.array([0.5]),
-            'weight_scale': np.array([0.5]),
-            'shift_n': np.array([0]),
+            "act_type": "INT8",
+            "data_offset": np.array([0]),
+            "weight_offset": np.array([0]),
+            "data_scale": np.array([0.5]),
+            "weight_scale": np.array([0.5]),
+            "shift_n": np.array([0]),
         }
-        RM.check_layer_params_range(params, 'l1')
+        RM.check_layer_params_range(params, "l1")
 
     def test_check_layer_params_range_bad_offset_d(self):
         params = {
-            'act_type': 'INT8',
-            'data_offset': np.array([999]),
-            'weight_offset': np.array([0]),
-            'data_scale': np.array([0.5]),
-            'weight_scale': np.array([0.5]),
-            'shift_n': np.array([0]),
+            "act_type": "INT8",
+            "data_offset": np.array([999]),
+            "weight_offset": np.array([0]),
+            "data_scale": np.array([0.5]),
+            "weight_scale": np.array([0.5]),
+            "shift_n": np.array([0]),
         }
-        self.assertRaises(ValueError, RM.check_layer_params_range, params, 'l1')
+        self.assertRaises(ValueError, RM.check_layer_params_range, params, "l1")
 
     def test_check_layer_params_range_bad_scale_w(self):
         params = {
-            'act_type': 'INT8',
-            'data_offset': np.array([0]),
-            'weight_offset': np.array([0]),
-            'data_scale': np.array([0.5]),
-            'weight_scale': np.array([0.0]),
-            'shift_n': np.array([0]),
+            "act_type": "INT8",
+            "data_offset": np.array([0]),
+            "weight_offset": np.array([0]),
+            "data_scale": np.array([0.5]),
+            "weight_scale": np.array([0.0]),
+            "shift_n": np.array([0]),
         }
-        self.assertRaises(ValueError, RM.check_layer_params_range, params, 'l1')
+        self.assertRaises(ValueError, RM.check_layer_params_range, params, "l1")
 
     def test_check_layer_params_range_bad_shift_n(self):
         params = {
-            'act_type': 'INT8',
-            'data_offset': np.array([0]),
-            'weight_offset': np.array([0]),
-            'data_scale': np.array([0.5]),
-            'weight_scale': np.array([0.5]),
-            'shift_n': np.array([99]),
+            "act_type": "INT8",
+            "data_offset": np.array([0]),
+            "weight_offset": np.array([0]),
+            "data_scale": np.array([0.5]),
+            "weight_scale": np.array([0.5]),
+            "shift_n": np.array([99]),
         }
-        self.assertRaises(ValueError, RM.check_layer_params_range, params, 'l1')
+        self.assertRaises(ValueError, RM.check_layer_params_range, params, "l1")
 
     def test_check_rnn_layer_params_range_ok(self):
         params = {
-            'act_type': 'INT8',
-            'h_offset': np.array([0]),
-            'recurrence_weight_offset': np.array([0]),
-            'h_scale': np.array([0.5]),
-            'recurrence_weight_scale': np.array([0.5]),
+            "act_type": "INT8",
+            "h_offset": np.array([0]),
+            "recurrence_weight_offset": np.array([0]),
+            "h_scale": np.array([0.5]),
+            "recurrence_weight_scale": np.array([0.5]),
         }
-        RM.check_rnn_layer_params_range(params, 'l1')
+        RM.check_rnn_layer_params_range(params, "l1")
 
     def test_check_rnn_layer_params_range_bad_offset_h(self):
         params = {
-            'act_type': 'INT8',
-            'h_offset': np.array([999]),
-            'recurrence_weight_offset': np.array([0]),
-            'h_scale': np.array([0.5]),
-            'recurrence_weight_scale': np.array([0.5]),
+            "act_type": "INT8",
+            "h_offset": np.array([999]),
+            "recurrence_weight_offset": np.array([0]),
+            "h_scale": np.array([0.5]),
+            "recurrence_weight_scale": np.array([0.5]),
         }
-        self.assertRaises(ValueError, RM.check_rnn_layer_params_range, params, 'l1')
+        self.assertRaises(ValueError, RM.check_rnn_layer_params_range, params, "l1")
 
 
 class TestRecordManagerGetters(unittest.TestCase):
     def test_get_key_value_skip(self):
         recs = REC()
         r = recs.record.add()
-        r.key = 'l1'
+        r.key = "l1"
         r.value.skip_fusion = True
         mgr = _mgr(record=r)
-        self.assertEqual(mgr.get_key(), 'l1')
+        self.assertEqual(mgr.get_key(), "l1")
         self.assertTrue(mgr.get_skip_fusion())
         self.assertIsNotNone(mgr.get_value())
 
@@ -152,52 +152,54 @@ class TestRecordManagerGetters(unittest.TestCase):
     def test_check_quant_value_empty_false(self):
         recs = REC()
         r = recs.record.add()
-        r.key = 'l1'
+        r.key = "l1"
         r.value.scale_d = 0.5
         self.assertFalse(_mgr(record=r).check_quant_value_empty())
 
     def test_get_dst_type_unset(self):
-        self.assertEqual(_mgr().get_dst_type(), 'UNSET')
+        self.assertEqual(_mgr().get_dst_type(), "UNSET")
 
     def test_get_dst_type_int8(self):
         recs = REC()
         r = recs.record.add()
-        r.key = 'l1'
-        r.value.dst_type = 'INT8'
-        self.assertEqual(_mgr(record=r).get_dst_type(), 'INT8')
+        r.key = "l1"
+        r.value.dst_type = "INT8"
+        self.assertEqual(_mgr(record=r).get_dst_type(), "INT8")
 
     def test_get_dst_type_invalid(self):
         recs = REC()
         r = recs.record.add()
-        r.key = 'l1'
-        r.value.dst_type = 'INT99'
+        r.key = "l1"
+        r.value.dst_type = "INT99"
         self.assertRaises(RuntimeError, _mgr(record=r).get_dst_type)
 
     def test_get_dst_type_avgpool_int4(self):
         recs = REC()
         r = recs.record.add()
-        r.key = 'AvgPool_1'
-        r.value.dst_type = 'INT4'
-        self.assertRaises(RuntimeError, _mgr(record=r, node_name='AvgPool_1').get_dst_type)
+        r.key = "AvgPool_1"
+        r.value.dst_type = "INT4"
+        self.assertRaises(
+            RuntimeError, _mgr(record=r, node_name="AvgPool_1").get_dst_type
+        )
 
     def test_get_act_type_unset(self):
-        self.assertEqual(_mgr().get_act_type(), 'UNSET')
+        self.assertEqual(_mgr().get_act_type(), "UNSET")
 
     def test_get_act_type_invalid(self):
         recs = REC()
         r = recs.record.add()
-        r.key = 'l1'
-        r.value.act_type = 'INT99'
+        r.key = "l1"
+        r.value.act_type = "INT99"
         self.assertRaises(RuntimeError, _mgr(record=r).get_act_type)
 
     def test_get_wts_type_unset(self):
-        self.assertEqual(_mgr().get_wts_type(), 'UNSET')
+        self.assertEqual(_mgr().get_wts_type(), "UNSET")
 
     def test_get_wts_type_invalid(self):
         recs = REC()
         r = recs.record.add()
-        r.key = 'l1'
-        r.value.wts_type = 'INT99'
+        r.key = "l1"
+        r.value.wts_type = "INT99"
         self.assertRaises(RuntimeError, _mgr(record=r).get_wts_type)
 
     def test_get_op_dtype_absent_field_noop(self):
@@ -208,13 +210,17 @@ class TestRecordManagerGetters(unittest.TestCase):
         self.assertEqual(params, {})
 
     def test_get_act_quant_factor_missing(self):
-        self.assertRaises(RuntimeError, _mgr().get_act_quant_factor, 'scale_d', np.float32)
+        self.assertRaises(
+            RuntimeError, _mgr().get_act_quant_factor, "scale_d", np.float32
+        )
 
     def test_get_wts_quant_factor_desirable_missing(self):
-        self.assertRaises(RuntimeError, _mgr().get_wts_quant_factor, 'scale_w', np.float32)
+        self.assertRaises(
+            RuntimeError, _mgr().get_wts_quant_factor, "scale_w", np.float32
+        )
 
     def test_get_wts_quant_factor_not_desirable_default(self):
-        arr = _mgr().get_wts_quant_factor('scale_w', np.float32, desirable=False)
+        arr = _mgr().get_wts_quant_factor("scale_w", np.float32, desirable=False)
         self.assertEqual(list(arr), [1.0])
 
     def test_get_shift_n_missing(self):
@@ -231,8 +237,8 @@ class TestRecordManagerGetters(unittest.TestCase):
         self.assertIsNone(_mgr().get_tensor_balance_factor())
 
     def test_get_fakequant_precision_mode_default(self):
-        self.assertEqual(_mgr().get_fakequant_precision_mode(), 'DEFAULT')
+        self.assertEqual(_mgr().get_fakequant_precision_mode(), "DEFAULT")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

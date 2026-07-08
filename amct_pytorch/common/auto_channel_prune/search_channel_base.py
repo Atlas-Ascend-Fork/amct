@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """Public re-export of SearchChannelBase."""
 
-__all__ = ['SearchChannelBase']
+__all__ = ["SearchChannelBase"]
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune import (
     search_channel_base as _impl,

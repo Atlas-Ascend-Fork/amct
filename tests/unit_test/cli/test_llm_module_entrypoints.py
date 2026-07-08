@@ -38,7 +38,9 @@ def test_amct_pytorch_module_exports_main(module_name, target_name):
 
 
 @pytest.mark.parametrize("module_name,target_name", ENTRYPOINTS)
-def test_amct_pytorch_module_executes_llm_cli_main(monkeypatch, module_name, target_name):
+def test_amct_pytorch_module_executes_llm_cli_main(
+    monkeypatch, module_name, target_name
+):
     calls = []
     target = importlib.import_module(target_name)
     monkeypatch.setattr(target, "main", lambda: calls.append(target_name))

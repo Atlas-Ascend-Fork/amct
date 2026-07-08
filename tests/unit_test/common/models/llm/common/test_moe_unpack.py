@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -34,8 +33,12 @@ class _FakeExperts:
 
     def __init__(self):
         # Two experts, packed gate/up: [E, 2*intermediate, hidden] = [2, 6, 4]
-        self.gate_up_proj = torch.arange(2 * 6 * 4, dtype=torch.float32).reshape(2, 6, 4)
-        self.down_proj = torch.arange(2 * 4 * 3, dtype=torch.float32).reshape(2, 4, 3) + 1000
+        self.gate_up_proj = torch.arange(2 * 6 * 4, dtype=torch.float32).reshape(
+            2, 6, 4
+        )
+        self.down_proj = (
+            torch.arange(2 * 4 * 3, dtype=torch.float32).reshape(2, 4, 3) + 1000
+        )
 
 
 def test_expert_linear_view_returns_full_slice_when_no_range():
@@ -46,7 +49,9 @@ def test_expert_linear_view_returns_full_slice_when_no_range():
 
 def test_expert_linear_view_returns_partial_range():
     experts = _FakeExperts()
-    view = ExpertLinearView(experts, expert_idx=0, weight_name="gate_up_proj", start=0, end=3)
+    view = ExpertLinearView(
+        experts, expert_idx=0, weight_name="gate_up_proj", start=0, end=3
+    )
     assert torch.equal(view.weight, experts.gate_up_proj[0, 0:3])
 
 

@@ -9,7 +9,7 @@ from .function_utils import set_require_grad_all, get_n_set_parameters_byname
 
 def cali_flat_quant(model, dataloader, dev):
     """
-    The parameters related to calibration (e.g. epochs, batch size, learning rate) 
+    The parameters related to calibration (e.g. epochs, batch size, learning rate)
     """
     # TODO: maybe standardize the configuration procedure for calibration in the future (also for other quant methods)
     model.eval()
@@ -34,11 +34,13 @@ def cali_flat_quant(model, dataloader, dev):
     layer_kwargs = {}
 
     def layer_input_data_hook(module, args, kwargs):
-        inps.append(args[0].squeeze(0))
+        inps.append(args[0].squeeze(0))  # noqa: F821
         layer_kwargs.update(kwargs)
-        raise ValueError('early exit to break later interface')
+        raise ValueError("early exit to break later interface")
 
-    handle = layers[0].register_forward_pre_hook(layer_input_data_hook, with_kwargs=True)
+    handle = layers[0].register_forward_pre_hook(
+        layer_input_data_hook, with_kwargs=True
+    )
 
     n_samples = len(dataloader)
     with torch.no_grad():
@@ -72,7 +74,10 @@ def cali_flat_quant(model, dataloader, dev):
             layer.float()
 
         training_flag = False
-        if type(layer.self_attn).__name__ == 'FlatQuantAttention' or type(layer.mlp).__name__ == 'FlatQuantMLP':
+        if (
+            type(layer.self_attn).__name__ == "FlatQuantAttention"
+            or type(layer.mlp).__name__ == "FlatQuantMLP"
+        ):
             training_flag = True
 
         # origin forward
@@ -83,7 +88,7 @@ def cali_flat_quant(model, dataloader, dev):
         with torch.no_grad():
             for j in range(n_samples):
                 fp_outs[j] = layer(fp_inps[j].unsqueeze(0), **layer_kwargs)[0]
-        
+
         # calibration layer by layer
         if training_flag:
             layer.self_attn._ori_mode = False
@@ -115,44 +120,79 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
     loss_func = torch.nn.MSELoss()
 
     # init diag scale with ln data
-    if hasattr(layer.self_attn, 'init_diag_scale'):
+    if hasattr(layer.self_attn, "init_diag_scale"):
         layer.self_attn.init_diag_scale(alpha=layer.self_attn.flat_config.diag_alpha)
-    if hasattr(layer.mlp, 'init_diag_scale'):
+    if hasattr(layer.mlp, "init_diag_scale"):
         layer.mlp.init_diag_scale(alpha=layer.self_attn.flat_config.diag_alpha)
 
     set_require_grad_all(layer, False)
     trained_params, paras_name = [], []
     if layer.self_attn.flat_config.cali_trans:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["trans.linear", ]), 
-            "lr": layer.self_attn.flat_config.flat_lr})
+            {
+                "params": get_n_set_parameters_byname(
+                    layer,
+                    [
+                        "trans.linear",
+                    ],
+                ),
+                "lr": layer.self_attn.flat_config.flat_lr,
+            }
+        )
         paras_name.append("trans.linear")
     if layer.self_attn.flat_config.add_diag:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["trans.diag_scale", ]), 
-            "lr": layer.self_attn.flat_config.flat_lr})
+            {
+                "params": get_n_set_parameters_byname(
+                    layer,
+                    [
+                        "trans.diag_scale",
+                    ],
+                ),
+                "lr": layer.self_attn.flat_config.flat_lr,
+            }
+        )
         paras_name.append("trans.diag_scale")
     if layer.self_attn.flat_config.lwc:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["clip_factor_w", ]), 
-            "lr": layer.self_attn.flat_config.flat_lr * 10})
+            {
+                "params": get_n_set_parameters_byname(
+                    layer,
+                    [
+                        "clip_factor_w",
+                    ],
+                ),
+                "lr": layer.self_attn.flat_config.flat_lr * 10,
+            }
+        )
         paras_name.append("clip_factor_w")
     if layer.self_attn.flat_config.lac:
         trained_params.append(
-            {"params": get_n_set_parameters_byname(layer, ["clip_factor_a", ]), 
-            "lr": layer.self_attn.flat_config.flat_lr * 10})
+            {
+                "params": get_n_set_parameters_byname(
+                    layer,
+                    [
+                        "clip_factor_a",
+                    ],
+                ),
+                "lr": layer.self_attn.flat_config.flat_lr * 10,
+            }
+        )
         paras_name.append("clip_factor_a")
 
     bsz = layer.self_attn.flat_config.cali_bsz
     batch_kwargs = layer_kwargs.copy()
-    if batch_kwargs['attention_mask'] is not None:
-        batch_kwargs['attention_mask'] = batch_kwargs['attention_mask'].repeat(bsz, 1, 1, 1).float()
+    if batch_kwargs["attention_mask"] is not None:
+        batch_kwargs["attention_mask"] = (
+            batch_kwargs["attention_mask"].repeat(bsz, 1, 1, 1).float()
+        )
 
     optimizer = torch.optim.AdamW(trained_params)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=layer.self_attn.flat_config.epochs * (n_samples // bsz), 
-        eta_min=layer.self_attn.flat_config.flat_lr * 1e-3)
+        T_max=layer.self_attn.flat_config.epochs * (n_samples // bsz),
+        eta_min=layer.self_attn.flat_config.flat_lr * 1e-3,
+    )
 
     for epoch in range(layer.self_attn.flat_config.epochs):
         mse = 0
@@ -160,15 +200,17 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
         with traincast():
             for j in range(n_samples // bsz):
                 index = j * bsz
-                quant_out = layer(fp_inps[index: index + bsz, ], **batch_kwargs)
+                quant_out = layer(fp_inps[index : index + bsz,], **batch_kwargs)
                 quant_out = quant_out[0] if isinstance(quant_out, tuple) else quant_out
-                loss = loss_func(fp_outs[index: index + bsz, ], quant_out)
+                loss = loss_func(fp_outs[index : index + bsz,], quant_out)
                 mse += loss.detach().cpu()
                 loss = loss / loss.clone().detach()
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
                 scheduler.step()
-        cur_lr = optimizer.state_dict()['param_groups'][0]['lr']
-        print(f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, "
-            f"lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}")
+        cur_lr = optimizer.state_dict()["param_groups"][0]["lr"]
+        print(
+            f"layer {layer.self_attn.layer_idx} lwc lac iter {epoch}, "
+            f"lr {cur_lr:.8f}  time {time.time() - start_tick:.6f}s, mse: {mse:.8f}"
+        )

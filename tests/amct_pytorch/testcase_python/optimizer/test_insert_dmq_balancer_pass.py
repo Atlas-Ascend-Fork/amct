@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,14 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
-from unittest import mock
-from unittest.mock import mock_open, patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
@@ -41,9 +36,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer imp
     ModelOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
-    QUANTIZABLE_TYPES,
-)
 
 from .utils import models
 
@@ -53,7 +45,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 class TestInsertCaliQuantPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_insert_dmq_balancer_pass')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_insert_dmq_balancer_pass")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -64,18 +56,18 @@ class TestInsertCaliQuantPass(unittest.TestCase):
             cls.args.append(torch.randn(input_shape))
         cls.args = tuple(cls.args)
 
-        cls.onnx_file = os.path.join(cls.temp_folder, 'net_001.onnx')
+        cls.onnx_file = os.path.join(cls.temp_folder, "net_001.onnx")
         Parser.export_onnx(cls.model_001, cls.args, cls.onnx_file)
         cls.graph = Parser.parse_net_to_graph(cls.onnx_file)
         cls.graph.add_model(cls.model_001)
 
-        cls.config_file = os.path.join(CUR_DIR, 'utils/net_dmq.json')
-        cls.record_file = os.path.join(cls.temp_folder, 'net_001.txt')
+        cls.config_file = os.path.join(CUR_DIR, "utils/net_dmq.json")
+        cls.record_file = os.path.join(cls.temp_folder, "net_001.txt")
         Configuration().init(cls.config_file, cls.record_file, cls.graph)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -84,7 +76,7 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         pass
 
     def test_fuse(self):
-        ''' test: conv(+ bias), Gemm, Matmul '''
+        """test: conv(+ bias), Gemm, Matmul"""
         torch_recorder = Recorder(self.record_file)
         optimizer = ModelOptimizer()
         optimizer.add_pass(InsertDMQBalancerPass(torch_recorder))
@@ -92,14 +84,13 @@ class TestInsertCaliQuantPass(unittest.TestCase):
 
         named_module_dict = {name: mod for name, mod in self.model_001.named_modules()}
 
-        self.assertEqual(True, isinstance(named_module_dict['layer1.0'], DMQBalancer))
-        self.assertEqual(True, isinstance(named_module_dict['layer2.0'], DMQBalancer))
-        self.assertEqual(True, isinstance(named_module_dict['layer3.0'], DMQBalancer))
-        self.assertEqual(True, isinstance(named_module_dict['layer4.0'], DMQBalancer))
-        self.assertEqual(True, isinstance(named_module_dict['layer5.0'], DMQBalancer))
-        self.assertEqual(True, isinstance(named_module_dict['layer6.0'], DMQBalancer))
+        self.assertEqual(True, isinstance(named_module_dict["layer1.0"], DMQBalancer))
+        self.assertEqual(True, isinstance(named_module_dict["layer2.0"], DMQBalancer))
+        self.assertEqual(True, isinstance(named_module_dict["layer3.0"], DMQBalancer))
+        self.assertEqual(True, isinstance(named_module_dict["layer4.0"], DMQBalancer))
+        self.assertEqual(True, isinstance(named_module_dict["layer5.0"], DMQBalancer))
+        self.assertEqual(True, isinstance(named_module_dict["layer6.0"], DMQBalancer))
 
-        self.assertEqual(True, isinstance(named_module_dict['fc.0'], torch.nn.Linear))
-        self.assertEqual(True, isinstance(named_module_dict['fc.2'], DMQBalancer))
-        self.assertEqual(True, isinstance(named_module_dict['fc.5'], torch.nn.Linear))
-
+        self.assertEqual(True, isinstance(named_module_dict["fc.0"], torch.nn.Linear))
+        self.assertEqual(True, isinstance(named_module_dict["fc.2"], DMQBalancer))
+        self.assertEqual(True, isinstance(named_module_dict["fc.5"], torch.nn.Linear))

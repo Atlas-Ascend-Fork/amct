@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,7 +18,8 @@
 
 
 class PruneHelperBase:
-    """ base class of prune helper"""
+    """base class of prune helper"""
+
     prunable_types = []
 
     def __init__(self, node):
@@ -37,7 +38,7 @@ class PruneHelperBase:
         Return: bool, matched or not
         """
         return False
-    
+
     @classmethod
     def get_producer_record(cls, node, in_idx):
         """
@@ -51,17 +52,19 @@ class PruneHelperBase:
         if not pre_node:
             return None
         if out_idx == 0:
-            tail = ''
+            tail = ""
         else:
-            tail = ':{}'.format(out_idx)
-        if pre_node.type in cls.prunable_types and not pre_node.has_attr('unable_active'):
-            if not pre_node.has_attr('active_prune_records{}'.format(tail)):
+            tail = ":{}".format(out_idx)
+        if pre_node.type in cls.prunable_types and not pre_node.has_attr(
+            "unable_active"
+        ):
+            if not pre_node.has_attr("active_prune_records{}".format(tail)):
                 return None
-            prune_records = pre_node.get_attr('active_prune_records{}'.format(tail))
+            prune_records = pre_node.get_attr("active_prune_records{}".format(tail))
         else:
-            if not pre_node.has_attr('passive_prune_records{}'.format(tail)):
+            if not pre_node.has_attr("passive_prune_records{}".format(tail)):
                 return None
-            prune_records = pre_node.get_attr('passive_prune_records{}'.format(tail))
+            prune_records = pre_node.get_attr("passive_prune_records{}".format(tail))
         return prune_records
 
     def process(self, record_helper):

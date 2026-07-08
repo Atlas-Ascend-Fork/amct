@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,16 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
-import math
 import os
-import sys
 import unittest
-from unittest import mock
-from unittest.mock import patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
@@ -32,9 +26,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import struct_helper
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.dump.dump import DUMP
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.auto_calibration_helper import (
-    AutoCalibrationHelper,
-)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -45,24 +36,19 @@ class TestDumpForward(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_dump_forward')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_dump_forward")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
-        dump_config = struct_helper.DumpConfig(
-            batch_num=-1,
-            dump_dir=cls.temp_folder
-        )
-        layers_name = ['test_layer']
-        cls.dump_module = DUMP(
-            layers_name=layers_name,
-            dump_config=dump_config
-        )
+        dump_config = struct_helper.DumpConfig(batch_num=-1, dump_dir=cls.temp_folder)
+        layers_name = ["test_layer"]
+        cls.dump_module = DUMP(layers_name=layers_name, dump_config=dump_config)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
         pass
 
     def setUp(self):
@@ -89,7 +75,7 @@ class TestDumpForward(unittest.TestCase):
         data = torch.tensor([1.2, 2.4, 3.7], dtype=torch.float32)
         self.dump_module(data)
 
-        file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch4.bin')
+        file_path = os.path.join(self.temp_folder, "test_layer_activation_batch4.bin")
         read_data = files_util.parse_dump_data(file_path, with_type=True)
         logger.info(data)
         logger.info(torch.from_numpy(read_data))
@@ -99,7 +85,7 @@ class TestDumpForward(unittest.TestCase):
         data = torch.tensor([1.123, 2.456, 3.789], dtype=torch.float64)
         self.dump_module(data)
 
-        file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch5.bin')
+        file_path = os.path.join(self.temp_folder, "test_layer_activation_batch5.bin")
         read_data = files_util.parse_dump_data(file_path, with_type=True)
         logger.info(data)
         logger.info(torch.from_numpy(read_data))
@@ -114,7 +100,7 @@ class TestDumpForward(unittest.TestCase):
         data = torch.tensor([1, 2, 3], dtype=torch.int32)
         self.dump_module(data)
 
-        file_path = os.path.join(self.temp_folder, 'test_layer_activation_batch7.bin')
+        file_path = os.path.join(self.temp_folder, "test_layer_activation_batch7.bin")
         read_data = files_util.parse_dump_data(file_path, with_type=True)
         logger.info(data)
         logger.info(torch.from_numpy(read_data))

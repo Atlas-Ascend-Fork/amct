@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,8 +27,10 @@ from ...amct_pytorch.custom_op.ada_round_quant import GAMMA, ZETA, ANNEAL_COEFFI
 from ...amct_pytorch.ada_round.ada_round_data_manager import AdaRoundDataManager
 
 
-def replace_adaround_module(object_module_name, model, data_tensor, tensor_balance_factor):
-    '''
+def replace_adaround_module(
+    object_module_name, model, data_tensor, tensor_balance_factor
+):
+    """
     Function: Replace the adaround module.
     Parameters:
         object_module_name: module to be replaced.
@@ -37,7 +39,7 @@ def replace_adaround_module(object_module_name, model, data_tensor, tensor_balan
         tensor_balance_factor: dmq factor
     Return:
         Complete the replacement module.
-    '''
+    """
     conf = Configuration()
 
     # Step1: get module by name
@@ -45,20 +47,22 @@ def replace_adaround_module(object_module_name, model, data_tensor, tensor_balan
     module = model_helper.get_module(object_module_name)
 
     # Step2: generate new model
-    wts_param = conf.get_quant_config()[object_module_name].get('weight_quant_params')
-    new_ada_module = AdaRoundQuant(module, wts_param, data_tensor, tensor_balance_factor)
+    wts_param = conf.get_quant_config()[object_module_name].get("weight_quant_params")
+    new_ada_module = AdaRoundQuant(
+        module, wts_param, data_tensor, tensor_balance_factor
+    )
 
     # Step3: replace new model
     model_helper.replace_module_by_name(model, object_module_name, new_ada_module)
     LOGGER.logd(
-        "replace AdaRoundQuant module to '{}' success!".format(
-            object_module_name))
- 
+        "replace AdaRoundQuant module to '{}' success!".format(object_module_name)
+    )
+
     return new_ada_module
 
 
 def set_ada_module_model(module_helper, groups, optimize_switch):
-    '''
+    """
     Function: Sets the control forward propagation flag bit.
     Parameters:
         module_helper: Helper for torch.nn.module.
@@ -66,14 +70,14 @@ def set_ada_module_model(module_helper, groups, optimize_switch):
         optimize_switch: bool.
     Return:
         None.
-    '''
+    """
     for group in groups:
         ada_module = module_helper.get_module(group[0])
         ada_module.ada_round_optimize = optimize_switch
 
 
 def optimize_alpha(model, model_all_input, groups, graph):
-    '''
+    """
     Function: Optimized the alpha in ada round module
     Parameters:
         model: torch.nn model.
@@ -82,7 +86,7 @@ def optimize_alpha(model, model_all_input, groups, graph):
         graph: inner graph.
     Return:
         None.
-    '''
+    """
     if not groups:
         return
     device = next(model.parameters()).device
@@ -95,23 +99,23 @@ def optimize_alpha(model, model_all_input, groups, graph):
         # input data from quantize model and output data from original model
         set_ada_module_model(module_helper, groups, False)
         output_data_o = sampler.get_output_data(model_all_input, group[0])
-        act_module = group[1] # activation function
+        act_module = group[1]  # activation function
         if act_module:
             act_module.to(output_data_o.device)
             output_data_o = act_module(output_data_o)
 
         set_ada_module_model(module_helper, groups, True)
         input_data_q = sampler.get_input_data(model_all_input, group[0])
-        
+
         optimizer = torch.optim.Adam([ada_module.alpha])
 
         wts_param = ada_module.wts_param
-        num_iteration = wts_param.get('num_iteration')
+        num_iteration = wts_param.get("num_iteration")
         for iteration in range(num_iteration):
             indices = torch.randperm(input_data_q.size(0))[:32]
             input_data_rand = input_data_q[indices].to(device)
             output_data_rand = output_data_o[indices].to(device)
- 
+
             optimizer.zero_grad()
             x = input_data_rand
             x = ada_module.forward(x)
@@ -123,12 +127,14 @@ def optimize_alpha(model, model_all_input, groups, graph):
             if not torch.isfinite(total_loss):
                 raise RuntimeError(
                     "{}'s activation quant loss has invalid value, inf or nan. "
-                    "Please check activation value.".format(group[0]))
+                    "Please check activation value.".format(group[0])
+                )
             total_loss.backward()
             optimizer.step()
 
-        LOGGER.logd('Do layer \'{}\' weights AdaRound fine-tuning success!'
-                    .format(group[0]))
+        LOGGER.logd(
+            "Do layer '{}' weights AdaRound fine-tuning success!".format(group[0])
+        )
 
     model.eval()
     set_ada_module_model(module_helper, groups, False)
@@ -143,22 +149,24 @@ def optimize_alpha(model, model_all_input, groups, graph):
 
         # set calied_weight to graph
         object_node = graph.get_node_by_name(group[0])
-        opt.WeightsCalibrationPass._graph_weight_set_process(object_node=object_node,
-                                                            object_module=ada_module.module,
-                                                            weight=ada_module.module.weight.data)
+        opt.WeightsCalibrationPass._graph_weight_set_process(
+            object_node=object_node,
+            object_module=ada_module.module,
+            weight=ada_module.module.weight.data,
+        )
         # Set the adaround module back
         ModuleHelper.replace_module_by_name(model, group[0], ada_module.module)
 
 
 def _compute_recon_loss(ada_quantized_output, original_output):
-    '''
+    """
     Function: Compute Reconstruction Loss using Squared Frobenius Norm - first part of Combined Loss.
     Parameters:
         ada_quantized_output: Activation output from quantized wrapper module.
         original_output: Activation output from original module.
     Return:
         recon_loss: reconstruction loss.
-    '''
+    """
     frobenius_norm = torch.norm(ada_quantized_output - original_output, p="fro", dim=1)
     recon_loss = frobenius_norm.pow(2).mean()
 
@@ -166,7 +174,7 @@ def _compute_recon_loss(ada_quantized_output, original_output):
 
 
 def _compute_beta(max_iter, cur_iter, beta_range, warm_start):
-    '''
+    """
     Function: Compute beta parameter used in regularization function using cosine decay.
     Parameters:
         max_iter: total maximum number of iterations.
@@ -175,7 +183,7 @@ def _compute_beta(max_iter, cur_iter, beta_range, warm_start):
         warm_start: warm up period, during which rounding loss has zero effect.
     Return:
         beta: parameter beta.
-    '''
+    """
     # iteration marking the conclusion of the warm-up phase
     warm_initial_end_iter = warm_start * max_iter
 
@@ -191,7 +199,7 @@ def _compute_beta(max_iter, cur_iter, beta_range, warm_start):
 
 
 def _compute_round_loss(alpha, opt_params, cur_iter):
-    '''
+    """
     Function: Compute Rounding Loss - second part of Combined Loss.
     Parameters:
         alpha: parameter 'alpha' to be optimized, float32 tensor same shape as weight tensor.
@@ -199,21 +207,24 @@ def _compute_round_loss(alpha, opt_params, cur_iter):
         cur_iter: current iteration.
     Return:
         round_loss: rounding loss.
-    '''
+    """
     round_loss = 0
-    if cur_iter >= opt_params.get('num_iteration') * opt_params.get('warm_start'):
+    if cur_iter >= opt_params.get("num_iteration") * opt_params.get("warm_start"):
         # calculate the rectified sigmoid function of the parameter 'alpha' to map it to the range between 0 and 1
         h_alpha = torch.clamp(torch.sigmoid(alpha) * (ZETA - GAMMA) + GAMMA, 0, 1)
- 
+
         # calculate beta parameter
-        beta = _compute_beta(opt_params.get('num_iteration'), cur_iter, 
-                             tuple(opt_params.get('beta_range')), opt_params.get('warm_start'))
- 
+        beta = _compute_beta(
+            opt_params.get("num_iteration"),
+            cur_iter,
+            tuple(opt_params.get("beta_range")),
+            opt_params.get("warm_start"),
+        )
+
         # calculate the regularization term, Convergence of parameters to 0 or 1
         term = -(torch.add(2 * h_alpha, -1).abs()).pow(beta)
         reg_term = torch.add(1, term).sum()
- 
-        round_loss = opt_params.get('reg_param') * reg_term
- 
-    return round_loss
 
+        round_loss = opt_params.get("reg_param") * reg_term
+
+    return round_loss

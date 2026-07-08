@@ -16,21 +16,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import copy
 import os
-import shutil
 import unittest
-from collections import defaultdict
 
-import numpy as np
-import onnx
-import onnxruntime as ort
 import torch
 from torch import nn
 
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils import (
-    copy_tensor,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.gru import (
     GRUQAT,
 )
@@ -70,21 +61,20 @@ class SingleLSTMNet(nn.Module):
 class TestGRUQAT(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        LOGGER.logi(f'torch version: {torch.__version__}')
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_qat_rnn')
+        LOGGER.logi(f"torch version: {torch.__version__}")
+        cls.temp_folder = os.path.join(CUR_DIR, "test_qat_rnn")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def test_gru_qat_convert_from_ori_op(self):
         net_gru = SingleGRUNet(input_size=10, hidden_size=20)
         for name, module in net_gru.named_modules():
             if isinstance(module, nn.GRU):
-                qat_module = GRUQAT.from_float(
-                    module)
+                qat_module = GRUQAT.from_float(module)
                 set_module(net_gru, name, qat_module)
         for _ in range(5):
             ret = net_gru.forward(torch.rand(1, 1, 10))
@@ -94,8 +84,7 @@ class TestGRUQAT(unittest.TestCase):
         net_gru = SingleGRUNet(input_size=10, hidden_size=20)
         for name, module in net_gru.named_modules():
             if isinstance(module, nn.GRU):
-                qat_module = GRUQAT.from_float(
-                    module)
+                qat_module = GRUQAT.from_float(module)
                 set_module(net_gru, name, qat_module)
         for _ in range(5):
             ret = net_gru.forward(torch.rand(1, 2, 10))
@@ -105,21 +94,20 @@ class TestGRUQAT(unittest.TestCase):
 class TestLSTMQAT(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        LOGGER.logi(f'torch version: {torch.__version__}')
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_qat_rnn')
+        LOGGER.logi(f"torch version: {torch.__version__}")
+        cls.temp_folder = os.path.join(CUR_DIR, "test_qat_rnn")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def test_lstm_qat_convert_from_ori_op(self):
         net_lstm = SingleLSTMNet(input_size=10, hidden_size=20)
         for name, module in net_lstm.named_modules():
             if isinstance(module, nn.LSTM):
-                qat_module = LSTMQAT.from_float(
-                    module)
+                qat_module = LSTMQAT.from_float(module)
                 set_module(net_lstm, name, qat_module)
         for _ in range(5):
             ret = net_lstm.forward(torch.rand(1, 1, 10))
@@ -129,8 +117,7 @@ class TestLSTMQAT(unittest.TestCase):
         net_lstm = SingleLSTMNet(input_size=10, hidden_size=20)
         for name, module in net_lstm.named_modules():
             if isinstance(module, nn.LSTM):
-                qat_module = LSTMQAT.from_float(
-                    module)
+                qat_module = LSTMQAT.from_float(module)
                 set_module(net_lstm, name, qat_module)
         for _ in range(5):
             ret = net_lstm.forward(torch.rand(1, 5, 10))
@@ -138,7 +125,7 @@ class TestLSTMQAT(unittest.TestCase):
 
 
 def set_module(model, sub_module_name, module):
-    tokens = sub_module_name.split('.')
+    tokens = sub_module_name.split(".")
     sub_tokens = tokens[:-1]
     cur_mod = model
     for s in sub_tokens:

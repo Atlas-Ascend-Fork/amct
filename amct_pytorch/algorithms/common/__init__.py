@@ -15,5 +15,5 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-__all__ = ['BaseAlgo', 'BaseQuantAlgo']
+__all__ = ["BaseAlgo", "BaseQuantAlgo"]
 from .base_algo import BaseAlgo, BaseQuantAlgo

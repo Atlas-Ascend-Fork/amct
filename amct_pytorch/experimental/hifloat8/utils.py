@@ -7,18 +7,20 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
 def get_qwen(model_path, seqlen=2048):
-    print(f'Getting official pretrained {model_path}')
-    model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.float16)
+    print(f"Getting official pretrained {model_path}")
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, device_map="auto", torch_dtype=torch.float16
+    )
     model.seqlen = seqlen
     tokenizer = AutoTokenizer.from_pretrained(
-            model_path, use_fast=False, trust_remote_code=True
+        model_path, use_fast=False, trust_remote_code=True
     )
     return model, tokenizer
 
 
 def get_test_dataset(enc):
-    print('Loading dataset: Wikitext2')
-    testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+    print("Loading dataset: Wikitext2")
+    testenc = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
     testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
     return testenc
 
@@ -46,5 +48,5 @@ def test_ppl(model, testenc):
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen))
 
     total_time = test_end_time - test_start_time
-    print('Test time taken: ', total_time // 60, 'min ', total_time % 60, 's')
-    print('Score: ', ppl.item())
+    print("Test time taken: ", total_time // 60, "min ", total_time % 60, "s")
+    print("Score: ", ppl.item())

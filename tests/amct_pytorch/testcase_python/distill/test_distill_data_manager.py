@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,18 +17,13 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 import torch.nn as nn
 
 from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_data_manager import (
     DistillDataManager,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_helper import (
-    DistillHelper,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.distill.distill_sample import (
     ModelSingleTensorInput,
@@ -52,19 +47,19 @@ class DistillNet(nn.Module):
 class TestDistillDataManager(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_distill_data_manager')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_distill_data_manager")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
         cls.data = torch.randn(1, 2, 4, 4)
         cls.train_loader = torch.utils.data.DataLoader(cls.data)
-        cls.groups = [['conv']]
+        cls.groups = [["conv"]]
         cls.torch_model = DistillNet().to(torch.device("cpu"))
         cls.sample_ins = ModelSingleTensorInput()
 
     @classmethod
     def tearDownClass(cls):
-        os.system('rm -r ' + cls.temp_folder)
+        os.system("rm -r " + cls.temp_folder)
         logger.info("[UNITTEST END test_distill_data_manager.py]")
 
     def setUp(self):
@@ -87,8 +82,10 @@ class TestDistillDataManager(unittest.TestCase):
     def test_dump_data(self):
         distill_manager = DistillDataManager(self.sample_ins)
         # dump data
-        distill_manager.dump_data(self.torch_model, self.groups, epochs=1, data_loader=self.train_loader)
-        self.assertTrue(os.path.exists('tmp/data_dump_input_model_input_0_0_cpu.npy'))
+        distill_manager.dump_data(
+            self.torch_model, self.groups, epochs=1, data_loader=self.train_loader
+        )
+        self.assertTrue(os.path.exists("tmp/data_dump_input_model_input_0_0_cpu.npy"))
 
         # load model input data
         load_model_data = distill_manager.load_model_input_dump_data(0, 0)
@@ -108,17 +105,21 @@ class TestDistillDataManager(unittest.TestCase):
 
         # release
         distill_manager.release()
-        self.assertFalse(os.path.exists('tmp/data_dump_input_model_input_0_0_cpu.npy'))
-    
+        self.assertFalse(os.path.exists("tmp/data_dump_input_model_input_0_0_cpu.npy"))
+
     def test_infer_data(self):
         distill_manager = DistillDataManager(self.sample_ins)
 
         # infer input data
-        infer_in_data = distill_manager.get_input_data_by_inferring(self.torch_model, self.groups[0], self.data)
+        infer_in_data = distill_manager.get_input_data_by_inferring(
+            self.torch_model, self.groups[0], self.data
+        )
         self.assertIsNotNone(infer_in_data)
-        
+
         # infer output data
-        infer_out_data = distill_manager.get_output_data_by_inferring(self.torch_model, self.groups[0], self.data)
+        infer_out_data = distill_manager.get_output_data_by_inferring(
+            self.torch_model, self.groups[0], self.data
+        )
         self.assertIsNotNone(infer_out_data)
 
     def test_infer_data_invalid_group(self):
@@ -126,13 +127,18 @@ class TestDistillDataManager(unittest.TestCase):
 
         # infer input data
         self.assertRaises(
-            RuntimeError, distill_manager.get_input_data_by_inferring,
-            self.torch_model, ['linear'], self.data)
-        
+            RuntimeError,
+            distill_manager.get_input_data_by_inferring,
+            self.torch_model,
+            ["linear"],
+            self.data,
+        )
+
         # infer output data
         self.assertRaises(
-            RuntimeError, distill_manager.get_output_data_by_inferring,
-            self.torch_model, ['linear'], self.data)
-    
-
-
+            RuntimeError,
+            distill_manager.get_output_data_by_inferring,
+            self.torch_model,
+            ["linear"],
+            self.data,
+        )

@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -24,15 +24,13 @@
 #include <new>
 #include "securec.h"
 
-
 namespace TensorDecompose {
-bool Vector::CheckValidDataGT(const Vector &vectorIn)
-{
+bool Vector::CheckValidDataGT(const Vector &vectorIn) {
     if (vectorIn.data == nullptr) {
         return false;
     }
-    double* srcEnd = vectorIn.data + vectorIn.length;
-    for (double* src = vectorIn.data; src != srcEnd; src++) {
+    double *srcEnd = vectorIn.data + vectorIn.length;
+    for (double *src = vectorIn.data; src != srcEnd; src++) {
         if (std::isnan(*src) || std::isinf(*src) || *src <= 0.0) {
             return false;
         }
@@ -40,13 +38,12 @@ bool Vector::CheckValidDataGT(const Vector &vectorIn)
     return true;
 }
 
-bool Vector::CheckValidDataNoZero(const Vector &vectorIn)
-{
+bool Vector::CheckValidDataNoZero(const Vector &vectorIn) {
     if (vectorIn.data == nullptr) {
         return false;
     }
-    double* srcEnd = vectorIn.data + vectorIn.length;
-    for (double* src = vectorIn.data; src != srcEnd; src++) {
+    double *srcEnd = vectorIn.data + vectorIn.length;
+    for (double *src = vectorIn.data; src != srcEnd; src++) {
         if (std::isnan(*src) || std::isinf(*src) || *src == 0.0) {
             return false;
         }
@@ -54,13 +51,12 @@ bool Vector::CheckValidDataNoZero(const Vector &vectorIn)
     return true;
 }
 
-bool Vector::CheckValidDataGTE(const Vector &vectorIn)
-{
+bool Vector::CheckValidDataGTE(const Vector &vectorIn) {
     if (vectorIn.data == nullptr) {
         return false;
     }
-    double* srcEnd = vectorIn.data + vectorIn.length;
-    for (double* src = vectorIn.data; src != srcEnd; src++) {
+    double *srcEnd = vectorIn.data + vectorIn.length;
+    for (double *src = vectorIn.data; src != srcEnd; src++) {
         if (std::isnan(*src) || std::isinf(*src) || *src < 0.0) {
             return false;
         }
@@ -68,13 +64,12 @@ bool Vector::CheckValidDataGTE(const Vector &vectorIn)
     return true;
 }
 
-bool Vector::CheckValidDataAny(const Vector &vectorIn)
-{
+bool Vector::CheckValidDataAny(const Vector &vectorIn) {
     if (vectorIn.data == nullptr) {
         return false;
     }
-    double* srcEnd = vectorIn.data + vectorIn.length;
-    for (double* src = vectorIn.data; src != srcEnd; src++) {
+    double *srcEnd = vectorIn.data + vectorIn.length;
+    for (double *src = vectorIn.data; src != srcEnd; src++) {
         if (std::isnan(*src) || std::isinf(*src)) {
             return false;
         }
@@ -82,13 +77,12 @@ bool Vector::CheckValidDataAny(const Vector &vectorIn)
     return true;
 }
 
-bool Vector::CheckDataGT(const Vector &vectorIn)
-{
+bool Vector::CheckDataGT(const Vector &vectorIn) {
     if (vectorIn.data == nullptr) {
         return false;
     }
-    double* srcEnd = vectorIn.data + vectorIn.length;
-    for (double* src = vectorIn.data; src != srcEnd; src++) {
+    double *srcEnd = vectorIn.data + vectorIn.length;
+    for (double *src = vectorIn.data; src != srcEnd; src++) {
         if (*src <= 0.0) {
             return false;
         }
@@ -96,13 +90,12 @@ bool Vector::CheckDataGT(const Vector &vectorIn)
     return true;
 }
 
-bool Vector::CheckDataNoZero(const Vector &vectorIn)
-{
+bool Vector::CheckDataNoZero(const Vector &vectorIn) {
     if (vectorIn.data == nullptr) {
         return false;
     }
-    double* srcEnd = vectorIn.data + vectorIn.length;
-    for (double* src = vectorIn.data; src != srcEnd; src++) {
+    double *srcEnd = vectorIn.data + vectorIn.length;
+    for (double *src = vectorIn.data; src != srcEnd; src++) {
         if (*src == double(0.0)) {
             return false;
         }
@@ -110,13 +103,12 @@ bool Vector::CheckDataNoZero(const Vector &vectorIn)
     return true;
 }
 
-bool Vector::CheckDataGTE(const Vector &vectorIn)
-{
+bool Vector::CheckDataGTE(const Vector &vectorIn) {
     if (vectorIn.data == nullptr) {
         return false;
     }
-    double* srcEnd = vectorIn.data + vectorIn.length;
-    for (double* src = vectorIn.data; src != srcEnd; src++) {
+    double *srcEnd = vectorIn.data + vectorIn.length;
+    for (double *src = vectorIn.data; src != srcEnd; src++) {
         if (*src < 0.0) {
             return false;
         }
@@ -124,8 +116,7 @@ bool Vector::CheckDataGTE(const Vector &vectorIn)
     return true;
 }
 
-bool Vector::CheckValidData(const Vector &vectorIn, bool checkNoZero, bool checkNonNegative)
-{
+bool Vector::CheckValidData(const Vector &vectorIn, bool checkNoZero, bool checkNonNegative) {
     if (checkNoZero && checkNonNegative) {
         return Vector::CheckValidDataGT(vectorIn);
     } else if (checkNoZero && !checkNonNegative) {
@@ -136,11 +127,10 @@ bool Vector::CheckValidData(const Vector &vectorIn, bool checkNoZero, bool check
     return Vector::CheckValidDataAny(vectorIn);
 }
 
-bool Vector::CheckData(const Vector &vectorIn, bool checkNonEmpty, bool checkNoZero,
-                       bool checkNonNegative, bool checkValid)
-{
+bool Vector::CheckData(
+    const Vector &vectorIn, bool checkNonEmpty, bool checkNoZero, bool checkNonNegative, bool checkValid) {
     if (vectorIn.length == 0) {
-        return !checkNonEmpty; // 为空时，若需判断则返回false，若不需判断则作为正常返回true
+        return !checkNonEmpty;      // 为空时，若需判断则返回false，若不需判断则作为正常返回true
     }
     if (vectorIn.data == nullptr) { // length!=0但data为空，作为异常
         return false;
@@ -159,14 +149,9 @@ bool Vector::CheckData(const Vector &vectorIn, bool checkNonEmpty, bool checkNoZ
     return true;
 }
 
-Vector::Vector()
-    : length(0),
-      data(nullptr)
-{
-}
+Vector::Vector() : length(0), data(nullptr) {}
 
-void Vector::Destroy()
-{
+void Vector::Destroy() {
     if (this->data != nullptr) {
         delete[] this->data;
         this->data = nullptr;
@@ -174,18 +159,16 @@ void Vector::Destroy()
     this->length = 0;
 }
 
-Vector::~Vector()
-{
+Vector::~Vector() {
     this->Destroy();
 }
 
-TdError Vector::Create(unsigned int lengthIn)
-{
+TdError Vector::Create(unsigned int lengthIn) {
     this->Destroy(); // 清理原有数据
     if (lengthIn == 0) {
         return TdError::TD_SUCCESS;
     }
-    this->data = new(std::nothrow) double[lengthIn];
+    this->data = new (std::nothrow) double[lengthIn];
 
     if (this->data == nullptr) {
         this->length = 0;
@@ -200,8 +183,7 @@ TdError Vector::Create(unsigned int lengthIn)
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Create(const Vector &vectorIn)
-{
+TdError Vector::Create(const Vector &vectorIn) {
     if (&vectorIn == this) { // 用自身创建自身，保持内容不变
         return TdError::TD_SUCCESS;
     }
@@ -212,20 +194,19 @@ TdError Vector::Create(const Vector &vectorIn)
     return this->Create(vectorIn.data, vectorIn.length);
 }
 
-TdError Vector::Create(const double* const dataIn, unsigned int lengthIn)
-{
+TdError Vector::Create(const double *const dataIn, unsigned int lengthIn) {
     if (dataIn == nullptr || lengthIn == 0) {
         this->Destroy();
         return TdError::TD_BAD_PARAMETERS_ERR;
     }
     if (this->data != nullptr &&
         ((this->data < dataIn + lengthIn && this->data >= dataIn) ||
-        (this->data + this->length <= dataIn + lengthIn && this->data + this->length > dataIn))) {
-            return TdError::TD_MEM_OPERATION_ERR; // 内存重叠，直接返回，否则后续执行Destroy将销毁部分dataIn指向的内存
+            (this->data + this->length <= dataIn + lengthIn && this->data + this->length > dataIn))) {
+        return TdError::TD_MEM_OPERATION_ERR; // 内存重叠，直接返回，否则后续执行Destroy将销毁部分dataIn指向的内存
     }
     if (lengthIn != this->length) {
         this->Destroy();
-        this->data = new(std::nothrow) double[lengthIn];
+        this->data = new (std::nothrow) double[lengthIn];
     }
     if (this->data == nullptr) {
         this->Destroy();
@@ -240,13 +221,11 @@ TdError Vector::Create(const double* const dataIn, unsigned int lengthIn)
     return TdError::TD_SUCCESS;
 }
 
-unsigned int Vector::GetLength() const
-{
+unsigned int Vector::GetLength() const {
     return this->length;
 }
 
-TdError Vector::GetValue(double &valueOut, unsigned int idx) const
-{
+TdError Vector::GetValue(double &valueOut, unsigned int idx) const {
     if (idx >= this->length) {
         return TdError::TD_IDX_OUT_OF_BOUNDS_ERR;
     }
@@ -255,8 +234,7 @@ TdError Vector::GetValue(double &valueOut, unsigned int idx) const
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::SetValue(double value, unsigned int idx) const
-{
+TdError Vector::SetValue(double value, unsigned int idx) const {
     if (idx >= this->length) {
         return TdError::TD_IDX_OUT_OF_BOUNDS_ERR;
     }
@@ -265,8 +243,7 @@ TdError Vector::SetValue(double value, unsigned int idx) const
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::CheckVectorCommon(Vector &vectorOut) const
-{
+TdError Vector::CheckVectorCommon(Vector &vectorOut) const {
     if (&vectorOut != this) {
         TD_FUNC_CHECK(vectorOut.Create(this->length));
     }
@@ -274,8 +251,7 @@ TdError Vector::CheckVectorCommon(Vector &vectorOut) const
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::CheckVector(Vector &vectorOut, bool checkNanInf, bool checkNoZero) const
-{
+TdError Vector::CheckVector(Vector &vectorOut, bool checkNanInf, bool checkNoZero) const {
     if (this->length == 0) {
         vectorOut.Destroy();
         return TdError::TD_SUCCESS;
@@ -287,8 +263,7 @@ TdError Vector::CheckVector(Vector &vectorOut, bool checkNanInf, bool checkNoZer
     return this->CheckVectorCommon(vectorOut);
 }
 
-TdError Vector::CheckVectorAndValue(Vector &vectorOut, double value, bool checkNanInf) const
-{
+TdError Vector::CheckVectorAndValue(Vector &vectorOut, double value, bool checkNanInf) const {
     if (checkNanInf && !Vector::CheckValid(value)) {
         return TdError::TD_GENERIC_MATH_ERR;
     }
@@ -303,16 +278,14 @@ TdError Vector::CheckVectorAndValue(Vector &vectorOut, double value, bool checkN
     return this->CheckVectorCommon(vectorOut);
 }
 
-TdError Vector::CheckVectorAndVector(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf,
-    bool checkVectorInNoZero) const
-{
+TdError Vector::CheckVectorAndVector(
+    Vector &vectorOut, const Vector &vectorIn, bool checkNanInf, bool checkVectorInNoZero) const {
     if (this->length == 0 && vectorIn.length == 0) {
         vectorOut.Destroy();
         return TdError::TD_SUCCESS;
     }
     TD_NULLPTR_CHECK_DOUBLE(this->data, vectorIn.data);
-    if (vectorIn.length != this->length ||
-        !Vector::CheckData(*this, false, false, false, checkNanInf) ||
+    if (vectorIn.length != this->length || !Vector::CheckData(*this, false, false, false, checkNanInf) ||
         !Vector::CheckData(vectorIn, false, checkVectorInNoZero && checkNanInf, false, checkNanInf)) {
         return TdError::TD_GENERIC_MATH_ERR;
     }
@@ -323,8 +296,7 @@ TdError Vector::CheckVectorAndVector(Vector &vectorOut, const Vector &vectorIn, 
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Sum(double &resultOut, bool checkNanInf) const
-{
+TdError Vector::Sum(double &resultOut, bool checkNanInf) const {
     if (this->length == 0) {
         resultOut = 0.0;
         return TdError::TD_SUCCESS;
@@ -334,16 +306,15 @@ TdError Vector::Sum(double &resultOut, bool checkNanInf) const
     }
     TD_NULLPTR_CHECK(this->data);
     double sum = 0;
-    double* end = this->data + this->length;
-    for (double* p = this->data; p != end; p++) {
+    double *end = this->data + this->length;
+    for (double *p = this->data; p != end; p++) {
         sum += *p;
     }
     resultOut = sum;
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Mean(double &resultOut, bool checkNanInf) const
-{
+TdError Vector::Mean(double &resultOut, bool checkNanInf) const {
     // 若不开checkNanInf；则允许除0(空向量，返回nan)
     if (!Vector::CheckData(*this, checkNanInf, false, false, checkNanInf)) {
         return TdError::TD_GENERIC_MATH_ERR;
@@ -354,51 +325,48 @@ TdError Vector::Mean(double &resultOut, bool checkNanInf) const
     }
     TD_NULLPTR_CHECK(this->data);
     double sum = 0;
-    double* end = this->data + this->length;
-    for (double* p = this->data; p != end; p++) {
+    double *end = this->data + this->length;
+    for (double *p = this->data; p != end; p++) {
         sum += *p;
     }
     resultOut = sum / this->length;
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Log(Vector &vectorOut, bool checkNanInf) const
-{
+TdError Vector::Log(Vector &vectorOut, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVector(vectorOut, checkNanInf, true));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_DOUBLE(this->data, vectorOut.data);
-    double* srcEnd = this->data + this->length;
-    double* dst = vectorOut.data;
-    for (double* src = this->data; src != srcEnd; src++) {
+    double *srcEnd = this->data + this->length;
+    double *dst = vectorOut.data;
+    for (double *src = this->data; src != srcEnd; src++) {
         *dst = log(*src);
         dst++;
     }
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Sqrt(Vector &vectorOut, bool checkNanInf) const
-{
+TdError Vector::Sqrt(Vector &vectorOut, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVector(vectorOut, checkNanInf, false));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_DOUBLE(this->data, vectorOut.data);
-    double* srcEnd = this->data + this->length;
-    double* dst = vectorOut.data;
-    for (double* src = this->data; src != srcEnd; src++) {
+    double *srcEnd = this->data + this->length;
+    double *dst = vectorOut.data;
+    for (double *src = this->data; src != srcEnd; src++) {
         *dst = sqrt(*src);
         dst++;
     }
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Div(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const
-{
+TdError Vector::Div(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVectorAndVector(vectorOut, vectorIn, checkNanInf, true));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_TRIPLE(this->data, vectorIn.data, vectorOut.data);
-    double* src1End = this->data + this->length;
-    double* src2 = vectorIn.data;
-    double* dst = vectorOut.data;
-    for (double* src1 = this->data; src1 != src1End; src1++) {
+    double *src1End = this->data + this->length;
+    double *src2 = vectorIn.data;
+    double *dst = vectorOut.data;
+    for (double *src1 = this->data; src1 != src1End; src1++) {
         *dst = *src1 / (*src2);
         src2++;
         dst++;
@@ -406,15 +374,14 @@ TdError Vector::Div(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf)
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Mul(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const
-{
+TdError Vector::Mul(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVectorAndVector(vectorOut, vectorIn, checkNanInf, false));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_TRIPLE(this->data, vectorIn.data, vectorOut.data);
-    double* src1End = this->data + this->length;
-    double* src2 = vectorIn.data;
-    double* dst = vectorOut.data;
-    for (double* src1 = this->data; src1 != src1End; src1++) {
+    double *src1End = this->data + this->length;
+    double *src2 = vectorIn.data;
+    double *dst = vectorOut.data;
+    for (double *src1 = this->data; src1 != src1End; src1++) {
         *dst = *src1 * (*src2);
         src2++;
         dst++;
@@ -422,30 +389,28 @@ TdError Vector::Mul(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf)
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Mul(Vector &vectorOut, double value, bool checkNanInf) const
-{
+TdError Vector::Mul(Vector &vectorOut, double value, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVectorAndValue(vectorOut, value, checkNanInf));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_DOUBLE(this->data, vectorOut.data);
     double mulValue = value;
-    double* srcEnd = this->data + this->length;
-    double* dst = vectorOut.data;
-    for (double* src = this->data; src != srcEnd; src++) {
+    double *srcEnd = this->data + this->length;
+    double *dst = vectorOut.data;
+    for (double *src = this->data; src != srcEnd; src++) {
         *dst = *src * mulValue;
         dst++;
     }
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Add(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const
-{
+TdError Vector::Add(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVectorAndVector(vectorOut, vectorIn, checkNanInf, false));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_TRIPLE(this->data, vectorIn.data, vectorOut.data);
-    double* src1End = this->data + this->length;
-    double* src2 = vectorIn.data;
-    double* dst = vectorOut.data;
-    for (double* src1 = this->data; src1 != src1End; src1++) {
+    double *src1End = this->data + this->length;
+    double *src2 = vectorIn.data;
+    double *dst = vectorOut.data;
+    for (double *src1 = this->data; src1 != src1End; src1++) {
         *dst = *src1 + (*src2);
         src2++;
         dst++;
@@ -453,29 +418,27 @@ TdError Vector::Add(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf)
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Add(Vector &vectorOut, double value, bool checkNanInf) const
-{
+TdError Vector::Add(Vector &vectorOut, double value, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVectorAndValue(vectorOut, value, checkNanInf));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_DOUBLE(this->data, vectorOut.data);
-    double* srcEnd = this->data + this->length;
-    double* dst = vectorOut.data;
-    for (double* src = this->data; src != srcEnd; src++) {
+    double *srcEnd = this->data + this->length;
+    double *dst = vectorOut.data;
+    for (double *src = this->data; src != srcEnd; src++) {
         *dst = *src + value;
         dst++;
     }
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Sub(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const
-{
+TdError Vector::Sub(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVectorAndVector(vectorOut, vectorIn, checkNanInf, false));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_TRIPLE(this->data, vectorIn.data, vectorOut.data);
-    double* src1End = this->data + this->length;
-    double* src2 = vectorIn.data;
-    double* dst = vectorOut.data;
-    for (double* src1 = this->data; src1 != src1End; src1++) {
+    double *src1End = this->data + this->length;
+    double *src2 = vectorIn.data;
+    double *dst = vectorOut.data;
+    for (double *src1 = this->data; src1 != src1End; src1++) {
         *dst = *src1 - (*src2);
         src2++;
         dst++;
@@ -483,27 +446,25 @@ TdError Vector::Sub(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf)
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Sub(Vector &vectorOut, double value, bool checkNanInf) const
-{
+TdError Vector::Sub(Vector &vectorOut, double value, bool checkNanInf) const {
     TD_FUNC_CHECK(this->CheckVectorAndValue(vectorOut, value, checkNanInf));
     TD_CHECK_NORMAL_ZERO_LENGTH(this->length);
     TD_NULLPTR_CHECK_DOUBLE(this->data, vectorOut.data);
-    double* srcEnd = this->data + this->length;
-    double* dst = vectorOut.data;
-    for (double* src = this->data; src != srcEnd; src++) {
+    double *srcEnd = this->data + this->length;
+    double *dst = vectorOut.data;
+    for (double *src = this->data; src != srcEnd; src++) {
         *dst = *src - value;
         dst++;
     }
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::SelectToCacheGTE(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const
-{
+TdError Vector::SelectToCacheGTE(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const {
     TD_NULLPTR_CHECK_DOUBLE(this->data, cacheVec.data);
-    double* dst = cacheVec.data;
-    double* srcEnd = this->data + this->length;
+    double *dst = cacheVec.data;
+    double *srcEnd = this->data + this->length;
     unsigned int cacheLength = 0;
-    for (double* src = data; src != srcEnd; src++) {
+    for (double *src = data; src != srcEnd; src++) {
         if (*src >= value) {
             *dst = *src;
             dst++;
@@ -514,13 +475,12 @@ TdError Vector::SelectToCacheGTE(const Vector &cacheVec, unsigned int &cacheLeng
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::SelectToCacheGT(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const
-{
+TdError Vector::SelectToCacheGT(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const {
     TD_NULLPTR_CHECK_DOUBLE(this->data, cacheVec.data);
-    double* dst = cacheVec.data;
-    double* srcEnd = this->data + this->length;
+    double *dst = cacheVec.data;
+    double *srcEnd = this->data + this->length;
     unsigned int cacheLength = 0;
-    for (double* src = data; src != srcEnd; src++) {
+    for (double *src = data; src != srcEnd; src++) {
         if (*src > value) {
             *dst = *src;
             dst++;
@@ -531,13 +491,12 @@ TdError Vector::SelectToCacheGT(const Vector &cacheVec, unsigned int &cacheLengt
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::SelectToCacheLTE(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const
-{
+TdError Vector::SelectToCacheLTE(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const {
     TD_NULLPTR_CHECK_DOUBLE(this->data, cacheVec.data);
-    double* dst = cacheVec.data;
-    double* srcEnd = this->data + this->length;
+    double *dst = cacheVec.data;
+    double *srcEnd = this->data + this->length;
     unsigned int cacheLength = 0;
-    for (double* src = data; src != srcEnd; src++) {
+    for (double *src = data; src != srcEnd; src++) {
         if (*src <= value) {
             *dst = *src;
             dst++;
@@ -548,13 +507,12 @@ TdError Vector::SelectToCacheLTE(const Vector &cacheVec, unsigned int &cacheLeng
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::SelectToCacheLT(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const
-{
+TdError Vector::SelectToCacheLT(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const {
     TD_NULLPTR_CHECK_DOUBLE(this->data, cacheVec.data);
-    double* dst = cacheVec.data;
-    double* srcEnd = this->data + this->length;
+    double *dst = cacheVec.data;
+    double *srcEnd = this->data + this->length;
     unsigned int cacheLength = 0;
-    for (double* src = this->data; src != srcEnd; src++) {
+    for (double *src = this->data; src != srcEnd; src++) {
         if (*src < value) {
             *dst = *src;
             dst++;
@@ -565,9 +523,8 @@ TdError Vector::SelectToCacheLT(const Vector &cacheVec, unsigned int &cacheLengt
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::SelectToCache(Vector &cacheVec, unsigned int &cacheLengthOut, double value, bool selectLarger,
-    bool allowEqual) const
-{
+TdError Vector::SelectToCache(
+    Vector &cacheVec, unsigned int &cacheLengthOut, double value, bool selectLarger, bool allowEqual) const {
     if (selectLarger && allowEqual) {
         TD_FUNC_CHECK(this->SelectToCacheGTE(cacheVec, cacheLengthOut, value));
     } else if (selectLarger && !allowEqual) {
@@ -580,8 +537,7 @@ TdError Vector::SelectToCache(Vector &cacheVec, unsigned int &cacheLengthOut, do
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Select(Vector &vectorOut, double value, bool selectLarger, bool allowEqual) const
-{
+TdError Vector::Select(Vector &vectorOut, double value, bool selectLarger, bool allowEqual) const {
     if (this->length == 0) {
         vectorOut.Destroy();
         return TdError::TD_SUCCESS;
@@ -599,8 +555,7 @@ TdError Vector::Select(Vector &vectorOut, double value, bool selectLarger, bool 
     return TdError::TD_SUCCESS;
 }
 
-TdError Vector::Slice(Vector &vectorOut, unsigned int startIdx, unsigned int endIdx) const
-{
+TdError Vector::Slice(Vector &vectorOut, unsigned int startIdx, unsigned int endIdx) const {
     if (this->length == 0 || startIdx >= endIdx || startIdx >= this->length) {
         vectorOut.Destroy();
         return TdError::TD_SUCCESS;
@@ -610,7 +565,7 @@ TdError Vector::Slice(Vector &vectorOut, unsigned int startIdx, unsigned int end
         endIdx = this->length;
     }
     unsigned int sliceLength = endIdx - startIdx;
-    double* src = this->data + startIdx;
+    double *src = this->data + startIdx;
     if (&vectorOut == this) { // 为保存结果到自身，先创建cacheVec临时存储
         Vector cacheVec;
         TD_FUNC_CHECK(cacheVec.Create(src, sliceLength));
@@ -620,4 +575,4 @@ TdError Vector::Slice(Vector &vectorOut, unsigned int startIdx, unsigned int end
     }
     return TdError::TD_SUCCESS;
 }
-}
+} // namespace TensorDecompose

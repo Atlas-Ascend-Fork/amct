@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -33,13 +33,13 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 class TestOnnxConvUtil(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_onnx_conv_util')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_onnx_conv_util")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -81,9 +81,9 @@ class TestOnnxConvUtil(unittest.TestCase):
         graph = Parser.parse_net_to_graph(tmp_onnx)
         graph.model = model
 
-        conv_util = OnnxConvUtil(graph.get_node_by_name('conv1'))
+        conv_util = OnnxConvUtil(graph.get_node_by_name("conv1"))
         self.assertTrue(conv_util.is_depthwise_conv())
         self.assertEqual(conv_util.get_depthwise_multiplier(), 2)
 
-        conv_util = OnnxConvUtil(graph.get_node_by_name('conv2'))
+        conv_util = OnnxConvUtil(graph.get_node_by_name("conv2"))
         self.assertTrue(conv_util.is_group_conv())

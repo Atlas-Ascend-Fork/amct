@@ -32,11 +32,11 @@ import requests
 
 
 REPO_TEMPLATE_CANDIDATES = (
-    '.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md',
-    '.gitcode/PULL_REQUEST_TEMPLATE.md',
-    '.github/pull_request_template.md',
-    '.github/PULL_REQUEST_TEMPLATE.md',
-    'PULL_REQUEST_TEMPLATE.md',
+    ".gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md",
+    ".gitcode/PULL_REQUEST_TEMPLATE.md",
+    ".github/pull_request_template.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "PULL_REQUEST_TEMPLATE.md",
 )
 
 
@@ -44,7 +44,7 @@ def find_repo_root(start_dir=None):
     """查找当前仓库根目录"""
     cur_dir = os.path.abspath(start_dir or os.getcwd())
     while True:
-        if os.path.isdir(os.path.join(cur_dir, '.git')):
+        if os.path.isdir(os.path.join(cur_dir, ".git")):
             return cur_dir
         parent_dir = os.path.dirname(cur_dir)
         if parent_dir == cur_dir:
@@ -64,10 +64,10 @@ def load_pr_template(template_path=None):
                     break
     if template_path is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        template_path = os.path.join(script_dir, '..', 'assets', 'pr_template.md')
+        template_path = os.path.join(script_dir, "..", "assets", "pr_template.md")
 
     if os.path.exists(template_path):
-        with open(template_path, 'r', encoding='utf-8') as f:
+        with open(template_path, "r", encoding="utf-8") as f:
             return f.read()
     return None
 
@@ -110,17 +110,14 @@ def create_pull_request(
             # 使用模板
             template = load_pr_template()
             if template:
-                body = template.replace('{{issue}}', issue).replace('{{description}}', description)
+                body = template.replace("{{issue}}", issue).replace(
+                    "{{description}}", description
+                )
         else:
             body = ""
 
     # PR 信息
-    pr_data = {
-        "title": title,
-        "head": head,
-        "base": base,
-        "body": body
-    }
+    pr_data = {"title": title, "head": head, "base": base, "body": body}
 
     print("正在创建 Pull Request...")
     print(f"目标仓库: {owner}/{repo}")
@@ -130,9 +127,9 @@ def create_pull_request(
 
     # 设置请求头
     headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
     }
 
     try:
@@ -144,7 +141,9 @@ def create_pull_request(
             result = response.json()
             print("✅ Pull Request 创建成功！")
             print(f"PR 编号: #{result.get('number', '未知')}")
-            print(f"PR 链接: {result.get('web_url', result.get('html_url', '获取失败'))}")
+            print(
+                f"PR 链接: {result.get('web_url', result.get('html_url', '获取失败'))}"
+            )
             print(f"状态: {result.get('state', '未知')}")
             return result
         else:
@@ -159,16 +158,16 @@ def create_pull_request(
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='使用 GitCode API 创建 Pull Request')
-    parser.add_argument('--owner', default='cann', help='仓库所有者 (默认: cann)')
-    parser.add_argument('--repo', default='metadef', help='仓库名称 (默认: metadef)')
-    parser.add_argument('--title', required=True, help='PR 标题')
-    parser.add_argument('--head', required=True, help='源分支 (格式: username:branch)')
-    parser.add_argument('--base', default='develop', help='目标分支 (默认: develop)')
-    parser.add_argument('--body', help='PR 描述完整内容')
-    parser.add_argument('--issue', help='关联的 issue 编号 (如: #32)')
-    parser.add_argument('--description', help='PR 描述摘要')
-    parser.add_argument('--token', help='GitCode 访问令牌')
+    parser = argparse.ArgumentParser(description="使用 GitCode API 创建 Pull Request")
+    parser.add_argument("--owner", default="cann", help="仓库所有者 (默认: cann)")
+    parser.add_argument("--repo", default="metadef", help="仓库名称 (默认: metadef)")
+    parser.add_argument("--title", required=True, help="PR 标题")
+    parser.add_argument("--head", required=True, help="源分支 (格式: username:branch)")
+    parser.add_argument("--base", default="develop", help="目标分支 (默认: develop)")
+    parser.add_argument("--body", help="PR 描述完整内容")
+    parser.add_argument("--issue", help="关联的 issue 编号 (如: #32)")
+    parser.add_argument("--description", help="PR 描述摘要")
+    parser.add_argument("--token", help="GitCode 访问令牌")
 
     args = parser.parse_args()
 
@@ -181,7 +180,7 @@ def main():
         body=args.body,
         issue=args.issue,
         description=args.description or "",
-        token=args.token
+        token=args.token,
     )
 
     if result:

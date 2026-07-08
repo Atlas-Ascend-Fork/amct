@@ -16,4 +16,4 @@
 # ----------------------------------------------------------------------------
 """Public namespace for amct_pytorch quantization-aware-training modules."""
 
-__all__ = ['module']
+__all__ = ["module"]

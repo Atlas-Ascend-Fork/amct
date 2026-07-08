@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,28 +18,29 @@
 from onnx.onnx_pb import AttributeProto
 
 
-class AttributeProtoHelper():
+class AttributeProtoHelper:
     """docstring for AttributeProtoHelper"""
+
     attribute_type = AttributeProto.AttributeType
     attribute_type_map = {
         # type_string ,type_proto_value, location
-        'FLOAT': [attribute_type.FLOAT, 'f'],
-        'INT': [attribute_type.INT, 'i'],
-        'STRING': [attribute_type.STRING, 's'],
-        'TENSOR': [attribute_type.TENSOR, 't'],
-        'FLOATS': [attribute_type.FLOATS, 'floats'],
-        'INTS': [attribute_type.INTS, 'ints'],
-        'STRINGS': [attribute_type.STRINGS, 'strings'],
-        'TENSORS': [attribute_type.TENSORS, 'tensors'],
-        'GRAPH': [attribute_type.GRAPH, 'g'],
-        'GRAPHS': [attribute_type.GRAPHS, 'graphs'],
-        'SPARSE_TENSOR': [attribute_type.SPARSE_TENSOR, 'sparse_tensor'],
-        'SPARSE_TENSORS': [attribute_type.SPARSE_TENSORS, 'sparse_tensors'],
-        'UNDEFINED': [attribute_type.UNDEFINED, None],
+        "FLOAT": [attribute_type.FLOAT, "f"],
+        "INT": [attribute_type.INT, "i"],
+        "STRING": [attribute_type.STRING, "s"],
+        "TENSOR": [attribute_type.TENSOR, "t"],
+        "FLOATS": [attribute_type.FLOATS, "floats"],
+        "INTS": [attribute_type.INTS, "ints"],
+        "STRINGS": [attribute_type.STRINGS, "strings"],
+        "TENSORS": [attribute_type.TENSORS, "tensors"],
+        "GRAPH": [attribute_type.GRAPH, "g"],
+        "GRAPHS": [attribute_type.GRAPHS, "graphs"],
+        "SPARSE_TENSOR": [attribute_type.SPARSE_TENSOR, "sparse_tensor"],
+        "SPARSE_TENSORS": [attribute_type.SPARSE_TENSORS, "sparse_tensors"],
+        "UNDEFINED": [attribute_type.UNDEFINED, None],
     }
     value_location_id = 1
     proto_value_id = 0
-    ge_dtype_map = {'FLOAT32': 0, 'FLOAT16': 1}
+    ge_dtype_map = {"FLOAT32": 0, "FLOAT16": 1}
 
     def __init__(self, node_proto):
         """
@@ -65,7 +66,7 @@ class AttributeProtoHelper():
             value = cls.attribute_type_map[type_str]
             if proto_value == value[0]:
                 return value[1]
-        raise ValueError('The type{%s} of attr is UNEXCEPTED' % (proto_value))
+        raise ValueError("The type{%s} of attr is UNEXCEPTED" % (proto_value))
 
     def has_attr(self, attr_name):
         """
@@ -94,8 +95,9 @@ class AttributeProtoHelper():
                 continue
             attr_value = getattr(attr, self.map_value_location(attr.type))
             return attr_value
-        raise RuntimeError("node %s has no attribute %s" %
-                           (self.node_proto.name, attr_name))
+        raise RuntimeError(
+            "node %s has no attribute %s" % (self.node_proto.name, attr_name)
+        )
 
     def set_attr_value(self, attr_name, type_string, value):
         """
@@ -119,10 +121,10 @@ class AttributeProtoHelper():
         target_attribute.type = attr_type
         value_location = self.map_value_location(target_attribute.type)
 
-        if value_location in ['f', 'i', 's']:
+        if value_location in ["f", "i", "s"]:
             # set value in f/i/s
             setattr(target_attribute, value_location, value)
-        elif value_location in ['floats', 'ints', 'strings']:
+        elif value_location in ["floats", "ints", "strings"]:
             # set value in floats/ints/strings
             target_attribute.ClearField(value_location)
             getattr(target_attribute, value_location).extend(value)

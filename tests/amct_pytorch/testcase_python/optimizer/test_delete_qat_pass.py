@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,12 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -41,7 +38,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
 )
 
-from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -59,18 +55,20 @@ class DistillQATNet(nn.Module):
 class TestDeleteQatPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_insert_qat_pass')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_insert_qat_pass")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
         cls.qat_model = DistillQATNet()
         cls.inputs = torch.randn((3, 2, 224, 224))
         cls.output = cls.qat_model.forward(cls.inputs)
-        cls.record_helper = ScaleOffsetRecordHelper(scale_offset_record_pb2.ScaleOffsetRecord)
+        cls.record_helper = ScaleOffsetRecordHelper(
+            scale_offset_record_pb2.ScaleOffsetRecord
+        )
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -80,11 +78,11 @@ class TestDeleteQatPass(unittest.TestCase):
 
     def test_delete_qat_match_pattern_success(self):
         mod = Conv2dQAT(2, 2, kernel_size=3, bias=False)
-        self.assertTrue(DeleteQatPass(self.record_helper).match_pattern(mod, 'layer1'))
+        self.assertTrue(DeleteQatPass(self.record_helper).match_pattern(mod, "layer1"))
 
     def test_delete_qat_match_pattern_not_qat(self):
-        mod = torch.nn.Conv2d(1, 1, 1, padding_mode='zeros')
-        self.assertFalse(DeleteQatPass(self.record_helper).match_pattern(mod, 'layer1'))
+        mod = torch.nn.Conv2d(1, 1, 1, padding_mode="zeros")
+        self.assertFalse(DeleteQatPass(self.record_helper).match_pattern(mod, "layer1"))
 
     def test_insert_qat_do_pass_success(self):
         optimizer = ModelOptimizer()
@@ -93,4 +91,3 @@ class TestDeleteQatPass(unittest.TestCase):
         optimizer.do_optimizer(model, None)
 
         self.assertIsInstance(model.conv, nn.Conv2d)
-

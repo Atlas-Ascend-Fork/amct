@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -54,10 +54,10 @@ class TestAdaRoundDataManager(unittest.TestCase):
         pass
 
     def test_get_input_data(self):
-        data = self.data_manager.get_input_data(self.input_data, 'linear')
+        data = self.data_manager.get_input_data(self.input_data, "linear")
         self.assertTrue((data == self.input_data).all())
 
     def test_get_output_data(self):
-        data = self.data_manager.get_output_data(self.input_data, 'linear')
+        data = self.data_manager.get_output_data(self.input_data, "linear")
         except_data = self.model.linear(self.input_data)
         self.assertTrue((data == except_data).all())

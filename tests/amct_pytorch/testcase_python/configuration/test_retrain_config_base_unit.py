@@ -53,64 +53,71 @@ class TestRetrainConfigBase(unittest.TestCase):
 
     def test_get_supported_layers_qat_branch(self):
         obj, q, _ = _make()
-        q.get_support_qat_layer2type.return_value = {'l1': 'Conv2d'}
-        self.assertEqual(obj.get_supported_layers(GRAPH), {'l1': 'Conv2d'})
+        q.get_support_qat_layer2type.return_value = {"l1": "Conv2d"}
+        self.assertEqual(obj.get_supported_layers(GRAPH), {"l1": "Conv2d"})
 
     def test_get_supported_layers_ptq_branch(self):
         obj, q, _ = _make()
         del q.get_support_qat_layer2type
-        q.get_name_type_dict.return_value = {'l1': 'Conv2d', 'l2': 'ReLU'}
-        q.get_support_quant_layers.return_value = ['l1', 'l2']
+        q.get_name_type_dict.return_value = {"l1": "Conv2d", "l2": "ReLU"}
+        q.get_support_quant_layers.return_value = ["l1", "l2"]
         # ReLU not in RETRAIN_TYPES -> filtered out
-        self.assertEqual(obj.get_supported_layers(GRAPH), {'l1': 'Conv2d'})
+        self.assertEqual(obj.get_supported_layers(GRAPH), {"l1": "Conv2d"})
 
     def test_check_quant_layers_valid_passthrough(self):
         obj, _, checker = _make()
         # strip all optional checker hooks -> returns input unchanged
-        for attr in ('check_data_type', 'check_gradient_op',
-                     'check_matmul_transpose', 'check_quantize_placeholder'):
+        for attr in (
+            "check_data_type",
+            "check_gradient_op",
+            "check_matmul_transpose",
+            "check_quantize_placeholder",
+        ):
             if hasattr(checker, attr):
                 delattr(checker, attr)
-        layers = ['l1', 'l2']
+        layers = ["l1", "l2"]
         self.assertEqual(obj.check_quant_layers_valid(GRAPH, layers), layers)
 
     def test_check_quant_layers_valid_with_hooks(self):
         obj, _, checker = _make()
-        for attr in ('check_gradient_op', 'check_matmul_transpose',
-                     'check_quantize_placeholder'):
+        for attr in (
+            "check_gradient_op",
+            "check_matmul_transpose",
+            "check_quantize_placeholder",
+        ):
             if hasattr(checker, attr):
                 delattr(checker, attr)
-        checker.check_data_type.return_value = ['l1']
-        self.assertEqual(obj.check_quant_layers_valid(GRAPH, ['l1', 'l2']), ['l1'])
+        checker.check_data_type.return_value = ["l1"]
+        self.assertEqual(obj.check_quant_layers_valid(GRAPH, ["l1", "l2"]), ["l1"])
 
     def test_create_default_config_prune_error(self):
         obj, _, _ = _make(enable_retrain=True, enable_prune=True)
-        self.assertRaises(RuntimeError, obj.create_default_config, '/tmp/x.json', GRAPH)
+        self.assertRaises(RuntimeError, obj.create_default_config, "/tmp/x.json", GRAPH)
 
     def test_create_default_config_no_retrain_error(self):
         obj, _, _ = _make(enable_retrain=False, enable_prune=False)
-        self.assertRaises(RuntimeError, obj.create_default_config, '/tmp/x.json', GRAPH)
+        self.assertRaises(RuntimeError, obj.create_default_config, "/tmp/x.json", GRAPH)
 
     def test_create_default_config_no_supported_layers(self):
         obj, q, _ = _make()
         q.get_support_qat_layer2type.return_value = {}
-        self.assertRaises(ValueError, obj.create_default_config, '/tmp/x.json', GRAPH)
+        self.assertRaises(ValueError, obj.create_default_config, "/tmp/x.json", GRAPH)
 
     def test_get_support_layers_retrain_only(self):
         obj, q, _ = _make()
-        q.get_support_qat_layer2type.return_value = {'l1': 'Conv2d'}
+        q.get_support_qat_layer2type.return_value = {"l1": "Conv2d"}
         supported, retrain, prune = obj.get_support_layers(GRAPH)
-        self.assertEqual(retrain, {'l1': 'Conv2d'})
-        self.assertEqual(supported, {'l1': 'Conv2d'})
+        self.assertEqual(retrain, {"l1": "Conv2d"})
+        self.assertEqual(supported, {"l1": "Conv2d"})
         self.assertIn(rcb.NO_PRUNE, prune)
 
     def test_set_config_by_graph_construct_no_hook(self):
         obj, _, checker = _make()
-        if hasattr(checker, 'set_softmax_channelwise'):
-            delattr(checker, 'set_softmax_channelwise')
+        if hasattr(checker, "set_softmax_channelwise"):
+            delattr(checker, "set_softmax_channelwise")
         # no hook -> no-op, should not raise
         obj.set_config_by_graph_construct({}, GRAPH)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

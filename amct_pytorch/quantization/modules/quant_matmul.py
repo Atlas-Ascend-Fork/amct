@@ -17,7 +17,10 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch.algorithms.quant import AlgoBuildContext
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
+from amct_pytorch.quantization.modules.quant_base import (
+    ActivationQuantizer,
+    build_algorithms_by_target,
+)
 
 
 class QuantizedMatmul(nn.Module):
@@ -53,7 +56,11 @@ class QuantizedMatmul(nn.Module):
             return
         if left_dim is not None:
             ctx = AlgoBuildContext(matrix_size=128, dim_size=left_dim)
-            self.left_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+            self.left_transform = build_algorithms_by_target(
+                self.quant_args, "structure", ctx
+            )
         if right_dim is not None:
             ctx = AlgoBuildContext(matrix_size=128, dim_size=right_dim)
-            self.right_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+            self.right_transform = build_algorithms_by_target(
+                self.quant_args, "structure", ctx
+            )

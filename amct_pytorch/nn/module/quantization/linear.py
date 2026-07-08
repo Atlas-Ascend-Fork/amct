@@ -16,6 +16,8 @@
 # ----------------------------------------------------------------------------
 """Public re-export of LinearQAT."""
 
-__all__ = ['LinearQAT']
+__all__ = ["LinearQAT"]
 
-from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.linear import LinearQAT
+from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.linear import (
+    LinearQAT,
+)

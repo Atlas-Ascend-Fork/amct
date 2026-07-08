@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -24,6 +24,7 @@ class OnnxConvUtil:
     Function: Utils for onnx conv or deconv node
     APIs: is_depthwise_conv, is_group_conv, get_group, get_depthwise_multiplier
     """
+
     def __init__(self, node):
         """
         Function: init function
@@ -39,9 +40,12 @@ class OnnxConvUtil:
         param: none
         Return: None
         """
-        if self.node.type not in ['Conv', 'ConvTranspose']:
-            raise RuntimeError('Only support [Conv, ConvTranspose] but {} is {}'
-                                .format(self.node.name, self.node.type))
+        if self.node.type not in ["Conv", "ConvTranspose"]:
+            raise RuntimeError(
+                "Only support [Conv, ConvTranspose] but {} is {}".format(
+                    self.node.name, self.node.type
+                )
+            )
 
     def is_depthwise_conv(self):
         """
@@ -73,7 +77,7 @@ class OnnxConvUtil:
         Return: group.
         """
         try:
-            group = AttributeProtoHelper(self.node.proto).get_attr_value('group')
+            group = AttributeProtoHelper(self.node.proto).get_attr_value("group")
         except RuntimeError:
             group = 1
         return group
@@ -86,7 +90,10 @@ class OnnxConvUtil:
         group = self.get_group()
         filter_shape = QuantOpInfo.get_weight_tensor(self.node).dims
         if filter_shape[0] % group != 0:
-            raise RuntimeError('unexpected depthwise node {}, filter_shape is {} and group is {}.'
-                               .format(self.node.name, filter_shape, group))
+            raise RuntimeError(
+                "unexpected depthwise node {}, filter_shape is {} and group is {}.".format(
+                    self.node.name, filter_shape, group
+                )
+            )
         multiplier = filter_shape[0] // group
         return multiplier

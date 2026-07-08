@@ -100,5 +100,5 @@ class TestKlOptimize(unittest.TestCase):
         self.assertLessEqual(float(scale) * 128, float(tensor.abs().max()) + 1e-3)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

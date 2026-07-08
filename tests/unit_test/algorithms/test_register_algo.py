@@ -16,11 +16,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import pytest
 
 from amct_pytorch.algorithms.register_algo import Algorithm
 
-ALG = 'alg'
+ALG = "alg"
 
 
 class _Op:
@@ -83,4 +82,3 @@ def test_repeated_registration_can_extend_deploy_with_new_target():
     a.register(ALG, "Linear", _OpA, _OpB)
     a.register(ALG, "Linear", _OpA, _OpC)
     assert set(a.quant_to_deploy[_OpA]) == {_OpB, _OpC}
-

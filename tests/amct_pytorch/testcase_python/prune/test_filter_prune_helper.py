@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -40,7 +40,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
 
 from .utils import models, record_utils
 
-DEVICE = 'cpu'
+DEVICE = "cpu"
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -49,15 +49,16 @@ class TestFilterPruneHelper(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_filter_prune_helper')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_filter_prune_helper")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
         pass
 
     def setUp(self):
@@ -66,8 +67,10 @@ class TestFilterPruneHelper(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_cascade(self,):
-        """ test active, passive, disable"""
+    def test_cascade(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.SingleConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()
@@ -75,7 +78,7 @@ class TestFilterPruneHelper(unittest.TestCase):
             args.append(torch.randn(input_shape))
         args = tuple(args)
 
-        onnx_file = os.path.join(self.temp_folder, 'SingleConv.onnx')
+        onnx_file = os.path.join(self.temp_folder, "SingleConv.onnx")
         Parser.export_onnx(model, args, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         preprocess_graph(graph, model)
@@ -84,18 +87,22 @@ class TestFilterPruneHelper(unittest.TestCase):
         record_helper = PruneRecordHelper(record, graph)
 
         configer = FakeRetrainConfig()
-        configer.set_prune_layers(['layer1.0', 'layer2.0'])
-        with mock.patch.object(retrain_config, 'RetrainConfig', FakeRetrainConfig):
+        configer.set_prune_layers(["layer1.0", "layer2.0"])
+        with mock.patch.object(retrain_config, "RetrainConfig", FakeRetrainConfig):
             for node in graph.nodes:
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
 
-        producer_names, consumer_names = record_utils.get_producer(record.prune_record[0])
-        self.assertEqual(producer_names, ['layer1.0'])
-        self.assertEqual(consumer_names, ['layer1.1', 'layer2.0'])
+        producer_names, consumer_names = record_utils.get_producer(
+            record.prune_record[0]
+        )
+        self.assertEqual(producer_names, ["layer1.0"])
+        self.assertEqual(consumer_names, ["layer1.1", "layer2.0"])
 
-    def test_eltwise(self,):
-        """ test active, passive, disable"""
+    def test_eltwise(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.EltwiseConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()
@@ -103,7 +110,7 @@ class TestFilterPruneHelper(unittest.TestCase):
             args.append(torch.randn(input_shape))
         args = tuple(args)
 
-        onnx_file = os.path.join(self.temp_folder, 'EltwiseConv.onnx')
+        onnx_file = os.path.join(self.temp_folder, "EltwiseConv.onnx")
         Parser.export_onnx(model, args, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         preprocess_graph(graph, model)
@@ -112,13 +119,17 @@ class TestFilterPruneHelper(unittest.TestCase):
         record_helper = PruneRecordHelper(records, graph)
 
         configer = FakeRetrainConfig()
-        configer.set_prune_layers(['layer1.0', 'layer2.0', 'layer3.0', 'layer4.0', 'layer5.0'])
-        with mock.patch.object(retrain_config, 'RetrainConfig', FakeRetrainConfig):
+        configer.set_prune_layers(
+            ["layer1.0", "layer2.0", "layer3.0", "layer4.0", "layer5.0"]
+        )
+        with mock.patch.object(retrain_config, "RetrainConfig", FakeRetrainConfig):
             for node in graph.nodes + graph._in_out_nodes:
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
 
-        tar_records = record_utils.read_record_file(os.path.join(CUR_DIR, './utils/records/record_EltwiseConv.txt'))
+        tar_records = record_utils.read_record_file(
+            os.path.join(CUR_DIR, "./utils/records/record_EltwiseConv.txt")
+        )
 
         prune_records = records.prune_record[0]
         tar_prune_records = tar_records.prune_record[0]
@@ -127,12 +138,14 @@ class TestFilterPruneHelper(unittest.TestCase):
         # node name is different based on torch version
         # change name in record as name in file
         for idx, consumer in enumerate(prune_records.consumer):
-            if 'add' in consumer.name.lower():
+            if "add" in consumer.name.lower():
                 consumer.name = tar_prune_records.consumer[idx].name
             self.assertEqual(consumer, tar_prune_records.consumer[idx])
 
-    def test_splitconcat(self,):
-        """ test active, passive, disable"""
+    def test_splitconcat(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.SplitConcatConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()
@@ -140,7 +153,7 @@ class TestFilterPruneHelper(unittest.TestCase):
             args.append(torch.randn(input_shape))
         args = tuple(args)
 
-        onnx_file = os.path.join(self.temp_folder, 'SplitConcatConv.onnx')
+        onnx_file = os.path.join(self.temp_folder, "SplitConcatConv.onnx")
         Parser.export_onnx(model, args, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         preprocess_graph(graph, model)
@@ -150,12 +163,14 @@ class TestFilterPruneHelper(unittest.TestCase):
 
         configer = FakeRetrainConfig()
 
-        configer.set_prune_layers(['layer1.0', 'layer2_1.0', 'layer2_2.0', 'layer3.0'])
-        with mock.patch.object(retrain_config, 'RetrainConfig', FakeRetrainConfig):
+        configer.set_prune_layers(["layer1.0", "layer2_1.0", "layer2_2.0", "layer3.0"])
+        with mock.patch.object(retrain_config, "RetrainConfig", FakeRetrainConfig):
             for node in graph.nodes + graph._in_out_nodes:
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
-        tar_records = record_utils.read_record_file(os.path.join(CUR_DIR, './utils/records/record_SplitConcatConv.txt'))
+        tar_records = record_utils.read_record_file(
+            os.path.join(CUR_DIR, "./utils/records/record_SplitConcatConv.txt")
+        )
 
         prune_records = records.prune_record[0]
         tar_prune_records = tar_records.prune_record[0]
@@ -164,12 +179,14 @@ class TestFilterPruneHelper(unittest.TestCase):
         # node name is different based on torch version
         # change name in record as name in file
         for idx, consumer in enumerate(prune_records.consumer):
-            if 'concat' in consumer.name.lower():
+            if "concat" in consumer.name.lower():
                 consumer.name = tar_prune_records.consumer[idx].name
             self.assertEqual(consumer, tar_prune_records.consumer[idx])
 
-    def test_splitconcat_gconv(self,):
-        """ test active, passive, disable"""
+    def test_splitconcat_gconv(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.SplitConcatGroupConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()
@@ -177,7 +194,7 @@ class TestFilterPruneHelper(unittest.TestCase):
             args.append(torch.randn(input_shape))
         args = tuple(args)
 
-        onnx_file = os.path.join(self.temp_folder, 'SplitConcatGroupConv.onnx')
+        onnx_file = os.path.join(self.temp_folder, "SplitConcatGroupConv.onnx")
         Parser.export_onnx(model, args, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         preprocess_graph(graph, model)
@@ -187,8 +204,8 @@ class TestFilterPruneHelper(unittest.TestCase):
 
         configer = FakeRetrainConfig()
 
-        configer.set_prune_layers(['layer1.0', 'layer2_1.0', 'layer2_2.0', 'layer3.0'])
-        with mock.patch.object(retrain_config, 'RetrainConfig', FakeRetrainConfig):
+        configer.set_prune_layers(["layer1.0", "layer2_1.0", "layer2_2.0", "layer3.0"])
+        with mock.patch.object(retrain_config, "RetrainConfig", FakeRetrainConfig):
             for node in graph.nodes + graph._in_out_nodes:
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
@@ -232,6 +249,6 @@ def preprocess_graph(graph, model):
     for node in graph.nodes:
         try:
             mod = model_helper.get_module(node.name)
-            node.set_attr('torch_type', type(mod).__name__)
+            node.set_attr("torch_type", type(mod).__name__)
         except RuntimeError:
             pass

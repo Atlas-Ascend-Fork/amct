@@ -92,7 +92,11 @@ class PtqParamHandler:
         if hasattr(unit.module, "load_ptq_params"):
             unit.module.load_ptq_params(params)
             return
-        if isinstance(params, dict) and params and all(isinstance(v, dict) for v in params.values()):
+        if (
+            isinstance(params, dict)
+            and params
+            and all(isinstance(v, dict) for v in params.values())
+        ):
             self.load_module(unit.module, params)
             return
         self.load_trainable_module(unit.module, params)
@@ -111,7 +115,9 @@ class PtqParamStore:
         param_path = os.path.join(param_dir, file_name)
         if not os.path.exists(param_path):
             if strict:
-                raise FileNotFoundError(f"PTQ params not found for unit '{unit.name}': {param_path}")
+                raise FileNotFoundError(
+                    f"PTQ params not found for unit '{unit.name}': {param_path}"
+                )
             return False
         params = torch.load(param_path, weights_only=True, map_location="cpu")
         self.ptq_param_handler.load_unit(unit, params)

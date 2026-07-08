@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,6 +26,7 @@ class DeleteLinearAddPass(BaseFusionPass):
     Function: Delete 'Add' node in graph if 'Add' is from Linear.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -41,14 +42,14 @@ class DeleteLinearAddPass(BaseFusionPass):
         Parameters: node: node in graph to be matched
         Return: True: matched / False: mismatch
         """
-        if node.type != 'Add':
+        if node.type != "Add":
             return False
 
         input_types = []
         for input_anchor in node.input_anchors:
             producer, _ = node.get_producer(input_anchor.index)
             input_types.append(producer.type)
-        if input_types.count('MatMul') != 1:
+        if input_types.count("MatMul") != 1:
             return False
 
         return True
@@ -62,14 +63,16 @@ class DeleteLinearAddPass(BaseFusionPass):
         object_node: node to process
         Return: None
         """
-        LOGGER.logd("Doing: delete node {} in graph.".format(object_node.name),
-                    'DeleteLinearAddPass')
+        LOGGER.logd(
+            "Doing: delete node {} in graph.".format(object_node.name),
+            "DeleteLinearAddPass",
+        )
 
-        producer_name = ''
+        producer_name = ""
         input_anchor_index = 0
         for input_anchor in object_node.input_anchors:
             producer, _ = object_node.get_producer(input_anchor.index)
-            if producer.type == 'MatMul':
+            if producer.type == "MatMul":
                 producer_name = producer.name
                 input_anchor_index = input_anchor.index
                 break
@@ -84,5 +87,7 @@ class DeleteLinearAddPass(BaseFusionPass):
         graph.delete_node(object_node, input_anchor_index, 0)
         graph.remove_node(object_node)
 
-        LOGGER.logd("Finished: delete node {} in graph.".format(object_node.name),
-                    'DeleteLinearAddPass')
+        LOGGER.logd(
+            "Finished: delete node {} in graph.".format(object_node.name),
+            "DeleteLinearAddPass",
+        )

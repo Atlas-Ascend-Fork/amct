@@ -22,7 +22,7 @@ This package exposes the documented import paths such as
 ``from amct_pytorch.common.auto_channel_prune.sensitivity_base import SensitivityBase``.
 """
 
-__all__ = ['SensitivityBase', 'SearchChannelBase']
+__all__ = ["SensitivityBase", "SearchChannelBase"]
 
 from .sensitivity_base import SensitivityBase
 from .search_channel_base import SearchChannelBase

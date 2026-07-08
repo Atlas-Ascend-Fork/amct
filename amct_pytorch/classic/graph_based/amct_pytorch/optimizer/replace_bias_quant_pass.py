@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -29,6 +29,7 @@ class ReplaceBiasQuantPass(BaseFusionPass):
     Function: Fakequant weight from int8 to int9
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -49,7 +50,7 @@ class ReplaceBiasQuantPass(BaseFusionPass):
         if node.name not in self.records:
             return False
 
-        if node.type == 'AveragePool':
+        if node.type == "AveragePool":
             return False
 
         bias_node = QuantOpInfo.get_bias_node(node)
@@ -69,13 +70,15 @@ class ReplaceBiasQuantPass(BaseFusionPass):
         Return: None
         """
         # Determine the quantization type based on the value of dst_type and obtain the corresponding num_bits
-        if self.records.get(object_node.name).get('dst_type') == 'UNSET':
-            num_bits = QuantOpInfo.get_dst_num_bits(self.records, object_node.name, 'act')
+        if self.records.get(object_node.name).get("dst_type") == "UNSET":
+            num_bits = QuantOpInfo.get_dst_num_bits(
+                self.records, object_node.name, "act"
+            )
         else:
             num_bits = QuantOpInfo.get_dst_num_bits(self.records, object_node.name)
 
         if num_bits == 4:
-            bias_index = QuantOpInfo.get_quant_index(object_node).get('bias_index')
+            bias_index = QuantOpInfo.get_quant_index(object_node).get("bias_index")
             cast_input_anchor = object_node.get_input_anchor(bias_index)
             cast_node = cast_input_anchor.get_peer_output_anchor().node
             bias_input_anchor = cast_node.get_input_anchor(0)
@@ -107,11 +110,14 @@ class ReplaceBiasQuantPass(BaseFusionPass):
             float_bias = int32_bias.astype(np.float32)
 
         bias_helper.clear_data()
-        bias_helper.set_data(float_bias.reshape(-1), 'FLOAT')
+        bias_helper.set_data(float_bias.reshape(-1), "FLOAT")
 
         LOGGER.logd(
-            "Replace bias quant layer '{}' to fake weight quant layer success!".
-            format(object_node.name), 'ReplaceBiasQuantPass')
+            "Replace bias quant layer '{}' to fake weight quant layer success!".format(
+                object_node.name
+            ),
+            "ReplaceBiasQuantPass",
+        )
 
     def fakequant_rnn_bias(self, int32_bias, layer_name):
         """
@@ -123,25 +129,27 @@ class ReplaceBiasQuantPass(BaseFusionPass):
         # dequant bias corresponding to w and to r separately
         bias_length = int32_bias.shape[1]
         bias_length = len(int32_bias.flatten())
-        weight_bias = int32_bias.flatten()[:bias_length // 2]
-        recurrence_weight_bias = int32_bias.flatten()[bias_length // 2:]
+        weight_bias = int32_bias.flatten()[: bias_length // 2]
+        recurrence_weight_bias = int32_bias.flatten()[bias_length // 2 :]
 
-        scale_w = self.records.get(layer_name).get('weight_scale')
+        scale_w = self.records.get(layer_name).get("weight_scale")
         if weight_bias.size != scale_w.size:
             scale_w = np.repeat(scale_w, weight_bias.size // scale_w.size)
 
-        scale_d = self.records.get(layer_name).get('data_scale')
+        scale_d = self.records.get(layer_name).get("data_scale")
         deq_scale = np.multiply(scale_w, scale_d).reshape([-1])
         weight_bias = weight_bias.astype(np.float32) * deq_scale
 
-        scale_r = self.records.get(layer_name).get('recurrence_weight_scale')
+        scale_r = self.records.get(layer_name).get("recurrence_weight_scale")
         if recurrence_weight_bias.size != scale_r.size:
             scale_r = np.repeat(scale_r, recurrence_weight_bias.size // scale_r.size)
-        scale_h = self.records.get(layer_name).get('h_scale')
+        scale_h = self.records.get(layer_name).get("h_scale")
         deq_scale_h = np.multiply(scale_r, scale_h).reshape([-1])
         recurrence_weight_bias = recurrence_weight_bias.astype(np.float32) * deq_scale_h
 
         bias_float32 = np.concatenate([weight_bias, recurrence_weight_bias], 0)
-        LOGGER.logd("Fakequant bias from int32 to float32 for layer '{}'" \
-            .format(layer_name), 'ReplaceBiasQuantPass')
+        LOGGER.logd(
+            "Fakequant bias from int32 to float32 for layer '{}'".format(layer_name),
+            "ReplaceBiasQuantPass",
+        )
         return bias_float32

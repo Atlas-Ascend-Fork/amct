@@ -27,7 +27,7 @@ from mock_torch_npu import (
     mock_npu_quant_matmul,
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
-    mock_npu
+    mock_npu,
 )
 
 from amct_pytorch import (
@@ -38,8 +38,6 @@ from amct_pytorch import (
     convert,
     quantize,
 )
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-from amct_pytorch.common.config import parse_config
 
 torch.manual_seed(0)
 
@@ -61,33 +59,47 @@ class TestModel(nn.Module):
 
 
 class TestDefQuantize(unittest.TestCase):
-    '''
+    """
     ST FOR QUANTIZATION
-    '''
+    """
+
     @classmethod
     def setUpClass(cls):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
-        cls.ori_out = cls.test_model(cls.inputs).to(torch.float32).detach().to('cpu').numpy().astype(np.float32)
-        logger.info('TestDefQuantize START!')
+        cls.ori_out = (
+            cls.test_model(cls.inputs)
+            .to(torch.float32)
+            .detach()
+            .to("cpu")
+            .numpy()
+            .astype(np.float32)
+        )
+        logger.info("TestDefQuantize START!")
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestDefQuantize END!')
+        logger.info("TestDefQuantize END!")
 
     def setUp(self):
         mock_torch_npu = MagicMock()
-        sys.modules['torch_npu'] = mock_torch_npu
+        sys.modules["torch_npu"] = mock_torch_npu
 
     def tearDown(self):
-        del sys.modules['torch_npu']
+        del sys.modules["torch_npu"]
 
-    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
-    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch("torch_npu.npu_quantize", wraps=mock_npu_quantize)
+    @patch("torch_npu.npu_quant_matmul", wraps=mock_npu_quant_matmul)
     @patch(
-        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        "torch_npu.npu_weight_quant_batchmatmul",
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        "torch_npu.npu_convert_weight_to_int4pack",
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch(
+        "amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema",
         MagicMock(return_value=True),
     )
     def test_default_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -97,18 +109,24 @@ class TestDefQuantize(unittest.TestCase):
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNotNone(model.linear2.scale_w)
         self.assertIsNotNone(model.linear3.scale_w)
-        self.assertEqual(type(model.linear3).__name__, 'MinMaxQuant')
+        self.assertEqual(type(model.linear3).__name__, "MinMaxQuant")
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
-    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
-    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch("torch_npu.npu_quantize", wraps=mock_npu_quantize)
+    @patch("torch_npu.npu_quant_matmul", wraps=mock_npu_quant_matmul)
     @patch(
-        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        "torch_npu.npu_weight_quant_batchmatmul",
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        "torch_npu.npu_convert_weight_to_int4pack",
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch(
+        "amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema",
         MagicMock(return_value=True),
     )
     def test_int4_awq_quant_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -117,19 +135,25 @@ class TestDefQuantize(unittest.TestCase):
         model(self.inputs)
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNotNone(model.linear2.scale_w)
-        self.assertEqual(type(model.linear2).__name__, 'LinearAWQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear2).__name__, "LinearAWQuant")
+        self.assertEqual(type(model.linear3).__name__, "Linear")
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
-    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
-    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch("torch_npu.npu_quantize", wraps=mock_npu_quantize)
+    @patch("torch_npu.npu_quant_matmul", wraps=mock_npu_quant_matmul)
     @patch(
-        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        "torch_npu.npu_weight_quant_batchmatmul",
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        "torch_npu.npu_convert_weight_to_int4pack",
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch(
+        "amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema",
         MagicMock(return_value=True),
     )
     def test_int4_gptq_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -138,20 +162,25 @@ class TestDefQuantize(unittest.TestCase):
         model(self.inputs)
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNotNone(model.linear2.scale_w)
-        self.assertEqual(type(model.linear2).__name__, 'GPTQuant')
-        self.assertEqual(type(model.linear3).__name__, 'Linear')
+        self.assertEqual(type(model.linear2).__name__, "GPTQuant")
+        self.assertEqual(type(model.linear3).__name__, "Linear")
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
-
-    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
-    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch("torch_npu.npu_quantize", wraps=mock_npu_quantize)
+    @patch("torch_npu.npu_quant_matmul", wraps=mock_npu_quant_matmul)
     @patch(
-        'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
+        "torch_npu.npu_weight_quant_batchmatmul",
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        "torch_npu.npu_convert_weight_to_int4pack",
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch(
+        "amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema",
         MagicMock(return_value=True),
     )
     def test_int8_minmax_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -160,18 +189,24 @@ class TestDefQuantize(unittest.TestCase):
         model(self.inputs)
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNotNone(model.linear2.scale_w)
-        self.assertEqual(type(model.linear3).__name__, 'MinMaxQuant')
+        self.assertEqual(type(model.linear3).__name__, "MinMaxQuant")
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
-    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
-    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch("torch_npu.npu_quantize", wraps=mock_npu_quantize)
+    @patch("torch_npu.npu_quant_matmul", wraps=mock_npu_quant_matmul)
     @patch(
-        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        "torch_npu.npu_weight_quant_batchmatmul",
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        "torch_npu.npu_convert_weight_to_int4pack",
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch(
+        "amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema",
         MagicMock(return_value=True),
     )
     def test_int8_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
@@ -182,9 +217,8 @@ class TestDefQuantize(unittest.TestCase):
         self.assertIsNotNone(model.linear2.scale_w)
         self.assertIsNotNone(model.linear1.scale_d)
         self.assertIsNotNone(model.linear2.scale_d)
-        self.assertEqual(type(model.linear3).__name__, 'SmoothQuant')
+        self.assertEqual(type(model.linear3).__name__, "SmoothQuant")
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
-
+        model(self.inputs.npu())

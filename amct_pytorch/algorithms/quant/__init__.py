@@ -16,7 +16,8 @@
 # ----------------------------------------------------------------------------
 
 __all__ = [
-    'register_algorithms', 'AlgoBuildContext',
+    "register_algorithms",
+    "AlgoBuildContext",
 ]
 
 from dataclasses import dataclass
@@ -30,10 +31,10 @@ def register_algorithms():
     if _REGISTERED:
         return
 
-    from .auto_clip import LAC, LWC
-    from .auto_round import AutoRound
-    from .omniquant import OmniQuant
-    from .flatquant import FlatQuant
+    from .auto_clip import LAC, LWC  # noqa: F401
+    from .auto_round import AutoRound  # noqa: F401
+    from .omniquant import OmniQuant  # noqa: F401
+    from .flatquant import FlatQuant  # noqa: F401
 
     _REGISTERED = True
 

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,12 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -32,9 +29,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_mo
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
     CompModuleLinear,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
-    Recorder,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
@@ -54,7 +48,7 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 class TestShareActCompPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_share_act_comp_pass')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_share_act_comp_pass")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -66,18 +60,18 @@ class TestShareActCompPass(unittest.TestCase):
             cls.args.append(torch.randn(input_shape))
         cls.args = tuple(cls.args)
 
-        cls.onnx_file = os.path.join(cls.temp_folder, 'net_002.onnx')
+        cls.onnx_file = os.path.join(cls.temp_folder, "net_002.onnx")
         Parser.export_onnx(cls.model_002, cls.args, cls.onnx_file)
         cls.graph = Parser.parse_net_to_graph(cls.onnx_file)
         cls.graph.add_model(cls.model_002)
 
-        cls.config_file = os.path.join(CUR_DIR, 'utils/net_002.json')
-        cls.record_file = os.path.join(cls.temp_folder, 'net_002.txt')
+        cls.config_file = os.path.join(CUR_DIR, "utils/net_002.json")
+        cls.record_file = os.path.join(cls.temp_folder, "net_002.txt")
         RetrainConfig.init_retrain(cls.config_file, cls.record_file, cls.graph)
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -93,14 +87,16 @@ class TestShareActCompPass(unittest.TestCase):
 
         named_module_dict = {name: mod for name, mod in self.model_002.named_modules()}
 
-        self.assertIsInstance(named_module_dict['branch1'], CompModuleConv2d)
-        self.assertIsInstance(named_module_dict['branch2'], nn.Conv2d)
-        self.assertIsInstance(named_module_dict['branch3'], CompModuleConv2d)
-        self.assertIsInstance(named_module_dict['branch3'].acts_comp_reuse, CompModuleConv2d)
-        self.assertIsInstance(named_module_dict['branch4'], CompModuleConv2d)
-        self.assertIsInstance(named_module_dict['conv'], CompModuleConv2d)
-        self.assertIsInstance(named_module_dict['linear'], CompModuleLinear)
+        self.assertIsInstance(named_module_dict["branch1"], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict["branch2"], nn.Conv2d)
+        self.assertIsInstance(named_module_dict["branch3"], CompModuleConv2d)
+        self.assertIsInstance(
+            named_module_dict["branch3"].acts_comp_reuse, CompModuleConv2d
+        )
+        self.assertIsInstance(named_module_dict["branch4"], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict["conv"], CompModuleConv2d)
+        self.assertIsInstance(named_module_dict["linear"], CompModuleLinear)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

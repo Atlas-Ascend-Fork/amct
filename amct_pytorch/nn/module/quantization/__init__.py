@@ -23,11 +23,11 @@ This package exposes the documented import paths such as
 """
 
 __all__ = [
-    'Conv2dQAT',
-    'Conv3dQAT',
-    'ConvTranspose2dQAT',
-    'LinearQAT',
-    'QuantCalibrationOp',
+    "Conv2dQAT",
+    "Conv3dQAT",
+    "ConvTranspose2dQAT",
+    "LinearQAT",
+    "QuantCalibrationOp",
 ]
 
 from .conv2d import Conv2dQAT

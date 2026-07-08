@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """Public re-export of SensitivityBase."""
 
-__all__ = ['SensitivityBase']
+__all__ = ["SensitivityBase"]
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune import (
     sensitivity_base as _impl,

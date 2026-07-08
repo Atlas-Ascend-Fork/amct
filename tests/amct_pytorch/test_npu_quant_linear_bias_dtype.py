@@ -20,6 +20,7 @@ modes (HIF8×HIF8, FP8×FP8, per-token, dynamic). The mock in mock_torch_npu
 silently casts to float32 at line 113, so only an explicit dtype assertion
 catches this defect before it reaches real hardware.
 """
+
 import unittest
 from unittest.mock import MagicMock
 
@@ -36,8 +37,14 @@ def _make_shell():
     return obj
 
 
-def _call_init_bias(act_type, wts_type, bias_tensor, act_granularity='tensor',
-                    dynamic=None, offset_bias=None):
+def _call_init_bias(
+    act_type,
+    wts_type,
+    bias_tensor,
+    act_granularity="tensor",
+    dynamic=None,
+    offset_bias=None,
+):
     linear = _make_shell()
     linear.act_granularity = act_granularity
     linear.dynamic = dynamic
@@ -54,38 +61,56 @@ def _call_init_bias(act_type, wts_type, bias_tensor, act_granularity='tensor',
 
 
 class TestInitBiasDtype(unittest.TestCase):
-
     def test_hif8x_hif8_bias_is_float32(self):
         linear = _call_init_bias(HIFLOAT8, HIFLOAT8, torch.randn(32).to(torch.float16))
-        self.assertEqual(linear.bias.dtype, torch.float32,
-                         "HIF8×HIF8 bias must be float32 for aclnnQuantMatmulV5")
+        self.assertEqual(
+            linear.bias.dtype,
+            torch.float32,
+            "HIF8×HIF8 bias must be float32 for aclnnQuantMatmulV5",
+        )
 
     def test_fp8xfp8_bias_is_float32(self):
-        linear = _call_init_bias(FLOAT8_E4M3FN, FLOAT8_E4M3FN, torch.randn(32).to(torch.float16))
-        self.assertEqual(linear.bias.dtype, torch.float32,
-                         "FP8×FP8 bias must be float32 for aclnnQuantMatmulV5")
+        linear = _call_init_bias(
+            FLOAT8_E4M3FN, FLOAT8_E4M3FN, torch.randn(32).to(torch.float16)
+        )
+        self.assertEqual(
+            linear.bias.dtype,
+            torch.float32,
+            "FP8×FP8 bias must be float32 for aclnnQuantMatmulV5",
+        )
 
     def test_int8_pertoken_bias_is_float32(self):
-        linear = _call_init_bias(INT8, INT8, torch.randn(32).to(torch.float16),
-                                 act_granularity='token')
-        self.assertEqual(linear.bias.dtype, torch.float32,
-                         "INT8 per-token bias must be float32 for aclnnQuantMatmulV5")
+        linear = _call_init_bias(
+            INT8, INT8, torch.randn(32).to(torch.float16), act_granularity="token"
+        )
+        self.assertEqual(
+            linear.bias.dtype,
+            torch.float32,
+            "INT8 per-token bias must be float32 for aclnnQuantMatmulV5",
+        )
 
     def test_int8_dynamic_bias_is_float32(self):
-        linear = _call_init_bias(INT8, INT8, torch.randn(32).to(torch.float16),
-                                 dynamic=True)
-        self.assertEqual(linear.bias.dtype, torch.float32,
-                         "INT8 dynamic bias must be float32 for aclnnQuantMatmulV5")
+        linear = _call_init_bias(
+            INT8, INT8, torch.randn(32).to(torch.float16), dynamic=True
+        )
+        self.assertEqual(
+            linear.bias.dtype,
+            torch.float32,
+            "INT8 dynamic bias must be float32 for aclnnQuantMatmulV5",
+        )
 
     def test_int8_tensor_static_bias_is_int32(self):
         # INT8 per-tensor non-dynamic takes the quantize-to-int32 branch — unchanged.
         linear = _call_init_bias(INT8, INT8, torch.randn(32).to(torch.float32))
-        self.assertEqual(linear.bias.dtype, torch.int32,
-                         "INT8 per-tensor static bias must stay int32")
+        self.assertEqual(
+            linear.bias.dtype,
+            torch.int32,
+            "INT8 per-tensor static bias must stay int32",
+        )
 
     def test_none_bias_stays_none(self):
         linear = _make_shell()
-        linear.act_granularity = 'tensor'
+        linear.act_granularity = "tensor"
         linear.dynamic = None
         linear.act_type = HIFLOAT8
         linear.wts_type = HIFLOAT8
@@ -97,5 +122,5 @@ class TestInitBiasDtype(unittest.TestCase):
         self.assertIsNone(linear.bias)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

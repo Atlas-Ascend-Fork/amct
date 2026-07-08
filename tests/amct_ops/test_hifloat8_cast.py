@@ -17,31 +17,30 @@
 import unittest
 
 import torch
-import torch_npu
 
 from amct_ops.hifloat8_cast import decode_from_hifloat8, encode_to_hifloat8
 
 
 EXPECTED_ENCODE = {
-    '+0': 0x00,
-    '-0': 0x00,
-    '+Inf': 0x6F,
-    '-Inf': 0xEF,
-    'NaN': 0x80,
+    "+0": 0x00,
+    "-0": 0x00,
+    "+Inf": 0x6F,
+    "-Inf": 0xEF,
+    "NaN": 0x80,
 }
-DEVICE = 'npu'
+DEVICE = "npu"
 
 
 class TestHiFloat8Cast(unittest.TestCase):
     @staticmethod
     def _is_decoded_special_value_valid(name, decoded_val):
-        if name in ('+0', '-0'):
+        if name in ("+0", "-0"):
             return decoded_val == 0.0
-        if name == '+Inf':
-            return decoded_val == float('inf')
-        if name == '-Inf':
-            return decoded_val == float('-inf')
-        if name == 'NaN':
+        if name == "+Inf":
+            return decoded_val == float("inf")
+        if name == "-Inf":
+            return decoded_val == float("-inf")
+        if name == "NaN":
             return decoded_val != decoded_val
         return False
 
@@ -76,7 +75,9 @@ class TestHiFloat8Cast(unittest.TestCase):
             decode_from_hifloat8(y_fp32)
 
     def test_roundtrip_basic(self):
-        x_orig = torch.tensor([1.0, -1.0, 0.5, 2.0, 0.0], dtype=torch.float16, device=DEVICE)
+        x_orig = torch.tensor(
+            [1.0, -1.0, 0.5, 2.0, 0.0], dtype=torch.float16, device=DEVICE
+        )
         y_encoded = encode_to_hifloat8(x_orig)
         z_decoded = decode_from_hifloat8(y_encoded, torch.float16)
         self.assertTrue(bool((x_orig == z_decoded).all().item()))
@@ -89,8 +90,24 @@ class TestHiFloat8Cast(unittest.TestCase):
 
     def test_boundary_values(self):
         test_values = [
-            0.0, -0.0, 1.0, -1.0, 0.5, -0.5, 2.0, -2.0, 0.25, 0.125,
-            3.0, -3.0, 0.0625, 0.03125, 0.01, 0.001, 10.0, 100.0,
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            0.5,
+            -0.5,
+            2.0,
+            -2.0,
+            0.25,
+            0.125,
+            3.0,
+            -3.0,
+            0.0625,
+            0.03125,
+            0.01,
+            0.001,
+            10.0,
+            100.0,
         ]
         x_orig = torch.tensor(test_values, dtype=torch.float16, device=DEVICE)
         y_encoded = encode_to_hifloat8(x_orig)
@@ -146,12 +163,14 @@ class TestHiFloat8Cast(unittest.TestCase):
         abs_diff = torch.abs(x_orig.float().cpu() - z_decoded.float().cpu())
         rel_diff = abs_diff / (torch.abs(x_orig.float().cpu()) + 1e-8)
         nonzero_mask = torch.abs(x_orig.float().cpu()) > 1e-4
-        max_rel_diff = rel_diff[nonzero_mask].max().item() if nonzero_mask.any() else 0.0
+        max_rel_diff = (
+            rel_diff[nonzero_mask].max().item() if nonzero_mask.any() else 0.0
+        )
         self.assertLess(max_rel_diff, 0.25)
 
     def _check_special_one_dtype(self, dtype):
-        test_names = ['+0', '-0', '+Inf', '-Inf', 'NaN']
-        test_values = [0.0, -0.0, float('inf'), float('-inf'), float('nan')]
+        test_names = ["+0", "-0", "+Inf", "-Inf", "NaN"]
+        test_values = [0.0, -0.0, float("inf"), float("-inf"), float("nan")]
 
         x_orig = torch.tensor(test_values, dtype=dtype, device=DEVICE)
         y_encoded = encode_to_hifloat8(x_orig)
@@ -161,9 +180,11 @@ class TestHiFloat8Cast(unittest.TestCase):
         dec_cpu = z_decoded.float().cpu()
         for i, name in enumerate(test_names):
             self.assertEqual(enc_cpu[i].item(), EXPECTED_ENCODE[name])
-            self.assertTrue(self._is_decoded_special_value_valid(name, dec_cpu[i].item()))
+            self.assertTrue(
+                self._is_decoded_special_value_valid(name, dec_cpu[i].item())
+            )
         return enc_cpu
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

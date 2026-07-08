@@ -19,8 +19,8 @@ import pytest
 
 from amct_pytorch.common.utils.registry_factory import Registry, RegistryItem
 
-BAR = 'bar'
-BAZ = 'baz'
+BAR = "bar"
+BAZ = "baz"
 
 
 def test_register_via_decorator_uses_class_name():
@@ -67,6 +67,7 @@ def test_duplicate_register_raises_without_force():
         pass
 
     with pytest.raises(KeyError, match="already registered"):
+
         @registry.register(name="x")
         class DummyAlgoB:
             pass
@@ -151,4 +152,3 @@ def test_get_item_missing_raises():
     registry = Registry("gi")
     with pytest.raises(KeyError, match="not registered"):
         registry.get_item("nope")
-

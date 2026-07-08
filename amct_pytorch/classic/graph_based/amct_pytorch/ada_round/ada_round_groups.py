@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,11 +21,11 @@ import numpy as np
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 
-MUL = 'Mul'
+MUL = "Mul"
 ACTIVATION_MAP = {
-    'Relu': torch.nn.ReLU(),
-    'Sigmoid': torch.nn.Sigmoid(),
-    'Tanh': torch.nn.Tanh()
+    "Relu": torch.nn.ReLU(),
+    "Sigmoid": torch.nn.Sigmoid(),
+    "Tanh": torch.nn.Tanh(),
 }
 
 
@@ -38,7 +38,7 @@ def _get_single_consumer(node):
 
 
 def _is_weight_ada_round(quant_config, layer_name):
-    '''
+    """
     Function: determine whether weight do ada round
     Parameters:
         quant_config: config which parsed from json file
@@ -46,11 +46,11 @@ def _is_weight_ada_round(quant_config, layer_name):
     Return:
         True: do ada round
         False: don't do ada round
-    '''
+    """
     if layer_name not in quant_config.keys():
         return False
     layer_config = quant_config.get(layer_name)
-    if layer_config.get('weight_quant_params').get('wts_algo') != 'ada_quantize':
+    if layer_config.get("weight_quant_params").get("wts_algo") != "ada_quantize":
         return False
     return True
 
@@ -60,7 +60,7 @@ def _match_gelu_subgraph(input_nodes):
         return False
 
     div_node = input_nodes[0]
-    if div_node.type != 'Div':
+    if div_node.type != "Div":
         return False
     div_value = QuantOpInfo.get_node_input_value(div_node, 1)
     except_value = np.array(1.4142135381698608, dtype=np.float32)
@@ -68,11 +68,11 @@ def _match_gelu_subgraph(input_nodes):
         return False
 
     erf_node = _get_single_consumer(div_node)
-    if erf_node is None or erf_node.type != 'Erf':
+    if erf_node is None or erf_node.type != "Erf":
         return False
 
     add_node = _get_single_consumer(erf_node)
-    if add_node is None or add_node.type != 'Add':
+    if add_node is None or add_node.type != "Add":
         return False
     if QuantOpInfo.get_node_input_value(add_node, 1) != 1:
         return False
@@ -108,7 +108,7 @@ def _match_gelu_tanh_subgraph_front_part(input_nodes):
         return False
 
     add0_node = _get_single_consumer(mul2_node)
-    if add0_node is None or add0_node.type != 'Add' or add0_node is not input_nodes[3]:
+    if add0_node is None or add0_node.type != "Add" or add0_node is not input_nodes[3]:
         return False
 
     return True
@@ -125,11 +125,11 @@ def _match_gelu_tanh_subgraph_back_part(input_nodes):
         return False
 
     tanh_node = _get_single_consumer(mul3_node)
-    if tanh_node is None or tanh_node.type != 'Tanh':
+    if tanh_node is None or tanh_node.type != "Tanh":
         return False
 
     add1_node = _get_single_consumer(tanh_node)
-    if add1_node is None or add1_node.type != 'Add':
+    if add1_node is None or add1_node.type != "Add":
         return False
     if QuantOpInfo.get_node_input_value(add1_node, 0) != 1:
         return False
@@ -148,14 +148,14 @@ def _match_gelu_tanh_subgraph_back_part(input_nodes):
 
 
 def _match_gelu_tanh_subgraph(input_nodes):
-    '''
-    Function: judge whether match gelu('tanh') subgraph 
+    """
+    Function: judge whether match gelu('tanh') subgraph
     Parameters:
         input_nodes: input_nodes of subgraph
     Return:
         True: match
         False: mismatch
-    '''
+    """
     if len(input_nodes) != 5:
         return False
 
@@ -173,40 +173,46 @@ def _match_rrelu_subgraph(input_nodes):
         return False
 
     rand_node = input_nodes[0]
-    if rand_node.type != 'RandomUniformLike':
+    if rand_node.type != "RandomUniformLike":
         return False
 
     prelu_node = _get_single_consumer(rand_node)
-    if prelu_node is None or prelu_node.type != 'PRelu' or prelu_node is not input_nodes[1]:
+    if (
+        prelu_node is None
+        or prelu_node.type != "PRelu"
+        or prelu_node is not input_nodes[1]
+    ):
         return False
 
     return True
 
 
 def _get_other_activation(consumers):
-    '''
+    """
     Function: get activation function of quant layer
     Parameters:
         consumers: consumers of quant layer
     Return:
         act_module: activation function
-    '''
+    """
     if len(consumers) != 1:
         return None
 
     act_module = None
     consumer = consumers[0]
-    if consumer.type in ('Relu', 'Sigmoid', 'Tanh'):
+    if consumer.type in ("Relu", "Sigmoid", "Tanh"):
         act_module = ACTIVATION_MAP.get(consumer.type)
-    elif consumer.type == 'LeakyRelu':
+    elif consumer.type == "LeakyRelu":
         attrs_helper = AttributeProtoHelper(consumer.proto)
-        alpha = attrs_helper.get_attr_value('alpha')
+        alpha = attrs_helper.get_attr_value("alpha")
         act_module = torch.nn.LeakyReLU(negative_slope=alpha)
-    elif consumer.type == 'PRelu':
+    elif consumer.type == "PRelu":
         slope_value = QuantOpInfo.get_node_input_value(consumer, 1).flatten()
         act_module = torch.nn.PReLU(num_parameters=slope_value.size)
-        act_module.weight = torch.nn.Parameter(torch.from_numpy(slope_value), requires_grad=False)
-    elif consumer.type == 'Clip':
+        act_module.weight = torch.nn.Parameter(
+            torch.from_numpy(slope_value), requires_grad=False
+        )
+    elif consumer.type == "Clip":
         if len(consumer.input_anchors) != 3:
             return None
         clip_min_value = QuantOpInfo.get_node_input_value(consumer, 1)
@@ -219,7 +225,7 @@ def _get_other_activation(consumers):
 
 
 def get_ada_round_groups(graph, quant_config):
-    '''
+    """
     Function: get ada round quant groups
     Parameters:
         graph: model in amct ir
@@ -227,7 +233,7 @@ def get_ada_round_groups(graph, quant_config):
     Return:
         quant_groups: [[quant_layer_name, activation_module], ...]
             if don't have activation module, it's None
-    '''
+    """
     ada_round_groups = list()
     for node in graph.nodes:
         if not _is_weight_ada_round(quant_config, node.name):
@@ -237,11 +243,11 @@ def get_ada_round_groups(graph, quant_config):
         if _match_gelu_subgraph(consumers):
             act_module = torch.nn.GELU()
         elif _match_gelu_tanh_subgraph(consumers):
-            act_module = torch.nn.GELU('tanh')
+            act_module = torch.nn.GELU("tanh")
         elif _match_rrelu_subgraph(consumers):
             attrs_helper = AttributeProtoHelper(consumers[0].proto)
-            high = attrs_helper.get_attr_value('high')
-            low = attrs_helper.get_attr_value('low')
+            high = attrs_helper.get_attr_value("high")
+            low = attrs_helper.get_attr_value("low")
             act_module = torch.nn.RReLU(lower=low, upper=high)
         else:
             act_module = _get_other_activation(consumers)

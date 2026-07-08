@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -40,9 +40,9 @@ def gloden_float_cast_to_float4_e2m1(tensor):
     res[absvalues > 5.0] = 6.0
 
     res *= sign
-    res[nan_mask] = float('nan')
-    res[inf_mask] = float('inf')
-    res[neg_inf_mask] = float('-inf')
+    res[nan_mask] = float("nan")
+    res[inf_mask] = float("inf")
+    res[neg_inf_mask] = float("-inf")
 
     return res
 
@@ -51,16 +51,17 @@ logger = logging.getLogger(__name__)
 
 
 class Testfloat2fp4e2m1(unittest.TestCase):
-    '''
+    """
     UT FOR DATA TRANSFORMATION FROM FLOAT 2 FP4E2M1
-    '''
+    """
+
     @classmethod
     def setUpClass(cls):
-        logger.info('Testfloat2fp4e2m1 START!')
+        logger.info("Testfloat2fp4e2m1 START!")
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('Testfloat2fp4e2m1 END!')
+        logger.info("Testfloat2fp4e2m1 END!")
 
     def test_float16_tensor_trans_2_fp4e2m1_success(self):
         for i in range(0, 10):

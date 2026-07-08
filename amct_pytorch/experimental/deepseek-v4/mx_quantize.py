@@ -65,7 +65,9 @@ def round_to_decimal(x):
     return exponent
 
 
-def _shared_exponents(A, method="max", axes=None, ebits=0, shared_exp_round_method="floor"):
+def _shared_exponents(
+    A, method="max", axes=None, ebits=0, shared_exp_round_method="floor"
+):
     """
     Get shared exponents for the passed matrix A.
     Args:
@@ -104,7 +106,7 @@ def _shared_exponents(A, method="max", axes=None, ebits=0, shared_exp_round_meth
 
     # Restrict to [-emax, emax] range
     if ebits > 0:
-        emax = 2**(ebits - 1) - 1
+        emax = 2 ** (ebits - 1) - 1
         # Overflow to Inf
         shared_exp[shared_exp > emax] = float("NaN")
         # Underflows are set to -127 which causes them to be
@@ -117,8 +119,7 @@ def _shared_exponents(A, method="max", axes=None, ebits=0, shared_exp_round_meth
 def _reshape_to_blocks(A, axes, block_size):
     if axes is None:
         raise Exception(
-            "axes required in order to determine which "
-            "dimension toapply block size to"
+            "axes required in order to determine which dimension toapply block size to"
         )
     if block_size == 0:
         raise Exception("block_size == 0 in _reshape_to_blocks")
@@ -193,20 +194,20 @@ def _safe_lshift(x, bits, exp):
     if exp is None:
         return x * (2**bits)
     else:
-        return x / (2 ** exp) * (2**bits)
+        return x / (2**exp) * (2**bits)
 
 
 def _safe_rshift(x, bits, exp):
     if exp is None:
         return x / (2**bits)
     else:
-        return x / (2**bits) * (2 ** exp)
+        return x / (2**bits) * (2**exp)
 
 
 def _get_min_norm(ebits):
-    """ Valid for all float formats """
+    """Valid for all float formats"""
     emin = 2 - (2 ** (ebits - 1))
-    return 0 if ebits == 0 else 2 ** emin
+    return 0 if ebits == 0 else 2**emin
 
 
 def _round_mantissa(A, bits, round, clamp=False):
@@ -246,10 +247,17 @@ def _round_mantissa(A, bits, round, clamp=False):
 # -------------------------------------------------------------------------
 # Main funcs
 # -------------------------------------------------------------------------
-def _quantize_elemwise_core(A, bits, exp_bits, max_norm, round='nearest',
-                            saturate_normals=False, allow_denorm=True,
-                            custom_cuda=False):
-    """ Core function used for element-wise quantization
+def _quantize_elemwise_core(
+    A,
+    bits,
+    exp_bits,
+    max_norm,
+    round="nearest",
+    saturate_normals=False,
+    allow_denorm=True,
+    custom_cuda=False,
+):
+    """Core function used for element-wise quantization
     Arguments:
       A         {PyTorch tensor} -- A tensor to be quantized
       bits      {int}            -- Number of mantissa bits. Includes
@@ -268,7 +276,9 @@ def _quantize_elemwise_core(A, bits, exp_bits, max_norm, round='nearest',
     A_is_sparse = A.is_sparse
     if A_is_sparse:
         if A.layout != torch.sparse_coo:
-            raise NotImplementedError("Only COO layout sparse tensors are currently supported.")
+            raise NotImplementedError(
+                "Only COO layout sparse tensors are currently supported."
+            )
 
         sparse_A = A.coalesce()
         A = sparse_A.values().clone()
@@ -281,11 +291,10 @@ def _quantize_elemwise_core(A, bits, exp_bits, max_norm, round='nearest',
         out = A
 
     if exp_bits != 0:
-        private_exp = torch.floor(torch.log2(
-            torch.abs(A) + (A == 0).type(A.dtype)))
+        private_exp = torch.floor(torch.log2(torch.abs(A) + (A == 0).type(A.dtype)))
 
         # The minimum representable exponent for 8 exp bits is -126
-        min_exp = -(2**(exp_bits - 1)) + 2
+        min_exp = -(2 ** (exp_bits - 1)) + 2
         private_exp = private_exp.clip(min=min_exp)
     else:
         private_exp = None
@@ -302,8 +311,9 @@ def _quantize_elemwise_core(A, bits, exp_bits, max_norm, round='nearest',
     if saturate_normals or exp_bits == 0:
         out = torch.clamp(out, min=-max_norm, max=max_norm)
     else:
-        out = torch.where((torch.abs(out) > max_norm),
-                           torch.sign(out) * float("Inf"), out)
+        out = torch.where(
+            (torch.abs(out) > max_norm), torch.sign(out) * float("Inf"), out
+        )
 
     # handle Inf/NaN
     out[A == float("Inf")] = float("Inf")
@@ -328,27 +338,24 @@ def quantize_mx(
     shared_exp_round_method="round2decimal",
     real_quant=False,
 ):
-    """Function used for MX* quantization
-    """
+    """Function used for MX* quantization"""
 
-    assert(scale_bits > 0)
+    assert scale_bits > 0
 
     # Make sure axes is a list of non-negative numbers
-    axes = [axes] if type(axes) == int else axes
+    axes = [axes] if isinstance(axes, int) else axes
     axes = [x + A.ndim if x < 0 else x for x in axes]
 
     if quant_bit == 8:
-        ebits, mbits, emax, max_norm = 4, 5, 8, 448.0 # e4m3
+        ebits, mbits, emax, max_norm = 4, 5, 8, 448.0  # e4m3
     elif quant_bit == 4:
-        ebits, mbits, emax, max_norm = 2, 3, 2, 6.0 # e2m1
+        ebits, mbits, emax, max_norm = 2, 3, 2, 6.0  # e2m1
     else:
         raise Exception("quant_bit must be 8 or 4")
 
     # Perform tiling to the hardware vector size
     if block_size > 0:
-        A, axes, orig_shape, padded_shape = _reshape_to_blocks(
-            A, axes, block_size
-        )
+        A, axes, orig_shape, padded_shape = _reshape_to_blocks(A, axes, block_size)
 
     ####################
     # Quantize
@@ -357,8 +364,11 @@ def quantize_mx(
 
     # Get shared exponents
     shared_exp = _shared_exponents(
-        A, method=shared_exp_method, axes=shared_exp_axes, ebits=0,
-        shared_exp_round_method=shared_exp_round_method
+        A,
+        method=shared_exp_method,
+        axes=shared_exp_axes,
+        ebits=0,
+        shared_exp_round_method=shared_exp_round_method,
     )
 
     # Flush subnormal FP32 inputs to zero
@@ -369,21 +379,29 @@ def quantize_mx(
     # in the element data format
     shared_exp = shared_exp - emax
 
-    scale_emax = 2**(scale_bits - 1) - 1
+    scale_emax = 2 ** (scale_bits - 1) - 1
     shared_exp[shared_exp > scale_emax] = float("NaN")
     shared_exp[shared_exp < -scale_emax] = -scale_emax
 
     A = A / (2**shared_exp)
 
     A = _quantize_elemwise_core(
-            A, mbits, ebits, max_norm, round=round,
-            allow_denorm=True, saturate_normals=True,
-            custom_cuda=False)
+        A,
+        mbits,
+        ebits,
+        max_norm,
+        round=round,
+        allow_denorm=True,
+        saturate_normals=True,
+        custom_cuda=False,
+    )
     if real_quant:
         if block_size:
             A = _undo_reshape_to_blocks(A, padded_shape, orig_shape, axes)
         if quant_bit == 8:
-            return A.to(torch.float8_e4m3fn), (shared_exp + scale_emax).to(torch.uint8).squeeze(-1)
+            return A.to(torch.float8_e4m3fn), (shared_exp + scale_emax).to(
+                torch.uint8
+            ).squeeze(-1)
         else:
             return A, (shared_exp + scale_emax).to(torch.uint8).squeeze(-1)
     A = A * (2**shared_exp)

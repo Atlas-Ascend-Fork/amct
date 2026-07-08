@@ -16,4 +16,4 @@
 # ----------------------------------------------------------------------------
 """Public namespace for amct_pytorch QAT modules."""
 
-__all__ = ['quantization']
+__all__ = ["quantization"]

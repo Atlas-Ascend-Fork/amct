@@ -18,8 +18,8 @@ import torch_npu
 from utils import get_test_dataset, get_qwen, get_calib_dataset, infer_model, test_ppl
 import amct_pytorch as amct
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='example')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="example")
     parser.add_argument("--model_path", type=str, required=True, help="模型路径")
     args = parser.parse_args()
 
@@ -33,7 +33,7 @@ if __name__ == '__main__':
     # Phase1: quantize model
     cfg = amct.HIFP8_OFMR_CFG
     amct.quantize(quant_model, cfg)
-    
+
     # Phase2: inference calibration model to cal quantized factors
     infer_model(quant_model, samples)
     torch_npu.npu.empty_cache()

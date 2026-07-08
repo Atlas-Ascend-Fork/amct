@@ -32,16 +32,24 @@ class QuantLinear(nn.Module):
         self.w_bits = w_bits
         self.weight_quantizer = WeightQuantizer()
         if w_bits is None:
-            self.weight_quantizer.configure(args.w_bits, perchannel=True, sym=not(args.w_asym), mse=False)
+            self.weight_quantizer.configure(
+                args.w_bits, perchannel=True, sym=not (args.w_asym), mse=False
+            )
         else:
-            self.weight_quantizer.configure(w_bits, perchannel=True, sym=not(args.w_asym), mse=False)
+            self.weight_quantizer.configure(
+                w_bits, perchannel=True, sym=not (args.w_asym), mse=False
+            )
 
         self.lwc = lwc if lwc is not None else args.lwc
         if self.lwc:
             lwc_dim = self.linear.weight.shape[0] if self.lwc else -1
-            init_value = 4.
-            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1)) * init_value, requires_grad=True)
-            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1)) * init_value, requires_grad=True)
+            init_value = 4.0
+            self.clip_factor_w_max = nn.Parameter(
+                torch.ones((lwc_dim, 1)) * init_value, requires_grad=True
+            )
+            self.clip_factor_w_min = nn.Parameter(
+                torch.ones((lwc_dim, 1)) * init_value, requires_grad=True
+            )
             self.sigmoid = nn.Sigmoid()
 
         self._eval_mode = False
@@ -81,4 +89,3 @@ class QuantLinear(nn.Module):
 
     def _eval_forward(self, hidden_states):
         return F.linear(hidden_states, self.weight, self.bias)
-

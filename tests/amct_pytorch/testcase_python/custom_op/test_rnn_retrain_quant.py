@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,7 +26,6 @@ from torch.nn.utils.rnn import pack_sequence
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
     CompModuleRNN,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.ifmr.ifmr import IFMR
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
 )
@@ -36,17 +35,17 @@ from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.rnn_retrain_quant i
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-LAYERS_NAME = 'layers_name'
+LAYERS_NAME = "layers_name"
 
-LSTM = 'lstm'
+LSTM = "lstm"
 
-BATCH_NUM = 'batch_num'
+BATCH_NUM = "batch_num"
 
 
 class TestRNNRetrainQuant(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, 'test_rnn_retrain_quant')
+        cls.temp_folder = os.path.join(CUR_DIR, "test_rnn_retrain_quant")
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -59,77 +58,71 @@ class TestRNNRetrainQuant(unittest.TestCase):
 
         # lstm
         cls.quant_module = CompModuleRNN(**cls.comp_args)
-        cls.quant_module.comp_algs.append('quant')
-        cls.record_file = os.path.join(cls.temp_folder, 'record.txt')
+        cls.quant_module.comp_algs.append("quant")
+        cls.record_file = os.path.join(cls.temp_folder, "record.txt")
         if not os.path.exists(cls.record_file):
-            with open(cls.record_file, 'w') as f:
-                f.write('')
+            with open(cls.record_file, "w") as f:
+                f.write("")
         cls.record_module = Recorder(cls.record_file)
         cls.retrain_quant = RNNRetrainQuant(cls.quant_module, cls.record_module)
-        
+
         # gru
         cls.quant_module_gru = CompModuleRNN(**cls.gru_comp_args)
-        cls.quant_module_gru.comp_algs.append('quant')
-        
-        cls.record_file_gru = os.path.join(cls.temp_folder, 'record_gru.txt')
+        cls.quant_module_gru.comp_algs.append("quant")
+
+        cls.record_file_gru = os.path.join(cls.temp_folder, "record_gru.txt")
         if not os.path.exists(cls.record_file):
-            with open(cls.record_file_gru, 'w') as f:
-                f.write('')
+            with open(cls.record_file_gru, "w") as f:
+                f.write("")
         cls.record_module_gru = Recorder(cls.record_file_gru)
-        cls.retrain_quant_gru = RNNRetrainQuant(cls.quant_module_gru, cls.record_module_gru)
+        cls.retrain_quant_gru = RNNRetrainQuant(
+            cls.quant_module_gru, cls.record_module_gru
+        )
 
     @classmethod
     def set_config(cls):
-        cls.act_config = {
-            'num_bits': 8,
-            'clip_max': 1.0,
-            'clip_min': -1.0
-        }
-        cls.wts_config = {
-            'num_bits': 8,
-            'channel_wise': False,
-            'algo': 'arq_retrain'
-        }
+        cls.act_config = {"num_bits": 8, "clip_max": 1.0, "clip_min": -1.0}
+        cls.wts_config = {"num_bits": 8, "channel_wise": False, "algo": "arq_retrain"}
         cls.comp_common_config = {
-            'device': 'cpu',
-            'need_sync': False,
-            'process_group': None,
-            'world_size': 1,
+            "device": "cpu",
+            "need_sync": False,
+            "process_group": None,
+            "world_size": 1,
             LAYERS_NAME: [LSTM],
-            BATCH_NUM: 1
+            BATCH_NUM: 1,
         }
         cls.gru_comp_common_config = {
-            'device': 'cpu',
-            'need_sync': False,
-            'process_group': None,
-            'world_size': 1,
+            "device": "cpu",
+            "need_sync": False,
+            "process_group": None,
+            "world_size": 1,
             LAYERS_NAME: [LSTM],
-            BATCH_NUM: 1
+            BATCH_NUM: 1,
         }
         cls.comp_args = {
-            'module': cls.module,
-            'act_config': cls.act_config,
-            'wts_config': cls.wts_config,
-            'common_config': cls.comp_common_config,
-            'acts_comp_reuse': False
+            "module": cls.module,
+            "act_config": cls.act_config,
+            "wts_config": cls.wts_config,
+            "common_config": cls.comp_common_config,
+            "acts_comp_reuse": False,
         }
         cls.gru_comp_args = {
-            'module': cls.gru_module,
-            'act_config': cls.act_config,
-            'wts_config': cls.wts_config,
-            'common_config': cls.gru_comp_common_config,
-            'acts_comp_reuse': False
+            "module": cls.gru_module,
+            "act_config": cls.act_config,
+            "wts_config": cls.wts_config,
+            "common_config": cls.gru_comp_common_config,
+            "acts_comp_reuse": False,
         }
         cls.common_config = {
-            'data_num_bits': 8,
-            'wts_num_bits': 8,
+            "data_num_bits": 8,
+            "wts_num_bits": 8,
             LAYERS_NAME: [LSTM],
-            BATCH_NUM: 1
+            BATCH_NUM: 1,
         }
 
     @classmethod
     def tearDownClass(cls):
-        os.popen('rm -r ' + cls.temp_folder)
+        os.popen("rm -r " + cls.temp_folder)
 
     def test_forward_input_type_error(self):
         input_data = pack_sequence([self.input])
@@ -148,7 +141,7 @@ class TestRNNRetrainQuant(unittest.TestCase):
     def test_forward_success(self):
         self.retrain_quant.forward(self.input, (self.h0, self.c0))
         self.retrain_quant_gru.forward(self.input, self.h0)
-    
+
     def test_forward_seq_n_success(self):
         inputs = torch.randn(1, 10, 10)
         self.retrain_quant.forward(inputs, (self.h0, self.c0))
@@ -156,14 +149,19 @@ class TestRNNRetrainQuant(unittest.TestCase):
 
     def test_reorganize_rnn_quant_factor(self):
         quant_factor = np.array([0, 1, 2, 3])
-        reorganized_quant_factor = self.retrain_quant._reorganize_rnn_quant_factor(quant_factor, 'name', 'LSTM')
+        reorganized_quant_factor = self.retrain_quant._reorganize_rnn_quant_factor(
+            quant_factor, "name", "LSTM"
+        )
         self.assertEqual(reorganized_quant_factor, [0, 3, 1, 2])
 
         quant_factor = np.array([0, 1, 2])
-        reorganized_quant_factor = self.retrain_quant._reorganize_rnn_quant_factor(quant_factor, 'name', 'GRU')
+        reorganized_quant_factor = self.retrain_quant._reorganize_rnn_quant_factor(
+            quant_factor, "name", "GRU"
+        )
         self.assertEqual(reorganized_quant_factor, [1, 0, 2])
 
     def test_update_quant_factor(self):
-        with patch('amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils.process_scale'):
+        with patch(
+            "amct_pytorch.classic.graph_based.amct_pytorch.custom_op.utils.process_scale"
+        ):
             self.retrain_quant._update_quant_factor()
-

@@ -22,7 +22,7 @@ This package exposes the documented import path
 ``from amct_pytorch.tensor_decompose import auto_decomposition, decompose_network``.
 """
 
-__all__ = ['auto_decomposition', 'decompose_network']
+__all__ = ["auto_decomposition", "decompose_network"]
 
 from amct_pytorch.classic.graph_based.amct_pytorch.tensor_decompose import (
     auto_decomposition,

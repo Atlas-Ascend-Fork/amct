@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,13 +17,11 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import sys
 import unittest
 
 import torch
 
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration \
-    .quant_calibration_config_base.quant_calibration_proto import (
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config_base.quant_calibration_proto import (
     QuantCalibrationProtoConfig,
 )
 
@@ -49,35 +47,35 @@ class CustomizedModel(torch.nn.Module):
 class TestQuantCalibrationProtoConfig(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        logger.info('TestQuantCalibrationProtoConfig start!')
-        cls.proto_path = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
+        logger.info("TestQuantCalibrationProtoConfig start!")
+        cls.proto_path = os.path.join(CUR_DIR, "utils/test_case_config_00.cfg")
         cls.obj = QuantCalibrationProtoConfig(cls.proto_path, CustomizedModel())
 
     @classmethod
     def tearDownClass(cls):
-        logger.info('TestQuantCalibrationProtoConfig end!')
+        logger.info("TestQuantCalibrationProtoConfig end!")
 
     def test_get_proto_global_config(self):
         ret = self.obj.get_proto_global_config()
-        self.assertEqual(ret.get('batch_num'), 2)
-        self.assertTrue(ret.get('activation_offset'))
+        self.assertEqual(ret.get("batch_num"), 2)
+        self.assertTrue(ret.get("activation_offset"))
 
     def test_get_quant_config(self):
-        ret = self.obj.get_quant_config('kv_cache_quant_config')
-        self.assertEqual(ret.get('act_algo'), 'hfmg')
+        ret = self.obj.get_quant_config("kv_cache_quant_config")
+        self.assertEqual(ret.get("act_algo"), "hfmg")
 
     def test_get_quant_layers(self):
-        ret = self.obj.get_quant_layers('kv_quant')
-        self.assertIn('matmul1', ret)
+        ret = self.obj.get_quant_layers("kv_quant")
+        self.assertIn("matmul1", ret)
 
     def test_get_override_layers(self):
         ret = self.obj.get_override_layers()
-        self.assertIn('matmul3', ret.get('kv_cache_quant_layers'))
+        self.assertIn("matmul3", ret.get("kv_cache_quant_layers"))
 
     def test_read_override_layer_config(self):
-        ret = self.obj.read_override_layer_config('matmul3', 'kv_data_quant_config')
-        self.assertIn('act_algo', ret)
-        self.assertIn('quant_granularity', ret)
+        ret = self.obj.read_override_layer_config("matmul3", "kv_data_quant_config")
+        self.assertIn("act_algo", ret)
+        self.assertIn("quant_granularity", ret)
 
     def test_get_batch_num(self):
         ret = self.obj._get_batch_num()

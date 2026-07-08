@@ -12,14 +12,12 @@
 # ----------------------------------------------------------------------------
 
 import argparse
-import torch
-import torch_npu
 
 from utils import get_test_dataset, get_qwen, test_ppl
 import amct_pytorch as amct
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='example')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="example")
     parser.add_argument("--model_path", type=str, required=True, help="model path")
     args = parser.parse_args()
 

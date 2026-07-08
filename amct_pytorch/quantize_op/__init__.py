@@ -15,6 +15,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-__all__ = ['BaseQuantizeModule']
+__all__ = ["BaseQuantizeModule"]
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule

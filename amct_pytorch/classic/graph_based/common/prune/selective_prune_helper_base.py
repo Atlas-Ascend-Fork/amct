@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,7 +20,7 @@ from .filter_prune_helper_base import PruneHelperBase
 
 
 class SelectivePruneHelperBase(PruneHelperBase):
-    """ base class of selective prune helper"""
+    """base class of selective prune helper"""
 
     def get_mask_shape(self):
         """
@@ -43,9 +43,9 @@ class SelectivePruneHelperBase(PruneHelperBase):
         attr_helper = AttrProtoHelper(record)
         prune_mask_shape = self.get_mask_shape()
         if prune_mask_shape:
-            attr_helper.set_attr_value('mask_shape', 'INTS', prune_mask_shape)
+            attr_helper.set_attr_value("mask_shape", "INTS", prune_mask_shape)
 
-        self.node.set_attr('selective_prune_records', [prune_record])
+        self.node.set_attr("selective_prune_records", [prune_record])
 
     def process(self, record_helper):
         """

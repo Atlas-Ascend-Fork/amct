@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,43 +16,56 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 __all__ = [
-    'bcp',
-    'selective_mask_gen',
-    'dmq_balancer_forward',
-    'ifmr_forward_pytorch',
-    'ifmr_backward_pytorch',
-    'arq_retrain_forward_pytorch',
-    'arq_retrain_backward_pytorch',
-    'ulq_retrain_forward_pytorch',
-    'ulq_retrain_backward_pytorch',
-    'ulq_scale_retrain_forward_pytorch',
-    'ulq_scale_retrain_backward_pytorch',
-    'arq_cali_pytorch',
-    'arq_real_pytorch',
-    'hfmg_arq_pytorch',
-    'hfmg_merge_pytorch',
-    'hfmg_forward_pytorch',
-    'hfmg_backward_pytorch']
+    "bcp",
+    "selective_mask_gen",
+    "dmq_balancer_forward",
+    "ifmr_forward_pytorch",
+    "ifmr_backward_pytorch",
+    "arq_retrain_forward_pytorch",
+    "arq_retrain_backward_pytorch",
+    "ulq_retrain_forward_pytorch",
+    "ulq_retrain_backward_pytorch",
+    "ulq_scale_retrain_forward_pytorch",
+    "ulq_scale_retrain_backward_pytorch",
+    "arq_cali_pytorch",
+    "arq_real_pytorch",
+    "hfmg_arq_pytorch",
+    "hfmg_merge_pytorch",
+    "hfmg_forward_pytorch",
+    "hfmg_backward_pytorch",
+]
 
-import os
+import os  # noqa: E402
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-from ...amct_pytorch.custom_op.ifmr.ifmr_impl import ifmr_forward_pytorch
-from ...amct_pytorch.custom_op.ifmr.ifmr_impl import ifmr_backward_pytorch
-from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import arq_retrain_forward_pytorch
-from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import arq_retrain_backward_pytorch
-from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import ulq_retrain_forward_pytorch
-from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import ulq_retrain_backward_pytorch
-from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import ulq_scale_retrain_forward_pytorch
-from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import ulq_scale_retrain_backward_pytorch
-from ...amct_pytorch.custom_op.arq.arq_impl import arq_cali_pytorch
-from ...amct_pytorch.custom_op.arq.arq_impl import arq_real_pytorch
-from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_arq_pytorch
-from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_merge_pytorch
-from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_forward_pytorch
-from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_backward_pytorch
+from ...amct_pytorch.custom_op.ifmr.ifmr_impl import ifmr_forward_pytorch  # noqa: E402
+from ...amct_pytorch.custom_op.ifmr.ifmr_impl import ifmr_backward_pytorch  # noqa: E402
+from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import (  # noqa: E402
+    arq_retrain_forward_pytorch,
+)
+from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import (  # noqa: E402
+    arq_retrain_backward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import (  # noqa: E402
+    ulq_retrain_forward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import (  # noqa: E402
+    ulq_retrain_backward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import (  # noqa: E402
+    ulq_scale_retrain_forward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import (  # noqa: E402
+    ulq_scale_retrain_backward_pytorch,
+)
+from ...amct_pytorch.custom_op.arq.arq_impl import arq_cali_pytorch  # noqa: E402
+from ...amct_pytorch.custom_op.arq.arq_impl import arq_real_pytorch  # noqa: E402
+from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_arq_pytorch  # noqa: E402
+from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_merge_pytorch  # noqa: E402
+from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_forward_pytorch  # noqa: E402
+from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_backward_pytorch  # noqa: E402
 
-from .bcp import bcp
-from .selective_mask_gen import selective_mask_gen
-from .dmq_balancer.dmq_balancer_func import dmq_balancer_forward
+from .bcp import bcp  # noqa: E402
+from .selective_mask_gen import selective_mask_gen  # noqa: E402
+from .dmq_balancer.dmq_balancer_func import dmq_balancer_forward  # noqa: E402

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,6 +27,7 @@ class QuantFusionPass(BaseFusionPass):
               same scale and offset
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: Init QuantFusionPass object
@@ -46,7 +47,7 @@ class QuantFusionPass(BaseFusionPass):
         for output_anchor in node.output_anchors:
             quant_layer_count = 0
             for peer_input_anchor in output_anchor.get_peer_input_anchor():
-                if peer_input_anchor.node.type == 'AscendQuant':
+                if peer_input_anchor.node.type == "AscendQuant":
                     quant_layer_count += 1
             if quant_layer_count > 1:
                 return True
@@ -58,11 +59,13 @@ class QuantFusionPass(BaseFusionPass):
         """find quant node with same scale and offset"""
         fusion_quant_nodes = {}
         for node in quant_node_list:
-            object_name = node.get_attr('object_node')
-            scale_d = records.get(object_name).get('data_scale')
-            offset_d = records.get(object_name).get('data_offset')
-            act_type = records.get(object_name).get('act_type', 'INT8')
-            encode_id = QuantFusionPass.encode_scale_offset(scale_d, offset_d) + act_type
+            object_name = node.get_attr("object_node")
+            scale_d = records.get(object_name).get("data_scale")
+            offset_d = records.get(object_name).get("data_offset")
+            act_type = records.get(object_name).get("act_type", "INT8")
+            encode_id = (
+                QuantFusionPass.encode_scale_offset(scale_d, offset_d) + act_type
+            )
             if encode_id not in fusion_quant_nodes:
                 fusion_quant_nodes[encode_id] = [node]
             else:
@@ -80,7 +83,8 @@ class QuantFusionPass(BaseFusionPass):
 
         encode_result = np.uint64(0)
         encode_result = np.uint64(uint32_scale) << np.uint32(32) | np.uint64(
-            uint32_offset)
+            uint32_offset
+        )
 
         return str(encode_result)
 
@@ -118,7 +122,8 @@ class QuantFusionPass(BaseFusionPass):
                     quant_node_list.append(peer_input_anchor.node)
             # record quant layer with same scale and offset
             fusion_quant_nodes = self.find_same_quant_node(
-                self.records, quant_node_list)
+                self.records, quant_node_list
+            )
             # do quant fusion
             for _, nodes in fusion_quant_nodes.items():
                 if len(nodes) < 2:
@@ -126,8 +131,7 @@ class QuantFusionPass(BaseFusionPass):
                 # retain first quant node, remove the rest
                 for node in nodes[1:]:
                     # remove input edge at first
-                    graph.remove_edge(object_node, output_anchor.index,
-                                      node, 0)
+                    graph.remove_edge(object_node, output_anchor.index, node, 0)
                     # relink from node -> consumer to first_node -> consumer
                     node_output = node.get_output_anchor(0)
                     peers = node_output.get_peer_input_anchor().copy()
@@ -137,8 +141,11 @@ class QuantFusionPass(BaseFusionPass):
                         graph.remove_edge(node, 0, dst_node, dst_anchor_index)
                         graph.add_edge(nodes[0], 0, dst_node, dst_anchor_index)
                     graph.remove_node(node)
-                    LOGGER.logd("Remove node {} from graph".format(
-                        node.name), 'QuantFusionPass')
+                    LOGGER.logd(
+                        "Remove node {} from graph".format(node.name), "QuantFusionPass"
+                    )
 
-        LOGGER.logd(f'Do fusion same quant layer from "{object_node.name}" success!', 'QuantFusionPass')
-
+        LOGGER.logd(
+            f'Do fusion same quant layer from "{object_node.name}" success!',
+            "QuantFusionPass",
+        )

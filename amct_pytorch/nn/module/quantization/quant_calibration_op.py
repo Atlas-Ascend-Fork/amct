@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """Public re-export of QuantCalibrationOp."""
 
-__all__ = ['QuantCalibrationOp']
+__all__ = ["QuantCalibrationOp"]
 
 from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization import (
     quant_calibration_op as _impl,

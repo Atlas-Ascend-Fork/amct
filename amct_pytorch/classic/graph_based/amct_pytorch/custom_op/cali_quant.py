@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,19 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from copy import deepcopy
 
 from torch import nn
 import torch
-import numpy as np
 
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 from ...amct_pytorch.custom_op.ifmr.ifmr import IFMR
 from ...amct_pytorch.custom_op.hfmg.hfmg import HFMG
 from ...amct_pytorch.custom_op.dump.dump import DUMP
 
-SCALE_D = 'scale_d'
-SCALE_H = 'scale_h'
+SCALE_D = "scale_d"
+SCALE_H = "scale_h"
 
 
 class CaliQuantBase(nn.Module):
@@ -35,17 +33,20 @@ class CaliQuantBase(nn.Module):
     Function: Customized torch.nn.Module of the calibration operator base class.
     APIs: forward.
     """
-    def __init__(self,
-                sub_module,
-                record_module,
-                layers_name,
-                num_bits=8,
-                batch_num=2,
-                with_offset=False,
-                dump_config=None,
-                mode='cali_dump',
-                tensor_balance_factor=None,
-                fakequant_precision_mode='DEFAULT'):
+
+    def __init__(
+        self,
+        sub_module,
+        record_module,
+        layers_name,
+        num_bits=8,
+        batch_num=2,
+        with_offset=False,
+        dump_config=None,
+        mode="cali_dump",
+        tensor_balance_factor=None,
+        fakequant_precision_mode="DEFAULT",
+    ):
         """
         Function: init base function.
         Init some common param both in IFMR and HFMG.
@@ -90,13 +91,15 @@ class CaliQuantBase(nn.Module):
         inputs: data used for calibration in torch.tensor.
         """
         if hx is None and self.module_type in RNN_LAYER_TYPE:
-            raise ValueError(f"hx is necessary input params of RNN op {self.module_type}")
+            raise ValueError(
+                f"hx is necessary input params of RNN op {self.module_type}"
+            )
         if hx is not None and self.module_type not in RNN_LAYER_TYPE:
             raise ValueError(f"hx is invalid input params of op {self.module_type}")
         # step 0. cali / dump / cali_dump
         h_inputs = None
         with torch.no_grad():
-            if 'dump' in self.mode and self.dump_config is not None:
+            if "dump" in self.mode and self.dump_config is not None:
                 # directly pass the inputs.
                 inputs = self.dump_module.forward(inputs)
             if self.tensor_balance_factor is not None:
@@ -109,16 +112,16 @@ class CaliQuantBase(nn.Module):
                 sub_out = self.sub_module(inputs, hx)
                 h0 = hx if self.module_type == "GRU" else hx[0]
                 h0 = h0.permute(1, 0, 2) if self.sub_module.batch_first else h0
-                h_inputs = torch.cat((h0, sub_out[0][:, :-1, :]), dim=1)     
+                h_inputs = torch.cat((h0, sub_out[0][:, :-1, :]), dim=1)
             else:
                 sub_out = self.sub_module(inputs)
 
-            if 'cali' not in self.mode:
+            if "cali" not in self.mode:
                 return sub_out
 
             # step 1. ifmr / hfmg
             self.cur_batch += 1
-            if self.cur_batch <= self.cali_algo_param.get('batch_num'):
+            if self.cur_batch <= self.cali_algo_param.get("batch_num"):
                 self.cali_process(inputs, h_inputs)
 
             return sub_out
@@ -136,8 +139,8 @@ class CaliQuantBase(nn.Module):
         scale_d = quant_info.scale[0]
         offset_d = quant_info.offset[0]
         self.scale_d = scale_d
-        if self.fakequant_precision_mode == 'FORCE_FP16_QUANT':
-            self.record_module.fakequant_precision_mode = 'FORCE_FP16_QUANT'
+        if self.fakequant_precision_mode == "FORCE_FP16_QUANT":
+            self.record_module.fakequant_precision_mode = "FORCE_FP16_QUANT"
         if hx is not None:
             quant_info_h = self.cali_quant_module_h.forward(hx)
             scale_h = quant_info_h.scale[0]
@@ -145,12 +148,14 @@ class CaliQuantBase(nn.Module):
             self.scale_h = scale_h
         if calibration_flag:
             # save scale_d offset_d scale_h and offset_h to record_module
-            records = {SCALE_D: scale_d.cpu().tolist(),
-                'offset_d': int(offset_d.cpu().tolist()),
-                'num_bits': self.cali_algo_param['num_bits']}
+            records = {
+                SCALE_D: scale_d.cpu().tolist(),
+                "offset_d": int(offset_d.cpu().tolist()),
+                "num_bits": self.cali_algo_param["num_bits"],
+            }
             if hx is not None:
                 records[SCALE_H] = scale_h.cpu().tolist()
-                records['offset_h'] = int(offset_h.cpu().tolist())
+                records["offset_h"] = int(offset_h.cpu().tolist())
             self.record_module(self.layers_name, self.cali_algo_name, records)
 
     def _init_dump_mode(self):
@@ -161,19 +166,22 @@ class CaliQuantBase(nn.Module):
             if self.dump_config.batch_num is None:
                 self.dump_config.batch_num = self.batch_num
             self.dump_module = DUMP(self.layers_name, self.dump_config)
-        if self.mode not in ['cali', 'dump', 'cali_dump']:
-            raise ValueError("param mode only support ['cali', 'dump', 'cali_dump'], but get {}"
-            .format(self.mode))
+        if self.mode not in ["cali", "dump", "cali_dump"]:
+            raise ValueError(
+                "param mode only support ['cali', 'dump', 'cali_dump'], but get {}".format(
+                    self.mode
+                )
+            )
 
     def _init_cali_param(self):
         """
         Function: init cali params. IFMR and HFMG's common param.
         """
         self.cali_algo_param = {}
-        self.cali_algo_param['layers_name'] = self.layers_name
-        self.cali_algo_param['num_bits'] = self.num_bits
-        self.cali_algo_param['batch_num'] = self.batch_num
-        self.cali_algo_param['with_offset'] = self.with_offset
+        self.cali_algo_param["layers_name"] = self.layers_name
+        self.cali_algo_param["num_bits"] = self.num_bits
+        self.cali_algo_param["batch_num"] = self.batch_num
+        self.cali_algo_param["with_offset"] = self.with_offset
 
 
 class CaliQuant(CaliQuantBase):
@@ -181,22 +189,25 @@ class CaliQuant(CaliQuantBase):
     Function: Customized torch.nn.Module of the calibration operator. IFMR.
     APIs: forward
     """
-    def __init__(self,
-                 sub_module,
-                 record_module,
-                 layers_name,
-                 num_bits=8,
-                 batch_num=2,
-                 with_offset=False,
-                 max_percentile=0.999999,
-                 min_percentile=0.999999,
-                 search_start=0.7,
-                 search_end=1.3,
-                 search_step=0.01,
-                 dump_config=None,
-                 mode='cali_dump',
-                 tensor_balance_factor=None,
-                 fakequant_precision_mode='DEFAULT'):
+
+    def __init__(
+        self,
+        sub_module,
+        record_module,
+        layers_name,
+        num_bits=8,
+        batch_num=2,
+        with_offset=False,
+        max_percentile=0.999999,
+        min_percentile=0.999999,
+        search_start=0.7,
+        search_end=1.3,
+        search_step=0.01,
+        dump_config=None,
+        mode="cali_dump",
+        tensor_balance_factor=None,
+        fakequant_precision_mode="DEFAULT",
+    ):
         """
         Function: IFMR init function.
 
@@ -220,16 +231,16 @@ class CaliQuant(CaliQuantBase):
             fakequant_precision_mode=fakequant_precision_mode,
         )
         # IFMR params init
-        self.cali_algo_param['max_percentile'] = max_percentile
-        self.cali_algo_param['min_percentile'] = min_percentile
-        self.cali_algo_param['search_start'] = search_start
-        self.cali_algo_param['search_end'] = search_end
-        self.cali_algo_param['search_step'] = search_step
+        self.cali_algo_param["max_percentile"] = max_percentile
+        self.cali_algo_param["min_percentile"] = min_percentile
+        self.cali_algo_param["search_start"] = search_start
+        self.cali_algo_param["search_end"] = search_end
+        self.cali_algo_param["search_step"] = search_step
         # IFMR module init.
         self.cali_quant_module = IFMR(**self.cali_algo_param)
         self.cali_quant_module_h = IFMR(**self.cali_algo_param)
         # algo name and search name
-        self.cali_algo_name = 'ifmr'
+        self.cali_algo_name = "ifmr"
 
 
 class CaliQuantHfmg(CaliQuantBase):
@@ -237,18 +248,21 @@ class CaliQuantHfmg(CaliQuantBase):
     Function: Customized torch.nn.Module of the calibration operator. HFMG.
     APIs: forward.
     """
-    def __init__(self,
-                 sub_module,
-                 record_module,
-                 layers_name,
-                 num_bits=8,
-                 batch_num=2,
-                 with_offset=False,
-                 nbins=4096,
-                 dump_config=None,
-                 mode='cali_dump',
-                 tensor_balance_factor=None,
-                 fakequant_precision_mode='DEFAULT'):
+
+    def __init__(
+        self,
+        sub_module,
+        record_module,
+        layers_name,
+        num_bits=8,
+        batch_num=2,
+        with_offset=False,
+        nbins=4096,
+        dump_config=None,
+        mode="cali_dump",
+        tensor_balance_factor=None,
+        fakequant_precision_mode="DEFAULT",
+    ):
         """
         Function: HFMG init function.
 
@@ -268,9 +282,9 @@ class CaliQuantHfmg(CaliQuantBase):
             fakequant_precision_mode=fakequant_precision_mode,
         )
         # HFMG param init.
-        self.cali_algo_param['nbins'] = nbins
+        self.cali_algo_param["nbins"] = nbins
         # HFMG module init.
         self.cali_quant_module = HFMG(**self.cali_algo_param)
         self.cali_quant_module_h = HFMG(**self.cali_algo_param)
         # algo name and search name
-        self.cali_algo_name = 'hfmg'
+        self.cali_algo_name = "hfmg"

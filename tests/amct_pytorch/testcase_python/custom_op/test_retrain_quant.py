@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,17 +16,14 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import unittest
-from unittest import mock
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.retrain_quant import (
     get_quant_type,
 )
 
-DEVICE = torch.device('cpu')
-
+DEVICE = torch.device("cpu")
 
 
 class TestUlqRetrain(unittest.TestCase):
@@ -47,4 +44,4 @@ class TestUlqRetrain(unittest.TestCase):
     def test_get_quant_type(self):
         conv = torch.nn.Conv2d(2, 3, 1)
         type_name = get_quant_type(conv)
-        self.assertEqual(type_name, 'Conv2d')
+        self.assertEqual(type_name, "Conv2d")

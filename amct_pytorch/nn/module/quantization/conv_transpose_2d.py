@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """Public re-export of ConvTranspose2dQAT."""
 
-__all__ = ['ConvTranspose2dQAT']
+__all__ = ["ConvTranspose2dQAT"]
 
 from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv_transpose_2d import (
     ConvTranspose2dQAT,

@@ -16,12 +16,12 @@
 # ----------------------------------------------------------------------------
 
 __all__ = [
-    'BaseQuantizeModule',
-    'GPTQuant',
-    'LinearAWQuant',
-    'SmoothQuant',
-    'MinMaxQuant',
-    'OfmrQuant'
+    "BaseQuantizeModule",
+    "GPTQuant",
+    "LinearAWQuant",
+    "SmoothQuant",
+    "MinMaxQuant",
+    "OfmrQuant",
 ]
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,17 +18,13 @@
 import copy
 import os
 import shutil
-import sys
 import unittest
 from unittest.mock import patch
 
 import numpy as np
-import onnx
 from onnx import onnx_pb
-from onnx.external_data_helper import convert_model_to_external_data
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
@@ -36,16 +32,16 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
     convert_external_data_format,
 )
 
-CONV1_WEIGHTS = 'conv1.weights'
-CONV1_BIAS = 'conv1.bias'
+CONV1_WEIGHTS = "conv1.weights"
+CONV1_BIAS = "conv1.bias"
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-CONV1 = 'conv1'
+CONV1 = "conv1"
 
-RELU1 = 'relu1'
+RELU1 = "relu1"
 
-ADD1 = 'add1'
+ADD1 = "add1"
 
 
 class TestSave(unittest.TestCase):
@@ -58,37 +54,37 @@ class TestSave(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.temp_folder = os.path.join(CUR_DIR, 'test_convert_external_data_format')
+        self.temp_folder = os.path.join(CUR_DIR, "test_convert_external_data_format")
         os.makedirs(self.temp_folder, exist_ok=True)
         # set basic info
         self.model_proto = onnx_pb.ModelProto()
-        self.model_proto.producer_name = 'model'
+        self.model_proto.producer_name = "model"
         self.graph = onnx_pb.GraphProto()
         # Add graph input 0
         graph_input0 = self.graph.input.add()
-        graph_input0.name = 'data0'
+        graph_input0.name = "data0"
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add graph input 1
         graph_input1 = self.graph.input.add()
-        graph_input1.name = 'data1'
+        graph_input1.name = "data1"
         graph_input1.type.tensor_type.shape.dim.add().dim_value = 1
         # Add conv1
         conv1 = self.graph.node.add()
         conv1.name = CONV1
-        conv1.op_type = 'Conv'
-        conv1.input[:] = ['data0', CONV1_WEIGHTS, CONV1_BIAS]
+        conv1.op_type = "Conv"
+        conv1.input[:] = ["data0", CONV1_WEIGHTS, CONV1_BIAS]
         conv1.output[:] = [CONV1]
         # add attribute "kernel_shape"
         kernel_shape = conv1.attribute.add()
-        kernel_shape.name = 'kernel_shape'
+        kernel_shape.name = "kernel_shape"
         kernel_shape.type = onnx_pb.AttributeProto.AttributeType.INTS
         kernel_shape.ints[:] = [64, 3, 3, 3]
         # add attribute "pads"
         pads = conv1.attribute.add()
-        pads.name = 'pads'
+        pads.name = "pads"
         pads.type = onnx_pb.AttributeProto.AttributeType.INTS
         pads.ints[:] = [0, 0, 0, 0]
         # Add weights
@@ -106,24 +102,24 @@ class TestSave(unittest.TestCase):
         # Add relu
         relu1 = self.graph.node.add()
         relu1.name = RELU1
-        relu1.op_type = 'Relu'
+        relu1.op_type = "Relu"
         relu1.input[:] = [CONV1]
         relu1.output[:] = [RELU1]
         # Add add
         add1 = self.graph.node.add()
         add1.name = ADD1
-        add1.op_type = 'Add'
-        add1.input[:] = [RELU1, 'data1']
+        add1.op_type = "Add"
+        add1.input[:] = [RELU1, "data1"]
         add1.output[:] = [ADD1]
         # Add average_pool
         avg_pool1 = self.graph.node.add()
-        avg_pool1.name = 'avg_pool1'
-        avg_pool1.op_type = 'AveragePool'
+        avg_pool1.name = "avg_pool1"
+        avg_pool1.op_type = "AveragePool"
         avg_pool1.input[:] = [ADD1]
-        avg_pool1.output[:] = ['output']
+        avg_pool1.output[:] = ["output"]
         # add output
         graph_output = self.graph.output.add()
-        graph_output.name = 'output'
+        graph_output.name = "output"
         graph_output.type.tensor_type.shape.dim.add().dim_value = 1
         self.model_proto.graph.CopyFrom(self.graph)
 
@@ -131,9 +127,11 @@ class TestSave(unittest.TestCase):
         shutil.rmtree(self.temp_folder)
         pass
 
-    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch(
+        "amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF", 1
+    )
     def test_convert_external_data_format(self):
-        file_name = os.path.join(self.temp_folder, 'test_external_data.pth')
+        file_name = os.path.join(self.temp_folder, "test_external_data.pth")
         test_model = copy.deepcopy(self.model_proto)
         graph = Graph(copy.deepcopy(self.model_proto), model_path=self.temp_folder)
         for initial in test_model.graph.initializer:
@@ -146,33 +144,42 @@ class TestSave(unittest.TestCase):
             else:
                 pass
         convert_external_data_format(test_model, graph, file_name, None)
-        bias_path = os.path.join(self.temp_folder, 'conv1.bias.external')
-        weight_path = os.path.join(self.temp_folder, 'conv1.weights.external')
+        bias_path = os.path.join(self.temp_folder, "conv1.bias.external")
+        weight_path = os.path.join(self.temp_folder, "conv1.weights.external")
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
-        self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
+        self.assertTrue(
+            os.path.exists(weight_path), f"File {weight_path} does not exist."
+        )
 
-    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch(
+        "amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF", 1
+    )
     def test_convert_external_data_format_fakequant(self):
-        file_name = os.path.join(self.temp_folder, 'test_external_data_fake_quant.onnx')
+        file_name = os.path.join(self.temp_folder, "test_external_data_fake_quant.onnx")
         test_model = copy.deepcopy(self.model_proto)
         graph = Graph(copy.deepcopy(self.model_proto), model_path=self.temp_folder)
-        convert_external_data_format(test_model, graph, file_name, 'Fakequant')
-        bias_path = os.path.join(self.temp_folder, 'conv1.bias_fakequant.external')
-        weight_path = os.path.join(self.temp_folder, 'conv1.weights_fakequant.external')
+        convert_external_data_format(test_model, graph, file_name, "Fakequant")
+        bias_path = os.path.join(self.temp_folder, "conv1.bias_fakequant.external")
+        weight_path = os.path.join(self.temp_folder, "conv1.weights_fakequant.external")
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
-        self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
+        self.assertTrue(
+            os.path.exists(weight_path), f"File {weight_path} does not exist."
+        )
 
-    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch(
+        "amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF", 1
+    )
     def test_convert_external_data_format_deploy(self):
-        file_name = os.path.join(self.temp_folder, 'test_external_data_deploy.onnx')
+        file_name = os.path.join(self.temp_folder, "test_external_data_deploy.onnx")
         test_model = copy.deepcopy(self.model_proto)
         graph = Graph(copy.deepcopy(self.model_proto), model_path=self.temp_folder)
-        convert_external_data_format(test_model, graph, file_name, 'Deploy')
-        bias_path = os.path.join(self.temp_folder, 'conv1.bias_deploy.external')
-        weight_path = os.path.join(self.temp_folder, 'conv1.weights_deploy.external')
+        convert_external_data_format(test_model, graph, file_name, "Deploy")
+        bias_path = os.path.join(self.temp_folder, "conv1.bias_deploy.external")
+        weight_path = os.path.join(self.temp_folder, "conv1.weights_deploy.external")
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
-        self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
-
+        self.assertTrue(
+            os.path.exists(weight_path), f"File {weight_path} does not exist."
+        )
 
     # def test_convert_external_data_format_data_location_error(self):
     #     for initial in temp_model.graph.initializer:

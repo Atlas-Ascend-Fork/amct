@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -23,12 +23,13 @@ from ....amct_pytorch.common.utils.util import version_higher_than
 
 VERSION = amct_utils.vars.find_torch_version()
 SYMBOLIC_OP_NAME = "QuantIdentity"
-if version_higher_than(VERSION, '1.5.0'):
+if version_higher_than(VERSION, "1.5.0"):
     SYMBOLIC_OP_NAME = "custom_op_domain::QuantIdentity"
 
 
 class QuantIdentity(Function):
     """Function to export onnx op with quantizable op name"""
+
     @staticmethod
     def forward(ctx, in_data, op_name, module_type):
         """QuantIdentity forward method"""
@@ -37,11 +38,14 @@ class QuantIdentity(Function):
     @staticmethod
     def symbolic(g, *inputs):
         """QuantIdentity symbolic method"""
-        return g.op(SYMBOLIC_OP_NAME, inputs[0], op_name_s=inputs[1], module_type_s=inputs[2])
+        return g.op(
+            SYMBOLIC_OP_NAME, inputs[0], op_name_s=inputs[1], module_type_s=inputs[2]
+        )
 
 
 class MarkedQuantizableModule(torch.nn.Module):
     """Custom Module to mark quantizable op"""
+
     def __init__(self, sub_module, layer_name):
         """MarkedQuantizableModule init method"""
         super().__init__()
