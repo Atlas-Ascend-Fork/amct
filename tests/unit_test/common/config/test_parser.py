@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -40,7 +40,7 @@ from amct_pytorch.common.config.parser import (
 # ---- set_default_config ----------------------------------------------------
 
 MINMAX = "minmax"
-MY_CUSTOM_PARSER = "my_custom_parser"
+MY_CUSTOM_PARSER = 'my_custom_parser'
 
 
 def test_set_default_config_returns_int8_minmax():
@@ -281,7 +281,7 @@ def test_check_fuzzy_config_warnings_skip_interaction(caplog):
 
 
 def test_is_layer_supported_conv2d_padding_mode():
-    mod = nn.Conv2d(3, 3, 1, padding_mode="reflect")
+    mod = nn.Conv2d(3, 3, 1, padding_mode='reflect')
     lt = {"Conv2d": "ofmr"}
     qc = _make_quant_config(weight_type="int8", input_type="int8")
     assert _is_layer_supported(mod, "conv.0", lt, "int8 int8", qc) is False

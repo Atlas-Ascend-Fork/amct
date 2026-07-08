@@ -52,7 +52,7 @@ def model_forward_only_pre(
     use_cache: Optional[bool] = None,
     output_attentions: Optional[bool] = None,
     output_hidden_states: Optional[bool] = None,
-    return_dict: Optional[bool] = None,
+                return_dict: Optional[bool] = None,
 ) -> Union[Tuple, BaseModelOutputWithPast]:
     output_attentions = (
         output_attentions
@@ -173,7 +173,7 @@ def model_forward_only_pre(
 
 def model_forward_only_post(
     self,
-    hidden_states: torch.LongTensor = None,
+        hidden_states: torch.LongTensor = None,
 ) -> Union[Tuple, BaseModelOutputWithPast]:
     hidden_states = self.norm(hidden_states)
     return BaseModelOutputWithPast(last_hidden_state=hidden_states)

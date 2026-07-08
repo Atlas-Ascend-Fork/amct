@@ -39,7 +39,7 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
     samples = []
     n_run = 0
     for data in dataset:
-        line = data["text"]
+        line = data['text']
         line = line.strip()
         line_encoded = tokenizer.encode(line)
         if len(line_encoded) > seq_len:
@@ -79,7 +79,7 @@ def get_act_stat(
     num_npus=1,
 ):
     model.eval()
-    device = torch.device(f"npu:{layer_idx % num_npus}")
+    device = torch.device(f'npu:{layer_idx % num_npus}')
     act_stat = {}
 
     def stat_tensor(name, tensor, type):
@@ -93,11 +93,11 @@ def get_act_stat(
 
     def stat_input_hook(m, x, y, name):
         stat_tensor(name, x, "inp")
-        stat_tensor(name, y, "out")
+        stat_tensor(name, y, 'out')
 
     hooks = []
     for name, m in model.named_modules():
-        if "DeepseekV3DecoderLayer" in model.__class__.__name__:
+        if 'DeepseekV3DecoderLayer' in model.__class__.__name__:
             hooks.append(
                 m.register_forward_hook(functools.partial(stat_input_hook, name=name))
             )
@@ -112,12 +112,12 @@ def get_act_stat(
             self.position_ids = None
 
         def forward(self, inp, **kwargs):
-            self.dataset.append(inp.to("cpu"))
+            self.dataset.append(inp.to('cpu'))
             self.index += 1
             if self.attention_mask is None:
-                self.attention_mask = kwargs["attention_mask"]
+                self.attention_mask = kwargs['attention_mask']
             if self.position_ids is None:
-                self.position_ids = kwargs["position_ids"]
+                self.position_ids = kwargs['position_ids']
 
             raise ValueError
 
@@ -126,7 +126,7 @@ def get_act_stat(
 
     if layer_idx == -1:
         load_embed_state_dict(model, args.model)
-        layers[0] = get_float_block(args.model, 0, "cpu", model_args=args.model_args)
+        layers[0] = get_float_block(args.model, 0, 'cpu', model_args=args.model_args)
         layers[0] = layers[0].bfloat16()
 
         # record attention and position_ids
@@ -148,7 +148,7 @@ def get_act_stat(
         )
         torch.save(position_ids, os.path.join(output_dir, "position_ids.pkl"))
         torch.save(attention_mask, os.path.join(output_dir, "attention_mask.pkl"))
-        torch.save(outs, os.path.join(output_dir, "layer_-1_out.pkl"))
+        torch.save(outs, os.path.join(output_dir, 'layer_-1_out.pkl'))
         layers[0] = layers[0].module
     else:
         layer = get_float_block(
@@ -166,7 +166,7 @@ def get_act_stat(
         position_ids = safe_torch_load(
             os.path.join(output_dir, "position_ids.pkl"), map_location=device
         )
-        for i in tqdm(range(len(inps)), desc="obtain activation stat"):
+        for i in tqdm(range(len(inps)), desc='obtain activation stat'):
             data = inps[i].to(device)
             out = layer(
                 data.to(device),
@@ -177,7 +177,7 @@ def get_act_stat(
             outs.append(out.to("cpu"))
         torch.save(outs, os.path.join(output_dir, f"layer_{layer_idx}_out.pkl"))
         layers[layer_idx] = None
-        layer.to("cpu")
+        layer.to('cpu')
         del layer
         torch.npu.empty_cache()
     for h in hooks:
@@ -211,11 +211,11 @@ def dump(input_dir, output_dir, num_layer):
     shutil.rmtree(input_dir)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     args = args_utils.parser_gen()
     num_npus = torch.npu.device_count()
 
-    config = "./cores/models/deepseek_v3_2/config_671B_v3.2.json"
+    config = './cores/models/deepseek_v3_2/config_671B_v3.2.json'
     with open(config) as f:
         model_args = ModelArgs(**json.load(f))
     args.model_args = model_args

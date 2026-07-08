@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -101,26 +101,26 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
         Args:
             g (Graph): graph to write the ONNX representation into.
         """
-        module_type = inputs[3].get("module_type")
+        module_type = inputs[3].get('module_type')
         if module_type in ["ConvTranspose1d", "ConvTranspose2d"]:
             quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[4])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
-        elif module_type == "Conv1d":
+        elif module_type == 'Conv1d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2]))
             quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
             dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2]))
-        elif module_type == "Conv2d":
+        elif module_type == 'Conv2d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3]))
             quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
             dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3]))
-        elif module_type == "Conv3d":
+        elif module_type == 'Conv3d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3, 4]))
             quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[4])
             dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3, 4]))
-        elif module_type == "Linear":
+        elif module_type == 'Linear':
             quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[4])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
         elif module_type in RNN_TENSOR_NUM:
@@ -136,7 +136,7 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
                     dtype=torch.int64,
                 ),
             )
-            reshape = g.op("Reshape", inputs[0], shape)
+            reshape = g.op('Reshape', inputs[0], shape)
             quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[4])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
         LOGGER.logi(

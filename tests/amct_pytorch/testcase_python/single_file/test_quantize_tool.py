@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -34,7 +34,7 @@ from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-ALGO_KEY = "algo"
+ALGO_KEY = 'algo'
 
 
 class TestQuantizeTool(unittest.TestCase):
@@ -44,7 +44,7 @@ class TestQuantizeTool(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, "test_quantize_tool")
+        cls.temp_folder = os.path.join(CUR_DIR, 'test_quantize_tool')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -58,7 +58,7 @@ class TestQuantizeTool(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        os.popen("rm -r " + cls.temp_folder)
+        os.popen('rm -r ' + cls.temp_folder)
         pass
 
     def setUp(self):
@@ -70,7 +70,7 @@ class TestQuantizeTool(unittest.TestCase):
     def test_create_quant_config(self):
         """test create ok for: conv, fc"""
         args = torch.randn((1, 2, 28, 28))
-        config_file = os.path.join(self.temp_folder, "model_001.json")
+        config_file = os.path.join(self.temp_folder, 'model_001.json')
         create_quant_config(
             config_file=config_file,
             model=self.model_001,
@@ -86,13 +86,13 @@ class TestQuantizeTool(unittest.TestCase):
     def test_create_quant_config_ifmr(self):
         """test create ok for: conv, fc"""
         mod_conv = torch.nn.Conv2d(2, 4, kernel_size=2)
-        record_file = os.path.join(CUR_DIR, "utils/conv_model.txt")
+        record_file = os.path.join(CUR_DIR, 'utils/conv_model.txt')
         record_module = Recorder(record_file)
         model = IFMR(mod_conv, record_module, ["conv"])
         model.to(torch.device("cpu"))
 
         args = torch.randn((1, 2, 28, 28))
-        config_file = os.path.join(self.temp_folder, "ifmr.json")
+        config_file = os.path.join(self.temp_folder, 'ifmr.json')
 
         self.assertRaises(RuntimeError, create_quant_config, config_file, model, args)
 
@@ -124,7 +124,7 @@ class TestQuantizeTool(unittest.TestCase):
     def test_quantize_model_ifmr(self):
         """test create ok for: conv, fc"""
         mod_conv = torch.nn.Conv2d(2, 4, kernel_size=2)
-        record_file = os.path.join(CUR_DIR, "utils/conv_model.txt")
+        record_file = os.path.join(CUR_DIR, 'utils/conv_model.txt')
         record_module = Recorder(record_file)
         model = IFMR(mod_conv, record_module, ["conv"])
         model.to(torch.device("cpu"))
@@ -145,7 +145,7 @@ class TestQuantizeTool(unittest.TestCase):
         )
 
     def test_check_config_consistency_true_001(self):
-        """ """
+        ''' '''
         retrain_config = {
             "version": 1,
             "batch_num": 1,
@@ -175,7 +175,7 @@ class TestQuantizeTool(unittest.TestCase):
         self.assertTrue(consistency)
 
     def test_check_config_consistency_true_002(self):
-        """ """
+        ''' '''
         retrain_config = {
             "version": 1,
             "batch_num": 1,
@@ -205,7 +205,7 @@ class TestQuantizeTool(unittest.TestCase):
         self.assertTrue(consistency)
 
     def test_check_config_consistency_false_001(self):
-        """ """
+        ''' '''
         retrain_config = {
             "batch_num": 1,
             "conv1": {
@@ -234,7 +234,7 @@ class TestQuantizeTool(unittest.TestCase):
         self.assertFalse(consistency)
 
     def test_check_config_consistency_false_002(self):
-        """ """
+        ''' '''
         retrain_config = {
             "version": 1,
             "batch_num": 1,
@@ -253,7 +253,7 @@ class TestQuantizeTool(unittest.TestCase):
         self.assertFalse(consistency)
 
     def test_check_config_consistency_false_003(self):
-        """ """
+        ''' '''
         retrain_config = {
             "version": 1,
             "batch_num": 1,
@@ -283,7 +283,7 @@ class TestQuantizeTool(unittest.TestCase):
         self.assertFalse(consistency)
 
     def test_check_config_consistency_false_004(self):
-        """ """
+        ''' '''
         retrain_config = {
             "version": 1,
             "batch_num": 1,
@@ -313,7 +313,7 @@ class TestQuantizeTool(unittest.TestCase):
         self.assertFalse(consistency)
 
     def test_check_config_consistency_false_005(self):
-        """ """
+        ''' '''
         retrain_config = {
             "version": 1,
             "batch_num": 1,

@@ -50,7 +50,7 @@ class OfmrQuant(BaseQuantizeModule):
 
         self.batch_num = quant_config.get("batch_num")
         self.wts_type = quant_config.get("weights_cfg").get("quant_type")
-        self.act_type = quant_config.get("inputs_cfg").get("quant_type")
+        self.act_type = quant_config.get('inputs_cfg').get('quant_type')
 
         self.weight_compress_only = (
             True
@@ -62,7 +62,7 @@ class OfmrQuant(BaseQuantizeModule):
             len(EC_CAND), dtype=torch.float32, device=self.device
         )
         self.cout = 1
-        if quant_config.get("weights_cfg").get("strategy") == "channel":
+        if quant_config.get('weights_cfg').get('strategy') == 'channel':
             self.cout = self.ori_module.weight.shape[0]
         self.wts_quant_loss = torch.zeros(
             (len(EC_CAND), self.cout), dtype=torch.float32, device=self.device
@@ -103,7 +103,7 @@ class OfmrQuant(BaseQuantizeModule):
                 return self.fake_quant_forward(inputs)
 
             self._calc_weight_quant_loss(inputs, fp_out)
-            if not self.weight_compress_only:
+            if not self.weight_compress_only: 
                 self._calc_act_quant_loss(inputs, fp_out)
 
             if self.cur_batch == self.batch_num:
@@ -179,7 +179,7 @@ class OfmrQuant(BaseQuantizeModule):
             )
         wts_ecs = [EC_CAND[min_index.tolist()] for min_index in min_indices]
         scale_w = torch.Tensor([2**wts_ec for wts_ec in wts_ecs])
-        if type(self.ori_module).__name__ == "Linear" and len(scale_w) > 1:
+        if type(self.ori_module).__name__ == 'Linear' and len(scale_w) > 1:
             scale_w = scale_w.reshape(-1, 1)
         return scale_w
 
@@ -195,7 +195,7 @@ class OfmrQuant(BaseQuantizeModule):
             quant_weights = quant_dequant_tensor(
                 self.ori_module.weight, self.wts_type, scale=scale_weight
             )
-            if self.module_type == "Linear":
+            if self.module_type == 'Linear':
                 quant_out = F.linear(inputs, quant_weights, self.ori_module.bias)
                 cout_axis = -1  # NC/...C
             else:

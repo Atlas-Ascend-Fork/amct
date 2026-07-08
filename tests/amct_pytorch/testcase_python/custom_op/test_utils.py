@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -21,7 +21,7 @@ import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op import utils
 
-DEVICE = torch.device("cpu")
+DEVICE = torch.device('cpu')
 
 
 class CustomizedModel(torch.nn.Module):

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -35,7 +35,7 @@ def get_layer_quant_params(records, layer_name):
     if records.get("quant_result_path") is None:
         raise RuntimeError("quant_result_path not exists in record!")
 
-    quant_result_path = records.get("quant_result_path")
+    quant_result_path = records.get('quant_result_path')
     if not os.path.exists(quant_result_path):
         raise RuntimeError(
             "quant_result_path {} not exists. Please check your record file.".format(
@@ -43,7 +43,7 @@ def get_layer_quant_params(records, layer_name):
             )
         )
     if version_higher_than(torch.__version__, "2.1.0"):
-        load_kwargs = {"mmap": True}
+        load_kwargs = {'mmap': True}
     else:
         load_kwargs = {}
     try:

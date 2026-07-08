@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -34,7 +34,7 @@ class InsertRetrainPrunePass(BaseFusionPass):
     APIs: match_pattern, do_pass
     """
 
-    def __init__(self, device="cpu"):
+    def __init__(self, device='cpu'):
         """
         Function: init object
         Parameter: None
@@ -87,11 +87,11 @@ class InsertRetrainPrunePass(BaseFusionPass):
                 act_config["ifmr_init"] = True
             pre_node = object_node.get_input_anchor(0).get_peer_output_anchor().node
             if act_config.get(FIXED_MIN) is None:
-                if pre_node.type == "Relu":
+                if pre_node.type == 'Relu':
                     act_config[FIXED_MIN] = True
                 else:
                     act_config[FIXED_MIN] = False
-            act_config["num_bits"] = 4 if act_config.get("dst_type") == "INT4" else 8
+            act_config['num_bits'] = 4 if act_config.get('dst_type') == 'INT4' else 8
 
             wts_config = self.conf.get_retrain_config(object_node_name)[
                 "retrain_weight_config"
@@ -103,7 +103,7 @@ class InsertRetrainPrunePass(BaseFusionPass):
         common_config = {
             "device": self.device,
             "layers_name": [object_node_name],
-            "batch_num": self.conf.retrain_config.get("batch_num"),
+            'batch_num': self.conf.retrain_config.get('batch_num'),
         }
 
         # weights prune config
@@ -114,9 +114,9 @@ class InsertRetrainPrunePass(BaseFusionPass):
         wts_config["prune_axis"] = cin_axis
         wts_config["update_freq"] = layer_prune_config["update_freq"]
         wts_config["prune_algo"] = layer_prune_config["algo"]
-        wts_config["layer_name"] = object_node_name
+        wts_config['layer_name'] = object_node_name
 
-        if hasattr(object_module, "comp_algs") and object_module.comp_algs:
+        if hasattr(object_module, 'comp_algs') and object_module.comp_algs:
             LOGGER.logd(
                 "Current module is already replaced module, not to replace again "
                 "'{}'.".format(object_node.name),

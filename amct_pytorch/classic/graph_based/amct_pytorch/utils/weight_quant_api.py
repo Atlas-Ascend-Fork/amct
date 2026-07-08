@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -27,7 +27,7 @@ def get_deconv_group(node_deconv):
         raise RuntimeError(
             "can not get the 'group' attr of {}".format(node_deconv.name)
         )
-    group = attrs_helper.get_attr_value("group")
+    group = attrs_helper.get_attr_value('group')
     return group
 
 

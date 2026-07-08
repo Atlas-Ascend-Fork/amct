@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -23,7 +23,7 @@ from ...amct_pytorch.graph.node import Node
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
-MODULE_NAME = "Graph"
+MODULE_NAME = 'Graph'
 
 
 class Graph(GraphBase):  # pylint: disable=no-member
@@ -32,7 +32,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
     APIs: add_node, remove_node, net, dump_proto
     """
 
-    def __init__(self, network, model_path=""):
+    def __init__(self, network, model_path=''):
         super().__init__(network)
         self.model_path = model_path
         self._net = network
@@ -55,23 +55,23 @@ class Graph(GraphBase):  # pylint: disable=no-member
         Return: consumer the conv nodes found
         """
         attr_helper = AttributeProtoHelper(quant_identity_node.proto)
-        layer_name = str(attr_helper.get_attr_value("op_name"), encoding="utf-8")
+        layer_name = str(attr_helper.get_attr_value('op_name'), encoding="utf-8")
         # apply bfs to search conv node
         root = quant_identity_node
         search_queue = []
         search_queue.append(root)
         while search_queue:
             current = search_queue.pop(0)
-            if current.type == "Conv":
+            if current.type == 'Conv':
                 consumer = current
                 break
 
             next_nodes, _ = current.get_consumers(0)
             for next_node in next_nodes:
-                next_node.set_attr("padding_target_node", layer_name)
+                next_node.set_attr('padding_target_node', layer_name)
                 search_queue.append(next_node)
 
-        consumer.set_attr("padding_circle", True)
+        consumer.set_attr('padding_circle', True)
         return consumer
 
     @staticmethod
@@ -99,7 +99,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
             for next_node in next_nodes:
                 search_queue.append(next_node)
 
-        consumer.set_attr("input_dimension_reduction", True)
+        consumer.set_attr('input_dimension_reduction', True)
         return consumer
 
     @staticmethod
@@ -132,14 +132,14 @@ class Graph(GraphBase):  # pylint: disable=no-member
         """
         # Set node_id to be unique by decorate_node_name function
         if isinstance(node_proto, onnx_pb.SparseTensorProto):
-            if node_proto.HasField("values"):
+            if node_proto.HasField('values'):
                 node_id = node_proto.values.name
                 node_proto.values.name = self._decorate_node_name(node_id)
-            elif node_proto.HasField("indices"):
+            elif node_proto.HasField('indices'):
                 node_id = node_proto.indices.name
                 node_proto.indices.name = self._decorate_node_name(node_id)
             else:
-                raise RuntimeError("Cannot find tensor in sparse_initializer")
+                raise RuntimeError('Cannot find tensor in sparse_initializer')
         else:
             node_id = node_proto.name
             node_proto.name = self._decorate_node_name(node_id)
@@ -182,7 +182,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
         """
         Function: Dump all nodes and weights of graph to onnx_pb.ModelProto format
         """
-        LOGGER.logi("Doing whole model dump...", module_name=MODULE_NAME)
+        LOGGER.logi('Doing whole model dump...', module_name=MODULE_NAME)
         self.topologic_sort()
 
         net = onnx_pb.ModelProto()
@@ -276,7 +276,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
         # delete node and initializer in graph
         self._net.graph.ClearField("node")
         self._net.graph.ClearField("initializer")
-        self._net.graph.ClearField("sparse_initializer")
+        self._net.graph.ClearField('sparse_initializer')
         # delete custom opset domain in graph
         if len(self._net.opset_import) > 1:
             self._net.opset_import.pop()
@@ -332,7 +332,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
     def _parse_node_proto(self, output_record):
         for index, node_proto in enumerate(self._net.graph.node):
             if not node_proto.HasField("name"):
-                node_proto.name = "node_{}".format(index)
+                node_proto.name = 'node_{}'.format(index)
             node = Node(self._tail, node_proto, model_path=self.model_path)
             self._nodes.append(node)
 
@@ -342,7 +342,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
         for node in self._nodes + self._in_out_nodes:
             for input_anchor in node.input_anchors:
                 if input_anchor.name not in output_record:
-                    if input_anchor.name == "":
+                    if input_anchor.name == '':
                         continue
                     raise ReferenceError(
                         "Cannot find tensor %s in model." % (input_anchor.name)
@@ -364,7 +364,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
                     MODULE_NAME,
                 )
                 node.set_attr("is_reuse", True)
-                target_node.set_attr("is_reuse", True)
+                target_node.set_attr('is_reuse', True)
 
             node.set_name(self._decorate_node_name(new_name))
             node.set_module_name(new_name)
@@ -372,7 +372,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
         # get quantize node name from mark node, and set to itself
         quant_mark_nodes = list()
         for node in self._nodes:
-            if node.type == "QuantIdentity":
+            if node.type == 'QuantIdentity':
                 attr_helper = AttributeProtoHelper(node.proto)
                 layer_name = str(
                     attr_helper.get_attr_value("op_name"), encoding="utf-8"
@@ -390,16 +390,16 @@ class Graph(GraphBase):  # pylint: disable=no-member
                     consumer = Graph._parse_rnn_nodes(node, layer_module_type)
 
                 if consumer.type == "Pad":
-                    set_name_node(consumer, "%s_pad" % (layer_name))
+                    set_name_node(consumer, '%s_pad' % (layer_name))
                     consumer_output = consumer.get_output_anchor(0)
                     consumer = consumer_output.get_peer_input_anchor()[0].node
 
                 if consumer.type == "Transpose":
-                    set_name_node(consumer, "%s_transpose" % (layer_name))
+                    set_name_node(consumer, '%s_transpose' % (layer_name))
                     consumer_output = consumer.get_output_anchor(0)
                     consumer = consumer_output.get_peer_input_anchor()[0].node
 
-                if consumer.type == "Unsqueeze":
+                if consumer.type == 'Unsqueeze':
                     consumer = Graph._parse_unsqueeze_nodes(node)
 
                 # handle circular padding for conv2d

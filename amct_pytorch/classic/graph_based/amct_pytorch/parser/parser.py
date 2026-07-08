@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -50,7 +50,7 @@ SUPPORT_TYPES = (
     torch.nn.Softmax,
 )
 
-TMP_PATH = os.path.realpath(os.path.join(os.getcwd(), "amct_temp"))
+TMP_PATH = os.path.realpath(os.path.join(os.getcwd(), 'amct_temp'))
 
 
 class Parser:
@@ -63,17 +63,17 @@ class Parser:
     def parse_proto(proto_file):
         """parse the onnx pb pb file to"""
         if isinstance(proto_file, str):
-            with open(proto_file, "rb") as onnx_pb_file:
+            with open(proto_file, 'rb') as onnx_pb_file:
                 onnx_pb_str = onnx_pb_file.read()
                 model = onnx_pb.ModelProto()
                 model.ParseFromString(onnx_pb_str)
-                LOGGER.logd(f"Parse onnx model from {proto_file} success.")
+                LOGGER.logd(f'Parse onnx model from {proto_file} success.')
                 return model
         elif isinstance(proto_file, BytesIO):
             onnx_pb_str = proto_file.getvalue()
             model = onnx_pb.ModelProto()
             model.ParseFromString(onnx_pb_str)
-            LOGGER.logd(f"Parse onnx model from {proto_file} success.")
+            LOGGER.logd(f'Parse onnx model from {proto_file} success.')
             return model
         else:
             raise TypeError(f'Not support proto type: "{type(proto_file)}"')
@@ -85,11 +85,11 @@ class Parser:
             proto_file_path = pathlib.Path(proto_file)
             # parse by proto
             if not proto_file_path.is_file():
-                raise ValueError("The input onnx pb file is not exist.")
+                raise ValueError('The input onnx pb file is not exist.')
         if isinstance(proto_file, str):
             model_path = os.path.dirname(proto_file)
         else:
-            model_path = os.path.realpath("./amct_temp")
+            model_path = os.path.realpath('./amct_temp')
         model = Parser.parse_proto(proto_file)
         graph = Graph(model, model_path)
         return graph
@@ -108,14 +108,14 @@ class Parser:
             files_util.create_file_path(onnx_file)
 
         if not isinstance(args, (tuple, torch.Tensor)):
-            raise RuntimeError("input data type must be tuple or torch.Tensor!")
+            raise RuntimeError('input data type must be tuple or torch.Tensor!')
 
         if export_setting is None:
             export_setting = {}
         else:
             Parser.validate_export_setting(export_setting)
         if torch.__version__ == "2.1.0":
-            export_setting["opset_version"] = 16
+            export_setting['opset_version'] = 16
         else:
             export_setting["opset_version"] = 11
         if version_higher_than(torch.__version__, "1.12.0"):
@@ -123,7 +123,7 @@ class Parser:
         if version_higher_than(torch.__version__, "1.5.0") and not version_higher_than(
             torch.__version__, "1.11.0"
         ):
-            export_setting["enable_onnx_checker"] = False
+            export_setting['enable_onnx_checker'] = False
 
         try:
             model = ModuleHelper.deep_copy(model)
@@ -136,7 +136,7 @@ class Parser:
             if _is_rename(name, mod):
                 parent_module = model_helper.get_parent_module(name)
                 marked_module = MarkedQuantizableModule(mod, name)
-                setattr(parent_module, name.split(".")[-1], marked_module)
+                setattr(parent_module, name.split('.')[-1], marked_module)
 
         torch_out = _export_to_onnx(model, args, onnx_file, export_setting)
 
@@ -146,7 +146,7 @@ class Parser:
             if isinstance(mod, MarkedQuantizableModule):
                 parent_module = model_helper.get_parent_module(name)
                 original_module = mod.sub_module
-                setattr(parent_module, name.split(".")[-1], original_module)
+                setattr(parent_module, name.split('.')[-1], original_module)
 
         # set file's permission 640
         if isinstance(onnx_file, str):
@@ -162,7 +162,7 @@ class Parser:
                 proto_file: str, onnx file path
                 attr_names: list, attribute names read from onnx model to graph
         """
-        with open(proto_file, "rb") as onnx_pb_file:
+        with open(proto_file, 'rb') as onnx_pb_file:
             onnx_pb_str = onnx_pb_file.read()
             proto_data = onnx_pb.ModelProto()
             proto_data.ParseFromString(onnx_pb_str)
@@ -178,7 +178,7 @@ class Parser:
         Function: check the export_setting passed in by user are valid
         Inputs: export_setting: dict, use to export onnx
         """
-        input_output_sett = ["input_names", "output_names"]
+        input_output_sett = ['input_names', 'output_names']
         for setting_key in input_output_sett:
             if not export_setting.get(setting_key):
                 continue
@@ -187,10 +187,10 @@ class Parser:
                     raise RuntimeError(
                         "{} type must be list(string)".format(setting_key)
                     )
-        if not export_setting.get("dynamic_axes"):
+        if not export_setting.get('dynamic_axes'):
             return
 
-        for key, value in export_setting.get("dynamic_axes").items():
+        for key, value in export_setting.get('dynamic_axes').items():
             if not isinstance(key, str) or not isinstance(value, (dict, list)):
                 raise RuntimeError(
                     "dynamic_axes type is invalid,"
@@ -240,7 +240,7 @@ def _write_attr_to_node_proto(node_proto, attr):
     if attr.type == AttributeProto.AttributeType.STRINGS:
         attr_value = [byte_string.decode("utf-8") for byte_string in attr_value]
     elif attr.type == AttributeProto.AttributeType.STRING:
-        attr_value = attr_value.decode("utf-8")
+        attr_value = attr_value.decode('utf-8')
     node_proto.set_attr(attr.name, attr_value)
 
 
@@ -279,7 +279,7 @@ def _export_to_onnx(model, args, onnx_file, export_setting):
     try:
         torch_out = torch.onnx.export(model, args, onnx_file, **export_setting)
     except Exception as exception:
-        if "2G" in str(exception):
+        if '2G' in str(exception):
             torch_out = _export_oversize_model(model, args, onnx_file, export_setting)
         else:
             raise RuntimeError(
@@ -300,11 +300,11 @@ def _export_to_onnx(model, args, onnx_file, export_setting):
 
 
 def _export_oversize_model(model, args, onnx_file, export_setting):
-    onnx_local_file = "{}/temp.onnx".format(TMP_PATH)
+    onnx_local_file = '{}/temp.onnx'.format(TMP_PATH)
     if not os.path.exists(TMP_PATH):
         os.mkdir(TMP_PATH)
     torch_out = torch.onnx.export(model, args, onnx_local_file, **export_setting)
-    with open(onnx_local_file, "rb") as f:
+    with open(onnx_local_file, 'rb') as f:
         copyfileobj(f, onnx_file)
     onnx_file.seek(0)
     return torch_out

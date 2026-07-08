@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -59,7 +59,7 @@ def create_quant_config(
     activation_offset=True,
     config_defination=None,
 ):
-    """
+    '''
     Function: Create quantize configuration json file for amct_pytorch tool
     Parameter: config_file: file path of quantize configuration json file
                model: user mode instance of Torch.nn.Module
@@ -109,10 +109,10 @@ def quantize_preprocess(config_file, record_file, model, input_data):
         None
     """
     files_util.is_valid_name(config_file, "config_file")
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(record_file, 'record_file')
     config_file = os.path.realpath(config_file)
     if not os.path.exists(config_file):
-        raise OSError(f"file ({config_file}) does not exist!")
+        raise OSError(f'file ({config_file}) does not exist!')
     file_realpath = files_util.create_empty_file(record_file, check_exist=True)
     SingletonScaleOffsetRecord().reset_singleton(file_realpath)
 
@@ -331,7 +331,7 @@ def save_model(modfied_onnx_file, record_file, save_path):
     """
     # check inputs
     files_util.is_valid_name(modfied_onnx_file, "modfied_onnx_file")
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(record_file, 'record_file')
     modfied_onnx_file = os.path.realpath(modfied_onnx_file)
     record_file = os.path.realpath(record_file)
     SingletonScaleOffsetRecord().reset_singleton(record_file)
@@ -499,7 +499,7 @@ def save_quant_retrain_model(
     """
     # check inputs
     files_util.is_valid_name(config_file, "config_file")
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(record_file, 'record_file')
     config_file = os.path.realpath(config_file)
     record_file = os.path.realpath(record_file)
     SingletonScaleOffsetRecord().reset_singleton(record_file)
@@ -574,7 +574,7 @@ def parameters(module):
 
     def _parameters(recurse=True):
         for name, param in module.named_parameters(recurse=recurse):
-            if "acts_comp_reuse" not in name:
+            if 'acts_comp_reuse' not in name:
                 yield param
 
     return _parameters
@@ -619,7 +619,7 @@ def _modify_original_model_to_quant(model, record_file, graph):
     try:
         device = next(model.parameters()).device
     except StopIteration:
-        device = "cpu"
+        device = 'cpu'
     torch_recorder = Recorder(record_file)
     optimizer = opt.GraphOptimizer()
     optimizer.add_pass(opt.InsertRetrainPass(device))
@@ -726,7 +726,7 @@ def _generate_model(graph, records, save_path):
     optimizer.add_pass(opt.ReplaceRNNPass(records))
     optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, "Deploy")
-    save_onnx_model(graph, deploy_file, "Deploy", None, ["op_data_type"])
+    save_onnx_model(graph, deploy_file, 'Deploy', None, ['op_data_type'])
 
     # generate and save fakequant model
     optimizer = opt.GraphOptimizer()
@@ -739,7 +739,7 @@ def _generate_model(graph, records, save_path):
     optimizer.add_pass(opt.ReplaceBiasQuantPass(records))
     optimizer.do_optimizer(graph_copy)
     fakequant_file = generate_onnx_file_name(save_dir, save_prefix, "Fakequant")
-    save_onnx_model(graph_copy, fakequant_file, "Fakequant", None, ["op_data_type"])
+    save_onnx_model(graph_copy, fakequant_file, 'Fakequant', None, ['op_data_type'])
 
 
 def inner_generate_fakequant_module(graph, model, records, numbits):
@@ -767,11 +767,11 @@ def generate_fakequant_module(
     dynamic_axes=None,
 ):
     """generate the fake quant pytorch module"""
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(record_file, 'record_file')
     record_file = os.path.realpath(record_file)
     config_file = os.path.realpath(config_file)
 
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(record_file, 'record_file')
 
     tmp_onnx = BytesIO()
     Parser.export_onnx(
@@ -817,9 +817,9 @@ def fetch_num_bits():
     quant_config = Configuration().get_quant_config()
     layer_name = Configuration.get_layers_name(quant_config)
     activation_quant_params = quant_config[layer_name[0]]["activation_quant_params"]
-    weight_quant_params = quant_config[layer_name[0]]["weight_quant_params"]
+    weight_quant_params = quant_config[layer_name[0]]['weight_quant_params']
     if activation_quant_params[NUM_BITS] != weight_quant_params[NUM_BITS]:
-        raise RuntimeError("Current activation and weight num bits should be same!")
+        raise RuntimeError('Current activation and weight num bits should be same!')
     return activation_quant_params[NUM_BITS]
 
 
@@ -833,7 +833,7 @@ def inner_fuse_bn(
     dynamic_axes=None,
 ):
     """generate the bn fused pytorch module"""
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(record_file, 'record_file')
     record_file = os.path.realpath(record_file)
     config_file = os.path.realpath(config_file)
 

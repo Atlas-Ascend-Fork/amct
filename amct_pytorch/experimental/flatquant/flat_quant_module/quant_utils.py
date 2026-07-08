@@ -2,9 +2,9 @@ import torch
 
 
 def round_ste(x: torch.Tensor):
-    """
+    '''
     Implement Straight-Through Estimator for rounding operation.
-    """
+    '''
     return (x.round() - x).detach() + x
 
 
@@ -109,13 +109,13 @@ class ActivationQuantizer(torch.nn.Module):
 
 
 class WeightQuantizer(torch.nn.Module):
-    """From GPTQ Repo"""
+    '''From GPTQ Repo'''
 
     def __init__(self, shape=(4096, 1)):
         super(WeightQuantizer, self).__init__()
         self.register_buffer("maxq", torch.tensor(0))
         self.register_buffer("scale", torch.zeros(*shape))
-        self.register_buffer("zero", torch.zeros(*shape))
+        self.register_buffer('zero', torch.zeros(*shape))
 
         self.enable = True
 
@@ -169,7 +169,7 @@ class WeightQuantizer(torch.nn.Module):
             self.zero = torch.round(-xmin / self.scale)
 
         if self.mse:
-            best = torch.full([x.shape[0]], float("inf"), device=dev)
+            best = torch.full([x.shape[0]], float('inf'), device=dev)
             for i in range(int(self.maxshrink * self.grid)):
                 p = 1 - i / self.grid
                 xmin1 = p * xmin

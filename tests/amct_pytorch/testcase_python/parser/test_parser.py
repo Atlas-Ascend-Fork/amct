@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -41,15 +41,15 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-OP_DATA_TYPE = "op_data_type"
+OP_DATA_TYPE = 'op_data_type'
 
-FLOAT16 = "float16"
+FLOAT16 = 'float16'
 
 
 class TestParser(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, "test_parser")
+        cls.temp_folder = os.path.join(CUR_DIR, 'test_parser')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -61,7 +61,7 @@ class TestParser(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        os.popen("rm -r " + cls.temp_folder)
+        os.popen('rm -r ' + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -83,7 +83,7 @@ class TestParser(unittest.TestCase):
         torch_out = Parser.export_onnx(model, self.args, tmp_onnx)
         self.assertIsNone(torch_out)
 
-    @patch("torch.onnx.export")
+    @patch('torch.onnx.export')
     def test_parse_unsupport_bn(self, mock_export):
         mock_export.side_effect = RuntimeError()
 
@@ -101,7 +101,7 @@ class TestParser(unittest.TestCase):
         tmp_onnx = BytesIO()
         self.assertRaises(RuntimeError, Parser.export_onnx, model, self.args, tmp_onnx)
 
-    @patch.object(ModuleHelper, "deep_copy")
+    @patch.object(ModuleHelper, 'deep_copy')
     def test_parse_export_unsupport_deep_copy_model(self, mock_deep_copy):
         mock_deep_copy.side_effect = RuntimeError()
 
@@ -167,20 +167,20 @@ class TestParser(unittest.TestCase):
                 x = self.conv2(x)
                 return x
 
-        model = ConvBNConvSerial(3, 10000, 3).to("cpu")
+        model = ConvBNConvSerial(3, 10000, 3).to('cpu')
 
         args_shape = [(4, 3, 16, 16)]
         args = list()
         for input_shape in args_shape:
-            args.append(torch.randn(input_shape).to("cpu"))
+            args.append(torch.randn(input_shape).to('cpu'))
         args = tuple(args)
 
         tmp_onnx = BytesIO()
-        if not version_higher_than(torch.__version__, "1.10.0"):
+        if not version_higher_than(torch.__version__, '1.10.0'):
             self.assertRaises(RuntimeError, Parser.export_onnx, model, args, tmp_onnx)
 
         if not version_higher_than(torch.__version__, "1.10.0"):
-            tmp_onnx = os.path.join(self.temp_folder, "ConvBNConvSerial.onnx")
+            tmp_onnx = os.path.join(self.temp_folder, 'ConvBNConvSerial.onnx')
             self.assertRaises(RuntimeError, Parser.export_onnx, model, args, tmp_onnx)
 
     def test_write_node_attrs_extracted_from_onnx(self):
@@ -195,7 +195,7 @@ class TestParser(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         conv_node = None
         for node in graph.nodes:
-            if node.type == "Conv":
+            if node.type == 'Conv':
                 conv_node = node
 
         node_attr = {
@@ -211,7 +211,7 @@ class TestParser(unittest.TestCase):
         dump_model = graph.dump_proto()
         dump_model = _write_node_info(dump_model, customized_attr)
         file_realpath = os.path.join(self.temp_folder, "temp.onnx")
-        with open(file_realpath, "wb") as fid:
+        with open(file_realpath, 'wb') as fid:
             fid.write(dump_model.SerializeToString())
         # set file's permission 640
         os.chmod(file_realpath, stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP)
@@ -221,13 +221,13 @@ class TestParser(unittest.TestCase):
         )
         conv_node = None
         for node in graph.nodes:
-            if node.type == "Conv":
+            if node.type == 'Conv':
                 conv_node = node
                 break
         self.assertTrue(conv_node.has_attr(OP_DATA_TYPE))
         self.assertEqual(conv_node.get_attr(OP_DATA_TYPE), FLOAT16)
 
-    @patch("torch.onnx.export")
+    @patch('torch.onnx.export')
     def test_parse_export_return_model(self, mock_torch_onnx_export):
         mock_torch_onnx_export.return_value = 0
         model = torch.nn.Sequential(
@@ -241,39 +241,39 @@ class TestParser(unittest.TestCase):
         )
 
     def test_validate_export_setting_invalid_input_names(self):
-        export_setting = {"input_names": [1]}
+        export_setting = {'input_names': [1]}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_output_names(self):
-        export_setting = {"output_names": [1]}
+        export_setting = {'output_names': [1]}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_1(self):
-        export_setting = {"dynamic_axes": {0: "inputs"}}
+        export_setting = {'dynamic_axes': {0: "inputs"}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_2(self):
-        export_setting = {"dynamic_axes": {"inputs": (0, 2, 3)}}
+        export_setting = {'dynamic_axes': {"inputs": (0, 2, 3)}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_3(self):
-        export_setting = {"dynamic_axes": {"inputs": {"0": "32"}}}
+        export_setting = {'dynamic_axes': {"inputs": {'0': '32'}}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_4(self):
-        export_setting = {"dynamic_axes": {"inputs": {0: 32}}}
+        export_setting = {'dynamic_axes': {"inputs": {0: 32}}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_5(self):
-        export_setting = {"dynamic_axes": {"inputs": ["0"]}}
+        export_setting = {'dynamic_axes': {"inputs": ['0']}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_6(self):
-        export_setting = {"dynamic_axes": {"inputs": [-4]}}
+        export_setting = {'dynamic_axes': {"inputs": [-4]}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_7(self):
-        export_setting = {"dynamic_axes": {"inputs": {-4: "32"}}}
+        export_setting = {'dynamic_axes': {"inputs": {-4: '32'}}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     @patch("amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.copyfileobj")
@@ -288,7 +288,7 @@ class TestParser(unittest.TestCase):
         # 本地 onnx 文件句柄仍需经由 with 上下文正确关闭, 避免资源泄露。
         mock_export.return_value = None
         mock_exists.return_value = True
-        mock_copy.side_effect = RuntimeError("copy failed")
+        mock_copy.side_effect = RuntimeError('copy failed')
 
         fake_handle = MagicMock()
         m_open = mock_open()
