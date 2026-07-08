@@ -15,6 +15,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import functools
+
 import torch
 import torch.nn as nn
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
@@ -193,6 +195,7 @@ class GLM5_2(BaseModel):
         )
         _orig = block.forward
 
+        @functools.wraps(_orig)
         def _capture(*args, **kwargs):
             out = _orig(*args, **kwargs)
             if isinstance(out, (tuple, list)) and len(out) >= 2:
