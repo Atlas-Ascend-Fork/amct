@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
+from amct_pytorch.algorithms.quant.auto_round import AutoRound  # noqa: F401
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
@@ -46,12 +47,13 @@ UT_QH_EXPORT_ALGO = '_ut_qh_export'
 UT_QH_B = '_ut_qh_b'
 
 
-def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=()):
+def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=(), w_size=(4, 8)):
     return SimpleNamespace(
         algos=list(algos),
         quant_dtype=quant_dtype,
         w_bits=w_bits,
         quant_target=list(quant_target),
+        w_size=w_size,
     )
 
 
@@ -320,6 +322,24 @@ def test_weight_quantizer_export_deploy_rejects_quantize_hook_path():
             wq.export_deploy(torch.zeros(4, 8))
     finally:
         ALGO_REGISTRY._items.pop(UT_QH_EXPORT_ALGO, None)
+
+
+def test_weight_quantizer_export_deploy_supports_autoround_hook():
+    wq = WeightQuantizer(_args(algos=["autoround"], w_bits=8), w_bits=8)
+    out = wq.export_deploy(torch.randn(4, 8))
+
+    assert "qweight" in out
+    assert "weight_scale" in out
+    assert "weight_bias" in out
+
+
+def test_weight_quantizer_export_deploy_supports_autoround_hook_for_mxfp():
+    args = _args(algos=["autoround"], quant_dtype="mxfp", w_bits=4, w_size=(4, 32))
+    wq = WeightQuantizer(args, w_bits=4)
+    out = wq.export_deploy(torch.randn(4, 32))
+
+    assert "qweight" in out
+    assert "weight_scale" in out
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():

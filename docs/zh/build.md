@@ -62,7 +62,7 @@ bash build.sh --torch
   ```
 
   > [!NOTE]说明
-  > 安装AMCT工具时，请确保pip版本<=25.2，否则可能出现“ModuleNotFoundError:No module named 'torch' ”错误信息；如果用户pip版本>25.2，且不想降低版本，则请在上述安装命令后追加`--no-build-isolation` 。
+  > 若使用`--no-build-isolation`安装，pip不会自动安装构建依赖。请先执行`pip install wheel`，再在上述安装命令后追加`--no-build-isolation`，否则可能出现“error: invalid command 'bdist_wheel'”错误信息。
 
 - 卸载
 

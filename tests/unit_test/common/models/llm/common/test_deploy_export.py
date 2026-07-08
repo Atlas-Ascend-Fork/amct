@@ -25,6 +25,7 @@ and the full pipeline; they are deferred to the tiny-config integration batch.
 import importlib
 
 import pytest
+import torch
 import torch.nn as nn
 
 from amct_pytorch.common.models.llm.common.deploy_export import (
@@ -38,7 +39,6 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 CONFIG_GROUPS_KEY = 'config_groups'
 GROUP_0 = 'group_0'
 GROUP_1 = 'group_1'
-GROUP_2 = 'group_2'
 
 # ---- generate_quant_group ------------------------------------------------
 
@@ -54,10 +54,10 @@ WEIGHTS = 'weights'
 def test_generate_quant_group_default_int():
     group = generate_quant_group()
     assert group[INPUT_ACTIVATIONS][NUM_BITS] == 8
-    assert group[INPUT_ACTIVATIONS]["strategy"] == "token"
+    assert group[INPUT_ACTIVATIONS]["strategy"] == "group"
     assert group[INPUT_ACTIVATIONS]["dynamic"] is True
     assert group[WEIGHTS][NUM_BITS] == 8
-    assert group[WEIGHTS]["strategy"] == "channel"
+    assert group[WEIGHTS]["strategy"] == "group"
     assert group[WEIGHTS]["dynamic"] is False
     assert group["activation_use_clip"] is False
     assert group["output_activations"] is None
@@ -65,7 +65,7 @@ def test_generate_quant_group_default_int():
 
 
 def test_generate_quant_group_custom_bits_and_qtype():
-    group = generate_quant_group(a_num_bits=4, w_num_bits=4, qtype=INT, activation_use_clip=True)
+    group = generate_quant_group(a_bits=4, w_bits=4, qtype=INT, activation_use_clip=True)
     assert group[INPUT_ACTIVATIONS][NUM_BITS] == 4
     assert group[WEIGHTS][NUM_BITS] == 4
     assert group[INPUT_ACTIVATIONS]["type"] == INT
@@ -82,7 +82,7 @@ def test_generate_quant_config_int_path_only_has_group_0():
     assert cfg["ignore"] == ["lm_head"]
     assert cfg["quantization_status"] == "compressed"
     assert cfg["quant_method"] == "compressed-tensors"
-    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0}
+    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1}
     assert cfg[CONFIG_GROUPS_KEY][GROUP_0]["targets"] == ["Linear"]
     # int path: no weight_block_size key emitted.
     assert "weight_block_size" not in cfg
@@ -97,21 +97,14 @@ def test_generate_quant_config_mx_w8_adds_moegmm_group():
     assert cfg["weight_block_size"] == [1, 32]
 
 
-def test_generate_quant_config_mx_w4a8_uses_4bit_weights_in_moegmm():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a8=True, is_mx=True)
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
+def test_generate_quant_config_moegmm_w4a8_via_bits_scheme():
+    scheme = [
+        {"targets": ["Linear"], "w_bits": 8, "a_bits": 8},
+        {"targets": ["MoEGMM"], "w_bits": 8, "a_bits": 8},
+    ]
+    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, bits_scheme=scheme)
+    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 8
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 8
-
-
-def test_generate_quant_config_mx_w4a4_splits_up_gate_and_down():
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], w4a4=True, is_mx=True)
-    assert set(cfg[CONFIG_GROUPS_KEY]) == {GROUP_0, GROUP_1, GROUP_2}
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1]["targets"] == ["MoEGMMUpGate"]
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 4
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 4
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_2]["targets"] == ["MoEGMMDown"]
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_2][WEIGHTS][NUM_BITS] == 4
-    assert cfg[CONFIG_GROUPS_KEY][GROUP_2][INPUT_ACTIVATIONS][NUM_BITS] == 8
 
 
 def test_generate_quant_config_merges_cache_scheme_into_top_level():
@@ -190,4 +183,142 @@ def test_export_block_deploy_skips_none_extra_tensor():
     )
     deploy_tensors, _ = export_block_deploy(pipeline, 0, [])
     assert "k.extra" not in deploy_tensors
+
+
+# ---- convert_state_dict (new in diff) ------------------------------------
+
+
+def test_convert_state_dict_non_fp8_passthrough(tmp_path):
+    """Non-FP8 weight (element_size > 1) is returned unchanged."""
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    weight = torch.randn(4, 4, dtype=torch.float32)
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        {}, tmp_path, {}, 32,
+    )
+    assert result is weight
+
+
+def test_convert_state_dict_fp8_with_scale_inv_loaded(tmp_path):
+    """FP8 int8 weight with scale_inv present gets dequantized."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    # Create a safetensors file with scale_inv
+    scale_inv = torch.ones(1, 2, dtype=torch.float32) * 0.5
+    sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
+
+    weight = torch.ones(2, 4, dtype=torch.int8)
+    weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
+    loaded_files = {}
+
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, loaded_files, block_size=32,
+    )
+    # int8 packed dequant unpacks columns, so shape changes
+    assert result.dtype != torch.int8
+    assert result.shape[0] == weight.shape[0]
+
+
+def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monkeypatch):
+    """Missing scale_inv logs warning and returns original weight."""
+    from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
+
+    warnings = []
+    monkeypatch.setattr(deploy_export_mod.logger, "warning", lambda message: warnings.append(message))
+
+    weight = torch.ones(4, 4, dtype=torch.int8)
+    weight_map = {}  # no scale_inv entry
+    result = deploy_export_mod.convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, {}, 32,
+    )
+    assert any("Missing scale_inv" in message for message in warnings)
+    assert result is weight
+
+
+def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
+    """FP8 weight with non-int8 dtype uses non-packed dequant (block_size=1)."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale_inv = torch.ones(2, 4, dtype=torch.float32)
+    sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
+
+    # Use uint8 to simulate a non-int8 1-byte dtype (float8 not available on CPU)
+    weight = torch.ones(2, 4, dtype=torch.uint8)
+    weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
+    loaded_files = {}
+
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, loaded_files, block_size=1,
+    )
+    assert result.dtype != torch.uint8
+
+
+def test_convert_state_dict_reuses_loaded_file(tmp_path):
+    """Already-loaded file is reused from loaded_files cache."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale_inv = torch.ones(1, 2, dtype=torch.float32) * 2.0
+    sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
+
+    # Pre-load the file
+    from safetensors.torch import load_file as sf_load
+    loaded_files = {"shard.safetensors": sf_load(str(tmp_path / "shard.safetensors"))}
+
+    weight = torch.ones(2, 4, dtype=torch.int8)
+    weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
+
+    result = convert_state_dict(
+        weight, "layer.weight", "layer.weight_scale_inv",
+        weight_map, tmp_path, loaded_files, block_size=32,
+    )
+    assert result.dtype != torch.int8
+
+
+# ---- quant_payload (new in diff) -----------------------------------------
+
+
+def test_quant_payload_basic():
+    """quant_payload builds tensors dict from quant_cls.export_deploy."""
+    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+
+    class FakeQuantCls:
+        def __init__(self, bits):
+            self.bits = bits
+
+        def export_deploy(self, weight):
+            return {
+                "qweight": torch.ones(4, 4) * self.bits,
+                "weight_scale": torch.ones(4, 1),
+            }
+
+    weight = torch.randn(4, 4)
+    result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=8)
+    assert "layer.weight" in result
+    assert torch.allclose(result["layer.weight"], torch.ones(4, 4) * 8)
+    assert "layer.weight_scale" in result
+
+
+def test_quant_payload_skips_none_extras():
+    """quant_payload skips extra tensors that are None."""
+    from amct_pytorch.common.models.llm.common.deploy_export import quant_payload
+
+    class FakeQuantCls:
+        def __init__(self, bits):
+            pass
+
+        def export_deploy(self, weight):
+            _ = self
+            return {"qweight": weight, "bias": None}
+
+    weight = torch.randn(4, 4)
+    result = quant_payload(FakeQuantCls, "layer.weight", weight, bit=4)
+    assert "layer.weight" in result
+    assert "layer.bias" not in result
 

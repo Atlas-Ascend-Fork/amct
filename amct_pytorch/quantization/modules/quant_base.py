@@ -165,7 +165,10 @@ class WeightQuantizer(torch.nn.Module):
     def export_deploy(self, x):
         x, quantize_algo = self.algo_forward(x)
         if quantize_algo is not None:
-            raise NotImplementedError("export_deploy() does not support custom weight quantize() hooks yet.")
+            export_fn = getattr(quantize_algo, "export_deploy", None)
+            if not callable(export_fn):
+                raise NotImplementedError("export_deploy() does not support custom weight quantize() hooks yet.")
+            return export_fn(x, self.quant_obj)
         export_fn = getattr(self.quant_obj, "export_deploy", None)
         if not callable(export_fn):
             raise NotImplementedError(

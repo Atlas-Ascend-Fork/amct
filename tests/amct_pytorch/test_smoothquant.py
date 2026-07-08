@@ -312,6 +312,94 @@ class TestSmoothQuant(unittest.TestCase):
         self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear') 
         self.assertEqual(type(model.linear3).__name__, 'Linear')
 
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_hif8_hif8_channel_tensor_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        torch.Tensor.npu = mock_npu
+        self.assertEqual(type(model.linear1).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear2).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear3).__name__, SMOOTH_QUANT)
+        # hifloat8 is always symmetric, so no activation/weight offset is produced
+        self.assertIsNone(model.linear1.offset_w)
+        self.assertIsNone(model.linear1.offset_d)
+        self.assertIsNotNone(model.linear1.scale_w)
+        self.assertIsNotNone(model.linear1.scale_d)
+        convert(model)
+        quant_out = model(self.inputs.npu())
+        self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_hif8_hif8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+        cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'channel',
+                },
+                'inputs': {
+                    'type': 'hifloat8',
+                    'symmetric': True,
+                    'strategy': 'token',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.4}}
+        }
+        model = copy.deepcopy(self.test_model).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        torch.Tensor.npu = mock_npu
+        self.assertEqual(type(model.linear1).__name__, SMOOTH_QUANT)
+        self.assertIsNone(model.linear1.offset_w)
+        self.assertIsNone(model.linear1.offset_d)
+        self.assertIsNotNone(model.linear1.scale_d)
+        convert(model)
+        # 推理 batch(行数)故意不同于校准的 64,验证 per-token 动态量化不绑定校准维度
+        infer_inputs = torch.randn(16, 64).to(torch.bfloat16)
+        quant_out = model(infer_inputs.npu())
+        # mock_5 是 npu_dynamic_quant,hif8 per-token 部署必须走运行时动态量化分支
+        self.assertTrue(mock_5.called)
+        self.assertEqual(quant_out.shape[0], 16)
+        self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
+        self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
+
     def _run_a8w4_smooth_case(self, weight_strategy, act_symmetric):
         model = copy.deepcopy(TestModel()).to(torch.float16)
         inputs = self.inputs.to(torch.float16)
