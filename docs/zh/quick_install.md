@@ -1,8 +1,91 @@
 # 环境部署
-
 使用AMCT工具之前，请先参考下面步骤完成基础环境搭建和源码下载，确保已经安装NPU固件、驱动和CANN软件（Ascend-cann-toolkit和Ascend-cann-ops）。
 
-## 前置依赖
+## 环境安装
+
+本项目提供多种搭建昇腾环境的方式，请按需选择。
+
+> **说明**：本文提到的编译态和运行态含义如下，请根据实际情况选择。
+>
+> - 编译态：针对仅编译本项目不运行的场景，只需安装CANN toolkit包。
+> - 运行态：针对运行本项目的场景（编译运行或纯运行），需安装驱动与固件、CANN toolkit包、CANN ops包。
+
+|  安装方式  |  使用说明  |  使用场景  |
+| ----- | ------ | ------ |
+|  WebIDE  | 一站式开发平台，提供在线直接运行的昇腾环境，无需手动安装。<br>当前可提供单机算力，**默认安装最新商发版CANN包**。 | 适用于没有昇腾设备的开发者。|
+|  Docker  | Docker镜像是一种高效部署方式，已预集成CANN包和必备依赖。<br>当前仅适用于Atlas A2系列产品，OS仅支持Ubuntu操作系统。**默认安装最新商发版CANN包**。 |适用有昇腾设备，需要快速搭建环境的开发者。|
+|  手动安装  | 手动安装CANN包和基础依赖，灵活性高。 |适用有昇腾设备，想体验手动安装CANN包或体验最新master分支能力的开发者。|
+
+### 方式1：WebIDE环境
+
+对于无昇腾设备的开发者，可直接使用WebIDE开发平台，即“**一站式开发平台**”，该平台为您提供在线可直接运行的昇腾环境，环境中已安装必备的驱动固件、软件包和依赖，无需手动安装。
+
+> **说明**：环境默认安装最新商发版CANN包，源码下载时注意与软件配套。更多关于开发平台的介绍请参考[WebIDE指导](https://gitcode.com/org/cann/discussions/54)。
+
+1. 进入开源项目，单击“`云开发`”按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
+
+   <img src="./figures/cloudIDE.png" alt="云平台"  width="750px" height="90px">
+
+2. 根据页面提示创建NPU环境并配置规格，启动云开发环境后，单击“`连接 > WebIDE`”进入一站式开发平台。
+  
+   当前开源项目资源默认在`/mnt/workspace/gitCode/${gitCode_id}`目录下，\$\{gitCode\_id\}表示开发者个人gitCode账号。
+
+   <img src="./figures/webIDE.png" alt="云平台"  width="1000px" height="150px">
+
+### 方式2：Docker部署
+
+对于有昇腾设备的开发者，若您想快速搭建昇腾环境，可使用Docker镜像部署。
+
+> **说明**：
+>
+> - 镜像文件比较大，下载需要一定时间，请您耐心等待。关于docker命令的选项介绍可通过`docker --help`查询。
+> - 环境默认安装最新商发版CANN包，源码下载时注意与软件配套。
+
+1.**安装驱动与固件（运行态依赖）**
+
+宿主机上昇腾驱动与固件的下载和安装操作请参考《[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)》中“准备软件包”和“安装NPU驱动和固件”章节。
+
+2.**下载镜像**
+
+- 步骤1：以root用户登录宿主机。确保宿主机已安装Docker引擎（版本1.11.2及以上）。
+- 步骤2：从[昇腾镜像仓库](https://www.hiascend.com/developer/ascendhub/detail/17da20d1c2b6493cb38765adeba85884)拉取已预集成CANN软件包及`amct`所需依赖的镜像。命令如下，根据实际架构选择：
+
+    ```bash
+    # 示例：拉取ARM架构的CANN开发镜像
+    docker pull --platform=arm64 swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:8.5.0-910b-ubuntu22.04-py3.10-ops
+    # 示例：拉取X86架构的CANN开发镜像
+    docker pull --platform=amd64 swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:8.5.0-910b-ubuntu22.04-py3.10-ops
+    ```
+
+3.**运行Docker**
+
+拉取镜像后，需要以特定参数启动容器，以便容器内能访问宿主的昇腾设备。
+
+```bash
+docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_manager --device /dev/devmm_svm --device /dev/hisi_hdc -v /usr/local/dcmi:/usr/local/dcmi -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info -v /etc/ascend_install.info:/etc/ascend_install.info -it swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:8.5.0-910b-ubuntu22.04-py3.10-ops bash
+```
+
+| 参数 | 说明 | 注意事项 |
+| :--- | :--- | :--- |
+| `--name cann_container` | 为容器指定名称，便于管理。 | 可自定义。 |
+| `--device /dev/davinci0` | 核心：将宿主机的NPU设备卡映射到容器内，可指定映射多张NPU设备卡。 | 必须根据实际情况调整：`davinci0`对应系统中的第0张NPU卡。请先在宿主机执行 `npu-smi info`命令，根据输出显示的设备号（如`NPU 0`, `NPU 1`）来修改此编号。|
+| `--device /dev/davinci_manager` | 映射NPU设备管理接口。 | - |
+| `--device /dev/devmm_svm` | 映射设备内存管理接口。 | - |
+| `--device /dev/hisi_hdc` | 映射主机与设备间的通信接口。 | - |
+| `-v /usr/local/dcmi:/usr/local/dcmi` | 挂载设备容器管理接口（DCMI）相关工具和库。 | - |
+| `-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi` | 挂载`npu-smi`工具。 | 使容器内可以直接运行此命令来查询NPU状态和性能信息。|
+| `-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/` | 关键挂载：将宿主机的NPU驱动库映射到容器内。 | - |
+| `-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info` | 挂载驱动版本信息文件。 | - |
+| `-v /etc/ascend_install.info:/etc/ascend_install.info` | 挂载CANN软件安装信息文件。 | - |
+| `-it` | `-i`（交互式）和 `-t`（分配伪终端）的组合参数。 | - |
+| `swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:8.5.0-910b-ubuntu22.04-py3.10-ops` | 指定要运行的Docker镜像。 |请确保此镜像名和标签（tag）与你通过`docker pull`拉取的镜像完全一致。 |
+| `bash` | 容器启动后立即执行的命令。 | - |
+
+### 方式3：手动安装
+
+对于有昇腾设备的开发者，若您想手动搭建昇腾环境，请参考下述步骤。
+
+#### 前置依赖
 
 - bash >= 5.1.16
 - GCC >= 7.3.x
@@ -43,7 +126,7 @@ python3 -c "import torch; assert '+cpu' in torch.__version__, 'must use CPU torc
 pip3 install -r requirements.txt
 ```
 
-## 环境安装
+#### 环境安装
 
 1. **安装驱动与固件**
 
@@ -84,7 +167,7 @@ pip3 install -r requirements.txt
 
     如果您想体验**官网正式发布的CANN包**能力，请访问[CANN官网下载中心](https://www.hiascend.com/cann/download)，选择对应版本CANN软件包（仅支持CANN 8.5.0及后续版本）进行安装。
 
-## 环境验证
+#### 环境验证
 
 安装完CANN包后，需验证环境和驱动是否正常。
 
@@ -104,7 +187,7 @@ pip3 install -r requirements.txt
    cat /usr/local/Ascend/cann/<arch>-linux/ascend_ops_install.info
    ```
 
-## 环境变量配置
+#### 环境变量配置
 
 按需选择合适的命令使环境变量生效：
 
