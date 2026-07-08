@@ -27,6 +27,7 @@ import torch
 from loguru import logger
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
+from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 from tqdm import tqdm
 
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -125,9 +126,28 @@ class LlmDeployWorkflow:
                 shutil.copy2(src_path, dst_path)
 
     def _load_weight_index(self):
-        index_path = Path(self.model_path) / "model.safetensors.index.json"
-        with open(index_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        # Align with HF/vLLM checkpoint loading: read index.json when present;
+        # otherwise this is a single-shard model -- map every tensor to the lone
+        # safetensors file and synthesize an equivalent index. Filenames reuse the
+        # transformers ecosystem constants to avoid hardcoded drift.
+        index_path = Path(self.model_path) / SAFE_WEIGHTS_INDEX_NAME
+        if index_path.exists():
+            with open(index_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        single_path = Path(self.model_path) / SAFE_WEIGHTS_NAME
+        if not single_path.exists():
+            raise FileNotFoundError(
+                f"Neither {SAFE_WEIGHTS_INDEX_NAME} nor {SAFE_WEIGHTS_NAME} "
+                f"found in {self.model_path}"
+            )
+        with safe_open(str(single_path), framework="pt") as f:
+            weight_map = {key: SAFE_WEIGHTS_NAME for key in f.keys()}
+        # total_size is a placeholder; _refresh_weight_index() recomputes and
+        # overwrites it from the actual output shard sizes.
+        return {
+            "metadata": {"total_size": single_path.stat().st_size},
+            "weight_map": weight_map,
+        }
 
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')

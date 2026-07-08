@@ -672,3 +672,25 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     # quant_payload produces qweight + weight_scale + weight_bias
     assert "layer.weight" in refreshed_index["weight_map"]
 
+
+
+def test_load_weight_index_single_shard_synthesizes(tmp_path):
+    # Single model.safetensors (no index.json) -> synthesize equivalent index
+    save_file(
+        {"a.weight": torch.zeros(2), "b.weight": torch.ones(3)},
+        str(tmp_path / MODEL_SAFETENSORS),
+    )
+    wf = _make_workflow(model_path=str(tmp_path))
+    idx = wf._load_weight_index()  # pylint: disable=protected-access
+    assert idx["weight_map"] == {
+        "a.weight": MODEL_SAFETENSORS,
+        "b.weight": MODEL_SAFETENSORS,
+    }
+    assert idx[METADATA_KEY]["total_size"] > 0
+
+
+def test_load_weight_index_missing_raises(tmp_path):
+    # Neither index.json nor model.safetensors -> FileNotFoundError
+    wf = _make_workflow(model_path=str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        wf._load_weight_index()  # pylint: disable=protected-access
