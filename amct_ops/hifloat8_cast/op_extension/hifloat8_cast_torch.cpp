@@ -23,10 +23,9 @@
 #include "hifloat8_cast_tiling.h"
 #include "securec.h"
 #include "tiling/platform/platform_ascendc.h"
-
-// OpCommand-based launch wrapper from op_host/hifloat8_cast_kernel_launch.cpp.
-extern "C" void Hifloat8CastLaunchOpCommand(
-    uint32_t blockNum, uint8_t *input, uint8_t *output, uint8_t *tiling, uint8_t *lut);
+#include "torch_npu/csrc/core/npu/NPUStream.h"
+#include "torch_npu/csrc/framework/OpCommand.h"
+#include "../op_kernel/hifloat8_cast_kernel.cpp"
 
 namespace {
 constexpr uint32_t FP16_EXP_BITS = 5;
@@ -383,10 +382,15 @@ at::Tensor Hifloat8CastTorch(const at::Tensor &input, int64_t castMode) {
     at::Tensor tilingDevice = UploadTilingToDevice(tilingHost, input);
     uint8_t *lutGm = GetOrBuildLutOnDevice(castMode, input);
 
-    Hifloat8CastLaunchOpCommand(tilingHost.blockNum,
-        reinterpret_cast<uint8_t *>(inputContiguous.data_ptr()),
-        reinterpret_cast<uint8_t *>(output.data_ptr()),
-        reinterpret_cast<uint8_t *>(tilingDevice.data_ptr()), lutGm);
+    auto aclStream = c10_npu::getCurrentNPUStream().stream(false);
+    auto aclCall = [=]() -> int {
+        hifloat8_cast_kernel_lut<<<tilingHost.blockNum, nullptr, aclStream>>>(
+            reinterpret_cast<uint8_t *>(inputContiguous.data_ptr()),
+            reinterpret_cast<uint8_t *>(output.data_ptr()),
+            reinterpret_cast<uint8_t *>(tilingDevice.data_ptr()), lutGm);
+        return 0;
+    };
+    at_npu::native::OpCommand::RunOpApiV2("hifloat8_cast", aclCall);
 
     return output;
 }
