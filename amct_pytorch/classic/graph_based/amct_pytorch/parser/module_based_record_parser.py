@@ -32,10 +32,10 @@ def get_layer_quant_params(records, layer_name):
     layer_name: str, name of check layer
     return: dict, include current layer params
     """
-    if records.get("quant_result_path") is None:
+    if records.get('quant_result_path') is None:
         raise RuntimeError("quant_result_path not exists in record!")
 
-    quant_result_path = records.get("quant_result_path")
+    quant_result_path = records.get('quant_result_path')
     if not os.path.exists(quant_result_path):
         raise RuntimeError(
             "quant_result_path {} not exists. Please check your record file.".format(

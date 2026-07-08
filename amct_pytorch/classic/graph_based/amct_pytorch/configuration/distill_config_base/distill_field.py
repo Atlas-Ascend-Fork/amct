@@ -35,22 +35,22 @@ class GroupSize(ConfigItem):
     """an object for GroupSize filed"""
 
     def build(self, val):
-        """inner method"""
+        '''inner method'''
         self.check_type("GroupSize", val, int)
         if val <= 0:
             raise ValueError("group_size({}) should be greater than zero.".format(val))
         self.value = val
 
     def build_default(self):
-        """inner method"""
+        '''inner method'''
         self.value = 1
 
 
 class DataDump(ConfigItem):
-    """an object for DataDump filed"""
+    '''an object for DataDump filed'''
 
     def build(self, val):
-        """inner method"""
+        '''inner method'''
         self.check_type("DataDump", val, bool)
         self.value = val
 

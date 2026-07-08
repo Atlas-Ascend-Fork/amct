@@ -39,7 +39,7 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
     samples = []
     n_run = 0
     for data in dataset:
-        line = data["text"]
+        line = data['text']
         line = line.strip()
         line_encoded = tokenizer.encode(line)
         if len(line_encoded) > seq_len:

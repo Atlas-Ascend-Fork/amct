@@ -29,7 +29,7 @@ def build_enc(model_path):
 
 
 def get_llama2(model_path, seqlen=2048):
-    print(f"Getting official pretrained {model_path}")
+    print(f'Getting official pretrained {model_path}')
 
     model = LlamaForCausalLM.from_pretrained(
         model_path, torch_dtype=torch.float16, offload_folder="offload/"

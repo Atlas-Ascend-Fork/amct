@@ -156,8 +156,8 @@ class TestModelHelper(unittest.TestCase):
     def test_get_dst_num_bits_unset_act_type(self):
         records = {
             CONV1: {
-                "data_scale": 1,
-                "data_offset": 0,
+                'data_scale': 1,
+                'data_offset': 0,
                 "act_type": "UNSET",
             }
         }

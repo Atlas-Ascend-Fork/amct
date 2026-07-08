@@ -2,9 +2,9 @@ import torch
 
 
 def round_ste(x: torch.Tensor):
-    """
+    '''
     Implement Straight-Through Estimator for rounding operation.
-    """
+    '''
     return (x.round() - x).detach() + x
 
 

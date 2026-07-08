@@ -37,7 +37,7 @@ def process_weights_for_layers(layers, scale_awq, quant_config):
         quant_config: quant parameters
     """
     wts_type = quant_config.get("weights_cfg").get("quant_type")
-    group_size = quant_config.get("weights_cfg").get("group_size")
+    group_size = quant_config.get('weights_cfg').get("group_size")
     for layer in layers:
         layer.weight.data = layer.weight.data.mul(scale_awq)
         if wts_type in (MXFP4_E2M1,):

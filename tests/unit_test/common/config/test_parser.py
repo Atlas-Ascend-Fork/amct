@@ -39,8 +39,8 @@ from amct_pytorch.common.config.parser import (
 
 # ---- set_default_config ----------------------------------------------------
 
-MINMAX = "minmax"
-MY_CUSTOM_PARSER = "my_custom_parser"
+MINMAX = 'minmax'
+MY_CUSTOM_PARSER = 'my_custom_parser'
 
 
 def test_set_default_config_returns_int8_minmax():

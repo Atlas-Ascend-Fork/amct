@@ -32,7 +32,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
     APIs: add_node, remove_node, net, dump_proto
     """
 
-    def __init__(self, network, model_path=""):
+    def __init__(self, network, model_path=''):
         super().__init__(network)
         self.model_path = model_path
         self._net = network
@@ -55,23 +55,23 @@ class Graph(GraphBase):  # pylint: disable=no-member
         Return: consumer the conv nodes found
         """
         attr_helper = AttributeProtoHelper(quant_identity_node.proto)
-        layer_name = str(attr_helper.get_attr_value("op_name"), encoding="utf-8")
+        layer_name = str(attr_helper.get_attr_value('op_name'), encoding="utf-8")
         # apply bfs to search conv node
         root = quant_identity_node
         search_queue = []
         search_queue.append(root)
         while search_queue:
             current = search_queue.pop(0)
-            if current.type == "Conv":
+            if current.type == 'Conv':
                 consumer = current
                 break
 
             next_nodes, _ = current.get_consumers(0)
             for next_node in next_nodes:
-                next_node.set_attr("padding_target_node", layer_name)
+                next_node.set_attr('padding_target_node', layer_name)
                 search_queue.append(next_node)
 
-        consumer.set_attr("padding_circle", True)
+        consumer.set_attr('padding_circle', True)
         return consumer
 
     @staticmethod

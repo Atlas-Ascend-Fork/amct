@@ -78,7 +78,7 @@ class TestDistillField(unittest.TestCase):
 
     def test_quant_enable_false(self):
         obj = distill_field.QuantEnable(GraphQuerier, CAPACITY)
-        extra = (CONV1, "Conv2d")
+        extra = (CONV1, 'Conv2d')
         obj.build(False, extra)
         self.assertFalse(obj.value)
 
@@ -244,10 +244,10 @@ class TestDistillField(unittest.TestCase):
             "batch_num": 1,
             "group_size": 1,
             "data_dump": False,
-            "distill_group": [["layer1", "layer2"]],
+            'distill_group': [['layer1', 'layer2']],
             "not_supported_layer": {},
         }
-        extra = {CONV1: "Conv2d"}
+        extra = {CONV1: 'Conv2d'}
         with self.assertRaises(ValueError):
             obj.build(value, extra)
 
