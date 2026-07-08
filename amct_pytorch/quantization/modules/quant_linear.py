@@ -67,3 +67,10 @@ class QuantLinear(nn.Module):
             weight = structure_transform(weight, inv_t=True, name=self.name)
         payload = self.weight_quantizer.export_deploy(weight)
         return payload
+
+    def export_ptq_params(self):
+        return {"weight": self.linear.weight.detach().cpu()}
+
+    def load_ptq_params(self, params):
+        weight = self.linear.weight
+        weight.data.copy_(params["weight"].to(device=weight.device, dtype=weight.dtype))

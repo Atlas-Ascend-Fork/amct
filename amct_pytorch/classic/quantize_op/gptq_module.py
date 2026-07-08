@@ -86,7 +86,8 @@ class GPTQuant(BaseQuantizeModule):
             self.cur_batch += 1
             optimized_weight, self.scale_w, self.offset_w = self.get_opt_weight_and_quant_factor()
             self.weight.data = optimized_weight
-            LOGGER.logd("Calculate gptq quant params of layer '{}' success!".format(self.layer_name), 'GPTQuant')
+            LOGGER.logd("Calculate gptq quant params of layer '{}' success!".format(self.layer_name),
+                        type(self).__name__)
         if self.cur_batch > self.quant_config.get('batch_num'):
             return self.fake_quant_forward(inputs)
         return F.linear(inputs, self.weight, self.bias)
