@@ -21,6 +21,7 @@ from safetensors.torch import load_file
 
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -66,26 +67,45 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
                     "ignore": ignores,
                     "quant_method": "compressed-tensors",
                     "quantization_status": "compressed"}
-    quant_config.update(cache_scheme)
+    if cache_scheme is not None:
+        quant_config.update(cache_scheme)
     if is_mx:
         quant_config["weight_block_size"] = [1, 32]
     return quant_config
 
 
 def get_quant_ignore_linear_names(block, weight_prefix):
+    """Return weight names of non-quantized Linear modules in a block.
+
+    QuantLinear modules are skipped (already quantized). PlainLinear and
+    raw nn.Linear modules are collected as ignore entries.
+    """
     quant_linear_prefixes = tuple(
         f"{name}."
         for name, module in block.named_modules()
         if isinstance(module, QuantLinear)
     )
+    plain_linear_prefixes = tuple(
+        f"{name}."
+        for name, module in block.named_modules()
+        if isinstance(module, PlainLinear)
+    )
 
     names = []
     for name, module in block.named_modules():
+        if isinstance(module, PlainLinear):
+            names.append(f"{weight_prefix}{name}")
+            continue
         if not isinstance(module, nn.Linear):
             continue
         if any(name.startswith(prefix) for prefix in quant_linear_prefixes):
             continue
+        # Skip inner nn.Linear of PlainLinear (e.g. skip "self_attn.kv_b_proj.linear");
+        # the wrapper path "self_attn.kv_b_proj" is collected above.
+        if any(name.startswith(prefix) for prefix in plain_linear_prefixes):
+            continue
         names.append(f"{weight_prefix}{name}")
+
     return names
 
 
