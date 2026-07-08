@@ -63,7 +63,7 @@ class TestQuantOpInfo(unittest.TestCase):
         tmp_onnx = BytesIO()
         Parser.export_onnx(conv1d_module, torch.randn(1, 1, 1), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
-        node = graph.get_node_by_name("conv1d")
+        node = graph.get_node_by_name('conv1d')
         self.assertEqual(QuantOpInfo.get_dequant_shape(node), [1, -1, 1])
 
     def test_get_scale_shape_rnn_per_channel(self):
@@ -86,8 +86,8 @@ class TestQuantOpInfo(unittest.TestCase):
             tmp_onnx,
         )
         graph = Parser.parse_net_to_graph(tmp_onnx)
-        node1 = graph.get_node_by_name("lstm")
-        node2 = graph.get_node_by_name("gru")
+        node1 = graph.get_node_by_name('lstm')
+        node2 = graph.get_node_by_name('gru')
 
         self.assertEqual(QuantOpInfo.get_scale_shape(node1, True), ([1, 80, 1], 80))
         self.assertEqual(QuantOpInfo.get_scale_shape(node2, True), ([1, 60, 1], 60))

@@ -144,7 +144,7 @@ class TestWeightsCalibrationPass(unittest.TestCase):
 
         named_module_dict = {}
         deconv_module = None
-        deconv_name = "conv_transpose"
+        deconv_name = 'conv_transpose'
         for name, mod in model.named_modules():
             named_module_dict[name] = mod
             if name == deconv_name:
@@ -153,7 +153,7 @@ class TestWeightsCalibrationPass(unittest.TestCase):
             WeightsCalibrationPass().do_pass(model, deconv_module, deconv_name, graph)
         )
 
-    @patch.object(Configuration, "get_layer_config")
+    @patch.object(Configuration, 'get_layer_config')
     def test_conv_transpose_1d_weights_calibration(self, mock_get_layer_config):
         class ConvTransposeNet(torch.nn.Module):
             def __init__(self):

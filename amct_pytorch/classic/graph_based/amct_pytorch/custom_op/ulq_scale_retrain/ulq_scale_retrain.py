@@ -31,7 +31,7 @@ from ....amct_pytorch.utils.vars import TRANSPOSE
 from ....amct_pytorch.utils.weight_quant_api import adjust_axis_for_group_wise
 
 
-MODULE_TYPE = "module_type"
+MODULE_TYPE = 'module_type'
 
 
 class UlqScaleRetrainFunction(Function):

@@ -47,7 +47,7 @@ def arq_retrain_forward_pytorch(data, num_bits, channel_wise, with_offset):
     else:
         data_max = torch.max(data)
         data_min = torch.min(data)
-    data_type = "INT" + str(num_bits)
+    data_type = 'INT' + str(num_bits)
     scale, offset = calculate_scale_offset(data_max, data_min, with_offset, data_type)
 
     data = apply_fake_quantize_and_anti_quantize(data, scale, offset, data_type)

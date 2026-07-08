@@ -25,7 +25,6 @@ class DeepseekV32Config(PretrainedConfig):
     read at runtime (`dim`, `n_layers`, ...). HF aliases win when both are
     provided so that loading the official config gives the right values.
     """
-
     model_type = "deepseek_v32"
 
     def __init__(
@@ -64,7 +63,7 @@ class DeepseekV32Config(PretrainedConfig):
         rope_factor=40,
         beta_fast=32,
         beta_slow=1,
-        mscale=1.0,
+        mscale=1.,
         index_n_heads=64,
         index_head_dim=128,
         index_topk=512,

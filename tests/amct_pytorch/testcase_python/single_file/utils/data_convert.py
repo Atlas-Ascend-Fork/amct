@@ -43,8 +43,8 @@ CUT_BIT_TYPE_TA = "TA"
 
 FLT_EPSILON = 1.192092896e-7
 
-SSR = "SSR"
-ONES = "ones"
+SSR = 'SSR'
+ONES = 'ones'
 
 
 def golden_float4(weight, quant_type, group_size):
@@ -722,14 +722,14 @@ def set_model_data_distribution(model, distribution_type=ONES, quant_type="MXFP4
                 .to(DATA_TYPE)
                 .to(DEVICE)
             )
-        elif distribution_type == "zeros":
+        elif distribution_type == 'zeros':
             param.data = torch.zeros_like(param.data).to(DATA_TYPE)
             param.data = (
                 convert_golden_inverse_conversion(param.data, quant_type)
                 .to(DATA_TYPE)
                 .to(DEVICE)
             )
-        elif distribution_type == "normal":
+        elif distribution_type == 'normal':
             shape = param.data.shape
             param.data = torch.normal(mean=0, std=1, size=shape).to(DATA_TYPE)
             param.data = (

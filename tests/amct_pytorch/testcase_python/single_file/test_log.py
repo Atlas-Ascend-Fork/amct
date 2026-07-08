@@ -35,14 +35,14 @@ class TestLog(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, "test_log")
+        cls.temp_folder = os.path.join(CUR_DIR, 'test_log')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
         cls.log_file = "amct_log.txt"
 
     @classmethod
     def tearDownClass(cls):
-        os.popen("rm -r " + cls.temp_folder)
+        os.popen('rm -r ' + cls.temp_folder)
         pass
 
     def setUp(self):
@@ -52,21 +52,21 @@ class TestLog(unittest.TestCase):
         pass
 
     def test_info_level(self):
-        os.environ[LOG_SET_ENV] = "info"
+        os.environ[LOG_SET_ENV] = 'info'
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logi("this is info test"))
 
     def test_debug_level(self):
-        os.environ[LOG_SET_ENV] = "debug"
+        os.environ[LOG_SET_ENV] = 'debug'
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logd("this is debug test"))
 
     def test_file_info_level(self):
-        os.environ[LOG_FILE_SET_ENV] = "info"
+        os.environ[LOG_FILE_SET_ENV] = 'info'
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logi("this is info test"))
 
     def test_debug_debug_level(self):
-        os.environ[LOG_FILE_SET_ENV] = "debug"
+        os.environ[LOG_FILE_SET_ENV] = 'debug'
         logger = Logger(self.temp_folder, self.log_file)
         self.assertIsNone(logger.logi("this is debug test"))

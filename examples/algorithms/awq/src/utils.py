@@ -29,7 +29,7 @@ def build_enc(model_path):
 
 
 def get_llama2(model_path, seqlen=2048):
-    print(f"Getting official pretrained {model_path}")
+    print(f'Getting official pretrained {model_path}')
 
     model = LlamaForCausalLM.from_pretrained(
         model_path, torch_dtype=torch.float16, offload_folder="offload/"
@@ -43,7 +43,7 @@ def get_llama2(model_path, seqlen=2048):
 
 
 def get_qwen(model_path, seqlen=2048):
-    print(f"Getting official pretrained {model_path}")
+    print(f'Getting official pretrained {model_path}')
 
     model = AutoModelForCausalLM.from_pretrained(
         model_path, device_map="auto", torch_dtype=torch.float16
@@ -57,15 +57,15 @@ def get_qwen(model_path, seqlen=2048):
 
 
 def get_test_dataset(enc, seqlen):
-    print("Loading dataset: Wikitext2")
-    testenc = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
+    print('Loading dataset: Wikitext2')
+    testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
     testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
 
     return testenc
 
 
 def get_calib_dataset(tokenizer=None, n_samples=512, block_size=512):
-    print("Loading dataset: pileval")
+    print('Loading dataset: pileval')
     dataset = load_dataset("mit-han-lab/pile-val-backup")
     dataset = dataset["validation"]
     dataset = dataset.shuffle(seed=42)
@@ -99,7 +99,7 @@ def infer_model(model, testenc):
         model(testenc[:, : model.seqlen].to(next(model.parameters()).device))
     test_end_time = time.time()
     total_time = test_end_time - test_start_time
-    print("Calibration time taken: ", total_time // 60, "min ", total_time % 60, "s")
+    print('Calibration time taken: ', total_time // 60, 'min ', total_time % 60, 's')
 
 
 def test_ppl(model, testenc):
@@ -125,5 +125,5 @@ def test_ppl(model, testenc):
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen))
 
     total_time = test_end_time - test_start_time
-    print("Test time taken: ", total_time // 60, "min ", total_time % 60, "s")
-    print("Score: ", ppl.item())
+    print('Test time taken: ', total_time // 60, 'min ', total_time % 60, 's')
+    print('Score: ', ppl.item())

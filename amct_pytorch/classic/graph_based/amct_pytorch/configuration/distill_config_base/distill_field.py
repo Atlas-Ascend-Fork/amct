@@ -32,68 +32,68 @@ from ....amct_pytorch.utils.vars import FIXED_MIN
 
 
 class GroupSize(ConfigItem):
-    """an object for GroupSize filed"""
+    '''an object for GroupSize filed'''
 
     def build(self, val):
-        """inner method"""
+        '''inner method'''
         self.check_type("GroupSize", val, int)
         if val <= 0:
             raise ValueError("group_size({}) should be greater than zero.".format(val))
         self.value = val
 
     def build_default(self):
-        """inner method"""
+        '''inner method'''
         self.value = 1
 
 
 class DataDump(ConfigItem):
-    """an object for DataDump filed"""
+    '''an object for DataDump filed'''
 
     def build(self, val):
-        """inner method"""
+        '''inner method'''
         self.check_type("DataDump", val, bool)
         self.value = val
 
     def build_default(self):
-        """inner method"""
+        '''inner method'''
         self.value = False
 
 
 class QuantEnable(ConfigItem):
-    """an object for QuantEnable filed"""
+    '''an object for QuantEnable filed'''
 
     def build(self, val, extra):
-        """inner method"""
+        '''inner method'''
         self.check_type("QuantEnable", val, bool, extra[0])
         self.value = val
 
     def build_default(self):
-        """inner method"""
+        '''inner method'''
         self.value = True
 
 
 class DataType(ConfigItem):
-    """an object for DataType filed"""
+    '''an object for DataType filed'''
 
     def build(self, val, extra):
-        """inner method"""
+        '''inner method'''
         self.check_type(DST_TYPE, val, str, extra[0])
         if val not in [INT4, INT8]:
             raise ValueError("now only support ['INT4', 'INT8'], but is {}".format(val))
         self.value = val
 
     def build_default(self, extra=None):
-        """inner method"""
+        '''inner method'''
         self.value = INT8
 
 
 class DistillDataConfig(ConfigItem):
-    """an object for DistillDataConfig filed"""
+    '''an object for DistillDataConfig filed'''
 
     def build(self, val, extra=None):
-        """inner method"""
-        self.check_type("DistillDataConfig", val, dict, extra[0])
-        key = "algo"
+        '''inner method'''
+        self.check_type('DistillDataConfig', val, dict, extra[0])
+        key = 'algo'
         if key not in val.keys():
             self.build_default_util(key, DataAlgo)
         else:
@@ -123,7 +123,7 @@ class DistillDataConfig(ConfigItem):
             )
 
     def build_default(self):
-        """inner method"""
+        '''inner method'''
         self.build_default_util("algo", DataAlgo)
         self.build_default_util(DST_TYPE, DataType)
 
@@ -132,7 +132,7 @@ class WeightAlgo(ConfigItem):
     """an object for WeightAlgo filed"""
 
     def build(self, val, extra=None):
-        """inner method"""
+        '''inner method'''
         self.check_type("WeightAlgo", val, str, extra[0])
         if val not in ["arq_distill", "ulq_distill"]:
             raise ValueError(
@@ -143,7 +143,7 @@ class WeightAlgo(ConfigItem):
         self.value = val
 
     def build_default(self, extra=None):
-        """inner method"""
+        '''inner method'''
         self.value = "arq_distill"
 
 
@@ -177,7 +177,7 @@ class DistillWeightConfig(ConfigItem):
         self.build_default_util(DST_TYPE, DataType)
 
     def build_config_by_key(self, key, cls, val, extra):
-        """inner method"""
+        '''inner method'''
         if key in val.keys():
             self.build_util(key, cls, val.get(key), extra)
             del val[key]
@@ -195,7 +195,7 @@ class LayerConfig(ConfigItem):
     }
 
     def build(self, val, extra):
-        """inner method"""
+        '''inner method'''
         self.check_type("LayerConfig", val, dict)
         for key, cls in self.fields.items():
             if key not in val.keys():
@@ -211,7 +211,7 @@ class LayerConfig(ConfigItem):
                 del val[key]
 
     def build_default(self, extra):
-        """inner method"""
+        '''inner method'''
         for key, cls in self.fields.items():
             if key == "distill_weight_config":
                 self.build_default_util(key, cls, extra)

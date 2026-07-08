@@ -47,10 +47,10 @@ def asym_quant_dequant(x, scale, zero, maxq):
 
 
 class ActivationQuantizer(torch.nn.Module):
-    """
+    '''
     A class for quantizing the activations. We only support (both sym. and asym.) per-token quantization
     for the activations.
-    """
+    '''
 
     def __init__(self, bits, sym=False, lac=False):
         super(ActivationQuantizer, self).__init__()
@@ -109,13 +109,13 @@ class ActivationQuantizer(torch.nn.Module):
 
 
 class WeightQuantizer(torch.nn.Module):
-    """From GPTQ Repo"""
+    '''From GPTQ Repo'''
 
     def __init__(self, shape=(4096, 1)):
         super(WeightQuantizer, self).__init__()
-        self.register_buffer("maxq", torch.tensor(0))
-        self.register_buffer("scale", torch.zeros(*shape))
-        self.register_buffer("zero", torch.zeros(*shape))
+        self.register_buffer('maxq', torch.tensor(0))
+        self.register_buffer('scale', torch.zeros(*shape))
+        self.register_buffer('zero', torch.zeros(*shape))
 
         self.enable = True
 

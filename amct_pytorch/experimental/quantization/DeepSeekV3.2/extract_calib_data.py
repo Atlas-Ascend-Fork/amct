@@ -39,7 +39,7 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
     samples = []
     n_run = 0
     for data in dataset:
-        line = data["text"]
+        line = data['text']
         line = line.strip()
         line_encoded = tokenizer.encode(line)
         if len(line_encoded) > seq_len:
@@ -148,7 +148,7 @@ def get_act_stat(
         )
         torch.save(position_ids, os.path.join(output_dir, "position_ids.pkl"))
         torch.save(attention_mask, os.path.join(output_dir, "attention_mask.pkl"))
-        torch.save(outs, os.path.join(output_dir, "layer_-1_out.pkl"))
+        torch.save(outs, os.path.join(output_dir, 'layer_-1_out.pkl'))
         layers[0] = layers[0].module
     else:
         layer = get_float_block(

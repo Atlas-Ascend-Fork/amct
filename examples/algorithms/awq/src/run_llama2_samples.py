@@ -21,7 +21,7 @@ import torch_npu
 from utils import get_test_dataset, get_llama2, get_calib_dataset, infer_model, test_ppl
 import amct_pytorch as amct
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="example")
     parser.add_argument("--model_path", type=str, required=True, help="模型路径")
     args = parser.parse_args()
@@ -35,16 +35,16 @@ if __name__ == "__main__":
 
     # Phase1: quantize model
     cfg = {
-        "batch_num": 1,
-        "quant_cfg": {
-            "weights": {
-                "type": "int4",
-                "symmetric": False,
-                "strategy": "group",
+        'batch_num': 1,
+        'quant_cfg': {
+            'weights': {
+                'type': 'int4',
+                'symmetric': False,
+                'strategy': 'group',
                 "group_size": 32,
             },
         },
-        "algorithm": {"awq": {"grids_num": 20}},
+        'algorithm': {'awq': {'grids_num': 20}},
         "skip_layers": {"lm_head"},
     }
     amct.quantize(quant_model, cfg)

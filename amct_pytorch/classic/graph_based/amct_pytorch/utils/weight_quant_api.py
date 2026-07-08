@@ -23,11 +23,11 @@ from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 def get_deconv_group(node_deconv):
     """Get ConvTranspose's group param value"""
     attrs_helper = AttributeProtoHelper(node_deconv.proto)
-    if not attrs_helper.has_attr("group"):
+    if not attrs_helper.has_attr('group'):
         raise RuntimeError(
             "can not get the 'group' attr of {}".format(node_deconv.name)
         )
-    group = attrs_helper.get_attr_value("group")
+    group = attrs_helper.get_attr_value('group')
     return group
 
 

@@ -33,7 +33,7 @@ class InsertRetrainQuantPass(BaseFusionPass):
     APIs: match_pattern, do_pass
     """
 
-    def __init__(self, torch_recorder, device="cpu"):
+    def __init__(self, torch_recorder, device='cpu'):
         """
         Function: init object
         Parameter: None
@@ -92,7 +92,7 @@ class InsertRetrainQuantPass(BaseFusionPass):
             new_module = RetrainQuant(
                 object_module, self.record_module, bn_module, bn_module_name
             )
-        setattr(parent_module, object_node_name.split(".")[-1], new_module)
+        setattr(parent_module, object_node_name.split('.')[-1], new_module)
         if is_next_node_bn:
             bn_parent_module = model_helper.get_parent_module(next_node.name)
             setattr(

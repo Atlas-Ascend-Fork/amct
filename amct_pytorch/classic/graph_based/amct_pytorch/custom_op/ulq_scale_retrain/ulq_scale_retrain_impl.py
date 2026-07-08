@@ -76,7 +76,7 @@ def ulq_scale_retrain_forward_pytorch(
     group_size = torch.numel(input_tensor) // len(scale)
     input_tensor = input_tensor.reshape(-1, group_size)
 
-    data_type = "INT" + str(num_bits)
+    data_type = 'INT' + str(num_bits)
     if arq_init:
         if channel_wise:
             data_max = torch.max(input_tensor, dim=1).values

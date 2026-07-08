@@ -26,14 +26,14 @@ from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
 
 TRANSPOSE_NODE_NAME = "transpose"
 
-CONV1 = "conv1"
-CONV1_WEIGHT = "conv1.weight"
-IDENTITY_0 = "identity_0"
+CONV1 = 'conv1'
+CONV1_WEIGHT = 'conv1.weight'
+IDENTITY_0 = 'identity_0'
 
-CONV1_BIAS = "conv1.bias"
-RELU1 = "relu1"
+CONV1_BIAS = 'conv1.bias'
+RELU1 = 'relu1'
 
-ADD1 = "add1"
+ADD1 = 'add1'
 
 
 class TestGraph(unittest.TestCase):
@@ -48,38 +48,38 @@ class TestGraph(unittest.TestCase):
     def setUp(self):
         # set basic info
         self.model_proto = onnx_pb.ModelProto()
-        self.model_proto.producer_name = "model"
+        self.model_proto.producer_name = 'model'
         self.graph = onnx_pb.GraphProto()
         # Add graph input 0
         graph_input0 = self.graph.input.add()
-        graph_input0.name = "data0"
+        graph_input0.name = 'data0'
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add graph input 1
         graph_input1 = self.graph.input.add()
-        graph_input1.name = "data1"
+        graph_input1.name = 'data1'
         graph_input1.type.tensor_type.shape.dim.add().dim_value = 1
         # Add conv1
         conv1 = self.graph.node.add()
         conv1.name = CONV1
-        conv1.op_type = "Conv"
-        conv1.input[:] = ["data0", "conv1.weights", CONV1_BIAS]
+        conv1.op_type = 'Conv'
+        conv1.input[:] = ['data0', 'conv1.weights', CONV1_BIAS]
         conv1.output[:] = [CONV1]
         # add attribute "kernel_shape"
         kernel_shape = conv1.attribute.add()
-        kernel_shape.name = "kernel_shape"
+        kernel_shape.name = 'kernel_shape'
         kernel_shape.type = onnx_pb.AttributeProto.AttributeType.INTS
         kernel_shape.ints[:] = [64, 3, 3, 3]
         # add attribute "pads"
         pads = conv1.attribute.add()
-        pads.name = "pads"
+        pads.name = 'pads'
         pads.type = onnx_pb.AttributeProto.AttributeType.INTS
         pads.ints[:] = [0, 0, 0, 0]
         # Add weights
         weights = self.graph.initializer.add()
-        weights.name = "conv1.weights"
+        weights.name = 'conv1.weights'
         weights.data_type = 3
         weights.int32_data[:] = [1, 2, 3, 4, 5, 6]
         weights.dims[:] = [1, 1, 2, 3]
@@ -92,24 +92,24 @@ class TestGraph(unittest.TestCase):
         # Add relu
         relu1 = self.graph.node.add()
         relu1.name = RELU1
-        relu1.op_type = "Relu"
+        relu1.op_type = 'Relu'
         relu1.input[:] = [CONV1]
         relu1.output[:] = [RELU1]
         # Add add
         add1 = self.graph.node.add()
         add1.name = ADD1
-        add1.op_type = "Add"
-        add1.input[:] = [RELU1, "data1"]
+        add1.op_type = 'Add'
+        add1.input[:] = [RELU1, 'data1']
         add1.output[:] = [ADD1]
         # Add average_pool
         avg_pool1 = self.graph.node.add()
-        avg_pool1.name = "avg_pool1"
-        avg_pool1.op_type = "AveragePool"
+        avg_pool1.name = 'avg_pool1'
+        avg_pool1.op_type = 'AveragePool'
         avg_pool1.input[:] = [ADD1]
-        avg_pool1.output[:] = ["output"]
+        avg_pool1.output[:] = ['output']
         # add output
         graph_output = self.graph.output.add()
-        graph_output.name = "output"
+        graph_output.name = 'output'
         graph_output.type.tensor_type.shape.dim.add().dim_value = 1
         self.model_proto.graph.CopyFrom(self.graph)
 
@@ -120,34 +120,34 @@ class TestGraph(unittest.TestCase):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         self.assertEqual(len(graph.nodes), 6)
-        self.assertEqual(graph.get_node(0).name, "conv1.weights")
+        self.assertEqual(graph.get_node(0).name, 'conv1.weights')
         self.assertEqual(graph.get_node(1).name, CONV1_BIAS)
         self.assertEqual(graph.get_node(2).name, CONV1)
         self.assertEqual(graph.get_node(3).name, RELU1)
         self.assertEqual(graph.get_node(4).name, ADD1)
-        self.assertEqual(graph.get_node(5).name, "avg_pool1")
-        self.assertEqual(graph.net.producer_name, "model")
+        self.assertEqual(graph.get_node(5).name, 'avg_pool1')
+        self.assertEqual(graph.net.producer_name, 'model')
         model_proto = graph.dump_proto()
         self.assertEqual(type(model_proto), onnx_pb.ModelProto)
 
     def test_graph_init_without_name(self):
         test_model = deepcopy(self.model_proto)
         for node in test_model.graph.node:
-            node.ClearField("name")
+            node.ClearField('name')
         graph = Graph(test_model)
         self.assertEqual(len(graph.nodes), 6)
-        self.assertEqual(graph.get_node(0).name, "conv1.weights")
+        self.assertEqual(graph.get_node(0).name, 'conv1.weights')
         self.assertEqual(graph.get_node(1).name, CONV1_BIAS)
-        self.assertEqual(graph.get_node(2).ori_name, "node_0")
-        self.assertEqual(graph.get_node(3).ori_name, "node_1")
-        self.assertEqual(graph.get_node(4).ori_name, "node_2")
-        self.assertEqual(graph.get_node(5).ori_name, "node_3")
-        self.assertEqual(graph.net.producer_name, "model")
+        self.assertEqual(graph.get_node(2).ori_name, 'node_0')
+        self.assertEqual(graph.get_node(3).ori_name, 'node_1')
+        self.assertEqual(graph.get_node(4).ori_name, 'node_2')
+        self.assertEqual(graph.get_node(5).ori_name, 'node_3')
+        self.assertEqual(graph.net.producer_name, 'model')
 
     def test_graph_init_with_no_input_output(self):
         test_model = deepcopy(self.model_proto)
         output1 = test_model.graph.output.add()
-        output1.name = "output1"
+        output1.name = 'output1'
         output1.type.tensor_type.shape.dim.add().dim_value = 1
         self.assertRaises(ReferenceError, Graph, test_model)
 

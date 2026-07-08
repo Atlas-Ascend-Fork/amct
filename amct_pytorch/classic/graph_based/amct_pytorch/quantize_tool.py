@@ -90,7 +90,7 @@ def create_quant_config(
     Configuration.create_quant_config(
         config_file, graph, skip_layers, batch_num, activation_offset, config_defination
     )
-    LOGGER.logi(f"Create quant config file {config_file} success.")
+    LOGGER.logi(f'Create quant config file {config_file} success.')
 
 
 @check_params(config_file=str, record_file=str, model=torch.nn.Module)
@@ -108,11 +108,11 @@ def quantize_preprocess(config_file, record_file, model, input_data):
     Returns:
         None
     """
-    files_util.is_valid_name(config_file, "config_file")
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(config_file, 'config_file')
+    files_util.is_valid_name(record_file, 'record_file')
     config_file = os.path.realpath(config_file)
     if not os.path.exists(config_file):
-        raise OSError(f"file ({config_file}) does not exist!")
+        raise OSError(f'file ({config_file}) does not exist!')
     file_realpath = files_util.create_empty_file(record_file, check_exist=True)
     SingletonScaleOffsetRecord().reset_singleton(file_realpath)
 
@@ -498,8 +498,8 @@ def save_quant_retrain_model(
     Return: None.
     """
     # check inputs
-    files_util.is_valid_name(config_file, "config_file")
-    files_util.is_valid_name(record_file, "record_file")
+    files_util.is_valid_name(config_file, 'config_file')
+    files_util.is_valid_name(record_file, 'record_file')
     config_file = os.path.realpath(config_file)
     record_file = os.path.realpath(record_file)
     SingletonScaleOffsetRecord().reset_singleton(record_file)

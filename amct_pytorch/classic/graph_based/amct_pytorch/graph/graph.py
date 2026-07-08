@@ -23,7 +23,7 @@ from ...amct_pytorch.graph.node import Node
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
-MODULE_NAME = "Graph"
+MODULE_NAME = 'Graph'
 
 
 class Graph(GraphBase):  # pylint: disable=no-member
@@ -32,7 +32,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
     APIs: add_node, remove_node, net, dump_proto
     """
 
-    def __init__(self, network, model_path=""):
+    def __init__(self, network, model_path=''):
         super().__init__(network)
         self.model_path = model_path
         self._net = network
@@ -55,23 +55,23 @@ class Graph(GraphBase):  # pylint: disable=no-member
         Return: consumer the conv nodes found
         """
         attr_helper = AttributeProtoHelper(quant_identity_node.proto)
-        layer_name = str(attr_helper.get_attr_value("op_name"), encoding="utf-8")
+        layer_name = str(attr_helper.get_attr_value('op_name'), encoding="utf-8")
         # apply bfs to search conv node
         root = quant_identity_node
         search_queue = []
         search_queue.append(root)
         while search_queue:
             current = search_queue.pop(0)
-            if current.type == "Conv":
+            if current.type == 'Conv':
                 consumer = current
                 break
 
             next_nodes, _ = current.get_consumers(0)
             for next_node in next_nodes:
-                next_node.set_attr("padding_target_node", layer_name)
+                next_node.set_attr('padding_target_node', layer_name)
                 search_queue.append(next_node)
 
-        consumer.set_attr("padding_circle", True)
+        consumer.set_attr('padding_circle', True)
         return consumer
 
     @staticmethod
@@ -99,7 +99,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
             for next_node in next_nodes:
                 search_queue.append(next_node)
 
-        consumer.set_attr("input_dimension_reduction", True)
+        consumer.set_attr('input_dimension_reduction', True)
         return consumer
 
     @staticmethod
@@ -132,14 +132,14 @@ class Graph(GraphBase):  # pylint: disable=no-member
         """
         # Set node_id to be unique by decorate_node_name function
         if isinstance(node_proto, onnx_pb.SparseTensorProto):
-            if node_proto.HasField("values"):
+            if node_proto.HasField('values'):
                 node_id = node_proto.values.name
                 node_proto.values.name = self._decorate_node_name(node_id)
-            elif node_proto.HasField("indices"):
+            elif node_proto.HasField('indices'):
                 node_id = node_proto.indices.name
                 node_proto.indices.name = self._decorate_node_name(node_id)
             else:
-                raise RuntimeError("Cannot find tensor in sparse_initializer")
+                raise RuntimeError('Cannot find tensor in sparse_initializer')
         else:
             node_id = node_proto.name
             node_proto.name = self._decorate_node_name(node_id)

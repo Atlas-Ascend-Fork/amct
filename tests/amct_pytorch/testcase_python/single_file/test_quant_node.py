@@ -74,50 +74,50 @@ class TestModelHelper(unittest.TestCase):
         wts_trans.input[:] = [
             "conv1.pre_weights",
         ]
-        wts_trans.output[:] = ["conv1.weights"]
+        wts_trans.output[:] = ['conv1.weights']
         # Add conv1
         conv1 = self.graph.node.add()
         conv1.name = CONV1
-        conv1.op_type = "Conv"
-        conv1.input[:] = ["data0", "conv1.weights", "conv1.bias"]
+        conv1.op_type = 'Conv'
+        conv1.input[:] = ['data0', 'conv1.weights', 'conv1.bias']
         conv1.output[:] = [CONV1]
         # add attribute "kernel_shape"
         kernel_shape = conv1.attribute.add()
-        kernel_shape.name = "kernel_shape"
+        kernel_shape.name = 'kernel_shape'
         kernel_shape.type = onnx_pb.AttributeProto.AttributeType.INTS
         kernel_shape.ints[:] = [64, 3, 3, 3]
         # add attribute "pads"
         pads = conv1.attribute.add()
-        pads.name = "pads"
+        pads.name = 'pads'
         pads.type = onnx_pb.AttributeProto.AttributeType.INTS
         pads.ints[:] = [0, 0, 0, 0]
         # Add bias
         bias = self.graph.initializer.add()
-        bias.name = "conv1.bias"
+        bias.name = 'conv1.bias'
         bias.data_type = 6
         bias.int32_data[:] = [0]
         bias.dims[:] = [1]
         # Add relu
         relu1 = self.graph.node.add()
         relu1.name = RELU1
-        relu1.op_type = "Relu"
+        relu1.op_type = 'Relu'
         relu1.input[:] = [CONV1]
         relu1.output[:] = [RELU1]
         # Add add
         add1 = self.graph.node.add()
         add1.name = ADD1
-        add1.op_type = "Add"
-        add1.input[:] = [RELU1, "data1"]
+        add1.op_type = 'Add'
+        add1.input[:] = [RELU1, 'data1']
         add1.output[:] = [ADD1]
         # Add average_pool
         avg_pool1 = self.graph.node.add()
-        avg_pool1.name = "avg_pool1"
-        avg_pool1.op_type = "AveragePool"
+        avg_pool1.name = 'avg_pool1'
+        avg_pool1.op_type = 'AveragePool'
         avg_pool1.input[:] = [ADD1]
-        avg_pool1.output[:] = ["output"]
+        avg_pool1.output[:] = ['output']
         # add output
         graph_output = self.graph.output.add()
-        graph_output.name = "output"
+        graph_output.name = 'output'
         graph_output.type.tensor_type.shape.dim.add().dim_value = 1
         self.model_proto.graph.CopyFrom(self.graph)
 
@@ -156,8 +156,8 @@ class TestModelHelper(unittest.TestCase):
     def test_get_dst_num_bits_unset_act_type(self):
         records = {
             CONV1: {
-                "data_scale": 1,
-                "data_offset": 0,
+                'data_scale': 1,
+                'data_offset': 0,
                 "act_type": "UNSET",
             }
         }
@@ -177,8 +177,8 @@ class TestModelHelper(unittest.TestCase):
     def test_get_dst_num_bits_unset_wts_type(self):
         records = {
             CONV1: {
-                "data_scale": 1,
-                "data_offset": 0,
+                'data_scale': 1,
+                'data_offset': 0,
                 "wts_type": "UNSET",
             }
         }
@@ -203,8 +203,8 @@ class TestModelHelper(unittest.TestCase):
     def test_get_dst_num_bits_none_data_type_none_dst_type(self):
         records = {
             CONV1: {
-                "data_scale": 1,
-                "data_offset": 0,
+                'data_scale': 1,
+                'data_offset': 0,
             }
         }
         num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1)

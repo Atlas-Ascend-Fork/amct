@@ -37,9 +37,9 @@ from ...amct_pytorch.utils.weight_quant_api import adjust_conv_weight_shape
 from ...amct_pytorch.ada_round.ada_round_optimize import replace_adaround_module
 from ...amct_pytorch.utils.module_info import ModuleInfo
 
-CONV2D = "Conv2d"
-CONV3D = "Conv3d"
-CONV1D = "Conv1d"
+CONV2D = 'Conv2d'
+CONV3D = 'Conv3d'
+CONV1D = 'Conv1d'
 RNN_TENSOR_SEQUENCE = {"LSTM": [0, 3, 1, 2], "GRU": [1, 0, 2]}
 
 
@@ -150,7 +150,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
 
     @staticmethod
     def _reorganize_rnn_quant_factor(quant_factor, module_name, module_type):
-        """
+        '''
         Reorganize the rnn weight quant factor from torch order to onnx order.
         """
         length = len(quant_factor)

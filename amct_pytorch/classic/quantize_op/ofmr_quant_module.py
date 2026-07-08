@@ -48,9 +48,9 @@ class OfmrQuant(BaseQuantizeModule):
         self.weight = ori_module.weight
         self.bias = ori_module.bias
 
-        self.batch_num = quant_config.get("batch_num")
-        self.wts_type = quant_config.get("weights_cfg").get("quant_type")
-        self.act_type = quant_config.get("inputs_cfg").get("quant_type")
+        self.batch_num = quant_config.get('batch_num')
+        self.wts_type = quant_config.get('weights_cfg').get('quant_type')
+        self.act_type = quant_config.get('inputs_cfg').get('quant_type')
 
         self.weight_compress_only = (
             True

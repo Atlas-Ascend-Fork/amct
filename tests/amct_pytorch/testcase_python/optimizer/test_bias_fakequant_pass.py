@@ -153,7 +153,7 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
         Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node_name = 'lstm'
-        graph.get_node_by_name(node_name)
+        node = graph.get_node_by_name(node_name)
 
         records = {
             node_name: {

@@ -50,17 +50,17 @@ class LinearAWQuant(BaseQuantizeModule):
         self.bias = ori_module.bias
         self.layer_name = layer_name
         self.quant_config = quant_config
-        self.wts_symmetric = quant_config.get("weights_cfg").get("symmetric")
+        self.wts_symmetric = quant_config.get('weights_cfg').get('symmetric')
         self.ori_module = ori_module
-        self.wts_type = self.quant_config.get("weights_cfg").get("quant_type")
-        if self.quant_config.get("weights_cfg").get("group_size") is not None:
-            self.group_size = self.quant_config.get("weights_cfg").get("group_size")
+        self.wts_type = self.quant_config.get('weights_cfg').get('quant_type')
+        if self.quant_config.get('weights_cfg').get("group_size") is not None:
+            self.group_size = self.quant_config.get('weights_cfg').get("group_size")
         self.calc_done = False
         if (
             quant_config.get("inputs_cfg").get("enable_quant") is None
             or quant_config.get("inputs_cfg").get("enable_quant") == True
         ):
-            self.act_granularity = quant_config.get("inputs_cfg").get("strategy")
+            self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
 
     @torch.no_grad()
     def forward(self, inputs):

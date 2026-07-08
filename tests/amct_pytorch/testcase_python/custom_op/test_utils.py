@@ -21,7 +21,7 @@ import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op import utils
 
-DEVICE = torch.device("cpu")
+DEVICE = torch.device('cpu')
 
 
 class CustomizedModel(torch.nn.Module):

@@ -41,15 +41,15 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-OP_DATA_TYPE = "op_data_type"
+OP_DATA_TYPE = 'op_data_type'
 
-FLOAT16 = "float16"
+FLOAT16 = 'float16'
 
 
 class TestParser(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp_folder = os.path.join(CUR_DIR, "test_parser")
+        cls.temp_folder = os.path.join(CUR_DIR, 'test_parser')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -61,7 +61,7 @@ class TestParser(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        os.popen("rm -r " + cls.temp_folder)
+        os.popen('rm -r ' + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -83,7 +83,7 @@ class TestParser(unittest.TestCase):
         torch_out = Parser.export_onnx(model, self.args, tmp_onnx)
         self.assertIsNone(torch_out)
 
-    @patch("torch.onnx.export")
+    @patch('torch.onnx.export')
     def test_parse_unsupport_bn(self, mock_export):
         mock_export.side_effect = RuntimeError()
 
@@ -101,7 +101,7 @@ class TestParser(unittest.TestCase):
         tmp_onnx = BytesIO()
         self.assertRaises(RuntimeError, Parser.export_onnx, model, self.args, tmp_onnx)
 
-    @patch.object(ModuleHelper, "deep_copy")
+    @patch.object(ModuleHelper, 'deep_copy')
     def test_parse_export_unsupport_deep_copy_model(self, mock_deep_copy):
         mock_deep_copy.side_effect = RuntimeError()
 
@@ -195,7 +195,7 @@ class TestParser(unittest.TestCase):
         graph = Parser.parse_net_to_graph(onnx_file)
         conv_node = None
         for node in graph.nodes:
-            if node.type == "Conv":
+            if node.type == 'Conv':
                 conv_node = node
 
         node_attr = {
