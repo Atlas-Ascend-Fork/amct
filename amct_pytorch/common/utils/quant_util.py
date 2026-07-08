@@ -77,6 +77,34 @@ def hifloat8_fake_quant(fp_tensor):
     return decode_from_hifloat8(codes, work_dtype).to(fp_tensor.dtype)
 
 
+@torch.no_grad()
+def hifloat4_fake_quant(fp_tensor, qdim=-1):
+    """FP -> HiFloat4 (hifx4) -> FP fake-quant round trip.
+
+    Unlike hifloat8 there is no native torch_npu hifloat4 dtype. On NPU (float16/bfloat16)
+    this prefers the amct_ops hifloat4_cast AscendC operator; everywhere else -- and if
+    amct_ops is not installed -- it falls back to the pure-python hifx4 quant-dequant
+    simulation, which runs on any device. Both paths are numerically equivalent (the kernel
+    is validated against the python reference to ~0 error).
+
+    The hifx4 format does its own 64-element block scaling along ``qdim`` -- so, unlike
+    hifloat8_fake_quant, no external scale factor is computed or applied here. ``qdim``
+    defaults to the last (reduction) dim, matching how HiFloat4's reference QLinear
+    quantizes both weights ([Cout, Cin] along Cin) and activations ([..., Cin] along Cin).
+    """
+    if fp_tensor.device.type == "npu" and fp_tensor.dtype in (torch.float16, torch.bfloat16):
+        try:
+            from amct_ops.hifloat4_cast import hifloat4_fake_quant as _npu_hifloat4_fake_quant
+        except ImportError:
+            _npu_hifloat4_fake_quant = None
+        if _npu_hifloat4_fake_quant is not None:
+            return _npu_hifloat4_fake_quant(fp_tensor, qdim=qdim)
+
+    from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
+    qtype = QType('hifx4').dim(qdim)
+    return quant_dequant_float(fp_tensor, qtype, force_py=True, force_fp32=True).to(fp_tensor.dtype)
+
+
 def pad_zero_by_group(tensor, group_size):
     """
     Function: Pads the input tensor so that the size of its last dimension is divisible by group_size.
