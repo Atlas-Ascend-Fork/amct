@@ -33,7 +33,9 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from transformers import PreTrainedModel
 from transformers.activations import SiLUActivation
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.configuration_deepseek import DeepseekV32Config
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.configuration_deepseek import (
+    DeepseekV32Config,
+)
 
 
 world_size = 1
@@ -89,6 +91,7 @@ class ModelArgs:
         index_head_dim (int): Dimension for index head.
         index_topk (int): Top-k for index head.
     """
+
     max_batch_size: int = 8
     max_seq_len: int = 4096 * 4
     dtype: Literal["bf16", "fp8"] = "bf16"
@@ -107,7 +110,7 @@ class ModelArgs:
     n_expert_groups: int = 1
     n_limited_groups: int = 1
     score_func: Literal["softmax", "sigmoid"] = "softmax"
-    route_scale: float = 1.
+    route_scale: float = 1.0
     # mla
     q_lora_rank: int = 0
     kv_lora_rank: int = 512
@@ -117,10 +120,10 @@ class ModelArgs:
     # yarn
     original_seq_len: int = 4096
     rope_theta: float = 10000.0
-    rope_factor: float = 40.
+    rope_factor: float = 40.0
     beta_fast: int = 32
     beta_slow: int = 1
-    mscale: float = 1.
+    mscale: float = 1.0
     # index
     index_n_heads: int = 64
     index_head_dim: int = 128
@@ -135,6 +138,7 @@ class RMSNorm(nn.Module):
         dim (int): Dimension of the input tensor.
         eps (float): Epsilon value for numerical stability. Defaults to 1e-6.
     """
+
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.dim = dim
@@ -168,6 +172,7 @@ class LayerNorm(nn.Module):
     """
     Layer Normalization.
     """
+
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.dim = dim
@@ -209,7 +214,11 @@ def precompute_freqs_cis(args: ModelArgs) -> torch.Tensor:
         Returns:
             float: The correction dimension based on the input parameters.
         """
-        return dim * math.log(max_seq_len / (num_rotations * 2 * math.pi)) / (2 * math.log(base))
+        return (
+            dim
+            * math.log(max_seq_len / (num_rotations * 2 * math.pi))
+            / (2 * math.log(base))
+        )
 
     def find_correction_range(low_rot, high_rot, dim, base, max_seq_len):
         """
@@ -250,7 +259,9 @@ def precompute_freqs_cis(args: ModelArgs) -> torch.Tensor:
 
     freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
     if seqlen > args.original_seq_len:
-        low, high = find_correction_range(beta_fast, beta_slow, dim, base, args.original_seq_len)
+        low, high = find_correction_range(
+            beta_fast, beta_slow, dim, base, args.original_seq_len
+        )
         smooth = 1 - linear_ramp_factor(low, high, dim // 2)
         freqs = freqs / factor * (1 - smooth) + freqs * smooth
 
@@ -272,7 +283,9 @@ def fp32_index(q: torch.Tensor, k: torch.Tensor, weights):
     return logits
 
 
-def apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor, interleaved: bool = True) -> torch.Tensor:
+def apply_rotary_emb(
+    x: torch.Tensor, freqs_cis: torch.Tensor, interleaved: bool = True
+) -> torch.Tensor:
     """
     Applies rotary positional embeddings to the input tensor.
 
@@ -299,7 +312,9 @@ def hadamard_transformers_fix(x):
     dtype = x.dtype
     device = x.device
     hidden_size = x.size(-1)
-    h_m = torch.tensor(hadamard(hidden_size, dtype=np.float32) / hidden_size ** 0.5).to(device)
+    h_m = torch.tensor(hadamard(hidden_size, dtype=np.float32) / hidden_size**0.5).to(
+        device
+    )
     x = (x.to(torch.float32) @ h_m).to(dtype)
     return x
 
@@ -318,42 +333,57 @@ class Indexer(torch.nn.Module):
         self.rope_head_dim: int = args.qk_rope_head_dim
         self.index_topk: int = args.index_topk
         self.q_lora_rank: int = args.q_lora_rank
-        self.wq_b = nn.Linear(self.q_lora_rank, self.n_heads * self.head_dim, bias=False)
+        self.wq_b = nn.Linear(
+            self.q_lora_rank, self.n_heads * self.head_dim, bias=False
+        )
         self.wk = nn.Linear(self.dim, self.head_dim, bias=False)
         self.k_norm = LayerNorm(self.head_dim)
         # weights_proj in the checkpoint is stored in bf16,
         # while the parameters here are stored in fp32 for convenient.
-        self.weights_proj = nn.Linear(self.dim, self.n_heads, dtype=torch.float32, bias=False)
-        self.softmax_scale = self.head_dim ** -0.5
+        self.weights_proj = nn.Linear(
+            self.dim, self.n_heads, dtype=torch.float32, bias=False
+        )
+        self.softmax_scale = self.head_dim**-0.5
         self.scale_fmt = args.scale_fmt
 
-
-    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int,
-                freqs_cis: torch.Tensor, mask: Optional[torch.Tensor]):
+    def forward(
+        self,
+        x: torch.Tensor,
+        qr: torch.Tensor,
+        start_pos: int,
+        freqs_cis: torch.Tensor,
+        mask: Optional[torch.Tensor],
+    ):
         bsz, seqlen, _ = x.size()
         end_pos = start_pos + seqlen
         q = self.wq_b(qr)
         q = q.view(bsz, seqlen, self.n_heads, self.head_dim)
-        q_pe, q_nope = torch.split(q, [self.rope_head_dim, self.head_dim - self.rope_head_dim], dim=-1)
+        q_pe, q_nope = torch.split(
+            q, [self.rope_head_dim, self.head_dim - self.rope_head_dim], dim=-1
+        )
         # rope in indexer is not interleaved
         q_pe = apply_rotary_emb(q_pe, freqs_cis, False)
         q = torch.cat([q_pe, q_nope], dim=-1)
         k = self.wk(x)
         k = self.k_norm(k)
-        k_pe, k_nope = torch.split(k, [self.rope_head_dim, self.head_dim - self.rope_head_dim], dim=-1)
+        k_pe, k_nope = torch.split(
+            k, [self.rope_head_dim, self.head_dim - self.rope_head_dim], dim=-1
+        )
         # rope in indexer is not interleaved
         k_pe = apply_rotary_emb(k_pe.unsqueeze(2), freqs_cis, False).squeeze(2)
         k = torch.cat([k_pe, k_nope], dim=-1)
         q = rotate_activation(q)
         k = rotate_activation(k)
-        weights = self.weights_proj(x.float()) * self.n_heads ** -0.5
+        weights = self.weights_proj(x.float()) * self.n_heads**-0.5
         weights = weights.unsqueeze(-1) * self.softmax_scale
         index_score = fp32_index(q, k.unsqueeze(2), weights)
         if mask is not None:
             index_score += mask
         topk_indices = index_score.topk(min(self.index_topk, end_pos), dim=-1)[1]
         topk_indices_ = topk_indices.clone()
-        assert torch.all(topk_indices == topk_indices_), f"{topk_indices=} {topk_indices_=}"
+        assert torch.all(topk_indices == topk_indices_), (
+            f"{topk_indices=} {topk_indices_=}"
+        )
         return topk_indices
 
 
@@ -396,6 +426,7 @@ class DeepseekV3Attention(nn.Module):
         v_head_dim (int): Dimensionality of value projections.
         softmax_scale (float): Scaling factor for softmax in attention computation.
     """
+
     def __init__(self, args: ModelArgs):
         super().__init__()
         self.dim = args.dim
@@ -410,13 +441,20 @@ class DeepseekV3Attention(nn.Module):
 
         self.q_a_proj = nn.Linear(self.dim, self.q_lora_rank, bias=False)
         self.q_a_layernorm = RMSNorm(self.q_lora_rank)
-        self.q_b_proj = nn.Linear(self.q_lora_rank, self.n_heads * self.qk_head_dim, bias=False)
-        self.kv_a_proj_with_mqa = nn.Linear(self.dim, self.kv_lora_rank + self.qk_rope_head_dim, bias=False)
+        self.q_b_proj = nn.Linear(
+            self.q_lora_rank, self.n_heads * self.qk_head_dim, bias=False
+        )
+        self.kv_a_proj_with_mqa = nn.Linear(
+            self.dim, self.kv_lora_rank + self.qk_rope_head_dim, bias=False
+        )
         self.kv_a_layernorm = RMSNorm(self.kv_lora_rank)
-        self.kv_b_proj = nn.Linear(self.kv_lora_rank, self.n_heads * (self.qk_nope_head_dim + self.v_head_dim),
-                                   bias=False)
+        self.kv_b_proj = nn.Linear(
+            self.kv_lora_rank,
+            self.n_heads * (self.qk_nope_head_dim + self.v_head_dim),
+            bias=False,
+        )
         self.o_proj = nn.Linear(self.n_heads * self.v_head_dim, self.dim, bias=False)
-        self.softmax_scale = self.qk_head_dim ** -0.5
+        self.softmax_scale = self.qk_head_dim**-0.5
         self.scale_fmt = args.scale_fmt
         if args.max_seq_len > args.original_seq_len:
             mscale = 0.1 * args.mscale * math.log(args.rope_factor) + 1.0
@@ -441,45 +479,69 @@ class DeepseekV3Attention(nn.Module):
         """
         bsz, seqlen, _ = x.size()
         end_pos = start_pos + seqlen
-        mask = torch.full((seqlen, seqlen), float("-inf"), device=x.device).triu_(1) if seqlen > 1 else None
+        mask = (
+            torch.full((seqlen, seqlen), float("-inf"), device=x.device).triu_(1)
+            if seqlen > 1
+            else None
+        )
         freqs_cis = self.freqs_cis[start_pos:end_pos]
         qr = self.q_a_layernorm(self.q_a_proj(x))
         q = self.q_b_proj(qr)
         q = q.view(bsz, seqlen, self.n_local_heads, self.qk_head_dim)
-        q_nope, q_pe = torch.split(q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
+        q_nope, q_pe = torch.split(
+            q, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1
+        )
         q_pe = apply_rotary_emb(q_pe, freqs_cis)
         kv = self.kv_a_proj_with_mqa(x)
         kv, k_pe = torch.split(kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
         kv = self.kv_a_layernorm(kv)
         k_pe = apply_rotary_emb(k_pe.unsqueeze(2), freqs_cis)
-        if mask is not None:    # MHA prefill
+        if mask is not None:  # MHA prefill
             q = torch.cat([q_nope, q_pe], dim=-1)
             kv = self.kv_b_proj(kv)
-            kv = kv.view(bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim)
-            k_nope, v = torch.split(kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
+            kv = kv.view(
+                bsz, seqlen, self.n_local_heads, self.qk_nope_head_dim + self.v_head_dim
+            )
+            k_nope, v = torch.split(
+                kv, [self.qk_nope_head_dim, self.v_head_dim], dim=-1
+            )
             k = torch.cat([k_nope, k_pe.expand(-1, -1, self.n_local_heads, -1)], dim=-1)
             scores = torch.einsum("bshd,bthd->bsht", q, k).mul_(self.softmax_scale)
 
             # indexer
             topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
-            index_mask = torch.full((bsz, seqlen, seqlen), float("-inf"), device=x.device).scatter_(-1, topk_indices, 0)
+            index_mask = torch.full(
+                (bsz, seqlen, seqlen), float("-inf"), device=x.device
+            ).scatter_(-1, topk_indices, 0)
             index_mask += mask
             scores += index_mask.unsqueeze(2)
 
             scores = scores.softmax(dim=-1)
             x = torch.einsum("bsht,bthd->bshd", scores, v)
-        else:                   # MQA decode
+        else:  # MQA decode
             if self.dequant_wkv_b is None and self.kv_b_proj.scale is not None:
-                self.dequant_wkv_b = weight_dequant(self.kv_b_proj.weight, self.kv_b_proj.scale)
-            wkv_b = self.kv_b_proj.weight if self.dequant_wkv_b is None else self.dequant_wkv_b
+                self.dequant_wkv_b = weight_dequant(
+                    self.kv_b_proj.weight, self.kv_b_proj.scale
+                )
+            wkv_b = (
+                self.kv_b_proj.weight
+                if self.dequant_wkv_b is None
+                else self.dequant_wkv_b
+            )
             wkv_b = wkv_b.view(self.n_local_heads, -1, self.kv_lora_rank)
-            q_nope = torch.einsum("bshd,hdc->bshc", q_nope, wkv_b[:, :self.qk_nope_head_dim])
-            scores = (torch.einsum("bshc,btc->bsht", q_nope, kv) +
-                      torch.einsum("bshr,btr->bsht", q_pe, k_pe.squeeze(2))) * self.softmax_scale
+            q_nope = torch.einsum(
+                "bshd,hdc->bshc", q_nope, wkv_b[:, : self.qk_nope_head_dim]
+            )
+            scores = (
+                torch.einsum("bshc,btc->bsht", q_nope, kv)
+                + torch.einsum("bshr,btr->bsht", q_pe, k_pe.squeeze(2))
+            ) * self.softmax_scale
 
             # indexer
             topk_indices = self.indexer(x, qr, start_pos, freqs_cis, mask)
-            index_mask = torch.full((bsz, 1, end_pos), float("-inf"), device=x.device).scatter_(-1, topk_indices, 0)
+            index_mask = torch.full(
+                (bsz, 1, end_pos), float("-inf"), device=x.device
+            ).scatter_(-1, topk_indices, 0)
             scores += index_mask.unsqueeze(2)
 
             scores = scores.softmax(dim=-1)
@@ -490,7 +552,6 @@ class DeepseekV3Attention(nn.Module):
 
 
 class DeepseekV3MLP(nn.Module):
-
     def __init__(self, dim: int, inter_dim: int, reduce_output: bool = True):
         super().__init__()
         self.hidden_size = dim
@@ -501,7 +562,11 @@ class DeepseekV3MLP(nn.Module):
         self.act_fn = SiLUActivation()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj((self.act_fn(self.gate_proj(x).float()) * self.up_proj(x).float()).type_as(x))
+        return self.down_proj(
+            (self.act_fn(self.gate_proj(x).float()) * self.up_proj(x).float()).type_as(
+                x
+            )
+        )
 
 
 class Gate(nn.Module):
@@ -514,7 +579,9 @@ class Gate(nn.Module):
         self.score_func = args.score_func
         self.route_scale = args.route_scale
         self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
-        self.e_score_correction_bias = nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32))
+        self.e_score_correction_bias = nn.Parameter(
+            torch.empty(args.n_routed_experts, dtype=torch.float32)
+        )
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         scores = F.linear(x.float(), self.weight.float())
@@ -532,7 +599,9 @@ class Gate(nn.Module):
             else:
                 group_scores = scores.topk(2, dim=-1)[0].sum(dim=-1)
             indices = group_scores.topk(self.topk_groups, dim=-1)[1]
-            mask = scores.new_ones(x.size(0), self.n_groups, dtype=bool).scatter_(1, indices, False)
+            mask = scores.new_ones(x.size(0), self.n_groups, dtype=bool).scatter_(
+                1, indices, False
+            )
             scores = scores.masked_fill_(mask.unsqueeze(-1), float("-inf")).flatten(1)
         indices = scores.topk(self.topk, dim=-1)[1]
         weights = original_scores.gather(1, indices)
@@ -550,11 +619,12 @@ class Expert(nn.Module):
         self.up_proj = nn.Linear(dim, inter_dim, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj((F.silu(self.gate_proj(x).float()) * self.up_proj(x).float()).type_as(x))
+        return self.down_proj(
+            (F.silu(self.gate_proj(x).float()) * self.up_proj(x).float()).type_as(x)
+        )
 
 
 class MoE(nn.Module):
-
     def __init__(self, args: ModelArgs):
         super().__init__()
         self.dim = args.dim
@@ -586,7 +656,9 @@ class MoE(nn.Module):
         x = x.view(-1, self.dim)
         weights, indices = self.gate(x)
         y = torch.zeros_like(x, dtype=torch.float32)
-        counts = torch.bincount(indices.flatten(), minlength=self.n_routed_experts).tolist()
+        counts = torch.bincount(
+            indices.flatten(), minlength=self.n_routed_experts
+        ).tolist()
         for i in range(self.experts_start_idx, self.experts_end_idx):
             if counts[i] == 0:
                 continue
@@ -640,9 +712,6 @@ class DeepseekV32ForCausalLM(DeepseekV32PreTrainedModel):
         global world_size, rank
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         rank = dist.get_rank() if dist.is_initialized() else 0
-        default_dtype = torch.float8_e4m3fn if config.arch_dtype == "fp8" else torch.bfloat16
-        scale_fmt = "ue8m0" if config.scale_dtype == "fp8" else config.scale_fmt
-        scale_dtype = torch.float8_e8m0fnu if config.scale_dtype == "fp8" else torch.float32
         super().__init__(config)
         self.max_seq_len = config.max_seq_len
         self.norm_eps = config.norm_eps

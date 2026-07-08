@@ -273,7 +273,7 @@ class TestDistillInterface(unittest.TestCase):
         self.assertIsInstance(student_model.layer3, LinearQAT)
 
         train_loader = torch.utils.data.DataLoader(input_data)
-        optimizer = torch.optim.AdamW(student_model.parameters(), lr=0.1)
+        torch.optim.AdamW(student_model.parameters(), lr=0.1)
         distill(ori_model, student_model, config_file, train_loader, epochs=1, loss=None, optimizer=None)
 
         save_path = os.path.join(self.temp_folder, 'save_distill')
@@ -297,7 +297,7 @@ class TestDistillInterface(unittest.TestCase):
         self.assertIsInstance(student_model.layer3, LinearQAT)
 
         train_loader = torch.utils.data.DataLoader(input_data)
-        optimizer = torch.optim.AdamW(student_model.parameters(), lr=0.1)
+        torch.optim.AdamW(student_model.parameters(), lr=0.1)
         distill(ori_model, student_model, config_file, train_loader, epochs=1, loss=None, optimizer=None)
 
         save_path = os.path.join(self.temp_folder, 'save_distill')
@@ -314,7 +314,7 @@ class TestDistillInterface(unittest.TestCase):
     def test_save_distill_model_unsupport_deep_copy_model(self, mock_deep_copy):
         mock_deep_copy.side_effect = RuntimeError()
 
-        out = self.qat_model.forward(self.data)
+        self.qat_model.forward(self.data)
         save_path = os.path.join(self.temp_folder, 'save_distill')
         save_distill_model(self.qat_model, save_path, self.data)
 

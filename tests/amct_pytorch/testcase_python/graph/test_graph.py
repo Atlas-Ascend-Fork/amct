@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,15 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
-import sys
 import unittest
 from copy import deepcopy
 
 import numpy as np
-import torch
-from onnx import TensorProto, ValueInfoProto, helper, onnx_pb
+from onnx import TensorProto, helper, onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
@@ -153,10 +149,7 @@ class TestGraph(unittest.TestCase):
         output1 = test_model.graph.output.add()
         output1.name = 'output1'
         output1.type.tensor_type.shape.dim.add().dim_value = 1
-        self.assertRaises(
-            ReferenceError,
-            Graph,
-            test_model)
+        self.assertRaises(ReferenceError, Graph, test_model)
 
     def test_graph_init_node_input_not_exist(self):
         test_model = deepcopy(self.model_proto)
@@ -165,10 +158,7 @@ class TestGraph(unittest.TestCase):
         empty_node.op_type = 'empty'
         empty_node.input[:] = ['not_exist_in']
         empty_node.output[:] = ['not_exist_out']
-        self.assertRaises(
-            ReferenceError,
-            Graph,
-            test_model)
+        self.assertRaises(ReferenceError, Graph, test_model)
 
     def test_linear_with_transpose(self):
         model_proto = onnx_pb.ModelProto()
@@ -238,7 +228,6 @@ class TestGraph(unittest.TestCase):
         graph = Graph(model_proto)
         self.assertEqual(graph.get_node(3).name, 'linear2')
 
-
     def test_linear_with_transpose_not_matmul(self):
         model_proto = onnx_pb.ModelProto()
 
@@ -281,7 +270,9 @@ class TestGraph(unittest.TestCase):
         relu2.output[:] = ['relu2_output']
 
         avg_pool1_node = graph.get_node_by_name('avg_pool1')
-        output_node = avg_pool1_node.get_output_anchor(0).get_peer_input_anchor()[0].node
+        output_node = (
+            avg_pool1_node.get_output_anchor(0).get_peer_input_anchor()[0].node
+        )
         relu2_node = graph.add_node(relu2)
         graph.remove_edge(avg_pool1_node, 0, output_node, 0)
         graph.add_edge(avg_pool1_node, 0, relu2_node, 0)
@@ -309,7 +300,6 @@ class TestGraph(unittest.TestCase):
         model_proto = graph.dump_proto()
         model_proto.graph.node[0]
 
-
     def test_remove_node_not_found(self):
         test_model = deepcopy(self.model_proto)
 
@@ -321,28 +311,20 @@ class TestGraph(unittest.TestCase):
         relu2_node = Node(0, relu2)
 
         graph = Graph(test_model)
-        self.assertRaises(
-            RuntimeError,
-            graph.remove_node,
-            relu2_node)
+        self.assertRaises(RuntimeError, graph.remove_node, relu2_node)
 
     def test_remove_input_anchor_failed(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         data_node = graph._in_out_nodes[0]
-        self.assertRaises(
-            RuntimeError,
-            graph.remove_node,
-            data_node)
+        self.assertRaises(RuntimeError, graph.remove_node, data_node)
 
     def test_dump_node_not_support(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
 
         graph.get_node(1)._node_proto = onnx_pb.GraphProto()
-        self.assertRaises(
-            TypeError,
-            graph.dump_proto)
+        self.assertRaises(TypeError, graph.dump_proto)
 
     def test_remove_initializer_not_initializer(self):
         test_model = deepcopy(self.model_proto)
@@ -365,27 +347,48 @@ class TestGraph(unittest.TestCase):
         w = helper.make_tensor(CONV1_WEIGHT, TensorProto.FLOAT, [3, 3, 3, 3], weight)
         b = helper.make_tensor(CONV1_BIAS, TensorProto.FLOAT, (3,), bias)
         initializer = [w, b]
-        x = helper.make_tensor_value_info('input.1', TensorProto.FLOAT, (16, 3, 224, 224))
-        w_input = helper.make_tensor_value_info(CONV1_WEIGHT, TensorProto.FLOAT, (3, 3, 3, 3))
+        x = helper.make_tensor_value_info(
+            "input.1", TensorProto.FLOAT, (16, 3, 224, 224)
+        )
+        w_input = helper.make_tensor_value_info(
+            CONV1_WEIGHT, TensorProto.FLOAT, (3, 3, 3, 3)
+        )
         b_input = helper.make_tensor_value_info(CONV1_BIAS, TensorProto.FLOAT, (3,))
- 
-        identity_0_node = helper.make_node('Identity', inputs=[CONV1_WEIGHT], outputs=['conv2.weight'], name=IDENTITY_0)
-        identity_1_node = helper.make_node('Identity', inputs=[CONV1_BIAS], outputs=['conv2.bias'], name='identity_1')
- 
+
+        identity_0_node = helper.make_node(
+            "Identity", inputs=[CONV1_WEIGHT], outputs=["conv2.weight"], name=IDENTITY_0
+        )
+        identity_1_node = helper.make_node(
+            "Identity", inputs=[CONV1_BIAS], outputs=["conv2.bias"], name="identity_1"
+        )
+
         conv1 = helper.make_node(
-            'Conv', inputs=['input.1', CONV1_WEIGHT, CONV1_BIAS],
-            outputs=['conv1.output'], name=CONV1)
+            "Conv",
+            inputs=["input.1", CONV1_WEIGHT, CONV1_BIAS],
+            outputs=["conv1.output"],
+            name=CONV1,
+        )
         conv2 = helper.make_node(
-            'Conv', inputs=['conv1.output', 'conv2.weight', 'conv2.bias'],
-            outputs=['conv2.output'], name='conv2')
-        y = helper.make_tensor_value_info('conv2.output', TensorProto.FLOAT, [3, 3, 3, 3])
-        graph_def = helper.make_graph((identity_0_node, identity_1_node, conv1, conv2),
-                                  'model',
-                                  [x, w_input, b_input],
-                                  [y, ],
-                                  initializer=initializer)
-        mode_def = helper.make_model(graph_def, opset_imports=[
-                                     helper.make_opsetid("", 12)])
+            "Conv",
+            inputs=["conv1.output", "conv2.weight", "conv2.bias"],
+            outputs=["conv2.output"],
+            name="conv2",
+        )
+        y = helper.make_tensor_value_info(
+            "conv2.output", TensorProto.FLOAT, [3, 3, 3, 3]
+        )
+        graph_def = helper.make_graph(
+            (identity_0_node, identity_1_node, conv1, conv2),
+            "model",
+            [x, w_input, b_input],
+            [
+                y,
+            ],
+            initializer=initializer,
+        )
+        mode_def = helper.make_model(
+            graph_def, opset_imports=[helper.make_opsetid("", 12)]
+        )
         graph = Graph(mode_def)
         err_flag = False
         for graph_input in graph._net.graph.input:
@@ -399,28 +402,46 @@ class TestGraph(unittest.TestCase):
         w = helper.make_tensor(CONV1_WEIGHT, TensorProto.FLOAT, [3, 3, 3, 3], weight)
         b = helper.make_tensor(CONV1_BIAS, TensorProto.FLOAT, (3,), bias)
         initializer = [w, b]
-        x = helper.make_tensor_value_info('input.1', TensorProto.FLOAT, (16, 3, 224, 224))
+        x = helper.make_tensor_value_info(
+            "input.1", TensorProto.FLOAT, (16, 3, 224, 224)
+        )
 
-        identity_node = helper.make_node('Identity', inputs=['input.1'], outputs=[IDENTITY_0], name=IDENTITY_0)
+        identity_node = helper.make_node(
+            "Identity", inputs=["input.1"], outputs=[IDENTITY_0], name=IDENTITY_0
+        )
 
         node_unsquezee_1 = helper.make_node(
-            op_type="Unsqueeze", name="unsquezee_1",
-            inputs=[IDENTITY_0], outputs=['unsquezee_1.output'])
+            op_type="Unsqueeze",
+            name="unsquezee_1",
+            inputs=[IDENTITY_0],
+            outputs=["unsquezee_1.output"],
+        )
         conv1 = helper.make_node(
-            'Conv', inputs=["unsquezee_1.output", CONV1_WEIGHT, CONV1_BIAS],
-            outputs=['conv1.output'], name=CONV1)
-        y = helper.make_tensor_value_info('conv1.output', TensorProto.FLOAT, [3, 3, 3, 3])
-        graph_def = helper.make_graph((identity_node, node_unsquezee_1, conv1),
-                                  'model',
-                                  [x, ],
-                                  [y, ],
-                                  initializer=initializer)
-        mode_def = helper.make_model(graph_def, opset_imports=[
-                                     helper.make_opsetid("", 12)])
+            "Conv",
+            inputs=["unsquezee_1.output", CONV1_WEIGHT, CONV1_BIAS],
+            outputs=["conv1.output"],
+            name=CONV1,
+        )
+        y = helper.make_tensor_value_info(
+            "conv1.output", TensorProto.FLOAT, [3, 3, 3, 3]
+        )
+        graph_def = helper.make_graph(
+            (identity_node, node_unsquezee_1, conv1),
+            "model",
+            [
+                x,
+            ],
+            [
+                y,
+            ],
+            initializer=initializer,
+        )
+        mode_def = helper.make_model(
+            graph_def, opset_imports=[helper.make_opsetid("", 12)]
+        )
         graph = Graph(mode_def)
         for node in graph._nodes:
             if node.type == 'Identity':
                 conv_node = Graph._parse_unsqueeze_nodes(node)
                 self.assertTrue(conv_node.get_attr('input_dimension_reduction'))
                 break
-

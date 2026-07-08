@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import unittest
-from unittest import mock
 
 import torch
 
@@ -65,7 +64,7 @@ class TestUtils(unittest.TestCase):
         input_data = torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)
         utils.check_quant_data(input_data, "weight")
 
-    def test_check_quant_data_float32(self):
+    def test_check_quant_data_float64_raises(self):
         input_data = torch.tensor([0.1, 0.2, 0.3], dtype=torch.float64)
         self.assertRaises(TypeError, utils.check_quant_data, input_data, "weight")
 

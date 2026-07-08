@@ -110,20 +110,16 @@ def run_inference_model(model, iterations=None):
 
 
 def run_inference_model_auto_cali(model, iterations=2):
-    batch_size = 16
     torch.manual_seed(1)
     device = torch.device("cpu")
-    kwargs = {'batch_size': batch_size}
 
     model.eval()
-    test_loss = 0
-    correct = 0
     iter_num = 0
     with torch.no_grad():
         for _ in range(iterations):
             data = torch.tensor(np.random.uniform(0, 10, (32, 1, 28, 28)).astype(np.float32))
             data = data.to(device)
-            output = model(data)
+            model(data)
             iter_num = iter_num + 1
             if iter_num == iterations:
                 break

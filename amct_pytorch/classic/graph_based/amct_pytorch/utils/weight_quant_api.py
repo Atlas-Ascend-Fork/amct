@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -24,16 +24,18 @@ def get_deconv_group(node_deconv):
     """Get ConvTranspose's group param value"""
     attrs_helper = AttributeProtoHelper(node_deconv.proto)
     if not attrs_helper.has_attr('group'):
-        raise RuntimeError("can not get the 'group' attr of {}".format(node_deconv.name))
+        raise RuntimeError(
+            "can not get the 'group' attr of {}".format(node_deconv.name)
+        )
     group = attrs_helper.get_attr_value('group')
     return group
 
 
 def adjust_deconv_weight_shape(group, weights_array):
-    """Adjust ConvTranspose weight shape to fit group param """
+    """Adjust ConvTranspose weight shape to fit group param"""
     weight_shape = weights_array.shape
     trans_common = [1, 0, 2, 3, 4]
-    trans_shape = tuple(trans_common[:len(weight_shape)])
+    trans_shape = tuple(trans_common[: len(weight_shape)])
     if isinstance(weights_array, torch.Tensor):
         device = weights_array.device
         weights_array = weights_array.cpu().detach()
@@ -45,7 +47,7 @@ def adjust_deconv_weight_shape(group, weights_array):
 
     new_shape = tuple([group, -1] + list(weight_shape)[1:])
     weights_array = np.reshape(weights_array, new_shape)
-    trans_axes = (0, 2, 1, 3, 4)[:len(weight_shape) + 1]
+    trans_axes = (0, 2, 1, 3, 4)[: len(weight_shape) + 1]
     weights_array = np.transpose(weights_array, trans_axes)
 
     weight_shape = weights_array.shape
@@ -62,12 +64,11 @@ def adjust_axis_for_group_wise(axis, input_tensor):
     if axis == 0:
         return input_tensor
     """Adjust weight shape to fit group as first axis """
-    dim_num = input_tensor.dim()
     return torch.transpose(input_tensor, 0, axis)
 
 
 def adjust_conv_weight_shape(group, weight):
-    """Adjust Conv weight shape to fit group param """
+    """Adjust Conv weight shape to fit group param"""
     weight_shape = weight.shape
     new_shape = tuple([group, -1] + list(weight_shape)[1:])
     weight = weight.reshape(new_shape)

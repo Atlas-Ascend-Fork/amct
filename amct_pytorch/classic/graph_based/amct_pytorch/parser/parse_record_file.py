@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -33,8 +33,10 @@ class RecordFileParser(RecordFileParserBase):
     Function: Parse the information of compression from record_file.
     APIs: read_record_file, parse
     """
-    def __init__(self, record_file, graph, model_name, enable_quant=True,
-                 enable_prune=False):
+
+    def __init__(
+        self, record_file, graph, model_name, enable_quant=True, enable_prune=False
+    ):
         """
         Function: init object
         Inputs:
@@ -43,19 +45,23 @@ class RecordFileParser(RecordFileParserBase):
             model_name: a string, the model's name.
         """
         capacity = {
-            'FUSE_TYPES':
-            CAPACITY.get_value('FUSE_ONNX_TYPES'),
-            'QUANTIZABLE_TYPES':
-            CAPACITY.get_value('QUANTIZABLE_ONNX_TYPES'),
-            'NO_WEIGHT_QUANT_TYPES':
-            CAPACITY.get_value('NO_WEIGHT_QUANT_ONNX_TYPES'),
+            "FUSE_TYPES": CAPACITY.get_value("FUSE_ONNX_TYPES"),
+            "QUANTIZABLE_TYPES": CAPACITY.get_value("QUANTIZABLE_ONNX_TYPES"),
+            "NO_WEIGHT_QUANT_TYPES": CAPACITY.get_value("NO_WEIGHT_QUANT_ONNX_TYPES"),
         }
         config = {
             "capacity": capacity,
             "records_pb2": scale_offset_record_pb2,
             "op_quirer": QuantOpInfo,
             "graph_querier": GraphQuerier,
-            "graph_checker": None
+            "graph_checker": None,
         }
-        RecordFileParserBase.__init__(self, record_file, graph, model_name,
-                                      config, enable_quant=enable_quant, enable_prune=enable_prune)
+        RecordFileParserBase.__init__(
+            self,
+            record_file,
+            graph,
+            model_name,
+            config,
+            enable_quant=enable_quant,
+            enable_prune=enable_prune,
+        )
