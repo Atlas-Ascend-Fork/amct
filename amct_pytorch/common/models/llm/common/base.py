@@ -30,6 +30,7 @@ from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, sa
 from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
 from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 class BaseModel(metaclass=ABCMeta):
@@ -223,7 +224,6 @@ class BaseModel(metaclass=ABCMeta):
 
         block = self._dispatch_block(block).eval()
         if use_quant_block and hook_name is None:
-            from amct_pytorch.quantization.modules.quant_linear import QuantLinear
             for mod in block.modules():
                 if isinstance(mod, QuantLinear):
                     mod.eval_mode = True
@@ -290,8 +290,6 @@ class BaseModel(metaclass=ABCMeta):
             return
 
     def iter_deploy_bindings(self, layer_idx, block):
-        from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         for name, module in block.named_modules():
             if not isinstance(module, QuantLinear):
