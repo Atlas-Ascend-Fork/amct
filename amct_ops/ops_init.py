@@ -33,6 +33,16 @@ amct_ops.hifloat8_cast
         torch.ops.amct.encode_to_hifloat8
         torch.ops.amct.decode_from_hifloat8
 
+amct_ops.hifloat4_cast
+    FP16 / BF16  →  HiFloat4 (4-bit block-scaling float)  →  FP16 / BF16 fake-quant.
+
+    Functions
+    ~~~~~~~~~
+    hifloat4_fake_quant(x, qdim=-1)          FP16/BF16 → HiF4 → FP16/BF16 (simulation)
+
+    Also accessible as:
+        torch.ops.amct.hifloat4_fake_quant(x, qdim)
+
 Quick start
 -----------
 >>> import torch
@@ -43,6 +53,7 @@ Quick start
 >>> z = decode_from_hifloat8(y)         # → bfloat16, same shape
 """
 
-__all__ = ['hifloat8_cast']
+__all__ = ['hifloat8_cast', 'hifloat4_cast']
 
 from . import hifloat8_cast
+from . import hifloat4_cast
