@@ -100,7 +100,7 @@ class LinearAWQuant(BaseQuantizeModule):
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
-        if not getattr(self, "fake_quant_cache_ready", False):
+        if not getattr(self, 'fake_quant_cache_ready', False):
             self.cached_dq_w = quant_dequant_weight(
                 self.ori_module.weight.data,
                 self.wts_type,

@@ -130,20 +130,20 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
 
         calied_weight_raw = weight
         # transpose torch.nn.Linear.weight in (Cout, Cin) to ONNX (Cin, Cout).
-        if object_node.type == "MatMul" and type(object_module).__name__ == "Linear":
+        if object_node.type == 'MatMul' and type(object_module).__name__ == 'Linear':
             need_transpose = True
             # Trans op may already be inserted in exported ONNX model
-            if object_node.has_attr("with_weights_trans"):
-                if object_node.get_attr("with_weights_trans"):
+            if object_node.has_attr('with_weights_trans'):
+                if object_node.get_attr('with_weights_trans'):
                     need_transpose = False
             if need_transpose:
                 calied_weight_raw = calied_weight_raw.transpose(1, 0)
 
         calied_weight_raw = calied_weight_raw.flatten().cpu().numpy()
         if weight.dtype is torch.float16:
-            set_data_type = "FLOAT16"
+            set_data_type = 'FLOAT16'
         else:
-            set_data_type = "FLOAT"
+            set_data_type = 'FLOAT'
 
         weight_helper.clear_data()
         weight_helper.set_data(calied_weight_raw, set_data_type)
@@ -174,7 +174,7 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         Inputs: None
         Returns: None
         """
-        with open(self.record_file_path, "r") as record_read_file:
+        with open(self.record_file_path, 'r') as record_read_file:
             pbtxt_string = record_read_file.read()
             text_format.Merge(pbtxt_string, self.records)
 
@@ -205,15 +205,15 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         """
         # Step0: do avgpooling calibration only by kernel shape
         object_node = graph.get_node_by_name(object_name)
-        if object_node.type == "AveragePool":
+        if object_node.type == 'AveragePool':
             self._averagegpool_process(object_name)
             return
 
         # Step1: do weight calibration by algo
         # get weights' information for quantization
         layer_config = self.conf.get_layer_config(object_name)
-        wts_param = layer_config.get("weight_quant_params")
-        dmq_param = layer_config.get("dmq_balancer_param")
+        wts_param = layer_config.get('weight_quant_params')
+        dmq_param = layer_config.get('dmq_balancer_param')
 
         # rnn weight has multi weight
         if type(object_module).__name__ in ("GRU", "LSTM"):
@@ -335,9 +335,9 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
         calied_weight_raw = calied_weight.flatten().cpu().numpy()
         calied_weight_r_raw = calied_weight_r.flatten().cpu().numpy()
         if object_module.weight_ih_l0.dtype is torch.float16:
-            set_data_type = "FLOAT16"
+            set_data_type = 'FLOAT16'
         else:
-            set_data_type = "FLOAT"
+            set_data_type = 'FLOAT'
 
         weight_helper.clear_data()
         weight_helper.set_data(calied_weight_raw, set_data_type)
@@ -395,14 +395,14 @@ class WeightsCalibrationPass(BaseModuleFusionPass):
             data_tensor = adjust_deconv_weight_shape(group, data_tensor)
         scale = [1.0]
         offset = [0]
-        if wts_param.get("wts_algo") == "arq_quantize":
+        if wts_param.get('wts_algo') == 'arq_quantize':
             scale, offset, calied_weight = weight_cali_tensor(data_tensor, wts_param)
-        elif wts_param.get("wts_algo") == "ada_quantize":
+        elif wts_param.get('wts_algo') == 'ada_quantize':
             if tensor_balance_factor is not None:
                 tensor_balance_factor = torch.tensor(
                     tensor_balance_factor, dtype=data_tensor.dtype
                 )
-                if type(object_module).__name__ in ("ConvTranspose2d", CONV2D):
+                if type(object_module).__name__ in ('ConvTranspose2d', CONV2D):
                     tensor_balance_factor = tensor_balance_factor.reshape([1, -1, 1, 1])
             adaround_module = replace_adaround_module(
                 object_node.name, model, data_tensor, tensor_balance_factor

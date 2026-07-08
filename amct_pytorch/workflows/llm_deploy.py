@@ -148,12 +148,12 @@ class LlmDeployWorkflow:
             json.dump(config, f, indent=2)
 
     def _refresh_config_tensor(self):
-        config_file = os.path.join(self.output_dir, "config.json")
+        config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
         if self.quant_dtype == "bf16":
             config["torch_dtype"] = "bfloat16"
-            config.pop("quantization_config", None)
+            config.pop('quantization_config', None)
         with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 

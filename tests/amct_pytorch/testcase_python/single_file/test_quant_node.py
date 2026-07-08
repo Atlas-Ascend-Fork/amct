@@ -25,11 +25,11 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
     QuantOpInfo,
 )
 
-CONV1 = "conv1"
+CONV1 = 'conv1'
 
-RELU1 = "relu1"
+RELU1 = 'relu1'
 
-ADD1 = "add1"
+ADD1 = 'add1'
 
 
 class TestModelHelper(unittest.TestCase):
@@ -48,29 +48,29 @@ class TestModelHelper(unittest.TestCase):
     def setUp(self):
         # set basic info
         self.model_proto = onnx_pb.ModelProto()
-        self.model_proto.producer_name = "model"
+        self.model_proto.producer_name = 'model'
         self.graph = onnx_pb.GraphProto()
         # Add graph input 0
         graph_input0 = self.graph.input.add()
-        graph_input0.name = "data0"
+        graph_input0.name = 'data0'
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         # Add graph input 1
         graph_input1 = self.graph.input.add()
-        graph_input1.name = "data1"
+        graph_input1.name = 'data1'
         graph_input1.type.tensor_type.shape.dim.add().dim_value = 1
         # Add weights
         weights = self.graph.initializer.add()
-        weights.name = "conv1.pre_weights"
+        weights.name = 'conv1.pre_weights'
         weights.data_type = 3
         weights.int32_data[:] = [1, 2, 3, 4, 5, 6]
         weights.dims[:] = [1, 1, 2, 3]
         # trans wts
         wts_trans = self.graph.node.add()
-        wts_trans.name = "wts_trans_0"
-        wts_trans.op_type = "Transpose"
+        wts_trans.name = 'wts_trans_0'
+        wts_trans.op_type = 'Transpose'
         wts_trans.input[:] = [
             "conv1.pre_weights",
         ]
@@ -158,7 +158,7 @@ class TestModelHelper(unittest.TestCase):
             CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
-                "act_type": "UNSET",
+                'act_type': 'UNSET',
             }
         }
         num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "act")
@@ -179,7 +179,7 @@ class TestModelHelper(unittest.TestCase):
             CONV1: {
                 'data_scale': 1,
                 'data_offset': 0,
-                "wts_type": "UNSET",
+                'wts_type': 'UNSET',
             }
         }
         num_bits = QuantOpInfo.get_dst_num_bits(records, CONV1, "wts")

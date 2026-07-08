@@ -154,17 +154,17 @@ class TestGraph(unittest.TestCase):
     def test_graph_init_node_input_not_exist(self):
         test_model = deepcopy(self.model_proto)
         empty_node = test_model.graph.node.add()
-        empty_node.name = "empty"
-        empty_node.op_type = "empty"
-        empty_node.input[:] = ["not_exist_in"]
-        empty_node.output[:] = ["not_exist_out"]
+        empty_node.name = 'empty'
+        empty_node.op_type = 'empty'
+        empty_node.input[:] = ['not_exist_in']
+        empty_node.output[:] = ['not_exist_out']
         self.assertRaises(ReferenceError, Graph, test_model)
 
     def test_linear_with_transpose(self):
         model_proto = onnx_pb.ModelProto()
 
         graph_input0 = model_proto.graph.input.add()
-        graph_input0.name = "data"
+        graph_input0.name = 'data'
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
@@ -172,30 +172,30 @@ class TestGraph(unittest.TestCase):
 
         transpose = model_proto.graph.node.add()
         transpose.name = TRANSPOSE_NODE_NAME
-        transpose.op_type = "Transpose"
-        transpose.input[:] = ["fc.weights"]
+        transpose.op_type = 'Transpose'
+        transpose.input[:] = ['fc.weights']
         transpose.output[:] = [TRANSPOSE_NODE_NAME]
 
         linear = model_proto.graph.node.add()
-        linear.name = "linear"
-        linear.op_type = "MatMul"
-        linear.input[:] = ["data", TRANSPOSE_NODE_NAME]
-        linear.output[:] = ["fc"]
+        linear.name = 'linear'
+        linear.op_type = 'MatMul'
+        linear.input[:] = ['data', TRANSPOSE_NODE_NAME]
+        linear.output[:] = ['fc']
 
         weights = model_proto.graph.initializer.add()
-        weights.name = "fc.weights"
+        weights.name = 'fc.weights'
         weights.data_type = 3
         weights.int32_data[:] = [1, 2, 3, 4, 5, 6]
         weights.dims[:] = [1, 1, 2, 3]
 
         graph = Graph(model_proto)
-        self.assertEqual(graph.get_node(2).name, "linear")
+        self.assertEqual(graph.get_node(2).name, 'linear')
 
     def test_linear_with_transpose_mult_output(self):
         model_proto = onnx_pb.ModelProto()
 
         graph_input0 = model_proto.graph.input.add()
-        graph_input0.name = "data"
+        graph_input0.name = 'data'
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
@@ -203,36 +203,36 @@ class TestGraph(unittest.TestCase):
 
         transpose = model_proto.graph.node.add()
         transpose.name = TRANSPOSE_NODE_NAME
-        transpose.op_type = "Transpose"
-        transpose.input[:] = ["fc.weights"]
+        transpose.op_type = 'Transpose'
+        transpose.input[:] = ['fc.weights']
         transpose.output[:] = [TRANSPOSE_NODE_NAME]
 
         linear = model_proto.graph.node.add()
-        linear.name = "linear"
-        linear.op_type = "MatMul"
-        linear.input[:] = ["data", TRANSPOSE_NODE_NAME]
-        linear.output[:] = ["fc"]
+        linear.name = 'linear'
+        linear.op_type = 'MatMul'
+        linear.input[:] = ['data', TRANSPOSE_NODE_NAME]
+        linear.output[:] = ['fc']
 
         linear2 = model_proto.graph.node.add()
-        linear2.name = "linear2"
-        linear2.op_type = "MatMul"
-        linear2.input[:] = ["fc", TRANSPOSE_NODE_NAME]
-        linear2.output[:] = ["fc2"]
+        linear2.name = 'linear2'
+        linear2.op_type = 'MatMul'
+        linear2.input[:] = ['fc', TRANSPOSE_NODE_NAME]
+        linear2.output[:] = ['fc2']
 
         weights = model_proto.graph.initializer.add()
-        weights.name = "fc.weights"
+        weights.name = 'fc.weights'
         weights.data_type = 3
         weights.int32_data[:] = [1, 2, 3, 4, 5, 6]
         weights.dims[:] = [1, 1, 2, 3]
 
         graph = Graph(model_proto)
-        self.assertEqual(graph.get_node(3).name, "linear2")
+        self.assertEqual(graph.get_node(3).name, 'linear2')
 
     def test_linear_with_transpose_not_matmul(self):
         model_proto = onnx_pb.ModelProto()
 
         graph_input0 = model_proto.graph.input.add()
-        graph_input0.name = "data"
+        graph_input0.name = 'data'
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
         graph_input0.type.tensor_type.shape.dim.add().dim_value = 3
@@ -240,36 +240,36 @@ class TestGraph(unittest.TestCase):
 
         transpose = model_proto.graph.node.add()
         transpose.name = TRANSPOSE_NODE_NAME
-        transpose.op_type = "Transpose"
-        transpose.input[:] = ["fc.weights"]
+        transpose.op_type = 'Transpose'
+        transpose.input[:] = ['fc.weights']
         transpose.output[:] = [TRANSPOSE_NODE_NAME]
 
         linear = model_proto.graph.node.add()
-        linear.name = "linear"
-        linear.op_type = "Gemm"
-        linear.input[:] = ["data", TRANSPOSE_NODE_NAME]
-        linear.output[:] = ["fc"]
+        linear.name = 'linear'
+        linear.op_type = 'Gemm'
+        linear.input[:] = ['data', TRANSPOSE_NODE_NAME]
+        linear.output[:] = ['fc']
 
         weights = model_proto.graph.initializer.add()
-        weights.name = "fc.weights"
+        weights.name = 'fc.weights'
         weights.data_type = 3
         weights.int32_data[:] = [1, 2, 3, 4, 5, 6]
         weights.dims[:] = [1, 1, 2, 3]
 
         graph = Graph(model_proto)
-        self.assertEqual(graph.get_node(2).type, "Gemm")
+        self.assertEqual(graph.get_node(2).type, 'Gemm')
 
     def test_modified_model_remove_node(self):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
 
         relu2 = onnx_pb.NodeProto()
-        relu2.name = "relu2"
-        relu2.op_type = "Relu"
-        relu2.input[:] = ["relu2_input"]
-        relu2.output[:] = ["relu2_output"]
+        relu2.name = 'relu2'
+        relu2.op_type = 'Relu'
+        relu2.input[:] = ['relu2_input']
+        relu2.output[:] = ['relu2_output']
 
-        avg_pool1_node = graph.get_node_by_name("avg_pool1")
+        avg_pool1_node = graph.get_node_by_name('avg_pool1')
         output_node = (
             avg_pool1_node.get_output_anchor(0).get_peer_input_anchor()[0].node
         )
@@ -280,23 +280,23 @@ class TestGraph(unittest.TestCase):
         graph.topologic_sort()
 
         relu3 = onnx_pb.NodeProto()
-        relu3.name = "relu3"
-        relu3.op_type = "Relu"
-        relu3.input[:] = ["relu3_input"]
-        relu3.output[:] = ["relu3_output"]
+        relu3.name = 'relu3'
+        relu3.op_type = 'Relu'
+        relu3.input[:] = ['relu3_input']
+        relu3.output[:] = ['relu3_output']
 
         relu3_node = graph.add_node(relu3, 0)
         graph.remove_node(relu3_node)
 
         model_proto = graph.dump_proto()
         self.assertEqual(len(graph.nodes), 7)
-        self.assertEqual(graph.get_node(0).name, "conv1.weights")
+        self.assertEqual(graph.get_node(0).name, 'conv1.weights')
         self.assertEqual(graph.get_node(1).name, CONV1_BIAS)
         self.assertEqual(graph.get_node(2).name, CONV1)
         self.assertEqual(graph.get_node(3).name, RELU1)
         self.assertEqual(graph.get_node(4).name, ADD1)
-        self.assertEqual(graph.get_node(5).name, "avg_pool1")
-        self.assertEqual(graph.get_node(6).name, "relu2")
+        self.assertEqual(graph.get_node(5).name, 'avg_pool1')
+        self.assertEqual(graph.get_node(6).name, 'relu2')
         model_proto = graph.dump_proto()
         model_proto.graph.node[0]
 
@@ -304,10 +304,10 @@ class TestGraph(unittest.TestCase):
         test_model = deepcopy(self.model_proto)
 
         relu2 = onnx_pb.NodeProto()
-        relu2.name = "relu2"
-        relu2.op_type = "Relu"
-        relu2.input[:] = ["relu2_input"]
-        relu2.output[:] = ["relu2_output"]
+        relu2.name = 'relu2'
+        relu2.op_type = 'Relu'
+        relu2.input[:] = ['relu2_input']
+        relu2.output[:] = ['relu2_output']
         relu2_node = Node(0, relu2)
 
         graph = Graph(test_model)
@@ -337,9 +337,9 @@ class TestGraph(unittest.TestCase):
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
 
-        weight = graph.get_node_by_name("conv1.weights")
+        weight = graph.get_node_by_name('conv1.weights')
         graph.remove_initializer(weight)
-        self.assertEqual(graph._nodes[0].name, "conv1.weights")
+        self.assertEqual(graph._nodes[0].name, 'conv1.weights')
 
     def test_delete_initializer_from_input(self):
         weight = np.random.randn(3, 3, 3, 3).astype(np.float32).flatten()
@@ -441,7 +441,7 @@ class TestGraph(unittest.TestCase):
         )
         graph = Graph(mode_def)
         for node in graph._nodes:
-            if node.type == "Identity":
+            if node.type == 'Identity':
                 conv_node = Graph._parse_unsqueeze_nodes(node)
-                self.assertTrue(conv_node.get_attr("input_dimension_reduction"))
+                self.assertTrue(conv_node.get_attr('input_dimension_reduction'))
                 break

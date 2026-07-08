@@ -56,7 +56,7 @@ class UlqScaleRetrainFunction(Function):
         Function: UlqRetrain foward funtion.
         """
         # check input data
-        check_quant_data(inputs, "weights")
+        check_quant_data(inputs, 'weights')
 
         # trans quantized axis to 0 in group wise
         group_wise = check_group_param(
@@ -75,10 +75,10 @@ class UlqScaleRetrainFunction(Function):
             inputs_processed,
             scale,
             offset,
-            wts_qat_param.get("num_bits"),
-            wts_qat_param.get("channel_wise"),
-            wts_qat_param.get("arq_init") and cur_batch == 0,
-            wts_qat_param.get("s_rec_flag"),
+            wts_qat_param.get('num_bits'),
+            wts_qat_param.get('channel_wise'),
+            wts_qat_param.get('arq_init') and cur_batch == 0,
+            wts_qat_param.get('s_rec_flag'),
             group,
         )
 
@@ -89,8 +89,8 @@ class UlqScaleRetrainFunction(Function):
         offset.data.copy_(offset_out.data)
 
         ctx.scale = scale
-        ctx.num_bits = wts_qat_param.get("num_bits")
-        ctx.s_rec_flag = wts_qat_param.get("s_rec_flag")
+        ctx.num_bits = wts_qat_param.get('num_bits')
+        ctx.s_rec_flag = wts_qat_param.get('s_rec_flag')
         ctx.group = group
         ctx.axis = axis
 
@@ -120,7 +120,7 @@ class UlqScaleRetrainFunction(Function):
 
         grad_input, grad_scale = res
 
-        if ctx.module_type in ["ConvTranspose1d", "ConvTranspose2d"]:
+        if ctx.module_type in ['ConvTranspose1d', 'ConvTranspose2d']:
             grad_input = grad_input.transpose(1, 0)
         ret = (grad_input, grad_scale, None, None, None, None, None, None)
         return ret
@@ -138,22 +138,22 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
         if module_type in ["ConvTranspose1d", "ConvTranspose2d"]:
             quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[5])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
-        elif module_type == "Conv1d":
+        elif module_type == 'Conv1d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2]))
             quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[5])
             dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2]))
-        elif module_type == "Conv2d":
+        elif module_type == 'Conv2d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3]))
             quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[5])
             dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3]))
-        elif module_type == "Conv3d":
+        elif module_type == 'Conv3d':
             transpose = g.op(TRANSPOSE, inputs[0], perm_i=list([1, 0, 2, 3, 4]))
             quant = g.op(QUANTIZE_LINEAR, transpose, inputs[1], inputs[5])
             dequant = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
             out_node = g.op(TRANSPOSE, dequant, perm_i=list([1, 0, 2, 3, 4]))
-        elif module_type == "Linear":
+        elif module_type == 'Linear':
             quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[5])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
         elif module_type in RNN_TENSOR_NUM:
@@ -169,7 +169,7 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
                     dtype=torch.int64,
                 ),
             )
-            reshape = g.op("Reshape", inputs[0], shape)
+            reshape = g.op('Reshape', inputs[0], shape)
             quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[5])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
         LOGGER.logi(

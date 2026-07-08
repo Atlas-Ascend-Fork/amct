@@ -62,7 +62,7 @@ class OfmrQuant(BaseQuantizeModule):
             len(EC_CAND), dtype=torch.float32, device=self.device
         )
         self.cout = 1
-        if quant_config.get("weights_cfg").get("strategy") == "channel":
+        if quant_config.get('weights_cfg').get('strategy') == 'channel':
             self.cout = self.ori_module.weight.shape[0]
         self.wts_quant_loss = torch.zeros(
             (len(EC_CAND), self.cout), dtype=torch.float32, device=self.device
@@ -115,7 +115,7 @@ class OfmrQuant(BaseQuantizeModule):
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
-        if not getattr(self, "fake_quant_cache_ready", False):
+        if not getattr(self, 'fake_quant_cache_ready', False):
             self.cached_dq_w = quant_dequant_weight(
                 self.weight.data,
                 self.wts_type,
@@ -179,7 +179,7 @@ class OfmrQuant(BaseQuantizeModule):
             )
         wts_ecs = [EC_CAND[min_index.tolist()] for min_index in min_indices]
         scale_w = torch.Tensor([2**wts_ec for wts_ec in wts_ecs])
-        if type(self.ori_module).__name__ == "Linear" and len(scale_w) > 1:
+        if type(self.ori_module).__name__ == 'Linear' and len(scale_w) > 1:
             scale_w = scale_w.reshape(-1, 1)
         return scale_w
 
@@ -195,7 +195,7 @@ class OfmrQuant(BaseQuantizeModule):
             quant_weights = quant_dequant_tensor(
                 self.ori_module.weight, self.wts_type, scale=scale_weight
             )
-            if self.module_type == "Linear":
+            if self.module_type == 'Linear':
                 quant_out = F.linear(inputs, quant_weights, self.ori_module.bias)
                 cout_axis = -1  # NC/...C
             else:
@@ -232,7 +232,7 @@ class OfmrQuant(BaseQuantizeModule):
             quant_inputs = quant_dequant_tensor(
                 inputs, self.act_type, scale=scale_inputes
             )
-            if self.module_type == "Linear":
+            if self.module_type == 'Linear':
                 quant_out = F.linear(
                     quant_inputs, self.ori_module.weight, self.ori_module.bias
                 )

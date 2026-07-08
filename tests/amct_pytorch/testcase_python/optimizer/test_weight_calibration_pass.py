@@ -44,14 +44,14 @@ from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
-CONV1D = "conv1d"
+CONV1D = 'conv1d'
 
 
 class TestWeightsCalibrationPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        QUANTIZABLE_TYPES.extend(["ConvTranspose2d", "AvgPool2d", "ConvTranspose1d"])
-        cls.temp_folder = os.path.join(CUR_DIR, "test_weight_calibration_pass")
+        QUANTIZABLE_TYPES.extend(['ConvTranspose2d', 'AvgPool2d', 'ConvTranspose1d'])
+        cls.temp_folder = os.path.join(CUR_DIR, 'test_weight_calibration_pass')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
 
@@ -62,24 +62,24 @@ class TestWeightsCalibrationPass(unittest.TestCase):
             cls.args.append(torch.randn(input_shape))
         cls.args = tuple(cls.args)
 
-        cls.onnx_file = os.path.join(cls.temp_folder, "net_001.onnx")
+        cls.onnx_file = os.path.join(cls.temp_folder, 'net_001.onnx')
 
         Parser.export_onnx(cls.model_001, cls.args, cls.onnx_file)
         cls.graph = Parser.parse_net_to_graph(cls.onnx_file)
         cls.graph.add_model(cls.model_001)
 
-        cls.config_file = os.path.join(CUR_DIR, "utils/net_001.json")
-        cls.record_file = os.path.join(cls.temp_folder, "net_001.txt")
-        with open(cls.record_file, "w") as record_file:
-            record_file.write("")
+        cls.config_file = os.path.join(CUR_DIR, 'utils/net_001.json')
+        cls.record_file = os.path.join(cls.temp_folder, 'net_001.txt')
+        with open(cls.record_file, 'w') as record_file:
+            record_file.write('')
         Configuration().init(cls.config_file, cls.record_file, cls.graph)
 
     @classmethod
     def tearDownClass(cls):
-        QUANTIZABLE_TYPES.remove("ConvTranspose2d")
-        QUANTIZABLE_TYPES.remove("AvgPool2d")
-        QUANTIZABLE_TYPES.remove("ConvTranspose1d")
-        os.popen("rm -r " + cls.temp_folder)
+        QUANTIZABLE_TYPES.remove('ConvTranspose2d')
+        QUANTIZABLE_TYPES.remove('AvgPool2d')
+        QUANTIZABLE_TYPES.remove('ConvTranspose1d')
+        os.popen('rm -r ' + cls.temp_folder)
 
     def setUp(self):
         pass
@@ -94,7 +94,7 @@ class TestWeightsCalibrationPass(unittest.TestCase):
         optimizer.do_optimizer(self.model_001, self.graph)
 
         records = scale_offset_record_pb2.ScaleOffsetRecord()
-        with open(self.record_file, "r") as record_read_file:
+        with open(self.record_file, 'r') as record_read_file:
             pbtxt_string = record_read_file.read()
             text_format.Merge(pbtxt_string, records)
 
@@ -102,21 +102,21 @@ class TestWeightsCalibrationPass(unittest.TestCase):
 
     def test_weight_cali_trans(self):
         """test: conv(+ bias), Gemm, Matmul"""
-        matmul_node = self.graph.get_node_by_name("fc.2")
-        matmul_node.set_attr("with_weights_trans", True)
+        matmul_node = self.graph.get_node_by_name('fc.2')
+        matmul_node.set_attr('with_weights_trans', True)
 
         optimizer = ModelOptimizer()
         optimizer.add_pass(WeightsCalibrationPass())
         optimizer.do_optimizer(self.model_001, self.graph)
 
         records = scale_offset_record_pb2.ScaleOffsetRecord()
-        with open(self.record_file, "r") as record_read_file:
+        with open(self.record_file, 'r') as record_read_file:
             pbtxt_string = record_read_file.read()
             text_format.Merge(pbtxt_string, records)
 
         self.assertEqual(8, len(records.record))
 
-    @patch.object(Configuration, "get_layer_config")
+    @patch.object(Configuration, 'get_layer_config')
     def test_conv_transpose2d_weights_calibration(self, mock_get_layer_config):
         class ConvTransposeNet(torch.nn.Module):
             def __init__(self):
@@ -181,7 +181,7 @@ class TestWeightsCalibrationPass(unittest.TestCase):
 
         named_module_dict = {}
         deconv_module = None
-        deconv_name = "conv_transpose"
+        deconv_name = 'conv_transpose'
         for name, mod in model.named_modules():
             named_module_dict[name] = mod
             if name == deconv_name:

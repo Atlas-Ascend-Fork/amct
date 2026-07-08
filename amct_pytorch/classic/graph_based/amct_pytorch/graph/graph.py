@@ -182,7 +182,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
         """
         Function: Dump all nodes and weights of graph to onnx_pb.ModelProto format
         """
-        LOGGER.logi("Doing whole model dump...", module_name=MODULE_NAME)
+        LOGGER.logi('Doing whole model dump...', module_name=MODULE_NAME)
         self.topologic_sort()
 
         net = onnx_pb.ModelProto()
@@ -274,9 +274,9 @@ class Graph(GraphBase):  # pylint: disable=no-member
         self._update_node_names()
 
         # delete node and initializer in graph
-        self._net.graph.ClearField("node")
-        self._net.graph.ClearField("initializer")
-        self._net.graph.ClearField("sparse_initializer")
+        self._net.graph.ClearField('node')
+        self._net.graph.ClearField('initializer')
+        self._net.graph.ClearField('sparse_initializer')
         # delete custom opset domain in graph
         if len(self._net.opset_import) > 1:
             self._net.opset_import.pop()
@@ -331,8 +331,8 @@ class Graph(GraphBase):  # pylint: disable=no-member
 
     def _parse_node_proto(self, output_record):
         for index, node_proto in enumerate(self._net.graph.node):
-            if not node_proto.HasField("name"):
-                node_proto.name = "node_{}".format(index)
+            if not node_proto.HasField('name'):
+                node_proto.name = 'node_{}'.format(index)
             node = Node(self._tail, node_proto, model_path=self.model_path)
             self._nodes.append(node)
 
@@ -342,7 +342,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
         for node in self._nodes + self._in_out_nodes:
             for input_anchor in node.input_anchors:
                 if input_anchor.name not in output_record:
-                    if input_anchor.name == "":
+                    if input_anchor.name == '':
                         continue
                     raise ReferenceError(
                         "Cannot find tensor %s in model." % (input_anchor.name)
@@ -363,8 +363,8 @@ class Graph(GraphBase):  # pylint: disable=no-member
                     '"%s" already exist in graph, may be reused module.' % (new_name),
                     MODULE_NAME,
                 )
-                node.set_attr("is_reuse", True)
-                target_node.set_attr("is_reuse", True)
+                node.set_attr('is_reuse', True)
+                target_node.set_attr('is_reuse', True)
 
             node.set_name(self._decorate_node_name(new_name))
             node.set_module_name(new_name)
@@ -372,7 +372,7 @@ class Graph(GraphBase):  # pylint: disable=no-member
         # get quantize node name from mark node, and set to itself
         quant_mark_nodes = list()
         for node in self._nodes:
-            if node.type == "QuantIdentity":
+            if node.type == 'QuantIdentity':
                 attr_helper = AttributeProtoHelper(node.proto)
                 layer_name = str(
                     attr_helper.get_attr_value("op_name"), encoding="utf-8"
@@ -389,17 +389,17 @@ class Graph(GraphBase):  # pylint: disable=no-member
                 ):
                     consumer = Graph._parse_rnn_nodes(node, layer_module_type)
 
-                if consumer.type == "Pad":
-                    set_name_node(consumer, "%s_pad" % (layer_name))
+                if consumer.type == 'Pad':
+                    set_name_node(consumer, '%s_pad' % (layer_name))
                     consumer_output = consumer.get_output_anchor(0)
                     consumer = consumer_output.get_peer_input_anchor()[0].node
 
-                if consumer.type == "Transpose":
-                    set_name_node(consumer, "%s_transpose" % (layer_name))
+                if consumer.type == 'Transpose':
+                    set_name_node(consumer, '%s_transpose' % (layer_name))
                     consumer_output = consumer.get_output_anchor(0)
                     consumer = consumer_output.get_peer_input_anchor()[0].node
 
-                if consumer.type == "Unsqueeze":
+                if consumer.type == 'Unsqueeze':
                     consumer = Graph._parse_unsqueeze_nodes(node)
 
                 # handle circular padding for conv2d

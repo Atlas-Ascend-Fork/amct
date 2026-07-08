@@ -124,17 +124,17 @@ class DistillDataConfig(ConfigItem):
 
     def build_default(self):
         '''inner method'''
-        self.build_default_util("algo", DataAlgo)
+        self.build_default_util('algo', DataAlgo)
         self.build_default_util(DST_TYPE, DataType)
 
 
 class WeightAlgo(ConfigItem):
-    """an object for WeightAlgo filed"""
+    '''an object for WeightAlgo filed'''
 
     def build(self, val, extra=None):
         '''inner method'''
-        self.check_type("WeightAlgo", val, str, extra[0])
-        if val not in ["arq_distill", "ulq_distill"]:
+        self.check_type('WeightAlgo', val, str, extra[0])
+        if val not in ['arq_distill', 'ulq_distill']:
             raise ValueError(
                 "WeightAlgo only supports [arq_distill, ulq_distill] for layer {}".format(
                     extra[0]
@@ -144,23 +144,23 @@ class WeightAlgo(ConfigItem):
 
     def build_default(self, extra=None):
         '''inner method'''
-        self.value = "arq_distill"
+        self.value = 'arq_distill'
 
 
 class DistillWeightConfig(ConfigItem):
-    """an object for DistillWeightConfig filed"""
+    '''an object for DistillWeightConfig filed'''
 
     def build(self, val, extra):
-        """inner method"""
-        self.check_type("DistillWeightConfig", val, dict, extra[0])
-        key = "algo"
+        '''inner method'''
+        self.check_type('DistillWeightConfig', val, dict, extra[0])
+        key = 'algo'
         if key not in val.keys():
             self.build_default_util(key, WeightAlgo)
         else:
             self.build_util(key, WeightAlgo, val.get(key), extra)
             del val[key]
 
-        self.build_config_by_key("channel_wise", ChannelWise, val, extra)
+        self.build_config_by_key('channel_wise', ChannelWise, val, extra)
         self.build_config_by_key(DST_TYPE, DataType, val, extra)
 
         if val.keys():
@@ -171,9 +171,9 @@ class DistillWeightConfig(ConfigItem):
             )
 
     def build_default(self, extra):
-        """inner method"""
-        self.build_default_util("algo", WeightAlgo)
-        self.build_default_util("channel_wise", ChannelWise, extra)
+        '''inner method'''
+        self.build_default_util('algo', WeightAlgo)
+        self.build_default_util('channel_wise', ChannelWise, extra)
         self.build_default_util(DST_TYPE, DataType)
 
     def build_config_by_key(self, key, cls, val, extra):
@@ -186,25 +186,25 @@ class DistillWeightConfig(ConfigItem):
 
 
 class LayerConfig(ConfigItem):
-    """an object for LayerConfig filed"""
+    '''an object for LayerConfig filed'''
 
     fields = {
-        "quant_enable": QuantEnable,
-        "distill_data_config": DistillDataConfig,
-        "distill_weight_config": DistillWeightConfig,
+        'quant_enable': QuantEnable,
+        'distill_data_config': DistillDataConfig,
+        'distill_weight_config': DistillWeightConfig,
     }
 
     def build(self, val, extra):
         '''inner method'''
-        self.check_type("LayerConfig", val, dict)
+        self.check_type('LayerConfig', val, dict)
         for key, cls in self.fields.items():
             if key not in val.keys():
-                if key == "distill_weight_config":
+                if key == 'distill_weight_config':
                     self.build_default_util(key, cls, extra)
                 else:
                     self.build_default_util(key, cls)
             else:
-                if key == "quant_enable":
+                if key == 'quant_enable':
                     self.build_util(key, cls, val.get(key), extra)
                 else:
                     self.build_util(key, cls, val.get(key), extra)
@@ -220,19 +220,19 @@ class LayerConfig(ConfigItem):
 
 
 class DistillGroup(ConfigItem):
-    """an object for DistillGroup filed"""
+    '''an object for DistillGroup filed'''
 
     def build(self, val):
-        """inner method"""
-        self.check_type("DistillGroup", val, list)
+        '''inner method'''
+        self.check_type('DistillGroup', val, list)
         self.value = val
 
 
 class DistillRootConfig(ConfigItem):
-    """an object for DistillRootConfig filed"""
+    '''an object for DistillRootConfig filed'''
 
     def check_layer_config_legal(self, layer):
-        """check layer config legal"""
+        '''check layer config legal'''
         weight_config = (
             self.children.get(layer).children.get("distill_weight_config").children
         )
@@ -250,22 +250,22 @@ class DistillRootConfig(ConfigItem):
                 )
 
     def build(self, value, extra):
-        """inner method"""
-        self.check_type("DistillRootConfig", value, dict)
+        '''inner method'''
+        self.check_type('DistillRootConfig', value, dict)
         # handle version
-        self._build("version", value)
+        self._build('version', value)
 
         # handle batch_num
-        self._build("batch_num", value)
+        self._build('batch_num', value)
 
         # handle group_size
-        self._build("group_size", value)
+        self._build('group_size', value)
 
         # handle data_dump
-        self._build("data_dump", value)
+        self._build('data_dump', value)
 
         # handle distill_group
-        key = "distill_group"
+        key = 'distill_group'
         if key in value.keys():
             self.build_util(key, DistillGroup, value[key])
             del value[key]
@@ -274,26 +274,26 @@ class DistillRootConfig(ConfigItem):
         for layer, layer_config in value.items():
             if layer not in extra.keys():
                 raise ValueError("unsupported layer {} for distillation".format(layer))
-            if layer_config.get("quant_enable"):
+            if layer_config.get('quant_enable'):
                 all_disable = False
             self.build_util(layer, LayerConfig, layer_config, (layer, extra[layer]))
             self.check_layer_config_legal(layer)
             del extra[layer]
         disable_config = {}
         for layer, layer_type in extra.items():
-            disable_config["quant_enable"] = False
+            disable_config['quant_enable'] = False
             self.build_util(layer, LayerConfig, disable_config, (layer, layer_type))
 
         if all_disable:
-            raise ValueError("No layer enabled distillation")
+            raise ValueError('No layer enabled distillation')
 
     def build_default(self, groups, extra):
-        """inner method"""
-        self.build_default_util("version", Version)
-        self.build_default_util("batch_num", BatchNum)
-        self.build_default_util("group_size", GroupSize)
-        self.build_default_util("data_dump", DataDump)
-        self.build_util("distill_group", DistillGroup, groups)
+        '''inner method'''
+        self.build_default_util('version', Version)
+        self.build_default_util('batch_num', BatchNum)
+        self.build_default_util('group_size', GroupSize)
+        self.build_default_util('data_dump', DataDump)
+        self.build_util('distill_group', DistillGroup, groups)
         for layer, layer_type in extra.items():
             self.build_default_util(layer, LayerConfig, (layer, layer_type))
 

@@ -32,24 +32,24 @@ CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
 logger = logging.getLogger(__name__)
 
-ALGO = "algo"
+ALGO = 'algo'
 
-CONV1 = "conv1"
-DST_TYPE = "dst_type"
+CONV1 = 'conv1'
+DST_TYPE = 'dst_type'
 
-QUANT_ENABLE = "quant_enable"
+QUANT_ENABLE = 'quant_enable'
 
-INT8 = "INT8"
+INT8 = 'INT8'
 
 
 class TestDistillField(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        logger.info("TestDistillField start!")
+        logger.info('TestDistillField start!')
 
     @classmethod
     def tearDownClass(cls):
-        logger.info("TestDistillField end!")
+        logger.info('TestDistillField end!')
 
     def test_group_size_0(self):
         obj = distill_field.GroupSize(GraphQuerier, CAPACITY)
@@ -78,7 +78,7 @@ class TestDistillField(unittest.TestCase):
 
     def test_quant_enable_false(self):
         obj = distill_field.QuantEnable(GraphQuerier, CAPACITY)
-        extra = (CONV1, "Conv2d")
+        extra = (CONV1, 'Conv2d')
         obj.build(False, extra)
         self.assertFalse(obj.value)
 
@@ -89,14 +89,14 @@ class TestDistillField(unittest.TestCase):
 
     def test_data_type_unknown(self):
         obj = distill_field.DataType(GraphQuerier, CAPACITY)
-        val = "UNKNOWN"
+        val = 'UNKNOWN'
         extra = (CONV1, 'Conv2d')
         with self.assertRaises(ValueError):
             obj.build(val, extra)
 
     def test_data_type_int4(self):
         obj = distill_field.DataType(GraphQuerier, CAPACITY)
-        val = "INT4"
+        val = 'INT4'
         extra = (CONV1, 'Conv2d')
         obj.build(val, extra)
         self.assertEqual(obj.value, val)
@@ -110,9 +110,9 @@ class TestDistillField(unittest.TestCase):
         obj = distill_field.DistillDataConfig(GraphQuerier, CAPACITY)
         val = {
             ALGO: "ulq_quantize",
-            "clip_max": 1.0,
-            "clip_min": -1.0,
-            "fixed_min": True,
+            'clip_max': 1.0,
+            'clip_min': -1.0,
+            'fixed_min': True,
             DST_TYPE: INT8,
         }
         extra = (CONV1, 'Conv2d')
@@ -218,11 +218,11 @@ class TestDistillField(unittest.TestCase):
 
     def test_layer_config_default(self):
         obj = distill_field.LayerConfig(GraphQuerier, CAPACITY)
-        extra = (CONV1, "Conv2d")
+        extra = (CONV1, 'Conv2d')
         obj.build_default(extra)
         except_val = {
             QUANT_ENABLE: True,
-            "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},
+            'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: INT8},
             "distill_weight_config": {
                 ALGO: "arq_distill",
                 "channel_wise": True,
@@ -233,7 +233,7 @@ class TestDistillField(unittest.TestCase):
 
     def test_distill_group(self):
         obj = distill_field.DistillGroup(GraphQuerier, CAPACITY)
-        val = [["layer1", "layer2"], ["layer3", "layer4"]]
+        val = [['layer1', 'layer2'], ['layer3', 'layer4']]
         obj.build(val)
         self.assertEqual(obj.value, val)
 
@@ -247,7 +247,7 @@ class TestDistillField(unittest.TestCase):
             'distill_group': [['layer1', 'layer2']],
             "not_supported_layer": {},
         }
-        extra = {CONV1: "Conv2d"}
+        extra = {CONV1: 'Conv2d'}
         with self.assertRaises(ValueError):
             obj.build(value, extra)
 
@@ -258,7 +258,7 @@ class TestDistillField(unittest.TestCase):
             "batch_num": 1,
             "group_size": 1,
             "data_dump": False,
-            "distill_group": [["layer1", "layer2"]],
+            'distill_group': [['layer1', 'layer2']],
             CONV1: {QUANT_ENABLE: False},
         }
         extra = {CONV1: 'Conv2d'}
@@ -272,7 +272,7 @@ class TestDistillField(unittest.TestCase):
             "batch_num": 1,
             "group_size": 1,
             "data_dump": False,
-            "distill_group": [["layer1", "layer2"]],
+            'distill_group': [['layer1', 'layer2']],
             CONV1: {
                 QUANT_ENABLE: True,
                 "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},
@@ -283,7 +283,7 @@ class TestDistillField(unittest.TestCase):
                 },
             },
         }
-        extra = {CONV1: "Conv2d"}
+        extra = {CONV1: 'Conv2d'}
         with self.assertRaises(ValueError):
             obj.build(value, extra)
 
@@ -294,17 +294,17 @@ class TestDistillField(unittest.TestCase):
             "batch_num": 2,
             "group_size": 2,
             "data_dump": True,
-            "distill_group": [["layer1", "layer2"]],
+            'distill_group': [['layer1', 'layer2']],
             CONV1: {QUANT_ENABLE: True},
         }
-        extra = {CONV1: "Conv2d", "conv2": "Conv2d"}
+        extra = {CONV1: 'Conv2d', 'conv2': 'Conv2d'}
         obj.build(value, extra)
         except_val = {
             "version": 1,
             "batch_num": 2,
             "group_size": 2,
             "data_dump": True,
-            "distill_group": [["layer1", "layer2"]],
+            'distill_group': [['layer1', 'layer2']],
             CONV1: {
                 QUANT_ENABLE: True,
                 "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},
@@ -328,15 +328,15 @@ class TestDistillField(unittest.TestCase):
 
     def test_distill_root_config_default(self):
         obj = distill_field.DistillRootConfig(GraphQuerier, CAPACITY)
-        groups = [["layer1", "layer2"]]
-        extra = {CONV1: "Conv2d"}
+        groups = [['layer1', 'layer2']]
+        extra = {CONV1: 'Conv2d'}
         obj.build_default(groups, extra)
         except_val = {
             "version": 1,
             "batch_num": 1,
             "group_size": 1,
             "data_dump": False,
-            "distill_group": [["layer1", "layer2"]],
+            'distill_group': [['layer1', 'layer2']],
             CONV1: {
                 QUANT_ENABLE: True,
                 "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},

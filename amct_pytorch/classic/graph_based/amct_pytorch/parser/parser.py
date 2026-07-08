@@ -50,7 +50,7 @@ SUPPORT_TYPES = (
     torch.nn.Softmax,
 )
 
-TMP_PATH = os.path.realpath(os.path.join(os.getcwd(), "amct_temp"))
+TMP_PATH = os.path.realpath(os.path.join(os.getcwd(), 'amct_temp'))
 
 
 class Parser:
@@ -63,11 +63,11 @@ class Parser:
     def parse_proto(proto_file):
         """parse the onnx pb pb file to"""
         if isinstance(proto_file, str):
-            with open(proto_file, "rb") as onnx_pb_file:
+            with open(proto_file, 'rb') as onnx_pb_file:
                 onnx_pb_str = onnx_pb_file.read()
                 model = onnx_pb.ModelProto()
                 model.ParseFromString(onnx_pb_str)
-                LOGGER.logd(f"Parse onnx model from {proto_file} success.")
+                LOGGER.logd(f'Parse onnx model from {proto_file} success.')
                 return model
         elif isinstance(proto_file, BytesIO):
             onnx_pb_str = proto_file.getvalue()
@@ -240,7 +240,7 @@ def _write_attr_to_node_proto(node_proto, attr):
     if attr.type == AttributeProto.AttributeType.STRINGS:
         attr_value = [byte_string.decode("utf-8") for byte_string in attr_value]
     elif attr.type == AttributeProto.AttributeType.STRING:
-        attr_value = attr_value.decode("utf-8")
+        attr_value = attr_value.decode('utf-8')
     node_proto.set_attr(attr.name, attr_value)
 
 
@@ -279,7 +279,7 @@ def _export_to_onnx(model, args, onnx_file, export_setting):
     try:
         torch_out = torch.onnx.export(model, args, onnx_file, **export_setting)
     except Exception as exception:
-        if "2G" in str(exception):
+        if '2G' in str(exception):
             torch_out = _export_oversize_model(model, args, onnx_file, export_setting)
         else:
             raise RuntimeError(
@@ -300,11 +300,11 @@ def _export_to_onnx(model, args, onnx_file, export_setting):
 
 
 def _export_oversize_model(model, args, onnx_file, export_setting):
-    onnx_local_file = "{}/temp.onnx".format(TMP_PATH)
+    onnx_local_file = '{}/temp.onnx'.format(TMP_PATH)
     if not os.path.exists(TMP_PATH):
         os.mkdir(TMP_PATH)
     torch_out = torch.onnx.export(model, args, onnx_local_file, **export_setting)
-    with open(onnx_local_file, "rb") as f:
+    with open(onnx_local_file, 'rb') as f:
         copyfileobj(f, onnx_file)
     onnx_file.seek(0)
     return torch_out

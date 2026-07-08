@@ -184,9 +184,9 @@ def float_cast_to_float4e1m2(values: torch.Tensor) -> torch.Tensor:
         res *= sign
 
         # 恢复特殊值
-        res[nan_mask] = float("nan")
-        res[inf_mask] = float("inf")
-        res[neg_inf_mask] = float("-inf")
+        res[nan_mask] = float('nan')
+        res[inf_mask] = float('inf')
+        res[neg_inf_mask] = float('-inf')
 
     return res.to(values.device)
 
@@ -224,15 +224,15 @@ def float_cast_to_float4e2m1(values: torch.Tensor) -> torch.Tensor:
         res *= sign
 
         # 恢复特殊值
-        res[nan_mask] = float("nan")
-        res[inf_mask] = float("inf")
-        res[neg_inf_mask] = float("-inf")
+        res[nan_mask] = float('nan')
+        res[inf_mask] = float('inf')
+        res[neg_inf_mask] = float('-inf')
 
     return res
 
 
 def golden_hifloat8(in_tensor):
-    hifloat8 = trans_np_float_tensor_to_hifuint8(in_tensor.to("cpu").numpy())
+    hifloat8 = trans_np_float_tensor_to_hifuint8(in_tensor.to('cpu').numpy())
     float32 = trans_np_hifuint8_tensor_to_float32(hifloat8)
     return torch.from_numpy(float32)
 
@@ -704,13 +704,13 @@ def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=3
 def convert_golden_inverse_conversion(input_tensor, quant_type):
     dtype = input_tensor.dtype
 
-    if quant_type in ("FLOAT4_E2M1"):
+    if quant_type in ('FLOAT4_E2M1'):
         input_tensor = golden_float4(input_tensor, quant_type, 128)
 
     return input_tensor.to(dtype)
 
 
-def set_model_data_distribution(model, distribution_type=ONES, quant_type="MXFP4_E2M1"):
+def set_model_data_distribution(model, distribution_type=ONES, quant_type='MXFP4_E2M1'):
     for name, param in model.named_parameters():
         param.data = param.data.to(DATA_TYPE).to(DEVICE)
         if "weight" not in name:
@@ -737,7 +737,7 @@ def set_model_data_distribution(model, distribution_type=ONES, quant_type="MXFP4
                 .to(DATA_TYPE)
                 .to(DEVICE)
             )
-        elif distribution_type == "rand":
+        elif distribution_type == 'rand':
             param.data = torch.rand_like(param.data).to(DATA_TYPE)
             param.data = (
                 convert_golden_inverse_conversion(param.data, quant_type)
@@ -756,14 +756,14 @@ def set_model_data_distribution(model, distribution_type=ONES, quant_type="MXFP4
                 .to(DATA_TYPE)
                 .to(DEVICE)
             )
-        elif distribution_type == "zeros":
+        elif distribution_type == 'zeros':
             buffer.data = torch.zeros_like(buffer.data).to(DATA_TYPE)
             buffer.data = (
                 convert_golden_inverse_conversion(param.data, quant_type)
                 .to(DATA_TYPE)
                 .to(DEVICE)
             )
-        elif distribution_type == "normal":
+        elif distribution_type == 'normal':
             shape = buffer.data.shape
             buffer.data = torch.normal(mean=0, std=1, size=shape).to(DATA_TYPE)
             buffer.data = (
@@ -771,7 +771,7 @@ def set_model_data_distribution(model, distribution_type=ONES, quant_type="MXFP4
                 .to(DATA_TYPE)
                 .to(DEVICE)
             )
-        elif distribution_type == "rand":
+        elif distribution_type == 'rand':
             buffer.data = torch.rand_like(buffer.data).to(DATA_TYPE)
             buffer.data = (
                 convert_golden_inverse_conversion(param.data, quant_type)
@@ -827,7 +827,7 @@ def similarity(data0, data1):
     return similar
 
 
-def set_data_distribution(data_shape, distribution_type=ONES, quant_type="MXFP4_E2M1"):
+def set_data_distribution(data_shape, distribution_type=ONES, quant_type='MXFP4_E2M1'):
     if distribution_type == ONES:
         data = torch.ones(data_shape).to(DATA_TYPE).to(DEVICE)
     elif distribution_type == "zeros":

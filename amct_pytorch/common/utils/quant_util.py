@@ -52,7 +52,7 @@ def hifloat8_supported():
         import torch_npu
     except ImportError:
         return False
-    if not (hasattr(torch_npu, "hifloat8") and hasattr(torch_npu, "npu_dtype_cast")):
+    if not (hasattr(torch_npu, 'hifloat8') and hasattr(torch_npu, 'npu_dtype_cast')):
         return False
     try:
         probe = torch.zeros(1, dtype=torch.float16).npu()
@@ -109,7 +109,7 @@ def pad_zero_by_group(tensor, group_size):
         Tensor: Padded tensor with last dimension size aligned to group_size
     """
     pad = (group_size - (tensor.shape[-1] % group_size)) % group_size
-    tensor_padded = torch.nn.functional.pad(tensor, (0, pad), "constant", 0)
+    tensor_padded = torch.nn.functional.pad(tensor, (0, pad), 'constant', 0)
     return tensor_padded
 
 
@@ -204,7 +204,7 @@ def convert_dtype(ori_tensor, quant_dtype):
 
         converted_tensor = torch_npu.npu_dtype_cast(ori_tensor, torch_npu.hifloat8)
     else:
-        raise ValueError("Not supported quant_dtype {}".format(quant_dtype))
+        raise ValueError('Not supported quant_dtype {}'.format(quant_dtype))
     return converted_tensor
 
 

@@ -34,8 +34,8 @@ from amct_pytorch.algorithms import BUILT_IN_ALGORITHM
 
 
 def set_default_config():
-    """default quant config"""
-    LOGGER.logd("Using INT8_MINMAX_WEIGHT_QUANT_CFG as default config")
+    '''default quant config'''
+    LOGGER.logd('Using INT8_MINMAX_WEIGHT_QUANT_CFG as default config')
     return INT8_MINMAX_WEIGHT_QUANT_CFG
 
 
@@ -53,7 +53,7 @@ def check_skip_layer(layer_name, skip_layers):
 
     for skip_layer in skip_layers:
         if skip_layer in layer_name:
-            LOGGER.logd("The {} quantifiable module is skipped".format(layer_name))
+            LOGGER.logd('The {} quantifiable module is skipped'.format(layer_name))
             return True
 
     return False
@@ -95,7 +95,7 @@ def check_config(quant_data_comb, quant_config, algo):
                 f"act_dtype and wts_dtype {quant_data_comb} do not support "
                 f"activation quant strategy {act_strategy}"
             )
-        if act_dtype in ["mxfp8_e4m3fn"] and act_strategy != "group":
+        if act_dtype in ['mxfp8_e4m3fn'] and act_strategy != 'group':
             raise ValueError(
                 f"act_dtype and wts_dtype {quant_data_comb} only support activation quant strategy group"
             )
@@ -124,14 +124,14 @@ def _check_quant_dtype_comb_rules(quant_data_comb, quant_config):
             f"{quant_data_comb} only support symmetric weight quantization"
         )
 
-    if quant_data_comb != "int8 int4":
+    if quant_data_comb != 'int8 int4':
         return
 
-    if weight_cfg.strategy not in ["tensor", "channel"]:
+    if weight_cfg.strategy not in ['tensor', 'channel']:
         raise ValueError(
             f"{quant_data_comb} only support weight quant strategy tensor or channel"
         )
-    if inputs_cfg.strategy != "tensor":
+    if inputs_cfg.strategy != 'tensor':
         raise ValueError(
             f"{quant_data_comb} only support activation quant strategy tensor"
         )
@@ -146,9 +146,9 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
     """
     from amct_pytorch.common.config.utils import match_fuzzy_pattern
 
-    fuzzy_weights = quant_config.quant_cfg.fuzzy_configs["weights"]
-    fuzzy_inputs = quant_config.quant_cfg.fuzzy_configs["inputs"]
-    fuzzy_kvcache = quant_config.quant_cfg.fuzzy_configs["kvcache"]
+    fuzzy_weights = quant_config.quant_cfg.fuzzy_configs['weights']
+    fuzzy_inputs = quant_config.quant_cfg.fuzzy_configs['inputs']
+    fuzzy_kvcache = quant_config.quant_cfg.fuzzy_configs['kvcache']
     skip_layers = quant_config.skip_layers.skip_layers
 
     if not fuzzy_weights and not fuzzy_inputs and not fuzzy_kvcache:
@@ -157,10 +157,10 @@ def _check_fuzzy_config_warnings(all_layer_names, quant_config):
     skip_layers_set = set(skip_layers or [])
 
     all_fuzzy_patterns = fuzzy_weights + fuzzy_inputs + fuzzy_kvcache
-    pattern_match_count = {cfg["pattern"]: 0 for cfg in all_fuzzy_patterns}
+    pattern_match_count = {cfg['pattern']: 0 for cfg in all_fuzzy_patterns}
 
     for fuzzy_cfg in all_fuzzy_patterns:
-        pattern = fuzzy_cfg["pattern"]
+        pattern = fuzzy_cfg['pattern']
         for layer_name in all_layer_names:
             if not match_fuzzy_pattern(layer_name, pattern):
                 continue
@@ -190,11 +190,11 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     Return: bool, Indicates whether the current layer is supported to quantization
     """
     mod_type = type(mod).__name__
-    if mod_type != "Linear":
+    if mod_type != 'Linear':
         return True
 
     # npu op check cin length be integer multiple of 64
-    support_quant_dtype_comb = ["float8_e4m3fn float4_e2m1"]
+    support_quant_dtype_comb = ['float8_e4m3fn float4_e2m1']
     if quant_data_comb in support_quant_dtype_comb and mod.weight.shape[1] % 64 != 0:
         LOGGER.logd(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement "
@@ -225,7 +225,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
         return False
 
     # npu op check cin length be integer multiple of 32b
-    if quant_data_comb in ["NOT_QUANTIZE mxfp4_e2m1", "NOT_QUANTIZE float4_e2m1"]:
+    if quant_data_comb in ['NOT_QUANTIZE mxfp4_e2m1', 'NOT_QUANTIZE float4_e2m1']:
         if mod.weight.shape[1] % 64 != 0 or mod.weight.shape[0] % 64 != 0:
             LOGGER.logd(
                 "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement"
@@ -235,7 +235,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
             )
             return False
 
-    if quant_data_comb in ["NOT_QUANTIZE int4", "int8 int4"]:
+    if quant_data_comb in ['NOT_QUANTIZE int4', 'int8 int4']:
         if mod.weight.shape[0] % 8 != 0 or mod.weight.shape[1] % 8 != 0:
             LOGGER.logd(
                 "layer:{} cannot be quantized, act_dtype and wts dtype {} has shape requirement"
@@ -261,7 +261,7 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
 def check_kv_config(quant_config, algo):
     quant_type = quant_config.quant_cfg.kvcache_cfg.quant_type
     if quant_type not in ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE.keys():
-        raise ValueError(f"Do not support {quant_type} of kvcache quant dtype.")
+        raise ValueError(f'Do not support {quant_type} of kvcache quant dtype.')
     if algo not in ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE[quant_type]:
         raise ValueError(
             f"Algorithm {algo} do not support kvcache quant dtype {quant_type}"
@@ -269,7 +269,7 @@ def check_kv_config(quant_config, algo):
 
 
 def _build_layer_types_and_quant_type(quant_config, registed_alg):
-    """Build layer types mapping and get quant type combination"""
+    '''Build layer types mapping and get quant type combination'''
     algos = quant_config.algorithm.names
     layer_types = dict()
     quant_type_comb = None
@@ -291,14 +291,14 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
             if wts_type is None:
                 quant_type_comb = None
             else:
-                quant_type_comb = act_type + " " + wts_type
+                quant_type_comb = act_type + ' ' + wts_type
                 check_config(quant_type_comb, quant_config, algo)
     return layer_types, quant_type_comb
 
 
 def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
-    """Check if layer is supported for quantization"""
-    if type(mod).__name__ == "FP8Linear":
+    '''Check if layer is supported for quantization'''
+    if type(mod).__name__ == 'FP8Linear':
         LOGGER.logw(
             "layer:{} is already quantized, do not need quantized again.".format(name)
         )
@@ -313,7 +313,7 @@ def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
         and type(mod).__name__ not in KVCACHE_OPS
     ):
         return False
-    if type(mod).__name__ == "Conv2d" and mod.padding_mode != "zeros":
+    if type(mod).__name__ == 'Conv2d' and mod.padding_mode != 'zeros':
         LOGGER.logd(
             "layer:{} cannot be quantized, act_dtype and wts dtype {} has requirement "
             "on padding_mode of conv2d, padding_mode should be zero.".format(
@@ -322,13 +322,13 @@ def _is_layer_supported(mod, name, layer_types, quant_type_comb, quant_config):
         )
         return False
     if check_skip_layer(name, quant_config.skip_layers.skip_layers):
-        LOGGER.logd("layer:{} is skipped".format(name))
+        LOGGER.logd('layer:{} is skipped'.format(name))
         return False
     return True
 
 
 def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
-    """Check layer constraints for built-in algorithms"""
+    '''Check layer constraints for built-in algorithms'''
     if algo not in BUILT_IN_ALGORITHM:
         return True
     if (
@@ -354,7 +354,7 @@ def _check_layer_constraints(mod, name, algo, quant_type_comb, quant_config):
 
 
 def get_supported_layers(model, quant_config, registed_alg):
-    """get supported layers based on quant config and registed algorithm"""
+    '''get supported layers based on quant config and registed algorithm'''
     layer_types, quant_type_comb = _build_layer_types_and_quant_type(
         quant_config, registed_alg
     )
@@ -392,7 +392,7 @@ def get_supported_layers(model, quant_config, registed_alg):
 
 
 def parse_config(model, config, registed_alg):
-    """parse quant config, get quant config for each layer"""
+    '''parse quant config, get quant config for each layer'''
     quant_config = QuantConfig(config, registed_alg)
     detail_config = get_supported_layers(model, quant_config, registed_alg)
 
