@@ -67,7 +67,8 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
                     "ignore": ignores,
                     "quant_method": "compressed-tensors",
                     "quantization_status": "compressed"}
-    quant_config.update(cache_scheme)
+    if cache_scheme:
+        quant_config.update(cache_scheme)
     if is_mx:
         quant_config["weight_block_size"] = [1, 32]
     return quant_config
