@@ -1,12 +1,11 @@
 # FP4 → BF16 → HiFloat4 Conversion Tools (Experimental)
 
-将 NVFP4 / MXFP4 checkpoint 转为经过 HiF4 fake-quant 的 BF16 权重。
+将 NVFP4 checkpoint 转为经过 HiF4 fake-quant 的 BF16 权重。
 
 ## 转换流程
 
 ```
 NVFP4 packed  ──nvfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
-MXFP4 packed  ──mxfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
                     (fp4_formats)              (hifx4_quant)
 ```
 
@@ -17,11 +16,10 @@ MXFP4 packed  ──mxfp4_to_bf16──►  BF16  ──quant_dequant_float─�
 
 | 文件 | 职责 |
 |------|------|
-| `fp4_formats.py` | 格式数学：FP4→BF16 反量化 + 可选 E6M0 编解码 |
+| `fp4_formats.py` | 格式数学：FP4→BF16 反量化 |
 | `ckpt_io.py` | 通用 checkpoint I/O：`walk_checkpoint` |
 | `metrics.py` | 诊断：重建误差打分 |
 | `convert_nvfp4_to_hif4.py` | NVFP4 转换 CLI |
-| `convert_mxfp4_to_hif4.py` | MXFP4 转换 CLI |
 
 ## 依赖
 
@@ -42,27 +40,6 @@ python -m amct_pytorch.experimental.fp4_convert.convert_nvfp4_to_hif4 \
     --out-dir /path/to/output
 ```
 
-### MXFP4 → HiF4
-
-```bash
-# 自测
-python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 selftest
-
-# 列 key
-python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 list-keys \
-    --file model.safetensors --filter experts
-
-# 转换单对张量
-python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 convert-pair \
-    --packed-spec model.safetensors:weight \
-    --scale-spec  model.safetensors:weight_scale --out out.pt
-
-# 整库转换
-python -m amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 convert-dir \
-    --mxfp4-dir /path/to/mxfp4_ckpt \
-    --bf16-index /path/to/model.safetensors.index.json \
-    --out-dir /path/to/output
-```
 
 ## 架构
 
