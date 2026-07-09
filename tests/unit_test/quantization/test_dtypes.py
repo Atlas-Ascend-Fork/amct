@@ -40,6 +40,8 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     up_size,
     weight_dequant,
 )
+from amct_pytorch.quantization.dtypes.hif import QuantDequantHif
+from amct_pytorch.common.utils.quant_util import hifloat8_supported
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -312,3 +314,39 @@ def test_weight_dequant_block_size_one_direct_multiply():
     expected = weight * scale
     assert result.shape == weight.shape
     assert torch.allclose(result, expected.to(torch.get_default_dtype()))
+
+
+@pytest.mark.skipif(
+    not hifloat8_supported(),
+    reason="HiFloat8 quantization requires native torch_npu hifloat8 runtime.",
+)
+def test_hif_forward_shape_and_dtype_preserved():
+    qdq = QuantDequantHif(bits=8)
+    x = torch.randn(2, 8, dtype=torch.bfloat16).npu()
+
+    y = qdq(x)
+
+    assert y.shape == x.shape
+    assert y.dtype == x.dtype
+
+
+def test_hif_forward_bits16_is_passthrough():
+    qdq = QuantDequantHif(bits=16)
+    x = torch.randn(2, 8)
+    assert torch.equal(qdq(x), x)
+
+
+def test_hif_export_deploy_returns_encoded_weight():
+    pytest.importorskip("torch_npu")
+    pytest.importorskip("amct_ops.hifloat8_cast")
+    if not hasattr(torch.Tensor, "npu"):
+        pytest.skip("HiFloat8 deploy export requires torch_npu Tensor.npu().")
+
+    qdq = QuantDequantHif(bits=8)
+    x = torch.randn(2, 8, dtype=torch.bfloat16)
+
+    out = qdq.export_deploy(x)
+
+    assert out["qweight"].dtype == torch.uint8
+    assert out["qweight"].shape == x.shape
+    assert out["weight_scale"] is None
