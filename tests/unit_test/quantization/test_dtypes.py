@@ -336,17 +336,11 @@ def test_hif_forward_bits16_is_passthrough():
     assert torch.equal(qdq(x), x)
 
 
-def test_hif_export_deploy_returns_encoded_weight():
-    pytest.importorskip("torch_npu")
-    pytest.importorskip("amct_ops.hifloat8_cast")
-    if not hasattr(torch.Tensor, "npu"):
-        pytest.skip("HiFloat8 deploy export requires torch_npu Tensor.npu().")
-
+def test_hif_deploy_and_export_deploy_are_unsupported():
     qdq = QuantDequantHif(bits=8)
     x = torch.randn(2, 8, dtype=torch.bfloat16)
 
-    out = qdq.export_deploy(x)
-
-    assert out["qweight"].dtype == torch.uint8
-    assert out["qweight"].shape == x.shape
-    assert out["weight_scale"] is None
+    with pytest.raises(NotImplementedError, match="export_deploy is not supported"):
+        qdq.export_deploy(x)
+    with pytest.raises(NotImplementedError, match="deploy is not supported"):
+        qdq.deploy(x)
