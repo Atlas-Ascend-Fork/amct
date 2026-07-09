@@ -745,7 +745,7 @@ class TestGRUPTQA8W4A16W8(unittest.TestCase):
     def setUp(self):
         sys.modules["torch_npu"] = MagicMock()
 
-    def _run_ptq(self, cfg, tag):
+    def run_ptq(self, cfg, tag):
         config_file = os.path.join(self.temp_folder, tag + '_config.json')
         record_file = os.path.join(self.temp_folder, tag + '_record.txt')
         modified_model = os.path.join(self.temp_folder, tag + '_modified.onnx')
@@ -768,10 +768,10 @@ class TestGRUPTQA8W4A16W8(unittest.TestCase):
                           'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)')
 
     def test_gru_ptq_a8w4_e2e(self):
-        self._run_ptq(self.a8w4_cfg, 'a8w4')
+        self.run_ptq(self.a8w4_cfg, 'a8w4')
 
     def test_gru_ptq_a16w8_e2e(self):
-        self._run_ptq(self.a16w8_cfg, 'a16w8')
+        self.run_ptq(self.a16w8_cfg, 'a16w8')
 
 
 class TestLSTMPTQA8W4A16W8(unittest.TestCase):
@@ -809,7 +809,7 @@ class TestLSTMPTQA8W4A16W8(unittest.TestCase):
     def setUp(self):
         sys.modules["torch_npu"] = MagicMock()
 
-    def _run_ptq(self, cfg, tag):
+    def run_ptq(self, cfg, tag):
         config_file = os.path.join(self.temp_folder, tag + '_config.json')
         record_file = os.path.join(self.temp_folder, tag + '_record.txt')
         modified_model = os.path.join(self.temp_folder, tag + '_modified.onnx')
@@ -832,10 +832,10 @@ class TestLSTMPTQA8W4A16W8(unittest.TestCase):
                           'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)')
 
     def test_lstm_ptq_a8w4_e2e(self):
-        self._run_ptq(self.a8w4_cfg, 'a8w4')
+        self.run_ptq(self.a8w4_cfg, 'a8w4')
 
     def test_lstm_ptq_a16w8_e2e(self):
-        self._run_ptq(self.a16w8_cfg, 'a16w8')
+        self.run_ptq(self.a16w8_cfg, 'a16w8')
 
 
 class TestConvTransposePTQA8W4(unittest.TestCase):
