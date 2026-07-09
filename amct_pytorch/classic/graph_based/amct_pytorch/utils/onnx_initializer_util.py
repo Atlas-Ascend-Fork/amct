@@ -28,8 +28,10 @@ RAW_DATA = 'raw_data'
 
 
 def pack_int4_to_int8(arr):
-    """把每两个 INT4 值（值域 [-8,7]）打包成一个 int8 字节：低 4 位存第一个、高 4 位存第二个。
-    奇数长度末尾补 0。返回 np.int8 数组。"""
+    """
+    把每两个 INT4 值（值域 [-8,7]）打包成一个 int8 字节：低 4 位存第一个、高 4 位存第二个。
+    奇数长度末尾补 0。返回 np.int8 数组。
+    """
     flat = np.asarray(arr).reshape(-1).astype(np.int8)
     if flat.size % 2 == 1:
         flat = np.append(flat, np.int8(0))
@@ -111,8 +113,10 @@ class TensorProtoHelper():
 
     @classmethod
     def resolve_np_dtype(cls, np_type):
-        """Resolve a np dtype string to a numpy/ml_dtypes type.
-        'int4' has no numpy attribute, so map it to ml_dtypes.int4."""
+        """
+        Resolve a np dtype string to a numpy/ml_dtypes type.
+        'int4' has no numpy attribute, so map it to ml_dtypes.int4.
+        """
         if np_type == 'int4':
             return ml_dtypes.int4
         return getattr(np, np_type)
