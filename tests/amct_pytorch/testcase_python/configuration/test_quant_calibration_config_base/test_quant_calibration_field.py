@@ -214,6 +214,13 @@ class TestQuantCalibrationField(unittest.TestCase):
         self.assertIn(KV_DATA_QUANT_CONFIG, ret.get(MATMUL_1_LAYER_NAME))
         self.assertEqual(ret.get(MATMUL_1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get(ACT_ALGO), 'hfmg')
 
+    def test_kv_cache_root_config_build_unsupported_layer_raises(self):
+        obj = field.KVCacheRootConfig(ModuleHelper, CAPACITY)
+        with self.assertRaises(ValueError):
+            obj.build(
+                {'not_a_kv_layer': {KV_DATA_QUANT_CONFIG: {ACT_ALGO: 'hfmg'}}},
+                {'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})
+
     def test_calibration_general_config_item_build_default(self):
         obj = field.CalibrationGeneralConfigItem(ModuleHelper, CAPACITY)
         obj.build_default({'kv_cache_quant_layers': {MATMUL_1_LAYER_NAME: LINEAR}})

@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,12 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from torch import nn
-import torch.nn.functional as F
 from transformers.cache_utils import DynamicCache
-
-from amct_pytorch.common.utils.vars import HIFLOAT8
-from amct_pytorch.common.utils.log import LOGGER
 
 
 class NpuDeepseekV3AttentionQuant(torch.nn.Module):
@@ -28,6 +23,7 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
     Function: Customized torch.nn.Module of the NpuDeepseekV3AttentionQuant class.
     APIs: forward.
     """
+
     def __init__(self, quant_module):
         """
         Function: init objective.
@@ -43,9 +39,15 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
         self.scale_k = quant_module.scale_k.to(self.device).to(self.output_dtype)
         self.scale_v = quant_module.scale_v.to(self.device).to(self.output_dtype)
 
-
     @torch.no_grad()
-    def forward(self, hidden_states, position_embeddings, attention_mask, past_key_values, **kwargs):
+    def forward(
+        self,
+        hidden_states,
+        position_embeddings,
+        attention_mask,
+        past_key_values,
+        **kwargs,
+    ):
         """
         Function: NpuDeepseekV3AttentionQuant forward function.
         Args:
@@ -53,9 +55,15 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
         """
         if past_key_values is None:
             past_key_values = DynamicCache()
-        kv_states = self._hook_kv_states(past_key_values)
-        fp_out = self.ori_module(hidden_states, position_embeddings, attention_mask, 
-                                past_key_values=past_key_values, **kwargs)
+        # Side effect: monkey-patches past_key_values.update to inject KV quantization hook
+        self._hook_kv_states(past_key_values)
+        fp_out = self.ori_module(
+            hidden_states,
+            position_embeddings,
+            attention_mask,
+            past_key_values=past_key_values,
+            **kwargs,
+        )
         return fp_out
 
     def _hook_kv_states(self, past_key_values):
@@ -65,23 +73,44 @@ class NpuDeepseekV3AttentionQuant(torch.nn.Module):
 
         def hook_update(key_states, value_states, layer_idx, **kwargs):
             import torch_npu
+
             device = key_states.device
-            quantized_key_states = \
-                torch_npu.npu_quantize(key_states.npu(), self.scale_k.npu(), None, dtype=torch_npu.hifloat8,
-                                    div_mode=False)
-            quantized_value_states = \
-                torch_npu.npu_quantize(value_states.npu(), self.scale_v.npu(), None, dtype=torch_npu.hifloat8,
-                                    div_mode=False)
-            key_states, value_states = \
-                update_function(quantized_key_states.to(device), quantized_value_states.to(device), layer_idx, **kwargs)
-            dequantized_key_states = \
-                torch_npu.npu_anti_quant(key_states.npu(), self.scale_k.to(torch.float32).npu(),
-                                        src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
-            dequantized_value_states = \
-                torch_npu.npu_anti_quant(value_states.npu(), self.scale_v.to(torch.float32).npu(),
-                                        src_dtype=torch_npu.hifloat8, dst_dtype=self.output_dtype)
-            
-            return dequantized_key_states.to(device), dequantized_value_states.to(device)
-        
+            quantized_key_states = torch_npu.npu_quantize(
+                key_states.npu(),
+                self.scale_k.npu(),
+                None,
+                dtype=torch_npu.hifloat8,
+                div_mode=False,
+            )
+            quantized_value_states = torch_npu.npu_quantize(
+                value_states.npu(),
+                self.scale_v.npu(),
+                None,
+                dtype=torch_npu.hifloat8,
+                div_mode=False,
+            )
+            key_states, value_states = update_function(
+                quantized_key_states.to(device),
+                quantized_value_states.to(device),
+                layer_idx,
+                **kwargs,
+            )
+            dequantized_key_states = torch_npu.npu_anti_quant(
+                key_states.npu(),
+                self.scale_k.to(torch.float32).npu(),
+                src_dtype=torch_npu.hifloat8,
+                dst_dtype=self.output_dtype,
+            )
+            dequantized_value_states = torch_npu.npu_anti_quant(
+                value_states.npu(),
+                self.scale_v.to(torch.float32).npu(),
+                src_dtype=torch_npu.hifloat8,
+                dst_dtype=self.output_dtype,
+            )
+
+            return dequantized_key_states.to(device), dequantized_value_states.to(
+                device
+            )
+
         past_key_values.update = hook_update
         past_key_values.is_hooked = True

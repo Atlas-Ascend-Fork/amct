@@ -141,7 +141,7 @@ Required parameter explanation:
 
 #### Multi-Card Environment
 To improve training efficiency, we provide training scripts under multi-card
-For multi-card environment, please refer to script [ptq_multi_npu](https://gitcode.com/fujun19/amct_llm/blob/master/examples/ptq_multi_npu.sh)
+For multi-card environment, please refer to script [ptq_multi_npu](../../ptq_multi_npu.sh)
 
 For more detailed parameter explanation, please refer to [Parameter Description](../../../docs/zh/AMCT_Pytorch_LLM.md#35-ptq-parameters)
 
