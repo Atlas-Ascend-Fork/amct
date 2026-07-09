@@ -71,8 +71,49 @@ def _quant_args(algos=None, quant_target=("attn-linear",)):
     )
 
 
+class _FakeV4Compressor(nn.Module):
+    def __init__(self, dim, compress_ratio, head_dim, rope_head_dim, rotate=False):
+        super().__init__()
+        self.compress_ratio = compress_ratio
+        self.overlap = compress_ratio == 4
+        self.rotate = rotate
+        self.head_dim = head_dim
+        self.rope_head_dim = rope_head_dim
+        coff = 1 + self.overlap
+        self.norm = nn.Identity()
+        self.ape = nn.Parameter(torch.zeros(compress_ratio, coff * head_dim))
+        self.freqs_cis = None
+        self.wkv = nn.Linear(dim, coff * head_dim, bias=False)
+        self.wgate = nn.Linear(dim, coff * head_dim, bias=False)
+
+
+class _FakeV4Indexer(nn.Module):
+    def __init__(self, attention):
+        super().__init__()
+        self.n_local_heads = attention.n_local_heads
+        self.head_dim = attention.head_dim
+        self.rope_head_dim = attention.rope_head_dim
+        self.compress_ratio = attention.compress_ratio
+        self.index_topk = 1
+        self.softmax_scale = 1.0
+        self.freqs_cis = None
+        self.wq_b = nn.Linear(
+            attention.q_lora_rank,
+            self.n_local_heads * self.head_dim,
+            bias=False,
+        )
+        self.weights_proj = nn.Linear(attention.dim, self.n_local_heads, bias=False)
+        self.compressor = _FakeV4Compressor(
+            attention.dim,
+            self.compress_ratio,
+            self.head_dim,
+            self.rope_head_dim,
+            rotate=True,
+        )
+
+
 class _FakeV4Attention(nn.Module):
-    def __init__(self):
+    def __init__(self, compress_ratio=0, with_indexer=False):
         super().__init__()
         self.layer_id = 0
         self.dim = 16
@@ -81,16 +122,16 @@ class _FakeV4Attention(nn.Module):
         self.q_lora_rank = 8
         self.o_lora_rank = 4
         self.head_dim = 4
-        self.rope_head_dim = 0
+        self.rope_head_dim = 4
         self.n_local_groups = 2
         self.window_size = 4
-        self.compress_ratio = 0
+        self.compress_ratio = compress_ratio
         self.eps = 1e-6
         self.softmax_scale = 1.0
         self.attn_sink = nn.Parameter(torch.zeros(self.n_local_heads))
         self.q_norm = nn.Identity()
         self.kv_norm = nn.Identity()
-        self.register_buffer("freqs_cis", torch.empty(8, 0))
+        self.register_buffer("freqs_cis", torch.ones(8, self.rope_head_dim // 2, dtype=torch.complex64))
 
         self.wq_a = nn.Linear(self.dim, self.q_lora_rank, bias=False)
         self.wq_b = nn.Linear(
@@ -105,6 +146,14 @@ class _FakeV4Attention(nn.Module):
             bias=False,
         )
         self.wo_b = nn.Linear(self.n_local_groups * self.o_lora_rank, self.dim, bias=False)
+        if self.compress_ratio:
+            self.compressor = _FakeV4Compressor(
+                self.dim,
+                self.compress_ratio,
+                self.head_dim,
+                self.rope_head_dim,
+            )
+            self.indexer = _FakeV4Indexer(self) if with_indexer else None
 
 
 class _RecordingMatmul(nn.Module):
@@ -149,5 +198,24 @@ def test_quant_v4_attention_attn_cache_uses_quantized_matmul_path():
     output = qattn.sparse_attn(query, kv, qattn.attn_sink.float(), topk_idxs, qattn.softmax_scale)
 
     assert output.shape == query.shape
+    assert qattn.qk_matmul.calls == 1
+    assert qattn.pv_matmul.calls == 1
+
+
+def test_quant_v4_attention_compressed_indexer_forward_aligns_topk_device():
+    qattn = QuantV4Attention(
+        _quant_args(quant_target=[]),
+        _FakeV4Attention(compress_ratio=4, with_indexer=True),
+    )
+    qattn.qk_matmul = _RecordingMatmul()
+    qattn.pv_matmul = _RecordingMatmul(transpose_right=False)
+    x = torch.randn(1, 8, 16)
+
+    output = qattn(x)
+
+    assert qattn.compress_ratio > 0
+    assert qattn.indexer is not None
+    assert output.shape == x.shape
+    assert output.device == x.device
     assert qattn.qk_matmul.calls == 1
     assert qattn.pv_matmul.calls == 1
