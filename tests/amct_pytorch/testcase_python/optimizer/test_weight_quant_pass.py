@@ -163,18 +163,10 @@ class TestWeightQuantPass(unittest.TestCase):
             msg='expected {} packed bytes, got {}'.format(n_elements // 2, packed.size),
         )
 
-    def test_recurrence_weight_int4(self):
-        """wts_type=INT4: quant_recurrence_weight must call weight_quant_np with num_bits=4, not hardcoded 8."""
-
-        class RNNModule(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.lstm = torch.nn.LSTM(10, 20, 1)
-
-            def forward(self, input_data, hx):
-                return self.lstm(input_data, hx)
-
-        model = RNNModule()
+    @staticmethod
+    def build_lstm_int4_case():
+        """Build the LSTM graph node and INT4 records for recurrence-weight UT."""
+        model = models.LSTMNet(10, 20, 1)
         tmp_onnx = BytesIO()
         Parser.export_onnx(
             model,
@@ -194,10 +186,17 @@ class TestWeightQuantPass(unittest.TestCase):
                 'wts_type': 'INT4',
             }
         }
+        return node, records
 
+    @staticmethod
+    def run_recurrence_weight_with_spy(node, records):
+        """Run quant_recurrence_weight while spying on weight_quant_np / set_data.
+
+        Returns (mock_wqnp, set_data_type_args) so callers can assert the
+        num_bits actually passed and the stored dtype.
+        """
         passer = InsertWeightQuantPass(records)
 
-        # Spy on weight_quant_np to capture the num_bits argument actually used.
         # Before fix: hardcoded 8 is passed regardless of get_dst_num_bits.
         # After fix: get_dst_num_bits returns 4 and 4 is passed.
         weight_quant_module = (
@@ -209,16 +208,16 @@ class TestWeightQuantPass(unittest.TestCase):
             'optimizer.insert_weight_quant_pass.TensorProtoHelper.set_data'
         )
         # Capture set_data calls via a closure that delegates to the real method.
-        _real_set_data = (
+        real_set_data = (
             TensorProtoHelper.set_data.__wrapped__
             if hasattr(TensorProtoHelper.set_data, '__wrapped__')
             else TensorProtoHelper.set_data
         )
         set_data_type_args = []
 
-        def _spy_set_data(self_inner, data, type_string=None, dims=None):
+        def spy_set_data(self_inner, data, type_string=None, dims=None):
             set_data_type_args.append(type_string)
-            return _real_set_data(self_inner, data, type_string, dims)
+            return real_set_data(self_inner, data, type_string, dims)
 
         with (
             patch(
@@ -233,9 +232,17 @@ class TestWeightQuantPass(unittest.TestCase):
                     fromlist=['weight_quant_np'],
                 ).weight_quant_np,
             ) as mock_wqnp,
-            patch(set_data_module, _spy_set_data),
+            patch(set_data_module, spy_set_data),
         ):
             passer.quant_recurrence_weight(node)
+        return mock_wqnp, set_data_type_args
+
+    def test_recurrence_weight_int4(self):
+        """wts_type=INT4: quant_recurrence_weight must call weight_quant_np with num_bits=4, not hardcoded 8."""
+        node, records = self.build_lstm_int4_case()
+        mock_wqnp, set_data_type_args = self.run_recurrence_weight_with_spy(
+            node, records
+        )
 
         # Assert weight_quant_np was called with num_bits=4, not 8
         self.assertTrue(mock_wqnp.called, 'weight_quant_np was never called')
