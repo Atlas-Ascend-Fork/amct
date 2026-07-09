@@ -13,4 +13,4 @@ python -m amct_pytorch.eval \
      --eval_mode quant \
      --quant_target mlp attn-linear \
      --quant_dtype mxfp \
-     --bit_config amct_pytorch/configs/w4a4.yaml
+     --bit_config amct_pytorch/configs/w4a16.yaml
