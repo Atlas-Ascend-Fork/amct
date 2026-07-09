@@ -54,8 +54,16 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
 
 
 def get_pileval(tokenizer, n_samples, seq_len=512):
+    # testdata = load_dataset(
+    #     'mit-han-lab/pile-val-backup', split='validation'
+    # )
+    # Local `hf download mit-han-lab/pile-val-backup --local-dir <path>` snapshot,
+    # a sibling of WIKITEXT2_LOCAL_PATH's directory. Override via PILEVAL_LOCAL_PATH.
+    local_path = os.environ.get("PILEVAL_LOCAL_PATH", "./data/pile-val-backup")
     testdata = load_dataset(
-        'mit-han-lab/pile-val-backup', split='validation'
+        "json",
+        data_files={"validation": os.path.join(local_path, "val.jsonl.zst")},
+        split="validation",
     )
 
     samples = pileval_awq(testdata, tokenizer, n_samples, seq_len)
