@@ -280,12 +280,12 @@ class TestGRUQATA8W4(unittest.TestCase):
         self.assertTrue(os.path.exists(config_file), 'retrain config file must be created')
 
         # verify the cfg entry actually drove weight INT4 into the generated config
-        _GLOBAL_KEYS = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _wts_int4_seen = False
         for _lname, _lcfg in _cfg_after.items():
-            if _lname in _GLOBAL_KEYS or not isinstance(_lcfg, dict):
+            if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
             if 'retrain_weight_config' in _lcfg and \
                     _lcfg['retrain_weight_config'].get('dst_type') == 'INT4':
@@ -383,12 +383,12 @@ class TestGRUQATA16W8(unittest.TestCase):
         self.assertTrue(os.path.exists(config_file), 'retrain config file must be created')
 
         # verify the cfg entry actually drove activation INT16 into the generated config
-        _GLOBAL_KEYS = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _act_int16_seen = False
         for _lname, _lcfg in _cfg_after.items():
-            if _lname in _GLOBAL_KEYS or not isinstance(_lcfg, dict):
+            if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
             if 'retrain_data_config' in _lcfg and \
                     _lcfg['retrain_data_config'].get('dst_type') == 'INT16':
@@ -489,12 +489,12 @@ class TestLSTMQATA8W4(unittest.TestCase):
         self.assertTrue(os.path.exists(config_file), 'LSTM retrain config file must be created')
 
         # verify the cfg entry actually drove weight INT4 into the generated config
-        _GLOBAL_KEYS = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _wts_int4_seen = False
         for _lname, _lcfg in _cfg_after.items():
-            if _lname in _GLOBAL_KEYS or not isinstance(_lcfg, dict):
+            if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
             if 'retrain_weight_config' in _lcfg and \
                     _lcfg['retrain_weight_config'].get('dst_type') == 'INT4':
@@ -595,12 +595,12 @@ class TestLSTMQATA16W8(unittest.TestCase):
         self.assertTrue(os.path.exists(config_file), 'LSTM retrain config file must be created')
 
         # verify the cfg entry actually drove activation INT16 into the generated config
-        _GLOBAL_KEYS = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _act_int16_seen = False
         for _lname, _lcfg in _cfg_after.items():
-            if _lname in _GLOBAL_KEYS or not isinstance(_lcfg, dict):
+            if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
             if 'retrain_data_config' in _lcfg and \
                     _lcfg['retrain_data_config'].get('dst_type') == 'INT16':
