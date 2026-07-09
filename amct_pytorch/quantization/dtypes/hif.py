@@ -48,9 +48,8 @@ class QuantDequantHif(torch.nn.Module):
             raise ValueError(f"HiFloat only supports 8-bit && 4-bit quantization, got {self.bits}.")
 
     def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
-        raise ValueError(f"Export quantized weight and params of HiFloat-{self.bits} are not supported yet.")
+        raise NotImplementedError(f"HiFloat-{self.bits} export_deploy is not supported yet.")
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
-        raise ValueError(f"Deployment of HiFloat-{self.bits} will be supported are not supported yet.")
-
+        raise NotImplementedError(f"HiFloat-{self.bits} deploy is not supported yet.")
 
