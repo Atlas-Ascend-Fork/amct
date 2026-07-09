@@ -639,6 +639,7 @@ class TestLSTMQATA16W8(unittest.TestCase):
         self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'),
                         'LSTM A16W8 QAT deploy model must be saved')
 
+
 class TestConvLinearPTQA8W4(unittest.TestCase):
     """PTQ A8W4 end-to-end for Conv/Linear ops via config_defination cfg.
 
