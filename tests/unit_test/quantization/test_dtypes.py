@@ -41,7 +41,6 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     weight_dequant,
 )
 from amct_pytorch.quantization.dtypes.hif import QuantDequantHif
-from amct_pytorch.common.utils.quant_util import hifloat8_supported
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -316,16 +315,13 @@ def test_weight_dequant_block_size_one_direct_multiply():
     assert torch.allclose(result, expected.to(torch.get_default_dtype()))
 
 
-@pytest.mark.skipif(
-    not hifloat8_supported(),
-    reason="HiFloat8 quantization requires native torch_npu hifloat8 runtime.",
-)
 def test_hif_forward_shape_and_dtype_preserved():
     qdq = QuantDequantHif(bits=8)
     x = torch.randn(2, 8, dtype=torch.bfloat16).npu()
 
     y = qdq(x)
 
+    assert torch.mean(abs(x - y)) > 0.0, f"HiFloat8 quant-dequant diff should be larger than 0."
     assert y.shape == x.shape
     assert y.dtype == x.dtype
 
