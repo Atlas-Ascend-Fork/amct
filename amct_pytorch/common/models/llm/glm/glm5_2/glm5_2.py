@@ -35,6 +35,7 @@ from amct_pytorch.common.models.llm.qwen.moe_common import (
     is_packed_experts,
     pack_gated_expert_weights,
 )
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
@@ -51,6 +52,8 @@ class GLM5_2(BaseModel):
     Handles MLA attention, DSA indexer, MoE gated experts (packed), and
     shared experts.
     """
+
+    MLP_LINEAR_NAMES = ("gate_proj", "down_proj", "up_proj")
 
     def __init__(self, args):
         super().__init__(args)
@@ -140,33 +143,47 @@ class GLM5_2(BaseModel):
 
 
     def cache_scheme(self):
-        """Return cache scheme dict for deploy config.
-
-        Aligns with infer repo convert_model.py:
-        - kv_cache_scheme: only quantized for mxfp (8-bit float, group-wise).
-          For non-mxfp (c16/int) the key is kept but set to None to signal
-          "no KV cache quantization".
-        - li_cache_scheme: always present, type follows quant_dtype
-          (mxfp -> "float", otherwise "int").
-        """
+        """Return cache scheme dict for deploy config."""
+        bit_policy = ensure_bit_policy(self.args)
         is_mxfp = self.args.quant_dtype == "mxfp"
+        is_w4a8 = bit_policy.w_bits == 4
         li_cache_scheme = {
             "type": "float" if is_mxfp else "int",
             "num_bits": 8,
         }
         if not is_mxfp:
+            # infer repo keeps kv_cache_scheme=None for non-mxfp
             return {"kv_cache_scheme": None, "li_cache_scheme": li_cache_scheme}
-        return {
+        scheme = {
             "kv_cache_scheme": {
                 "num_bits": 8,
                 "type": "float",
                 "strategy": "group",
                 "group_size": 128,
-                "dynamic": True,
-                "symmetric": True,
+                "dynamic": "true",  # string, not bool, per infer repo
+                "symmetric": "true",  # string, not bool, per infer repo
             },
             "li_cache_scheme": li_cache_scheme,
+            "activation_scheme": "dynamic",  # mxfp-only field per infer repo
         }
+        if not is_w4a8:
+            # infer repo uses mxfp8 (not compressed-tensors) for w8a8-mx
+            scheme["quant_method"] = "mxfp8"
+        return scheme
+
+    def bits_scheme(self):
+        """Per-group (targets, w_bits, a_bits) for the deploy config groups."""
+        bit_policy = ensure_bit_policy(self.args)
+        routed = bit_policy["moe.routed"].default
+        groups = [
+            {"targets": ["Linear"], "w_bits": bit_policy.w_bits, "a_bits": bit_policy.a_bits},
+        ]
+        # group_1 (MoEGMM) only for w4a8, per infer repo
+        if routed.w == 4:
+            groups.append(
+                {"targets": ["MoEGMM"], "w_bits": routed.w, "a_bits": routed.a},
+            )
+        return groups
 
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
@@ -188,6 +205,109 @@ class GLM5_2(BaseModel):
                     continue
 
             yield f"{weight_prefix}{name}.weight", module
+
+    def generate_tensorwise_quant_layers(self):
+        """Return {weight_name_without_.weight: bit} for tensor-wise deploy."""
+        bit_policy = ensure_bit_policy(self.args)
+        num_hidden_layers = self.config.num_hidden_layers
+        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
+        num_layers = num_hidden_layers + num_nextn  # tensor mode covers MTP layers; computed independently to avoid block/tensor confusion
+        num_experts = self.config.n_routed_experts
+        first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
+        indexer_types = getattr(self.config, "indexer_types", None)
+
+        quant_layers = {}
+        for i in range(num_layers):
+            # MLP branch: i >= first_k_dense_replace is MoE, otherwise dense
+            if i >= first_k_dense_replace:
+                # routed experts: bit from moe.routed (4 for w4a8, else 8)
+                for j in range(num_experts):
+                    for n in self.MLP_LINEAR_NAMES:
+                        quant_layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = (
+                            bit_policy["moe.routed"][n].w
+                        )
+                # shared experts: bit from moe.shared (always 8)
+                for n in self.MLP_LINEAR_NAMES:
+                    quant_layers[f"model.layers.{i}.mlp.shared_experts.{n}"] = (
+                        bit_policy["moe.shared"][n].w
+                    )
+            else:
+                # dense MLP: bit from mlp (always 8)
+                for n in self.MLP_LINEAR_NAMES:
+                    quant_layers[f"model.layers.{i}.mlp.{n}"] = (
+                        bit_policy["mlp"][n].w
+                    )
+
+            # attn low-rank projections: quantized only in mxfp mode (excluded from dict in INT mode)
+            if self.args.quant_dtype == "mxfp":
+                quant_layers[f"model.layers.{i}.self_attn.q_a_proj"] = (
+                    bit_policy["attn-linear"]["q_a_proj"].w
+                )
+                quant_layers[f"model.layers.{i}.self_attn.kv_a_proj_with_mqa"] = (
+                    bit_policy["attn-linear"]["kv_a_proj_with_mqa"].w
+                )
+            # attn main projections: quantized in all modes
+            quant_layers[f"model.layers.{i}.self_attn.o_proj"] = (
+                bit_policy["attn-linear"]["o_proj"].w
+            )
+            quant_layers[f"model.layers.{i}.self_attn.q_b_proj"] = (
+                bit_policy["attn-linear"]["q_b_proj"].w
+            )
+            # indexer weights: only for "full" layers and MTP layers (IndexShare: "shared" layers have no indexer tensors)
+            if self._is_indexer_layer(i, num_hidden_layers, indexer_types):
+                quant_layers[f"model.layers.{i}.self_attn.indexer.wq_b"] = (
+                    bit_policy["attn-linear"]["wq_b"].w
+                )
+                # indexer.wk: quantized only in mxfp mode
+                if self.args.quant_dtype == "mxfp":
+                    quant_layers[f"model.layers.{i}.self_attn.indexer.wk"] = (
+                        bit_policy["attn-linear"]["wk"].w
+                    )
+        return quant_layers
+
+    def generate_tensorwise_ignore_layers(self):
+        """Return module names written into config.json ignore list.
+
+        Aligns with infer repo glm_5_2/utils/convert_model.py generate_ignore_item.
+        """
+        num_hidden_layers = self.config.num_hidden_layers
+        num_nextn = getattr(self.config, "num_nextn_predict_layers", 0)
+        num_layers = num_hidden_layers + num_nextn
+        first_k_dense_replace = getattr(self.config, "first_k_dense_replace", 0)
+        indexer_types = getattr(self.config, "indexer_types", None)
+
+        ignore = []
+        for i in range(num_layers):
+            # indexer ignore items: only for "full" layers and MTP layers
+            if self._is_indexer_layer(i, num_hidden_layers, indexer_types):
+                # indexer.wk ignored only in non-mxfp mode
+                if self.args.quant_dtype != "mxfp":
+                    ignore.append(f"model.layers.{i}.self_attn.indexer.wk")
+                ignore.append(f"model.layers.{i}.self_attn.indexer.weights_proj")
+            # low-rank projections ignored only in non-mxfp mode
+            if self.args.quant_dtype != "mxfp":
+                ignore.append(f"model.layers.{i}.self_attn.kv_a_proj_with_mqa")
+                ignore.append(f"model.layers.{i}.self_attn.q_a_proj")
+            # kv_b_proj always ignored
+            ignore.append(f"model.layers.{i}.self_attn.kv_b_proj")
+            # mlp.gate (router) ignored for MoE layers
+            if i >= first_k_dense_replace:
+                ignore.append(f"model.layers.{i}.mlp.gate")
+            # MTP layer extra ignores
+            if i >= num_hidden_layers:
+                ignore.append(f"model.layers.{i}.eh_proj")
+                ignore.append(f"model.layers.{i}.shared_head.head")
+        ignore.append("lm_head")  # always ignored per infer repo
+        return ignore
+
+    @staticmethod
+    def _is_indexer_layer(layer_idx, num_hidden_layers, indexer_types):
+        """Check if a layer owns indexer weights (IndexShare: only "full" + MTP layers)."""
+        if layer_idx >= num_hidden_layers:
+            return True
+        if not indexer_types:
+            return True
+        return indexer_types[layer_idx] == "full"
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
         block = super()._build_block_for_forward(
