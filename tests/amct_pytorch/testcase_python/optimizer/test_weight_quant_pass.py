@@ -163,8 +163,7 @@ class TestWeightQuantPass(unittest.TestCase):
             msg='expected {} packed bytes, got {}'.format(n_elements // 2, packed.size),
         )
 
-    @staticmethod
-    def build_lstm_int4_case():
+    def build_lstm_int4_case(self):
         """Build the LSTM graph node and INT4 records for recurrence-weight UT."""
         model = models.LSTMNet(10, 20, 1)
         tmp_onnx = BytesIO()
@@ -188,8 +187,7 @@ class TestWeightQuantPass(unittest.TestCase):
         }
         return node, records
 
-    @staticmethod
-    def run_recurrence_weight_with_spy(node, records):
+    def run_recurrence_weight_with_spy(self, node, records):
         """Run quant_recurrence_weight while spying on weight_quant_np / set_data.
 
         Returns (mock_wqnp, set_data_type_args) so callers can assert the
