@@ -79,10 +79,7 @@ class TensorProtoHelper():
         'COMPLEX128': [data_type.COMPLEX128, 'double_data', 'complex128'],
         'BFLOAT16': [data_type.BFLOAT16, RAW_DATA, 'float32'],
     }
-    # TensorProto.INT4 只在较新的 onnx 版本中定义，旧版本 getattr 会缺失该枚举，
-    # 若在类定义时直接引用会导致模块 import 失败（"enum datatype has no value
-    # defined for name 'INT4'"），进而使所有依赖本模块的用例批量报错。
-    # 因此按可用性动态加入，缺失时不注册 INT4（旧 onnx 环境本就不支持原生 INT4）。
+    # 旧版 onnx 无 INT4 枚举，动态注册避免 import 时报错
     if hasattr(data_type, 'INT4'):
         data_type_maps['INT4'] = [data_type.INT4, RAW_DATA, 'int4']  # ml_dtypes.int4
     proto_value_id = 0
