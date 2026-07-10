@@ -312,6 +312,19 @@ class TestWeightQuantPass(unittest.TestCase):
             'deploy packed size must be half the INT4 element count',
         )
 
-        # simulate the full finalize loop body (no save)
+        # simulate the full finalize loop body (no save), mirroring _finalize_node:
+        # dims must be updated to the packed size so the INT8 tensor is self-consistent.
         weight_helper.clear_data()
-        weight_helper.set_data(packed_deploy, dtype_deploy)
+        weight_helper.set_data(packed_deploy, dtype_deploy, dims=list(packed_deploy.shape))
+
+        # after packing, prod(dims) * sizeof(INT8) must equal raw_data byte length
+        self.assertEqual(
+            list(weight_node.proto.dims),
+            [packed_deploy.size],
+            'deploy INT4-packed weight dims must match packed INT8 element count',
+        )
+        self.assertEqual(
+            int(np.prod(weight_node.proto.dims)),
+            len(weight_node.proto.raw_data),
+            'INT8 tensor must be self-consistent: prod(dims) == raw_data bytes',
+        )
