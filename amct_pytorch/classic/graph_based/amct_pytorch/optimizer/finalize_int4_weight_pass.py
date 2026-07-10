@@ -67,10 +67,6 @@ class FinalizeInt4WeightPass(BaseFusionPass):
         int4_vals = helper.get_data()
         data, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
         helper.clear_data()
-        # dims note: set_data switches data_type to INT8 but intentionally
-        # preserves the original element-count dims. The deploy model is an
-        # AMCT-specific format; the Ascend runtime identifies packed INT4-in-INT8
-        # weights via the op_data_type attribute, not dims x sizeof. Do NOT update
-        # dims here without auditing the runtime consumer.
-        helper.set_data(data, dtype_str)
+        # 两个 INT4 pack 成一个 INT8，元素数减半，dims 同步更新为打包后大小
+        helper.set_data(data, dtype_str, dims=list(data.shape))
 
