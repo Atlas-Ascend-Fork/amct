@@ -17,10 +17,13 @@
 import torch
 import torch.nn.functional as F
 
+from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.classic.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.common.utils.quant_util import hifloat4_fake_quant
 
 
+@ALGO_REGISTRY.register(name="higptq", description="HiGPTQ Hessian-based single-pass calibrator (HiFloat4)",
+                         targets=("calibration",))
 class HiGPTQuant(GPTQuant):
     """
     Function: GPTQ variant for the HiFloat4 (hifx4) block floating-point format.
