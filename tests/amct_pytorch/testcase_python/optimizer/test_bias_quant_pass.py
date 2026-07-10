@@ -123,8 +123,13 @@ class TestInsertBiasQuantPass(unittest.TestCase):
         quant_bias = passer.bias_quant_rnn(bias, layer_name)
         self.assertEqual(quant_bias.dtype, np.int32)
 
-    def test_rnn_bias_quant_a8w4_halfsplit_deqscale(self):
-        """A8W4 bias: output is int32; first half deq_scale=scale_w*scale_d, second=scale_r*scale_h."""
+    @staticmethod
+    def build_a8w4_bias_case():
+        """Build records/bias and run bias_quant_rnn for the A8W4 half-split case.
+
+        Returns a dict with the scales, the raw bias, the split length and the
+        quantized bias so callers can assert the per-half deq_scale.
+        """
         layer_name = 'lstm_a8w4'
         # Use distinct non-unit scales so we can verify the correct scale pair
         # is applied to each half.
@@ -155,6 +160,26 @@ class TestInsertBiasQuantPass(unittest.TestCase):
 
         passer = InsertBiasQuantPass(records)
         quant_bias = passer.bias_quant_rnn(bias, layer_name)
+        return {
+            'scale_w': scale_w,
+            'scale_d': scale_d,
+            'scale_r': scale_r,
+            'scale_h': scale_h,
+            'bias': bias,
+            'bias_len': bias_len,
+            'quant_bias': quant_bias,
+        }
+
+    def test_rnn_bias_quant_a8w4_halfsplit_deqscale(self):
+        """A8W4 bias: output is int32; first half deq_scale=scale_w*scale_d, second=scale_r*scale_h."""
+        case = self.build_a8w4_bias_case()
+        scale_w = case['scale_w']
+        scale_d = case['scale_d']
+        scale_r = case['scale_r']
+        scale_h = case['scale_h']
+        bias = case['bias']
+        bias_len = case['bias_len']
+        quant_bias = case['quant_bias']
 
         # 1. Output dtype must be int32 regardless of weight bit-width
         self.assertEqual(
