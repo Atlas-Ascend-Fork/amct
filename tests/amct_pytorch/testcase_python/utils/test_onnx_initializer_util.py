@@ -30,6 +30,9 @@ class TestInt4Pack(unittest.TestCase):
 
 
 class TestNativeInt4(unittest.TestCase):
+    @unittest.skipUnless(
+        hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4'
+    )
     def test_set_get_native_int4(self):
         t = TensorProto()
         helper = TensorProtoHelper(t)

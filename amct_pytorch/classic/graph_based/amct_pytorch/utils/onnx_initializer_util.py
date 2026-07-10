@@ -199,8 +199,10 @@ class TensorProtoHelper():
         Return: None
         '''
         if type_string is not None:
-            data_type = self.data_type_maps[type_string][self.proto_value_id]
-            self.tensor.data_type = data_type
+            entry = self.data_type_maps.get(type_string)
+            if entry is None:
+                raise ValueError(f'unsupported data type {type_string} in current onnx')
+            self.tensor.data_type = entry[self.proto_value_id]
         if dims is not None:
             self.tensor.ClearField('dims')
             self.tensor.dims.extend(dims)
