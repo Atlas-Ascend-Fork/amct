@@ -18,11 +18,12 @@
 import torch
 from loguru import logger
 
-from amct_pytorch.algorithms.quant.higptq import HiGPTQuant
+from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.common.models.llm.common.quant_apply import (
     set_model_act_quant_state, set_model_weight_quant_state)
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
+from amct_pytorch.quantization.modules.quant_base import get_algo_names_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 from .base_solver import BaseSolver
@@ -35,8 +36,19 @@ from .base_solver import BaseSolver
 _HIFLOAT4_WEIGHTS_CFG = {'quant_type': 'hifloat4', 'symmetric': True, 'strategy': 'channel'}
 
 
-@SOLVER_REGISTRY.register(name="gptq", description="HiGPTQ Hessian-based blockwise calibration solver")
-class GptqSolver(BaseSolver):
+@SOLVER_REGISTRY.register(name="calibration", description="Single-pass (no-gradient) calibration solver")
+class CalibrationSolver(BaseSolver):
+    """Orchestrates no-gradient, single-pass-over-calibration-data PTQ algorithms.
+
+    Unlike BlockwiseSolver (which drives ALGO_REGISTRY "weight"/"activation"/"structure"
+    plugins composed inline into QuantLinear/ActivationQuantizer's forward), algorithms in
+    this category (targets=("calibration",), e.g. higptq) are looked up by name and
+    driven directly by this solver -- each one gets its own dispatch branch below, since
+    their construction/call conventions differ from each other (and from the weight/
+    activation/structure plugin shape). Add a new branch here when a new calibration-only
+    algorithm is registered.
+    """
+
     granularity = "block"
 
     def __init__(self, args, layer_idx, model, max_iters=100):
@@ -47,11 +59,12 @@ class GptqSolver(BaseSolver):
         kwargs = forward_kwargs or {}
         self.model = self.model.to(self.args.device)
 
-        if self.args.algos:
-            logger.warning(
-                "--solver gptq ignores --algos (got {}); HiGPTQ does not use the "
-                "WeightQuantizer algo plugin slot.", self.args.algos,
+        algo_names = get_algo_names_by_target(self.args, "calibration")
+        if len(algo_names) != 1:
+            raise ValueError(
+                f"CalibrationSolver supports exactly one calibration algo per run, got {algo_names}"
             )
+        algo_name = algo_names[0]
 
         quant_linears = {
             name: module for name, module in self.model.named_modules()
@@ -63,13 +76,22 @@ class GptqSolver(BaseSolver):
         num_batches = len(data_loader)
         if num_batches == 0:
             return None
+
+        if algo_name == "higptq":
+            self._run_higptq(algo_name, quant_linears, data_loader, kwargs, num_batches)
+        else:
+            raise ValueError(f"CalibrationSolver: no dispatch branch for algo '{algo_name}'")
+        return None
+
+    def _run_higptq(self, algo_name, quant_linears, data_loader, kwargs, num_batches):
+        algo_cls = ALGO_REGISTRY.get(algo_name)  # HiGPTQuant
         quant_config = {
             'batch_num': num_batches,
             'weights_cfg': dict(_HIFLOAT4_WEIGHTS_CFG),
             'inputs_cfg': {'enable_quant': False},
         }
         wrapped = {
-            name: HiGPTQuant(module.linear, name, quant_config)
+            name: algo_cls(module.linear, name, quant_config)
             for name, module in quant_linears.items()
         }
 
@@ -100,8 +122,8 @@ class GptqSolver(BaseSolver):
                 for name, higptq in wrapped.items():
                     if name not in captured:
                         raise RuntimeError(
-                            f"GptqSolver: layer '{name}' was not reached during the calibration "
-                            "forward pass; cannot accumulate its Hessian."
+                            f"CalibrationSolver: layer '{name}' was not reached during the "
+                            "calibration forward pass; cannot accumulate its Hessian."
                         )
                     # Drives HiGPTQuant's own calibrate/optimize state machine (forward()):
                     # accumulates the Hessian on every call, and on the batch_num-th call runs
@@ -114,8 +136,7 @@ class GptqSolver(BaseSolver):
             set_model_weight_quant_state(self.model, True)
             set_model_act_quant_state(self.model, True)
 
-        logger.info("Layer {}: HiGPTQ finished for {} linear(s).", self.layer_idx, len(wrapped))
-        return None
+        logger.info("Layer {}: {} finished for {} linear(s).", self.layer_idx, algo_name, len(wrapped))
 
     def finalize(self):
         return PtqParamHandler.export_module(self.model)
