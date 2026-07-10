@@ -27,13 +27,16 @@ from ...amct_pytorch.utils.log import LOGGER
 class FinalizeInt4WeightPass(BaseFusionPass):
     """
     Function: Pack INT4 weight storage for the deploy model: two INT4 nibbles
-        into one INT8 byte. Covers both the main weight and the RNN
-        recurrence_weight.
+        into one INT8 byte. Applies to every layer whose weight is configured
+        as INT4 (Conv/ConvTranspose/Linear/LSTM/GRU). The main weight is packed
+        for all such layers; recurrence_weight is packed additionally for RNN
+        ops only (non-RNN ops have no recurrence_weight and are skipped).
     APIs: match_pattern, do_pass
 
-    This pass must run while the original LSTM/GRU nodes are still in the graph
-    (i.e. BEFORE ReplaceRNNPass on the deploy path), so that QuantOpInfo can
-    locate the weight tensors via the original node types.
+    For RNN layers this pass must run while the original LSTM/GRU nodes are
+    still in the graph (i.e. BEFORE ReplaceRNNPass on the deploy path), so that
+    QuantOpInfo can locate the recurrence_weight tensor via the original node
+    type.
     """
 
     def __init__(self, records):
