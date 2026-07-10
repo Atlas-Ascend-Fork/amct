@@ -40,12 +40,17 @@ from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logg
 
 class LlmPtqWorkflow:
 
-    # Algo names that select the HiGPTQ solver. GPTQ-family algorithms accumulate a
-    # Hessian over the whole calibration set and closed-form-update the raw fp weight --
-    # they don't fit the ALGO_REGISTRY "weight/activation/structure" plugin shape used
-    # by lwc/lac/autoround/omniquant, so --algos gptq/higptq is treated as a solver
-    # selector instead of being registered there.
-    _GPTQ_SOLVER_ALGOS = frozenset({"gptq", "higptq"})
+    # Algo names that select the CalibrationSolver. These are registered in ALGO_REGISTRY
+    # with targets=("calibration",) (see amct_pytorch/algorithms/quant/higptq.py), so they
+    # never get picked up by WeightQuantizer/ActivationQuantizer/structure's normal
+    # get_algo_names_by_target lookups (those only ever ask for "weight"/"activation"/
+    # "structure") -- no need to strip them from args.algos before QuantLinear is built.
+    # "gptq" (the plain int/mxfp/hifloat8 GPTQuant) and "higptq" (the HiFloat4-specific
+    # HiGPTQuant) are two distinct algorithms, not aliases -- only "higptq" is wired up
+    # here today. When adding a new no-gradient, single-forward-pass algorithm (including
+    # plain "gptq"), add its name here AND register it in ALGO_REGISTRY with
+    # targets=("calibration",).
+    _CALIBRATION_ALGOS = frozenset({"higptq"})
 
     def __init__(self, args):
         self.args = args
@@ -55,14 +60,10 @@ class LlmPtqWorkflow:
         self.device = args.device
         self.granularity = args.granularity
 
-        matched = self._GPTQ_SOLVER_ALGOS.intersection(args.algos)
+        matched = self._CALIBRATION_ALGOS.intersection(args.algos)
         if matched:
-            # Strip before any QuantLinear gets built: ALGO_REGISTRY has no 'gptq'/
-            # 'higptq' entry, so leaving them in args.algos would make WeightQuantizer's
-            # normal algo lookup (get_algo_names_by_target) raise KeyError.
-            self.args.algos = [algo for algo in self.args.algos if algo not in self._GPTQ_SOLVER_ALGOS]
-            logger.info("Detected {} in --algos; routing this run to the 'gptq' solver.", sorted(matched))
-            self.solver_key = "gptq"
+            logger.info("Detected {} in --algos; routing this run to the 'calibration' solver.", sorted(matched))
+            self.solver_key = "calibration"
         else:
             self.solver_key = "block"
 
@@ -102,7 +103,7 @@ class LlmPtqWorkflow:
         # granularity picks which run loop executes (_run_blockwise vs _run_modelwise);
         # solver_key independently picks which Solver class that loop uses. They used to
         # be conflated (solver looked up by granularity), which meant there was no way to
-        # plug in a non-gradient solver like GptqSolver without also changing the loop.
+        # plug in a non-gradient solver like CalibrationSolver without also changing the loop.
         solver_cls = SOLVER_REGISTRY.get(self.solver_key)
         if self.granularity == "block":
             results = self._run_blockwise(solver_cls)

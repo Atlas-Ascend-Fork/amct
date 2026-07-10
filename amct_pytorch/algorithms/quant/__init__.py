@@ -34,6 +34,7 @@ def register_algorithms():
     from .auto_round import AutoRound
     from .omniquant import OmniQuant
     from .flatquant import FlatQuant
+    from .higptq import HiGPTQuant
 
     _REGISTERED = True
 
