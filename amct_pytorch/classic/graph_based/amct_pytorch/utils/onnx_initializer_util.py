@@ -78,8 +78,13 @@ class TensorProtoHelper():
         'COMPLEX64': [data_type.COMPLEX64, 'float_data', 'complex64'],
         'COMPLEX128': [data_type.COMPLEX128, 'double_data', 'complex128'],
         'BFLOAT16': [data_type.BFLOAT16, RAW_DATA, 'float32'],
-        'INT4': [data_type.INT4, RAW_DATA, 'int4'],  # ml_dtypes.int4
     }
+    # TensorProto.INT4 只在较新的 onnx 版本中定义，旧版本 getattr 会缺失该枚举，
+    # 若在类定义时直接引用会导致模块 import 失败（"enum datatype has no value
+    # defined for name 'INT4'"），进而使所有依赖本模块的用例批量报错。
+    # 因此按可用性动态加入，缺失时不注册 INT4（旧 onnx 环境本就不支持原生 INT4）。
+    if hasattr(data_type, 'INT4'):
+        data_type_maps['INT4'] = [data_type.INT4, RAW_DATA, 'int4']  # ml_dtypes.int4
     proto_value_id = 0
     data_location_id = 1
     np_type_id = 2
@@ -207,9 +212,11 @@ class TensorProtoHelper():
         data_location_new = self._rematch_data_location(data_location, self.tensor.data_type)
         if self.externel_data:
             return self.set_external_data(data)
+        int4_entry = self.data_type_maps.get('INT4')
         if data_location == RAW_DATA:
             # INT4: nibble-pack two INT4 values into each INT8 byte
-            if self.tensor.data_type == self.data_type_maps['INT4'][self.proto_value_id]:
+            if int4_entry is not None and \
+                    self.tensor.data_type == int4_entry[self.proto_value_id]:
                 packed = pack_int4_to_int8(data)
                 setattr(self.tensor, RAW_DATA, bytes(packed.flatten().astype('uint8')))
             else:
