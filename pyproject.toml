@@ -34,9 +34,6 @@ env = [
 source = ["amct_pytorch"]
 omit = [
     "*/experimental/*",
-    "*/cli/*",
-    "**/__init__.py",
-    "*/common/models/llm/deepseek/*",
 ]
 
 [tool.coverage.report]
