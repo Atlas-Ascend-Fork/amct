@@ -251,29 +251,31 @@ def test_build_block_solver_supports_block_kwarg_alias():
 # ---- __init__ ------------------------------------------------------------
 
 
-def test_init_sets_solver_key_default_and_custom():
-    bp = SimpleNamespace()
+def test_init_sets_solver_key_to_calibration_when_gptq_in_algos():
     args = SimpleNamespace(
         quant_target=[QUANT_TARGET_MLP], granularity="block",
         output_dir="/tmp/ptq", model_name="qwen3",
-        device="cpu", solver="modelwise",
+        device="cpu", algos=["higptq"],
     )
     wf = LlmPtqWorkflow(args)
-    assert wf.solver_key == "modelwise"
+    assert wf.solver_key == "calibration"
     assert wf.quant_target == QUANT_TARGET_MLP
     assert wf.model_name == "qwen3"
     assert wf.pipeline is None
     assert wf.data_provider is None
+    # ALGO_REGISTRY filters "higptq" out of weight/activation/structure lookups via its
+    # targets=("calibration",) metadata, so __init__ no longer needs to strip it out.
+    assert wf.args.algos == ["higptq"]
 
 
-def test_init_solver_key_defaults_to_blockwise():
+def test_init_solver_key_defaults_to_block():
     args = SimpleNamespace(
         quant_target=["attn-linear"], granularity="block",
         output_dir="/tmp", model_name="qwen3",
-        device="cpu",
+        device="cpu", algos=[],
     )
     wf = LlmPtqWorkflow(args)
-    assert wf.solver_key == "blockwise"
+    assert wf.solver_key == "block"
 
 
 # ---- run with model granularity (calls _run_modelwise) -------------------

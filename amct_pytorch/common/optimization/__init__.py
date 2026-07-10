@@ -30,6 +30,6 @@ def register_solvers():
         return
 
     from .blockwise_solver import BlockwiseSolver  # noqa: F401
-    from .gptq_solver import GptqSolver  # noqa: F401
+    from .calibration_solver import CalibrationSolver  # noqa: F401
 
     _REGISTERED = True
