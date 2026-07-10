@@ -90,13 +90,13 @@ class Qwen3_5(BaseModel):
         decoder_layer = self.block(layer_idx)
 
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
-            self.apply_quant_attn(decoder_layer)
+            self.apply_quant_attn(decoder_layer, layer_idx)
         if "mlp" in self.quant_target:
             self.apply_quant_moe_mlp(decoder_layer)
         return decoder_layer
 
-    def apply_quant_attn(self, decoder_layer):
-        layer_type = decoder_layer.layer_type
+    def apply_quant_attn(self, decoder_layer, layer_idx=None):
+        layer_type = self.config.layer_types[layer_idx] if layer_idx is not None else "full_attention"
         if layer_type == "linear_attention":
             attn_cls = QuantQwen35LinearAttn
             quant_attn = getattr(decoder_layer, "linear_attn", None)
