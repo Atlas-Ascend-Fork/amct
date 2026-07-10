@@ -123,8 +123,7 @@ class TestInsertBiasQuantPass(unittest.TestCase):
         quant_bias = passer.bias_quant_rnn(bias, layer_name)
         self.assertEqual(quant_bias.dtype, np.int32)
 
-    @staticmethod
-    def build_a8w4_bias_case():
+    def build_a8w4_bias_case(self):
         """Build records/bias and run bias_quant_rnn for the A8W4 half-split case.
 
         Returns a dict with the scales, the raw bias, the split length and the
