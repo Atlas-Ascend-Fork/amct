@@ -43,6 +43,22 @@ class TestNativeInt4(unittest.TestCase):
         out = helper.get_data()
         np.testing.assert_array_equal(out.astype(np.int8), data)
 
+    @unittest.skipUnless(
+        hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4'
+    )
+    def test_external_int4_roundtrip(self):
+        # external data 路径下 INT4 需 pack/unpack 对称，且不因 numpy 无 int4 崩溃
+        t = TensorProto()
+        t.data_type = TensorProto.INT4
+        t.dims.extend([4, 2])  # 8 个 INT4
+        t.data_location = 1  # EXTERNAL
+        data = np.array([1, -2, 7, -8, 3, -4, 0, 5], dtype=np.int8)
+        TensorProtoHelper(t).set_external_data(data)
+        self.assertEqual(len(t.raw_data), 4)  # 8 个 INT4 → packed → 4 字节
+        out, _ = TensorProtoHelper(t).get_external_data()
+        self.assertEqual(list(out.shape), [4, 2])
+        np.testing.assert_array_equal(out.astype(np.int8).flatten(), data)
+
 
 if __name__ == "__main__":
     unittest.main()

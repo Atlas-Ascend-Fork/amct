@@ -266,6 +266,11 @@ class TensorProtoHelper():
                 quantized_data = bool(data.value)
 
         if quantized_data:
+            if tensor_np_type == 'int4':
+                # raw_data 为 packed 字节，unpack 成 prod(dims) 个 INT4 再 reshape
+                packed = np.frombuffer(self.tensor.raw_data, np.uint8)
+                np_value = unpack_int8_to_int4(packed, int(np.prod(self.tensor.dims)))
+                return np_value.reshape(self.tensor.dims), length
             np_value = np.frombuffer(self.tensor.raw_data, tensor_np_type)
             np_value = np_value.reshape(self.tensor.dims)
             return np_value, length
@@ -282,6 +287,14 @@ class TensorProtoHelper():
                 raw_data = f.read(length)
             return raw_data, length
  
+        if tensor_np_type == 'int4':
+            # 外部文件存 packed 字节，按 uint8 读入后 unpack 成 prod(dims) 个 INT4
+            byte_len = length if length > 0 else -1
+            packed = np.fromfile(file_name, np.uint8, byte_len, '', offset)
+            if length == -1:
+                length = len(packed)
+            np_value = unpack_int8_to_int4(packed, int(np.prod(self.tensor.dims)))
+            return np_value.reshape(self.tensor.dims), length
         item_size = np.dtype(tensor_np_type).itemsize
         if length > 0:
             data_length = int(length / item_size)
@@ -312,7 +325,12 @@ class TensorProtoHelper():
         quantized_data = self.tensor.external_data.add()
         quantized_data.key = 'amct_quantized_raw_data'
         quantized_data.value = str(1)
-        setattr(self.tensor, RAW_DATA, bytes(data.flatten()))
+        if self.map_np_type(self.tensor.data_type) == 'int4':
+            # 与 raw_data 路径一致：INT4 nibble-pack 成 packed 字节后存储
+            packed = pack_int4_to_int8(data)
+            setattr(self.tensor, RAW_DATA, bytes(packed.flatten().astype('uint8')))
+        else:
+            setattr(self.tensor, RAW_DATA, bytes(data.flatten()))
 
     def save_external_data(self, external_file):
         """
@@ -325,7 +343,9 @@ class TensorProtoHelper():
         tensor_dtype = self.tensor.data_type
         np_type = self.map_np_type(tensor_dtype)
         data_location = self.map_data_location(tensor_dtype)
-        byte_size = np.dtype(np_type).itemsize
+        # INT4 以 packed 字节存储，按 uint8 搬运字节流；其余类型按自身 dtype
+        store_np_type = np.uint8 if np_type == 'int4' else self.resolve_np_dtype(np_type)
+        byte_size = np.dtype(store_np_type).itemsize
         # the list is index of TensorProto.Datetype 
         if tensor_dtype not in TensorProtoHelper.data_type.values() \
             or tensor_dtype == TensorProtoHelper.data_type.STRING:
@@ -339,11 +359,11 @@ class TensorProtoHelper():
             raw_data = self.tensor.raw_data
             if raw_data:
                 data_length = len(self.tensor.raw_data)
-                np_value = np.frombuffer(self.tensor.raw_data, getattr(np, np_type))
+                np_value = np.frombuffer(self.tensor.raw_data, store_np_type)
                 self.tensor.ClearField(RAW_DATA)
             else:
                 data_length = len(getattr(self.tensor, data_location)) * byte_size
-                np_value = np.array(getattr(self.tensor, data_location), getattr(np, np_type))
+                np_value = np.array(getattr(self.tensor, data_location), store_np_type)
                 self.tensor.ClearField(data_location)
             self.export_external_data(np_value, external_file, data_length)
             return
@@ -353,7 +373,7 @@ class TensorProtoHelper():
                 self.tensor.ClearField(data_location)
             else:
                 data_length = len(self.tensor.raw_data)
-                np_value = np.frombuffer(self.tensor.raw_data, getattr(np, np_type))
+                np_value = np.frombuffer(self.tensor.raw_data, store_np_type)
                 self.tensor.ClearField(RAW_DATA)
             self.export_external_data(np_value, external_file, data_length)
             return
