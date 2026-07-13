@@ -1227,3 +1227,83 @@ class TestConfigParse(unittest.TestCase):
             parse_config(model_bfloat16, cfg, AlgorithmRegistry)
         except Exception as e:
             self.assertIn(f'One src_op only support one algorithm, current algo', str(e))
+
+    def test_int8_minmax_cfg_skip_lm_head(self):
+        """INT8_MINMAX_WEIGHT_QUANT_CFG should skip lm_head layer by default."""
+        class ModelWithLmHead(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear1 = nn.Linear(64, 64)
+                self.lm_head = nn.Linear(64, 128)
+            def forward(self, x):
+                return self.lm_head(self.linear1(x))
+        model = ModelWithLmHead().to(torch.bfloat16)
+        detail_config = parse_config(model, INT8_MINMAX_WEIGHT_QUANT_CFG, AlgorithmRegistry)
+        self.assertIn('linear1', detail_config)
+        self.assertNotIn('lm_head', detail_config)
+        self.assertEqual(len(detail_config.keys()), 1)
+
+    def test_int8_minmax_cfg_has_skip_layers(self):
+        """INT8_MINMAX_WEIGHT_QUANT_CFG should contain skip_layers with lm_head."""
+        self.assertIn('skip_layers', INT8_MINMAX_WEIGHT_QUANT_CFG)
+        self.assertIn('lm_head', INT8_MINMAX_WEIGHT_QUANT_CFG['skip_layers'])
+
+
+class TestNpuWeightQuantDimLimit(unittest.TestCase):
+    """Tests for NPU weight-quant operator dimension limit (65535) in check_quant_op_constraint."""
+
+    def setUp(self):
+        from amct_pytorch.common.config.parser import check_quant_op_constraint
+        from amct_pytorch.common.config.fields import QuantConfig
+        self.check_fn = check_quant_op_constraint
+        self.base_cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
+            },
+            'algorithm': {'minmax'},
+            'skip_layers': {'lm_head'}
+        }
+        self.quant_config = QuantConfig(self.base_cfg, AlgorithmRegistry)
+
+    def test_normal_linear_passes(self):
+        """Linear layer with dims <= 65535 should pass."""
+        mod = nn.Linear(4096, 4096)
+        result = self.check_fn(mod, 'layer1', 'NOT_QUANTIZE int8', self.quant_config)
+        self.assertTrue(result)
+
+    def test_boundary_65535_passes(self):
+        """Linear layer with dim == 65535 should pass."""
+        mod = nn.Linear(4096, 65535, bias=False)
+        result = self.check_fn(mod, 'layer_boundary', 'NOT_QUANTIZE int8', self.quant_config)
+        self.assertTrue(result)
+
+    def test_output_dim_exceeds_limit_skipped(self):
+        """Linear layer with output_features > 65535 should be skipped."""
+        mod = nn.Linear(4096, 65536, bias=False)
+        result = self.check_fn(mod, 'lm_head', 'NOT_QUANTIZE int8', self.quant_config)
+        self.assertFalse(result)
+
+    def test_large_vocab_lm_head_skipped(self):
+        """lm_head with vocab_size ~152K (like Qwen2) should be skipped."""
+        mod = nn.Linear(4096, 152064, bias=False)
+        result = self.check_fn(mod, 'lm_head', 'NOT_QUANTIZE int8', self.quant_config)
+        self.assertFalse(result)
+
+    def test_input_dim_exceeds_limit_skipped(self):
+        """Linear layer with input_features > 65535 should be skipped."""
+        mod = nn.Linear(65536, 4096, bias=False)
+        result = self.check_fn(mod, 'large_input_layer', 'NOT_QUANTIZE int8', self.quant_config)
+        self.assertFalse(result)
+
+    def test_non_linear_module_passes(self):
+        """Non-Linear modules should always pass the constraint check."""
+        mod = nn.Conv2d(3, 64, kernel_size=3)
+        result = self.check_fn(mod, 'conv1', 'NOT_QUANTIZE int8', self.quant_config)
+        self.assertTrue(result)
+
+    def test_both_dims_exceed_limit_skipped(self):
+        """Linear layer with both dims > 65535 should be skipped."""
+        mod = nn.Linear(100000, 100000, bias=False)
+        result = self.check_fn(mod, 'huge_layer', 'NOT_QUANTIZE int8', self.quant_config)
+        self.assertFalse(result)
