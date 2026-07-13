@@ -197,13 +197,13 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     # for both k (input features) and n (output features). Layers like lm_head
     # in large-vocabulary models (e.g. Qwen2 with vocab_size ~152K) will exceed
     # this limit and cause runtime failures during PPL evaluation.
-    NPU_WEIGHT_QUANT_DIM_LIMIT = 65535
-    if mod.weight.shape[0] > NPU_WEIGHT_QUANT_DIM_LIMIT or mod.weight.shape[1] > NPU_WEIGHT_QUANT_DIM_LIMIT:
+    npu_weight_quant_dim_limit = 65535
+    if mod.weight.shape[0] > npu_weight_quant_dim_limit or mod.weight.shape[1] > npu_weight_quant_dim_limit:
         LOGGER.logd(
             "layer:{} cannot be quantized, weight shape [{}, {}] exceeds NPU "
             "weight-quant operator dimension limit (max {})".format(
                 layer_name, mod.weight.shape[0], mod.weight.shape[1],
-                NPU_WEIGHT_QUANT_DIM_LIMIT
+                npu_weight_quant_dim_limit
             )
         )
         return False
