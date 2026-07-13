@@ -73,6 +73,7 @@ INT8_MINMAX_WEIGHT_QUANT_CFG = {
         },
     },
     'algorithm': {'minmax'},
+    'skip_layers': {'lm_head'}
 }
 
 
