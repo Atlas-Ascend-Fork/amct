@@ -17,7 +17,10 @@
 # ----------------------------------------------------------------------------
 import os
 import numpy as np
-import ml_dtypes
+try:
+    import ml_dtypes
+except ImportError:
+    ml_dtypes = None  # 仅原生 INT4 映射需要，缺失时在用到 int4 处再报错
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto # pylint: disable=E0401
 
@@ -34,6 +37,12 @@ def pack_int4_to_int8(arr):
     """
     flat = np.asarray(arr).reshape(-1).astype(np.int8)
     if flat.size % 2 == 1:
+        LOGGER.logw(
+            'INT4 weight has odd length {}, padding one zero for packing'.format(
+                flat.size
+            ),
+            'pack_int4_to_int8',
+        )
         flat = np.append(flat, np.int8(0))
     low = flat[0::2] & 0x0F
     high = flat[1::2] & 0x0F
@@ -120,6 +129,8 @@ class TensorProtoHelper():
         'int4' has no numpy attribute, so map it to ml_dtypes.int4.
         """
         if np_type == 'int4':
+            if ml_dtypes is None:
+                raise ImportError('ml_dtypes is required for native INT4 tensors')
             return ml_dtypes.int4
         return getattr(np, np_type)
 
