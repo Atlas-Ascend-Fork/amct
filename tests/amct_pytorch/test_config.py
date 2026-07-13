@@ -1346,18 +1346,38 @@ class TestNpuWeightQuantDimLimit(unittest.TestCase):
             nn.Linear(4096, 32000, bias=False), 'llama2_lm_head',
             'NOT_QUANTIZE int8', self.quant_config))
 
-    def test_dim_limit_independent_of_dtype_comb(self):
-        """The NPU dim limit check should apply regardless of quant_data_comb.
+    def test_dim_limit_only_for_weight_only_combos(self):
+        """The NPU dim limit check should ONLY apply to weight-only quantization.
 
-        Verifies the check fires before any dtype-specific constraint checks,
-        so oversized layers are always caught.
+        Weight-only combos (NOT_QUANTIZE *) use aclnnWeightQuantBatchMatmulV2
+        which has the 65535 limit. Full quantization combos use different operators
+        and should NOT be affected by this constraint.
         """
         large_layer = nn.Linear(4096, 65536, bias=False)
+        # Weight-only combos should be rejected by dim limit
         for comb in ['NOT_QUANTIZE int8', 'NOT_QUANTIZE int4',
-                     'float8_e4m3fn float4_e2m1']:
+                     'NOT_QUANTIZE float8_e4m3fn', 'NOT_QUANTIZE float4_e2m1']:
             self.assertFalse(
                 self.check_fn(large_layer, 'oversized', comb, self.quant_config),
-                f"Dim limit check should reject oversized layer for comb={comb}"
+                f"Dim limit check should reject oversized layer for weight-only comb={comb}"
+            )
+
+    def test_full_quant_combos_not_affected_by_dim_limit(self):
+        """Full quantization combos should NOT be rejected by the NPU dim limit.
+
+        Combos like int8 int8, float8_e4m3fn float8_e4m3fn use different NPU
+        operators that do not have the 65535 dimension constraint.
+        """
+        large_layer = nn.Linear(4096, 65536, bias=False)
+        full_quant_combs = ['int8 int8', 'float8_e4m3fn float8_e4m3fn']
+        for comb in full_quant_combs:
+            # These should NOT return False due to dim limit
+            # (they may return True or be caught by other checks, but not dim limit)
+            result = self.check_fn(large_layer, 'oversized_full_quant', comb, self.quant_config)
+            # int8 int8 with large dims should pass (no dim limit for full quant)
+            self.assertTrue(
+                result,
+                f"Full quant comb={comb} should NOT be rejected by NPU dim limit check"
             )
 
     def test_dim_limit_does_not_mask_other_checks(self):
