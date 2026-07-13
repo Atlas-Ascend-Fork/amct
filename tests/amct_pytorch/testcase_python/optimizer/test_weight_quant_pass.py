@@ -131,20 +131,19 @@ class TestWeightQuantPass(unittest.TestCase):
 
     def test_deploy_packs_int4_weight(self):
         # 4 个 INT4 权重 → deploy 应 pack 成 2 个 INT8 字节
-        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
-            finalize_int4_weight_for_deploy,
+        from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+            pack_int4_to_int8,
         )
 
         int4_vals = np.array([1, -2, 7, -8], dtype=np.int8)
-        packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
-        self.assertEqual(dtype_str, 'INT8')
+        packed = pack_int4_to_int8(int4_vals)
         self.assertEqual(packed.size, 2)
 
     def test_deploy_packs_int4_recurrence_weight(self):
         """LSTM A8W4: deploy finalize packs recurrence_weight INT4 → INT8 (packed.size == n//2).
         Guards the ReplaceRNNPass ordering bug where recurrence_weight was silently skipped."""
-        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
-            finalize_int4_weight_for_deploy,
+        from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+            pack_int4_to_int8,
         )
 
         # Simulate a recurrence_weight tensor for an LSTM with hidden_size=20,
@@ -153,9 +152,8 @@ class TestWeightQuantPass(unittest.TestCase):
         rng = np.random.default_rng(42)
         int4_vals = rng.integers(-8, 8, size=n_elements, dtype=np.int8)
 
-        packed, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
+        packed = pack_int4_to_int8(int4_vals)
 
-        self.assertEqual(dtype_str, 'INT8')
         # Two INT4 nibbles packed into each INT8 byte → exactly n_elements // 2 bytes.
         self.assertEqual(
             packed.size,
@@ -270,8 +268,8 @@ class TestWeightQuantPass(unittest.TestCase):
     def test_conv_int4_finalize_deploy_no_crash(self):
         """C-1 regression: Conv A8W4 deploy finalize loop must not crash.
         get_recurrence_weight_node must return None (not raise) for non-RNN nodes."""
-        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
-            finalize_int4_weight_for_deploy,
+        from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+            pack_int4_to_int8,
         )
         from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
             QuantOpInfo,
@@ -304,18 +302,17 @@ class TestWeightQuantPass(unittest.TestCase):
         int4_vals = np.clip(raw_data.flatten().astype(np.int8), -8, 7)
 
         # deploy path
-        packed_deploy, dtype_deploy = finalize_int4_weight_for_deploy(int4_vals)
-        self.assertEqual(dtype_deploy, 'INT8', 'deploy dtype must be INT8')
+        packed_deploy = pack_int4_to_int8(np.asarray(int4_vals).reshape(-1))
         self.assertEqual(
             packed_deploy.size,
             n_elements // 2,
             'deploy packed size must be half the INT4 element count',
         )
 
-        # simulate the full finalize loop body (no save), mirroring _finalize_node:
+        # simulate the full pack loop body (no save), mirroring _pack_int4_weight:
         # dims must be updated to the packed size so the INT8 tensor is self-consistent.
         weight_helper.clear_data()
-        weight_helper.set_data(packed_deploy, dtype_deploy, dims=list(packed_deploy.shape))
+        weight_helper.set_data(packed_deploy, 'INT8', dims=list(packed_deploy.shape))
 
         # after packing, prod(dims) * sizeof(INT8) must equal raw_data byte length
         self.assertEqual(

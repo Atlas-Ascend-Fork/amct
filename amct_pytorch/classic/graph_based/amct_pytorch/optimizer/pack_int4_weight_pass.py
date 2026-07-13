@@ -15,16 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import numpy as np
+
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from ...amct_pytorch.optimizer.insert_weight_quant_pass import (
-    finalize_int4_weight_for_deploy,
+from ...amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+    pack_int4_to_int8,
 )
-from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.log import LOGGER
 
 
-class FinalizeInt4WeightPass(BaseFusionPass):
+class PackInt4WeightPass(BaseFusionPass):
     """
     Function: Pack INT4 weight storage for the deploy model: two INT4 nibbles
         into one INT8 byte. Applies to every layer whose weight is configured
@@ -50,17 +52,17 @@ class FinalizeInt4WeightPass(BaseFusionPass):
         return self.records[node.name].get("wts_type") == "INT4"
 
     def do_pass(self, graph, object_node, model=None):
-        """Finalize the INT4 weight (and recurrence_weight for RNN) of object_node."""
+        """Pack the INT4 weight (and recurrence_weight for RNN) of object_node."""
         weight_node = QuantOpInfo.get_weight_node(object_node)
-        self._finalize_node(weight_node)
+        self._pack_int4_weight(weight_node)
         recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(object_node)
-        self._finalize_node(recurrence_weight_node)
+        self._pack_int4_weight(recurrence_weight_node)
         LOGGER.logd(
-            "Finalize INT4 weight (deploy) for layer '{}'".format(object_node.name),
-            "FinalizeInt4WeightPass",
+            "Pack INT4 weight (deploy) for layer '{}'".format(object_node.name),
+            "PackInt4WeightPass",
         )
 
-    def _finalize_node(self, weight_node):
+    def _pack_int4_weight(self, weight_node):
         """Read INT4 values from a weight tensor node and write them back packed
         two-per-byte. No-op when weight_node is None (e.g. non-RNN ops have no
         recurrence_weight)."""
@@ -68,8 +70,8 @@ class FinalizeInt4WeightPass(BaseFusionPass):
             return
         helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
         int4_vals = helper.get_data()
-        data, dtype_str = finalize_int4_weight_for_deploy(int4_vals)
-        helper.clear_data()
         # 两个 INT4 pack 成一个 INT8，元素数减半，dims 同步更新为打包后大小
-        helper.set_data(data, dtype_str, dims=list(data.shape))
+        packed = pack_int4_to_int8(np.asarray(int4_vals).reshape(-1))
+        helper.clear_data()
+        helper.set_data(packed, 'INT8', dims=list(packed.shape))
 

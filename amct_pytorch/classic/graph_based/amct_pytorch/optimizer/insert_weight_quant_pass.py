@@ -20,18 +20,11 @@ import numpy as np
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.custom_op.arq.arq import weight_quant_np
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from ...amct_pytorch.utils.onnx_initializer_util import pack_int4_to_int8
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-
-
-def finalize_int4_weight_for_deploy(int4_weight):
-    """deploy 模型：两个 INT4 pack 成一个 INT8。返回 (packed_int8_array, 'INT8')。"""
-    packed = pack_int4_to_int8(np.asarray(int4_weight).reshape(-1))
-    return packed, 'INT8'
 
 
 class InsertWeightQuantPass(BaseFusionPass):
