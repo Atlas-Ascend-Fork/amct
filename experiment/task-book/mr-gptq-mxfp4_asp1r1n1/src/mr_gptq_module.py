@@ -14,6 +14,8 @@
 
 零改 amct 源码：import 本模块即运行时注册 'mr_gptq'。
 """
+import time
+
 import torch
 import torch.nn.functional as F
 
@@ -31,6 +33,8 @@ _INCREMENTS = {
 }
 
 _HADAMARD_K = 128  # block-wise Hadamard 尺寸（论文示 MXFP4 上 128 优于 32）
+
+_PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始）
 
 
 def _sylvester_hadamard(k):
@@ -126,6 +130,12 @@ class MRGPTQuant(GPTQuant):
         orig_device = self.weight.device
         orig_dtype = self.weight.dtype
 
+        _PROGRESS[0] += 1
+        _t0 = time.time()
+        print(f"[MR-GPTQ] layer #{_PROGRESS[0]:>3}  {self.layer_name}  "
+              f"(in={columns}, had={self._do_hadamard()}, "
+              f"scale_fit={self.increments['scale_fitting']})", flush=True)
+
         # 全程 CPU float32：小算子无 NPU 启动开销，Cholesky 亦在 CPU（~0.7s）
         weight = self.weight.detach().to("cpu", torch.float32)
         if self._do_hadamard():
@@ -179,6 +189,7 @@ class MRGPTQuant(GPTQuant):
 
         # 6) 恢复列顺序；此时 weight 每列已是量化值 → 即 fake-quant 权重
         weight = weight[:, invperm].to(orig_device, orig_dtype)
+        print(f"[MR-GPTQ]   ↳ done in {time.time() - _t0:.1f}s", flush=True)
         # mxfp4 无独立 scale/offset（含在共享指数里）
         return weight, None, None
 
