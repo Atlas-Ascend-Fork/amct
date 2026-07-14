@@ -36,6 +36,8 @@ _HADAMARD_K = 128  # block-wise Hadamard 尺寸（论文示 MXFP4 上 128 优于
 
 _PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始）
 
+_FP4_MAX_EXP = 2  # E2M1 最大指数（6 = 1.5·2²）；scale fitting 的 offset
+
 
 def _sylvester_hadamard(k):
     """归一化 Sylvester-Hadamard H_k/√k（k 须为 2 的幂），正交且对称。"""
@@ -75,42 +77,34 @@ class MRGPTQuant(GPTQuant):
             input_data = self._rotate_last_dim(input_data)
         super().update_hessian(input_data)
 
-    # ---- MXFP scale fitting（附录 H）：每 block 搜 MSE 最优共享指数 ---------
+    # ---- MXFP scale fitting（附录 H 式2/3）：E8M0 网格重映射 ----------------
     @staticmethod
-    def _fit_shared_exponent(weight, block_size=32, search=(-2, -1, 0, 1)):
-        """标准 cal_shared_exponent 给基准指数，再在 base+search 候选里
-        逐 block 选重构 MSE 最小的指数（仍是 E8M0 幂次，只是更贴数据分布）。
-        返回 [out, n_groups]，与 cal_shared_exponent 同形，可直接按列索引。
+    def _fit_block_scale(weight, block_size=32):
+        """把每块连续 log-scale 重映射到 [L_min,L_max] 的 256 级细网格，
+        得到次幂次(sub-power-of-two) scale，减小 E8M0 粗网格的 scale 量化误差。
+        L = log2(block_max) − FP4_MAX_EXP；q=clamp(round(255·(L−Lmin)/(Lmax−Lmin)),0,255)；
+        L_fit = Lmin + q·(Lmax−Lmin)/255；返回每块浮点 scale [out, n_groups]。
         """
-        base = torch.nan_to_num(cal_shared_exponent(weight, block_size))  # [out, n_groups]
         out, in_features = weight.shape
-        n_groups = base.shape[1]
+        n_groups = (in_features + block_size - 1) // block_size
         pad = n_groups * block_size - in_features
         w = F.pad(weight, (0, pad)) if pad else weight
-        w = w.reshape(out, n_groups, block_size)                          # [out, n_groups, 32]
+        w = w.reshape(out, n_groups, block_size)
+        block_max = w.abs().amax(dim=-1)                             # [out, n_groups]
+        L = torch.log2(block_max) - _FP4_MAX_EXP                     # 连续理想 log2(scale)
+        L = torch.where(torch.isfinite(L), L, torch.zeros_like(L))  # 空块→0
+        Lmin, Lmax = L.min(), L.max()
+        denom = (Lmax - Lmin).clamp_min(1e-6)
+        q = torch.clamp(torch.round(255.0 * (L - Lmin) / denom), 0.0, 255.0)
+        L_fit = Lmin + q * (Lmax - Lmin) / 255.0                    # 细网格
+        return torch.pow(2.0, L_fit)                                # 每块浮点 scale
 
-        best_se = base.clone()
-        best_err = torch.full_like(base, float("inf"))
-        for d in search:
-            se = base + d
-            scale = torch.pow(2.0, se).unsqueeze(-1)                      # [out, n_groups, 1]
-            q = float_to_fp4e2m1(w / scale) * scale
-            err = ((w - q) ** 2).sum(dim=-1)                             # [out, n_groups]
-            better = err < best_err
-            best_se = torch.where(better, se, best_se)
-            best_err = torch.where(better, err, best_err)
-        return best_se
-
-    # ---- 标准 block-32 MXFP4 单列量化 -------------------------------------
+    # ---- block-32 MXFP4 单列量化（按每块浮点 scale） ----------------------
     @staticmethod
-    def _quant_col_mxfp4(w, se_col):
-        """对单列 w[out] 用其组共享指数 se_col[out] 做 MXFP4 fake-quant。
-
-        w_scaled = w · 2^(-se) → round 到 E2M1 网格 → · 2^(se)。
-        """
-        scale = torch.pow(2.0, se_col)
-        q = float_to_fp4e2m1(w / scale)
-        return q * scale
+    def _quant_col(w, scale_col):
+        """对单列 w[out] 用其组 scale scale_col[out] 做 MXFP4 fake-quant：
+        w/scale → round 到 E2M1 网格 → ×scale。"""
+        return float_to_fp4e2m1(w / scale_col) * scale_col
 
     # ---- Hessian 逆的上三角 Cholesky（override 父类，全程 CPU） -------------
     def cal_hessian_inverse(self, hessian, columns):
@@ -148,13 +142,13 @@ class MRGPTQuant(GPTQuant):
         hessian[dead, dead] = 1
         weight[:, dead] = 0
 
-        # 2) 预计算 block-32 shared exponent（沿 in-features），静态、只算一次
+        # 2) 预计算每块浮点 scale（沿 in-features，32 一组），静态、只算一次
         #    形状 [out, ceil(in/32)]；后续每列按 原始列号//32 取用
-        #    增量①：scale fitting → 逐 block 搜 MSE 最优指数
+        #    增量②：scale fitting → E8M0 网格重映射（附录 H 式2/3）
         if self.increments["scale_fitting"]:
-            shared_exp = self._fit_shared_exponent(weight)
+            blk_scale = self._fit_block_scale(weight, self.group_size)
         else:
-            shared_exp = torch.nan_to_num(cal_shared_exponent(weight))
+            blk_scale = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(weight)))
 
         # 3) 激活重排：按 Hessian 对角（激活能量）排序处理列。
         #    stock GPTQ 亦如此；MR-GPTQ 的“静态激活重排”增量将在此细化。
@@ -179,8 +173,8 @@ class MRGPTQuant(GPTQuant):
                 w = w_block[:, i]
                 d = hinv_block[i, i]
                 col_idx = perm[i1 + i]                      # 原始列号
-                se_col = shared_exp[:, col_idx // self.group_size]
-                w_q = self._quant_col_mxfp4(w, se_col)
+                scale_col = blk_scale[:, col_idx // self.group_size]
+                w_q = self._quant_col(w, scale_col)
                 err = (w - w_q) / d
                 w_block[:, i:] -= err.unsqueeze(1).matmul(hinv_block[i, i:].unsqueeze(0))
                 err_block[:, i] = err
