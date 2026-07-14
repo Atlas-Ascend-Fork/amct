@@ -298,6 +298,7 @@ class TestWeightQuantPass(unittest.TestCase):
         self.assertIsNotNone(weight_node, 'Conv node must have a weight node')
 
         weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+        orig_dims = list(weight_node.proto.dims)
         raw_data = weight_helper.get_data()
         n_elements = raw_data.size
         int4_vals = np.clip(raw_data.flatten().astype(np.int8), -8, 7)
@@ -310,19 +311,20 @@ class TestWeightQuantPass(unittest.TestCase):
             'deploy packed size must be half the INT4 element count',
         )
 
-        # simulate the full pack loop body (no save), mirroring _pack_int4_weight:
-        # dims must be updated to the packed size so the INT8 tensor is self-consistent.
+        # simulate the pack loop body (no save), mirroring _pack_int4_weight:
+        # dims keep the original multi-dim shape (for the deploy consumer to
+        # rebuild the weight); raw_data holds the packed bytes (half the count).
         weight_helper.clear_data()
-        weight_helper.set_data(packed_deploy, 'INT8', dims=list(packed_deploy.shape))
+        weight_helper.set_data(packed_deploy, 'INT8')
 
-        # after packing, prod(dims) * sizeof(INT8) must equal raw_data byte length
+        # dims stay original; raw_data byte length is prod(dims) // 2 (INT4-packed)
         self.assertEqual(
             list(weight_node.proto.dims),
-            [packed_deploy.size],
-            'deploy INT4-packed weight dims must match packed INT8 element count',
+            orig_dims,
+            'deploy INT4-packed weight must keep original multi-dim shape',
         )
         self.assertEqual(
-            int(np.prod(weight_node.proto.dims)),
             len(weight_node.proto.raw_data),
-            'INT8 tensor must be self-consistent: prod(dims) == raw_data bytes',
+            (int(np.prod(orig_dims)) + 1) // 2,
+            'INT4-packed raw_data must be half the original element count',
         )
