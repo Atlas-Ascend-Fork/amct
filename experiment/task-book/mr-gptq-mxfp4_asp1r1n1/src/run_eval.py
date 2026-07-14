@@ -59,6 +59,9 @@ def build_args():
     ap.add_argument("--calib_block", type=int, default=512)
     ap.add_argument("--dtype", default="float16", choices=["float16", "bfloat16"])
     ap.add_argument("--device", default="npu:0")
+    ap.add_argument("--increments", nargs="*", default=[],
+                    choices=["scale_fitting", "hadamard", "act_reorder"],
+                    help="mr_gptq 模式下开启的增量（消融用）")
     return ap.parse_args()
 
 
@@ -72,7 +75,10 @@ def main():
     if args.mode != "bf16":
         import amct_pytorch as amct
         if args.mode == "mr_gptq":
-            import mr_gptq_module  # noqa: F401  import 即运行时注册 'mr_gptq'
+            import mr_gptq_module  # import 即运行时注册 'mr_gptq'
+            for inc in args.increments:
+                mr_gptq_module._INCREMENTS[inc] = True
+            print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
             cfg = MXFP4_MR_GPTQ_CFG
         else:
             cfg = MXFP4_GPTQ_CFG

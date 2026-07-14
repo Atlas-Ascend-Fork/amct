@@ -40,6 +40,32 @@ class MRGPTQuant(GPTQuant):
         if self.wts_type != MXFP4_E2M1:
             raise ValueError(f"MR-GPTQ 目前仅支持 mxfp4_e2m1，收到 {self.wts_type}")
 
+    # ---- MXFP scale fitting（附录 H）：每 block 搜 MSE 最优共享指数 ---------
+    @staticmethod
+    def _fit_shared_exponent(weight, block_size=32, search=(-2, -1, 0, 1)):
+        """标准 cal_shared_exponent 给基准指数，再在 base+search 候选里
+        逐 block 选重构 MSE 最小的指数（仍是 E8M0 幂次，只是更贴数据分布）。
+        返回 [out, n_groups]，与 cal_shared_exponent 同形，可直接按列索引。
+        """
+        base = torch.nan_to_num(cal_shared_exponent(weight, block_size))  # [out, n_groups]
+        out, in_features = weight.shape
+        n_groups = base.shape[1]
+        pad = n_groups * block_size - in_features
+        w = F.pad(weight, (0, pad)) if pad else weight
+        w = w.reshape(out, n_groups, block_size)                          # [out, n_groups, 32]
+
+        best_se = base.clone()
+        best_err = torch.full_like(base, float("inf"))
+        for d in search:
+            se = base + d
+            scale = torch.pow(2.0, se).unsqueeze(-1)                      # [out, n_groups, 1]
+            q = float_to_fp4e2m1(w / scale) * scale
+            err = ((w - q) ** 2).sum(dim=-1)                             # [out, n_groups]
+            better = err < best_err
+            best_se = torch.where(better, se, best_se)
+            best_err = torch.where(better, err, best_err)
+        return best_se
+
     # ---- 标准 block-32 MXFP4 单列量化 -------------------------------------
     @staticmethod
     def _quant_col_mxfp4(w, se_col):
@@ -79,10 +105,13 @@ class MRGPTQuant(GPTQuant):
         hessian[dead, dead] = 1
         weight[:, dead] = 0
 
-        # 2) 预计算标准 block-32 shared exponent（沿 in-features），静态、只算一次
+        # 2) 预计算 block-32 shared exponent（沿 in-features），静态、只算一次
         #    形状 [out, ceil(in/32)]；后续每列按 原始列号//32 取用
-        shared_exp = cal_shared_exponent(weight)  # [out, n_groups]
-        shared_exp = torch.nan_to_num(shared_exp)
+        #    增量①：scale fitting → 逐 block 搜 MSE 最优指数
+        if self.increments["scale_fitting"]:
+            shared_exp = self._fit_shared_exponent(weight)
+        else:
+            shared_exp = torch.nan_to_num(cal_shared_exponent(weight))
 
         # 3) 激活重排：按 Hessian 对角（激活能量）排序处理列。
         #    stock GPTQ 亦如此；MR-GPTQ 的“静态激活重排”增量将在此细化。
