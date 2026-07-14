@@ -193,6 +193,25 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     if mod_type != 'Linear':
         return True
 
+    # NPU op aclnnWeightQuantBatchMatmulV2 has a dimension limit of 65535
+    # for both k (input features) and n (output features). Layers like lm_head
+    # in large-vocabulary models (e.g. Qwen2 with vocab_size ~152K) will exceed
+    # this limit and cause runtime failures during PPL evaluation.
+    # This constraint only applies to weight-only quantization scenarios
+    # (where activation is NOT_QUANTIZE), not to full quantization combos.
+    npu_weight_quant_dim_limit = 65535
+    weight_only_combs = [c for c in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB if c.startswith('NOT_QUANTIZE')]
+    if quant_data_comb in weight_only_combs:
+        if mod.weight.shape[0] > npu_weight_quant_dim_limit or mod.weight.shape[1] > npu_weight_quant_dim_limit:
+            LOGGER.logw(
+                "layer:{} cannot be quantized, weight shape [{}, {}] exceeds NPU "
+                "weight-quant operator dimension limit (max {})".format(
+                    layer_name, mod.weight.shape[0], mod.weight.shape[1],
+                    npu_weight_quant_dim_limit
+                )
+            )
+            return False
+
     # npu op check cin length be integer multiple of 64
     support_quant_dtype_comb = ['float8_e4m3fn float4_e2m1']
     if quant_data_comb in support_quant_dtype_comb and mod.weight.shape[1] % 64 != 0:

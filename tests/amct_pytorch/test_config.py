@@ -1227,3 +1227,176 @@ class TestConfigParse(unittest.TestCase):
             parse_config(model_bfloat16, cfg, AlgorithmRegistry)
         except Exception as e:
             self.assertIn(f'One src_op only support one algorithm, current algo', str(e))
+
+    def test_int8_minmax_skip_lm_head_with_hidden_layers(self):
+        """INT8_MINMAX_WEIGHT_QUANT_CFG should skip lm_head but quantize all hidden layers.
+
+        Simulates a realistic LLM structure: multiple hidden Linear layers + lm_head.
+        Verifies that skip_layers={'lm_head'} in the built-in config correctly excludes
+        only lm_head while all hidden layers remain quantizable.
+        """
+        class RealisticLLM(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.attn_q = nn.Linear(4096, 4096)
+                self.attn_k = nn.Linear(4096, 4096)
+                self.attn_v = nn.Linear(4096, 4096)
+                self.attn_out = nn.Linear(4096, 4096)
+                self.mlp_gate = nn.Linear(4096, 11008)
+                self.mlp_up = nn.Linear(4096, 11008)
+                self.mlp_down = nn.Linear(11008, 4096)
+                self.lm_head = nn.Linear(4096, 151936, bias=False)  # Qwen2 vocab_size
+            def forward(self, x):
+                return self.lm_head(self.mlp_down(torch.relu(self.mlp_gate(x) * self.mlp_up(x))))
+        model = RealisticLLM().to(torch.bfloat16)
+        detail_config = parse_config(model, INT8_MINMAX_WEIGHT_QUANT_CFG, AlgorithmRegistry)
+        # All 7 hidden layers should be quantized
+        for layer_name in ['attn_q', 'attn_k', 'attn_v', 'attn_out',
+                           'mlp_gate', 'mlp_up', 'mlp_down']:
+            self.assertIn(layer_name, detail_config,
+                          f"Hidden layer '{layer_name}' should be quantized")
+        # lm_head must be skipped
+        self.assertNotIn('lm_head', detail_config)
+        self.assertEqual(len(detail_config), 7)
+
+    def test_int8_minmax_lm_head_auto_skipped_by_dim_limit(self):
+        """Even without explicit skip_layers, check_quant_op_constraint should
+        auto-skip layers whose weight dims exceed NPU limit (65535).
+
+        This validates the defensive check works as a safety net when users
+        provide a custom config that forgets to skip lm_head.
+        """
+        from amct_pytorch.common.config.parser import check_quant_op_constraint
+        from amct_pytorch.common.config.fields import QuantConfig
+        # Custom config WITHOUT skip_layers — simulates user oversight
+        cfg_no_skip = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
+            },
+            'algorithm': {'minmax'},
+        }
+        quant_config = QuantConfig(cfg_no_skip, AlgorithmRegistry)
+        # Qwen2-style lm_head: 4096 -> 151936 (exceeds 65535)
+        lm_head = nn.Linear(4096, 151936, bias=False)
+        self.assertFalse(
+            check_quant_op_constraint(lm_head, 'lm_head', 'NOT_QUANTIZE int8', quant_config),
+            "lm_head with vocab_size=151936 should be auto-skipped by NPU dim limit check"
+        )
+        # LLaMA-style lm_head: 4096 -> 32000 (within limit, should pass)
+        llama_lm_head = nn.Linear(4096, 32000, bias=False)
+        self.assertTrue(
+            check_quant_op_constraint(llama_lm_head, 'lm_head', 'NOT_QUANTIZE int8', quant_config),
+            "lm_head with vocab_size=32000 should pass (within NPU dim limit)"
+        )
+
+
+class TestNpuWeightQuantDimLimit(unittest.TestCase):
+    """Verify NPU weight-quant operator dimension limit (65535) in check_quant_op_constraint.
+
+    The aclnnWeightQuantBatchMatmulV2 operator has a hard limit of 65535 for both
+    k (input features) and n (output features). This class tests the defensive
+    check that auto-skips layers exceeding this limit.
+    """
+
+    def setUp(self):
+        from amct_pytorch.common.config.parser import check_quant_op_constraint
+        from amct_pytorch.common.config.fields import QuantConfig
+        self.check_fn = check_quant_op_constraint
+        base_cfg = {
+            'batch_num': 1,
+            'quant_cfg': {
+                'weights': {'type': 'int8', 'symmetric': True, 'strategy': 'channel'},
+            },
+            'algorithm': {'minmax'},
+        }
+        self.quant_config = QuantConfig(base_cfg, AlgorithmRegistry)
+
+    def test_boundary_and_exceeds(self):
+        """Boundary value 65535 passes; 65536 is rejected.
+        Tests both output_features (n) and input_features (k) dimensions.
+        """
+        # Boundary: exactly 65535 should pass
+        self.assertTrue(self.check_fn(
+            nn.Linear(4096, 65535, bias=False), 'layer_n_boundary',
+            'NOT_QUANTIZE int8', self.quant_config))
+        self.assertTrue(self.check_fn(
+            nn.Linear(65535, 4096, bias=False), 'layer_k_boundary',
+            'NOT_QUANTIZE int8', self.quant_config))
+        # Just over: 65536 should fail
+        self.assertFalse(self.check_fn(
+            nn.Linear(4096, 65536, bias=False), 'layer_n_exceed',
+            'NOT_QUANTIZE int8', self.quant_config))
+        self.assertFalse(self.check_fn(
+            nn.Linear(65536, 4096, bias=False), 'layer_k_exceed',
+            'NOT_QUANTIZE int8', self.quant_config))
+
+    def test_real_model_vocab_sizes(self):
+        """Test with real-world model vocab sizes to validate the fix for issue #157."""
+        # Qwen2-7B: vocab_size=151936 >> 65535 → must skip
+        self.assertFalse(self.check_fn(
+            nn.Linear(4096, 151936, bias=False), 'qwen2_lm_head',
+            'NOT_QUANTIZE int8', self.quant_config))
+        # Qwen3-8B: vocab_size=151936 >> 65535 → must skip
+        self.assertFalse(self.check_fn(
+            nn.Linear(4096, 151936, bias=False), 'qwen3_lm_head',
+            'NOT_QUANTIZE int8', self.quant_config))
+        # LLaMA2-7B: vocab_size=32000 < 65535 → should pass
+        self.assertTrue(self.check_fn(
+            nn.Linear(4096, 32000, bias=False), 'llama2_lm_head',
+            'NOT_QUANTIZE int8', self.quant_config))
+
+    def test_dim_limit_only_for_weight_only_combos(self):
+        """The NPU dim limit check should ONLY apply to weight-only quantization.
+
+        Weight-only combos (NOT_QUANTIZE *) use aclnnWeightQuantBatchMatmulV2
+        which has the 65535 limit. Full quantization combos use different operators
+        and should NOT be affected by this constraint.
+        """
+        large_layer = nn.Linear(4096, 65536, bias=False)
+        # Weight-only combos should be rejected by dim limit
+        for comb in ['NOT_QUANTIZE int8', 'NOT_QUANTIZE int4',
+                     'NOT_QUANTIZE float8_e4m3fn', 'NOT_QUANTIZE float4_e2m1']:
+            self.assertFalse(
+                self.check_fn(large_layer, 'oversized', comb, self.quant_config),
+                f"Dim limit check should reject oversized layer for weight-only comb={comb}"
+            )
+
+    def test_full_quant_combos_not_affected_by_dim_limit(self):
+        """Full quantization combos should NOT be rejected by the NPU dim limit.
+
+        Combos like int8 int8, float8_e4m3fn float8_e4m3fn use different NPU
+        operators that do not have the 65535 dimension constraint.
+        """
+        large_layer = nn.Linear(4096, 65536, bias=False)
+        full_quant_combs = ['int8 int8', 'float8_e4m3fn float8_e4m3fn']
+        for comb in full_quant_combs:
+            # These should NOT return False due to dim limit
+            # (they may return True or be caught by other checks, but not dim limit)
+            result = self.check_fn(large_layer, 'oversized_full_quant', comb, self.quant_config)
+            # int8 int8 with large dims should pass (no dim limit for full quant)
+            self.assertTrue(
+                result,
+                f"Full quant comb={comb} should NOT be rejected by NPU dim limit check"
+            )
+
+    def test_dim_limit_does_not_mask_other_checks(self):
+        """A layer within dim limit should still be checked by subsequent constraints.
+
+        For float8_e4m3fn float4_e2m1, cin must be multiple of 64.
+        A layer with cin=63 (< 65535) should pass the dim check but fail the cin%64 check.
+        """
+        # cin=63 is not multiple of 64, but within dim limit
+        bad_cin_layer = nn.Linear(63, 128, bias=False)
+        self.assertFalse(
+            self.check_fn(bad_cin_layer, 'bad_cin', 'float8_e4m3fn float4_e2m1',
+                          self.quant_config),
+            "Layer with cin=63 should fail cin%64 check for float8_e4m3fn float4_e2m1"
+        )
+        # cin=64 passes both checks
+        good_layer = nn.Linear(64, 128, bias=False)
+        self.assertTrue(
+            self.check_fn(good_layer, 'good_layer', 'float8_e4m3fn float4_e2m1',
+                          self.quant_config),
+            "Layer with cin=64 should pass all checks"
+        )
