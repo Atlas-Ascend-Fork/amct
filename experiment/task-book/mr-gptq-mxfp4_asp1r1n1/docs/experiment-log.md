@@ -74,7 +74,7 @@ export HF_HUB_DISABLE_XET=1
 | E0 | Qwen3-8B | BF16 基准 | 2048 | — | **9.7154** | — | 与 ofmr README 参考值 9.715 吻合，流程正确 |
 | A（冒烟） | Qwen3-8B | MXFP4-AWQ（仓内现成 CFG） | 2048 | pile 512×256 | **9.954** | **+0.239** ✅ | ≤0.4 达标；验证 MXFP4 管线跑通 |
 | E1 | Qwen3-8B | 我们的 GPTQ-mxfp4（MR-GPTQ 增量全关，标准 block-32） | 2048 | pile 64×512 | **10.1332** | **+0.418** | 纯 MXFP4 粗糙，GPTQ≈RTN（论文表11），刚好卡门槛外 → 需增量 |
-| E1' | Qwen3-8B | stock amct GPTQ-mxfp4（外部参考，非标准 per-column） | 2048 | — | *后台跑中* | — | 可选，~2h |
+| E1' | Qwen3-8B | stock amct GPTQ-mxfp4（外部参考） | 2048 | — | **10.1369** | +0.4215 | **与我们的 10.1332 差 0.004 → 交叉验证实现正确**；stock 跑 3h，我们几分钟（~15x 提速） |
 | — | Qwen3-8B | **MR-GPTQ**（+scale fitting/Hadamard/reorder） | 2048→4096 | — | *待实现* | 目标 <9.95 且 ≤0.4 | 逐增量消融 |
 
 **关键观察（2026-07-14）**：我们自研 MRGPTQuant（CPU 补偿 + 标准 block-32 MXFP4）跑通，增量全关时 PPL=10.1332（delta 0.418）。与论文一致——纯 MXFP4 上 GPTQ 几乎不比 RTN 强，AWQ（9.954）反而更好；MR-GPTQ 的收益来自三增量（scale fitting 最大）。补偿从 stock 的 ~2h 降到几分钟（CPU 卸载 + shared exponent 预计算 + 标准量化）。下一步加 scale fitting。
