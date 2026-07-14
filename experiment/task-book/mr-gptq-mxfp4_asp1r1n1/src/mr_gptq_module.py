@@ -51,6 +51,17 @@ class MRGPTQuant(GPTQuant):
         q = float_to_fp4e2m1(w / scale)
         return q * scale
 
+    # ---- Hessian 逆的上三角 Cholesky（override 父类，全程 CPU） -------------
+    def cal_hessian_inverse(self, hessian, columns):
+        # 父类用 self.weight.device(NPU) 造 index 张量，与 CPU hessian 冲突；
+        # 这里全程 CPU：damping → cholesky → 逆 → 上三角 cholesky。
+        damp = self.perc_damp * torch.mean(torch.diag(hessian))
+        idx = torch.arange(columns)
+        hessian[idx, idx] += damp
+        L = torch.linalg.cholesky(hessian)
+        hinv = torch.cholesky_inverse(L)
+        return torch.linalg.cholesky(hinv, upper=True)
+
     # ---- GPTQ 误差补偿（CPU、标准 MXFP4、shared exponent 预计算） ----------
     @torch.no_grad()
     def get_opt_weight_and_quant_factor(self):
@@ -80,9 +91,8 @@ class MRGPTQuant(GPTQuant):
         weight = weight[:, perm]
         hessian = hessian[perm][:, perm]
 
-        # 4) Hessian 逆的上三角 Cholesky（复用父类，内部走 CPU）
-        #    父类末尾会 .to(self.weight.device)(NPU)，这里搬回 CPU 保持全程一致
-        hessian_inv = self.cal_hessian_inverse(hessian, columns).to("cpu", torch.float32)
+        # 4) Hessian 逆的上三角 Cholesky（override 版，全程 CPU）
+        hessian_inv = self.cal_hessian_inverse(hessian, columns)
         del hessian
 
         # 5) 分块 + 逐列量化 + 误差补偿（标准 GPTQ）
