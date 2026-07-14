@@ -87,6 +87,18 @@ export HF_HUB_DISABLE_XET=1
 > 冒烟实验 A 仅用于验证「MXFP4 量化 → 校准 → WikiText2 PPL」全链路在 910B 跑通
 > （无 amct_ops 报错），非最终交付项；最终交付用 GPTQ 系列 + seq_len=4096。
 
+## 5.1 ★ 8B 最终交付数（seq_len=4096，任务真实设置）
+
+| 指标 | 结果 | 要求 | |
+|------|------|------|---|
+| bf16 PPL | 8.9893 | — | 基准 |
+| MR-GPTQ PPL（Had128+scale fitting） | 9.2621 | — | |
+| **PPL delta** | **0.273** | ≤ 0.4 | ✅ |
+| **量化层覆盖率** | **99.6%**（252/253，仅跳 lm_head） | ≥ 70% | ✅ |
+| **显存降低** | **67.4%**（MXFP4 4.25bit vs bf16 16bit；lm_head 保 fp16） | ≥ 50% | ✅ |
+
+**Qwen3-8B 三项硬指标全部达标。** 命令：`run_eval.py --mode mr_gptq --increments hadamard scale_fitting --seq_len 4096`。日志：`src/logs/mrgptq_full_8b_4096.log`、`e0_bf16_4096.log`。
+
 ## 6. 下一步
 
 1. E0：BF16 基准 PPL（`--mode bf16`）。
