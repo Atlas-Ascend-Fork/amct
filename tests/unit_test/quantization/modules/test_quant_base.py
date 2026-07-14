@@ -330,7 +330,9 @@ def test_weight_quantizer_export_deploy_supports_autoround_hook():
 
     assert "qweight" in out
     assert "weight_scale" in out
-    assert "weight_bias" in out
+    # int export emits the assistance bias under ".bias" (see 7dc892a) so infer's
+    # generic expert remap matches the registered w13_bias / w2_bias params.
+    assert "bias" in out and "weight_bias" not in out
 
 
 def test_weight_quantizer_export_deploy_supports_autoround_hook_for_mxfp():
