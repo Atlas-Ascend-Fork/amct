@@ -30,15 +30,46 @@ _INCREMENTS = {
     "act_reorder": False,     # 静态激活重排
 }
 
+_HADAMARD_K = 128  # block-wise Hadamard 尺寸（论文示 MXFP4 上 128 优于 32）
+
+
+def _sylvester_hadamard(k):
+    """归一化 Sylvester-Hadamard H_k/√k（k 须为 2 的幂），正交且对称。"""
+    H = torch.ones(1, 1)
+    while H.shape[0] < k:
+        H = torch.cat([torch.cat([H, H], dim=1), torch.cat([H, -H], dim=1)], dim=0)
+    return H / (k ** 0.5)
+
 
 class MRGPTQuant(GPTQuant):
-    """MR-GPTQ 量化算子。当前实现 = 高效标准 MXFP4 + GPTQ 误差补偿。"""
+    """MR-GPTQ 量化算子。当前实现 = 高效标准 MXFP4 + GPTQ 误差补偿 + 可选增量。"""
 
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__(ori_module, layer_name, quant_config)
         self.increments = dict(_INCREMENTS)
         if self.wts_type != MXFP4_E2M1:
             raise ValueError(f"MR-GPTQ 目前仅支持 mxfp4_e2m1，收到 {self.wts_type}")
+        self.hadamard_k = _HADAMARD_K
+        self._H = _sylvester_hadamard(self.hadamard_k)  # [k,k] CPU float32
+
+    # ---- block-wise Hadamard 旋转（增量①） --------------------------------
+    def _do_hadamard(self):
+        # in_features 需被 k 整除；否则该层跳过旋转（Qwen3 各层均可整除）
+        return self.increments["hadamard"] and self.weight.shape[1] % self.hadamard_k == 0
+
+    def _rotate_last_dim(self, x):
+        """沿最后一维（in）做块对角 Hadamard：reshape [...,n_blk,k] @ H_k。"""
+        k = self.hadamard_k
+        H = self._H.to(device=x.device, dtype=x.dtype)
+        shape = x.shape
+        x = x.reshape(*shape[:-1], shape[-1] // k, k).matmul(H)
+        return x.reshape(shape)
+
+    def update_hessian(self, input_data):
+        # 旋转后累积 Hessian，使 H_r = RᵀHR 与旋转权重一致（转输入比转 Hessian 便宜）
+        if self._do_hadamard():
+            input_data = self._rotate_last_dim(input_data)
+        super().update_hessian(input_data)
 
     # ---- MXFP scale fitting（附录 H）：每 block 搜 MSE 最优共享指数 ---------
     @staticmethod
@@ -97,6 +128,8 @@ class MRGPTQuant(GPTQuant):
 
         # 全程 CPU float32：小算子无 NPU 启动开销，Cholesky 亦在 CPU（~0.7s）
         weight = self.weight.detach().to("cpu", torch.float32)
+        if self._do_hadamard():
+            weight = self._rotate_last_dim(weight)  # 旋转权重（Hessian 已在 update 时旋转）
         hessian = self.hessian.to("cpu", torch.float32)
 
         # 1) 死列（Hessian 对角为 0）处理
@@ -151,7 +184,10 @@ class MRGPTQuant(GPTQuant):
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
-        # weight 已是量化后的权重，直接线性；不再走父类的二次量化
+        # weight 已是（旋转+）量化后的权重；Hadamard 开时输入需同样旋转，
+        # y = (x·R)·(W·R)ᵀ = x·Wᵀ（R 正交对称），weight-only 下 x·R 精确无损。
+        if self._do_hadamard():
+            inputs = self._rotate_last_dim(inputs)
         return F.linear(inputs, self.weight.to(inputs.dtype), self.bias)
 
 
