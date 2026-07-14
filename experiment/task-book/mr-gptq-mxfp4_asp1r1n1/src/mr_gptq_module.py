@@ -119,11 +119,19 @@ class MRGPTQuant(GPTQuant):
 # ---- 运行时注册 'mr_gptq'（零改 amct 源码） --------------------------------
 def register():
     import amct_pytorch.algorithms as _algos
+    import amct_pytorch.common.utils.vars as _vars
     from amct_pytorch.classic.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
 
+    # 1) 注册算子 + 加入内置算法白名单
     _algos.AlgorithmRegistry.register("mr_gptq", "Linear", MRGPTQuant, NpuWeightQuantizedLinear)
     if "mr_gptq" not in _algos.BUILT_IN_ALGORITHM:
         _algos.BUILT_IN_ALGORITHM.append("mr_gptq")
+
+    # 2) 加入 (算法, 量化类型组合) 支持表：weight-only MXFP4
+    comb = "NOT_QUANTIZE mxfp4_e2m1"
+    supported = _vars.ALGORITHM_SUPPORTED_QUANT_TYPE_COMB.get(comb)
+    if supported is not None and "mr_gptq" not in supported:
+        supported.append("mr_gptq")
 
 
 register()
