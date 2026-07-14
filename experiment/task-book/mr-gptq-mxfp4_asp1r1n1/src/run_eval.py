@@ -20,7 +20,7 @@ import argparse
 import torch
 
 from data import get_test_dataset, get_calib_dataset
-from eval_utils import get_model, calibrate, test_ppl
+from eval_utils import get_model, calibrate, test_ppl, report_coverage_memory
 
 
 # ---- 量化配置 ----------------------------------------------------------------
@@ -84,6 +84,7 @@ def main():
             cfg = MXFP4_GPTQ_CFG
         calib = get_calib_dataset(tokenizer, n_samples=args.n_calib,
                                   block_size=args.calib_block)
+        report_coverage_memory(model, skip_layers=cfg["skip_layers"])  # 量化前统计
         amct.quantize(model, cfg)
         calibrate(model, calib)
 
