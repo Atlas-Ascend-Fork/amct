@@ -76,7 +76,9 @@ export HF_HUB_DISABLE_XET=1
 | E1 | Qwen3-8B | 我们的 GPTQ-mxfp4（MR-GPTQ 增量全关，标准 block-32） | 2048 | pile 64×512 | **10.1332** | **+0.418** | 纯 MXFP4 粗糙，GPTQ≈RTN（论文表11），刚好卡门槛外 → 需增量 |
 | E1' | Qwen3-8B | stock amct GPTQ-mxfp4（外部参考） | 2048 | — | **10.1369** | +0.4215 | **与我们的 10.1332 差 0.004 → 交叉验证实现正确**；stock 跑 3h，我们几分钟（~15x 提速） |
 | E2 | Qwen3-8B | **MR-GPTQ +Hadamard(k=128)** | 2048 | pile 64×512 | **10.0747** | **+0.359** ✅ | Hadamard 把 delta 0.418→0.359 **越过门槛**；纯 GPTQ 过不了、增量让它过 |
-| — | Qwen3-8B | MR-GPTQ +Hadamard +scale fitting | 2048→4096 | — | *待测* | 目标 <9.95 | scale fitting 叠 Hadamard（论文表11 Qwen3-8B 95.2→98.5） |
+| E3 | Qwen3-8B | **MR-GPTQ +Hadamard +scale fitting**（完整） | 2048 | pile 64×512 | **10.0499** | **+0.3345** ✅ | scale fitting（offset=log2 6 修正后）再降 0.025；完整消融链每步都降 |
+
+**完整消融链（2026-07-14，Qwen3-8B，seq_len=2048）**：GPTQ 10.1332(+0.418❌) → +Hadamard 10.0747(+0.359✅) → +scale fitting 10.0499(+0.3345✅)。**每个增量都正向**，复现论文 MR-GPTQ 设计。⚠️scale fitting 关键坑：① 方法须是论文式(2)/(3) grid remapping（非 MSE 搜索）；② offset 用 log2(6) 使 block_max→6 用满 E2M1 范围（用 2 则→4，反而变差）。当前 8B 达标（delta 0.3345 < 0.4），未反超 AWQ(9.954/0.239)——AWQ 用了 512 校准样本、我们才 64，加校准可能进一步降。
 
 **消融进展（2026-07-14）**：GPTQ 10.1332(+0.418,超门槛) → +Hadamard 10.0747(+0.359,**达标**)。复现论文核心：Hadamard 是 MXFP4 头号杠杆，纯 GPTQ 不够、需微旋转。⚠️坑：box 单分支 clone `git pull` 拉不动新分支提交，须 `git fetch origin <branch> && git reset --hard FETCH_HEAD`（否则跑的是旧代码，hadamard flag 成 no-op → 结果=baseline）。下一步：把 scale fitting 改为论文式(2)/(3) 的 grid remapping（当前 MSE 搜索版是错的），叠在 Hadamard 上冲击 <9.95。
 
