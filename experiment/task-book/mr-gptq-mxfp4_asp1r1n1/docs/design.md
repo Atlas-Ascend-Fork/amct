@@ -97,10 +97,12 @@ MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §
 **② 静态激活重排（Static Activation Reordering, Ingredient 2）**
 GPTQ 原生 dynamic act-order（按 Hessian 对角降序重排）精度好但推理要动态 reshuffle（慢 10-20%）。MR-GPTQ 改**静态**：先按原始列序定 scale/grid，再 shuffle 列跑 GPTQ，跑完 shuffle 回去，保持微缩 group 结构。**同等精度、零推理开销**，实现也简单。
 
-**③ MXFP scale fitting（Ingredient 1 / 附录 H）—— MXFP4 头号增益杠杆**
-针对 3.1 的 PoT scale 误差，**把 E8M0 指数网格从 [2⁻¹²⁷,2¹²⁸] 重映射到数据实际范围 [s_min,s_max]**（论文式(1)(2)，本质是一次 scale 重标定），记作 **MXFP4†**。
+**③ MXFP scale fitting（Ingredient 1 / 附录 H）—— 需与 Hadamard 配合，不能单独用于 GPTQ**
+针对 3.1 的 PoT scale 误差，把 E8M0 的 256 个码位从 [2⁻¹²⁷,2¹²⁸] 重映射到数据实际范围，记作 **MXFP4†**。**确切公式（附录 H 式(1)(2)(3)）**：
+- 标准 E8M0（含 4/3 去偏）：`s_E8M0 = (4/3)·2^clamp(round(log₂s),−128,127)`（式1）。
+- 拟合网格：码位 `q = clamp(round(255·(log₂s − log₂s_min)/(log₂s_max − log₂s_min)), 0, 255)`；拟合后 `s_fit = 2^(α·q + β)`，其中 **α = (log₂s_max − log₂s_min)/255**（斜率 <1 → 次幂次、比幂次细）、**β = log₂s_min**（式2/3）。`s_min/s_max` 取该张量所有块 scale 的最小/最大值。
 - 效果（论文表 11）：RTN 下 Qwen3-8B **93.7→96.3**、Llama3-8B 87.8→94.3；MR-GPTQ 下 Qwen3-8B **95.2→98.5**。
-- **实现极简、与旋转/GPTQ 正交、投入产出比最高 → 应最先做。** 这是我 v0.2 严重低估的一块。
+- **⚠️ 关键修正（原 v0.3 判断错误）**：scale fitting **不是**"单独最先做"。论文表 11 GPTQ 行：**Qwen3-8B 94.1→92.3（−1.8，变差）**；只有叠在 **Hadamard 之上**（MR-GPTQ）才发力（95.2→98.5）。RTN 下才单独有效。**我们实测复现了这点**：GPTQ-mxfp4 10.13 → 加 scale fitting 10.26（变差）。故 scale fitting 须与 Hadamard 配合、排在其后。
 
 > 校准设置：论文用 1024 条 FineWeb 序列、λ=1e-2，与仓内 GPTQ 默认基本一致。
 > **论文自证我们的靶子成立**：Qwen3-8B 上 MXFP4 MR-GPTQ(95.2%) > GPTQ(94.1%) > RTN(93.7%)（表10）——"相比 baseline 有提升"在测试模型上已被原作者验证，我们是在 AMCT 里复现这个已知正结果。
@@ -136,8 +138,10 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 
 按论文三增量分步实现（**建议实现顺序 = 投入产出比排序**）：
 
-1. **【先做】MXFP scale fitting（§3.3③）**：override MXFP4 的 per-block scale 计算，把 E8M0 网格重映射到 `[s_min,s_max]`（论文式(2)）。**改动最小、增益最大**，单独就能把 MXFP4 拉近 NVFP4。落点：`cal_scale_offset_static` 的 MXFP4 分支 / `quant_util.py` 的 mxfp4 量化路径。
-2. **【再做】Block-Hadamard 微旋转（§3.3①）**：`override get_opt_weight_and_quant_factor()`，进 GPTQ 列循环前 `W' = W·H_k`（H_k 确定性 Sylvester-Hadamard，k∈{32,128} 可配），补偿在 `W'` 上做；旋转矩阵随产物导出。
+> **顺序修正（v0.4，基于实测 + 论文表 11）**：原计划"scale fitting 先做/单独用"是错的——它单独会让 GPTQ 在 Qwen3-8B 变差（实测 10.13→10.26，与论文表 11 的 −1.8 一致）。MXFP4 的头号杠杆是 **Hadamard**（论文标题即此），scale fitting 须叠在其上才发力。故新顺序：
+
+1. **【先做】Block-Hadamard 微旋转（§3.3①）**：`override get_opt_weight_and_quant_factor()`，进 GPTQ 列循环前 `W' = W·H_k`（H_k 确定性 Sylvester-Hadamard，k∈{32,128} 可配，论文示 MXFP4 上 Had128 更优），补偿在 `W'` 上做。weight-only 下激活侧只需前向乘一次 `H_kᵀ`（数值精确、无需快核）。
+2. **【再做】MXFP scale fitting（§3.3③）**：叠在 Hadamard 之上，override MXFP4 的 per-block scale，用式(2)/(3) 重映射 E8M0 网格。落点：`cal_scale_offset_static` 的 MXFP4 分支 / `quant_util.py` 的 mxfp4 量化路径。
 3. **【后做】静态激活重排（§3.3②）**：先定 scale/grid，再按 Hessian 对角序 shuffle 列跑 GPTQ、跑完 shuffle 回，保持 32-group 结构。
 
 **关于激活侧旋转 `X·H_k`（原头号难点，现已明确）**：
