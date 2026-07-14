@@ -14,6 +14,7 @@
 
 零改 amct 源码：import 本模块即运行时注册 'mr_gptq'。
 """
+import math
 import time
 
 import torch
@@ -91,7 +92,8 @@ class MRGPTQuant(GPTQuant):
         w = F.pad(weight, (0, pad)) if pad else weight
         w = w.reshape(out, n_groups, block_size)
         block_max = w.abs().amax(dim=-1)                             # [out, n_groups]
-        L = torch.log2(block_max) - _FP4_MAX_EXP                     # 连续理想 log2(scale)
+        # 连续理想 log2(scale)：block_max/scale = 6（用满 E2M1 范围，非 4）
+        L = torch.log2(block_max) - math.log2(6.0)
         L = torch.where(torch.isfinite(L), L, torch.zeros_like(L))  # 空块→0
         Lmin, Lmax = L.min(), L.max()
         denom = (Lmax - Lmin).clamp_min(1e-6)
