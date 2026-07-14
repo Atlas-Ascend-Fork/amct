@@ -112,23 +112,43 @@ class Qwen3_5Moe(Qwen3_5):
     def bits_scheme(self):
         """Per-group (targets, w_bits, a_bits) for the deploy config groups.
 
-        Follows quant_target so we only declare a config group for what was
-        actually quantized: the ``Linear`` group for ``attn-linear`` and the
-        ``MoEGMM`` group for ``moe``. Bit-widths come from the bit_policy
-        (per-group ``moe.routed`` node, falling back to the top-level globals),
-        so W4A8 MoE is expressed as ``moe.routed: {w_bits: 4, a_bits: 8}``.
-        Returns ``None`` when nothing matches so generate_quant_config keeps
-        its default.
+        Declares one config group per quantized target so infer's
+        find_matched_target resolves every non-ignored QuantLinear:
+
+        - ``attn-linear`` -> ``Linear`` group at the top-level bit-widths
+          (attention linears).
+        - ``moe`` -> a ``MoEGMM`` group for the routed experts (W4A8, from
+          ``moe.routed``) AND a ``Linear`` group for the shared_expert, which
+          build_quant_block wraps as a QuantLinear at ``moe.shared`` bit-widths
+          (W8A8). Without the Linear group the shared_expert weights are
+          quantized but unmatched, so infer aborts with "Unable to find
+          matching target". This mirrors deepseek_v4's two-group W4A8 recipe
+          (Linear=W8A8 for shared_expert, MoEGMM=W4A8 for routed).
+
+        A ``Linear`` target is emitted at most once; when both attn-linear and
+        moe are requested the attention (top-level) bit-widths win. Returns
+        ``None`` when nothing matches so generate_quant_config keeps its
+        default.
         """
         bit_policy = ensure_bit_policy(self.args)
-        groups = []
-        if "attn-linear" in self.quant_target:
-            groups.append({"targets": ["Linear"],
-                           "w_bits": bit_policy.w_bits, "a_bits": bit_policy.a_bits})
+        linear_bits = None
+        moe_gmm_bits = None
         if "moe" in self.quant_target:
+            shared = bit_policy["moe.shared"].default
+            linear_bits = (shared.w, shared.a)
             routed = bit_policy["moe.routed"].default
+            moe_gmm_bits = (routed.w, routed.a)
+        if "attn-linear" in self.quant_target:
+            # attention (top-level) bit-widths take precedence for the Linear group
+            linear_bits = (bit_policy.w_bits, bit_policy.a_bits)
+
+        groups = []
+        if linear_bits is not None:
+            groups.append({"targets": ["Linear"],
+                           "w_bits": linear_bits[0], "a_bits": linear_bits[1]})
+        if moe_gmm_bits is not None:
             groups.append({"targets": ["MoEGMM"],
-                           "w_bits": routed.w, "a_bits": routed.a})
+                           "w_bits": moe_gmm_bits[0], "a_bits": moe_gmm_bits[1]})
         return groups or None
 
     def iter_deploy_bindings(self, layer_idx, block):
