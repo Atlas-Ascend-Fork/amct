@@ -71,7 +71,11 @@ def main():
 
     if args.mode != "bf16":
         import amct_pytorch as amct
-        cfg = MXFP4_GPTQ_CFG if args.mode == "gptq_mxfp4" else MXFP4_MR_GPTQ_CFG
+        if args.mode == "mr_gptq":
+            import mr_gptq_module  # noqa: F401  import 即运行时注册 'mr_gptq'
+            cfg = MXFP4_MR_GPTQ_CFG
+        else:
+            cfg = MXFP4_GPTQ_CFG
         calib = get_calib_dataset(tokenizer, n_samples=args.n_calib,
                                   block_size=args.calib_block)
         amct.quantize(model, cfg)
