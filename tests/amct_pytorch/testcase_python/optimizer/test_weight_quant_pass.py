@@ -252,15 +252,16 @@ class TestWeightQuantPass(unittest.TestCase):
             ),
         )
 
-        # Assert recurrence_weight is stored as INT8 container (even when num_bits=4)
+        # Assert recurrence_weight is stored as INT4 when num_bits==4 (dtype label
+        # matches the actual [-8,7] value range)
         self.assertTrue(
             set_data_type_args, 'TensorProtoHelper.set_data was never called'
         )
         actual_dtype = set_data_type_args[-1]
         self.assertEqual(
             actual_dtype,
-            'INT8',
-            msg='expected recurrence_weight stored as INT8, got {}'.format(
+            'INT4',
+            msg='expected recurrence_weight stored as INT4, got {}'.format(
                 actual_dtype
             ),
         )

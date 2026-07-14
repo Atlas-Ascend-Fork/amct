@@ -85,7 +85,8 @@ class InsertWeightQuantPass(BaseFusionPass):
         int8_weight = int8_weight.reshape([-1])
 
         weight_helper.clear_data()
-        weight_helper.set_data(int8_weight, 'INT8')
+        # num_bits==4 时值域为 [-8,7]，写回 INT4 使 dtype 标签与实际值域一致
+        weight_helper.set_data(int8_weight, 'INT4' if num_bits == 4 else 'INT8')
 
         if object_node.type in RNN_LAYER_TYPE:
             self.quant_recurrence_weight(object_node)
@@ -120,7 +121,10 @@ class InsertWeightQuantPass(BaseFusionPass):
         int_recurrence_weight = weight_quant_np(recurrence_weight, scale_r, offset_r, num_bits)
         int_recurrence_weight = int_recurrence_weight.reshape([-1])
         recurrence_weight_helper.clear_data()
-        recurrence_weight_helper.set_data(int_recurrence_weight, 'INT8')
+        # num_bits==4 时值域为 [-8,7]，写回 INT4 使 dtype 标签与实际值域一致
+        recurrence_weight_helper.set_data(
+            int_recurrence_weight, 'INT4' if num_bits == 4 else 'INT8'
+        )
         LOGGER.logd(
             "Quant recurrence_weight to int{} for layer '{}'".format(
                 num_bits, object_node.name

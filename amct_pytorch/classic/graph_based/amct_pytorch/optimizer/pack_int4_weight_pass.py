@@ -69,9 +69,21 @@ class PackInt4WeightPass(BaseFusionPass):
         if weight_node is None:
             return
         helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+        orig_dims = list(helper.tensor.dims)
         int4_vals = helper.get_data()
-        # 两个 INT4 pack 成一个 INT8，元素数减半，dims 同步更新为打包后大小
+        # 两个 INT4 pack 成一个 INT8，元素数减半
         packed = pack_int4_to_int8(np.asarray(int4_vals).reshape(-1))
         helper.clear_data()
-        helper.set_data(packed, 'INT8', dims=list(packed.shape))
+        # dims 保留原始维度结构、仅让末维随打包减半（保住 RNN 的 num_directions 维，
+        # 供 ReplaceRNNPass 的 dims[0] 检查）；末维无法整除时退回打包后一维大小
+        helper.set_data(packed, 'INT8', dims=self._packed_dims(orig_dims, packed.size))
+
+    @staticmethod
+    def _packed_dims(orig_dims, packed_size):
+        """Map original dims to packed dims: keep leading dims, halve the last."""
+        if len(orig_dims) > 1:
+            lead = int(np.prod(orig_dims[:-1]))
+            if lead and packed_size % lead == 0:
+                return orig_dims[:-1] + [packed_size // lead]
+        return [packed_size]
 
