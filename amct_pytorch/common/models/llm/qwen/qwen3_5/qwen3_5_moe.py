@@ -36,6 +36,7 @@ from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5, QuantQw
 
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, build_no_algo_args
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
 @MODEL_REGISTRY.register(
@@ -107,6 +108,28 @@ class Qwen3_5Moe(Qwen3_5):
 
     def iter_ptq_units(self, layer_idx, block):
         yield from super().iter_ptq_units(layer_idx, block)
+
+    def bits_scheme(self):
+        """Per-group (targets, w_bits, a_bits) for the deploy config groups.
+
+        Follows quant_target so we only declare a config group for what was
+        actually quantized: the ``Linear`` group for ``attn-linear`` and the
+        ``MoEGMM`` group for ``moe``. Bit-widths come from the bit_policy
+        (per-group ``moe.routed`` node, falling back to the top-level globals),
+        so W4A8 MoE is expressed as ``moe.routed: {w_bits: 4, a_bits: 8}``.
+        Returns ``None`` when nothing matches so generate_quant_config keeps
+        its default.
+        """
+        bit_policy = ensure_bit_policy(self.args)
+        groups = []
+        if "attn-linear" in self.quant_target:
+            groups.append({"targets": ["Linear"],
+                           "w_bits": bit_policy.w_bits, "a_bits": bit_policy.a_bits})
+        if "moe" in self.quant_target:
+            routed = bit_policy["moe.routed"].default
+            groups.append({"targets": ["MoEGMM"],
+                           "w_bits": routed.w, "a_bits": routed.a})
+        return groups or None
 
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
