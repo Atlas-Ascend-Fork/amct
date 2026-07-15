@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """CLI entry point for FP4/FP8 → HiFloat4 checkpoint conversion.
 
-Supports --source-format nvfp4 | mxfp4 (future: mxfp8).
+Supports --source-format nvfp4 | mxfp4 | mxfp8.
 """
 
 
@@ -27,7 +27,7 @@ def main():
         description="FP4/FP8 → BF16 → HiFloat4 checkpoint converter"
     )
     ap.add_argument("--source-format", type=str, required=True,
-                    choices=["nvfp4", "mxfp4"],
+                    choices=["nvfp4", "mxfp4", "mxfp8"],
                     help="Source quant format.")
     args, remainder = ap.parse_known_args()
 
@@ -35,6 +35,8 @@ def main():
         from amct_pytorch.experimental.fp4_convert.convert_nvfp4_to_hif4 import main as _run
     elif args.source_format == "mxfp4":
         from amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 import main as _run
+    elif args.source_format == "mxfp8":
+        from amct_pytorch.experimental.fp4_convert.convert_mxfp8_to_hif4 import main as _run
     else:
         ap.error(f"unsupported source format: {args.source_format}")
 
