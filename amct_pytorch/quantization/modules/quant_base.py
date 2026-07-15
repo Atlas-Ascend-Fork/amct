@@ -30,6 +30,12 @@ def get_algo_names_by_target(args, target):
     selected = []
     for algo_name in args.algos:
         algo_item = ALGO_REGISTRY.get_item(algo_name)
+        if algo_item.metadata.get("solver") == "calibrate":
+            # calibrate-class algos (e.g. higptq) are single-pass, no-gradient algorithms
+            # driven directly by CalibrationSolver (by name, via args.algos) -- they never
+            # plug into the weight/activation/structure quantizer slots this function
+            # serves, so they don't declare `targets` at all.
+            continue
         targets = tuple(algo_item.metadata.get("targets", ()))
         if not targets:
             raise ValueError(
