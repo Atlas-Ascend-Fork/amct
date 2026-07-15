@@ -184,6 +184,79 @@ MXFP4 的量化 = `cal_shared_exponent`(log2/floor) + `float_to_fp4e2m1`(布尔�
 - 为什么不能用 micro-batch 校准省显存？
 - `"mlp.gate"` 能跳 router 不误伤 expert，靠的是什么？
 
+> ⚠️ 上面 §6 是我**预想的** MoE（路由专家 = 一堆 nn.Linear）。真实跑 35B 时发现这个模型
+> **根本不是这样**——见 §6.5。这套冷/稀疏 expert 兜底代码留着（对别的 MoE 实现仍有效、也是防御），
+> 但这次真正的硬骨头是另一个。**"预想 vs 实际有落差"本身就是最该讲的实战经验。**
+
+---
+
+## 6.5 ⚠️ 实战复盘：35B 上真实遇到的（比预想更麻烦）
+
+这一节全是**只有真跑才会遇到、面试最能体现工程能力**的东西。
+
+### 先厘清两个被混用的词："层" 到底是什么
+
+- **Transformer 解码层**：这个 35B 有 **40 层**（`model.layers.0..39`），是宏观结构单位。
+- **nn.Linear**：一次矩阵乘 `y = x·Wᵀ`。**每个解码层里塞了一堆 nn.Linear**（q/k/v/o_proj、
+  各种投影、shared_expert 的 gate/up/down…）。全模型 `named_modules()` 数出来 **351 个 nn.Linear**。
+- 任务书说的"**量化层占比**"数的是 **nn.Linear**，不是那 40 个解码层。
+- "**覆盖 / 量化**某个 nn.Linear" = 把它的权重矩阵 W 从 fp16(16bit) 压成 **MXFP4(~4.25bit)**；
+  没覆盖 = W 保持 fp16。
+
+### 坑一：MoE 路由专家根本不是 nn.Linear（35B 的胜负手）
+
+`qwen3_5_moe` 的 256 个路由专家**不是 256×3 个 nn.Linear**，而是**融合成 3D 张量**存在
+`Qwen3_5MoeExperts` 模块里：
+```
+experts.gate_up_proj : [256, 1024, 2048]   ← 256 个专家的 gate+up 融合，grouped GEMM
+experts.down_proj    : [256, 2048, 512]
+```
+每层 ~805M 参数 × 40 层 = **~32B，占 35B 的大头**。⚠️**它们是 `nn.Parameter`、不是 nn.Linear
+→ amct（只量化 nn.Linear）完全碰不到 → 不处理则「显存降≥50%」必挂**（只量化那 ~3B 的
+attn/shared_expert 远远不够）。
+
+**解法**：自己写 `quantize_fused_experts`——把 3D 张量 reshape 成 `[E*out, in]`，沿**收缩维
+（最后一维 in）**每 32 个一组做 MXFP4（复用 `_fit_block_scale`+`_quant_direct`）。用 scale-fitting
+RTN（对 RTN 是加分项）、不做 Hadamard（专家输入旋转要和 router/shared_expert 同步，代价大）。
+router（`Qwen3_5MoeTopKRouter`，也非 Linear）保 fp16。
+
+> **这就是 35B 该讲的故事**：标准量化工具箱在这个模型上会**静默地漏掉 90% 的参数**
+> （因为大头不是它认识的 nn.Linear），我定位到、并补了一块量化逻辑救回显存指标。
+
+### 坑二：为什么 350 个 nn.Linear 只覆盖了 250 个
+
+跳过 `lm_head` 后目标 350，amct 实际只量化 **250**。差的 ~100 个**不是 bug，是 MXFP4 格式够不着**：
+
+> MXFP4 = 每 **32** 个权重共享一个 scale → 要量化的矩阵，**收缩维 in_features 必须整除 32**
+> 才能干净切块。
+
+这模型里 `linear_attn` 的部分 SSM 投影（`in_proj_a/b/z`，输出状态/门控，维度是小的奇怪数）、
+`shared_expert_gate`（out=1 的标量门）**维度不整除 32 → amct 直接跳过、保 fp16**。它们参数量极小。
+
+### 坑三：覆盖率的"诚实口径"（别被自己的打印骗了）
+
+我的 `report_actual_coverage` 分母只数了"被 amct 包装的模块"(250)，印成 `250/250=100%`——
+**会误导**。诚实口径是 **250/350 = 71.4%**（贴着 70% 线）。但 nn.Linear 覆盖对 35B 意义不大，
+因为大头（32B）根本不在 nn.Linear 里。**真正的量化程度看：全参数量化占比 97% / 显存降 71.2%。**
+→ 教训：**报告指标要想清楚分母是什么**，不然一问就穿。
+
+### 坑四：融合专家量化的 NPU OOM（多卡显存陷阱）
+
+`device_map` 把 card0 塞到只剩 ~1GB。融合专家量化时 `weight/scale`、`float_to_fp4e2m1` 的
+`zeros_like` 一堆 **2GB fp32 临时量**放在卡上 → **OOM**。我第一次判断"整张量算子在 NPU 无 kernel
+启动灾难"时**只想了算子数、没想显存**。修法：全程 CPU 算；回写时**先把 CPU 结果赋给 `W.data`
+（释放卡上旧张量）→ empty_cache → 再挪回卡**，保证设备峰值不超基线。
+→ 教训：NPU 上"少数大算子"没有 kernel 启动问题，但 **fp32 临时量的显存**是另一回事。
+
+### 35B 最终成绩
+delta **0.067**（≤0.4）、nn.Linear 覆盖 71.4%、全参数 97%、显存降 **71.2%**——三指标全过。
+
+🎯 **自测**：
+- "层" 在这里指什么？和"40 个解码层"什么关系？
+- 为什么 350 个 nn.Linear 只量化了 250 个？（MXFP4 block-32 要求 in%32==0）
+- 35B 的参数大头在哪？为什么只看 nn.Linear 覆盖率会误判量化程度？
+- 融合专家量化为什么会 OOM、怎么修的？
+
 ---
 
 ## 7. 面试模拟题（脱稿答，答不出就回去看对应节）
@@ -198,6 +271,8 @@ MXFP4 的量化 = `cal_shared_exponent`(log2/floor) + `float_to_fp4e2m1`(布尔�
 8. MoE 量化你遇到什么坑？"稀疏 expert 清零"这个 bug 怎么发现和修的？（§6，⚠️）
 9. 多卡跨卡张量你怎么保证不出 device mismatch？（§6④）
 10. 如果 delta 还是超 0.4，你下一步会调什么？（加 Hadamard→加 n_calib→跳 router→提校准样本，按投产比排序）
+11. ⭐35B 上你发现标准量化工具会漏掉大部分参数，怎么回事、怎么救的？（§6.5 坑一——融合专家非 nn.Linear，自实现融合张量 MXFP4）
+12. 你报告里 nn.Linear 覆盖率写 71.4% 不是 100%，为什么？（§6.5 坑二/三——维度不整除 32 量化不了 + 诚实分母）
 
 ---
 
