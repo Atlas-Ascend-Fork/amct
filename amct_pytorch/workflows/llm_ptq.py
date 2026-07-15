@@ -25,6 +25,7 @@ from typing import Any
 import torch
 from loguru import logger
 
+from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.datasets.ptq_provider import LlmPtqDataProvider
 from amct_pytorch.common.models.llm.common.base import PtqUnit
 from amct_pytorch.common.models.llm import register_llm_models
@@ -40,36 +41,53 @@ from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logg
 
 class LlmPtqWorkflow:
 
-    # Algo names that select the CalibrationSolver. These are registered in ALGO_REGISTRY
-    # with targets=("calibration",) (see amct_pytorch/algorithms/quant/higptq.py), so they
-    # never get picked up by WeightQuantizer/ActivationQuantizer/structure's normal
-    # get_algo_names_by_target lookups (those only ever ask for "weight"/"activation"/
-    # "structure") -- no need to strip them from args.algos before QuantLinear is built.
-    # "gptq" (the plain int/mxfp/hifloat8 GPTQuant) and "higptq" (the HiFloat4-specific
-    # HiGPTQuant) are two distinct algorithms, not aliases -- only "higptq" is wired up
-    # here today. When adding a new no-gradient, single-forward-pass algorithm (including
-    # plain "gptq"), add its name here AND register it in ALGO_REGISTRY with
-    # targets=("calibration",).
-    _CALIBRATION_ALGOS = frozenset({"higptq"})
+    # Maps each algorithm's ALGO_REGISTRY "solver" metadata (see e.g.
+    # amct_pytorch/algorithms/quant/higptq.py and auto_clip.py) to the SOLVER_REGISTRY key
+    # that should drive it. "gradient" algos (lwc/lac/autoround/omniquant/flatquant) are
+    # composed inline into QuantLinear/ActivationQuantizer and trained via BlockwiseSolver's
+    # backprop + optimizer loop; "calibrate" algos (e.g. higptq) are single-pass, no-gradient
+    # closed-form solves driven by CalibrationSolver. Every algo in ALGO_REGISTRY must declare
+    # a "solver" so this mapping never has to be hand-maintained per algo name.
+    _ALGO_SOLVER_TO_SOLVER_KEY = {"gradient": "block", "calibrate": "calibration"}
 
     def __init__(self, args):
         self.args = args
+        register_algorithms()  # populate ALGO_REGISTRY before reading its metadata below
+
         if len(args.quant_target) != 1:
             raise ValueError("ptq only supports a single quant_target.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
         self.granularity = args.granularity
 
-        matched = self._CALIBRATION_ALGOS.intersection(args.algos)
-        if matched:
-            logger.info("Detected {} in --algos; routing this run to the 'calibration' solver.", sorted(matched))
-            self.solver_key = "calibration"
-        else:
-            self.solver_key = "block"
+        self.solver_key = self._resolve_solver_key(args.algos)
 
         self.pipeline = None
         self.data_provider = None
         self.model_name = self.args.model_name
+
+    @staticmethod
+    def _resolve_solver_key(algos):
+        solver_kinds = set()
+        for algo_name in algos:
+            algo_item = ALGO_REGISTRY.get_item(algo_name)
+            solver_kind = algo_item.metadata.get("solver")
+            if solver_kind is None:
+                raise ValueError(f"Algorithm '{algo_name}' is missing registry metadata 'solver'.")
+            solver_kinds.add(solver_kind)
+
+        if len(solver_kinds) > 1:
+            raise ValueError(
+                f"--algos mixes incompatible solver kinds {sorted(solver_kinds)} across {list(algos)}; "
+                "a single PTQ run must use algorithms that share one solver."
+            )
+        if not solver_kinds:
+            return "block"
+
+        (solver_kind,) = solver_kinds
+        solver_key = LlmPtqWorkflow._ALGO_SOLVER_TO_SOLVER_KEY[solver_kind]
+        logger.info("Resolved --algos {} to solver '{}' (solver kind '{}').", list(algos), solver_key, solver_kind)
+        return solver_key
 
     @staticmethod
     def _register_components():

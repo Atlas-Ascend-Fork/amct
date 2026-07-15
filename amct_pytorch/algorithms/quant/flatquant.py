@@ -93,6 +93,7 @@ class _InvFlatDecomposeTransform(nn.Module):
     name="flatquant",
     description="Learnable affine structure transform inspired by FlatQuant",
     targets=("structure",),
+    solver="gradient",
 )
 class FlatQuant(nn.Module):
     """

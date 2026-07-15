@@ -25,6 +25,7 @@ from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
     name="omniquant",
     description="omniquant",
     targets=("structure",),
+    solver="gradient",
 )
 class OmniQuant(nn.Module):
     def __init__(self, args, ctx):
