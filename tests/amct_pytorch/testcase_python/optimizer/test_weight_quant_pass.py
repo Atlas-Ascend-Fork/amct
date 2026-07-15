@@ -269,9 +269,6 @@ class TestWeightQuantPass(unittest.TestCase):
     def test_conv_int4_finalize_deploy_no_crash(self):
         """C-1 regression: Conv A8W4 deploy finalize loop must not crash.
         get_recurrence_weight_node must return None (not raise) for non-RNN nodes."""
-        from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-            pack_int4_to_int8,
-        )
         from amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node import (
             QuantOpInfo,
         )
@@ -297,34 +294,35 @@ class TestWeightQuantPass(unittest.TestCase):
         weight_node = QuantOpInfo.get_weight_node(conv_node)
         self.assertIsNotNone(weight_node, 'Conv node must have a weight node')
 
+        from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.pack_int4_weight_pass import (
+            PackInt4WeightPass,
+        )
+
         weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
         orig_dims = list(weight_node.proto.dims)
-        raw_data = weight_helper.get_data()
-        n_elements = raw_data.size
-        int4_vals = np.clip(raw_data.flatten().astype(np.int8), -8, 7)
+        int4_vals = np.clip(weight_helper.get_data().astype(np.int8), -8, 7)
 
-        # deploy path
-        packed_deploy = pack_int4_to_int8(np.asarray(int4_vals).reshape(-1))
+        # deploy path: pack along the last axis, other axes unchanged
+        packed, packed_last = PackInt4WeightPass._pack_last_axis(int4_vals, orig_dims)
+        expected_last = (orig_dims[-1] + 1) // 2
         self.assertEqual(
-            packed_deploy.size,
-            n_elements // 2,
-            'deploy packed size must be half the INT4 element count',
+            packed_last, expected_last, 'last axis must become ceil(last/2)'
         )
 
-        # simulate the pack loop body (no save), mirroring _pack_int4_weight:
-        # dims keep the original multi-dim shape (for the deploy consumer to
-        # rebuild the weight); raw_data holds the packed bytes (half the count).
         weight_helper.clear_data()
-        weight_helper.set_data(packed_deploy, 'INT8')
+        new_dims = orig_dims[:-1] + [packed_last]
+        weight_helper.set_data(packed, 'INT8', dims=new_dims)
 
-        # dims stay original; raw_data byte length is prod(dims) // 2 (INT4-packed)
+        # only the last axis halves; leading axes stay identical
         self.assertEqual(
-            list(weight_node.proto.dims),
-            orig_dims,
-            'deploy INT4-packed weight must keep original multi-dim shape',
+            list(weight_node.proto.dims)[:-1],
+            orig_dims[:-1],
+            'leading axes must stay unchanged after last-axis packing',
         )
+        self.assertEqual(list(weight_node.proto.dims)[-1], expected_last)
+        # self-consistent: prod(new_dims) == raw_data byte length
         self.assertEqual(
+            int(np.prod(new_dims)),
             len(weight_node.proto.raw_data),
-            (int(np.prod(orig_dims)) + 1) // 2,
-            'INT4-packed raw_data must be half the original element count',
+            'packed INT8 tensor must satisfy prod(dims) == raw_data bytes',
         )

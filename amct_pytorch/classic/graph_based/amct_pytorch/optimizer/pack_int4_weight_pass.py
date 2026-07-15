@@ -18,10 +18,7 @@
 import numpy as np
 
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from ...amct_pytorch.utils.onnx_initializer_util import (
-    TensorProtoHelper,
-    pack_int4_to_int8,
-)
+from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.log import LOGGER
 
@@ -69,11 +66,33 @@ class PackInt4WeightPass(BaseFusionPass):
         if weight_node is None:
             return
         helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-        int4_vals = helper.get_data()
-        # 两个 INT4 pack 成一个 INT8，raw_data 字节数减半，但 dims 保留原始多维
-        # 形状（供部署侧按原始 shape 重建权重）。deploy 为 AMCT 专有格式，实际
-        # 字节数由 op_data_type 标记为 INT4-packed，不满足标准 ONNX 的 dims*sizeof。
-        packed = pack_int4_to_int8(np.asarray(int4_vals).reshape(-1))
+        int4_vals = np.asarray(helper.get_data())
+        orig_dims = list(helper.tensor.dims)
+        # 沿最后一轴 nibble-pack：末轴每两个 INT4 合成一个 INT8，其余轴不变。
+        # 末轴为奇数时逐行末尾补 0（末轴 -> ceil(last/2)）。deploy 为 AMCT 专有
+        # 格式，实际字节由 op_data_type 标记为 INT4-packed。
+        packed, packed_last = self._pack_last_axis(int4_vals, orig_dims)
         helper.clear_data()
-        helper.set_data(packed, 'INT8')
+        new_dims = orig_dims[:-1] + [packed_last] if len(orig_dims) > 1 else [packed_last]
+        helper.set_data(packed, 'INT8', dims=new_dims)
+
+    @staticmethod
+    def _pack_last_axis(int4_vals, dims):
+        """Pack every two INT4 along the last axis into one INT8, leaving other
+        axes unchanged. Odd last-axis rows are zero-padded (last -> ceil(last/2)).
+        Returns (flat_packed_int8, packed_last_size)."""
+        last = dims[-1] if dims else int(np.prod(int4_vals.shape))
+        rows = int4_vals.reshape(-1, last).astype(np.int8)
+        if last % 2 == 1:
+            LOGGER.logw(
+                'INT4 weight last-axis length {} is odd, zero-padding each row '
+                'for packing'.format(last),
+                'PackInt4WeightPass',
+            )
+            pad = np.zeros((rows.shape[0], 1), dtype=np.int8)
+            rows = np.concatenate([rows, pad], axis=1)
+        low = rows[:, 0::2] & 0x0F
+        high = rows[:, 1::2] & 0x0F
+        packed = (low | (high << 4)).astype(np.uint8).astype(np.int8)
+        return packed.reshape(-1), packed.shape[1]
 
