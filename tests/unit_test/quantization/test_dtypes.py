@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from unittest.mock import patch
+
 import pytest
 import torch
 
@@ -40,7 +42,8 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     up_size,
     weight_dequant,
 )
-from amct_pytorch.quantization.dtypes.hif import QuantDequantHif
+from amct_pytorch.quantization.dtypes import hifp as hifp_dtype
+from amct_pytorch.quantization.dtypes.hifp import QuantDequantHifp
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -315,8 +318,8 @@ def test_weight_dequant_block_size_one_direct_multiply():
     assert torch.allclose(result, expected.to(torch.get_default_dtype()))
 
 
-def test_hif_forward_shape_and_dtype_preserved():
-    qdq = QuantDequantHif(bits=8)
+def test_hifp_forward_shape_and_dtype_preserved():
+    qdq = QuantDequantHifp(bits=8)
     x = torch.randn(2, 8, dtype=torch.bfloat16).npu()
 
     y = qdq(x)
@@ -326,14 +329,43 @@ def test_hif_forward_shape_and_dtype_preserved():
     assert y.dtype == x.dtype
 
 
-def test_hif_forward_bits16_is_passthrough():
-    qdq = QuantDequantHif(bits=16)
+def test_hifp_quant_passes_gradient_through_ste():
+    x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
+    quantized = torch.full_like(x, 0.25)
+
+    with patch.object(
+        hifp_dtype, "hifloat8_fake_quant", return_value=quantized
+    ):
+        out = QuantDequantHifp(bits=8)(x)
+
+    assert torch.equal(out, quantized)
+    out.sum().backward()
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_passthrough_fallback_preserves_gradient():
+    x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
+
+    with patch.object(
+        hifp_dtype,
+        "hifloat8_fake_quant",
+        side_effect=lambda tensor: tensor.detach(),
+    ):
+        out = QuantDequantHifp(bits=8)(x)
+
+    assert torch.equal(out, x)
+    out.sum().backward()
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_forward_bits16_is_passthrough():
+    qdq = QuantDequantHifp(bits=16)
     x = torch.randn(2, 8)
     assert torch.equal(qdq(x), x)
 
 
-def test_hif_deploy_and_export_deploy_are_unsupported():
-    qdq = QuantDequantHif(bits=8)
+def test_hifp_deploy_and_export_deploy_are_unsupported():
+    qdq = QuantDequantHifp(bits=8)
     x = torch.randn(2, 8, dtype=torch.bfloat16)
 
     with pytest.raises(NotImplementedError, match="export_deploy is not supported"):
