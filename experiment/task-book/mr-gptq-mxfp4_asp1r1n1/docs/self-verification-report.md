@@ -56,8 +56,15 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq \
 | **显存降低**     | **67.4%**            | ≥ 50% | ✅   |
 
 - 日志：`src/logs/mrgptq_full_8b_4096.log`、`src/logs/e0_bf16_4096.log`
-- 【截图占位：MR-GPTQ 运行末尾，含 `[coverage]`/`[memory]`/`Score:` 三屏】
-- 【截图占位：bf16 基准 `Score:`】
+- MR-GPTQ 运行结果（覆盖率 / 显存 / Score / RESULT）：
+
+  ![8B MR-GPTQ 结果-1](img/8B1.png)
+
+  ![8B MR-GPTQ 结果-2](img/8B2.png)
+
+- bf16 基准 Score：
+
+  ![8B bf16 基准](img/8B_bf16.png)
 
 ### 4.2 Qwen3.6-35B-A3B（MoE，seq_len=4096）—— ✅ 达标
 
@@ -82,8 +89,18 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq \
   `shared_expert_gate`（out=1），参数量极小、保 fp16）。故 nn.Linear 覆盖 = 250/350 = 71.4%。
   **但 35B 参数大头是 32B 融合路由专家**（非 nn.Linear），单看 nn.Linear 不足以反映量化程度，
   以「全参数量化占比 97.0% / 显存降低 71.2%」为准。
-- 【截图占位：35B MR-GPTQ 运行末尾，含 `[actual-coverage]`/`[fused-experts]`/`[memory-full]`/`Score:`】
-- 【截图占位：35B bf16 基准 `Score:`】
+- MR-GPTQ 运行结果（`[coverage]`/`[actual-coverage]` 覆盖率）：
+
+  ![35B 覆盖率](img/35B1.png)
+
+- MR-GPTQ 运行结果（`[fused-experts]`/`[memory-full]` 显存 / `Score` / `RESULT`）：
+
+  ![35B 显存与结果](img/35B2.png)
+
+- bf16 基准 Score：
+
+  ![35B bf16 基准](img/35B_bf16.png)
+
 - 量化策略：nn.Linear（attn / 线性注意力投影 / 共享专家，共 250 个）走**完整 MR-GPTQ**
   （Hadamard + scale fitting + GPTQ 补偿）；融合路由专家（32B）走 **scale-fitting MXFP4 RTN**
   （不做 Hadamard——专家输入旋转需与 router/shared_expert 同步、代价大；scale fitting 对 RTN
@@ -103,20 +120,24 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq \
 **结论**：三增量逐步生效，复现论文 MR-GPTQ 设计；Hadamard 是 MXFP4 头号杠杆（纯 GPTQ 不达标，微旋转后达标）。
 外部交叉验证：我们的 GPTQ-mxfp4（10.1332）与 amct 自带 GPTQ（10.1369）逐位吻合，实现正确。
 
-- 【截图占位：消融三次运行的 `Score:` 对比】
+- 消融各次运行 `Score:` 见日志：`src/logs/mrgptq_had128_8b.log`（+Hadamard）、
+  `mrgptq_had_sf_8b.log`（+scale fitting）、`mrgptq_v1_8b.log`（无增量 baseline）等。
 
 ## 6. 性能数据
 
-| 项                                   | 数据                                                  |
-| ------------------------------------ | ----------------------------------------------------- |
-| 补偿耗时（8B，全增量，seq_len=2048） | 【待填：约 X min】                                    |
-| 相对 stock GPTQ 提速                 | ~15×（CPU 卸载 + shared exponent 预计算 + 标准量化） |
-| 【其他】                             | 【待填】                                              |
+| 项                                          | 数据                                                        |
+| ------------------------------------------- | ----------------------------------------------------------- |
+| 35B 校准+补偿耗时（全增量，seq_len=4096）   | **454.0s**（含 Hessian 累积 + 逐层 CPU 补偿 + 融合专家量化）|
+| 35B PPL 评测耗时（72 samples @4096，双卡）  | **5min 46.7s**                                              |
+| 相对 stock GPTQ 提速                        | ~15×（CPU 卸载 + shared exponent 预计算 + 标准量化）        |
 
-- 【截图占位：性能数据（per-layer 耗时 / 总耗时）】
+- 性能数据（35B 校准/补偿/评测耗时）：
+
+  ![35B 性能数据](img/35B_calib.png)
 
 ## 7. 结论
 
-- Qwen3-8B：MXFP4 weight-only 下 MR-GPTQ 三项硬指标（delta 0.273 / 覆盖 99.6% / 显存 67.4%）全部达标 ✅。
-- Qwen3.6-35B-A3B：【待测】。
+- Qwen3-8B（dense）：MXFP4 weight-only 下 MR-GPTQ 三项硬指标（delta 0.273 / 覆盖 99.6% / 显存 67.4%）全部达标 ✅。
+- Qwen3.6-35B-A3B（qwen3_5_moe 混合 MoE）：delta 0.067 / nn.Linear 覆盖 71.4% / 全参数 97.0% / 显存 71.2%，全部达标 ✅。
+  额外解决 amct 覆盖不到融合路由专家（占 32B）的问题，自实现融合专家 MXFP4 量化。
 - 算法实现自包含、零改 amct 源码、运行时注册，消融链证明各增量有效。
