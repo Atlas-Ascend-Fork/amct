@@ -20,7 +20,8 @@ import argparse
 import torch
 
 from data import get_test_dataset, get_calib_dataset
-from eval_utils import get_model, calibrate, test_ppl, report_coverage_memory
+from eval_utils import (get_model, calibrate, test_ppl,
+                        report_coverage_memory, report_actual_coverage)
 
 
 # ---- 量化配置 ----------------------------------------------------------------
@@ -59,6 +60,11 @@ def build_args():
     ap.add_argument("--calib_block", type=int, default=512)
     ap.add_argument("--dtype", default="float16", choices=["float16", "bfloat16"])
     ap.add_argument("--device", default="npu:0")
+    ap.add_argument("--device_map", default=None,
+                    help="多卡切分：'auto' 让 accelerate 跨可见卡切分（35B 单卡放不下时用）；"
+                         "留空=单卡整体加载（8B）")
+    ap.add_argument("--skip_router", action="store_true",
+                    help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
                     choices=["scale_fitting", "hadamard", "act_reorder"],
                     help="mr_gptq 模式下开启的增量（消融用）")
@@ -70,7 +76,8 @@ def main():
     dtype = getattr(torch, args.dtype)
 
     model, tokenizer = get_model(args.model_path, seqlen=args.seq_len,
-                                 dtype=dtype, device=args.device)
+                                 dtype=dtype, device=args.device,
+                                 device_map=args.device_map)
 
     if args.mode != "bf16":
         import amct_pytorch as amct
@@ -79,16 +86,22 @@ def main():
             for inc in args.increments:
                 mr_gptq_module._INCREMENTS[inc] = True
             print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
-            cfg = MXFP4_MR_GPTQ_CFG
+            cfg = dict(MXFP4_MR_GPTQ_CFG)
         else:
-            cfg = MXFP4_GPTQ_CFG
+            cfg = dict(MXFP4_GPTQ_CFG)
+        # MoE：可选跳过 router（mlp.gate）。amct skip_layers 为子串匹配，
+        # 'mlp.gate' 命中 router（...mlp.gate）但不命中 expert（...mlp.experts.N.gate_proj）。
+        if args.skip_router:
+            cfg["skip_layers"] = set(cfg["skip_layers"]) | {"mlp.gate"}
+        print(f"[cfg] skip_layers = {sorted(cfg['skip_layers'])}")
         calib = get_calib_dataset(tokenizer, n_samples=args.n_calib,
                                   block_size=args.calib_block)
-        report_coverage_memory(model, skip_layers=cfg["skip_layers"])  # 量化前统计
+        report_coverage_memory(model, skip_layers=cfg["skip_layers"])  # 量化前理论统计
         amct.quantize(model, cfg)
         calibrate(model, calib)
+        report_actual_coverage(model)  # 校准后真实统计（MoE 冷 expert 会掉出来）
 
-    testenc = get_test_dataset(tokenizer).to(args.device)
+    testenc = get_test_dataset(tokenizer)  # 保持 CPU，test_ppl 逐 batch 搬到输入卡
     ppl = test_ppl(model, testenc)
     print(f"[RESULT] model={args.model_path} mode={args.mode} "
           f"seq_len={args.seq_len} dtype={args.dtype} PPL={ppl:.4f}")
