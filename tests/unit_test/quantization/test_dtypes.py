@@ -15,11 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import sys
 from unittest.mock import patch
 
 import pytest
 import torch
 
+from amct_pytorch.cli.llm.args import parser_gen
 from amct_pytorch.quantization.dtypes.int import QuantDequantInt
 from amct_pytorch.quantization.dtypes.int_impl import (
     dynamic_per_token_quant,
@@ -42,7 +44,7 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     up_size,
     weight_dequant,
 )
-from amct_pytorch.quantization.dtypes import hifp as hifp_dtype
+from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, hifp as hifp_dtype
 from amct_pytorch.quantization.dtypes.hifp import QuantDequantHifp
 
 
@@ -316,6 +318,21 @@ def test_weight_dequant_block_size_one_direct_multiply():
     expected = weight * scale
     assert result.shape == weight.shape
     assert torch.allclose(result, expected.to(torch.get_default_dtype()))
+
+
+def test_hifp_is_registered_under_hifp_name_only():
+    assert DTYPE_REGISTRY.get("hifp") is QuantDequantHifp
+    with pytest.raises(KeyError):
+        DTYPE_REGISTRY.get("hif")
+
+
+def test_hifp_quant_dtype_cli_option_replaces_hif():
+    with patch.object(sys, "argv", ["amct", "--quant_dtype", "hifp"]):
+        assert parser_gen().quant_dtype == "hifp"
+
+    with patch.object(sys, "argv", ["amct", "--quant_dtype", "hif"]):
+        with pytest.raises(SystemExit):
+            parser_gen()
 
 
 def test_hifp_forward_shape_and_dtype_preserved():
