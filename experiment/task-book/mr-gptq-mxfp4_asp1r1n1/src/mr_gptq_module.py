@@ -235,6 +235,48 @@ class MRGPTQuant(GPTQuant):
         return F.linear(inputs, self.weight.to(inputs.dtype), self.bias)
 
 
+# ---- 融合存储的 MoE 路由专家量化（amct 覆盖不到的大头） --------------------
+@torch.no_grad()
+def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_000):
+    """对融合存储的 MoE 路由专家做 MXFP4 fake-quant。
+
+    背景：Qwen3.5-MoE 的路由专家不是一堆 nn.Linear，而是 `Qwen3_5MoeExperts` 模块里的
+    3D 权重张量 `gate_up_proj`/`down_proj`（形状 [E, out, in]，占 35B 的大头）。amct 只
+    量化 nn.Linear → 碰不到它们 → 不处理则「显存降低≥50%」必然不达标。
+
+    做法：沿最后一维(in，收缩维)每 32 元素一组做标准 MXFP4（reshape [E*out, in] 后
+    复用逐块量化）。weight-only RTN + 可选 scale fitting；**不做 Hadamard**（专家输入的
+    旋转需与 router/shared_expert 同步，代价大；且 scale fitting 对 RTN 本就是加分项）。
+    这些是整张量的少数向量化算子，NPU 上无 per-column kernel 启动灾难，故留在原设备。
+
+    返回 (专家模块数, 已量化参数量)。对无此结构的模型(如 8B dense)是 no-op。
+    """
+    n_mod = 0
+    quant_param = 0
+    for name, mod in model.named_modules():
+        if type(mod).__name__ != "Qwen3_5MoeExperts":
+            continue
+        n_mod += 1
+        for pname in ("gate_up_proj", "down_proj"):
+            W = getattr(mod, pname, None)
+            if W is None or W.numel() < min_experts_numel:
+                continue
+            dev, dt = W.device, W.dtype
+            E, O, I = W.shape
+            w2 = W.data.reshape(E * O, I).float()                 # [E*out, in]，原设备
+            if scale_fitting:
+                blk = MRGPTQuant._fit_block_scale(w2, 32)         # 附录H 网格重映射
+            else:
+                blk = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(w2)))
+            wq = MRGPTQuant._quant_direct(w2, blk, 32)            # 逐块 MXFP4 RTN
+            W.data = wq.reshape(E, O, I).to(dt)
+            quant_param += W.numel()
+        print(f"[fused-experts] {name}  (scale_fit={scale_fitting}) 量化完成", flush=True)
+    print(f"[fused-experts] 共 {n_mod} 个 Experts 模块，量化 {quant_param / 1e9:.2f}B 参数",
+          flush=True)
+    return n_mod, quant_param
+
+
 # ---- 运行时注册 'mr_gptq'（零改 amct 源码） --------------------------------
 def register():
     import amct_pytorch.algorithms as _algos
