@@ -23,7 +23,6 @@ from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.common.models.llm.common.quant_apply import (
     set_model_act_quant_state, set_model_weight_quant_state)
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
-from amct_pytorch.quantization.modules.quant_base import get_algo_names_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 from .base_solver import BaseSolver
@@ -42,11 +41,13 @@ class CalibrationSolver(BaseSolver):
 
     Unlike BlockwiseSolver (which drives ALGO_REGISTRY "weight"/"activation"/"structure"
     plugins composed inline into QuantLinear/ActivationQuantizer's forward), algorithms in
-    this category (targets=("calibration",), e.g. higptq) are looked up by name and
-    driven directly by this solver -- each one gets its own dispatch branch below, since
-    their construction/call conventions differ from each other (and from the weight/
-    activation/structure plugin shape). Add a new branch here when a new calibration-only
-    algorithm is registered.
+    this category (solver="calibrate", e.g. higptq -- see ALGO_REGISTRY metadata) declare no
+    `targets` at all and are looked up directly from args.algos, then driven by name -- each
+    one gets its own dispatch branch below, since their construction/call conventions differ
+    from each other (and from the weight/activation/structure plugin shape). LlmPtqWorkflow's
+    solver routing already guarantees every algo in args.algos shares one solver kind by the
+    time this runs, so args.algos itself is the calibration algo list here. Add a new branch
+    below when a new calibration-only algorithm is registered.
     """
 
     granularity = "block"
@@ -59,7 +60,7 @@ class CalibrationSolver(BaseSolver):
         kwargs = forward_kwargs or {}
         self.model = self.model.to(self.args.device)
 
-        algo_names = get_algo_names_by_target(self.args, "calibration")
+        algo_names = list(self.args.algos)
         if len(algo_names) != 1:
             raise ValueError(
                 f"CalibrationSolver supports exactly one calibration algo per run, got {algo_names}"
