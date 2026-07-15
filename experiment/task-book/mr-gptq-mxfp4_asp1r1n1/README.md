@@ -60,6 +60,19 @@ python3 -u run_eval.py --model_path <35B> --mode mr_gptq --increments hadamard s
 
 运行即打印：量化层覆盖率（`[coverage]`/`[actual-coverage]`）、融合专家量化（`[fused-experts]`）、显存降低（`[memory-full]`）、WikiText2 PPL（`Score:`）。环境搭建见 [experiment-log.md](docs/experiment-log.md) §2。
 
+## ⚠️ 安全提示
+
+本项目对 `qwen3_5_moe` 等**自定义模型架构**，在 `eval_utils.py` 加载时使用了
+`trust_remote_code=True`（该架构未并入 transformers 主干，不开则无法加载）。此参数会让
+HuggingFace 模型仓内的 `modeling_*.py` / `tokenization_*.py` 等自定义代码在加载阶段**直接执行**，
+等同于以当前进程权限运行任意 Python 代码。若 `--model_path` 指向被篡改或来路不明的模型，可能导致
+**主机被控、数据泄露**。
+
+使用建议：
+- **仅从受信任来源获取模型**（如官方 ModelScope `Qwen/...`、HuggingFace 官方仓）；
+- 尽量**固定到已知安全的版本 / commit hash**，避免加载被篡改的最新快照；
+- 不要把 `--model_path` 指向未经核验的第三方模型目录。
+
 ## 交付说明
 
 - **设计文档**（交付 #3）：分支 `feat/mr-gptq-mxfp4`，MR 合入 `cann/amct:feature/community-tasks`（评审对象）。

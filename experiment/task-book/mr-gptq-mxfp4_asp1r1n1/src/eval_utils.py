@@ -23,6 +23,11 @@ def get_model(model_path, seqlen=2048, dtype=torch.float16, device="npu:0",
     - device_map="auto"/dict：accelerate 跨卡切分（35B 单卡放不下，走这条）。
       注意 amct 换层后 offload 到 CPU/disk 的权重不会被加载 → 强制要求全放 NPU，
       出现 cpu/disk offload 直接报错（提示加卡或降 dtype）。
+
+    ⚠️安全：qwen3_5_moe 等自定义架构必须 trust_remote_code=True，加载时会执行模型仓内的
+    modeling_*.py / tokenization_*.py（等同以当前进程权限运行任意 Python 代码）。因此
+    **只能把 model_path 指向受信任来源**（官方 ModelScope / HuggingFace 仓，最好固定到已知安全
+    的版本/commit hash）；切勿指向来路不明或可被篡改的模型目录，否则会导致主机被控/数据泄露。
     """
     print(f"Loading model: {model_path} (seqlen={seqlen}, dtype={dtype}, "
           f"device_map={device_map})")
