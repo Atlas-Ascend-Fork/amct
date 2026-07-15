@@ -72,13 +72,15 @@ def _build_loader(n=8, dim=16, batch_size=4):
 
 
 class _registered_calibration_algo:
-    """Temporarily registers a dummy targets=("calibration",) entry in ALGO_REGISTRY."""
+    """Temporarily registers a dummy solver="calibrate" entry in ALGO_REGISTRY (no targets,
+    matching higptq's real registration -- calibrate-class algos are looked up from
+    args.algos directly, not via get_algo_names_by_target)."""
 
     def __init__(self, name):
         self.name = name
 
     def __enter__(self):
-        ALGO_REGISTRY.register(name=self.name, targets=("calibration",))(type(self.name, (), {}))
+        ALGO_REGISTRY.register(name=self.name, solver="calibrate")(type(self.name, (), {}))
         return self.name
 
     def __exit__(self, *exc_info):
