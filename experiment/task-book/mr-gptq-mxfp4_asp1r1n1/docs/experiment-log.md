@@ -99,9 +99,24 @@ export HF_HUB_DISABLE_XET=1
 
 **Qwen3-8B 三项硬指标全部达标。** 命令：`run_eval.py --mode mr_gptq --increments hadamard scale_fitting --seq_len 4096`。日志：`src/logs/mrgptq_full_8b_4096.log`、`e0_bf16_4096.log`。
 
-## 6. 下一步
+## 5.2 ★ 35B 最终交付数（Qwen3.6-35B-A3B / qwen3_5_moe，seq_len=4096）
 
-1. E0：BF16 基准 PPL（`--mode bf16`）。
-2. E1：MXFP4-GPTQ baseline PPL（`--mode gptq_mxfp4`），与 E0 算 delta 立靶。
-3. 实现 MR-GPTQ 三增量（按投产比）：MXFP scale fitting → block Hadamard 微旋转 → 静态激活重排。
-4. seq_len 切 4096 出最终交付数；再上 Qwen3.6-35B-A3B（含 MoE expert，量化层占比 ≥ 70%）。
+| 指标 | 结果 | 要求 | |
+|------|------|------|---|
+| bf16 PPL | 6.311 | — | 基准 |
+| MR-GPTQ PPL | 6.3781 | — | |
+| **PPL delta** | **0.067** | ≤ 0.4 | ✅ |
+| **量化层覆盖率（nn.Linear）** | **100%**（250/250） | ≥ 70% | ✅ |
+| 全参数量化占比 | 97.0%（33.62B/34.66B） | — | 参考 |
+| **显存降低** | **71.2%** | ≥ 50% | ✅ |
+
+**Qwen3.6-35B-A3B 三项硬指标全部达标。** 双卡 device_map，命令：`run_eval.py --mode mr_gptq --increments hadamard scale_fitting --seq_len 4096 --device_map auto`。
+
+**架构与坑（2026-07-15）**：模型实为 **`qwen3_5_moe` 混合架构**（30 层 linear_attn + 10 层 self_attn，每层 MoE 带 256 路由专家 + 共享专家）。⚠️**路由专家是 `Qwen3_5MoeExperts` 的融合 3D 张量（gate_up_proj/down_proj，占 ~32B/35B），非 nn.Linear → amct 覆盖不到**，不处理则显存降<50% 必挂。解法：`quantize_fused_experts` 对融合张量沿收缩维做 **scale-fitting MXFP4 RTN**（不做 Hadamard；scale fitting 对 RTN 是加分项）。nn.Linear（attn/linear_attn/shared_expert，250 个）走完整 MR-GPTQ。⚠️融合专家量化的 fp32 临时量在多卡塞满的卡上会 OOM → 全程 CPU 计算、回写先释放旧张量再挪回。router 保 fp16。日志：`src/logs/mrgptq_full_35b_4096.log`、`e0_bf16_35b_4096.log`。
+
+## 6. 交付收尾（8B + 35B 均达标，剩交付动作）
+
+1. ✅ 8B/35B 全部达标（见 5.1/5.2）。
+2. 把 35B 两份日志存进 `src/logs/`（`mrgptq_full_35b_4096.log`、`e0_bf16_35b_4096.log`）并 commit。
+3. 补截图：8B、35B 各一组运行末尾（覆盖率/显存/Score）+ bf16 基准。
+4. 推设计文档评审（`feat/mr-gptq-mxfp4` 分支的 MR 合入 `feature/community-tasks`）。
