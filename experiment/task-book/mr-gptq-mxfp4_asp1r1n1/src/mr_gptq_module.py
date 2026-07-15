@@ -108,6 +108,16 @@ class MRGPTQuant(GPTQuant):
         w/scale → round 到 E2M1 网格 → ×scale。"""
         return float_to_fp4e2m1(w / scale_col) * scale_col
 
+    # ---- 直接 MXFP4 量化（无补偿，RTN） -----------------------------------
+    @staticmethod
+    def _quant_direct(weight, blk_scale, group_size):
+        """整块权重直接 MXFP4 量化：每列按其组 scale round 到 E2M1，不做 GPTQ 补偿。
+        用于 MoE 冷/稀疏 expert（Hessian 缺失或秩亏，补偿不可用）——退化为 RTN 好过
+        把权重列置零。weight[out,in]，blk_scale[out, n_groups]。"""
+        in_features = weight.shape[1]
+        scale_full = blk_scale.repeat_interleave(group_size, dim=1)[:, :in_features]
+        return float_to_fp4e2m1(weight / scale_full) * scale_full
+
     # ---- Hessian 逆的上三角 Cholesky（override 父类，全程 CPU） -------------
     def cal_hessian_inverse(self, hessian, columns):
         # 父类用 self.weight.device(NPU) 造 index 张量，与 CPU hessian 冲突；
@@ -136,34 +146,61 @@ class MRGPTQuant(GPTQuant):
         weight = self.weight.detach().to("cpu", torch.float32)
         if self._do_hadamard():
             weight = self._rotate_last_dim(weight)  # 旋转权重（Hessian 已在 update 时旋转）
-        hessian = self.hessian.to("cpu", torch.float32)
 
-        # 1) 死列（Hessian 对角为 0）处理
-        diag = torch.diag(hessian)
-        dead = diag == 0
-        hessian[dead, dead] = 1
-        weight[:, dead] = 0
-
-        # 2) 预计算每块浮点 scale（沿 in-features，32 一组），静态、只算一次
-        #    形状 [out, ceil(in/32)]；后续每列按 原始列号//32 取用
+        # 1) 预计算每块浮点 scale（沿 in-features，32 一组）——基于真实权重，置零前算。
+        #    形状 [out, ceil(in/32)]；后续每列按 原始列号//32 取用。
         #    增量②：scale fitting → E8M0 网格重映射（附录 H 式2/3）
         if self.increments["scale_fitting"]:
             blk_scale = self._fit_block_scale(weight, self.group_size)
         else:
             blk_scale = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(weight)))
 
-        # 3) 激活重排：按 Hessian 对角（激活能量）排序处理列。
+        # 2) MoE 冷 expert 兜底：校准前向从未路由到它 → 无 Hessian。
+        #    （理论上 get_opt 只在 ≥1 次 update 后触发、hessian 不为 None；防御性保留）
+        if self.hessian is None:
+            wq = self._quant_direct(weight, blk_scale, self.group_size)
+            print(f"[MR-GPTQ]   ↳ no Hessian (cold expert) → direct MXFP4 "
+                  f"in {time.time() - _t0:.1f}s", flush=True)
+            return wq.to(orig_device, orig_dtype), None, None
+
+        hessian = self.hessian.to("cpu", torch.float32)
+        diag = torch.diag(hessian)
+        dead = diag == 0
+
+        # 3) MoE 稀疏 expert 兜底：多数输入通道在校准集内零激活 → Hessian 秩亏，
+        #    GPTQ 补偿不稳且 weight[:,dead]=0 会毁掉整块权重。退化为直接 MXFP4（RTN）。
+        if bool(dead.all()) or dead.float().mean().item() > 0.5:
+            wq = self._quant_direct(weight, blk_scale, self.group_size)
+            print(f"[MR-GPTQ]   ↳ sparse expert (dead={dead.float().mean().item():.0%}) "
+                  f"→ direct MXFP4 in {time.time() - _t0:.1f}s", flush=True)
+            return wq.to(orig_device, orig_dtype), None, None
+
+        # 4) 少量死列（dense 层常态）：置 1 稳定 Cholesky、对应权重列置零（stock GPTQ）
+        hessian[dead, dead] = 1
+        weight[:, dead] = 0
+
+        # 5) 激活重排：按 Hessian 对角（激活能量）排序处理列。
         #    stock GPTQ 亦如此；MR-GPTQ 的“静态激活重排”增量将在此细化。
         perm = torch.argsort(diag, descending=True)
         invperm = torch.argsort(perm)
         weight = weight[:, perm]
         hessian = hessian[perm][:, perm]
 
-        # 4) Hessian 逆的上三角 Cholesky（override 版，全程 CPU）
-        hessian_inv = self.cal_hessian_inverse(hessian, columns)
+        # 6) Hessian 逆的上三角 Cholesky（override 版，全程 CPU）
+        #    极端秩亏时仍可能非正定 → 兜底直接 MXFP4（用旋转后原权重，未置零）。
+        try:
+            hessian_inv = self.cal_hessian_inverse(hessian, columns)
+        except torch.linalg.LinAlgError:
+            w0 = self.weight.detach().to("cpu", torch.float32)
+            if self._do_hadamard():
+                w0 = self._rotate_last_dim(w0)
+            wq = self._quant_direct(w0, blk_scale, self.group_size)
+            print(f"[MR-GPTQ]   ↳ Hessian not PD → direct MXFP4 "
+                  f"in {time.time() - _t0:.1f}s", flush=True)
+            return wq.to(orig_device, orig_dtype), None, None
         del hessian
 
-        # 5) 分块 + 逐列量化 + 误差补偿（标准 GPTQ）
+        # 7) 分块 + 逐列量化 + 误差补偿（标准 GPTQ）
         block = self.block_size
         for i1 in range(0, columns, block):
             i2 = min(i1 + block, columns)
@@ -183,7 +220,7 @@ class MRGPTQuant(GPTQuant):
 
             weight[:, i2:] -= err_block.matmul(hessian_inv[i1:i2, i2:])
 
-        # 6) 恢复列顺序；此时 weight 每列已是量化值 → 即 fake-quant 权重
+        # 8) 恢复列顺序；此时 weight 每列已是量化值 → 即 fake-quant 权重
         weight = weight[:, invperm].to(orig_device, orig_dtype)
         print(f"[MR-GPTQ]   ↳ done in {time.time() - _t0:.1f}s", flush=True)
         # mxfp4 无独立 scale/offset（含在共享指数里）
