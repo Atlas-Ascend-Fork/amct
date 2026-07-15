@@ -121,6 +121,40 @@ def report_actual_coverage(model, quant_bits=4.25, bf16_bits=16):
 
 
 @torch.no_grad()
+def report_memory_full(model, quant_bits=4.25, bf16_bits=16):
+    """按【全模型参数】口径算真实显存降低（验收硬指标"显存降低≥50%"）。
+
+    分母 = 所有参数（含 embedding/norm/router 等 fp16）；分子 = 真正被量化的参数：
+      ① 量化的 nn.Linear（amct 量化模块，cur_batch>=2）；
+      ② 融合 MoE 路由专家 Qwen3_5MoeExperts.{gate_up_proj,down_proj}（本项目手动量化）。
+    对 8B dense 无②，退化为纯 nn.Linear 口径。
+    """
+    quant_ids = set()
+    for name, mod in model.named_modules():
+        tname = type(mod).__name__
+        if tname == "Qwen3_5MoeExperts":
+            for pn in ("gate_up_proj", "down_proj"):
+                p = getattr(mod, pn, None)
+                if p is not None:
+                    quant_ids.add(id(p))
+        elif (hasattr(mod, "cur_batch") and hasattr(mod, "wts_type")
+              and hasattr(mod, "weight") and getattr(mod, "cur_batch", 0) >= 2):
+            quant_ids.add(id(mod.weight))
+
+    total = quant = 0
+    for p in model.parameters():
+        total += p.numel()
+        if id(p) in quant_ids:
+            quant += p.numel()
+    red = 100.0 * (1 - (quant * quant_bits + (total - quant) * bf16_bits)
+                   / (total * bf16_bits))
+    print(f"[memory-full] 全模型量化参数占比 = {100.0 * quant / max(total, 1):.1f}% "
+          f"({quant / 1e9:.2f}B / {total / 1e9:.2f}B)")
+    print(f"[memory-full] 整体权重显存降低 = {red:.1f}%  (要求≥50%)")
+    return red
+
+
+@torch.no_grad()
 def calibrate(model, calib_blocks):
     """喂一次校准前向：把校准块拼成一个 batch 过模型。
 

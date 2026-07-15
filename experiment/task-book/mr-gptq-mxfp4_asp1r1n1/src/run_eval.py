@@ -20,8 +20,8 @@ import argparse
 import torch
 
 from data import get_test_dataset, get_calib_dataset
-from eval_utils import (get_model, calibrate, test_ppl,
-                        report_coverage_memory, report_actual_coverage)
+from eval_utils import (get_model, calibrate, test_ppl, report_coverage_memory,
+                        report_actual_coverage, report_memory_full)
 
 
 # ---- 量化配置 ----------------------------------------------------------------
@@ -100,6 +100,11 @@ def main():
         amct.quantize(model, cfg)
         calibrate(model, calib)
         report_actual_coverage(model)  # 校准后真实统计（MoE 冷 expert 会掉出来）
+        # MoE 融合路由专家（amct 覆盖不到的大头）：手动 MXFP4，否则显存降不达标
+        if args.mode == "mr_gptq":
+            sf = mr_gptq_module._INCREMENTS["scale_fitting"]
+            mr_gptq_module.quantize_fused_experts(model, scale_fitting=sf)
+        report_memory_full(model)  # 全参数口径的真实显存降低（验收用）
 
     testenc = get_test_dataset(tokenizer)  # 保持 CPU，test_ppl 逐 batch 搬到输入卡
     ppl = test_ppl(model, testenc)
