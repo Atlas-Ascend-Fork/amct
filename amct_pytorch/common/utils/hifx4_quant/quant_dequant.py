@@ -35,43 +35,72 @@ def quant_hifx(x: Tensor, Q: QType, qdim: int) -> Tensor:
 
     The quant dimension is reshaped into (-1, 8, 2, 4) blocks of 64 elements, so the caller
     must have padded ``x.shape[qdim]`` to a multiple of 64 (done by quant_dequant_float).
+
+    All arithmetic is performed in fp32 with torch.ldexp for exact power-of-2 (NPU-safe),
+    threshold comparison for level bits, and an extra bf16 rounding before the in-group
+    code rounding.
     """
-    # reshape x
-    x = x.unflatten(qdim, (-1, 8, 2, 4))
-    x_unsigned = torch.abs(x)
-    sign = torch.sign(x)
-
     assert Q.exp_bits == 0
-    # compute initial shared exp
-    max_lv3 = torch.max(x_unsigned, dim=qdim, keepdim=True)[0]
-    max_lv2 = torch.max(max_lv3, dim=qdim - 1, keepdim=True)[0]
-    max_lv1 = torch.max(max_lv2, dim=qdim - 2, keepdim=True)[0]
 
-    div7 = torch.ones_like(max_lv1) / 7.0
-    div7 = div7.to(torch.bfloat16).to(x.dtype)
-    scale_factor = max_lv1 * div7
-    scale_factor = (scale_factor).to(torch.bfloat16).to(x.dtype).clip(min=2 ** (-48), max=49152)
-    # change to tobf16(rint)
-    e_sf = torch.floor(torch.log2(scale_factor))
-    mant_sf = scale_factor / 2 ** e_sf * 2 ** 7
-    scale_factor = torch.round(mant_sf) / 2 ** 7 * 2 ** e_sf
+    dtype_ori = x.dtype
 
-    # scale_factor to e6m2
-    e_sf = torch.floor(torch.log2(scale_factor))
-    scale_factor = torch.round(scale_factor * torch.exp2(2 - e_sf)) * torch.exp2(e_sf - 2)
+    # Reshape quant dim into (-1, 8, 2, 4) blocks
+    x = x.unflatten(qdim, (-1, 8, 2, 4))
 
-    rec_sf = (1.0 / scale_factor).to(torch.bfloat16).to(x.dtype)
-    scale_lv2 = (max_lv2 * rec_sf)
-    scale_lv2 = torch.exp2((scale_lv2.clip(0, 4) / 4).floor())
-    scale_lv3 = torch.exp2(((max_lv3 * rec_sf / scale_lv2).clip(0, 2) / 2).floor())
+    # Cast to fp32 -- all computation in fp32
+    x = x.to(torch.float32)
 
-    mant = x_unsigned / scale_lv2 / scale_lv3 * rec_sf
-    mant = torch.floor(mant * 2 ** (Q.man_bits - 1) + 0.5) / 2 ** (Q.man_bits - 1)
-    mant[mant >= 2] = 2 - 2 ** (-Q.man_bits + 1)
+    # Handle non-finite values
+    xf = torch.where(torch.isfinite(x), x, torch.zeros_like(x))
+    tmp = xf.abs()
+    sign_bit = (xf < 0).to(torch.int32)
 
-    out = sign * mant * scale_lv2 * scale_lv3 * scale_factor
+    # Max values along block hierarchy
+    v16 = tmp.amax(dim=-1)       # [..., gn, 8, 2]
+    v8 = v16.amax(dim=-1)        # [..., gn, 8]
+    vmax = v8.amax(dim=-1)       # [..., gn]
 
-    out = out.flatten(qdim - 3, qdim)
+    NG = Q.man_bits - 1           # HiF4: man_bits=3 → NG=2
+    E6_OFFSET = 48
+
+    def _pow2(e):
+        """Exact 2^e via ldexp -- NPU-safe, unlike torch.exp2 / 2**e."""
+        return torch.ldexp(torch.ones_like(e, dtype=torch.float32), e.to(torch.int32))
+
+    # E6M2 (level-1 scale): e = floor(log2(sf)); q = round(sf * 2^(2-e)) in {4..7}
+    const_rec = (torch.tensor(1.0 / 7.0, dtype=torch.float32, device=x.device)).bfloat16().float()
+    sf = (vmax * const_rec).bfloat16().float()
+
+    sf_c = sf.clamp(2.0 ** -E6_OFFSET, 2.0 ** 15 * 1.5)
+    e_e6 = torch.floor(torch.log2(sf_c))
+    q_val = torch.round(sf_c * _pow2(2.0 - e_e6))          # {4,5,6,7}
+    e6m2 = q_val * _pow2(e_e6 - 2.0)                        # E6M2 value
+    rec = (1.0 / e6m2).bfloat16().float()                   # reciprocal, bf16-rounded
+
+    # Level-2 (8x) exponent bits
+    e1_8 = (v8 * rec.unsqueeze(-1) >= 4.0)                  # [..., gn, 8] bool
+    e1_8x2 = e1_8.unsqueeze(-1).expand(*e1_8.shape, 2)      # [..., gn, 8, 2]
+
+    # Level-3 (16x) exponent bits
+    e1_16 = (v16 * rec[..., None, None] * _pow2(-e1_8x2.to(torch.float32)) >= 2.0)
+
+    # In-group S1P2 code
+    de = e1_16.to(torch.float32) + e1_8x2.to(torch.float32)  # {0,1,2}
+    de64 = de.unsqueeze(-1).expand(*de.shape, 4)              # [..., gn, 8, 2, 4]
+
+    in_grp = tmp * rec[..., None, None, None] * _pow2(-de64)
+    in_grp = in_grp.bfloat16().float() * (2 ** NG)            # extra bf16 rounding
+    code = torch.floor(in_grp + 0.5).clamp(0, (1 << (NG + 1)) - 1).to(torch.int32)
+
+    # HiF4 → float: dequantize
+    sign = 1.0 - 2.0 * sign_bit.to(torch.float32)             # +1 / -1 (zero → +1)
+    dequant = (sign * e6m2[..., None, None, None] * _pow2(de64)
+               * (code.to(torch.float32) / (2 ** NG)))
+
+    # Restore original shape and dtype
+    out = dequant.flatten(qdim - 3, qdim)
+    if out.dtype != dtype_ori:
+        out = out.to(dtype_ori)
     return out
 
 
