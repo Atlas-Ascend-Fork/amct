@@ -279,8 +279,9 @@ def test_init_sets_solver_key_to_calibration_when_gptq_in_algos():
     assert wf.model_name == "qwen3"
     assert wf.pipeline is None
     assert wf.data_provider is None
-    # ALGO_REGISTRY filters "higptq" out of weight/activation/structure lookups via its
-    # targets=("calibration",) metadata, so __init__ no longer needs to strip it out.
+    # get_algo_names_by_target skips "higptq" in weight/activation/structure lookups via
+    # its solver="calibrate" metadata (it declares no `targets` at all), so __init__ no
+    # longer needs to strip it out.
     assert wf.args.algos == ["higptq"]
 
 
