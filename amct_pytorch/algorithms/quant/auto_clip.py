@@ -24,6 +24,7 @@ from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
     name="lwc",
     description="Learnable weight clipping",
     targets=("weight",),
+    solver="gradient",
 )
 class LWC(torch.nn.Module):
     def __init__(self, args, w_bits=None):
@@ -78,6 +79,7 @@ class LWC(torch.nn.Module):
     name="lac",
     description="Learnable activation clipping",
     targets=("activation",),
+    solver="gradient",
 )
 class LAC(torch.nn.Module):
     def __init__(self, args):
