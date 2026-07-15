@@ -247,10 +247,20 @@ def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_00
     做法：沿最后一维(in，收缩维)每 32 元素一组做标准 MXFP4（reshape [E*out, in] 后
     复用逐块量化）。weight-only RTN + 可选 scale fitting；**不做 Hadamard**（专家输入的
     旋转需与 router/shared_expert 同步，代价大；且 scale fitting 对 RTN 本就是加分项）。
-    这些是整张量的少数向量化算子，NPU 上无 per-column kernel 启动灾难，故留在原设备。
+
+    ⚠️显存：device_map 会把卡塞得很满(card 0 常仅剩 ~1GB)，故计算全程放 **CPU**
+    （fp32 临时量 2GB+ 放卡上必 OOM）；回写时先把 CPU 结果赋给 W.data 释放卡上旧张量、
+    empty_cache、再挪回卡，保证设备峰值不超基线。
 
     返回 (专家模块数, 已量化参数量)。对无此结构的模型(如 8B dense)是 no-op。
     """
+    def _empty_cache():
+        try:
+            import torch_npu
+            torch_npu.npu.empty_cache()
+        except Exception:
+            pass
+
     n_mod = 0
     quant_param = 0
     for name, mod in model.named_modules():
@@ -263,14 +273,19 @@ def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_00
                 continue
             dev, dt = W.device, W.dtype
             E, O, I = W.shape
-            w2 = W.data.reshape(E * O, I).float()                 # [E*out, in]，原设备
+            w2 = W.data.reshape(E * O, I).to("cpu").float()  # 先 fp16→CPU 再转 fp32（避免卡上 fp32 临时量）
             if scale_fitting:
-                blk = MRGPTQuant._fit_block_scale(w2, 32)         # 附录H 网格重映射
+                blk = MRGPTQuant._fit_block_scale(w2, 32)          # 附录H 网格重映射
             else:
                 blk = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(w2)))
-            wq = MRGPTQuant._quant_direct(w2, blk, 32)            # 逐块 MXFP4 RTN
-            W.data = wq.reshape(E, O, I).to(dt)
+            wq = MRGPTQuant._quant_direct(w2, blk, 32).reshape(E, O, I).to(dt)  # CPU fp16 结果
+            del w2, blk
+            W.data = wq                # 先赋 CPU：释放卡上旧权重存储
+            _empty_cache()             # 回收，给挪回腾地方
+            W.data = wq.to(dev)        # 再挪回原卡（此时峰值不超基线）
+            del wq
             quant_param += W.numel()
+        _empty_cache()
         print(f"[fused-experts] {name}  (scale_fit={scale_fitting}) 量化完成", flush=True)
     print(f"[fused-experts] 共 {n_mod} 个 Experts 模块，量化 {quant_param / 1e9:.2f}B 参数",
           flush=True)
