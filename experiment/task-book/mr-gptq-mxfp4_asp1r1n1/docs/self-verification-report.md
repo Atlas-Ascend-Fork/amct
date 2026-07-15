@@ -72,11 +72,16 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq \
 | bf16 PPL                   | 6.311                    | —     | 基准 |
 | MR-GPTQ PPL                | 6.3781                   | —     | —   |
 | **PPL delta**              | **0.067**                | ≤ 0.4 | ✅   |
-| **量化层覆盖率（nn.Linear）** | **100%**（250/250）      | ≥ 70% | ✅   |
-| 全参数量化占比             | 97.0%（33.62B/34.66B）   | —     | 参考 |
+| **量化层覆盖率（nn.Linear）** | **71.4%**（250/350）     | ≥ 70% | ✅   |
+| **全参数量化占比**         | **97.0%**（33.62B/34.66B）| —     | ✅   |
 | **显存降低**               | **71.2%**                | ≥ 50% | ✅   |
 
 - 日志：`src/logs/mrgptq_full_35b_4096.log`、`src/logs/e0_bf16_35b_4096.log`
+- 覆盖率口径说明：全模型 351 个 nn.Linear，跳 `lm_head`，目标 350 个；amct 实际量化 **250 个**
+  （其余 ~100 个为 in/out 维不整除 32、无法做 block-32 MXFP4 的层——部分 `linear_attn` 投影、
+  `shared_expert_gate`（out=1），参数量极小、保 fp16）。故 nn.Linear 覆盖 = 250/350 = 71.4%。
+  **但 35B 参数大头是 32B 融合路由专家**（非 nn.Linear），单看 nn.Linear 不足以反映量化程度，
+  以「全参数量化占比 97.0% / 显存降低 71.2%」为准。
 - 【截图占位：35B MR-GPTQ 运行末尾，含 `[actual-coverage]`/`[fused-experts]`/`[memory-full]`/`Score:`】
 - 【截图占位：35B bf16 基准 `Score:`】
 - 量化策略：nn.Linear（attn / 线性注意力投影 / 共享专家，共 250 个）走**完整 MR-GPTQ**
