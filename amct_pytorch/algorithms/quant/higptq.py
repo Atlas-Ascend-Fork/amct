@@ -23,7 +23,7 @@ from amct_pytorch.common.utils.quant_util import hifloat4_fake_quant
 
 
 @ALGO_REGISTRY.register(name="higptq", description="HiGPTQ Hessian-based single-pass calibrator (HiFloat4)",
-                         targets=("calibration",))
+                         targets=("calibration",), solver="calibrate")
 class HiGPTQuant(GPTQuant):
     """
     Function: GPTQ variant for the HiFloat4 (hifx4) block floating-point format.
