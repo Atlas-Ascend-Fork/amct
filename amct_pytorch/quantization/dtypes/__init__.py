@@ -31,6 +31,6 @@ def register_dtype():
 
     from .int import QuantDequantInt
     from .mxfp import QuantDequantMx
-    from .hif import QuantDequantHif
+    from .hifp import QuantDequantHifp
 
     _REGISTERED = True

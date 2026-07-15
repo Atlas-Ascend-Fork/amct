@@ -21,21 +21,22 @@ import torch
 from torch import Tensor
 
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.common.utils.quant_util import hifloat8_fake_quant
+from amct_pytorch.quantization.dtypes.hifp_impl import hifloat8_fake_quant
 
 
 
-@DTYPE_REGISTRY.register(name="hif", description="quant dequant for hifloat")
-class QuantDequantHif(torch.nn.Module):
+@DTYPE_REGISTRY.register(name="hifp", description="quant dequant for hifloat")
+class QuantDequantHifp(torch.nn.Module):
     def __init__(self, bits=8, is_act=False):
-        super(QuantDequantHif, self).__init__()
+        super(QuantDequantHifp, self).__init__()
         self.bits = bits
         self.is_act = is_act
         self._deploy_mod = False
 
     def fake_quant(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.bits == 8:
-            return hifloat8_fake_quant(x)
+            dq = hifloat8_fake_quant(x)
+            return dq.detach() + (x - x.detach())
         else:
             raise ValueError(f"HiFloat 4-bit are not implemented yet.")
 
@@ -52,4 +53,3 @@ class QuantDequantHif(torch.nn.Module):
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
         raise NotImplementedError(f"HiFloat-{self.bits} deploy is not supported yet.")
-

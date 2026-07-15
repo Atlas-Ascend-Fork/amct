@@ -64,7 +64,7 @@ def parser_gen(command=None):
                         help='bf16 uses the original model path; '
                              'quant rebuilds quant modules and toggles quantizers by bit-widths.')
 
-    parser.add_argument("--quant_dtype", type=str, default="", choices=['int', 'mxfp'],
+    parser.add_argument("--quant_dtype", type=str, default="", choices=['int', 'mxfp', 'hifp'],
                         help='Quantization data type.')
 
     parser.add_argument('--cali_bsz', type=int, default=4,
