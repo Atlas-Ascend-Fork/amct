@@ -61,6 +61,7 @@ def _get_scale_shape(weight_shape, group_size: int):
     name="autoround",
     description="Learnable rounding offsets inspired by Intel AutoRound",
     targets=("weight",),
+    solver="gradient",
 )
 class AutoRound(nn.Module):
     def __init__(self, args, w_bits):

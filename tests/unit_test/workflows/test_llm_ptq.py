@@ -30,10 +30,26 @@ import pytest
 import torch
 import torch.nn as nn
 
+from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
 QUANT_TARGET_MLP = "mlp"
+
+
+class _registered_algo:
+    """Temporarily registers a dummy ALGO_REGISTRY entry with the given metadata."""
+
+    def __init__(self, name, **metadata):
+        self.name = name
+        self.metadata = metadata
+
+    def __enter__(self):
+        ALGO_REGISTRY.register(name=self.name, **self.metadata)(type(self.name, (), {}))
+        return self.name
+
+    def __exit__(self, *exc_info):
+        ALGO_REGISTRY._items.pop(self.name, None)
 
 
 def _make_workflow(
@@ -276,6 +292,37 @@ def test_init_solver_key_defaults_to_block():
     )
     wf = LlmPtqWorkflow(args)
     assert wf.solver_key == "block"
+
+
+def test_init_sets_solver_key_to_block_for_gradient_algo():
+    args = SimpleNamespace(
+        quant_target=[QUANT_TARGET_MLP], granularity="block",
+        output_dir="/tmp/ptq", model_name="qwen3",
+        device="cpu", algos=["lwc"],
+    )
+    wf = LlmPtqWorkflow(args)
+    assert wf.solver_key == "block"
+
+
+def test_init_raises_when_algo_missing_solver_metadata():
+    with _registered_algo("no_solver_algo", targets=("weight",)):
+        args = SimpleNamespace(
+            quant_target=[QUANT_TARGET_MLP], granularity="block",
+            output_dir="/tmp/ptq", model_name="qwen3",
+            device="cpu", algos=["no_solver_algo"],
+        )
+        with pytest.raises(ValueError, match="missing registry metadata 'solver'"):
+            LlmPtqWorkflow(args)
+
+
+def test_init_raises_when_algos_mix_solver_kinds():
+    args = SimpleNamespace(
+        quant_target=[QUANT_TARGET_MLP], granularity="block",
+        output_dir="/tmp/ptq", model_name="qwen3",
+        device="cpu", algos=["higptq", "lwc"],
+    )
+    with pytest.raises(ValueError, match="mixes incompatible solver kinds"):
+        LlmPtqWorkflow(args)
 
 
 # ---- run with model granularity (calls _run_modelwise) -------------------
