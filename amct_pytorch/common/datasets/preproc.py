@@ -62,9 +62,14 @@ def get_pileval(tokenizer, n_samples, seq_len=512):
 
 
 def get_wikitext2(tokenizer):
-    testdata = load_dataset(
-        'wikitext', 'wikitext-2-raw-v1', split='test'
-    )
+    import os
+    local_dir = '/run/z84450661/wikitext-2/test_dataset'
+    if os.path.isdir(local_dir):
+        testdata = load_from_disk(local_dir)
+    else:
+        testdata = load_dataset(
+            'wikitext', 'wikitext-2-raw-v1', split='test'
+        )
 
     testenc = tokenizer(
         '\n\n'.join(testdata['text']), return_tensors='pt'
