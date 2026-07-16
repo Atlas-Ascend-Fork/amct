@@ -48,51 +48,66 @@ class PackInt4WeightPass(BaseFusionPass):
             return False
         return self.records[node.name].get("wts_type") == "INT4"
 
+    # 量化轴（per-channel scale 所在的 Cout 维）在 onnx 权重张量里的位置：
+    # Conv 为轴 0；ConvTranspose/MatMul/Gemm(transB=0)/LSTM/GRU 为轴 1。
+    _QUANT_AXIS = {
+        'Conv': 0,
+        'ConvTranspose': 1,
+        'MatMul': 1,
+        'Gemm': 1,
+        'LSTM': 1,
+        'GRU': 1,
+    }
+
     def do_pass(self, graph, object_node, model=None):
         """Pack the INT4 weight (and recurrence_weight for RNN) of object_node."""
+        axis = self._QUANT_AXIS.get(object_node.type, 0)
         weight_node = QuantOpInfo.get_weight_node(object_node)
-        self._pack_int4_weight(weight_node)
+        self._pack_int4_weight(weight_node, axis)
+        # recurrence_weight 仅 RNN 有，其量化轴（4H）同样在 onnx 张量的轴 1
         recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(object_node)
-        self._pack_int4_weight(recurrence_weight_node)
+        self._pack_int4_weight(recurrence_weight_node, axis)
         LOGGER.logd(
             "Pack INT4 weight (deploy) for layer '{}'".format(object_node.name),
             "PackInt4WeightPass",
         )
 
-    def _pack_int4_weight(self, weight_node):
+    def _pack_int4_weight(self, weight_node, quant_axis):
         """Read INT4 values from a weight tensor node and write them back packed
-        two-per-byte. No-op when weight_node is None (e.g. non-RNN ops have no
-        recurrence_weight)."""
+        two-per-byte along quant_axis. No-op when weight_node is None (e.g. non-RNN
+        ops have no recurrence_weight)."""
         if weight_node is None:
             return
         helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
         int4_vals = np.asarray(helper.get_data())
         orig_dims = list(helper.tensor.dims)
-        # 沿最后一轴 nibble-pack：末轴每两个 INT4 合成一个 INT8，其余轴不变。
-        # 末轴为奇数时逐行末尾补 0（末轴 -> ceil(last/2)）。deploy 为 AMCT 专有
+        # 沿量化轴（per-channel scale 所在的 Cout 维）nibble-pack：该轴每两个 INT4
+        # 合成一个 INT8，其余轴不变（该轴 -> ceil(axis/2)）。deploy 为 AMCT 专有
         # 格式，实际字节由 op_data_type 标记为 INT4-packed。
-        packed, packed_last = self._pack_last_axis(int4_vals, orig_dims)
+        packed, new_dims = self._pack_along_axis(int4_vals, orig_dims, quant_axis)
         helper.clear_data()
-        new_dims = orig_dims[:-1] + [packed_last] if len(orig_dims) > 1 else [packed_last]
         helper.set_data(packed, 'INT8', dims=new_dims)
 
     @staticmethod
-    def _pack_last_axis(int4_vals, dims):
-        """Pack every two INT4 along the last axis into one INT8, leaving other
-        axes unchanged. Odd last-axis rows are zero-padded (last -> ceil(last/2)).
-        Returns (flat_packed_int8, packed_last_size)."""
-        last = dims[-1] if dims else int(np.prod(int4_vals.shape))
-        rows = int4_vals.reshape(-1, last).astype(np.int8)
+    def _pack_along_axis(int4_vals, dims, axis):
+        """Pack every two INT4 into one INT8 along `axis`, leaving other axes
+        unchanged. Odd axis length is zero-padded (axis -> ceil(len/2)).
+        Returns (flat_packed_int8, new_dims)."""
+        arr = int4_vals.reshape(dims).astype(np.int8)
+        # 把量化轴移到最后，沿它两两配对，再移回原位
+        moved = np.moveaxis(arr, axis, -1)
+        last = moved.shape[-1]
         if last % 2 == 1:
             LOGGER.logw(
-                'INT4 weight last-axis length {} is odd, zero-padding each row '
-                'for packing'.format(last),
+                'INT4 weight quant-axis length {} is odd, zero-padding for '
+                'packing'.format(last),
                 'PackInt4WeightPass',
             )
-            pad = np.zeros((rows.shape[0], 1), dtype=np.int8)
-            rows = np.concatenate([rows, pad], axis=1)
-        low = rows[:, 0::2] & 0x0F
-        high = rows[:, 1::2] & 0x0F
-        packed = (low | (high << 4)).astype(np.uint8).astype(np.int8)
-        return packed.reshape(-1), packed.shape[1]
+            pad = np.zeros(moved.shape[:-1] + (1,), dtype=np.int8)
+            moved = np.concatenate([moved, pad], axis=-1)
+        low = moved[..., 0::2] & 0x0F
+        high = moved[..., 1::2] & 0x0F
+        packed_moved = (low | (high << 4)).astype(np.uint8).astype(np.int8)
+        packed = np.moveaxis(packed_moved, -1, axis)
+        return packed.reshape(-1), list(packed.shape)
 
