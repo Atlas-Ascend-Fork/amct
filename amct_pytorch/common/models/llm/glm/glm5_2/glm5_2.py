@@ -71,7 +71,7 @@ class GLM5_2(BaseModel):
         """Check if a layer owns indexer weights (IndexShare: only "full" + MTP layers)."""
         if layer_idx >= num_hidden_layers:
             return True
-        if not indexer_types:
+        if not indexer_types or layer_idx >= len(indexer_types):
             return True
         return indexer_types[layer_idx] == "full"
 
@@ -152,10 +152,16 @@ class GLM5_2(BaseModel):
 
 
     def cache_scheme(self):
-        """Return cache scheme dict for deploy config."""
+        """Return cache scheme dict for deploy config.
+
+        - non-mxfp: kv_cache_scheme=None, li_cache_scheme type=int.
+        - mxfp: kv_cache_scheme quantized (8-bit float, group-wise),
+          li_cache_scheme type=float, plus activation_scheme='dynamic'.
+        - w8a8-mxfp: quant_method='mxfp8'; w4a8-mxfp: quant_method omitted.
+        """
         bit_policy = ensure_bit_policy(self.args)
         is_mxfp = self.args.quant_dtype == "mxfp"
-        is_w4a8 = bit_policy.w_bits == 4
+        is_w4a8 = bit_policy["moe.routed"].default.w == 4
         li_cache_scheme = {
             "type": "float" if is_mxfp else "int",
             "num_bits": 8,

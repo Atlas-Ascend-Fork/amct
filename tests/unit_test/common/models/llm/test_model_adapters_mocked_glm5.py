@@ -969,6 +969,20 @@ class TestGLM5_2NewFunctions:
         # w8a8 (non-w4a8) mxfp uses quant_method=mxfp8
         assert result["quant_method"] == "mxfp8"
 
+    @pytest.mark.cpu
+    def test_cache_scheme_mxfp_w4a8(self, monkeypatch):
+        """w4a8-mxfp: quant_method should NOT be set (only w8a8-mxfp sets mxfp8)."""
+        model = self._make_model(monkeypatch, quant_dtype="mxfp")
+        model.args.bit_policy = BitPolicy({
+            "w_bits": 8, "a_bits": 8,
+            "moe": {"routed": {"w_bits": 4, "a_bits": 8}},
+        })
+        result = model.cache_scheme()
+        assert result["kv_cache_scheme"]["type"] == "float"
+        assert result["li_cache_scheme"]["type"] == "float"
+        assert result["activation_scheme"] == "dynamic"
+        assert "quant_method" not in result
+
     # -- generate_tensorwise_quant_layers --
 
     @pytest.mark.cpu
