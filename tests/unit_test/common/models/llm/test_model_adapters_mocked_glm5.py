@@ -39,6 +39,9 @@ QUANT_TARGET_MLP = 'mlp'
 QUANT_TARGET_MOE = 'moe'
 W_BITS = 'w_bits'
 A_BITS = 'a_bits'
+GATE_PROJ = 'gate_proj'
+DOWN_PROJ = 'down_proj'
+UP_PROJ = 'up_proj'
 
 
 def _make_glm5_config(num_layers=2):
@@ -858,6 +861,47 @@ def _make_glm5_config_ext(num_layers=2, num_nextn=0, first_k_dense=0,
     return GlmMoeDsaConfig(**kwargs)
 
 
+def _make_tensor_bit_policy(w4a8=False):
+    """Construct a BitPolicy with per-group entries for tensor mode tests.
+
+    Mirrors the structure AMCT deploy would build from a bit_config YAML:
+    - attn-linear: per-name bits (q_a/kv_a/wk=16 to model "not quantized in int")
+    - moe.routed: w_bits=4 for w4a8, else 8
+    - moe.shared / mlp: 8
+    """
+    moe_w = 4 if w4a8 else 8
+    cfg = {
+        W_BITS: 8,
+        A_BITS: 8,
+        "attn-linear": {
+            "q_a_proj": {W_BITS: 16, A_BITS: 16},
+            "q_b_proj": {W_BITS: 8, A_BITS: 8},
+            "kv_a_proj_with_mqa": {W_BITS: 16, A_BITS: 16},
+            "o_proj": {W_BITS: 8, A_BITS: 8},
+            "wq_b": {W_BITS: 8, A_BITS: 8},
+            "wk": {W_BITS: 16, A_BITS: 16},
+        },
+        "mlp": {
+            GATE_PROJ: {W_BITS: 8, A_BITS: 8},
+            DOWN_PROJ: {W_BITS: 8, A_BITS: 8},
+            UP_PROJ: {W_BITS: 8, A_BITS: 8},
+        },
+        "moe": {
+            "routed": {
+                GATE_PROJ: {W_BITS: moe_w, A_BITS: 8},
+                DOWN_PROJ: {W_BITS: moe_w, A_BITS: 8},
+                UP_PROJ: {W_BITS: moe_w, A_BITS: 8},
+            },
+            "shared": {
+                GATE_PROJ: {W_BITS: 8, A_BITS: 8},
+                DOWN_PROJ: {W_BITS: 8, A_BITS: 8},
+                UP_PROJ: {W_BITS: 8, A_BITS: 8},
+            },
+        },
+    }
+    return BitPolicy(cfg)
+
+
 class TestGLM5_2NewFunctions:
     """Tests for GLM5_2 functions at lines 156-413."""
 
@@ -875,6 +919,7 @@ class TestGLM5_2NewFunctions:
         args = _make_mock_args(
             quant_target=quant_target, quant_dtype=quant_dtype,
         )
+        args.bit_policy = _make_tensor_bit_policy(w4a8=False)
         return GLM5_2(args)
 
     # -- get_scale_name --
@@ -909,7 +954,7 @@ class TestGLM5_2NewFunctions:
 
     @pytest.mark.cpu
     def test_cache_scheme_mxfp(self, monkeypatch):
-        """cache_scheme for mxfp: both kv_cache_scheme and li_cache_scheme present."""
+        """cache_scheme for mxfp: kv/li cache + activation_scheme + quant_method."""
         model = self._make_model(monkeypatch, quant_dtype="mxfp")
         result = model.cache_scheme()
         kv = result["kv_cache_scheme"]
@@ -917,9 +962,223 @@ class TestGLM5_2NewFunctions:
         assert kv["type"] == "float"
         assert kv["strategy"] == "group"
         assert kv["group_size"] == 128
-        assert kv["dynamic"] is True
-        assert kv["symmetric"] is True
+        assert kv["dynamic"] == "true"
+        assert kv["symmetric"] == "true"
         assert result["li_cache_scheme"] == {"type": "float", "num_bits": 8}
+        assert result["activation_scheme"] == "dynamic"
+        # w8a8 (non-w4a8) mxfp uses quant_method=mxfp8
+        assert result["quant_method"] == "mxfp8"
+
+    @pytest.mark.cpu
+    def test_cache_scheme_mxfp_w4a8(self, monkeypatch):
+        """w4a8-mxfp: quant_method should NOT be set (only w8a8-mxfp sets mxfp8)."""
+        model = self._make_model(monkeypatch, quant_dtype="mxfp")
+        model.args.bit_policy = BitPolicy({
+            "w_bits": 8, "a_bits": 8,
+            "moe": {"routed": {"w_bits": 4, "a_bits": 8}},
+        })
+        result = model.cache_scheme()
+        assert result["kv_cache_scheme"]["type"] == "float"
+        assert result["li_cache_scheme"]["type"] == "float"
+        assert result["activation_scheme"] == "dynamic"
+        assert "quant_method" not in result
+
+    # -- generate_tensorwise_quant_layers --
+
+    @pytest.mark.cpu
+    def test_tensorwise_quant_int_dense_and_moe_mix(self, monkeypatch):
+        """INT mode: dense layers (i<first_k_dense) use mlp; MoE layers use experts+shared."""
+        model = self._make_model(
+            monkeypatch, num_layers=4, first_k_dense=2, num_nextn=0,
+            quant_dtype="int8",
+        )
+        layers = model.generate_tensorwise_quant_layers()
+        # Dense layers 0,1: mlp.gate_proj/down_proj/up_proj
+        assert "model.layers.0.mlp.gate_proj" in layers
+        assert "model.layers.0.mlp.down_proj" in layers
+        assert "model.layers.0.mlp.up_proj" in layers
+        assert "model.layers.1.mlp.gate_proj" in layers
+        # MoE layers 2,3: experts + shared_experts
+        assert "model.layers.2.mlp.experts.0.gate_proj" in layers
+        assert "model.layers.2.mlp.experts.7.down_proj" in layers
+        assert "model.layers.2.mlp.shared_experts.up_proj" in layers
+        assert "model.layers.3.mlp.experts.0.gate_proj" in layers
+        # Dense layers should NOT have experts/shared_experts
+        assert not any("model.layers.0.mlp.experts" in k for k in layers)
+        assert not any("model.layers.0.mlp.shared_experts" in k for k in layers)
+        # MoE layers should NOT have plain mlp.gate_proj
+        assert "model.layers.2.mlp.gate_proj" not in layers
+        # INT mode: no q_a_proj/kv_a_proj_with_mqa/indexer.wk
+        assert not any("q_a_proj" in k for k in layers)
+        assert not any("kv_a_proj_with_mqa" in k for k in layers)
+        assert not any("indexer.wk" in k for k in layers)
+        # All layers have o_proj/q_b_proj/indexer.wq_b
+        for i in range(4):
+            assert f"model.layers.{i}.self_attn.o_proj" in layers
+            assert f"model.layers.{i}.self_attn.q_b_proj" in layers
+            assert f"model.layers.{i}.self_attn.indexer.wq_b" in layers
+        # kv_b_proj never in quant_layers
+        assert not any("kv_b_proj" in k for k in layers)
+        # mlp.gate (router) never in quant_layers
+        assert not any(k.endswith(".mlp.gate") for k in layers)
+
+    @pytest.mark.cpu
+    def test_tensorwise_quant_mxfp_extra_layers(self, monkeypatch):
+        """MXFP mode: q_a_proj/kv_a_proj_with_mqa/indexer.wk are quantized."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, first_k_dense=0, num_nextn=0,
+            quant_dtype="mxfp",
+        )
+        layers = model.generate_tensorwise_quant_layers()
+        # mxfp-only layers present
+        assert "model.layers.0.self_attn.q_a_proj" in layers
+        assert "model.layers.0.self_attn.kv_a_proj_with_mqa" in layers
+        assert "model.layers.0.self_attn.indexer.wk" in layers
+        assert "model.layers.1.self_attn.q_a_proj" in layers
+        # always-quantized still present
+        assert "model.layers.0.self_attn.o_proj" in layers
+        assert "model.layers.0.self_attn.q_b_proj" in layers
+        assert "model.layers.0.self_attn.indexer.wq_b" in layers
+
+    @pytest.mark.cpu
+    def test_tensorwise_quant_covers_mtp_layer(self, monkeypatch):
+        """Tensor mode covers MTP layer (num_layers = num_hidden + num_nextn)."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, num_nextn=1, first_k_dense=0,
+            quant_dtype="int8",
+        )
+        layers = model.generate_tensorwise_quant_layers()
+        # Layer 2 is MTP — must be covered
+        assert "model.layers.2.self_attn.o_proj" in layers
+        assert "model.layers.2.mlp.experts.0.gate_proj" in layers
+        assert "model.layers.2.mlp.shared_experts.gate_proj" in layers
+
+    @pytest.mark.cpu
+    def test_tensorwise_quant_w4a8_routed_bit(self, monkeypatch):
+        """w4a8: moe.routed experts get bit=4, shared/attn stay 8."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, first_k_dense=0, num_nextn=0,
+            quant_dtype="int8",
+        )
+        model.args.bit_policy = _make_tensor_bit_policy(w4a8=True)
+        layers = model.generate_tensorwise_quant_layers()
+        # Routed experts = 4
+        assert layers["model.layers.0.mlp.experts.0.gate_proj"] == 4
+        assert layers["model.layers.0.mlp.experts.7.up_proj"] == 4
+        # Shared experts = 8
+        assert layers["model.layers.0.mlp.shared_experts.gate_proj"] == 8
+        # Attn bits = 8
+        assert layers["model.layers.0.self_attn.o_proj"] == 8
+        assert layers["model.layers.0.self_attn.q_b_proj"] == 8
+
+    @pytest.mark.cpu
+    def test_tensorwise_quant_default_bit_fallback(self, monkeypatch):
+        """Without per-group bit_policy, all bits fall back to top-level w_bits=8."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, first_k_dense=0, num_nextn=0,
+            quant_dtype="int8",
+        )
+        # Minimal bit_policy: only top-level, no per-group entries
+        model.args.bit_policy = BitPolicy({"w_bits": 8, "a_bits": 8})
+        layers = model.generate_tensorwise_quant_layers()
+        assert layers["model.layers.0.mlp.experts.0.gate_proj"] == 8
+        assert layers["model.layers.0.mlp.shared_experts.gate_proj"] == 8
+        assert layers["model.layers.0.self_attn.o_proj"] == 8
+
+    @pytest.mark.cpu
+    def test_tensorwise_indexer_types_filtering(self, monkeypatch):
+        """'shared' layers have no indexer weights; only 'full' and MTP layers do."""
+        model = self._make_model(
+            monkeypatch, num_layers=3, first_k_dense=0, num_nextn=0,
+            indexer_types=["full", "shared", "full"], quant_dtype="int8",
+        )
+        layers = model.generate_tensorwise_quant_layers()
+        ignore = model.generate_tensorwise_ignore_layers()
+        # Layer 0 (full): has indexer.wq_b
+        assert "model.layers.0.self_attn.indexer.wq_b" in layers
+        assert "model.layers.0.self_attn.indexer.weights_proj" in ignore
+        # Layer 1 (shared): NO indexer weights
+        assert "model.layers.1.self_attn.indexer.wq_b" not in layers
+        assert not any("model.layers.1.self_attn.indexer" in n for n in ignore)
+        # Layer 2 (full): has indexer.wq_b
+        assert "model.layers.2.self_attn.indexer.wq_b" in layers
+        assert "model.layers.2.self_attn.indexer.weights_proj" in ignore
+
+    # -- bits_scheme --
+
+    @pytest.mark.cpu
+    def test_bits_scheme_w8a8_single_group(self, monkeypatch):
+        """w8a8: bits_scheme returns only Linear group, no MoEGMM."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, first_k_dense=0, num_nextn=0,
+            quant_dtype="int8",
+        )
+        groups = model.bits_scheme()
+        assert len(groups) == 1
+        assert groups[0]["targets"] == ["Linear"]
+        assert groups[0]["w_bits"] == 8
+        assert groups[0]["a_bits"] == 8
+
+    @pytest.mark.cpu
+    def test_bits_scheme_w4a8_dual_group(self, monkeypatch):
+        """w4a8: bits_scheme returns Linear group + MoEGMM group with w_bits=4."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, first_k_dense=0, num_nextn=0,
+            quant_dtype="int8",
+        )
+        # Build a bit_policy where moe.routed group default has w_bits=4
+        model.args.bit_policy = BitPolicy({
+            W_BITS: 8, A_BITS: 8,
+            "moe": {"routed": {W_BITS: 4, A_BITS: 8}},
+        })
+        groups = model.bits_scheme()
+        assert len(groups) == 2
+        assert groups[0]["targets"] == ["Linear"]
+        assert groups[1]["targets"] == ["MoEGMM"]
+        assert groups[1][W_BITS] == 4
+        assert groups[1][A_BITS] == 8
+
+    # -- generate_tensorwise_ignore_layers --
+
+    @pytest.mark.cpu
+    def test_tensorwise_ignore_basic(self, monkeypatch):
+        """ignore list aligns with infer repo generate_ignore_item (int mode)."""
+        model = self._make_model(
+            monkeypatch, num_layers=3, num_nextn=0, quant_dtype="int8",
+        )
+        ignore = model.generate_tensorwise_ignore_layers()
+        # kv_b_proj always ignored
+        assert "model.layers.0.self_attn.kv_b_proj" in ignore
+        assert "model.layers.1.self_attn.kv_b_proj" in ignore
+        assert "model.layers.2.self_attn.kv_b_proj" in ignore
+        assert "lm_head" in ignore
+        # INT mode: q_a_proj, kv_a_proj_with_mqa, indexer.wk are in ignore
+        assert "model.layers.0.self_attn.q_a_proj" in ignore
+        assert "model.layers.0.self_attn.kv_a_proj_with_mqa" in ignore
+        assert "model.layers.0.self_attn.indexer.wk" in ignore
+        assert "model.layers.0.self_attn.indexer.weights_proj" in ignore
+        # No embed_tokens, no eh_proj (non-MTP)
+        assert not any("embed_tokens" in n for n in ignore)
+        assert not any("eh_proj" in n for n in ignore)
+
+    @pytest.mark.cpu
+    def test_tensorwise_ignore_covers_mtp(self, monkeypatch):
+        """MTP layer adds eh_proj + shared_head.head to ignore list."""
+        model = self._make_model(
+            monkeypatch, num_layers=2, num_nextn=1, quant_dtype="int8",
+        )
+        ignore = model.generate_tensorwise_ignore_layers()
+        # num_layers = 2 + 1 = 3
+        assert "model.layers.0.self_attn.kv_b_proj" in ignore
+        assert "model.layers.1.self_attn.kv_b_proj" in ignore
+        assert "model.layers.2.self_attn.kv_b_proj" in ignore
+        assert "lm_head" in ignore
+        # MTP layer (layer 2) has eh_proj and shared_head.head
+        assert "model.layers.2.eh_proj" in ignore
+        assert "model.layers.2.shared_head.head" in ignore
+        # Non-MTP layers do NOT have eh_proj
+        assert "model.layers.0.eh_proj" not in ignore
+        assert "model.layers.1.eh_proj" not in ignore
 
 
 if __name__ == "__main__":
