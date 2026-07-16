@@ -144,7 +144,22 @@ class Qwen3_5Moe(Qwen3_5):
 
         groups = []
         if linear_bits is not None:
-            groups.append({"targets": ["Linear"],
+            # linear_attn (Gated DeltaNet) projections are quantized alongside
+            # the attention linears at the same bit-widths, but infer represents
+            # them as custom modules whose class name is not "Linear", so the
+            # bare "Linear" target never matches them. Declare them explicitly
+            # via regex targets or infer aborts with "Unable to find matching
+            # target" for the quantized-but-unmatched in_proj/out_proj weights.
+            linear_targets = ["Linear"]
+            if "attn-linear" in self.quant_target:
+                linear_targets += [
+                    r"re:.*\.linear_attn\.in_proj_qkv",
+                    r"re:.*\.linear_attn\.in_proj_z",
+                    r"re:.*\.linear_attn\.in_proj_a",
+                    r"re:.*\.linear_attn\.in_proj_b",
+                    r"re:.*\.linear_attn\.out_proj",
+                ]
+            groups.append({"targets": linear_targets,
                            "w_bits": linear_bits[0], "a_bits": linear_bits[1]})
         if moe_gmm_bits is not None:
             groups.append({"targets": ["MoEGMM"],
