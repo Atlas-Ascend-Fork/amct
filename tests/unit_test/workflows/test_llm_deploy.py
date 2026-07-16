@@ -707,3 +707,32 @@ def test_load_weight_index_missing_raises(tmp_path):
     wf = _make_workflow(model_path=str(tmp_path))
     with pytest.raises(FileNotFoundError):
         wf._load_weight_index()  # pylint: disable=protected-access
+
+
+# ---- Bug1: fused MoE expert origin marked replaced ----------------------
+
+
+def test_collect_replaced_marks_fused_gate_up_origin():
+    wf = _make_workflow()
+    prefix = "model.language_model.layers.0.mlp.experts."
+    layer_tensors = {prefix + "5.gate_proj.qweight": "x"}
+    routes = {prefix + "5.gate_proj.qweight": prefix + "5.gate_proj.weight"}
+    original = {prefix + "gate_up_proj": "rest_00000.safetensors"}
+    out = wf._collect_replaced_original_weights(layer_tensors, routes, original)
+    assert out == {prefix + "gate_up_proj"}
+
+
+def test_collect_replaced_marks_fused_down_origin():
+    wf = _make_workflow()
+    prefix = "model.language_model.layers.3.mlp.experts."
+    layer_tensors = {prefix + "200.down_proj.qweight": "x"}
+    routes = {prefix + "200.down_proj.qweight": prefix + "200.down_proj.weight"}
+    original = {prefix + "down_proj": "rest_00001.safetensors"}
+    out = wf._collect_replaced_original_weights(layer_tensors, routes, original)
+    assert out == {prefix + "down_proj"}
+
+
+def test_fused_origin_of_ignores_non_expert():
+    wf = _make_workflow()
+    assert wf._fused_origin_of("model.layers.0.self_attn.q_proj.weight") is None
+    assert wf._fused_origin_of("model.layers.0.mlp.experts.gate_up_proj") is None
