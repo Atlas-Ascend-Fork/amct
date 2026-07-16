@@ -295,6 +295,25 @@ class GraphQuerier():
         return layers
 
     @staticmethod
+    def get_int4_odd_axis_layers(graph):
+        """Return layers whose weight quant-axis (Cout) length is odd.
+        INT4 packs two values along the quant axis, so an odd axis cannot be
+        packed and INT4 must be rejected for such layers. RNN quant axis (4H)
+        is always even, so RNN nodes (which get_cout_length does not cover)
+        are safely skipped via the exception guard."""
+        layers = []
+        if graph.model is not None:
+            return layers
+        for node in graph.nodes:
+            try:
+                cout = QuantOpInfo.get_cout_length(node)
+            except RuntimeError:
+                continue
+            if cout is not None and cout % 2 == 1:
+                layers.append(node.name)
+        return layers
+
+    @staticmethod
     def get_support_winograd_layer_types():
         """get layer types support int6 int7 quant"""
         return ['Conv2d']

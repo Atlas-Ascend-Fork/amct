@@ -235,6 +235,7 @@ class ConfigBase():
             self.check_int16_quantize_layers(graph, config, supported_layers)
 
         self.check_and_down_grade_winograd_num_bits(graph, config, supported_layers)
+        self.check_int4_weight_quant_axis(graph, config, supported_layers)
         act_common_config = self.get_common_activation_quant_config(common_config)
         self._fill_default_activation_asymmetric(graph, config, supported_layers, act_common_config)
         self.root.check(None, config)
@@ -271,6 +272,18 @@ class ConfigBase():
                 layer not in self.graph_querier.get_support_int16_quantizable_layers(graph):
                 config.get(layer).get(ACTIVATION_QUANT_PARAMS)['num_bits'] = 8
                 LOGGER.logw("Layer {} does not support int16_quantizable, set int8".format(layer))
+
+    def check_int4_weight_quant_axis(self, graph, config, supported_layers):
+        ''' INT4 沿量化轴(Cout)两两 pack，量化轴为奇数无法 pack，
+        配置阶段拦截：这些层不允许 INT4 权重量化。 '''
+        odd_axis_layers = set(self.graph_querier.get_int4_odd_axis_layers(graph))
+        for layer in supported_layers:
+            wts_config = config.get(layer).get(WEIGHT_QUANT_PARAMS)
+            if wts_config and wts_config.get('num_bits') == 4 and layer in odd_axis_layers:
+                raise ValueError(
+                    "Layer {} cannot be INT4-quantized: its weight quant axis "
+                    "(Cout) length is odd and cannot be nibble-packed. Please "
+                    "use INT8 for this layer.".format(layer))
 
     def check_and_down_grade_winograd_num_bits(self, graph, config, supported_layers):
         '''check quant num bits and turn it into 8 if it not support int6 int7 quant'''

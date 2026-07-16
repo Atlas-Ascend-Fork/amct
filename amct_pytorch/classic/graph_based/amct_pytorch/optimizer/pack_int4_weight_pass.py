@@ -91,20 +91,18 @@ class PackInt4WeightPass(BaseFusionPass):
     @staticmethod
     def _pack_along_axis(int4_vals, dims, axis):
         """Pack every two INT4 into one INT8 along `axis`, leaving other axes
-        unchanged. Odd axis length is zero-padded (axis -> ceil(len/2)).
-        Returns (flat_packed_int8, new_dims)."""
+        unchanged (axis -> axis/2). The quant axis is guaranteed even here:
+        odd quant-axis INT4 layers are already rejected at config stage
+        (check_int4_weight_quant_axis). Returns (flat_packed_int8, new_dims)."""
         arr = int4_vals.reshape(dims).astype(np.int8)
         # 把量化轴移到最后，沿它两两配对，再移回原位
         moved = np.moveaxis(arr, axis, -1)
         last = moved.shape[-1]
         if last % 2 == 1:
-            LOGGER.logw(
-                'INT4 weight quant-axis length {} is odd, zero-padding for '
-                'packing'.format(last),
-                'PackInt4WeightPass',
-            )
-            pad = np.zeros(moved.shape[:-1] + (1,), dtype=np.int8)
-            moved = np.concatenate([moved, pad], axis=-1)
+            # 配置阶段已拦截奇数量化轴，走到这里说明校验有漏，暴露而非静默补零
+            raise RuntimeError(
+                'INT4 quant-axis length {} is odd; should have been rejected '
+                'at config stage'.format(last))
         low = moved[..., 0::2] & 0x0F
         high = moved[..., 1::2] & 0x0F
         packed_moved = (low | (high << 4)).astype(np.uint8).astype(np.int8)
