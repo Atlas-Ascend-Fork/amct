@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from collections import defaultdict
 from pathlib import Path
@@ -69,8 +70,33 @@ class LlmDeployWorkflow:
         register_dtype()
         register_algorithms()
 
-    @staticmethod
+    # Maps a per-expert projection produced by deploy back to the fused expert
+    # tensor it originated from in the source checkpoint. MoE deploy unpacks the
+    # fused experts.gate_up_proj/experts.down_proj into per-expert
+    # experts.{idx}.{gate,up,down}_proj.weight before quantizing, so the fused
+    # originals must be marked replaced explicitly - their names never appear in
+    # tensor_routes and would otherwise be passed through verbatim (BF16),
+    # bloating the export and shadowing the quantized per-expert weights.
+    _PER_EXPERT_PROJ_TO_FUSED = {
+        "gate_proj": "gate_up_proj",
+        "up_proj": "gate_up_proj",
+        "down_proj": "down_proj",
+    }
+    _PER_EXPERT_RE = re.compile(
+        r"^(?P<prefix>.*\.experts\.)\d+\.(?P<proj>gate_proj|up_proj|down_proj)\.weight$"
+    )
+
+    @classmethod
+    def _fused_origin_of(cls, base_weight_name: str) -> str | None:
+        match = cls._PER_EXPERT_RE.match(base_weight_name)
+        if match is None:
+            return None
+        fused_proj = cls._PER_EXPERT_PROJ_TO_FUSED[match.group("proj")]
+        return match.group("prefix") + fused_proj
+
+    @classmethod
     def _collect_replaced_original_weights(
+        cls,
         layer_tensors: dict[str, object],
         tensor_routes: dict[str, str],
         original_weight_map: dict[str, str],
@@ -80,6 +106,13 @@ class LlmDeployWorkflow:
             base_weight_name = tensor_routes.get(weight_name, weight_name)
             if base_weight_name in original_weight_map:
                 replaced.add(base_weight_name)
+                continue
+            # Fused MoE experts: the deploy output is per-expert, but the source
+            # checkpoint stores a single fused tensor. Mark that fused tensor
+            # replaced so it is not passed through as an unquantized BF16 copy.
+            fused_origin = cls._fused_origin_of(base_weight_name)
+            if fused_origin is not None and fused_origin in original_weight_map:
+                replaced.add(fused_origin)
         return replaced
 
     def run(self):
