@@ -151,6 +151,21 @@ class Qwen3_5Moe(Qwen3_5):
                            "w_bits": moe_gmm_bits[0], "a_bits": moe_gmm_bits[1]})
         return groups or None
 
+    def generate_deploy_ignore_layers(self):
+        """Top-level (non-block) modules that deploy leaves unquantized.
+
+        The per-block ignore scan (get_quant_ignore_linear_names) only sees
+        modules inside decoder blocks, so lm_head - which is never quantized -
+        must be declared here. Without it infer matches lm_head against the
+        Linear target group and aborts for the missing weight_scale. When
+        weights are tied, lm_head shares embed_tokens and has no standalone
+        tensor to ignore.
+        """
+        ignore = []
+        if not bool(getattr(self.config, "tie_word_embeddings", False)):
+            ignore.append("lm_head")
+        return ignore
+
     def iter_deploy_bindings(self, layer_idx, block):
         weight_prefix = self.get_layer_weight_prefix(layer_idx)
         for name, module in block.named_modules():

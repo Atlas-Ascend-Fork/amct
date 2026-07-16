@@ -234,7 +234,13 @@ class LlmDeployWorkflow:
 
     def _run_blockwise(self):
         self._copy_support_files()
-        quant_ignore_layers = []
+        # Top-level modules that live outside the decoder blocks (e.g. lm_head)
+        # are never visited by the per-block ignore scan, so an adapter that
+        # leaves them unquantized must declare them here or infer will try to
+        # match them against a quantized target and abort. Optional hook: adapters
+        # that do not implement it keep the previous empty-list behaviour.
+        deploy_ignore_fn = getattr(self.pipeline, "generate_deploy_ignore_layers", None)
+        quant_ignore_layers = list(deploy_ignore_fn()) if callable(deploy_ignore_fn) else []
         original_index = self._load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
         updated_weight_map = {}
