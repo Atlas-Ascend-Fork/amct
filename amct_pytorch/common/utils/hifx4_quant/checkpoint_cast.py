@@ -7,36 +7,36 @@
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""CLI entry point for FP16/BF16 <-> HiFloat4 checkpoint cast.
+"""FP16/BF16 <-> HiFloat4 checkpoint conversion (implementation).
 
-The user chooses what a cast produces via ``--output-format``:
+The thin CLI front door ``amct_pytorch.cli.llm.cast_hif4`` just calls ``main`` here. Three verb
+subcommands:
 
-    cast --output-format fp16   FP16/BF16 --quant_dequant_float--> FP16  (HiF4 fake-quant,
-    cast --output-format bf16   FP16/BF16 --quant_dequant_float--> BF16   dequantized float;
-                                runs on any hardware, e.g. Atlas A2/A3/A5)
-    cast --output-format hif4   FP16/BF16 --hif4_cast(packed)----> real HiF4 packed bytes
-                                (scale + value uint8 safetensors; for HiF4-capable
-                                hardware, e.g. Atlas A6)
+    fake-quant   FP16/BF16 --HiF4 fake-quant--> FP16/BF16   (eval: inject HiF4 error into
+                 --dtype {fp16,bf16}                         float weights; NPU kernel if
+                                                             available, else pure torch)
+    pack         FP16/BF16 --real HiF4 pack---> scale+value uint8 safetensors  (deploy;
+                                                             pure PyTorch)
+    unpack       real HiF4 --reconstruct------> FP16/BF16    (reverse of pack; --dtype
+                 --dtype {fp16,bf16}                          overrides, default = pack-time dtype)
 
-    dequant                     real HiF4 safetensors --hif4_bit_reconstruct--> FP16/BF16
-
-Both the fake-quant (float) and the real-pack paths share the same HiF4 quantization
-(``amct_pytorch.common.utils.hifx4_quant.bit_dump``), so a fake-quant float tensor and
-the dequant of the matching packed tensor are bit-identical.
+Routing: ``fake-quant`` (the eval path) prefers the AscendC kernel and falls back to the
+pure-torch reference off-NPU; ``pack`` (the deploy path) always uses the pure-torch packer.
+Kernel and torch reference are numerically equivalent (<1e-6); ``pack`` and ``unpack`` are
+bit-identical. Only 2-D+ ``*.weight`` tensors are quantized; everything else is copied.
 
 Typical usage::
 
-    python -m amct_pytorch.cli.cast_hif4 cast \\
-        --input /path/to/model --output /path/to/out --output-format hif4
-    python -m amct_pytorch.cli.cast_hif4 dequant \\
-        --input /path/to/hif4-packed --output /path/to/float-out
+    python -m amct_pytorch.cli.llm.cast_hif4 fake-quant --input <model> --output <out> --dtype bf16
+    python -m amct_pytorch.cli.llm.cast_hif4 pack       --input <model> --output <out>
+    python -m amct_pytorch.cli.llm.cast_hif4 unpack     --input <packed> --output <out>
 """
 from __future__ import annotations
 
@@ -47,18 +47,13 @@ from typing import Dict, List, Optional
 
 import torch
 
-from amct_pytorch.common.utils.hifx4_quant import (
-    QType,
-    quant_dequant_float,
-    hif4_cast,
-    hif4_bit_reconstruct,
-)
+from .bit_dump import hif4_cast, hif4_bit_reconstruct
+from ..quant_util import hifloat4_fake_quant
 
-# HiF4 quantizes along the last dim in blocks of 64 (see bit_dump / quant_hifx).
+# HiF4 quantizes along the last dim in blocks of 64 (see bit_dump / _hif4_core).
 HIF4_BLOCK = 64
-# Marks a directory produced by ``cast --output-format hif4``; read back by ``dequant``.
+# Marks a directory produced by ``pack``; read back by ``unpack``.
 HIF4_META_NAME = "hif4_cast_meta.json"
-_HIF4_QTYPE = QType("hifx4").dim(-1)
 
 
 # --------------------------------------------------------------------------- I/O
@@ -116,23 +111,40 @@ def _pad_last_to_block(x: torch.Tensor) -> torch.Tensor:
     return torch.nn.functional.pad(x, (0, HIF4_BLOCK - rem))
 
 
-# --output-format float choices -> the torch dtype the dequantized weight is emitted as.
+# fake-quant --dtype choices -> the torch dtype the fake-quantized weight is emitted as.
 _FLOAT_FMT = {"fp16": torch.float16, "bf16": torch.bfloat16}
-# name (as stored in meta / --out-dtype) -> torch float dtype, for dequant.
+# name (as stored in meta / unpack --dtype) -> torch float dtype.
 _DTYPE_BY_NAME = {"fp16": torch.float16, "float16": torch.float16,
                   "bf16": torch.bfloat16, "bfloat16": torch.bfloat16}
 
 
+def _npu_available() -> bool:
+    """True if torch_npu is importable and an Ascend NPU is visible."""
+    try:
+        import torch_npu  # noqa: F401
+    except ImportError:
+        return False
+    return getattr(torch, "npu", None) is not None and torch.npu.is_available()
+
+
 def cast_weight_float(t: torch.Tensor, out_dtype: torch.dtype) -> torch.Tensor:
-    """Fake-quant: float -> HiF4 -> float (dequantized, output ``out_dtype``, no packing)."""
-    return quant_dequant_float(t, _HIF4_QTYPE, force_py=True, force_fp32=True).to(out_dtype)
+    """Fake-quant: float -> HiF4 -> float (dequantized, output ``out_dtype``, no packing).
+
+    Routed through the AscendC NPU kernel when an NPU is available (the weight is moved to
+    NPU); off-NPU it falls back to the pure-torch reference. ``hifloat4_fake_quant`` makes
+    that choice -- kernel only for an npu-resident fp16/bf16 tensor, else pure torch. The two
+    paths are numerically equivalent (kernel validated against the reference to <1e-6)."""
+    x = t.to(out_dtype)                                  # kernel needs fp16/bf16
+    if _npu_available():
+        x = x.npu()
+    return hifloat4_fake_quant(x, qdim=-1).cpu().to(out_dtype)
 
 
 def cast_weight_hif4(t: torch.Tensor):
     """Real pack: BF16 -> HiF4 (scale, value) uint8 buffers + reconstruction metadata.
 
     Leading dims are flattened to a matrix and the last dim is padded to a multiple of 64;
-    the original shape and pre-pad width are recorded so ``dequant`` restores exactly."""
+    the original shape and pre-pad width are recorded so ``unpack`` restores exactly."""
     orig_shape = list(t.shape)
     mat = t.reshape(-1, orig_shape[-1])
     n_orig = mat.shape[-1]
@@ -143,17 +155,18 @@ def cast_weight_hif4(t: torch.Tensor):
     return scale.contiguous(), value.contiguous(), meta
 
 
-def run_cast(args) -> None:
+def _cast(input_dir: str, output_dir: str, out_format: str, quiet: bool) -> None:
+    """Core forward pass shared by ``fake-quant`` (out_format fp16/bf16) and ``pack`` (hif4)."""
     _require_safetensors()
     from safetensors.torch import load_file, save_file
 
-    if args.output_format not in ("fp16", "bf16", "hif4"):
-        raise ValueError(f"--output-format must be fp16, bf16 or hif4, got {args.output_format!r}")
-    os.makedirs(args.output, exist_ok=True)
+    if out_format not in ("fp16", "bf16", "hif4"):
+        raise ValueError(f"output format must be fp16, bf16 or hif4, got {out_format!r}")
+    os.makedirs(output_dir, exist_ok=True)
     # tensors copied verbatim (norms/biases) and the packed dir's non-weights use this float dtype.
-    copy_dtype = _FLOAT_FMT.get(args.output_format, torch.bfloat16)
+    copy_dtype = _FLOAT_FMT.get(out_format, torch.bfloat16)
 
-    index = load_index(args.input)
+    index = load_index(input_dir)
     weight_map = index["weight_map"]
     s2k = shard_to_keys(weight_map)
 
@@ -163,13 +176,13 @@ def run_cast(args) -> None:
     n_quant = n_copy = 0
 
     for shard, keys in s2k.items():
-        tensors = load_file(os.path.join(args.input, shard))
+        tensors = load_file(os.path.join(input_dir, shard))
         out_tensors: Dict[str, torch.Tensor] = {}
         for name in keys:
             t = tensors[name]
             if _is_weight(name, t):
-                if args.output_format in _FLOAT_FMT:  # fp16 / bf16 fake-quant
-                    out_tensors[name] = cast_weight_float(t, _FLOAT_FMT[args.output_format])
+                if out_format in _FLOAT_FMT:  # fp16 / bf16 fake-quant
+                    out_tensors[name] = cast_weight_float(t, _FLOAT_FMT[out_format])
                     out_weight_map[name] = shard
                 else:  # hif4 real pack
                     scale, value, meta = cast_weight_hif4(t)
@@ -186,37 +199,48 @@ def run_cast(args) -> None:
                 n_copy += 1
         for v in out_tensors.values():
             total_bytes += v.numel() * v.element_size()
-        save_file(out_tensors, os.path.join(args.output, shard),
-                  metadata={"format": "pt", "hif4_output": args.output_format})
-        if not args.quiet:
+        save_file(out_tensors, os.path.join(output_dir, shard),
+                  metadata={"format": "pt", "hif4_output": out_format})
+        if not quiet:
             print(f"[shard] {shard}: {len(out_tensors)} tensors written", flush=True)
 
-    write_index(out_weight_map, total_bytes, args.output)
-    if args.output_format == "hif4":
+    write_index(out_weight_map, total_bytes, output_dir)
+    if out_format == "hif4":
         payload = {"format": "hif4_packed", "block": HIF4_BLOCK, "weights": hif4_meta}
-        with open(os.path.join(args.output, HIF4_META_NAME), "w", encoding="utf-8") as f:
+        with open(os.path.join(output_dir, HIF4_META_NAME), "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
-    _copy_side_files(args.input, args.output)
-    print(f"[cast] output-format={args.output_format} | quantized={n_quant} copied={n_copy} "
-          f"-> {args.output}", flush=True)
+    _copy_side_files(input_dir, output_dir)
+    mode = "pack" if out_format == "hif4" else f"fake-quant({out_format})"
+    print(f"[{mode}] weights={n_quant} copied={n_copy} -> {output_dir}", flush=True)
 
 
-# --------------------------------------------------------------- dequant (rev)
-def run_dequant(args) -> None:
+def run_fake_quant(args) -> None:
+    """``fake-quant`` subcommand: FP16/BF16 -> HiF4 -> FP16/BF16 (weights only)."""
+    _cast(args.input, args.output, out_format=args.dtype, quiet=args.quiet)
+
+
+def run_pack(args) -> None:
+    """``pack`` subcommand: FP16/BF16 -> real HiF4 packed bytes."""
+    _cast(args.input, args.output, out_format="hif4", quiet=args.quiet)
+
+
+# --------------------------------------------------------------- unpack (rev)
+def _unpack(input_dir: str, output_dir: str, out_dtype: Optional[str], quiet: bool) -> None:
+    """Core reverse pass for ``unpack``: real HiF4 bytes -> FP16/BF16 float."""
     _require_safetensors()
     from safetensors.torch import load_file, save_file
 
-    os.makedirs(args.output, exist_ok=True)
-    meta_path = os.path.join(args.input, HIF4_META_NAME)
+    os.makedirs(output_dir, exist_ok=True)
+    meta_path = os.path.join(input_dir, HIF4_META_NAME)
     if not os.path.exists(meta_path):
         raise FileNotFoundError(
-            f"{meta_path} not found — dequant expects a directory produced by "
-            f"'cast --output-format hif4'")
+            f"{meta_path} not found — unpack expects a directory produced by "
+            f"'cast_hif4 pack'")
     with open(meta_path, "r", encoding="utf-8") as f:
         payload = json.load(f)
     hif4_meta = payload["weights"]
 
-    index = load_index(args.input)
+    index = load_index(input_dir)
     weight_map = index["weight_map"]
     s2k = shard_to_keys(weight_map)
     # keys that are the two halves of a packed weight -> the weight they belong to
@@ -230,7 +254,7 @@ def run_dequant(args) -> None:
     n_deq = n_copy = 0
 
     for shard, keys in s2k.items():
-        tensors = load_file(os.path.join(args.input, shard))
+        tensors = load_file(os.path.join(input_dir, shard))
         out_tensors: Dict[str, torch.Tensor] = {}
         done_weights = set()
         for name in keys:
@@ -241,12 +265,12 @@ def run_dequant(args) -> None:
                 m = hif4_meta[wname]
                 scale = tensors[m["scale_key"]]
                 value = tensors[m["value_key"]]
-                # output dtype: --out-dtype override, else the source dtype recorded at pack time.
-                out_dtype = (_DTYPE_BY_NAME[args.out_dtype] if args.out_dtype
-                             else _DTYPE_BY_NAME.get(m.get("orig_dtype", "bf16"), torch.bfloat16))
+                # output dtype: --dtype override, else the source dtype recorded at pack time.
+                out_dtype_t = (_DTYPE_BY_NAME[out_dtype] if out_dtype
+                               else _DTYPE_BY_NAME.get(m.get("orig_dtype", "bf16"), torch.bfloat16))
                 recon = hif4_bit_reconstruct(scale, value)          # fp32 [rows, n_padded]
                 recon = torch.as_tensor(recon)[:, : m["n_orig"]]     # unpad
-                recon = recon.reshape(*m["orig_shape"]).to(out_dtype)
+                recon = recon.reshape(*m["orig_shape"]).to(out_dtype_t)
                 out_tensors[wname] = recon
                 out_weight_map[wname] = shard
                 done_weights.add(wname)
@@ -257,14 +281,19 @@ def run_dequant(args) -> None:
                 n_copy += 1
         for v in out_tensors.values():
             total_bytes += v.numel() * v.element_size()
-        save_file(out_tensors, os.path.join(args.output, shard), metadata={"format": "pt"})
-        if not args.quiet:
+        save_file(out_tensors, os.path.join(output_dir, shard), metadata={"format": "pt"})
+        if not quiet:
             print(f"[shard] {shard}: {len(out_tensors)} tensors written", flush=True)
 
-    write_index(out_weight_map, total_bytes, args.output)
-    _copy_side_files(args.input, args.output, skip=(HIF4_META_NAME,))
-    print(f"[dequant] hif4 -> float | dequantized={n_deq} copied={n_copy} -> {args.output}",
+    write_index(out_weight_map, total_bytes, output_dir)
+    _copy_side_files(input_dir, output_dir, skip=(HIF4_META_NAME,))
+    print(f"[unpack] hif4 -> float | weights={n_deq} copied={n_copy} -> {output_dir}",
           flush=True)
+
+
+def run_unpack(args) -> None:
+    """``unpack`` subcommand: real HiF4 packed bytes -> FP16/BF16 float."""
+    _unpack(args.input, args.output, out_dtype=args.dtype, quiet=args.quiet)
 
 
 # -------------------------------------------------------------------- helpers
@@ -285,32 +314,38 @@ def _copy_side_files(src: str, dst: str, skip=()) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description="BF16 <-> HiFloat4 checkpoint cast")
+    ap = argparse.ArgumentParser(
+        description="FP16/BF16 <-> HiFloat4 checkpoint conversion (fake-quant / pack / unpack)")
     sub = ap.add_subparsers(dest="command", required=True)
 
-    c = sub.add_parser("cast", help="cast an FP16/BF16 checkpoint to HiF4 (float fake-quant or real packed)")
-    c.add_argument("--input", required=True, help="FP16/BF16 model dir (safetensors)")
-    c.add_argument("--output", required=True, help="output dir")
-    c.add_argument("--output-format", default="bf16", choices=["fp16", "bf16", "hif4"],
-                   help="fp16/bf16 = HiF4 fake-quant, output that float dtype; "
-                        "hif4 = real packed HiF4 safetensors (scale+value bytes)")
-    c.add_argument("--quiet", action="store_true")
-    c.set_defaults(func=run_cast)
+    fq = sub.add_parser(
+        "fake-quant",
+        help="FP16/BF16 -> HiF4 -> FP16/BF16 fake-quant (eval; weights only). "
+             "NPU kernel if available, else pure-torch reference")
+    fq.add_argument("--input", required=True, help="FP16/BF16 model dir (safetensors)")
+    fq.add_argument("--output", required=True, help="output dir")
+    fq.add_argument("--dtype", default="bf16", choices=["fp16", "bf16"],
+                    help="output float dtype (default bf16)")
+    fq.add_argument("--quiet", action="store_true")
+    fq.set_defaults(func=run_fake_quant)
 
-    d = sub.add_parser("dequant", help="unpack a real HiF4 checkpoint back to FP16/BF16")
-    d.add_argument("--input", required=True, help="packed HiF4 dir (from 'cast --output-format hif4')")
-    d.add_argument("--output", required=True, help="output float dir")
-    d.add_argument("--out-dtype", default=None, choices=["fp16", "bf16"],
-                   help="dequant output dtype (default: the source dtype recorded at pack time)")
-    d.add_argument("--quiet", action="store_true")
-    d.set_defaults(func=run_dequant)
+    pk = sub.add_parser(
+        "pack", help="FP16/BF16 -> real HiF4 packed bytes (scale+value uint8 safetensors; deploy)")
+    pk.add_argument("--input", required=True, help="FP16/BF16 model dir (safetensors)")
+    pk.add_argument("--output", required=True, help="output dir")
+    pk.add_argument("--quiet", action="store_true")
+    pk.set_defaults(func=run_pack)
+
+    up = sub.add_parser("unpack", help="real HiF4 packed bytes -> FP16/BF16 float (reverse of pack)")
+    up.add_argument("--input", required=True, help="packed HiF4 dir (from 'cast_hif4 pack')")
+    up.add_argument("--output", required=True, help="output float dir")
+    up.add_argument("--dtype", default=None, choices=["fp16", "bf16"],
+                    help="output dtype (default: the source dtype recorded at pack time)")
+    up.add_argument("--quiet", action="store_true")
+    up.set_defaults(func=run_unpack)
     return ap
 
 
 def main(argv: Optional[list] = None) -> None:
     args = build_parser().parse_args(argv)
     args.func(args)
-
-
-if __name__ == "__main__":
-    main()

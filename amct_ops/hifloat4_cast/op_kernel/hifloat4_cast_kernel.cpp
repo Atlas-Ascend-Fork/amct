@@ -314,6 +314,12 @@ public:
         pipe_barrier(PIPE_V);
         vmul(mantbuf.ptr(), mantbuf.ptr(), exp0recbuf.ptr(), BATCH/64, 1, 1, 1, 8, 8, 8);
         pipe_barrier(PIPE_V);
+        // round the in-group mantissa quotient to bf16 before the S1P2 round, matching the
+        // reference (_hif4_core.hif4_encode) and the authoritative hifx_quant_op.h kernel.
+        vconv_f322bf16r(bf16_general_buf.ptr(), mantbuf.ptr(), BATCH/64, 1, 1, 4, 8);
+        pipe_barrier(PIPE_V);
+        vconv_bf162f32(mantbuf.ptr(), bf16_general_buf.ptr(), BATCH/64, 1, 1, 8, 4);
+        pipe_barrier(PIPE_V);
 
         vmuls(mantbuf.ptr(), mantbuf.ptr(), (float)(1<<(shape.MB-1)), BATCH/64, 1, 1, 8, 8);
         pipe_barrier(PIPE_V);
