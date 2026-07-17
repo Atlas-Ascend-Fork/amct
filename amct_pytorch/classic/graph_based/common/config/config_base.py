@@ -276,10 +276,10 @@ class ConfigBase():
     def check_int4_weight_quant_axis(self, graph, config, supported_layers):
         ''' INT4 沿量化轴(Cout)两两 pack，量化轴为奇数无法 pack，
         配置阶段拦截：这些层不允许 INT4 权重量化。 '''
-        odd_axis_layers = set(self.graph_querier.get_int4_odd_axis_layers(graph))
         for layer in supported_layers:
-            wts_config = config.get(layer).get(WEIGHT_QUANT_PARAMS)
-            if wts_config and wts_config.get('num_bits') == 4 and layer in odd_axis_layers:
+            if config.get(layer).get(WEIGHT_QUANT_PARAMS).get('num_bits') != 4:
+                continue
+            if self.graph_querier.is_int4_quant_axis_odd(graph, layer):
                 raise ValueError(
                     "Layer {} cannot be INT4-quantized: its weight quant axis "
                     "(Cout) length is odd and cannot be nibble-packed. Please "
