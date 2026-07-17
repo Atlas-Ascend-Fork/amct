@@ -24,7 +24,7 @@ Pipeline::
 
 Typical usage::
 
-    python -m amct_pytorch.cli.convert_to_hif4 --source-format mxfp8 \\
+    python -m amct_pytorch.cli.llm.convert_to_hif4 --source-format mxfp8 \\
         --quant_model_dir /path/to/MXFP8 \\
         --ref_bf16_model_dir /path/to/BF16-ref \\
         --output_dir /path/to/output
