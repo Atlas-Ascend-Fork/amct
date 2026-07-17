@@ -16,14 +16,14 @@
 # ----------------------------------------------------------------------------
 """HiF4 (N=4) real bit dump -- pack model weights to the deployable HiFloat4 layout.
 
-Take an [M, N] tensor, cast it to fp32, run the *same* HiF4 quantization logic as
-``hifx4_quant.quant_dequant.quant_hifx`` but stop before dequantizing, and emit the raw
+Take an [M, N] tensor, cast it to fp32, run the *same* shared HiF4 quantization
+(``_hif4_core.hif4_encode``, also used by ``quant_dequant_float``) but stop before dequantizing, and emit the raw
 bit representation of the scale and the in-group codes. This is what turns a weight tensor
 into the uint8 buffers stored in a "real" HiF4 safetensors file (vs. the FP->HiF4->FP
 fake-quant simulation used for PPL/accuracy evaluation).
 
 Grouping is along the LAST dim (N): every 64 consecutive elements of a row form one
-group, laid out as (8, 2, 4) exactly like ``quant_hifx``'s ``unflatten(-1, (-1, 8, 2, 4))``.
+group, laid out as (8, 2, 4) exactly like ``quant_dequant_float``'s ``unflatten(-1, (-1, 8, 2, 4))``.
 So ``N`` must be a multiple of 64.
 
 Outputs
@@ -38,7 +38,7 @@ value : uint8 [M, N // 2]          two adjacent 4-bit codes packed into one byte
     the first (even-index) element goes in the HIGH nibble, the next in the LOW nibble
 
 Note E1_8 / E1_16 are named "level-1 / level-2 scale" per the requested byte layout;
-they correspond to the level-2 (8x) and level-3 (16x) exponents inside ``quant_hifx``.
+they correspond to the level-2 (8x) and level-3 (16x) exponents inside the shared ``_hif4_core`` encode.
 This format is HiF4-specific (Ng = 2, so the in-group code fits in 3 bits + 1 sign bit).
 
 NPU pitfall: ``torch.exp2`` / ``2**e`` / ``torch.pow(2, e)`` are exp-approximation based on
@@ -52,19 +52,10 @@ bit packing uses plain integer arithmetic (a*2**k + b) instead of shift/or.
 import numpy as np
 import torch
 
+from ._hif4_core import hif4_encode, hif4_decode, _pow2, E6_OFFSET, E6M2_MBITS
+
 N_FMT = 4            # HiF4
 NG = N_FMT - 2       # S1PNg, Ng = 2  -> in-group code is 3 bits, value = code / 2**Ng
-E6M2_MBITS = 2       # E6M2 mantissa bits
-E6_OFFSET = 48       # E6M2 exponent bias: unbiased in [-48, 15] -> biased in [0, 63]
-
-
-def _pow2_t(e):
-    return torch.ldexp(torch.ones_like(e, dtype=torch.float32), e.to(torch.int32))
-
-
-def _to_bf16_t(x):
-    # round to bf16 then back to fp32 (round-half-to-even), matches To_BF16 / quant_hifx
-    return x.bfloat16().float()
 
 
 @torch.no_grad()
@@ -94,54 +85,25 @@ def hif4_cast(x, output="packed"):
     gn = N // 64
 
     xg = x.reshape(M, gn, 8, 2, 4)
-    xf = torch.where(torch.isfinite(xg), xg, torch.zeros_like(xg))
-    tmp = xf.abs()
-    sign_bit = (xf < 0).to(torch.int32)                        # [M,gn,8,2,4]
-
-    v16 = tmp.amax(dim=-1)                                     # [M,gn,8,2]
-    v8 = v16.amax(dim=-1)                                      # [M,gn,8]
-    vmax = v8.amax(dim=-1)                                     # [M,gn]
-
-    const_rec = _to_bf16_t(torch.tensor(1.0 / 7.0, dtype=torch.float32, device=x.device))
-    sf = _to_bf16_t(vmax * const_rec)                         # [M,gn]
-
-    # E6M2 (level-1): e = floor(log2(sf)); q = round(sf * 2^(2-e)) in {4..7}
-    sf_c = sf.clamp(2.0 ** -E6_OFFSET, 2.0 ** 15 * 1.5)
-    e_e6 = torch.floor(torch.log2(sf_c))
-    q = torch.round(sf_c * _pow2_t(2.0 - e_e6))               # {4,5,6,7}
-    e6m2 = q * _pow2_t(e_e6 - 2.0)                             # value
-    rec = _to_bf16_t(1.0 / e6m2)                              # [M,gn]
-
-    # level-2 (8x) and level-3 (16x) exponent bits
-    e1_8 = (v8 * rec.unsqueeze(-1) >= 4.0)                    # [M,gn,8] bool
-    e1_8x2 = e1_8.unsqueeze(-1).expand(M, gn, 8, 2)          # [M,gn,8,2]
-    e1_16 = (v16 * rec[..., None, None] * _pow2_t(-e1_8x2.to(torch.float32)) >= 2.0)
-
-    # in-group S1P2 code
-    de = e1_16.to(torch.float32) + e1_8x2.to(torch.float32)   # {0,1,2}
-    de64 = de.unsqueeze(-1).expand(M, gn, 8, 2, 4)
-    in_grp = tmp * rec[..., None, None, None] * _pow2_t(-de64)
-    in_grp = _to_bf16_t(in_grp) * (2 ** NG)
-    code = torch.floor(in_grp + 0.5).clamp(0, (1 << (NG + 1)) - 1).to(torch.int32)
+    # Shared HiF4 encode (same _hif4_core as quant_dequant_float, bit-for-bit identical).
+    enc = hif4_encode(xg, ng=NG)
 
     # ---- HiF4 -> float: dequantize the codes we just produced (same bits a stored weight has) ----
     if output == "dequant":
-        sign = 1.0 - 2.0 * sign_bit.to(torch.float32)                        # +1 / -1 (zero -> +1)
-        dequant = (sign * e6m2[..., None, None, None] * _pow2_t(de64)
-                   * (code.to(torch.float32) / (2 ** NG)))
+        dequant = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=NG)
         return dequant.reshape(M, N).to(dtype_ori)
 
     # ---- pack value: nibble = sign*8 + code, pair adjacent along N (even -> high nibble) ----
-    nibble = (sign_bit * 8 + code).reshape(M, N // 2, 2)
+    nibble = (enc.sign_bit * 8 + enc.code).reshape(M, N // 2, 2)
     value = (nibble[..., 0] * 16 + nibble[..., 1]).to(torch.uint8)      # [M, N//2]
 
     # ---- pack scale (integer arithmetic, no bitwise ops) ----
-    byte_e6m2 = ((e_e6 + E6_OFFSET).to(torch.int32) * (2 ** E6M2_MBITS)
-                 + (q.to(torch.int32) - 4))                            # [M,gn]
+    byte_e6m2 = ((enc.e_e6 + E6_OFFSET).to(torch.int32) * (2 ** E6M2_MBITS)
+                 + (enc.q.to(torch.int32) - 4))                        # [M,gn]
 
-    pw8 = _pow2_t(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(torch.int32)  # [128..1]
-    byte_l1 = (e1_8.to(torch.int32) * pw8).sum(dim=-1)                  # [M,gn]
-    e1_16f = e1_16.reshape(M, gn, 16).to(torch.int32)                   # k = a*2+b
+    pw8 = _pow2(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(torch.int32)  # [128..1]
+    byte_l1 = (enc.e1_8.to(torch.int32) * pw8).sum(dim=-1)              # [M,gn]
+    e1_16f = enc.e1_16.reshape(M, gn, 16).to(torch.int32)              # k = a*2+b
     byte_l2_hi = (e1_16f[..., 0:8] * pw8).sum(dim=-1)
     byte_l2_lo = (e1_16f[..., 8:16] * pw8).sum(dim=-1)
 
@@ -153,7 +115,7 @@ def hif4_bit_reconstruct(scale, value):
     """Decode (scale, value) back to the dequantized fp32 tensor [M, N] (for verification).
 
     Device-agnostic: accepts the uint8 outputs of :func:`hif4_bit_dump` as torch tensors
-    (moved to CPU) or numpy arrays, and rebuilds the same values ``quant_hifx`` would produce.
+    (moved to CPU) or numpy arrays, and rebuilds the same values ``quant_dequant_float`` (via ``_hif4_core``) would produce.
     """
     if isinstance(scale, torch.Tensor):
         scale = scale.cpu().numpy()
