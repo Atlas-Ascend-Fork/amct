@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """HiFloat4 cast op test.
 
-Compares the AscendC kernel against amct's CPU reference (quant_hifx via quant_dequant_float)
+Compares the AscendC kernel against amct's CPU reference (quant_dequant_float)
 to ~0 error (< 1e-6), including zero-input blocks. Requires an Ascend NPU; skipped otherwise.
 """
 import unittest
