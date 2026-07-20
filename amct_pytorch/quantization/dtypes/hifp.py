@@ -43,10 +43,10 @@ class QuantDequantHifp(torch.nn.Module):
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.bits == 16:
             return x
-        elif self.bits == 8 or self.bits == 4:
+        elif self.bits == 8:
             return self.fake_quant(x, v=v)
         else:
-            raise ValueError(f"HiFloat only supports 8-bit && 4-bit quantization, got {self.bits}.")
+            raise ValueError(f"HiFloat only supports 8-bit quantization, got {self.bits}.")
 
     def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
         raise NotImplementedError(f"HiFloat-{self.bits} export_deploy is not supported yet.")

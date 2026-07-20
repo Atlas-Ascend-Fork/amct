@@ -48,6 +48,14 @@ from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, hifp as hifp_dtype
 from amct_pytorch.quantization.dtypes.hifp import QuantDequantHifp
 
 
+def _has_npu():
+    return (
+        hasattr(torch, "npu")
+        and hasattr(torch.Tensor, "npu")
+        and torch.npu.is_available()
+    )
+
+
 @pytest.mark.parametrize("bits", [4, 8])
 def test_mxfp_forward_shape_and_dtype_preserved(bits):
     qdq = QuantDequantMx(bits=bits)
@@ -335,6 +343,7 @@ def test_hifp_quant_dtype_cli_option_replaces_hif():
             parser_gen()
 
 
+@pytest.mark.skipif(not _has_npu(), reason="NPU is not available")
 def test_hifp_forward_shape_and_dtype_preserved():
     qdq = QuantDequantHifp(bits=8)
     x = torch.randn(2, 8, dtype=torch.bfloat16).npu()
