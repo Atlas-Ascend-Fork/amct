@@ -62,18 +62,30 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
 
     int64_t n = xp.size(-1);
     int64_t m = xp.numel() / n;
-    at::Tensor output = at::empty_like(xp);
+
+    // Kernel variants: BF16 -> bf16 kernel, FP32 -> fp32 kernel. FP16 has no dedicated kernel,
+    // so run it through the FP32 kernel on an up-converted copy and cast the result back --
+    // mirroring the reference dispatcher (QTensor.get_npu_func's cvt_fp32 fallback). Feeding raw
+    // FP16 bytes to the FP32 kernel would misread element width (2-byte data as 4-byte).
+    auto inDtype = input.scalar_type();
+    bool cvtFp32 = (inDtype == at::kHalf);
+    at::Tensor xin = cvtFp32 ? xp.to(at::kFloat) : xp;
+    at::Tensor output = at::empty_like(xin);
 
     auto stream = c10_npu::getCurrentNPUStream(input.device().index());
     void *aclStream = stream.stream();
-    auto *xptr = reinterpret_cast<uint8_t *>(xp.data_ptr());
+    auto *xptr = reinterpret_cast<uint8_t *>(xin.data_ptr());
     auto *optr = reinterpret_cast<uint8_t *>(output.data_ptr());
-    if (input.scalar_type() == at::kBFloat16) {
+    if (inDtype == at::kBFloat16) {
         run_hifx_kernel_bf16(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n),
             HIF4_MANT_BIT);
     } else {
         run_hifx_kernel(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n),
             HIF4_MANT_BIT);
+    }
+
+    if (cvtFp32) {
+        output = output.to(inDtype);   // FP32 result -> original FP16
     }
 
     if (needPermute) {
