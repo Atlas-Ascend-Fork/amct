@@ -18,7 +18,7 @@
 
 Provides the shared "calculator" for NVFP4 and MXFP4 conversion pipelines.
 The BF16 → HiF4 fake-quant step (e6m2) is handled by the existing
-``amct_pytorch.common.utils.hifx4_quant.quant_dequant_float``, not here.
+``amct_pytorch.common.utils.hifloat4_quant.quant_dequant_float``, not here.
 
 This module covers:
   1. Raw FP4 codec: nibble unpack/pack, E2M1 decode.

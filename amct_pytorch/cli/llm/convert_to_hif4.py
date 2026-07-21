@@ -32,9 +32,9 @@ def main():
     args, remainder = ap.parse_known_args()
 
     if args.source_format == "nvfp4":
-        from amct_pytorch.experimental.fp4_convert.convert_nvfp4_to_hif4 import main as _run
+        from amct_pytorch.common.utils.fpx_decode.convert_nvfp4_to_hif4 import main as _run
     elif args.source_format == "mxfp4":
-        from amct_pytorch.experimental.fp4_convert.convert_mxfp4_to_hif4 import main as _run
+        from amct_pytorch.common.utils.fpx_decode.convert_mxfp4_to_hif4 import main as _run
     else:
         ap.error(f"unsupported source format: {args.source_format}")
 

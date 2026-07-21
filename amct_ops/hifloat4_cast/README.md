@@ -30,7 +30,7 @@ kernel 逐步复刻纯 python 参考，逐元素对齐到 ~0 误差。在设备�
 ```python
 import torch
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
-from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
+from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
 
 x = torch.randn(4, 512, dtype=torch.bfloat16)
 y_ref = quant_dequant_float(x, QType('hifx4').dim(-1), force_py=True, force_fp32=True)  # CPU 参考
