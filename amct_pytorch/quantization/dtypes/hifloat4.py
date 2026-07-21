@@ -19,7 +19,7 @@ import torch
 from torch import Tensor
 
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.common.utils.quant_util import hifloat4_fake_quant
+from amct_pytorch.common.utils.hifloat4_quant import hifloat4_fake_quant
 
 
 @DTYPE_REGISTRY.register(name="hifloat4", description="quant dequant for hifloat4")
@@ -31,7 +31,7 @@ class QuantDequantHiF4(torch.nn.Module):
 
     1. No explicit block-scale / shared-exponent step here. HiFloat4's hierarchical
        64-element block scale (L1 E6M2 + L2/L3 micro-exponents) is computed *inside*
-       ``hifloat4_fake_quant`` (see common/utils/hifx4_quant), so this class only routes
+       ``hifloat4_fake_quant`` (see common/utils/hifloat4_quant), so this class only routes
        the tensor through it.
     2. ``bits`` selects only whether the format is applied, not which variant. HiFloat4
        is intrinsically a 4-bit (S1P2) element format, so any ``bits < 16`` maps to the

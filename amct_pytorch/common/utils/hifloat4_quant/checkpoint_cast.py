@@ -48,7 +48,7 @@ from typing import Dict, List, Optional
 import torch
 
 from .bit_dump import hif4_cast, hif4_bit_reconstruct
-from ..quant_util import hifloat4_fake_quant
+from .fake_quant import hifloat4_fake_quant
 
 # HiF4 quantizes along the last dim in blocks of 64 (see bit_dump / _hif4_core).
 HIF4_BLOCK = 64
