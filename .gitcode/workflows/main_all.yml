@@ -1,0 +1,1377 @@
+name: nn_compile_cyj
+
+on:  
+  # pull_request_comment:
+  #   types: [created]
+  # pr_comment:
+  #   types: [ created ]
+  #   keyword: 'qww'
+  pull_request_comment:
+    types: [created, edit, deleted ]
+    branches: [ '*' ]
+    comments: [ '^qww$' ]
+  workflow_call:
+    secrets:
+      GIT_TOKEN:
+        description: 'A token passed from the caller workflow'
+        required: true
+
+env:
+  org_name: "opencann"
+  obs_path: "test/ops-nn/package/${{ env.MERGE_ID }}"
+  CI_PATH: "https://gitcode.com/tanghaoran7/cann_ci.git"
+  repo_name: "ops-nn"
+  
+
+stages:
+  stage1:
+    name: image
+    select: selected_by_default
+    jobs:
+      JOB_image:
+        name: image
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              fetch-depth: 1
+              token: ${{secrets.GIT_TOKEN}}
+          -
+            name: pip_install
+            run: |
+              pip3 install Pyyaml --trusted-host mirrors.huaweicloud.com -i https://mirrors.huaweicloud.com/repository/pypi/simple
+          - name: revise_image
+            identifier: revise_image
+            uses: ./.gitcode/actions/revise-img
+            with:
+              repo_name: ${{ env.repo_name }}
+              target_branch: ${{ env.TARGET_BRANCH }}
+          -
+            name: show_output
+            run: |
+              echo "image: ${{ steps.revise_image.outputs.Compile_Ascend_ARM }}"
+        if: "${{ default() }}"
+        runs-on: 
+        - default
+      JOB_pr:  
+        name: get_pr_files
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+              token: ${{secrets.GIT_TOKEN}}
+          -
+            name: get_pr
+            identifier: get_pr
+            uses: ./.gitcode/actions/get-pr
+            with:
+              workspace: ${{ steps.process_checkout.outputs.path }}
+              target_branch: ${{ env.TARGET_BRANCH }}
+              git_token: ${{secrets.GIT_TOKEN}}
+            # run: |
+            #   target_branch=${{ inputs.target_branch }}
+            #   cd ${{ steps.process_checkout.outputs.path }}
+            #   ls -lh
+            #   git fetch --unshallow
+            #   git branch
+            #   git branch -r
+            #   git submodule update --init --depth 1 --recursive
+            #   # 找到 PR 与主干的公共祖先（真正的对比基准）
+            #   BASE=$(git merge-base HEAD origin/${target_branch})
+            #   echo "PR 基准 commit: $BASE"
+            #   git diff $BASE HEAD --stat
+            #   git -c core.quotePath=false diff $BASE HEAD --name-status > pr_filelist_mod.txt
+            #   git -c core.quotePath=false diff $BASE HEAD --name-only > pr_filelist.txt
+            #   git -c core.quotePath=false diff $BASE...HEAD --name-only --diff-filter=AM > pr_filelist_precommit.txt
+            #   git -c core.quotePath=false diff -U0 -w --no-renames $BASE...HEAD > update_file_detail.txt
+            #   cat pr_filelist_mod.txt
+            #   cat pr_filelist.txt
+            #   cat pr_filelist_precommit.txt
+            #   touch gitdiff.txt
+            #   while IFS= read -r line;do  if [[ -f $line && $line == *.md ]];then echo "------${line}" >>gitdiff.txt; git diff $BASE $line >> gitdiff.txt;  fi; done < pr_filelist.txt
+          - 
+            name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: |
+                ${{ steps.process_checkout.outputs.path }}/pr_filelist.txt
+                ${{ steps.process_checkout.outputs.path }}/pr_filelist_mod.txt
+                ${{ steps.process_checkout.outputs.path }}/pr_filelist_precommit.txt
+                ${{ steps.process_checkout.outputs.path }}/update_file_detail.txt
+              object-prefix: ${{ env.obs_path }}/
+        runs-on: 
+        - default
+    pre:
+    - type: auto
+    fail-fast: true
+  stage2:
+    name: compile
+    select: selected_by_default
+    jobs:
+      # JOB_codecheck_action:
+      #   name: codecheck_action
+      #   select: selected_by_default
+      #   needs: []
+      #   uses: .gitcode/workflows/codecheck_action.yml
+      JOB_Pre_compile:
+        name: Pre_compile
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              fetch-depth: 1
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              bash build.sh --pkg --ops="fatrelu_mul" --cann_3rd_lib_path=/home/jenkins/opensource
+              echo "build fatrelu_mul"
+              ls build_out
+              mv build_out/*.run ${{ steps.process_checkout.outputs.path }}/build_out/cann-ops-nn-fatrelu_mul_linux-aarch64.run
+              ls build_out
+              exit 0
+              set -e
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret       
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on:  [dedicate-hosted, arm64, xlarge]
+        # runs-on: 
+        # - default  
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_x86_compile:
+        name: x86_compile
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              if [[ -f "/opt/rh/devtoolset-7/enable" ]]; then
+                  echo "source devtoolset"
+                  source /opt/rh/devtoolset-7/enable
+              fi
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16
+              echo "exec cmd: [bash build.sh --pkg --soc=kirinx90 --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH} -j16]"
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret       
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on:  [dedicate-hosted, x64, large]  
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_x86:lv6_v1.1076
+      JOB_x86_compile_ubuntu24:
+        name: x86_compile_ubuntu24
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: |
+                test/pr_filelist.txt
+                test/pr_filelist_mod.txt
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              gcc --version
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              gcc --version
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              gcc --version
+              REPOSITORY_NAME=${{ env.repo_name }}
+              WORKSPACE=${{ steps.process_checkout.outputs.path }}
+              GIT_PR_NUMBER=${{ env.MERGE_ID }}
+              BRANCH=${{ env.source_branch }}
+              GIT_TARGET_BRANCH=${{ env.target_branch }}
+              sed -i "1i set(CMAKE_EXPORT_COMPILE_COMMANDS ON)" "CMakeLists.txt"
+              bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16
+              echo "exec cmd: [bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16]"
+              python /home/api-doc/APIInfoGenTool/ops_analyser.py -t ${REPOSITORY_NAME} -c ${WORKSPACE}/build/ -o /home/api_result -p ${WORKSPACE} --list pr_filelist_mod.txt --mode full --driver_path=${ASCEND_3RD_LIB_PATH} --diff_file update_file_detail.txt
+              python /home/api-doc/APIInfoGenTool/uploadData.py \
+                  -o /home/api_result -t ${REPOSITORY_NAME} \
+                  --git_url "https://gitcode.com/cann/${REPOSITORY_NAME}/pull/${GIT_PR_NUMBER}" \
+                  --branch "${BRANCH}" --key ${GIT_PR_NUMBER} \
+                  -su "https://gitcode.com/cann/${REPOSITORY_NAME}/pull/${GIT_PR_NUMBER}" \
+                  -sb "${BRANCH}" \
+                  -tu "https://gitcode.com/cann/${REPOSITORY_NAME}.git" \
+                  -tb "${GIT_TARGET_BRANCH}" \
+                  --server_url "http://10.0.0.193:10001/api/import" \
+                    --mode full \
+                    --prefix ${WORKSPACE} \
+                    --driver_path=/home/jenkins/opensource
+                  python /home/api-doc/APIInfoGenTool/usabilityCheck.py --target ${REPOSITORY_NAME} --out_dir /home/api_result --key ${GIT_PR_NUMBER} --git_url https://gitcode.com/cann/${REPOSITORY_NAME}/pull/${GIT_PR_NUMBER} --branch ${BRANCH} --server_url http://10.0.0.193:10005/check
+              ret=$?
+              ret=$?
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-910b-ops-nn_9.1.0_linux-x86_64.run
+                exit 0
+              fi
+              compile_package_name=$(ls "${{ steps.process_checkout.outputs.path }}/build_out/" |grep -E "*.run$"|head -n1)
+              echo "compile package name is: ${compile_package_name}"
+              mv build_out/cann-910b-ops-nn_9.1.0_linux-x86_64.run build_out/cann-910b-ops-nn_9.1.0_linux-x86_64_ubuntu24.run
+              exit $ret       
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_x86:lv6_v1.1076
+      JOB_compile_single:
+        name: compile_single
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              if [[ -f "/opt/rh/devtoolset-7/enable" ]]; then
+                  echo "source devtoolset"
+                  source /opt/rh/devtoolset-7/enable
+              fi
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              if [ "${{inputs.target_branch}}" = "master" ];then
+                  export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
+                  bash scripts/ci/check_pkg.sh "pr_filelist.txt" "-j16"
+                  echo "exec cmd: [bash scripts/ci/check_pkg.sh pr_filelist.txt]"
+                  exit 0
+              else
+                  echo "not need build single"
+                  mkdir single
+                  touch single.tar.gz
+                  exit 0
+              fi
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret       
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on:  [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_X86_monitor_910b:
+        name: X86_monitor_910b
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16 --soc=ascend910b
+              echo "exec cmd: [bash build.sh --pkg --jit -j16 --soc=ascend910b]"
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret       
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu20.04.05_x86:lv6_v1.1069
+      JOB_X86_monitor_910c:
+        name: X86_monitor_910c
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16 --soc=ascend910_93
+              echo "exec cmd: [bash build.sh --pkg --jit -j16 --soc=ascend910_93]"
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret       
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu20.04.05_x86:lv6_v1.1069
+      JOB_X86_monitor_950:
+        name: X86_monitor_950
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16 --soc=ascend950
+              echo "exec cmd: [bash build.sh --pkg --jit -j16 --soc=ascend950]"
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret       
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu20.04.05_x86:lv6_v1.1082
+      JOB_arm_compile:
+        name: arm_compile
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16
+              echo "exec cmd: [bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16]"
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_arm_compile_ubuntu24:
+        name: arm_compile_ubuntu24
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              set -e
+              bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16
+              echo "exec cmd: [bash build.sh --pkg --jit --cann_3rd_lib_path=/home/jenkins/opensource -j16]"
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_compile_single_ubuntu24:
+        name: compile_single_ubuntu24
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              if [ "${{inputs.target_branch}}" = "master" ];then
+                  export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
+                  bash scripts/ci/check_pkg.sh "pr_filelist.txt" "-j16"
+                  echo "exec cmd: [bash scripts/ci/check_pkg.sh pr_filelist.txt]"
+                  exit 0
+              else
+                  echo "not need build single"
+                  mkdir single
+                  touch single.tar.gz
+                  exit 0
+              fi
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_Compile_Ascend_experimental:
+        name: Compile_Ascend_experimental
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              sh scripts/ci/check_experimental_pkg.sh "pr_filelist.txt"
+              echo "exec cmd: [sh scripts/ci/check_experimental_pkg.sh pr_filelist.txt]"
+              if [ ! -f "build_out/"*.run ]; then
+                  mkdir -p build_out
+                  touch build_out/cann-ops-nn-experimental_linux-aarch64.run
+              fi
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_Compile_Ascend_experimental_ubuntu24:
+        name: Compile_Ascend_experimental_ubuntu24
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              set -euo pipefail
+              sh scripts/ci/check_experimental_pkg.sh "pr_filelist.txt"
+              echo "exec cmd: [sh scripts/ci/check_experimental_pkg.sh pr_filelist.txt]"
+              if [ ! -f "build_out/"*.run ]; then
+                  mkdir -p build_out
+                  touch build_out/cann-ops-nn-experimental_linux-aarch64.run
+              fi
+              ret=$?
+              echo "aaa"
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_Compile_Ascend_X86_mobile_station:
+        name: Compile_Ascend_X86_mobile_station
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              # set -e
+              if [ "${{inputs.target_branch}}" = "master" ];then
+                  wget -nv https://kiri-obs.obs.cn-north-4.myhuaweicloud.com/Cann%20Large%20Model%20Foundation%208.5.0.beta005/cann-bisheng-compiler_9.0.0_linux-x86_64.run
+                  chmod +x *.run
+                  sudo -u jenkins ./*.run --full --quiet --install-path=/home/jenkins/Ascend
+                  source /home/jenkins/Ascend/cann/bin/setenv.bash
+                  bash build.sh --pkg --soc=kirinx90 --cann_3rd_lib_path=/home/jenkins/opensource -j16
+                  echo "exec cmd: [bash build.sh --pkg --soc=kirinx90 --cann_3rd_lib_path=/home/jenkins/opensource -j16]"
+              else
+                  echo "not need build mobile_station"
+                  mkdir build_out
+                  touch build_out/cann-ops-nn-kirinx90_linux-x86_64.run
+                  exit 0
+              fi
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_x86:lv6_v1.1076
+      JOB_Compile_Ascend_X86_mobile_station_ubuntu24:
+        name: Compile_Ascend_X86_mobile_station_ubuntu24
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              # set -e
+              if [ "${{inputs.target_branch}}" = "master" ];then
+                  wget -nv https://kiri-obs.obs.cn-north-4.myhuaweicloud.com/Cann%20Large%20Model%20Foundation%208.5.0.beta005/cann-bisheng-compiler_9.0.0_linux-x86_64.run
+                  chmod +x *.run
+                  sudo -u jenkins ./*.run --full --quiet --install-path=/home/jenkins/Ascend
+                  source /home/jenkins/Ascend/cann/bin/setenv.bash
+                  bash build.sh --pkg --soc=kirinx90 --cann_3rd_lib_path=/home/jenkins/opensource -j16
+                  echo "exec cmd: [bash build.sh --pkg --soc=kirinx90 --cann_3rd_lib_path=/home/jenkins/opensource -j16]"
+              else
+                  echo "not need build mobile_station"
+                  mkdir build_out
+                  touch build_out/cann-ops-nn-kirinx90_linux-x86_64.run
+                  exit 0
+              fi
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_x86:lv6_v1.1076
+      JOB_Compile_Ascend_X86_950:
+        name: Compile_Ascend_X86_950
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
+              bash scripts/ci/compile_ascend950_pkg.sh "pr_filelist.txt" "-j16" "--no_force"
+              bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt || {
+                  echo "exec cmd: [bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt] 执行失败"
+                  exit 1
+              }
+              compile_package_name=$(ls "${{ steps.process_checkout.outputs.path }}/build_out/" |grep -E "*.run$"|head -n1)
+              if [[ -z "${compile_package_name}" ]]; then
+                  echo "not need build 950"
+                  mkdir build_out
+                  touch build_out/cann-ops-nn-950_linux-x86_64.run
+              fi
+              exit 0
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_x86:lv6_v1.1076
+      JOB_Compile_Ascend_X86_950_ubuntu24:
+        name: Compile_Ascend_X86_950_ubuntu24
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              set -e
+              export ASCEND_3RD_LIB_PATH=/home/jenkins/opensource
+              bash scripts/ci/compile_ascend950_pkg.sh "pr_filelist.txt" "-j16" "--no_force"
+              bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt || {
+                  echo "exec cmd: [bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt] 执行失败"
+                  exit 1
+              }
+              compile_package_name=$(ls "${WORKSPACE}/build_out/" |grep -E "*.run$"|head -n1)
+              if [[ -z "${compile_package_name}" ]]; then
+                  echo "not need build 950"
+                  mkdir build_out
+                  touch build_out/cann-ops-nn-950_linux-x86_64.run
+              fi
+              exit 0
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, large]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_x86:lv6_v1.1076
+      JOB_Compile_Ascend_ARM_950_ubuntu24:
+        name: Compile_Ascend_ARM_950_ubuntu24
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              sudo update-alternatives --set gcc /usr/bin/gcc-14
+              set -e
+              bash scripts/ci/compile_ascend950_pkg.sh "pr_filelist.txt" "-j16" "-force_jit" "--no_force"
+              bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt -force_jit || {
+                  echo "exec cmd: [bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt -force_jit] 执行失败"
+                  exit 1
+              }
+              compile_package_name=$(ls "${WORKSPACE}/build_out/" |grep -E "*.run$"|head -n1)
+              if [[ -z "${compile_package_name}" ]]; then
+                  echo "not need build 950"
+                  mkdir build_out
+                  touch build_out/cann-ops-nn-950_linux-aarch64.run
+              fi
+              exit 0
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_Compile_Ascend_ARM_950:
+        name: Compile_Ascend_ARM_950
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+              # ref: refs/merge-requests/${{ inputs.pr_number }}/head
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: "test/pr_filelist.txt"
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: compile
+            run: |
+              cd ${{ steps.process_checkout.outputs.path }}
+              source /home/jenkins/Ascend/cann/bin/setenv.bash
+              set -e
+              bash scripts/ci/compile_ascend950_pkg.sh "pr_filelist.txt" "-j16" "-force_jit" "--no_force"
+              bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt -force_jit || {
+                  echo "exec cmd: [bash scripts/ci/compile_ascend950_pkg.sh pr_filelist.txt -force_jit] 执行失败"
+                  exit 1
+              }
+              compile_package_name=$(ls "${WORKSPACE}/build_out/" |grep -E "*.run$"|head -n1)
+              if [[ -z "${compile_package_name}" ]]; then
+                  echo "not need build 950"
+                  mkdir build_out
+                  touch build_out/cann-ops-nn-950_linux-aarch64.run
+              fi
+              exit 0
+              ret=$?
+
+              # 200 表示跳过编译，属于正常情况
+              if [ $ret -eq 200 ]; then
+                echo "not need compile"
+                mkdir build_out
+                touch build_out/cann-ops-nn_linux-x86_64.run
+                exit 0
+              fi
+              exit $ret         
+          - name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.run"
+              object-prefix: "test/"
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, arm64, xlarge]
+        container:
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:lv6_v1.1075
+      JOB_staticcheck_markdown:
+        name: staticcheck_markdown
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/staticcheck_action.yml
+        with:
+          check_type: 'markdown'
+      JOB_staticcheck_codespell_check:
+        name: staticcheck_codespell_check
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/staticcheck_action.yml
+        with:
+          check_type: 'codespell_check'
+      JOB_staticcheck_tag_closed_check:
+        name: staticcheck_tag_closed_check
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/staticcheck_action.yml
+        with:
+          check_type: 'tag_closed_check'
+      JOB_staticcheck_resource_existence_check:
+        name: staticcheck_resource_existence_check
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/staticcheck_action.yml
+        with:
+          check_type: 'resource_existence_check'
+      JOB_staticcheck_link_validity_check:
+        name: staticcheck_link_validity_check
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/staticcheck_action.yml
+        with:
+          check_type: 'link_validity_check'
+    pre:
+    - type: auto
+    fail-fast: false
+  stage3: 
+    name: ut
+    select: selected_by_default
+    jobs:
+      JOB_api_check:
+        name: api_check
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+          -
+            name: api_check
+            identifier: api_check
+            uses: cann-actions/api-check@master
+            with:
+              org_name: ${{ env.org_name }}
+              task_name: "api-check"
+              repo_name: ${{ env.repo_name }}
+              merge_id: ${{ env.MERGE_ID }}
+        if: "${{ default() }}"
+        runs-on: [dedicated-hosted, x64, large]
+        container:
+          image: swr.cn-north-4.myhuaweicloud.com/ci_cann/ubuntu24.04_x86:lv1_v1.1032
+      JOB_UT_Test_ophost:
+        name: UT_Test_ophost
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/llt_action.yml
+        with:
+          ut_type: 'ophost'
+          ut_package: 'coverage_*.info'
+          token: ${{secrets.GIT_TOKEN}}
+      JOB_UT_Test_opapi:
+        name: UT_Test_opapi
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/llt_action.yml
+        with:
+          ut_type: 'opapi'
+          ut_package: 'coverage_*.info'
+          token: ${{secrets.GIT_TOKEN}}
+      JOB_UT_Test_kernel:
+        name: UT_Test_kernel
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/llt_action.yml
+        with:
+          ut_type: 'kernel'
+          ut_package: 'coverage_*.info'
+          token: ${{secrets.GIT_TOKEN}}
+      JOB_UT_Test_opgraph:
+        name: UT_Test_opgraph
+        select: selected_by_default
+        needs: []
+        uses: .gitcode/workflows/llt_action.yml
+        with:
+          ut_type: 'opgraph'
+          ut_package: 'coverage_*.info'
+          token: ${{secrets.GIT_TOKEN}}
+    pre:
+    - type: auto
+    fail-fast: false
+  stage4:
+    name: ut_report
+    select: selected_by_default
+    jobs:
+      JOB_ut_report_lcov:
+        name: ut_report_lcov
+        select: selected_by_default
+        needs: []
+        steps:
+          - 
+            name: Checkout
+            identifier: process_checkout
+            uses: checkout
+            with:
+              ref: ${{ atomgit.event.pull_request.merge_commit_sha }}
+              token: ${{secrets.GIT_TOKEN}}
+          -
+            name: download
+            uses: obs-download
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              key: |
+                ${{ env.obs_path }}/pr_filelist.txt
+                ${{ env.obs_path }}/pr_filelist_mod.txt
+              path: ${{ steps.process_checkout.outputs.path }}
+          -
+            name: ut_report
+            identifier: ut-report
+            uses: tanghaoran7/.gitcode/actions/ut-cov-report@master
+            with:
+              workspace: ${{ steps.process_checkout.outputs.path }}
+              cov_mode: "report"
+              ut_field: "ops-nn"
+              modules: "ophost opapi kernel opgraph"
+              source_branch: ${{ env.SOURCE_BRANCH }}
+              target_branch: ${{ env.TARGET_BRANCH }}
+              obs_path: ${{ env.obs_path }}
+              git_token: ${{secrets.GIT_TOKEN}}
+          -
+            name: upload
+            uses: obs-upload
+            with:
+              endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+              bucket: "ascend-ci"
+              access-key: ${{secrets.AK}}
+              secret-key: ${{secrets.SK}}
+              artifact-path: |
+                ${{ steps.process_checkout.outputs.path }}/ut_cov_*.tar.gz
+              object-prefix: ${{ env.obs_path }}/             
+        if: "${{ default() }}"
+        runs-on: [dedicate-hosted, x64, xlarge]
+        container:
+          image: swr.cn-north-4.myhuaweicloud.com/ci_cann/ubuntu24.04_x86:lv6_v1.1073
