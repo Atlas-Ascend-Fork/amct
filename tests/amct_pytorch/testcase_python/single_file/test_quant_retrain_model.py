@@ -116,7 +116,7 @@ class TestQuantRetrainModel(unittest.TestCase):
     @unittest.expectedFailure
     def test_create_quant_retrain_config_un_init(self):
         RetrainConfig.un_init()
-        retrain_config = RetrainConfig()
+        RetrainConfig()
 
     def test_create_quant_retrain_config_retrain_enable_false(self):
         retrain_config = RetrainConfig()
@@ -160,7 +160,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
-        ans_2 = new_model(data)
+        new_model(data)
         torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
@@ -176,7 +176,7 @@ class TestQuantRetrainModel(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -191,7 +191,7 @@ class TestQuantRetrainModel(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         save_quant_retrain_model(
             self.config_file,
@@ -235,7 +235,7 @@ class TestQuantRetrainModel(unittest.TestCase):
             logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
-        ans_2 = new_model(data)
+        new_model(data)
         torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
@@ -251,7 +251,7 @@ class TestQuantRetrainModel(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -266,7 +266,7 @@ class TestQuantRetrainModel(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         save_quant_retrain_model(
             self.config_file,
@@ -347,7 +347,7 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
             logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
-        ans_2 = new_model(data)
+        new_model(data)
         torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
@@ -363,7 +363,7 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -378,7 +378,7 @@ class TestQuantRetrainModelDeconv(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         save_quant_retrain_model(
             self.config_file,
@@ -397,7 +397,6 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        torch_version = '1.4.0'
         cls.temp_folder = os.path.join(CUR_DIR, 'test_quant_retrain_conv_circular_model')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
@@ -460,13 +459,13 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
             logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
-        ans_2 = new_model(data)
+        new_model(data)
         torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
 
     def test_create_quant_retrain_model_1_4(self):
-        with patch.object(vars, 'find_torch_version', return_value='1.4.0') as mock_method:
+        with patch.object(vars, 'find_torch_version', return_value='1.4.0'):
             new_model = create_quant_retrain_model(
                 self.config_file,
                 self.model_001,
@@ -476,7 +475,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
             logger.info('%s', param)
         data = self.args[0]
         new_model = new_model.train()
-        ans_2 = new_model(data)
+        new_model(data)
         torch.save({STATE_DICT: new_model.state_dict()}, self.pth)
 
         self.assertTrue(os.path.exists(self.record_file))
@@ -492,7 +491,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         self.assertTrue(os.path.exists(self.record_file))
 
@@ -507,7 +506,7 @@ class TestQuantRetrainModelConvCircular(unittest.TestCase):
 
         data = self.args[0]
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         save_quant_retrain_model(
             self.config_file,
@@ -559,9 +558,9 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
             self.args)
         data = self.args[0]
         new_model = new_model.train()
-        ans_2 = new_model(data)
+        new_model(data)
         new_model = new_model.eval()
-        ans_2 = new_model(data)
+        new_model(data)
 
         save_quant_retrain_model(
             self.config_file,
@@ -598,7 +597,7 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
         model_conv1d = Net1d().to(torch.device("cpu"))
         input_data = torch.randn(1, 2, 14)
         config_file = os.path.join(self.temp_folder, 'conv1d_config.json')
-        record_file = os.path.join(self.temp_folder, 'conv1d_record.txt')
+        os.path.join(self.temp_folder, 'conv1d_record.txt')
         self.assertRaises(ValueError, create_quant_retrain_config, config_file, model_conv1d, input_data)
 
     def test_conv1d_create_quant_retrain_config_success(self):
@@ -620,12 +619,12 @@ class TestQuantRetrainQuantFusionModel(unittest.TestCase):
         input_data = torch.randn(1, 2, 14)
         config_file = os.path.join(self.temp_folder, 'conv1d_config.json')
         record_file = os.path.join(self.temp_folder, 'conv1d_record.txt')
-        pth_path = os.path.join(self.temp_folder, 'conv1d_retrain.pth')
+        os.path.join(self.temp_folder, 'conv1d_retrain.pth')
         save_path = os.path.join(self.temp_folder, 'conv1d_retrain')
         create_quant_retrain_config(config_file, model_conv1d, input_data)
         retrain_model = create_quant_retrain_model(config_file, model_conv1d, record_file, input_data)
         retrain_model = retrain_model.train()
-        ans_2 = retrain_model(input_data)
+        retrain_model(input_data)
         retrain_model = retrain_model.eval()
         retrain_model(input_data)
         save_quant_retrain_model(

@@ -87,7 +87,7 @@ class TestCast(unittest.TestCase):
         self.assertEqual(type(model.linear3).__name__, HIF8_CAST_QUANT)
         convert(model)
         self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -112,7 +112,7 @@ class TestCast(unittest.TestCase):
         self.assertEqual(type(model.linear3).__name__, HIF8_CAST_QUANT)
         convert(model)
         self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -146,7 +146,7 @@ class TestCast(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -180,4 +180,4 @@ class TestCast(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_HIF8_CAST_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_HIF8_CAST_LINEAR)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())

@@ -70,9 +70,11 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 | 依赖 | 版本 |
 |------|------|
 | Python | >=3.9 |
-| PyTorch | 2.7.1 或 2.1.0（需配套 `torch_npu`） |
+| PyTorch | 2.7.1 或 2.1.0（NPU 加速后端需使用 CPU 版 PyTorch，并配套 `torch_npu`） |
 | GCC / CMake / patch | ≥ 7.3 / ≥ 3.16（推荐 3.20） / ≥ 2.7 |
 | CANN（Toolkit & Ops） | ≥ 8.5.0（需提前安装 NPU 驱动 / 固件） |
+
+> ⚠️ 使用 NPU 加速后端时，请安装 CPU 版 PyTorch 后再安装配套 `torch_npu`，不要在同一环境中混用非 CPU 版 PyTorch 与 `torch_npu`。
 
 完整环境部署请参见 [快速安装](docs/zh/quick_install.md)。
 
@@ -81,9 +83,10 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 ```bash
 # 1. 拉取源码并安装依赖
 git clone https://gitcode.com/cann/amct.git
+cd amct
+pip3 install -r requirements.txt
 
 # 2. 源码构建打包
-cd amct
 bash build.sh --torch
 
 # 3. 安装（产物位于 build_out/）
@@ -92,10 +95,13 @@ bash build.sh --torch
 pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user
 ```
 
-> ⚠️ **注意**：若 pip 版本 > 25.2，安装命令需追加 `--no-build-isolation`，否则可能出现 `ModuleNotFoundError: No module named 'torch'`。
+> ⚠️ **注意**：若使用 `--no-build-isolation` 安装，pip 不会自动安装构建依赖；
+> 请先执行 `pip install wheel`，再追加 `--no-build-isolation` 安装产物包，否则可能出现
+> `error: invalid command 'bdist_wheel'`。
 
 ```bash
 # 验证 AMCT 安装
+python3 -c "import torch; assert '+cpu' in torch.__version__, 'must use CPU torch for NPU path'"
 python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 ```
 
@@ -109,8 +115,6 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | 在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。 |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的单卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。    |
-
-
 
 ## 📖 文档样例
 
@@ -172,19 +176,20 @@ amct/
 
 </details>
 
-
 <details>
 <summary><strong>安装时报 "ModuleNotFoundError: No module named 'torch'"？</strong></summary>
 
 **原因**：pip 版本 > 25.2，构建隔离导致 torch 未被识别。
 
 **解决方案**：
+
 ```bash
 # 方案 1：降低 pip 版本
 pip install pip==25.2
 
-# 方案 2：添加 --no-build-isolation
-pip3 install amct_pytorch_${version}-linux-${arch}.tar.gz --user --no-build-isolation
+# 方案 2：先安装 wheel，再添加 --no-build-isolation
+pip install wheel
+pip3 install build_out/amct_pytorch-${version}-py3-none-linux_${arch}.tar.gz --user --no-build-isolation
 ```
 
 </details>

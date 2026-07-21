@@ -28,6 +28,7 @@ from safetensors.torch import save_file
 
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from tests.unit_test.conftest import SAFETENSORS_TMP_DIR
 
 QUANT_TARGET_ATTN_CACHE = 'attn-cache'
@@ -53,6 +54,8 @@ class _StubModel(BaseModel):
             args.model = "/fake/path"
         if not hasattr(args, 'quant_target'):
             args.quant_target = list(quant_target)
+        if not hasattr(args, 'quant_dtype'):
+            args.quant_dtype = 'int8'
 
         with patch(
             "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
@@ -431,7 +434,6 @@ def test_load_selected_layer_ptq_params_full_missing_warns():
 
 
 def test_iter_deploy_bindings_yields_quant_linear_weights(monkeypatch):
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     stub = _StubModel()
 
     def get_layer_weight_prefix(layer_idx):
@@ -547,7 +549,7 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
         return {}
 
     stub.load_selected_layer_ptq_params = load_selected_layer_ptq_params  # noqa: E1111
-    result = stub._build_block_for_forward(3, use_quant_block=True)
+    stub._build_block_for_forward(3, use_quant_block=True)
     assert captured["quant_idx"] == 3
 
 
@@ -643,7 +645,6 @@ def test_iter_ptq_units_raises_when_no_mlp_and_not_attn():
 
 
 def test_iter_deploy_bindings_yields_quant_linear_weight_paths():
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
 
     def get_layer_weight_prefix(idx):
@@ -974,7 +975,7 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
     batch, seq_len = 2, 4
     samples = [torch.randint(0, config.vocab_size, (batch, seq_len))]
 
-    outs = model.do_embedding_forward(samples)
+    model.do_embedding_forward(samples)
 
     assert model.position_ids is not None
     assert model.position_embeddings is not None
@@ -1192,7 +1193,6 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
 def test_do_block_forward_quant_eval_mode(monkeypatch):
     """do_block_forward sets QuantLinear._eval_mode when use_quant_block=True and hook_name is None (lines 200-204)."""
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
-    from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
     _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
@@ -1272,7 +1272,6 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
     )
 
     mock_hook = MagicMock()
-    hooks_list = []
 
     def _fake_register_hooks(block, target_name, hooks, act_stat):
         hooks.append(mock_hook)
@@ -1377,4 +1376,24 @@ def test_load_unit_inputs_when_not_cached_returns_default():
     unit = make_ptq_unit("mlp", "mlp", 0, nn.Linear(4, 8))
     result = model.load_unit_inputs("/nonexistent", unit)
     assert result is not None
+
+
+# ---- block_size (new in diff) --------------------------------------------
+
+
+def test_block_size_returns_32():
+    w = torch.randn(4, 4)
+    assert BaseModel.block_size(w) == 32
+
+
+def test_generate_tensorwise_quant_layers_raises_not_implemented():
+    stub = _StubModel()
+    with pytest.raises(NotImplementedError):
+        stub.generate_tensorwise_quant_layers()
+
+
+def test_generate_tensorwise_ignore_layers_raises_not_implemented():
+    stub = _StubModel()
+    with pytest.raises(NotImplementedError):
+        stub.generate_tensorwise_ignore_layers()
 

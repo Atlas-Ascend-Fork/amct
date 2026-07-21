@@ -73,6 +73,7 @@ INT8_MINMAX_WEIGHT_QUANT_CFG = {
         },
     },
     'algorithm': {'minmax'},
+    'skip_layers': {'lm_head'}
 }
 
 
@@ -194,4 +195,23 @@ HIFP8_KVCACHE_CFG = {
         },
     },
     'algorithm': {'quantile'}
+}
+
+
+HIFP8_SMOOTHQUANT_CFG = {
+    'batch_num': 1,
+    'quant_cfg': {
+        'weights': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'channel',
+        },
+        'inputs': {
+            'type': 'hifloat8',
+            'symmetric': True,
+            'strategy': 'tensor',
+        },
+    },
+    'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+    'skip_layers': {'lm_head'}
 }

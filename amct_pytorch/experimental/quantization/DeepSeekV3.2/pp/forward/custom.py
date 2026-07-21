@@ -38,22 +38,21 @@ from transformers.modeling_outputs import (
 from transformers.utils import (
     logging,
 )
-from loguru import logger
 
 logger = logging.get_logger(__name__)
 
 
 def model_forward_only_pre(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+    self,
+    input_ids: torch.LongTensor = None,
+    attention_mask: Optional[torch.Tensor] = None,
+    position_ids: Optional[torch.LongTensor] = None,
+    past_key_values: Optional[List[torch.FloatTensor]] = None,
+    inputs_embeds: Optional[torch.FloatTensor] = None,
+    use_cache: Optional[bool] = None,
+    output_attentions: Optional[bool] = None,
+    output_hidden_states: Optional[bool] = None,
+    return_dict: Optional[bool] = None,
 ) -> Union[Tuple, BaseModelOutputWithPast]:
     output_attentions = (
         output_attentions
@@ -81,8 +80,7 @@ def model_forward_only_pre(
     elif inputs_embeds is not None:
         batch_size, seq_length = inputs_embeds.shape[:2]
     else:
-        raise ValueError(
-            "You have to specify either input_ids or inputs_embeds")
+        raise ValueError("You have to specify either input_ids or inputs_embeds")
 
     if self.gradient_checkpointing and self.training:
         if use_cache:
@@ -95,10 +93,8 @@ def model_forward_only_pre(
     if use_cache:
         use_legacy_cache = not isinstance(past_key_values, Cache)
         if use_legacy_cache:
-            past_key_values = DynamicCache.from_legacy_cache(
-                past_key_values)
-        past_key_values_length = past_key_values.get_usable_length(
-            seq_length)
+            past_key_values = DynamicCache.from_legacy_cache(past_key_values)
+        past_key_values_length = past_key_values.get_usable_length(seq_length)
 
     if position_ids is None:
         device = input_ids.device if input_ids is not None else inputs_embeds.device
@@ -171,32 +167,30 @@ def model_forward_only_pre(
         "position_ids": position_ids,
         "past_key_value": past_key_values,
         "output_attentions": output_attentions,
-        "use_cache": use_cache
+        "use_cache": use_cache,
     }
 
 
 def model_forward_only_post(
-        self,
-        hidden_states: torch.LongTensor = None,
+    self,
+    hidden_states: torch.LongTensor = None,
 ) -> Union[Tuple, BaseModelOutputWithPast]:
     hidden_states = self.norm(hidden_states)
-    return BaseModelOutputWithPast(
-        last_hidden_state=hidden_states
-    )
+    return BaseModelOutputWithPast(last_hidden_state=hidden_states)
 
 
 def model_causal_forward_only_pre(
-        self,
-        input_ids: torch.LongTensor = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.LongTensor] = None,
-        past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
+    self,
+    input_ids: torch.LongTensor = None,
+    attention_mask: Optional[torch.Tensor] = None,
+    position_ids: Optional[torch.LongTensor] = None,
+    past_key_values: Optional[List[torch.FloatTensor]] = None,
+    inputs_embeds: Optional[torch.FloatTensor] = None,
+    labels: Optional[torch.LongTensor] = None,
+    use_cache: Optional[bool] = None,
+    output_attentions: Optional[bool] = None,
+    output_hidden_states: Optional[bool] = None,
+    return_dict: Optional[bool] = None,
 ) -> Union[Tuple, CausalLMOutputWithPast]:
     output_attentions = (
         output_attentions
@@ -225,10 +219,10 @@ def model_causal_forward_only_pre(
 
 
 def model_causal_forward_only_post(
-        self,
-        hidden_states,
-        labels: Optional[torch.LongTensor] = None,
-        return_dict: Optional[bool] = None,
+    self,
+    hidden_states,
+    labels: Optional[torch.LongTensor] = None,
+    return_dict: Optional[bool] = None,
 ) -> Union[Tuple, CausalLMOutputWithPast]:
     outputs = self.model.forward_only_post(hidden_states)
     hidden_states = outputs[0].to(dtype=torch.bfloat16)

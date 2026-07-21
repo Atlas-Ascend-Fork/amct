@@ -19,7 +19,7 @@
 | 算法 | INT8 | INT4 | MXFP8 | HiFloat8 |
 |--------|:----------:|:----------:|:-----------:|:--------:|
 | Min-Max     | ✅ | — | — | — |
-| SmoothQuant | ✅ | — | — | — |
+| SmoothQuant | ✅ | — | — | ✅ |
 | Cast        | — | — | — | ✅ |
 | Quantile    | — | — | — | ✅ |
 | OFMR        | — | — | — | ✅ |
@@ -211,13 +211,20 @@ OFMR（Output FeatureMap Reconstruct）算法在某个数据分布下，通过�
 ### OmniQuant
 
 OmniQuant是面向LLM的轻量级、可微分训练后量化算法，核心是风格结构变换，学习通道缩放：在可学习裁剪外加入通道缩放类结构变换，增强低比特W/A量化精度。
+
 算法详细介绍请参见： [OmniQuant: Omnidirectionally Calibrated Quantization for Large Language Models](https://arxiv.org/abs/2308.13137) 。
 
 ### SmoothQuant
 
 SmoothQuant是一种同时确保准确率且推理高效的训练后量化 (PTQ) 方法，由于权重很容易量化，而激活则较难量化，SmoothQuant通过引入平滑系数来平滑激活异常值，通过数学上等效的变换将量化难度从激活转移到权重上。一般来说，激活异常值越多，迁移强度越大。
 
-算法详细介绍请参见[Link](https://arxiv.org/abs/2211.10438)。
+算法详细介绍请参见： [SmoothQuant: Accurate and Efficient Post-Training Quantization for Large Language Models](https://arxiv.org/abs/2211.10438)。
+
+### FlatQuant
+
+FlatQuant 是一种面向大模型的训练后量化（PTQ）方法，核心思想是通过可学习的仿射变换对激活和权重进行数学等效变换，使激活分布更加平坦，从而降低低比特量化难度。具体地，FlatQuant 引入可学习的仿射变换、对角缩放以及 Kronecker 分解矩阵等结构化参数，在保持线性层计算等价性的同时，对 hidden 维度上的激活和权重进重新分布，使异常值在更多维度上被摊平。一般来说，激活分布越尖锐、异常值越集中，FlatQuant 的结构变换越有助于改善量化后的精度表现。
+
+算法详细介绍请参见： [FlatQuant: Flatness Matters for LLM Quantization](https://arxiv.org/abs/2410.09426)。
 
 ### ULQ数据量化算法
 
