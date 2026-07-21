@@ -13,6 +13,7 @@ fi
 gcc --version
 source /home/jenkins/Ascend/cann/bin/setenv.bash
 set +e
+echo "${task_name}"
 case "${task_name}" in
     x86_compile)
         bash build.sh --pkg --cann_3rd_lib_path=/home/jenkins/opensource
@@ -37,7 +38,7 @@ case "${task_name}" in
 esac
 
 
-if [ ! -f "build_out/"*.run ]; then
+if [ ! -f "build_out/"*.tar.gz ]; then
     mkdir -p build_out
-    touch build_out/cann-amct-test_linux-aarch64.run
+    touch build_out/cann-amct-test_linux-x86.tar.gz
 fi
