@@ -17,7 +17,7 @@
 """Shared HiF4 (N=4) quantization core -- one copy of the 3-level-scale + S1P2 math.
 
 Both the fake-quant path (``quant_dequant.quant_dequant_float``) and the real byte packer
-(``bit_dump.hif4_cast``) call the same ``hif4_encode`` / ``hif4_decode`` here, so the
+(``hif4_pack_unpack.hif4_cast``) call the same ``hif4_encode`` / ``hif4_decode`` here, so the
 evaluation path and the deployed packed weight can never drift apart -- change the math
 once and both stay in sync.
 
