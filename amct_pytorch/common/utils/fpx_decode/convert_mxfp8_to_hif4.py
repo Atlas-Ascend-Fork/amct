@@ -22,11 +22,13 @@ Pipeline::
     MXFP8 packed  ──dequant_mxfp8──►  BF16  ──quant_dequant_float──►  BF16
                          (fp4_formats)              (hifloat4_quant)
 
+Conversion is self-sufficient — the output plan is derived from the MXFP8 checkpoint's own
+index, so no bf16 reference is needed. ``--ref_bf16_model_dir`` is only for ``--compare``.
+
 Typical usage::
 
     python -m amct_pytorch.cli.llm.convert_to_hif4 --source-format mxfp8 \\
         --quant_model_dir /path/to/MXFP8 \\
-        --ref_bf16_model_dir /path/to/BF16-ref \\
         --output_dir /path/to/output
 """
 
@@ -340,7 +342,7 @@ def is_potential_weight_name(name: str) -> bool:
     return name.endswith(".weight")
 
 
-def copy_model_side_files(ref_dir: Optional[Path], quant_dir: Path, output_dir: Path) -> None:
+def copy_model_side_files(quant_dir: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     common_files = [
@@ -350,12 +352,10 @@ def copy_model_side_files(ref_dir: Optional[Path], quant_dir: Path, output_dir: 
     ]
 
     for filename in common_files:
-        src = (ref_dir / filename) if ref_dir is not None else None
-        if src is None or not src.exists():
-            src = quant_dir / filename
+        src = quant_dir / filename
         if src.exists():
             dst = output_dir / filename
-            if filename == "config.json" and src == quant_dir / filename:
+            if filename == "config.json":
                 cfg = load_json(src)
                 cfg.pop("quantization_config", None)
                 save_json(cfg, dst)
@@ -365,36 +365,29 @@ def copy_model_side_files(ref_dir: Optional[Path], quant_dir: Path, output_dir: 
 
 def convert_mxfp8_checkpoint_to_hif4(
     quant_model_dir: Path,
-    ref_bf16_model_dir: Optional[Path],
     output_dir: Path,
     group_size_override: Optional[int] = None,
     out_dtype: torch.dtype = torch.bfloat16,
     max_cached_shards: int = 3,
     allow_reshape_scale: bool = True,
-    allow_ref_fallback: bool = False,
     strict_no_fp8_copy: bool = True,
     debug_regex: Optional[str] = None,
     quiet: bool = False,
 ) -> None:
-    """MXFP8 → BF16 → HiFloat4 full pipeline."""
+    """MXFP8 → BF16 → HiFloat4 full pipeline (self-sufficient; no bf16 reference)."""
     quant_index = load_index(quant_model_dir)
-    have_ref = ref_bf16_model_dir is not None
-    if have_ref:
-        ref_index = load_index(ref_bf16_model_dir)
-    else:
-        # Self-sufficient: derive the output plan from the quant checkpoint's own index,
-        # dropping the consumed ``*_scale`` tensors. The bf16 ref is optional (used only for
-        # --allow_ref_fallback of genuinely-missing tensors and for --compare).
-        scale_keys = {
-            build_global_scale_key(w) for w in quant_index["weight_map"]
-            if build_global_scale_key(w) in quant_index["weight_map"]
-        }
-        ref_index = {
-            "metadata": quant_index.get("metadata", {}),
-            "weight_map": {
-                k: v for k, v in quant_index["weight_map"].items() if k not in scale_keys
-            },
-        }
+    # Output plan derived from the quant checkpoint's own index, dropping the consumed
+    # ``*_scale`` tensors (read during dequant, not emitted).
+    scale_keys = {
+        build_global_scale_key(w) for w in quant_index["weight_map"]
+        if build_global_scale_key(w) in quant_index["weight_map"]
+    }
+    plan_index = {
+        "metadata": quant_index.get("metadata", {}),
+        "weight_map": {
+            k: v for k, v in quant_index["weight_map"].items() if k not in scale_keys
+        },
+    }
 
     quant_scope = infer_quant_scope(quant_model_dir)
     group_size = int(group_size_override or quant_scope.get("group_size") or 32)
@@ -408,45 +401,28 @@ def convert_mxfp8_checkpoint_to_hif4(
         print(f"Using group_size={group_size}, out_dtype={out_dtype}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    ref_shard_to_keys = build_shard_to_keys(ref_index)
+    plan_shard_to_keys = build_shard_to_keys(plan_index)
 
     quant_cache = ShardCache(quant_model_dir, max_cached=max_cached_shards)
-    ref_cache = (ShardCache(ref_bf16_model_dir, max_cached=max_cached_shards)
-                 if have_ref else None)
 
     debug_pat = re.compile(debug_regex) if debug_regex else None
 
     conversion_stats = {
         "dequantized_fp8_weights": 0,
         "copied_non_fp8_tensors": 0,
-        "fallback_copied_from_ref": 0,
         "reshaped_scales": 0,
         "written_tensors": 0,
         "written_shards": 0,
         "dequant_examples": [],
     }
 
-    for out_shard_name, ref_tensor_names in ref_shard_to_keys.items():
+    for out_shard_name, plan_tensor_names in plan_shard_to_keys.items():
         out_tensors: Dict[str, torch.Tensor] = {}
 
         if not quiet:
-            print(f"\n[Output shard] {out_shard_name}: {len(ref_tensor_names)} tensors")
+            print(f"\n[Output shard] {out_shard_name}: {len(plan_tensor_names)} tensors")
 
-        for tensor_name in ref_tensor_names:
-            if tensor_name not in quant_index["weight_map"]:
-                if not allow_ref_fallback:
-                    raise KeyError(
-                        f"Tensor exists in reference but not in quant checkpoint: {tensor_name}. "
-                        f"Use --allow_ref_fallback to copy it from ref."
-                    )
-                ref_tensor = ref_cache.get_tensor_by_name(ref_index, tensor_name)
-                out_tensors[tensor_name] = ref_tensor.to(out_dtype).contiguous()
-                conversion_stats["fallback_copied_from_ref"] += 1
-                conversion_stats["written_tensors"] += 1
-                if not quiet:
-                    print(f"  [fallback copy from ref] {tensor_name}")
-                continue
-
+        for tensor_name in plan_tensor_names:
             q_shard_name = quant_index["weight_map"][tensor_name]
             q_shard = quant_cache.get_shard(q_shard_name)
             if tensor_name not in q_shard:
@@ -543,18 +519,16 @@ def convert_mxfp8_checkpoint_to_hif4(
         gc.collect()
 
     out_index = {
-        "metadata": ref_index.get("metadata", {}),
-        "weight_map": dict(ref_index["weight_map"]),
+        "metadata": plan_index.get("metadata", {}),
+        "weight_map": dict(plan_index["weight_map"]),
     }
     save_json(out_index, output_dir / "model.safetensors.index.json")
 
-    copy_model_side_files(ref_bf16_model_dir, quant_model_dir, output_dir)
+    copy_model_side_files(quant_model_dir, output_dir)
 
     save_json(conversion_stats, output_dir / "mxfp8_to_hif4_conversion_stats.json")
 
     quant_cache.clear()
-    if ref_cache is not None:
-        ref_cache.clear()
 
     print("\n========== conversion done ==========")
     print(f"Output dir: {output_dir}")
@@ -857,9 +831,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MXFP8 → BF16 → HiFloat4 converter")
     parser.add_argument("--quant_model_dir", type=str, required=True)
     parser.add_argument("--ref_bf16_model_dir", type=str, default=None,
-                        help="Optional bf16 reference model. If omitted, the plan is derived "
-                             "from the MXFP8 checkpoint's own index (self-sufficient). Required "
-                             "only for --allow_ref_fallback and --compare.")
+                        help="Bf16 reference model, used only by --compare. Conversion is "
+                             "self-sufficient and never needs it.")
     parser.add_argument("--output_dir", type=str, required=True)
 
     parser.add_argument("--group_size", type=int, default=None,
@@ -868,7 +841,6 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=["bf16", "bfloat16", "fp16", "float16", "fp32", "float32"])
     parser.add_argument("--max_cached_shards", type=int, default=3)
     parser.add_argument("--no_reshape_scale", action="store_true")
-    parser.add_argument("--allow_ref_fallback", action="store_true")
     parser.add_argument("--debug_regex", type=str, default=None)
     parser.add_argument("--quiet", action="store_true")
 
@@ -918,11 +890,10 @@ def main(argv: Optional[list] = None) -> None:
         return
 
     convert_mxfp8_checkpoint_to_hif4(
-        quant_model_dir=quant_model_dir, ref_bf16_model_dir=ref_bf16_model_dir,
+        quant_model_dir=quant_model_dir,
         output_dir=output_dir, group_size_override=args.group_size,
         out_dtype=out_dtype, max_cached_shards=args.max_cached_shards,
         allow_reshape_scale=not args.no_reshape_scale,
-        allow_ref_fallback=args.allow_ref_fallback,
         strict_no_fp8_copy=True, debug_regex=args.debug_regex,
         quiet=args.quiet,
     )
