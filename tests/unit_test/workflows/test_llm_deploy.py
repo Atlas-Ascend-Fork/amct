@@ -686,6 +686,69 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     assert "layer.weight" in refreshed_index["weight_map"]
 
 
+def test_run_tensorwise_uses_adapter_output_weight_name(monkeypatch, tmp_path):
+    from amct_pytorch.quantization.dtypes import register_dtype
+    register_dtype()
+
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    (src / CONFIG_JSON).write_text(json.dumps({"torch_dtype": "bfloat16"}))
+    save_file(
+        {
+            "layer.weight_packed": torch.tensor([[0x21, 0x43]], dtype=torch.uint8),
+            "layer.weight_scale": torch.ones(1, 1, dtype=torch.float32),
+            "other.weight": torch.ones(1, 4, dtype=torch.bfloat16),
+        },
+        str(src / KEY_SHARD1_SAFETENSORS),
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {},
+        "weight_map": {
+            "layer.weight_packed": KEY_SHARD1_SAFETENSORS,
+            "layer.weight_scale": KEY_SHARD1_SAFETENSORS,
+            "other.weight": KEY_SHARD1_SAFETENSORS,
+        },
+    }))
+
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="int")
+    wf.pipeline = MagicMock()
+    wf.pipeline.get_scale_name.side_effect = lambda name: (
+        ".weight_scale",
+        name.replace(".weight_packed", ".weight_scale"),
+    )
+    wf.pipeline.generate_tensorwise_quant_layers.return_value = {"layer": 4}
+    wf.pipeline.generate_tensorwise_ignore_layers.return_value = []
+    wf.pipeline.cache_scheme.return_value = {}
+    wf.pipeline.bits_scheme.return_value = None
+    wf.pipeline.block_size.return_value = 4
+    wf.pipeline.tensorwise_output_weight_name.side_effect = (
+        lambda name: name.replace(".weight_packed", ".weight")
+    )
+    wf.pipeline.is_packed_mxfp4_weight.side_effect = (
+        lambda name, weight: name.endswith(".weight_packed")
+    )
+
+    wf._run_tensorwise()
+
+    refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    saved = load_file(dst / KEY_SHARD1_SAFETENSORS)
+    assert "layer.weight" in refreshed_index["weight_map"]
+    assert "layer.weight_packed" not in refreshed_index["weight_map"]
+    assert "layer.weight_scale" in refreshed_index["weight_map"]
+    assert "other.weight" in refreshed_index["weight_map"]
+    assert "layer.weight" in saved
+    assert "layer.weight_packed" not in saved
+    assert saved["other.weight"].dtype == torch.bfloat16
+
+
 
 def test_load_weight_index_single_shard_synthesizes(tmp_path):
     # Single model.safetensors (no index.json) -> synthesize equivalent index

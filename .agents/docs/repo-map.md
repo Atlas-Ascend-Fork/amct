@@ -66,6 +66,9 @@
   - `longcat_lite`
   - `longcat_next`
   - `glm5`
+  - `glm5_2`
+  - `hyv3`
+  - `kimi_k3`
   - `qwen3`
   - `qwen3_moe`
   - `qwen3_5`

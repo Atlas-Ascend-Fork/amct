@@ -263,15 +263,24 @@ class LlmDeployWorkflow:
                     continue
                 # FP8 -> bf16
                 block_size = self.pipeline.block_size(weight)
-                weight = convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
-                                            model_dir, loaded_files, block_size)
-                new_state_dict[weight_name] = weight
+                packed_mxfp4_fn = getattr(self.pipeline, "is_packed_mxfp4_weight", None)
+                is_packed_mxfp4 = (
+                    packed_mxfp4_fn(weight_name, weight) if callable(packed_mxfp4_fn) else False
+                )
+                weight = convert_state_dict(
+                    weight, weight_name, scale_inv_name, original_weight_map,
+                    model_dir, loaded_files, block_size, is_packed_mxfp4=is_packed_mxfp4)
+                output_name_fn = getattr(self.pipeline, "tensorwise_output_weight_name", None)
+                output_weight_name = (
+                    output_name_fn(weight_name) if callable(output_name_fn) else weight_name
+                )
+                new_state_dict[output_weight_name] = weight
                 if self.quant_dtype in ["int", "mxfp"]:
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
-                    new_weight_name = weight_name.rsplit(".", 1)[0]
+                    new_weight_name = output_weight_name.rsplit(".", 1)[0]
                     if new_weight_name in quant_layers:
                         bit = quant_layers[new_weight_name]
-                        state_dict = quant_payload(quant_cls, weight_name, weight, bit)
+                        state_dict = quant_payload(quant_cls, output_weight_name, weight, bit)
                         new_state_dict.update(state_dict)
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:

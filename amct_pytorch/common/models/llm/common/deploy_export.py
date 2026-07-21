@@ -129,7 +129,16 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
-def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size):
+def convert_state_dict(
+    weight,
+    weight_name,
+    scale_inv_name,
+    original_weight_map,
+    model_dir,
+    loaded_files,
+    block_size,
+    is_packed_mxfp4=False,
+):
     if weight.element_size() == 1:
         # FP8 weight
         try:
@@ -139,7 +148,7 @@ def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
                 file_path = model_dir / file_name
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
-            if weight.dtype == torch.int8:
+            if is_packed_mxfp4 or weight.dtype == torch.int8:
                 weight = weight_dequant(weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True)
             else:
                 weight = weight_dequant(weight, scale_inv, block_size=block_size)

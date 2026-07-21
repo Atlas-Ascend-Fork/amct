@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 """Lightweight adapter tests for longcat / qwen3.6 families."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -25,6 +26,7 @@ import torch.nn as nn
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import LongcatLite
 from amct_pytorch.common.models.llm.longcat.longcat_next.longcat_next import LongcatNext
+from amct_pytorch.common.models.llm.kimi.kimi_k3.kimi_k3 import KimiK3
 from amct_pytorch.common.models.llm.qwen.qwen3_6.qwen3_6_moe import Qwen3_6Moe
 from amct_pytorch.quantization.dtypes import register_dtype
 
@@ -66,6 +68,61 @@ def test_longcat_lite_set_safe_attn_impl_writes_eager():
 
 def test_qwen3_6_moe_registers_in_model_registry():
     assert MODEL_REGISTRY.get("qwen3_6_moe") is Qwen3_6Moe
+
+
+def test_kimi_k3_registers_in_model_registry():
+    assert MODEL_REGISTRY.get("kimi_k3") is KimiK3
+
+
+def test_kimi_k3_placeholder_fails_outside_tensor_deploy():
+    args = SimpleNamespace(granularity="block", model="/fake", quant_target=[])
+    with pytest.raises(NotImplementedError, match="model_name='kimi_k3'"):
+        KimiK3(args)
+
+
+def test_kimi_k3_tensor_deploy_builds_moe_quant_layers_from_index(tmp_path):
+    index = {
+        "weight_map": {
+            "language_model.model.layers.19.block_sparse_moe.experts.895.w3.weight_packed": "shard.safetensors",
+            "language_model.model.layers.19.block_sparse_moe.experts.895.w3.weight_scale": "shard.safetensors",
+            "language_model.model.layers.19.self_attn.q_proj.weight": "shard.safetensors",
+        }
+    }
+    (tmp_path / "model.safetensors.index.json").write_text(json.dumps(index))
+    args = SimpleNamespace(granularity="tensor", model=str(tmp_path), quant_target=["moe"])
+
+    model = KimiK3(args)
+
+    assert model.generate_tensorwise_quant_layers() == {
+        "language_model.model.layers.19.block_sparse_moe.experts.895.w3": 4,
+    }
+    assert model.generate_tensorwise_ignore_layers() == []
+
+
+def test_kimi_k3_tensor_deploy_respects_non_moe_quant_target(tmp_path):
+    (tmp_path / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {
+        "language_model.model.layers.0.block_sparse_moe.experts.0.w1.weight_packed": "shard.safetensors",
+    }}))
+    args = SimpleNamespace(granularity="tensor", model=str(tmp_path), quant_target=["attn-linear"])
+
+    model = KimiK3(args)
+
+    assert model.generate_tensorwise_quant_layers() == {}
+
+
+def test_kimi_k3_scale_and_output_names_for_packed_weight(tmp_path):
+    args = SimpleNamespace(granularity="tensor", model=str(tmp_path), quant_target=["moe"])
+    model = KimiK3(args)
+    weight_name = "language_model.model.layers.0.block_sparse_moe.experts.0.w1.weight_packed"
+
+    assert model.get_scale_name(weight_name) == (
+        ".weight_scale",
+        "language_model.model.layers.0.block_sparse_moe.experts.0.w1.weight_scale",
+    )
+    assert model.tensorwise_output_weight_name(weight_name) == (
+        "language_model.model.layers.0.block_sparse_moe.experts.0.w1.weight"
+    )
+    assert model.is_packed_mxfp4_weight(weight_name, None) is True
 
 
 # ---- registry coverage check --------------------------------------------

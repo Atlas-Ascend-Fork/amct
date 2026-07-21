@@ -260,6 +260,30 @@ def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
     assert result.dtype != torch.uint8
 
 
+def test_convert_state_dict_uint8_weight_packed_uses_packed_mxfp4(tmp_path):
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale = torch.ones(2, 1, dtype=torch.float32)
+    sf_save({"layer.weight_scale": scale}, str(tmp_path / "shard.safetensors"))
+
+    weight = torch.tensor([[0x21, 0x43], [0x65, 0x87]], dtype=torch.uint8)
+    weight_map = {"layer.weight_scale": "shard.safetensors"}
+
+    result = convert_state_dict(
+        weight,
+        "layer.weight_packed",
+        "layer.weight_scale",
+        weight_map,
+        tmp_path,
+        {},
+        block_size=4,
+    )
+
+    assert result.dtype != torch.uint8
+    assert result.shape == (2, 4)
+
+
 def test_convert_state_dict_reuses_loaded_file(tmp_path):
     """Already-loaded file is reused from loaded_files cache."""
     from safetensors.torch import save_file as sf_save
