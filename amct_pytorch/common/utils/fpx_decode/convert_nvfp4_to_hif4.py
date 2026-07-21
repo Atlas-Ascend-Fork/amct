@@ -25,12 +25,15 @@ The two-step conversion: (1) dequant NVFP4 → BF16, (2) simulate HiF4 quantizat
 via ``quant_dequant_float`` (the existing fake-quant reference from
 ``amct_pytorch.common.utils.hifloat4_quant``).  Output is BF16 safetensors.
 
+The traversal/output plan is derived from the NVFP4 checkpoint's own index
+(``resolve_index``), so no separate bf16 reference is required; ``--bf16-index`` is an
+optional override.
+
 Usage::
 
     python -m amct_pytorch.common.utils.fpx_decode.convert_nvfp4_to_hif4 \\
         --nvfp4-dir /path/to/nvfp4_ckpt \\
-        --bf16-index /path/to/model.safetensors.index.json \\
-        --out-dir /path/to/output
+        --out-dir /path/to/output          # plan derived from the nvfp4 checkpoint itself
 """
 
 from __future__ import annotations
@@ -146,8 +149,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--nvfp4-dir", type=str, required=True,
                     help="NVFP4 checkpoint directory with *.safetensors shards.")
-    ap.add_argument("--bf16-index", type=str, required=True,
-                    help="BF16 model.safetensors.index.json (target sharding plan).")
+    ap.add_argument("--bf16-index", type=str, default=None,
+                    help="Optional target sharding plan (model.safetensors.index.json). "
+                         "If omitted, the plan is derived from the NVFP4 checkpoint's own "
+                         "index (self-sufficient; no bf16 reference required).")
     ap.add_argument("--out-dir", type=str, required=True,
                     help="Output directory for converted BF16 shards + index.")
     ap.add_argument("--sf-vec-size", type=int, default=16,
@@ -178,12 +183,12 @@ def main(argv: Optional[list] = None) -> None:
 
     if args.dry_run:
         from amct_pytorch.common.utils.fpx_decode.ckpt_io import (
-            load_index, ShardCache, invert_weight_map,
+            resolve_index, ShardCache, invert_weight_map,
         )
         import glob as glob_mod
 
-        bf16_index = load_index(args.bf16_index)
-        by_file = invert_weight_map(bf16_index["weight_map"])
+        plan_index = resolve_index(args.nvfp4_dir, args.bf16_index)
+        by_file = invert_weight_map(plan_index["weight_map"])
         source_shards = sorted(
             glob_mod.glob(os.path.join(args.nvfp4_dir, "*.safetensors"))
         )

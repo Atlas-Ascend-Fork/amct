@@ -48,6 +48,34 @@ def load_index(index_path: str) -> dict:
         return json.load(f)
 
 
+def resolve_index(src_dir: str, explicit_index_path: Optional[str] = None) -> dict:
+    """Return a ``{'weight_map': ...}`` index for a checkpoint directory.
+
+    Precedence:
+      1. an explicit index path, if given;
+      2. the checkpoint's own ``model.safetensors.index.json`` (sharded);
+      3. a synthesized single-file index from ``model.safetensors``.
+
+    This lets a converter derive its traversal/output plan from the *source*
+    checkpoint itself, so no separate (bf16) reference index is required.
+    """
+    if explicit_index_path:
+        return load_index(explicit_index_path)
+    own = os.path.join(src_dir, "model.safetensors.index.json")
+    if os.path.exists(own):
+        return load_index(own)
+    single = os.path.join(src_dir, "model.safetensors")
+    if os.path.exists(single):
+        from safetensors import safe_open
+        with safe_open(single, framework="pt") as f:
+            keys = list(f.keys())
+        return {"weight_map": {k: "model.safetensors" for k in keys}}
+    raise FileNotFoundError(
+        f"No index.json and no model.safetensors in {src_dir}; "
+        f"pass an explicit index path."
+    )
+
+
 def invert_weight_map(weight_map: Dict[str, str]) -> Dict[str, List[str]]:
     """Invert ``{tensor_key → shard_filename}`` to ``{shard_filename → [tensor_keys]}``."""
     by_file: Dict[str, List[str]] = defaultdict(list)
@@ -181,7 +209,7 @@ def save_convert_output(path: str, payload: Dict[str, Any]) -> None:
 
 def walk_checkpoint(
     src_dir: str,
-    index_path: str,
+    index_path: Optional[str],
     out_dir: str,
     transform_fn: Callable[
         [str, torch.Tensor, Callable[[str], Tuple[Optional[torch.Tensor], Optional[str]]]],
@@ -195,7 +223,9 @@ def walk_checkpoint(
 
     Args:
         src_dir: Source safetensors directory.
-        index_path: Path to BF16 ``model.safetensors.index.json`` (target sharding plan).
+        index_path: Optional path to a ``model.safetensors.index.json`` (target sharding
+            plan). If ``None``, the plan is derived from the *source* checkpoint's own index
+            (or a synthesized single-file index) via :func:`resolve_index`.
         out_dir: Output directory.
         transform_fn: ``fn(key, tensor, lookup) -> Optional[Tensor]``.
             Return ``None`` to drop the key.
@@ -210,10 +240,10 @@ def walk_checkpoint(
     out_path_obj = Path(out_dir)
     out_path_obj.mkdir(parents=True, exist_ok=True)
 
-    bf16_index = load_index(index_path)
-    if "weight_map" not in bf16_index:
+    plan_index = resolve_index(src_dir, index_path)
+    if "weight_map" not in plan_index:
         raise ValueError("index.json must contain 'weight_map'")
-    weight_map: Dict[str, str] = bf16_index["weight_map"]
+    weight_map: Dict[str, str] = plan_index["weight_map"]
     by_file = invert_weight_map(weight_map)
 
     source_shards = sorted(glob_mod.glob(os.path.join(src_dir, "*.safetensors")))
@@ -261,7 +291,7 @@ def walk_checkpoint(
         for written_key in shard_out:
             actual_weight_map[written_key] = shard_fname
 
-    new_metadata = dict(bf16_index.get("metadata", {}))
+    new_metadata = dict(plan_index.get("metadata", {}))
     write_index(str(out_path_obj), actual_weight_map, new_metadata)
     if verbose:
         print(f"\n[OK] wrote index: {out_path_obj / 'model.safetensors.index.json'}")
@@ -272,6 +302,6 @@ def walk_checkpoint(
             f"dropped={stats['dropped']}, missing={stats['missing']}"
         )
         if stats["missing"] > 0:
-            print("NOTE: missing>0 — bf16 index keys may not match source checkpoint keys.")
+            print("NOTE: missing>0 — plan index keys may not match source checkpoint keys.")
 
     return stats
