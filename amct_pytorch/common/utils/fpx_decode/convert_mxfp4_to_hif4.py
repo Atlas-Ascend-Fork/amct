@@ -14,12 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""MXFP4 → BF16 → HiFloat4 converter (strategy + CLI).
+"""MXFP4 → BF16 decoder + HiF4 diagnostics (strategy + CLI).
 
-Pipeline::
+``convert-dir`` is decode-only (the deploy/ptq path)::
 
-    MXFP4 packed  ──mxfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16
-                       (fp4_formats)              (hifloat4_quant)
+    MXFP4 packed  ──mxfp4_to_bf16──►  BF16
+                       (fp4_formats)
+
+HiF4 (pack via deploy, fake-quant via ptq) is applied downstream by ``hifloat4_quant``.
+The ``selftest`` / ``convert-pair`` subcommands keep the HiF4 e6m2/e6m0 round-trips as
+standalone validation utilities (they still exercise ``quant_dequant_float`` /
+``bf16_to_hif4_e6m0``).
 
 Subcommands: selftest / list-keys / convert-pair / convert-dir.
 """
@@ -122,8 +127,8 @@ def transform_fn(
     """MXFP4 per-tensor strategy.
 
     1. Drop quantization intermediates → None.
-    2. Convert .weight keys with paired weight_scale:
-       mxfp4_to_bf16 → (e6m2: quant_dequant_float | e6m0: bf16_to_hif4_e6m0).
+    2. Decode .weight keys with paired weight_scale: mxfp4_to_bf16 → BF16 (decode only;
+       HiF4 pack/fake-quant applied downstream by deploy/ptq).
     3. Copy everything else as BF16.
     """
     if should_drop_key(key):
@@ -142,20 +147,11 @@ def transform_fn(
                 print(f"  [CONVERT] {key}  shape=({out_features},{in_features})")
             if dry_run:
                 return tensor
-            # step 1: MXFP4 → BF16
-            w_bf16 = mxfp4_to_bf16(
+            # MXFP4 → BF16 (decode only). HiF4 is applied downstream by the caller
+            # (deploy → pack, ptq → fake-quant) via hifloat4_quant, not here.
+            return mxfp4_to_bf16(
                 tensor, w_sf, low_first=low_first, e8_bias=e8_bias,
-            )
-            # step 2: BF16 → HiF4
-            if hif4_format == "e6m2":
-                return quant_dequant_float(w_bf16, _HIF4_QTYPE, force_py=True, force_fp32=True)
-            else:
-                # e6m0: return packed S1P2 bytes
-                hif = bf16_to_hif4_e6m0(
-                    w_bf16, w_sf, e8_bias=e8_bias, e6_rule=e6_rule,
-                    e6_bias=e6_bias, pack_low_first=low_first,
-                )
-                return hif["s1p2_packed"]
+            ).contiguous()
 
     if verbose:
         print(f"  [COPY]  {key}")
@@ -294,7 +290,7 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.dry_run:
-        print(f"[DRY RUN] MXFP4 → HiF4 ({args.hif4_format})")
+        print("[DRY RUN] MXFP4 → BF16 (decode only)")
 
     def _transform(key: str, tensor: torch.Tensor, lookup: Any) -> Optional[torch.Tensor]:
         return transform_fn(
