@@ -36,6 +36,19 @@ def _make_shell():
     return obj
 
 
+class _ScaleDOnDifferentDevice:
+    def __init__(self, tensor):
+        self.tensor = tensor
+
+    def __mul__(self, other):
+        raise RuntimeError(
+            "Expected all tensors to be on the same device. Expected NPU tensor, "
+            "please check whether the input tensor device is correct.")
+
+    def to(self, *args, **kwargs):
+        return self.tensor.to(*args, **kwargs)
+
+
 def _call_init_bias(act_type, wts_type, bias_tensor, act_granularity='tensor',
                     dynamic=None, offset_bias=None, scale_d=None, scale_w=None):
     linear = _make_shell()
@@ -67,6 +80,16 @@ class TestInitBiasDtype(unittest.TestCase):
         linear = _call_init_bias(HIFLOAT8, HIFLOAT8, bias, scale_d=scale_d, scale_w=scale_w)
 
         expected = bias.to(torch.float32) / (scale_d * scale_w)
+        self.assertTrue(torch.allclose(linear.bias, expected))
+        self.assertEqual(linear.bias.dtype, torch.float32)
+
+    def test_hif8x_hif8_tensor_channel_bias_moves_scale_d_to_weight_device(self):
+        bias = torch.tensor([2.0, 12.0, -18.0], dtype=torch.float16)
+        scale_d = _ScaleDOnDifferentDevice(torch.tensor([0.5], dtype=torch.float32))
+        scale_w = torch.tensor([2.0, 3.0, 6.0], dtype=torch.float32)
+        linear = _call_init_bias(HIFLOAT8, HIFLOAT8, bias, scale_d=scale_d, scale_w=scale_w)
+
+        expected = bias.to(torch.float32) / (scale_d.tensor * scale_w)
         self.assertTrue(torch.allclose(linear.bias, expected))
         self.assertEqual(linear.bias.dtype, torch.float32)
 

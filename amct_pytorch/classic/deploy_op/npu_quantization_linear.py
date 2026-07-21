@@ -224,8 +224,10 @@ class NpuQuantizationLinear(torch.nn.Module):
               and self.dynamic is not True
               and self.act_type in [HIFLOAT8, FLOAT8_E4M3FN]
               and self.wts_type in [HIFLOAT8, FLOAT8_E4M3FN]):
-            deq_scale = module.scale_d * self.scale_w_tensor
-            self.register_buffer('bias', (module.bias.data.to(torch.float32) / deq_scale.to(torch.float32)))
+            scale_w = self.scale_w_tensor.to(torch.float32)
+            scale_d = module.scale_d.to(device=scale_w.device, dtype=torch.float32)
+            bias_tensor = module.bias.data.to(device=scale_w.device, dtype=torch.float32)
+            self.register_buffer('bias', bias_tensor / (scale_d * scale_w))
         else:
             self.register_buffer('bias', module.bias.to(torch.float32))
 
