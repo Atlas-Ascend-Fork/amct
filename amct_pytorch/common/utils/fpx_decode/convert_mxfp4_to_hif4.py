@@ -51,6 +51,7 @@ from amct_pytorch.common.utils.fpx_decode.fp4_formats import (  # noqa: E402
 )
 from amct_pytorch.common.utils.fpx_decode.ckpt_io import (  # noqa: E402
     load_index,
+    resolve_index,
     load_tensor_from_spec,
     save_convert_output,
     ShardCache,
@@ -305,9 +306,9 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
 
     if args.dry_run:
         import glob as glob_mod
-        bf16_index = load_index(args.bf16_index)
+        plan_index = resolve_index(args.mxfp4_dir, args.bf16_index)
         from amct_pytorch.common.utils.fpx_decode.ckpt_io import invert_weight_map
-        by_file = invert_weight_map(bf16_index["weight_map"])
+        by_file = invert_weight_map(plan_index["weight_map"])
         source_shards = sorted(glob_mod.glob(os.path.join(args.mxfp4_dir, "*.safetensors")))
         cache = ShardCache(source_shards)
         for shard_fname, keys in by_file.items():
@@ -375,7 +376,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("convert-dir", parents=[common], help="Whole-checkpoint conversion.")
     sp.add_argument("--mxfp4-dir", type=str, required=True)
-    sp.add_argument("--bf16-index", type=str, required=True)
+    sp.add_argument("--bf16-index", type=str, default=None,
+                    help="Optional target sharding plan; if omitted, derived from the "
+                         "MXFP4 checkpoint's own index (self-sufficient).")
     sp.add_argument("--out-dir", type=str, required=True)
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--verbose", action="store_true")
