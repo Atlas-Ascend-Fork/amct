@@ -14,6 +14,12 @@ gcc --version
 source /home/jenkins/Ascend/cann/bin/setenv.bash
 set +e
 echo "${task_name}"
+if [[ "${task_name}" =~ x86_compile_ubuntu24 ]]; then
+    sed -i "1i set(CMAKE_EXPORT_COMPILE_COMMANDS ON)" "CMakeLists.txt"
+    echo "api-check=compile" >> "${ATOMGIT_OUTPUT}"
+else
+    echo "api-check=continue" >> "${ATOMGIT_OUTPUT}"
+fi
 case "${task_name}" in
     x86_compile)
         bash build.sh --pkg --cann_3rd_lib_path=/home/jenkins/opensource
