@@ -47,10 +47,10 @@ from typing import Dict, List, Optional
 
 import torch
 
-from .bit_dump import hif4_cast, hif4_bit_reconstruct
-from .fake_quant import hifloat4_fake_quant
+from .hif4_pack_unpack import hif4_cast, hif4_bit_reconstruct
+from .hif4_fake_quant import hifloat4_fake_quant
 
-# HiF4 quantizes along the last dim in blocks of 64 (see bit_dump / _hif4_core).
+# HiF4 quantizes along the last dim in blocks of 64 (see hif4_pack_unpack / _hif4_encode_decode).
 HIF4_BLOCK = 64
 # Marks a directory produced by ``pack``; read back by ``unpack``.
 HIF4_META_NAME = "hif4_cast_meta.json"
