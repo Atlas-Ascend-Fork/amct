@@ -483,6 +483,15 @@ def test_deploy_init_hif_flag():
     ))
     assert wf.is_hif is True
 
+
+def test_tensorwise_compute_device_uses_args_device_only_for_compute_tensors():
+    wf = _make_workflow()
+    wf.args.device = "npu:0"
+
+    assert wf._tensorwise_compute_device(should_quantize=True, is_packed_mxfp4=False) == "npu:0"
+    assert wf._tensorwise_compute_device(should_quantize=False, is_packed_mxfp4=True) == "npu:0"
+    assert wf._tensorwise_compute_device(should_quantize=False, is_packed_mxfp4=False) == "cpu"
+
 # ---- _write_remaining_original_weights: shard split -----------------------
 
 
@@ -557,7 +566,8 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.convert_state_dict",
-        lambda weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size: weight,
+        lambda weight, weight_name, scale_inv_name, original_weight_map,
+        model_dir, loaded_files, block_size, **kwargs: weight,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",
@@ -729,10 +739,10 @@ def test_run_tensorwise_uses_adapter_output_weight_name(monkeypatch, tmp_path):
     wf.pipeline.cache_scheme.return_value = {}
     wf.pipeline.bits_scheme.return_value = None
     wf.pipeline.block_size.return_value = 4
-    wf.pipeline.tensorwise_output_weight_name.side_effect = (
+    wf.pipeline.tensorwise_output_weight_name = (
         lambda name: name.replace(".weight_packed", ".weight")
     )
-    wf.pipeline.is_packed_mxfp4_weight.side_effect = (
+    wf.pipeline.is_packed_mxfp4_weight = (
         lambda name, weight: name.endswith(".weight_packed")
     )
 

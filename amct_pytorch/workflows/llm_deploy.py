@@ -238,6 +238,17 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
         }
 
+    def _tensorwise_compute_device(self, should_quantize: bool, is_packed_mxfp4: bool) -> str:
+        if should_quantize or is_packed_mxfp4:
+            return getattr(self.args, "device", None) or "cpu"
+        return "cpu"
+
+    def _pipeline_hook(self, name: str):
+        if getattr(type(self.pipeline), name, None) is not None:
+            return getattr(self.pipeline, name)
+        instance_attrs = getattr(self.pipeline, "__dict__", {})
+        return instance_attrs.get(name)
+
     def _run_tensorwise(self):
         self._copy_support_files()
         original_index = self._load_weight_index()
@@ -263,25 +274,36 @@ class LlmDeployWorkflow:
                     continue
                 # FP8 -> bf16
                 block_size = self.pipeline.block_size(weight)
-                packed_mxfp4_fn = getattr(self.pipeline, "is_packed_mxfp4_weight", None)
+                packed_mxfp4_fn = self._pipeline_hook("is_packed_mxfp4_weight")
                 is_packed_mxfp4 = (
                     packed_mxfp4_fn(weight_name, weight) if callable(packed_mxfp4_fn) else False
                 )
-                weight = convert_state_dict(
-                    weight, weight_name, scale_inv_name, original_weight_map,
-                    model_dir, loaded_files, block_size, is_packed_mxfp4=is_packed_mxfp4)
-                output_name_fn = getattr(self.pipeline, "tensorwise_output_weight_name", None)
+                output_name_fn = self._pipeline_hook("tensorwise_output_weight_name")
                 output_weight_name = (
                     output_name_fn(weight_name) if callable(output_name_fn) else weight_name
                 )
-                new_state_dict[output_weight_name] = weight
+                should_quantize = False
                 if self.quant_dtype in ["int", "mxfp"]:
-                    quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
                     new_weight_name = output_weight_name.rsplit(".", 1)[0]
-                    if new_weight_name in quant_layers:
-                        bit = quant_layers[new_weight_name]
-                        state_dict = quant_payload(quant_cls, output_weight_name, weight, bit)
-                        new_state_dict.update(state_dict)
+                    should_quantize = new_weight_name in quant_layers
+                compute_device = self._tensorwise_compute_device(
+                    should_quantize=should_quantize,
+                    is_packed_mxfp4=is_packed_mxfp4,
+                )
+                weight = convert_state_dict(
+                    weight, weight_name, scale_inv_name, original_weight_map,
+                    model_dir, loaded_files, block_size,
+                    is_packed_mxfp4=is_packed_mxfp4,
+                    compute_device=compute_device,
+                )
+                if should_quantize:
+                    weight = weight.to(compute_device)
+                    quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
+                    bit = quant_layers[output_weight_name.rsplit(".", 1)[0]]
+                    state_dict = quant_payload(quant_cls, output_weight_name, weight, bit)
+                    new_state_dict.update(state_dict)
+                else:
+                    new_state_dict[output_weight_name] = weight.cpu()
             self._write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file

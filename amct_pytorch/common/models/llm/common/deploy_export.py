@@ -138,6 +138,7 @@ def convert_state_dict(
     loaded_files,
     block_size,
     is_packed_mxfp4=False,
+    compute_device="cpu",
 ):
     if weight.element_size() == 1:
         # FP8 weight
@@ -148,6 +149,8 @@ def convert_state_dict(
                 file_path = model_dir / file_name
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
+            weight = weight.to(compute_device)
+            scale_inv = scale_inv.to(compute_device)
             if is_packed_mxfp4 or weight.dtype == torch.int8:
                 weight = weight_dequant(weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True)
             else:
