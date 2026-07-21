@@ -15,19 +15,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""MXFP8 → BF16 → HiFloat4 checkpoint converter.
+"""MXFP8 → BF16 checkpoint decoder.
 
-Pipeline::
+Pipeline (decode only)::
 
-    MXFP8 packed  ──dequant_mxfp8──►  BF16  ──quant_dequant_float──►  BF16
-                         (fp4_formats)              (hifloat4_quant)
+    MXFP8 packed  ──dequant_mxfp8──►  BF16
+                         (fp4_formats)
 
+HiF4 (pack via deploy, fake-quant via ptq) is applied downstream by ``hifloat4_quant``.
 Conversion is self-sufficient — the output plan is derived from the MXFP8 checkpoint's own
 index, so no bf16 reference is needed.
 
 Typical usage::
 
-    python -m amct_pytorch.cli.llm.convert_to_hif4 --source-format mxfp8 \\
+    python -m amct_pytorch.common.utils.fpx_decode.convert_mxfp8_to_hif4 \\
         --quant_model_dir /path/to/MXFP8 \\
         --output_dir /path/to/output
 """
@@ -47,10 +48,6 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import torch
 from safetensors.torch import load_file, save_file
-
-from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
-
-_HIF4_QTYPE = QType("hifx4").dim(-1)
 
 
 # -----------------------------------------------------------------------------
@@ -462,8 +459,9 @@ def convert_mxfp8_checkpoint_to_hif4(
                 if scale_shape_before != expected_scale_shape:
                     conversion_stats["reshaped_scales"] += 1
 
-                # step 2: BF16 → HiF4 fake-quant → BF16
-                out = quant_dequant_float(w_bf16, _HIF4_QTYPE, force_py=True, force_fp32=True)
+                # Decode only: emit the dequantized BF16. HiF4 (pack via deploy /
+                # fake-quant via ptq) is applied downstream by hifloat4_quant.
+                out = w_bf16
 
                 out_tensors[tensor_name] = out
                 conversion_stats["dequantized_fp8_weights"] += 1
