@@ -48,23 +48,12 @@ class PackInt4WeightPass(BaseFusionPass):
             return False
         return self.records[node.name].get("wts_type") == "INT4"
 
-    # 量化轴（per-channel scale 所在的 Cout 维）在 onnx 权重张量里的位置：
-    # Conv 为轴 0；ConvTranspose/MatMul/Gemm(transB=0)/LSTM/GRU 为轴 1。
-    _QUANT_AXIS = {
-        'Conv': 0,
-        'ConvTranspose': 1,
-        'MatMul': 1,
-        'Gemm': 1,
-        'LSTM': 1,
-        'GRU': 1,
-    }
-
     def do_pass(self, graph, object_node, model=None):
         """Pack the INT4 weight (and recurrence_weight for RNN) of object_node."""
-        axis = self._QUANT_AXIS.get(object_node.type, 0)
+        axis = QuantOpInfo.get_cin_axis(object_node)
         weight_node = QuantOpInfo.get_weight_node(object_node)
         self._pack_int4_weight(weight_node, axis)
-        # recurrence_weight 仅 RNN 有，其量化轴（4H）同样在 onnx 张量的轴 1
+        # recurrence_weight 仅 RNN 有，其 Cin(hidden) 同样在 onnx 张量的轴 2
         recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(object_node)
         self._pack_int4_weight(recurrence_weight_node, axis)
         LOGGER.logd(
@@ -72,19 +61,19 @@ class PackInt4WeightPass(BaseFusionPass):
             "PackInt4WeightPass",
         )
 
-    def _pack_int4_weight(self, weight_node, quant_axis):
+    def _pack_int4_weight(self, weight_node, cin_axis):
         """Read INT4 values from a weight tensor node and write them back packed
-        two-per-byte along quant_axis. No-op when weight_node is None (e.g. non-RNN
-        ops have no recurrence_weight)."""
+        two-per-byte along the Cin axis. No-op when weight_node is None (e.g.
+        non-RNN ops have no recurrence_weight)."""
         if weight_node is None:
             return
         helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
         int4_vals = np.asarray(helper.get_data())
         orig_dims = list(helper.tensor.dims)
-        # 沿量化轴（per-channel scale 所在的 Cout 维）nibble-pack：该轴每两个 INT4
-        # 合成一个 INT8，其余轴不变（该轴 -> ceil(axis/2)）。deploy 为 AMCT 专有
-        # 格式，实际字节由 op_data_type 标记为 INT4-packed。
-        packed, new_dims = self._pack_along_axis(int4_vals, orig_dims, quant_axis)
+        # 沿 Cin 维 nibble-pack：该轴每两个 INT4 合成一个 INT8，其余轴不变
+        # （Cin -> Cin/2）。deploy 为 AMCT 专有格式，实际字节由 op_data_type
+        # 标记为 INT4-packed。Cin 奇数已在配置阶段拦截，不会走到这里。
+        packed, new_dims = self._pack_along_axis(int4_vals, orig_dims, cin_axis)
         helper.clear_data()
         helper.set_data(packed, 'INT8', dims=new_dims)
 

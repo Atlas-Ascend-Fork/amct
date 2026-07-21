@@ -274,16 +274,27 @@ class ConfigBase():
                 LOGGER.logw("Layer {} does not support int16_quantizable, set int8".format(layer))
 
     def check_int4_weight_quant_axis(self, graph, config, supported_layers):
-        ''' INT4 沿量化轴(Cout)两两 pack，量化轴为奇数无法 pack，
-        配置阶段拦截：这些层不允许 INT4 权重量化。 '''
+        ''' INT4 沿 Cin 轴两两 pack。group/depthwise conv 或 Cin 为奇数的层
+        无法沿 Cin pack，配置阶段自动将其权重降级为 INT8(A8W8)。
+        同时兼容 PTQ(weight_quant_params/num_bits) 与 retrain
+        (retrain_weight_config/dst_type) 两种配置结构。 '''
         for layer in supported_layers:
-            if config.get(layer).get(WEIGHT_QUANT_PARAMS).get('num_bits') != 4:
+            layer_cfg = config.get(layer)
+            wts_ptq = layer_cfg.get(WEIGHT_QUANT_PARAMS)
+            wts_retrain = layer_cfg.get('retrain_weight_config')
+            is_int4 = (wts_ptq is not None and wts_ptq.get('num_bits') == 4) or \
+                (wts_retrain is not None and wts_retrain.get('dst_type') == 'INT4')
+            if not is_int4:
                 continue
-            if self.graph_querier.is_int4_quant_axis_odd(graph, layer):
-                raise ValueError(
-                    "Layer {} cannot be INT4-quantized: its weight quant axis "
-                    "(Cout) length is odd and cannot be nibble-packed. Please "
-                    "use INT8 for this layer.".format(layer))
+            if not self.graph_querier.int4_cin_pack_unsupported(graph, layer):
+                continue
+            if wts_ptq is not None and wts_ptq.get('num_bits') == 4:
+                wts_ptq['num_bits'] = 8
+            if wts_retrain is not None and wts_retrain.get('dst_type') == 'INT4':
+                wts_retrain['dst_type'] = 'INT8'
+            LOGGER.logw(
+                "Layer {} weight cannot be INT4-packed along Cin (grouped "
+                "conv or odd Cin), downgraded to INT8 (A8W8).".format(layer))
 
     def check_and_down_grade_winograd_num_bits(self, graph, config, supported_layers):
         '''check quant num bits and turn it into 8 if it not support int6 int7 quant'''

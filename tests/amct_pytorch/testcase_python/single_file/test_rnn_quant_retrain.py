@@ -679,7 +679,8 @@ class TestConvLinearPTQA8W4(unittest.TestCase):
             input_data=self.input,
             config_defination=self.cfg)
         self.assertTrue(os.path.exists(config_file))
-        # cfg entry must drive weight INT4: assert generated config carries num_bits=4
+        # cfg entry drives weight INT4; Net001 has group/depthwise conv whose Cin
+        # axis cannot be nibble-packed, so those layers are downgraded to INT8.
         with open(config_file) as fh:
             cfg = _json.load(fh)
         wts_bits = []
@@ -689,8 +690,10 @@ class TestConvLinearPTQA8W4(unittest.TestCase):
                 if nb is not None:
                     wts_bits.append(nb)
         self.assertTrue(wts_bits, 'no weight_quant_params.num_bits found in config')
-        self.assertTrue(all(b == 4 for b in wts_bits),
-                        'A8W4 cfg should yield weight num_bits=4, got {}'.format(wts_bits))
+        # regular conv/linear stay INT4; group/depthwise conv downgraded to INT8
+        self.assertIn(4, wts_bits, 'A8W4 cfg should yield INT4 for regular layers')
+        self.assertIn(8, wts_bits,
+                      'group/depthwise conv should be downgraded to INT8, got {}'.format(wts_bits))
 
     def test_quantize_and_save_a8w4(self):
         # Full end-to-end. quantize_model/save_model need NPU op lib; in a bare

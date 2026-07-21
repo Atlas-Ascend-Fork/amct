@@ -256,6 +256,24 @@ class QuantOpInfo():
         return cin_length
 
     @staticmethod
+    def get_cin_axis(node):
+        """Cin 维在 onnx 权重张量里的轴位置（INT4 沿此轴 nibble-pack）。
+        Conv 轴1；ConvTranspose/MatMul 轴0；Gemm 依 transB(0->轴0,1->轴1)；
+        LSTM/GRU 轴2(input/hidden)。"""
+        if node.type == 'Conv':
+            return 1
+        if node.type in ['ConvTranspose', 'MatMul']:
+            return 0
+        if node.type == 'Gemm':
+            attr_helper = AttributeProtoHelper(node.proto)
+            if attr_helper.has_attr('transB') and attr_helper.get_attr_value('transB') == 1:
+                return 1
+            return 0
+        if node.type in ['LSTM', 'GRU']:
+            return 2
+        raise RuntimeError("Unexpected node's type {} for get_cin_axis".format(node.type))
+
+    @staticmethod
     def get_node_tensor(node):
         '''
         Function: Get node's value tensor

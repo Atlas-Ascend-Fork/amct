@@ -295,19 +295,31 @@ class GraphQuerier():
         return layers
 
     @staticmethod
-    def is_int4_quant_axis_odd(graph, layer_name):
-        """Whether the layer's weight quant-axis (Cout) length is odd.
-        INT4 packs two values along the quant axis, so an odd axis cannot be
-        packed. RNN quant axis (4H) is always even and get_cout_length does not
-        cover RNN, so a RuntimeError is treated as even (not odd)."""
-        if graph.model is not None:
-            return False
+    def int4_cin_pack_unsupported(graph, layer_name):
+        """Whether the layer cannot be INT4-packed along the Cin axis.
+        INT4 packs two values along Cin, so it is unsupported when:
+        - the conv is grouped (groups > 1): the onnx weight Cin dim is Cin/groups
+          (1 for depthwise), which cannot be nibble-packed along Cin;
+        - the Cin axis length is odd (e.g. first conv with Cin=3).
+        RNN also checks its recurrence_weight Cin."""
         try:
             node = graph.get_node_by_name(layer_name)
-            cout = QuantOpInfo.get_cout_length(node)
+            cin_axis = QuantOpInfo.get_cin_axis(node)
         except RuntimeError:
             return False
-        return cout is not None and cout % 2 == 1
+        # group/depthwise conv: onnx weight Cin dim is Cin/groups, cannot pack
+        if node.type in ('Conv', 'ConvTranspose'):
+            attr_helper = AttributeProtoHelper(node.proto)
+            if attr_helper.has_attr('group') and attr_helper.get_attr_value('group') > 1:
+                return True
+        for wnode in (QuantOpInfo.get_weight_node(node),
+                      QuantOpInfo.get_recurrence_weight_node(node)):
+            if wnode is None:
+                continue
+            dims = QuantOpInfo.get_node_tensor(wnode).dims
+            if cin_axis < len(dims) and dims[cin_axis] % 2 == 1:
+                return True
+        return False
 
     @staticmethod
     def get_support_winograd_layer_types():
