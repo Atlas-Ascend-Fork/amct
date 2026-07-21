@@ -137,12 +137,29 @@ def detect_source_format(model_dir: str) -> str:
 
 
 def copy_side_files(src: str, dst: str) -> None:
-    """Copy config/tokenizer side files so the decoded dir is loadable as a model."""
+    """Copy config/tokenizer side files so the decoded dir loads as a plain BF16 model.
+
+    ``config.json`` has its ``quantization_config`` stripped (the decoded weights are plain
+    BF16, not quantized) and ``torch_dtype`` set to bfloat16, so the model loader does not treat
+    the decoded checkpoint as still-quantized.
+    """
     os.makedirs(dst, exist_ok=True)
     for fn in _SIDE_FILES:
         p = os.path.join(src, fn)
-        if os.path.exists(p) and not os.path.exists(os.path.join(dst, fn)):
-            shutil.copy2(p, os.path.join(dst, fn))
+        if not os.path.exists(p) or os.path.exists(os.path.join(dst, fn)):
+            continue
+        if fn == "config.json":
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                cfg.pop("quantization_config", None)
+                cfg["torch_dtype"] = "bfloat16"
+                with open(os.path.join(dst, fn), "w", encoding="utf-8") as f:
+                    json.dump(cfg, f, indent=2)
+                continue
+            except (OSError, ValueError):
+                pass  # fall back to a verbatim copy
+        shutil.copy2(p, os.path.join(dst, fn))
 
 
 def decode_to_bf16(model_dir: str, out_dir: str, fmt: str) -> str:
