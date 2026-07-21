@@ -40,7 +40,8 @@ class _ScaleDOnDifferentDevice:
     def __init__(self, tensor):
         self.tensor = tensor
 
-    def __mul__(self, other):
+    @staticmethod
+    def __mul__(other):
         raise RuntimeError(
             "Expected all tensors to be on the same device. Expected NPU tensor, "
             "please check whether the input tensor device is correct.")
