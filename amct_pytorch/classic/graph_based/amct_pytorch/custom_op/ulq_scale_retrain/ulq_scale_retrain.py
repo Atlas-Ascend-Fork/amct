@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -39,21 +39,35 @@ class UlqScaleRetrainFunction(Function):
     Function: Run calibration process for quantization of the given layer.
     APIs: forward
     """
+
     @staticmethod
-    def forward(ctx, inputs, scale, offset, wts_qat_param, cur_batch, offset_deploy=None, group=1, axis=0):
+    def forward(
+        ctx,
+        inputs,
+        scale,
+        offset,
+        wts_qat_param,
+        cur_batch,
+        offset_deploy=None,
+        group=1,
+        axis=0,
+    ):
         """
         Function: UlqRetrain foward funtion.
         """
         # check input data
         check_quant_data(inputs, 'weights')
-        
-        # trans quantized axis to 0 in group wise
-        group_wise = check_group_param(inputs, wts_qat_param.get('channel_wise'), group, axis)
-        if group_wise:
-            processed_tensor = adjust_axis_for_group_wise(axis, inputs)
 
-        inputs_processed = process_tensor_shape(inputs, wts_qat_param.get(MODULE_TYPE),
-            wts_qat_param.get('module'))
+        # trans quantized axis to 0 in group wise
+        group_wise = check_group_param(
+            inputs, wts_qat_param.get("channel_wise"), group, axis
+        )
+        if group_wise:
+            adjust_axis_for_group_wise(axis, inputs)
+
+        inputs_processed = process_tensor_shape(
+            inputs, wts_qat_param.get(MODULE_TYPE), wts_qat_param.get("module")
+        )
 
         ctx.inputs = inputs_processed
         ctx.module_type = wts_qat_param.get(MODULE_TYPE)
@@ -65,7 +79,8 @@ class UlqScaleRetrainFunction(Function):
             wts_qat_param.get('channel_wise'),
             wts_qat_param.get('arq_init') and cur_batch == 0,
             wts_qat_param.get('s_rec_flag'),
-            group)
+            group,
+        )
 
         outputs, scale_out, offset_out = results
         scale_out = scale_out.reshape(scale.shape)
@@ -79,11 +94,12 @@ class UlqScaleRetrainFunction(Function):
         ctx.group = group
         ctx.axis = axis
 
-        outputs = process_tensor_shape(outputs, wts_qat_param.get(MODULE_TYPE),
-            wts_qat_param.get('module'))
+        outputs = process_tensor_shape(
+            outputs, wts_qat_param.get(MODULE_TYPE), wts_qat_param.get("module")
+        )
         # transpose wts axis back in group wise
         if group_wise and axis > 0:
-            processed_tensor = adjust_axis_for_group_wise(axis, outputs)
+            adjust_axis_for_group_wise(axis, outputs)
         return outputs, scale, offset
 
     @staticmethod
@@ -99,7 +115,8 @@ class UlqScaleRetrainFunction(Function):
             ctx.num_bits,
             ctx.s_rec_flag,
             ctx.group,
-            ctx.axis)
+            ctx.axis,
+        )
 
         grad_input, grad_scale = res
 
@@ -140,10 +157,22 @@ class UlqScaleRetrainFuncQAT(UlqScaleRetrainFunction):
             quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[5])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
         elif module_type in RNN_TENSOR_NUM:
-            shape = g.op('Constant', value_t=torch.tensor(
-                    [1, RNN_TENSOR_NUM.get(module_type) * inputs[3]['module'].hidden_size, -1], dtype=torch.int64))
+            shape = g.op(
+                "Constant",
+                value_t=torch.tensor(
+                    [
+                        1,
+                        RNN_TENSOR_NUM.get(module_type)
+                        * inputs[3]["module"].hidden_size,
+                        -1,
+                    ],
+                    dtype=torch.int64,
+                ),
+            )
             reshape = g.op('Reshape', inputs[0], shape)
             quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[5])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[5])
-        LOGGER.logi(f'Convert ULQ scale op to onnx QuantizeLinear and DequantizeLinear op successfully.')
+        LOGGER.logi(
+            "Convert ULQ scale op to onnx QuantizeLinear and DequantizeLinear op successfully."
+        )
         return out_node, None, None

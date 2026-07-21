@@ -1,13 +1,22 @@
 ---
 name: default-skills
 description: |
-  **必须触发此 default-skills 的场景**（用户提到以下任何内容时使用）：找不到/缺失/安装/更新 gitcode-pr, gitcode-issue skill时，或者安装必备/默认/必要/必须skills时；
+  **必须触发此 default-skills 的场景**：① gitcode-pr 或 gitcode-issue skill 缺失/找不到时（补装缺失，不覆盖已有版本）；② 用户明确要求更新/同步上游 skill 时（使用 --force 覆盖）；
 ---
 
-## 安装默认skills步骤
-1. 读取`.claude/skills/default-skills/scripts/install-default-skills.sh` 获取 `DEFAULT_SKILLS`
-2. 首先尝试使用 `.claude/skills/default-skills/scripts/install-default-skills.sh` 安装或更新skills，执行后检查 `.claude/skills/`目录有没有`DEFAULT_SKILLS`，如果有立即结束；如果没有，继续下一步
-3. 使用git克隆`https://gitcode.com/cann-agent/skills.git` 到临时目录，要使用`--depth 1`参数，该仓下找到`DEFAULT_SKILLS`，拷贝到`.claude/skills/`目录下
+## 执行步骤
+
+**第一步（必须）**：读取 `.claude/skills/default-skills/scripts/install-default-skills.sh` 获取 `DEFAULT_SKILLS` 列表
+
+**场景一：补装缺失（默认）**
+1. 执行 `.claude/skills/default-skills/scripts/install-default-skills.sh`（已存在的 skill 自动跳过）
+2. 检查 `.claude/skills/` 目录是否已有所有 `DEFAULT_SKILLS`，有则结束；若脚本执行失败，执行步骤 3
+3. 兜底（脚本失败时手动复刻，与脚本逻辑等价）：`git clone --depth 1 https://gitcode.com/cann-agent/skills.git` 到临时目录，将缺失的 `DEFAULT_SKILLS` 拷贝到 `.claude/skills/`
+
+**场景二：强制更新（用户明确要求更新/同步上游时）**
+1. 执行 `.claude/skills/default-skills/scripts/install-default-skills.sh --force`（从上游覆盖所有 skill）
+2. 若脚本失败，同场景一步骤 3 手动兜底（不做存在性检查，直接覆盖）
+3. 提示用户：本地对这些 skill 的定制改动已被上游版本覆盖
 
 ## 默认skills使用场景
 1. **必须触发 gitcode-issue 的场景**（用户提到以下任何内容时使用）：

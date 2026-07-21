@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -42,20 +42,23 @@ from ..amct_pytorch.utils.vars import NUM_BITS
 from ..amct_pytorch.ada_round.ada_round_optimize import optimize_alpha
 
 
-@check_params(config_file=str,
-              model=torch.nn.Module,
-              skip_layers=(list, type(None)),
-              batch_num=int,
-              activation_offset=bool,
-              config_defination=(type(None), str))
+@check_params(
+    config_file=str,
+    model=torch.nn.Module,
+    skip_layers=(list, type(None)),
+    batch_num=int,
+    activation_offset=bool,
+    config_defination=(type(None), str),
+)
 def create_quant_config(
-        config_file,
-        model,
-        input_data,
-        skip_layers=None,
-        batch_num=1,
-        activation_offset=True,
-        config_defination=None):
+    config_file,
+    model,
+    input_data,
+    skip_layers=None,
+    batch_num=1,
+    activation_offset=True,
+    config_defination=None,
+):
     """
     Function: Create quantize configuration json file for amct_pytorch tool
     Parameter: config_file: file path of quantize configuration json file
@@ -84,20 +87,14 @@ def create_quant_config(
     graph.add_model(model)
 
     # create config file for quantizetion
-    Configuration.create_quant_config(config_file, graph, skip_layers,
-                                      batch_num, activation_offset,
-                                      config_defination)
+    Configuration.create_quant_config(
+        config_file, graph, skip_layers, batch_num, activation_offset, config_defination
+    )
     LOGGER.logi(f'Create quant config file {config_file} success.')
 
 
-@check_params(config_file=str,
-              record_file=str,
-              model=torch.nn.Module)
-def quantize_preprocess(
-        config_file,
-        record_file,
-        model,
-        input_data):
+@check_params(config_file=str, record_file=str, model=torch.nn.Module)
+def quantize_preprocess(config_file, record_file, model, input_data):
     """
     Function: Quantization input model: According to the quantization
               configuration file, insert dmq_balancer op at the specified
@@ -145,22 +142,25 @@ def quantize_preprocess(
     return model
 
 
-@check_params(config_file=str,
-              modfied_onnx_file=str,
-              record_file=str,
-              model=torch.nn.Module,
-              input_names=(list, type(None)),
-              output_names=(list, type(None)),
-              dynamic_axes=(dict, type(None)))
+@check_params(
+    config_file=str,
+    modfied_onnx_file=str,
+    record_file=str,
+    model=torch.nn.Module,
+    input_names=(list, type(None)),
+    output_names=(list, type(None)),
+    dynamic_axes=(dict, type(None)),
+)
 def quantize_model(
-        config_file,
-        modfied_onnx_file,
-        record_file,
-        model,
-        input_data,
-        input_names=None,
-        output_names=None,
-        dynamic_axes=None):
+    config_file,
+    modfied_onnx_file,
+    record_file,
+    model,
+    input_data,
+    input_names=None,
+    output_names=None,
+    dynamic_axes=None,
+):
     """
     Function: Modify user's model for calibration in inference process.
     Parameter: config_file: quantize configuration json file
@@ -177,30 +177,33 @@ def quantize_model(
                    input/output
     Return: model: modified pytorch model for calibration inference.
     """
-    model = inner_quantize_model(config_file=config_file,
-                                 modfied_onnx_file=modfied_onnx_file,
-                                 record_file=record_file,
-                                 model=model,
-                                 input_data=input_data,
-                                 input_names=input_names,
-                                 output_names=output_names,
-                                 dynamic_axes=dynamic_axes,
-                                 dump_config=None)
+    model = inner_quantize_model(
+        config_file=config_file,
+        modfied_onnx_file=modfied_onnx_file,
+        record_file=record_file,
+        model=model,
+        input_data=input_data,
+        input_names=input_names,
+        output_names=output_names,
+        dynamic_axes=dynamic_axes,
+        dump_config=None,
+    )
 
     return model
 
 
 def inner_quantize_model(
-        config_file,
-        modfied_onnx_file,
-        record_file,
-        model,
-        input_data,
-        input_names=None,
-        output_names=None,
-        dynamic_axes=None,
-        dump_config=None,
-        weight_fakequant=True):
+    config_file,
+    modfied_onnx_file,
+    record_file,
+    model,
+    input_data,
+    input_names=None,
+    output_names=None,
+    dynamic_axes=None,
+    dump_config=None,
+    weight_fakequant=True,
+):
     """
     Function: Modify user's model for calibration in inference process.
     Parameter: config_file: quantize configuration json file
@@ -233,10 +236,16 @@ def inner_quantize_model(
 
     # parse to graph
     tmp_onnx = BytesIO()
-    Parser.export_onnx(model, input_data, tmp_onnx,
-                       {'input_names': input_names,
-                        'output_names': output_names,
-                        'dynamic_axes': dynamic_axes})
+    Parser.export_onnx(
+        model,
+        input_data,
+        tmp_onnx,
+        {
+            "input_names": input_names,
+            "output_names": output_names,
+            "dynamic_axes": dynamic_axes,
+        },
+    )
     graph = Parser.parse_net_to_graph(tmp_onnx)
     graph.add_model(model)
 
@@ -248,7 +257,8 @@ def inner_quantize_model(
         if not os.path.exists(record_file) or record_parser.is_records_empty():
             raise RuntimeError(
                 "config_file indicates dmq_balancer, but record_file is empty. "
-                "please check quant_preprocess and calibration is done!")
+                "please check quant_preprocess and calibration is done!"
+            )
         records, _ = record_parser.parse()
     else:
         record_file = files_util.create_empty_file(record_file, check_exist=True)
@@ -279,10 +289,12 @@ def _inner_quantize_weight(model, graph, weight_fakequant, records, input_data):
     # add bn fusion pass only when get_fusion_switch set to true
     if Configuration().get_fusion_switch():
         optimizer.add_pass(opt.ConvBnFusionPass(Configuration))
-    optimizer.add_pass(opt.WeightsCalibrationPass(records, weight_fakequant=weight_fakequant))
+    optimizer.add_pass(
+        opt.WeightsCalibrationPass(records, weight_fakequant=weight_fakequant)
+    )
 
     optimizer.do_optimizer(model, graph)
-    
+
     # for adaRound feature, Finetune the rounding mode.
     groups = get_ada_round_groups(graph, Configuration().get_quant_config())
     optimize_alpha(model, input_data, groups, graph)
@@ -331,22 +343,20 @@ def save_model(modfied_onnx_file, record_file, save_path):
     if record_parser.is_records_empty():
         raise RuntimeError(
             "record_file is empty, no layers to be quantized. Please "
-            "ensure calibration is finished by checking information!")
+            "ensure calibration is finished by checking information!"
+        )
     records, _ = record_parser.parse()
 
-    Parser.write_node_attrs_extracted_from_onnx(graph, modfied_onnx_file, ['op_data_type'])
-    quant_config = Configuration().get_quant_config()
+    Parser.write_node_attrs_extracted_from_onnx(
+        graph, modfied_onnx_file, ["op_data_type"]
+    )
     _generate_model(graph, records, save_path)
 
 
-@check_params(config_file=str,
-              model=torch.nn.Module,
-              config_defination=(type(None), str))
-def create_quant_retrain_config(
-        config_file,
-        model,
-        input_data,
-        config_defination=None):
+@check_params(
+    config_file=str, model=torch.nn.Module, config_defination=(type(None), str)
+)
+def create_quant_retrain_config(config_file, model, input_data, config_defination=None):
     """
     Function: Create retrain quantize configuration json file for amct_caffe
         tool
@@ -379,21 +389,12 @@ def create_quant_retrain_config(
         RetrainConfig.create_default_retrain_config(config_file, graph)
     # create config file for quantizetion
     else:
-        RetrainConfig.create_quant_retrain_config(
-            config_file,
-            graph,
-            config_defination)
+        RetrainConfig.create_quant_retrain_config(config_file, graph, config_defination)
     LOGGER.logi(f'Create quant retrain config file {config_file} success.')
 
 
-@check_params(config_file=str,
-              model=torch.nn.Module,
-              record_file=str)
-def create_quant_retrain_model(
-        config_file,
-        model,
-        record_file,
-        input_data):
+@check_params(config_file=str, model=torch.nn.Module, record_file=str)
+def create_quant_retrain_model(config_file, model, record_file, input_data):
     """
     Function: Modify user's model for retrain in train and inference process.
     Parameter: config_file: retrain quantize configuration json file
@@ -423,18 +424,16 @@ def create_quant_retrain_model(
     return model_copy
 
 
-@check_params(config_file=str,
-              model=torch.nn.Module,
-              record_file=str,
-              pth_file=str,
-              state_dict_name=(str, type(None)))
+@check_params(
+    config_file=str,
+    model=torch.nn.Module,
+    record_file=str,
+    pth_file=str,
+    state_dict_name=(str, type(None)),
+)
 def restore_quant_retrain_model(
-        config_file,
-        model,
-        record_file,
-        input_data,
-        pth_file,
-        state_dict_name=None):
+    config_file, model, record_file, input_data, pth_file, state_dict_name=None
+):
     """
     Function: Modify user's model and restore retrain network from last
         checkpoint.
@@ -463,22 +462,25 @@ def restore_quant_retrain_model(
     return model
 
 
-@check_params(config_file=str,
-              model=torch.nn.Module,
-              record_file=str,
-              save_path=str,
-              input_names=(list, type(None)),
-              output_names=(list, type(None)),
-              dynamic_axes=(dict, type(None)))
+@check_params(
+    config_file=str,
+    model=torch.nn.Module,
+    record_file=str,
+    save_path=str,
+    input_names=(list, type(None)),
+    output_names=(list, type(None)),
+    dynamic_axes=(dict, type(None)),
+)
 def save_quant_retrain_model(
-        config_file,
-        model,
-        record_file,
-        save_path,
-        input_data,
-        input_names=None,
-        output_names=None,
-        dynamic_axes=None):
+    config_file,
+    model,
+    record_file,
+    save_path,
+    input_data,
+    input_names=None,
+    output_names=None,
+    dynamic_axes=None,
+):
     """
     Function: save modfied_onnx_file to fakequant_onnx_file and
         deploy_onnx_file.
@@ -515,20 +517,28 @@ def save_quant_retrain_model(
 
     # save model to fakequant and deploy
     modfied_onnx_file = BytesIO()
-    Parser.export_onnx(model_copy, input_data, modfied_onnx_file,
-                       {'input_names': input_names,
-                        'output_names': output_names,
-                        'dynamic_axes': dynamic_axes})
+    Parser.export_onnx(
+        model_copy,
+        input_data,
+        modfied_onnx_file,
+        {
+            "input_names": input_names,
+            "output_names": output_names,
+            "dynamic_axes": dynamic_axes,
+        },
+    )
 
     graph = Parser.parse_net_to_graph(modfied_onnx_file)
 
     record_parser = RecordFileParser(
-        record_file, graph, 'modfied_onnx_file after retrain')
+        record_file, graph, "modfied_onnx_file after retrain"
+    )
     if record_parser.is_records_empty():
         raise RuntimeError(
             "record_file is empty, no layers to be quantized. Please "
             "confirm the process of retrain quantification: whether "
-            "the inference process is omitted after the training!")
+            "the inference process is omitted after the training!"
+        )
     records, _ = record_parser.parse()
 
     _generate_model(graph, records, save_path)
@@ -561,10 +571,12 @@ def _copy_modified_model(model, record_file):
 
 def parameters(module):
     """Returns an iterator over module parameters."""
+
     def _parameters(recurse=True):
         for name, param in module.named_parameters(recurse=recurse):
             if 'acts_comp_reuse' not in name:
                 yield param
+
     return _parameters
 
 
@@ -645,12 +657,12 @@ def _preprocess_retrain_model(model, input_data, config_file=None):
     graph.add_model(model)
     if config_file is not None:
         retrain_config = RetrainConfig().parse_retrain_config(config_file, graph)
-        if not _check_config_consistency(retrain_config,
-                                        RetrainConfig.retrain_config):
+        if not _check_config_consistency(retrain_config, RetrainConfig.retrain_config):
             raise RuntimeError(
                 "The config_file is inconsistent with the config_file input by "
                 "the create_quant_retrain_model or restore_quant_retrain_model "
-                "interface!")
+                "interface!"
+            )
 
     optimizer = opt.ModelOptimizer()
     optimizer.add_pass(opt.ConvBnFusionPass(RetrainConfig))
@@ -658,19 +670,19 @@ def _preprocess_retrain_model(model, input_data, config_file=None):
 
 
 def _check_config_consistency(retrain_config, single_instance_config):
-    ''' Verify the consistency between retrain_config and
-        single_instance_config.
-    '''
+    """Verify the consistency between retrain_config and
+    single_instance_config.
+    """
+
     def _check_item_consistency(value1, value2):
-        ''' Verify the consistency between value1 and value2. '''
+        """Verify the consistency between value1 and value2."""
         if not isinstance(value1, type(value2)):
             return False
         if isinstance(value1, dict):
             for key, value in value1.items():
                 if key not in value2.keys():
                     return False
-                consistency = \
-                    _check_item_consistency(value, value2.get(key))
+                consistency = _check_item_consistency(value, value2.get(key))
                 if not consistency:
                     return False
         else:
@@ -683,15 +695,14 @@ def _check_config_consistency(retrain_config, single_instance_config):
 
     consistency = True
     for key, value in retrain_config.items():
-        consistency = _check_item_consistency(
-            value, single_instance_config.get(key))
+        consistency = _check_item_consistency(value, single_instance_config.get(key))
         if not consistency:
             return False
     return consistency
 
 
 def _generate_model(graph, records, save_path):
-    ''' Generate deploy and fakequant onnx model. '''
+    """Generate deploy and fakequant onnx model."""
     save_dir, save_prefix = split_dir_prefix(save_path)
     files_util.create_path(save_dir)
 
@@ -721,8 +732,8 @@ def _generate_model(graph, records, save_path):
     optimizer = opt.GraphOptimizer()
     optimizer.add_pass(opt.InsertRNNFakeQuantPass(records))
     optimizer.add_pass(opt.ReplaceQuantPass(records))
-    optimizer.add_pass(opt.ReplaceWeightQuantPass(records)) # AscendWeightQuant op only
-    optimizer.add_pass(opt.WeightFakequantPass(records)) # int8 case only
+    optimizer.add_pass(opt.ReplaceWeightQuantPass(records))  # AscendWeightQuant op only
+    optimizer.add_pass(opt.WeightFakequantPass(records))  # int8 case only
     optimizer.add_pass(opt.ReplaceDequantPass(records))
     optimizer.add_pass(opt.ReplaceAntiQuantPass(records))
     optimizer.add_pass(opt.ReplaceBiasQuantPass(records))
@@ -732,7 +743,7 @@ def _generate_model(graph, records, save_path):
 
 
 def inner_generate_fakequant_module(graph, model, records, numbits):
-    """ generate the fake quant pytorch module"""
+    """generate the fake quant pytorch module"""
     optimizer = opt.ModelOptimizer()
     if Configuration().get_fusion_switch():
         optimizer.add_pass(opt.ConvBnFusionPass(Configuration))
@@ -747,14 +758,15 @@ def inner_generate_fakequant_module(graph, model, records, numbits):
 
 
 def generate_fakequant_module(
-        model,
-        config_file,
-        record_file,
-        input_data,
-        input_names=None,
-        output_names=None,
-        dynamic_axes=None):
-    """ generate the fake quant pytorch module"""
+    model,
+    config_file,
+    record_file,
+    input_data,
+    input_names=None,
+    output_names=None,
+    dynamic_axes=None,
+):
+    """generate the fake quant pytorch module"""
     files_util.is_valid_name(record_file, 'record_file')
     record_file = os.path.realpath(record_file)
     config_file = os.path.realpath(config_file)
@@ -762,10 +774,16 @@ def generate_fakequant_module(
     files_util.is_valid_name(record_file, 'record_file')
 
     tmp_onnx = BytesIO()
-    Parser.export_onnx(model, input_data, tmp_onnx,
-                       {'input_names': input_names,
-                        'output_names': output_names,
-                        'dynamic_axes': dynamic_axes})
+    Parser.export_onnx(
+        model,
+        input_data,
+        tmp_onnx,
+        {
+            "input_names": input_names,
+            "output_names": output_names,
+            "dynamic_axes": dynamic_axes,
+        },
+    )
 
     graph = Parser.parse_net_to_graph(tmp_onnx)
     graph.add_model(model)
@@ -773,11 +791,13 @@ def generate_fakequant_module(
 
     # parse record file
     record_parser = RecordFileParser(
-        record_file, graph, 'modified_onnx_file after calibration')
+        record_file, graph, "modified_onnx_file after calibration"
+    )
     if record_parser.is_records_empty():
         raise RuntimeError(
             "record_file is empty, no layers to be quantized. Please "
-            "ensure calibration is finished by checking information!")
+            "ensure calibration is finished by checking information!"
+        )
     records, _ = record_parser.parse()
 
     # For AMC Feature, each layer can be same dst_type.
@@ -804,23 +824,30 @@ def fetch_num_bits():
 
 
 def inner_fuse_bn(
-        model,
-        config_file,
-        record_file,
-        input_data,
-        input_names=None,
-        output_names=None,
-        dynamic_axes=None):
-    """ generate the bn fused pytorch module"""
+    model,
+    config_file,
+    record_file,
+    input_data,
+    input_names=None,
+    output_names=None,
+    dynamic_axes=None,
+):
+    """generate the bn fused pytorch module"""
     files_util.is_valid_name(record_file, 'record_file')
     record_file = os.path.realpath(record_file)
     config_file = os.path.realpath(config_file)
 
     tmp_onnx = BytesIO()
-    Parser.export_onnx(model, input_data, tmp_onnx,
-                       {'input_names': input_names,
-                        'output_names': output_names,
-                        'dynamic_axes': dynamic_axes})
+    Parser.export_onnx(
+        model,
+        input_data,
+        tmp_onnx,
+        {
+            "input_names": input_names,
+            "output_names": output_names,
+            "dynamic_axes": dynamic_axes,
+        },
+    )
 
     graph = Parser.parse_net_to_graph(tmp_onnx)
     graph.add_model(model)
@@ -845,5 +872,9 @@ def add_dump_operations(model, dump_config):
     None.
     """
     optimizer = opt.ModelOptimizer()
-    optimizer.add_pass(opt.InsertCaliQuantPass(torch_recorder=None, dump_config=dump_config, mode='dump'))
+    optimizer.add_pass(
+        opt.InsertCaliQuantPass(
+            torch_recorder=None, dump_config=dump_config, mode="dump"
+        )
+    )
     optimizer.do_optimizer(model, graph=None)

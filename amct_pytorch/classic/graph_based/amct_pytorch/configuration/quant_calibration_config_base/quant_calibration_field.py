@@ -20,11 +20,14 @@ from collections import OrderedDict
 from ....amct_pytorch.common.retrain_config.retrain_field import ConfigItem
 from ....amct_pytorch.common.retrain_config.retrain_field import BatchNum
 from ....amct_pytorch.common.config.field import NUM_OF_BINS_RANGE
-from ....amct_pytorch.utils.vars import ACT_ALGO, IFMR, HFMG, BATCH_NUM, ASYMMETRIC,\
+from ....amct_pytorch.utils.vars import ACT_ALGO, IFMR, BATCH_NUM, ASYMMETRIC,\
     ACTIVATION_OFFSET, QUANT_GRANULARITY, MAX_PERCENTILE, MIN_PERCENTILE, SEARCH_STEP, SEARCH_RANGE, NUM_OF_BINS
-from ....amct_pytorch.common.utils.vars_util import DEFAULT_MAX_PERCENTILE, DEFAULT_MIN_PERCENTILE,\
-    DEFAULT_MIN_PERCENTILE, DEFAULT_SEARCH_RANGE_START, DEFAULT_SEARCH_RANGE_END, DEFAULT_SEARCH_STEP,\
-    DEFUALT_NUM_OF_BINS, SUPPORT_ACT_ALGO, PER_TENSOR_IDX, PER_CHANNEL_IDX
+from ....amct_pytorch.common.utils.vars_util import (
+    DEFAULT_MAX_PERCENTILE, DEFAULT_MIN_PERCENTILE,
+    DEFAULT_SEARCH_RANGE_START, DEFAULT_SEARCH_RANGE_END,
+    DEFAULT_SEARCH_STEP, DEFUALT_NUM_OF_BINS,
+    SUPPORT_ACT_ALGO, PER_TENSOR_IDX, PER_CHANNEL_IDX,
+)
 
 
 class ActAlgo(ConfigItem):
@@ -220,7 +223,7 @@ class KVCacheRootConfig(ConfigItem):
         kv_quant_layers = extra.get('kv_cache_quant_layers')
         for layer, layer_config in value.items():
             if layer not in kv_quant_layers.keys():
-                raise ValueError('unsupported layer %s'.format(layer))
+                raise ValueError('unsupported layer %s' % layer)
             self.build_util(layer, KVCacheLayerConfig, layer_config,
                             (layer, kv_quant_layers[layer]))
 

@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -14,17 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import math
 import copy
 import torch
-from torch import nn
 import torch.nn.functional as F
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
-from amct_pytorch.algorithms.quant.awq import search_scale, apply_scale, calculate_scale_offset_by_granularity
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
-from amct_pytorch.common.utils.vars import INT4, INT8, FLOAT4_E2M1, MXFP4_E2M1
+from amct_pytorch.algorithms.quant.awq import (
+    search_scale,
+    apply_scale,
+    calculate_scale_offset_by_granularity,
+)
+from amct_pytorch.common.utils.quant_util import quant_dequant_weight
+from amct_pytorch.common.utils.vars import INT4, INT8, FLOAT4_E2M1
 from amct_pytorch.common.utils.log import LOGGER
 
 
@@ -33,10 +35,8 @@ class LinearAWQuant(BaseQuantizeModule):
     Function: Customized torch.nn.Module of the LinearAWQuant class.
     APIs: forward.
     """
-    def __init__(self,
-                 ori_module,
-                 layer_name,
-                 quant_config):
+
+    def __init__(self, ori_module, layer_name, quant_config):
         """
         Function: init objective.
         Args:
@@ -56,10 +56,12 @@ class LinearAWQuant(BaseQuantizeModule):
         if self.quant_config.get('weights_cfg').get("group_size") is not None:
             self.group_size = self.quant_config.get('weights_cfg').get("group_size")
         self.calc_done = False
-        if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-            quant_config.get('inputs_cfg').get('enable_quant') == True:
+        if (
+            quant_config.get("inputs_cfg").get("enable_quant") is None
+            or quant_config.get("inputs_cfg").get("enable_quant") == True
+        ):
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
-    
+
     @torch.no_grad()
     def forward(self, inputs):
         """
@@ -75,22 +77,37 @@ class LinearAWQuant(BaseQuantizeModule):
         if self.calc_done:
             return self.fake_quant_forward(input_data)
 
-        scale_awq = search_scale(input_data, [self.ori_module], self.ori_module, self.quant_config)
+        scale_awq = search_scale(
+            input_data, [self.ori_module], self.ori_module, self.quant_config
+        )
         apply_scale(scale_awq, self.ori_module, input_data)
         self.scale = 1 / scale_awq.detach()
 
-        if self.quant_config.get('weights_cfg').get('quant_type') in (INT4, INT8, FLOAT4_E2M1):
-            self.scale_w, self.offset_w = \
-                calculate_scale_offset_by_granularity(self.ori_module.weight.data, self.quant_config)
+        if self.quant_config.get("weights_cfg").get("quant_type") in (
+            INT4,
+            INT8,
+            FLOAT4_E2M1,
+        ):
+            self.scale_w, self.offset_w = calculate_scale_offset_by_granularity(
+                self.ori_module.weight.data, self.quant_config
+            )
         self.calc_done = True
-        LOGGER.logd("Calculate awq quant params of layer '{}' success!".format(self.layer_name), 'LinearAWQuant')
+        LOGGER.logd(
+            "Calculate awq quant params of layer '{}' success!".format(self.layer_name),
+            "LinearAWQuant",
+        )
         return output
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
         if not getattr(self, 'fake_quant_cache_ready', False):
-            self.cached_dq_w = quant_dequant_weight(self.ori_module.weight.data, self.wts_type, self.scale_w,
-                                                    self.offset_w, getattr(self, 'group_size', None))
+            self.cached_dq_w = quant_dequant_weight(
+                self.ori_module.weight.data,
+                self.wts_type,
+                self.scale_w,
+                self.offset_w,
+                getattr(self, "group_size", None),
+            )
             self.fake_quant_cache_ready = True
         x = inputs * self.scale.to(device=inputs.device, dtype=inputs.dtype)
         return F.linear(x, self.cached_dq_w, self.bias)

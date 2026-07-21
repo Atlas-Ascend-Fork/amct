@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -41,14 +41,14 @@ if __name__ == '__main__':
                 'type': 'int4',
                 'symmetric': False,
                 'strategy': 'group',
-                'group_size': 32
+                "group_size": 32,
             },
         },
         'algorithm': {'awq': {'grids_num': 20}},
-        'skip_layers': {'lm_head'}
+        "skip_layers": {"lm_head"},
     }
     amct.quantize(quant_model, cfg)
-    
+
     # Phase2: inference calibration model to cal quantized factors
     infer_model(quant_model, samples)
     torch_npu.npu.empty_cache()

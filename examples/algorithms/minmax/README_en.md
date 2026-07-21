@@ -14,6 +14,10 @@ This sample uses Llama2-7b, qwen2-7b, and qwen3-8b models, pileval data, and wik
 
 Note: The quantization data type combination float8_e4m3fn * float4_e2m1 only supports quantizing original data type torch.bfloat16. Please modify the data type when getting the model in the src/utils.py file.
 
+
+> **NPU Operator Dimension Limitation:** The NPU quantization operator `aclnnWeightQuantBatchMatmulV2` has an upper limit of 65535 for both k (input feature dimension) and n (output feature dimension). Large-vocabulary models such as Qwen2-7B / Qwen3-8B have a vocabulary size of approximately 152K, which far exceeds this limit, causing the `lm_head` layer to fail when invoking this operator during PPL evaluation. The built-in quantization config `INT8_MINMAX_WEIGHT_QUANT_CFG` now includes `lm_head` in `skip_layers` by default, and the tool also automatically skips layers exceeding the dimension limit in `check_quant_op_constraint`. If you use a custom quantization config, make sure to add `lm_head` to `skip_layers` for large-vocabulary models:
+> 
+
 ### 1.3 Simple Quantization Configuration
 The quantization configuration used in this sample is built into the tool and can be obtained and used in the following ways:
 

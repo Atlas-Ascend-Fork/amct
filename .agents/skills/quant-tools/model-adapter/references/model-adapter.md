@@ -85,8 +85,14 @@ float 等价过了之后，再做：
 1. 抽一条 unit 输入路径
 2. 为该 unit 生成 GT
 3. 跑一次 unit 级 solver
-4. 保存 PTQ 参数
-5. 回载 PTQ 参数
+4. **监控训练健康信号**：
+   - loss 是否下降（正常应从初始值逐步收敛）
+   - loss 是否为 0 或 NaN（**立即停止**，说明适配失败）
+   - 参数是否真正更新（check parameter grad）
+5. 保存 PTQ 参数
+6. 回载 PTQ 参数
+
+**关键检查点**：如果训练 epoch loss 恒为 0 或 NaN，说明该 PTQ unit 未被正确优化（可能是 build_no_algo_args 与 iter_ptq_units 不一致、输入为 None、梯度未传播等），应立即停止并检查适配逻辑，不要浪费计算资源。参考：`hunyuan/hy3-preview`（shared_experts PTQ 策略矛盾）。
 
 做完这些，再考虑更大范围的评测。
 

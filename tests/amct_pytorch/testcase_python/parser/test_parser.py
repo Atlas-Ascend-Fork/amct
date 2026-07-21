@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -37,7 +37,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.save import (
     _write_node_info,
-    delete_customized_attr,
 )
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
@@ -91,18 +90,16 @@ class TestParser(unittest.TestCase):
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super(TestModel, self).__init__()
-                self.bn = torch.nn.BatchNorm2d(2, track_running_stats=False).to(torch.device("cpu"))
+                self.bn = torch.nn.BatchNorm2d(2, track_running_stats=False).to(
+                    torch.device("cpu")
+                )
 
             def forward(self, x):
                 return self.bn(x)
+
         model = TestModel()
         tmp_onnx = BytesIO()
-        self.assertRaises(
-            RuntimeError,
-            Parser.export_onnx,
-            model,
-            self.args,
-            tmp_onnx)
+        self.assertRaises(RuntimeError, Parser.export_onnx, model, self.args, tmp_onnx)
 
     @patch.object(ModuleHelper, 'deep_copy')
     def test_parse_export_unsupport_deep_copy_model(self, mock_deep_copy):
@@ -121,24 +118,48 @@ class TestParser(unittest.TestCase):
         torch_out = Parser.export_onnx(model, self.args, tmp_onnx)
         self.assertIsNone(torch_out)
 
-
     def test_export_large(self):
         class ConvBNConvSerial(torch.nn.Module):
-            def __init__(self, in_channels, out_channels, kernel_size, stride=1, \
-                        padding=0, dilation=1, groups=1, bias=True, \
-                        padding_mode='zeros', affine=True, track_running_stats=True):
+            def __init__(
+                self,
+                in_channels,
+                out_channels,
+                kernel_size,
+                stride=1,
+                padding=0,
+                dilation=1,
+                groups=1,
+                bias=True,
+                padding_mode="zeros",
+                affine=True,
+                track_running_stats=True,
+            ):
                 super(ConvBNConvSerial, self).__init__()
-                self.conv1 = torch.nn.Conv2d(in_channels, out_channels, \
-                                    kernel_size=kernel_size, stride=stride,\
-                                    padding=padding, dilation=dilation, \
-                                    groups=groups, bias=bias, \
-                                    padding_mode=padding_mode)
-                self.bn1 = torch.nn.BatchNorm2d(out_channels, affine=affine, track_running_stats=track_running_stats)
-                self.conv2 = torch.nn.Conv2d(out_channels, out_channels, \
-                                    kernel_size=kernel_size, stride=stride,\
-                                    padding=padding, dilation=dilation, \
-                                    groups=groups, bias=bias, \
-                                    padding_mode=padding_mode)
+                self.conv1 = torch.nn.Conv2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    dilation=dilation,
+                    groups=groups,
+                    bias=bias,
+                    padding_mode=padding_mode,
+                )
+                self.bn1 = torch.nn.BatchNorm2d(
+                    out_channels, affine=affine, track_running_stats=track_running_stats
+                )
+                self.conv2 = torch.nn.Conv2d(
+                    out_channels,
+                    out_channels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    dilation=dilation,
+                    groups=groups,
+                    bias=bias,
+                    padding_mode=padding_mode,
+                )
 
             def forward(self, x):
                 x = self.conv1(x)
@@ -163,10 +184,11 @@ class TestParser(unittest.TestCase):
             self.assertRaises(RuntimeError, Parser.export_onnx, model, args, tmp_onnx)
 
     def test_write_node_attrs_extracted_from_onnx(self):
-        model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
-                                    torch.nn.BatchNorm2d(3, 3))
+        model = torch.nn.Sequential(
+            torch.nn.Conv2d(3, 3, 3), torch.nn.BatchNorm2d(3, 3)
+        )
         model.eval()
-        tmp_onnx = BytesIO()
+        BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
 
@@ -176,11 +198,14 @@ class TestParser(unittest.TestCase):
             if node.type == 'Conv':
                 conv_node = node
 
-        node_attr = {"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
-                      "attr_val": bytes(FLOAT16, encoding='utf-8')}
+        node_attr = {
+            "attr_name": OP_DATA_TYPE,
+            "attr_type": "STRING",
+            "attr_val": bytes(FLOAT16, encoding="utf-8"),
+        }
         customized_attr = {
             conv_node.name: [node_attr],
-            "BatchNormalization_1": [node_attr]
+            "BatchNormalization_1": [node_attr],
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
@@ -191,7 +216,9 @@ class TestParser(unittest.TestCase):
         # set file's permission 640
         os.chmod(file_realpath, stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP)
         graph = Parser.parse_net_to_graph(file_realpath)
-        Parser.write_node_attrs_extracted_from_onnx(graph, file_realpath, [OP_DATA_TYPE])
+        Parser.write_node_attrs_extracted_from_onnx(
+            graph, file_realpath, [OP_DATA_TYPE]
+        )
         conv_node = None
         for node in graph.nodes:
             if node.type == 'Conv':
@@ -203,11 +230,15 @@ class TestParser(unittest.TestCase):
     @patch('torch.onnx.export')
     def test_parse_export_return_model(self, mock_torch_onnx_export):
         mock_torch_onnx_export.return_value = 0
-        model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3), torch.nn.BatchNorm2d(3, 3))
+        model = torch.nn.Sequential(
+            torch.nn.Conv2d(3, 3, 3), torch.nn.BatchNorm2d(3, 3)
+        )
         model.eval()
         tmp_onnx = BytesIO()
         export_setting = {}
-        self.assertRaises(RuntimeError, _export_to_onnx, model, self.args, tmp_onnx, export_setting)
+        self.assertRaises(
+            RuntimeError, _export_to_onnx, model, self.args, tmp_onnx, export_setting
+        )
 
     def test_validate_export_setting_invalid_input_names(self):
         export_setting = {'input_names': [1]}
@@ -230,7 +261,7 @@ class TestParser(unittest.TestCase):
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_4(self):
-        export_setting = {'dynamic_axes': {"inputs": {0: 32}}}
+        export_setting = {"dynamic_axes": {"inputs": {0: 32}}}
         self.assertRaises(RuntimeError, Parser.validate_export_setting, export_setting)
 
     def test_validate_export_setting_invalid_dynamic_axes_5(self):
@@ -247,9 +278,12 @@ class TestParser(unittest.TestCase):
 
     @patch('amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.copyfileobj')
     @patch('amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.os.path.exists')
-    @patch('amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.torch.onnx.export')
+    @patch(
+        "amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.torch.onnx.export"
+    )
     def test_export_oversize_model_closes_handle_on_error(
-            self, mock_export, mock_exists, mock_copy):
+        self, mock_export, mock_exists, mock_copy
+    ):
         # 回归测试: _export_oversize_model 中 copyfileobj 抛异常时,
         # 本地 onnx 文件句柄仍需经由 with 上下文正确关闭, 避免资源泄露。
         mock_export.return_value = None
@@ -262,11 +296,12 @@ class TestParser(unittest.TestCase):
         onnx_file = BytesIO()
 
         with patch(
-                'amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.open',
-                m_open, create=True):
+            "amct_pytorch.classic.graph_based.amct_pytorch.parser.parser.open",
+            m_open,
+            create=True,
+        ):
             with self.assertRaises(RuntimeError):
                 _export_oversize_model(torch.nn.Identity(), self.args, onnx_file, {})
 
         # with 语句保证异常路径下句柄被关闭(__exit__ 被调用)。
         m_open.return_value.__exit__.assert_called()
-
