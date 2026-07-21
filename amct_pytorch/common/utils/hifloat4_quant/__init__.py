@@ -28,8 +28,8 @@ Public API:
 
 from .qtype import QType
 from .quant_dequant import quant_dequant_float
-from .bit_dump import hif4_cast, hif4_bit_reconstruct
-from .fake_quant import hifloat4_fake_quant
+from .hif4_pack_unpack import hif4_cast, hif4_bit_reconstruct
+from .hif4_fake_quant import hifloat4_fake_quant
 
 __all__ = ['QType', 'quant_dequant_float', 'hif4_cast', 'hif4_bit_reconstruct',
            'hifloat4_fake_quant']

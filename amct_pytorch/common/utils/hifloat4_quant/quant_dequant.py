@@ -17,8 +17,8 @@
 """Pure-PyTorch hifx4 quant-dequant simulation.
 
 ``quant_dequant_float`` is the only entry point: it pads the quant dimension to the 64-block
-size, runs the shared HiF4 encode/decode from ``_hif4_core`` (bit-for-bit identical to the
-real byte packer ``bit_dump.hif4_cast``), then slices/casts back. The compiled CUDA/CCE
+size, runs the shared HiF4 encode/decode from ``_hif4_encode_decode`` (bit-for-bit identical to the
+real byte packer ``hif4_pack_unpack.hif4_cast``), then slices/casts back. The compiled CUDA/CCE
 kernels and the autograd ``Function`` wrappers are intentionally dropped -- amct uses this
 purely for inference-time fake-quant (``@torch.no_grad``), so no speed kernel and no backward
 is needed.
@@ -28,7 +28,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from .qtype import QType
-from ._hif4_core import hif4_encode, hif4_decode
+from ._hif4_encode_decode import hif4_encode, hif4_decode
 
 
 @torch.no_grad()
@@ -36,8 +36,8 @@ def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32:
     """Fake-quantize ``x`` to the HiF4 format described by ``Q`` and dequantize back to float.
 
     Pads ``x.shape[Q.q_dim]`` to a multiple of 64, reshapes into (-1, 8, 2, 4) blocks, runs the
-    shared HiF4 encode/decode (``_hif4_core``, bit-for-bit identical to the real byte packer
-    ``bit_dump.hif4_cast``), then slices the pad off and restores the original shape/dtype.
+    shared HiF4 encode/decode (``_hif4_encode_decode``, bit-for-bit identical to the real byte packer
+    ``hif4_pack_unpack.hif4_cast``), then slices the pad off and restores the original shape/dtype.
     Only ``hifx*`` formats are supported.
 
     ``force_py`` is accepted for API compatibility but ignored (only the pure-python path is
@@ -69,7 +69,7 @@ def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32:
         x = F.pad(x, pads, value=0.0)
 
     # HiF4 fake-quant: reshape quant dim into (-1, 8, 2, 4) blocks, then shared encode -> decode
-    # in fp32 (same math as bit_dump.hif4_cast, see _hif4_core).
+    # in fp32 (same math as hif4_pack_unpack.hif4_cast, see _hif4_encode_decode).
     ng = Q.man_bits - 1                       # HiF4: man_bits=3 -> ng=2
     xb = x.unflatten(qdim, (-1, 8, 2, 4)).to(torch.float32)
     enc = hif4_encode(xb, ng=ng)

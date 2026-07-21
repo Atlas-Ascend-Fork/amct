@@ -17,7 +17,7 @@
 """HiF4 (N=4) real bit dump -- pack model weights to the deployable HiFloat4 layout.
 
 Take an [M, N] tensor, cast it to fp32, run the *same* shared HiF4 quantization
-(``_hif4_core.hif4_encode``, also used by ``quant_dequant_float``) but stop before dequantizing, and emit the raw
+(``_hif4_encode_decode.hif4_encode``, also used by ``quant_dequant_float``) but stop before dequantizing, and emit the raw
 bit representation of the scale and the in-group codes. This is what turns a weight tensor
 into the uint8 buffers stored in a "real" HiF4 safetensors file (vs. the FP->HiF4->FP
 fake-quant simulation used for PPL/accuracy evaluation).
@@ -38,7 +38,7 @@ value : uint8 [M, N // 2]          two adjacent 4-bit codes packed into one byte
     the first (even-index) element goes in the HIGH nibble, the next in the LOW nibble
 
 Note E1_8 / E1_16 are named "level-1 / level-2 scale" per the requested byte layout;
-they correspond to the level-2 (8x) and level-3 (16x) exponents inside the shared ``_hif4_core`` encode.
+they correspond to the level-2 (8x) and level-3 (16x) exponents inside the shared ``_hif4_encode_decode`` encode.
 This format is HiF4-specific (Ng = 2, so the in-group code fits in 3 bits + 1 sign bit).
 
 NPU pitfall: ``torch.exp2`` / ``2**e`` / ``torch.pow(2, e)`` are exp-approximation based on
@@ -52,7 +52,7 @@ bit packing uses plain integer arithmetic (a*2**k + b) instead of shift/or.
 import numpy as np
 import torch
 
-from ._hif4_core import hif4_encode, hif4_decode, _pow2, E6_OFFSET, E6M2_MBITS
+from ._hif4_encode_decode import hif4_encode, hif4_decode, _pow2, E6_OFFSET, E6M2_MBITS
 
 N_FMT = 4            # HiF4
 NG = N_FMT - 2       # S1PNg, Ng = 2  -> in-group code is 3 bits, value = code / 2**Ng
@@ -85,7 +85,7 @@ def hif4_cast(x, output="packed"):
     gn = N // 64
 
     xg = x.reshape(M, gn, 8, 2, 4)
-    # Shared HiF4 encode (same _hif4_core as quant_dequant_float, bit-for-bit identical).
+    # Shared HiF4 encode (same _hif4_encode_decode as quant_dequant_float, bit-for-bit identical).
     enc = hif4_encode(xg, ng=NG)
 
     # ---- HiF4 -> float: dequantize the codes we just produced (same bits a stored weight has) ----
@@ -114,8 +114,8 @@ def hif4_cast(x, output="packed"):
 def hif4_bit_reconstruct(scale, value):
     """Decode (scale, value) back to the dequantized fp32 tensor [M, N] (for verification).
 
-    Device-agnostic: accepts the uint8 outputs of :func:`hif4_bit_dump` as torch tensors
-    (moved to CPU) or numpy arrays, and rebuilds the same values ``quant_dequant_float`` (via ``_hif4_core``) would produce.
+    Device-agnostic: accepts the uint8 outputs of :func:`hif4_hif4_pack_unpack` as torch tensors
+    (moved to CPU) or numpy arrays, and rebuilds the same values ``quant_dequant_float`` (via ``_hif4_encode_decode``) would produce.
     """
     if isinstance(scale, torch.Tensor):
         scale = scale.cpu().numpy()
