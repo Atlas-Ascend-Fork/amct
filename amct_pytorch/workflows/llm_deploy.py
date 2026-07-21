@@ -99,9 +99,29 @@ class LlmDeployWorkflow:
         os.makedirs(self.output_dir, exist_ok=True)
         ensure_log_dir(self.args)
         self._register_components()
+        self._maybe_decode_source()
         self.pipeline = self._build_pipeline()
         sink_id, _ = setup_run_logging(self.args, "deploy")
         return sink_id
+
+    def _maybe_decode_source(self):
+        """Auto-detect a foreign FP4/FP8 source and decode it to BF16 before deploy.
+
+        Deploy loads a float model, then packs weights to HiF4 (``QuantDequantHiF4.export_deploy``).
+        For nvfp4/mxfp4/mxfp8 input, decode to a temp BF16 checkpoint first (``fpx_decode``) and
+        point the pipeline at it; fp16/bf16 pass through unchanged.
+        """
+        from amct_pytorch.common.utils.fpx_decode.detect import (
+            detect_source_format, decode_to_bf16, FOREIGN_FORMATS,
+        )
+        fmt = detect_source_format(self.model_path)
+        logger.info("Deploy source format detected: {}", fmt)
+        if fmt in FOREIGN_FORMATS:
+            decoded = os.path.join(self.output_dir, "_decoded_bf16")
+            logger.info("Decoding {} -> BF16 at {} before HiF4 pack", fmt, decoded)
+            decode_to_bf16(self.model_path, decoded, fmt)
+            self.model_path = decoded
+            self.args.model = decoded
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)
