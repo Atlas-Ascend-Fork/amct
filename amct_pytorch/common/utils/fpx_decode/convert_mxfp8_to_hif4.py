@@ -340,7 +340,7 @@ def is_potential_weight_name(name: str) -> bool:
     return name.endswith(".weight")
 
 
-def copy_model_side_files(ref_dir: Path, quant_dir: Path, output_dir: Path) -> None:
+def copy_model_side_files(ref_dir: Optional[Path], quant_dir: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     common_files = [
@@ -350,8 +350,8 @@ def copy_model_side_files(ref_dir: Path, quant_dir: Path, output_dir: Path) -> N
     ]
 
     for filename in common_files:
-        src = ref_dir / filename
-        if not src.exists():
+        src = (ref_dir / filename) if ref_dir is not None else None
+        if src is None or not src.exists():
             src = quant_dir / filename
         if src.exists():
             dst = output_dir / filename
@@ -365,7 +365,7 @@ def copy_model_side_files(ref_dir: Path, quant_dir: Path, output_dir: Path) -> N
 
 def convert_mxfp8_checkpoint_to_hif4(
     quant_model_dir: Path,
-    ref_bf16_model_dir: Path,
+    ref_bf16_model_dir: Optional[Path],
     output_dir: Path,
     group_size_override: Optional[int] = None,
     out_dtype: torch.dtype = torch.bfloat16,
@@ -378,7 +378,23 @@ def convert_mxfp8_checkpoint_to_hif4(
 ) -> None:
     """MXFP8 → BF16 → HiFloat4 full pipeline."""
     quant_index = load_index(quant_model_dir)
-    ref_index = load_index(ref_bf16_model_dir)
+    have_ref = ref_bf16_model_dir is not None
+    if have_ref:
+        ref_index = load_index(ref_bf16_model_dir)
+    else:
+        # Self-sufficient: derive the output plan from the quant checkpoint's own index,
+        # dropping the consumed ``*_scale`` tensors. The bf16 ref is optional (used only for
+        # --allow_ref_fallback of genuinely-missing tensors and for --compare).
+        scale_keys = {
+            build_global_scale_key(w) for w in quant_index["weight_map"]
+            if build_global_scale_key(w) in quant_index["weight_map"]
+        }
+        ref_index = {
+            "metadata": quant_index.get("metadata", {}),
+            "weight_map": {
+                k: v for k, v in quant_index["weight_map"].items() if k not in scale_keys
+            },
+        }
 
     quant_scope = infer_quant_scope(quant_model_dir)
     group_size = int(group_size_override or quant_scope.get("group_size") or 32)
@@ -395,7 +411,8 @@ def convert_mxfp8_checkpoint_to_hif4(
     ref_shard_to_keys = build_shard_to_keys(ref_index)
 
     quant_cache = ShardCache(quant_model_dir, max_cached=max_cached_shards)
-    ref_cache = ShardCache(ref_bf16_model_dir, max_cached=max_cached_shards)
+    ref_cache = (ShardCache(ref_bf16_model_dir, max_cached=max_cached_shards)
+                 if have_ref else None)
 
     debug_pat = re.compile(debug_regex) if debug_regex else None
 
@@ -536,7 +553,8 @@ def convert_mxfp8_checkpoint_to_hif4(
     save_json(conversion_stats, output_dir / "mxfp8_to_hif4_conversion_stats.json")
 
     quant_cache.clear()
-    ref_cache.clear()
+    if ref_cache is not None:
+        ref_cache.clear()
 
     print("\n========== conversion done ==========")
     print(f"Output dir: {output_dir}")
@@ -838,7 +856,10 @@ def parse_dtype(name: str) -> torch.dtype:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MXFP8 → BF16 → HiFloat4 converter")
     parser.add_argument("--quant_model_dir", type=str, required=True)
-    parser.add_argument("--ref_bf16_model_dir", type=str, required=True)
+    parser.add_argument("--ref_bf16_model_dir", type=str, default=None,
+                        help="Optional bf16 reference model. If omitted, the plan is derived "
+                             "from the MXFP8 checkpoint's own index (self-sufficient). Required "
+                             "only for --allow_ref_fallback and --compare.")
     parser.add_argument("--output_dir", type=str, required=True)
 
     parser.add_argument("--group_size", type=int, default=None,
@@ -868,7 +889,7 @@ def main(argv: Optional[list] = None) -> None:
     args = build_parser().parse_args(argv)
 
     quant_model_dir = Path(args.quant_model_dir)
-    ref_bf16_model_dir = Path(args.ref_bf16_model_dir)
+    ref_bf16_model_dir = Path(args.ref_bf16_model_dir) if args.ref_bf16_model_dir else None
     output_dir = Path(args.output_dir)
     out_dtype = parse_dtype(args.out_dtype)
 
@@ -907,6 +928,8 @@ def main(argv: Optional[list] = None) -> None:
     )
 
     if args.compare:
+        if ref_bf16_model_dir is None:
+            raise ValueError("--compare requires --ref_bf16_model_dir")
         report = compare_two_models_by_ref_index(
             ref_bf16_model_dir=ref_bf16_model_dir,
             converted_bf16_model_dir=output_dir,
