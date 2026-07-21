@@ -22,6 +22,7 @@ __all__ = [
     'INT8_MINMAX_WEIGHT_QUANT_CFG',
     'HIFP8_OFMR_CFG', 'FP8_OFMR_CFG', 'MXFP8_QUANT_CFG',
     'MXFP4_AWQ_WEIGHT_QUANT_CFG', 'HIFP8_CAST_CFG', 'HIFP8_QUANTILE_CFG',
+    'HIFP8_SMOOTHQUANT_CFG',
 ]
 
 from amct_pytorch.classic import quantize, convert, algorithm_register
@@ -30,6 +31,7 @@ from amct_pytorch.common.config import (
     INT8_SMOOTHQUANT_CFG, INT8_MINMAX_WEIGHT_QUANT_CFG,
     HIFP8_OFMR_CFG, FP8_OFMR_CFG, MXFP8_QUANT_CFG,
     MXFP4_AWQ_WEIGHT_QUANT_CFG, HIFP8_CAST_CFG, HIFP8_QUANTILE_CFG,
+    HIFP8_SMOOTHQUANT_CFG,
 )
 
 

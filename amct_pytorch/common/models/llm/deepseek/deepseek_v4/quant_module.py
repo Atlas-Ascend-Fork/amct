@@ -27,9 +27,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer
+from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (
     Attention,
@@ -194,7 +196,7 @@ class QuantV4Indexer(nn.Module):
         q = q.unflatten(-1, (self.n_local_heads, self.head_dim))
         apply_rotary_emb(q[..., -rd:], freqs_cis)
         q = rotate_activation(q)
-        compressed_kv = self.compressor(x, 0)  # [b, t, d] where t = seqlen // ratio
+        compressed_kv = self.compressor(x, 0)
         x_q = self.x_afq(x)
         weights = self.weights_proj(x_q) * (self.softmax_scale * self.n_local_heads ** -0.5)
         end_pos = seqlen
@@ -219,10 +221,9 @@ class QuantV4Attention(nn.Module):
         embedded Compressor/Indexer Linears. ``wo_a`` uses a grouped einsum
         (per-group block of a `[g*r, d_in]` weight) so we apply weight quant
         manually rather than via QuantLinear.forward.
-      - ``attn-cache``: ActivationQuantizer on q (post-RMS+RoPE) and kv (post-
-        norm+RoPE) — these are the inputs the original Attention writes into
-        kv_cache during decode; under prefill they only flow into sparse_attn,
-        but the quantizer placement still represents the cache-quant path.
+      - ``attn-cache``: QuantizedMatmul on sparse-attention QK/PV matmuls, so
+        q/k/p/v cache bits and optional structure transforms are applied on
+        the path that consumes cache-like tensors during prefill.
     """
 
     def __init__(self, quant_args, module: Attention):
@@ -249,6 +250,8 @@ class QuantV4Attention(nn.Module):
         self.q_norm = module.q_norm
         self.kv_norm = module.kv_norm
         self.register_buffer("freqs_cis", module.freqs_cis, persistent=False)
+        self.input_transform = None
+        self.out_transform = None
 
         if self.enable_attn_linear:
             bits = quant_args.bit_policy["attn-linear"]
@@ -263,6 +266,7 @@ class QuantV4Attention(nn.Module):
             self.quant_args.w_size = module.wo_a.weight.data.shape
             self.wo_a_name = "wo_a"
             self.wo_a_weight_quantizer = WeightQuantizer(self.quant_args, w_bits=wo_a.w)
+            self._init_structure_transforms()
             self.inp_afq = ActivationQuantizer(quant_args, wq_a.a)
             self.wq_b_afq = ActivationQuantizer(quant_args, wq_b.a)
             self.wo_b_afq = ActivationQuantizer(quant_args, wo_b.a)
@@ -277,14 +281,22 @@ class QuantV4Attention(nn.Module):
             self.wq_b_afq = nn.Identity()
             self.wo_b_afq = nn.Identity()
 
-        self.q_cache_quantizer = (
-            ActivationQuantizer(quant_args, bits=quant_args.bit_policy.cache_bits("q"))
-            if self.enable_attn_cache else nn.Identity()
+        self.qk_matmul = QuantizedMatmul(
+            quant_args,
+            l_bits=quant_args.bit_policy.cache_bits("q"),
+            r_bits=quant_args.bit_policy.cache_bits("k"),
+            left_dim=self.head_dim,
+            right_dim=self.head_dim,
         )
-        self.k_cache_quantizer = (
-            ActivationQuantizer(quant_args, bits=quant_args.bit_policy.cache_bits("k"))
-            if self.enable_attn_cache else nn.Identity()
+        self.pv_matmul = QuantizedMatmul(
+            quant_args,
+            l_bits=quant_args.bit_policy.cache_bits("p"),
+            r_bits=quant_args.bit_policy.cache_bits("v"),
+            right_dim=self.head_dim,
+            transpose_right=False,
         )
+        self.q_cache_quantizer = nn.Identity()
+        self.k_cache_quantizer = nn.Identity()
 
         if self.compress_ratio:
             self.compressor = QuantV4Compressor(quant_args, module.compressor)
@@ -302,7 +314,7 @@ class QuantV4Attention(nn.Module):
         """
         query_states = query_states.transpose(1, 2)
         kv_states = kv_states.unsqueeze(1)
-        attn_weights = torch.matmul(query_states, kv_states.transpose(2, 3)) * softmax_scale
+        attn_weights = self.qk_matmul(query_states, kv_states) * softmax_scale
         index_mask = torch.full(
             (query_states.shape[0], 1, query_states.shape[2], kv_states.shape[2] + 1),
             fill_value=torch.finfo(torch.float32).min,
@@ -318,7 +330,7 @@ class QuantV4Attention(nn.Module):
         combined_logits = combined_logits - combined_logits.max(dim=-1, keepdim=True).values
         probs = F.softmax(combined_logits, dim=-1, dtype=combined_logits.dtype)
         scores = probs[..., :-1]
-        attn_output = torch.matmul(scores.to(query_states.dtype), kv_states)
+        attn_output = self.pv_matmul(scores.to(query_states.dtype), kv_states)
         return attn_output.transpose(1, 2).contiguous()
 
     def forward(self, x: torch.Tensor, start_pos: int = 0):
@@ -339,9 +351,14 @@ class QuantV4Attention(nn.Module):
                     self.indexer.compressor.freqs_cis = self.freqs_cis
 
         x_q = self.inp_afq(x)
-        qr = q = self.q_norm(self.wq_a(x_q))
+        qr = self.q_norm(self.wq_a(x_q))
+        qr_orig = qr
+        if self.input_transform is not None:
+            qr = self.input_transform(qr)
         qr_q = self.wq_b_afq(qr)
-        q = self.wq_b(qr_q).unflatten(-1, (self.n_local_heads, self.head_dim))
+        q = self.wq_b(qr_q, structure_transform=self.input_transform).unflatten(
+            -1, (self.n_local_heads, self.head_dim)
+        )
         q = q * torch.rsqrt(q.square().mean(-1, keepdim=True) + self.eps)
         apply_rotary_emb(q[..., -rd:], freqs_cis)
 
@@ -349,17 +366,14 @@ class QuantV4Attention(nn.Module):
         kv = self.kv_norm(kv)
         apply_rotary_emb(kv[..., -rd:], freqs_cis)
 
-        q = self.q_cache_quantizer(q)
-        kv = self.k_cache_quantizer(kv)
-
         topk_idxs = get_window_topk_idxs(win, bsz, seqlen, 0)
         if self.compress_ratio:
             offset = kv.size(1)
             if self.indexer is not None:
-                compress_topk_idxs = self.indexer(x, qr, 0, offset)
+                compress_topk_idxs = self.indexer(x, qr_orig, 0, offset)
             else:
                 compress_topk_idxs = get_compress_topk_idxs(ratio, bsz, seqlen, 0, offset)
-            topk_idxs = torch.cat([topk_idxs, compress_topk_idxs], dim=-1)
+            topk_idxs = torch.cat([topk_idxs.to(compress_topk_idxs.device), compress_topk_idxs], dim=-1)
         topk_idxs = topk_idxs.int()
 
         if self.compress_ratio:
@@ -373,8 +387,10 @@ class QuantV4Attention(nn.Module):
         o = o.view(bsz, seqlen, self.n_local_groups, -1)
         o = self._wo_a_apply(o)
         o_flat = o.flatten(2)
+        if self.out_transform is not None:
+            o_flat = self.out_transform(o_flat)
         o_q = self.wo_b_afq(o_flat)
-        return self.wo_b(o_q)
+        return self.wo_b(o_q, structure_transform=self.out_transform)
 
     def _wo_a_apply(self, o):
         """Replicate the upstream einsum over wo_a's weight, with optional
@@ -386,3 +402,9 @@ class QuantV4Attention(nn.Module):
             weight = self.wo_a_weight_quantizer(weight)
         weight = weight.view(self.n_local_groups, self.o_lora_rank, -1)  # [g, r, d_in]
         return torch.einsum("bsgd,grd->bsgr", o, weight)
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
+        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.n_local_groups * self.o_lora_rank)
+        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)

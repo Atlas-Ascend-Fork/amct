@@ -20,8 +20,10 @@ import torch
 from loguru import logger
 from transformers import AutoConfig
 from safetensors import safe_open
-from cores.models.deepseek_v3_2.modeling_deepseek_v3_2 import DeepseekV3DecoderLayer, DeepseekV3MLP, \
-    _prepare_4d_causal_attention_mask
+from cores.models.deepseek_v3_2.modeling_deepseek_v3_2 import (
+    DeepseekV3DecoderLayer,
+    DeepseekV3MLP,
+)
 from cores.quantization.node import ActivationQuantizer
 from cores.utils.utils import skip_initialization
 from cores.quantization.linear import QuantLinear
@@ -39,11 +41,13 @@ class QuantDeepseekV3MLP(torch.nn.Module):
         self.down_proj = QuantLinear(args, module.down_proj)
 
         self._ori_mode = False
-        self.afq_x = ActivationQuantizer(bits=args.a_bits, \
-                                         sym=not (args.a_asym), lac=True, groupsize=-1)
+        self.afq_x = ActivationQuantizer(
+            bits=args.a_bits, sym=not (args.a_asym), lac=True, groupsize=-1
+        )
 
-        self.afq_down = ActivationQuantizer(bits=args.a_bits, \
-                                            sym=not (args.a_asym), lac=True, groupsize=-1)
+        self.afq_down = ActivationQuantizer(
+            bits=args.a_bits, sym=not (args.a_asym), lac=True, groupsize=-1
+        )
 
     def _trans_forward(self, x):
         x_ts = x
@@ -97,7 +101,12 @@ def apply_quant_to_moe(args, model, shared_expert_bits=None, routed_expert_bits=
             setattr(model, name, QuantDeepseekV3MLP(new_args, mod))
 
         if len(list(mod.children())) > 0:
-            apply_quant_to_moe(args, mod, shared_expert_bits=shared_expert_bits, routed_expert_bits=routed_expert_bits)
+            apply_quant_to_moe(
+                args,
+                mod,
+                shared_expert_bits=shared_expert_bits,
+                routed_expert_bits=routed_expert_bits,
+            )
 
     return model
 
@@ -124,7 +133,9 @@ def load_layer_weight(model_dir, rank, weight_map, layer_idx):
     #
     state_dict = {}
     for file in file_list:
-        with safe_open(os.path.join(model_dir, file), framework="pt", device="cpu") as f:
+        with safe_open(
+            os.path.join(model_dir, file), framework="pt", device="cpu"
+        ) as f:
             for k in f.keys():
                 if not k.startswith(prefix):
                     continue
@@ -138,7 +149,9 @@ def load_layer_weight(model_dir, rank, weight_map, layer_idx):
     return state_dict
 
 
-def load_layer(model_dir, rank, config, weight_map, layer_idx, cls=DeepseekV3DecoderLayer):
+def load_layer(
+    model_dir, rank, config, weight_map, layer_idx, cls=DeepseekV3DecoderLayer
+):
     decoder_layer = cls(config, layer_idx, is_nextn=layer_idx == 61)
 
     state_dict = load_layer_weight(model_dir, rank, weight_map, layer_idx)
@@ -154,8 +167,7 @@ def load_layer(model_dir, rank, config, weight_map, layer_idx, cls=DeepseekV3Dec
 
 
 def get_float_block(model_path, idx, dev, model_args=None):
-    config = AutoConfig.from_pretrained(
-        model_path, trust_remote_code=True)
+    config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
     config.model_args = model_args
     with open(f"{model_path}/model.safetensors.index.json") as f:
         weight_map = json.load(f)

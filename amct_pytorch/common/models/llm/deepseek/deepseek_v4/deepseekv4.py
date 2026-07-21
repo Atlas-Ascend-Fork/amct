@@ -71,6 +71,11 @@ class DeepseekV4(BaseModel):
         self.sharded_block = False
 
     @staticmethod
+    def block_size(weight):
+        bs = 32 if weight.dtype == torch.int8 else 128
+        return bs
+
+    @staticmethod
     def _resolve_param_device(local_name, device_map):
         best_path = None
         for path in device_map:
@@ -247,6 +252,16 @@ class DeepseekV4(BaseModel):
     def load_embed_state_dict(self):
         super().load_embed_state_dict()
         self._load_top_level_hc_head_params()
+
+    def cache_scheme(self):
+        cache_type = "int" if self.quant_dtype == "int" else "float"
+        scheme = {
+        "kv_cache_scheme": {"num_bits": 8, "type": "float"},
+        "li_cache_scheme": {
+            "type": cache_type,
+            "num_bits": 8,
+        }}
+        return scheme
 
     def _block_sharded(self, layer_idx):
         """Meta build + per-tensor direct send to target NPU. Avoids the

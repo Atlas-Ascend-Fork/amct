@@ -35,7 +35,4 @@ tmp/
 **/.claude/settings.local.json
 **/.claude/scheduled_tasks.lock
 
-# Generated agent views (source of truth: .agents/)
-/.claude/
-/.opencode/
-/CLAUDE.md
+coverage.xml
