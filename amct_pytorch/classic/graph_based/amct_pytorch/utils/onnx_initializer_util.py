@@ -17,6 +17,10 @@
 # ----------------------------------------------------------------------------
 import os
 import numpy as np
+try:
+    import ml_dtypes
+except ImportError:
+    ml_dtypes = None  # 仅原生 INT4 映射需要，缺失时在用到 int4 处再报错
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto  # pylint: disable=E0401
 
@@ -26,8 +30,41 @@ from ...amct_pytorch.common.utils import files as files_util
 RAW_DATA = 'raw_data'
 
 
-class TensorProtoHelper:
-    """Help cope with onnx.TensorProto
+def pack_int4_to_int8(arr):
+    """
+    把每两个 INT4 值（值域 [-8,7]）打包成一个 int8 字节：低 4 位存第一个、高 4 位存第二个。
+    奇数长度末尾补 0。返回 np.int8 数组。
+    """
+    flat = np.asarray(arr).reshape(-1).astype(np.int8)
+    if flat.size % 2 == 1:
+        LOGGER.logw(
+            'INT4 weight has odd length {}, padding one zero for packing'.format(
+                flat.size
+            ),
+            'pack_int4_to_int8',
+        )
+        flat = np.append(flat, np.int8(0))
+    low = flat[0::2] & 0x0F
+    high = flat[1::2] & 0x0F
+    packed = (low | (high << 4)).astype(np.uint8)
+    return packed.astype(np.int8)
+
+
+def unpack_int8_to_int4(packed, count):
+    """把打包的 int8 还原成 count 个 INT4 值（值域 [-8,7]，np.int8 数组）。"""
+    raw = np.asarray(packed).reshape(-1).astype(np.uint8)
+    low = raw & 0x0F
+    high = (raw >> 4) & 0x0F
+    out = np.empty(raw.size * 2, dtype=np.int8)
+    out[0::2] = low
+    out[1::2] = high
+    # 4-bit 有符号还原：>7 的值减 16
+    out = np.where(out > 7, out - 16, out).astype(np.int8)
+    return out[:count]
+
+
+class TensorProtoHelper():
+    """ Help cope with onnx.TensorProto
     APIs: map_data_location, map_np_type, get_data, clear_data, set_data
     """
 
@@ -52,6 +89,9 @@ class TensorProtoHelper:
         'COMPLEX128': [data_type.COMPLEX128, 'double_data', 'complex128'],
         'BFLOAT16': [data_type.BFLOAT16, RAW_DATA, 'float32'],
     }
+    # 旧版 onnx 无 INT4 枚举，动态注册避免 import 时报错
+    if hasattr(data_type, 'INT4'):
+        data_type_maps['INT4'] = [data_type.INT4, RAW_DATA, 'int4']  # ml_dtypes.int4
     proto_value_id = 0
     data_location_id = 1
     np_type_id = 2
@@ -71,7 +111,7 @@ class TensorProtoHelper:
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.data_location_id]
 
-        raise ValueError('The data_type{proto_value} is UNEXCEPTED')
+        raise ValueError(f'The data_type{proto_value} is UNEXPECTED')
 
     @classmethod
     def map_np_type(cls, proto_value):
@@ -81,17 +121,29 @@ class TensorProtoHelper:
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.np_type_id]
 
-        raise ValueError('The data_type{proto_value} is UNEXCEPTED')
+        raise ValueError(f'The data_type{proto_value} is UNEXPECTED')
+
+    @classmethod
+    def resolve_np_dtype(cls, np_type):
+        """
+        Resolve a np dtype string to a numpy/ml_dtypes type.
+        'int4' has no numpy attribute, so map it to ml_dtypes.int4.
+        """
+        if np_type == 'int4':
+            if ml_dtypes is None:
+                raise ImportError('ml_dtypes is required for native INT4 tensors')
+            return ml_dtypes.int4
+        return getattr(np, np_type)
 
     @classmethod
     def cast_ori_data(cls, value, tensor_np_type):
         '''cast ori-data to numpy type'''
         if tensor_np_type == 'float16':
             value = np.array(value).astype(np.uint16).tobytes()
-            np_value = np.frombuffer(value, getattr(np, tensor_np_type))
+            np_value = np.frombuffer(value, cls.resolve_np_dtype(tensor_np_type))
             np_value = np.array(np_value)
         else:
-            np_value = np.array(value, getattr(np, tensor_np_type))
+            np_value = np.array(value, cls.resolve_np_dtype(tensor_np_type))
         return np_value
 
     def check_external_data(self):
@@ -116,7 +168,13 @@ class TensorProtoHelper:
 
         np_type = self.map_np_type(tensor_data_type)
         if byte_value:
-            np_value = np.frombuffer(byte_value, getattr(np, np_type))
+            if np_type == 'int4':
+                packed = np.frombuffer(byte_value, np.uint8)
+                count = int(np.prod(self.tensor.dims))
+                np_value = unpack_int8_to_int4(packed, count)
+            else:
+                np_dtype = self.resolve_np_dtype(np_type)
+                np_value = np.frombuffer(byte_value, np_dtype)
             # to modify np_value.flags['WRITEABLE'] as True
             np_value = np.array(np_value)
         else:
@@ -150,8 +208,10 @@ class TensorProtoHelper:
         Return: None
         '''
         if type_string is not None:
-            data_type = self.data_type_maps[type_string][self.proto_value_id]
-            self.tensor.data_type = data_type
+            entry = self.data_type_maps.get(type_string)
+            if entry is None:
+                raise ValueError(f'unsupported data type {type_string} in current onnx')
+            self.tensor.data_type = entry[self.proto_value_id]
         if dims is not None:
             self.tensor.ClearField('dims')
             self.tensor.dims.extend(dims)
@@ -162,8 +222,15 @@ class TensorProtoHelper:
         )
         if self.externel_data:
             return self.set_external_data(data)
+        int4_entry = self.data_type_maps.get('INT4')
         if data_location == RAW_DATA:
-            setattr(self.tensor, data_location, bytes(data.flatten()))
+            # INT4: nibble-pack two INT4 values into each INT8 byte
+            if int4_entry is not None and \
+                    self.tensor.data_type == int4_entry[self.proto_value_id]:
+                packed = pack_int4_to_int8(data)
+                setattr(self.tensor, RAW_DATA, bytes(packed.flatten().astype('uint8')))
+            else:
+                setattr(self.tensor, data_location, bytes(data.flatten()))
         else:
             self.tensor.ClearField(data_location)
             if data_location_new == RAW_DATA:
@@ -199,6 +266,11 @@ class TensorProtoHelper:
                 quantized_data = bool(data.value)
 
         if quantized_data:
+            if tensor_np_type == 'int4':
+                # raw_data 为 packed 字节，unpack 成 prod(dims) 个 INT4 再 reshape
+                packed = np.frombuffer(self.tensor.raw_data, np.uint8)
+                np_value = unpack_int8_to_int4(packed, int(np.prod(self.tensor.dims)))
+                return np_value.reshape(self.tensor.dims), length
             np_value = np.frombuffer(self.tensor.raw_data, tensor_np_type)
             np_value = np_value.reshape(self.tensor.dims)
             return np_value, length
@@ -214,7 +286,15 @@ class TensorProtoHelper:
                 f.seek(offset, 0)
                 raw_data = f.read(length)
             return raw_data, length
-
+ 
+        if tensor_np_type == 'int4':
+            # 外部文件存 packed 字节，按 uint8 读入后 unpack 成 prod(dims) 个 INT4
+            byte_len = length if length > 0 else -1
+            packed = np.fromfile(file_name, np.uint8, byte_len, '', offset)
+            if length == -1:
+                length = len(packed)
+            np_value = unpack_int8_to_int4(packed, int(np.prod(self.tensor.dims)))
+            return np_value.reshape(self.tensor.dims), length
         item_size = np.dtype(tensor_np_type).itemsize
         if length > 0:
             data_length = int(length / item_size)
@@ -245,7 +325,12 @@ class TensorProtoHelper:
         quantized_data = self.tensor.external_data.add()
         quantized_data.key = 'amct_quantized_raw_data'
         quantized_data.value = str(1)
-        setattr(self.tensor, RAW_DATA, bytes(data.flatten()))
+        if self.map_np_type(self.tensor.data_type) == 'int4':
+            # 与 raw_data 路径一致：INT4 nibble-pack 成 packed 字节后存储
+            packed = pack_int4_to_int8(data)
+            setattr(self.tensor, RAW_DATA, bytes(packed.flatten().astype('uint8')))
+        else:
+            setattr(self.tensor, RAW_DATA, bytes(data.flatten()))
 
     def save_external_data(self, external_file):
         """
@@ -258,15 +343,14 @@ class TensorProtoHelper:
         tensor_dtype = self.tensor.data_type
         np_type = self.map_np_type(tensor_dtype)
         data_location = self.map_data_location(tensor_dtype)
-        byte_size = np.dtype(np_type).itemsize
-        # the list is index of TensorProto.Datetype
-        if (
-            tensor_dtype not in TensorProtoHelper.data_type.values()
-            or tensor_dtype == TensorProtoHelper.data_type.STRING
-        ):
-            LOGGER.logd(
-                "this patch does not support dtype %s for now" % (tensor_dtype), 'Utils'
-            )
+        # INT4 以 packed 字节存储，按 uint8 搬运字节流；其余类型按自身 dtype
+        store_np_type = np.uint8 if np_type == 'int4' else self.resolve_np_dtype(np_type)
+        byte_size = np.dtype(store_np_type).itemsize
+        # the list is index of TensorProto.Datetype 
+        if tensor_dtype not in TensorProtoHelper.data_type.values() \
+            or tensor_dtype == TensorProtoHelper.data_type.STRING:
+            LOGGER.logd("this patch does not support dtype %s for now" % (tensor_dtype),\
+                        'Utils')
             return
         # DEFAULT is 0, EXTERNAL is 1
         if self.tensor.data_location == 0:
@@ -275,13 +359,11 @@ class TensorProtoHelper:
             raw_data = self.tensor.raw_data
             if raw_data:
                 data_length = len(self.tensor.raw_data)
-                np_value = np.frombuffer(self.tensor.raw_data, getattr(np, np_type))
+                np_value = np.frombuffer(self.tensor.raw_data, store_np_type)
                 self.tensor.ClearField(RAW_DATA)
             else:
                 data_length = len(getattr(self.tensor, data_location)) * byte_size
-                np_value = np.array(
-                    getattr(self.tensor, data_location), getattr(np, np_type)
-                )
+                np_value = np.array(getattr(self.tensor, data_location), store_np_type)
                 self.tensor.ClearField(data_location)
             self.export_external_data(np_value, external_file, data_length)
             return
@@ -291,7 +373,7 @@ class TensorProtoHelper:
                 self.tensor.ClearField(data_location)
             else:
                 data_length = len(self.tensor.raw_data)
-                np_value = np.frombuffer(self.tensor.raw_data, getattr(np, np_type))
+                np_value = np.frombuffer(self.tensor.raw_data, store_np_type)
                 self.tensor.ClearField(RAW_DATA)
             self.export_external_data(np_value, external_file, data_length)
             return
