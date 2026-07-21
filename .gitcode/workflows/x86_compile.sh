@@ -27,12 +27,12 @@ case "${task_name}" in
         ;;
     x86_compile_torch)
         bash build.sh --torch --cann_3rd_lib_path=/home/jenkins/opensource
-        echo "exec cmd: [bash build.sh --pkg --cann_3rd_lib_path=/home/jenkins/opensource]"
+        echo "exec cmd: [bash build.sh --torch --cann_3rd_lib_path=/home/jenkins/opensource]"
         exit 0
         ;;
     x86_compile_torch_ubuntu24)
         bash build.sh --torch --cann_3rd_lib_path=/home/jenkins/opensource
-        echo "exec cmd: [bash build.sh --pkg --cann_3rd_lib_path=/home/jenkins/opensource]"
+        echo "exec cmd: [bash build.sh --torch --cann_3rd_lib_path=/home/jenkins/opensource]"
         exit 0
         ;;
 esac

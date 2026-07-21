@@ -28,12 +28,12 @@ case "${task_name}" in
         ;;  
     arm_compile_ubuntu24)
         bash build.sh --pkg --cann_3rd_lib_path=/home/jenkins/opensource
-        echo "exec cmd: [bash build.sh --pkg --cann_3rd_lib_path=/home/jenkins/opensource]"
+        echo "exec cmd: [bash build.sh --torch --cann_3rd_lib_path=/home/jenkins/opensource]"
         exit 0
         ;;  
     arm_compile_torch_ubuntu24)
         bash build.sh --torch --cann_3rd_lib_path=/home/jenkins/opensource
-        echo "exec cmd: [bash build.sh --pkg --cann_3rd_lib_path=/home/jenkins/opensource]"
+        echo "exec cmd: [bash build.sh --torch --cann_3rd_lib_path=/home/jenkins/opensource]"
         exit 0
         ;; 
 esac

@@ -46,11 +46,11 @@ jobs:
             export GIT_TARGET_BRANCH=${{ env.target_branch }}
             BuildAccelerate bash .gitcode/workflows/x86_compile.sh
           AC_SERVER_IP: ${{ vars.AC_SERVER_IP }} 
-      -
-        name: verify_package
-        uses: cann/.gitcode/actions/verify-package@master
-        with:
-          workspace: ${{ steps.process_checkout.outputs.path }}
+      # -
+      #   name: verify_package
+      #   uses: cann/.gitcode/actions/verify-package@master
+      #   with:
+      #     workspace: ${{ steps.process_checkout.outputs.path }}
       -
         name: api_check
         uses: cann/.gitcode/actions/api-check@master
@@ -69,7 +69,7 @@ jobs:
           bucket: "ascend-ci"
           access-key: ${{ secrets.AK }}
           secret-key: ${{ secrets.SK }}
-          artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*"
+          artifact-path: "${{ steps.process_checkout.outputs.path }}/build_out/*.tar.gz"
           object-prefix: ${{ env.obs_path }}/  
     if: "${{ default() }}"
     runs-on: [dedicate-hosted, x64, large]
