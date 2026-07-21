@@ -23,7 +23,7 @@ Pipeline::
                          (fp4_formats)              (hifloat4_quant)
 
 Conversion is self-sufficient — the output plan is derived from the MXFP8 checkpoint's own
-index, so no bf16 reference is needed. ``--ref_bf16_model_dir`` is only for ``--compare``.
+index, so no bf16 reference is needed.
 
 Typical usage::
 
@@ -538,188 +538,6 @@ def convert_mxfp8_checkpoint_to_hif4(
 
 
 # -----------------------------------------------------------------------------
-# Comparison
-# -----------------------------------------------------------------------------
-
-def compare_two_models_by_ref_index(
-    ref_bf16_model_dir: Path,
-    converted_bf16_model_dir: Path,
-    quant_model_dir: Optional[Path] = None,
-    report_json_path: Optional[Path] = None,
-    max_cached_shards: int = 2,
-    topk: int = 50,
-    limit: int = 0,
-) -> dict:
-    ref_index = load_index(ref_bf16_model_dir)
-    cvt_index = load_index(converted_bf16_model_dir)
-
-    if set(ref_index["weight_map"].keys()) != set(cvt_index["weight_map"].keys()):
-        missing = set(ref_index["weight_map"].keys()) - set(cvt_index["weight_map"].keys())
-        extra = set(cvt_index["weight_map"].keys()) - set(ref_index["weight_map"].keys())
-        raise ValueError(
-            f"Converted model tensor set differs from reference. "
-            f"missing={list(sorted(missing))[:10]}, extra={list(sorted(extra))[:10]}"
-        )
-
-    quant_index = load_index(quant_model_dir) if quant_model_dir else None
-    quantized_names = set()
-    if quant_index:
-        for name in quant_index["weight_map"].keys():
-            if is_potential_weight_name(name) and build_global_scale_key(name) in quant_index["weight_map"]:
-                quantized_names.add(name)
-
-    ref_cache = ShardCache(ref_bf16_model_dir, max_cached=max_cached_shards)
-    cvt_cache = ShardCache(converted_bf16_model_dir, max_cached=max_cached_shards)
-
-    ref_shard_to_keys = build_shard_to_keys(ref_index)
-
-    total_numel = 0
-    total_sq = 0.0
-    total_abs = 0.0
-    total_dot = 0.0
-    total_ref_sq = 0.0
-    total_cvt_sq = 0.0
-
-    group_stats: Dict[str, Dict[str, float]] = defaultdict(
-        lambda: {
-            "num_tensors": 0, "numel": 0,
-            "sum_sq": 0.0, "sum_abs": 0.0,
-            "sum_dot": 0.0, "sum_ref_sq": 0.0, "sum_cvt_sq": 0.0,
-            "max_abs": 0.0,
-        }
-    )
-
-    worst_mse: list[dict] = []
-    worst_max_abs: list[dict] = []
-    worst_cosine: list[dict] = []
-
-    n_seen = 0
-
-    for ref_shard_name, tensor_names in ref_shard_to_keys.items():
-        ref_shard = ref_cache.get_shard(ref_shard_name)
-        cvt_shard = cvt_cache.get_shard(ref_shard_name)
-
-        for name in tensor_names:
-            if name not in ref_shard or name not in cvt_shard:
-                continue
-
-            a = ref_shard[name].to(torch.float32)
-            b = cvt_shard[name].to(torch.float32)
-
-            if a.shape != b.shape:
-                raise ValueError(f"Shape mismatch for {name}: ref={tuple(a.shape)} vs cvt={tuple(b.shape)}")
-
-            diff = a - b
-            numel = diff.numel()
-            sum_sq = float(torch.sum(diff * diff).item())
-            sum_abs = float(torch.sum(diff.abs()).item())
-            max_abs = float(torch.max(diff.abs()).item()) if numel > 0 else 0.0
-            dot = float(torch.sum(a * b).item())
-            ref_sq = float(torch.sum(a * a).item())
-            cvt_sq = float(torch.sum(b * b).item())
-
-            mse = sum_sq / numel if numel else float("nan")
-            rmse = math.sqrt(mse) if mse >= 0 else float("nan")
-            mean_abs = sum_abs / numel if numel else float("nan")
-            cosine = dot / math.sqrt(ref_sq * cvt_sq) if ref_sq > 0 and cvt_sq > 0 else float("nan")
-
-            row = {
-                "name": name, "shape": list(a.shape), "numel": numel,
-                "mse": mse, "rmse": rmse, "mean_abs": mean_abs,
-                "max_abs": max_abs, "cosine": cosine,
-                "group": "quantized_weight" if name in quantized_names else "non_quant_or_no_scale",
-            }
-
-            worst_mse.append(row)
-            worst_mse.sort(key=lambda x: x["mse"], reverse=True)
-            if len(worst_mse) > topk:
-                worst_mse.pop()
-
-            worst_max_abs.append(row)
-            worst_max_abs.sort(key=lambda x: x["max_abs"], reverse=True)
-            if len(worst_max_abs) > topk:
-                worst_max_abs.pop()
-
-            worst_cosine.append(row)
-            worst_cosine.sort(key=lambda x: x["cosine"] if not math.isnan(x["cosine"]) else -float("inf"))
-            if len(worst_cosine) > topk:
-                worst_cosine.pop()
-
-            total_numel += numel
-            total_sq += sum_sq
-            total_abs += sum_abs
-            total_dot += dot
-            total_ref_sq += ref_sq
-            total_cvt_sq += cvt_sq
-
-            g = group_stats[row["group"]]
-            g["num_tensors"] += 1
-            g["numel"] += numel
-            g["sum_sq"] += sum_sq
-            g["sum_abs"] += sum_abs
-            g["sum_dot"] += dot
-            g["sum_ref_sq"] += ref_sq
-            g["sum_cvt_sq"] += cvt_sq
-            g["max_abs"] = max(g["max_abs"], max_abs)
-
-            n_seen += 1
-            if limit > 0 and n_seen >= limit:
-                break
-
-        if limit > 0 and n_seen >= limit:
-            break
-
-    weighted_mse = total_sq / total_numel if total_numel else None
-    weighted_rmse = math.sqrt(weighted_mse) if weighted_mse is not None else None
-    weighted_mean_abs = total_abs / total_numel if total_numel else None
-    global_cosine = (
-        total_dot / math.sqrt(total_ref_sq * total_cvt_sq)
-        if total_ref_sq > 0 and total_cvt_sq > 0
-        else None
-    )
-
-    group_summary = {}
-    for group, g in group_stats.items():
-        g_numel = int(g["numel"])
-        g_mse = g["sum_sq"] / g_numel if g_numel else None
-        group_summary[group] = {
-            "num_tensors": int(g["num_tensors"]), "numel": g_numel,
-            "weighted_mse": g_mse,
-            "weighted_rmse": math.sqrt(g_mse) if g_mse is not None else None,
-            "weighted_mean_abs": g["sum_abs"] / g_numel if g_numel else None,
-            "global_cosine": (
-                g["sum_dot"] / math.sqrt(g["sum_ref_sq"] * g["sum_cvt_sq"])
-                if g["sum_ref_sq"] > 0 and g["sum_cvt_sq"] > 0
-                else None
-            ),
-            "max_abs": g["max_abs"],
-        }
-
-    report = {
-        "summary": {
-            "num_tensors": n_seen, "numel": total_numel,
-            "weighted_mse": weighted_mse, "weighted_rmse": weighted_rmse,
-            "weighted_mean_abs": weighted_mean_abs, "global_cosine": global_cosine,
-            "worst_max_abs": worst_max_abs[0]["max_abs"] if worst_max_abs else None,
-            "worst_max_abs_tensor": worst_max_abs[0]["name"] if worst_max_abs else None,
-            "worst_mse_tensor": worst_mse[0]["name"] if worst_mse else None,
-            "worst_cosine_tensor": worst_cosine[0]["name"] if worst_cosine else None,
-        },
-        "group_summary": group_summary,
-        "top_worst_mse": worst_mse,
-        "top_worst_max_abs": worst_max_abs,
-        "top_worst_cosine": worst_cosine,
-    }
-
-    if report_json_path is not None:
-        save_json(report, report_json_path)
-
-    ref_cache.clear()
-    cvt_cache.clear()
-    return report
-
-
-# -----------------------------------------------------------------------------
 # Scan / dump helpers
 # -----------------------------------------------------------------------------
 
@@ -830,9 +648,6 @@ def parse_dtype(name: str) -> torch.dtype:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MXFP8 → BF16 → HiFloat4 converter")
     parser.add_argument("--quant_model_dir", type=str, required=True)
-    parser.add_argument("--ref_bf16_model_dir", type=str, default=None,
-                        help="Bf16 reference model, used only by --compare. Conversion is "
-                             "self-sufficient and never needs it.")
     parser.add_argument("--output_dir", type=str, required=True)
 
     parser.add_argument("--group_size", type=int, default=None,
@@ -849,11 +664,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dump_max_keys", type=int, default=300)
     parser.add_argument("--dump_regex", type=str, default=None)
 
-    parser.add_argument("--compare", action="store_true")
-    parser.add_argument("--compare_limit", type=int, default=0)
-    parser.add_argument("--topk", type=int, default=50)
-    parser.add_argument("--report_json", type=str, default=None)
-
     return parser
 
 
@@ -861,7 +671,6 @@ def main(argv: Optional[list] = None) -> None:
     args = build_parser().parse_args(argv)
 
     quant_model_dir = Path(args.quant_model_dir)
-    ref_bf16_model_dir = Path(args.ref_bf16_model_dir) if args.ref_bf16_model_dir else None
     output_dir = Path(args.output_dir)
     out_dtype = parse_dtype(args.out_dtype)
 
@@ -897,24 +706,6 @@ def main(argv: Optional[list] = None) -> None:
         strict_no_fp8_copy=True, debug_regex=args.debug_regex,
         quiet=args.quiet,
     )
-
-    if args.compare:
-        if ref_bf16_model_dir is None:
-            raise ValueError("--compare requires --ref_bf16_model_dir")
-        report = compare_two_models_by_ref_index(
-            ref_bf16_model_dir=ref_bf16_model_dir,
-            converted_bf16_model_dir=output_dir,
-            quant_model_dir=quant_model_dir,
-            report_json_path=Path(args.report_json) if args.report_json else None,
-            max_cached_shards=args.max_cached_shards,
-            topk=args.topk, limit=args.compare_limit,
-        )
-        print("\n========== comparison summary ==========")
-        print(json.dumps(report["summary"], indent=2, ensure_ascii=False))
-        print("\n========== comparison group summary ==========")
-        print(json.dumps(report["group_summary"], indent=2, ensure_ascii=False))
-        if args.report_json:
-            print(f"\nReport saved to: {args.report_json}")
 
 
 if __name__ == "__main__":
