@@ -14,16 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""NVFP4 → BF16 → HiFloat4 whole-checkpoint converter (strategy + CLI).
+"""NVFP4 → BF16 whole-checkpoint decoder (strategy + CLI).
 
 Pipeline::
 
-    NVFP4 packed  ──nvfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
-                        (fp4_formats)              (hifloat4_quant)
+    NVFP4 packed  ──nvfp4_to_bf16──►  BF16
+                        (fp4_formats)
 
-The two-step conversion: (1) dequant NVFP4 → BF16, (2) simulate HiF4 quantization
-via ``quant_dequant_float`` (the existing fake-quant reference from
-``amct_pytorch.common.utils.hifloat4_quant``).  Output is BF16 safetensors.
+Decode only: dequantize NVFP4 → BF16 safetensors. HiF4 (pack via deploy, fake-quant via
+ptq) is applied downstream by ``hifloat4_quant`` on the decoded BF16 -- not here.
 
 The traversal/output plan is derived from the NVFP4 checkpoint's own index
 (``resolve_index``), so no separate bf16 reference is required; ``--bf16-index`` is an
@@ -51,12 +50,8 @@ _ROOT_DIR = os.path.realpath(os.path.join(_CUR_DIR, "../../../"))
 if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
-from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float  # noqa: E402
 from amct_pytorch.common.utils.fpx_decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
 from amct_pytorch.common.utils.fpx_decode.ckpt_io import walk_checkpoint  # noqa: E402
-
-# Build QType once — reused for every tensor.
-_HIF4_QTYPE = QType("hifx4").dim(-1)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -101,8 +96,8 @@ def transform_fn(
     """NVFP4 per-tensor strategy.
 
     1. Drop quantization intermediates → None.
-    2. Convert .weight keys with paired weight_scale:
-       nvfp4_to_bf16 → quant_dequant_float (HiF4 fake-quant) → BF16.
+    2. Decode .weight keys with paired weight_scale: nvfp4_to_bf16 → BF16 (decode only;
+       HiF4 pack/fake-quant applied downstream by deploy/ptq).
     3. Copy everything else as BF16.
     """
     if should_drop_key(key):
@@ -123,13 +118,13 @@ def transform_fn(
                 print(f"  [CONVERT] {key}  shape=({out_features},{in_features})")
             if dry_run:
                 return tensor
-            # step 1: NVFP4 → BF16
+            # NVFP4 → BF16 (decode only). HiF4 is applied downstream by the caller
+            # (deploy → pack, ptq → fake-quant) via hifloat4_quant, not here.
             w_bf16 = nvfp4_to_bf16(
                 tensor, w_sf, w_sfg, out_features, in_features,
                 sf_vec_size=sf_vec_size,
             )
-            # step 2: BF16 → HiF4 fake-quant → BF16 (reuses hifloat4-cast)
-            return quant_dequant_float(w_bf16, _HIF4_QTYPE, force_py=True, force_fp32=True)
+            return w_bf16.contiguous()
 
     if verbose:
         print(f"  [COPY]  {key}")
@@ -171,7 +166,7 @@ def main(argv: Optional[list] = None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.dry_run:
-        print("[DRY RUN] NVFP4 → BF16 → HiF4 (quant_dequant_float)")
+        print("[DRY RUN] NVFP4 → BF16 (decode only)")
 
     def _transform(key: str, tensor: torch.Tensor, lookup: Any) -> Optional[torch.Tensor]:
         return transform_fn(
