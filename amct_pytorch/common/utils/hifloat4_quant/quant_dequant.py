@@ -47,7 +47,7 @@ def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32:
     import re
     if not re.match(r'^hifx[0-9]*$', Q.desc):
         raise ValueError(
-            f"hifx4_quant only implements the 'hifx*' fake-quant path, got '{Q.desc}'. "
+            f"hifloat4_quant only implements the 'hifx*' fake-quant path, got '{Q.desc}'. "
             "Add the corresponding QFuncs reference if another format is needed."
         )
     assert Q.exp_bits == 0
