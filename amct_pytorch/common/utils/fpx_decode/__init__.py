@@ -17,5 +17,5 @@
 """FP4 → BF16 → HiFloat4 offline conversion tools (experimental).
 
 FP4→BF16 dequant is pure PyTorch CPU.  BF16→HiF4 fake-quant reuses
-``amct_pytorch.common.utils.hifx4_quant.quant_dequant_float``.
+``amct_pytorch.common.utils.hifloat4_quant.quant_dequant_float``.
 """

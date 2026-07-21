@@ -6,11 +6,11 @@
 
 ```
 NVFP4 packed  ──nvfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
-                    (fp4_formats)              (hifx4_quant)
+                    (fp4_formats)              (hifloat4_quant)
 ```
 
 两步转换：(1) FP4 反量化 → BF16（纯 torch CPU），(2) HiF4 模拟量化 → BF16
-（复用 ``amct_pytorch.common.utils.hifx4_quant.quant_dequant_float``）。
+（复用 ``amct_pytorch.common.utils.hifloat4_quant.quant_dequant_float``）。
 
 ## 目录结构
 
@@ -27,14 +27,14 @@ NVFP4 packed  ──nvfp4_to_bf16──►  BF16  ──quant_dequant_float─�
 pip install -r requirements.txt
 ```
 
-依赖 ``jian/hifloat4-cast`` 分支的 ``hifx4_quant`` 模块。
+依赖 ``jian/hifloat4-cast`` 分支的 ``hifloat4_quant`` 模块。
 
 ## 用法
 
 ### NVFP4 → HiF4
 
 ```bash
-python -m amct_pytorch.experimental.fp4_convert.convert_nvfp4_to_hif4 \
+python -m amct_pytorch.common.utils.fpx_decode.convert_nvfp4_to_hif4 \
     --nvfp4-dir /path/to/nvfp4_ckpt \
     --bf16-index /path/to/model.safetensors.index.json \
     --out-dir /path/to/output
@@ -52,5 +52,5 @@ fp4_formats.py  →  格式数学（FP4→BF16）
 ckpt_io.py      →  通用分片 I/O
 metrics.py      →  诊断验证
     ↓ 调用
-hifx4_quant     →  BF16→HiF4 fake-quant（jian/hifloat4-cast 已有）
+hifloat4_quant     →  BF16→HiF4 fake-quant（jian/hifloat4-cast 已有）
 ```

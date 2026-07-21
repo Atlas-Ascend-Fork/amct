@@ -19,15 +19,15 @@
 Pipeline::
 
     NVFP4 packed  ──nvfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
-                        (fp4_formats)              (hifx4_quant)
+                        (fp4_formats)              (hifloat4_quant)
 
 The two-step conversion: (1) dequant NVFP4 → BF16, (2) simulate HiF4 quantization
 via ``quant_dequant_float`` (the existing fake-quant reference from
-``amct_pytorch.common.utils.hifx4_quant``).  Output is BF16 safetensors.
+``amct_pytorch.common.utils.hifloat4_quant``).  Output is BF16 safetensors.
 
 Usage::
 
-    python -m amct_pytorch.experimental.fp4_convert.convert_nvfp4_to_hif4 \\
+    python -m amct_pytorch.common.utils.fpx_decode.convert_nvfp4_to_hif4 \\
         --nvfp4-dir /path/to/nvfp4_ckpt \\
         --bf16-index /path/to/model.safetensors.index.json \\
         --out-dir /path/to/output
@@ -48,9 +48,9 @@ _ROOT_DIR = os.path.realpath(os.path.join(_CUR_DIR, "../../../"))
 if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
-from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float  # noqa: E402
-from amct_pytorch.experimental.fp4_convert.fp4_formats import nvfp4_to_bf16  # noqa: E402
-from amct_pytorch.experimental.fp4_convert.ckpt_io import walk_checkpoint  # noqa: E402
+from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float  # noqa: E402
+from amct_pytorch.common.utils.fpx_decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
+from amct_pytorch.common.utils.fpx_decode.ckpt_io import walk_checkpoint  # noqa: E402
 
 # Build QType once — reused for every tensor.
 _HIF4_QTYPE = QType("hifx4").dim(-1)
@@ -177,7 +177,7 @@ def main(argv: Optional[list] = None) -> None:
         )
 
     if args.dry_run:
-        from amct_pytorch.experimental.fp4_convert.ckpt_io import (
+        from amct_pytorch.common.utils.fpx_decode.ckpt_io import (
             load_index, ShardCache, invert_weight_map,
         )
         import glob as glob_mod
