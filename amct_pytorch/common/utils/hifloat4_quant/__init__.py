@@ -22,12 +22,14 @@ kernel to zero difference; the compiled kernel is only a speed optimization and 
 here.
 
 Public API:
-    from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
+    from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
     w_sim = quant_dequant_float(weight, QType('hifx4').dim(-1), force_py=True, force_fp32=True)
 """
 
 from .qtype import QType
 from .quant_dequant import quant_dequant_float
 from .bit_dump import hif4_cast, hif4_bit_reconstruct
+from .fake_quant import hifloat4_fake_quant
 
-__all__ = ['QType', 'quant_dequant_float', 'hif4_cast', 'hif4_bit_reconstruct']
+__all__ = ['QType', 'quant_dequant_float', 'hif4_cast', 'hif4_bit_reconstruct',
+           'hifloat4_fake_quant']

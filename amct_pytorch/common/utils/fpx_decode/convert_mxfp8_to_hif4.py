@@ -20,7 +20,7 @@
 Pipeline::
 
     MXFP8 packed  ──dequant_mxfp8──►  BF16  ──quant_dequant_float──►  BF16
-                         (fp4_formats)              (hifx4_quant)
+                         (fp4_formats)              (hifloat4_quant)
 
 Typical usage::
 
@@ -46,7 +46,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 import torch
 from safetensors.torch import load_file, save_file
 
-from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
+from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
 
 _HIF4_QTYPE = QType("hifx4").dim(-1)
 

@@ -19,7 +19,7 @@
 Pipeline::
 
     MXFP4 packed  ──mxfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16
-                       (fp4_formats)              (hifx4_quant)
+                       (fp4_formats)              (hifloat4_quant)
 
 Subcommands: selftest / list-keys / convert-pair / convert-dir.
 """
@@ -41,22 +41,23 @@ _ROOT_DIR = os.path.realpath(os.path.join(_CUR_DIR, "../../../"))
 if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
-from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float  # noqa: E402
-from amct_pytorch.experimental.fp4_convert.fp4_formats import (  # noqa: E402
+from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float  # noqa: E402
+from amct_pytorch.common.utils.fpx_decode.fp4_formats import (  # noqa: E402
     bf16_to_hif4_e6m0,
     e2m1_lut,
     hif4_e6m0_to_fp32,
     mxfp4_to_bf16,
     pack_nibbles,
 )
-from amct_pytorch.experimental.fp4_convert.ckpt_io import (  # noqa: E402
+from amct_pytorch.common.utils.fpx_decode.ckpt_io import (  # noqa: E402
     load_index,
+    resolve_index,
     load_tensor_from_spec,
     save_convert_output,
     ShardCache,
     walk_checkpoint,
 )
-from amct_pytorch.experimental.fp4_convert.metrics import make_stats  # noqa: E402
+from amct_pytorch.common.utils.fpx_decode.metrics import make_stats  # noqa: E402
 
 _HIF4_QTYPE = QType("hifx4").dim(-1)
 
@@ -305,9 +306,9 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
 
     if args.dry_run:
         import glob as glob_mod
-        bf16_index = load_index(args.bf16_index)
-        from amct_pytorch.experimental.fp4_convert.ckpt_io import invert_weight_map
-        by_file = invert_weight_map(bf16_index["weight_map"])
+        plan_index = resolve_index(args.mxfp4_dir, args.bf16_index)
+        from amct_pytorch.common.utils.fpx_decode.ckpt_io import invert_weight_map
+        by_file = invert_weight_map(plan_index["weight_map"])
         source_shards = sorted(glob_mod.glob(os.path.join(args.mxfp4_dir, "*.safetensors")))
         cache = ShardCache(source_shards)
         for shard_fname, keys in by_file.items():
@@ -375,7 +376,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("convert-dir", parents=[common], help="Whole-checkpoint conversion.")
     sp.add_argument("--mxfp4-dir", type=str, required=True)
-    sp.add_argument("--bf16-index", type=str, required=True)
+    sp.add_argument("--bf16-index", type=str, default=None,
+                    help="Optional target sharding plan; if omitted, derived from the "
+                         "MXFP4 checkpoint's own index (self-sufficient).")
     sp.add_argument("--out-dir", type=str, required=True)
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--verbose", action="store_true")

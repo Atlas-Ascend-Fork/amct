@@ -17,13 +17,13 @@
 """CLI entry point for FP16/BF16 <-> HiFloat4 checkpoint conversion.
 
 Thin front door -- the implementation (fake-quant / pack / unpack) lives in
-``amct_pytorch.common.utils.hifx4_quant.checkpoint_cast``. Usage::
+``amct_pytorch.common.utils.hifloat4_quant.checkpoint_cast``. Usage::
 
     python -m amct_pytorch.cli.llm.cast_hif4 fake-quant --input <model> --output <out> --dtype bf16
     python -m amct_pytorch.cli.llm.cast_hif4 pack       --input <model> --output <out>
     python -m amct_pytorch.cli.llm.cast_hif4 unpack     --input <packed> --output <out>
 """
-from amct_pytorch.common.utils.hifx4_quant.checkpoint_cast import main
+from amct_pytorch.common.utils.hifloat4_quant.checkpoint_cast import main
 
 
 if __name__ == "__main__":

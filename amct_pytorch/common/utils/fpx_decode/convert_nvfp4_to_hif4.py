@@ -19,18 +19,21 @@
 Pipeline::
 
     NVFP4 packed  ──nvfp4_to_bf16──►  BF16  ──quant_dequant_float──►  BF16 (HiF4 fake-quant)
-                        (fp4_formats)              (hifx4_quant)
+                        (fp4_formats)              (hifloat4_quant)
 
 The two-step conversion: (1) dequant NVFP4 → BF16, (2) simulate HiF4 quantization
 via ``quant_dequant_float`` (the existing fake-quant reference from
-``amct_pytorch.common.utils.hifx4_quant``).  Output is BF16 safetensors.
+``amct_pytorch.common.utils.hifloat4_quant``).  Output is BF16 safetensors.
+
+The traversal/output plan is derived from the NVFP4 checkpoint's own index
+(``resolve_index``), so no separate bf16 reference is required; ``--bf16-index`` is an
+optional override.
 
 Usage::
 
-    python -m amct_pytorch.experimental.fp4_convert.convert_nvfp4_to_hif4 \\
+    python -m amct_pytorch.common.utils.fpx_decode.convert_nvfp4_to_hif4 \\
         --nvfp4-dir /path/to/nvfp4_ckpt \\
-        --bf16-index /path/to/model.safetensors.index.json \\
-        --out-dir /path/to/output
+        --out-dir /path/to/output          # plan derived from the nvfp4 checkpoint itself
 """
 
 from __future__ import annotations
@@ -48,9 +51,9 @@ _ROOT_DIR = os.path.realpath(os.path.join(_CUR_DIR, "../../../"))
 if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
-from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float  # noqa: E402
-from amct_pytorch.experimental.fp4_convert.fp4_formats import nvfp4_to_bf16  # noqa: E402
-from amct_pytorch.experimental.fp4_convert.ckpt_io import walk_checkpoint  # noqa: E402
+from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float  # noqa: E402
+from amct_pytorch.common.utils.fpx_decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
+from amct_pytorch.common.utils.fpx_decode.ckpt_io import walk_checkpoint  # noqa: E402
 
 # Build QType once — reused for every tensor.
 _HIF4_QTYPE = QType("hifx4").dim(-1)
@@ -146,8 +149,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--nvfp4-dir", type=str, required=True,
                     help="NVFP4 checkpoint directory with *.safetensors shards.")
-    ap.add_argument("--bf16-index", type=str, required=True,
-                    help="BF16 model.safetensors.index.json (target sharding plan).")
+    ap.add_argument("--bf16-index", type=str, default=None,
+                    help="Optional target sharding plan (model.safetensors.index.json). "
+                         "If omitted, the plan is derived from the NVFP4 checkpoint's own "
+                         "index (self-sufficient; no bf16 reference required).")
     ap.add_argument("--out-dir", type=str, required=True,
                     help="Output directory for converted BF16 shards + index.")
     ap.add_argument("--sf-vec-size", type=int, default=16,
@@ -177,13 +182,13 @@ def main(argv: Optional[list] = None) -> None:
         )
 
     if args.dry_run:
-        from amct_pytorch.experimental.fp4_convert.ckpt_io import (
-            load_index, ShardCache, invert_weight_map,
+        from amct_pytorch.common.utils.fpx_decode.ckpt_io import (
+            resolve_index, ShardCache, invert_weight_map,
         )
         import glob as glob_mod
 
-        bf16_index = load_index(args.bf16_index)
-        by_file = invert_weight_map(bf16_index["weight_map"])
+        plan_index = resolve_index(args.nvfp4_dir, args.bf16_index)
+        by_file = invert_weight_map(plan_index["weight_map"])
         source_shards = sorted(
             glob_mod.glob(os.path.join(args.nvfp4_dir, "*.safetensors"))
         )

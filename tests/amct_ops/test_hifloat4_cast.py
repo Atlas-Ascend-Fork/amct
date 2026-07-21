@@ -23,7 +23,7 @@ import unittest
 
 import torch
 
-from amct_pytorch.common.utils.hifx4_quant import QType, quant_dequant_float
+from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
 
 
 def _npu_available():
