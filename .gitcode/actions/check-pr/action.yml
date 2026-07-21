@@ -1,0 +1,16 @@
+name: 'check-pr'
+author: 'CANN'
+version: '1.0.0'
+description: 'this is a check pr filelist action'
+inputs:
+  workspace:
+    description: 代码检出目录
+    required: true
+  repo_name:
+    description: 仓库名称
+    required: true
+
+
+runs:
+  using: 'node16'
+  main: 'dist/main.js'

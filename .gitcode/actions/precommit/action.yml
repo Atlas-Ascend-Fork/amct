@@ -1,0 +1,18 @@
+name: 'precommit'
+author: 'CANN'
+version: '1.0.0'
+description: 'this is a precommit action'
+inputs:
+  merge_id:
+    description: "PR/MR merge id"
+    required: true
+  repo_name:
+    description: "仓库名称"
+    required: true
+  workspace:
+    description: "代码仓库根目录"
+    required: true
+
+runs:
+  using: 'node16'
+  main: 'dist/main.js'

@@ -1,0 +1,22 @@
+name: 'ut-cov'
+author: 'CANN'
+version: '1.0.0'
+description: 'this is a ut cov action'
+inputs:
+  ut_process:
+    description: 流程标识，可选 ut_cov / coverage
+    reqired: false
+    default: ""
+  workspace:
+    description: 代码仓库根目录
+    required: true
+  ut_type:
+    description: UT类型
+    required: true
+  target_branch:
+    description: 目标分支名称
+    required: true
+
+runs:
+  using: 'node16'
+  main: 'dist/main.js'

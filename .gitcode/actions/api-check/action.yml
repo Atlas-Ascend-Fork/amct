@@ -1,0 +1,31 @@
+name: 'api-check'
+author: 'CANN'
+version: '1.0.0'
+description: 'this is aapi check action'
+inputs:
+  org_name:
+    description: 组织名称，全局必填
+    required: true
+  task_name:
+    description: 任务标识，含compile执行编译上报；含ubuntu24执行PR接口校验
+    required: true
+  repo_name:
+    description: 仓库名称
+    required: false
+  merge_id:
+    description: PR/MERGE编号
+    required: false
+  workspace:
+    description: 代码工作目录，compile流程必填
+    required: false
+  source_branch:
+    description: PR源分支，compile流程必填
+    required: false
+  target_branch:
+    description: PR目标分支，compile流程必填
+    required: false
+
+
+runs:
+  using: 'node16'
+  main: 'dist/main.js'

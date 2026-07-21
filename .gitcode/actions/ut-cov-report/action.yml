@@ -1,0 +1,49 @@
+name: 'ut-cov-report'
+author: 'CANN'
+version: '1.0.0'
+description: 'this is a ut cov or report action'
+inputs:
+  workspace:
+    description: 代码检出根目录，全局必填
+    required: true
+  cov_mode:
+    description: cov(打包覆盖率包) / report(生成报告)，默认cov
+    required: false
+    default: "cov"
+  coverage_num:
+    description: 覆盖率阈值，全局通用，默认80
+    required: false
+    default: "70"
+  git_token:
+    description: 私有仓库访问token，公开仓库无需传入
+    required: false
+
+  # ========== cov模式专属参数 ==========
+  ut_process:
+    description: 仅cov模式使用，ut_cov/coverage，空则跳过打包流程
+    required: false
+  ut_type:
+    description: cov模式必填，UT分类
+    required: false
+  target_branch:
+    description: cov模式必填，目标分支
+    required: false
+
+  # ========== report模式专属参数 ==========
+  ut_field:
+    description: report模式必填，业务域标识
+    required: false
+  modules:
+    description: report模式必填，空格分隔模块列表
+    required: false
+  source_branch:
+    description: report模式必填，代码源分支名称
+    required: false
+  obs_path:
+    description: report模式必填，OBS文件上传路径
+    required: false
+
+
+runs:
+  using: 'node16'
+  main: 'dist/main.js'

@@ -94,13 +94,13 @@ stages:
           task_name: 'x86_compile_ubuntu24'
           image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_X86_ubuntu24 }}
       JOB_x86_compile_torch:
-        name: x86_compile
+        name: x86_compile_torch
         uses: .gitcode/workflows/x86_compile_action.yml
         with:
           task_name: 'x86_compile_torch'
           image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_X86 }}
       JOB_x86_compile_torch_ubuntu24:
-        name: x86_compile
+        name: x86_compile_torch_ubuntu24
         uses: .gitcode/workflows/x86_compile_action.yml
         with:
           task_name: 'x86_compile_torch_24'
@@ -118,13 +118,13 @@ stages:
           task_name: 'arm_compile_24'
           image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_ARM_ubuntu24 }}
       JOB_arm_compile_torch:
-        name: arm_compile
+        name: arm_compile_torch
         uses: .gitcode/workflows/arm_compile_action.yml
         with:
           task_name: 'arm_compile_torch'
           image_version: ${{ jobs.JOB_image.outputs.Compile_Ascend_ARM }}
       JOB_arm_compile_torch_ubuntu24:
-        name: arm_compile_ubuntu24
+        name: arm_compile_torch_ubuntu24
         uses: .gitcode/workflows/arm_compile_action.yml
         with:
           task_name: 'arm_compile_torch_24'
