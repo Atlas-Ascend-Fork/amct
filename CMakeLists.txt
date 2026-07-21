@@ -24,6 +24,8 @@ message("PROJECT_SOURCE_DIR === ${PROJECT_SOURCE_DIR}")
 
 include(cmake/config.cmake)
 
+
+
 cmake_print_variables(VERSION)
 if(NOT CANN_3RD_LIB_PATH)
   set(CANN_3RD_LIB_PATH ${PROJECT_SOURCE_DIR}/build/third_party)
