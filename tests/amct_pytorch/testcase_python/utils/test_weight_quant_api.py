@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,9 +16,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 import unittest
-from unittest import mock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import torch
@@ -27,6 +26,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.weight_quant_api import
     adjust_axis_for_group_wise,
     adjust_conv_weight_shape,
     adjust_deconv_weight_shape,
+    get_deconv_group,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ class TestNetParams(unittest.TestCase):
     """
     UT for ParamsHelperTorch
     """
+
     @classmethod
     def setUpClass(cls):
         logger.info("Test ParamsHelperTorch start!")
@@ -96,3 +97,24 @@ class TestNetParams(unittest.TestCase):
         group = 2
         adjusted_weight = adjust_deconv_weight_shape(group, weight_tensor)
         self.assertEqual(list(adjusted_weight.shape), [10, 2, 6])
+
+    def test_get_deconv_group_returns_value(self):
+        node = MagicMock()
+        with patch(
+            "amct_pytorch.classic.graph_based.amct_pytorch.utils.weight_quant_api.AttributeProtoHelper"
+        ) as mock_helper:
+            inst = mock_helper.return_value
+            inst.has_attr.return_value = True
+            inst.get_attr_value.return_value = 4
+            self.assertEqual(get_deconv_group(node), 4)
+
+    def test_get_deconv_group_raises_when_no_group_attr(self):
+        node = MagicMock()
+        node.name = "deconv0"
+        with patch(
+            "amct_pytorch.classic.graph_based.amct_pytorch.utils.weight_quant_api.AttributeProtoHelper"
+        ) as mock_helper:
+            inst = mock_helper.return_value
+            inst.has_attr.return_value = False
+            with self.assertRaises(RuntimeError):
+                get_deconv_group(node)

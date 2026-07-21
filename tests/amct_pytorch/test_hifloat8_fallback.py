@@ -23,7 +23,7 @@ point of PR #147 -- run hifloat8 fake-quant when torch_npu lacks a native cast.
 import sys
 import types
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import torch
 
@@ -71,13 +71,20 @@ class TestHifloat8Supported(unittest.TestCase):
 
     def setUp(self):
         quant_util.hifloat8_supported.cache_clear()
-        self._saved_npu = torch.Tensor.npu
+        self._saved_npu = getattr(torch.Tensor, 'npu', None)
+        self._saved_torch_npu = sys.modules.get('torch_npu')
         torch.Tensor.npu = lambda self: self
 
     def tearDown(self):
         quant_util.hifloat8_supported.cache_clear()
-        torch.Tensor.npu = self._saved_npu
-        sys.modules.pop('torch_npu', None)
+        if self._saved_npu is not None:
+            torch.Tensor.npu = self._saved_npu
+        elif hasattr(torch.Tensor, 'npu'):
+            delattr(torch.Tensor, 'npu')
+        if self._saved_torch_npu is not None:
+            sys.modules['torch_npu'] = self._saved_torch_npu
+        else:
+            sys.modules.pop('torch_npu', None)
 
     def test_returns_false_when_torch_npu_missing(self):
         sys.modules['torch_npu'] = None  # force ImportError on `import torch_npu`
@@ -100,13 +107,21 @@ class TestHifloat8FakeQuant(unittest.TestCase):
     """quant_util.hifloat8_fake_quant() native vs amct_ops fallback."""
 
     def setUp(self):
-        self._saved_npu = torch.Tensor.npu
+        self._saved_npu = getattr(torch.Tensor, 'npu', None)
+        self._saved_torch_npu = sys.modules.get('torch_npu')
         torch.Tensor.npu = lambda self: self
 
     def tearDown(self):
-        torch.Tensor.npu = self._saved_npu
-        for name in ('torch_npu', 'amct_ops', 'amct_ops.hifloat8_cast'):
+        if self._saved_npu is not None:
+            torch.Tensor.npu = self._saved_npu
+        elif hasattr(torch.Tensor, 'npu'):
+            delattr(torch.Tensor, 'npu')
+        for name in ('amct_ops', 'amct_ops.hifloat8_cast'):
             sys.modules.pop(name, None)
+        if self._saved_torch_npu is not None:
+            sys.modules['torch_npu'] = self._saved_torch_npu
+        else:
+            sys.modules.pop('torch_npu', None)
 
     @patch.object(quant_util, 'hifloat8_supported', return_value=True)
     def test_uses_native_cast_when_supported(self, _):

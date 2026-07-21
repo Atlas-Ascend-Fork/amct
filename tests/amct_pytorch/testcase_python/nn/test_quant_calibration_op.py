@@ -95,7 +95,7 @@ def calc_similarity(data0, data1):
     data0[data0_nan] = 1
     data1_nan = np.isnan(data1)
     data1[data1_nan] = 1
-    similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
+    similarity = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if (data0 == data1).all():
@@ -103,13 +103,13 @@ def calc_similarity(data0, data1):
     if np.isnan(similarity) or np.isinf(similarity):
         data0 = np.divide(data0, np.power(10, 38))
         data1 = np.divide(data1, np.power(10, 38))
-        similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
+        similarity = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
         if np.isnan(similarity) or np.isinf(similarity):
             data0 = np.divide(data0, np.power(10, 38))
             data1 = np.divide(data1, np.power(10, 38))
-            similarity = similarity_1 = np.sum(np.multiply(data0, data1).astype(np.float64))\
+            similarity = np.sum(np.multiply(data0, data1).astype(np.float64))\
                     / (np.sqrt(np.sum(data0.astype(np.float64)**2))\
                     * np.sqrt(np.sum(data1.astype(np.float64)**2))) * 100
     if np.isnan(similarity):

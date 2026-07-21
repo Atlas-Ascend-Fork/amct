@@ -193,7 +193,7 @@ class TestQatOp(unittest.TestCase):
                 'channel_wise': 1
             }
         }
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
             with open('./amct_log/amct_pytorch.classic.graph_based.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
@@ -222,7 +222,7 @@ class TestQatOp(unittest.TestCase):
                 'weights_retrain_algo': '1',
             }
         }
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
             with open('./amct_log/amct_pytorch.classic.graph_based.amct_pytorch.log', 'r') as f:
                 log_content = f.read()
@@ -238,7 +238,7 @@ class TestQatOp(unittest.TestCase):
                 'batch_num': -1
             }
         }
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
 
         wrong_quant_conf = {
@@ -247,7 +247,7 @@ class TestQatOp(unittest.TestCase):
                 'clip_max': 1.0
             }
         }
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
 
         wrong_quant_conf = {
@@ -256,7 +256,7 @@ class TestQatOp(unittest.TestCase):
                 'clip_max': -1.0
             }
         }
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
 
     def test_qat_base_register_qat_params(self):
@@ -276,7 +276,7 @@ class TestQatOp(unittest.TestCase):
     def test_get_ori_op_params_redundant_params(self):
         bak_required_params = copy.deepcopy(Conv2dQAT._required_params)
         Conv2dQAT._required_params = ('err_param',)
-        with self.assertRaises(RuntimeError) as cm:
+        with self.assertRaises(RuntimeError):
             Conv2dQAT.from_float(torch.nn.Conv2d(1, 1, 1))
         Conv2dQAT._required_params = bak_required_params
 
@@ -289,7 +289,7 @@ class TestQatOp(unittest.TestCase):
                 'dst_type': 'INT16',
             }
         }
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             Conv2dQAT(1, 1, 1, config=wrong_quant_conf)
 
     def test_qat_init_d16w8(self):
@@ -328,12 +328,12 @@ class TestConv2dQAT(unittest.TestCase):
 
     def test_conv2d_qat_from_float_failed_padding_mode_not_zeros(self):
         mod = torch.nn.Conv2d(1, 1, 1, padding_mode='reflect')
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             Conv2dQAT.from_float(mod)
 
     def test_conv2d_qat_from_float_failed_ori_op_not_conv2d(self):
         mod = torch.nn.Conv3d(1, 1, 1)
-        with self.assertRaises(TypeError) as cm:
+        with self.assertRaises(TypeError):
             Conv2dQAT.from_float(mod)
 
     def test_conv2d_qat_forward(self):
@@ -377,8 +377,8 @@ class TestConv2dQAT(unittest.TestCase):
 
     def test_conv2d_qat_unsupport_shape_inputs(self):
         mod = Conv2dQAT(3, 16, 1)
-        with self.assertRaises(RuntimeError) as cm:
-            ret = mod.forward(torch.randn((3, 224, 224)))
+        with self.assertRaises(RuntimeError):
+            mod.forward(torch.randn((3, 224, 224)))
 
 
 class TestConvTranspose2dQAT(unittest.TestCase):
@@ -403,7 +403,7 @@ class TestConvTranspose2dQAT(unittest.TestCase):
 
     def test_conv_transpose_2d_qat_from_float_failed_ori_op_not_conv_transpose_2d(self):
         mod = torch.nn.Conv2d(1, 1, 1)
-        with self.assertRaises(TypeError) as cm:
+        with self.assertRaises(TypeError):
             ConvTranspose2dQAT.from_float(mod)
 
     def test_conv_transpose_2d_qat_forward(self):
@@ -413,7 +413,7 @@ class TestConvTranspose2dQAT(unittest.TestCase):
         self.assertIsNotNone(output)
 
     def test_conv_transpose_2d_qat_padding_mode_not_zero(self):
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(ValueError):
             ConvTranspose2dQAT(1, 1, 1, padding_mode='reflect')
 
     def test_conv_transpose_2d_qat_forward_ulq_retrain(self):
@@ -451,8 +451,8 @@ class TestConvTranspose2dQAT(unittest.TestCase):
 
     def test_conv_transpose_2d_qat_unsupport_shape_inputs(self):
         mod = ConvTranspose2dQAT(3, 16, 1)
-        with self.assertRaises(RuntimeError) as cm:
-            output = mod.forward(torch.randn(3, 224, 224))
+        with self.assertRaises(RuntimeError):
+            mod.forward(torch.randn(3, 224, 224))
 
 
 class TestConv3dQAT(unittest.TestCase):
@@ -499,12 +499,12 @@ class TestConv3dQAT(unittest.TestCase):
 
     def test_conv3d_qat_from_float_02(self):
         ori_op = torch.nn.Conv2d(2, 3, 4)
-        with self.assertRaises(RuntimeError) as cm:
+        with self.assertRaises(RuntimeError):
             Conv3dQAT.from_float(ori_op)
 
     def test_conv3d_qat_unsupport_shape_inputs(self):
         qat_op = Conv3dQAT(3, 3, 4, dilation=(1, 2, 1))
-        with self.assertRaises(RuntimeError) as cm:
+        with self.assertRaises(RuntimeError):
             qat_op.forward(torch.randn(3, 12, 64, 64))
 
 
@@ -524,7 +524,7 @@ class TestLinearQAT(unittest.TestCase):
         pass
 
     def test_lineard_qat_limit_check_01(self):
-        with self.assertRaises(RuntimeError) as cm:
+        with self.assertRaises(RuntimeError):
             LinearQAT(1, 1,
                       config={'retrain_weight_config': {'channel_wise': True}})
 
@@ -542,7 +542,7 @@ class TestLinearQAT(unittest.TestCase):
 
     def test_lineard_qat_from_float_02(self):
         ori_op = torch.nn.Conv3d(1, 1, 1)
-        with self.assertRaises(RuntimeError) as cm:
+        with self.assertRaises(RuntimeError):
             LinearQAT.from_float(ori_op,
                                 config={'retrain_weight_config': {'channel_wise': False}})
 
@@ -664,7 +664,7 @@ class TestConv1dQAT(unittest.TestCase):
 
     def test_conv1d_qat_from_float_failed_ori_op_not_conv1d(self):
         mod = torch.nn.Conv3d(1, 1, 1)
-        with self.assertRaises(TypeError) as cm:
+        with self.assertRaises(TypeError):
             Conv1dQAT.from_float(mod)
 
     def test_conv1d_qat_scratch_from_zero(self):
@@ -688,8 +688,8 @@ class TestConv1dQAT(unittest.TestCase):
 
     def test_conv1d_qat_unsupport_shape_inputs(self):
         net_conv1d_qat = NetConv1dQAT()
-        with self.assertRaises(RuntimeError) as cm:
-            ret = net_conv1d_qat.forward(torch.rand(1, 2, 28, 28))
+        with self.assertRaises(RuntimeError):
+            net_conv1d_qat.forward(torch.rand(1, 2, 28, 28))
 
     def test_conv1d_qat_op_not_support_padding_mode_not_zeros(self):
         self.assertRaises(ValueError, Conv1dQAT, 1, 1, 1, padding_mode='reflect')
@@ -820,8 +820,8 @@ class TestConvTranspose1dQAT(unittest.TestCase):
 
     def test_conv_transpose_1d_qat_unsupport_shape_inputs(self):
         net_conv_transpose_1d_qat = NetConvTranspose1dQAT()
-        with self.assertRaises(RuntimeError) as cm:
-            ret = net_conv_transpose_1d_qat.forward(torch.rand(2, 28))
+        with self.assertRaises(RuntimeError):
+            net_conv_transpose_1d_qat.forward(torch.rand(2, 28))
 
 
 class TestMatMulQAT(unittest.TestCase):
