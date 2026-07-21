@@ -78,22 +78,22 @@ class InsertWeightQuantPass(BaseFusionPass):
             weight = adjust_deconv_weight_shape(group, weight)
         scale_w = self.records.get(object_node.name).get('weight_scale')
         offset_w = self.records.get(object_node.name).get('weight_offset')
-        int8_weight = weight_quant_np(weight, scale_w, offset_w, num_bits)
+        quant_weight = weight_quant_np(weight, scale_w, offset_w, num_bits)
         if object_node.type == 'ConvTranspose':
             group = get_deconv_group(object_node)
-            int8_weight = adjust_deconv_weight_shape(group, int8_weight)
-        int8_weight = int8_weight.reshape([-1])
+            quant_weight = adjust_deconv_weight_shape(group, quant_weight)
+        quant_weight = quant_weight.reshape([-1])
 
         weight_helper.clear_data()
         # num_bits==4 时值域为 [-8,7]，写回 INT4 使 dtype 标签与实际值域一致
-        weight_helper.set_data(int8_weight, 'INT4' if num_bits == 4 else 'INT8')
+        weight_helper.set_data(quant_weight, 'INT4' if num_bits == 4 else 'INT8')
 
         if object_node.type in RNN_LAYER_TYPE:
             self.quant_recurrence_weight(object_node)
 
         LOGGER.logd(
-            "Quant weight from int32 to int8 for layer '{}' success!".format(
-                object_node.name
+            "Quant weight to int{} for layer '{}' success!".format(
+                num_bits, object_node.name
             ),
             'WeightQuantPass',
         )
