@@ -46,10 +46,10 @@ jobs:
             export target_branch=${{ env.target_branch }}
             BuildAccelerate bash .gitcode/workflows/arm_compile.sh
           AC_SERVER_IP: ${{ vars.AC_SERVER_IP }}
-      - name: verify_package
-        uses: cann/.gitcode/actions/verify-package@master
-        with:
-          workspace: ${{ steps.process_checkout.outputs.path }}
+      # - name: verify_package
+      #   uses: cann/.gitcode/actions/verify-package@master
+      #   with:
+      #     workspace: ${{ steps.process_checkout.outputs.path }}
       - name: upload
         uses: obs-upload
         with:

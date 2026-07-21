@@ -56,6 +56,7 @@ jobs:
         uses: cann/.gitcode/actions/api-check@master
         with:
           org_name: ${{ env.org_name }}
+          mode: compile
           task_name: ${{ inputs.task_name }}
           repo_name: ${{ env.repo_name }}
           merge_id: ${{ env.MERGE_ID }}
