@@ -199,7 +199,7 @@ class RetrainConfigBase():
         self.set_config_by_graph_construct(ordered_config, graph)
 
         self._del_reduant_config(ordered_config, retrain_supported_layers, prune_supported_layers)
-        self._downgrade_int4_unpackable_layers(graph, ordered_config)
+        self.downgrade_int4_unpackable_layers(graph, ordered_config)
         if hasattr(self.graph_checker, 'check_weights_shared'):
             layer_names = get_layers_from_config(
                 ordered_config, self.config_tree.get_global_keys())
@@ -214,7 +214,7 @@ class RetrainConfigBase():
             with open(config_file, 'w') as fid:
                 json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
 
-    def _downgrade_int4_unpackable_layers(self, graph, ordered_config):
+    def downgrade_int4_unpackable_layers(self, graph, ordered_config):
         ''' group/depthwise conv 或 Cin 为奇数的层无法沿 Cin pack INT4，
         配置阶段将其权重从 INT4 降级为 INT8(A8W8)。遍历所有配置了
         retrain_weight_config 的层。 '''
