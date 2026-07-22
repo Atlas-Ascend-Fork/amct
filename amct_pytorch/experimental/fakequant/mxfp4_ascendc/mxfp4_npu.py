@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import ctypes
+import importlib
 import os
 import sys
 
@@ -59,9 +60,7 @@ def _try_load() -> bool:
         sys.path.insert(0, _BUILD_DIR)
 
     try:
-        import mxfp4_ascendc_ext  # type: ignore[import-not-found]
-
-        _ext = mxfp4_ascendc_ext
+        _ext = importlib.import_module("mxfp4_ascendc_ext")
     except ImportError as e:
         print(f"[mxfp4_npu] Failed to load extension: {e}")
 

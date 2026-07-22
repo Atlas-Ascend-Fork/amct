@@ -7,22 +7,26 @@ Compares against the pure-PyTorch reference in ../mxfp4.py.
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 import time
 
 import torch
-import torch_npu  # noqa: F401 – registers NPU device
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_DIR = os.path.dirname(os.path.abspath(__file__))
+_PARENT = os.path.dirname(_DIR)
+for _p in (_DIR, _PARENT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-from mxfp4 import quant_dequant_mxfp4 as ref_qdq  # PyTorch reference
-
-try:
-    from mxfp4_npu import quant_dequant_mxfp4_npu  # dev loader (mxfp4_npu.py)
-except ImportError:
-    from mxfp4_npu import quant_dequant_mxfp4 as quant_dequant_mxfp4_npu  # package
+importlib.import_module("torch_npu")  # registers NPU device
+ref_qdq = importlib.import_module("mxfp4").quant_dequant_mxfp4  # PyTorch reference
+_mxfp4_npu = importlib.import_module("mxfp4_npu")
+# Prefer the dev loader API; fall back to the package export name.
+quant_dequant_mxfp4_npu = getattr(
+    _mxfp4_npu, "quant_dequant_mxfp4_npu", _mxfp4_npu.quant_dequant_mxfp4
+)
 
 
 def _banner(msg: str) -> None:

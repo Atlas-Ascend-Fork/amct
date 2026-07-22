@@ -10,16 +10,19 @@ reference quant_dequant_mxfp4(..., scale_factor=6.0/s).
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 
 import torch
-import torch_npu  # noqa: F401 – registers NPU device
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_DIR = os.path.dirname(os.path.abspath(__file__))
+if _DIR not in sys.path:
+    sys.path.insert(0, _DIR)
 
-from mxfp4 import quant_dequant_mxfp4 as ref_qdq
-from mxfp4_npu import quant_dequant_mxfp4 as npu_qdq
+importlib.import_module("torch_npu")  # registers NPU device
+ref_qdq = importlib.import_module("mxfp4").quant_dequant_mxfp4
+npu_qdq = importlib.import_module("mxfp4_npu").quant_dequant_mxfp4
 
 
 def _banner(msg: str) -> None:

@@ -9,11 +9,13 @@ vLLM `_quant_dequant_mxfp4`:
   * dq = sign(x) * code * scale
 """
 
+import importlib
 import time
 import argparse
 
 import torch
-import torch_npu  # noqa: F401  - registers npu device on import
+
+importlib.import_module("torch_npu")  # registers npu device on import
 
 
 def torch_qdq(x: torch.Tensor) -> torch.Tensor:
