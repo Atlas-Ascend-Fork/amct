@@ -33,11 +33,18 @@ from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
     save_quant_retrain_model,
 )
 
+from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
+    TensorProtoHelper,
+)
+
 from .utils import rnn_model
 from .utils import models
 
 torch.manual_seed(0)
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+# 原生 INT4 需 onnx>=1.16；旧版 onnx 无 INT4 枚举，A8W4 相关用例跳过
+_INT4_SUPPORTED = 'INT4' in TensorProtoHelper.data_type_maps
+_SKIP_INT4_MSG = 'onnx version too old for native INT4 (A8W4)'
 
 
 class TestGRUPTQ(unittest.TestCase):
@@ -271,6 +278,7 @@ class TestGRUQATA8W4(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_gru_a8w4_qat_e2e(self):
         """GRU A8W4: steps 1-4 fully asserted; step 5 env-blocked, known RuntimeError asserted."""
         config_file = os.path.join(self.temp_folder, 'retrain_config_a8w4.json')
@@ -479,6 +487,7 @@ class TestLSTMQATA8W4(unittest.TestCase):
     def tearDown(self):
         pass
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_lstm_a8w4_qat_e2e(self):
         """LSTM A8W4 end-to-end via cfg entry (config_defination drives A8W4)."""
         config_file = os.path.join(self.temp_folder, 'retrain_config_a8w4.json')
@@ -701,6 +710,7 @@ class TestConvLinearPTQA8W4(unittest.TestCase):
         self.assertIn(8, wts_bits,
                       'group/depthwise conv should be downgraded to INT8, got {}'.format(wts_bits))
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_quantize_and_save_a8w4(self):
         # Full end-to-end. quantize_model/save_model need NPU op lib; in a bare
         # dev env this raises (env limitation, not a code defect) — upstream CI
@@ -776,6 +786,7 @@ class TestGRUPTQA8W4A16W8(unittest.TestCase):
             self.assertIn('wts_type: "INT4"', record_text,
                           'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)')
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_gru_ptq_a8w4_e2e(self):
         self.run_ptq(self.a8w4_cfg, 'a8w4')
 
@@ -840,6 +851,7 @@ class TestLSTMPTQA8W4A16W8(unittest.TestCase):
             self.assertIn('wts_type: "INT4"', record_text,
                           'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)')
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_lstm_ptq_a8w4_e2e(self):
         self.run_ptq(self.a8w4_cfg, 'a8w4')
 
@@ -871,6 +883,7 @@ class TestConvTransposePTQA8W4(unittest.TestCase):
     def setUp(self):
         sys.modules["torch_npu"] = MagicMock()
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_convtranspose_ptq_a8w4_e2e(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         record_file = os.path.join(self.temp_folder, 'record.txt')
@@ -911,6 +924,7 @@ class TestConvTranspose1dPTQA8W4(unittest.TestCase):
     def setUp(self):
         sys.modules["torch_npu"] = MagicMock()
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_convtranspose1d_ptq_a8w4_e2e(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         record_file = os.path.join(self.temp_folder, 'record.txt')
