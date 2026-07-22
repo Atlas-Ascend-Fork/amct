@@ -78,10 +78,9 @@ def _self_test_or_raise() -> None:
     """Run a fixed-input MXFP4 QDQ on the kernel and verify the output.
 
     Input ones(32) is chosen because the FP4 e2m1 codebook + scale_factor
-    derivation produces an analytically known result for both scale=6.0
-    and scale=5.8:
+    derivation produces an analytically known result for scale=6.0:
         max_abs    = 1.0
-        raw_scale  = 1.0 / scale_factor   (~0.1667 or ~0.1724)
+        raw_scale  = 1.0 / scale_factor   (~0.1667)
         log2_round = -3
         scale      = 2^-3 = 0.125
         x / scale  = 8.0
