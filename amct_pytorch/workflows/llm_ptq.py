@@ -36,6 +36,8 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+from amct_pytorch.common.models.llm.common.deploy_export import export_block_fakequant
 
 
 class LlmPtqWorkflow:
@@ -252,3 +254,27 @@ class LlmPtqWorkflow:
         save_path = self._unit_result_path(unit)
         torch.save(result, save_path)
         logger.info("Saved PTQ params for layer {} unit '{}' to {}", unit.layer_idx, unit.name, save_path)
+
+
+class LlmPtqConvertWorkflow(LlmDeployWorkflow):
+    """ptq convert-only: per-model HiF4 fake-quant to a plain float checkpoint (no calibration).
+
+    Reuses LlmDeployWorkflow's per-model block / remaining-weight / index write machinery and its
+    foreign-format decode front-end, but emits fake-quantized *float* weights
+    (``export_block_fakequant``) instead of packed bytes, and writes a plain float config."""
+
+    def __init__(self, args, out_dtype=None):
+        super().__init__(args)
+        self.out_dtype = out_dtype or torch.bfloat16
+
+    def _export_block(self, layer_idx, quant_ignore_layers):
+        return export_block_fakequant(self.pipeline, layer_idx, self.out_dtype)
+
+    def _refresh_config(self, quant_ignore_layers):
+        config_file = os.path.join(self.output_dir, "config.json")
+        with open(config_file, "r") as f:
+            config = json.load(f)
+        config.pop("quantization_config", None)  # plain float model, fake-quant baked in
+        config["torch_dtype"] = "float16" if self.out_dtype == torch.float16 else "bfloat16"
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=2)
