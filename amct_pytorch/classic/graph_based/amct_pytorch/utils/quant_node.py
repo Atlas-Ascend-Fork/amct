@@ -271,9 +271,11 @@ class QuantOpInfo:
 
     @staticmethod
     def get_cin_axis(node):
-        """Cin 维在 onnx 权重张量里的轴位置（INT4 沿此轴 nibble-pack）。
+        """
+        Cin 维在 onnx 权重张量里的轴位置（INT4 沿此轴 nibble-pack）。
         Conv 轴1；ConvTranspose/MatMul 轴0；Gemm 依 transB(0->轴0,1->轴1)；
-        LSTM/GRU 轴2(input/hidden)。"""
+        LSTM/GRU 轴2(input/hidden)。
+        """
         if node.type == 'Conv':
             return 1
         if node.type in ['ConvTranspose', 'MatMul']:

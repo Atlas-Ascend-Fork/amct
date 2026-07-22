@@ -232,9 +232,11 @@ class RetrainConfigBase:
                 json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
 
     def downgrade_int4_unpackable_layers(self, graph, ordered_config):
-        ''' group/depthwise conv 或 Cin 为奇数的层无法沿 Cin pack INT4，
+        ''' 
+        group/depthwise conv 或 Cin 为奇数的层无法沿 Cin pack INT4，
         配置阶段将其权重从 INT4 降级为 INT8(A8W8)。遍历所有配置了
-        retrain_weight_config 的层。 '''
+        retrain_weight_config 的层。 
+        '''
         if not hasattr(self.graph_querier, 'int4_cin_pack_unsupported'):
             return
         for layer, layer_cfg in ordered_config.items():

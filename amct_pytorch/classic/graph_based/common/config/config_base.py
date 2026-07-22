@@ -312,10 +312,12 @@ class ConfigBase:
                 )
 
     def check_int4_weight_quant_axis(self, graph, config, supported_layers):
-        ''' INT4 沿 Cin 轴两两 pack。group/depthwise conv 或 Cin 为奇数的层
+        ''' 
+        INT4 沿 Cin 轴两两 pack。group/depthwise conv 或 Cin 为奇数的层
         无法沿 Cin pack，配置阶段自动将其权重降级为 INT8(A8W8)。
         同时兼容 PTQ(weight_quant_params/num_bits) 与 retrain
-        (retrain_weight_config/dst_type) 两种配置结构。 '''
+        (retrain_weight_config/dst_type) 两种配置结构。 
+        '''
         for layer in supported_layers:
             layer_cfg = config.get(layer)
             wts_ptq = layer_cfg.get(WEIGHT_QUANT_PARAMS)
