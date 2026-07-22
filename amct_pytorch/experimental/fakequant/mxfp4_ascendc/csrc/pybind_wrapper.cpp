@@ -4,6 +4,7 @@
  */
 #include <pybind11/pybind11.h>
 #include <torch/extension.h>
+#include <cstdint>
 #include <cstring>
 
 #include "aclrtlaunch_mxfp4_quant_dequant.h"
@@ -15,8 +16,14 @@ namespace py = pybind11;
 at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double inv_scale_factor_scale) {
     TORCH_CHECK(x.is_contiguous(), "input must be contiguous");
     TORCH_CHECK(x.scalar_type() == at::kFloat, "input must be float32 (got ", x.scalar_type(), ")");
-    int32_t totalLen = static_cast<int32_t>(x.numel());
-    TORCH_CHECK(totalLen > 0 && totalLen % 32 == 0, "numel() must be a positive multiple of 32, got ", totalLen);
+    // numel() is int64_t. The tiling layout and kernel index arithmetic are
+    // int32/uint32, so a tensor with > INT32_MAX elements would be silently
+    // truncated into a wrong totalLen. Reject it explicitly instead.
+    int64_t numel = x.numel();
+    TORCH_CHECK(numel > 0 && numel % 32 == 0 && numel <= INT32_MAX,
+        "numel() must be a positive multiple of 32 and <= INT32_MAX "
+        "(this kernel uses int32 tiling), got ", numel);
+    int32_t totalLen = static_cast<int32_t>(numel);
 
     auto y = at::empty_like(x);
     // IMPORTANT: pass need_empty=true so torch_npu drains its internal task
