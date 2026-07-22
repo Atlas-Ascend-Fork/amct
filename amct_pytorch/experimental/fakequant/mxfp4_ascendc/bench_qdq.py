@@ -3,7 +3,7 @@
 Both implementations preserve the exact reference semantics used by the patched
 vLLM `_quant_dequant_mxfp4`:
   * pad last dim to multiple of 32
-  * per-block (32 elem) absolute-max scale, divided by scale_factor=5.8
+  * per-block (32 elem) absolute-max scale, divided by scale_factor=6.0
   * E8M0 scale = 2 ** round(log2(scale_raw))
   * 8-level FP4-e2m1 codebook on |x/scale|
   * dq = sign(x) * code * scale
@@ -28,7 +28,7 @@ def torch_qdq(x: torch.Tensor) -> torch.Tensor:
         x_fp = torch.nn.functional.pad(x_fp, (0, pad))
     x_view = x_fp.view(*x_fp.shape[:-1], -1, block)
     max_abs = x_view.abs().amax(dim=-1, keepdim=True)
-    raw_scale = torch.clamp(max_abs / 5.8, min=2.0**-30)
+    raw_scale = torch.clamp(max_abs / 6.0, min=2.0**-30)
     log2_scale = torch.round(torch.log2(raw_scale))
     scale = torch.exp2(log2_scale)
     y = x_view / scale
