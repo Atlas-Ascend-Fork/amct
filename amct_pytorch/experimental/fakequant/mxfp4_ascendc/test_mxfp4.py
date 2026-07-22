@@ -4,6 +4,7 @@ Correctness + performance test for the MXFP4 Ascend-C kernel.
 
 Compares against the pure-PyTorch reference in ../mxfp4.py.
 """
+
 from __future__ import annotations
 
 import os
@@ -17,8 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mxfp4 import quant_dequant_mxfp4 as ref_qdq  # PyTorch reference
+
 try:
-    from mxfp4_npu import quant_dequant_mxfp4_npu           # dev loader (mxfp4_npu.py)
+    from mxfp4_npu import quant_dequant_mxfp4_npu  # dev loader (mxfp4_npu.py)
 except ImportError:
     from mxfp4_npu import quant_dequant_mxfp4 as quant_dequant_mxfp4_npu  # package
 
@@ -74,8 +76,7 @@ def benchmark(
     iters: int = 200,
 ) -> None:
     if shapes is None:
-        shapes = [(1, 32), (4, 128), (16, 1024),
-                  (64, 4096), (256, 4096), (1024, 4096)]
+        shapes = [(1, 32), (4, 128), (16, 1024), (64, 4096), (256, 4096), (1024, 4096)]
 
     _banner(f"Benchmark  warmup={warmup}  iters={iters}")
     header = f"  {'shape':>14s}  {'elems':>8s}  {'torch_npu':>10s}  {'ascendc':>10s}  {'speedup':>8s}"
@@ -86,10 +87,12 @@ def benchmark(
         x_npu = torch.randn(shape, dtype=torch.float32, device="npu:0") * 3.0
 
         ms_tnpu = _bench_one(ref_qdq, x_npu, warmup, iters)
-        ms_ac   = _bench_one(quant_dequant_mxfp4_npu, x_npu, warmup, iters)
+        ms_ac = _bench_one(quant_dequant_mxfp4_npu, x_npu, warmup, iters)
         sp = ms_tnpu / ms_ac if ms_ac > 0 else float("inf")
 
-        print(f"  {str(shape):>14s}  {x_npu.numel():>8d}  {ms_tnpu:>8.3f}ms  {ms_ac:>8.3f}ms  {sp:>7.2f}x")
+        print(
+            f"  {str(shape):>14s}  {x_npu.numel():>8d}  {ms_tnpu:>8.3f}ms  {ms_ac:>8.3f}ms  {sp:>7.2f}x"
+        )
 
 
 if __name__ == "__main__":

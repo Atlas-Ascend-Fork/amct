@@ -12,6 +12,7 @@ Requirements:
     - torch 2.6.0 + torch_npu 2.6.0.post4
     - Python 3.10 (aarch64)
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -38,8 +39,10 @@ def _load_ext() -> bool:
 
     try:
         import torch_npu as _tnpu
+
         _tnpu_lib = os.path.join(
-            os.path.dirname(_tnpu.__file__), "lib", "libtorch_npu.so")
+            os.path.dirname(_tnpu.__file__), "lib", "libtorch_npu.so"
+        )
         if os.path.isfile(_tnpu_lib):
             ctypes.CDLL(_tnpu_lib, mode=ctypes.RTLD_GLOBAL)
     except Exception:
@@ -57,6 +60,7 @@ def _load_ext() -> bool:
 
     try:
         import mxfp4_ascendc_ext  # type: ignore[import-not-found]
+
         _ext = mxfp4_ascendc_ext
     except ImportError as e:
         print(f"[mxfp4_npu] Failed to load extension: {e}")
@@ -90,8 +94,8 @@ def _self_test_or_raise() -> None:
     if _SELF_TEST_DONE:
         if not _SELF_TEST_OK:
             raise RuntimeError(
-                f"mxfp4_npu kernel previously failed self-test: "
-                f"{_SELF_TEST_ERR}")
+                f"mxfp4_npu kernel previously failed self-test: {_SELF_TEST_ERR}"
+            )
         return
     _SELF_TEST_DONE = True
 
@@ -102,7 +106,8 @@ def _self_test_or_raise() -> None:
 
     try:
         is_npu_available = bool(
-            getattr(torch, "npu", None) and torch.npu.is_available())
+            getattr(torch, "npu", None) and torch.npu.is_available()
+        )
     except Exception:
         is_npu_available = False
     if not is_npu_available:
@@ -122,12 +127,14 @@ def _self_test_or_raise() -> None:
             f"mxfp4_npu kernel self-test FAILED while invoking the kernel: "
             f"{e}. Check that the compiled kernel SoC matches the runtime "
             f"hardware (`npu-smi info -t board -i 0 -c 0 | "
-            f"grep 'NPU Name'`).") from e
+            f"grep 'NPU Name'`)."
+        ) from e
 
     if not (diff < 1e-5):
         _SELF_TEST_OK = False
         _SELF_TEST_ERR = (
-            f"input=ones(32), expected output all 0.75, max_abs_err={diff:.4e}")
+            f"input=ones(32), expected output all 0.75, max_abs_err={diff:.4e}"
+        )
         raise RuntimeError(
             "mxfp4_npu kernel self-test FAILED: input=ones(32), "
             f"expected output all 0.75, max_abs_err={diff:.4e}. This usually "
@@ -135,7 +142,8 @@ def _self_test_or_raise() -> None:
             "hardware. Check SoC with "
             "`npu-smi info -t board -i 0 -c 0 | grep 'NPU Name'` and rebuild "
             "with the matching SOC_VERSION (e.g. "
-            "SOC_VERSION=Ascend910_9392 bash build.sh).")
+            "SOC_VERSION=Ascend910_9392 bash build.sh)."
+        )
 
     _SELF_TEST_OK = True
 
@@ -176,7 +184,8 @@ def quant_dequant_mxfp4(
         raise RuntimeError(
             "mxfp4_npu: failed to load compiled extension. "
             "Ensure this package was built for your platform "
-            "(Ascend 910B3, CANN 8.2, Python 3.10 aarch64).")
+            "(Ascend 910B3, CANN 8.2, Python 3.10 aarch64)."
+        )
 
     assert block_size == 32, "only block_size=32 is supported"
 
@@ -189,8 +198,7 @@ def quant_dequant_mxfp4(
     if pad:
         x_fp = F.pad(x_fp, (0, pad))
 
-    y_fp = _ext.mxfp4_quant_dequant_npu(
-        x_fp, block_dim, float(inv_scale_factor_scale))
+    y_fp = _ext.mxfp4_quant_dequant_npu(x_fp, block_dim, float(inv_scale_factor_scale))
 
     if pad:
         y_fp = y_fp[:n]

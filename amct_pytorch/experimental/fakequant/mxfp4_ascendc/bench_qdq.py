@@ -8,7 +8,7 @@ vLLM `_quant_dequant_mxfp4`:
   * 8-level FP4-e2m1 codebook on |x/scale|
   * dq = sign(x) * code * scale
 """
-import os
+
 import time
 import argparse
 
@@ -26,7 +26,7 @@ def torch_qdq(x: torch.Tensor) -> torch.Tensor:
         x_fp = torch.nn.functional.pad(x_fp, (0, pad))
     x_view = x_fp.view(*x_fp.shape[:-1], -1, block)
     max_abs = x_view.abs().amax(dim=-1, keepdim=True)
-    raw_scale = torch.clamp(max_abs / 5.8, min=2.0 ** -30)
+    raw_scale = torch.clamp(max_abs / 5.8, min=2.0**-30)
     log2_scale = torch.round(torch.log2(raw_scale))
     scale = torch.exp2(log2_scale)
     y = x_view / scale
@@ -90,8 +90,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="npu:0")
     parser.add_argument("--iters", type=int, default=100)
-    parser.add_argument("--dtype", default="bfloat16",
-                        choices=["bfloat16", "float32"])
+    parser.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float32"])
     args = parser.parse_args()
 
     torch.npu.set_device(0)
@@ -101,27 +100,29 @@ def main():
     from mxfp4_npu_scale58 import quant_dequant_mxfp4 as kernel
 
     H = 3072
-    I = 1536
+    intermediate_size = 1536
     shapes = [
-        ("decode    bs=1   x H",                  (1,         H)),
-        ("decode    bs=32  x H",                  (32,        H)),
-        ("decode    bs=64  x H",                  (64,        H)),
-        ("prefill   bs=1024 x H",                 (1024,      H)),
-        ("prefill   bs=4096 x H",                 (4096,      H)),
-        ("prefill   bs=8192 x H",                 (8192,      H)),
-        ("prefill   bs=32768 x H",                (32768,     H)),
-        ("MoE expert 256 x I (n_tok=256)",        (256,       I)),
-        ("MoE expert 1024 x I",                   (1024,      I)),
-        ("MoE expert 4096 x I",                   (4096,      I)),
-        ("MoE expert 16384 x I",                  (16384,     I)),
-        ("MoE 3D    8 x 4096 x I",                (8, 4096,   I)),
+        ("decode    bs=1   x H", (1, H)),
+        ("decode    bs=32  x H", (32, H)),
+        ("decode    bs=64  x H", (64, H)),
+        ("prefill   bs=1024 x H", (1024, H)),
+        ("prefill   bs=4096 x H", (4096, H)),
+        ("prefill   bs=8192 x H", (8192, H)),
+        ("prefill   bs=32768 x H", (32768, H)),
+        ("MoE expert 256 x I (n_tok=256)", (256, intermediate_size)),
+        ("MoE expert 1024 x I", (1024, intermediate_size)),
+        ("MoE expert 4096 x I", (4096, intermediate_size)),
+        ("MoE expert 16384 x I", (16384, intermediate_size)),
+        ("MoE 3D    8 x 4096 x I", (8, 4096, intermediate_size)),
     ]
 
     print(f"\n  device={device}  dtype={dtype}  iters={args.iters}")
-    print(f"  H={H} (hidden_size)  I={I} (intermediate_size)")
+    print(f"  H={H} (hidden_size)  I={intermediate_size} (intermediate_size)")
     print()
-    print(f"  {'shape':40s} {'numel':>12s}  {'torch':>12s}  "
-          f"{'ascendc':>12s}  {'speedup':>8s}  {'max_abs_err':>12s}")
+    print(
+        f"  {'shape':40s} {'numel':>12s}  {'torch':>12s}  "
+        f"{'ascendc':>12s}  {'speedup':>8s}  {'max_abs_err':>12s}"
+    )
     print("  " + "-" * 110)
 
     for label, shape in shapes:
@@ -137,8 +138,10 @@ def main():
         t_ac = time_op(lambda: ascendc_qdq(x, kernel), args.iters)
         speedup = t_torch / t_ac
 
-        print(f"  {label:40s} {x.numel():12d}  {fmt(t_torch):>12s}  "
-              f"{fmt(t_ac):>12s}  {speedup:7.2f}x  {max_err:12.3e}")
+        print(
+            f"  {label:40s} {x.numel():12d}  {fmt(t_torch):>12s}  "
+            f"{fmt(t_ac):>12s}  {speedup:7.2f}x  {max_err:12.3e}"
+        )
 
     print()
 

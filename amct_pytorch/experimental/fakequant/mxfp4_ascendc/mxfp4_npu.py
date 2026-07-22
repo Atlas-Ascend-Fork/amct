@@ -7,6 +7,7 @@ Usage:
     x_npu = torch.randn(4, 128, device="npu:0")
     y_npu = quant_dequant_mxfp4_npu(x_npu)
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -34,6 +35,7 @@ def _try_load() -> bool:
     # pre-load libtorch_npu.so so that c10_npu symbols are globally visible
     try:
         import torch_npu as _tnpu
+
         _tnpu_dir = os.path.dirname(_tnpu.__file__)
         _tnpu_lib = os.path.join(_tnpu_dir, "lib", "libtorch_npu.so")
         if os.path.isfile(_tnpu_lib):
@@ -58,6 +60,7 @@ def _try_load() -> bool:
 
     try:
         import mxfp4_ascendc_ext  # type: ignore[import-not-found]
+
         _ext = mxfp4_ascendc_ext
     except ImportError as e:
         print(f"[mxfp4_npu] Failed to load extension: {e}")
@@ -90,7 +93,8 @@ def quant_dequant_mxfp4_npu(
     """
     if not _try_load():
         raise RuntimeError(
-            "mxfp4_ascendc_ext not built.  Run:  bash mxfp4_ascendc/build.sh")
+            "mxfp4_ascendc_ext not built.  Run:  bash mxfp4_ascendc/build.sh"
+        )
 
     assert block_size == 32, "only block_size=32 supported by the NPU kernel"
 
@@ -104,8 +108,7 @@ def quant_dequant_mxfp4_npu(
     if pad:
         x_fp = F.pad(x_fp, (0, pad))
 
-    y_fp = _ext.mxfp4_quant_dequant_npu(
-        x_fp, block_dim, float(inv_scale_factor_scale))
+    y_fp = _ext.mxfp4_quant_dequant_npu(x_fp, block_dim, float(inv_scale_factor_scale))
 
     if pad:
         y_fp = y_fp[:n]

@@ -7,6 +7,7 @@ Relationship being checked:
 so the NPU kernel with inv_scale_factor_scale=s must match the pure-PyTorch
 reference quant_dequant_mxfp4(..., scale_factor=6.0/s).
 """
+
 from __future__ import annotations
 
 import os
@@ -37,8 +38,10 @@ def test_scales(
 
     for s in scales:
         ref_scale_factor = 6.0 / s
-        print(f"\n-- inv_scale_factor_scale={s}  "
-              f"(<=> reference scale_factor={ref_scale_factor:.4f}) --")
+        print(
+            f"\n-- inv_scale_factor_scale={s}  "
+            f"(<=> reference scale_factor={ref_scale_factor:.4f}) --"
+        )
         for shape in shapes:
             x_cpu = torch.randn(shape, dtype=torch.float32) * 3.0
 
@@ -50,8 +53,10 @@ def test_scales(
             max_err = (out_cpu - ref_cpu).abs().max().item()
             ok = max_err <= atol
             all_ok &= ok
-            print(f"   {'PASS' if ok else 'FAIL'}  shape={str(shape):>14s}  "
-                  f"max_err={max_err:.3e}")
+            print(
+                f"   {'PASS' if ok else 'FAIL'}  shape={str(shape):>14s}  "
+                f"max_err={max_err:.3e}"
+            )
     return all_ok
 
 
@@ -85,8 +90,10 @@ def test_scale_effect(seed: int = 7) -> bool:
     y2 = npu_qdq(x_npu, inv_scale_factor_scale=2.0).cpu()
     diff = (y1 - y2).abs().max().item()
     ok = diff > 0.0
-    print(f"   max|y(s=1.0) - y(s=2.0)| = {diff:.4f}  "
-          f"({'differs' if ok else 'IDENTICAL!'})")
+    print(
+        f"   max|y(s=1.0) - y(s=2.0)| = {diff:.4f}  "
+        f"({'differs' if ok else 'IDENTICAL!'})"
+    )
     print(f"   {'PASS' if ok else 'FAIL'}")
     return ok
 

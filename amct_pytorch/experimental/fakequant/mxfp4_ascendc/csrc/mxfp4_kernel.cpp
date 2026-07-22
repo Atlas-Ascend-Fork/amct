@@ -16,7 +16,7 @@ using namespace AscendC;
 constexpr int32_t BLOCK_SIZE = 32;
 constexpr float SCALE_FACTOR = 6.0f;
 constexpr float INV_SCALE_FACTOR = 1.0f / 6.0f;
-constexpr float MIN_SCALE_RAW = 9.313225746e-10f;  // 2^-30
+constexpr float MIN_SCALE_RAW = 9.313225746e-10f; // 2^-30
 constexpr int32_t BLOCKS_PER_TILE = 208;
 constexpr int32_t TILE_ELEMS = BLOCK_SIZE * BLOCKS_PER_TILE;
 constexpr float BIG = 1e20f;
@@ -24,43 +24,43 @@ constexpr float STEP_EPS = 1e-6f;
 
 class KernelMxfp4 {
 public:
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR y,
-                                uint32_t totalLen, uint32_t numCores,
-                                float invScaleMul) {
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR y, uint32_t totalLen, uint32_t numCores, float invScaleMul) {
         // Runtime multiplier applied on top of the compile-time
         // INV_SCALE_FACTOR (1/6.0). Guards against an uninitialised / zero
         // tiling slot so an old cache entry cannot silently zero the scale.
-        if (!(invScaleMul > 0.0f)) invScaleMul = 1.0f;
+        if (!(invScaleMul > 0.0f))
+            invScaleMul = 1.0f;
         effInvScale = INV_SCALE_FACTOR * invScaleMul;
 
-        uint32_t coreIdx  = GetBlockIdx();
-        uint32_t nBlocks  = totalLen / BLOCK_SIZE;
-        uint32_t perCore  = nBlocks / numCores;
+        uint32_t coreIdx = GetBlockIdx();
+        uint32_t nBlocks = totalLen / BLOCK_SIZE;
+        uint32_t perCore = nBlocks / numCores;
         uint32_t leftover = nBlocks % numCores;
 
         if (coreIdx < leftover) {
-            numBlocks  = perCore + 1;
+            numBlocks = perCore + 1;
             startBlock = coreIdx * numBlocks;
         } else {
-            numBlocks  = perCore;
+            numBlocks = perCore;
             startBlock = coreIdx * perCore + leftover;
         }
 
         xGm.SetGlobalBuffer((__gm__ float *)x, totalLen);
         yGm.SetGlobalBuffer((__gm__ float *)y, totalLen);
 
-        pipe.InitBuffer(inQueue,  2, TILE_ELEMS * sizeof(float));
+        pipe.InitBuffer(inQueue, 2, TILE_ELEMS * sizeof(float));
         pipe.InitBuffer(outQueue, 2, TILE_ELEMS * sizeof(float));
-        pipe.InitBuffer(calcBuf,
-            (3 * TILE_ELEMS + BLOCK_SIZE) * sizeof(float));
+        pipe.InitBuffer(calcBuf, (3 * TILE_ELEMS + BLOCK_SIZE) * sizeof(float));
     }
 
     __aicore__ inline void Process() {
-        if (numBlocks == 0) return;
+        if (numBlocks == 0)
+            return;
 
         uint32_t off = 0;
         uint32_t bpt = numBlocks;
-        if (bpt > (uint32_t)BLOCKS_PER_TILE) bpt = (uint32_t)BLOCKS_PER_TILE;
+        if (bpt > (uint32_t)BLOCKS_PER_TILE)
+            bpt = (uint32_t)BLOCKS_PER_TILE;
 
         CopyIn(off, bpt);
         uint32_t nextOff = off + bpt;
@@ -86,15 +86,13 @@ public:
 private:
     __aicore__ inline void CopyIn(uint32_t blockOff, uint32_t nblk) {
         LocalTensor<float> xL = inQueue.AllocTensor<float>();
-        DataCopy(xL, xGm[(startBlock + blockOff) * BLOCK_SIZE],
-                 nblk * BLOCK_SIZE);
+        DataCopy(xL, xGm[(startBlock + blockOff) * BLOCK_SIZE], nblk * BLOCK_SIZE);
         inQueue.EnQue(xL);
     }
 
     __aicore__ inline void CopyOut(uint32_t blockOff, uint32_t nblk) {
         LocalTensor<float> yL = outQueue.DeQue<float>();
-        DataCopy(yGm[(startBlock + blockOff) * BLOCK_SIZE], yL,
-                 nblk * BLOCK_SIZE);
+        DataCopy(yGm[(startBlock + blockOff) * BLOCK_SIZE], yL, nblk * BLOCK_SIZE);
         outQueue.FreeTensor(yL);
     }
 
@@ -102,11 +100,11 @@ private:
         LocalTensor<float> xL = inQueue.DeQue<float>();
         LocalTensor<float> yL = outQueue.AllocTensor<float>();
 
-        LocalTensor<float> buf    = calcBuf.Get<float>();
+        LocalTensor<float> buf = calcBuf.Get<float>();
         LocalTensor<float> yAbBuf = buf[0];
         LocalTensor<float> qAbBuf = buf[TILE_ELEMS];
         LocalTensor<float> tmpBuf = buf[2 * TILE_ELEMS];
-        LocalTensor<float> wrkL   = buf[3 * TILE_ELEMS];
+        LocalTensor<float> wrkL = buf[3 * TILE_ELEMS];
 
         uint32_t N = nblk * BLOCK_SIZE;
         float invScaleArr[BLOCKS_PER_TILE];
@@ -125,22 +123,21 @@ private:
             uint32_t doneRpt = 0;
             while (doneRpt < totalRpt) {
                 int32_t r = (int32_t)(totalRpt - doneRpt);
-                if (r > 255) r = 255;
-                BlockReduceMax<float, false>(
-                    tmpBuf[doneRpt * 8], yAbBuf[doneRpt * 8],
-                    r, 8, 1, 1, 1);
+                if (r > 255)
+                    r = 255;
+                BlockReduceMax<float, false>(tmpBuf[doneRpt * 8], yAbBuf[doneRpt * 8], r, 8, 1, 1, 1);
                 doneRpt += (uint32_t)r;
             }
         }
         Max(tmpBuf, tmpBuf, tmpBuf[16], N - 16);
-        Max(tmpBuf, tmpBuf, tmpBuf[8],  N - 8);
+        Max(tmpBuf, tmpBuf, tmpBuf[8], N - 8);
 
         /* ==== Phase 1b: read results + compute E8M0 scales ====
          * 8x unrolled for maximum scalar ILP. */
         {
             uint32_t b = 0;
             for (; b + 7 < nblk; b += 8) {
-                float m0 = tmpBuf.GetValue((b    ) * BLOCK_SIZE);
+                float m0 = tmpBuf.GetValue((b)*BLOCK_SIZE);
                 float m1 = tmpBuf.GetValue((b + 1) * BLOCK_SIZE);
                 float m2 = tmpBuf.GetValue((b + 2) * BLOCK_SIZE);
                 float m3 = tmpBuf.GetValue((b + 3) * BLOCK_SIZE);
@@ -149,18 +146,43 @@ private:
                 float m6 = tmpBuf.GetValue((b + 6) * BLOCK_SIZE);
                 float m7 = tmpBuf.GetValue((b + 7) * BLOCK_SIZE);
 
-                float r0 = m0 * effInvScale; if (r0 < MIN_SCALE_RAW) r0 = MIN_SCALE_RAW;
-                float r1 = m1 * effInvScale; if (r1 < MIN_SCALE_RAW) r1 = MIN_SCALE_RAW;
-                float r2 = m2 * effInvScale; if (r2 < MIN_SCALE_RAW) r2 = MIN_SCALE_RAW;
-                float r3 = m3 * effInvScale; if (r3 < MIN_SCALE_RAW) r3 = MIN_SCALE_RAW;
-                float r4 = m4 * effInvScale; if (r4 < MIN_SCALE_RAW) r4 = MIN_SCALE_RAW;
-                float r5 = m5 * effInvScale; if (r5 < MIN_SCALE_RAW) r5 = MIN_SCALE_RAW;
-                float r6 = m6 * effInvScale; if (r6 < MIN_SCALE_RAW) r6 = MIN_SCALE_RAW;
-                float r7 = m7 * effInvScale; if (r7 < MIN_SCALE_RAW) r7 = MIN_SCALE_RAW;
+                float r0 = m0 * effInvScale;
+                if (r0 < MIN_SCALE_RAW)
+                    r0 = MIN_SCALE_RAW;
+                float r1 = m1 * effInvScale;
+                if (r1 < MIN_SCALE_RAW)
+                    r1 = MIN_SCALE_RAW;
+                float r2 = m2 * effInvScale;
+                if (r2 < MIN_SCALE_RAW)
+                    r2 = MIN_SCALE_RAW;
+                float r3 = m3 * effInvScale;
+                if (r3 < MIN_SCALE_RAW)
+                    r3 = MIN_SCALE_RAW;
+                float r4 = m4 * effInvScale;
+                if (r4 < MIN_SCALE_RAW)
+                    r4 = MIN_SCALE_RAW;
+                float r5 = m5 * effInvScale;
+                if (r5 < MIN_SCALE_RAW)
+                    r5 = MIN_SCALE_RAW;
+                float r6 = m6 * effInvScale;
+                if (r6 < MIN_SCALE_RAW)
+                    r6 = MIN_SCALE_RAW;
+                float r7 = m7 * effInvScale;
+                if (r7 < MIN_SCALE_RAW)
+                    r7 = MIN_SCALE_RAW;
 
-                union { float f; int32_t i; } rb0, rb1, rb2, rb3, rb4, rb5, rb6, rb7;
-                rb0.f = r0; rb1.f = r1; rb2.f = r2; rb3.f = r3;
-                rb4.f = r4; rb5.f = r5; rb6.f = r6; rb7.f = r7;
+                union {
+                    float f;
+                    int32_t i;
+                } rb0, rb1, rb2, rb3, rb4, rb5, rb6, rb7;
+                rb0.f = r0;
+                rb1.f = r1;
+                rb2.f = r2;
+                rb3.f = r3;
+                rb4.f = r4;
+                rb5.f = r5;
+                rb6.f = r6;
+                rb7.f = r7;
 
                 int32_t e0 = ((rb0.i >> 23) & 0xFF) + ((rb0.i & 0x7FFFFF) >= 0x3504F3);
                 int32_t e1 = ((rb1.i >> 23) & 0xFF) + ((rb1.i & 0x7FFFFF) >= 0x3504F3);
@@ -171,25 +193,43 @@ private:
                 int32_t e6 = ((rb6.i >> 23) & 0xFF) + ((rb6.i & 0x7FFFFF) >= 0x3504F3);
                 int32_t e7 = ((rb7.i >> 23) & 0xFF) + ((rb7.i & 0x7FFFFF) >= 0x3504F3);
 
-                union { float f; int32_t i; } is0, is1, is2, is3, is4, is5, is6, is7;
-                is0.i = (254 - e0) << 23; is1.i = (254 - e1) << 23;
-                is2.i = (254 - e2) << 23; is3.i = (254 - e3) << 23;
-                is4.i = (254 - e4) << 23; is5.i = (254 - e5) << 23;
-                is6.i = (254 - e6) << 23; is7.i = (254 - e7) << 23;
+                union {
+                    float f;
+                    int32_t i;
+                } is0, is1, is2, is3, is4, is5, is6, is7;
+                is0.i = (254 - e0) << 23;
+                is1.i = (254 - e1) << 23;
+                is2.i = (254 - e2) << 23;
+                is3.i = (254 - e3) << 23;
+                is4.i = (254 - e4) << 23;
+                is5.i = (254 - e5) << 23;
+                is6.i = (254 - e6) << 23;
+                is7.i = (254 - e7) << 23;
 
-                invScaleArr[b    ] = is0.f; invScaleArr[b + 1] = is1.f;
-                invScaleArr[b + 2] = is2.f; invScaleArr[b + 3] = is3.f;
-                invScaleArr[b + 4] = is4.f; invScaleArr[b + 5] = is5.f;
-                invScaleArr[b + 6] = is6.f; invScaleArr[b + 7] = is7.f;
+                invScaleArr[b] = is0.f;
+                invScaleArr[b + 1] = is1.f;
+                invScaleArr[b + 2] = is2.f;
+                invScaleArr[b + 3] = is3.f;
+                invScaleArr[b + 4] = is4.f;
+                invScaleArr[b + 5] = is5.f;
+                invScaleArr[b + 6] = is6.f;
+                invScaleArr[b + 7] = is7.f;
             }
             for (; b < nblk; b++) {
                 float maxAbs = tmpBuf.GetValue(b * BLOCK_SIZE);
                 float raw = maxAbs * effInvScale;
-                if (raw < MIN_SCALE_RAW) raw = MIN_SCALE_RAW;
-                union { float f; int32_t i; } rb;
+                if (raw < MIN_SCALE_RAW)
+                    raw = MIN_SCALE_RAW;
+                union {
+                    float f;
+                    int32_t i;
+                } rb;
                 rb.f = raw;
                 int32_t e = ((rb.i >> 23) & 0xFF) + ((rb.i & 0x7FFFFF) >= 0x3504F3);
-                union { float f; int32_t i; } isb;
+                union {
+                    float f;
+                    int32_t i;
+                } isb;
                 isb.i = (254 - e) << 23;
                 invScaleArr[b] = isb.f;
             }
@@ -201,7 +241,7 @@ private:
         {
             uint32_t b = 0;
             for (; b + 7 < nblk; b += 8) {
-                Duplicate(tmpBuf[(b    ) * BLOCK_SIZE], invScaleArr[b    ], BLOCK_SIZE);
+                Duplicate(tmpBuf[(b)*BLOCK_SIZE], invScaleArr[b], BLOCK_SIZE);
                 Duplicate(tmpBuf[(b + 1) * BLOCK_SIZE], invScaleArr[b + 1], BLOCK_SIZE);
                 Duplicate(tmpBuf[(b + 2) * BLOCK_SIZE], invScaleArr[b + 2], BLOCK_SIZE);
                 Duplicate(tmpBuf[(b + 3) * BLOCK_SIZE], invScaleArr[b + 3], BLOCK_SIZE);
@@ -216,7 +256,7 @@ private:
         }
         {
             LocalTensor<int32_t> intTmp = tmpBuf.ReinterpretCast<int32_t>();
-            LocalTensor<int32_t> intYL  = yL.ReinterpretCast<int32_t>();
+            LocalTensor<int32_t> intYL = yL.ReinterpretCast<int32_t>();
             Duplicate(intYL, (int32_t)0x7E800000, N);
             Sub(intYL, intYL, intTmp, N);
         }
@@ -272,7 +312,7 @@ private:
 
 private:
     TPipe pipe;
-    TQue<QuePosition::VECIN,  2> inQueue;
+    TQue<QuePosition::VECIN, 2> inQueue;
     TQue<QuePosition::VECOUT, 2> outQueue;
     TBuf<QuePosition::VECCALC> calcBuf;
     GlobalTensor<float> xGm, yGm;
@@ -280,16 +320,19 @@ private:
     float effInvScale;
 };
 
-extern "C" __global__ __aicore__ void mxfp4_quant_dequant(
-        GM_ADDR x, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling) {
+extern "C" __global__ __aicore__ void mxfp4_quant_dequant(GM_ADDR x, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling) {
     GlobalTensor<int32_t> tilingGM;
     tilingGM.SetGlobalBuffer((__gm__ int32_t *)tiling, 4);
     uint32_t totalLen = (uint32_t)tilingGM.GetValue(0);
     uint32_t numCores = (uint32_t)tilingGM.GetValue(1);
-    if (numCores == 0) numCores = 1;
+    if (numCores == 0)
+        numCores = 1;
 
     // tiling[2] carries the float bit-pattern of the runtime scale multiplier.
-    union { int32_t i; float f; } scaleU;
+    union {
+        int32_t i;
+        float f;
+    } scaleU;
     scaleU.i = tilingGM.GetValue(2);
     float invScaleMul = scaleU.f;
 
