@@ -90,11 +90,16 @@ echo "======================================================"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
+# CANN lays out arch-specific headers/libs under <arch>-linux; pass the host
+# arch so CMake picks the right directory (aarch64-linux vs x86_64-linux).
+ARCH="$(uname -m)"
+
 cmake "${CSRC_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DSOC_VERSION="${SOC_VERSION}" \
     -DRUN_MODE=npu \
     -DASCEND_CANN_PACKAGE_PATH="${CANN_PATH}" \
+    -DARCH="${ARCH}" \
     -DPython3_EXECUTABLE="${PYTHON}" \
     2>&1
 

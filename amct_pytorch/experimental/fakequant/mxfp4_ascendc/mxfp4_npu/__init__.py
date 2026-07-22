@@ -185,7 +185,13 @@ def quant_dequant_mxfp4(
             "(Ascend 910B3, CANN 8.2, Python 3.10 aarch64)."
         )
 
-    assert block_size == 32, "only block_size=32 is supported"
+    if block_size != 32:
+        raise ValueError(
+            f"only block_size=32 supported by the NPU kernel, got {block_size}"
+        )
+
+    if block_dim <= 0:
+        raise ValueError(f"block_dim must be positive, got {block_dim}")
 
     orig_shape = x.shape
     orig_dtype = x.dtype

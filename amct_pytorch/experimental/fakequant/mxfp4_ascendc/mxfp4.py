@@ -28,6 +28,9 @@ def quant_dequant_mxfp4(
     if scale_factor is None:
         scale_factor = float(os.getenv("VLLM_MXFP4_ACT_QDQ_SCALE_FACTOR", "6.0"))
 
+    if scale_factor <= 0:
+        raise ValueError(f"scale_factor must be positive, got {scale_factor}")
+
     x_fp = x.to(torch.float32)
     last_dim = x_fp.shape[-1]
     pad = (block_size - (last_dim % block_size)) % block_size

@@ -49,9 +49,25 @@ execute_process(
             -c "import torch_npu, os; print(os.path.join(os.path.dirname(torch_npu.__file__), 'include'))"
     OUTPUT_VARIABLE TORCH_NPU_INC OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-set(ASCEND_INC ${ASCEND_CANN_PACKAGE_PATH}/include
-               ${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/include)
-set(ASCEND_LIB ${ASCEND_CANN_PACKAGE_PATH}/aarch64-linux/lib64)
+# CANN ships arch-specific headers/libs under <arch>-linux (e.g. aarch64-linux,
+# x86_64-linux). Hardcoding aarch64 breaks x86_64 builds (dev hosts, simulator).
+# Prefer the ARCH passed by build.sh (from `uname -m`); fall back to the CMake
+# host processor. Only add the arch dir when it actually exists so we stay
+# robust to CANN layouts that place headers directly under include/.
+if(NOT DEFINED ARCH OR ARCH STREQUAL "")
+    set(ARCH ${CMAKE_HOST_SYSTEM_PROCESSOR})
+endif()
+
+set(ASCEND_INC ${ASCEND_CANN_PACKAGE_PATH}/include)
+if(EXISTS ${ASCEND_CANN_PACKAGE_PATH}/${ARCH}-linux/include)
+    list(APPEND ASCEND_INC ${ASCEND_CANN_PACKAGE_PATH}/${ARCH}-linux/include)
+endif()
+
+if(EXISTS ${ASCEND_CANN_PACKAGE_PATH}/${ARCH}-linux/lib64)
+    set(ASCEND_LIB ${ASCEND_CANN_PACKAGE_PATH}/${ARCH}-linux/lib64)
+else()
+    set(ASCEND_LIB ${ASCEND_CANN_PACKAGE_PATH}/lib64)
+endif()
 
 pybind11_add_module(mxfp4_ascendc_ext
     ${CMAKE_CURRENT_SOURCE_DIR}/pybind_wrapper.cpp)
