@@ -326,12 +326,14 @@ class GraphQuerier:
 
     @staticmethod
     def int4_cin_pack_unsupported(graph, layer_name):
-        """Whether the layer cannot be INT4-packed along the Cin axis.
+        """
+        Whether the layer cannot be INT4-packed along the Cin axis.
         INT4 packs two values along Cin, so it is unsupported when:
         - the conv is grouped (groups > 1): the onnx weight Cin dim is Cin/groups
           (1 for depthwise), which cannot be nibble-packed along Cin;
         - the Cin axis length is odd (e.g. first conv with Cin=3).
-        RNN also checks its recurrence_weight Cin."""
+        RNN also checks its recurrence_weight Cin.
+        """
         try:
             node = graph.get_node_by_name(layer_name)
             cin_axis = QuantOpInfo.get_cin_axis(node)
