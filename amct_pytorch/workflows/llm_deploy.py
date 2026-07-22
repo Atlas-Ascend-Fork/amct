@@ -36,6 +36,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import (
     export_block_deploy,
+    export_block_fakequant,
     generate_quant_config,
     convert_state_dict,
     quant_payload,
@@ -47,7 +48,7 @@ from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 class LlmDeployWorkflow:
     """Export deploy-ready quantized artifacts."""
 
-    def __init__(self, args):
+    def __init__(self, args, fake_quant_output=False, out_dtype=None):
         self.args = args
         self.granularity = args.granularity
         self.pipeline = None
@@ -58,6 +59,9 @@ class LlmDeployWorkflow:
         self.is_mx = self.quant_dtype.startswith("mx")
         self.is_int = self.quant_dtype.startswith("int")
         self.is_hif = self.quant_dtype.startswith("hif")
+        # ptq convert mode: emit fake-quantized *float* weights (no packing).
+        self.fake_quant_output = fake_quant_output
+        self.out_dtype = out_dtype or torch.bfloat16
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
@@ -178,6 +182,13 @@ class LlmDeployWorkflow:
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
+        if self.fake_quant_output:
+            # ptq convert output is a plain float checkpoint (fake-quant baked in), not quantized.
+            config.pop('quantization_config', None)
+            config["torch_dtype"] = ("float16" if self.out_dtype == torch.float16 else "bfloat16")
+            with open(config_file, "w") as f:
+                json.dump(config, f, indent=2)
+            return
         if self.quant_dtype is not None:
             cache_scheme_fn = getattr(self.pipeline, "cache_scheme", None)
             cache_scheme = cache_scheme_fn() if callable(cache_scheme_fn) else None
@@ -227,11 +238,16 @@ class LlmDeployWorkflow:
         updated_weight_map = {}
         replaced_original_weights = set()
         for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):
-            layer_tensors, tensor_routes = export_block_deploy(
-                self.pipeline,
-                layer_idx,
-                quant_ignore_layers,
-            )
+            if self.fake_quant_output:
+                layer_tensors, tensor_routes = export_block_fakequant(
+                    self.pipeline, layer_idx, self.out_dtype,
+                )
+            else:
+                layer_tensors, tensor_routes = export_block_deploy(
+                    self.pipeline,
+                    layer_idx,
+                    quant_ignore_layers,
+                )
             if not layer_tensors:
                 continue
             updated_weight_map.update(self._write_block_file(layer_idx, layer_tensors))

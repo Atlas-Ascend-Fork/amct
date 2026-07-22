@@ -129,6 +129,25 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
+def export_block_fakequant(pipeline, layer_idx: int, out_dtype):
+    """Per-model fake-quant (ptq convert): build the layer, apply weight fake-quant, and return
+    the fake-quantized *float* weights keyed by their checkpoint name.
+
+    Mirrors ``export_block_deploy`` but calls ``weight_quantizer.fake_quant`` (float, HiF4 error
+    injected) instead of ``export_deploy`` (packed bytes). Only the layer's quantizable weights
+    are returned; non-quantized tensors (norms/embeddings/head/bias) are copied by the caller."""
+    block = pipeline.build_quant_block(layer_idx).to(pipeline.args.device).eval()
+    pipeline.load_selected_layer_ptq_params(layer_idx, block, strict=False)
+    out_tensors = {}
+    tensor_routes = {}
+    for weight_key, module in pipeline.iter_deploy_bindings(layer_idx, block):
+        weight = module.linear.weight
+        fq = module.weight_quantizer.fake_quant(weight).detach().to(out_dtype).cpu().contiguous()
+        out_tensors[weight_key] = fq
+        tensor_routes[weight_key] = weight_key
+    return out_tensors, tensor_routes
+
+
 def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size):
     if weight.element_size() == 1:
         # FP8 weight

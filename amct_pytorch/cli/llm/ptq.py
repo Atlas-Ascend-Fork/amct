@@ -22,37 +22,34 @@ from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
 
 def _run_hif4_convert(args):
-    """HiF4 ptq: convert-only (no calibration).
+    """HiF4 ptq: convert-only (no calibration), via the per-model route.
 
-    Auto-detect the input format, decode foreign FP4/FP8 to BF16 (fpx_decode), then apply HiF4
-    fake-quant per weight -> float checkpoint. Output dtype: fp16/bf16 preserve the source;
-    foreign and hif4 inputs default to fp16. HiF4 input is reconstructed (unpack), not re-quantized.
+    - fp16/bf16/nvfp4/mxfp4/mxfp8 input -> per-model HiF4 fake-quant to a float checkpoint.
+      Uses LlmDeployWorkflow in ``fake_quant_output`` mode: it auto-detects the format, decodes
+      a foreign FP4/FP8 source to BF16 first, builds the model layer-by-layer, and fake-quants
+      each quantizable weight (quant_target modules); non-quantized tensors are copied.
+    - hif4 input -> reconstruct to float via checkpoint_cast unpack (the model pipeline cannot
+      load packed HiF4 weights, so this stays model-agnostic).
+
+    Output float dtype: fp16/bf16 preserve the source; foreign/hif4 default to fp16.
     """
-    from amct_pytorch.common.utils.fpx_decode.detect import (
-        detect_source_format, decode_to_bf16, FOREIGN_FORMATS,
-    )
-    from amct_pytorch.common.utils.hifloat4_quant.checkpoint_cast import main as cast_main
+    from amct_pytorch.common.utils.fpx_decode.detect import detect_source_format
 
-    model_dir = args.model
-    out_dir = args.output_dir
-    os.makedirs(out_dir, exist_ok=True)
-
-    fmt = detect_source_format(model_dir)
+    fmt = detect_source_format(args.model)
     print(f"[ptq/hif4] source format detected: {fmt}", flush=True)
 
-    src = model_dir
-    if fmt in FOREIGN_FORMATS:
-        decoded = os.path.join(out_dir, "_decoded_bf16")
-        print(f"[ptq/hif4] decoding {fmt} -> BF16 at {decoded}", flush=True)
-        decode_to_bf16(model_dir, decoded, fmt)
-        src, fmt = decoded, "bf16"
-
     if fmt == "hif4":
-        # already HiF4: reconstruct to float (no re-quant)
-        cast_main(["unpack", "--input", src, "--output", out_dir, "--dtype", "fp16"])
-    else:
-        dtype = "bf16" if fmt == "bf16" else "fp16"
-        cast_main(["fake-quant", "--input", src, "--output", out_dir, "--dtype", dtype])
+        from amct_pytorch.common.utils.hifloat4_quant.checkpoint_cast import main as cast_main
+        os.makedirs(args.output_dir, exist_ok=True)
+        cast_main(["unpack", "--input", args.model, "--output", args.output_dir, "--dtype", "fp16"])
+        return
+
+    import torch
+    from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+
+    out_dtype = torch.bfloat16 if fmt == "bf16" else torch.float16
+    args.granularity = "block"  # per-model fake-quant runs block-by-block
+    LlmDeployWorkflow(args, fake_quant_output=True, out_dtype=out_dtype).run()
 
 
 def main():
