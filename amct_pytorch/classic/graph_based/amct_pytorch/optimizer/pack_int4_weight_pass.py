@@ -77,8 +77,7 @@ class PackInt4WeightPass(BaseFusionPass):
         helper.clear_data()
         helper.set_data(packed, 'INT8', dims=new_dims)
 
-    @staticmethod
-    def _pack_along_axis(int4_vals, dims, axis):
+    def _pack_along_axis(self, int4_vals, dims, axis):
         """Pack every two INT4 into one INT8 along `axis`, leaving other axes
         unchanged (axis -> axis/2). The quant axis is guaranteed even here:
         odd quant-axis INT4 layers are already rejected at config stage

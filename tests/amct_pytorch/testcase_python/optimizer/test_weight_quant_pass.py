@@ -302,22 +302,22 @@ class TestWeightQuantPass(unittest.TestCase):
         orig_dims = list(weight_node.proto.dims)
         int4_vals = np.clip(weight_helper.get_data().astype(np.int8), -8, 7)
 
-        # deploy path: Conv packs along quant axis 0 (Cout), other axes unchanged
-        quant_axis = 0
-        packed, new_dims = PackInt4WeightPass._pack_along_axis(
-            int4_vals, orig_dims, quant_axis
+        # deploy path: Conv packs along the Cin axis (axis 1), other axes unchanged
+        cin_axis = 1
+        packed, new_dims = PackInt4WeightPass({})._pack_along_axis(
+            int4_vals, orig_dims, cin_axis
         )
         expected = orig_dims.copy()
-        expected[quant_axis] = (orig_dims[quant_axis] + 1) // 2
-        self.assertEqual(new_dims, expected, 'quant axis must become ceil(axis/2)')
+        expected[cin_axis] = (orig_dims[cin_axis] + 1) // 2
+        self.assertEqual(new_dims, expected, 'Cin axis must become ceil(axis/2)')
 
         weight_helper.clear_data()
         weight_helper.set_data(packed, 'INT8', dims=new_dims)
 
         # only the quant axis halves; other axes stay identical
         self.assertEqual(
-            [d for i, d in enumerate(new_dims) if i != quant_axis],
-            [d for i, d in enumerate(orig_dims) if i != quant_axis],
+            [d for i, d in enumerate(new_dims) if i != cin_axis],
+            [d for i, d in enumerate(orig_dims) if i != cin_axis],
             'non-quant axes must stay unchanged after packing',
         )
         # self-consistent: prod(new_dims) == raw_data byte length
