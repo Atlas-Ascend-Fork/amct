@@ -40,6 +40,9 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
 from .utils import models, record_file_utils
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+# 原生 INT4 需 onnx>=1.16；旧版 onnx 无 INT4 枚举，INT4 相关用例跳过
+_INT4_SUPPORTED = 'INT4' in TensorProtoHelper.data_type_maps
+_SKIP_INT4_MSG = 'onnx version too old for native INT4'
 
 
 class TestWeightQuantPass(unittest.TestCase):
@@ -88,6 +91,7 @@ class TestWeightQuantPass(unittest.TestCase):
             self.graph.get_node_by_name('layer1.0.sub_module.weight').proto).get_data().dtype
         self.assertEqual(weight_dtype, 'int8')
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_quant_weight_int4(self):
         with patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
@@ -233,6 +237,7 @@ class TestWeightQuantPass(unittest.TestCase):
             passer.quant_recurrence_weight(node)
         return mock_wqnp, set_data_type_args
 
+    @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_recurrence_weight_int4(self):
         """wts_type=INT4: quant_recurrence_weight must call weight_quant_np with num_bits=4, not hardcoded 8."""
         node, records = self.build_lstm_int4_case()
