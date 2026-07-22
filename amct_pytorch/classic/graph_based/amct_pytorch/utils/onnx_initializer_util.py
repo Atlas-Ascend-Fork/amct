@@ -63,6 +63,21 @@ def unpack_int8_to_int4(packed, count):
     return out[:count]
 
 
+def parse_external_data_meta(external_data):
+    """把 external_data 条目解析成 (file_name, offset, length, quantized_data)。"""
+    file_name, offset, length, quantized_data = None, 0, -1, None
+    for data in external_data:
+        if data.key == 'location':
+            file_name = data.value
+        elif data.key == 'offset':
+            offset = int(data.value)
+        elif data.key == 'length':
+            length = int(data.value)
+        elif data.key == 'amct_quantized_raw_data':
+            quantized_data = bool(data.value)
+    return file_name, offset, length, quantized_data
+
+
 class TensorProtoHelper():
     """ Help cope with onnx.TensorProto
     APIs: map_data_location, map_np_type, get_data, clear_data, set_data
@@ -251,7 +266,7 @@ class TensorProtoHelper():
         '''
         tensor_np_type = self.map_np_type(self.tensor.data_type)
         file_name, offset, length, quantized_data = \
-            self._parse_external_data_meta(self.tensor.external_data)
+            parse_external_data_meta(self.tensor.external_data)
 
         if quantized_data:
             return self._get_quantized_raw_data(tensor_np_type), length
@@ -358,21 +373,6 @@ class TensorProtoHelper():
         if tensor_data_type == self.data_type.FLOAT16:
             data_location = RAW_DATA
         return data_location
-
-    @staticmethod
-    def _parse_external_data_meta(external_data):
-        ''' parse external_data entries into (file_name, offset, length, quantized_data) '''
-        file_name, offset, length, quantized_data = None, 0, -1, None
-        for data in external_data:
-            if data.key == 'location':
-                file_name = data.value
-            elif data.key == 'offset':
-                offset = int(data.value)
-            elif data.key == 'length':
-                length = int(data.value)
-            elif data.key == 'amct_quantized_raw_data':
-                quantized_data = bool(data.value)
-        return file_name, offset, length, quantized_data
 
     def _get_quantized_raw_data(self, tensor_np_type):
         ''' read quantized data already stored in tensor.raw_data '''
