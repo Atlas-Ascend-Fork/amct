@@ -42,7 +42,7 @@ extern "C" __global__ __aicore__ void mxfp4_quant_dequant(
     GM_ADDR x, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling);
 ```
 
-Tiling layout (int32 array on GM): `[totalLen, numCores, 0, 0]`.
+Tiling layout (int32 array on GM): `[totalLen, numCores, scaleBits, 0]`.
 
 ## Algorithm reference (PyTorch, see `../mxfp4.py`)
 

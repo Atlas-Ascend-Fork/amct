@@ -4,43 +4,12 @@
  */
 #include <pybind11/pybind11.h>
 #include <torch/extension.h>
-#include <map>
-#include <tuple>
-#include <mutex>
 #include <cstring>
 
-#include "acl/acl.h"
 #include "aclrtlaunch_mxfp4_quant_dequant.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 
 namespace py = pybind11;
-
-/* ---- tiling cache (avoids repeated H2D copies) ---- */
-struct TilingCache {
-    // Key combines (totalLen, cores, scaleBits) so different runtime scale
-    // multipliers do not collide on a single cached tiling buffer.
-    std::map<std::tuple<int32_t, int32_t, int32_t>, void *> cache;
-    std::mutex mtx;
-
-    void *get_or_create(int32_t totalLen, int32_t cores, float invScaleMul) {
-        int32_t scaleBits;
-        std::memcpy(&scaleBits, &invScaleMul, sizeof(float));
-        auto k = std::make_tuple(totalLen, cores, scaleBits);
-
-        std::lock_guard<std::mutex> lk(mtx);
-        auto it = cache.find(k);
-        if (it != cache.end())
-            return it->second;
-
-        int32_t tiling[4] = {totalLen, cores, scaleBits, 0};
-        void *dev = nullptr;
-        aclrtMalloc(&dev, sizeof(tiling), ACL_MEM_MALLOC_HUGE_FIRST);
-        aclrtMemcpy(dev, sizeof(tiling), tiling, sizeof(tiling), ACL_MEMCPY_HOST_TO_DEVICE);
-        cache[k] = dev;
-        return dev;
-    }
-};
-static TilingCache g_cache;
 
 /* ---- exposed function ---- */
 at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double inv_scale_factor_scale) {
@@ -60,7 +29,18 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
     // kernel return code is still 0). This was reproducible in vLLM's
     // multi-process worker setup and breaks every MoE/Linear activation.
     auto stream = c10_npu::getCurrentNPUStream().stream(true);
-    void *tiling = g_cache.get_or_create(totalLen, block_dim, static_cast<float>(inv_scale_factor_scale));
+
+    // Tiling is only 4x int32. Allocate via the PyTorch NPU caching allocator
+    // instead of a process-global aclrtMalloc cache: each call gets a fresh
+    // buffer, and free is deferred until the launch stream completes—no
+    // unbounded device-memory growth across (totalLen, cores, scale) keys.
+    float invScaleMul = static_cast<float>(inv_scale_factor_scale);
+    int32_t scaleBits = 0;
+    std::memcpy(&scaleBits, &invScaleMul, sizeof(float));
+    int32_t host_tiling[4] = {totalLen, static_cast<int32_t>(block_dim), scaleBits, 0};
+    auto tiling = at::empty({4}, at::TensorOptions().dtype(at::kInt).device(x.device()));
+    auto tiling_cpu = at::from_blob(host_tiling, {4}, at::TensorOptions().dtype(at::kInt)).clone();
+    tiling.copy_(tiling_cpu, /*non_blocking=*/true);
 
     // The auto-generated host stub still returns 0 ("success") when the
     // kernel handle was never registered (e.g. SoC mismatch), so this
@@ -69,7 +49,7 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
     // detects silent registration failures.
     uint32_t ret = ACLRT_LAUNCH_KERNEL(mxfp4_quant_dequant)(block_dim, stream, const_cast<void *>(x.data_ptr()),
         y.data_ptr(), nullptr, /* workspace */
-        tiling);
+        tiling.data_ptr());
 
     TORCH_CHECK(ret == 0, "mxfp4_quant_dequant kernel launch failed (ret=", ret,
         "). This usually means the compiled kernel cannot run on the "

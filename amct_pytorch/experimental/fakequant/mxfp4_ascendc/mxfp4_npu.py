@@ -95,7 +95,8 @@ def quant_dequant_mxfp4_npu(
             "mxfp4_ascendc_ext not built.  Run:  bash mxfp4_ascendc/build.sh"
         )
 
-    assert block_size == 32, "only block_size=32 supported by the NPU kernel"
+    if block_size != 32:
+        raise ValueError(f"only block_size=32 supported by the NPU kernel, got {block_size}")
 
     orig_shape = x.shape
     orig_dtype = x.dtype

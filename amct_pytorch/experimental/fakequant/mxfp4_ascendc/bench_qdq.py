@@ -99,7 +99,7 @@ def main():
     dtype = getattr(torch, args.dtype)
     device = args.device
 
-    from mxfp4_npu_scale58 import quant_dequant_mxfp4 as kernel
+    from mxfp4_npu import quant_dequant_mxfp4 as kernel
 
     H = 3072
     intermediate_size = 1536
