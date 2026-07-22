@@ -32,12 +32,22 @@ def _banner(msg: str) -> None:
 
 
 def test_correctness(
-    shapes: list[tuple[int, ...]] = [(4, 128), (1, 32), (16, 1024), (64, 4096)],
+    shapes: list[tuple[int, ...]] = [
+        (4, 128),
+        (1, 32),
+        (16, 1024),
+        (64, 4096),
+        # last_dim not a multiple of 32: catches per-row vs flatten-then-pad
+        (2, 33),
+        (3, 17),
+        (4, 48, 33),
+    ],
     seed: int = 42,
     atol: float = 1e-6,
-) -> None:
+) -> bool:
     _banner("Correctness")
     torch.manual_seed(seed)
+    all_ok = True
 
     for shape in shapes:
         x_cpu = torch.randn(shape, dtype=torch.float32) * 3.0
@@ -52,8 +62,11 @@ def test_correctness(
         tag = "PASS" if ok else "FAIL"
         print(f"  {tag}  shape={str(shape):>16s}  max_err={max_err:.2e}")
         if not ok:
+            all_ok = False
             print(f"         ref[:4] = {ref_cpu.reshape(-1)[:4].tolist()}")
             print(f"         npu[:4] = {out_cpu.reshape(-1)[:4].tolist()}")
+
+    return all_ok
 
 
 def _bench_one(fn, x, warmup: int, iters: int) -> float:
@@ -96,5 +109,6 @@ def benchmark(
 
 
 if __name__ == "__main__":
-    test_correctness()
+    ok = test_correctness()
     benchmark()
+    sys.exit(0 if ok else 1)

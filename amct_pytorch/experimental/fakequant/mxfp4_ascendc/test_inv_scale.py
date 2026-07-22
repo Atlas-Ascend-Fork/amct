@@ -30,7 +30,7 @@ def _banner(msg: str) -> None:
 
 
 def test_scales(
-    shapes=((4, 128), (1, 32), (16, 1024), (64, 4096)),
+    shapes=((4, 128), (1, 32), (16, 1024), (64, 4096), (2, 33), (3, 17)),
     scales=(1.0, 2.0, 0.5, 1.5, 0.25),
     seed: int = 42,
     atol: float = 1e-6,

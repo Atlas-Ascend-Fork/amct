@@ -95,9 +95,13 @@ def main():
     parser.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float32"])
     args = parser.parse_args()
 
-    torch.npu.set_device(0)
     dtype = getattr(torch, args.dtype)
-    device = args.device
+    device = torch.device(args.device)
+    if device.type != "npu":
+        raise ValueError(f"--device must be an NPU device, got {args.device!r}")
+    # Match current NPU (and thus getCurrentNPUStream / mxfp4_npu self-test)
+    # to --device; hardcoding set_device(0) breaks multi-NPU runs.
+    torch.npu.set_device(device.index if device.index is not None else 0)
 
     from mxfp4_npu import quant_dequant_mxfp4 as kernel
 

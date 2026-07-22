@@ -198,22 +198,28 @@ def quant_dequant_mxfp4(
             f"inv_scale_factor_scale must be positive, got {inv_scale_factor_scale}"
         )
 
-    orig_shape = x.shape
     orig_dtype = x.dtype
     if not x.is_npu:
         raise ValueError(
             f"input must be on an NPU device, got device={x.device}"
         )
-    x_fp = x.to(torch.float32).reshape(-1).contiguous()
-
-    n = x_fp.numel()
-    pad = (block_size - n % block_size) % block_size
+    # Pad along the last dim first (per-row blocks), matching the PyTorch
+    # reference. Flattening before pad would merge adjacent rows into the
+    # same MXFP4 block when last_dim is not a multiple of block_size.
+    x_fp = x.to(torch.float32)
+    last_dim = x_fp.shape[-1]
+    pad = (block_size - last_dim % block_size) % block_size
     if pad:
         x_fp = F.pad(x_fp, (0, pad))
+    padded_shape = x_fp.shape
+    x_flat = x_fp.reshape(-1).contiguous()
 
-    y_fp = _ext.mxfp4_quant_dequant_npu(x_fp, block_dim, float(inv_scale_factor_scale))
+    y_flat = _ext.mxfp4_quant_dequant_npu(
+        x_flat, block_dim, float(inv_scale_factor_scale)
+    )
 
+    y_fp = y_flat.reshape(padded_shape)
     if pad:
-        y_fp = y_fp[:n]
+        y_fp = y_fp[..., :last_dim]
 
-    return y_fp.reshape(orig_shape).to(orig_dtype)
+    return y_fp.to(orig_dtype)
