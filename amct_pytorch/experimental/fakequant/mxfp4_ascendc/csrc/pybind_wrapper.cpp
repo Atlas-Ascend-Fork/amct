@@ -16,12 +16,20 @@ namespace py = pybind11;
 at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double inv_scale_factor_scale) {
     TORCH_CHECK(x.is_contiguous(), "input must be contiguous");
     TORCH_CHECK(x.scalar_type() == at::kFloat, "input must be float32 (got ", x.scalar_type(), ")");
+    TORCH_CHECK(x.device().type() == c10::DeviceType::PrivateUse1,
+        "input must be on NPU device, got ", x.device());
+
     // block_dim is both the kernel launch block dimension (number of AI Cores)
     // and tiling[1] (numCores). A non-positive value is invalid for the launch
     // API, and a negative value reinterpreted as uint32 in the kernel yields a
     // huge numCores, causing most blocks to be dropped and the output to
     // contain uninitialised memory (the kernel return code stays 0). Reject it.
     TORCH_CHECK(block_dim > 0, "block_dim must be positive, got ", block_dim);
+    // inv_scale_factor_scale multiplies the kernel's built-in INV_SCALE_FACTOR
+    // (1/6.0). Non-positive values make raw_scale=0 (→ NaN/inf) or invert the
+    // scale semantics; reject them the same way mxfp4.py rejects scale_factor<=0.
+    TORCH_CHECK(inv_scale_factor_scale > 0.0,
+        "inv_scale_factor_scale must be positive, got ", inv_scale_factor_scale);
     // numel() is int64_t. The tiling layout and kernel index arithmetic are
     // int32/uint32, so a tensor with > INT32_MAX elements would be silently
     // truncated into a wrong totalLen. Reject it explicitly instead.

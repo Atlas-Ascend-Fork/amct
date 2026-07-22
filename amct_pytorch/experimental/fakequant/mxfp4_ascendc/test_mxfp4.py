@@ -22,11 +22,7 @@ for _p in (_DIR, _PARENT):
 
 importlib.import_module("torch_npu")  # registers NPU device
 ref_qdq = importlib.import_module("mxfp4").quant_dequant_mxfp4  # PyTorch reference
-_mxfp4_npu = importlib.import_module("mxfp4_npu")
-# Prefer the dev loader API; fall back to the package export name.
-quant_dequant_mxfp4_npu = getattr(
-    _mxfp4_npu, "quant_dequant_mxfp4_npu", _mxfp4_npu.quant_dequant_mxfp4
-)
+quant_dequant_mxfp4_npu = importlib.import_module("mxfp4_npu").quant_dequant_mxfp4
 
 
 def _banner(msg: str) -> None:

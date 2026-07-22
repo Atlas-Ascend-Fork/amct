@@ -193,8 +193,17 @@ def quant_dequant_mxfp4(
     if block_dim <= 0:
         raise ValueError(f"block_dim must be positive, got {block_dim}")
 
+    if inv_scale_factor_scale <= 0:
+        raise ValueError(
+            f"inv_scale_factor_scale must be positive, got {inv_scale_factor_scale}"
+        )
+
     orig_shape = x.shape
     orig_dtype = x.dtype
+    if not x.is_npu:
+        raise ValueError(
+            f"input must be on an NPU device, got device={x.device}"
+        )
     x_fp = x.to(torch.float32).reshape(-1).contiguous()
 
     n = x_fp.numel()

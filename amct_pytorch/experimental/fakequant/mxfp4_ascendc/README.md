@@ -76,7 +76,7 @@ mxfp4_ascendc/
 │       └── __init__.py         #    占位；编译后拷入 .so
 │
 ├── csrc/                       # Ascend-C 源码
-│   ├── mxfp4_kernel.cpp        #    设备核（唯一需要优化的文件）
+│   ├── mxfp4_kernel.cpp        #    设备核
 │   ├── pybind_wrapper.cpp      #    Pybind11 封装
 │   └── CMakeLists.txt          #    构建配置
 │
@@ -84,6 +84,5 @@ mxfp4_ascendc/
 ├── build/                      # 编译中间产物（本地生成，勿提交）
 ├── test_mxfp4.py               # 正确性 + benchmark 测试
 ├── test_inv_scale.py           # inv_scale 相关正确性测试
-├── mxfp4_npu.py                # 开发用 Python 加载器
 └── README.md                   # 本文件
 ```
