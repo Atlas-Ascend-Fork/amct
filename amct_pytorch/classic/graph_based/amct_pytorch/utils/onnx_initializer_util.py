@@ -241,19 +241,9 @@ class TensorProtoHelper():
             else:
                 getattr(self.tensor, data_location).MergeFrom(data)
 
-    def get_external_data(self):
-        '''
-        Function: get data from external file. Return a numpy.array If
-            tensor.data_type is not UNDEFINED, otherwise return a binary
-        Parameters:
-            tensor: a instance of TensorProto
-        Return: value: raw_value or np_value; length: data length
-        '''
-        # raw bytes data stored in external data file
-        tensor_dtype = self.tensor.data_type
-        tensor_np_type = self.map_np_type(tensor_dtype)
-
-        external_data = self.tensor.external_data
+    @staticmethod
+    def _parse_external_data_meta(external_data):
+        '''parse external_data entries into (file_name, offset, length, quantized_data)'''
         file_name, offset, length, quantized_data = None, 0, -1, None
         for data in external_data:
             if data.key == 'location':
@@ -264,29 +254,21 @@ class TensorProtoHelper():
                 length = int(data.value)
             elif data.key == 'amct_quantized_raw_data':
                 quantized_data = bool(data.value)
+        return file_name, offset, length, quantized_data
 
-        if quantized_data:
-            if tensor_np_type == 'int4':
-                # raw_data 为 packed 字节，unpack 成 prod(dims) 个 INT4 再 reshape
-                packed = np.frombuffer(self.tensor.raw_data, np.uint8)
-                np_value = unpack_int8_to_int4(packed, int(np.prod(self.tensor.dims)))
-                return np_value.reshape(self.tensor.dims), length
+    def _get_quantized_raw_data(self, tensor_np_type):
+        '''read quantized data already stored in tensor.raw_data'''
+        if tensor_np_type == 'int4':
+            # raw_data 为 packed 字节，unpack 成 prod(dims) 个 INT4 再 reshape
+            packed = np.frombuffer(self.tensor.raw_data, np.uint8)
+            np_value = unpack_int8_to_int4(packed, int(np.prod(self.tensor.dims)))
+        else:
             np_value = np.frombuffer(self.tensor.raw_data, tensor_np_type)
-            np_value = np_value.reshape(self.tensor.dims)
-            return np_value, length
-        # file path relative to the filesystem directory where the ONNX protobuf model was stored
-        # Data stored in external data files will be in the same binary bytes string format as 
-        # is used by the raw_data field in current ONNX implementations.
-        if file_name is None:
-            raise ValueError('The external_data is UNEXCEPTED, unspecified file path')
+        return np_value.reshape(self.tensor.dims)
 
-        file_name = os.path.realpath(os.path.join(self.model_path, file_name))
-        if tensor_np_type is None:
-            with open(file_name, 'rb') as f:
-                f.seek(offset, 0)
-                raw_data = f.read(length)
-            return raw_data, length
- 
+    def _read_external_file(self, file_name, offset, length, tensor_np_type):
+        '''read data from the external file for a typed (non-raw) tensor.
+        Returns (np_value, length).'''
         if tensor_np_type == 'int4':
             # 外部文件存 packed 字节，按 uint8 读入后 unpack 成 prod(dims) 个 INT4
             byte_len = length if length > 0 else -1
@@ -295,25 +277,45 @@ class TensorProtoHelper():
                 length = len(packed)
             np_value = unpack_int8_to_int4(packed, int(np.prod(self.tensor.dims)))
             return np_value.reshape(self.tensor.dims), length
+
         item_size = np.dtype(tensor_np_type).itemsize
-        if length > 0:
-            data_length = int(length / item_size)
-        else:
-            data_length = length
+        data_length = int(length / item_size) if length > 0 else length
         np_value = np.fromfile(file_name, tensor_np_type, data_length, '', offset)
-        # need keep real length in proto
         if length == -1:
             length = len(np_value.flatten()) * item_size
-        if tensor_np_type is None:
-            return np_value, length
-        dim = 1
-        for i in self.tensor.dims:
-            dim = dim * i
-        if len(np_value.flatten()) != dim:
+        if int(np.prod(self.tensor.dims)) != len(np_value.flatten()):
             raise ValueError('The external_data is not consistant with the shape')
- 
-        np_value = np_value.reshape(self.tensor.dims)
-        return np_value, length
+        return np_value.reshape(self.tensor.dims), length
+
+    def get_external_data(self):
+        '''
+        Function: get data from external file. Return a numpy.array If
+            tensor.data_type is not UNDEFINED, otherwise return a binary
+        Parameters:
+            tensor: a instance of TensorProto
+        Return: value: raw_value or np_value; length: data length
+        '''
+        tensor_np_type = self.map_np_type(self.tensor.data_type)
+        file_name, offset, length, quantized_data = \
+            self._parse_external_data_meta(self.tensor.external_data)
+
+        if quantized_data:
+            return self._get_quantized_raw_data(tensor_np_type), length
+
+        # file path relative to the filesystem directory where the ONNX protobuf
+        # model was stored. Data in external files uses the same binary bytes
+        # format as the raw_data field in current ONNX implementations.
+        if file_name is None:
+            raise ValueError('The external_data is UNEXCEPTED, unspecified file path')
+        file_name = os.path.realpath(os.path.join(self.model_path, file_name))
+
+        if tensor_np_type is None:
+            with open(file_name, 'rb') as f:
+                f.seek(offset, 0)
+                raw_data = f.read(length)
+            return raw_data, length
+
+        return self._read_external_file(file_name, offset, length, tensor_np_type)
 
     def set_external_data(self, data):
         '''
