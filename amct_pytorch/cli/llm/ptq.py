@@ -45,11 +45,11 @@ def _run_hif4_convert(args):
         return
 
     import torch
-    from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+    from amct_pytorch.workflows.llm_ptq import LlmPtqConvertWorkflow
 
     out_dtype = torch.bfloat16 if fmt == "bf16" else torch.float16
     args.granularity = "block"  # per-model fake-quant runs block-by-block
-    LlmDeployWorkflow(args, fake_quant_output=True, out_dtype=out_dtype).run()
+    LlmPtqConvertWorkflow(args, out_dtype=out_dtype).run()
 
 
 def main():
