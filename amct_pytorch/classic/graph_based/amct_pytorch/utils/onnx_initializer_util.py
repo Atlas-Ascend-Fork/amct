@@ -359,7 +359,8 @@ class TensorProtoHelper():
             data_location = RAW_DATA
         return data_location
 
-    def _parse_external_data_meta(self, external_data):
+    @staticmethod
+    def _parse_external_data_meta(external_data):
         ''' parse external_data entries into (file_name, offset, length, quantized_data) '''
         file_name, offset, length, quantized_data = None, 0, -1, None
         for data in external_data:
