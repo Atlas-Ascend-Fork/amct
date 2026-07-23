@@ -17,7 +17,7 @@
 """Detect a checkpoint's quant source format and decode foreign formats to BF16.
 
 Used by the ptq/deploy entry points to route an input checkpoint: foreign FP4/FP8 formats
-(nvfp4/mxfp4/mxfp8) are decoded to BF16 first (via the fpx_decode converters), after which
+(nvfp4/mxfp4/mxfp8) are decoded to BF16 first (via the decode unpackers), after which
 HiF4 fake-quant (ptq) or pack (deploy) is applied by ``hifloat4_quant``.
 
 NOTE: ``detect_source_format`` is a best-effort heuristic (config + weight markers) and should
@@ -165,18 +165,18 @@ def copy_side_files(src: str, dst: str) -> None:
 def decode_to_bf16(model_dir: str, out_dir: str, fmt: str) -> str:
     """Decode a foreign FP4/FP8 checkpoint to a BF16 checkpoint at ``out_dir``; returns out_dir.
 
-    Dispatches to the format's fpx_decode converter (decode-only; no HiF4). Imports are lazy so
-    this module loads on branches that only carry a subset of the converters.
+    Dispatches to the format's ``decode`` unpacker (decode-only; no HiF4). Imports are lazy so
+    this module loads on branches that only carry a subset of the unpackers.
     """
     os.makedirs(out_dir, exist_ok=True)
     if fmt == "nvfp4":
-        from amct_pytorch.common.utils.fpx_decode.convert_nvfp4_to_hif4 import main as run
+        from amct_pytorch.common.utils.decode.unpack_nvfp4 import main as run
         run(["--nvfp4-dir", model_dir, "--out-dir", out_dir])
     elif fmt == "mxfp4":
-        from amct_pytorch.common.utils.fpx_decode.convert_mxfp4_to_hif4 import main as run
+        from amct_pytorch.common.utils.decode.unpack_mxfp4 import main as run
         run(["convert-dir", "--mxfp4-dir", model_dir, "--out-dir", out_dir])
     elif fmt == "mxfp8":
-        from amct_pytorch.common.utils.fpx_decode.convert_mxfp8_to_hif4 import main as run
+        from amct_pytorch.common.utils.decode.unpack_mxfp8 import main as run
         run(["--quant_model_dir", model_dir, "--output_dir", out_dir])
     else:
         raise ValueError(f"decode_to_bf16: {fmt!r} is not a foreign format {FOREIGN_FORMATS}")

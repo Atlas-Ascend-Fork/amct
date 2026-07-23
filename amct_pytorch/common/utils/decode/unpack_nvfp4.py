@@ -30,7 +30,7 @@ optional override.
 
 Usage::
 
-    python -m amct_pytorch.common.utils.fpx_decode.convert_nvfp4_to_hif4 \\
+    python -m amct_pytorch.common.utils.decode.unpack_nvfp4 \\
         --nvfp4-dir /path/to/nvfp4_ckpt \\
         --out-dir /path/to/output          # plan derived from the nvfp4 checkpoint itself
 """
@@ -50,7 +50,7 @@ _ROOT_DIR = os.path.realpath(os.path.join(_CUR_DIR, "../../../"))
 if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
-from amct_pytorch.common.utils.fpx_decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
+from amct_pytorch.common.utils.decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
 from amct_pytorch.common.utils.checkpoint_io import walk_checkpoint  # noqa: E402
 
 
