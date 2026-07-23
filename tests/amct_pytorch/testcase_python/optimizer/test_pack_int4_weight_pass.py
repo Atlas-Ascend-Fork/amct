@@ -82,7 +82,7 @@ class TestPackInt4Weight(unittest.TestCase):
     )
 
     def test_do_pass_conv_packs_weight_only(self):
-        # 通过公有入口 do_pass 覆盖 _pack_int4_weight：Conv 无 recurrence
+        # 通过公有入口 do_pass 覆盖 pack_int4_weight_node：Conv 无 recurrence
         # (recurrence_weight_node=None 走 no-op 分支)，主权重写回 INT8。
         node = mock.MagicMock()
         node.type = 'Conv'

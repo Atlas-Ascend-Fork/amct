@@ -44,6 +44,23 @@ def pack_along_axis(int4_vals, dims, axis):
     return packed.reshape(-1), list(packed.shape)
 
 
+def pack_int4_weight_node(weight_node, cin_axis):
+    """Read INT4 values from a weight tensor node and write them back packed
+    two-per-byte along the Cin axis. No-op when weight_node is None (e.g.
+    non-RNN ops have no recurrence_weight)."""
+    if weight_node is None:
+        return
+    helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
+    int4_vals = np.asarray(helper.get_data())
+    orig_dims = list(helper.tensor.dims)
+    # 沿 Cin 维 nibble-pack：该轴每两个 INT4 合成一个 INT8，其余轴不变
+    # （Cin -> Cin/2）。deploy 为 AMCT 专有格式，实际字节由 op_data_type
+    # 标记为 INT4-packed。Cin 奇数已在配置阶段拦截，不会走到这里。
+    packed, new_dims = pack_along_axis(int4_vals, orig_dims, cin_axis)
+    helper.clear_data()
+    helper.set_data(packed, 'INT8', dims=new_dims)
+
+
 class PackInt4WeightPass(BaseFusionPass):
     """
     Function: Pack INT4 weight storage for the deploy model: two INT4 nibbles
@@ -73,28 +90,12 @@ class PackInt4WeightPass(BaseFusionPass):
         """Pack the INT4 weight (and recurrence_weight for RNN) of object_node."""
         axis = QuantOpInfo.get_cin_axis(object_node)
         weight_node = QuantOpInfo.get_weight_node(object_node)
-        self._pack_int4_weight(weight_node, axis)
+        pack_int4_weight_node(weight_node, axis)
         # recurrence_weight 仅 RNN 有，其 Cin(hidden) 同样在 onnx 张量的轴 2
         recurrence_weight_node = QuantOpInfo.get_recurrence_weight_node(object_node)
-        self._pack_int4_weight(recurrence_weight_node, axis)
+        pack_int4_weight_node(recurrence_weight_node, axis)
         LOGGER.logd(
             "Pack INT4 weight (deploy) for layer '{}'".format(object_node.name),
             "PackInt4WeightPass",
         )
-
-    def _pack_int4_weight(self, weight_node, cin_axis):
-        """Read INT4 values from a weight tensor node and write them back packed
-        two-per-byte along the Cin axis. No-op when weight_node is None (e.g.
-        non-RNN ops have no recurrence_weight)."""
-        if weight_node is None:
-            return
-        helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-        int4_vals = np.asarray(helper.get_data())
-        orig_dims = list(helper.tensor.dims)
-        # 沿 Cin 维 nibble-pack：该轴每两个 INT4 合成一个 INT8，其余轴不变
-        # （Cin -> Cin/2）。deploy 为 AMCT 专有格式，实际字节由 op_data_type
-        # 标记为 INT4-packed。Cin 奇数已在配置阶段拦截，不会走到这里。
-        packed, new_dims = pack_along_axis(int4_vals, orig_dims, cin_axis)
-        helper.clear_data()
-        helper.set_data(packed, 'INT8', dims=new_dims)
 
