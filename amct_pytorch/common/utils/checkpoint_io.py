@@ -20,12 +20,12 @@ Single home for reading/writing sharded safetensors checkpoints (``index.json`` 
 Shared by:
   - deploy (``LlmDeployWorkflow``, real pack) and ptq convert (fake-quant) via
     :class:`CheckpointShardWriter`;
-  - the HiF4 ptq unpack (``hifloat4_quant.checkpoint_unpack``) via the free functions;
-  - the ``fpx_decode`` foreign-format converters (folded in downstream).
+  - the HiF4 ptq unpack (``decode.unpack_hif4``) via the free functions;
+  - the ``decode`` foreign-format converters (folded in downstream).
 
 No knowledge of any quant format lives here -- only index parsing, shard read/write, and
 support-file copying. Deliberately depends on nothing beyond ``torch`` + ``safetensors`` so
-lightweight callers (e.g. ``checkpoint_unpack``) do not pull in ``transformers``.
+lightweight callers (e.g. ``decode.unpack_hif4``) do not pull in ``transformers``.
 """
 from __future__ import annotations
 
