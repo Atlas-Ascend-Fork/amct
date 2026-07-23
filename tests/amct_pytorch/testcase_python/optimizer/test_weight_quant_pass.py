@@ -309,7 +309,7 @@ class TestWeightQuantPass(unittest.TestCase):
         self.assertIsNotNone(weight_node, 'Conv node must have a weight node')
 
         from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.pack_int4_weight_pass import (
-            PackInt4WeightPass,
+            pack_along_axis,
         )
 
         weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
@@ -318,9 +318,7 @@ class TestWeightQuantPass(unittest.TestCase):
 
         # deploy path: Conv packs along the Cin axis (axis 1), other axes unchanged
         cin_axis = 1
-        packed, new_dims = PackInt4WeightPass({})._pack_along_axis(
-            int4_vals, orig_dims, cin_axis
-        )
+        packed, new_dims = pack_along_axis(int4_vals, orig_dims, cin_axis)
         expected = orig_dims.copy()
         expected[cin_axis] = (orig_dims[cin_axis] + 1) // 2
         self.assertEqual(new_dims, expected, 'Cin axis must become ceil(axis/2)')
