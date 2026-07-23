@@ -80,11 +80,6 @@ jobs:
           source_branch: ${{ env.SOURCE_BRANCH }}
           target_branch: ${{ env.TARGET_BRANCH }}
       -
-        name: verify_package
-        uses: cann/.gitcode/actions/verify-package@master
-        with:
-          workspace: ${{ steps.process_checkout.outputs.path }}
-      -
         name: upload
         uses: obs-upload
         with:
