@@ -27,19 +27,15 @@ from amct_pytorch.classic.quantize import (
     convert,
     quantize,
 )
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
+from amct_pytorch.quantize_op import BaseQuantizeModule
 
 QUANTIZE_MODULE = sys.modules["amct_pytorch.classic.quantize"]
 
 
 def test_base_quantize_module_keeps_public_import_paths():
     from amct_pytorch.quantize_op import BaseQuantizeModule as PackageBaseQuantizeModule
-    from amct_pytorch.quantize_op.base_quant_module import (
-        BaseQuantizeModule as ModuleBaseQuantizeModule,
-    )
 
     assert PackageBaseQuantizeModule is BaseQuantizeModule
-    assert ModuleBaseQuantizeModule is BaseQuantizeModule
 
 
 def test_classic_quantize_imports_without_ptq_package_layer():
