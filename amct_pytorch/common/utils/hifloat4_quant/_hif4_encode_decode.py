@@ -65,8 +65,12 @@ def hif4_encode(xg: Tensor, ng: int = 2) -> Hif4Encoded:
     packer's ``reshape(M, N // 64, 8, 2, 4)``. ``ng`` is the S1P2 in-group mantissa bit count
     (HiF4: 2, so the in-group code is 3 bits and value = code / 2**ng).
     """
-    # Handle non-finite values (NaN/Inf -> 0)
+    # Non-finite handling, matching the HiF4 hardware / reference (To_HiFX, hif4_bit_dump):
+    # a 64-group carries NaN/Inf *only* in its block-level E6M2 scale. Compute the codes from
+    # the finite values (non-finite -> 0), but if ANY element of the (8, 2, 4) group is
+    # non-finite (NaN or +/-Inf) the whole group is later poisoned to NaN via the E6M2 scale.
     xf = torch.where(torch.isfinite(xg), xg, torch.zeros_like(xg))
+    block_nan = (~torch.isfinite(xg)).flatten(-3, -1).any(dim=-1)  # [*B] any non-finite in group
     tmp = xf.abs()
     sign_bit = (xf < 0).to(torch.int32)
 
@@ -95,6 +99,11 @@ def hif4_encode(xg: Tensor, ng: int = 2) -> Hif4Encoded:
     in_grp = tmp * rec[..., None, None, None] * _pow2(-de64)
     in_grp = _to_bf16(in_grp) * (2 ** ng)                    # extra bf16 rounding
     code = torch.floor(in_grp + 0.5).clamp(0, (1 << (ng + 1)) - 1).to(torch.int32)
+
+    # NaN/Inf poison: record non-finite groups in the E6M2 scale (the reserved 0xFF code the
+    # byte packer emits). decode multiplies every element by e6m2, so a NaN scale turns the
+    # whole 64-group to NaN -- computed *after* the codes above so finite math is unaffected.
+    e6m2 = torch.where(block_nan, torch.full_like(e6m2, float("nan")), e6m2)
 
     return Hif4Encoded(sign_bit, e6m2, de, code, e1_8, e1_16, e_e6, q)
 

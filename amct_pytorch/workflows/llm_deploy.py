@@ -19,16 +19,13 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 from collections import defaultdict
 from pathlib import Path
 
 import torch
 
 from loguru import logger
-from safetensors import safe_open
-from safetensors.torch import load_file, save_file
-from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
+from safetensors.torch import load_file
 from tqdm import tqdm
 
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -40,6 +37,7 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     convert_state_dict,
     quant_payload,
 )
+from amct_pytorch.common.utils.checkpoint_io import CheckpointShardWriter
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
@@ -60,27 +58,10 @@ class LlmDeployWorkflow:
         self.is_hif = self.quant_dtype.startswith("hif")
 
     @staticmethod
-    def _is_weight_file(path: Path) -> bool:
-        return path.name == "model.safetensors.index.json" or path.suffix == ".safetensors"
-
-    @staticmethod
     def _register_components():
         register_llm_models()
         register_dtype()
         register_algorithms()
-
-    @staticmethod
-    def _collect_replaced_original_weights(
-        layer_tensors: dict[str, object],
-        tensor_routes: dict[str, str],
-        original_weight_map: dict[str, str],
-    ):
-        replaced = set()
-        for weight_name in layer_tensors:
-            base_weight_name = tensor_routes.get(weight_name, weight_name)
-            if base_weight_name in original_weight_map:
-                replaced.add(base_weight_name)
-        return replaced
 
     def run(self):
         sink_id = self.setup()
@@ -134,46 +115,6 @@ class LlmDeployWorkflow:
             f"tensor granularity does not support quant_dtype '{self.quant_dtype}' yet"
         )
 
-    def _copy_support_files(self):
-        src_dir = Path(self.model_path)
-        dst_dir = Path(self.output_dir)
-        for src_path in src_dir.iterdir():
-            if src_path.name.startswith("."):
-                continue
-            if self._is_weight_file(src_path):
-                continue
-            dst_path = dst_dir / src_path.name
-            if dst_path.exists():
-                continue
-            if src_path.is_dir():
-                shutil.copytree(src_path, dst_path)
-            else:
-                shutil.copy2(src_path, dst_path)
-
-    def _load_weight_index(self):
-        # Align with HF/vLLM checkpoint loading: read index.json when present;
-        # otherwise this is a single-shard model -- map every tensor to the lone
-        # safetensors file and synthesize an equivalent index. Filenames reuse the
-        # transformers ecosystem constants to avoid hardcoded drift.
-        index_path = Path(self.model_path) / SAFE_WEIGHTS_INDEX_NAME
-        if index_path.exists():
-            with open(index_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        single_path = Path(self.model_path) / SAFE_WEIGHTS_NAME
-        if not single_path.exists():
-            raise FileNotFoundError(
-                f"Neither {SAFE_WEIGHTS_INDEX_NAME} nor {SAFE_WEIGHTS_NAME} "
-                f"found in {self.model_path}"
-            )
-        with safe_open(str(single_path), framework="pt") as f:
-            weight_map = {key: SAFE_WEIGHTS_NAME for key in f.keys()}
-        # total_size is a placeholder; _refresh_weight_index() recomputes and
-        # overwrites it from the actual output shard sizes.
-        return {
-            "metadata": {"total_size": single_path.stat().st_size},
-            "weight_map": weight_map,
-        }
-
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
@@ -203,31 +144,17 @@ class LlmDeployWorkflow:
         with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
-    def _refresh_weight_index(self, original_index, updated_weight_map):
-        metadata = dict(original_index.get("metadata", {}))
-        total_size = 0
-        for file_name in sorted(set(updated_weight_map.values())):
-            total_size += os.path.getsize(os.path.join(self.output_dir, file_name))
-        metadata["total_size"] = total_size
-
-        output_index = {
-            "metadata": metadata,
-            "weight_map": updated_weight_map,
-        }
-        index_path = os.path.join(self.output_dir, "model.safetensors.index.json")
-        with open(index_path, "w", encoding="utf-8") as f:
-            json.dump(output_index, f, ensure_ascii=False, indent=2, sort_keys=True)
-        return index_path
-
     def _export_block(self, layer_idx, quant_ignore_layers):
         """Per-layer export hook. Default: real HiF4/int/mxfp pack (``export_block_deploy``).
         Subclasses (e.g. ptq convert) override this to emit fake-quantized float weights."""
         return export_block_deploy(self.pipeline, layer_idx, quant_ignore_layers)
 
     def _run_blockwise(self):
-        self._copy_support_files()
+        # Local writer bound to the *current* model_path (post foreign-format decode) / output_dir.
+        writer = CheckpointShardWriter(self.model_path, self.output_dir)
+        writer.copy_support_files()
         quant_ignore_layers = []
-        original_index = self._load_weight_index()
+        original_index = writer.load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
         updated_weight_map = {}
         replaced_original_weights = set()
@@ -235,9 +162,11 @@ class LlmDeployWorkflow:
             layer_tensors, tensor_routes = self._export_block(layer_idx, quant_ignore_layers)
             if not layer_tensors:
                 continue
-            updated_weight_map.update(self._write_block_file(layer_idx, layer_tensors))
+            updated_weight_map.update(
+                writer.write_block_file(layer_idx, self.pipeline.num_layers, layer_tensors)
+            )
             replaced_original_weights.update(
-                self._collect_replaced_original_weights(
+                writer.collect_replaced_original_weights(
                     layer_tensors,
                     tensor_routes,
                     original_weight_map,
@@ -245,12 +174,12 @@ class LlmDeployWorkflow:
             )
 
         updated_weight_map.update(
-            self._write_remaining_original_weights(
+            writer.write_remaining_original_weights(
                 original_weight_map,
                 replaced_original_weights,
             )
         )
-        index_path = self._refresh_weight_index(original_index, updated_weight_map)
+        index_path = writer.refresh_weight_index(original_index, updated_weight_map)
         self._refresh_config(quant_ignore_layers)
         logger.info("Exported deploy model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
@@ -260,8 +189,9 @@ class LlmDeployWorkflow:
         }
 
     def _run_tensorwise(self):
-        self._copy_support_files()
-        original_index = self._load_weight_index()
+        writer = CheckpointShardWriter(self.model_path, self.output_dir)
+        writer.copy_support_files()
+        original_index = writer.load_weight_index()
         original_weight_map = dict(original_index.get("weight_map", {}))
         quant_layers = self.pipeline.generate_tensorwise_quant_layers()
         quant_ignore_layers = self.pipeline.generate_tensorwise_ignore_layers()
@@ -294,10 +224,10 @@ class LlmDeployWorkflow:
                         bit = quant_layers[new_weight_name]
                         state_dict = quant_payload(quant_cls, weight_name, weight, bit)
                         new_state_dict.update(state_dict)
-            self._write_safetensor_file(source_file, new_state_dict)
+            writer.write_safetensor_file(source_file, new_state_dict)
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file
-        index_path = self._refresh_weight_index(original_index, updated_weight_map)
+        index_path = writer.refresh_weight_index(original_index, updated_weight_map)
         self._refresh_config(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
@@ -305,61 +235,3 @@ class LlmDeployWorkflow:
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
         }
-
-    def _write_block_file(self, layer_idx: int, layer_tensors: dict[str, object]):
-        width = max(3, len(str(max(self.pipeline.num_layers - 1, 0))))
-        file_name = f"layer_{layer_idx:0{width}d}.safetensors"
-        self._write_safetensor_file(file_name, layer_tensors)
-        return {weight_name: file_name for weight_name in layer_tensors}
-
-    def _write_remaining_original_weights(
-        self,
-        original_weight_map: dict[str, str],
-        replaced_original_weights: set[str],
-    ):
-        remaining_by_file = defaultdict(list)
-        for weight_name, file_name in original_weight_map.items():
-            if weight_name in replaced_original_weights:
-                continue
-            remaining_by_file[file_name].append(weight_name)
-
-        max_shard_size = 8 * 1024 ** 3
-        rest_idx = 0
-        current_tensors = {}
-        current_size = 0
-        updated_entries = {}
-
-        def flush_current():
-            nonlocal rest_idx, current_tensors, current_size
-            if not current_tensors:
-                return
-            file_name = f"rest_{rest_idx:05d}.safetensors"
-            self._write_safetensor_file(file_name, current_tensors)
-            for weight_name in current_tensors:
-                updated_entries[weight_name] = file_name
-            rest_idx += 1
-            current_tensors = {}
-            current_size = 0
-
-        model_dir = Path(self.model_path)
-        for source_file in sorted(remaining_by_file):
-            source_path = model_dir / source_file
-            with safe_open(str(source_path), framework="pt", device="cpu") as f:
-                for weight_name in remaining_by_file[source_file]:
-                    tensor = f.get_tensor(weight_name)
-                    tensor_size = tensor.numel() * tensor.element_size()
-                    if current_tensors and current_size + tensor_size > max_shard_size:
-                        flush_current()
-                    current_tensors[weight_name] = tensor
-                    current_size += tensor_size
-
-        flush_current()
-        return updated_entries
-
-    def _write_safetensor_file(self, file_name: str, tensors: dict[str, object]):
-        if not tensors:
-            return
-        output_path = Path(self.output_dir) / file_name
-        tmp_path = output_path.parent / f".{output_path.name}.tmp"
-        save_file(tensors, str(tmp_path))
-        os.replace(tmp_path, output_path)

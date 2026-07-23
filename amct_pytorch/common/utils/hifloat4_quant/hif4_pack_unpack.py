@@ -100,6 +100,10 @@ def hif4_cast(x, output="packed"):
     # ---- pack scale (integer arithmetic, no bitwise ops) ----
     byte_e6m2 = ((enc.e_e6 + E6_OFFSET).to(torch.int32) * (2 ** E6M2_MBITS)
                  + (enc.q.to(torch.int32) - 4))                        # [M,gn]
+    # NaN/Inf block poison: hif4_encode flags non-finite groups by making the E6M2 scale NaN;
+    # store them as the reserved 0xFF E6M2 code (2^15 * 1.75) so the block decodes back to NaN.
+    byte_e6m2 = torch.where(torch.isnan(enc.e6m2),
+                            torch.full_like(byte_e6m2, 0xFF), byte_e6m2)
 
     pw8 = _pow2(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(torch.int32)  # [128..1]
     byte_l1 = (enc.e1_8.to(torch.int32) * pw8).sum(dim=-1)              # [M,gn]
@@ -149,4 +153,7 @@ def hif4_bit_reconstruct(scale, value):
 
     de = e1_16 + e1_8[..., None]                                          # [M,gn,8,2]
     dequant = sign * e6m2[..., None, None, None] * 2.0 ** de[..., None] * in_grp_val
+    # byte0 (E6M2) == 0xFF is the reserved NaN code -> the whole 64-block is NaN.
+    nan_block = (b_e6m2 == 0xFF)                                          # [M,gn]
+    dequant = np.where(nan_block[..., None, None, None], np.float32(np.nan), dequant)
     return dequant.reshape(M, N).astype(np.float32)
