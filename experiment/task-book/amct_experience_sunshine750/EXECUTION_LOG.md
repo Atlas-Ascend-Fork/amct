@@ -44,7 +44,7 @@ gcc --version
 
 ---
 
-## Step 5：检查 Python 和 NPU
+## Step 4：检查 Python 和 NPU
 
 ```bash
 python3 -m pip list
@@ -57,7 +57,7 @@ python3 -c "import torch, torch_npu; print(torch.npu.is_available(), torch.npu.d
 
 ---
 
-## Step 6：NPU 运算benchmark
+## Step 5：NPU 运算benchmark
 
 ```bash
 python3 -c "import torch, torch_npu; x=torch.tensor([1.,-1.], dtype=torch.float16, device='npu:0'); print((x*2).cpu())"
@@ -67,7 +67,7 @@ python3 -c "import torch, torch_npu; x=torch.tensor([1.,-1.], dtype=torch.float1
 
 ---
 
-## Step 9：发现官方分支的哈希值不同
+## Step 6：发现官方分支的哈希值不同
 
 ```bash
 git ls-remote --heads https://gitcode.com/cann/amct.git
@@ -84,7 +84,7 @@ git clone --depth 1 --branch master --single-branch \
 
 ---
 
-## Step 11：编译 hifloat8_cast
+## Step 7：编译 hifloat8_cast
 
 > **路径：** `/mnt/workspace/amct-master`
 
@@ -96,7 +96,7 @@ bash amct_ops/ops_build.sh --soc ascend910_93 hifloat8_cast
 
 ---
 
-## Step 12：运行官方算子benchmark
+## Step 8：运行官方算子benchmark
 
 ```bash
 PYTHONPATH=amct_ops/staging python3 -m unittest -v tests.amct_ops.test_hifloat8_cast
@@ -106,7 +106,7 @@ PYTHONPATH=amct_ops/staging python3 -m unittest -v tests.amct_ops.test_hifloat8_
 
 ---
 
-## Step 13：HiFloat8检查
+## Step 9：HiFloat8检查
 
 先直接调用 `torch_npu.npu_dtype_cast`，再运行官方 smoke：
 
@@ -124,7 +124,7 @@ python3 tests/amct_ops/run_hifloat8_dtype_smoke.py --backend native --device npu
 
 ---
 
-## Step 15：创建 Python 环境
+## Step 10：创建 Python 环境
 
 ```bash
 python3 -m venv --system-site-packages /mnt/workspace/.venv-amct
@@ -135,7 +135,7 @@ python3 -m venv --system-site-packages /mnt/workspace/.venv-amct
 
 ---
 
-## Step 17：运行 HiFloat dtype
+## Step 11：运行 HiFloat dtype
 
 ```bash
 .venv-amct/bin/python -m pytest -q \
@@ -147,7 +147,7 @@ python3 -m venv --system-site-packages /mnt/workspace/.venv-amct
 
 ---
 
-## Step 18：构建并安装 AMCT
+## Step 12：构建并安装 AMCT
 
 ```bash
 bash build.sh --torch
@@ -161,7 +161,7 @@ bash build.sh --torch
 
 ---
 
-## Step 21：运行 cast benchmark
+## Step 13：运行 cast benchmark
 
 ```bash
 .venv-amct/bin/python hifloat8_report_work/benchmark_hifloat8_cast.py \
@@ -173,7 +173,7 @@ bash build.sh --torch
 
 ---
 
-## Step 22：查看 Cast/Quantile/OFMR 实现
+## Step 14：查看 Cast/Quantile/OFMR 实现
 
 详细阅读内置配置、三种 quant module、deploy module、官方 Qwen 示例和 HiFloat8 文档。
 
@@ -187,7 +187,7 @@ bash build.sh --torch
 
 ---
 
-## Step 27：下载公开模型与数据
+## Step 15：下载公开模型与数据
 
 ```bash
 df -h /mnt/workspace
@@ -204,7 +204,7 @@ curl -I -L --max-time 25 \
 
 ---
 
-## Step 28：下载 Qwen3-0.6B
+## Step 16：下载 Qwen3-0.6B
 
 ```bash
 HF_ENDPOINT=https://hf-mirror.com \
@@ -227,7 +227,7 @@ mv model.safetensors.part model.safetensors
 
 ---
 
-## Step 29：下载并规范化 Wikitext-2
+## Step 17：下载并规范化 Wikitext-2
 
 第一次整库下载误包含 Wikitext-103，终止实际 PID 55612，随后只拉取目标配置：
 
@@ -246,7 +246,7 @@ HF_ENDPOINT=https://hf-mirror.com HF_HUB_DISABLE_XET=1 \
 
 ---
 
-## Step 30：建立 Qwen3 环境
+## Step 18：建立 Qwen3 环境
 
 仓库根依赖固定 `transformers==5.12.1`，首次加载因系统 torchaudio 2.11 与 torch
 2.7.1 ABI 不匹配而失败。模型配置和仓库 Qwen3 样例均指向 4.51.0，因此另建环境：
@@ -284,7 +284,7 @@ sha256sum /mnt/workspace/hifloat8_report_work/assets/wikitext/wikitext-2-raw-v1/
 
 ---
 
-## Step 31：实现并验证量化全过程
+## Step 19：实现并验证量化全过程
 
 新增 `delivery_draft/quantize.py`，实现本地模型/数据哈希、BF16 PPL、Cast/Quantile/
 OFMR、固定校准采样、官方/控制配置、显存计量、convert 探测和 JSON 结果。
@@ -301,7 +301,7 @@ Quantile 和 1-batch OFMR smoke。
 
 ---
 
-## Step 32：运行 PPL
+## Step 20：运行 PPL
 
 > **公共参数：** Qwen3-0.6B BF16、Wikitext-2 test、`seq_len=4096`、73 段、seed 42。
 
