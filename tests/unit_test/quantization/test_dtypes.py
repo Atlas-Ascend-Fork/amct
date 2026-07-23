@@ -15,9 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import sys
+from unittest.mock import patch
+
 import pytest
 import torch
 
+from amct_pytorch.cli.llm.args import parser_gen
 from amct_pytorch.quantization.dtypes.int import QuantDequantInt
 from amct_pytorch.quantization.dtypes.int_impl import (
     dynamic_per_token_quant,
@@ -40,6 +44,31 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     up_size,
     weight_dequant,
 )
+from amct_pytorch.quantization.dtypes import (
+    DTYPE_REGISTRY,
+    hifp as hifp_dtype,
+    hifp_impl,
+)
+from amct_pytorch.quantization.dtypes.hifp import QuantDequantHifp
+
+
+def _has_npu():
+    return (
+        hasattr(torch, "npu")
+        and hasattr(torch.Tensor, "npu")
+        and torch.npu.is_available()
+    )
+
+
+def _has_hifloat8_backend():
+    if not _has_npu():
+        return False
+    if hifp_impl.is_native_hifloat8_cast_available():
+        return True
+    try:
+        return hifp_impl._load_amct_ops_cast() is not None
+    except (ImportError, OSError, RuntimeError):
+        return False
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -312,3 +341,78 @@ def test_weight_dequant_block_size_one_direct_multiply():
     expected = weight * scale
     assert result.shape == weight.shape
     assert torch.allclose(result, expected.to(torch.get_default_dtype()))
+
+
+def test_hifp_is_registered_under_hifp_name_only():
+    assert DTYPE_REGISTRY.get("hifp") is QuantDequantHifp
+    with pytest.raises(KeyError):
+        DTYPE_REGISTRY.get("hif")
+
+
+def test_hifp_quant_dtype_cli_option_replaces_hif():
+    with patch.object(sys, "argv", ["amct", "--quant_dtype", "hifp"]):
+        assert parser_gen().quant_dtype == "hifp"
+
+    with patch.object(sys, "argv", ["amct", "--quant_dtype", "hif"]):
+        with pytest.raises(SystemExit):
+            parser_gen()
+
+
+@pytest.mark.skipif(
+    not _has_hifloat8_backend(),
+    reason="NPU or HiFloat8 backend is not available",
+)
+def test_hifp_forward_shape_and_dtype_preserved():
+    qdq = QuantDequantHifp(bits=8)
+    x = torch.randn(2, 8, dtype=torch.bfloat16).npu()
+
+    y = qdq(x)
+
+    assert torch.mean(abs(x - y)) > 0.0, f"HiFloat8 quant-dequant diff should be larger than 0."
+    assert y.shape == x.shape
+    assert y.dtype == x.dtype
+
+
+def test_hifp_quant_passes_gradient_through_ste():
+    x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
+    quantized = torch.full_like(x, 0.25)
+
+    with patch.object(
+        hifp_dtype, "hifloat8_fake_quant", return_value=quantized
+    ):
+        out = QuantDequantHifp(bits=8)(x)
+
+    assert torch.equal(out, quantized)
+    out.sum().backward()
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_identity_quant_result_preserves_gradient():
+    x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
+
+    with patch.object(
+        hifp_dtype,
+        "hifloat8_fake_quant",
+        side_effect=lambda tensor: tensor.detach(),
+    ):
+        out = QuantDequantHifp(bits=8)(x)
+
+    assert torch.equal(out, x)
+    out.sum().backward()
+    assert torch.equal(x.grad, torch.ones_like(x))
+
+
+def test_hifp_forward_bits16_is_passthrough():
+    qdq = QuantDequantHifp(bits=16)
+    x = torch.randn(2, 8)
+    assert torch.equal(qdq(x), x)
+
+
+def test_hifp_deploy_and_export_deploy_are_unsupported():
+    qdq = QuantDequantHifp(bits=8)
+    x = torch.randn(2, 8, dtype=torch.bfloat16)
+
+    with pytest.raises(NotImplementedError, match="export_deploy is not supported"):
+        qdq.export_deploy(x)
+    with pytest.raises(NotImplementedError, match="deploy is not supported"):
+        qdq.deploy(x)

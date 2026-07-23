@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """HiF4 checkpoint unpack -- reconstruct a packed HiFloat4 checkpoint back to FP16/BF16 float.
 
-This is the reverse of deploy's HiF4 *pack* (``QuantDequantHiF4.export_deploy`` -> ``hif4_cast``).
+This is the reverse of deploy's HiF4 *pack* (``QuantDequantHifp.export_deploy`` -> ``hif4_cast``).
 It is **model-agnostic**: the model pipeline cannot load packed HiF4 weights, so unpack walks the
 safetensors shards by their index (via the shared ``checkpoint_io`` layer) and reconstructs each
 packed weight tensor with ``hif4_bit_reconstruct``. Exposed as a plain function -- the ``ptq`` CLI
@@ -33,7 +33,7 @@ from typing import Dict, Optional
 
 import torch
 
-from .hif4_pack_unpack import hif4_bit_reconstruct
+from ..hifloat4_quant.hif4_pack_unpack import hif4_bit_reconstruct
 from ..checkpoint_io import resolve_index, invert_weight_map, write_index, copy_side_files, save_shard
 
 # unpack --dtype name -> the torch float dtype the reconstructed weight is emitted as.
