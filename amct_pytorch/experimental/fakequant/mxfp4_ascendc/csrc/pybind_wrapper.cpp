@@ -41,16 +41,6 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
     int32_t totalLen = static_cast<int32_t>(numel);
 
     auto y = at::empty_like(x);
-    // IMPORTANT: pass need_empty=true so torch_npu drains its internal task
-    // queue before returning the underlying aclrtStream. Without this, prior
-    // PyTorch ops (e.g. fill_, contiguous, prior matmuls feeding `x`) may
-    // still sit in the task queue and have NOT been submitted to the NPU
-    // stream yet. The kernel we launch directly with ACLRT_LAUNCH_KERNEL
-    // would then race ahead of those producers, reading uninitialised
-    // memory for `x` and producing all-zero outputs (silently, since the
-    // kernel return code is still 0). This was reproducible in vLLM's
-    // multi-process worker setup and breaks every MoE/Linear activation.
-    auto stream = c10_npu::getCurrentNPUStream().stream(true);
 
     // Tiling is only 4x int32. Allocate via the PyTorch NPU caching allocator
     // instead of a process-global aclrtMalloc cache: each call gets a fresh
@@ -63,6 +53,21 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
     auto tiling = at::empty({4}, at::TensorOptions().dtype(at::kInt).device(x.device()));
     auto tiling_cpu = at::from_blob(host_tiling, {4}, at::TensorOptions().dtype(at::kInt)).clone();
     tiling.copy_(tiling_cpu, /*non_blocking=*/true);
+
+    // IMPORTANT: pass need_empty=true so torch_npu drains its internal task
+    // queue before returning the underlying aclrtStream. This MUST be done
+    // AFTER all the aten prep ops above (empty_like, tiling alloc + copy_),
+    // so those ops are actually submitted to the NPU stream before we bypass
+    // the queue with ACLRT_LAUNCH_KERNEL below. Without this, prior PyTorch
+    // ops (the tiling H2D copy, fill_, contiguous, prior matmuls feeding `x`)
+    // may still sit in the task queue and have NOT been submitted to the NPU
+    // stream yet. The kernel we launch directly with ACLRT_LAUNCH_KERNEL would
+    // then race ahead of those producers, reading uninitialised memory for the
+    // tiling buffer (garbage totalLen/numCores/scale) or `x`, producing
+    // all-zero or numerically wrong outputs (silently, since the kernel return
+    // code is still 0). This was reproducible in vLLM's multi-process worker
+    // setup and breaks every MoE/Linear activation.
+    auto stream = c10_npu::getCurrentNPUStream().stream(true);
 
     // The auto-generated host stub still returns 0 ("success") when the
     // kernel handle was never registered (e.g. SoC mismatch), so this
