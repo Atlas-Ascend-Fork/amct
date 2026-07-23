@@ -10,9 +10,12 @@ on:
     comments: [ '^(?:\/)?compile*' ]
 
 env:
-  org_name: "opencann"
-  obs_path: "test/amct/package/${{ env.MERGE_ID }}"
-  repo_name: "amct"
+  org_name: ${{ vars.ORG_NAME }}
+  repo_name: "amct" 
+  MERGE_ID: ${{ atomgit.event.pull_request.number }} 
+  TARGET_BRANCH: ${{ atomgit.base_ref }} 
+  SOURCE_BRANCH: ${{ atomgit.head_ref }} 
+  obs_path: "${{ vars.OBS_PATH }}/${{ env.MERGE_ID }}"
   
 
 stages:
