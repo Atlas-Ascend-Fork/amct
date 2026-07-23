@@ -206,7 +206,8 @@ class NpuQuantizationLinear(torch.nn.Module):
     def _init_bias(self, module):
         """Decide bias form and set self.bias (passed to npu_quant_matmul, may be None):
           - INT8 PER_TENSOR + non-dynamic: quantize bias to INT32
-          - FP8*FP8 / HIFLOAT8*HIFLOAT8 / INT8 PER_TOKEN / dynamic: keep fp
+          - FP8*FP8 / HIFLOAT8*HIFLOAT8 tensor input: keep FP32 bias in x2Scale domain
+          - INT8 PER_TOKEN / dynamic: keep fp
           - module.bias is None: handle offset_bias if present
         """
         if module.bias is None:
@@ -219,6 +220,14 @@ class NpuQuantizationLinear(torch.nn.Module):
             deq_scale = module.scale_d * self.scale_w_tensor
             bias_tensor = (module.bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX).to(torch.int32)
             self.register_buffer('bias', bias_tensor)
+        elif (self.act_granularity == 'tensor'
+              and self.dynamic is not True
+              and self.act_type in [HIFLOAT8, FLOAT8_E4M3FN]
+              and self.wts_type in [HIFLOAT8, FLOAT8_E4M3FN]):
+            scale_w = self.scale_w_tensor.to(torch.float32)
+            scale_d = module.scale_d.to(device=scale_w.device, dtype=torch.float32)
+            bias_tensor = module.bias.data.to(device=scale_w.device, dtype=torch.float32)
+            self.register_buffer('bias', bias_tensor / (scale_d * scale_w))
         else:
             self.register_buffer('bias', module.bias.to(torch.float32))
 

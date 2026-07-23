@@ -28,7 +28,7 @@ index, so no bf16 reference is needed.
 
 Typical usage::
 
-    python -m amct_pytorch.common.utils.fpx_decode.convert_mxfp8_to_hif4 \\
+    python -m amct_pytorch.common.utils.decode.unpack_mxfp8 \\
         --quant_model_dir /path/to/MXFP8 \\
         --output_dir /path/to/output
 """

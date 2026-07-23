@@ -47,7 +47,7 @@ if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
 from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float  # noqa: E402
-from amct_pytorch.common.utils.fpx_decode.fp4_formats import (  # noqa: E402
+from amct_pytorch.common.utils.decode.fp4_formats import (  # noqa: E402
     bf16_to_hif4_e6m0,
     e2m1_lut,
     hif4_e6m0_to_fp32,
@@ -62,7 +62,7 @@ from amct_pytorch.common.utils.checkpoint_io import (  # noqa: E402
     ShardCache,
     walk_checkpoint,
 )
-from amct_pytorch.common.utils.fpx_decode.metrics import make_stats  # noqa: E402
+from amct_pytorch.common.utils.decode.metrics import make_stats  # noqa: E402
 
 _HIF4_QTYPE = QType("hifx4").dim(-1)
 

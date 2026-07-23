@@ -89,10 +89,10 @@ class LlmDeployWorkflow:
         """Auto-detect a foreign FP4/FP8 source and decode it to BF16 before deploy.
 
         Deploy loads a float model, then packs weights to HiF4 (``QuantDequantHiF4.export_deploy``).
-        For nvfp4/mxfp4/mxfp8 input, decode to a temp BF16 checkpoint first (``fpx_decode``) and
+        For nvfp4/mxfp4/mxfp8 input, decode to a temp BF16 checkpoint first (``decode``) and
         point the pipeline at it; fp16/bf16 pass through unchanged.
         """
-        from amct_pytorch.common.utils.fpx_decode.detect import (
+        from amct_pytorch.common.utils.decode.detect import (
             detect_source_format, decode_to_bf16, FOREIGN_FORMATS,
         )
         fmt = detect_source_format(self.model_path)

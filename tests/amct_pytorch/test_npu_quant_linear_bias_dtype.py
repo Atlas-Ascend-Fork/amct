@@ -36,19 +36,33 @@ def _make_shell():
     return obj
 
 
+class _ScaleDOnDifferentDevice:
+    def __init__(self, tensor):
+        self.tensor = tensor
+
+    @staticmethod
+    def __mul__(other):
+        raise RuntimeError(
+            "Expected all tensors to be on the same device. Expected NPU tensor, "
+            "please check whether the input tensor device is correct.")
+
+    def to(self, *args, **kwargs):
+        return self.tensor.to(*args, **kwargs)
+
+
 def _call_init_bias(act_type, wts_type, bias_tensor, act_granularity='tensor',
-                    dynamic=None, offset_bias=None):
+                    dynamic=None, offset_bias=None, scale_d=None, scale_w=None):
     linear = _make_shell()
     linear.act_granularity = act_granularity
     linear.dynamic = dynamic
     linear.act_type = act_type
     linear.wts_type = wts_type
-    linear.scale_w_tensor = torch.ones(bias_tensor.shape[0])
+    linear.scale_w_tensor = scale_w if scale_w is not None else torch.ones(bias_tensor.shape[0])
     linear.offset_bias = offset_bias
 
     module = MagicMock()
     module.bias = bias_tensor
-    module.scale_d = torch.ones(1)
+    module.scale_d = scale_d if scale_d is not None else torch.ones(1)
     linear._init_bias(module)
     return linear
 
@@ -60,10 +74,60 @@ class TestInitBiasDtype(unittest.TestCase):
         self.assertEqual(linear.bias.dtype, torch.float32,
                          "HIF8×HIF8 bias must be float32 for aclnnQuantMatmulV5")
 
+    def test_hif8x_hif8_tensor_channel_bias_uses_x2scale_domain(self):
+        bias = torch.tensor([2.0, 12.0, -18.0], dtype=torch.float16)
+        scale_d = torch.tensor([0.5], dtype=torch.float32)
+        scale_w = torch.tensor([2.0, 3.0, 6.0], dtype=torch.float32)
+        linear = _call_init_bias(HIFLOAT8, HIFLOAT8, bias, scale_d=scale_d, scale_w=scale_w)
+
+        expected = bias.to(torch.float32) / (scale_d * scale_w)
+        self.assertTrue(torch.allclose(linear.bias, expected))
+        self.assertEqual(linear.bias.dtype, torch.float32)
+
+    def test_hif8x_hif8_tensor_channel_bias_moves_scale_d_to_weight_device(self):
+        bias = torch.tensor([2.0, 12.0, -18.0], dtype=torch.float16)
+        scale_d = _ScaleDOnDifferentDevice(torch.tensor([0.5], dtype=torch.float32))
+        scale_w = torch.tensor([2.0, 3.0, 6.0], dtype=torch.float32)
+        linear = _call_init_bias(HIFLOAT8, HIFLOAT8, bias, scale_d=scale_d, scale_w=scale_w)
+
+        expected = bias.to(torch.float32) / (scale_d.tensor * scale_w)
+        self.assertTrue(torch.allclose(linear.bias, expected))
+        self.assertEqual(linear.bias.dtype, torch.float32)
+
+    def test_hif8x_hif8_token_bias_keeps_original_fp32(self):
+        bias = torch.tensor([2.0, 12.0, -18.0], dtype=torch.float16)
+        scale_d = torch.tensor([0.5], dtype=torch.float32)
+        scale_w = torch.tensor([2.0, 3.0, 6.0], dtype=torch.float32)
+        linear = _call_init_bias(HIFLOAT8, HIFLOAT8, bias, act_granularity='token',
+                                 scale_d=scale_d, scale_w=scale_w)
+
+        self.assertTrue(torch.allclose(linear.bias, bias.to(torch.float32)))
+        self.assertEqual(linear.bias.dtype, torch.float32)
+
     def test_fp8xfp8_bias_is_float32(self):
         linear = _call_init_bias(FLOAT8_E4M3FN, FLOAT8_E4M3FN, torch.randn(32).to(torch.float16))
         self.assertEqual(linear.bias.dtype, torch.float32,
                          "FP8×FP8 bias must be float32 for aclnnQuantMatmulV5")
+
+    def test_fp8xfp8_tensor_channel_bias_uses_x2scale_domain(self):
+        bias = torch.tensor([4.0, -10.0, 24.0], dtype=torch.float16)
+        scale_d = torch.tensor([0.25], dtype=torch.float32)
+        scale_w = torch.tensor([2.0, 5.0, 8.0], dtype=torch.float32)
+        linear = _call_init_bias(FLOAT8_E4M3FN, FLOAT8_E4M3FN, bias, scale_d=scale_d, scale_w=scale_w)
+
+        expected = bias.to(torch.float32) / (scale_d * scale_w)
+        self.assertTrue(torch.allclose(linear.bias, expected))
+        self.assertEqual(linear.bias.dtype, torch.float32)
+
+    def test_fp8xfp8_dynamic_bias_keeps_original_fp32(self):
+        bias = torch.tensor([4.0, -10.0, 24.0], dtype=torch.float16)
+        scale_d = torch.tensor([0.25], dtype=torch.float32)
+        scale_w = torch.tensor([2.0, 5.0, 8.0], dtype=torch.float32)
+        linear = _call_init_bias(FLOAT8_E4M3FN, FLOAT8_E4M3FN, bias, dynamic=True,
+                                 scale_d=scale_d, scale_w=scale_w)
+
+        self.assertTrue(torch.allclose(linear.bias, bias.to(torch.float32)))
+        self.assertEqual(linear.bias.dtype, torch.float32)
 
     def test_int8_pertoken_bias_is_float32(self):
         linear = _call_init_bias(INT8, INT8, torch.randn(32).to(torch.float16),

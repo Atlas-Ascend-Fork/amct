@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -14,8 +15,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""FP4 → BF16 → HiFloat4 offline conversion tools (experimental).
+import subprocess
+import sys
+from pathlib import Path
 
-FP4→BF16 dequant is pure PyTorch CPU.  BF16→HiF4 fake-quant reuses
-``amct_pytorch.common.utils.hifloat4_quant.quant_dequant_float``.
-"""
+
+SMOKE_SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "amct_ops"
+    / "run_hifloat8_dtype_smoke.py"
+)
+
+
+def test_hifloat8_smoke_help_lists_backend_modes():
+    result = subprocess.run(
+        [sys.executable, str(SMOKE_SCRIPT), "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--backend" in result.stdout
+    assert "native" in result.stdout
+    assert "amct_ops" in result.stdout
+    assert "auto" in result.stdout
