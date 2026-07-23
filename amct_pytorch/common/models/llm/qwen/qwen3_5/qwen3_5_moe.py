@@ -16,6 +16,7 @@
 # ----------------------------------------------------------------------------
 
 import torch
+from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import (
     Qwen3_5MoeDecoderLayer,
     Qwen3_5MoeTextConfig,
@@ -44,6 +45,7 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 class Qwen3_5Moe(Qwen3_5):
     def __init__(self, args):
         super().__init__(args)
+        self._weight_map = get_weight_mappings(self.model_path)
         self.cls = Qwen3_5MoeDecoderLayer
         self.textconfig = Qwen3_5MoeTextConfig
 
