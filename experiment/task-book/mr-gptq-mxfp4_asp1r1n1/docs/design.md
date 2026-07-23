@@ -160,7 +160,13 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 | **W4A16（weight-only）** | mxfp4 | bf16 | ✅ 权重 16→4bit，整体 >50% | ✅ | **低**（无激活量化+无在线激活旋转） | **首选/保底** |
 | W4A4（全量化） | mxfp4 | mxfp4 | ✅ 更省 | ✅ | 高（激活敏感，需在线旋转） | 进阶/加分 |
 
-任务只要求 "mxfp4 + delta≤0.4 + 量化层≥70%"，**未强制 W4A4**。W4A16 已满足全部硬指标且风险最低 → **8B/35B 主线走 W4A16**，W4A4 时间富余再冲。（`bit_config`：W4A16 用 `w_bits=4,a_bits=16`；W4A4 用现成 `w4a4.yaml`。）
+任务硬指标（delta≤0.4 / 量化层≥70% / 显存≥50%）**未强制 W4A4**，W4A16 已全部满足且风险最低 → **8B/35B 主线走 W4A16**（保底达标）。
+
+**W4A4 精度评估（按评审意见补充）**：weight-only 仅得存储收益，matmul 时权重需反量化回 bf16、推理反而变慢；W4A4（激活也 4-bit）才能让 matmul 在低比特上算、拿到计算收益。为此在**已实现的 Hadamard 在线旋转**基础上补齐激活量化：
+- **方法**：`fake_quant_forward` 内，对旋转后的激活 `X·H_k` 做**逐 token、逐 32 通道块的动态 MXFP4**（E8M0 shared exponent 每次前向重算）——旋转把激活离群值摊平，是激活能 4-bit 的前提；
+- **实现**：`--increments hadamard scale_fitting act_quant` 启用；amct 配置仍为 weight-only 组合（放行），激活量化在自实现 fake-quant 路径完成，用于**精度评估**（真部署需低比特激活算子，属另一课题）；
+- **消融**：W4A4「旋转开 vs 关」对照，量化 Hadamard 对激活量化的关键作用；
+- W4A4 精度数据见自验证报告。预期 delta 明显大于 W4A16（激活敏感），作进阶精度补充、不改 W4A16 保底结论。
 
 ### 4.5 全链路调用（复用现有 CLI）
 
