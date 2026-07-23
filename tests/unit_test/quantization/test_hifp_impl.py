@@ -21,7 +21,6 @@ from unittest.mock import patch
 
 import pytest
 import torch
-from loguru import logger
 
 from amct_pytorch.quantization.dtypes import hifp_impl
 
@@ -29,25 +28,8 @@ from amct_pytorch.quantization.dtypes import hifp_impl
 @pytest.fixture(autouse=True)
 def _clear_native_probe_cache():
     hifp_impl.is_native_hifloat8_cast_available.cache_clear()
-    warn_once = getattr(hifp_impl, "_warn_hifloat8_passthrough_once", None)
-    if warn_once is not None:
-        warn_once.cache_clear()
     yield
     hifp_impl.is_native_hifloat8_cast_available.cache_clear()
-    warn_once = getattr(hifp_impl, "_warn_hifloat8_passthrough_once", None)
-    if warn_once is not None:
-        warn_once.cache_clear()
-
-
-@pytest.fixture
-def warning_messages():
-    messages = []
-    sink_id = logger.add(
-        lambda message: messages.append(message.record["message"]),
-        level="WARNING",
-    )
-    yield messages
-    logger.remove(sink_id)
 
 
 def _fake_torch_npu(cast_fn=None, with_attrs=True):
@@ -280,7 +262,7 @@ def test_native_execution_error_falls_back_to_amct_ops(error_type):
 
 
 @pytest.mark.parametrize("error_type", [RuntimeError, OSError])
-def test_amct_ops_execution_error_returns_original_tensor(error_type):
+def test_amct_ops_execution_error_raises_backend_requirement(error_type):
     x = torch.randn(2, 8)
 
     def fail_amct_ops(tensor, encode, decode):
@@ -295,16 +277,42 @@ def test_amct_ops_execution_error_returns_original_tensor(error_type):
         "_amct_ops_hifloat8_fake_quant",
         side_effect=fail_amct_ops,
     ):
-        assert hifp_impl.hifloat8_fake_quant(x) is x
+        with pytest.raises(RuntimeError) as error:
+            hifp_impl.hifloat8_fake_quant(x)
+
+    assert "native HiFloat8 cast" in str(error.value)
+    assert "install amct_ops" in str(error.value)
 
 
-def test_both_backends_unavailable_returns_original_tensor():
+def test_both_backends_unavailable_raises_backend_requirement():
     x = torch.randn(2, 8)
 
     with patch.object(
         hifp_impl, "is_native_hifloat8_cast_available", return_value=False
     ), patch.object(hifp_impl, "_load_amct_ops_cast", return_value=None):
-        assert hifp_impl.hifloat8_fake_quant(x) is x
+        with pytest.raises(RuntimeError) as error:
+            hifp_impl.hifloat8_fake_quant(x)
+
+    assert "native HiFloat8 cast" in str(error.value)
+    assert "install amct_ops" in str(error.value)
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, OSError])
+def test_amct_ops_load_error_raises_backend_requirement(error_type):
+    x = torch.randn(2, 8)
+
+    with patch.object(
+        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
+    ), patch.object(
+        hifp_impl,
+        "_load_amct_ops_cast",
+        side_effect=error_type("failed to load amct_ops"),
+    ):
+        with pytest.raises(RuntimeError) as error:
+            hifp_impl.hifloat8_fake_quant(x)
+
+    assert "native HiFloat8 cast" in str(error.value)
+    assert "install amct_ops" in str(error.value)
 
 
 def test_unexpected_native_error_is_not_swallowed():
@@ -322,65 +330,7 @@ def test_unexpected_native_error_is_not_swallowed():
             hifp_impl.hifloat8_fake_quant(x)
 
 
-def test_both_backends_unavailable_warns_once(warning_messages):
-    x = torch.randn(2, 8)
-
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
-    ), patch.object(hifp_impl, "_load_amct_ops_cast", return_value=None):
-        assert hifp_impl.hifloat8_fake_quant(x) is x
-        assert hifp_impl.hifloat8_fake_quant(x) is x
-    assert len(warning_messages) == 1
-
-
-def test_passthrough_warning_explains_behavior(warning_messages):
-    x = torch.randn(2, 8)
-
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
-    ), patch.object(hifp_impl, "_load_amct_ops_cast", return_value=None):
-        hifp_impl.hifloat8_fake_quant(x)
-
-    assert len(warning_messages) == 1
-    assert "Native HiFloat8 cast" in warning_messages[0]
-    assert "amct_ops hifloat8_cast" in warning_messages[0]
-    assert "HiFloat8 fake quantization was not executed" in warning_messages[0]
-    assert "original tensor is returned" in warning_messages[0]
-
-
-def test_native_success_does_not_warn_about_passthrough(warning_messages):
-    x = torch.randn(2, 8)
-
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=True
-    ), patch.object(
-        hifp_impl,
-        "_native_hifloat8_fake_quant",
-        side_effect=lambda tensor: tensor + 1,
-    ):
-        hifp_impl.hifloat8_fake_quant(x)
-
-    assert warning_messages == []
-
-
-def test_amct_ops_success_does_not_warn_about_passthrough(warning_messages):
-    x = torch.randn(2, 8)
-
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
-    ), patch.object(
-        hifp_impl, "_load_amct_ops_cast", return_value=(object(), object())
-    ), patch.object(
-        hifp_impl,
-        "_amct_ops_hifloat8_fake_quant",
-        side_effect=lambda tensor, encode, decode: tensor + 1,
-    ):
-        hifp_impl.hifloat8_fake_quant(x)
-
-    assert warning_messages == []
-
-
-def test_both_backend_execution_failures_warn_once(warning_messages):
+def test_both_backend_execution_failures_raise_backend_requirement():
     x = torch.randn(2, 8)
     native_attempts = []
     fallback_attempts = []
@@ -404,10 +354,10 @@ def test_both_backend_execution_failures_warn_once(warning_messages):
         "_amct_ops_hifloat8_fake_quant",
         side_effect=fail_amct_ops,
     ):
-        assert hifp_impl.hifloat8_fake_quant(x) is x
-        assert hifp_impl.hifloat8_fake_quant(x) is x
-    assert len(warning_messages) == 1
-    assert len(native_attempts) == 2
-    assert all(tensor is x for tensor in native_attempts)
-    assert len(fallback_attempts) == 2
-    assert all(tensor is x for tensor in fallback_attempts)
+        with pytest.raises(RuntimeError) as error:
+            hifp_impl.hifloat8_fake_quant(x)
+
+    assert "native HiFloat8 cast" in str(error.value)
+    assert "install amct_ops" in str(error.value)
+    assert native_attempts == [x]
+    assert fallback_attempts == [x]

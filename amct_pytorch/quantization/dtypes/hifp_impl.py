@@ -18,10 +18,13 @@
 import functools
 
 import torch
-from loguru import logger
 
 
 _HIFLOAT8_BACKEND_ERRORS = (RuntimeError, OSError)
+_HIFLOAT8_BACKEND_REQUIRED = (
+    "HiFloat8 fake quantization is unavailable. To use HiFloat8, enable "
+    "native HiFloat8 cast support in torch_npu or install amct_ops."
+)
 
 
 @functools.lru_cache(maxsize=1)
@@ -94,16 +97,6 @@ def _amct_ops_hifloat8_fake_quant(fp_tensor, encode, decode):
     )
 
 
-@functools.lru_cache(maxsize=1)
-def _warn_hifloat8_passthrough_once():
-    """Warn once when no HiFloat8 backend can execute fake quantization."""
-    logger.warning(
-        "Native HiFloat8 cast and amct_ops hifloat8_cast are unavailable or "
-        "failed. HiFloat8 fake quantization was not executed; the original "
-        "tensor is returned."
-    )
-
-
 @torch.no_grad()
 def hifloat8_fake_quant(fp_tensor):
     """Run HiFloat8 fake quant with native cast and amct_ops fallback."""
@@ -113,12 +106,14 @@ def hifloat8_fake_quant(fp_tensor):
         except _HIFLOAT8_BACKEND_ERRORS:
             pass
 
-    ops = _load_amct_ops_cast()
+    try:
+        ops = _load_amct_ops_cast()
+    except _HIFLOAT8_BACKEND_ERRORS:
+        ops = None
     if ops is not None:
         try:
             return _amct_ops_hifloat8_fake_quant(fp_tensor, *ops)
         except _HIFLOAT8_BACKEND_ERRORS:
             pass
 
-    _warn_hifloat8_passthrough_once()
-    return fp_tensor
+    raise RuntimeError(_HIFLOAT8_BACKEND_REQUIRED)

@@ -44,7 +44,11 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import (
     up_size,
     weight_dequant,
 )
-from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, hifp as hifp_dtype
+from amct_pytorch.quantization.dtypes import (
+    DTYPE_REGISTRY,
+    hifp as hifp_dtype,
+    hifp_impl,
+)
 from amct_pytorch.quantization.dtypes.hifp import QuantDequantHifp
 
 
@@ -54,6 +58,17 @@ def _has_npu():
         and hasattr(torch.Tensor, "npu")
         and torch.npu.is_available()
     )
+
+
+def _has_hifloat8_backend():
+    if not _has_npu():
+        return False
+    if hifp_impl.is_native_hifloat8_cast_available():
+        return True
+    try:
+        return hifp_impl._load_amct_ops_cast() is not None
+    except (ImportError, OSError, RuntimeError):
+        return False
 
 
 @pytest.mark.parametrize("bits", [4, 8])
@@ -343,7 +358,10 @@ def test_hifp_quant_dtype_cli_option_replaces_hif():
             parser_gen()
 
 
-@pytest.mark.skipif(not _has_npu(), reason="NPU is not available")
+@pytest.mark.skipif(
+    not _has_hifloat8_backend(),
+    reason="NPU or HiFloat8 backend is not available",
+)
 def test_hifp_forward_shape_and_dtype_preserved():
     qdq = QuantDequantHifp(bits=8)
     x = torch.randn(2, 8, dtype=torch.bfloat16).npu()
@@ -369,7 +387,7 @@ def test_hifp_quant_passes_gradient_through_ste():
     assert torch.equal(x.grad, torch.ones_like(x))
 
 
-def test_hifp_passthrough_fallback_preserves_gradient():
+def test_hifp_identity_quant_result_preserves_gradient():
     x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
 
     with patch.object(
