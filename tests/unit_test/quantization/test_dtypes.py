@@ -297,6 +297,22 @@ def test_weight_dequant_packed_non_mx():
     assert result.shape == (16, 32)
 
 
+def test_weight_dequant_uint8_scale_uses_e8m0_encoding():
+    weight = torch.ones(1, 2, dtype=torch.float32)
+    scale = torch.tensor([[128, 129]], dtype=torch.uint8)
+    result = weight_dequant(weight, scale, block_size=1)
+    expected = torch.tensor([[1.0, 2.0]], dtype=torch.get_default_dtype())
+    assert torch.allclose(result, expected)
+
+
+def test_weight_dequant_int8_scale_uses_direct_float_value():
+    weight = torch.ones(1, 2, dtype=torch.float32)
+    scale = torch.tensor([[1, 2]], dtype=torch.int8)
+    result = weight_dequant(weight, scale, block_size=1)
+    expected = torch.tensor([[1.0, 2.0]], dtype=torch.get_default_dtype())
+    assert torch.allclose(result, expected)
+
+
 def test_weight_dequant_asserts_scale_mismatch():
     weight = torch.randn(16, 32)
     scale = torch.randn(3, 4)

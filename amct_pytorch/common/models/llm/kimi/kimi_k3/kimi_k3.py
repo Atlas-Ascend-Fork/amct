@@ -90,9 +90,6 @@ class KimiK3(BaseModel):
             return weight_name.replace(".weight_packed", ".weight")
         return weight_name
 
-    def is_packed_mxfp4_weight(self, weight_name, weight):
-        return self._is_kimi_moe_weight_packed(weight_name)
-
     def generate_tensorwise_quant_layers(self):
         if self.quant_target and "moe" not in self.quant_target:
             return {}

@@ -238,8 +238,8 @@ class LlmDeployWorkflow:
             "num_output_files": len(set(updated_weight_map.values())),
         }
 
-    def _tensorwise_compute_device(self, should_quantize: bool, is_packed_mxfp4: bool) -> str:
-        if should_quantize or is_packed_mxfp4:
+    def _tensorwise_compute_device(self, should_quantize: bool, needs_dequant: bool) -> str:
+        if should_quantize or needs_dequant:
             return getattr(self.args, "device", None) or "cpu"
         return "cpu"
 
@@ -274,10 +274,6 @@ class LlmDeployWorkflow:
                     continue
                 # FP8 -> bf16
                 block_size = self.pipeline.block_size(weight)
-                packed_mxfp4_fn = self._pipeline_hook("is_packed_mxfp4_weight")
-                is_packed_mxfp4 = (
-                    packed_mxfp4_fn(weight_name, weight) if callable(packed_mxfp4_fn) else False
-                )
                 output_name_fn = self._pipeline_hook("tensorwise_output_weight_name")
                 output_weight_name = (
                     output_name_fn(weight_name) if callable(output_name_fn) else weight_name
@@ -288,12 +284,11 @@ class LlmDeployWorkflow:
                     should_quantize = new_weight_name in quant_layers
                 compute_device = self._tensorwise_compute_device(
                     should_quantize=should_quantize,
-                    is_packed_mxfp4=is_packed_mxfp4,
+                    needs_dequant=weight.element_size() == 1,
                 )
                 weight = convert_state_dict(
                     weight, weight_name, scale_inv_name, original_weight_map,
                     model_dir, loaded_files, block_size,
-                    is_packed_mxfp4=is_packed_mxfp4,
                     compute_device=compute_device,
                 )
                 if should_quantize:

@@ -122,7 +122,6 @@ def test_kimi_k3_scale_and_output_names_for_packed_weight(tmp_path):
     assert model.tensorwise_output_weight_name(weight_name) == (
         "language_model.model.layers.0.block_sparse_moe.experts.0.w1.weight"
     )
-    assert model.is_packed_mxfp4_weight(weight_name, None) is True
 
 
 # ---- registry coverage check --------------------------------------------

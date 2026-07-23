@@ -488,9 +488,9 @@ def test_tensorwise_compute_device_uses_args_device_only_for_compute_tensors():
     wf = _make_workflow()
     wf.args.device = "npu:0"
 
-    assert wf._tensorwise_compute_device(should_quantize=True, is_packed_mxfp4=False) == "npu:0"
-    assert wf._tensorwise_compute_device(should_quantize=False, is_packed_mxfp4=True) == "npu:0"
-    assert wf._tensorwise_compute_device(should_quantize=False, is_packed_mxfp4=False) == "cpu"
+    assert wf._tensorwise_compute_device(should_quantize=True, needs_dequant=False) == "npu:0"
+    assert wf._tensorwise_compute_device(should_quantize=False, needs_dequant=True) == "npu:0"
+    assert wf._tensorwise_compute_device(should_quantize=False, needs_dequant=False) == "cpu"
 
 # ---- _write_remaining_original_weights: shard split -----------------------
 
@@ -742,10 +742,6 @@ def test_run_tensorwise_uses_adapter_output_weight_name(monkeypatch, tmp_path):
     wf.pipeline.tensorwise_output_weight_name = (
         lambda name: name.replace(".weight_packed", ".weight")
     )
-    wf.pipeline.is_packed_mxfp4_weight = (
-        lambda name, weight: name.endswith(".weight_packed")
-    )
-
     wf._run_tensorwise()
 
     refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())

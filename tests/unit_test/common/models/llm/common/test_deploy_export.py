@@ -240,24 +240,24 @@ def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monke
     assert result is weight
 
 
-def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
-    """FP8 weight with non-int8 dtype uses non-packed dequant (block_size=1)."""
+def test_convert_state_dict_uint8_dtype_uses_packed_mxfp4(tmp_path):
+    """uint8 1-byte weights are treated as packed MXFP4."""
     from safetensors.torch import save_file as sf_save
     from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
 
-    scale_inv = torch.ones(2, 4, dtype=torch.float32)
+    scale_inv = torch.ones(2, 1, dtype=torch.float32)
     sf_save({"layer.weight_scale_inv": scale_inv}, str(tmp_path / "shard.safetensors"))
 
-    # Use uint8 to simulate a non-int8 1-byte dtype (float8 not available on CPU)
-    weight = torch.ones(2, 4, dtype=torch.uint8)
+    weight = torch.ones(2, 2, dtype=torch.uint8)
     weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
     loaded_files = {}
 
     result = convert_state_dict(
         weight, "layer.weight", "layer.weight_scale_inv",
-        weight_map, tmp_path, loaded_files, block_size=1,
+        weight_map, tmp_path, loaded_files, block_size=4,
     )
     assert result.dtype != torch.uint8
+    assert result.shape == (2, 4)
 
 
 def test_convert_state_dict_uint8_weight_packed_uses_packed_mxfp4(tmp_path):

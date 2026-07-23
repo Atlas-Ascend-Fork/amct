@@ -73,8 +73,10 @@ def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 
     # Get the original dimensions of weight
     M, N = weight.shape
     weight = weight.to(torch.float32)
-    scale = scale.to(torch.float32)
-    scale = torch.pow(2.0, scale - 128.0)
+    if scale.dtype == torch.uint8:
+        scale = torch.pow(2.0, scale.to(torch.float32) - 128.0)
+    else:
+        scale = scale.to(torch.float32)
     if block_size != 1:
         if is_mx:
             scale_expanded = scale.repeat_interleave(block_size, dim=1)
