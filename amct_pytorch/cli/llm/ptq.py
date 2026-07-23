@@ -21,25 +21,17 @@ from amct_pytorch.cli.llm.args import parser_gen
 from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
 
-def _run_hif4_convert(args):
-    """HiF4 ptq: convert-only (no calibration), via the per-model route.
+def _run_hif4_convert(args, fmt):
+    """HiF4 ptq convert (no calibration): normalize a non-float input to a plain FP16 checkpoint.
 
-    - fp16/bf16/nvfp4/mxfp4/mxfp8 input -> per-model HiF4 fake-quant to a float checkpoint.
-      Uses LlmDeployWorkflow in ``fake_quant_output`` mode: it auto-detects the format, decodes
-      a foreign FP4/FP8 source to BF16 first, builds the model layer-by-layer, and fake-quants
-      each quantizable weight (quant_target modules); non-quantized tensors are copied.
-    - hif4 input -> reconstruct to float via checkpoint_unpack (the model pipeline cannot
-      load packed HiF4 weights, so this stays model-agnostic).
-
-    Output float dtype: fp16/bf16 preserve the source; foreign/hif4 default to fp16.
+    - hif4 packed input -> reconstruct to FP16 via ``decode.unpack_hif4`` (model-agnostic; the
+      model pipeline cannot load packed HiF4 weights).
+    - nvfp4/mxfp4/mxfp8 input -> ``LlmPtqConvertWorkflow``: auto-decode the foreign format to
+      BF16, build the model layer-by-layer, and HiF4 fake-quant each quantizable weight (NPU
+      kernel), emitting a plain FP16 checkpoint. Non-quantized tensors are copied.
     """
-    from amct_pytorch.common.utils.fpx_decode.detect import detect_source_format
-
-    fmt = detect_source_format(args.model)
-    print(f"[ptq/hif4] source format detected: {fmt}", flush=True)
-
     if fmt == "hif4":
-        from amct_pytorch.common.utils.hifloat4_quant.checkpoint_unpack import unpack_hif4_checkpoint
+        from amct_pytorch.common.utils.decode.unpack_hif4 import unpack_hif4_checkpoint
         os.makedirs(args.output_dir, exist_ok=True)
         unpack_hif4_checkpoint(args.model, args.output_dir, out_dtype="fp16")
         return
@@ -47,19 +39,23 @@ def _run_hif4_convert(args):
     import torch
     from amct_pytorch.workflows.llm_ptq import LlmPtqConvertWorkflow
 
-    out_dtype = torch.bfloat16 if fmt == "bf16" else torch.float16
     args.granularity = "block"  # per-model fake-quant runs block-by-block
-    LlmPtqConvertWorkflow(args, out_dtype=out_dtype).run()
+    LlmPtqConvertWorkflow(args, out_dtype=torch.float16).run()
 
 
 def main():
     args = parser_gen(command="ptq")
-    # HiF4 ptq is convert-only (no calibration); other dtypes keep the calibration workflow.
-    if args.quant_dtype == "hifloat4":
-        _run_hif4_convert(args)
-    else:
-        workflow = LlmPtqWorkflow(args)
-        workflow.run()
+    # HiFloat: route HiF4-family inputs (hif4 packed, or foreign nvfp4/mxfp4/mxfp8) through the
+    # convert path -> plain FP16. A plain float input (incl. HiFloat8) keeps the standard
+    # calibration workflow.
+    if args.quant_dtype == "hifp":
+        from amct_pytorch.common.utils.decode.detect import detect_source_format, FOREIGN_FORMATS
+        fmt = detect_source_format(args.model)
+        print(f"[ptq/hifp] source format detected: {fmt}", flush=True)
+        if fmt == "hif4" or fmt in FOREIGN_FORMATS:
+            _run_hif4_convert(args, fmt)
+            return
+    LlmPtqWorkflow(args).run()
 
 
 if __name__ == "__main__":
