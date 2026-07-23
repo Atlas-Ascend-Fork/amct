@@ -60,8 +60,7 @@ DP_ASSERT_EQUAL()
 }
 
 LOG_HEAD "Build ${REPOSITORY_NAME}."
-cd ${WORKSPACE}/ || exit
-cd ${WORKSPACE}/
+cd ${WORKSPACE}/ || exit 1
 echo "------------------"
 echo "${GIT_TARGET_BRANCH}"
 if [ "${GE_ST_RT2}X" == "torchX" ];then
@@ -83,4 +82,4 @@ else
         LOG_DO bash build.sh --pkg --cann_3rd_lib_path="/home/jenkins/opensource"
     fi
 fi
-DP_ASSERT_EQUAL "$?" "0" "Build with --opapi failed"
+DP_ASSERT_EQUAL "$?" "0" "Build amct failed"
