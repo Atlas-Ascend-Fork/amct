@@ -49,10 +49,11 @@ class CompModuleConvTranspose2d(CompModuleBase):
 
         # num_spatial_dims is module's kernel_size
         num_spatial_dims = 2
+        calc_output_padding = getattr(self.replaced_module, '_output_padding')
 
         # Forward
         if version_higher_than(torch.__version__, '1.12.0'):
-            output_padding = self.replaced_module._output_padding(
+            output_padding = calc_output_padding(
                 inputs,
                 output_size,
                 self.replaced_module.stride,
@@ -62,7 +63,7 @@ class CompModuleConvTranspose2d(CompModuleBase):
                 self.replaced_module.dilation,
             )
         elif version_higher_than(torch.__version__, '1.7.0'):
-            output_padding = self.replaced_module._output_padding(
+            output_padding = calc_output_padding(
                 inputs,
                 output_size,
                 self.replaced_module.stride,
@@ -71,7 +72,7 @@ class CompModuleConvTranspose2d(CompModuleBase):
                 self.replaced_module.dilation,
             )
         else:
-            output_padding = self.replaced_module._output_padding(
+            output_padding = calc_output_padding(
                 inputs,
                 output_size,
                 self.replaced_module.stride,

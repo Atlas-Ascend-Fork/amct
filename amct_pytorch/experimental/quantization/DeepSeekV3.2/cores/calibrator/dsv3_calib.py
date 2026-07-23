@@ -49,6 +49,7 @@ def set_model_weight_quant_state(model, flag):
 
 
 def forward_once(layer, fp_inps, seq_length, index, args):
+    batch_slice = slice(index, index + args.cali_bsz)
     if args.train_mode == "mla":
         attention_mask = None
         attention_mask_batch = _prepare_4d_causal_attention_mask(
@@ -57,11 +58,9 @@ def forward_once(layer, fp_inps, seq_length, index, args):
             torch.randn_like(fp_inps),
             0,
         )
-        out = layer(
-            fp_inps[index : index + args.cali_bsz,], attention_mask=attention_mask_batch
-        )[0]
+        out = layer(fp_inps[batch_slice], attention_mask=attention_mask_batch)[0]
     else:
-        out = layer(fp_inps[index : index + args.cali_bsz,])
+        out = layer(fp_inps[batch_slice])
     return out
 
 
@@ -102,9 +101,8 @@ def cali_quant(args, layer, layer_idx, inps, dev, param_prefix=None):
     with torch.no_grad():
         for j in range(args.nsamples // args.cali_bsz):
             index = j * args.cali_bsz
-            fp_outs[index : index + args.cali_bsz,] = forward_once(
-                layer, fp_inps, seq_length, index, args
-            )
+            batch_slice = slice(index, index + args.cali_bsz)
+            fp_outs[batch_slice] = forward_once(layer, fp_inps, seq_length, index, args)
 
     set_model_to_observe(layer, False)
     set_model_weight_quant_state(layer, True)
@@ -161,7 +159,8 @@ def cali_quant(args, layer, layer_idx, inps, dev, param_prefix=None):
                 index = j * args.cali_bsz
                 quant_out = forward_once(layer, fp_inps, seq_length, index, args)
 
-                loss = loss_func(fp_outs[index : index + args.cali_bsz,], quant_out)
+                batch_slice = slice(index, index + args.cali_bsz)
+                loss = loss_func(fp_outs[batch_slice], quant_out)
                 mse += loss.detach().cpu()
                 loss = loss / loss.clone().detach()
 

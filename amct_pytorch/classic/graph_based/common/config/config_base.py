@@ -482,6 +482,8 @@ class ConfigBase:
             ordered_config = self.root.sort(quant_config)
             return ordered_config
 
+        return None
+
     def check_activation_symmetric_valid(self, graph, config, layer_name):
         '''check current layer if support symmetric'''
         symmetric_limit_layers = self.graph_querier.get_act_symmetric_limit_layers(
