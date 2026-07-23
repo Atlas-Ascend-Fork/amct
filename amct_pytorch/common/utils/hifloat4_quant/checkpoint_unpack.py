@@ -16,7 +16,7 @@
 # ----------------------------------------------------------------------------
 """HiF4 checkpoint unpack -- reconstruct a packed HiFloat4 checkpoint back to FP16/BF16 float.
 
-This is the reverse of deploy's HiF4 *pack* (``QuantDequantHiF4.export_deploy`` -> ``hif4_cast``).
+This is the reverse of deploy's HiF4 *pack* (``QuantDequantHifp.export_deploy`` -> ``hif4_cast``).
 It is **model-agnostic**: the model pipeline cannot load packed HiF4 weights, so unpack walks the
 safetensors shards by their index (via the shared ``checkpoint_io`` layer) and reconstructs each
 packed weight tensor with ``hif4_bit_reconstruct``. Exposed as a plain function -- the ``ptq`` CLI
