@@ -15,7 +15,8 @@ env:
   MERGE_ID: ${{ atomgit.event.pull_request.number }} 
   TARGET_BRANCH: ${{ atomgit.base_ref }} 
   SOURCE_BRANCH: ${{ atomgit.head_ref }} 
-  obs_path: "${{ vars.OBS_PATH }}/${{ env.MERGE_ID }}"
+  # obs_path: "${{ vars.OBS_PATH }}/${{ env.MERGE_ID }}"
+  obs_path: "/test/amct/${{ env.MERGE_ID }}"
   
 
 stages:
