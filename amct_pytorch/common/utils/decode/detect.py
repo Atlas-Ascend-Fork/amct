@@ -68,44 +68,57 @@ def _tensor_keys(model_dir: str) -> Set[str]:
     return set()
 
 
-def _peek_weight_dtype(model_dir: str, keys: Set[str]) -> Optional[str]:
-    """safetensors dtype string of the first ``*.weight`` (e.g. 'F8_E4M3', 'U8', 'BF16')."""
-    weight_keys = sorted(k for k in keys if k.endswith(".weight"))
-    if not weight_keys:
-        return None
-    k = weight_keys[0]
+def _peek_tensor(model_dir: str, key: str):
+    """``(shape tuple, dtype string)`` of one tensor via its index shard / single file.
+
+    Returns ``(None, None)`` on any failure. dtype is the safetensors string, e.g. 'U8', 'F8_E4M3'.
+    """
     idx = os.path.join(model_dir, "model.safetensors.index.json")
     if os.path.exists(idx):
         try:
             with open(idx, "r", encoding="utf-8") as f:
-                shard = json.load(f)["weight_map"].get(k)
+                shard = json.load(f)["weight_map"].get(key)
         except (OSError, ValueError, KeyError):
             shard = None
         path = os.path.join(model_dir, shard) if shard else None
     else:
         path = os.path.join(model_dir, "model.safetensors")
     if not path or not os.path.exists(path):
-        return None
+        return None, None
     try:
         from safetensors import safe_open
         with safe_open(path, framework="pt") as f:
-            return f.get_slice(k).get_dtype()
+            sl = f.get_slice(key)
+            return tuple(sl.get_shape()), sl.get_dtype()
     except Exception:  # pragma: no cover
+        return None, None
+
+
+def _peek_weight_dtype(model_dir: str, keys: Set[str]) -> Optional[str]:
+    """safetensors dtype string of the first ``*.weight`` (e.g. 'F8_E4M3', 'U8', 'BF16')."""
+    weight_keys = sorted(k for k in keys if k.endswith(".weight"))
+    if not weight_keys:
         return None
+    return _peek_tensor(model_dir, weight_keys[0])[1]
 
 
 def detect_source_format(model_dir: str) -> str:
     """Best-effort detection. Returns 'hif4'|'nvfp4'|'mxfp8'|'mxfp4'|'fp16'|'bf16'.
 
-    Order: HiF4 pack marker -> config.json quantization_config hint -> weight-key markers
-    (with a dtype peek to split mxfp4 vs mxfp8) -> float dtype fallback.
+    Order: HiF4 pack marker (weight_scale shape) -> config.json quantization_config hint ->
+    weight-key markers (with a dtype peek to split mxfp4 vs mxfp8) -> float dtype fallback.
     """
-    # 1. HiF4 packed (produced by our pack)
-    if os.path.exists(os.path.join(model_dir, "hif4_cast_meta.json")):
-        return "hif4"
     keys = _tensor_keys(model_dir)
-    if any(k.endswith(".hif4_scale") or k.endswith(".hif4_value") for k in keys):
-        return "hif4"
+    # 1. HiF4 packed (our deploy pack): every quantized weight stores <w>.weight (uint8 codes)
+    #    plus <w>.weight_scale as a uint8 record of shape [M, N//64, 4] (E6M2 + 3 exponent bytes
+    #    per 64-group). mxfp4/mxfp8 also carry .weight_scale but it is 2-D; nvfp4 additionally has
+    #    .weight_scale_2. So a 3-D uint8 weight_scale with a trailing 4 uniquely marks HiF4.
+    if (any(k.endswith(".weight_scale") for k in keys)
+            and not any(k.endswith(".weight_scale_2") for k in keys)):
+        s_key = next(k for k in sorted(keys) if k.endswith(".weight_scale"))
+        shape, dtype = _peek_tensor(model_dir, s_key)
+        if dtype and dtype.upper() == "U8" and shape and len(shape) == 3 and shape[-1] == 4:
+            return "hif4"
 
     # 2. config.json quantization_config hints
     cfg = _read_config(model_dir)
@@ -131,8 +144,10 @@ def detect_source_format(model_dir: str) -> str:
             return "mxfp8"
         return "mxfp4"
 
-    # 4. plain float
+    # 4. plain float (check bfloat16 first -- "float16" is a substring of "bfloat16")
     dt = str(cfg.get("torch_dtype", "")).lower()
+    if "bfloat16" in dt or dt == "bf16":
+        return "bf16"
     return "fp16" if ("float16" in dt or dt == "fp16") else "bf16"
 
 
