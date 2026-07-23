@@ -126,5 +126,82 @@ class TestExternalDataIO(unittest.TestCase):
         return t
 
 
+class TestInt4BranchesViaMock(unittest.TestCase):
+    """覆盖 INT4 分支：这些分支靠字符串 'int4'/data_type_maps 判断，用 mock
+    传参即可覆盖，不依赖 onnx 原生 INT4 枚举。"""
+
+    _MAP = ('amct_pytorch.classic.graph_based.amct_pytorch.utils.'
+            'onnx_initializer_util.TensorProtoHelper.data_type_maps')
+
+    def test_resolve_np_dtype_int4(self):
+        # 'int4' -> ml_dtypes.int4（ml_dtypes 为独立包，不依赖 onnx）
+        import ml_dtypes
+        self.assertIs(TensorProtoHelper.resolve_np_dtype('int4'), ml_dtypes.int4)
+
+    def test_resolve_np_dtype_int4_without_ml_dtypes(self):
+        mod = ('amct_pytorch.classic.graph_based.amct_pytorch.utils.'
+               'onnx_initializer_util.ml_dtypes')
+        with mock.patch(mod, None):
+            with self.assertRaises(ImportError):
+                TensorProtoHelper.resolve_np_dtype('int4')
+
+    def test_get_quantized_raw_data_int4(self):
+        # 传 tensor_np_type='int4' 走 unpack 分支
+        data = np.array([1, -2, 7, -8], dtype=np.int8)
+        packed = pack_int4_to_int8(data)
+        t = TensorProto()
+        t.dims.extend([4])
+        setattr(t, 'raw_data', bytes(packed.astype('uint8')))
+        out = TensorProtoHelper(t)._get_quantized_raw_data('int4')
+        np.testing.assert_array_equal(out.astype(np.int8), data)
+
+    def test_set_data_unsupported_type_raises(self):
+        t = TensorProto()
+        with self.assertRaises(ValueError):
+            TensorProtoHelper(t).set_data(np.array([1], np.int8), 'NO_SUCH_TYPE')
+
+    def test_set_data_int4_packs(self):
+        # patch data_type_maps 注入 INT4 条目，使 int4 pack 分支可达
+        maps = dict(TensorProtoHelper.data_type_maps)
+        maps['INT4'] = [22, 'raw_data', 'int4']  # 22 = TensorProto.INT4 值
+        t = TensorProto()
+        with mock.patch(self._MAP, maps):
+            data = np.array([1, -2, 7, -8], dtype=np.int8)
+            TensorProtoHelper(t).set_data(data, 'INT4')
+        # 4 个 INT4 -> nibble-packed -> 2 字节
+        self.assertEqual(len(t.raw_data), 2)
+
+    def test_get_data_int4(self):
+        # patch map_np_type 返回 'int4'，覆盖 get_data 的 int4 unpack 分支
+        data = np.array([1, -2, 7, -8], dtype=np.int8)
+        packed = pack_int4_to_int8(data)
+        t = TensorProto()
+        t.data_type = TensorProto.INT8  # 非 UNDEFINED，才会走到 map_np_type
+        t.dims.extend([4])
+        setattr(t, 'raw_data', bytes(packed.astype('uint8')))
+        helper = TensorProtoHelper(t)
+        with mock.patch.object(helper, 'map_np_type', return_value='int4'):
+            out = helper.get_data()
+        np.testing.assert_array_equal(np.asarray(out).astype(np.int8), data)
+
+    def test_read_external_file_int4(self):
+        # _read_external_file 传 'int4'，覆盖外部文件 unpack 分支
+        tmp = tempfile.mkdtemp()
+        try:
+            data = np.array([1, -2, 7, -8, 3, -4, 0, 5], dtype=np.int8)
+            packed = pack_int4_to_int8(data)
+            fpath = os.path.join(tmp, 'w.bin')
+            packed.astype('uint8').tofile(fpath)
+            t = TensorProto()
+            t.dims.extend([8])
+            out, _ = TensorProtoHelper(t)._read_external_file(
+                fpath, 0, len(packed), 'int4')
+            np.testing.assert_array_equal(out.astype(np.int8), data)
+        finally:
+            for f in os.listdir(tmp):
+                os.remove(os.path.join(tmp, f))
+            os.rmdir(tmp)
+
+
 if __name__ == "__main__":
     unittest.main()
