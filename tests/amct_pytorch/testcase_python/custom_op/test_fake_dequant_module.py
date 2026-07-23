@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,7 +22,6 @@ import unittest
 import numpy as np
 import torch
 
-import amct_pytorch.classic.graph_based.amct_pytorch
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.fake_quant import (
     FakeDeQuant,
 )
@@ -74,11 +73,11 @@ class TestFakeDeQuantModule(unittest.TestCase):
         deq_shape = (-1, 1, 1, 1)
         offset_d = -128
         inputs = torch.tensor(
-            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32)
+            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32
+        )
         fake_dequant = FakeDeQuant(scale_d, scale_w, deq_shape)
         out = fake_dequant(inputs)
-        np_out = dequant_compute(
-            inputs.numpy(), scale_d, scale_w, deq_shape)
+        np_out = dequant_compute(inputs.numpy(), scale_d, scale_w, deq_shape)
         compare_ndarray(np_out, out.detach().numpy(), 'fake_dequant')
 
     def test_fake_dequant_module_per_tensor(self):
@@ -87,9 +86,9 @@ class TestFakeDeQuantModule(unittest.TestCase):
         deq_shape = (1, -1)
         offset_d = -128
         inputs = torch.tensor(
-            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32)
+            np.random.randint(0, 255, (1, 3, 224, 224)), dtype=torch.float32
+        )
         fake_dequant = FakeDeQuant(scale_d, scale_w, deq_shape)
         out = fake_dequant(inputs)
-        np_out = dequant_compute(
-            inputs.numpy(), scale_d, scale_w, deq_shape)
+        np_out = dequant_compute(inputs.numpy(), scale_d, scale_w, deq_shape)
         compare_ndarray(np_out, out.detach().numpy(), 'fake_dequant')

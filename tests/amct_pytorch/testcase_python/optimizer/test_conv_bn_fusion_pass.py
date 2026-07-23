@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,16 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import copy
-import json
 import logging
 import os
-import sys
 import unittest
 from io import BytesIO
 from unittest.mock import patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.record_file_operator import (
@@ -102,7 +98,7 @@ class TestConvbnFusionPass(unittest.TestCase):
         pass
 
     def test_fuse_eval(self):
-        ''' test GraphQuerier.get_support_quant_layer2type '''
+        '''test GraphQuerier.get_support_quant_layer2type'''
         model_001 = models.Net001().to(torch.device("cpu"))
         graph = Parser.parse_net_to_graph(self.onnx_file)
 
@@ -114,19 +110,33 @@ class TestConvbnFusionPass(unittest.TestCase):
         named_module_dict = {name: mod for name, mod in model_001.named_modules()}
 
         # BatchNormalization is replaced by Indntity
-        self.assertEqual(True, isinstance(named_module_dict['layer1.1'], torch.nn.Identity))
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer1.1'], torch.nn.Identity)
+        )
         if version_higher_than(torch.__version__, '2.1.0'):
             # affine cannot be false version later than 2.1.0
-            self.assertEqual(True, isinstance(named_module_dict['layer2.1'], torch.nn.Identity))
+            self.assertEqual(
+                True, isinstance(named_module_dict['layer2.1'], torch.nn.Identity)
+            )
         else:
-            self.assertEqual(True, isinstance(named_module_dict['layer2.1'], torch.nn.BatchNorm2d))
-        self.assertEqual(True, isinstance(named_module_dict['layer3.1'], torch.nn.Identity))
-        self.assertEqual(True, isinstance(named_module_dict['layer4.1'], torch.nn.Identity))
-        self.assertEqual(True, isinstance(named_module_dict['layer5.1'], torch.nn.Identity))
-        self.assertEqual(True, isinstance(named_module_dict['layer6.1'], torch.nn.Identity))
+            self.assertEqual(
+                True, isinstance(named_module_dict['layer2.1'], torch.nn.BatchNorm2d)
+            )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer3.1'], torch.nn.Identity)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer4.1'], torch.nn.Identity)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer5.1'], torch.nn.Identity)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer6.1'], torch.nn.Identity)
+        )
 
     def test_fuse_train(self):
-        ''' test GraphQuerier.get_support_quant_layer2type '''
+        '''test GraphQuerier.get_support_quant_layer2type'''
         model_001 = models.Net001().to(torch.device("cpu"))
         graph = Parser.parse_net_to_graph(self.onnx_file)
 
@@ -138,40 +148,81 @@ class TestConvbnFusionPass(unittest.TestCase):
         named_module_dict = {name: mod for name, mod in model_001.named_modules()}
 
         # BatchNormalization is not replaced by Indntity
-        self.assertEqual(True, isinstance(named_module_dict['layer1.1'], torch.nn.BatchNorm2d))
-        self.assertEqual(True, isinstance(named_module_dict['layer2.1'], torch.nn.BatchNorm2d))
-        self.assertEqual(True, isinstance(named_module_dict['layer3.1'], torch.nn.BatchNorm2d))
-        self.assertEqual(True, isinstance(named_module_dict['layer4.1'], torch.nn.BatchNorm2d))
-        self.assertEqual(True, isinstance(named_module_dict['layer5.1'], torch.nn.BatchNorm2d))
-        self.assertEqual(True, isinstance(named_module_dict['layer6.1'], torch.nn.BatchNorm2d))
-
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer1.1'], torch.nn.BatchNorm2d)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer2.1'], torch.nn.BatchNorm2d)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer3.1'], torch.nn.BatchNorm2d)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer4.1'], torch.nn.BatchNorm2d)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer5.1'], torch.nn.BatchNorm2d)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer6.1'], torch.nn.BatchNorm2d)
+        )
 
     @patch.object(Configuration, 'get_skip_fusion_layers')
-    def test_conv_bn_fusion_pass_with_unsupport_padding_typpe(self, mock_get_skip_fusion_layers):
+    def test_conv_bn_fusion_pass_with_unsupport_padding_typpe(
+        self, mock_get_skip_fusion_layers
+    ):
         mock_get_skip_fusion_layers.return_value = []
 
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1 = torch.nn.Conv2d(3, 3, kernel_size=[3, 3], stride=1,
-                                             padding=[1, 3], dilation=1, groups=1,
-                                             bias=False,
-                                             padding_mode='circular')
+                self.conv1 = torch.nn.Conv2d(
+                    3,
+                    3,
+                    kernel_size=[3, 3],
+                    stride=1,
+                    padding=[1, 3],
+                    dilation=1,
+                    groups=1,
+                    bias=False,
+                    padding_mode='circular',
+                )
                 self.bn1 = torch.nn.BatchNorm2d(3)
-                self.conv2 = torch.nn.Conv2d(3, 3, kernel_size=[3, 3], stride=1,
-                                             padding=[1, 3], dilation=1, groups=1,
-                                             bias=False,
-                                             padding_mode='replicate')
+                self.conv2 = torch.nn.Conv2d(
+                    3,
+                    3,
+                    kernel_size=[3, 3],
+                    stride=1,
+                    padding=[1, 3],
+                    dilation=1,
+                    groups=1,
+                    bias=False,
+                    padding_mode='replicate',
+                )
                 self.bn2 = torch.nn.BatchNorm2d(3)
-                self.conv3 = torch.nn.Conv2d(3, 3, kernel_size=[3, 3], stride=1,
-                                             padding=[1, 3], dilation=1, groups=1,
-                                             bias=False,
-                                             padding_mode='reflect')
+                self.conv3 = torch.nn.Conv2d(
+                    3,
+                    3,
+                    kernel_size=[3, 3],
+                    stride=1,
+                    padding=[1, 3],
+                    dilation=1,
+                    groups=1,
+                    bias=False,
+                    padding_mode='reflect',
+                )
                 self.bn3 = torch.nn.BatchNorm2d(3)
-                self.conv4 = torch.nn.Conv2d(3, 3, kernel_size=[3, 3], stride=1,
-                                             padding=[1, 3], dilation=1, groups=1,
-                                             bias=False,
-                                             padding_mode='zeros')
+                self.conv4 = torch.nn.Conv2d(
+                    3,
+                    3,
+                    kernel_size=[3, 3],
+                    stride=1,
+                    padding=[1, 3],
+                    dilation=1,
+                    groups=1,
+                    bias=False,
+                    padding_mode='zeros',
+                )
                 self.bn4 = torch.nn.BatchNorm2d(3)
 
             def forward(self, x):
@@ -184,6 +235,7 @@ class TestConvbnFusionPass(unittest.TestCase):
                 x = self.conv4(x)
                 x = self.bn4(x)
                 return x
+
         model = SingleConv()
         model.eval()
 
@@ -201,7 +253,6 @@ class TestConvbnFusionPass(unittest.TestCase):
         after_nodes = len(graph.nodes)
         self.assertEqual(before_nodes - after_nodes, 4)
 
-
     @patch.object(Configuration, 'get_skip_fusion_layers')
     def test_conv_bn_fusion_pass_dialation_2(self, mock_get_skip_fusion_layers):
         mock_get_skip_fusion_layers.return_value = []
@@ -209,15 +260,22 @@ class TestConvbnFusionPass(unittest.TestCase):
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1 = torch.nn.Conv2d(3, 3, kernel_size=[3, 3], stride=1,
-                                             padding=[1, 3], dilation=2, groups=1)
+                self.conv1 = torch.nn.Conv2d(
+                    3,
+                    3,
+                    kernel_size=[3, 3],
+                    stride=1,
+                    padding=[1, 3],
+                    dilation=2,
+                    groups=1,
+                )
                 self.bn1 = torch.nn.BatchNorm2d(3)
-
 
             def forward(self, x):
                 x = self.conv1(x)
                 x = self.bn1(x)
                 return x
+
         model = SingleConv()
         model.eval()
 
@@ -236,15 +294,22 @@ class TestConvbnFusionPass(unittest.TestCase):
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1 = torch.nn.Conv2d(3, 3, kernel_size=[3, 3], stride=1,
-                                             padding=[1, 3], dilation=2, groups=1)
+                self.conv1 = torch.nn.Conv2d(
+                    3,
+                    3,
+                    kernel_size=[3, 3],
+                    stride=1,
+                    padding=[1, 3],
+                    dilation=2,
+                    groups=1,
+                )
                 self.bn1 = torch.nn.BatchNorm2d(3)
-
 
             def forward(self, x):
                 x = self.conv1(x)
                 x = self.bn1(x)
                 return x
+
         model = SingleConv()
         model.eval()
 
@@ -252,12 +317,13 @@ class TestConvbnFusionPass(unittest.TestCase):
         Parser.export_onnx(model, torch.randn(1, 3, 19, 19), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
 
-        record_helper = ScaleOffsetRecordHelper(scale_offset_record_pb2.ScaleOffsetRecord)
+        record_helper = ScaleOffsetRecordHelper(
+            scale_offset_record_pb2.ScaleOffsetRecord
+        )
         scale = [1]
         offset = [0, 0]
         record_helper.record_weights_scale_offset(CONV1, scale, offset)
         record_helper.record_activation_scale_offset(CONV1, 1, 0)
-
 
         optimizer = ModelOptimizer()
         optimizer.add_pass(ConvBnFusionPass(None, record_helper))
@@ -267,15 +333,22 @@ class TestConvbnFusionPass(unittest.TestCase):
         class SingleConv(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1 = torch.nn.Conv2d(3, 3, kernel_size=[3, 3], stride=1,
-                                             padding=[1, 3], dilation=2, groups=1)
+                self.conv1 = torch.nn.Conv2d(
+                    3,
+                    3,
+                    kernel_size=[3, 3],
+                    stride=1,
+                    padding=[1, 3],
+                    dilation=2,
+                    groups=1,
+                )
                 self.bn1 = torch.nn.BatchNorm2d(3)
-
 
             def forward(self, x):
                 x = self.conv1(x)
                 x = self.bn1(x)
                 return x
+
         model = SingleConv()
         model.eval()
 
@@ -283,12 +356,13 @@ class TestConvbnFusionPass(unittest.TestCase):
         Parser.export_onnx(model, torch.randn(1, 3, 19, 19), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
 
-        record_helper = ScaleOffsetRecordHelper(scale_offset_record_pb2.ScaleOffsetRecord)
+        record_helper = ScaleOffsetRecordHelper(
+            scale_offset_record_pb2.ScaleOffsetRecord
+        )
         scale = [1]
         offset = [0]
         record_helper.record_weights_scale_offset(CONV1, scale, offset)
         record_helper.record_activation_scale_offset(CONV1, 1, 0)
-
 
         optimizer = ModelOptimizer()
         optimizer.add_pass(ConvBnFusionPass(None, record_helper))
@@ -297,5 +371,3 @@ class TestConvbnFusionPass(unittest.TestCase):
         self.assertEqual(3, len(offset_w))
         self.assertEqual(3, len(scale_w))
         self.assertNotEqual(1, scale_w[0])
-
-

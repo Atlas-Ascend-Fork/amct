@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -47,7 +47,7 @@ class TestArqOp(unittest.TestCase):
         pass
 
     def test_arq_cali_pytorch_channelwise_f_withoffset_f(self):
-        '''channel_wise: F withoffset:F '''
+        '''channel_wise: F withoffset:F'''
         data_list = [[-1.0] * 12, [0.0] * 12, [1.0] * 12, [-1.0, 0.0, 1.0] * 4]
         input_data = torch.tensor(data_list, device=DEVICE)
         scale, offset, output_data = arq_cali_pytorch(input_data, 8, False, False)
@@ -62,12 +62,14 @@ class TestArqOp(unittest.TestCase):
         self.assertTrue(torch.ge(1e-2 * torch.ones([4, 12]), err).numpy().all())
 
     def test_arq_cali_pytorch_channelwise_t_withoffset_f(self):
-        '''channel_wise: T withoffset:F '''
+        '''channel_wise: T withoffset:F'''
         data_list = [[-1.0] * 12, [0.0] * 12, [1.0] * 12, [-1.0, 0.0, 1.0] * 4]
         input_data = torch.tensor(data_list, device=DEVICE)
         scale, offset, output_data = arq_cali_pytorch(input_data, 8, True, False)
 
-        scale_except = torch.tensor([0.007844, 1.000000, 0.007844, 0.007844], device=DEVICE)
+        scale_except = torch.tensor(
+            [0.007844, 1.000000, 0.007844, 0.007844], device=DEVICE
+        )
         scale_err = torch.abs(scale_except - scale).to('cpu')
         offset_except = torch.tensor([0, 0, 0, 0], dtype=torch.int32, device=DEVICE)
         err = torch.abs(output_data - input_data).to('cpu')
@@ -81,9 +83,13 @@ class TestArqOp(unittest.TestCase):
         input_data = torch.tensor(data_list, device=DEVICE)
         scale, offset, output_data = arq_cali_pytorch(input_data, 8, True, True)
 
-        scale_except = torch.tensor([0.003923, 1.000000, 0.003923, 0.007844], device=DEVICE)
+        scale_except = torch.tensor(
+            [0.003923, 1.000000, 0.003923, 0.007844], device=DEVICE
+        )
         scale_err = torch.abs(scale_except - scale).to('cpu')
-        offset_except = torch.tensor([127, -128, -128, -1], dtype=torch.int32, device=DEVICE)
+        offset_except = torch.tensor(
+            [127, -128, -128, -1], dtype=torch.int32, device=DEVICE
+        )
         err = torch.abs(output_data - input_data).to('cpu')
 
         self.assertTrue(torch.ge(1e-4 * torch.ones([1]), scale_err).numpy().all())

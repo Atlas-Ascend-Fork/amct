@@ -43,7 +43,6 @@ class TestGRUPTQ(unittest.TestCase):
     The UT for QuantizeTool
     """
 
-
     @classmethod
     def setUpClass(cls):
         batch_size = 32
@@ -59,13 +58,15 @@ class TestGRUPTQ(unittest.TestCase):
         gru_hidden_size = 64
         num_gru_layers = 1
 
-        cls.model = rnn_model.Conv1dGRU(input_channels=channels,
-                            conv1d_kernel_size=conv1d_kernel_size,
-                            conv1d_out_channels=conv1d_out_channels,
-                            gru_hidden_size=gru_hidden_size,
-                            num_classes=num_class,
-                            num_gru_layers=num_gru_layers,
-                            dropout=0.1)
+        cls.model = rnn_model.Conv1dGRU(
+            input_channels=channels,
+            conv1d_kernel_size=conv1d_kernel_size,
+            conv1d_out_channels=conv1d_out_channels,
+            gru_hidden_size=gru_hidden_size,
+            num_classes=num_class,
+            num_gru_layers=num_gru_layers,
+            dropout=0.1,
+        )
 
         cls.temp_folder = os.path.join(CUR_DIR, 'test_rnn')
         if not os.path.isdir(cls.temp_folder):
@@ -90,9 +91,8 @@ class TestGRUPTQ(unittest.TestCase):
     def test_create_quant_config(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         create_quant_config(
-            config_file=config_file,
-            model=self.model,
-            input_data=(self.input, self.h0))
+            config_file=config_file, model=self.model, input_data=(self.input, self.h0)
+        )
 
         self.assertTrue(os.path.exists(config_file))
 
@@ -100,8 +100,9 @@ class TestGRUPTQ(unittest.TestCase):
         config_file = os.path.join(self.temp_folder, 'config.json')
         record_file = os.path.join(self.temp_folder, 'record.txt')
         modified_model = os.path.join(self.temp_folder, 'modified_model.onnx')
-        new_model = quantize_model(config_file, modified_model, record_file,
-            self.model, (self.input, self.h0))
+        new_model = quantize_model(
+            config_file, modified_model, record_file, self.model, (self.input, self.h0)
+        )
 
         self.assertTrue(os.path.exists(modified_model))
         output = new_model(self.input, self.h0)
@@ -126,6 +127,7 @@ class TestGRUQAT(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.batch_size = 1
@@ -141,13 +143,15 @@ class TestGRUQAT(unittest.TestCase):
         gru_hidden_size = 64
         num_gru_layers = 1
 
-        cls.model = rnn_model.Conv1dGRU(input_channels=channels,
-                            conv1d_kernel_size=conv1d_kernel_size,
-                            conv1d_out_channels=conv1d_out_channels,
-                            gru_hidden_size=gru_hidden_size,
-                            num_classes=cls.num_class,
-                            num_gru_layers=num_gru_layers,
-                            dropout=0.1)
+        cls.model = rnn_model.Conv1dGRU(
+            input_channels=channels,
+            conv1d_kernel_size=conv1d_kernel_size,
+            conv1d_out_channels=conv1d_out_channels,
+            gru_hidden_size=gru_hidden_size,
+            num_classes=cls.num_class,
+            num_gru_layers=num_gru_layers,
+            dropout=0.1,
+        )
 
         cls.temp_folder = os.path.join(CUR_DIR, 'test_rnn')
         if not os.path.isdir(cls.temp_folder):
@@ -174,17 +178,17 @@ class TestGRUQAT(unittest.TestCase):
     def test_create_quant_retrain_config(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         create_quant_retrain_config(
-            config_file=config_file,
-            model=self.model,
-            input_data=(self.input, self.h0))
+            config_file=config_file, model=self.model, input_data=(self.input, self.h0)
+        )
 
         self.assertTrue(os.path.exists(config_file))
 
     def test_create_quant_retrain_model(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         record_file = os.path.join(self.temp_folder, 'record.txt')
-        self.new_model = create_quant_retrain_model(config_file, self.model, record_file,
-            (self.input, self.h0))
+        self.new_model = create_quant_retrain_model(
+            config_file, self.model, record_file, (self.input, self.h0)
+        )
 
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.new_model.parameters(), lr=self.learning_rate)
@@ -207,11 +211,13 @@ class TestGRUQAT(unittest.TestCase):
         fakequant = os.path.join(self.temp_folder, 'res_fake_quant_model.onnx')
         deploy = os.path.join(self.temp_folder, 'res_deploy_model.onnx')
 
-        save_quant_retrain_model(model=self.new_model,
-                                 input_data=(self.input, self.h0),
-                                 config_file=config_file,
-                                 record_file=record_file,
-                                 save_path=save_path)
+        save_quant_retrain_model(
+            model=self.new_model,
+            input_data=(self.input, self.h0),
+            config_file=config_file,
+            record_file=record_file,
+            save_path=save_path,
+        )
 
         self.assertTrue(os.path.exists(fakequant))
         self.assertTrue(os.path.exists(deploy))

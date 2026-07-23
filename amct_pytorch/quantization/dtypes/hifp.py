@@ -24,7 +24,6 @@ from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.quantization.dtypes.hifp_impl import hifloat8_fake_quant
 
 
-
 @DTYPE_REGISTRY.register(name="hifp", description="quant dequant for hifloat")
 class QuantDequantHifp(torch.nn.Module):
     def __init__(self, bits=8, is_act=False):
@@ -38,7 +37,7 @@ class QuantDequantHifp(torch.nn.Module):
             dq = hifloat8_fake_quant(x)
             return dq.detach() + (x - x.detach())
         else:
-            raise ValueError(f"HiFloat 4-bit are not implemented yet.")
+            raise ValueError("HiFloat 4-bit are not implemented yet.")
 
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
         if self.bits == 16:
@@ -46,10 +45,14 @@ class QuantDequantHifp(torch.nn.Module):
         elif self.bits == 8:
             return self.fake_quant(x, v=v)
         else:
-            raise ValueError(f"HiFloat only supports 8-bit quantization, got {self.bits}.")
+            raise ValueError(
+                f"HiFloat only supports 8-bit quantization, got {self.bits}."
+            )
 
     def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
-        raise NotImplementedError(f"HiFloat-{self.bits} export_deploy is not supported yet.")
+        raise NotImplementedError(
+            f"HiFloat-{self.bits} export_deploy is not supported yet."
+        )
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
         raise NotImplementedError(f"HiFloat-{self.bits} deploy is not supported yet.")

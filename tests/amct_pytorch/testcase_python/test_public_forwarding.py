@@ -22,6 +22,7 @@ implementations under ``amct_pytorch.classic.graph_based.amct_pytorch``. The tes
 asserts that each documented path imports and resolves to the exact same object
 as its underlying implementation.
 """
+
 import importlib
 import unittest
 
@@ -32,9 +33,14 @@ class TestPublicForwarding(unittest.TestCase):
     def test_auto_calibration_forwarding(self):
         """auto_calibration public path forwards to the real base classes."""
         base = "amct_pytorch.classic.graph_based.amct_pytorch.common.auto_calibration"
-        for name in ("AutoCalibrationEvaluatorBase", "AccuracyBasedAutoCalibrationBase",
-                     "AutoCalibrationStrategyBase", "SensitivityBase",
-                     "BinarySearchStrategy", "CosineSimilaritySensitivity"):
+        for name in (
+            "AutoCalibrationEvaluatorBase",
+            "AccuracyBasedAutoCalibrationBase",
+            "AutoCalibrationStrategyBase",
+            "SensitivityBase",
+            "BinarySearchStrategy",
+            "CosineSimilaritySensitivity",
+        ):
             self._assert_same("amct_pytorch.common.auto_calibration", name, base, name)
 
     def test_qat_module_forwarding(self):
@@ -43,9 +49,15 @@ class TestPublicForwarding(unittest.TestCase):
         cases = [
             ("amct_pytorch.nn.module.quantization.conv2d", "Conv2dQAT"),
             ("amct_pytorch.nn.module.quantization.conv3d", "Conv3dQAT"),
-            ("amct_pytorch.nn.module.quantization.conv_transpose_2d", "ConvTranspose2dQAT"),
+            (
+                "amct_pytorch.nn.module.quantization.conv_transpose_2d",
+                "ConvTranspose2dQAT",
+            ),
             ("amct_pytorch.nn.module.quantization.linear", "LinearQAT"),
-            ("amct_pytorch.nn.module.quantization.quant_calibration_op", "QuantCalibrationOp"),
+            (
+                "amct_pytorch.nn.module.quantization.quant_calibration_op",
+                "QuantCalibrationOp",
+            ),
         ]
         for public_mod, attr in cases:
             self._assert_same(public_mod, attr, base, attr)
@@ -53,8 +65,13 @@ class TestPublicForwarding(unittest.TestCase):
     def test_qat_quantization_package_exports(self):
         """The quantization package re-exports all QAT classes."""
         mod = importlib.import_module("amct_pytorch.nn.module.quantization")
-        for attr in ("Conv2dQAT", "Conv3dQAT", "ConvTranspose2dQAT",
-                     "LinearQAT", "QuantCalibrationOp"):
+        for attr in (
+            "Conv2dQAT",
+            "Conv3dQAT",
+            "ConvTranspose2dQAT",
+            "LinearQAT",
+            "QuantCalibrationOp",
+        ):
             self.assertTrue(hasattr(mod, attr))
 
     def test_tensor_decompose_forwarding(self):
@@ -68,10 +85,16 @@ class TestPublicForwarding(unittest.TestCase):
         base = "amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune"
         self._assert_same(
             "amct_pytorch.common.auto_channel_prune.sensitivity_base",
-            "SensitivityBase", base, "SensitivityBase")
+            "SensitivityBase",
+            base,
+            "SensitivityBase",
+        )
         self._assert_same(
             "amct_pytorch.common.auto_channel_prune.search_channel_base",
-            "SearchChannelBase", base, "SearchChannelBase")
+            "SearchChannelBase",
+            base,
+            "SearchChannelBase",
+        )
 
     def test_auto_channel_prune_package_exports(self):
         """The auto_channel_prune package re-exports both base classes."""
@@ -83,8 +106,11 @@ class TestPublicForwarding(unittest.TestCase):
         """Assert the public attribute is the same object as the implementation."""
         pub = getattr(importlib.import_module(public_mod), public_attr)
         impl = getattr(importlib.import_module(impl_mod), impl_attr)
-        self.assertIs(pub, impl, f"{public_mod}.{public_attr} should forward to "
-                                 f"{impl_mod}.{impl_attr}")
+        self.assertIs(
+            pub,
+            impl,
+            f"{public_mod}.{public_attr} should forward to {impl_mod}.{impl_attr}",
+        )
 
 
 if __name__ == '__main__':

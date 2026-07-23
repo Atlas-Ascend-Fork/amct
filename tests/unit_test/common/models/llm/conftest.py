@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 try:
     import transformers.models.glm_moe_dsa.modeling_glm_moe_dsa as _glm_dsa_mod
+
     if not hasattr(_glm_dsa_mod, "apply_rotary_pos_emb_interleave"):
         _glm_dsa_mod.apply_rotary_pos_emb_interleave = lambda *a, **kw: (a[0], a[1])
     if not hasattr(_glm_dsa_mod, "eager_attention_forward"):

@@ -17,7 +17,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import torch
-import torch.nn as nn
 from mock_torch_npu import (
     mock_npu,
     mock_npu_convert_weight_to_int4pack,
@@ -28,7 +27,7 @@ from mock_torch_npu import (
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
 )
-from utils import TestModel, TestModelBias
+from utils import TestModel
 
 from amct_pytorch import convert, quantize
 
@@ -44,6 +43,7 @@ class TestMinMax(unittest.TestCase):
     '''
     ST FOR MINMAX ALGORITHM
     '''
+
     @classmethod
     def setUpClass(cls):
         cls.test_model = TestModel().to(torch.bfloat16)
@@ -64,12 +64,20 @@ class TestMinMax(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
-    def test_mxfp4_group_sym_mxquant_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
+    def test_mxfp4_group_sym_mxquant_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7
+    ):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -77,7 +85,7 @@ class TestMinMax(unittest.TestCase):
                     'type': 'mxfp4_e2m1',
                     'symmetric': True,
                     'strategy': 'group',
-                    'group_size': 32
+                    'group_size': 32,
                 },
             },
             'algorithm': {'mxquant'},
@@ -96,12 +104,20 @@ class TestMinMax(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
-    def test_mxfp8_mxfp8_group_sym_mxquant_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7):
+    def test_mxfp8_mxfp8_group_sym_mxquant_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7
+    ):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -109,7 +125,7 @@ class TestMinMax(unittest.TestCase):
                     'type': 'mxfp8_e4m3fn',
                     'symmetric': True,
                     'strategy': 'group',
-                    'group_size': 32
+                    'group_size': 32,
                 },
                 'inputs': {
                     'type': 'mxfp8_e4m3fn',

@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,8 +16,22 @@
 # ----------------------------------------------------------------------------
 import torch
 
-SUPPORT_WEIGHT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp4_e2m1', 'float4_e2m1', 'mxfp8_e4m3fn']
-SUPPORT_INPUT_QUANT_DTYPE = ['int8', 'int4', 'hifloat8', 'float8_e4m3fn', 'mxfp8_e4m3fn']
+SUPPORT_WEIGHT_QUANT_DTYPE = [
+    'int8',
+    'int4',
+    'hifloat8',
+    'float8_e4m3fn',
+    'mxfp4_e2m1',
+    'float4_e2m1',
+    'mxfp8_e4m3fn',
+]
+SUPPORT_INPUT_QUANT_DTYPE = [
+    'int8',
+    'int4',
+    'hifloat8',
+    'float8_e4m3fn',
+    'mxfp8_e4m3fn',
+]
 SUPPORT_QUANT_STRATEGY_WEIGHT = ['tensor', 'channel', 'group']
 SUPPORT_QUANT_STRATEGY_INPUT = ['tensor', 'token']
 SUPPORT_QUANT_DYNAMIC_INPUT = ['token']
@@ -47,7 +61,7 @@ GROUP_SIZE_SUPPORTED_DTYPE = [INT4, INT8, FLOAT4_E2M1, MXFP4_E2M1, MXFP8_E4M3FN]
 GROUP_SIZE_SUPPORTED_MAP = {
     MXFP8_E4M3FN: [32],
     FLOAT4_E2M1: [32, 64, 128, 256],
-    MXFP4_E2M1: [32]
+    MXFP4_E2M1: [32],
 }
 
 ALGORITHM_SUPPORTED_QUANT_TYPE_COMB = {
@@ -80,34 +94,56 @@ ALLOWED_WEIGHT_DTYPES = {
     'NOT_QUANTIZE float4_e2m1': [torch.bfloat16, torch.float16],
 }
 
-WTS_PER_TENSOR_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'float8_e4m3fn float8_e4m3fn', 
-                                'int8 int8', 'int8 int4', 'NOT_QUANTIZE int8', 'NOT_QUANTIZE int4',
-                                'NOT_QUANTIZE hifloat8', 'NOT_QUANTIZE float8_e4m3fn']
-WTS_PER_CHANNEL_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'float8_e4m3fn float8_e4m3fn', 
-                                'int8 int8', 'int8 int4', 'NOT_QUANTIZE int8', 'NOT_QUANTIZE int4',
-                                'NOT_QUANTIZE hifloat8', 'NOT_QUANTIZE float8_e4m3fn']
-WTS_PER_GROUP_SUPPORT_COMBINATION = ['mxfp8_e4m3fn mxfp8_e4m3fn', 'float8_e4m3fn float4_e2m1',
-                                'NOT_QUANTIZE int4', 'NOT_QUANTIZE int8',
-                                'NOT_QUANTIZE mxfp4_e2m1', 'NOT_QUANTIZE float4_e2m1']
+WTS_PER_TENSOR_SUPPORT_COMBINATION = [
+    'hifloat8 hifloat8',
+    'float8_e4m3fn float8_e4m3fn',
+    'int8 int8',
+    'int8 int4',
+    'NOT_QUANTIZE int8',
+    'NOT_QUANTIZE int4',
+    'NOT_QUANTIZE hifloat8',
+    'NOT_QUANTIZE float8_e4m3fn',
+]
+WTS_PER_CHANNEL_SUPPORT_COMBINATION = [
+    'hifloat8 hifloat8',
+    'float8_e4m3fn float8_e4m3fn',
+    'int8 int8',
+    'int8 int4',
+    'NOT_QUANTIZE int8',
+    'NOT_QUANTIZE int4',
+    'NOT_QUANTIZE hifloat8',
+    'NOT_QUANTIZE float8_e4m3fn',
+]
+WTS_PER_GROUP_SUPPORT_COMBINATION = [
+    'mxfp8_e4m3fn mxfp8_e4m3fn',
+    'float8_e4m3fn float4_e2m1',
+    'NOT_QUANTIZE int4',
+    'NOT_QUANTIZE int8',
+    'NOT_QUANTIZE mxfp4_e2m1',
+    'NOT_QUANTIZE float4_e2m1',
+]
 
-ACT_PER_TENSOR_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'float8_e4m3fn float8_e4m3fn', 
-                                'int8 int8', 'int8 int4', 'float8_e4m3fn float4_e2m1']
+ACT_PER_TENSOR_SUPPORT_COMBINATION = [
+    'hifloat8 hifloat8',
+    'float8_e4m3fn float8_e4m3fn',
+    'int8 int8',
+    'int8 int4',
+    'float8_e4m3fn float4_e2m1',
+]
 ACT_PER_TOKEN_SUPPORT_COMBINATION = ['int8 int8', 'hifloat8 hifloat8']
 
 # Quantization bit width combinations supported by different quantization granularities
 WTS_GRANULARITY_SUPPORT_MAP = {
     'tensor': WTS_PER_TENSOR_SUPPORT_COMBINATION,
     'channel': WTS_PER_CHANNEL_SUPPORT_COMBINATION,
-    'group': WTS_PER_GROUP_SUPPORT_COMBINATION
+    'group': WTS_PER_GROUP_SUPPORT_COMBINATION,
 }
 
 ACT_GRANULARITY_SUPPORT_MAP = {
     'tensor': ACT_PER_TENSOR_SUPPORT_COMBINATION,
-    'token': ACT_PER_TOKEN_SUPPORT_COMBINATION
+    'token': ACT_PER_TOKEN_SUPPORT_COMBINATION,
 }
 
-ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE = {
-    'hifloat8': ['quantile']
-}
+ALGORITHM_SUPPORTED_QUANT_TYPE_KV_CACHE = {'hifloat8': ['quantile']}
 
 KVCACHE_OPS = ['DeepseekV3Attention', 'LongcatFlashMLA']

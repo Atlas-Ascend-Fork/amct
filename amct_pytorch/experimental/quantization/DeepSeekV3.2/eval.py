@@ -27,7 +27,9 @@ from pp.forward.infer import do_embedding_forward, do_one_layer_forward
 
 
 @torch.no_grad()
-def get_act_stat(args, model, samples, layer_idxes, output_dir, dtype=torch.bfloat16, num_npus=1):
+def get_act_stat(
+    args, model, samples, layer_idxes, output_dir, dtype=torch.bfloat16, num_npus=1
+):
     model.eval()
     act_stat = {}
     num_layers = len(model.model.layers)
@@ -35,7 +37,9 @@ def get_act_stat(args, model, samples, layer_idxes, output_dir, dtype=torch.bflo
     if layer_idxes[0] == -1:
         do_embedding_forward(args, model, layers, samples, output_dir, dtype)
     else:
-        do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_dir, num_npus=num_npus)
+        do_one_layer_forward(
+            args, model, layers, layer_idxes, num_layers, output_dir, num_npus=num_npus
+        )
     return act_stat
 
 
@@ -51,22 +55,19 @@ if __name__ == '__main__':
     os.makedirs(args.wikitext_final_out, exist_ok=True)
     os.makedirs(args.output_dir, exist_ok=True)
 
-    config = AutoConfig.from_pretrained(
-        args.model, trust_remote_code=True)
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model, trust_remote_code=True)
+    config = AutoConfig.from_pretrained(args.model, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     with init_empty_weights():
         model = AutoModelForCausalLM.from_config(
-            config,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16)
+            config, trust_remote_code=True, torch_dtype=torch.bfloat16
+        )
     logger.info(model)
 
     num_npus = torch.npu.device_count()
     group = 8
     begin, end = 0, 60
     groups = [i for i in range(begin, end + 1)]
-    indexes = [groups[i:i + group] for i in range(0, len(groups), group)]
+    indexes = [groups[i : i + group] for i in range(0, len(groups), group)]
     indexes.insert(0, [-1])
     indexes.append([61])
     for layer_idx in indexes:
@@ -77,10 +78,14 @@ if __name__ == '__main__':
             testenc = get_wikitext2(tokenizer)
             samples = get_wiki_inputs(testenc, seq_len=args.seq_len)
             nsamples = len(samples)
-            get_act_stat(args, model, samples, layer_idx, args.output_dir, num_npus=num_npus)
+            get_act_stat(
+                args, model, samples, layer_idx, args.output_dir, num_npus=num_npus
+            )
 
         elif layer_idx[-1] < len(model.model.layers):
-            get_act_stat(args, model, samples, layer_idx, args.output_dir, num_npus=num_npus)
+            get_act_stat(
+                args, model, samples, layer_idx, args.output_dir, num_npus=num_npus
+            )
         else:
             testenc = get_wikitext2(tokenizer)
             wikitext2_ppl(testenc, args.wikitext_final_out, seq_len=args.seq_len)

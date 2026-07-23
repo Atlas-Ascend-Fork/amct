@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-from unittest.mock import patch
 
 import torch
 
@@ -53,22 +52,175 @@ class TestDMQBalancerModule(unittest.TestCase):
         cls.record_file = os.path.join(CUR_DIR, 'utils/conv_model.txt')
         cls.record_module = Recorder(cls.record_file)
         cls.gaussian_tensor = torch.tensor(
-        [[[[-0.4534, -0.3931, 1.4165, -0.2845, 1.3123, -0.5861, -0.9216, -2.9547],
-          [-1.1394, -0.5585, 1.0372, 0.8990, -0.4554, 0.0915, 0.1655, 0.7922],
-          [0.4200, 0.0399, 0.2150, -0.4659, 1.0101, -0.0448, 1.6585, 0.3404],
-          [-0.3245, -0.8681, 1.4481, -1.2872, 0.8476, -0.3390, 0.6998, 0.9337],
-          [-0.2462, 0.0883, 0.7797, 0.2625, -0.5033, 0.3216, -0.5286, -1.1610],
-          [-0.7261, 0.9066, 0.7493, 0.2082, -0.0145, 1.0608, -0.0193, 1.1523],
-          [-0.8728, 0.7968, 0.5643, -0.9889, -1.5797, 1.3663, 0.3207, -0.5696],
-          [-1.1566, 0.5097, -0.2754, 0.4404, 0.9737, 1.1980, 0.1219, 0.2367]],
-         [[1.4429, 1.8090, 0.5159, -2.3921, -0.5751, -1.1347, -0.4845, -0.8817],
-          [0.4223, 0.6367, 1.3398, 0.5552, 1.2147, 0.0621, -0.7931, -0.4430],
-          [-0.6708, 0.0983, -0.3347, -1.1744, 0.0569, -0.7386, 0.5141, -0.6317],
-          [1.6589, 0.3437, -0.2570, 0.4474, -0.3003, -1.4195, 0.1037, -0.4414],
-          [-0.3674, 0.0741, 0.7980, 0.8538, 1.1619, 0.2918, -0.3035, 1.5540],
-          [1.9373, 2.5682, -0.2986, -0.2450, -1.4277, 0.3202, -1.5792, 0.7967],
-          [-1.1843, -2.2168, -0.3940, 0.7455, 1.1740, -0.7198, -0.0188, -0.4981],
-          [-0.8536, 0.5208, -1.8724, -0.7368, 0.2126, -0.0707, 0.5122, 0.5675]]]])
+            [
+                [
+                    [
+                        [
+                            -0.4534,
+                            -0.3931,
+                            1.4165,
+                            -0.2845,
+                            1.3123,
+                            -0.5861,
+                            -0.9216,
+                            -2.9547,
+                        ],
+                        [
+                            -1.1394,
+                            -0.5585,
+                            1.0372,
+                            0.8990,
+                            -0.4554,
+                            0.0915,
+                            0.1655,
+                            0.7922,
+                        ],
+                        [
+                            0.4200,
+                            0.0399,
+                            0.2150,
+                            -0.4659,
+                            1.0101,
+                            -0.0448,
+                            1.6585,
+                            0.3404,
+                        ],
+                        [
+                            -0.3245,
+                            -0.8681,
+                            1.4481,
+                            -1.2872,
+                            0.8476,
+                            -0.3390,
+                            0.6998,
+                            0.9337,
+                        ],
+                        [
+                            -0.2462,
+                            0.0883,
+                            0.7797,
+                            0.2625,
+                            -0.5033,
+                            0.3216,
+                            -0.5286,
+                            -1.1610,
+                        ],
+                        [
+                            -0.7261,
+                            0.9066,
+                            0.7493,
+                            0.2082,
+                            -0.0145,
+                            1.0608,
+                            -0.0193,
+                            1.1523,
+                        ],
+                        [
+                            -0.8728,
+                            0.7968,
+                            0.5643,
+                            -0.9889,
+                            -1.5797,
+                            1.3663,
+                            0.3207,
+                            -0.5696,
+                        ],
+                        [
+                            -1.1566,
+                            0.5097,
+                            -0.2754,
+                            0.4404,
+                            0.9737,
+                            1.1980,
+                            0.1219,
+                            0.2367,
+                        ],
+                    ],
+                    [
+                        [
+                            1.4429,
+                            1.8090,
+                            0.5159,
+                            -2.3921,
+                            -0.5751,
+                            -1.1347,
+                            -0.4845,
+                            -0.8817,
+                        ],
+                        [
+                            0.4223,
+                            0.6367,
+                            1.3398,
+                            0.5552,
+                            1.2147,
+                            0.0621,
+                            -0.7931,
+                            -0.4430,
+                        ],
+                        [
+                            -0.6708,
+                            0.0983,
+                            -0.3347,
+                            -1.1744,
+                            0.0569,
+                            -0.7386,
+                            0.5141,
+                            -0.6317,
+                        ],
+                        [
+                            1.6589,
+                            0.3437,
+                            -0.2570,
+                            0.4474,
+                            -0.3003,
+                            -1.4195,
+                            0.1037,
+                            -0.4414,
+                        ],
+                        [
+                            -0.3674,
+                            0.0741,
+                            0.7980,
+                            0.8538,
+                            1.1619,
+                            0.2918,
+                            -0.3035,
+                            1.5540,
+                        ],
+                        [
+                            1.9373,
+                            2.5682,
+                            -0.2986,
+                            -0.2450,
+                            -1.4277,
+                            0.3202,
+                            -1.5792,
+                            0.7967,
+                        ],
+                        [
+                            -1.1843,
+                            -2.2168,
+                            -0.3940,
+                            0.7455,
+                            1.1740,
+                            -0.7198,
+                            -0.0188,
+                            -0.4981,
+                        ],
+                        [
+                            -0.8536,
+                            0.5208,
+                            -1.8724,
+                            -0.7368,
+                            0.2126,
+                            -0.0707,
+                            0.5122,
+                            0.5675,
+                        ],
+                    ],
+                ]
+            ]
+        )
 
         cls.migration_strength = 0.5
         cls.layers_name = 'conv1'
@@ -85,14 +237,22 @@ class TestDMQBalancerModule(unittest.TestCase):
 
     def test_dmq_balancer_conv(self):
         dmq_balancer_module = DMQBalancer(
-            self.conv_model, self.record_module, self.migration_strength, self.layers_name)
+            self.conv_model,
+            self.record_module,
+            self.migration_strength,
+            self.layers_name,
+        )
         in_data = self.gaussian_tensor
         out_data = dmq_balancer_module.forward(in_data)
         self.assertIsNotNone(out_data)
 
     def test_dmq_balancer_group_conv(self):
         dmq_balancer_module2 = DMQBalancer(
-            self.conv_model2, self.record_module, self.migration_strength, self.layers_name)
+            self.conv_model2,
+            self.record_module,
+            self.migration_strength,
+            self.layers_name,
+        )
         in_data = self.gaussian_tensor
         out_data = dmq_balancer_module2.forward(in_data)
         self.assertIsNotNone(out_data)
@@ -116,16 +276,20 @@ class TestDMQBalancerFunc(unittest.TestCase):
     def test_dmq_balancer_func_forward(self):
         dmq_balancer_function = DMQBalancerFunction()
 
-        weight_tensor = torch.tensor([[0, 1, 2, 3], [4, 5, 6, 7]], device=DEVICE, dtype=torch.float32)
-        inputs = torch.tensor([[0, 1, 2, 3], [4, 5, 6, 7]], device=DEVICE, dtype=torch.float32)
+        weight_tensor = torch.tensor(
+            [[0, 1, 2, 3], [4, 5, 6, 7]], device=DEVICE, dtype=torch.float32
+        )
+        inputs = torch.tensor(
+            [[0, 1, 2, 3], [4, 5, 6, 7]], device=DEVICE, dtype=torch.float32
+        )
         migration_strength = 0.5
 
-        tensor_balance_factor = dmq_balancer_function.forward(dmq_balancer_function, inputs,
-            weight_tensor, migration_strength)
+        tensor_balance_factor = dmq_balancer_function.forward(
+            dmq_balancer_function, inputs, weight_tensor, migration_strength
+        )
         self.assertIsNotNone(tensor_balance_factor)
 
     # def test_dmq_balancer_func_forward_failed(self):
-
 
     #     with self.assertRaises(RuntimeError):
     #         tensor_balance_factor = dmq_balancer_function.forward(dmq_balancer_function, inputs,

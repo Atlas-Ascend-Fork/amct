@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import numpy as np
 import torch
 from torch import nn
 
@@ -27,7 +26,7 @@ from ...amct_pytorch.custom_op.utils import copy_tensor
 from ...amct_pytorch.custom_op.utils import tensor
 from ...amct_pytorch.custom_op.utils import process_scale
 from ...amct_pytorch.utils.vars import BATCH_NUM
-from ...amct_pytorch.common.utils.vars_util import DEFAULT, FORCE_FP16_QUANT
+from ...amct_pytorch.common.utils.vars_util import FORCE_FP16_QUANT
 
 LAYERS_NAME = 'layers_name'
 DEVICE = 'device'
@@ -42,7 +41,10 @@ class RetrainQuant(nn.Module):
     """
     record quantization factor.
     """
-    def __init__(self, quant_module, record_module, bn_module=None, bn_module_name=None):
+
+    def __init__(
+        self, quant_module, record_module, bn_module=None, bn_module_name=None
+    ):
         """
         Function: init function
         Inputs:
@@ -62,7 +64,8 @@ class RetrainQuant(nn.Module):
             self.init_module = IFMR(
                 num_bits=self.quant_module.act_config.get(NUM_BITS),
                 layers_name=self.common_config.get(LAYERS_NAME),
-                batch_num=self.common_config.get(BATCH_NUM))
+                batch_num=self.common_config.get(BATCH_NUM),
+            )
         self.record_module = record_module
         self.bn_module = bn_module
         self.bn_module_name = bn_module_name
@@ -72,22 +75,14 @@ class RetrainQuant(nn.Module):
         if self.bn_module and self.quant_module.num_scales == 1:
             self.quant_module.num_scales *= self.bn_module.num_features
 
-        self.scale_w_old = \
-            tensor([0.0], device=self.common_config.get(DEVICE))
-        self.scale_d_old = \
-            tensor(0.0, device=self.common_config.get(DEVICE))
+        self.scale_w_old = tensor([0.0], device=self.common_config.get(DEVICE))
+        self.scale_d_old = tensor(0.0, device=self.common_config.get(DEVICE))
         self.scale_d = 1.0
         # register buffer space FIRST instead of reference in update_quant_factor.
-        self.register_buffer(
-            SCALE_W,
-            tensor([1.0] * self.quant_module.num_scales)
-        )
+        self.register_buffer(SCALE_W, tensor([1.0] * self.quant_module.num_scales))
         self.offset_d = 0.0
         # register buffer space FIRST instead of reference in update_quant_factor.
-        self.register_buffer(
-            'offset_w',
-            tensor([0.0] * self.quant_module.num_scales)
-        )
+        self.register_buffer('offset_w', tensor([0.0] * self.quant_module.num_scales))
         self.write_done_flag = False
 
     def update_quant_factor(self):
@@ -110,7 +105,9 @@ class RetrainQuant(nn.Module):
             if self.quant_module.wts_scales.numel() != 1:
                 scale_id = idx
             wts_scale = self.quant_module.wts_scales.data[scale_id]
-            self.scale_w.data[idx] = 1 / wts_scale if self.quant_module.s_rec_flag else wts_scale
+            self.scale_w.data[idx] = (
+                1 / wts_scale if self.quant_module.s_rec_flag else wts_scale
+            )
 
             offset_id = 0
             if self.quant_module.wts_scales.numel() != 1:
@@ -124,11 +121,17 @@ class RetrainQuant(nn.Module):
             self.scale_w = self.scale_w.to(scale.device).abs() * abs(scale).detach()
 
         self.scale_d, self.offset_d = process_scale(
-            self.scale_d, self.offset_d, True,
-            self.quant_module.act_config.get(NUM_BITS))
+            self.scale_d,
+            self.offset_d,
+            True,
+            self.quant_module.act_config.get(NUM_BITS),
+        )
         self.scale_w, self.offset_w = process_scale(
-            self.scale_w, self.offset_w, False,
-            self.quant_module.wts_config.get(NUM_BITS))
+            self.scale_w,
+            self.offset_w,
+            False,
+            self.quant_module.wts_config.get(NUM_BITS),
+        )
 
     def acts_quant_init(self, inputs):
         """
@@ -155,17 +158,21 @@ class RetrainQuant(nn.Module):
             need_sync = world_size > 1
             if need_sync:
                 clip_max_all = torch.empty(
-                    world_size, 1, dtype=clip_max.dtype, device=clip_max.device)
+                    world_size, 1, dtype=clip_max.dtype, device=clip_max.device
+                )
                 clip_min_all = torch.empty(
-                    world_size, 1, dtype=clip_min.dtype, device=clip_min.device)
+                    world_size, 1, dtype=clip_min.dtype, device=clip_min.device
+                )
 
                 clip_max_l = list(clip_max_all.unbind(0))
                 clip_min_l = list(clip_min_all.unbind(0))
 
                 clip_max_all_reduce = torch.distributed.all_gather(
-                    clip_max_l, clip_max, process_group, async_op=True)
+                    clip_max_l, clip_max, process_group, async_op=True
+                )
                 clip_min_all_reduce = torch.distributed.all_gather(
-                    clip_min_l, clip_min, process_group, async_op=True)
+                    clip_min_l, clip_min, process_group, async_op=True
+                )
 
                 # wait on the async communication to finish
                 clip_max_all_reduce.wait()
@@ -192,7 +199,7 @@ class RetrainQuant(nn.Module):
 
         self.do_init = not is_init
 
-    def forward(self, inputs): # pylint: disable=W0221
+    def forward(self, inputs):  # pylint: disable=W0221
         """
         Function: forward function
         Inputs:
@@ -217,16 +224,23 @@ class RetrainQuant(nn.Module):
 
             if not self.write_done_flag:
                 self.record_module(
-                    layers_name, 'ifmr',
-                    {SCALE_D: self.scale_d.cpu().tolist(),
-                     'offset_d': int(self.offset_d.cpu().tolist()),
-                     'num_bits': self.quant_module.act_config.get(NUM_BITS)})
+                    layers_name,
+                    'ifmr',
+                    {
+                        SCALE_D: self.scale_d.cpu().tolist(),
+                        'offset_d': int(self.offset_d.cpu().tolist()),
+                        'num_bits': self.quant_module.act_config.get(NUM_BITS),
+                    },
+                )
                 self.record_module(
-                    layers_name, 'arq',
-                    {SCALE_W: self.scale_w.cpu().tolist(),
-                     'offset_w': list(
-                         map(int, self.offset_w.cpu().tolist())),
-                     'num_bits': self.quant_module.wts_config.get(NUM_BITS)})
+                    layers_name,
+                    'arq',
+                    {
+                        SCALE_W: self.scale_w.cpu().tolist(),
+                        'offset_w': list(map(int, self.offset_w.cpu().tolist())),
+                        'num_bits': self.quant_module.wts_config.get(NUM_BITS),
+                    },
+                )
                 self.write_done_flag = True
         else:
             self.cur_batch = 0
@@ -240,4 +254,3 @@ def get_quant_type(module):
     if isinstance(module, CompModuleBase) or isinstance(module, CompModuleRNN):
         return type(module.replaced_module).__name__
     return type(module).__name__
-

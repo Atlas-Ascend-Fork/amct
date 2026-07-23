@@ -17,7 +17,7 @@
 
 import torch
 from tqdm import tqdm
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset
 
 
 def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
@@ -47,14 +47,12 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
             f"Not enough pileval tokens to build {n_samples} samples with seq_len={seq_len}; "
             f"only got {n_split} samples."
         )
-    samples = [samples[:, i * seq_len: (i + 1) * seq_len] for i in range(n_samples)]
+    samples = [samples[:, i * seq_len : (i + 1) * seq_len] for i in range(n_samples)]
     return samples
 
 
 def get_pileval(tokenizer, n_samples, seq_len=512):
-    testdata = load_dataset(
-        'mit-han-lab/pile-val-backup', split='validation'
-    )
+    testdata = load_dataset('mit-han-lab/pile-val-backup', split='validation')
 
     samples = pileval_awq(testdata, tokenizer, n_samples, seq_len)
 
@@ -62,13 +60,9 @@ def get_pileval(tokenizer, n_samples, seq_len=512):
 
 
 def get_wikitext2(tokenizer):
-    testdata = load_dataset(
-        'wikitext', 'wikitext-2-raw-v1', split='test'
-    )
+    testdata = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
 
-    testenc = tokenizer(
-        '\n\n'.join(testdata['text']), return_tensors='pt'
-    )
+    testenc = tokenizer('\n\n'.join(testdata['text']), return_tensors='pt')
     return testenc
 
 
@@ -80,8 +74,7 @@ def get_wiki_inputs(tokenizer, seq_len=4096):
 
     for i in tqdm(range(0, nsamples, bs), desc='Chunking wikitext2'):
         j = min(i + bs, nsamples)
-        inputs = testenc[:, (i * seq_len): (j * seq_len)].cpu()
+        inputs = testenc[:, (i * seq_len) : (j * seq_len)].cpu()
         inputs = inputs.reshape(j - i, seq_len)
         wiki_inputs.append(inputs)
     return wiki_inputs
-

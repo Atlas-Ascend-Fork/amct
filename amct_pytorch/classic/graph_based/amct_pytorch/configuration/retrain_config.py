@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,10 +27,11 @@ from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.configuration.check import GraphChecker
 from ...amct_pytorch.configuration.check import GraphQuerier
 from ...amct_pytorch.common.utils.check_params import check_params
-from ...amct_pytorch.common.retrain_config.retrain_config_base import \
-        RetrainConfigBase
+from ...amct_pytorch.common.retrain_config.retrain_config_base import RetrainConfigBase
 from ...amct_pytorch.common.config.config_base import GraphObjects
-from ...amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import AutoChannelPruneConfigHelper
+from ...amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import (
+    AutoChannelPruneConfigHelper,
+)
 from ...amct_pytorch.capacity import CAPACITY
 
 WEIGHT_QUANT_PARAMS = 'weight_quant_params'
@@ -39,13 +40,14 @@ CONFIGURER = RetrainConfigBase(
 )
 
 
-class RetrainConfig():
+class RetrainConfig:
     """
     Function: manage configuration of project including quant_config
               and record_file.
     APIs: init, get_quant_config, get_layer_config, get_record_file_path;
         create_quant_config, parse_quant_config
     """
+
     __instance = None
     __initialized = False
     __record_file_path = None
@@ -59,7 +61,8 @@ class RetrainConfig():
         super(RetrainConfig, self).__init__()
         if not RetrainConfig.__initialized:
             raise RuntimeError(
-                "Classmethod RetrainConfig.init() should be called firstly.")
+                "Classmethod RetrainConfig.init() should be called firstly."
+            )
         if self.enable_retrain:
             self.__retrain_config = RetrainConfig.retrain_config
             self.__skip_fusion_layers = []
@@ -92,24 +95,24 @@ class RetrainConfig():
         config_file = os.path.realpath(config_defination)
 
         LOGGER.logi(
-            f"Create {config_name} according to {config_file}, " \
-                "other configuration will be ignored.", module_name='RetrainConfig')
+            f"Create {config_name} according to {config_file}, "
+            "other configuration will be ignored.",
+            module_name='RetrainConfig',
+        )
         CONFIGURER.set_ability(enable_retrain=True, enable_prune=False)
         CONFIGURER.create_config_from_proto(config_name, graph, config_file)
 
-        LOGGER.logi(
-            "Create quant config success!", module_name='RetrainConfig')
+        LOGGER.logi("Create quant config success!", module_name='RetrainConfig')
 
     @staticmethod
     @check_params(file_name=str, graph=Graph)
     def create_default_retrain_config(file_name, graph):
         """create deafult config"""
         CONFIGURER.set_ability(enable_retrain=True, enable_prune=False)
-        CONFIGURER.create_default_config(
-            file_name,
-            graph)
-        LOGGER.logd("Create retrain config by file success!",
-                    module_name='RetrainConfig')
+        CONFIGURER.create_default_config(file_name, graph)
+        LOGGER.logd(
+            "Create retrain config by file success!", module_name='RetrainConfig'
+        )
 
     @staticmethod
     @check_params(graph=Graph, config_defination=(str, type(None)))
@@ -125,8 +128,7 @@ class RetrainConfig():
         config_file = os.path.realpath(config_defination)
         CONFIGURER.create_config_from_proto(retrain_config, graph, config_file)
 
-        LOGGER.logi(
-            "Create quant config success!", module_name='RetrainConfig')
+        LOGGER.logi("Create quant config success!", module_name='RetrainConfig')
         return retrain_config
 
     @classmethod
@@ -147,7 +149,8 @@ class RetrainConfig():
         """
         cls.set_ability(enable_retrain=True, enable_prune=False)
         cls.retrain_config = cls.parse_retrain_config(
-            os.path.realpath(config_file), graph)
+            os.path.realpath(config_file), graph
+        )
         RetrainConfig.__initialized = True
         RetrainConfig.__record_file_path = os.path.realpath(record_file)
 
@@ -164,12 +167,16 @@ class RetrainConfig():
         cls.__initialized = True
 
     @classmethod
-    def amc_init(cls, graph, config_defination, enable_retrain=False, enable_prune=True):
+    def amc_init(
+        cls, graph, config_defination, enable_retrain=False, enable_prune=True
+    ):
         """
         Function: initialize pruning based on amc config.
         """
         cls.set_ability(enable_retrain=enable_retrain, enable_prune=enable_prune)
-        config_helper = AutoChannelPruneConfigHelper(graph, config_defination, GraphQuerier, CAPACITY)
+        config_helper = AutoChannelPruneConfigHelper(
+            graph, config_defination, GraphQuerier, CAPACITY
+        )
         cls.retrain_config = config_helper.create_prune_config()
         cls.__initialized = True
 
@@ -178,8 +185,12 @@ class RetrainConfig():
         cls.enable_retrain = enable_retrain
         cls.enable_prune = enable_prune
         CONFIGURER.set_ability(enable_retrain, enable_prune)
-        LOGGER.logi('enable_retrain is {}, enable_prune is {}'.format(enable_retrain, enable_prune),
-                    'RetrainConfig')
+        LOGGER.logi(
+            'enable_retrain is {}, enable_prune is {}'.format(
+                enable_retrain, enable_prune
+            ),
+            'RetrainConfig',
+        )
 
     def get_retrain_config(self, layer):
         """get retrain config"""
@@ -191,7 +202,9 @@ class RetrainConfig():
         """
         Function: get prune config for the given layer
         """
-        if not self.filter_prune_enable(layer) and not self.selective_prune_enable(layer):
+        if not self.filter_prune_enable(layer) and not self.selective_prune_enable(
+            layer
+        ):
             return None
         return self.__retrain_config.get(layer).get("regular_prune_config")
 
@@ -213,8 +226,9 @@ class RetrainConfig():
         if not self.__retrain_config.get(layer).get('regular_prune_enable'):
             return False
         # is filter prune
-        if self.__retrain_config.get(layer).get('regular_prune_config').get('algo') \
-            in ["balanced_l2_norm_filter_prune"]:
+        if self.__retrain_config.get(layer).get('regular_prune_config').get('algo') in [
+            "balanced_l2_norm_filter_prune"
+        ]:
             return True
         return False
 
@@ -227,7 +241,9 @@ class RetrainConfig():
         if not self.__retrain_config.get(layer).get('regular_prune_enable'):
             return False
         # is selective prune
-        if self.__retrain_config.get(layer).get('regular_prune_config').get('algo') in ["l1_selective_prune"]:
+        if self.__retrain_config.get(layer).get('regular_prune_config').get('algo') in [
+            "l1_selective_prune"
+        ]:
             return True
         return False
 
@@ -242,8 +258,9 @@ class RetrainConfig():
         config.get(WEIGHT_QUANT_PARAMS)['num_bits'] = 8
         config.get(WEIGHT_QUANT_PARAMS)['with_offset'] = False
         config.get(WEIGHT_QUANT_PARAMS)['wts_algo'] = 'arq_quantize'
-        config.get(WEIGHT_QUANT_PARAMS)['channel_wise'] = \
-                layer_config.get('retrain_weight_config')['channel_wise']
+        config.get(WEIGHT_QUANT_PARAMS)['channel_wise'] = layer_config.get(
+            'retrain_weight_config'
+        )['channel_wise']
 
         return config
 

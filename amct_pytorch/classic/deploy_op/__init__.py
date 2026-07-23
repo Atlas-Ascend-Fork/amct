@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -19,11 +19,17 @@ __all__ = [
     'NpuQuantizationLinear',
     'NpuWeightQuantizedLinear',
     'NpuQuantizationConv2d',
-    'NpuMXQuantizationLinear'
+    'NpuMXQuantizationLinear',
 ]
 
 from amct_pytorch.classic.deploy_op.npu_quantization_linear import NpuQuantizationLinear
-from amct_pytorch.classic.deploy_op.weight_npu_quant_module import NpuWeightQuantizedLinear
+from amct_pytorch.classic.deploy_op.weight_npu_quant_module import (
+    NpuWeightQuantizedLinear,
+)
 from amct_pytorch.classic.deploy_op.npu_quantization_conv2d import NpuQuantizationConv2d
-from amct_pytorch.classic.deploy_op.npu_mx_quantization_linear import NpuMXQuantizationLinear
-from amct_pytorch.classic.deploy_op.npu_hif8_cast_quantization_linear import NpuHIF8CastLinear
+from amct_pytorch.classic.deploy_op.npu_mx_quantization_linear import (
+    NpuMXQuantizationLinear,
+)
+from amct_pytorch.classic.deploy_op.npu_hif8_cast_quantization_linear import (
+    NpuHIF8CastLinear,
+)

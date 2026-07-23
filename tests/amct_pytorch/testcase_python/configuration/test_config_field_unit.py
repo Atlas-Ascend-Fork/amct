@@ -43,8 +43,14 @@ class TestLeafFieldChecks(unittest.TestCase):
         self.assertEqual(f.default_value(), F.BATCH_NUM)
 
     def test_bool_fields(self):
-        for cls in (F.ActOffsetField, F.LayerActOffsetField, F.JointQuantField,
-                    F.WtsOffsetField, F.DoFusionField, F.QuantEnableField):
+        for cls in (
+            F.ActOffsetField,
+            F.LayerActOffsetField,
+            F.JointQuantField,
+            F.WtsOffsetField,
+            F.DoFusionField,
+            F.QuantEnableField,
+        ):
             f = _f(cls)
             self.assertRaises(TypeError, f.check, 'x', 'not_bool')
             f.check('x', True)
@@ -137,8 +143,8 @@ class TestLeafFieldChecks(unittest.TestCase):
         f = _f(F.SearchRangeField)
         self.assertRaises(TypeError, f.check, 'sr', 1.0)
         self.assertRaises(ValueError, f.check, 'sr', [1.0])
-        self.assertRaises(ValueError, f.check, 'sr', [0, 1.0])      # start<=0
-        self.assertRaises(ValueError, f.check, 'sr', [1.3, 0.7])    # start>=end
+        self.assertRaises(ValueError, f.check, 'sr', [0, 1.0])  # start<=0
+        self.assertRaises(ValueError, f.check, 'sr', [1.3, 0.7])  # start>=end
         f.check('sr', [0.7, 1.3])
 
     def test_layer_name_and_input_index_field(self):
@@ -198,23 +204,27 @@ class TestContainerFields(unittest.TestCase):
         f = _f(F.SkipFusionLayersField)
         self.assertRaises(TypeError, f.check, 'skip', 'notalist')
         self.assertRaises(TypeError, f.check, 'skip', [1])
-        self.assertRaises(ValueError, f.check, 'skip', ['ghost'])   # not in graph
-        self.assertRaises(ValueError, f.check, 'skip', ['relu1'])   # type not fusible
+        self.assertRaises(ValueError, f.check, 'skip', ['ghost'])  # not in graph
+        self.assertRaises(ValueError, f.check, 'skip', ['relu1'])  # type not fusible
         f.check('skip', ['conv1'])
         F.PARAM_POOL.clear()
 
     def test_act_quant_params_conflict(self):
         f = _f(F.ActQuantParamsField)
         # ifmr-only and hfmg-only params at same time
-        self.assertRaises(ValueError, f.check, 'act',
-                          {'act_algo': 'ifmr', 'num_of_bins': 1024,
-                           'search_range': [0.7, 1.3]})
+        self.assertRaises(
+            ValueError,
+            f.check,
+            'act',
+            {'act_algo': 'ifmr', 'num_of_bins': 1024, 'search_range': [0.7, 1.3]},
+        )
 
     def test_wgt_quant_params_invalid_param(self):
         f = _f(F.WgtQuantParamsField)
         # reg_param is not valid for arq_quantize
-        self.assertRaises(ValueError, f.check, 'wgt',
-                          {'wts_algo': 'arq_quantize', 'reg_param': 0.01})
+        self.assertRaises(
+            ValueError, f.check, 'wgt', {'wts_algo': 'arq_quantize', 'reg_param': 0.01}
+        )
 
     def test_tensor_quantize_field_type(self):
         f = _f(F.TensorQuantizeField)

@@ -14,19 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import math
 import torch
-from torch import nn
 import torch.nn.functional as F
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import calculate_scale_offset
-from amct_pytorch.classic.quantize_op.utils import calculate_progressive_weights_scale_factor
+from amct_pytorch.classic.quantize_op.utils import (
+    calculate_progressive_weights_scale_factor,
+)
 from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity
 from amct_pytorch.classic.quantize_op.utils import apply_progressive_quant_dequant
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
-from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, INT8, INT32_MAX, INT32_MIN
+from amct_pytorch.common.utils.quant_util import (
+    quant_dequant_tensor,
+    quant_dequant_weight,
+)
+from amct_pytorch.common.utils.vars import (
+    FLOAT8_E4M3FN,
+    FLOAT4_E2M1,
+    INT8,
+    INT32_MAX,
+    INT32_MIN,
+)
 from amct_pytorch.common.utils.log import LOGGER
 
 
@@ -35,10 +44,8 @@ class MinMaxQuant(BaseQuantizeModule):
     Function: calibration operator to obtain act quant factors using min-max algo
     APIs: forward.
     """
-    def __init__(self,
-                 ori_module,
-                 layer_name,
-                 quant_config):
+
+    def __init__(self, ori_module, layer_name, quant_config):
         """
         Function: init objective.
         Args:
@@ -58,8 +65,10 @@ class MinMaxQuant(BaseQuantizeModule):
         self.scale_w2 = None
 
         self.batch_num = quant_config.get('batch_num')
-        if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-            quant_config.get('inputs_cfg').get('enable_quant') == True:
+        if (
+            quant_config.get('inputs_cfg').get('enable_quant') is None
+            or quant_config.get('inputs_cfg').get('enable_quant') == True
+        ):
             self.weight_compress_only = False
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
@@ -73,21 +82,28 @@ class MinMaxQuant(BaseQuantizeModule):
         self.weight_granularity = quant_config.get('weights_cfg').get('strategy')
 
         if self.act_type == FLOAT8_E4M3FN and self.wts_type == FLOAT4_E2M1:
-            self.scale_w1, self.scale_w2 = \
-                calculate_progressive_weights_scale_factor(self.ori_module.weight.data)
+            self.scale_w1, self.scale_w2 = calculate_progressive_weights_scale_factor(
+                self.ori_module.weight.data
+            )
         else:
-            self.scale_w, self.offset_w = \
-                self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
+            self.scale_w, self.offset_w = (
+                self.calculate_weights_scale_factor_and_quantize(
+                    self.weight.data, quant_config
+                )
+            )
 
     def calculate_weights_scale_factor_and_quantize(self, weight_data, quant_config):
         """
         Function: calculate weights's quant factor and do fakequant
         Parameters: quant_config: configuration of quantization
         """
-        weight_min, weight_max = get_weight_min_max_by_granularity(weight_data, quant_config)
+        weight_min, weight_max = get_weight_min_max_by_granularity(
+            weight_data, quant_config
+        )
 
-        scale_w, offset_w = calculate_scale_offset(weight_max, weight_min,
-                                            self.wts_symmetric, self.wts_type)
+        scale_w, offset_w = calculate_scale_offset(
+            weight_max, weight_min, self.wts_symmetric, self.wts_type
+        )
         return scale_w, offset_w
 
     @torch.no_grad()
@@ -124,9 +140,15 @@ class MinMaxQuant(BaseQuantizeModule):
 
         if self.cur_batch == self.batch_num:
             self.scale_d, self.offset_d = calculate_scale_offset(
-                self.data_max, self.data_min, self.act_symmetric, self.act_type)
+                self.data_max, self.data_min, self.act_symmetric, self.act_type
+            )
 
-            LOGGER.logd("Calculate minmax quant params of layer '{}' success!".format(self.layer_name), 'MinMaxQuant')
+            LOGGER.logd(
+                "Calculate minmax quant params of layer '{}' success!".format(
+                    self.layer_name
+                ),
+                'MinMaxQuant',
+            )
         return fp_out
 
     @torch.no_grad()
@@ -134,13 +156,24 @@ class MinMaxQuant(BaseQuantizeModule):
         if not getattr(self, 'fake_quant_cache_ready', False):
             if self.scale_w1 is not None:
                 self.cached_dq_w = apply_progressive_quant_dequant(
-                    self.weight.data, self.scale_w1, self.scale_w2, self.group_size)
+                    self.weight.data, self.scale_w1, self.scale_w2, self.group_size
+                )
             else:
-                self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type,
-                                                        self.scale_w, self.offset_w, self.group_size)
+                self.cached_dq_w = quant_dequant_weight(
+                    self.weight.data,
+                    self.wts_type,
+                    self.scale_w,
+                    self.offset_w,
+                    self.group_size,
+                )
             bias = self.bias
-            if (bias is not None and self.scale_d is not None and self.scale_w is not None
-                    and self.act_type == INT8 and self.act_granularity == 'tensor'):
+            if (
+                bias is not None
+                and self.scale_d is not None
+                and self.scale_w is not None
+                and self.act_type == INT8
+                and self.act_granularity == 'tensor'
+            ):
                 deq_scale = (self.scale_d * self.scale_w).reshape(-1)
                 bias_q = (bias.data / deq_scale).round().clamp(INT32_MIN, INT32_MAX)
                 bias = (bias_q * deq_scale).to(bias.dtype)
@@ -148,7 +181,9 @@ class MinMaxQuant(BaseQuantizeModule):
             self.fake_quant_cache_ready = True
 
         if self.scale_d is not None:
-            dq_x = quant_dequant_tensor(inputs, self.act_type, self.scale_d, self.offset_d)
+            dq_x = quant_dequant_tensor(
+                inputs, self.act_type, self.scale_d, self.offset_d
+            )
         else:
             dq_x = inputs
         return F.linear(dq_x, self.cached_dq_w, self.cached_bias)

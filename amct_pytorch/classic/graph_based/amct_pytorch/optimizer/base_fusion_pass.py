@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,11 +18,12 @@
 import inspect
 
 
-class BaseFusionPass():# pylint: disable=unused-argument, no-self-use
+class BaseFusionPass:  # pylint: disable=unused-argument, no-self-use
     """
     Function: Base class of graph optimizer pass
     APIs: set_up, tear_down, match_pattern, do_fusion, run
     """
+
     def __init__(self):
         """
         Function: init object
@@ -37,7 +38,7 @@ class BaseFusionPass():# pylint: disable=unused-argument, no-self-use
         Parameter: None
         Return: None
         """
-        pass # pylint: disable=unnecessary-pass
+        pass  # pylint: disable=unnecessary-pass
 
     def tear_down(self):
         """
@@ -45,7 +46,7 @@ class BaseFusionPass():# pylint: disable=unused-argument, no-self-use
         Parameter: None
         Return: None
         """
-        pass # pylint: disable=unnecessary-pass
+        pass  # pylint: disable=unnecessary-pass
 
     def match_pattern(self, node):
         """
@@ -62,7 +63,7 @@ class BaseFusionPass():# pylint: disable=unused-argument, no-self-use
                     object_node: matched node
         Return: None
         """
-        pass # pylint: disable=unnecessary-pass
+        pass  # pylint: disable=unnecessary-pass
 
     def run(self, graph, model):
         """

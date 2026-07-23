@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -32,9 +32,10 @@ PASSIVE_PRUNE_SPLIT = 'passive_prune_split'
 
 
 class RegularModelPruner:
-    """ Really do regular prune model """
+    """Really do regular prune model"""
+
     def __init__(self, graph, record, mode_input_data):
-        """ init function"""
+        """init function"""
         self.graph = graph
         self.record = record
         self.mode_input_data = mode_input_data
@@ -46,8 +47,11 @@ class RegularModelPruner:
         """really do prune"""
         # try to run the original model in train mode
         if not self.run_model_train_forward():
-            raise RuntimeError("the model cannot do prune for do run forward fail in training mode with "
-                               "input_data.", "RegularModelPruner")
+            raise RuntimeError(
+                "the model cannot do prune for do run forward fail in training mode with "
+                "input_data.",
+                "RegularModelPruner",
+            )
         self.split_info = PruneRecordHelper.prepare_split_info(self.record.prune_record)
         uncertain_index = [idx for idx in range(len(self.record.prune_record))]
         delete_records = []
@@ -76,9 +80,12 @@ class RegularModelPruner:
 
         for delete_record in delete_records:
             for producer in delete_record.producer:
-                LOGGER.logw("Disable prune layer {} for fail to run forward. Please skip it by setting "
-                            "regular_prune_skip_layers, which will help to reduce execution time of "
-                            "create_prune_retrain_model".format(producer.name), "RegularModelPruner")
+                LOGGER.logw(
+                    "Disable prune layer {} for fail to run forward. Please skip it by setting "
+                    "regular_prune_skip_layers, which will help to reduce execution time of "
+                    "create_prune_retrain_model".format(producer.name),
+                    "RegularModelPruner",
+                )
             self.record.prune_record.remove(delete_record)
 
     def prune_by_several_records(self, record_indexes):
@@ -119,9 +126,13 @@ class RegularModelPruner:
             module = self.get_module(node_name)
             ModulePruneHelper.restore(module, node_backup['module_backup'], node_name)
             if ACTIVE_PRUNE_SPLIT in node_backup:
-                self.split_info[node_name][ACTIVE_PRUNE_SPLIT] = node_backup[ACTIVE_PRUNE_SPLIT]
+                self.split_info[node_name][ACTIVE_PRUNE_SPLIT] = node_backup[
+                    ACTIVE_PRUNE_SPLIT
+                ]
             if PASSIVE_PRUNE_SPLIT in node_backup:
-                self.split_info[node_name][PASSIVE_PRUNE_SPLIT] = node_backup[PASSIVE_PRUNE_SPLIT]
+                self.split_info[node_name][PASSIVE_PRUNE_SPLIT] = node_backup[
+                    PASSIVE_PRUNE_SPLIT
+                ]
         return False
 
     def run_model_train_forward(self):
@@ -133,7 +144,7 @@ class RegularModelPruner:
         self.graph.model.train()
         buffer = copy.deepcopy(self.graph.model.state_dict())
         if isinstance(self.mode_input_data, torch.Tensor):
-            self.mode_input_data = (self.mode_input_data, )
+            self.mode_input_data = (self.mode_input_data,)
         success = True
         try:
             self.graph.model.forward(*self.mode_input_data)
@@ -145,13 +156,12 @@ class RegularModelPruner:
         return success
 
     def get_module(self, name):
-        """ get module by name"""
+        """get module by name"""
         try:
             module = self.model_helper.get_module(name)
             return module
         except RuntimeError:
-            LOGGER.logd('Cannot find "%s" in model, cannot do pune '
-                        % (name))
+            LOGGER.logd('Cannot find "%s" in model, cannot do pune ' % (name))
             return None
 
     def prune_producer_cout(self, producer, node_backup):
@@ -166,21 +176,25 @@ class RegularModelPruner:
         attr_helper = AttrProtoHelper(producer)
         ori_begin = attr_helper.get_attr_value('begin')
         prune_index = attr_helper.get_attr_value('prune_index')
-        real_begin = self.split_info[name][ACTIVE_PRUNE_SPLIT]['ori_begin_{}'.format(ori_begin)]
+        real_begin = self.split_info[name][ACTIVE_PRUNE_SPLIT][
+            'ori_begin_{}'.format(ori_begin)
+        ]
         # really prune filter cout
         module = self.get_module(name)
         prune_helper = create_prune_helper(module)
         module_backup = prune_helper.do_prune(
-            [], cout_prune_list=[idx - ori_begin + real_begin for idx in prune_index])
+            [], cout_prune_list=[idx - ori_begin + real_begin for idx in prune_index]
+        )
         if 'module_backup' not in node_backup:
             node_backup['module_backup'] = module_backup
         # update prune_split info
         if ACTIVE_PRUNE_SPLIT not in node_backup:
-            node_backup[ACTIVE_PRUNE_SPLIT] = copy.deepcopy(self.split_info[name][ACTIVE_PRUNE_SPLIT])
+            node_backup[ACTIVE_PRUNE_SPLIT] = copy.deepcopy(
+                self.split_info[name][ACTIVE_PRUNE_SPLIT]
+            )
         for key in self.split_info[name][ACTIVE_PRUNE_SPLIT]:
             if int(key[10:]) > ori_begin:
                 self.split_info[name][ACTIVE_PRUNE_SPLIT][key] -= len(prune_index)
-
 
     def prune_consumer_cin(self, consumer, node_backup):
         """
@@ -198,17 +212,23 @@ class RegularModelPruner:
         attr_helper = AttrProtoHelper(consumer)
         ori_begin = attr_helper.get_attr_value('begin')
         prune_index = attr_helper.get_attr_value('prune_index')
-        real_begin = self.split_info[name][PASSIVE_PRUNE_SPLIT]['ori_begin_{}'.format(ori_begin)]
+        real_begin = self.split_info[name][PASSIVE_PRUNE_SPLIT][
+            'ori_begin_{}'.format(ori_begin)
+        ]
         # really prune filter cin
         module = self.get_module(name)
         prune_helper = create_prune_helper(module)
-        module_backup = prune_helper.do_prune(cin_prune_list=[idx - ori_begin + real_begin for idx in prune_index],
-                                              cout_prune_list=[])
+        module_backup = prune_helper.do_prune(
+            cin_prune_list=[idx - ori_begin + real_begin for idx in prune_index],
+            cout_prune_list=[],
+        )
         if 'module_backup' not in node_backup:
             node_backup['module_backup'] = module_backup
         # update prune_split info
         if PASSIVE_PRUNE_SPLIT not in node_backup:
-            node_backup[PASSIVE_PRUNE_SPLIT] = copy.deepcopy(self.split_info[name][PASSIVE_PRUNE_SPLIT])
+            node_backup[PASSIVE_PRUNE_SPLIT] = copy.deepcopy(
+                self.split_info[name][PASSIVE_PRUNE_SPLIT]
+            )
         for key in self.split_info[name][PASSIVE_PRUNE_SPLIT]:
             if int(key[10:]) > ori_begin:
                 self.split_info[name][PASSIVE_PRUNE_SPLIT][key] -= len(prune_index)

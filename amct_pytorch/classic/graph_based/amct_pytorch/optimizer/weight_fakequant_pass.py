@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -34,6 +34,7 @@ class WeightFakequantPass(BaseFusionPass):
     Function: Fakequant weight from int8 to int9
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -88,7 +89,7 @@ class WeightFakequantPass(BaseFusionPass):
         if object_node.type == 'ConvTranspose' and get_deconv_group(object_node) > 1:
             group = get_deconv_group(object_node)
             int8_weight = adjust_deconv_weight_shape(group, int8_weight)
-            trans_axes = (1, 0, 2, 3, 4)[:len(int8_weight.shape)]
+            trans_axes = (1, 0, 2, 3, 4)[: len(int8_weight.shape)]
             int8_weight = np.transpose(int8_weight, trans_axes)
         weight_helper.clear_data()
 
@@ -99,7 +100,7 @@ class WeightFakequantPass(BaseFusionPass):
 
         if object_node.type == 'ConvTranspose' and get_deconv_group(object_node) > 1:
             group = get_deconv_group(object_node)
-            trans_axes = (1, 0, 2, 3, 4)[:len(int9_weight.shape)]
+            trans_axes = (1, 0, 2, 3, 4)[: len(int9_weight.shape)]
             int9_weight = np.transpose(int9_weight, trans_axes)
             int9_weight = adjust_deconv_weight_shape(group, int9_weight)
 
@@ -107,8 +108,12 @@ class WeightFakequantPass(BaseFusionPass):
 
         weight_helper.set_data(int9_weight, 'FLOAT')
 
-        LOGGER.logd("Fakequant weight from int8 to int9 for layer '{}' " \
-            "success!".format(object_node.name), 'WeightFakequantPass')
+        LOGGER.logd(
+            "Fakequant weight from int8 to int9 for layer '{}' success!".format(
+                object_node.name
+            ),
+            'WeightFakequantPass',
+        )
 
     def dequant_weight(self, object_node, is_recurrence_weight=False):
         """
@@ -126,7 +131,9 @@ class WeightFakequantPass(BaseFusionPass):
             scale = self.records.get(object_node.name).get('recurrence_weight_scale')
             offset = self.records.get(object_node.name).get('recurrence_weight_offset')
         weight_tensor = QuantOpInfo.get_node_tensor(weight_node)
-        weight_helper = TensorProtoHelper(weight_tensor, model_path=weight_node.model_path)
+        weight_helper = TensorProtoHelper(
+            weight_tensor, model_path=weight_node.model_path
+        )
         weight = weight_helper.get_data().astype(np.float32)
         weight_helper.clear_data()
 

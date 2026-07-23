@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,6 +26,7 @@ class DeleteIsolatedNodePass(BaseFusionPass):
     Function: Delete isolated nodes in graph.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -60,8 +61,10 @@ class DeleteIsolatedNodePass(BaseFusionPass):
         object_node: node to process
         Return: None
         """
-        LOGGER.logd("Doing: delete node {} in graph.".format(object_node.name),
-                     'DeleteIsolatedNodePass')
+        LOGGER.logd(
+            "Doing: delete node {} in graph.".format(object_node.name),
+            'DeleteIsolatedNodePass',
+        )
 
         delete_nodes = []
 
@@ -87,8 +90,9 @@ class DeleteIsolatedNodePass(BaseFusionPass):
                 if is_del:
                     del_node(delete_node)
 
-
         del_node(object_node)
 
-        LOGGER.logd("Finished: delete node {} in graph.".format(object_node.name),
-                     'DeleteIsolatedNodePass')
+        LOGGER.logd(
+            "Finished: delete node {} in graph.".format(object_node.name),
+            'DeleteIsolatedNodePass',
+        )

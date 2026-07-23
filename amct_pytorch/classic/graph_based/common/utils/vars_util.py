@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -54,38 +54,35 @@ LSTM_ATTRS_LIMIT_MAP = {
     'clip': None,
     'direction': 'forward',
     'input_forget': 0,
-    'layout': 0
+    'layout': 0,
 }
 GRU_ATTRS_LIMIT_MAP = {
     'activation_alpha': None,
     'activation_beta': None,
     'activations': None,
     'direction': 'forward',
-    'layout': 0
+    'layout': 0,
 }
 RNN_INPUT_ORDER_MAP = {
     'LSTM': {
-        0: 0, # X
-        1: 1, # W
-        2: 2, # R
-        3: 5, # B
-        4: 6, # sequence_lens
-        5: 3, # initial_h
-        6: 4, # initial_c
+        0: 0,  # X
+        1: 1,  # W
+        2: 2,  # R
+        3: 5,  # B
+        4: 6,  # sequence_lens
+        5: 3,  # initial_h
+        6: 4,  # initial_c
     },
     'GRU': {
-        0: 0, # X
-        1: 1, # W
-        2: 2, # R
-        3: 4, # B
-        4: 5, # sequence_lens
-        5: 3, # initial_h
-    }
+        0: 0,  # X
+        1: 1,  # W
+        2: 2,  # R
+        3: 4,  # B
+        4: 5,  # sequence_lens
+        5: 3,  # initial_h
+    },
 }
-RNN_DEQ_SCALE_INDEX = {
-    'LSTM': 8,
-    'GRU': 7
-}
+RNN_DEQ_SCALE_INDEX = {'LSTM': 8, 'GRU': 7}
 
 # ifmr default params
 DEFAULT_MAX_PERCENTILE = 0.999999
@@ -103,10 +100,16 @@ WINOGRAD_NUM_BITS = (6, 7)
 DEFAULT = 'DEFAULT'
 FORCE_FP16_QUANT = 'FORCE_FP16_QUANT'
 
-RETRAIN_DATA_TYPES = CAPACITY.get_value('RETRAIN_DATA_TYPES') \
-    if CAPACITY.get_value('RETRAIN_DATA_TYPES') is not None else [INT8]
-RETRAIN_ACT_WTS_TYPES = CAPACITY.get_value('RETRAIN_ACT_WTS_TYPES') \
-    if CAPACITY.get_value('RETRAIN_ACT_WTS_TYPES') is not None else ['A8W8']
+RETRAIN_DATA_TYPES = (
+    CAPACITY.get_value('RETRAIN_DATA_TYPES')
+    if CAPACITY.get_value('RETRAIN_DATA_TYPES') is not None
+    else [INT8]
+)
+RETRAIN_ACT_WTS_TYPES = (
+    CAPACITY.get_value('RETRAIN_ACT_WTS_TYPES')
+    if CAPACITY.get_value('RETRAIN_ACT_WTS_TYPES') is not None
+    else ['A8W8']
+)
 
 ACT_INDEX = 'act_index'
 WTS_INDEX = 'weight_index'
@@ -115,30 +118,23 @@ INITIAL_H_INDEX = 'initial_h_index'
 SEQUENCE_LENS_INDEX = 'sequence_lens_index'
 RECURRENCE_WEIGHT_INDEX = 'recurrence_weight_index'
 QUANT_INDEXES_MAP = {
-    'Conv': {ACT_INDEX: 0,
-             WTS_INDEX: 1,
-             BIAS_INDEX: 2},
-    'ConvTranspose': {ACT_INDEX: 0,
-                      WTS_INDEX: 1,
-                      BIAS_INDEX: 2},
-    'Gemm': {ACT_INDEX: 0,
-             WTS_INDEX: 1,
-             BIAS_INDEX: 2},
-    'MatMul': {ACT_INDEX: 0,
-               WTS_INDEX: 1,
-               BIAS_INDEX: None},
-    'AveragePool': {ACT_INDEX: 0,
-                    WTS_INDEX: None,
-                    BIAS_INDEX: None},
-    'LSTM': {ACT_INDEX: 0,
-             WTS_INDEX: 1,
-             BIAS_INDEX: 3,
-             INITIAL_H_INDEX: 5,
-             RECURRENCE_WEIGHT_INDEX: 2},
-    'GRU': {ACT_INDEX: 0,
-            WTS_INDEX: 1,
-            BIAS_INDEX: 3,
-            INITIAL_H_INDEX: 5,
-            RECURRENCE_WEIGHT_INDEX: 2
-    }
+    'Conv': {ACT_INDEX: 0, WTS_INDEX: 1, BIAS_INDEX: 2},
+    'ConvTranspose': {ACT_INDEX: 0, WTS_INDEX: 1, BIAS_INDEX: 2},
+    'Gemm': {ACT_INDEX: 0, WTS_INDEX: 1, BIAS_INDEX: 2},
+    'MatMul': {ACT_INDEX: 0, WTS_INDEX: 1, BIAS_INDEX: None},
+    'AveragePool': {ACT_INDEX: 0, WTS_INDEX: None, BIAS_INDEX: None},
+    'LSTM': {
+        ACT_INDEX: 0,
+        WTS_INDEX: 1,
+        BIAS_INDEX: 3,
+        INITIAL_H_INDEX: 5,
+        RECURRENCE_WEIGHT_INDEX: 2,
+    },
+    'GRU': {
+        ACT_INDEX: 0,
+        WTS_INDEX: 1,
+        BIAS_INDEX: 3,
+        INITIAL_H_INDEX: 5,
+        RECURRENCE_WEIGHT_INDEX: 2,
+    },
 }

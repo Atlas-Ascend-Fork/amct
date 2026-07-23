@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 
 import json
-import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -57,12 +56,15 @@ class _StubModel(BaseModel):
         if not hasattr(args, 'quant_dtype'):
             args.quant_dtype = 'int8'
 
-        with patch(
-            "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
-            return_value=SimpleNamespace(tie_word_embeddings=False),
-        ), patch(
-            "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained",
-            return_value=SimpleNamespace(),
+        with (
+            patch(
+                "amct_pytorch.common.models.llm.common.base.AutoConfig.from_pretrained",
+                return_value=SimpleNamespace(tie_word_embeddings=False),
+            ),
+            patch(
+                "amct_pytorch.common.models.llm.common.base.AutoTokenizer.from_pretrained",
+                return_value=SimpleNamespace(),
+            ),
         ):
             super().__init__(args)
 
@@ -173,7 +175,9 @@ def test_iter_ptq_units_yields_each_expert_when_target_is_moe():
     stub = _StubModel(quant_target=["moe"])
     block = nn.Module()
     block.mlp = nn.Module()
-    block.mlp.experts = nn.ModuleList([nn.Linear(4, 4), nn.Linear(4, 4), nn.Linear(4, 4)])
+    block.mlp.experts = nn.ModuleList(
+        [nn.Linear(4, 4), nn.Linear(4, 4), nn.Linear(4, 4)]
+    )
     units = list(stub.iter_ptq_units(layer_idx=0, block=block))
     assert [u.name for u in units] == ["expert_0", "expert_1", "expert_2"]
     assert all(u.kind == "moe" for u in units)
@@ -191,12 +195,16 @@ def test_iter_ptq_units_raises_when_target_is_unsupported_and_block_lacks_mlp():
 
 
 def test_save_block_hook_inputs_raises_when_hook_name_is_none():
-    stub = _StubModel(quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/tmp"))
+    stub = _StubModel(
+        quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/tmp")
+    )
     with pytest.raises(ValueError, match="hook_name cannot be None"):
         stub.save_block_hook_inputs(act_stat={}, hook_name=None, layer_idx=0)
 
 
-def test_save_block_hook_inputs_chooses_attn_save_target_when_attn_in_quant_target(monkeypatch):
+def test_save_block_hook_inputs_chooses_attn_save_target_when_attn_in_quant_target(
+    monkeypatch,
+):
     captured = {}
 
     def fake_save(act_stat, hook_name, save_target, layer_idx, data_dir):
@@ -211,7 +219,9 @@ def test_save_block_hook_inputs_chooses_attn_save_target_when_attn_in_quant_targ
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.save_ptq_inps", fake_save
     )
-    stub = _StubModel(quant_target=[QUANT_TARGET_ATTN_LINEAR], args=SimpleNamespace(data_dir="/d"))
+    stub = _StubModel(
+        quant_target=[QUANT_TARGET_ATTN_LINEAR], args=SimpleNamespace(data_dir="/d")
+    )
     stub.save_block_hook_inputs({"k": 1}, hook_name="hook", layer_idx=4)
     assert captured["save_target"] == "attn"
     assert captured["layer_idx"] == 4
@@ -225,7 +235,9 @@ def test_save_block_hook_inputs_uses_quant_target_for_non_attn(monkeypatch):
         "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
         lambda *a, **k: captured.update(args=a, kwargs=k),
     )
-    stub = _StubModel(quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/d"))
+    stub = _StubModel(
+        quant_target=[QUANT_TARGET_MLP], args=SimpleNamespace(data_dir="/d")
+    )
     stub.save_block_hook_inputs({}, hook_name="hook", layer_idx=2)
     assert captured.get("args")[2] == QUANT_TARGET_MLP  # noqa: E1111
 
@@ -329,9 +341,11 @@ def test_iter_ptq_units_moe_uses_expert_modules_fallback():
     stub = _StubModel(quant_target=["moe"])
     block = nn.Module()
     block.mlp = nn.Module()
-    block.mlp.experts = type("E", (), {"expert_modules": [nn.Linear(4, 4), nn.Linear(4, 4)]})()
+    block.mlp.experts = type(
+        "E", (), {"expert_modules": [nn.Linear(4, 4), nn.Linear(4, 4)]}
+    )()
     units = list(stub.iter_ptq_units(layer_idx=0, block=block))
-    assert [u.name for u in units] == ["expert_0", "expert_1"]
+    assert [u.name for u in units] == ["expert_0", "expert_1"]  # noqa: E1111
 
 
 def test_iter_ptq_units_moe_uses_iter_ptq_expert_modules():
@@ -349,7 +363,7 @@ def test_iter_ptq_units_moe_uses_iter_ptq_expert_modules():
 
     block.mlp.experts = _IterExperts()
     units = list(stub.iter_ptq_units(layer_idx=0, block=block))
-    assert [u.name for u in units] == ["expert_0", "expert_1"]  # noqa: E1111
+    assert [u.name for u in units] == ["expert_0", "expert_1"]
 
 
 def test_load_selected_layer_ptq_params_attn_cache_target():
@@ -529,6 +543,7 @@ def test_build_block_for_forward_calls_block_when_no_quant():
     def _fake_block(idx):
         captured["idx"] = idx
         return nn.Linear(4, 4)
+
     stub.block = _fake_block
     result = stub._build_block_for_forward(3, use_quant_block=False)
     assert captured["idx"] == 3
@@ -543,6 +558,7 @@ def test_build_block_for_forward_calls_build_quant_block_when_quant():
         captured["quant_idx"] = idx
         mod = nn.Linear(4, 4)
         return mod
+
     stub.build_quant_block = _fake_quant_block
 
     def load_selected_layer_ptq_params(idx, block, strict):
@@ -681,7 +697,9 @@ def test_iter_deploy_bindings_skips_non_quant_linear():
 
 def test_load_unit_inputs_delegates_to_load_ptq_inps(tmp_path, monkeypatch):
     stub = _StubModel(quant_target=[QUANT_TARGET_MLP])
-    unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=2, module=nn.Linear(4, 4))
+    unit = make_ptq_unit(
+        QUANT_TARGET_MLP, QUANT_TARGET_MLP, layer_idx=2, module=nn.Linear(4, 4)
+    )
     fake_data = torch.randn(4, 4)
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -739,7 +757,9 @@ def _make_tiny_safetensors_model_dir(num_layers=1):
 
     # Create embed / head tensors
     embed_head_tensors = {
-        "model.embed_tokens.weight": torch.zeros(vocab_size, hidden_size, dtype=torch.bfloat16),
+        "model.embed_tokens.weight": torch.zeros(
+            vocab_size, hidden_size, dtype=torch.bfloat16
+        ),
         "model.norm.weight": torch.zeros(hidden_size, dtype=torch.bfloat16),
         "lm_head.weight": torch.zeros(vocab_size, hidden_size, dtype=torch.bfloat16),
     }
@@ -778,7 +798,11 @@ def _mock_hf_for_safetensors_test(monkeypatch, model_dir, config):
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type(
+            "FakeAT",
+            (),
+            {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)},
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
@@ -786,10 +810,14 @@ def _mock_hf_for_safetensors_test(monkeypatch, model_dir, config):
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
-        type("FakeAMFCLM", (), {
-            FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
-            "from_config": staticmethod(lambda *a, **kw: empty_model),
-        })(),
+        type(
+            "FakeAMFCLM",
+            (),
+            {
+                FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+                "from_config": staticmethod(lambda *a, **kw: empty_model),
+            },
+        )(),
     )
 
 
@@ -984,11 +1012,16 @@ def test_do_embedding_forward_saves_position_info(tmp_path, monkeypatch):
 # ---- do_block_forward / do_head_forward --------------------------------
 
 
-def _compute_position_embeddings(config, batch, seq_len, device="cpu", dtype=torch.bfloat16):
+def _compute_position_embeddings(
+    config, batch, seq_len, device="cpu", dtype=torch.bfloat16
+):
     from transformers.models.qwen3.modeling_qwen3 import Qwen3RotaryEmbedding
+
     rope = Qwen3RotaryEmbedding(config)
     position_ids = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch, -1)
-    hidden_states = torch.zeros(batch, seq_len, config.hidden_size, device=device, dtype=dtype)
+    hidden_states = torch.zeros(
+        batch, seq_len, config.hidden_size, device=device, dtype=dtype
+    )
     cos, sin = rope(hidden_states, position_ids)
     return (cos, sin)
 
@@ -1177,7 +1210,9 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
             return x
 
     fake_block = _FakeBlock()
-    monkeypatch.setattr(model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block)
+    monkeypatch.setattr(
+        model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block
+    )
 
     batch, seq_len, hidden_size = 2, 4, 8
     samples = [torch.randn(batch, seq_len, hidden_size)]
@@ -1241,7 +1276,9 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
             return x
 
     fake_block = _FakeBlock()
-    monkeypatch.setattr(model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block)
+    monkeypatch.setattr(
+        model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block
+    )
 
     batch, seq_len, hidden_size = 2, 4, 8
     samples = [torch.randn(batch, seq_len, hidden_size)]
@@ -1306,7 +1343,9 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
             return x
 
     fake_block = _FakeBlock()
-    monkeypatch.setattr(model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block)
+    monkeypatch.setattr(
+        model, "_build_block_for_forward", lambda idx, use_quant_block: fake_block
+    )
 
     batch, seq_len, hidden_size = 2, 4, 8
     samples = [torch.randn(batch, seq_len, hidden_size)]
@@ -1396,4 +1435,3 @@ def test_generate_tensorwise_ignore_layers_raises_not_implemented():
     stub = _StubModel()
     with pytest.raises(NotImplementedError):
         stub.generate_tensorwise_ignore_layers()
-

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,11 +18,7 @@
 import torch
 
 
-DATA_MAP = {
-    torch.float32: 0,
-    torch.float16: 1,
-    torch.bfloat16: 2
-}
+DATA_MAP = {torch.float32: 0, torch.float16: 1, torch.bfloat16: 2}
 
 
 def check_data_type(tensor_dtype, data_types):
@@ -33,7 +29,11 @@ def check_data_type(tensor_dtype, data_types):
         data_types: list or tuple. torch.dtypes
     """
     if tensor_dtype not in data_types:
-        raise RuntimeError('Not support tensor dtype {}, support dtypes {}.'.format(tensor_dtype, data_types))
+        raise RuntimeError(
+            'Not support tensor dtype {}, support dtypes {}.'.format(
+                tensor_dtype, data_types
+            )
+        )
 
 
 def check_linear_input_dim(input):
@@ -84,14 +84,17 @@ def convert_precision(ori_tensor, quant_dtype, round_mode):
     original_dtype_index = DATA_MAP.get(ori_tensor.dtype)
     if original_dtype_index is None:
         raise RuntimeError(
-            "dtype {} not support now, only support float32/float16/bfloat16.".format(ori_tensor.dtype))
+            "dtype {} not support now, only support float32/float16/bfloat16.".format(
+                ori_tensor.dtype
+            )
+        )
 
     quant_bits = int(quant_dtype.replace('INT', ''))
-    converted_data = torch.clamp(torch.round(
-        ori_tensor), -pow(2, quant_bits - 1), pow(2, quant_bits - 1) - 1)
+    converted_data = torch.clamp(
+        torch.round(ori_tensor), -pow(2, quant_bits - 1), pow(2, quant_bits - 1) - 1
+    )
 
     return converted_data
-
 
 
 def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=32):
@@ -105,7 +108,9 @@ def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=3
         torch.tensor, shape is same with input_tensor
     """
     n = input_tensor.shape[-1]
-    expanded_tensor = torch.repeat_interleave(torch.pow(2, shared_exponents), repeats=block_size, dim=-1)[..., :n]
+    expanded_tensor = torch.repeat_interleave(
+        torch.pow(2, shared_exponents), repeats=block_size, dim=-1
+    )[..., :n]
     result = input_tensor * expanded_tensor
     return result
 
@@ -113,11 +118,11 @@ def scale_input_by_shared_exponents(input_tensor, shared_exponents, block_size=3
 def pad_zero_by_group(tensor, group_size):
     """
     Pads the input tensor so that the size of its last dimension is divisible by group_size.
- 
+
     Args:
         tensor (Tensor): Input tensor to be padded, 2 dim
         group_size (int): Group size that the last dimension should be divisible by
- 
+
     Returns:
         Tensor: Padded tensor with last dimension size aligned to group_size
     """

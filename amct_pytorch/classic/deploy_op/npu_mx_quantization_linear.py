@@ -22,9 +22,11 @@ class NpuMXQuantizationLinear(torch.nn.Module):
     Function: class for npu mx_data quant operator inherited from nn.module.
     APIs: forward
     """
+
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__()
         import torch_npu
+
         self.ori_module_type = type(ori_module).__name__
         self.ori_dtype = ori_module.weight.dtype
         self.weight = ori_module.weight
@@ -33,21 +35,30 @@ class NpuMXQuantizationLinear(torch.nn.Module):
         device = ori_module.weight.device
         self.weight_compress_only = True
 
-        if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-            quant_config.get('inputs_cfg').get('enable_quant') == True:
+        if (
+            quant_config.get('inputs_cfg').get('enable_quant') is None
+            or quant_config.get('inputs_cfg').get('enable_quant') == True
+        ):
             self.weight_compress_only = False
 
         if self.wts_type == MXFP4_E2M1:
             weight_tensor, shared_exponent_w = quant_tensor(self.weight, self.wts_type)
-            weight_tensor = torch_npu.npu_convert_weight_to_int4pack(weight_tensor.npu()).to(device=device)
+            weight_tensor = torch_npu.npu_convert_weight_to_int4pack(
+                weight_tensor.npu()
+            ).to(device=device)
             shared_exponent_w = (shared_exponent_w + 127).to(torch.uint8)
             shared_exponent_w = shared_exponent_w.transpose(-1, -2)
         elif self.wts_type == MXFP8_E4M3FN:
             weight_tensor, shared_exponent_w = torch_npu.npu_dynamic_mx_quant(
-                self.weight, axis=-1, round_mode='rint', dst_type=torch.float8_e4m3fn, block_size=32)
+                self.weight,
+                axis=-1,
+                round_mode='rint',
+                dst_type=torch.float8_e4m3fn,
+                block_size=32,
+            )
             shared_exponent_w = shared_exponent_w.transpose(0, 1)
             self.group_sizes = [1, 1, 32]
-        
+
         weight_tensor = weight_tensor.transpose(1, 0)
         self.register_buffer('quantized_weight', weight_tensor)
         self.register_buffer('scale_w', shared_exponent_w)
@@ -63,6 +74,7 @@ class NpuMXQuantizationLinear(torch.nn.Module):
 
     def forward(self, x):
         import torch_npu
+
         ori_shape = x.shape
         if len(ori_shape) < 2 or len(ori_shape) > 6:
             raise RuntimeError("Only support activation dims in [2,6] for linear.")
@@ -72,16 +84,34 @@ class NpuMXQuantizationLinear(torch.nn.Module):
             x = x.reshape(-1, ori_shape[-1])
 
         if self.weight_compress_only:
-            output = torch_npu.npu_weight_quant_batchmatmul(x, self.quantized_weight, self.scale_w,
-                antiquant_offset=None, bias=self.bias, weight_dtype=None,
-                antiquant_group_size=32)
+            output = torch_npu.npu_weight_quant_batchmatmul(
+                x,
+                self.quantized_weight,
+                self.scale_w,
+                antiquant_offset=None,
+                bias=self.bias,
+                weight_dtype=None,
+                antiquant_group_size=32,
+            )
         else:
             quant_x, shared_exponent_d = torch_npu.npu_dynamic_mx_quant(
-                x, axis=-1, round_mode='rint', dst_type=torch.float8_e4m3fn, block_size=32)
-            output = torch_npu.npu_quant_matmul(quant_x, self.quantized_weight, self.scale_w,
-                bias=self.bias, pertoken_scale=shared_exponent_d, output_dtype=self.ori_dtype,
+                x,
+                axis=-1,
+                round_mode='rint',
+                dst_type=torch.float8_e4m3fn,
+                block_size=32,
+            )
+            output = torch_npu.npu_quant_matmul(
+                quant_x,
+                self.quantized_weight,
+                self.scale_w,
+                bias=self.bias,
+                pertoken_scale=shared_exponent_d,
+                output_dtype=self.ori_dtype,
                 pertoken_scale_dtype=torch_npu.float8_e8m0fnu,
-                scale_dtype=torch_npu.float8_e8m0fnu, group_sizes=self.group_sizes)
+                scale_dtype=torch_npu.float8_e8m0fnu,
+                group_sizes=self.group_sizes,
+            )
 
         if len(ori_shape) != 2:
             output = output.reshape(*ori_shape[:-1], -1)

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,14 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
 import stat
-import sys
 import unittest
 from io import BytesIO
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
@@ -45,6 +42,7 @@ class TestSave(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_save')
@@ -88,17 +86,28 @@ class TestSave(unittest.TestCase):
         self.assertEqual(save_prefix, 'model')
 
     def test_write_node_info(self):
-        model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
-                                    torch.nn.BatchNorm2d(3, 3))
+        model = torch.nn.Sequential(
+            torch.nn.Conv2d(3, 3, 3), torch.nn.BatchNorm2d(3, 3)
+        )
         model.eval()
         tmp_onnx = BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
-            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
-                        "attr_val": bytes("float16", encoding='utf-8')}, ],
-            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
-                                     "attr_val": bytes("float16", encoding='utf-8')}, ]
+            "Conv_0": [
+                {
+                    "attr_name": OP_DATA_TYPE,
+                    "attr_type": "STRING",
+                    "attr_val": bytes("float16", encoding='utf-8'),
+                },
+            ],
+            "BatchNormalization_1": [
+                {
+                    "attr_name": OP_DATA_TYPE,
+                    "attr_type": "STRING",
+                    "attr_val": bytes("float16", encoding='utf-8'),
+                },
+            ],
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
@@ -118,17 +127,28 @@ class TestSave(unittest.TestCase):
                 self.assertTrue(find_flag)
 
     def test_delete_customized_attr(self):
-        model = torch.nn.Sequential(torch.nn.Conv2d(3, 3, 3),
-                                    torch.nn.BatchNorm2d(3, 3))
+        model = torch.nn.Sequential(
+            torch.nn.Conv2d(3, 3, 3), torch.nn.BatchNorm2d(3, 3)
+        )
         model.eval()
         tmp_onnx = BytesIO()
         onnx_file = os.path.join(self.temp_folder, "tmp.onnx")
         torch.onnx.export(model, torch.randn(1, 3, 19, 19), onnx_file)
         customized_attr = {
-            "Conv_0": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
-                        "attr_val": bytes("float16", encoding='utf-8')}, ],
-            "BatchNormalization_1": [{"attr_name": OP_DATA_TYPE, "attr_type": "STRING",
-                                     "attr_val": bytes("float16", encoding='utf-8')}, ]
+            "Conv_0": [
+                {
+                    "attr_name": OP_DATA_TYPE,
+                    "attr_type": "STRING",
+                    "attr_val": bytes("float16", encoding='utf-8'),
+                },
+            ],
+            "BatchNormalization_1": [
+                {
+                    "attr_name": OP_DATA_TYPE,
+                    "attr_type": "STRING",
+                    "attr_val": bytes("float16", encoding='utf-8'),
+                },
+            ],
         }
         graph = Parser.parse_net_to_graph(onnx_file)
         dump_model = graph.dump_proto()
@@ -147,4 +167,3 @@ class TestSave(unittest.TestCase):
                     if attr.name == OP_DATA_TYPE:
                         find_flag = True
                 self.assertFalse(find_flag)
-

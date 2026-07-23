@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -29,6 +29,7 @@ class ReplaceWeightQuantPass(BaseFusionPass):
     Function: Fakequant weight from int8 to int9
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -82,7 +83,9 @@ class ReplaceWeightQuantPass(BaseFusionPass):
         if weight_node.type == 'Transpose':
             weight_node = weight_node.get_input_anchor(0).get_peer_output_anchor().node
         weight_helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
-        offset_helper = TensorProtoHelper(offset_node.proto.attribute[0].t, offset_node.model_path)
+        offset_helper = TensorProtoHelper(
+            offset_node.proto.attribute[0].t, offset_node.model_path
+        )
         # get data
         int8_weight = weight_helper.get_data()
         int8_offset = offset_helper.get_data()
@@ -91,22 +94,31 @@ class ReplaceWeightQuantPass(BaseFusionPass):
 
         for input_anchor in peer_input_anchors:
             peer_input_node = input_anchor.node
-            if peer_input_node.type == "ConvTranspose" and get_deconv_group(peer_input_node) > 1:
+            if (
+                peer_input_node.type == "ConvTranspose"
+                and get_deconv_group(peer_input_node) > 1
+            ):
                 group = get_deconv_group(peer_input_node)
                 if len(peer_input_anchors) > 1:
-                    raise RuntimeError("Cannot replace weight quant layer '{}' to fake weight quant layer"\
-                        "in the case of group > 1 weight sharing of ConvTranspose".format(object_node.name))
+                    raise RuntimeError(
+                        "Cannot replace weight quant layer '{}' to fake weight quant layer"
+                        "in the case of group > 1 weight sharing of ConvTranspose".format(
+                            object_node.name
+                        )
+                    )
                 else:
                     int8_weight = adjust_deconv_weight_shape(group, int8_weight)
-                    trans_axes = (1, 0, 2, 3, 4)[:len(int8_weight.shape)]
+                    trans_axes = (1, 0, 2, 3, 4)[: len(int8_weight.shape)]
                     int8_weight = np.transpose(int8_weight, trans_axes)
 
-        int9_weight = int8_weight.astype(np.float32) - \
-                      int8_offset.astype(np.float32)
+        int9_weight = int8_weight.astype(np.float32) - int8_offset.astype(np.float32)
 
         for input_anchor in peer_input_anchors:
             peer_input_node = input_anchor.node
-            if peer_input_node.type == "ConvTranspose" and get_deconv_group(peer_input_node) > 1:
+            if (
+                peer_input_node.type == "ConvTranspose"
+                and get_deconv_group(peer_input_node) > 1
+            ):
                 group = get_deconv_group(peer_input_node)
                 int9_weight = np.transpose(int9_weight, (1, 0, 2, 3))
                 int9_weight = adjust_deconv_weight_shape(group, int9_weight)
@@ -119,5 +131,8 @@ class ReplaceWeightQuantPass(BaseFusionPass):
         graph.remove_node(offset_node)
 
         LOGGER.logd(
-            "Replace weight quant layer '{}' to fake weight quant layer success!".
-                format(object_node.name), 'ReplaceWeightQuantPass')
+            "Replace weight quant layer '{}' to fake weight quant layer success!".format(
+                object_node.name
+            ),
+            'ReplaceWeightQuantPass',
+        )

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,6 +27,7 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
     Function: Replace "GlobalAveragePool + Flatten" node in graph.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -47,8 +48,12 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
 
         consumers, _ = node.get_consumers(0)
         if len(consumers) != 1 or consumers[0].type != 'Flatten':
-            LOGGER.logd("node {} match_pattern fail for it must have only one consumer Flatten.".format(node.name),
-                        'ReplaceAvgpoolFlattenPass')
+            LOGGER.logd(
+                "node {} match_pattern fail for it must have only one consumer Flatten.".format(
+                    node.name
+                ),
+                'ReplaceAvgpoolFlattenPass',
+            )
             return False
 
         consumer = consumers[0]
@@ -57,8 +62,12 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
         if attr_helper.has_attr('axis'):
             axis = attr_helper.get_attr_value('axis')
         if axis != 1:
-            LOGGER.logd("node {} match_pattern fail for its consumer Flatten has axis {} not equal to 1."
-                        .format(node.name, axis), 'ReplaceAvgpoolFlattenPass')
+            LOGGER.logd(
+                "node {} match_pattern fail for its consumer Flatten has axis {} not equal to 1.".format(
+                    node.name, axis
+                ),
+                'ReplaceAvgpoolFlattenPass',
+            )
             return False
 
         return True
@@ -72,12 +81,16 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
         object_node: node to process
         Return: None
         """
-        LOGGER.logd("Doing: delete node {} in graph.".format(object_node.name),
-                    'ReplaceAvgpoolFlattenPass')
+        LOGGER.logd(
+            "Doing: delete node {} in graph.".format(object_node.name),
+            'ReplaceAvgpoolFlattenPass',
+        )
         consumers, _ = object_node.get_consumers(0)
         consumer = consumers[0]
 
-        proto_p1ton1 = ReplaceAvgpoolFlattenPass.construct_d4tod2('.'.join([object_node.name, consumer.name]))
+        proto_p1ton1 = ReplaceAvgpoolFlattenPass.construct_d4tod2(
+            '.'.join([object_node.name, consumer.name])
+        )
         node_p1ton1 = graph.add_node(proto_p1ton1)
         graph.insert_node_before(node_p1ton1, 0, 0, object_node, 0)
 
@@ -86,8 +99,10 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
         graph.delete_node(consumer, 0, 0)
         graph.remove_node(consumer)
 
-        LOGGER.logd("Finished: delete node {} in graph.".format(object_node.name),
-                    'ReplaceAvgpoolFlattenPass')
+        LOGGER.logd(
+            "Finished: delete node {} in graph.".format(object_node.name),
+            'ReplaceAvgpoolFlattenPass',
+        )
 
     @staticmethod
     def construct_d4tod2(layer_name):

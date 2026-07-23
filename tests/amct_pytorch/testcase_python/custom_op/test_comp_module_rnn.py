@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,9 +22,6 @@ import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_rnn import (
     CompModuleRNN,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
-    Recorder,
 )
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
@@ -43,17 +40,9 @@ class TestCompModuleRNN(unittest.TestCase):
         cls.h0 = torch.randn(1, 1, 20)
         cls.c0 = torch.randn(1, 1, 20)
 
-        cls.act_config = {
-            'num_bits': 8,
-            'clip_max': 1.0,
-            'clip_min': -1.0
-        }
+        cls.act_config = {'num_bits': 8, 'clip_max': 1.0, 'clip_min': -1.0}
 
-        cls.wts_config = {
-            'num_bits': 8,
-            'channel_wise': False,
-            'algo': 'arq_retrain'
-        }
+        cls.wts_config = {'num_bits': 8, 'channel_wise': False, 'algo': 'arq_retrain'}
 
         cls.common_config = {
             'device': 'cpu',
@@ -61,16 +50,16 @@ class TestCompModuleRNN(unittest.TestCase):
             'process_group': None,
             'world_size': 1,
             'layers_name': ['lstm'],
-            'batch_num': 1
+            'batch_num': 1,
         }
-        
+
         cls.gru_common_config = {
             'device': 'cpu',
             'need_sync': False,
             'process_group': None,
             'world_size': 1,
             'layers_name': ['gru'],
-            'batch_num': 1
+            'batch_num': 1,
         }
 
         cls.comp_args = {
@@ -78,15 +67,15 @@ class TestCompModuleRNN(unittest.TestCase):
             'act_config': cls.act_config,
             'wts_config': cls.wts_config,
             'common_config': cls.common_config,
-            'acts_comp_reuse': False
+            'acts_comp_reuse': False,
         }
-        
+
         cls.gru_comp_args = {
             'module': cls.gru_module,
             'act_config': cls.act_config,
             'wts_config': cls.wts_config,
             'common_config': cls.gru_common_config,
-            'acts_comp_reuse': False
+            'acts_comp_reuse': False,
         }
 
     @classmethod
@@ -97,13 +86,13 @@ class TestCompModuleRNN(unittest.TestCase):
         comp_module = CompModuleRNN(**self.comp_args)
         comp_module.comp_algs.append('quant')
         comp_module.forward(self.input, (self.h0, self.c0))
-    
+
     def test_forward_seq_n_success(self):
         comp_module = CompModuleRNN(**self.comp_args)
         comp_module.comp_algs.append('quant')
         inputs = torch.randn(1, 10, 10)
         comp_module.forward(inputs, (self.h0, self.c0))
-        
+
         comp_module = CompModuleRNN(**self.gru_comp_args)
         comp_module.comp_algs.append('quant')
         inputs = torch.randn(1, 10, 10)

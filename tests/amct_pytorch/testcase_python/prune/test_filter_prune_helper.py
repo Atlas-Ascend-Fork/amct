@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -49,6 +49,7 @@ class TestFilterPruneHelper(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_filter_prune_helper')
@@ -66,8 +67,10 @@ class TestFilterPruneHelper(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_cascade(self,):
-        """ test active, passive, disable"""
+    def test_cascade(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.SingleConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()
@@ -90,12 +93,16 @@ class TestFilterPruneHelper(unittest.TestCase):
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
 
-        producer_names, consumer_names = record_utils.get_producer(record.prune_record[0])
+        producer_names, consumer_names = record_utils.get_producer(
+            record.prune_record[0]
+        )
         self.assertEqual(producer_names, ['layer1.0'])
         self.assertEqual(consumer_names, ['layer1.1', 'layer2.0'])
 
-    def test_eltwise(self,):
-        """ test active, passive, disable"""
+    def test_eltwise(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.EltwiseConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()
@@ -112,13 +119,17 @@ class TestFilterPruneHelper(unittest.TestCase):
         record_helper = PruneRecordHelper(records, graph)
 
         configer = FakeRetrainConfig()
-        configer.set_prune_layers(['layer1.0', 'layer2.0', 'layer3.0', 'layer4.0', 'layer5.0'])
+        configer.set_prune_layers(
+            ['layer1.0', 'layer2.0', 'layer3.0', 'layer4.0', 'layer5.0']
+        )
         with mock.patch.object(retrain_config, 'RetrainConfig', FakeRetrainConfig):
             for node in graph.nodes + graph._in_out_nodes:
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
 
-        tar_records = record_utils.read_record_file(os.path.join(CUR_DIR, './utils/records/record_EltwiseConv.txt'))
+        tar_records = record_utils.read_record_file(
+            os.path.join(CUR_DIR, './utils/records/record_EltwiseConv.txt')
+        )
 
         prune_records = records.prune_record[0]
         tar_prune_records = tar_records.prune_record[0]
@@ -131,8 +142,10 @@ class TestFilterPruneHelper(unittest.TestCase):
                 consumer.name = tar_prune_records.consumer[idx].name
             self.assertEqual(consumer, tar_prune_records.consumer[idx])
 
-    def test_splitconcat(self,):
-        """ test active, passive, disable"""
+    def test_splitconcat(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.SplitConcatConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()
@@ -155,7 +168,9 @@ class TestFilterPruneHelper(unittest.TestCase):
             for node in graph.nodes + graph._in_out_nodes:
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
-        tar_records = record_utils.read_record_file(os.path.join(CUR_DIR, './utils/records/record_SplitConcatConv.txt'))
+        tar_records = record_utils.read_record_file(
+            os.path.join(CUR_DIR, './utils/records/record_SplitConcatConv.txt')
+        )
 
         prune_records = records.prune_record[0]
         tar_prune_records = tar_records.prune_record[0]
@@ -168,8 +183,10 @@ class TestFilterPruneHelper(unittest.TestCase):
                 consumer.name = tar_prune_records.consumer[idx].name
             self.assertEqual(consumer, tar_prune_records.consumer[idx])
 
-    def test_splitconcat_gconv(self,):
-        """ test active, passive, disable"""
+    def test_splitconcat_gconv(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.SplitConcatGroupConv()
         args_shape = [(1, 16, 28, 28)]
         args = list()

@@ -35,16 +35,12 @@ def is_native_hifloat8_cast_available():
     except ImportError:
         return False
 
-    if not hasattr(torch_npu, "hifloat8") or not hasattr(
-        torch_npu, "npu_dtype_cast"
-    ):
+    if not hasattr(torch_npu, "hifloat8") or not hasattr(torch_npu, "npu_dtype_cast"):
         return False
 
     try:
         fp_tensor = torch.zeros(1, dtype=torch.float16).npu()
-        hifloat8_tensor = torch_npu.npu_dtype_cast(
-            fp_tensor, torch_npu.hifloat8
-        )
+        hifloat8_tensor = torch_npu.npu_dtype_cast(fp_tensor, torch_npu.hifloat8)
         torch_npu.npu_dtype_cast(
             hifloat8_tensor,
             torch.float16,
@@ -59,9 +55,7 @@ def _native_hifloat8_fake_quant(fp_tensor):
     """Run a native FP-to-HiFloat8-to-FP cast without fallback."""
     import torch_npu
 
-    hifloat8_tensor = torch_npu.npu_dtype_cast(
-        fp_tensor, torch_npu.hifloat8
-    )
+    hifloat8_tensor = torch_npu.npu_dtype_cast(fp_tensor, torch_npu.hifloat8)
     return torch_npu.npu_dtype_cast(
         hifloat8_tensor,
         fp_tensor.dtype,
@@ -92,9 +86,7 @@ def _amct_ops_hifloat8_fake_quant(fp_tensor, encode, decode):
     if work_tensor.device.type != "npu":
         work_tensor = work_tensor.npu()
     codes = encode(work_tensor)
-    return decode(codes, work_dtype).to(
-        device=fp_tensor.device, dtype=fp_tensor.dtype
-    )
+    return decode(codes, work_dtype).to(device=fp_tensor.device, dtype=fp_tensor.dtype)
 
 
 @torch.no_grad()

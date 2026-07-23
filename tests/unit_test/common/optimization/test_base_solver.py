@@ -39,7 +39,9 @@ def test_cannot_instantiate_abstract_base_solver():
 
 
 def test_concrete_solver_records_attributes():
-    solver = _ConcreteSolver(args=_args(["attn-linear"]), layer_idx=3, model=nn.Linear(4, 4))
+    solver = _ConcreteSolver(
+        args=_args(["attn-linear"]), layer_idx=3, model=nn.Linear(4, 4)
+    )
     assert solver.layer_idx == 3
     assert solver.quant_target == ["attn-linear"]
     assert solver.optimizer is None and solver.lr_scheduler is None
@@ -117,4 +119,5 @@ def test_base_solver_granularity_class_attribute():
     from amct_pytorch.common.optimization.base_solver import (
         BaseSolver as base_solver_cls,
     )
+
     assert base_solver_cls.granularity == "block"

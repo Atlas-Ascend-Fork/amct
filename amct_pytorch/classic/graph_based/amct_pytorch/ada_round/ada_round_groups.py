@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -25,7 +25,7 @@ MUL = 'Mul'
 ACTIVATION_MAP = {
     'Relu': torch.nn.ReLU(),
     'Sigmoid': torch.nn.Sigmoid(),
-    'Tanh': torch.nn.Tanh()
+    'Tanh': torch.nn.Tanh(),
 }
 
 
@@ -149,7 +149,7 @@ def _match_gelu_tanh_subgraph_back_part(input_nodes):
 
 def _match_gelu_tanh_subgraph(input_nodes):
     '''
-    Function: judge whether match gelu('tanh') subgraph 
+    Function: judge whether match gelu('tanh') subgraph
     Parameters:
         input_nodes: input_nodes of subgraph
     Return:
@@ -177,7 +177,11 @@ def _match_rrelu_subgraph(input_nodes):
         return False
 
     prelu_node = _get_single_consumer(rand_node)
-    if prelu_node is None or prelu_node.type != 'PRelu' or prelu_node is not input_nodes[1]:
+    if (
+        prelu_node is None
+        or prelu_node.type != 'PRelu'
+        or prelu_node is not input_nodes[1]
+    ):
         return False
 
     return True
@@ -205,7 +209,9 @@ def _get_other_activation(consumers):
     elif consumer.type == 'PRelu':
         slope_value = QuantOpInfo.get_node_input_value(consumer, 1).flatten()
         act_module = torch.nn.PReLU(num_parameters=slope_value.size)
-        act_module.weight = torch.nn.Parameter(torch.from_numpy(slope_value), requires_grad=False)
+        act_module.weight = torch.nn.Parameter(
+            torch.from_numpy(slope_value), requires_grad=False
+        )
     elif consumer.type == 'Clip':
         if len(consumer.input_anchors) != 3:
             return None

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,12 +26,10 @@ import torch.nn.functional as F
 
 from amct_pytorch.classic.graph_based.amct_pytorch.auto_channel_prune_search import (
     AutoChannelPruneSearch,
-    TaylorLossSensitivity,
     auto_channel_prune_search,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune.\
-    auto_channel_prune_config_helper import (
+from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import (
     AutoChannelPruneConfigHelper,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
@@ -45,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class Net001(nn.Module):
-    """ args_shape: [(1, 2, 28, 28)]
+    """args_shape: [(1, 2, 28, 28)]
     conv + bn
     conv(with bias) + bn
     depthwise_conv + bn
@@ -55,32 +53,36 @@ class Net001(nn.Module):
     fc + bn
     fc(bias) + bn
     """
+
     def __init__(self):
         super(Net001, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
-            nn.Conv2d(2, 16, kernel_size=3, bias=False),
-            nn.BatchNorm2d(16))
+            nn.Conv2d(2, 16, kernel_size=3, bias=False), nn.BatchNorm2d(16)
+        )
         self.layer2 = nn.Sequential(
             nn.Conv2d(16, 16, kernel_size=3, bias=True),
             nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True))
+            nn.ReLU(inplace=True),
+        )
         # depthwise_conv + bn
         self.layer3 = nn.Sequential(
-            nn.Conv2d(16, 16, kernel_size=3, groups=16),
-            nn.BatchNorm2d(16))
+            nn.Conv2d(16, 16, kernel_size=3, groups=16), nn.BatchNorm2d(16)
+        )
         self.layer4 = nn.Sequential(
             nn.Conv2d(16, 16, kernel_size=3, groups=16),
             nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True))
+            nn.ReLU(inplace=True),
+        )
         # group_conv + bn
         self.layer5 = nn.Sequential(
-            nn.Conv2d(16, 32, kernel_size=3, groups=4),
-            nn.BatchNorm2d(32))
+            nn.Conv2d(16, 32, kernel_size=3, groups=4), nn.BatchNorm2d(32)
+        )
         self.layer6 = nn.Sequential(
             nn.Conv2d(32, 8, kernel_size=3, groups=8),
             nn.BatchNorm2d(8),
-            nn.ReLU(inplace=True))
+            nn.ReLU(inplace=True),
+        )
         # fc
         self.fc = nn.Sequential(
             nn.Linear(8 * 16 * 16, 1024, bias=True),
@@ -88,7 +90,8 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128, 10, bias=True))
+            nn.Linear(128, 10, bias=True),
+        )
 
     def forward(self, x):
         x = self.layer1(x)
@@ -108,6 +111,7 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
     """
     The ST for TestAutoChannelPruneSearch
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_auto_channel_prune_search')
@@ -127,17 +131,19 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
         labels = torch.randn(output.size())
         cls.sample_data = [cls.args[0], labels]
 
-         # parse to graph
+        # parse to graph
         tmp_onnx = BytesIO()
         Parser.export_onnx(model, cls.args, tmp_onnx)
         cls.graph = Parser.parse_net_to_graph(tmp_onnx)
         cls.graph.add_model(model)
 
-        cls.config_helper = AutoChannelPruneConfigHelper(cls.graph, config_defination, GraphQuerier, CAPACITY)
+        cls.config_helper = AutoChannelPruneConfigHelper(
+            cls.graph, config_defination, GraphQuerier, CAPACITY
+        )
         cls.auto_channel_prune_search = AutoChannelPruneSearch(
-            cls.graph, cls.args, cls.config_helper, None, cls.output_cofig, None)
+            cls.graph, cls.args, cls.config_helper, None, cls.output_cofig, None
+        )
         logger.info('AutoChannelPruneSearchTorch start!')
-
 
     @classmethod
     def tearDownClass(cls):
@@ -151,7 +157,9 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
         pass
 
     def test_get_search_ops(self):
-        search_ops = self.auto_channel_prune_search.get_search_ops(self.graph, self.args)
+        search_ops = self.auto_channel_prune_search.get_search_ops(
+            self.graph, self.args
+        )
         self.assertIsNotNone(search_ops)
 
     def test_get_graph_bitops(self):
@@ -176,7 +184,12 @@ class TestAutoChannelPruneSearchTorch(unittest.TestCase):
         sample_data = [args[0], labels]
 
         auto_channel_prune_search(
-            model=model, config=config_defination, input_data=sample_data, output_cfg=output_cofig,
-            sensitivity='TaylorLossSensitivity', search_alg='GreedySearch')
+            model=model,
+            config=config_defination,
+            input_data=sample_data,
+            output_cfg=output_cofig,
+            sensitivity='TaylorLossSensitivity',
+            search_alg='GreedySearch',
+        )
         logger.info(output_cofig)
         self.assertTrue(output_cofig)

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -38,7 +38,10 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
     Function: Insert CaliQuant for quantizable module
     APIs: match_pattern, do_pass
     """
-    def __init__(self, torch_recorder, records=None, dump_config=None, mode='cali_dump'):
+
+    def __init__(
+        self, torch_recorder, records=None, dump_config=None, mode='cali_dump'
+    ):
         """
         Function: init object of insert act cali quant pass.
         Parameter:
@@ -84,9 +87,9 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
         parent_module = model_helper.get_parent_module(object_name)
         # Step2: construct a new module
         tensor_balance_factor = self.broad_cast_tensor_balance_factor(
-            object_name, object_module, graph)
-        act_config = self.conf.get_layer_config(
-            object_name)['activation_quant_params']
+            object_name, object_module, graph
+        )
+        act_config = self.conf.get_layer_config(object_name)['activation_quant_params']
         act_algo = act_config.get('act_algo', 'ifmr')
         num_bits = act_config.get(NUM_BITS, 8)
         if act_algo == 'hfmg':
@@ -100,7 +103,7 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
                 'dump_config': self.dump_config,
                 'mode': self.mode,
                 TENSOR_BALANCE_FACTOR: tensor_balance_factor,
-                FAKEQUANT_PRECISION_MODE: act_config.get(FAKEQUANT_PRECISION_MODE)
+                FAKEQUANT_PRECISION_MODE: act_config.get(FAKEQUANT_PRECISION_MODE),
             }
             act_cali_module = CaliQuantHfmg(object_module, **hfmg_args)
         else:
@@ -118,7 +121,7 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
                 'dump_config': self.dump_config,
                 'mode': self.mode,
                 TENSOR_BALANCE_FACTOR: tensor_balance_factor,
-                FAKEQUANT_PRECISION_MODE: act_config.get(FAKEQUANT_PRECISION_MODE)
+                FAKEQUANT_PRECISION_MODE: act_config.get(FAKEQUANT_PRECISION_MODE),
             }
             act_cali_module = CaliQuant(object_module, **ifmr_args)
 
@@ -127,7 +130,10 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
 
         LOGGER.logd(
             "Insert CaliQuant module of {} to '{}' success!".format(
-                act_algo, object_name), 'InsertCaliQuantPass')
+                act_algo, object_name
+            ),
+            'InsertCaliQuantPass',
+        )
 
     def broad_cast_tensor_balance_factor(self, node_name, module, graph):
         '''
@@ -144,7 +150,9 @@ class InsertCaliQuantPass(BaseModuleFusionPass):
             if graph is None:
                 raise RuntimeError(' There is no graph in Caliquantpass!')
             object_node = graph.get_node_by_name(node_name)
-            tensor_balance_factor = self.records.get(object_node.name).get(TENSOR_BALANCE_FACTOR)
+            tensor_balance_factor = self.records.get(object_node.name).get(
+                TENSOR_BALANCE_FACTOR
+            )
             tensor_balance_factor = np.array(tensor_balance_factor, np.float32)
             if type(module).__name__ in ('Conv2d', 'ConvTranspose2d'):
                 tensor_balance_factor = tensor_balance_factor.reshape([1, -1, 1, 1])

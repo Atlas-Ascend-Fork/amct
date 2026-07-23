@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,19 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
-from copy import deepcopy
 
-import numpy as np
 import torch
 from onnx import onnx_pb
 
-from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util import (
-    version_higher_than,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer import DeleteResizePass
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
@@ -65,9 +58,8 @@ class TestDeleteResizePass(unittest.TestCase):
     def tearDown(self):
         pass
 
-
     def test_do_success_01(self):
-        """ now is fail"""
+        """now is fail"""
         graph = Parser.parse_net_to_graph(self.onnx_file)
         ori_len = len(graph.nodes)
         resize_node = None
@@ -81,7 +73,7 @@ class TestDeleteResizePass(unittest.TestCase):
         passer.do_pass(graph, resize_node)
 
     def test_do_success_02(self):
-        """ now is fail"""
+        """now is fail"""
         # set basic info
         model_proto = onnx_pb.ModelProto()
         model_proto.producer_name = 'model'

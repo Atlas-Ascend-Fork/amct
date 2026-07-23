@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -50,7 +50,6 @@ class TestDeleteIsolatedNodePass(unittest.TestCase):
         cls.onnx_file = os.path.join(cls.temp_folder, 'conv_pad_long.onnx')
         Parser.export_onnx(cls.model, cls.args, cls.onnx_file)
 
-
     @classmethod
     def tearDownClass(cls):
         os.popen('rm -r ' + cls.temp_folder)
@@ -82,4 +81,3 @@ class TestDeleteIsolatedNodePass(unittest.TestCase):
             self.assertEqual(15, ori_len - len(graph.nodes))
         else:
             self.assertEqual(20, ori_len - len(graph.nodes))
-
