@@ -63,6 +63,7 @@ jobs:
           else
             echo "bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}"
             bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}
+            ret=$?
           fi
 
           if [ $ret -ne 200 ] && [ $ret -ne 0 ]; then
@@ -78,9 +79,6 @@ jobs:
               fi
           fi
           exit 0 
-      -
-        name: cat_content
-        run: cat ./.gitcode/actions/ut-cov-report/dist/ut_cov.sh
       -
         name: ut_cov
         identifier: ut_cov
