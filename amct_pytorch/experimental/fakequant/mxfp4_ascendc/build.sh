@@ -19,6 +19,7 @@ if [[ -z "${ASCEND_TOOLKIT_HOME:-}" ]]; then
     source "${CANN_PATH}/../../set_env.sh" 2>/dev/null || true
     source /usr/local/Ascend/ascend-toolkit/set_env.sh 2>/dev/null || true
 fi
+CANN_PATH="${ASCEND_TOOLKIT_HOME:-$CANN_PATH}"
 
 # Auto-detect SoC version from npu-smi when SOC_VERSION is not provided.
 # Avoids silent failure when the host hardware (e.g. A3 Ascend910_9392)
