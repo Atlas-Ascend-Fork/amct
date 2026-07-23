@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+import os
+import tempfile
 import unittest
+from unittest import mock
 
 import numpy as np
 from onnx.onnx_pb import TensorProto
@@ -8,6 +11,7 @@ from onnx.onnx_pb import TensorProto
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
     pack_int4_to_int8,
+    parse_external_data_meta,
     unpack_int8_to_int4,
 )
 
@@ -58,6 +62,68 @@ class TestNativeInt4(unittest.TestCase):
         out, _ = TensorProtoHelper(t).get_external_data()
         self.assertEqual(list(out.shape), [4, 2])
         np.testing.assert_array_equal(out.astype(np.int8).flatten(), data)
+
+
+class TestParseExternalDataMeta(unittest.TestCase):
+    def test_parse_all_fields(self):
+        entries = []
+        for k, v in [('location', 'w.bin'), ('offset', '128'),
+                     ('length', '256'), ('amct_quantized_raw_data', '1')]:
+            e = mock.MagicMock()
+            e.key, e.value = k, v
+            entries.append(e)
+        file_name, offset, length, quantized = parse_external_data_meta(entries)
+        self.assertEqual(file_name, 'w.bin')
+        self.assertEqual(offset, 128)
+        self.assertEqual(length, 256)
+        self.assertTrue(quantized)
+
+    def test_parse_defaults_when_empty(self):
+        file_name, offset, length, quantized = parse_external_data_meta([])
+        self.assertIsNone(file_name)
+        self.assertEqual(offset, 0)
+        self.assertEqual(length, -1)
+        self.assertIsNone(quantized)
+
+
+class TestExternalDataIO(unittest.TestCase):
+    """external data 的 INT8/float 读取路径，不依赖 onnx 原生 INT4。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        for f in os.listdir(self.tmp):
+            os.remove(os.path.join(self.tmp, f))
+        os.rmdir(self.tmp)
+
+    def _build_external_tensor(self, np_value, data_type):
+        ext_file = os.path.join(self.tmp, 'w.bin')
+        np_value.tofile(ext_file)
+        t = TensorProto()
+        t.data_type = data_type
+        t.dims.extend(list(np_value.shape))
+        t.data_location = 1  # EXTERNAL
+        for k, v in [('location', 'w.bin'), ('offset', '0'),
+                     ('length', str(np_value.nbytes))]:
+            e = t.external_data.add()
+            e.key, e.value = k, str(v)
+        return t
+
+    def test_read_int8_external_file(self):
+        data = np.arange(12, dtype=np.int8).reshape(3, 4)
+        t = self._build_external_tensor(data, TensorProto.INT8)
+        out, _ = TensorProtoHelper(t, model_path=self.tmp).get_external_data()
+        self.assertEqual(list(out.shape), [3, 4])
+        np.testing.assert_array_equal(out, data)
+
+    def test_read_shape_mismatch_raises(self):
+        data = np.arange(12, dtype=np.int8)
+        t = self._build_external_tensor(data, TensorProto.INT8)
+        t.ClearField('dims')
+        t.dims.extend([3, 5])  # 与实际 12 个元素不符
+        with self.assertRaises(ValueError):
+            TensorProtoHelper(t, model_path=self.tmp).get_external_data()
 
 
 if __name__ == "__main__":

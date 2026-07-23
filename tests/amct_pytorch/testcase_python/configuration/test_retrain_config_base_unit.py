@@ -112,5 +112,37 @@ class TestRetrainConfigBase(unittest.TestCase):
         obj.set_config_by_graph_construct({}, GRAPH)
 
 
+class TestDowngradeInt4UnpackableLayers(unittest.TestCase):
+    def test_downgrade_unpackable_int4_layer_to_int8(self):
+        obj, querier, _ = _make()
+        # conv1 无法沿 Cin pack -> 降级；conv2 可以 -> 保持 INT4
+        querier.int4_cin_pack_unsupported.side_effect = \
+            lambda graph, layer: layer == 'conv1'
+        config = {
+            'conv1': {'retrain_weight_config': {'dst_type': 'INT4'}},
+            'conv2': {'retrain_weight_config': {'dst_type': 'INT4'}},
+            'version': 'v1',  # 非 dict 之外的全局项也应被安全跳过
+        }
+        obj.downgrade_int4_unpackable_layers(None, config)
+        self.assertEqual(config['conv1']['retrain_weight_config']['dst_type'], 'INT8')
+        self.assertEqual(config['conv2']['retrain_weight_config']['dst_type'], 'INT4')
+
+    def test_non_int4_layer_untouched(self):
+        obj, querier, _ = _make()
+        querier.int4_cin_pack_unsupported.return_value = True
+        config = {'fc': {'retrain_weight_config': {'dst_type': 'INT8'}}}
+        obj.downgrade_int4_unpackable_layers(None, config)
+        # 非 INT4 层即便 unsupported=True 也不动
+        self.assertEqual(config['fc']['retrain_weight_config']['dst_type'], 'INT8')
+
+    def test_no_querier_method_is_noop(self):
+        obj, _, _ = _make()
+        # graph_querier 无 int4_cin_pack_unsupported 时直接返回，不报错
+        obj.graph_querier = object()
+        config = {'conv': {'retrain_weight_config': {'dst_type': 'INT4'}}}
+        obj.downgrade_int4_unpackable_layers(None, config)
+        self.assertEqual(config['conv']['retrain_weight_config']['dst_type'], 'INT4')
+
+
 if __name__ == '__main__':
     unittest.main()
