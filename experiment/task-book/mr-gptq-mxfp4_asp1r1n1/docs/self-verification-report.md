@@ -107,6 +107,31 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq \
   是加分项，论文 Table 11）。router（`Qwen3_5MoeTopKRouter`，非 Linear）保 fp16。
 - 工程：双卡 device_map（35B fp16≈70GB 单卡放不下），融合专家量化在 CPU 完成规避多卡 OOM。
 
+### 4.3 W4A4 精度评估（激活也量化，进阶 —— 按评审意见补充）—— 【待测】
+
+**动机**：weight-only（W4A16）仅得**存储**收益；matmul 时权重需反量化回 bf16，推理反而变慢。
+**W4A4**（权重+激活均 4-bit）才能让 matmul 在低比特上算、拿到**计算**收益。amct 原生无 MXFP4 W4A4
+组合，本项目在**已实现的 Hadamard 在线旋转**基础上，于 `fake_quant_forward` 内对旋转后激活做
+**逐 token、逐 32 通道块的动态 MXFP4**（E8M0 shared exponent 每次前向重算），用于精度评估。
+
+命令：`--increments hadamard scale_fitting act_quant`（W4A4）；旋转开/关做消融对照。
+
+**Qwen3-8B（seq_len=4096）**：
+
+| 方案 | 权重 | 激活 | PPL | delta | 说明 |
+|------|------|------|-----|-------|------|
+| bf16 基准 | — | — | 8.9893 | — | 基准 |
+| W4A16（MR-GPTQ，主线） | mxfp4 | bf16 | 9.2621 | 0.273 | ✅ 已验收达标 |
+| W4A4 + Hadamard 旋转 | mxfp4 | mxfp4 | 【待填】 | 【待填】 | 招牌 W4A4 数 |
+| W4A4 无旋转（消融） | mxfp4 | mxfp4 | 【待填】 | 【待填】 | 证明旋转的作用 |
+
+- 日志：`src/logs/【待填：mrgptq_w4a4_had_8b.log / mrgptq_w4a4_norot_8b.log】`
+- 【截图占位：W4A4（旋转）运行 `Score`】、【截图占位：W4A4 无旋转 `Score`】
+- 结论要点（数据到位后填）：
+  1. W4A4 相对 W4A16 的 delta【增大 X】——激活量化更敏感，符合论文 recovery 96.76%(W4A16)→89.47%(W4A4) 的趋势；
+  2. **旋转开 vs 关的差值【待填】**——量化 Hadamard 在线旋转对激活量化的关键作用：无旋转时激活离群值致 PPL【大幅劣化/崩溃】，旋转把它拉回可用范围（这是 MR-GPTQ 对 W4A4 的核心贡献）。
+- 说明：本节为 **fake-quant 精度评估**；真实 W4A4 部署需低比特激活算子（Ascend C），属推理加速课题，不在本量化算法任务范围。W4A16 保底达标结论不受影响。
+
 ## 5. 消融实验（算法有效性验证，Qwen3-8B，seq_len=2048）
 
 逐个开启增量，验证每一步的贡献：
