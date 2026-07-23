@@ -51,7 +51,7 @@ if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
 from amct_pytorch.common.utils.fpx_decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
-from amct_pytorch.common.utils.fpx_decode.ckpt_io import walk_checkpoint  # noqa: E402
+from amct_pytorch.common.utils.checkpoint_io import walk_checkpoint  # noqa: E402
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -177,7 +177,7 @@ def main(argv: Optional[list] = None) -> None:
         )
 
     if args.dry_run:
-        from amct_pytorch.common.utils.fpx_decode.ckpt_io import (
+        from amct_pytorch.common.utils.checkpoint_io import (
             resolve_index, ShardCache, invert_weight_map,
         )
         import glob as glob_mod

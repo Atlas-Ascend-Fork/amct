@@ -34,9 +34,13 @@ import os
 import shutil
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import torch
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover
+    np = None
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
@@ -176,6 +180,164 @@ def save_shard(out_dir: str, file_name: str, tensors: Dict[str, object], atomic:
     else:
         save_file(tensors, str(out_path))
     return str(out_path)
+
+
+# ------------------------------------------------------------- shard cache + specs
+class ShardCache:
+    """Lazy cache for safetensors shards with cross-shard key lookup."""
+
+    def __init__(self, shard_paths: List[str]) -> None:
+        self._paths = list(shard_paths)
+        self._cache: Dict[str, dict] = {}
+
+    def get(self, path: str) -> dict:
+        if path not in self._cache:
+            self._cache[path] = load_file(path, device="cpu")
+        return self._cache[path]
+
+    def find_key(self, key: str) -> Tuple[Optional[torch.Tensor], Optional[str]]:
+        for p in self._paths:
+            d = self.get(p)
+            if key in d:
+                return d[key], p
+        return None, None
+
+
+def parse_spec(spec: str) -> Tuple[str, Optional[str]]:
+    """Parse a ``path[:key]`` spec string."""
+    if ":" in spec:
+        path, key = spec.split(":", 1)
+        return path, key
+    return spec, None
+
+
+def load_tensor_from_spec(spec: str, map_location: str = "cpu") -> torch.Tensor:
+    """Load a single tensor from ``.pt`` / ``.pth`` / ``.npy`` / ``.safetensors:key``."""
+    path, key = parse_spec(spec)
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+
+    lower = path.lower()
+    if lower.endswith(".pt") or lower.endswith(".pth"):
+        obj = torch.load(path, map_location=map_location)
+        if key is not None:
+            if not isinstance(obj, dict):
+                raise TypeError(f"{path} is not a dict, cannot get key {key}")
+            obj = obj[key]
+        if not isinstance(obj, torch.Tensor):
+            raise TypeError(f"loaded object is not a tensor: {type(obj)}")
+        return obj
+
+    if lower.endswith(".npy"):
+        if np is None:
+            raise ImportError("numpy is required to load .npy files")
+        if key is not None:
+            raise ValueError(".npy spec should not include a key")
+        return torch.from_numpy(np.load(path))
+
+    if lower.endswith(".safetensors"):
+        if key is None:
+            raise ValueError("safetensors spec must be path.safetensors:key")
+        return load_file(path, device=map_location)[key]
+
+    raise ValueError(f"unsupported input file type: {path}")
+
+
+def save_convert_output(path: str, payload: Dict[str, Any]) -> None:
+    """Save conversion output as a ``.pt`` file."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    torch.save(payload, path)
+
+
+# ------------------------------------------------------------- generic traversal
+def walk_checkpoint(
+    src_dir: str,
+    index_path: Optional[str],
+    out_dir: str,
+    transform_fn: Callable[
+        [str, torch.Tensor, Callable[[str], Tuple[Optional[torch.Tensor], Optional[str]]]],
+        Optional[torch.Tensor],
+    ],
+    *,
+    extra_shard_globs: Optional[List[str]] = None,
+    verbose: bool = True,
+) -> Dict[str, int]:
+    """Walk every tensor in a safetensors checkpoint, transform, and save.
+
+    ``transform_fn(key, tensor, lookup) -> Optional[Tensor]``: return a new tensor to convert,
+    the same tensor to copy, or ``None`` to drop the key. ``lookup(other_key)`` resolves a tensor
+    from any source shard (for cross-shard scale/weight pairing). ``index_path`` is an optional
+    target sharding plan; if ``None`` it is derived from the source checkpoint via
+    :func:`resolve_index`. Returns ``{converted, copied, dropped, missing}`` counts.
+    """
+    import glob as glob_mod
+
+    out_path_obj = Path(out_dir)
+    out_path_obj.mkdir(parents=True, exist_ok=True)
+
+    plan_index = resolve_index(src_dir, index_path)
+    if "weight_map" not in plan_index:
+        raise ValueError("index.json must contain 'weight_map'")
+    weight_map: Dict[str, str] = plan_index["weight_map"]
+    by_file = invert_weight_map(weight_map)
+
+    source_shards = sorted(glob_mod.glob(os.path.join(src_dir, "*.safetensors")))
+    if extra_shard_globs:
+        for g in extra_shard_globs:
+            source_shards.extend(sorted(glob_mod.glob(g)))
+    if not source_shards:
+        raise FileNotFoundError(f"No *.safetensors found in {src_dir}")
+    cache = ShardCache(source_shards)
+
+    stats: Dict[str, int] = {"converted": 0, "copied": 0, "dropped": 0, "missing": 0}
+    actual_weight_map: Dict[str, str] = {}
+
+    for shard_fname, keys in by_file.items():
+        shard_out: Dict[str, torch.Tensor] = {}
+        if verbose:
+            print(f"\n[Shard] {shard_fname}: {len(keys)} tensors")
+
+        for k in keys:
+            tensor, src_path = cache.find_key(k)
+            if tensor is None:
+                stats["missing"] += 1
+                if verbose:
+                    print(f"  [MISS] {k}")
+                continue
+
+            def _lookup(lk: str) -> Tuple[Optional[torch.Tensor], Optional[str]]:
+                return cache.find_key(lk)
+
+            result = transform_fn(k, tensor, _lookup)
+            if result is None:
+                stats["dropped"] += 1
+                continue
+
+            shard_out[k] = result.contiguous()
+            if result is not tensor:
+                stats["converted"] += 1
+            else:
+                stats["copied"] += 1
+
+        save_shard(str(out_path_obj), shard_fname, shard_out)
+        if verbose:
+            print(f"  [Saved] {out_path_obj / shard_fname}  tensors={len(shard_out)}")
+
+        for written_key in shard_out:
+            actual_weight_map[written_key] = shard_fname
+
+    new_metadata = dict(plan_index.get("metadata", {}))
+    write_index(str(out_path_obj), actual_weight_map, metadata=new_metadata)
+    if verbose:
+        print(f"\n[OK] wrote index: {out_path_obj / SAFE_WEIGHTS_INDEX_NAME}")
+        print(
+            f"\nSummary: converted={stats['converted']}, copied={stats['copied']}, "
+            f"dropped={stats['dropped']}, missing={stats['missing']}"
+        )
+        if stats["missing"] > 0:
+            print("NOTE: missing>0 -- plan index keys may not match source checkpoint keys.")
+
+    return stats
 
 
 class CheckpointShardWriter:
