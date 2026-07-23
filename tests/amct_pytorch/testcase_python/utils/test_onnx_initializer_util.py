@@ -97,19 +97,6 @@ class TestExternalDataIO(unittest.TestCase):
             os.remove(os.path.join(self.tmp, f))
         os.rmdir(self.tmp)
 
-    def _build_external_tensor(self, np_value, data_type):
-        ext_file = os.path.join(self.tmp, 'w.bin')
-        np_value.tofile(ext_file)
-        t = TensorProto()
-        t.data_type = data_type
-        t.dims.extend(list(np_value.shape))
-        t.data_location = 1  # EXTERNAL
-        for k, v in [('location', 'w.bin'), ('offset', '0'),
-                     ('length', str(np_value.nbytes))]:
-            e = t.external_data.add()
-            e.key, e.value = k, str(v)
-        return t
-
     def test_read_int8_external_file(self):
         data = np.arange(12, dtype=np.int8).reshape(3, 4)
         t = self._build_external_tensor(data, TensorProto.INT8)
@@ -124,6 +111,19 @@ class TestExternalDataIO(unittest.TestCase):
         t.dims.extend([3, 5])  # 与实际 12 个元素不符
         with self.assertRaises(ValueError):
             TensorProtoHelper(t, model_path=self.tmp).get_external_data()
+
+    def _build_external_tensor(self, np_value, data_type):
+        ext_file = os.path.join(self.tmp, 'w.bin')
+        np_value.tofile(ext_file)
+        t = TensorProto()
+        t.data_type = data_type
+        t.dims.extend(list(np_value.shape))
+        t.data_location = 1  # EXTERNAL
+        for k, v in [('location', 'w.bin'), ('offset', '0'),
+                     ('length', str(np_value.nbytes))]:
+            e = t.external_data.add()
+            e.key, e.value = k, str(v)
+        return t
 
 
 if __name__ == "__main__":
