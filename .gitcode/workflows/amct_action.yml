@@ -36,6 +36,18 @@ stages:
             name: show_output
             run: |
               echo "image: ${{ steps.revise_image.outputs.Compile_Ascend_X86  }}"
+          -
+            name: print_env
+            run: |
+              echo "org_name: ${{ env.org_name }}"
+              echo "repo_name: ${{ env.repo_name }}"
+              echo "MERGE_ID: ${{ env.MERGE_ID }}"
+              echo "TARGET_BRANCH: ${{ env.TARGET_BRANCH }}"
+              echo "SOURCE_BRANCH: ${{ env.SOURCE_BRANCH }}"
+              echo "obs_path: ${{ env.obs_path }}"
+              echo "atomgit.event.pull_request.number: ${{ atomgit.event.pull_request.number }}"
+              echo "atomgit.base_ref: ${{ atomgit.base_ref }}"
+              echo "atomgit.head_ref: ${{ atomgit.head_ref }}"
         if: "${{ default() }}"
         runs-on: ["codearts-hosted", "ubuntu-latest", "x64", "large"]
       JOB_pr:  
