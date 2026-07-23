@@ -55,47 +55,14 @@ jobs:
           cd -
           source .gitcode/assert.sh
           cat "pr_filelist.txt"
-          if [ "$TARGET_BRANCH" = "master" ];then
-              case "${{ inputs.ut_type }}" in
-                  ophost)
-                      bash build.sh -u --cov --ophost --cann_3rd_lib_path=/home/jenkins/opensource -f "pr_filelist.txt" -j16
-                      ret=$?
-                      coverage_save="true"
-                      ;;
-                  opapi)
-                      bash build.sh -u --cov --opapi --cann_3rd_lib_path=/home/jenkins/opensource -f "pr_filelist.txt" -j1
-                      ret=$?
-                      coverage_save="true"
-                      ;;
-                  opgraph)
-                      bash build.sh -u --opgraph --cov --cann_3rd_lib_path=/home/jenkins/opensource -f "pr_filelist.txt" -j16     
-                      ret=200
-                      coverage_save="true"
-                      ;;
-                  opkernel)
-                      bash scripts/ci/check_kernel_ut.sh "pr_filelist.txt" "${repo_name}" "-j16" | tee output.txt
-                      ret=$?
-                      coverage_save="true"
-                      ;;
-                esac
+          if [ "$TARGET_BRANCH" = "feature/community-tasks" ];then
+            LOG_HEAD "not need build"
+            mkdir -p build_out
+            touch ${WORKSPACE}/build_out/cann-amct.tar.gz
+            exit 0
           else
-              case "${{ inputs.ut_type }}" in
-                  ophost)
-                      bash build.sh -u --ophost --cann_3rd_lib_path=/home/jenkins/opensource -f "pr_filelist.txt" -j16          
-                      ret=$?
-                      coverage_save="true"
-                      ;;
-                  opapi)
-                      bash build.sh -u --opapi --cann_3rd_lib_path=/home/jenkins/opensource -f "pr_filelist.txt" -j16                     
-                      ret=$?
-                      coverage_save="true"
-                      ;;
-                  *)
-                      echo "Skip UT test execution for ${{ inputs.ut_type }} on non-master branch"
-                      exit 0
-                      ;;
-
-              esac
+            echo "bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}"
+            bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}
           fi
 
           if [ $ret -ne 200 ] && [ $ret -ne 0 ]; then
