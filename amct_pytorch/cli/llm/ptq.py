@@ -28,7 +28,7 @@ def _run_hif4_convert(args):
       Uses LlmDeployWorkflow in ``fake_quant_output`` mode: it auto-detects the format, decodes
       a foreign FP4/FP8 source to BF16 first, builds the model layer-by-layer, and fake-quants
       each quantizable weight (quant_target modules); non-quantized tensors are copied.
-    - hif4 input -> reconstruct to float via checkpoint_cast unpack (the model pipeline cannot
+    - hif4 input -> reconstruct to float via checkpoint_unpack (the model pipeline cannot
       load packed HiF4 weights, so this stays model-agnostic).
 
     Output float dtype: fp16/bf16 preserve the source; foreign/hif4 default to fp16.
@@ -39,9 +39,9 @@ def _run_hif4_convert(args):
     print(f"[ptq/hif4] source format detected: {fmt}", flush=True)
 
     if fmt == "hif4":
-        from amct_pytorch.common.utils.hifloat4_quant.checkpoint_cast import main as cast_main
+        from amct_pytorch.common.utils.hifloat4_quant.checkpoint_unpack import unpack_hif4_checkpoint
         os.makedirs(args.output_dir, exist_ok=True)
-        cast_main(["unpack", "--input", args.model, "--output", args.output_dir, "--dtype", "fp16"])
+        unpack_hif4_checkpoint(args.model, args.output_dir, out_dtype="fp16")
         return
 
     import torch
