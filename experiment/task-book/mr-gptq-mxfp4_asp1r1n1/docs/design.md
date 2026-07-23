@@ -256,40 +256,6 @@ python -m amct_pytorch.deploy ... --quant_dtype mxfp --algos mr_gptq --output_di
 
 ---
 
-## 9. 实现补记（实测修正，2026-07-15）
-
-设计阶段对 35B 的判断与实测有关键出入，如实记录（8B 与设计一致，略）。
-
-**① 35B 实为 `qwen3_5_moe` 混合架构**：40 层 = 30 层线性注意力 `linear_attn`（SSM）+ 10 层
-全注意力 `self_attn`，每层 MoE 含 256 路由专家 + 共享专家。
-
-**② ⚠️路由专家不是 nn.Linear（推翻本文 §6 的覆盖率预判）**：本文原假设"experts 的
-gate/up/down 是 nn.Linear、占全网 Linear 绝大多数、纳入后覆盖 >90%"。**实测该模型的路由专家
-是 `Qwen3_5MoeExperts` 的融合 3D 张量**（`gate_up_proj[256,1024,2048]`/`down_proj[256,2048,512]`，
-占 ~32B/35B），属 `nn.Parameter` 而非 nn.Linear → **amct 只量化 nn.Linear，完全覆盖不到** →
-不处理则显存降 <50% 不达标。**修正**：新增 `quantize_fused_experts`，对融合张量沿收缩维（最后
-一维）每 32 元素做 MXFP4（scale-fitting RTN；不做 Hadamard——专家输入旋转需与 router/shared_expert
-同步、代价大）。router（`Qwen3_5MoeTopKRouter`，亦非 Linear）保 fp16。
-
-**③ nn.Linear 覆盖率口径**：全模型 351 个 nn.Linear，跳 lm_head 后目标 350，amct 实际量化 250
-（其余 ~100 个 in_features 不整除 32、无法做 block-32 MXFP4——部分 SSM 投影、`shared_expert_gate`(out=1)，
-参数量极小、保 fp16）→ nn.Linear 覆盖 250/350 = 71.4%。**因大头在融合专家、单看 nn.Linear 会误判，
-真实以「全参数量化占比 97.0% / 显存降低 71.2%」为准。**
-
-**④ 工程**：35B fp16≈70GB 单卡放不下 → 双卡 `device_map`；融合专家量化的 fp32 临时量在被塞满的
-卡上会 OOM → 全程 CPU 计算、回写先释放卡上旧张量再挪回。
-
-**⑤ 最终达标（seq_len=4096，wikitext2 PPL）**：
-
-| 模型 | bf16 | MR-GPTQ | delta | nn.Linear 覆盖 | 显存降 | 判定 |
-|------|------|---------|-------|----------------|--------|------|
-| Qwen3-8B（dense） | 8.9893 | 9.2621 | 0.273 | 99.6% | 67.4% | ✅ |
-| Qwen3.6-35B-A3B（MoE） | 6.311 | 6.3781 | 0.067 | 71.4%（全参数 97%） | 71.2% | ✅ |
-
-详见自验证报告 `docs/self-verification-report.md` 与实验记录 `docs/experiment-log.md`（均在代码分支 `feat/mr-gptq-impl`）。
-
----
-
 ## 附录 A：参考
 
 - MR-GPTQ: *Bridging the Gap Between Promise and Performance for Microscaling FP4 Quantization*, arXiv:2509.23202
