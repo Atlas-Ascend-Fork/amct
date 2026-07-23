@@ -31,6 +31,7 @@ _INCREMENTS = {
     "hadamard": False,        # block-wise Hadamard 微旋转
     "scale_fitting": False,   # MXFP scale fitting（附录 H）
     "act_reorder": False,     # 静态激活重排
+    "act_quant": False,       # W4A4：激活也做 MXFP4（动态、逐32块）；须配 hadamard 压离群值
 }
 
 _HADAMARD_K = 128  # block-wise Hadamard 尺寸（论文示 MXFP4 上 128 优于 32）
@@ -117,6 +118,19 @@ class MRGPTQuant(GPTQuant):
         in_features = weight.shape[1]
         scale_full = blk_scale.repeat_interleave(group_size, dim=1)[:, :in_features]
         return float_to_fp4e2m1(weight / scale_full) * scale_full
+
+    # ---- 激活 MXFP4 动态量化（W4A4，增量④） ---------------------------------
+    @classmethod
+    def _quant_act_mxfp4(cls, x, group_size=32):
+        """激活 MXFP4 动态伪量化：把 [*, in] 展平成 [N, in]，沿最后一维每 32 通道一块，
+        **运行时**算 E8M0 shared exponent（激活是动态的，scale 每次前向重算）→ 吸附到 E2M1。
+        与权重量化对称，复用 _quant_direct。须先做 Hadamard 旋转压激活离群值，否则 4-bit 激活会崩。
+        这些是整张量少数向量化算子，NPU 上无 per-column kernel 启动灾难。"""
+        shape = x.shape
+        x2 = x.reshape(-1, shape[-1]).float()
+        blk = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(x2)))  # [N, ceil(in/32)]
+        xq = cls._quant_direct(x2, blk, group_size)
+        return xq.reshape(shape).to(x.dtype)
 
     # ---- Hessian 逆的上三角 Cholesky（override 父类，全程 CPU） -------------
     def cal_hessian_inverse(self, hessian, columns):
@@ -232,6 +246,10 @@ class MRGPTQuant(GPTQuant):
         # y = (x·R)·(W·R)ᵀ = x·Wᵀ（R 正交对称），weight-only 下 x·R 精确无损。
         if self._do_hadamard():
             inputs = self._rotate_last_dim(inputs)
+        # W4A4：旋转后把激活也量化到 MXFP4（旋转已压离群值 → 激活可 4-bit）。
+        # 注意：只在此 fake-quant 路径量化激活；校准前向走父类 F.linear、不量化激活。
+        if self.increments.get("act_quant"):
+            inputs = self._quant_act_mxfp4(inputs, self.group_size)
         return F.linear(inputs, self.weight.to(inputs.dtype), self.bias)
 
 

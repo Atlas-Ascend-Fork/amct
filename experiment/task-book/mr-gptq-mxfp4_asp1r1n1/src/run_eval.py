@@ -66,8 +66,8 @@ def build_args():
     ap.add_argument("--skip_router", action="store_true",
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
-                    choices=["scale_fitting", "hadamard", "act_reorder"],
-                    help="mr_gptq 模式下开启的增量（消融用）")
+                    choices=["scale_fitting", "hadamard", "act_reorder", "act_quant"],
+                    help="mr_gptq 增量（消融用）；act_quant=W4A4 激活也量化（须配 hadamard）")
     return ap.parse_args()
 
 
@@ -86,6 +86,11 @@ def main():
             for inc in args.increments:
                 mr_gptq_module._INCREMENTS[inc] = True
             print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
+            inc = mr_gptq_module._INCREMENTS
+            if inc["act_quant"]:
+                mode_str = "W4A4（激活也 MXFP4）" if inc["hadamard"] else \
+                    "W4A4 但【未开 hadamard】——激活离群值未压制，精度会崩（仅作消融对照）"
+                print(f"[MR-GPTQ] 激活量化开启：{mode_str}")
             cfg = dict(MXFP4_MR_GPTQ_CFG)
         else:
             cfg = dict(MXFP4_GPTQ_CFG)
