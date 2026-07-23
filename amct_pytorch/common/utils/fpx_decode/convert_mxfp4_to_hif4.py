@@ -54,7 +54,7 @@ from amct_pytorch.common.utils.fpx_decode.fp4_formats import (  # noqa: E402
     mxfp4_to_bf16,
     pack_nibbles,
 )
-from amct_pytorch.common.utils.fpx_decode.ckpt_io import (  # noqa: E402
+from amct_pytorch.common.utils.checkpoint_io import (  # noqa: E402
     load_index,
     resolve_index,
     load_tensor_from_spec,
@@ -303,7 +303,7 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
     if args.dry_run:
         import glob as glob_mod
         plan_index = resolve_index(args.mxfp4_dir, args.bf16_index)
-        from amct_pytorch.common.utils.fpx_decode.ckpt_io import invert_weight_map
+        from amct_pytorch.common.utils.checkpoint_io import invert_weight_map
         by_file = invert_weight_map(plan_index["weight_map"])
         source_shards = sorted(glob_mod.glob(os.path.join(args.mxfp4_dir, "*.safetensors")))
         cache = ShardCache(source_shards)
