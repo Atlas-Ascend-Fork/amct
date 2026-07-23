@@ -1,0 +1,224 @@
+{
+  "baseline_ppl": 19.165120800541743,
+  "evaluation": {
+    "dataset": "Wikitext-2-raw-v1/test",
+    "seq_len": 4096,
+    "segments": 73,
+    "predicted_tokens": 298935
+  },
+  "experiments": [
+    {
+      "id": "baseline",
+      "algorithm": "baseline",
+      "profile": "official",
+      "source_file": "baseline_official_full.json",
+      "ppl": 19.165120800541743,
+      "delta": 0.0,
+      "relative_change_percent": 0.0,
+      "segments": 73,
+      "predicted_tokens": 298935,
+      "evaluation_seconds": 23.071620467992034,
+      "tokens_per_second": 12956.827216134285,
+      "peak_memory_bytes": 7440936448,
+      "calibration_seconds": null,
+      "calibration_tokens": null
+    },
+    {
+      "id": "cast_official",
+      "algorithm": "cast",
+      "profile": "official",
+      "source_file": "cast_official_full.json",
+      "ppl": 19.416355072004258,
+      "delta": 0.25123427146251487,
+      "relative_change_percent": 1.3108932319143785,
+      "segments": 73,
+      "predicted_tokens": 298935,
+      "evaluation_seconds": 159.64220729202498,
+      "tokens_per_second": 1872.5311123591152,
+      "peak_memory_bytes": 8326648832,
+      "calibration_seconds": null,
+      "calibration_tokens": null
+    },
+    {
+      "id": "quantile_official",
+      "algorithm": "quantile",
+      "profile": "official",
+      "source_file": "quantile_official_full.json",
+      "ppl": 19.281381167664026,
+      "delta": 0.11626036712228327,
+      "relative_change_percent": 0.606624755107199,
+      "segments": 73,
+      "predicted_tokens": 298935,
+      "evaluation_seconds": 162.64135747600812,
+      "tokens_per_second": 1838.0011372205688,
+      "peak_memory_bytes": 8323031040,
+      "calibration_seconds": 1.8798255849978887,
+      "calibration_tokens": 16384
+    },
+    {
+      "id": "ofmr_official",
+      "algorithm": "ofmr",
+      "profile": "official",
+      "source_file": "ofmr_official_full.json",
+      "ppl": 19.79134650097254,
+      "delta": 0.6262257004307976,
+      "relative_change_percent": 3.26752806281867,
+      "segments": 73,
+      "predicted_tokens": 298935,
+      "evaluation_seconds": 166.83309732199996,
+      "tokens_per_second": 1791.8207166233556,
+      "peak_memory_bytes": 8634097664,
+      "calibration_seconds": 15.914910261984915,
+      "calibration_tokens": 512
+    },
+    {
+      "id": "cast_controlled",
+      "algorithm": "cast",
+      "profile": "controlled",
+      "source_file": "cast_controlled_full.json",
+      "ppl": 19.443510687496673,
+      "delta": 0.2783898869549297,
+      "relative_change_percent": 1.4525861321315503,
+      "segments": 73,
+      "predicted_tokens": 298935,
+      "evaluation_seconds": 159.63828314599232,
+      "tokens_per_second": 1872.5771419542148,
+      "peak_memory_bytes": 8323552256,
+      "calibration_seconds": null,
+      "calibration_tokens": null
+    },
+    {
+      "id": "ofmr_controlled",
+      "algorithm": "ofmr",
+      "profile": "controlled",
+      "source_file": "ofmr_controlled_full.json",
+      "ppl": 19.544636111679434,
+      "delta": 0.3795153111376912,
+      "relative_change_percent": 1.9802395982130294,
+      "segments": 73,
+      "predicted_tokens": 298935,
+      "evaluation_seconds": 165.78691607399378,
+      "tokens_per_second": 1803.12781659187,
+      "peak_memory_bytes": 8322930688,
+      "calibration_seconds": 13.069466145010665,
+      "calibration_tokens": 512
+    }
+  ],
+  "official_best": "quantile_official",
+  "controlled_quantile_reuses_official": true,
+  "weight_scope": {
+    "selected_linear_modules": 196,
+    "selected_weight_parameters": 440401920,
+    "bf16_payload_bytes": 880803840,
+    "hifloat8_payload_bytes": 440401920,
+    "payload_reduction_percent": 50.0,
+    "measured_deploy_memory_reduction": false
+  },
+  "cast_benchmark_16m": [
+    {
+      "numel": 16777216,
+      "dtype": "float16",
+      "first_encode_call_ms": 13.395948015386239,
+      "lut_cache_expected_cold": false,
+      "encode": {
+        "mean_ms": 13.32512374909129,
+        "p50_ms": 13.323409992153756,
+        "p95_ms": 13.346335996175185,
+        "std_ms": 0.006960534664473876,
+        "min_ms": 13.318405020982027,
+        "max_ms": 13.35577599820681,
+        "throughput_mb_s": 3777.199292684421
+      },
+      "decode": {
+        "mean_ms": 13.234039909439161,
+        "p50_ms": 13.233651508926414,
+        "p95_ms": 13.238161016488448,
+        "std_ms": 0.0047823768813396806,
+        "min_ms": 13.227760995505378,
+        "max_ms": 13.266362017020583,
+        "throughput_mb_s": 3803.1960266419496
+      },
+      "roundtrip": {
+        "mean_ms": 26.513293069729116,
+        "p50_ms": 26.51238499674946,
+        "p95_ms": 26.521665015025064,
+        "std_ms": 0.005752509238485951,
+        "min_ms": 26.49946400197223,
+        "max_ms": 26.536334975389764,
+        "effective_throughput_mb_s": 2531.1402783315457,
+        "kernel_logical_throughput_mb_s": 3796.7104174973188
+      },
+      "accuracy": {
+        "max_abs_error": 0.25,
+        "mean_abs_error": 0.018099511042237282
+      }
+    },
+    {
+      "numel": 16777216,
+      "dtype": "bfloat16",
+      "first_encode_call_ms": 13.422249001450837,
+      "lut_cache_expected_cold": false,
+      "encode": {
+        "mean_ms": 13.3276762109017,
+        "p50_ms": 13.327915497939102,
+        "p95_ms": 13.335395022295415,
+        "std_ms": 0.0031860976119316743,
+        "min_ms": 13.321865000762045,
+        "max_ms": 13.336536008864641,
+        "throughput_mb_s": 3776.475898989052
+      },
+      "decode": {
+        "mean_ms": 13.23743715940509,
+        "p50_ms": 13.236526501714252,
+        "p95_ms": 13.245822017779574,
+        "std_ms": 0.004637534752108675,
+        "min_ms": 13.23181198677048,
+        "max_ms": 13.261122978292406,
+        "throughput_mb_s": 3802.2199761106917
+      },
+      "roundtrip": {
+        "mean_ms": 26.51548484864179,
+        "p50_ms": 26.51393999985885,
+        "p95_ms": 26.534045988228172,
+        "std_ms": 0.00852246189463939,
+        "min_ms": 26.50277499924414,
+        "max_ms": 26.562446990283206,
+        "effective_throughput_mb_s": 2530.931053423205,
+        "kernel_logical_throughput_mb_s": 3796.3965801348077
+      },
+      "accuracy": {
+        "max_abs_error": 0.25,
+        "mean_abs_error": 0.018095899373292923
+      }
+    }
+  ],
+  "noncontiguous": [
+    {
+      "shape": [
+        2048,
+        2048
+      ],
+      "dtype": "float16",
+      "contiguous_mean_ms": 3.4025893302168697,
+      "noncontiguous_mean_ms": 3.4547512876451947,
+      "slowdown": 1.0153300772929303
+    },
+    {
+      "shape": [
+        2048,
+        2048
+      ],
+      "dtype": "bfloat16",
+      "contiguous_mean_ms": 3.403685258817859,
+      "noncontiguous_mean_ms": 3.457460500940215,
+      "slowdown": 1.0157991230190986
+    }
+  ],
+  "deployment": {
+    "requested": true,
+    "verified": false,
+    "elapsed_seconds": 0.0013200340035837144,
+    "error_type": "RuntimeError",
+    "error": "npu_quantize_by_kernel:../third_party/op-plugin/op_plugin/ops/opapi/QuantizeKernelNpuOpApi.cpp:61 NPU function error: call aclnnQuantize failed, error code is 161002\n[ERROR] 2026-07-23-16:21:08 (PID:72886, Device:0, RankID:-1) ERR00100 PTA call acl api failed.\n[PID: 72886] 2026-07-23-16:21:08.732.208 AclNN_Parameter_Error(EZ1001): Param dtype DT_HIFLOAT8 should be in dtype support list [[DT_INT8,DT_UINT8,DT_INT32,]].\n"
+  }
+}

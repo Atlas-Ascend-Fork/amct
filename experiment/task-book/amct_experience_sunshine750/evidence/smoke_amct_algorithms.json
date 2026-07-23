@@ -1,0 +1,70 @@
+{
+  "environment": {
+    "torch": "2.7.1+cpu",
+    "torch_npu": "2.7.1.post4",
+    "device": "npu:0",
+    "device_name": "Ascend910_9362"
+  },
+  "scope": "integration smoke only; not a model-accuracy benchmark",
+  "results": [
+    {
+      "algorithm": "cast",
+      "module_types": [
+        "Sequential",
+        "HIF8CastQuant",
+        "GELU",
+        "HIF8CastQuant"
+      ],
+      "quantize_ms": 41.07635701075196,
+      "calibration_ms": null,
+      "output_shape": [
+        4,
+        8
+      ],
+      "output_dtype": "torch.bfloat16",
+      "finite": true,
+      "max_abs_error": 0.0263671875,
+      "mean_abs_error": 0.008496284484863281
+    },
+    {
+      "algorithm": "quantile",
+      "module_types": [
+        "Sequential",
+        "QuantileQuant",
+        "GELU",
+        "QuantileQuant"
+      ],
+      "quantize_ms": 14.717710990225896,
+      "calibration_ms": 0.7724210154265165,
+      "output_shape": [
+        4,
+        8
+      ],
+      "output_dtype": "torch.bfloat16",
+      "finite": true,
+      "max_abs_error": 0.02734375,
+      "mean_abs_error": 0.008821487426757812
+    },
+    {
+      "algorithm": "ofmr",
+      "module_types": [
+        "Sequential",
+        "OfmrQuant",
+        "Linear",
+        "GELU",
+        "OfmrQuant",
+        "Linear"
+      ],
+      "quantize_ms": 1.579173986101523,
+      "calibration_ms": 54.54008700326085,
+      "output_shape": [
+        4,
+        8
+      ],
+      "output_dtype": "torch.bfloat16",
+      "finite": true,
+      "max_abs_error": 0.0283203125,
+      "mean_abs_error": 0.008242607116699219
+    }
+  ]
+}
