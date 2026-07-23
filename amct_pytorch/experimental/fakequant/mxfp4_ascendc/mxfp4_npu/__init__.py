@@ -207,6 +207,8 @@ def quant_dequant_mxfp4(
     # reference. Flattening before pad would merge adjacent rows into the
     # same MXFP4 block when last_dim is not a multiple of block_size.
     x_fp = x.to(torch.float32)
+    if x_fp.ndim == 0:
+        raise ValueError("x must have at least 1 dimension")
     last_dim = x_fp.shape[-1]
     pad = (block_size - last_dim % block_size) % block_size
     if pad:

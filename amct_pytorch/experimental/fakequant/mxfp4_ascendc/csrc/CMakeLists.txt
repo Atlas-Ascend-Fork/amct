@@ -80,7 +80,25 @@ target_include_directories(mxfp4_ascendc_ext PRIVATE
 execute_process(
     COMMAND ${Python3_EXECUTABLE}
             -c "import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))"
-    OUTPUT_VARIABLE TORCH_CXX11_ABI OUTPUT_STRIP_TRAILING_WHITESPACE)
+    OUTPUT_VARIABLE TORCH_CXX11_ABI OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE TORCH_ABI_RET)
+
+# Never fall back to an empty macro: -D_GLIBCXX_USE_CXX11_ABI= expands to an
+# empty token, which PyTorch headers evaluate as 0 in #if, silently disabling
+# the CXX11 ABI and causing std::string/ABI mismatches (runtime crashes) when
+# the extension is loaded against a real ABI=1 PyTorch. If the probe fails or
+# returns anything other than 0/1, abort the build instead of guessing.
+if(NOT TORCH_ABI_RET EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to probe torch._C._GLIBCXX_USE_CXX11_ABI (python exit code "
+        "${TORCH_ABI_RET}). Ensure PyTorch is importable by "
+        "${Python3_EXECUTABLE} before building.")
+endif()
+if(NOT (TORCH_CXX11_ABI STREQUAL "0" OR TORCH_CXX11_ABI STREQUAL "1"))
+    message(FATAL_ERROR
+        "Unexpected torch._C._GLIBCXX_USE_CXX11_ABI value '${TORCH_CXX11_ABI}' "
+        "(expected 0 or 1). Refusing to build with an ambiguous ABI setting.")
+endif()
 
 target_compile_options(mxfp4_ascendc_ext PRIVATE
     -O2 -std=c++17 -D_GLIBCXX_USE_CXX11_ABI=${TORCH_CXX11_ABI})
