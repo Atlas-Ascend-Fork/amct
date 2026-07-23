@@ -251,8 +251,9 @@ class AutoChannelPruneConfigHelper:
             proto parsed.
         """
         # global prune config
-        self.override_proto_config.prune_config.filter_pruner.balanced_l2_norm_filter_prune.prune_ratio = 0.3
-        self.override_proto_config.prune_config.filter_pruner.balanced_l2_norm_filter_prune.ascend_optimized = self.ascend_optimized
+        pruner = self.override_proto_config.prune_config.filter_pruner.balanced_l2_norm_filter_prune
+        pruner.prune_ratio = 0.3
+        pruner.ascend_optimized = self.ascend_optimized
 
         # search override/skip layer config
         for layer_name, prune_config in search_prune_config.items():
@@ -267,8 +268,11 @@ class AutoChannelPruneConfigHelper:
             prune_ratio = 1 - sum_prune / len_prune
             proto_override = retrain_config_pb2.RetrainOverrideLayer()
             proto_override.layer_name = layer_name
-            proto_override.prune_config.filter_pruner.balanced_l2_norm_filter_prune.prune_ratio = prune_ratio
-            proto_override.prune_config.filter_pruner.balanced_l2_norm_filter_prune.ascend_optimized = self.ascend_optimized
+            pruner = (
+                proto_override.prune_config.filter_pruner.balanced_l2_norm_filter_prune
+            )
+            pruner.prune_ratio = prune_ratio
+            pruner.ascend_optimized = self.ascend_optimized
             self.override_proto_config.override_layer_configs.append(proto_override)
 
         return self.override_proto_config

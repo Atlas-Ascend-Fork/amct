@@ -66,12 +66,12 @@ def round_to_decimal(x):
 
 
 def _shared_exponents(
-    A, method="max", axes=None, ebits=0, shared_exp_round_method="floor"
+    tensor, method="max", axes=None, ebits=0, shared_exp_round_method="floor"
 ):
     """
     Get shared exponents for the passed matrix A.
     Args:
-      A      {PyTorch tensor} -- Input tensor
+      tensor {PyTorch tensor} -- Input tensor
       method {str}            -- Exponent selection method.
                                  "max" uses the max absolute value
                                  "none" uses an exponent for each value (i.e., no sharing)
@@ -83,13 +83,13 @@ def _shared_exponents(
 
     if method == "max":
         if axes is None:
-            shared_exp = torch.max(torch.abs(A))
+            shared_exp = torch.max(torch.abs(tensor))
         else:
-            shared_exp = A
+            shared_exp = tensor
             for axis in axes:
                 shared_exp, _ = torch.max(torch.abs(shared_exp), dim=axis, keepdim=True)
     elif method == "none":
-        shared_exp = torch.abs(A)
+        shared_exp = torch.abs(tensor)
     else:
         raise Exception("Unrecognized shared exponent selection method %s" % (method))
 
@@ -210,61 +210,63 @@ def _get_min_norm(ebits):
     return 0 if ebits == 0 else 2**emin
 
 
-def _round_mantissa(A, bits, round, clamp=False):
+def _round_mantissa(tensor, bits, round_mode, clamp=False):
     """
     Rounds mantissa to nearest bits depending on the rounding method 'round'
     Args:
-      A     {PyTorch tensor} -- Input tensor
-      round {str}            --  Rounding method
+      tensor     {PyTorch tensor} -- Input tensor
+      round_mode {str}            --  Rounding method
                                  "floor" rounds to the floor
                                  "nearest" rounds to ceil or floor, whichever is nearest
     Returns:
-      A {PyTorch tensor} -- Tensor with mantissas rounded
+      tensor {PyTorch tensor} -- Tensor with mantissas rounded
     """
 
-    if round == "dither":
-        rand_A = torch.rand_like(A, requires_grad=False)
-        A = torch.sign(A) * torch.floor(torch.abs(A) + rand_A)
-    elif round == "floor":
-        A = torch.sign(A) * torch.floor(torch.abs(A))
-    elif round == "nearest":
-        A = torch.sign(A) * torch.floor(torch.abs(A) + 0.5)
-    elif round == "even":
-        absA = torch.abs(A)
+    if round_mode == "dither":
+        rand_tensor = torch.rand_like(tensor, requires_grad=False)
+        tensor = torch.sign(tensor) * torch.floor(torch.abs(tensor) + rand_tensor)
+    elif round_mode == "floor":
+        tensor = torch.sign(tensor) * torch.floor(torch.abs(tensor))
+    elif round_mode == "nearest":
+        tensor = torch.sign(tensor) * torch.floor(torch.abs(tensor) + 0.5)
+    elif round_mode == "even":
+        abs_tensor = torch.abs(tensor)
         # find 0.5, 2.5, 4.5 ...
-        maskA = ((absA - 0.5) % 2 == torch.zeros_like(A)).type(A.dtype)
-        A = torch.sign(A) * (torch.floor(absA + 0.5) - maskA)
+        mask_tensor = ((abs_tensor - 0.5) % 2 == torch.zeros_like(tensor)).type(
+            tensor.dtype
+        )
+        tensor = torch.sign(tensor) * (torch.floor(abs_tensor + 0.5) - mask_tensor)
     else:
-        raise Exception("Unrecognized round method %s" % (round))
+        raise Exception("Unrecognized round method %s" % (round_mode))
 
     # Clip values that cannot be expressed by the specified number of bits
     if clamp:
         max_mantissa = 2 ** (bits - 1) - 1
-        A = torch.clamp(A, -max_mantissa, max_mantissa)
-    return A
+        tensor = torch.clamp(tensor, -max_mantissa, max_mantissa)
+    return tensor
 
 
 # -------------------------------------------------------------------------
 # Main funcs
 # -------------------------------------------------------------------------
 def _quantize_elemwise_core(
-    A,
+    tensor,
     bits,
     exp_bits,
     max_norm,
-    round='nearest',
+    round_mode='nearest',
     saturate_normals=False,
     allow_denorm=True,
     custom_cuda=False,
 ):
     """Core function used for element-wise quantization
     Arguments:
-      A         {PyTorch tensor} -- A tensor to be quantized
+      tensor    {PyTorch tensor} -- A tensor to be quantized
       bits      {int}            -- Number of mantissa bits. Includes
                                     sign bit and implicit one for floats
       exp_bits  {int}            -- Number of exponent bits, 0 for ints
       max_norm  {float}          -- Largest representable normal number
-      round     {str}            -- Rounding mode: (floor, nearest, even)
+      round_mode {str}           -- Rounding mode: (floor, nearest, even)
       saturate_normals {bool}    -- If True, normal numbers (i.e., not NaN/Inf)
                                     that exceed max norm are clamped.
                                     Must be True for correct MX conversion.
@@ -273,25 +275,27 @@ def _quantize_elemwise_core(
     Returns:
       quantized tensor {PyTorch tensor} -- A tensor that has been quantized
     """
-    A_is_sparse = A.is_sparse
-    if A_is_sparse:
-        if A.layout != torch.sparse_coo:
+    tensor_is_sparse = tensor.is_sparse
+    if tensor_is_sparse:
+        if tensor.layout != torch.sparse_coo:
             raise NotImplementedError(
                 "Only COO layout sparse tensors are currently supported."
             )
 
-        sparse_A = A.coalesce()
-        A = sparse_A.values().clone()
+        sparse_tensor = tensor.coalesce()
+        tensor = sparse_tensor.values().clone()
 
     # Flush values < min_norm to zero if denorms are not allowed
     if not allow_denorm and exp_bits > 0:
         min_norm = _get_min_norm(exp_bits)
-        out = (torch.abs(A) >= min_norm).type(A.dtype) * A
+        out = (torch.abs(tensor) >= min_norm).type(tensor.dtype) * tensor
     else:
-        out = A
+        out = tensor
 
     if exp_bits != 0:
-        private_exp = torch.floor(torch.log2(torch.abs(A) + (A == 0).type(A.dtype)))
+        private_exp = torch.floor(
+            torch.log2(torch.abs(tensor) + (tensor == 0).type(tensor.dtype))
+        )
 
         # The minimum representable exponent for 8 exp bits is -126
         min_exp = -(2 ** (exp_bits - 1)) + 2
@@ -302,7 +306,7 @@ def _quantize_elemwise_core(
     # Scale up so appropriate number of bits are in the integer portion of the number
     out = _safe_lshift(out, bits - 2, private_exp)
 
-    out = _round_mantissa(out, bits, round, clamp=False)
+    out = _round_mantissa(out, bits, round_mode, clamp=False)
 
     # Undo scaling
     out = _safe_rshift(out, bits - 2, private_exp)
@@ -316,9 +320,9 @@ def _quantize_elemwise_core(
         )
 
     # handle Inf/NaN
-    out[A == float("Inf")] = float("Inf")
-    out[A == -float("Inf")] = -float("Inf")
-    out[A == float("NaN")] = float("NaN")
+    out[tensor == float("Inf")] = float("Inf")
+    out[tensor == -float("Inf")] = -float("Inf")
+    out[tensor == float("NaN")] = float("NaN")
 
     return out
 
@@ -343,7 +347,7 @@ def quantize_mx(
     assert scale_bits > 0
 
     # Make sure axes is a list of non-negative numbers
-    axes = [axes] if type(axes) == int else axes
+    axes = [axes] if isinstance(axes, int) else axes
     axes = [x + A.ndim if x < 0 else x for x in axes]
 
     if quant_bit == 8:
@@ -390,7 +394,7 @@ def quantize_mx(
         mbits,
         ebits,
         max_norm,
-        round=round,
+        round_mode=round,
         allow_denorm=True,
         saturate_normals=True,
         custom_cuda=False,

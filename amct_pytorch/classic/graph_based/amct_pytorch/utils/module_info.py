@@ -377,12 +377,11 @@ def prune_tensor_channel(tensor, axis, prune_channel):
     new_tensor = torch.index_select(
         tensor, dim=axis, index=torch.LongTensor(remain_channel).to(tensor.device)
     )
-    LOGGER.logd(
-        'After Prune(axis: {}, prune_channel: len is {} and val is {}), tensor shape has been changed from {} to {}'.format(
-            axis, len(prune_channel), prune_channel, pre_shape, new_tensor.shape
-        ),
-        'PruneModelPass',
-    )
+    msg = (
+        'After Prune(axis: {}, prune_channel: len is {} and val is {}), '
+        'tensor shape has been changed from {} to {}'
+    ).format(axis, len(prune_channel), prune_channel, pre_shape, new_tensor.shape)
+    LOGGER.logd(msg, 'PruneModelPass')
     return new_tensor
 
 

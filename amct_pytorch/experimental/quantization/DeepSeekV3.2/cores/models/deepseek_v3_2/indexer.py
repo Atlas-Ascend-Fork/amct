@@ -144,10 +144,10 @@ def hadamard_transform_fix(x):
     dtype = x.dtype
     device = x.device
     hidden_size = x.size(-1)
-    H_m = torch.tensor(hadamard(hidden_size, dtype=np.float32) / (hidden_size**0.5)).to(
-        device
-    )
-    x = (x.to(torch.float32) @ H_m).to(dtype)
+    hadamard_matrix = torch.tensor(
+        hadamard(hidden_size, dtype=np.float32) / (hidden_size**0.5)
+    ).to(device)
+    x = (x.to(torch.float32) @ hadamard_matrix).to(dtype)
     return x
 
 

@@ -149,7 +149,10 @@ def optimize_alpha(model, model_all_input, groups, graph):
 
         # set calied_weight to graph
         object_node = graph.get_node_by_name(group[0])
-        opt.WeightsCalibrationPass._graph_weight_set_process(
+        graph_weight_set_process = getattr(
+            opt.WeightsCalibrationPass, '_graph_weight_set_process'
+        )
+        graph_weight_set_process(
             object_node=object_node,
             object_module=ada_module.module,
             weight=ada_module.module.weight.data,

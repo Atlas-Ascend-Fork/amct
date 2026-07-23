@@ -88,7 +88,7 @@ class CompModuleRNN(nn.Module):
                 else inputs[i : i + 1, :, :]
             )
             acts_comp_func = (
-                self.acts_comp_reuse._acts_comp_quant
+                getattr(self.acts_comp_reuse, '_acts_comp_quant')
                 if self.acts_comp_reuse
                 else self._acts_comp_quant
             )
