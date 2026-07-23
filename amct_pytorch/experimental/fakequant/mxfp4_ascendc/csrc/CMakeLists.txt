@@ -47,7 +47,28 @@ find_package(Torch REQUIRED)
 execute_process(
     COMMAND ${Python3_EXECUTABLE}
             -c "import torch_npu, os; print(os.path.join(os.path.dirname(torch_npu.__file__), 'include'))"
-    OUTPUT_VARIABLE TORCH_NPU_INC OUTPUT_STRIP_TRAILING_WHITESPACE)
+    OUTPUT_VARIABLE TORCH_NPU_INC OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE TORCH_NPU_INC_RET)
+
+# Fail fast if torch_npu is missing or the include path cannot be resolved.
+# An empty TORCH_NPU_INC would otherwise be silently appended to
+# target_include_directories (CMake only warns for missing dirs), deferring
+# the failure to compile time with harder-to-diagnose missing headers.
+if(NOT TORCH_NPU_INC_RET EQUAL 0)
+    message(FATAL_ERROR
+        "Failed to probe torch_npu include path (python exit code "
+        "${TORCH_NPU_INC_RET}). Ensure torch_npu is importable by "
+        "${Python3_EXECUTABLE} before building.")
+endif()
+if(TORCH_NPU_INC STREQUAL "")
+    message(FATAL_ERROR
+        "torch_npu include path probe returned empty. Ensure torch_npu is "
+        "installed and importable by ${Python3_EXECUTABLE}.")
+endif()
+if(NOT EXISTS "${TORCH_NPU_INC}")
+    message(FATAL_ERROR
+        "torch_npu include directory does not exist: '${TORCH_NPU_INC}'.")
+endif()
 
 # CANN ships arch-specific headers/libs under <arch>-linux (e.g. aarch64-linux,
 # x86_64-linux). Hardcoding aarch64 breaks x86_64 builds (dev hosts, simulator).
