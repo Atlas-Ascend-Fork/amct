@@ -63,6 +63,8 @@ def build_args():
     ap.add_argument("--device_map", default=None,
                     help="多卡切分：'auto' 让 accelerate 跨可见卡切分（35B 单卡放不下时用）；"
                          "留空=单卡整体加载（8B）")
+    ap.add_argument("--max_eval_samples", type=int, default=0,
+                    help="仅评测前 N 块（0=全量）；消融/快速验证省时用")
     ap.add_argument("--skip_router", action="store_true",
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
@@ -112,7 +114,7 @@ def main():
         report_memory_full(model)  # 全参数口径的真实显存降低（验收用）
 
     testenc = get_test_dataset(tokenizer)  # 保持 CPU，test_ppl 逐 batch 搬到输入卡
-    ppl = test_ppl(model, testenc)
+    ppl = test_ppl(model, testenc, max_samples=args.max_eval_samples)
     print(f"[RESULT] model={args.model_path} mode={args.mode} "
           f"seq_len={args.seq_len} dtype={args.dtype} PPL={ppl:.4f}")
 

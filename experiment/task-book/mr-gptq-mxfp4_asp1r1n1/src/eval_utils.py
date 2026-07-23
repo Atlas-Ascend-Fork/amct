@@ -175,11 +175,15 @@ def calibrate(model, calib_blocks):
 
 
 @torch.no_grad()
-def test_ppl(model, testenc):
-    """WikiText2 PPL。testenc: [1, total_tokens] 的 input_ids（已在目标 device）。"""
+def test_ppl(model, testenc, max_samples=0):
+    """WikiText2 PPL。testenc: [1, total_tokens] 的 input_ids（已在目标 device）。
+    max_samples>0 时只评前 N 块（消融/快速验证用）。"""
     seqlen = model.seqlen
     dev = input_device(model)
     nsamples = testenc.numel() // seqlen
+    if max_samples and 0 < max_samples < nsamples:
+        nsamples = max_samples                 # 只评前 N 块（消融/快速验证用；PPL 略噪但定性可靠）
+        print(f"[ppl] 仅评前 {nsamples} 块（--max_eval_samples）")
     nlls = []
     t0 = time.time()
     for i in tqdm.tqdm(range(nsamples), desc="evaluating..."):
