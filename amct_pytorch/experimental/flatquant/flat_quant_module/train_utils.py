@@ -30,11 +30,12 @@ def cali_flat_quant(model, dataloader, dev):
         model.model.rotary_emb = model.model.rotary_emb.to(dev)
 
     # catch the first layer input
-    inps = []
+    input_batches = []
     layer_kwargs = {}
 
     def layer_input_data_hook(module, args, kwargs):
-        inps.append(args[0].squeeze(0))
+        nonlocal input_batches
+        input_batches.append(args[0].squeeze(0))
         layer_kwargs.update(kwargs)
         raise ValueError('early exit to break later interface')
 
@@ -60,7 +61,7 @@ def cali_flat_quant(model, dataloader, dev):
     torch.npu.empty_cache()
 
     # same input of first layer for fp model and quant model
-    fp_inps = torch.stack(inps)
+    fp_inps = torch.stack(input_batches)
     fp_outs = torch.zeros_like(fp_inps)
 
     # start training
@@ -104,7 +105,7 @@ def cali_flat_quant(model, dataloader, dev):
         del layer
         torch.npu.empty_cache()
 
-    del inps, fp_inps, fp_outs
+    del input_batches, fp_inps, fp_outs
     gc.collect()
     torch.npu.empty_cache()
     model.config.use_cache = use_cache
@@ -200,9 +201,10 @@ def cali_layer(layer, fp_inps, fp_outs, layer_kwargs):
         with traincast():
             for j in range(n_samples // bsz):
                 index = j * bsz
-                quant_out = layer(fp_inps[index : index + bsz,], **batch_kwargs)
+                batch_slice = slice(index, index + bsz)
+                quant_out = layer(fp_inps[batch_slice], **batch_kwargs)
                 quant_out = quant_out[0] if isinstance(quant_out, tuple) else quant_out
-                loss = loss_func(fp_outs[index : index + bsz,], quant_out)
+                loss = loss_func(fp_outs[batch_slice], quant_out)
                 mse += loss.detach().cpu()
                 loss = loss / loss.clone().detach()
                 optimizer.zero_grad()

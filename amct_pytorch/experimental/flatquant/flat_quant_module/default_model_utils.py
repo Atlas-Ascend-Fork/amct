@@ -221,19 +221,16 @@ class FlatQuantAttention(nn.Module):
             )
 
         attention_interface: Callable = eager_attention_forward
-        if self.module_config._attn_implementation != 'eager':
-            if self.module_config._attn_implementation == 'sdpa' and kwargs.get(
-                'output_attentions', False
-            ):
+        attn_implementation = getattr(self.module_config, '_attn_implementation')
+        if attn_implementation != 'eager':
+            if attn_implementation == 'sdpa' and kwargs.get('output_attentions', False):
                 print(
                     "`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to "
                     'eager attention. This warning can be removed using the argument '
                     '`attn_implementation="eager"` when loading the model.'
                 )
             else:
-                attention_interface = ALL_ATTENTION_FUNCTIONS[
-                    self.module_config._attn_implementation
-                ]
+                attention_interface = ALL_ATTENTION_FUNCTIONS[attn_implementation]
 
         if hasattr(self, 'sliding_window'):
             kwargs['sliding_window'] = self.sliding_window

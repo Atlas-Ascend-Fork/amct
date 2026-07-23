@@ -93,7 +93,9 @@ class UlqRetrainFunction(Function):
         return outputs, scale, offset, clip_max, clip_min
 
     @staticmethod
-    def backward(ctx, grad_outputs, grad_scale, grad_offset, grad_max, grad_min):
+    def backward(  # pylint: disable=too-many-return-values
+        ctx, grad_outputs, grad_scale, grad_offset, grad_max, grad_min
+    ):
         """
         Function: UlqRetrain backward funtion required by torch
                   torch.autograd.
