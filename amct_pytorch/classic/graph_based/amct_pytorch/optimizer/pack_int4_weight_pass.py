@@ -24,10 +24,12 @@ from ...amct_pytorch.utils.log import LOGGER
 
 
 def pack_along_axis(int4_vals, dims, axis):
-    """Pack every two INT4 into one INT8 along `axis`, leaving other axes
+    """
+    Pack every two INT4 into one INT8 along `axis`, leaving other axes
     unchanged (axis -> axis/2). The quant axis is guaranteed even here: odd
     quant-axis INT4 layers are already rejected at config stage
-    (check_int4_weight_quant_axis). Returns (flat_packed_int8, new_dims)."""
+    (check_int4_weight_quant_axis). Returns (flat_packed_int8, new_dims).
+    """
     arr = np.asarray(int4_vals).reshape(dims).astype(np.int8)
     # 把量化轴移到最后，沿它两两配对，再移回原位
     moved = np.moveaxis(arr, axis, -1)
@@ -45,9 +47,11 @@ def pack_along_axis(int4_vals, dims, axis):
 
 
 def pack_int4_weight_node(weight_node, cin_axis):
-    """Read INT4 values from a weight tensor node and write them back packed
+    """
+    Read INT4 values from a weight tensor node and write them back packed
     two-per-byte along the Cin axis. No-op when weight_node is None (e.g.
-    non-RNN ops have no recurrence_weight)."""
+    non-RNN ops have no recurrence_weight).
+    """
     if weight_node is None:
         return
     helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
