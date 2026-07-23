@@ -210,40 +210,13 @@ stages:
         runs-on: [dedicated-hosted, x64, large]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ci_cann/ubuntu24.04_x86:lv1_v1.1032
-      JOB_UT_Test_ophost:
-        name: UT_Test_ophost
+      JOB_UT_Test:
+        name: UT_Test
         select: selected_by_default
         needs: []
         uses: .gitcode/workflows/llt_action.yml
         with:
           ut_type: 'ophost'
-          ut_package: 'coverage_*.info'
-          token: ${{secrets.GIT_TOKEN}}
-      JOB_UT_Test_opapi:
-        name: UT_Test_opapi
-        select: selected_by_default
-        needs: []
-        uses: .gitcode/workflows/llt_action.yml
-        with:
-          ut_type: 'opapi'
-          ut_package: 'coverage_*.info'
-          token: ${{secrets.GIT_TOKEN}}
-      JOB_UT_Test_kernel:
-        name: UT_Test_kernel
-        select: selected_by_default
-        needs: []
-        uses: .gitcode/workflows/llt_action.yml
-        with:
-          ut_type: 'kernel'
-          ut_package: 'coverage_*.info'
-          token: ${{secrets.GIT_TOKEN}}
-      JOB_UT_Test_opgraph:
-        name: UT_Test_opgraph
-        select: selected_by_default
-        needs: []
-        uses: .gitcode/workflows/llt_action.yml
-        with:
-          ut_type: 'opgraph'
           ut_package: 'coverage_*.info'
           token: ${{secrets.GIT_TOKEN}}
     pre:
