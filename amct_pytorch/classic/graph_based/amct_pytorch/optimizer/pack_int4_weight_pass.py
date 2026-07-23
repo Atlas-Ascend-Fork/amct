@@ -23,6 +23,27 @@ from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.log import LOGGER
 
 
+def pack_along_axis(int4_vals, dims, axis):
+    """Pack every two INT4 into one INT8 along `axis`, leaving other axes
+    unchanged (axis -> axis/2). The quant axis is guaranteed even here: odd
+    quant-axis INT4 layers are already rejected at config stage
+    (check_int4_weight_quant_axis). Returns (flat_packed_int8, new_dims)."""
+    arr = np.asarray(int4_vals).reshape(dims).astype(np.int8)
+    # 把量化轴移到最后，沿它两两配对，再移回原位
+    moved = np.moveaxis(arr, axis, -1)
+    last = moved.shape[-1]
+    if last % 2 == 1:
+        # 配置阶段已拦截奇数量化轴，走到这里说明校验有漏，暴露而非静默补零
+        raise RuntimeError(
+            'INT4 quant-axis length {} is odd; should have been rejected '
+            'at config stage'.format(last))
+    low = moved[..., 0::2] & 0x0F
+    high = moved[..., 1::2] & 0x0F
+    packed_moved = (low | (high << 4)).astype(np.uint8).astype(np.int8)
+    packed = np.moveaxis(packed_moved, -1, axis)
+    return packed.reshape(-1), list(packed.shape)
+
+
 class PackInt4WeightPass(BaseFusionPass):
     """
     Function: Pack INT4 weight storage for the deploy model: two INT4 nibbles
@@ -73,27 +94,7 @@ class PackInt4WeightPass(BaseFusionPass):
         # 沿 Cin 维 nibble-pack：该轴每两个 INT4 合成一个 INT8，其余轴不变
         # （Cin -> Cin/2）。deploy 为 AMCT 专有格式，实际字节由 op_data_type
         # 标记为 INT4-packed。Cin 奇数已在配置阶段拦截，不会走到这里。
-        packed, new_dims = self._pack_along_axis(int4_vals, orig_dims, cin_axis)
+        packed, new_dims = pack_along_axis(int4_vals, orig_dims, cin_axis)
         helper.clear_data()
         helper.set_data(packed, 'INT8', dims=new_dims)
-
-    def _pack_along_axis(self, int4_vals, dims, axis):
-        """Pack every two INT4 into one INT8 along `axis`, leaving other axes
-        unchanged (axis -> axis/2). The quant axis is guaranteed even here:
-        odd quant-axis INT4 layers are already rejected at config stage
-        (check_int4_weight_quant_axis). Returns (flat_packed_int8, new_dims)."""
-        arr = int4_vals.reshape(dims).astype(np.int8)
-        # 把量化轴移到最后，沿它两两配对，再移回原位
-        moved = np.moveaxis(arr, axis, -1)
-        last = moved.shape[-1]
-        if last % 2 == 1:
-            # 配置阶段已拦截奇数量化轴，走到这里说明校验有漏，暴露而非静默补零
-            raise RuntimeError(
-                'INT4 quant-axis length {} is odd; should have been rejected '
-                'at config stage'.format(last))
-        low = moved[..., 0::2] & 0x0F
-        high = moved[..., 1::2] & 0x0F
-        packed_moved = (low | (high << 4)).astype(np.uint8).astype(np.int8)
-        packed = np.moveaxis(packed_moved, -1, axis)
-        return packed.reshape(-1), list(packed.shape)
 

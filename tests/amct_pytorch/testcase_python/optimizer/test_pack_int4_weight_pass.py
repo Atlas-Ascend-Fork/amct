@@ -15,10 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Unit tests for PackInt4WeightPass that do NOT rely on onnx native INT4
-support. The pack logic is pure numpy / dict manipulation, so these run on any
-onnx version and keep diff coverage up even when end-to-end INT4 tests skip on
-old onnx."""
 import unittest
 from unittest import mock
 
@@ -26,31 +22,29 @@ import numpy as np
 
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.pack_int4_weight_pass import (
     PackInt4WeightPass,
+    pack_along_axis,
 )
 
 
 class TestPackAlongAxis(unittest.TestCase):
-    def setUp(self):
-        self.passer = PackInt4WeightPass({})
-
     def test_pack_along_last_axis_even(self):
         # [2, 4] pack along axis 1 -> [2, 2]
         vals = np.arange(8, dtype=np.int8).reshape(2, 4)
-        packed, new_dims = self.passer._pack_along_axis(vals, [2, 4], 1)
+        packed, new_dims = pack_along_axis(vals, [2, 4], 1)
         self.assertEqual(new_dims, [2, 2])
         self.assertEqual(packed.size, 4)
 
     def test_pack_along_axis0(self):
         # Conv-like: [16, 4, 3, 3] pack along Cin axis 1 -> [16, 2, 3, 3]
         vals = (np.arange(16 * 4 * 3 * 3, dtype=np.int8) % 15 - 7)
-        packed, new_dims = self.passer._pack_along_axis(vals, [16, 4, 3, 3], 1)
+        packed, new_dims = pack_along_axis(vals, [16, 4, 3, 3], 1)
         self.assertEqual(new_dims, [16, 2, 3, 3])
         self.assertEqual(packed.size, 16 * 2 * 3 * 3)
 
     def test_pack_nibble_layout(self):
         # low nibble = first value, high nibble = second value
         vals = np.array([1, 2], dtype=np.int8)
-        packed, _ = self.passer._pack_along_axis(vals, [2], 0)
+        packed, _ = pack_along_axis(vals, [2], 0)
         self.assertEqual(int(packed[0]) & 0x0F, 1)
         self.assertEqual((int(packed[0]) >> 4) & 0x0F, 2)
 
@@ -58,7 +52,7 @@ class TestPackAlongAxis(unittest.TestCase):
         # odd pack axis should be rejected at config stage; defensive raise here
         vals = np.arange(3, dtype=np.int8)
         with self.assertRaises(RuntimeError):
-            self.passer._pack_along_axis(vals, [3], 0)
+            pack_along_axis(vals, [3], 0)
 
 
 class TestPackInt4Weight(unittest.TestCase):
@@ -78,48 +72,55 @@ class TestPackInt4Weight(unittest.TestCase):
         self.assertFalse(passer.match_pattern(node_int8))      # INT8 -> no
         self.assertFalse(passer.match_pattern(node_absent))    # not in records -> no
 
-    def test_none_weight_node_is_noop(self):
-        # non-RNN ops have no recurrence_weight -> weight_node is None -> no-op
-        self.assertIsNone(self.passer._pack_int4_weight(None, 1))
+    _QOI = (
+        'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
+        'pack_int4_weight_pass.QuantOpInfo'
+    )
+    _HELPER = (
+        'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
+        'pack_int4_weight_pass.TensorProtoHelper'
+    )
 
-    def test_pack_writes_int8_with_new_dims(self):
-        # mock TensorProtoHelper to isolate the pack logic from onnx
+    def test_do_pass_conv_packs_weight_only(self):
+        # 通过公有入口 do_pass 覆盖 _pack_int4_weight：Conv 无 recurrence
+        # (recurrence_weight_node=None 走 no-op 分支)，主权重写回 INT8。
+        node = mock.MagicMock()
+        node.type = 'Conv'
+        node.name = 'conv'
         weight_node = mock.MagicMock()
         weight_node.model_path = ''
-        int4_vals = np.arange(8, dtype=np.int8).reshape(2, 4)
         helper = mock.MagicMock()
-        helper.get_data.return_value = int4_vals
+        helper.get_data.return_value = np.arange(8, dtype=np.int8).reshape(2, 4)
         helper.tensor.dims = [2, 4]
-        module = (
-            'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
-            'pack_int4_weight_pass.TensorProtoHelper'
-        )
-        with mock.patch(module, return_value=helper):
-            self.passer._pack_int4_weight(weight_node, 1)
+        with mock.patch(self._QOI) as m_qoi, \
+                mock.patch(self._HELPER, return_value=helper):
+            m_qoi.get_cin_axis.return_value = 1
+            m_qoi.get_weight_node.return_value = weight_node
+            m_qoi.get_recurrence_weight_node.return_value = None
+            self.passer.do_pass(None, node)
         helper.clear_data.assert_called_once()
-        # set_data called with dtype INT8 and Cin-halved dims
         args, kwargs = helper.set_data.call_args
         self.assertEqual(args[1], 'INT8')
         self.assertEqual(kwargs.get('dims'), [2, 2])
 
-    def test_do_pass_packs_weight_and_recurrence(self):
+    def test_do_pass_rnn_packs_weight_and_recurrence(self):
+        # RNN：主权重 + recurrence_weight 都被打包(两次 set_data)
         node = mock.MagicMock()
         node.type = 'LSTM'
         node.name = 'lstm'
-        qoi = (
-            'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
-            'pack_int4_weight_pass.QuantOpInfo'
-        )
-        with mock.patch(qoi) as m_qoi, \
-                mock.patch.object(self.passer, '_pack_int4_weight') as m_pack:
+        wnode = mock.MagicMock()
+        wnode.model_path = ''
+        helper = mock.MagicMock()
+        helper.get_data.return_value = np.arange(8, dtype=np.int8).reshape(1, 4, 2)
+        helper.tensor.dims = [1, 4, 2]
+        with mock.patch(self._QOI) as m_qoi, \
+                mock.patch(self._HELPER, return_value=helper):
             m_qoi.get_cin_axis.return_value = 2
-            m_qoi.get_weight_node.return_value = 'w'
-            m_qoi.get_recurrence_weight_node.return_value = 'r'
+            m_qoi.get_weight_node.return_value = wnode
+            m_qoi.get_recurrence_weight_node.return_value = wnode
             self.passer.do_pass(None, node)
-        # both main weight and recurrence_weight packed along the same Cin axis
-        self.assertEqual(m_pack.call_count, 2)
-        m_pack.assert_any_call('w', 2)
-        m_pack.assert_any_call('r', 2)
+        # 主 + recurrence 各一次 set_data
+        self.assertEqual(helper.set_data.call_count, 2)
 
 
 if __name__ == '__main__':
