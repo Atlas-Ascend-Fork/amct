@@ -52,10 +52,9 @@ detect_soc() {
             fi
         done
     done
-    if [[ "${chip_name}" =~ ^9[0-9]{3}$ ]]; then
-        echo "Ascend910_${chip_name}"
-        return 0
-    fi
+    # No matching platform_config .ini found. Do not invent an unverified
+    # Ascend910_${chip_name} — that makes CMake fail with an opaque missing
+    # config error instead of the caller's clear WARNING + Ascend910B3 fallback.
     return 1
 }
 

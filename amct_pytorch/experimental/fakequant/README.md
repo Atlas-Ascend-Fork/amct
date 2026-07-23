@@ -8,7 +8,7 @@
 
 ```
 fakequant/
-├── mxfp4/          # MXFP4 等特定格式的模拟伪量化实现
+├── mxfp4_ascendc/  # MXFP4 等特定格式的模拟伪量化实现
 └── README.md
 ```
 
