@@ -67,6 +67,8 @@ jobs:
         uses: obs-download
         with:
           endpoint: "https://obs.cn-north-4.myhuaweicloud.com"
+          access-key: ${{secrets.AK}}
+          secret-key: ${{secrets.SK}}
           bucket: "ascend-ci"
           key: |
             ${{ env.obs_path }}/pr_filelist.txt
