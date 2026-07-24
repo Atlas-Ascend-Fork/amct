@@ -31,7 +31,7 @@ from tqdm import tqdm
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.common.models.llm.common.deploy_export import (
+from amct_pytorch.common.models.llm.common.block_export import (
     export_block_deploy,
     generate_quant_config,
     convert_state_dict,
