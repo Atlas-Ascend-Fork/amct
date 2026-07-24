@@ -81,7 +81,6 @@ stages:
                 ${{ steps.process_checkout.outputs.path }}/pr_filelist_precommit.txt
                 ${{ steps.process_checkout.outputs.path }}/update_file_detail.txt
               object-prefix: ${{ env.obs_path }}/
-        if: "${{ default() }}"
         runs-on:
         - default
       JOB_shell:
