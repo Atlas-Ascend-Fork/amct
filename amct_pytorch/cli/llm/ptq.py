@@ -22,13 +22,15 @@ from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
 
 def _run_hif4_convert(args, fmt):
-    """HiF4 ptq convert (no calibration): normalize a non-float input to a plain FP16 checkpoint.
+    """HiF4 ptq convert (no calibration): normalize any hifp input to a plain float checkpoint.
 
     - hif4 packed input -> reconstruct to FP16 via ``decode.unpack_hif4`` (model-agnostic; the
       model pipeline cannot load packed HiF4 weights).
-    - nvfp4/mxfp4/mxfp8 input -> ``LlmPtqConvertWorkflow``: auto-decode the foreign format to
-      BF16, build the model layer-by-layer, and HiF4 fake-quant each quantizable weight (NPU
-      kernel), emitting a plain FP16 checkpoint. Non-quantized tensors are copied.
+    - fp16/bf16 input -> HiF4 fake-quant each quantizable weight via the NPU kernel (no NPU:
+      pure-torch reference), emitting a plain float checkpoint (fp16/bf16 preserves the source
+      dtype). Runs per-model block-by-block through ``LlmPtqConvertWorkflow``.
+    - nvfp4/mxfp4/mxfp8 input [planned] -> auto-decode to BF16 first, then the same HiF4
+      fake-quant -> FP16. Non-quantized tensors are copied.
     """
     if fmt == "hif4":
         from amct_pytorch.common.utils.decode.unpack_hif4 import unpack_hif4_checkpoint
@@ -39,22 +41,22 @@ def _run_hif4_convert(args, fmt):
     import torch
     from amct_pytorch.workflows.llm_ptq import LlmPtqConvertWorkflow
 
+    out_dtype = torch.bfloat16 if fmt == "bf16" else torch.float16  # fp16/foreign -> fp16
     args.granularity = "block"  # per-model fake-quant runs block-by-block
-    LlmPtqConvertWorkflow(args, out_dtype=torch.float16).run()
+    LlmPtqConvertWorkflow(args, out_dtype=out_dtype).run()
 
 
 def main():
     args = parser_gen(command="ptq")
-    # HiFloat: route HiF4-family inputs (hif4 packed, or foreign nvfp4/mxfp4/mxfp8) through the
-    # convert path -> plain FP16. A plain float input (incl. HiFloat8) keeps the standard
-    # calibration workflow.
+    # HiFloat: every hifp input goes through the HiF4 path -- hif4 packed -> unpack; fp16/bf16 or
+    # foreign [planned] -> HiF4 fake-quant (NPU kernel) -> plain float. Non-hifp dtypes keep the
+    # standard calibration workflow.
     if args.quant_dtype == "hifp":
-        from amct_pytorch.common.utils.decode.detect import detect_source_format, FOREIGN_FORMATS
+        from amct_pytorch.common.utils.decode.detect import detect_source_format
         fmt = detect_source_format(args.model)
         print(f"[ptq/hifp] source format detected: {fmt}", flush=True)
-        if fmt == "hif4" or fmt in FOREIGN_FORMATS:
-            _run_hif4_convert(args, fmt)
-            return
+        _run_hif4_convert(args, fmt)
+        return
     LlmPtqWorkflow(args).run()
 
 
