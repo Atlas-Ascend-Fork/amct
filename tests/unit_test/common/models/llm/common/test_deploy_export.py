@@ -284,6 +284,43 @@ def test_convert_state_dict_uint8_weight_packed_uses_packed_mxfp4(tmp_path):
     assert result.shape == (2, 4)
 
 
+def test_convert_state_dict_keeps_packed_mxfp4_weight_on_cpu_before_dequant(tmp_path, monkeypatch):
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
+
+    scale = torch.ones(2, 1, dtype=torch.float32)
+    sf_save({"layer.weight_scale": scale}, str(tmp_path / "shard.safetensors"))
+
+    captured = {}
+
+    def fake_weight_dequant(weight, scale, block_size, is_mx=False, is_packed=False):
+        captured["weight_device"] = weight.device
+        captured["scale_device"] = scale.device
+        captured["is_packed"] = is_packed
+        return torch.ones(2, 4, dtype=torch.float32)
+
+    monkeypatch.setattr(deploy_export_mod, "weight_dequant", fake_weight_dequant)
+
+    weight = torch.ones(2, 2, dtype=torch.uint8)
+    result = deploy_export_mod.convert_state_dict(
+        weight,
+        "layer.weight_packed",
+        "layer.weight_scale",
+        {"layer.weight_scale": "shard.safetensors"},
+        tmp_path,
+        {},
+        block_size=4,
+        compute_device="meta",
+    )
+
+    assert captured == {
+        "weight_device": torch.device("cpu"),
+        "scale_device": torch.device("meta"),
+        "is_packed": True,
+    }
+    assert result.shape == (2, 4)
+
+
 def test_convert_state_dict_reuses_loaded_file(tmp_path):
     """Already-loaded file is reused from loaded_files cache."""
     from safetensors.torch import save_file as sf_save

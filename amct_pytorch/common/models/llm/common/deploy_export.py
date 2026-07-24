@@ -148,11 +148,11 @@ def convert_state_dict(
                 file_path = model_dir / file_name
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
-            weight = weight.to(compute_device)
             scale_inv = scale_inv.to(compute_device)
             if weight.dtype in (torch.uint8, torch.int8):
                 weight = weight_dequant(weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True)
             else:
+                weight = weight.to(compute_device)
                 weight = weight_dequant(weight, scale_inv, block_size=block_size)
         except KeyError:
             logger.warning(
