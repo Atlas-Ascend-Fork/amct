@@ -65,6 +65,8 @@ def build_args():
                          "留空=单卡整体加载（8B）")
     ap.add_argument("--max_eval_samples", type=int, default=0,
                     help="仅评测前 N 块（0=全量）；消融/快速验证省时用")
+    ap.add_argument("--act_protect", nargs="*", default=[],
+                    help="W4A4 混合精度：层名含这些子串的层保激活高精度（如 down_proj）；空=全量 W4A4")
     ap.add_argument("--skip_router", action="store_true",
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
@@ -88,7 +90,10 @@ def main():
             import mr_gptq_module  # import 即运行时注册 'mr_gptq'
             for inc in args.increments:
                 mr_gptq_module._INCREMENTS[inc] = True
+            mr_gptq_module._ACT_PROTECT = list(args.act_protect)
             print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
+            if args.act_protect:
+                print(f"[MR-GPTQ] W4A4 混合精度：以下层名子串的层保激活高精度 = {args.act_protect}")
             inc = mr_gptq_module._INCREMENTS
             if inc["act_quant"]:
                 mode_str = "W4A4（激活也 MXFP4）" if inc["hadamard"] else \

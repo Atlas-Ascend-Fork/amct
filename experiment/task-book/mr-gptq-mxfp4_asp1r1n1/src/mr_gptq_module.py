@@ -38,6 +38,10 @@ _INCREMENTS = {
 
 _HADAMARD_K = 128  # block-wise Hadamard 尺寸（论文示 MXFP4 上 128 优于 32）
 
+# W4A4 混合精度：层名含这些子串的层【不】量化激活（保 bf16/高精度），用于保护敏感层冲 0.4。
+# 例：['down_proj'] 保护所有 down_proj 的激活；空 = 全量 W4A4。
+_ACT_PROTECT = []
+
 _PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始）
 
 _FP4_MAX_EXP = 2  # E2M1 最大指数（6 = 1.5·2²）；scale fitting 的 offset
@@ -62,6 +66,12 @@ class MRGPTQuant(GPTQuant):
         self.hadamard_k = _HADAMARD_K
         self._H = _sylvester_hadamard(self.hadamard_k)  # [k,k] CPU float32
 
+    # ---- W4A4：本层是否量化激活（混合精度下敏感层跳过，保高精度） ----------
+    def _do_act_quant(self):
+        if not self.increments.get("act_quant"):
+            return False
+        return not any(p in self.layer_name for p in _ACT_PROTECT)
+
     # ---- block-wise Hadamard 旋转（增量①） --------------------------------
     def _do_hadamard(self):
         # in_features 需被 k 整除；否则该层跳过旋转（Qwen3 各层均可整除）
@@ -80,7 +90,7 @@ class MRGPTQuant(GPTQuant):
         if self._do_hadamard():
             input_data = self._rotate_last_dim(input_data)
         # W4A4 优化②（联合补偿）：用【量化后】的激活建 Hessian，使权重补偿适配 W4A4 推理输入
-        if self.increments.get("joint_comp") and self.increments.get("act_quant"):
+        if self.increments.get("joint_comp") and self._do_act_quant():
             input_data = self._quant_act_mxfp4(
                 input_data, self.group_size, self.increments.get("act_scale_fit", False))
         super().update_hessian(input_data)
@@ -257,7 +267,7 @@ class MRGPTQuant(GPTQuant):
             inputs = self._rotate_last_dim(inputs)
         # W4A4：旋转后把激活也量化到 MXFP4（旋转已压离群值 → 激活可 4-bit）。
         # 注意：只在此 fake-quant 路径量化激活；校准前向走父类 F.linear、不量化激活。
-        if self.increments.get("act_quant"):
+        if self._do_act_quant():
             inputs = self._quant_act_mxfp4(
                 inputs, self.group_size, self.increments.get("act_scale_fit", False))
         return F.linear(inputs, self.weight.to(inputs.dtype), self.bias)
