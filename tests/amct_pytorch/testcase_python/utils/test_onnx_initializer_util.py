@@ -127,8 +127,10 @@ class TestExternalDataIO(unittest.TestCase):
 
 
 class TestInt4BranchesViaMock(unittest.TestCase):
-    """覆盖 INT4 分支：这些分支靠字符串 'int4'/data_type_maps 判断，用 mock
-    传参即可覆盖，不依赖 onnx 原生 INT4 枚举。"""
+    """
+    覆盖 INT4 分支：这些分支靠字符串 'int4'/data_type_maps 判断，用 mock
+    传参即可覆盖，不依赖 onnx 原生 INT4 枚举。
+    """
 
     _MAP = ('amct_pytorch.classic.graph_based.amct_pytorch.utils.'
             'onnx_initializer_util.TensorProtoHelper.data_type_maps')
@@ -145,14 +147,20 @@ class TestInt4BranchesViaMock(unittest.TestCase):
             with self.assertRaises(ImportError):
                 TensorProtoHelper.resolve_np_dtype('int4')
 
-    def test_get_quantized_raw_data_int4(self):
-        # 传 tensor_np_type='int4' 走 unpack 分支
+    def test_get_external_quantized_int4(self):
+        # 经公有入口 get_external_data 覆盖 quantized raw_data 的 int4 分支
         data = np.array([1, -2, 7, -8], dtype=np.int8)
         packed = pack_int4_to_int8(data)
         t = TensorProto()
+        t.data_type = TensorProto.INT8
         t.dims.extend([4])
+        t.data_location = 1
         setattr(t, 'raw_data', bytes(packed.astype('uint8')))
-        out = TensorProtoHelper(t)._get_quantized_raw_data('int4')
+        e = t.external_data.add()
+        e.key, e.value = 'amct_quantized_raw_data', '1'
+        helper = TensorProtoHelper(t)
+        with mock.patch.object(helper, 'map_np_type', return_value='int4'):
+            out, _ = helper.get_external_data()
         np.testing.assert_array_equal(out.astype(np.int8), data)
 
     def test_set_data_unsupported_type_raises(self):
@@ -185,17 +193,23 @@ class TestInt4BranchesViaMock(unittest.TestCase):
         np.testing.assert_array_equal(np.asarray(out).astype(np.int8), data)
 
     def test_read_external_file_int4(self):
-        # _read_external_file 传 'int4'，覆盖外部文件 unpack 分支
+        # 经公有入口 get_external_data 覆盖外部文件的 int4 unpack 分支
         tmp = tempfile.mkdtemp()
         try:
             data = np.array([1, -2, 7, -8, 3, -4, 0, 5], dtype=np.int8)
             packed = pack_int4_to_int8(data)
-            fpath = os.path.join(tmp, 'w.bin')
-            packed.astype('uint8').tofile(fpath)
+            packed.astype('uint8').tofile(os.path.join(tmp, 'w.bin'))
             t = TensorProto()
+            t.data_type = TensorProto.INT8
             t.dims.extend([8])
-            out, _ = TensorProtoHelper(t)._read_external_file(
-                fpath, 0, len(packed), 'int4')
+            t.data_location = 1
+            for k, v in [('location', 'w.bin'), ('offset', '0'),
+                         ('length', str(packed.nbytes))]:
+                e = t.external_data.add()
+                e.key, e.value = k, v
+            helper = TensorProtoHelper(t, model_path=tmp)
+            with mock.patch.object(helper, 'map_np_type', return_value='int4'):
+                out, _ = helper.get_external_data()
             np.testing.assert_array_equal(out.astype(np.int8), data)
         finally:
             for f in os.listdir(tmp):
