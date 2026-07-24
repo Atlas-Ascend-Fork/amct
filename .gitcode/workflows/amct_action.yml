@@ -105,7 +105,6 @@ stages:
               artifact-path: |
                 ${{ steps.process_checkout.outputs.path }}/.gitcode/scripts/*
               object-prefix: ${{ env.obs_path }}/
-        if: "${{ default() }}"
         runs-on:
         - default
     pre:
