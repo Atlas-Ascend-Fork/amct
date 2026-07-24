@@ -29,9 +29,11 @@ from amct_pytorch.common.utils.vars import MXFP4_E2M1
 # MR-GPTQ 增量开关（默认全关 = GPTQ-mxfp4 baseline；逐个打开做消融）
 _INCREMENTS = {
     "hadamard": False,        # block-wise Hadamard 微旋转
-    "scale_fitting": False,   # MXFP scale fitting（附录 H）
+    "scale_fitting": False,   # MXFP scale fitting（附录 H），作用于权重
     "act_reorder": False,     # 静态激活重排
     "act_quant": False,       # W4A4：激活也做 MXFP4（动态、逐32块）；须配 hadamard 压离群值
+    "act_scale_fit": False,   # W4A4 优化①：激活量化也用 scale fitting（次幂次细网格，非幂次）
+    "joint_comp": False,      # W4A4 优化②：用量化后的激活建 Hessian，权重补偿适配 W4A4 输入
 }
 
 _HADAMARD_K = 128  # block-wise Hadamard 尺寸（论文示 MXFP4 上 128 优于 32）
@@ -77,6 +79,10 @@ class MRGPTQuant(GPTQuant):
         # 旋转后累积 Hessian，使 H_r = RᵀHR 与旋转权重一致（转输入比转 Hessian 便宜）
         if self._do_hadamard():
             input_data = self._rotate_last_dim(input_data)
+        # W4A4 优化②（联合补偿）：用【量化后】的激活建 Hessian，使权重补偿适配 W4A4 推理输入
+        if self.increments.get("joint_comp") and self.increments.get("act_quant"):
+            input_data = self._quant_act_mxfp4(
+                input_data, self.group_size, self.increments.get("act_scale_fit", False))
         super().update_hessian(input_data)
 
     # ---- MXFP scale fitting（附录 H 式2/3）：E8M0 网格重映射 ----------------
@@ -121,14 +127,17 @@ class MRGPTQuant(GPTQuant):
 
     # ---- 激活 MXFP4 动态量化（W4A4，增量④） ---------------------------------
     @classmethod
-    def _quant_act_mxfp4(cls, x, group_size=32):
+    def _quant_act_mxfp4(cls, x, group_size=32, scale_fit=False):
         """激活 MXFP4 动态伪量化：把 [*, in] 展平成 [N, in]，沿最后一维每 32 通道一块，
-        **运行时**算 E8M0 shared exponent（激活是动态的，scale 每次前向重算）→ 吸附到 E2M1。
-        与权重量化对称，复用 _quant_direct。须先做 Hadamard 旋转压激活离群值，否则 4-bit 激活会崩。
-        这些是整张量少数向量化算子，NPU 上无 per-column kernel 启动灾难。"""
+        **运行时**算 scale（激活是动态的，每次前向重算）→ 吸附到 E2M1。复用 _quant_direct。
+        scale_fit=False：E8M0 幂次 scale；True：附录 H 次幂次细网格（W4A4 优化①，减小激活 scale 误差）。
+        须先做 Hadamard 旋转压激活离群值，否则 4-bit 激活会崩。"""
         shape = x.shape
         x2 = x.reshape(-1, shape[-1]).float()
-        blk = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(x2)))  # [N, ceil(in/32)]
+        if scale_fit:
+            blk = cls._fit_block_scale(x2, group_size)                   # 次幂次细网格
+        else:
+            blk = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(x2)))  # E8M0 幂次
         xq = cls._quant_direct(x2, blk, group_size)
         return xq.reshape(shape).to(x.dtype)
 
@@ -249,7 +258,8 @@ class MRGPTQuant(GPTQuant):
         # W4A4：旋转后把激活也量化到 MXFP4（旋转已压离群值 → 激活可 4-bit）。
         # 注意：只在此 fake-quant 路径量化激活；校准前向走父类 F.linear、不量化激活。
         if self.increments.get("act_quant"):
-            inputs = self._quant_act_mxfp4(inputs, self.group_size)
+            inputs = self._quant_act_mxfp4(
+                inputs, self.group_size, self.increments.get("act_scale_fit", False))
         return F.linear(inputs, self.weight.to(inputs.dtype), self.bias)
 
 
