@@ -69,7 +69,7 @@ def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 
         AssertionError: If `scale` dimensions do not align with `weight` shape after scaling.
     """
     if is_packed:
-        weight = unpack_mxfloat4_to_fp32(weight.view(torch.uint8))
+        weight = unpack_mxfloat4_to_fp32(weight.cpu().view(torch.uint8)).to(scale.device)
     # Get the original dimensions of weight
     M, N = weight.shape
     weight = weight.to(torch.float32)

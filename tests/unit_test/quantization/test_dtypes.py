@@ -176,6 +176,20 @@ class TestIntImpl:
         assert packed.dtype == torch.int8
         assert packed.shape[1] == 32
 
+    def test_weight_quant_4bit_real_quant_packs_on_cpu(self, monkeypatch):
+        packed_input_device = None
+
+        def fake_pack_4bit(tensor):
+            nonlocal packed_input_device
+            packed_input_device = tensor.device
+            return torch.zeros(tensor.shape[0], tensor.shape[1] // 2, dtype=torch.int8)
+
+        monkeypatch.setattr("amct_pytorch.quantization.dtypes.int_impl.pack_4bit", fake_pack_4bit)
+
+        w = torch.randn(8, 32, dtype=torch.float32)
+        weight_quant(w, bits=4, real_quant=True)
+        assert packed_input_device == torch.device("cpu")
+
     def test_weight_quant_8bit_shape(self):
         w = torch.randn(8, 32, dtype=torch.float32)
         out = weight_quant(w, bits=8)
@@ -215,6 +229,23 @@ class TestMxfpImpl:
         packed = mx_pack_uint4(x)
         unpacked = unpack_uint4(packed)
         assert torch.equal(unpacked, x)
+
+    def test_weight_dequant_unpacks_mxfp4_on_cpu(self, monkeypatch):
+        unpack_input_device = None
+
+        def fake_unpack(packed_tensor):
+            nonlocal unpack_input_device
+            unpack_input_device = packed_tensor.device
+            return torch.ones(2, 4, dtype=torch.float32)
+
+        monkeypatch.setattr("amct_pytorch.quantization.dtypes.mxfp_impl.unpack_mxfloat4_to_fp32", fake_unpack)
+
+        weight = torch.ones(2, 2, dtype=torch.uint8)
+        scale = torch.ones(2, 1, dtype=torch.float32)
+        out = weight_dequant(weight, scale, block_size=4, is_mx=True, is_packed=True)
+
+        assert unpack_input_device == torch.device("cpu")
+        assert out.shape == (2, 4)
 
     def test_round_to_decimal(self):
         x = torch.tensor([1.0, 1.5, 1.76, 3.0], dtype=torch.float32)

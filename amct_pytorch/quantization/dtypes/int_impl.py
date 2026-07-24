@@ -84,7 +84,7 @@ def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor
             # pack 4bit for W4A8 MoEGMM
             quantized = quantized.to(torch.int8)
             bias = int4_assistance_bias(quantized, scale)
-            quantized = pack_4bit(quantized)
+            quantized = pack_4bit(quantized.cpu())
             scale = scale_fp32_to_u64(scale)
             return quantized, scale, bias
         else:
