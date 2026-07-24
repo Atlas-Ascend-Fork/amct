@@ -14,6 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+"""Per-layer, model-aware quantized-weight export helpers (shared by deploy and ptq).
+
+Each ``export_block_*`` builds a layer's quant block (``pipeline.build_quant_block``) and
+iterates its deploy bindings; they are twins that differ only in the final step:
+  - ``export_block_deploy``   -> real HiF4/int/mxfp packed bytes (``module.export_deploy``),
+    driven by ``deploy`` (``LlmDeployWorkflow``);
+  - ``export_block_fakequant`` -> fake-quantized float weights (``weight_quantizer.fake_quant``),
+    driven by ``ptq`` (``LlmPtqConvertWorkflow``).
+Both need the model pipeline, so they live in the model layer (not in the format-agnostic
+``common/utils/checkpoint_io``). Also holds the deploy quant-config / tensor-mode helpers.
+"""
 from loguru import logger
 import torch
 import torch.nn as nn
