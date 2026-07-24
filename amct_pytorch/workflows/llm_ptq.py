@@ -37,7 +37,7 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
-from amct_pytorch.common.models.llm.common.deploy_export import export_block_fakequant
+from amct_pytorch.common.models.llm.common.block_export import export_block_fakequant
 
 
 class LlmPtqWorkflow:
