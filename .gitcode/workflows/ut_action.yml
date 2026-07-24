@@ -54,6 +54,7 @@ jobs:
           ut_type: amct
           target_branch: ${{ env.TARGET_BRANCH }}
           git_token: ${{ secrets.GIT_TOKEN }}
+          language: "python"
       -
         name: upload
         uses: obs-upload
