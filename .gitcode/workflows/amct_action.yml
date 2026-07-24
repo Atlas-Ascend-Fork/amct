@@ -294,7 +294,7 @@ stages:
               secret-key: ${{secrets.SK}}
               artifact-path: |
                 ${{ steps.process_checkout.outputs.path }}/smoke_data.tar.gz
-              object-prefix: ${{ env.obs_smoke_path_A2 }}/
+              object-prefix: ${{ env.obs_smoke_path }}/
           -
             name: smoke executor
             uses: manifest-management-plugin
@@ -309,7 +309,7 @@ stages:
                 export pr_id=${{ env.MERGE_ID }}
                 export AK=${{secrets.AK}}
                 export SK=${{secrets.SK}}
-                export obs_smoke_path=${{ env.obs_smoke_path_A2 }}
+                export obs_smoke_path=${{ env.obs_smoke_path }}
                 export obs_path=${{ env.obs_path }}
                 mkdir -p /home/taskspace && cd /home/taskspace
                 wget -nv ${{ steps.process_upload.outputs.primary-url }}
