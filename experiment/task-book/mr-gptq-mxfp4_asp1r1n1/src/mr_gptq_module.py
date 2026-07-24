@@ -36,7 +36,10 @@ _INCREMENTS = {
     "joint_comp": False,      # W4A4 优化②：用量化后的激活建 Hessian，权重补偿适配 W4A4 输入
 }
 
-_HADAMARD_K = 128  # block-wise Hadamard 尺寸（论文示 MXFP4 上 128 优于 32）
+_HADAMARD_K = 128  # block-wise Hadamard 尺寸；论文取 128 是为【在线算子】的开销权衡。
+                   # 本项目 fake-quant 只测精度、旋转无推理开销 → 可经 --hadamard_k 调大
+                   # (512/1024/4096) 做消融：块越大离群值摊得越开，或能进一步压 W4A4 误差。
+                   # 注意 in_features 须被 k 整除，否则该层跳过旋转（见 _do_hadamard）。
 
 # W4A4 混合精度：层名含这些子串的层【不】量化激活（保 bf16/高精度），用于保护敏感层冲 0.4。
 # 例：['down_proj'] 保护所有 down_proj 的激活；空 = 全量 W4A4。
@@ -55,6 +58,19 @@ def _sylvester_hadamard(k):
     return H / (k ** 0.5)
 
 
+_HADAMARD_CACHE = {}
+
+
+def _get_hadamard(k):
+    """按 k 缓存 Hadamard 矩阵。k 大时矩阵不小（k=4096 → 64MB fp32），252 个量化模块
+    各建一份会撑爆内存，故同一 k 全局只造一次、共享只读。"""
+    H = _HADAMARD_CACHE.get(k)
+    if H is None:
+        H = _sylvester_hadamard(k)
+        _HADAMARD_CACHE[k] = H
+    return H
+
+
 class MRGPTQuant(GPTQuant):
     """MR-GPTQ 量化算子。当前实现 = 高效标准 MXFP4 + GPTQ 误差补偿 + 可选增量。"""
 
@@ -64,7 +80,7 @@ class MRGPTQuant(GPTQuant):
         if self.wts_type != MXFP4_E2M1:
             raise ValueError(f"MR-GPTQ 目前仅支持 mxfp4_e2m1，收到 {self.wts_type}")
         self.hadamard_k = _HADAMARD_K
-        self._H = _sylvester_hadamard(self.hadamard_k)  # [k,k] CPU float32
+        self._H = _get_hadamard(self.hadamard_k)  # [k,k] CPU float32（全局缓存，同 k 共享）
 
     # ---- W4A4：本层是否量化激活（混合精度下敏感层跳过，保高精度） ----------
     def _do_act_quant(self):
@@ -78,12 +94,14 @@ class MRGPTQuant(GPTQuant):
         return self.increments["hadamard"] and self.weight.shape[1] % self.hadamard_k == 0
 
     def _rotate_last_dim(self, x):
-        """沿最后一维（in）做块对角 Hadamard：reshape [...,n_blk,k] @ H_k。"""
+        """沿最后一维（in）做块对角 Hadamard：reshape [...,n_blk,k] @ H_k。
+        matmul 在 fp32 下做再回原 dtype——k 大时（如 4096）fp16 累加 4096 项误差可达数个
+        百分点，会污染消融；fp32 旋转对 k=128 影响可忽略、对大 k 是必需。"""
         k = self.hadamard_k
-        H = self._H.to(device=x.device, dtype=x.dtype)
         shape = x.shape
-        x = x.reshape(*shape[:-1], shape[-1] // k, k).matmul(H)
-        return x.reshape(shape)
+        H = self._H.to(device=x.device, dtype=torch.float32)
+        xr = x.reshape(*shape[:-1], shape[-1] // k, k).float().matmul(H)
+        return xr.reshape(shape).to(x.dtype)
 
     def update_hessian(self, input_data):
         # 旋转后累积 Hessian，使 H_r = RᵀHR 与旋转权重一致（转输入比转 Hessian 便宜）

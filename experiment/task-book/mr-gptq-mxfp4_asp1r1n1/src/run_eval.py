@@ -67,6 +67,9 @@ def build_args():
                     help="仅评测前 N 块（0=全量）；消融/快速验证省时用")
     ap.add_argument("--act_protect", nargs="*", default=[],
                     help="W4A4 混合精度：层名含这些子串的层保激活高精度（如 down_proj）；空=全量 W4A4")
+    ap.add_argument("--hadamard_k", type=int, default=128,
+                    help="Hadamard 微旋转块大小（须为2的幂，且能整除各层 in_features）。论文默认128；"
+                         "fake-quant 无在线开销，可调大(512/1024/4096)测更强旋转能否进一步压 W4A4 误差")
     ap.add_argument("--skip_router", action="store_true",
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
@@ -91,7 +94,10 @@ def main():
             for inc in args.increments:
                 mr_gptq_module._INCREMENTS[inc] = True
             mr_gptq_module._ACT_PROTECT = list(args.act_protect)
+            mr_gptq_module._HADAMARD_K = args.hadamard_k
             print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
+            if args.hadamard_k != 128:
+                print(f"[MR-GPTQ] Hadamard 块大小 = {args.hadamard_k}（消融：>128 测更强旋转压离群值）")
             if args.act_protect:
                 print(f"[MR-GPTQ] W4A4 混合精度：以下层名子串的层保激活高精度 = {args.act_protect}")
             inc = mr_gptq_module._INCREMENTS
