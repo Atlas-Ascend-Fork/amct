@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -25,12 +25,10 @@ class KVCacheQuant(nn.Module):
     Function: Customized torch.nn.Module of the kv-cache calibration class.
     APIs: forward.
     """
-    def __init__(self,
-                 ori_module,
-                 cali_module,
-                 record_module,
-                 layer_name,
-                 cali_algo_params):
+
+    def __init__(
+        self, ori_module, cali_module, record_module, layer_name, cali_algo_params
+    ):
         """
         Function: init objective.
         Args:
@@ -66,8 +64,10 @@ class KVCacheQuant(nn.Module):
                 if cali_done:
                     # step 3. save scale and offset to record_module
                     scale = [float(each_scale.cpu()) for each_scale in quant_info.scale]
-                    offset = [int(each_offset.cpu()) for each_offset in quant_info.offset]
-                    self.record_module(self.layer_name, 'kv_cache',
-                                       {'scale': scale,
-                                        'offset': offset})
+                    offset = [
+                        int(each_offset.cpu()) for each_offset in quant_info.offset
+                    ]
+                    self.record_module(
+                        self.layer_name, 'kv_cache', {'scale': scale, 'offset': offset}
+                    )
             return output

@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,11 +18,12 @@
 from amct_pytorch.common.utils.log import LOGGER
 
 
-class ModelOptimizer():
+class ModelOptimizer:
     """
     Function: Optimizer is manager and executor of graph passes.
     APIs: add_pass, clear_pass, do_optimizer
     """
+
     def __init__(self):
         """
         Function: init

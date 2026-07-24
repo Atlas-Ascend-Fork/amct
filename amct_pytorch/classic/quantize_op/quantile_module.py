@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -15,13 +15,18 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from torch import nn
 import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-from amct_pytorch.classic.quantize_op.utils import get_weight_min_max_by_granularity, calculate_quantile_ema_scale
+from amct_pytorch.classic.quantize_op.utils import (
+    get_weight_min_max_by_granularity,
+    calculate_quantile_ema_scale,
+)
 from amct_pytorch.classic.quantize_op.utils import QUANT_SCOPE, process_scale
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_dequant_weight
+from amct_pytorch.common.utils.quant_util import (
+    quant_dequant_tensor,
+    quant_dequant_weight,
+)
 from amct_pytorch.common.utils.vars import HIFLOAT8
 from amct_pytorch.common.utils.log import LOGGER
 
@@ -36,6 +41,7 @@ class QuantileQuant(BaseQuantizeModule):
         4. Support weight per-tensor/per-channel, activation per-tensor/static per-token/dynamic per-token
     APIs: forward.
     """
+
     def __init__(self, ori_module, layer_name, quant_config):
         """
         Function: init objective.
@@ -50,11 +56,13 @@ class QuantileQuant(BaseQuantizeModule):
         self.layer_name = layer_name
         self.cur_batch = 0
         self.weight_compress_only = True
-        
+
         self.batch_num = quant_config.get('batch_num')
-        
-        if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-            quant_config.get('inputs_cfg').get('enable_quant') == True:
+
+        if (
+            quant_config.get('inputs_cfg').get('enable_quant') is None
+            or quant_config.get('inputs_cfg').get('enable_quant') == True
+        ):
             self.weight_compress_only = False
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')
@@ -62,18 +70,22 @@ class QuantileQuant(BaseQuantizeModule):
             self.dynamic = quant_config.get('inputs_cfg').get('dynamic')
             self.previous_max = None
             self.batch_input = None
-        
+
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
-        
+
         if self.wts_type != HIFLOAT8:
-            raise ValueError("Quantile algorithm only supports hifloat8 type for weights")
-        
+            raise ValueError(
+                "Quantile algorithm only supports hifloat8 type for weights"
+            )
+
         if not self.weight_compress_only and self.act_type != HIFLOAT8:
-            raise ValueError("Quantile algorithm only supports hifloat8 type for activation")
-        
+            raise ValueError(
+                "Quantile algorithm only supports hifloat8 type for activation"
+            )
+
         self.calculate_weights_scale_factor_and_quantize(self.weight.data, quant_config)
         self.bias = ori_module.bias
-    
+
     @torch.no_grad()
     def forward(self, inputs):
         check_linear_input_dim(inputs)
@@ -95,11 +107,18 @@ class QuantileQuant(BaseQuantizeModule):
         Function: calculate weights's quant factor using quantile algo
         Parameters: quant_config: configuration of quantization
         """
-        weight_min, weight_max = get_weight_min_max_by_granularity(weight_data, quant_config)
+        weight_min, weight_max = get_weight_min_max_by_granularity(
+            weight_data, quant_config
+        )
         self.scale_w = self.calculate_hif8_scale(weight_max)
         self.offset_w = None
-        LOGGER.logd("Calculate quantile quant params of layer '{}' success!".format(self.layer_name), 'QuantileQuant')
-    
+        LOGGER.logd(
+            "Calculate quantile quant params of layer '{}' success!".format(
+                self.layer_name
+            ),
+            'QuantileQuant',
+        )
+
     def calculate_hif8_scale(self, tensor_max):
         """
         Function: calculate HIF8 scale by scaling tensor max to 16
@@ -116,30 +135,43 @@ class QuantileQuant(BaseQuantizeModule):
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
         if not getattr(self, 'fake_quant_cache_ready', False):
-            self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w,
-                                                    self.offset_w, getattr(self, 'group_size', None))
+            self.cached_dq_w = quant_dequant_weight(
+                self.weight.data,
+                self.wts_type,
+                self.scale_w,
+                self.offset_w,
+                getattr(self, 'group_size', None),
+            )
             self.fake_quant_cache_ready = True
         if self.weight_compress_only:
             dq_x = inputs
         elif self.dynamic is True:
             from amct_pytorch.common.utils.quant_util import hifloat8_supported
+
             if hifloat8_supported():
                 import torch_npu
+
                 quant_x, pertoken_scale = torch_npu.npu_dynamic_quant(
-                    inputs.npu(), dst_type=torch_npu.hifloat8, dst_type_max=15)
+                    inputs.npu(), dst_type=torch_npu.hifloat8, dst_type_max=15
+                )
                 quant_x_fp = torch_npu.npu_dtype_cast(
-                    quant_x, inputs.dtype, input_dtype=torch_npu.hifloat8)
+                    quant_x, inputs.dtype, input_dtype=torch_npu.hifloat8
+                )
                 dq_x = quant_x_fp * pertoken_scale.unsqueeze(-1).to(quant_x_fp.dtype)
             else:
                 # Mirror the native dst_type_max=15 above: per-token dynamic-quant target
                 # max for HiF8 activations (distinct from the /16 weight scale target).
-                pertoken_scale = (inputs.abs().amax(dim=-1, keepdim=True) / 15).to(torch.float32)
+                pertoken_scale = (inputs.abs().amax(dim=-1, keepdim=True) / 15).to(
+                    torch.float32
+                )
                 # Guard against all-zero tokens producing scale=0 (-> inf/nan on dequant),
                 # matching the lower-bound protection the native op applies internally.
                 pertoken_scale, _ = process_scale(pertoken_scale, None, symmetric=True)
                 dq_x = quant_dequant_tensor(inputs, HIFLOAT8, pertoken_scale)
         else:
-            dq_x = quant_dequant_tensor(inputs, self.act_type, self.scale_d, self.offset_d)
+            dq_x = quant_dequant_tensor(
+                inputs, self.act_type, self.scale_d, self.offset_d
+            )
         return F.linear(dq_x, self.cached_dq_w, self.bias)
 
     def _compute_batch_max(self, inputs):
@@ -157,10 +189,16 @@ class QuantileQuant(BaseQuantizeModule):
         if self.previous_max is None:
             self.previous_max = batch_max
         else:
-            self.previous_max = calculate_quantile_ema_scale(self.previous_max, batch_max)
+            self.previous_max = calculate_quantile_ema_scale(
+                self.previous_max, batch_max
+            )
 
     def _finalize_calibration(self):
         self.scale_d = self.calculate_hif8_scale(self.previous_max)
         self.offset_d = None
-        LOGGER.logd("Calculate quantile activation quant params of layer '{}' success!".format(self.layer_name),
-            'QuantileQuant')
+        LOGGER.logd(
+            "Calculate quantile activation quant params of layer '{}' success!".format(
+                self.layer_name
+            ),
+            'QuantileQuant',
+        )

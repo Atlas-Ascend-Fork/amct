@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import torch
-import torch.nn as nn
 from mock_torch_npu import (
     mock_npu,
     mock_npu_convert_weight_to_int4pack,
@@ -51,6 +50,7 @@ class TestSmoothQuant(unittest.TestCase):
     '''
     ST FOR SMOOTH ALGORITHM
     '''
+
     @classmethod
     def setUpClass(cls):
         cls.test_model = TestModel().to(torch.bfloat16)
@@ -65,14 +65,20 @@ class TestSmoothQuant(unittest.TestCase):
     def setUp(self):
         mock_torch_npu = MagicMock()
         sys.modules['torch_npu'] = mock_torch_npu
- 
+
     def tearDown(self):
         del sys.modules['torch_npu']
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -92,7 +98,7 @@ class TestSmoothQuant(unittest.TestCase):
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
         }
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
@@ -107,13 +113,20 @@ class TestSmoothQuant(unittest.TestCase):
         self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)
 
-
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
-    @patch('amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema', 
-           MagicMock(return_value=True))
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_int8_int8_tensor_asym_smooth_invalid(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
             'batch_num': 1,
@@ -129,23 +142,32 @@ class TestSmoothQuant(unittest.TestCase):
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {'smoothquant': {'smooth_strength': 0.4}}
+            'algorithm': {'smoothquant': {'smooth_strength': 0.4}},
         }
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
-        with self.assertRaisesRegex(ValueError, 'int8 int8 only support symmetric weight quantization'):
+        with self.assertRaisesRegex(
+            ValueError, 'int8 int8 only support symmetric weight quantization'
+        ):
             quantize(model, cfg)
-
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
-    def test_int8_int8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+    def test_int8_int8_token_sym_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5
+    ):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -160,7 +182,7 @@ class TestSmoothQuant(unittest.TestCase):
                     'strategy': 'token',
                 },
             },
-            'algorithm': {'smoothquant': {'smooth_strength': 0.4}}
+            'algorithm': {'smoothquant': {'smooth_strength': 0.4}},
         }
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
@@ -180,14 +202,22 @@ class TestSmoothQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
-    def test_int8_int8_token_deploy_uses_dynamic_quant(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+    def test_int8_int8_token_deploy_uses_dynamic_quant(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5
+    ):
         '''
         INT8 per-token 激活量化部署后,forward 必须走运行时 npu_dynamic_quant 分支
         (而非定长静态 npu_quantize),否则推理 seqlen 与校准不同会维度不匹配报错。
@@ -207,7 +237,7 @@ class TestSmoothQuant(unittest.TestCase):
                     'strategy': 'token',
                 },
             },
-            'algorithm': {'smoothquant': {'smooth_strength': 0.4}}
+            'algorithm': {'smoothquant': {'smooth_strength': 0.4}},
         }
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
@@ -225,102 +255,158 @@ class TestSmoothQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param)
-    @patch('amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
-           MagicMock(return_value=True))
-    def test_int8_int4_tensor_tensor_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_int8_int4_tensor_tensor_sym_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5
+    ):
         self._run_a8w4_smooth_case('tensor', True)
         self.assertTrue(mock_1.called)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param)
-    @patch('amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema', 
-           MagicMock(return_value=True))
-    def test_int8_int4_tensor_channel_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_int8_int4_tensor_channel_sym_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5
+    ):
         self._run_a8w4_smooth_case('channel', True)
         self.assertTrue(mock_1.called)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param)
-    @patch('amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema', 
-           MagicMock(return_value=True))
-    def test_int8_int4_asym_act_tensor_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_int8_int4_asym_act_tensor_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5
+    ):
         self._run_a8w4_smooth_case('tensor', False)
         self.assertTrue(mock_1.called)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param)
-    @patch('amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema', 
-           MagicMock(return_value=True))
-    def test_int8_int4_asym_act_channel_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
-        self._run_a8w4_smooth_case('channel', False)
-        self.assertTrue(mock_1.called)
-
-    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize) 
-    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul) 
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul) 
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack) 
-    @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast) 
-    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast) 
-    @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant) 
-    @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param) 
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
-    def test_fp8_fp4_group_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7, mock_8): 
+    def test_int8_int4_asym_act_channel_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5
+    ):
+        self._run_a8w4_smooth_case('channel', False)
+        self.assertTrue(mock_1.called)
+
+    @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
+    @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
+    @patch('torch_npu.npu_format_cast', wraps=mock_npu_format_cast)
+    @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
+    @patch('torch_npu.npu_dynamic_mx_quant', wraps=mock_npu_dynamic_mx_quant)
+    @patch('torch_npu.npu_trans_quant_param', wraps=mock_npu_trans_quant_param)
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
+    def test_fp8_fp4_group_sym_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5, mock_6, mock_7, mock_8
+    ):
         cfg = {
-            'batch_num': 1, 
+            'batch_num': 1,
             'quant_cfg': {
                 'weights': {
-                    'type': 'float4_e2m1', 
-                    'symmetric': True, 
-                    'strategy': 'group', 
-                    'group_size': 32 
-                }, 
+                    'type': 'float4_e2m1',
+                    'symmetric': True,
+                    'strategy': 'group',
+                    'group_size': 32,
+                },
                 'inputs': {
-                    'type': 'float8_e4m3fn', 
-                    'symmetric': True, 
-                    'strategy': 'tensor', 
-                }, 
-            }, 
-            'algorithm': {'smoothquant': {'smooth_strength': 0.5}} 
-        } 
-        model = copy.deepcopy(TestModelBias()).to(torch.bfloat16) 
-        quantize(model, cfg) 
-        model(self.inputs) 
-        torch.Tensor.npu = mock_npu 
-        self.assertEqual(type(model.linear1).__name__, LINEAR) 
-        self.assertEqual(type(model.linear2).__name__, SMOOTH_QUANT) 
-        self.assertEqual(type(model.linear3).__name__, LINEAR) 
-        self.assertIsNotNone(model.linear2.scale_w1) 
-        self.assertIsNotNone(model.linear2.scale_d) 
-        convert(model) 
-        model(self.inputs.npu()) 
-        self.assertEqual(type(model.linear1).__name__, LINEAR) 
-        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear') 
+                    'type': 'float8_e4m3fn',
+                    'symmetric': True,
+                    'strategy': 'tensor',
+                },
+            },
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
+        }
+        model = copy.deepcopy(TestModelBias()).to(torch.bfloat16)
+        quantize(model, cfg)
+        model(self.inputs)
+        torch.Tensor.npu = mock_npu
+        self.assertEqual(type(model.linear1).__name__, LINEAR)
+        self.assertEqual(type(model.linear2).__name__, SMOOTH_QUANT)
+        self.assertEqual(type(model.linear3).__name__, LINEAR)
+        self.assertIsNotNone(model.linear2.scale_w1)
+        self.assertIsNotNone(model.linear2.scale_d)
+        convert(model)
+        model(self.inputs.npu())
+        self.assertEqual(type(model.linear1).__name__, LINEAR)
+        self.assertEqual(type(model.linear2).__name__, 'NpuQuantizationLinear')
         self.assertEqual(type(model.linear3).__name__, 'Linear')
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
-    def test_hif8_hif8_channel_tensor_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4):
+    def test_hif8_hif8_channel_tensor_sym_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4
+    ):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -335,7 +421,7 @@ class TestSmoothQuant(unittest.TestCase):
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
         }
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
@@ -357,14 +443,22 @@ class TestSmoothQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
     )
-    def test_hif8_hif8_token_sym_smooth_success(self, mock_1, mock_2, mock_3, mock_4, mock_5):
+    def test_hif8_hif8_token_sym_smooth_success(
+        self, mock_1, mock_2, mock_3, mock_4, mock_5
+    ):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -379,7 +473,7 @@ class TestSmoothQuant(unittest.TestCase):
                     'strategy': 'token',
                 },
             },
-            'algorithm': {'smoothquant': {'smooth_strength': 0.4}}
+            'algorithm': {'smoothquant': {'smooth_strength': 0.4}},
         }
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
@@ -417,7 +511,7 @@ class TestSmoothQuant(unittest.TestCase):
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {'smoothquant': {'smooth_strength': 0.5}}
+            'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
         }
         quantize(model, cfg)
         model(inputs)
@@ -437,4 +531,3 @@ class TestSmoothQuant(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, 'NpuQuantizationLinear')
         self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear3).__name__, LINEAR)
-

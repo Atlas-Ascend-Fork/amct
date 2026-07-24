@@ -21,7 +21,7 @@ __all__ = [
     'LinearAWQuant',
     'SmoothQuant',
     'MinMaxQuant',
-    'OfmrQuant'
+    'OfmrQuant',
 ]
 
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule

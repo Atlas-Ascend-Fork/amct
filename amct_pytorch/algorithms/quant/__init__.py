@@ -16,7 +16,8 @@
 # ----------------------------------------------------------------------------
 
 __all__ = [
-    'register_algorithms', 'AlgoBuildContext',
+    'register_algorithms',
+    'AlgoBuildContext',
 ]
 
 from dataclasses import dataclass

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,7 +18,9 @@
 
 
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
-from ...amct_pytorch.optimizer.replace_avgpool_flatten_pass import ReplaceAvgpoolFlattenPass
+from ...amct_pytorch.optimizer.replace_avgpool_flatten_pass import (
+    ReplaceAvgpoolFlattenPass,
+)
 from ...amct_pytorch.utils.log import LOGGER
 
 
@@ -27,6 +29,7 @@ class ReplaceAvgpoolReshapePass(BaseFusionPass):
     Function: Replace "GlobalAveragePool + Reshape" node in graph.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -47,8 +50,12 @@ class ReplaceAvgpoolReshapePass(BaseFusionPass):
 
         consumers, in_idxs = node.get_consumers(0)
         if len(consumers) != 1 or consumers[0].type != 'Reshape':
-            LOGGER.logd("node {} match_pattern fail for it must have only one consumer Reshape.".format(node.name),
-                        'ReplaceAvgpoolReshapePass')
+            LOGGER.logd(
+                "node {} match_pattern fail for it must have only one consumer Reshape.".format(
+                    node.name
+                ),
+                'ReplaceAvgpoolReshapePass',
+            )
             return False
 
         reshape_node = consumers[0]
@@ -79,9 +86,7 @@ class ReplaceAvgpoolReshapePass(BaseFusionPass):
         if search_node is not reshape_node:
             return False
 
-        self.structure = {
-            node.name: [reshape_node, shape_nodes]
-        }
+        self.structure = {node.name: [reshape_node, shape_nodes]}
         return True
 
     def do_pass(self, graph, object_node):
@@ -92,11 +97,15 @@ class ReplaceAvgpoolReshapePass(BaseFusionPass):
         object_node: node to process
         Return: None
         """
-        LOGGER.logd("Doing: delete node {} in graph.".format(object_node.name),
-                    'ReplaceAvgpoolReshapePass')
+        LOGGER.logd(
+            "Doing: delete node {} in graph.".format(object_node.name),
+            'ReplaceAvgpoolReshapePass',
+        )
         reshape_node, shape_nodes = self.structure[object_node.name]
 
-        proto_p1ton1 = ReplaceAvgpoolFlattenPass.construct_d4tod2('.'.join([object_node.name, reshape_node.name]))
+        proto_p1ton1 = ReplaceAvgpoolFlattenPass.construct_d4tod2(
+            '.'.join([object_node.name, reshape_node.name])
+        )
         node_p1ton1 = graph.add_node(proto_p1ton1)
         graph.insert_node_before(node_p1ton1, 0, 0, object_node, 0)
 
@@ -109,5 +118,7 @@ class ReplaceAvgpoolReshapePass(BaseFusionPass):
         for node in shape_nodes:
             graph.remove_node(node)
 
-        LOGGER.logd("Finished: delete node {} in graph.".format(object_node.name),
-                    'ReplaceAvgpoolReshapePass')
+        LOGGER.logd(
+            "Finished: delete node {} in graph.".format(object_node.name),
+            'ReplaceAvgpoolReshapePass',
+        )

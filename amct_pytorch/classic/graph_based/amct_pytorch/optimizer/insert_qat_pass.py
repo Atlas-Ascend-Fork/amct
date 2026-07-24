@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -36,10 +36,11 @@ class InsertQatPass(BaseModuleFusionPass):
     Function: Insert QAT mudule about compressed quantization.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, distill_config):
         """
         Function: init object
-        Parameter: 
+        Parameter:
             distill_config: dict
         Return: None
         """
@@ -74,12 +75,14 @@ class InsertQatPass(BaseModuleFusionPass):
         """
         # Step2: construct a new module
         # activation quant config
-        act_config = get_quant_layer_config(
-            object_name, self.conf).get('distill_data_config')
+        act_config = get_quant_layer_config(object_name, self.conf).get(
+            'distill_data_config'
+        )
         act_config['batch_num'] = self.conf.get('batch_num')
         # weights quant config
-        wts_config = get_quant_layer_config(
-            object_name, self.conf).get('distill_weight_config')
+        wts_config = get_quant_layer_config(object_name, self.conf).get(
+            'distill_weight_config'
+        )
 
         # quant config
         config = {
@@ -93,8 +96,11 @@ class InsertQatPass(BaseModuleFusionPass):
         parent_module = model_helper.get_parent_module(object_name)
         if REPLACE_DICT.get(type(object_module).__name__):
             qat_module = REPLACE_DICT.get(type(object_module).__name__).from_float(
-                object_module, config)
+                object_module, config
+            )
 
             setattr(parent_module, object_name.split('.')[-1], qat_module)
             LOGGER.logd(
-                "Insert QAT module to '{}' success!".format(object_name), 'InsertQatPass')
+                "Insert QAT module to '{}' success!".format(object_name),
+                'InsertQatPass',
+            )

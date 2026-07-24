@@ -67,8 +67,12 @@ class TestRetrainConfigBase(unittest.TestCase):
     def test_check_quant_layers_valid_passthrough(self):
         obj, _, checker = _make()
         # strip all optional checker hooks -> returns input unchanged
-        for attr in ('check_data_type', 'check_gradient_op',
-                     'check_matmul_transpose', 'check_quantize_placeholder'):
+        for attr in (
+            'check_data_type',
+            'check_gradient_op',
+            'check_matmul_transpose',
+            'check_quantize_placeholder',
+        ):
             if hasattr(checker, attr):
                 delattr(checker, attr)
         layers = ['l1', 'l2']
@@ -76,8 +80,11 @@ class TestRetrainConfigBase(unittest.TestCase):
 
     def test_check_quant_layers_valid_with_hooks(self):
         obj, _, checker = _make()
-        for attr in ('check_gradient_op', 'check_matmul_transpose',
-                     'check_quantize_placeholder'):
+        for attr in (
+            'check_gradient_op',
+            'check_matmul_transpose',
+            'check_quantize_placeholder',
+        ):
             if hasattr(checker, attr):
                 delattr(checker, attr)
         checker.check_data_type.return_value = ['l1']

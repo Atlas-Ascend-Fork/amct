@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,14 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
-from unittest import mock
-from unittest.mock import mock_open, patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
@@ -41,9 +36,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer imp
     ModelOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
-    QUANTIZABLE_TYPES,
-)
 
 from .utils import models
 
@@ -84,7 +76,7 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         pass
 
     def test_fuse(self):
-        ''' test: conv(+ bias), Gemm, Matmul '''
+        '''test: conv(+ bias), Gemm, Matmul'''
         torch_recorder = Recorder(self.record_file)
         optimizer = ModelOptimizer()
         optimizer.add_pass(InsertDMQBalancerPass(torch_recorder))
@@ -102,4 +94,3 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         self.assertEqual(True, isinstance(named_module_dict['fc.0'], torch.nn.Linear))
         self.assertEqual(True, isinstance(named_module_dict['fc.2'], DMQBalancer))
         self.assertEqual(True, isinstance(named_module_dict['fc.5'], torch.nn.Linear))
-

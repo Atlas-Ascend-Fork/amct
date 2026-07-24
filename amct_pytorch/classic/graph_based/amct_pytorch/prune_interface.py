@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -37,18 +37,17 @@ from ..amct_pytorch.quantize_tool import _modify_original_model_to_quant
 from ..amct_pytorch.utils.model_util import load_pth_file
 from ..amct_pytorch.utils.save import split_dir_prefix
 from ..amct_pytorch.utils.save import generate_onnx_file_name
-from ..amct_pytorch.utils.vars import TORCH_VERSION
 from ..amct_pytorch.common.utils.util import version_higher_than
 from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
-from ..amct_pytorch.custom_op.selective_prune.selective_prune \
-    import create_selective_prune_record
-from ..amct_pytorch.custom_op.selective_prune.selective_prune \
-    import restore_selective_prune_record
+from ..amct_pytorch.custom_op.selective_prune.selective_prune import (
+    create_selective_prune_record,
+)
+from ..amct_pytorch.custom_op.selective_prune.selective_prune import (
+    restore_selective_prune_record,
+)
 
 
-@check_params(model=torch.nn.Module,
-              config_defination=str,
-              record_file=str)
+@check_params(model=torch.nn.Module, config_defination=str, record_file=str)
 def create_prune_retrain_model(model, input_data, config_defination, record_file):
     """
     Function: create_prune_retrain_model API. create a pruned model
@@ -78,9 +77,7 @@ def create_prune_retrain_model(model, input_data, config_defination, record_file
 
     graph.add_model(model)
     # parse config
-    RetrainConfig.init(graph, config_defination,
-                        enable_retrain=True,
-                        enable_prune=True)
+    RetrainConfig.init(graph, config_defination, enable_retrain=True, enable_prune=True)
 
     # do prune
     prune_helper = PruneHelper(graph, input_data, record_file)
@@ -93,18 +90,16 @@ def create_prune_retrain_model(model, input_data, config_defination, record_file
     return model
 
 
-@check_params(model=torch.nn.Module,
-              record_file=str,
-              config_defination=str,
-              pth_file=str,
-              state_dict_name=(str, type(None)))
+@check_params(
+    model=torch.nn.Module,
+    record_file=str,
+    config_defination=str,
+    pth_file=str,
+    state_dict_name=(str, type(None)),
+)
 def restore_prune_retrain_model(
-    model,
-    input_data,
-    record_file,
-    config_defination,
-    pth_file,
-    state_dict_name=None):
+    model, input_data, record_file, config_defination, pth_file, state_dict_name=None
+):
     """
     Function: restore_prune_retrain_model API. Restore pruned model
     based on record_file.
@@ -134,9 +129,7 @@ def restore_prune_retrain_model(
     graph.add_model(model)
 
     # parse config
-    RetrainConfig.init(graph, config_defination,
-                        enable_retrain=True,
-                        enable_prune=True)
+    RetrainConfig.init(graph, config_defination, enable_retrain=True, enable_prune=True)
 
     prune_helper = PruneHelper(graph, input_data, record_file)
     prune_helper.restore_prune_model()
@@ -154,15 +147,10 @@ def restore_prune_retrain_model(
     save_path=str,
     input_names=(list, type(None)),
     output_names=(list, type(None)),
-    dynamic_axes=(dict, type(None))
+    dynamic_axes=(dict, type(None)),
 )
 def save_prune_retrain_model(
-    model,
-    save_path,
-    input_data,
-    input_names=None,
-    output_names=None,
-    dynamic_axes=None
+    model, save_path, input_data, input_names=None, output_names=None, dynamic_axes=None
 ):
     """
     Function:
@@ -180,9 +168,11 @@ def save_prune_retrain_model(
     Return: None.
     """
     # check input
-    export_setting = {'input_names': input_names,
-                      'output_names': output_names,
-                      'dynamic_axes': dynamic_axes}
+    export_setting = {
+        'input_names': input_names,
+        'output_names': output_names,
+        'dynamic_axes': dynamic_axes,
+    }
     _check_param_onnx_export(**export_setting)
 
     # step1. preprocess prune model, restore raw module and set prune wts
@@ -190,14 +180,13 @@ def save_prune_retrain_model(
     _preprocess_prune_model(model_copy)
     # step2. save corresponding onnx file.
     _inner_save_plain_prune_model(
-        model=model_copy,
-        save_path=save_path,
-        input_data=input_data,
-        **export_setting
+        model=model_copy, save_path=save_path, input_data=input_data, **export_setting
     )
 
 
-def _modify_original_to_compressed_model(model, input_data, config_defination, record_file, prune_call_mode):
+def _modify_original_to_compressed_model(
+    model, input_data, config_defination, record_file, prune_call_mode
+):
     # step 1. parse
     # parse to graph
     model_onnx = BytesIO()
@@ -206,10 +195,7 @@ def _modify_original_to_compressed_model(model, input_data, config_defination, r
     graph.add_model(model)
 
     # parse compressed config
-    RetrainConfig.init(graph,
-                        config_defination,
-                        enable_retrain=True,
-                        enable_prune=True)
+    RetrainConfig.init(graph, config_defination, enable_retrain=True, enable_prune=True)
 
     # step 2. do filter prune
     if RetrainConfig.enable_prune:
@@ -242,11 +228,7 @@ def _modify_original_to_compressed_model(model, input_data, config_defination, r
     config_defination=str,
     record_file=str,
 )
-def create_compressed_retrain_model(
-    model,
-    input_data,
-    config_defination,
-    record_file):
+def create_compressed_retrain_model(model, input_data, config_defination, record_file):
     """
     Function:
     create_compressed_retrain_model API.
@@ -272,11 +254,7 @@ def create_compressed_retrain_model(
     SingletonScaleOffsetRecord().reset_singleton(record_file)
 
     model = _modify_original_to_compressed_model(
-        model,
-        input_data,
-        config_defination,
-        record_file,
-        "create"
+        model, input_data, config_defination, record_file, "create"
     )
 
     return model
@@ -287,16 +265,11 @@ def create_compressed_retrain_model(
     config_defination=str,
     record_file=str,
     pth_file=str,
-    state_dict_name=(str, type(None))
+    state_dict_name=(str, type(None)),
 )
 def restore_compressed_retrain_model(
-    model,
-    input_data,
-    config_defination,
-    record_file,
-    pth_file,
-    state_dict_name=None
-    ):
+    model, input_data, config_defination, record_file, pth_file, state_dict_name=None
+):
     """
     Function:
     restore_compressed_retrain_model API. Restore compressed model
@@ -321,11 +294,7 @@ def restore_compressed_retrain_model(
     pth_file = os.path.realpath(pth_file)
 
     model = _modify_original_to_compressed_model(
-        model,
-        input_data,
-        config_defination,
-        record_file,
-        "restore"
+        model, input_data, config_defination, record_file, "restore"
     )
 
     model = load_pth_file(model, pth_file, state_dict_name)
@@ -339,7 +308,7 @@ def restore_compressed_retrain_model(
     save_path=str,
     input_names=(list, type(None)),
     output_names=(list, type(None)),
-    dynamic_axes=(dict, type(None))
+    dynamic_axes=(dict, type(None)),
 )
 def save_compressed_retrain_model(
     model,
@@ -348,7 +317,7 @@ def save_compressed_retrain_model(
     input_data,
     input_names=None,
     output_names=None,
-    dynamic_axes=None
+    dynamic_axes=None,
 ):
     """
     Function:
@@ -370,9 +339,11 @@ def save_compressed_retrain_model(
     Return: None.
     """
     # check inputs
-    export_setting = {'input_names': input_names,
-                      'output_names': output_names,
-                      'dynamic_axes': dynamic_axes}
+    export_setting = {
+        'input_names': input_names,
+        'output_names': output_names,
+        'dynamic_axes': dynamic_axes,
+    }
     _check_param_onnx_export(**export_setting)
 
     files_util.is_valid_name(record_file, 'record_file')
@@ -390,7 +361,7 @@ def save_compressed_retrain_model(
             model=model_copy,
             save_path=save_path,
             input_data=input_data,
-            **export_setting
+            **export_setting,
         )
     else:
         _inner_save_compressed_retrain_model(
@@ -398,7 +369,7 @@ def save_compressed_retrain_model(
             record_file=record_file,
             save_path=save_path,
             input_data=input_data,
-            **export_setting
+            **export_setting,
         )
 
 
@@ -424,31 +395,32 @@ def _inner_save_plain_prune_model(
         export_setting['opset_version'] = 11
     if version_higher_than(torch.__version__, '1.12.0'):
         export_setting['keep_initializers_as_inputs'] = True
-    if version_higher_than(torch.__version__, '1.5.0') and \
-        not version_higher_than(torch.__version__, '1.11.0'):
+    if version_higher_than(torch.__version__, '1.5.0') and not version_higher_than(
+        torch.__version__, '1.11.0'
+    ):
         export_setting['enable_onnx_checker'] = False
 
     files_util.check_files_exist([deploy_file])
     torch.onnx.export(model, input_data, deploy_file, **export_setting)
     # set file's permission 640
     os.chmod(deploy_file, files_util.FILE_MODE)
-    LOGGER.logi('Get only prune model, save deploy onnx file to {}'.format(deploy_file),
-                'save_compressed_retrain_model')
+    LOGGER.logi(
+        'Get only prune model, save deploy onnx file to {}'.format(deploy_file),
+        'save_compressed_retrain_model',
+    )
 
     files_util.check_files_exist([fake_quant_file])
     torch.onnx.export(model, input_data, fake_quant_file, **export_setting)
     # set file's permission 640
     os.chmod(fake_quant_file, files_util.FILE_MODE)
-    LOGGER.logi('Get only prune model, save fake quant onnx file to {}'.format(fake_quant_file),
-                'save_compressed_retrain_model')
+    LOGGER.logi(
+        'Get only prune model, save fake quant onnx file to {}'.format(fake_quant_file),
+        'save_compressed_retrain_model',
+    )
 
 
 def _inner_save_compressed_retrain_model(
-    model,
-    record_file,
-    save_path,
-    input_data,
-    **export_setting
+    model, record_file, save_path, input_data, **export_setting
 ):
     """
     Function:
@@ -475,13 +447,14 @@ def _inner_save_compressed_retrain_model(
         graph,
         'modified_onnx_file after prune, retrain',
         enable_prune=False,
-        enable_quant=True
+        enable_quant=True,
     )
     if record_parser.is_records_empty():
         raise RuntimeError(
             "record_file is empty, no layers to be quantized. Please "
             "confirm the process of retrain quantification: whether "
-            "the inference process is omitted after the training!")
+            "the inference process is omitted after the training!"
+        )
     records, _ = record_parser.parse()
 
     _generate_model(graph, records, save_path)
@@ -514,7 +487,7 @@ def check_only_prune(model, record_file):
         graph=None,
         model_name='check only prune',
         enable_quant=False,
-        enable_prune=True
+        enable_prune=True,
     )
     if not model_has_quant and not record_parser.is_records_empty():
         return True
@@ -565,8 +538,10 @@ def _check_type_in_container(container, data_type):
 def _check_negative_integers(lst):
     for item in lst:
         if item < 0:
-            raise RuntimeError('dynamic_axes value is invalid,'
-                'The int value of axis indicators cannot be a negative number.')
+            raise RuntimeError(
+                'dynamic_axes value is invalid,'
+                'The int value of axis indicators cannot be a negative number.'
+            )
 
 
 def _check_param_onnx_export(**export_setting):

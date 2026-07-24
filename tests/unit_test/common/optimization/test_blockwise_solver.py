@@ -164,6 +164,7 @@ def test_optimize_block_raises_on_loader_yielding_single_tensor():
     # Bootstrap the optimizer manually without invoking solve().
     groups = solver._collect_trainable_param_groups(layer)
     from amct_pytorch.common.optimization.factory import build_optimizer
+
     solver.optimizer = build_optimizer(_args(), groups)
 
     bad_loader = DataLoader(TensorDataset(torch.randn(2, 4)), batch_size=1)
@@ -176,6 +177,7 @@ def test_optimize_block_returns_zero_when_loader_empty():
     solver = BlockwiseSolver(_args(), layer_idx=0, model=layer)
     groups = solver._collect_trainable_param_groups(layer)
     from amct_pytorch.common.optimization.factory import build_optimizer
+
     solver.optimizer = build_optimizer(_args(), groups)
 
     empty_loader = DataLoader(
@@ -200,6 +202,7 @@ def test_optimize_block_handles_tuple_outputs_from_model():
     solver = BlockwiseSolver(_args(), layer_idx=0, model=layer)
     groups = solver._collect_trainable_param_groups(layer)
     from amct_pytorch.common.optimization.factory import build_optimizer
+
     solver.optimizer = build_optimizer(_args(), groups)
 
     solver._optimize_block(_build_loader())

@@ -245,6 +245,7 @@ class TestSmoothQuantFakeQuant(FakeQuantTestBase):
     )
     def test_fp8_fp4_progressive_passes_group_size(self, *_):
         from amct_pytorch.classic.quantize_op import smooth_quant_module
+
         cfg = {
             "batch_num": 1,
             "quant_cfg": {
@@ -265,13 +266,19 @@ class TestSmoothQuantFakeQuant(FakeQuantTestBase):
         model = copy.deepcopy(_ModelBias()).to(torch.bfloat16)
         quantize(model, cfg)
         model(self.inputs)
-        with patch.object(smooth_quant_module, 'apply_progressive_quant_dequant',
-                          wraps=smooth_quant_module.apply_progressive_quant_dequant) as m:
+        with patch.object(
+            smooth_quant_module,
+            'apply_progressive_quant_dequant',
+            wraps=smooth_quant_module.apply_progressive_quant_dequant,
+        ) as m:
             model(self.inputs)
         self.assertGreater(m.call_count, 0)
         for call in m.call_args_list:
-            self.assertEqual(call.args[3], 32,
-                             'group_size from quant_config must be forwarded to apply_progressive_quant_dequant')
+            self.assertEqual(
+                call.args[3],
+                32,
+                'group_size from quant_config must be forwarded to apply_progressive_quant_dequant',
+            )
 
 
 class TestOfmrFakeQuant(FakeQuantTestBase):

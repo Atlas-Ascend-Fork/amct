@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Unit tests for module_based_record_parser.get_layer_quant_params error branches."""
+
 import unittest
 from unittest.mock import patch
 
@@ -39,8 +40,9 @@ class TestGetLayerQuantParams(unittest.TestCase):
 
     def test_raises_when_layer_missing_in_params(self):
         records = {"quant_result_path": "/tmp/fake.pth"}
-        with patch(f"{_MODULE}.os.path.exists", return_value=True), patch(
-            f"{_MODULE}.safe_torch_load", return_value={"other.layer": {}}
+        with (
+            patch(f"{_MODULE}.os.path.exists", return_value=True),
+            patch(f"{_MODULE}.safe_torch_load", return_value={"other.layer": {}}),
         ):
             with self.assertRaises(RuntimeError):
                 mbrp.get_layer_quant_params(records, "layer.0")
@@ -48,16 +50,18 @@ class TestGetLayerQuantParams(unittest.TestCase):
     def test_returns_layer_params_on_success(self):
         records = {"quant_result_path": "/tmp/fake.pth"}
         expected = {"scale": 1.0}
-        with patch(f"{_MODULE}.os.path.exists", return_value=True), patch(
-            f"{_MODULE}.safe_torch_load", return_value={"layer.0": expected}
+        with (
+            patch(f"{_MODULE}.os.path.exists", return_value=True),
+            patch(f"{_MODULE}.safe_torch_load", return_value={"layer.0": expected}),
         ):
             result = mbrp.get_layer_quant_params(records, "layer.0")
         self.assertEqual(result, expected)
 
     def test_raises_when_load_fails(self):
         records = {"quant_result_path": "/tmp/fake.pth"}
-        with patch(f"{_MODULE}.os.path.exists", return_value=True), patch(
-            f"{_MODULE}.safe_torch_load", side_effect=ValueError("bad file")
+        with (
+            patch(f"{_MODULE}.os.path.exists", return_value=True),
+            patch(f"{_MODULE}.safe_torch_load", side_effect=ValueError("bad file")),
         ):
             with self.assertRaises(RuntimeError):
                 mbrp.get_layer_quant_params(records, "layer.0")

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,44 +17,23 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import sys
 import unittest
-from copy import deepcopy
 from io import BytesIO
-from unittest.mock import patch
 
 import numpy as np
 import torch
-from google.protobuf import text_format
-from onnx import onnx_pb
 
 import amct_pytorch.classic.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
-    files as files_util,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
-    Configuration,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_bias_quant_pass import (
     InsertBiasQuantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
-    construct_quant_node,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_bias_quant_pass import (
     ReplaceBiasQuantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parse_record_file import (
-    RecordFileParser,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
@@ -87,11 +66,9 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
         cls.config_file = os.path.join(cls.temp_folder, 'net_bias_fakequant.json')
         skip_layers = []
         batch_num = 2
-        amct.create_quant_config(cls.config_file,
-                                 cls.model,
-                                 cls.args,
-                                 skip_layers,
-                                 batch_num)
+        amct.create_quant_config(
+            cls.config_file, cls.model, cls.args, skip_layers, batch_num
+        )
         cls.records = record_file.generate_records(
             layers_length={
                 "layer1.0": 16,
@@ -104,7 +81,8 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
                 "fc.2": 1,
                 "fc.5": 1,
                 "avg_pool": 1,
-            })
+            }
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -122,21 +100,27 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
         optimizer.add_pass(InsertBiasQuantPass(self.records))
         optimizer.add_pass(ReplaceBiasQuantPass(self.records))
         optimizer.do_optimizer(self.graph, self.model)
-        bias_dtype = TensorProtoHelper(self.graph.get_node_by_name('fc.5.sub_module.bias').proto).get_data().dtype
+        bias_dtype = (
+            TensorProtoHelper(self.graph.get_node_by_name('fc.5.sub_module.bias').proto)
+            .get_data()
+            .dtype
+        )
         self.assertEqual(bias_dtype, 'float32')
 
     def test_bias_fake_quant_pass_fail(self):
         self.records = record_file.generate_records(
-            layers_length={
-                "layer1.0": 16,
-                "fc.5": 1
-            })
+            layers_length={"layer1.0": 16, "fc.5": 1}
+        )
 
         optimizer = GraphOptimizer()
         optimizer.add_pass(InsertBiasQuantPass(self.records))
         optimizer.add_pass(ReplaceBiasQuantPass(self.records))
         optimizer.do_optimizer(self.graph, self.model)
-        bias_dtype = TensorProtoHelper(self.graph.get_node_by_name('fc.5.sub_module.bias').proto).get_data().dtype
+        bias_dtype = (
+            TensorProtoHelper(self.graph.get_node_by_name('fc.5.sub_module.bias').proto)
+            .get_data()
+            .dtype
+        )
         self.assertEqual(bias_dtype, 'float32')
 
     def test_rnn_bias_fake_quant_success(self):
@@ -148,9 +132,14 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
             def forward(self, input_data, hx):
                 x = self.lstm(input_data, hx)
                 return x
+
         model = RNNModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
+        Parser.export_onnx(
+            model,
+            (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))),
+            tmp_onnx,
+        )
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node_name = 'lstm'
         node = graph.get_node_by_name(node_name)

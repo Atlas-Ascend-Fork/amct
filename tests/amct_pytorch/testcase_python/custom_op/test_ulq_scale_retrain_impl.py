@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Unit tests for ulq_scale_retrain_impl backward math (pure torch, no NPU/ONNX)."""
+
 import unittest
 
 import torch

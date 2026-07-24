@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -28,29 +28,25 @@ from ..amct_pytorch.utils.log import LOGGER
 from ..amct_pytorch.common.utils.check_params import check_params
 from ..amct_pytorch.common.utils import files as files_util
 from ..amct_pytorch.common.utils.log_base import LOG_FILE_DIR
-from ..amct_pytorch.common.utils.record_file_operator import \
-    ScaleOffsetRecordHelper
+from ..amct_pytorch.common.utils.record_file_operator import ScaleOffsetRecordHelper
 from ..amct_pytorch.utils.model_util import ModuleHelper
 from ..amct_pytorch.distill.distill_data_manager import DistillDataManager
 from ..amct_pytorch.distill.distill_helper import DistillHelper
 from ..amct_pytorch.distill.distill_sample import DistillSampleBase
 from ..amct_pytorch.quantize_tool import _generate_model
-from ..amct_pytorch.quantize_tool import _check_config_consistency
 from ..amct_pytorch.proto import scale_offset_record_pb2
 from ..amct_pytorch.parser.parse_record_file import RecordFileParser
 
 MODULE_NAME = 'Distill'
 
 
-@check_params(config_file=str,
-              model=torch.nn.Module,
-              input_data=(torch.Tensor, tuple),
-              config_defination=(type(None), str))
-def create_distill_config(
-        config_file,
-        model,
-        input_data,
-        config_defination=None):
+@check_params(
+    config_file=str,
+    model=torch.nn.Module,
+    input_data=(torch.Tensor, tuple),
+    config_defination=(type(None), str),
+)
+def create_distill_config(config_file, model, input_data, config_defination=None):
     """
     Function: Create distill quantize configuration json file for amct_pytorch
         tool
@@ -81,16 +77,13 @@ def create_distill_config(
         config_proto_file = os.path.realpath(config_defination)
         files_util.is_valid_name(config_proto_file, 'config_defination')
         if not os.path.exists(config_proto_file):
-            raise FileNotFoundError("Not found config_defination file {}".format(config_proto_file))
-        create_distill_config_from_proto(
-            config_file,
-            graph,
-            config_proto_file)
+            raise FileNotFoundError(
+                "Not found config_defination file {}".format(config_proto_file)
+            )
+        create_distill_config_from_proto(config_file, graph, config_proto_file)
 
 
-@check_params(config_file=str,
-              model=torch.nn.Module,
-              input_data=(torch.Tensor, tuple))
+@check_params(config_file=str, model=torch.nn.Module, input_data=(torch.Tensor, tuple))
 def create_distill_model(config_file, model, input_data):
     """
     Function: Modify user's model for compressed in train process.
@@ -133,38 +126,51 @@ def _get_data(data_manager, distill_helper, group, index, sample):
     '''get input data of student and output data of teacher'''
     (epoch, step) = index
     if distill_helper.is_dump:
-        input_data_t = data_manager.load_input_dump_data(
-            group, epoch, step)
-        output_data_t = data_manager.load_output_dump_data(
-            group, epoch, step)
+        input_data_t = data_manager.load_input_dump_data(group, epoch, step)
+        output_data_t = data_manager.load_output_dump_data(group, epoch, step)
 
         dump_sample = data_manager.load_model_input_dump_data(epoch, step)
         input_data_s = data_manager.get_input_data_by_inferring(
-            distill_helper.model_s, group, dump_sample)
+            distill_helper.model_s, group, dump_sample
+        )
     else:
         # load input data of teacher model and student model
         input_data_t = data_manager.get_input_data_by_inferring(
-            distill_helper.model_t, group, sample)
+            distill_helper.model_t, group, sample
+        )
         output_data_t = data_manager.get_output_data_by_inferring(
-            distill_helper.model_t, group, input_data_t)
+            distill_helper.model_t, group, input_data_t
+        )
         input_data_s = data_manager.get_input_data_by_inferring(
-            distill_helper.model_s, group, sample)
+            distill_helper.model_s, group, sample
+        )
 
     input_data_s = data_manager.get_norm_min_data(input_data_t, input_data_s)
     return input_data_s, output_data_t
 
 
-@check_params(model=torch.nn.Module,
-              compress_model=torch.nn.Module,
-              config_file=str,
-              train_loader=torch.utils.data.DataLoader,
-              epochs=int,
-              lr=float,
-              sample_instance=(type(None), DistillSampleBase),
-              loss=(type(None), torch.nn.modules.loss._Loss),
-              optimizer=(type(None), torch.optim.Optimizer))
-def distill(model, compress_model, config_file, train_loader, epochs=1,
-    lr=1e-3, sample_instance=None, loss=None, optimizer=None):
+@check_params(
+    model=torch.nn.Module,
+    compress_model=torch.nn.Module,
+    config_file=str,
+    train_loader=torch.utils.data.DataLoader,
+    epochs=int,
+    lr=float,
+    sample_instance=(type(None), DistillSampleBase),
+    loss=(type(None), torch.nn.modules.loss._Loss),
+    optimizer=(type(None), torch.optim.Optimizer),
+)
+def distill(
+    model,
+    compress_model,
+    config_file,
+    train_loader,
+    epochs=1,
+    lr=1e-3,
+    sample_instance=None,
+    loss=None,
+    optimizer=None,
+):
     '''
     Function: distill the compressed model
     Parameter: model: golden model
@@ -183,62 +189,83 @@ def distill(model, compress_model, config_file, train_loader, epochs=1,
         raise ValueError('invalid param epochs {}'.format(epochs))
 
     distill_helper = DistillHelper(
-        model, compress_model, config_file, loss, sample_instance)
+        model, compress_model, config_file, loss, sample_instance
+    )
     distill_helper.do_calibration(train_loader)
 
     data_manager = DistillDataManager(distill_helper.sample_ins)
     if distill_helper.is_dump:
         data_manager.dump_data(
-            distill_helper.model_t, distill_helper.distill_groups, epochs, train_loader)
+            distill_helper.model_t, distill_helper.distill_groups, epochs, train_loader
+        )
 
     # distill each group
     group_size = len(distill_helper.distill_groups)
     LOGGER.logi('distill group num: {}'.format(group_size), MODULE_NAME)
     for group_index, group in enumerate(distill_helper.distill_groups):
         # get student distill modules
-        distill_modules = distill_helper.get_distill_modules(distill_helper.model_s, group)
-        distill_opt = distill_helper.gen_optimizer_per_group(distill_modules, optimizer, lr)
+        distill_modules = distill_helper.get_distill_modules(
+            distill_helper.model_s, group
+        )
+        distill_opt = distill_helper.gen_optimizer_per_group(
+            distill_modules, optimizer, lr
+        )
         for epoch in range(epochs):
             loss_per_epoch = 0
             for step, sample in enumerate(train_loader):
                 sample = distill_helper.get_model_input(sample)
                 index = (epoch, step)
                 input_data_s, output_data_t = _get_data(
-                    data_manager, distill_helper, group, index, sample)
+                    data_manager, distill_helper, group, index, sample
+                )
 
                 # student model forward & loss
                 loss_val = distill_helper.get_distill_modules_loss(
-                    distill_modules, input_data_s, output_data_t)
+                    distill_modules, input_data_s, output_data_t
+                )
                 distill_opt.zero_grad()
                 loss_val.backward()
                 distill_opt.step()
                 loss_per_epoch += loss_val.item()
-                LOGGER.logd('step {}/{} loss {}'.format(step + 1, len(train_loader), loss_val), MODULE_NAME)
+                LOGGER.logd(
+                    'step {}/{} loss {}'.format(step + 1, len(train_loader), loss_val),
+                    MODULE_NAME,
+                )
             loss_per_epoch = loss_per_epoch / epochs
-            LOGGER.logi('epoch {}/{} distill group {} finished, loss {}'
-                .format(epoch + 1, epochs, group_index + 1, loss_per_epoch), MODULE_NAME)
-        LOGGER.logi('group {}/{} distill group finished'.format(group_index + 1, group_size), MODULE_NAME)
+            LOGGER.logi(
+                'epoch {}/{} distill group {} finished, loss {}'.format(
+                    epoch + 1, epochs, group_index + 1, loss_per_epoch
+                ),
+                MODULE_NAME,
+            )
+        LOGGER.logi(
+            'group {}/{} distill group finished'.format(group_index + 1, group_size),
+            MODULE_NAME,
+        )
     data_manager.release()
 
     LOGGER.logi('distill model success.')
     return distill_helper.model_s
 
 
-@check_params(model=torch.nn.Module,
-              save_path=str,
-              input_data=(torch.Tensor, tuple),
-              record_file=(type(None), str),
-              input_names=(list, type(None)),
-              output_names=(list, type(None)),
-              dynamic_axes=(dict, type(None)))
+@check_params(
+    model=torch.nn.Module,
+    save_path=str,
+    input_data=(torch.Tensor, tuple),
+    record_file=(type(None), str),
+    input_names=(list, type(None)),
+    output_names=(list, type(None)),
+    dynamic_axes=(dict, type(None)),
+)
 def save_distill_model(
-        model,
-        save_path,
-        input_data,
-        record_file=None,
-        input_names=None,
-        output_names=None,
-        dynamic_axes=None):
+    model,
+    save_path,
+    input_data,
+    record_file=None,
+    input_names=None,
+    output_names=None,
+    dynamic_axes=None,
+):
     """
     Function: save compressed model to fakequant_onnx_file and
         deploy_onnx_file.
@@ -281,10 +308,16 @@ def save_distill_model(
 
     # save model to fakequant and deploy
     modfied_onnx_file = BytesIO()
-    Parser.export_onnx(model, input_data, modfied_onnx_file,
-                       {'input_names': input_names,
-                        'output_names': output_names,
-                        'dynamic_axes': dynamic_axes})
+    Parser.export_onnx(
+        model,
+        input_data,
+        modfied_onnx_file,
+        {
+            'input_names': input_names,
+            'output_names': output_names,
+            'dynamic_axes': dynamic_axes,
+        },
+    )
 
     graph = Parser.parse_net_to_graph(modfied_onnx_file)
 
@@ -295,7 +328,8 @@ def save_distill_model(
     if record_parser.is_records_empty():
         raise RuntimeError(
             "record_file is empty, no layers to be saved. "
-            "please ensure distill is finished by checking information!")
+            "please ensure distill is finished by checking information!"
+        )
     records, _ = record_parser.parse()
 
     _generate_model(graph, records, save_path)

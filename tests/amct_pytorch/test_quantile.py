@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -33,7 +33,6 @@ from mock_torch_npu import (
 from utils import TestModel
 
 from amct_pytorch import HIFP8_QUANTILE_CFG, convert, quantize
-from amct_pytorch.algorithms import AlgorithmRegistry
 from amct_pytorch.classic.quantize_op.quantile_module import QuantileQuant
 from amct_pytorch.common.utils import quant_util
 
@@ -60,10 +59,13 @@ class TestQuantileQuant(unittest.TestCase):
 
     def tearDown(self):
         del sys.modules['torch_npu']
-    
+
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch(
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
@@ -79,9 +81,9 @@ class TestQuantileQuant(unittest.TestCase):
                     'strategy': 'channel',
                 },
             },
-            'algorithm': {'quantile'}
+            'algorithm': {'quantile'},
         }
-        
+
         model = copy.deepcopy(self.model).to(torch.bfloat16)
         quantize(model, cfg)
 
@@ -97,10 +99,12 @@ class TestQuantileQuant(unittest.TestCase):
         self.assertEqual(type(model.linear1).__name__, 'NpuWeightQuantizedLinear')
         self.assertEqual(type(model.linear2).__name__, 'NpuWeightQuantizedLinear')
 
-
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -120,9 +124,9 @@ class TestQuantileQuant(unittest.TestCase):
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {'quantile'}
+            'algorithm': {'quantile'},
         }
-        
+
         model = copy.deepcopy(self.model).to(torch.bfloat16)
         quantize(model, cfg)
 
@@ -136,7 +140,10 @@ class TestQuantileQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch(
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
@@ -156,9 +163,9 @@ class TestQuantileQuant(unittest.TestCase):
                     'symmetric': True,
                 },
             },
-            'algorithm': {'quantile'}
+            'algorithm': {'quantile'},
         }
-        
+
         model = copy.deepcopy(self.model).to(torch.bfloat16)
         quantize(model, cfg)
 
@@ -171,7 +178,10 @@ class TestQuantileQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -192,9 +202,9 @@ class TestQuantileQuant(unittest.TestCase):
                 },
             },
             'algorithm': {'quantile'},
-            'skip_layers': {'lm_head'}
+            'skip_layers': {'lm_head'},
         }
-        
+
         model = copy.deepcopy(self.model).to(torch.bfloat16)
         quantize(model, cfg)
 
@@ -207,7 +217,10 @@ class TestQuantileQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch(
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
@@ -223,16 +236,16 @@ class TestQuantileQuant(unittest.TestCase):
                     'strategy': 'channel',
                 },
             },
-            'algorithm': {'quantile'}
+            'algorithm': {'quantile'},
         }
-        
+
         model = copy.deepcopy(self.model).to(torch.bfloat16)
         quantize(model, cfg)
 
         for _ in range(4):
             inputs = torch.randn(64, 64).to(torch.bfloat16)
             model(inputs)
-        
+
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
         torch.Tensor.npu = mock_npu
@@ -241,7 +254,10 @@ class TestQuantileQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
@@ -264,7 +280,10 @@ class TestQuantileQuant(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch(
@@ -289,14 +308,14 @@ class TestQuantileQuant(unittest.TestCase):
                 },
             },
             'algorithm': {'quantile'},
-            'skip_layers': {'lm_head'}
+            'skip_layers': {'lm_head'},
         }
         quantize(model, cfg)
 
         for _ in range(4):
             inputs = torch.randn(64, 64).to(torch.bfloat16)
             model(inputs)
-        
+
         self.assertIsNotNone(model.linear1.scale_w)
         self.assertIsNone(model.linear1.scale_d)
         self.assertEqual(type(model.linear1).__name__, QUANTILEQUANT)
@@ -313,8 +332,14 @@ def _guard_cfg(weight_type, enable_act, act_type=None):
     """Minimal internal quant_config dict consumed by QuantileQuant.__init__."""
     inputs_cfg = {'enable_quant': enable_act}
     if enable_act:
-        inputs_cfg.update({'quant_type': act_type, 'symmetric': True,
-                           'strategy': 'tensor', 'dynamic': False})
+        inputs_cfg.update(
+            {
+                'quant_type': act_type,
+                'symmetric': True,
+                'strategy': 'tensor',
+                'dynamic': False,
+            }
+        )
     return {
         'batch_num': 1,
         'inputs_cfg': inputs_cfg,
@@ -390,8 +415,10 @@ class TestQuantileDynamicFallback(unittest.TestCase):
         self.assertTrue(qq.dynamic)
         # Force the no-native-hifloat8 branch (else at line 133->136) and keep the
         # HiF8 round trip on CPU (identity) instead of hitting a real NPU op.
-        with patch.object(quant_util, 'hifloat8_supported', return_value=False), \
-             patch.object(quant_util, 'hifloat8_fake_quant', side_effect=lambda t: t):
+        with (
+            patch.object(quant_util, 'hifloat8_supported', return_value=False),
+            patch.object(quant_util, 'hifloat8_fake_quant', side_effect=lambda t: t),
+        ):
             out = qq(torch.randn(64, 64).to(torch.bfloat16))
         self.assertEqual(out.shape[0], 64)
         # fake-quant cache built on first forward, so the second call reuses it.
@@ -400,8 +427,13 @@ class TestQuantileDynamicFallback(unittest.TestCase):
     def _make_dynamic_module(self):
         cfg = {
             'batch_num': 1,
-            'inputs_cfg': {'enable_quant': True, 'quant_type': 'hifloat8',
-                           'symmetric': True, 'strategy': 'token', 'dynamic': True},
+            'inputs_cfg': {
+                'enable_quant': True,
+                'quant_type': 'hifloat8',
+                'symmetric': True,
+                'strategy': 'token',
+                'dynamic': True,
+            },
             'weights_cfg': {'quant_type': 'hifloat8', 'strategy': 'tensor'},
         }
         return QuantileQuant(nn.Linear(64, 64).to(torch.bfloat16), 'linear', cfg)
@@ -409,4 +441,3 @@ class TestQuantileDynamicFallback(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

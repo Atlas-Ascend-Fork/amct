@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,20 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 from io import BytesIO
 from unittest.mock import patch
 
 import numpy as np
 import torch
-from google.protobuf import text_format
 
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
-    Configuration,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
 )
@@ -36,9 +30,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant
     InsertWeightQuantPass,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
@@ -71,11 +62,8 @@ class TestWeightQuantPass(unittest.TestCase):
         cls.graph = Parser.parse_net_to_graph(tmp_onnx)
 
         cls.records = record_file_utils.generate_records(
-            layers_length={
-                "layer1.0": 16,
-                "layer2.0": 16,
-                "fc.2": 1
-            })
+            layers_length={"layer1.0": 16, "layer2.0": 16, "fc.2": 1}
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -88,14 +76,21 @@ class TestWeightQuantPass(unittest.TestCase):
         optimizer = GraphOptimizer()
         optimizer.add_pass(passer)
         optimizer.do_optimizer(self.graph, None)
-        weight_dtype = TensorProtoHelper(
-            self.graph.get_node_by_name('layer1.0.sub_module.weight').proto).get_data().dtype
+        weight_dtype = (
+            TensorProtoHelper(
+                self.graph.get_node_by_name('layer1.0.sub_module.weight').proto
+            )
+            .get_data()
+            .dtype
+        )
         self.assertEqual(weight_dtype, 'int8')
 
     def test_quant_weight_int4(self):
         with patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
-            'QuantOpInfo.get_dst_num_bits', return_value=4):
+            'QuantOpInfo.get_dst_num_bits',
+            return_value=4,
+        ):
             passer = InsertWeightQuantPass(self.records)
             before_nodes = len(self.graph.nodes)
             optimizer = GraphOptimizer()
@@ -113,9 +108,14 @@ class TestWeightQuantPass(unittest.TestCase):
             def forward(self, input_data, hx):
                 x = self.lstm(input_data, hx)
                 return x
+
         model = RNNModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
+        Parser.export_onnx(
+            model,
+            (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))),
+            tmp_onnx,
+        )
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node_name = 'lstm'
         node = graph.get_node_by_name(node_name)

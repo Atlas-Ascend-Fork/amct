@@ -35,6 +35,7 @@ proto subpackage stays discoverable by ``find_packages`` (which is what actually
 ships the generated ``*_pb2.py`` modules -- ``package_data`` only carries the
 non-``.py`` resources). They fail loudly if the layout drifts again.
 """
+
 import ast
 from pathlib import Path
 
@@ -86,7 +87,8 @@ def _literal_dict(dict_node):
         if not isinstance(key_node, ast.Constant):
             continue
         patterns = [
-            e.value for e in getattr(val_node, "elts", [])
+            e.value
+            for e in getattr(val_node, "elts", [])
             if isinstance(e, ast.Constant)
         ]
         result[key_node.value] = patterns
@@ -155,8 +157,10 @@ def test_package_data_patterns_point_at_existing_dirs():
         if top in BUILD_ARTIFACT_DIRS:
             # Build artifact: dir may not exist yet, but the path must resolve
             # inside the package tree (not via .. or an absolute escape).
-            if pkg_root not in glob_dir.resolve().parents and \
-                    glob_dir.resolve() != pkg_root.resolve():
+            if (
+                pkg_root not in glob_dir.resolve().parents
+                and glob_dir.resolve() != pkg_root.resolve()
+            ):
                 escaped_dirs.append(f"{pattern} -> {glob_dir}")
             continue
         if not glob_dir.is_dir():
@@ -187,9 +191,7 @@ def test_proto_init_pb2_imports_have_matching_proto_sources():
     pb2_modules = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.level >= 1:
-            pb2_modules.extend(
-                a.name for a in node.names if a.name.endswith("_pb2")
-            )
+            pb2_modules.extend(a.name for a in node.names if a.name.endswith("_pb2"))
     assert pb2_modules, f"no relative *_pb2 imports found in {init_path}"
 
     missing = []

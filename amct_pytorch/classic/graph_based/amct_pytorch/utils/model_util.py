@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -28,13 +28,14 @@ from ...amct_pytorch.utils.vars import AMCT_DISTILL_OPERATIONS
 from ...amct_pytorch.utils.vars import AMCT_RETRAIN_OPERATIONS
 
 
-class ModuleHelper():
+class ModuleHelper:
     """
     Funtion: Helper for torch.nn.module
     APIS: get_module, get_parent_module
     """
+
     def __init__(self, model):
-        ''' init function '''
+        '''init function'''
         self.named_module_dict = {}
         for name, mod in model.named_modules():
             self.named_module_dict[name] = mod
@@ -49,17 +50,18 @@ class ModuleHelper():
 
     @staticmethod
     def deep_copy(model):
-        """deepcopy a model """
+        """deepcopy a model"""
         try:
             new_model = copy.deepcopy(model)
             return new_model
         except Exception as exception:
-            raise RuntimeError("The model cannot do copy.deepcopy, "
-                               "exception is: {}".format(exception)) from exception
+            raise RuntimeError(
+                "The model cannot do copy.deepcopy, exception is: {}".format(exception)
+            ) from exception
 
     @staticmethod
     def replace_module_by_name(model, name, mod):
-        """ replace module in model by a new mod according to module name """
+        """replace module in model by a new mod according to module name"""
         tokens = name.split('.')
         sub_tokens = tokens[:-1]
         cur_mod = model
@@ -68,14 +70,14 @@ class ModuleHelper():
         setattr(cur_mod, tokens[-1], mod)
 
     def get_module(self, name):
-        ''' get a module from name'''
+        '''get a module from name'''
         module = self.named_module_dict.get(name)
         if module is None:
             raise RuntimeError(f"module {name} not in model.")
         return module
 
     def get_parent_module(self, name):
-        ''' get parent module from name'''
+        '''get parent module from name'''
         if name == '':
             raise RuntimeError("model has no parent module.")
 
@@ -86,8 +88,7 @@ class ModuleHelper():
         return parent_module
 
     def check_amct_op(self):
-        """ Check all the layers whose type is in AMCT_OPERATIONS in model
-        """
+        """Check all the layers whose type is in AMCT_OPERATIONS in model"""
         amct_layers = {}
         for name in self.named_module_dict:
             mod_type = type(self.named_module_dict[name]).__name__
@@ -95,12 +96,14 @@ class ModuleHelper():
                 amct_layers[name] = mod_type
 
         if amct_layers:
-            raise RuntimeError("The model cannot be quantized for following "\
-                "quant layers are in the model {}".format(amct_layers))
+            raise RuntimeError(
+                "The model cannot be quantized for following "
+                "quant layers are in the model {}".format(amct_layers)
+            )
 
     def check_amct_retrain_op(self):
-        """ Check all the layers whose type is in AMCT_RETRAIN_OPERATIONS in
-            model
+        """Check all the layers whose type is in AMCT_RETRAIN_OPERATIONS in
+        model
         """
         amct_retrain_layers = {}
         for name in self.named_module_dict:
@@ -109,12 +112,14 @@ class ModuleHelper():
                 amct_retrain_layers[name] = mod_type
 
         if not amct_retrain_layers:
-            raise RuntimeError("The model cannot be quantized because it is "\
-                "not a model after quantitative retraining.")
+            raise RuntimeError(
+                "The model cannot be quantized because it is "
+                "not a model after quantitative retraining."
+            )
 
     def check_amct_distill_op(self):
-        """ Check all the layers whose type is in AMCT_DISTILL_OPERATIONS in
-            model
+        """Check all the layers whose type is in AMCT_DISTILL_OPERATIONS in
+        model
         """
         amct_distill_layers = {}
         for name in self.named_module_dict:
@@ -123,8 +128,10 @@ class ModuleHelper():
                 amct_distill_layers[name] = mod_type
 
         if not amct_distill_layers:
-            raise RuntimeError("The model cannot be distill because it is "\
-                "not a model after compressing.")
+            raise RuntimeError(
+                "The model cannot be distill because it is "
+                "not a model after compressing."
+            )
 
 
 def load_pth_file(model, pth_file, state_dict_name):
@@ -143,8 +150,7 @@ def load_pth_file(model, pth_file, state_dict_name):
         if checkpoint.get(state_dict_name):
             state_dict = checkpoint[state_dict_name]
         else:
-            raise KeyError("The pth_file has no key name: "
-                           "{}".format(state_dict_name))
+            raise KeyError("The pth_file has no key name: {}".format(state_dict_name))
     else:
         state_dict = checkpoint
     is_pth_parallel = all((state.startswith('module.') for state in state_dict.keys()))
@@ -204,7 +210,9 @@ def get_node_output_info(model, input_data):
         attr_dtype = dict()
         attr_dtype['attr_name'] = 'op_data_type'
         attr_dtype['attr_type'] = 'STRING'
-        attr_dtype['attr_val'] = bytes('float16' if output_dtype[module] is torch.float16 else 'float',
-                                       encoding='utf-8')
+        attr_dtype['attr_val'] = bytes(
+            'float16' if output_dtype[module] is torch.float16 else 'float',
+            encoding='utf-8',
+        )
         result[name].append(attr_dtype)
     return result

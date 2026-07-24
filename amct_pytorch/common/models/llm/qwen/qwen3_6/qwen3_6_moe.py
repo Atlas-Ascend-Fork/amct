@@ -27,4 +27,3 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 )
 class Qwen3_6Moe(Qwen3_5Moe):
     pass
-

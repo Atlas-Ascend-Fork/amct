@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,17 +16,13 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import json
 import os
-import sys
 import unittest
 from collections import OrderedDict
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config import (
-    get_enable_quant_layers,
     parse_distill_config,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.nn.module.quantization.conv2d import (
@@ -42,7 +38,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.model_optimizer imp
     ModelOptimizer,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import DISTILL_TYPES
 
 from .utils import models
 
@@ -86,21 +81,46 @@ class TestInsertQatPass(unittest.TestCase):
             if name == 'layer1':
                 conv2d = mod
                 break
-        self.assertTrue(InsertQatPass(self.distill_config).match_pattern(conv2d, 'layer1'))
+        self.assertTrue(
+            InsertQatPass(self.distill_config).match_pattern(conv2d, 'layer1')
+        )
 
     def test_insert_qat_match_pattern_not_distill_type(self):
         mod = torch.nn.Conv3d(1, 1, 1)
-        self.assertFalse(InsertQatPass(self.distill_config).match_pattern(mod, 'layer1'))
+        self.assertFalse(
+            InsertQatPass(self.distill_config).match_pattern(mod, 'layer1')
+        )
 
     def test_insert_qat_match_pattern_not_enable_quant(self):
         mod = torch.nn.Conv2d(1, 1, 1, padding_mode='zeros')
-        distill_config = OrderedDict([('layer2', OrderedDict([
-            ('quant_enable', True),
-            ('distill_data_config',
-             OrderedDict([('algo', 'ulq_quantize'), ('dst_type', 'INT8')])),
-            ('distill_weight_config',
-             OrderedDict([('algo', 'arq_distill'), ('channel_wise', True),
-                          ('dst_type', 'INT8')]))]))])
+        distill_config = OrderedDict(
+            [
+                (
+                    'layer2',
+                    OrderedDict(
+                        [
+                            ('quant_enable', True),
+                            (
+                                'distill_data_config',
+                                OrderedDict(
+                                    [('algo', 'ulq_quantize'), ('dst_type', 'INT8')]
+                                ),
+                            ),
+                            (
+                                'distill_weight_config',
+                                OrderedDict(
+                                    [
+                                        ('algo', 'arq_distill'),
+                                        ('channel_wise', True),
+                                        ('dst_type', 'INT8'),
+                                    ]
+                                ),
+                            ),
+                        ]
+                    ),
+                )
+            ]
+        )
         self.assertFalse(InsertQatPass(distill_config).match_pattern(mod, 'layer1'))
 
     def test_insert_qat_do_pass_success(self):
@@ -111,4 +131,3 @@ class TestInsertQatPass(unittest.TestCase):
 
         self.assertIsInstance(model.layer1, Conv2dQAT)
         self.assertIsInstance(model.layer3, LinearQAT)
-

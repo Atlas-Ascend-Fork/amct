@@ -40,7 +40,8 @@ def weight_dequant(
     weight: torch.Tensor,
     scale: torch.Tensor,
     block_size: int = 128,
-     is_mx: bool = False) -> torch.Tensor:
+    is_mx: bool = False,
+) -> torch.Tensor:
     """
     Dequantizes the given weight tensor using the provided scale tensor, efficiently handling cases where
     `weight` is not a multiple of `block_size` by broadcasting `scale`.
@@ -67,14 +68,17 @@ def weight_dequant(
     else:
         # Compute the effective block dimensions for scale
         scale_m, scale_n = scale.shape
-        assert scale_m == (
-            M + block_size - 1) // block_size, "Mismatch in scale rows and weight rows."
-        assert scale_n == (
-            N + block_size - 1) // block_size, "Mismatch in scale columns and weight columns."
+        assert scale_m == (M + block_size - 1) // block_size, (
+            "Mismatch in scale rows and weight rows."
+        )
+        assert scale_n == (N + block_size - 1) // block_size, (
+            "Mismatch in scale columns and weight columns."
+        )
 
         # Expand scale to match the weight tensor's shape
-        scale_expanded = scale.repeat_interleave(
-            block_size, dim=0).repeat_interleave(block_size, dim=1)
+        scale_expanded = scale.repeat_interleave(block_size, dim=0).repeat_interleave(
+            block_size, dim=1
+        )
 
     # Trim scale_expanded to match weight's shape if necessary
     scale_expanded = scale_expanded[:M, :N]
@@ -89,10 +93,28 @@ def weight_dequant(
 
 
 def unpack_mxfloat4_to_fp32(packed_tensor):
-    e2m1_values = torch.tensor([
-        0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0,
-        -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0
-    ], dtype=torch.float32, device=packed_tensor.device)
+    e2m1_values = torch.tensor(
+        [
+            0.0,
+            0.5,
+            1.0,
+            1.5,
+            2.0,
+            3.0,
+            4.0,
+            6.0,
+            -0.0,
+            -0.5,
+            -1.0,
+            -1.5,
+            -2.0,
+            -3.0,
+            -4.0,
+            -6.0,
+        ],
+        dtype=torch.float32,
+        device=packed_tensor.device,
+    )
 
     low_4bits = packed_tensor & 0x0F
     high_4bits = (packed_tensor // 16) & 0x0F
@@ -119,7 +141,9 @@ def int_weight_quant(tensor: torch.Tensor, bits=8, weight_clip_factor=None):
     return quantized.to(torch.int8), scale.to(torch.float32), None
 
 
-def generate_quant_layers(num_layers, num_experts, compress_ratios, w4a8=False, is_mx=False):
+def generate_quant_layers(
+    num_layers, num_experts, compress_ratios, w4a8=False, is_mx=False
+):
     quant_layers = {}
     moe_bit = NUM_BITS_4 if w4a8 else NUM_BITS_8
     se_bit = NUM_BITS_8
@@ -147,13 +171,13 @@ def generate_quant_layers(num_layers, num_experts, compress_ratios, w4a8=False, 
     for n in mlp_linears:
         quant_layers[f"mtp.0.ffn.shared_experts.{n}"] = mtp_bit
     if is_mx:
-        quant_layers[f"mtp.0.attn.wq_a"] = mtp_bit
-        quant_layers[f"mtp.0.attn.wkv"] = mtp_bit
-        quant_layers[f"mtp.0.attn.wo_a"] = mtp_bit
-    quant_layers[f"mtp.0.attn.wq_b"] = mtp_bit
-    quant_layers[f"mtp.0.attn.wo_b"] = mtp_bit
-    quant_layers[f"mtp.0.e_proj"] = mtp_bit
-    quant_layers[f"mtp.0.h_proj"] = mtp_bit
+        quant_layers["mtp.0.attn.wq_a"] = mtp_bit
+        quant_layers["mtp.0.attn.wkv"] = mtp_bit
+        quant_layers["mtp.0.attn.wo_a"] = mtp_bit
+    quant_layers["mtp.0.attn.wq_b"] = mtp_bit
+    quant_layers["mtp.0.attn.wo_b"] = mtp_bit
+    quant_layers["mtp.0.e_proj"] = mtp_bit
+    quant_layers["mtp.0.h_proj"] = mtp_bit
     return quant_layers
 
 
@@ -196,8 +220,9 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
     """
     torch.set_default_dtype(torch.bfloat16)
     os.makedirs(output_path, exist_ok=True)
-    assert quant_type in [
-        "bfloat16", "w8a8-int", "w8a8-mx", "w4a8-mx"], f"Unsupported quant_type: {quant_type}"
+    assert quant_type in ["bfloat16", "w8a8-int", "w8a8-mx", "w4a8-mx"], (
+        f"Unsupported quant_type: {quant_type}"
+    )
     model_index_file = os.path.join(fp8_path, "model.safetensors.index.json")
     config_file = os.path.join(fp8_path, 'config.json')
     with open(model_index_file, "r") as f:
@@ -216,11 +241,15 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
     mx = quant_type.endswith('mx')
 
     if w8a8 or w4a8:
-        cache_scheme = {"kv_cache_scheme": {"num_bits": NUM_BITS_8, "type": "float"} if mx else None,
-                        "li_cache_scheme": {
-                            "type": "float" if mx else "int",
-                            "num_bits": NUM_BITS_8,
-                        }}
+        cache_scheme = {
+            "kv_cache_scheme": {"num_bits": NUM_BITS_8, "type": "float"}
+            if mx
+            else None,
+            "li_cache_scheme": {
+                "type": "float" if mx else "int",
+                "num_bits": NUM_BITS_8,
+            },
+        }
         if mx and w8a8:
             config['quantization_config']["quant_method"] = "mxfp8"
             config['quantization_config'].pop("weight_block_size")
@@ -228,11 +257,16 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
         else:
             if 'quantization_config' in config:
                 config.pop('quantization_config')
-            quant_ignore_layers = generate_ignore_item(num_layers, compress_ratios, is_fp=mx)
+            quant_ignore_layers = generate_ignore_item(
+                num_layers, compress_ratios, is_fp=mx
+            )
             quantization_config = generate_quant_config(
-                cache_scheme, quant_ignore_layers, w4a8=w4a8, is_fp=mx)
+                cache_scheme, quant_ignore_layers, w4a8=w4a8, is_fp=mx
+            )
             config['quantization_config'] = quantization_config
-    quant_layers = generate_quant_layers(num_layers, num_experts, compress_ratios, w4a8=w4a8, is_mx=mx)
+    quant_layers = generate_quant_layers(
+        num_layers, num_experts, compress_ratios, w4a8=w4a8, is_mx=mx
+    )
     # Cache for loaded safetensor files
     loaded_files = {}
 
@@ -275,12 +309,15 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
                     scale_inv = get_tensor(scale_inv_name)
                     if weight.dtype == torch.int8:
                         weight = unpack_mxfloat4_to_fp32(weight.view(torch.uint8))
-                        weight = weight_dequant(weight, scale_inv, block_size=32, is_mx=True)
+                        weight = weight_dequant(
+                            weight, scale_inv, block_size=32, is_mx=True
+                        )
                     else:
                         weight = weight_dequant(weight, scale_inv)
                 except KeyError:
                     print(
-                        f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
+                        f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+                    )
                 new_state_dict[weight_name] = weight
                 new_weight_map[weight_name] = file_name
             else:
@@ -291,12 +328,16 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
                 if new_weight_name in list(quant_layers.keys()):
                     bit = quant_layers[new_weight_name]
                     if mx:
-                        quant_weight, scale_inv = quantize_mx(weight, bit, real_quant=True)
+                        quant_weight, scale_inv = quantize_mx(
+                            weight, bit, real_quant=True
+                        )
                         if bit == NUM_BITS_4:
                             quant_weight = f32_to_f4_unpacked(quant_weight.float())
                             quant_weight = pack_uint4(quant_weight)
                     else:
-                        quant_weight, scale_inv, bias = int_weight_quant(weight, bits=bit)
+                        quant_weight, scale_inv, bias = int_weight_quant(
+                            weight, bits=bit
+                        )
                     new_scale_name = weight_name.replace('.weight', '.scale')
 
                     new_state_dict[weight_name] = quant_weight
@@ -305,10 +346,8 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
                     new_weight_map[weight_name] = file_name
                     new_weight_map[new_scale_name] = file_name
 
-
         new_safetensor_file = os.path.join(output_path, file_name)
-        save_file(new_state_dict, new_safetensor_file,
-                  metadata={'format': 'pt'})
+        save_file(new_state_dict, new_safetensor_file, metadata={'format': 'pt'})
 
         # Memory management: keep only the 2 most recently used files
         if len(loaded_files) > 2:
@@ -318,8 +357,7 @@ def main(fp8_path, output_path, quant_type, quant_param_path=None):
     copy_py_json(fp8_path, output_path)
 
     # Update model index
-    new_model_index_file = os.path.join(
-        output_path, "model.safetensors.index.json")
+    new_model_index_file = os.path.join(output_path, "model.safetensors.index.json")
     new_config_file = os.path.join(output_path, "config.json")
     with open(new_model_index_file, "w") as f:
         json.dump({"metadata": {}, "weight_map": new_weight_map}, f, indent=2)
@@ -332,10 +370,18 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--input_fp8_hf_path", type=str, required=True)
     parser.add_argument("--output_hf_path", type=str, required=True)
-    parser.add_argument("--quant_type", type=str, default="w8a8-int",
-                        choices=["w8a8-int", "bfloat16", "w4a8-mx"])
+    parser.add_argument(
+        "--quant_type",
+        type=str,
+        default="w8a8-int",
+        choices=["w8a8-int", "bfloat16", "w4a8-mx"],
+    )
     parser.add_argument("--quant_param_path", type=str, default=None)
     args = parser.parse_args()
 
-    main(args.input_fp8_hf_path, args.output_hf_path,
-         args.quant_type, args.quant_param_path)
+    main(
+        args.input_fp8_hf_path,
+        args.output_hf_path,
+        args.quant_type,
+        args.quant_param_path,
+    )

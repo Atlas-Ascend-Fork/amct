@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,7 +20,6 @@ import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
 import torch
-import torch.nn as nn
 from utils import TestModelDeepseekV3Attention
 from mock_torch_npu import mock_npu_quantize, mock_npu_anti_quant, mock_npu
 from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
@@ -32,8 +31,9 @@ torch.manual_seed(0)
 
 class TestDeepseekV3Attention(unittest.TestCase):
     '''
-    ST FOR KVCACHE 
+    ST FOR KVCACHE
     '''
+
     @classmethod
     def setUpClass(cls):
         config = DeepseekV3Config()
@@ -43,7 +43,9 @@ class TestDeepseekV3Attention(unittest.TestCase):
         cls.kvcache_quant = DynamicCache()
         cls.kvcache = DynamicCache()
         for _ in range(5):
-            cls.ori_out = cls.test_model(cls.hidden_states, past_key_values=cls.kvcache_ori)
+            cls.ori_out = cls.test_model(
+                cls.hidden_states, past_key_values=cls.kvcache_ori
+            )
         logging.info('TestDeepseekV3Attention START!')
 
     @classmethod
@@ -56,7 +58,7 @@ class TestDeepseekV3Attention(unittest.TestCase):
 
     def tearDown(self):
         del sys.modules['torch_npu']
-        
+
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_anti_quant', wraps=mock_npu_anti_quant)
     def test_quantize_deepseekv3_success(self, mock_1, mock_2):

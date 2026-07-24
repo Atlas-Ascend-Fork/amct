@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -31,7 +31,8 @@ from ...amct_pytorch.common.config.config_base import check_config_dmq_balancer
 from ...amct_pytorch.capacity import CAPACITY
 
 CONFIGURER = ConfigBase(
-    GraphObjects(graph_querier=GraphQuerier, graph_checker=None), CAPACITY)
+    GraphObjects(graph_querier=GraphQuerier, graph_checker=None), CAPACITY
+)
 
 
 class Configuration:
@@ -41,6 +42,7 @@ class Configuration:
     APIs: get_quant_config, get_layer_config, get_record_file_path;
         create_quant_config, parse_quant_config
     """
+
     __instance = None
     __is_init = False
 
@@ -58,19 +60,22 @@ class Configuration:
             self.__is_init = True
 
     @staticmethod
-    @check_params(config_file=str,
-                  graph=Graph,
-                  skip_modules=(list, type(None)),
-                  batch_num=int,
-                  activation_offset=bool,
-                  config_defination=(type(None), str))
+    @check_params(
+        config_file=str,
+        graph=Graph,
+        skip_modules=(list, type(None)),
+        batch_num=int,
+        activation_offset=bool,
+        config_defination=(type(None), str),
+    )
     def create_quant_config(
-            config_file,
-            graph,
-            skip_modules=None,
-            batch_num=1,
-            activation_offset=True,
-            config_defination=None):
+        config_file,
+        graph,
+        skip_modules=None,
+        batch_num=1,
+        activation_offset=True,
+        config_defination=None,
+    ):
         """
         Function: Create quant config.
         Inputs:
@@ -98,19 +103,19 @@ class Configuration:
                     "When setting 'config_defination' param of "
                     "'create_quant_config' API, 'skip_modules' need to be set "
                     "in simple quant config file!",
-                    module_name="Configuration")
-            CONFIGURER.create_config_from_proto(config_file, graph,
-                                                config_defination)
+                    module_name="Configuration",
+                )
+            CONFIGURER.create_config_from_proto(config_file, graph, config_defination)
         else:
-            CONFIGURER.create_quant_config(config_file, graph, skip_modules,
-                                           batch_num, activation_offset)
+            CONFIGURER.create_quant_config(
+                config_file, graph, skip_modules, batch_num, activation_offset
+            )
 
     @staticmethod
     def add_global_to_layer(quant_config):
         """add global quantize parameter to each layer"""
         CONFIGURER.add_global_to_layer(quant_config)
-        LOGGER.logd("Add global params to layer's config success!",
-                    "Configuration")
+        LOGGER.logd("Add global params to layer's config success!", "Configuration")
 
     @staticmethod
     @check_params(file_path=str, graph=Graph)
@@ -139,7 +144,7 @@ class Configuration:
 
     @staticmethod
     def get_layers_name(quant_config):
-        """ Get all layers' name from quant_config """
+        """Get all layers' name from quant_config"""
         layers_name = list(quant_config.keys())
         # contains other keys: version, activation_offset,etc
         for item in CONFIGURER.root.get_keys():
@@ -157,10 +162,10 @@ class Configuration:
         Returns: None
         """
         self.__quant_config = self.parse_quant_config(
-            os.path.realpath(config_file), graph)
+            os.path.realpath(config_file), graph
+        )
         self.__record_file_path = os.path.realpath(record_file)
-        self.__skip_fusion_layers = \
-            self.__quant_config.get('skip_fusion_layers')
+        self.__skip_fusion_layers = self.__quant_config.get('skip_fusion_layers')
         self.__initialized = True
 
     def uninit(self):

@@ -16,6 +16,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 Get config dict for quantization from .cfg file.
 
 """
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -24,14 +25,12 @@ import copy
 from collections import OrderedDict, namedtuple
 from enum import IntEnum, unique, Enum
 
-from google.protobuf import text_format # pylint: disable=E0401
+from google.protobuf import text_format  # pylint: disable=E0401
 
 from ..utils.util import find_repeated_items
 from ..utils.util import check_no_repeated
 from ..utils.util import proto_float_to_python_float
-from .field import NUM_STEPS
-from .field import NUM_OF_ITERATION
-from ...utils.log import LOGGER # pylint: disable=relative-beyond-top-level
+from ...utils.log import LOGGER  # pylint: disable=relative-beyond-top-level
 from ..utils.vars_util import WINOGRAD_NUM_BITS
 
 _MODULE_NAME = 'Proto_config'
@@ -44,7 +43,9 @@ CHANNEL_WISE = 'channel_wise'
 WEIGHT_QUANT_PARAMS = 'weight_quant_params'
 
 
-ProtoConfRet = namedtuple('ProtoConfRet', ['global_config', 'common_config', 'type_config', 'layer_config'])
+ProtoConfRet = namedtuple(
+    'ProtoConfRet', ['global_config', 'common_config', 'type_config', 'layer_config']
+)
 
 
 # enum value of DataType in proto
@@ -61,20 +62,26 @@ class FakequantPrecisionMode(Enum):
     FORCE_FP16_QUANT = 1
 
 
-class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-public-methods
+class ProtoConfig:  # pylint: disable=too-many-instance-attributes, too-few-public-methods
     """
     Function: Cope with simple config file from proto.
     APIs:
     """
-    def __init__(self, config_file, # pylint: disable=R0913
-                 capacity, graph_querier, graph, proto_config):
+
+    def __init__(
+        self,
+        config_file,  # pylint: disable=R0913
+        capacity,
+        graph_querier,
+        graph,
+        proto_config,
+    ):
         self.config_file = config_file
         self.proto_config = proto_config
         with open(self.config_file, 'rb') as cfg_file:
             pbtxt_string = cfg_file.read()
             text_format.Merge(pbtxt_string, self.proto_config)
-        self.channel_wise_types = \
-            capacity.get_value('CHANNEL_WISE_TYPES')
+        self.channel_wise_types = capacity.get_value('CHANNEL_WISE_TYPES')
 
         self.capacity = capacity
         self.quantizable_type = capacity.get_value('QUANTIZABLE_TYPES')
@@ -86,10 +93,7 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
 
     @staticmethod
     def _parse_data_type(data_type_proto):
-        dtype_define = {
-            ProtoDataType.INT8.value: 8,
-            ProtoDataType.INT16.value: 16
-        }
+        dtype_define = {ProtoDataType.INT8.value: 8, ProtoDataType.INT16.value: 16}
         if data_type_proto not in dtype_define:
             raise ValueError('Not support dtype of {}.'.format(data_type_proto))
         return dtype_define[data_type_proto]
@@ -98,9 +102,13 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
     def _get_ada_quantize(ada_quantize, weight_params):
         weight_params['num_iteration'] = ada_quantize.num_iteration
         weight_params['reg_param'] = proto_float_to_python_float(ada_quantize.reg_param)
-        weight_params['beta_range'] = [proto_float_to_python_float(ada_quantize.beta_range_start),
-                      proto_float_to_python_float(ada_quantize.beta_range_end)]
-        weight_params['warm_start'] = proto_float_to_python_float(ada_quantize.warm_start)
+        weight_params['beta_range'] = [
+            proto_float_to_python_float(ada_quantize.beta_range_start),
+            proto_float_to_python_float(ada_quantize.beta_range_end),
+        ]
+        weight_params['warm_start'] = proto_float_to_python_float(
+            ada_quantize.warm_start
+        )
         if ada_quantize.HasField(CHANNEL_WISE):
             weight_params[CHANNEL_WISE] = ada_quantize.channel_wise
 
@@ -112,7 +120,9 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         num_of_bins = hfmg_quantize.num_of_bins
         act_params['num_of_bins'] = num_of_bins
         if hasattr(hfmg_quantize, 'dst_type'):
-            act_params['num_bits'] = ProtoConfig._parse_data_type(hfmg_quantize.dst_type)
+            act_params['num_bits'] = ProtoConfig._parse_data_type(
+                hfmg_quantize.dst_type
+            )
         if hfmg_quantize.HasField(ASYMMETRIC):
             act_params[ASYMMETRIC] = hfmg_quantize.asymmetric
         else:
@@ -124,8 +134,10 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
             return False
 
         weight_params = config[WEIGHT_QUANT_PARAMS]
-        if weight_params.get('wts_algo') in ('arq_quantize', None) and \
-            weight_params.get(CHANNEL_WISE, False):
+        if weight_params.get('wts_algo') in (
+            'arq_quantize',
+            None,
+        ) and weight_params.get(CHANNEL_WISE, False):
             return True
         return False
 
@@ -134,22 +146,27 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         '''extract ifmr configs'''
         ifmr_quantize = config.ifmr_quantize
         if hasattr(ifmr_quantize, 'dst_type'):
-            act_params['num_bits'] = ProtoConfig._parse_data_type(ifmr_quantize.dst_type)
+            act_params['num_bits'] = ProtoConfig._parse_data_type(
+                ifmr_quantize.dst_type
+            )
         act_params['act_algo'] = 'ifmr'
-        act_params['max_percentile'] = \
-            proto_float_to_python_float(ifmr_quantize.max_percentile)
-        act_params['min_percentile'] = \
-            proto_float_to_python_float(ifmr_quantize.min_percentile)
-        act_params['search_range'] = \
-            [proto_float_to_python_float(ifmr_quantize.search_range_start),
-             proto_float_to_python_float(ifmr_quantize.search_range_end)]
+        act_params['max_percentile'] = proto_float_to_python_float(
+            ifmr_quantize.max_percentile
+        )
+        act_params['min_percentile'] = proto_float_to_python_float(
+            ifmr_quantize.min_percentile
+        )
+        act_params['search_range'] = [
+            proto_float_to_python_float(ifmr_quantize.search_range_start),
+            proto_float_to_python_float(ifmr_quantize.search_range_end),
+        ]
         act_params['search_step'] = proto_float_to_python_float(
-            ifmr_quantize.search_step)
+            ifmr_quantize.search_step
+        )
         if ifmr_quantize.HasField(ASYMMETRIC):
             act_params[ASYMMETRIC] = ifmr_quantize.asymmetric
         else:
             act_params[ASYMMETRIC] = None
-
 
     def get_proto_config(self, enable_quant=True, enable_approximate=False):
         """parse proto config"""
@@ -168,8 +185,9 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
                     common_config = self._get_conv_calibration_config()
                 if hasattr(self.proto_config, FC_CALIBRATION_CONFIG):
                     fc_config = self._get_fc_calibration_config()
-                    for item in (set(self.quantizable_type) -
-                                set(self.channel_wise_types)):
+                    for item in set(self.quantizable_type) - set(
+                        self.channel_wise_types
+                    ):
                         type_config[item] = copy.deepcopy(fc_config)
             else:
                 if hasattr(self.proto_config, CONV_CALIBRATION_CONFIG):
@@ -179,7 +197,8 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
 
             if hasattr(self.proto_config, 'tensor_quantize'):
                 global_config['tensor_quantize'] = self._get_tensor_quantize_config(
-                    self.proto_config.tensor_quantize)
+                    self.proto_config.tensor_quantize
+                )
 
             LOGGER.logd('global_config is {}'.format(global_config))
             LOGGER.logd('common_config is {}'.format(common_config))
@@ -196,7 +215,7 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
     def _get_fakequant_precision_mode(self):
         precision_mode_define = {
             FakequantPrecisionMode.DEFAULT.value: 'DEFAULT',
-            FakequantPrecisionMode.FORCE_FP16_QUANT.value: 'FORCE_FP16_QUANT'
+            FakequantPrecisionMode.FORCE_FP16_QUANT.value: 'FORCE_FP16_QUANT',
         }
         if self.proto_config.HasField('fakequant_precision_mode'):
             return precision_mode_define.get(self.proto_config.fakequant_precision_mode)
@@ -233,7 +252,9 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         if layer_type not in map_types:
             raise ValueError(
                 'Unrecognized layer type:{}, only support {}'.format(
-                    layer_type, map_types))
+                    layer_type, map_types
+                )
+            )
         return self.quantizable_type[map_types.index(layer_type)]
 
     def _transform_layer_types(self, layer_types):
@@ -282,7 +303,9 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
             arq_quantize = config.arq_quantize
             if arq_quantize.HasField(CHANNEL_WISE):
                 weight_params[CHANNEL_WISE] = arq_quantize.channel_wise
-            if hasattr(arq_quantize, 'quant_bits') and arq_quantize.HasField('quant_bits'):
+            if hasattr(arq_quantize, 'quant_bits') and arq_quantize.HasField(
+                'quant_bits'
+            ):
                 weight_params['num_bits'] = arq_quantize.quant_bits
         elif hasattr(config, 'ada_quantize') and config.HasField('ada_quantize'):
             weight_params['wts_algo'] = 'ada_quantize'
@@ -291,7 +314,9 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         layer_config[WEIGHT_QUANT_PARAMS] = weight_params
 
         if hasattr(config, 'dmq_balancer') and config.HasField('dmq_balancer'):
-            migration_strength = proto_float_to_python_float(config.dmq_balancer.migration_strength)
+            migration_strength = proto_float_to_python_float(
+                config.dmq_balancer.migration_strength
+            )
             layer_config['dmq_balancer_param'] = migration_strength
 
         return layer_config
@@ -312,39 +337,75 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
             layer_type = item.layer_type
             layer_type = self._transform_layer_types(layer_type)
             if layer_type not in self.quantizable_type:
-                raise ValueError("Layer type {} does not support "
-                                 "quantize.".format(layer_type))
+                raise ValueError(
+                    "Layer type {} does not support quantize.".format(layer_type)
+                )
 
-            override_types[layer_type] = self._parser_calibration_config(item.calibration_config)
+            override_types[layer_type] = self._parser_calibration_config(
+                item.calibration_config
+            )
             symmetric_limit_types = self.graph_querier.get_act_symmetric_limit_types()
             if layer_type in symmetric_limit_types:
-                if override_types.get(layer_type).get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC):
-                    raise ValueError('Layer type {} can only set asymmetric be False '.format(layer_type))
-            if layer_type not in self.channel_wise_types and \
-                self._channel_wise_is_true(override_types.get(layer_type)):
-                raise ValueError('channel_wise can only be False '
-                                 'for {} type'.format(layer_type))
-            if override_types.get(layer_type).get('dmq_balancer_param') and \
-                layer_type not in self.graph_querier.get_support_dmq_balancer_types():
-                raise ValueError('dmq_balancer not support '
-                                 'for {} type'.format(layer_type))
-            if override_types.get(layer_type).get(ACTIVATION_QUANT_PARAMS).get('num_bits') == 16 and \
-                layer_type not in self.int16_quantizable_type:
-                raise ValueError('int16_quantizable not support '
-                                 'for {} type'.format(layer_type))
-            if override_types.get(layer_type).get(WEIGHT_QUANT_PARAMS).get('wts_algo') == 'ada_quantize' and \
-                layer_type not in self.ada_round_quantizable_type:
-                raise ValueError('ada_quantizable not support '
-                                 'for {} layer'.format(layer_type))
+                if (
+                    override_types.get(layer_type)
+                    .get(ACTIVATION_QUANT_PARAMS)
+                    .get(ASYMMETRIC)
+                ):
+                    raise ValueError(
+                        'Layer type {} can only set asymmetric be False '.format(
+                            layer_type
+                        )
+                    )
+            if layer_type not in self.channel_wise_types and self._channel_wise_is_true(
+                override_types.get(layer_type)
+            ):
+                raise ValueError(
+                    'channel_wise can only be False for {} type'.format(layer_type)
+                )
+            if (
+                override_types.get(layer_type).get('dmq_balancer_param')
+                and layer_type
+                not in self.graph_querier.get_support_dmq_balancer_types()
+            ):
+                raise ValueError(
+                    'dmq_balancer not support for {} type'.format(layer_type)
+                )
+            if (
+                override_types.get(layer_type)
+                .get(ACTIVATION_QUANT_PARAMS)
+                .get('num_bits')
+                == 16
+                and layer_type not in self.int16_quantizable_type
+            ):
+                raise ValueError(
+                    'int16_quantizable not support for {} type'.format(layer_type)
+                )
+            if (
+                override_types.get(layer_type).get(WEIGHT_QUANT_PARAMS).get('wts_algo')
+                == 'ada_quantize'
+                and layer_type not in self.ada_round_quantizable_type
+            ):
+                raise ValueError(
+                    'ada_quantizable not support for {} layer'.format(layer_type)
+                )
             if hasattr(self.graph_querier, 'get_support_winograd_layer_types'):
-                winograd_support_layer_type = self.graph_querier.get_support_winograd_layer_types()
+                winograd_support_layer_type = (
+                    self.graph_querier.get_support_winograd_layer_types()
+                )
             else:
                 winograd_support_layer_type = list()
-            wts_num_bits = override_types.get(layer_type).get(WEIGHT_QUANT_PARAMS).get('num_bits')
-            if wts_num_bits in WINOGRAD_NUM_BITS and \
-                layer_type not in winograd_support_layer_type:
-                raise ValueError('quant_bits {} not support '
-                                 'for {} type'.format(wts_num_bits, layer_type))
+            wts_num_bits = (
+                override_types.get(layer_type).get(WEIGHT_QUANT_PARAMS).get('num_bits')
+            )
+            if (
+                wts_num_bits in WINOGRAD_NUM_BITS
+                and layer_type not in winograd_support_layer_type
+            ):
+                raise ValueError(
+                    'quant_bits {} not support for {} type'.format(
+                        wts_num_bits, layer_type
+                    )
+                )
         return override_types
 
     def _get_override_layer_configs(self):
@@ -355,40 +416,83 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         for item in self.proto_config.override_layer_configs:
             layer_name = item.layer_name
             if layer_name not in self.layer_type:
-                raise ValueError('Layer {} does not exist in '
-                                 'the graph.'.format(layer_name))
+                raise ValueError(
+                    'Layer {} does not exist in the graph.'.format(layer_name)
+                )
 
-            override_layers[layer_name] = self._parser_calibration_config(item.calibration_config)
-            symmetric_limit_layers = self.graph_querier.get_act_symmetric_limit_layers(self.graph)
+            override_layers[layer_name] = self._parser_calibration_config(
+                item.calibration_config
+            )
+            symmetric_limit_layers = self.graph_querier.get_act_symmetric_limit_layers(
+                self.graph
+            )
             if layer_name in symmetric_limit_layers:
-                if override_layers.get(layer_name).get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC):
-                    raise ValueError('Layer {} can only set asymmetric be False '.format(layer_name))
-            if self.layer_type.get(layer_name) not in self.channel_wise_types and \
-                self._channel_wise_is_true(override_layers.get(layer_name)):
-                raise ValueError('channel_wise can only be False '
-                                 'for {} layer.'.format(layer_name))
-            if override_layers.get(layer_name).get('dmq_balancer_param') and \
-                layer_name not in self.graph_querier.get_support_dmq_balancer_layers(self.graph):
-                raise ValueError('dmq_balancer not support '
-                                 'for {} layer'.format(layer_name))
-            if override_layers.get(layer_name).get(ACTIVATION_QUANT_PARAMS).get('num_bits') == 16 and \
-                layer_name not in self.graph_querier.get_support_int16_quantizable_layers(self.graph):
-                raise ValueError('int16_quantizable not support '
-                                 'for {} layer'.format(layer_name))
-            if override_layers.get(layer_name).get(WEIGHT_QUANT_PARAMS).get('wts_algo') == 'ada_quantize' and \
-                layer_name not in self.graph_querier.get_ada_quant_layers(self.graph):
-                raise ValueError('ada_quantizable not support '
-                                 'for {} layer'.format(layer_name))
-            wts_quant_bits = override_layers.get(layer_name).get(WEIGHT_QUANT_PARAMS).get('num_bits')
-            if wts_quant_bits in WINOGRAD_NUM_BITS and \
-                layer_name not in self.graph_querier.get_support_winograd_quant_layers(self.graph):
-                raise ValueError('quant_bits {} not support '
-                                 'for {} layer'.format(wts_quant_bits, layer_name))
+                if (
+                    override_layers.get(layer_name)
+                    .get(ACTIVATION_QUANT_PARAMS)
+                    .get(ASYMMETRIC)
+                ):
+                    raise ValueError(
+                        'Layer {} can only set asymmetric be False '.format(layer_name)
+                    )
+            if self.layer_type.get(
+                layer_name
+            ) not in self.channel_wise_types and self._channel_wise_is_true(
+                override_layers.get(layer_name)
+            ):
+                raise ValueError(
+                    'channel_wise can only be False for {} layer.'.format(layer_name)
+                )
+            if override_layers.get(layer_name).get(
+                'dmq_balancer_param'
+            ) and layer_name not in self.graph_querier.get_support_dmq_balancer_layers(
+                self.graph
+            ):
+                raise ValueError(
+                    'dmq_balancer not support for {} layer'.format(layer_name)
+                )
+            if (
+                override_layers.get(layer_name)
+                .get(ACTIVATION_QUANT_PARAMS)
+                .get('num_bits')
+                == 16
+                and layer_name
+                not in self.graph_querier.get_support_int16_quantizable_layers(
+                    self.graph
+                )
+            ):
+                raise ValueError(
+                    'int16_quantizable not support for {} layer'.format(layer_name)
+                )
+            if (
+                override_layers.get(layer_name).get(WEIGHT_QUANT_PARAMS).get('wts_algo')
+                == 'ada_quantize'
+                and layer_name
+                not in self.graph_querier.get_ada_quant_layers(self.graph)
+            ):
+                raise ValueError(
+                    'ada_quantizable not support for {} layer'.format(layer_name)
+                )
+            wts_quant_bits = (
+                override_layers.get(layer_name).get(WEIGHT_QUANT_PARAMS).get('num_bits')
+            )
+            if (
+                wts_quant_bits in WINOGRAD_NUM_BITS
+                and layer_name
+                not in self.graph_querier.get_support_winograd_quant_layers(self.graph)
+            ):
+                raise ValueError(
+                    'quant_bits {} not support for {} layer'.format(
+                        wts_quant_bits, layer_name
+                    )
+                )
         return override_layers
 
     def _parse_deprecated_config(self, name, config):
-        LOGGER.logi('{} field has been deprecated, use common_config and '
-                    'override_layer_types instead.'.format(name))
+        LOGGER.logi(
+            '{} field has been deprecated, use common_config and '
+            'override_layer_types instead.'.format(name)
+        )
         return self._parser_calibration_config(config)
 
     def _get_conv_calibration_config(self):
@@ -405,14 +509,17 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         config = self.proto_config.fc_calibration_config
         fc_config = self._parse_deprecated_config(name, config)
         if self._channel_wise_is_true(fc_config):
-            raise ValueError('channel_wise can only be False '
-                             'for fc_calibration_config field')
+            raise ValueError(
+                'channel_wise can only be False for fc_calibration_config field'
+            )
         return fc_config
 
     def _raise_ignore_info(self, name):
         if self.proto_config.HasField(name):
-            LOGGER.logw('{} field would be ignored when common_config '
-                        'or override_layer_types exists'.format(name))
+            LOGGER.logw(
+                '{} field would be ignored when common_config '
+                'or override_layer_types exists'.format(name)
+            )
 
     def _get_global_config(self):
         """parse global config"""
@@ -425,7 +532,9 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         if hasattr(self.proto_config, 'weight_offset'):
             global_config['weight_offset'] = self._get_weight_offset()
         if hasattr(self.proto_config, 'fakequant_precision_mode'):
-            global_config['fakequant_precision_mode'] = self._get_fakequant_precision_mode()
+            global_config['fakequant_precision_mode'] = (
+                self._get_fakequant_precision_mode()
+            )
         global_config['skip_layers'] = self._get_skip_layers()
         global_config['skip_layer_types'] = self._get_skip_layer_types()
         global_config['do_fusion'] = self._get_do_fusion()
@@ -446,13 +555,19 @@ class ProtoConfig(): # pylint: disable=too-many-instance-attributes, too-few-pub
         for layer_config in tensor_configs:
             tensor_quantize = {}
             if not layer_config.HasField('layer_name'):
-                raise RuntimeError('To quantize tensor, must set "layer_name" at first.')
+                raise RuntimeError(
+                    'To quantize tensor, must set "layer_name" at first.'
+                )
             if not layer_config.HasField('input_index'):
-                raise RuntimeError('To quantize tensor, must set "input_index" at first.')
+                raise RuntimeError(
+                    'To quantize tensor, must set "input_index" at first.'
+                )
             tensor_quantize['layer_name'] = layer_config.layer_name
             tensor_quantize['input_index'] = layer_config.input_index
             quantize_params = {}
-            if hasattr(layer_config, 'hfmg_quantize') and layer_config.HasField('hfmg_quantize'): # default set to ifmr
+            if hasattr(layer_config, 'hfmg_quantize') and layer_config.HasField(
+                'hfmg_quantize'
+            ):  # default set to ifmr
                 self._get_hfmg_config(layer_config, quantize_params)
             else:
                 self._get_ifmr_config(layer_config, quantize_params)

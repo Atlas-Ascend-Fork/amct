@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,9 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
 import json
-import copy
 
 from collections import namedtuple
 from collections import OrderedDict
@@ -26,9 +24,12 @@ from ....amct_pytorch.common.utils.files import save_to_json
 from ....amct_pytorch.common.utils.util import check_no_repeated
 from ....amct_pytorch.common.utils.util import find_repeated_items
 from ....amct_pytorch.common.utils.vars_util import INT8
-from ....amct_pytorch.configuration.distill_config_base.distill_field import LayerConfig
-from ....amct_pytorch.configuration.distill_config_base.distill_field import DistillRootConfig
-from ....amct_pytorch.configuration.distill_config_base.distill_proto import DistillProtoConfig
+from ....amct_pytorch.configuration.distill_config_base.distill_field import (
+    DistillRootConfig,
+)
+from ....amct_pytorch.configuration.distill_config_base.distill_proto import (
+    DistillProtoConfig,
+)
 from ....amct_pytorch.utils.log import LOGGER
 from ....amct_pytorch.utils.model_util import ModuleHelper
 from ....amct_pytorch.utils.vars import DST_TYPE
@@ -39,10 +40,11 @@ DISTILL_WEIGHT_CONFIG = 'distill_weight_config'
 GraphObjects = namedtuple('GraphObjects', ['graph_querier', 'graph_checker'])
 
 
-class DistillConfigBase():
+class DistillConfigBase:
     '''distill config base'''
+
     def __init__(self, graph_objects, capacity):
-        ''' inner method '''
+        '''inner method'''
         self.capacity = capacity
         self.graph_querier = graph_objects.graph_querier
         self.graph_checker = graph_objects.graph_checker
@@ -50,7 +52,9 @@ class DistillConfigBase():
         self.supported_distill_types = self.capacity.get_value('DISTILL_TYPES')
         self.supported_bn_types = self.capacity.get_value('DISTILL_BN_TYPES')
         self.supported_bn_onnx_types = self.capacity.get_value('DISTILL_BN_ONNX_TYPES')
-        self.supported_activation_types = self.capacity.get_value('DISTILL_ACTIVATION_ONNX_TYPES')
+        self.supported_activation_types = self.capacity.get_value(
+            'DISTILL_ACTIVATION_ONNX_TYPES'
+        )
         self.supported_module_type = self.capacity.get_value('DISTILL_MODULE_TYPES')
 
     @staticmethod
@@ -61,13 +65,23 @@ class DistillConfigBase():
 
         if data_dst_type != weights_dst_type:
             if not layer_data_config.get(DST_TYPE):
-                LOGGER.logw("dst_type of DistillDataQuantConfig was not given in config, "
-                            "and was set to 'INT8' by defualt!", module_name='DistillConfig')
+                LOGGER.logw(
+                    "dst_type of DistillDataQuantConfig was not given in config, "
+                    "and was set to 'INT8' by defualt!",
+                    module_name='DistillConfig',
+                )
             if not layer_weight_config.get(DST_TYPE):
-                LOGGER.logw("dst_type of RetrainWeightQuantConfig was not given in config, "
-                            "and was set to 'INT8' by defualt!", module_name='DistillConfig')
-            raise ValueError("Activation and weights with different data_type are not supported for now. Note, " \
-                "activation is {} and weight is {}.".format(data_dst_type, weights_dst_type))
+                LOGGER.logw(
+                    "dst_type of RetrainWeightQuantConfig was not given in config, "
+                    "and was set to 'INT8' by defualt!",
+                    module_name='DistillConfig',
+                )
+            raise ValueError(
+                "Activation and weights with different data_type are not supported for now. Note, "
+                "activation is {} and weight is {}.".format(
+                    data_dst_type, weights_dst_type
+                )
+            )
 
     @staticmethod
     def get_enable_quant_layers(config):
@@ -162,7 +176,9 @@ class DistillConfigBase():
         for node in graph.nodes:
             if DistillConfigBase.is_node_in_units(node.name, cascade_units):
                 continue
-            cascade_units = DistillConfigBase.get_cascade_unit(graph, distill_unit, group_size, node, cascade_units)
+            cascade_units = DistillConfigBase.get_cascade_unit(
+                graph, distill_unit, group_size, node, cascade_units
+            )
 
         # get module name by AMCT IR node name
         cascade_module_units = []
@@ -177,7 +193,7 @@ class DistillConfigBase():
 
     @staticmethod
     def check_groups_intersection(graph, module_name_distill_groups):
-        ''' check whether there is an intersection between groups '''
+        '''check whether there is an intersection between groups'''
         # get AMCT IR node name
         node_name_distill_groups = list()
         for module_name_distill_group in module_name_distill_groups:
@@ -194,18 +210,25 @@ class DistillConfigBase():
         for i in range(group_num - 1):
             for j in range(i + 1, group_num):
                 if set(node_name_distill_groups[i]) & set(node_name_distill_groups[j]):
-                    raise ValueError("There is an intersection between "
+                    raise ValueError(
+                        "There is an intersection between "
                         "distill_group(start_layer_name: {}, end_layer_name: {}) and "
                         "distill_group(start_layer_name: {}, end_layer_name: {})".format(
-                        node_name_distill_groups[i][0], node_name_distill_groups[i][-1],
-                        node_name_distill_groups[j][0], node_name_distill_groups[j][-1]))
+                            node_name_distill_groups[i][0],
+                            node_name_distill_groups[i][-1],
+                            node_name_distill_groups[j][0],
+                            node_name_distill_groups[j][-1],
+                        )
+                    )
 
     @staticmethod
     def sort_distill_group(graph, distill_groups, cascade_unit):
-        ''' inner method for sort distill group according to the topology order in graph '''
+        '''inner method for sort distill group according to the topology order in graph'''
         all_distill_groups = distill_groups + cascade_unit
         if all_distill_groups == []:
-            raise ValueError("Not found distill group in graph, please check the model or cfg file.")
+            raise ValueError(
+                "Not found distill group in graph, please check the model or cfg file."
+            )
         sorted_distill_groups = list()
         for node in graph.nodes:
             record_distill_layers = sum(sorted_distill_groups, [])
@@ -226,7 +249,8 @@ class DistillConfigBase():
 
     @staticmethod
     def check_proto(proto, supported_layer2type):
-        ''' inner method for check not supported layers and types '''
+        '''inner method for check not supported layers and types'''
+
         def _get_not_supported_names(be_checked_names, supported_names):
             not_supported_names = list()
             for name in be_checked_names:
@@ -236,26 +260,47 @@ class DistillConfigBase():
 
         skip_layers = proto.get_quant_skip_layers()
         if not set(skip_layers).issubset(set(supported_layer2type.keys())):
-            not_supported_layers = _get_not_supported_names(set(skip_layers), set(supported_layer2type.keys()))
-            raise ValueError("quant_skip_layers{} not exist or supported".format(not_supported_layers))
+            not_supported_layers = _get_not_supported_names(
+                set(skip_layers), set(supported_layer2type.keys())
+            )
+            raise ValueError(
+                "quant_skip_layers{} not exist or supported".format(
+                    not_supported_layers
+                )
+            )
 
         skip_layer_types = proto.get_quant_skip_layer_types()
         if not set(skip_layer_types).issubset(set(supported_layer2type.values())):
-            not_supported_types = _get_not_supported_names(set(skip_layer_types), set(supported_layer2type.values()))
-            raise ValueError("quant_skip_layer_types{} not exist or supported".format(not_supported_types))
+            not_supported_types = _get_not_supported_names(
+                set(skip_layer_types), set(supported_layer2type.values())
+            )
+            raise ValueError(
+                "quant_skip_layer_types{} not exist or supported".format(
+                    not_supported_types
+                )
+            )
 
         override_layers = proto.get_override_layers()
         if not set(override_layers).issubset(set(supported_layer2type.keys())):
-            not_supported_layers = _get_not_supported_names(set(override_layers), set(supported_layer2type.keys()))
-            raise ValueError("distill_override_layers{} not exist or supported for quant".format(
-                not_supported_layers))
+            not_supported_layers = _get_not_supported_names(
+                set(override_layers), set(supported_layer2type.keys())
+            )
+            raise ValueError(
+                "distill_override_layers{} not exist or supported for quant".format(
+                    not_supported_layers
+                )
+            )
 
         override_layer_types = proto.get_override_layer_types()
         if not set(override_layer_types).issubset(set(supported_layer2type.values())):
             not_supported_types = _get_not_supported_names(
-                set(override_layer_types), set(supported_layer2type.values()))
-            raise ValueError("distill_override_layer_types{} not exist or supported for quant".format(
-                not_supported_types))
+                set(override_layer_types), set(supported_layer2type.values())
+            )
+            raise ValueError(
+                "distill_override_layer_types{} not exist or supported for quant".format(
+                    not_supported_types
+                )
+            )
 
     def create_default_config(self, config_file, graph):
         '''
@@ -276,7 +321,10 @@ class DistillConfigBase():
         ordered_config = self.config_tree.dump()
 
         save_to_json(config_file, ordered_config)
-        LOGGER.logi("Create distill config file {} success!".format(config_file), module_name='DistillConfig')
+        LOGGER.logi(
+            "Create distill config file {} success!".format(config_file),
+            module_name='DistillConfig',
+        )
 
     def create_config_from_proto(self, config_file, graph, config_proto_file):
         '''
@@ -298,16 +346,24 @@ class DistillConfigBase():
         # get distill group from simple config file
         distill_groups = proto.get_distill_groups()
         # get all layers in distill group
-        detailed_distill_groups = self._get_layers_in_distill_group(distill_groups, graph)
+        detailed_distill_groups = self._get_layers_in_distill_group(
+            distill_groups, graph
+        )
         # check distill group from simple config file
         self._check_distill_group_type(detailed_distill_groups, graph.model)
         self.check_groups_intersection(graph, detailed_distill_groups)
         # get distill group from graph
-        distill_unit = self._get_distill_unit(graph, detailed_distill_groups, supported_layer2type.keys())
+        distill_unit = self._get_distill_unit(
+            graph, detailed_distill_groups, supported_layer2type.keys()
+        )
         # get cascade unit
-        cascade_unit = self.get_distill_cascade_unit(graph, distill_unit, config['group_size'])
+        cascade_unit = self.get_distill_cascade_unit(
+            graph, distill_unit, config['group_size']
+        )
         # sort distill group according to the topology order in graph
-        all_distill_groups = self.sort_distill_group(graph, detailed_distill_groups, cascade_unit)
+        all_distill_groups = self.sort_distill_group(
+            graph, detailed_distill_groups, cascade_unit
+        )
         config['distill_group'] = all_distill_groups
 
         self._clear_config_tree()
@@ -317,7 +373,10 @@ class DistillConfigBase():
         ordered_config = self.config_tree.dump()
 
         save_to_json(config_file, ordered_config)
-        LOGGER.logi("Create distill config file {} success!".format(config_file), module_name='DistillConfig')
+        LOGGER.logi(
+            "Create distill config file {} success!".format(config_file),
+            module_name='DistillConfig',
+        )
 
     def parse_distill_config(self, config_file, model, graph=None):
         '''
@@ -328,6 +387,7 @@ class DistillConfigBase():
                    graph: None, IR Graph
         Return: dict, distill config
         '''
+
         def _detect_repetitive_key_hook(lst):
             '''
             a hook function for detect repeated key in config file.
@@ -342,9 +402,13 @@ class DistillConfigBase():
 
         with open(config_file, 'r') as fid:
             try:
-                distill_config = json.load(fid, object_pairs_hook=_detect_repetitive_key_hook)
+                distill_config = json.load(
+                    fid, object_pairs_hook=_detect_repetitive_key_hook
+                )
             except json.decoder.JSONDecodeError as e:
-                raise ValueError("config_file {} is invalid, please check.".format(config_file)) from e
+                raise ValueError(
+                    "config_file {} is invalid, please check.".format(config_file)
+                ) from e
 
         supported_layers = self._get_supported_layers(model, graph)
 
@@ -353,21 +417,27 @@ class DistillConfigBase():
         ordered_config = self.config_tree.dump()
         distill_groups = ordered_config.get('distill_group')
         if distill_groups is None:
-            raise ValueError("config file {} do not have distill group.".format(config_file))
+            raise ValueError(
+                "config file {} do not have distill group.".format(config_file)
+            )
         self._check_distill_group_type(distill_groups, model)
 
-        LOGGER.logd('distill config is {}'.format(ordered_config), module_name='DistillConfig')
+        LOGGER.logd(
+            'distill config is {}'.format(ordered_config), module_name='DistillConfig'
+        )
         return ordered_config
 
     def _get_supported_layers(self, model, graph=None):
-        ''' inner method for distill quant '''
-        supported_layer2type = self.graph_querier.get_support_distill_layer2type(model, graph)
+        '''inner method for distill quant'''
+        supported_layer2type = self.graph_querier.get_support_distill_layer2type(
+            model, graph
+        )
         if not supported_layer2type:
             raise ValueError("Not found supported distill quant layers in model.")
         return supported_layer2type
 
     def _clear_config_tree(self):
-        ''' inner method '''
+        '''inner method'''
         self.config_tree = DistillRootConfig(self.graph_querier, self.capacity)
 
     def _generate_layer_config(self, proto, supported_layer2type):
@@ -396,18 +466,23 @@ class DistillConfigBase():
                 config[layer][DISTILL_DATA_CONFIG] = dict()
                 config[layer][DISTILL_WEIGHT_CONFIG] = dict()
             elif layer in override_layers:
-                distill_data_params, distill_weight_params = proto.read_override_layer_config(layer)
+                distill_data_params, distill_weight_params = (
+                    proto.read_override_layer_config(layer)
+                )
                 config[layer][DISTILL_DATA_CONFIG] = distill_data_params
                 config[layer][DISTILL_WEIGHT_CONFIG] = distill_weight_params
             elif layer_type in override_layer_types:
-                distill_data_params, distill_weight_params = proto.read_override_type_config(layer_type)
+                distill_data_params, distill_weight_params = (
+                    proto.read_override_type_config(layer_type)
+                )
                 config[layer][DISTILL_DATA_CONFIG] = distill_data_params
                 config[layer][DISTILL_WEIGHT_CONFIG] = distill_weight_params
             else:
                 config[layer][DISTILL_DATA_CONFIG] = data_config.copy()
                 config[layer][DISTILL_WEIGHT_CONFIG] = weight_config.copy()
-            self.check_dst_type_legal(config[layer][DISTILL_DATA_CONFIG],
-                config[layer][DISTILL_WEIGHT_CONFIG])
+            self.check_dst_type_legal(
+                config[layer][DISTILL_DATA_CONFIG], config[layer][DISTILL_WEIGHT_CONFIG]
+            )
 
         return config
 
@@ -419,6 +494,7 @@ class DistillConfigBase():
                 supported_distill_layers: nodes that support distillation
         Return: list, distillation unit
         '''
+
         def _get_single_consumer(node):
             '''
             Function: get node consumer if the node has only one consumer
@@ -433,6 +509,7 @@ class DistillConfigBase():
             if len(consumers) != 1:
                 return None
             return consumers[0]
+
         model_helper = ModuleHelper(graph.model)
         distill_unit = []
         user_distill_layers = sum(distill_groups, [])
@@ -479,7 +556,7 @@ class DistillConfigBase():
         return distill_unit
 
     def _check_distill_group_type(self, detailed_distill_groups, model):
-        ''' inner method for check users's distill group module type '''
+        '''inner method for check users's distill group module type'''
         # if user do not set distill group, no need to check
         if detailed_distill_groups == []:
             return
@@ -491,21 +568,34 @@ class DistillConfigBase():
                     # check layer is nn.Module or not
                     mod = model_helper.get_module(layer_name)
                 except RuntimeError as exception:
-                    raise ValueError("layer [{}] in distill_group(start_layer_name: {}, end_layer_name: {}) "
+                    raise ValueError(
+                        "layer [{}] in distill_group(start_layer_name: {}, end_layer_name: {}) "
                         "not exist or not a nn.Module object.".format(
-                        layer_name, detailed_distill_group[0], detailed_distill_group[-1])) from exception
+                            layer_name,
+                            detailed_distill_group[0],
+                            detailed_distill_group[-1],
+                        )
+                    ) from exception
 
                 # check module type whether supported
                 mod_type = type(mod).__name__
                 if mod_type not in self.supported_module_type:
-                    raise ValueError("layer [{}] in distill_group(start_layer_name: {}, end_layer_name: {}) "
-                        "is not a supported type{}.".format(layer_name, detailed_distill_group[0],
-                        detailed_distill_group[-1], self.supported_module_type))
+                    raise ValueError(
+                        "layer [{}] in distill_group(start_layer_name: {}, end_layer_name: {}) "
+                        "is not a supported type{}.".format(
+                            layer_name,
+                            detailed_distill_group[0],
+                            detailed_distill_group[-1],
+                            self.supported_module_type,
+                        )
+                    )
 
     def _dfs_search(self, node, end_layer, path):
         '''search all paths from start layer to end layer'''
         if node.type in self.supported_bn_onnx_types and self.is_node_reused(node):
-            raise ValueError("Not support to distill reused module for {}".format(node.module_name))
+            raise ValueError(
+                "Not support to distill reused module for {}".format(node.module_name)
+            )
 
         # save the path from start node to curent node
         cur_path = path + [node]
@@ -529,13 +619,19 @@ class DistillConfigBase():
         for node in graph.nodes:
             if node.module_name == start_layer:
                 if self.is_node_reused(node):
-                    raise ValueError("Not support module {} be reused "
-                        "as a start layer of distill_group".format(node.module_name))
+                    raise ValueError(
+                        "Not support module {} be reused "
+                        "as a start layer of distill_group".format(node.module_name)
+                    )
                 all_paths = self._dfs_search(node, end_layer, [])
                 break
         if len(all_paths) != 1:
-            raise ValueError("Can not find an only route from start_layer_name({}) to end_layer_name({}), "
-                "please check whether layer in model and in right order.".format(start_layer, end_layer))
+            raise ValueError(
+                "Can not find an only route from start_layer_name({}) to end_layer_name({}), "
+                "please check whether layer in model and in right order.".format(
+                    start_layer, end_layer
+                )
+            )
         # get module name from node
         all_nodes = list()
         for node in all_paths[0]:
@@ -543,9 +639,11 @@ class DistillConfigBase():
         return all_nodes
 
     def _get_layers_in_distill_group(self, distill_groups, graph):
-        ''' inner method to get users's distill group '''
+        '''inner method to get users's distill group'''
         detailed_distill_groups = list()
         for distill_group in distill_groups:
-            distill_group_nodes = self._get_all_nodes_between_two_layers(distill_group, graph)
+            distill_group_nodes = self._get_all_nodes_between_two_layers(
+                distill_group, graph
+            )
             detailed_distill_groups.append(distill_group_nodes)
         return detailed_distill_groups

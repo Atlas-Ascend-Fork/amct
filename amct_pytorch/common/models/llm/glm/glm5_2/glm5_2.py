@@ -18,7 +18,6 @@
 import functools
 
 import torch
-import torch.nn as nn
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from transformers.models.glm_moe_dsa.configuration_glm_moe_dsa import GlmMoeDsaConfig
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaDecoderLayer
@@ -29,7 +28,9 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     QuantGatedMLP,
     apply_quant_to_attn,
 )
-from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import QuantGlmMoeDsaAttention
+from amct_pytorch.common.models.llm.glm.glm5_2.quant_module import (
+    QuantGlmMoeDsaAttention,
+)
 from amct_pytorch.common.models.llm.qwen.moe_common import (
     QuantGatedExperts,
     is_packed_experts,
@@ -92,9 +93,7 @@ class GLM5_2(BaseModel):
 
     def load_layer_weight(self, prefix):
         state_dict = super().load_layer_weight(prefix)
-        state_dict = pack_gated_expert_weights(
-            state_dict, expert_prefix="mlp.experts"
-        )
+        state_dict = pack_gated_expert_weights(state_dict, expert_prefix="mlp.experts")
         return state_dict
 
     def load_embed_state_dict(self):
@@ -103,10 +102,17 @@ class GLM5_2(BaseModel):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None,
-                         use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
-            layer_idx, samples,
+            layer_idx,
+            samples,
             hook_name=hook_name,
             use_quant_block=use_quant_block,
             enable_quant=enable_quant,
@@ -130,9 +136,7 @@ class GLM5_2(BaseModel):
         if "moe" in self.quant_target or "mlp" in self.quant_target:
             mlp = getattr(decoder_layer, "mlp", None)
             if mlp is None:
-                raise ValueError(
-                    f"MLP not found on decoder layer {layer_idx}"
-                )
+                raise ValueError(f"MLP not found on decoder layer {layer_idx}")
             if hasattr(mlp, "experts") and is_packed_experts(mlp.experts):
                 mlp.experts = QuantGatedExperts(self.args, mlp.experts)
                 if hasattr(mlp, "shared_experts"):
@@ -149,7 +153,6 @@ class GLM5_2(BaseModel):
         scale_prefix = ".scale"
         scale_inv_name = weight_name.replace(".weight", ".scale")
         return scale_prefix, scale_inv_name
-
 
     def cache_scheme(self):
         """Return cache scheme dict for deploy config.
@@ -191,7 +194,11 @@ class GLM5_2(BaseModel):
         bit_policy = ensure_bit_policy(self.args)
         routed = bit_policy["moe.routed"].default
         groups = [
-            {"targets": ["Linear"], "w_bits": bit_policy.w_bits, "a_bits": bit_policy.a_bits},
+            {
+                "targets": ["Linear"],
+                "w_bits": bit_policy.w_bits,
+                "a_bits": bit_policy.a_bits,
+            },
         ]
         # group_1 (MoEGMM) only for w4a8, per infer repo
         if routed.w == 4:
@@ -281,56 +288,48 @@ class GLM5_2(BaseModel):
         ignore.append("lm_head")  # always ignored per infer repo
         return ignore
 
-    def _mlp_tensorwise_quant_layers(self, i, first_k_dense_replace, num_experts, bit_policy):
+    def _mlp_tensorwise_quant_layers(
+        self, i, first_k_dense_replace, num_experts, bit_policy
+    ):
         """Collect tensor-wise quant entries for layer ``i``'s MLP branch."""
         layers = {}
         if i >= first_k_dense_replace:
             # routed experts: bit from moe.routed (4 for w4a8, else 8)
             for j in range(num_experts):
                 for n in self.MLP_LINEAR_NAMES:
-                    layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = (
-                        bit_policy["moe.routed"][n].w
-                    )
+                    layers[f"model.layers.{i}.mlp.experts.{j}.{n}"] = bit_policy[
+                        "moe.routed"
+                    ][n].w
             # shared experts: bit from moe.shared (always 8)
             for n in self.MLP_LINEAR_NAMES:
-                layers[f"model.layers.{i}.mlp.shared_experts.{n}"] = (
-                    bit_policy["moe.shared"][n].w
-                )
+                layers[f"model.layers.{i}.mlp.shared_experts.{n}"] = bit_policy[
+                    "moe.shared"
+                ][n].w
         else:
             # dense MLP: bit from mlp (always 8)
             for n in self.MLP_LINEAR_NAMES:
-                layers[f"model.layers.{i}.mlp.{n}"] = (
-                    bit_policy["mlp"][n].w
-                )
+                layers[f"model.layers.{i}.mlp.{n}"] = bit_policy["mlp"][n].w
         return layers
 
-    def _attn_tensorwise_quant_layers(self, i, num_hidden_layers, indexer_types, attn_linear):
+    def _attn_tensorwise_quant_layers(
+        self, i, num_hidden_layers, indexer_types, attn_linear
+    ):
         """Collect tensor-wise quant entries for layer ``i``'s attn branch."""
         layers = {}
         # attn low-rank projections: quantized only in mxfp mode (excluded from dict in INT mode)
         if self.args.quant_dtype == "mxfp":
-            layers[f"model.layers.{i}.self_attn.q_a_proj"] = (
-                attn_linear["q_a_proj"].w
-            )
-            layers[f"model.layers.{i}.self_attn.kv_a_proj_with_mqa"] = (
-                attn_linear["kv_a_proj_with_mqa"].w
-            )
+            layers[f"model.layers.{i}.self_attn.q_a_proj"] = attn_linear["q_a_proj"].w
+            layers[f"model.layers.{i}.self_attn.kv_a_proj_with_mqa"] = attn_linear[
+                "kv_a_proj_with_mqa"
+            ].w
         # attn main projections: quantized in all modes
-        layers[f"model.layers.{i}.self_attn.o_proj"] = (
-            attn_linear["o_proj"].w
-        )
-        layers[f"model.layers.{i}.self_attn.q_b_proj"] = (
-            attn_linear["q_b_proj"].w
-        )
+        layers[f"model.layers.{i}.self_attn.o_proj"] = attn_linear["o_proj"].w
+        layers[f"model.layers.{i}.self_attn.q_b_proj"] = attn_linear["q_b_proj"].w
         if self._is_indexer_layer(i, num_hidden_layers, indexer_types):
-            layers[f"model.layers.{i}.self_attn.indexer.wq_b"] = (
-                attn_linear["wq_b"].w
-            )
+            layers[f"model.layers.{i}.self_attn.indexer.wq_b"] = attn_linear["wq_b"].w
             # indexer.wk: quantized only in mxfp mode
             if self.args.quant_dtype == "mxfp":
-                layers[f"model.layers.{i}.self_attn.indexer.wk"] = (
-                    attn_linear["wk"].w
-                )
+                layers[f"model.layers.{i}.self_attn.indexer.wk"] = attn_linear["wk"].w
         return layers
 
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
@@ -348,4 +347,3 @@ class GLM5_2(BaseModel):
 
         block.forward = _capture
         return block
-

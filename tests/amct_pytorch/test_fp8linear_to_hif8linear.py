@@ -23,7 +23,6 @@ import math
 import unittest
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -65,9 +64,12 @@ class FP8Linear(nn.Module):
             block_h, block_w = self.block_size
             weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_h, dim=0)
             weight_scale_inv = torch.repeat_interleave(weight_scale_inv, block_w, dim=1)
-            weight_scale_inv = weight_scale_inv[:self.weight.shape[0], :self.weight.shape[1]]
+            weight_scale_inv = weight_scale_inv[
+                : self.weight.shape[0], : self.weight.shape[1]
+            ]
         weight = self.weight.to(torch.float32) / weight_scale_inv.to(torch.float32)
         return torch.nn.functional.linear(x, weight.to(x.dtype), self.bias)
+
 
 AlgorithmRegistry.register('cast', None, FP8Linear, NpuHIF8Linear)
 
@@ -86,24 +88,28 @@ class FP8Model(nn.Module):
             self.layer2 = FP8Linear(hidden_dim, out_dim, has_bias=False)
         else:
             block_size = (block_size, block_size)
-            self.layer2 = FP8Linear(hidden_dim, out_dim, block_size=block_size, has_bias=False)
+            self.layer2 = FP8Linear(
+                hidden_dim, out_dim, block_size=block_size, has_bias=False
+            )
 
     def forward(self, x):
         x = self.layer1(x)
-        x = torch.relu(x) # 中间加个激活函数演示
+        x = torch.relu(x)  # 中间加个激活函数演示
         x = self.layer2(x)
         return x
 
 
 class TestFP8HIF8(unittest.TestCase):
-    '''    ST FOR FP8HIF8 ALGORITHM    '''
+    '''ST FOR FP8HIF8 ALGORITHM'''
+
     @classmethod
     def setUpClass(cls):
         input_dim, hidden_dim, output_dim, block_size = 128, 256, 64, 10
         batch = 8
         cls.test_model = FP8Model(input_dim, hidden_dim, output_dim).to(torch.bfloat16)
-        cls.test_block_model = FP8Model(input_dim, hidden_dim, output_dim,
-                                        block_size).to(torch.bfloat16)
+        cls.test_block_model = FP8Model(
+            input_dim, hidden_dim, output_dim, block_size
+        ).to(torch.bfloat16)
         cls.test_inputs = torch.randn(batch, input_dim).to(torch.bfloat16)
         cls.ori_out = cls.test_model(cls.test_inputs)
         LOGGER.info('TestFP8HIF8 START!')
@@ -122,13 +128,17 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch('amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
-           MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_model)
         quantize(model)
         LOGGER.info("%s", model)
-        self.assertEqual(list(model.state_dict().keys()), list(self.test_model.state_dict().keys()))
+        self.assertEqual(
+            list(model.state_dict().keys()), list(self.test_model.state_dict().keys())
+        )
         self.assertEqual(type(model.layer1).__name__, 'FP8Linear')
         self.assertEqual(type(model.layer2).__name__, 'FP8Linear')
         convert(model)
@@ -140,13 +150,17 @@ class TestFP8HIF8(unittest.TestCase):
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
     @patch('torch_npu.npu_dynamic_quant', wraps=mock_npu_dynamic_quant)
-    @patch('amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
-           MagicMock(return_value=True))
+    @patch(
+        'amct_pytorch.classic.deploy_op.npu_hif8_quantization_linear.check_parameters_in_schema',
+        MagicMock(return_value=True),
+    )
     def test_block_fp8_hif8_success(self, mock_1, mock_2, mock_3):
         model = copy.deepcopy(self.test_block_model)
         quantize(model)
         LOGGER.info("%s", model)
-        self.assertEqual(list(model.state_dict().keys()), list(self.test_model.state_dict().keys()))
+        self.assertEqual(
+            list(model.state_dict().keys()), list(self.test_model.state_dict().keys())
+        )
         self.assertEqual(type(model.layer1).__name__, 'FP8Linear')
         self.assertEqual(type(model.layer2).__name__, 'FP8Linear')
         convert(model)
