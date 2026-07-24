@@ -51,3 +51,5 @@ LOG_HEAD "Start run c++ testcase"
 cd ${WORKSPACE}/ || exit 1
 LOG_DO bash build.sh -u --cann_3rd_lib_path=${ASCEND_3RD_LIB_PATH}
 DP_ASSERT_EQUAL "$?" "0" "Run UT TESTCASE"
+
+echo "ut_process=ut_cov" >> "${ATOMGIT_OUTPUT}"
