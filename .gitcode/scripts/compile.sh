@@ -59,6 +59,13 @@ DP_ASSERT_EQUAL()
     fi
 }
 
+if [[ "${task_name}" =~ Compile_Ascend_X86_ubuntu24 ]]; then
+    sed -i "1i set(CMAKE_EXPORT_COMPILE_COMMANDS ON)" "CMakeLists.txt"
+    echo "api-check=compile" >> "${ATOMGIT_OUTPUT}"
+else
+    echo "api-check=continue" >> "${ATOMGIT_OUTPUT}"
+fi
+
 LOG_HEAD "Build ${REPOSITORY_NAME}."
 cd ${WORKSPACE}/ || exit 1
 echo "------------------"
