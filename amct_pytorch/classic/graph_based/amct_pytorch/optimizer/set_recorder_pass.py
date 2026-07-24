@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,8 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from ...amct_pytorch.optimizer.base_module_fusion_pass \
-    import BaseModuleFusionPass
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from ...amct_pytorch.utils.log import LOGGER
 
 
@@ -25,6 +24,7 @@ class SetRecorderPass(BaseModuleFusionPass):
     Function: Set record_module in RetrainQuant module.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, torch_recorder=None):
         """
         Function: init object
@@ -62,4 +62,5 @@ class SetRecorderPass(BaseModuleFusionPass):
         object_module.record_module = self.torch_recorder
         LOGGER.logd(
             "Set recorder module of '{}' success!".format(object_name),
-            'SetRecorderPass')
+            'SetRecorderPass',
+        )

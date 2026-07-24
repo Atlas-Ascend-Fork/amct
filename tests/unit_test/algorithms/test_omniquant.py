@@ -71,7 +71,9 @@ def test_observe_mode_updates_log_scale_with_running_max():
     out = om(torch.tensor([[3.0, 5.0]]))
     assert torch.equal(out, torch.tensor([[3.0, 5.0]]))  # passthrough in observe mode
     # log_scale ≈ log(max(|x|)) = log([3, 5])
-    assert torch.allclose(om.log_scale.data, torch.log(torch.tensor([[3.0, 5.0]])), atol=1e-4)
+    assert torch.allclose(
+        om.log_scale.data, torch.log(torch.tensor([[3.0, 5.0]])), atol=1e-4
+    )
     # A larger update raises log_scale; smaller does not.
     om(torch.tensor([[1.0, 6.0]]))
     expected = torch.log(torch.tensor([[3.0, 6.0]]))

@@ -116,6 +116,7 @@ def test_build_algorithms_structure_returns_single_algorithm():
     class _Algo(nn.Module):
         def __init__(self, args, ctx):
             super().__init__()
+
     try:
         out = build_algorithms_by_target(
             _args(algos=[name]), "structure", SimpleNamespace()
@@ -128,10 +129,12 @@ def test_build_algorithms_structure_returns_single_algorithm():
 def test_build_algorithms_structure_raises_on_multiple_matches():
     n1, n2 = "_ut_struct_a", "_ut_struct_b"
     for n in (n1, n2):
+
         @ALGO_REGISTRY.register(name=n, targets=("structure",))
         class _Algo(nn.Module):
             def __init__(self, args, ctx):
                 super().__init__()
+
     try:
         with pytest.raises(ValueError, match="Only one 'structure' algorithm"):
             build_algorithms_by_target(
@@ -194,7 +197,9 @@ def test_activation_quantizer_forward_quantizes_when_enabled():
     assert out.dtype == x.dtype
 
 
-def test_activation_quantizer_trainable_params_collects_from_algorithms(_ephemeral_algo):
+def test_activation_quantizer_trainable_params_collects_from_algorithms(
+    _ephemeral_algo,
+):
     aq = ActivationQuantizer(_args(algos=[_ephemeral_algo]), bits=8)
     # The ephemeral algo has no `trainable_params` -> empty.
     assert not aq.trainable_params()
@@ -276,7 +281,7 @@ def test_weight_quantizer_algo_forward_picks_quantize_hook_separately():
         wq = WeightQuantizer(_args(algos=[UT_QUANT_HOOK_ALGO], w_bits=8), w_bits=8)
         x = torch.ones(1, 4)
         out, qa = wq.algo_forward(x)
-        assert torch.equal(out, x)        # passthrough — quantize hook is deferred
+        assert torch.equal(out, x)  # passthrough — quantize hook is deferred
         assert isinstance(qa, _Q)
     finally:
         ALGO_REGISTRY._items.pop(UT_QUANT_HOOK_ALGO, None)
@@ -284,6 +289,7 @@ def test_weight_quantizer_algo_forward_picks_quantize_hook_separately():
 
 def test_weight_quantizer_algo_forward_rejects_multiple_quantize_hooks():
     for n in (UT_QH_A_ALGO, UT_QH_B):
+
         @ALGO_REGISTRY.register(name=n, targets=("weight",))
         class _Q(nn.Module):
             def __init__(self, args, *_):
@@ -316,6 +322,7 @@ def test_weight_quantizer_export_deploy_rejects_quantize_hook_path():
 
         def quantize(self, x, q):
             return x
+
     try:
         wq = WeightQuantizer(_args(algos=[UT_QH_EXPORT_ALGO], w_bits=8), w_bits=8)
         with pytest.raises(NotImplementedError, match="custom weight quantize"):
@@ -343,13 +350,13 @@ def test_weight_quantizer_export_deploy_supports_autoround_hook_for_mxfp():
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
-
     name = "_ut_struct_mis"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
     class _Algo(nn.Module):
         def __init__(self, args, ctx=None):
             super().__init__()
+
     try:
         out = build_algorithms_by_target(_args(algos=[name]), "activation")
         assert isinstance(out, nn.ModuleDict)
@@ -359,7 +366,6 @@ def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
 
 
 def test_activation_quantizer_trainable_params_returns_params_from_algo():
-
     name = "_ut_act_tp"
 
     @ALGO_REGISTRY.register(name=name, targets=("activation",))
@@ -373,6 +379,7 @@ def test_activation_quantizer_trainable_params_returns_params_from_algo():
 
         def trainable_params(self):
             return [self.p]
+
     try:
         aq = ActivationQuantizer(_args(algos=[name]), bits=8)
         params = aq.trainable_params()
@@ -382,7 +389,6 @@ def test_activation_quantizer_trainable_params_returns_params_from_algo():
 
 
 def test_activation_quantizer_forward_applies_algo_when_enabled():
-
     name = "_ut_act_fwd"
 
     @ALGO_REGISTRY.register(name=name, targets=("activation",))
@@ -392,6 +398,7 @@ def test_activation_quantizer_forward_applies_algo_when_enabled():
 
         def forward(self, x):
             return x * 2
+
     try:
         aq = ActivationQuantizer(_args(algos=[name]), bits=8)
         aq.enable = True
@@ -404,7 +411,6 @@ def test_activation_quantizer_forward_applies_algo_when_enabled():
 
 
 def test_weight_quantizer_trainable_params_returns_params_from_algo():
-
     name = "_ut_wt_tp"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
@@ -418,6 +424,7 @@ def test_weight_quantizer_trainable_params_returns_params_from_algo():
 
         def trainable_params(self):
             return [self.p]
+
     try:
         wq = WeightQuantizer(_args(algos=[name], w_bits=8), w_bits=8)
         params = wq.trainable_params()
@@ -427,7 +434,6 @@ def test_weight_quantizer_trainable_params_returns_params_from_algo():
 
 
 def test_weight_quantizer_forward_uses_quantize_algo_when_enabled():
-
     name = "_ut_wt_qalgo"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
@@ -466,13 +472,13 @@ def test_build_algorithms_raises_with_missing_targets():
 
 
 def test_build_algorithms_raises_when_target_not_in_algo_targets():
-
     name = "_ut_struct_nonmatch"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
     class _Algo(nn.Module):
         def __init__(self, args, ctx=None):
             super().__init__()
+
     try:
         out = build_algorithms_by_target(_args(algos=[name]), "activation")
         assert isinstance(out, nn.ModuleDict)
@@ -486,12 +492,15 @@ def test_build_algorithms_by_target_raises_on_missing_targets_metadata(monkeypat
 
     from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
     from amct_pytorch.quantization.modules import quant_base as quant_base_mod
+
     monkeypatch.setattr(
-        quant_base_mod, "get_algo_names_by_target",
+        quant_base_mod,
+        "get_algo_names_by_target",
         lambda args, target: ["fake_algo"],
     )
     monkeypatch.setattr(
-        algo_registry, "get_item",
+        algo_registry,
+        "get_item",
         lambda name: simple_ns(metadata={}, target=lambda *a: None),
     )
     args = SimpleNamespace()
@@ -504,15 +513,17 @@ def test_build_algorithms_by_target_raises_on_mismatched_target(monkeypatch):
 
     from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY as algo_registry
     from amct_pytorch.quantization.modules import quant_base as quant_base_mod
+
     monkeypatch.setattr(
-        quant_base_mod, "get_algo_names_by_target",
+        quant_base_mod,
+        "get_algo_names_by_target",
         lambda args, target: ["fake_algo"],
     )
     monkeypatch.setattr(
-        algo_registry, "get_item",
+        algo_registry,
+        "get_item",
         lambda name: simple_ns(metadata={"targets": ("attn",)}, target=lambda *a: None),
     )
     args = SimpleNamespace()
     with pytest.raises(ValueError, match="cannot be used for target"):
         quant_base_mod.build_algorithms_by_target(args, "mlp")
-

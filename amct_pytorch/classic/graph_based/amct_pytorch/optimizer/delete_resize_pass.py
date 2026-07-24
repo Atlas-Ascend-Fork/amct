@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,6 +26,7 @@ class DeleteResizePass(BaseFusionPass):
     Function: Delete 'Resize' node in graph.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -63,8 +64,10 @@ class DeleteResizePass(BaseFusionPass):
         object_node: node to process
         Return: None
         """
-        LOGGER.logd("Doing: delete node {} in graph.".format(object_node.name),
-                     'DeleteResizePass')
+        LOGGER.logd(
+            "Doing: delete node {} in graph.".format(object_node.name),
+            'DeleteResizePass',
+        )
 
         roi_node, _ = object_node.get_producer(1)
         scales_node, _ = object_node.get_producer(2)
@@ -75,5 +78,7 @@ class DeleteResizePass(BaseFusionPass):
         graph.delete_node(object_node, 0, 0)
         graph.remove_node(object_node)
 
-        LOGGER.logd("Finished: delete node {} in graph.".format(object_node.name),
-                     'DeleteResizePass')
+        LOGGER.logd(
+            "Finished: delete node {} in graph.".format(object_node.name),
+            'DeleteResizePass',
+        )

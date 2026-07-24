@@ -18,7 +18,11 @@ import torch
 from loguru import logger
 
 from cores.utils import args_utils as args_utils, utils as utils
-from cores.models.deepseek_v3_2.quant_utils import apply_quant_to_moe, get_float_block, apply_quant_to_mla
+from cores.models.deepseek_v3_2.quant_utils import (
+    apply_quant_to_moe,
+    get_float_block,
+    apply_quant_to_mla,
+)
 from cores.models.deepseek_v3_2.quant_utils import QuantDeepseekV3MLP
 from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
 from cores.models.deepseek_v3_2.indexer import ModelArgs
@@ -38,7 +42,9 @@ def train_mla_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
 
     logger.info(layer)
     if args.quantize:
-        cali_quant(args, layer.self_attn, layer_idx, inps, dev, param_prefix="self_attn")
+        cali_quant(
+            args, layer.self_attn, layer_idx, inps, dev, param_prefix="self_attn"
+        )
     torch.npu.empty_cache()
 
 
@@ -60,11 +66,12 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
     inps = get_mla_moe_inputs(layer, layer_inps, dev)
 
     torch.npu.empty_cache()
-    layer = apply_quant_to_moe(args, layer, shared_expert_bits=8, routed_expert_bits=args.w_bits)
+    layer = apply_quant_to_moe(
+        args, layer, shared_expert_bits=8, routed_expert_bits=args.w_bits
+    )
     logger.info(layer)
     if args.quantize:
-        if (args.lwc or args.lac):
-
+        if args.lwc or args.lac:
             if hasattr(layer.mlp, 'experts'):
                 for idx in range(0, len(layer.mlp.experts)):
                     expert = layer.mlp.experts[idx]
@@ -75,23 +82,37 @@ def train_experts_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):
 
                 if isinstance(layer.mlp.shared_experts, QuantDeepseekV3MLP):
                     logger.info(" --- train shared expert --- ")
-                    part_params = cali_quant(args, layer.mlp.shared_experts, layer_idx, inps, dev)
-                    prefix = f"mlp.shared_experts."
+                    part_params = cali_quant(
+                        args, layer.mlp.shared_experts, layer_idx, inps, dev
+                    )
+                    prefix = "mlp.shared_experts."
                     quant_params.update(refactor_quant_params(part_params, prefix))
 
                 logger.info(quant_params.keys())
-                torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))
+                torch.save(
+                    quant_params,
+                    os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"),
+                )
                 logger.info(
-                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
+                    "saved parameters at {}".format(
+                        os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")
+                    )
+                )
 
             elif isinstance(layer.mlp, QuantDeepseekV3MLP):
                 part_params = cali_quant(args, layer.mlp, layer_idx, inps, dev)
-                prefix = f"mlp."
+                prefix = "mlp."
                 quant_params.update(refactor_quant_params(part_params, prefix))
                 logger.info(quant_params.keys())
-                torch.save(quant_params, os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"))
+                torch.save(
+                    quant_params,
+                    os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth"),
+                )
                 logger.info(
-                    "saved parameters at {}".format(os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")))
+                    "saved parameters at {}".format(
+                        os.path.join(args.exp_dir, f"quant_parameters_{layer_idx}.pth")
+                    )
+                )
 
 
 def main():

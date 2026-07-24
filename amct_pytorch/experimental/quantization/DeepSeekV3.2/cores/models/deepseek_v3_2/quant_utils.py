@@ -144,7 +144,7 @@ def load_layer_weight(model_dir, rank, weight_map, layer_idx):
     # remove prefix of layer:
     state_dict_new = {}
     for k, v in state_dict.items():
-        state_dict_new[k[len(prefix):]] = v
+        state_dict_new[k[len(prefix) :]] = v
     state_dict = state_dict_new
     return state_dict
 

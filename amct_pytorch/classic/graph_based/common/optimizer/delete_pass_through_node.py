@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -40,14 +40,18 @@ class DeletePassThroughNodePass(BasePass):
         object_node: node to process
         Return: None
         """
-        LOGGER.logd("Doing: delete node {} in graph.".format(object_node.name),
-                     'DeletePassThroughNodePass')
+        LOGGER.logd(
+            "Doing: delete node {} in graph.".format(object_node.name),
+            'DeletePassThroughNodePass',
+        )
 
         graph.delete_node(object_node, 0, 0)
         if object_node.is_isolated:
             graph.remove_node(object_node)
-        LOGGER.logd("Finished: delete node {} in graph.".format(object_node.name),
-                     'DeletePassThroughNodePass')
+        LOGGER.logd(
+            "Finished: delete node {} in graph.".format(object_node.name),
+            'DeletePassThroughNodePass',
+        )
 
     def match_pattern(self, node):
         """

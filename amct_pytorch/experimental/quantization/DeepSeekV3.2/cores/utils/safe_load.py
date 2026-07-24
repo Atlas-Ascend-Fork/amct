@@ -43,6 +43,7 @@ def safe_torch_load(file_path, **kwargs):
     else:
         kwargs.pop(WEIGHTS_ONLY, None)
         from loguru import logger
+
         logger.warning(
             f"Current PyTorch {torch.__version__} does not support "
             f"torch.load(weights_only=...); falling back to unsafe pickle "

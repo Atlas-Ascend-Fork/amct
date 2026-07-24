@@ -28,8 +28,18 @@ logger = logging.getLogger(__name__)
 
 # agent_type -> 不允许修改的文件模式
 PROTECTED_PATTERNS = {
-    "quant-analyzer": ["*.yaml", "*/common/models/llm/*", "*/amct_pytorch/cli/*", "*/algorithms/quant/*"],
-    "quant-reviewer": ["*.yaml", "*/common/models/llm/*", "*/amct_pytorch/cli/*", "*/algorithms/quant/*"],
+    "quant-analyzer": [
+        "*.yaml",
+        "*/common/models/llm/*",
+        "*/amct_pytorch/cli/*",
+        "*/algorithms/quant/*",
+    ],
+    "quant-reviewer": [
+        "*.yaml",
+        "*/common/models/llm/*",
+        "*/amct_pytorch/cli/*",
+        "*/algorithms/quant/*",
+    ],
 }
 
 
@@ -49,7 +59,11 @@ def main():
     agent_type = data.get("agent_type", "")
     file_path = data.get("tool_input", {}).get("file_path", "")
     patterns = PROTECTED_PATTERNS.get(agent_type)
-    if patterns and file_path and matches_any(os.path.basename(file_path), file_path, patterns):
+    if (
+        patterns
+        and file_path
+        and matches_any(os.path.basename(file_path), file_path, patterns)
+    ):
         logger.error(
             f"禁止：{agent_type} 不可修改 {file_path}"
             "（adapter 代码 / bit_config yaml / CLI / 算法实现）。改代码请走 quant-implementer。"

@@ -28,6 +28,7 @@ The static checks parse source with ``ast`` and need no built package, so they
 run in any CI environment. The behavioural check imports the real package and is
 skipped when the generated protobuf modules are absent (unbuilt source tree).
 """
+
 import ast
 import importlib
 from pathlib import Path
@@ -136,10 +137,10 @@ def test_top_level_interfaces_importable_when_built():
     """
     try:
         import amct_pytorch
+
         importlib.import_module(GRAPH_MODULE)
     except ImportError as exc:
-        pytest.skip(
-            f"graph-based package not importable in this environment: {exc}")
+        pytest.skip(f"graph-based package not importable in this environment: {exc}")
 
     expected = _module_dunder_all(GRAPH_INIT)
     assert expected, "graph module __all__ unexpectedly empty"

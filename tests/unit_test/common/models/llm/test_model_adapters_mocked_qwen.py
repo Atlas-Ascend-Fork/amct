@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,20 +16,17 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Tests for model adapters with mocked HuggingFace model loading."""
+
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import torch
 import torch.nn as nn
 from accelerate import init_empty_weights
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM
 from transformers.models.qwen3.modeling_qwen3 import Qwen3Config, Qwen3DecoderLayer
 
-from amct_pytorch.quantization.bit_policy import BitPolicy
-from tests.unit_test.common.models.llm.common.test_base import (
-    _make_block_with_attn_and_mlp,
-)
 
 FROM_PRETRAINED = 'from_pretrained'
 QUANT_TARGET_MLP = 'mlp'
@@ -55,7 +52,9 @@ def _make_qwen3_config(num_layers=2):
     )
 
 
-def _make_mock_args(model_path="/tmp/fake_model", quant_target=(QUANT_TARGET_MLP,), **extra):
+def _make_mock_args(
+    model_path="/tmp/fake_model", quant_target=(QUANT_TARGET_MLP,), **extra
+):
     base = {
         "model": model_path,
         "quant_target": list(quant_target),
@@ -84,20 +83,30 @@ def mock_hf_model(monkeypatch):
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type(
+            "FakeAT",
+            (),
+            {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)},
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
         lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
     )
     with init_empty_weights():
-        empty_model = AutoModelForCausalLM.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
+        empty_model = AutoModelForCausalLM.from_config(
+            cfg, trust_remote_code=True, torch_dtype=torch.bfloat16
+        )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
-        type("FakeAMFCLM", (), {
-            FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
-            "from_config": staticmethod(lambda *a, **kw: empty_model),
-        })(),
+        type(
+            "FakeAMFCLM",
+            (),
+            {
+                FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+                "from_config": staticmethod(lambda *a, **kw: empty_model),
+            },
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
@@ -112,6 +121,7 @@ def mock_hf_model(monkeypatch):
 class TestQwen3Mocked:
     def test_qwen3_init_creates_model(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
         model = Qwen3(args)
         assert model.num_layers == 2
@@ -123,17 +133,20 @@ class TestQwen3Mocked:
 
     def test_qwen3_parse_quant_mode_rejects_moe(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         args = _make_mock_args(quant_target=["moe"])
         with pytest.raises(ValueError, match="does not support quant_target='moe'"):
             Qwen3(args)
 
     def test_qwen3_get_layer_weight_prefix(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         model = Qwen3(_make_mock_args())
         assert model.get_layer_weight_prefix(0) == "model.layers.0."
 
     def test_qwen3_iter_deploy_bindings_called(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         model = Qwen3(_make_mock_args())
         block = nn.Module()
         bindings = list(model.iter_deploy_bindings(0, block))
@@ -141,6 +154,7 @@ class TestQwen3Mocked:
 
     def test_qwen3_iter_ptq_units_called(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         model = Qwen3(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
         block = nn.Module()
         block.mlp = nn.Linear(4, 4)
@@ -153,6 +167,7 @@ class TestQwen3Mocked:
             export_block_deploy,
         )
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         model = Qwen3(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
 
         def block(layer_idx):
@@ -174,11 +189,13 @@ class TestQwen3Mocked:
         )
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         model = Qwen3(_make_mock_args())
         assert model.cls is qwen3_decoder_layer
 
     def test_qwen3_num_layers_property(self, mock_hf_model):
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         model = Qwen3(_make_mock_args())
         assert model.num_layers == 2
 
@@ -186,6 +203,7 @@ class TestQwen3Mocked:
         from transformers.models.qwen3.modeling_qwen3 import Qwen3Config as qwen3_config
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
+
         model = Qwen3(_make_mock_args())
         assert model.textconfig is qwen3_config
 
@@ -198,17 +216,27 @@ class TestQwen3MoeMocked:
         )
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoConfig",
@@ -217,21 +245,32 @@ class TestQwen3MoeMocked:
         fake_tokenizer = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-            type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+            type(
+                "FakeAT",
+                (),
+                {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)},
+            )(),
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.init_empty_weights",
             lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
         )
         from transformers import AutoModelForCausalLM as auto_model_for_causal_lm
+
         with init_empty_weights():
-            empty_model = auto_model_for_causal_lm.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
+            empty_model = auto_model_for_causal_lm.from_config(
+                cfg, trust_remote_code=True, torch_dtype=torch.bfloat16
+            )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
-            type("FakeAMFCLM", (), {
-                FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
-                "from_config": staticmethod(lambda *a, **kw: empty_model),
-            })(),
+            type(
+                "FakeAMFCLM",
+                (),
+                {
+                    FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+                    "from_config": staticmethod(lambda *a, **kw: empty_model),
+                },
+            )(),
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
@@ -247,17 +286,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoConfig",
@@ -266,45 +315,68 @@ class TestQwen3MoeMocked:
         fake_tokenizer = MagicMock()
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-            type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+            type(
+                "FakeAT",
+                (),
+                {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)},
+            )(),
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.init_empty_weights",
             lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
         )
         from transformers import AutoModelForCausalLM as auto_model_for_causal_lm
+
         with init_empty_weights():
-            empty_model = auto_model_for_causal_lm.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
+            empty_model = auto_model_for_causal_lm.from_config(
+                cfg, trust_remote_code=True, torch_dtype=torch.bfloat16
+            )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
-            type("FakeAMFCLM", (), {
-                FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
-                "from_config": staticmethod(lambda *a, **kw: empty_model),
-            })(),
+            type(
+                "FakeAMFCLM",
+                (),
+                {
+                    FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+                    "from_config": staticmethod(lambda *a, **kw: empty_model),
+                },
+            )(),
         )
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
             lambda path: {},
         )
         args = _make_mock_args(quant_target=[QUANT_TARGET_MLP], moe_mlp_param_dir="")
-        with pytest.raises(ValueError, match=f"does not support quant_target='{QUANT_TARGET_MLP}'"):
+        with pytest.raises(
+            ValueError, match=f"does not support quant_target='{QUANT_TARGET_MLP}'"
+        ):
             Qwen3Moe(args)
 
     def test_qwen3_moe_num_experts(self, monkeypatch):
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=8, moe_intermediate_size=64,
-            n_routed_experts=8, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=8,
+            moe_intermediate_size=64,
+            n_routed_experts=8,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -315,17 +387,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -336,17 +418,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -370,17 +462,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -401,17 +503,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -425,6 +537,7 @@ class TestQwen3MoeMocked:
             captured["called"] = True
             captured["module"] = module
             return module
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.QuantQwen3MLP",
             _mock_mlp,
@@ -436,17 +549,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -461,17 +584,27 @@ class TestQwen3MoeMocked:
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -496,17 +629,27 @@ class TestQwen3MoeMocked:
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -526,17 +669,27 @@ class TestQwen3MoeMocked:
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -559,17 +712,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -583,17 +746,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
@@ -608,17 +781,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
@@ -632,17 +815,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
@@ -657,17 +850,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
@@ -683,25 +886,41 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
         mock_result = [torch.randn(2, 4, 8)]
         fake_block_result = mock_result
 
-        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
-                                   use_quant_block=False, enable_quant=False):
+        def _mock_do_block_forward(
+            self,
+            layer_idx,
+            samples,
+            hook_name=None,
+            use_quant_block=False,
+            enable_quant=False,
+        ):
             return fake_block_result
 
         monkeypatch.setattr(
@@ -715,17 +934,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
@@ -741,17 +970,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["attn-linear"])
@@ -762,6 +1001,7 @@ class TestQwen3MoeMocked:
 
         def _mock_apply(args_in, dl_in, attn_cls):
             captured["called"] = True
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.apply_quant_to_attn",
             _mock_apply,
@@ -774,17 +1014,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["attn-cache"])
@@ -795,6 +1045,7 @@ class TestQwen3MoeMocked:
 
         def _mock_apply(args_in, dl_in, attn_cls):
             captured["called"] = True
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.apply_quant_to_attn",
             _mock_apply,
@@ -807,17 +1058,27 @@ class TestQwen3MoeMocked:
         from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
@@ -832,21 +1093,33 @@ class TestQwen3MoeMocked:
 
         from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
         from amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe import Qwen3Moe
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3MoeConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2, head_dim=16,
-            rms_norm_eps=1e-6, vocab_size=100, max_position_embeddings=512,
-            rope_theta=10000.0, tie_word_embeddings=False,
-            num_experts=4, moe_intermediate_size=64,
-            n_routed_experts=4, n_shared_experts=0,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
+            num_experts=4,
+            moe_intermediate_size=64,
+            n_routed_experts=4,
+            n_shared_experts=0,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Moe(_make_mock_args(quant_target=["moe"]))
-        unit = make_ptq_unit("moe", QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
+        unit = make_ptq_unit(
+            "moe", QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4)
+        )
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -865,21 +1138,32 @@ def _mock_base_deps(monkeypatch, cfg):
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type(
+            "FakeAT",
+            (),
+            {FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)},
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
         lambda: MagicMock(__enter__=lambda s: None, __exit__=lambda *a: None),
     )
     from transformers import AutoModelForCausalLM as auto_model_for_causal_lm
+
     with init_empty_weights():
-        empty_model = auto_model_for_causal_lm.from_config(cfg, trust_remote_code=True, torch_dtype=torch.bfloat16)
+        empty_model = auto_model_for_causal_lm.from_config(
+            cfg, trust_remote_code=True, torch_dtype=torch.bfloat16
+        )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
-        type("FakeAMFCLM", (), {
-            FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
-            "from_config": staticmethod(lambda *a, **kw: empty_model),
-        })(),
+        type(
+            "FakeAMFCLM",
+            (),
+            {
+                FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+                "from_config": staticmethod(lambda *a, **kw: empty_model),
+            },
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
@@ -895,15 +1179,23 @@ class TestQwen3NextMocked:
         )
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -915,19 +1207,29 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MLP])
-        with pytest.raises(ValueError, match=f"does not support quant_target='{QUANT_TARGET_MLP}'"):
+        with pytest.raises(
+            ValueError, match=f"does not support quant_target='{QUANT_TARGET_MLP}'"
+        ):
             Qwen3Next(args)
 
     def test_qwen3_next_export_block_deploy(self, monkeypatch):
@@ -937,15 +1239,23 @@ class TestQwen3NextMocked:
             export_block_deploy,
         )
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -967,15 +1277,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -986,15 +1304,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1021,15 +1347,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1046,22 +1380,32 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
         model = Qwen3Next(args)
         dl = nn.Module()
         moe = nn.Module()
-        moe.experts = type("PE", (), {"gate_up_proj": None, "down_proj": None, "num_experts": 4})()
+        moe.experts = type(
+            "PE", (), {"gate_up_proj": None, "down_proj": None, "num_experts": 4}
+        )()
         dl.mlp = moe
         monkeypatch.setattr(model, "block", lambda idx: dl)
         monkeypatch.setattr(
@@ -1079,22 +1423,32 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
         model = Qwen3Next(args)
         dl = nn.Module()
         moe = nn.Module()
-        moe.experts = type("PE", (), {"gate_up_proj": None, "down_proj": None, "num_experts": 4})()
+        moe.experts = type(
+            "PE", (), {"gate_up_proj": None, "down_proj": None, "num_experts": 4}
+        )()
         moe.shared_expert = nn.Linear(4, 4)
         dl.mlp = moe
         monkeypatch.setattr(model, "block", lambda idx: dl)
@@ -1112,6 +1466,7 @@ class TestQwen3NextMocked:
             def __new__(cls, args_in, module, **kwargs):
                 captured["called"] = True
                 return module
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.QuantQwen3NextMLP",
             _MockQwen3NextMLP,
@@ -1123,15 +1478,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1152,15 +1515,23 @@ class TestQwen3NextMocked:
             QuantQwen3NextLinearAttn,
         )
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["attn-linear"])
@@ -1172,8 +1543,10 @@ class TestQwen3NextMocked:
 
         def _mock(args_in, dl_in, attn_cls):
             captured["attn_cls"] = attn_cls
+
         monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.apply_quant_to_attn", _mock
+            "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.apply_quant_to_attn",
+            _mock,
         )
         model.apply_quant_attn(dl)
         assert captured["attn_cls"] is QuantQwen3NextLinearAttn
@@ -1185,15 +1558,23 @@ class TestQwen3NextMocked:
             QuantQwen3NextAttn,
         )
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["attn-linear"])
@@ -1204,8 +1585,10 @@ class TestQwen3NextMocked:
 
         def _mock(args_in, dl_in, attn_cls):
             captured["attn_cls"] = attn_cls
+
         monkeypatch.setattr(
-            "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.apply_quant_to_attn", _mock
+            "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.apply_quant_to_attn",
+            _mock,
         )
         model.apply_quant_attn(dl)
         assert captured["attn_cls"] is QuantQwen3NextAttn
@@ -1215,15 +1598,23 @@ class TestQwen3NextMocked:
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1248,15 +1639,23 @@ class TestQwen3NextMocked:
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1276,15 +1675,23 @@ class TestQwen3NextMocked:
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
         from amct_pytorch.quantization.modules.quant_linear import QuantLinear
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1300,22 +1707,32 @@ class TestQwen3NextMocked:
         expert0.extra = nn.Module()
         expert0.extra.proj = ql
         block.mlp.experts.expert_modules = nn.ModuleList([expert0])
-        with pytest.raises(ValueError, match="Unexpected Qwen3-Next expert module name"):
+        with pytest.raises(
+            ValueError, match="Unexpected Qwen3-Next expert module name"
+        ):
             list(model.iter_deploy_bindings(0, block))
 
     def test_qwen3_next_skips_non_quant_linear(self, monkeypatch):
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1329,15 +1746,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
@@ -1352,15 +1777,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
@@ -1374,15 +1807,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
@@ -1398,23 +1839,37 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
         mock_result = [torch.randn(2, 4, 8)]
         fake_block_result = mock_result
 
-        def _mock_do_block_forward(self, layer_idx, samples, hook_name=None,
-                                   use_quant_block=False, enable_quant=False):
+        def _mock_do_block_forward(
+            self,
+            layer_idx,
+            samples,
+            hook_name=None,
+            use_quant_block=False,
+            enable_quant=False,
+        ):
             return fake_block_result
 
         monkeypatch.setattr(
@@ -1428,15 +1883,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
@@ -1452,22 +1915,32 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["attn-linear"])
         model = Qwen3Next(args)
         dl = nn.Module()
         monkeypatch.setattr(model, "block", lambda idx: dl)
-        monkeypatch.setattr(model, "apply_quant_attn", lambda dl_in: setattr(dl_in, "_a", True))
+        monkeypatch.setattr(
+            model, "apply_quant_attn", lambda dl_in: setattr(dl_in, "_a", True)
+        )
         result = model.build_quant_block(0)
         assert hasattr(result, "_a")
 
@@ -1476,19 +1949,29 @@ class TestQwen3NextMocked:
 
         from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         model = Qwen3Next(_make_mock_args(quant_target=["moe"]))
-        unit = make_ptq_unit("moe", QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4))
+        unit = make_ptq_unit(
+            "moe", QUANT_TARGET_MLP, layer_idx=0, module=nn.Linear(4, 4)
+        )
         fake_data = torch.randn(4, 4)
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.common.base.load_ptq_inps",
@@ -1501,15 +1984,23 @@ class TestQwen3NextMocked:
         from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextConfig
 
         from amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next import Qwen3Next
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.get_weight_mappings",
             lambda path: {},
         )
         cfg = Qwen3NextConfig(
-            num_hidden_layers=2, hidden_size=64, intermediate_size=128,
-            num_attention_heads=4, num_key_value_heads=2,
-            head_dim=16, rms_norm_eps=1e-6, vocab_size=100,
-            max_position_embeddings=512, rope_theta=10000.0, tie_word_embeddings=False,
+            num_hidden_layers=2,
+            hidden_size=64,
+            intermediate_size=128,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            head_dim=16,
+            rms_norm_eps=1e-6,
+            vocab_size=100,
+            max_position_embeddings=512,
+            rope_theta=10000.0,
+            tie_word_embeddings=False,
         )
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=["moe"])
@@ -1520,5 +2011,3 @@ class TestQwen3NextMocked:
         units = list(model.iter_ptq_units(0, block))
         assert len(units) == 2
         assert all(u.kind == "moe" for u in units)
-
-

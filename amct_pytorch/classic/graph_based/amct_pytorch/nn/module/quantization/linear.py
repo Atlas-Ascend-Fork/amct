@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -32,17 +32,12 @@ class LinearQAT(nn.Linear, QATBase):
     Function: Quantization module class after linear encapsulation.
     APIs: __init__, check_quantifiable, forward, from_float
     """
+
     _float_module = nn.Linear
     _required_params = ("in_features", "out_features", "bias")
 
     def __init__(
-        self,
-        in_features,
-        out_features,
-        bias=True,
-        device=None,
-        dtype=None,
-        config=None
+        self, in_features, out_features, bias=True, device=None, dtype=None, config=None
     ) -> None:
         """Init LinearQat amct op module"""
 
@@ -67,21 +62,19 @@ class LinearQAT(nn.Linear, QATBase):
         Args: `mod` a float module, 'config' amct op quant config
         """
         if not isinstance(mod, cls._float_module):
-            raise RuntimeError(f'{cls.__name__}.from_float can only works for '
-                               f'{cls._float_module.__name__}')
+            raise RuntimeError(
+                f'{cls.__name__}.from_float can only works for '
+                f'{cls._float_module.__name__}'
+            )
 
         qat_linear = cls(
-            mod.in_features,
-            mod.out_features,
-            bias=mod.bias is not None,
-            config=config
+            mod.in_features, mod.out_features, bias=mod.bias is not None, config=config
         )
 
         setattr(qat_linear, 'weight', mod.weight)
         setattr(qat_linear, 'bias', mod.bias)
         qat_linear.to(mod.weight.device)
-        LOGGER.logi(
-            f'Convert {cls._float_module.__name__} to QAT op successfully.')
+        LOGGER.logi(f'Convert {cls._float_module.__name__} to QAT op successfully.')
         return qat_linear
 
     def check_quantifiable(self):

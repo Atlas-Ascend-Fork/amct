@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,7 +26,11 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
-DATASETS_DIR = os.path.realpath(os.path.join(CUR_DIR, '../../../../../../../../build/bin/llt/toolchain/dmct_datasets'))
+DATASETS_DIR = os.path.realpath(
+    os.path.join(
+        CUR_DIR, '../../../../../../../../build/bin/llt/toolchain/dmct_datasets'
+    )
+)
 DATA_PATH = os.path.join(DATASETS_DIR, 'pytorch/data')
 
 logger = logging.getLogger(__name__)
@@ -36,7 +40,7 @@ class CustomDataset(Dataset):
     def __init__(self, num_samples):
         """
         初始化数据集。
-        
+
         参数:
             num_samples (int): 数据集中的样本数量。
         """
@@ -52,18 +56,18 @@ class CustomDataset(Dataset):
             label = torch.randint(0, 10, (1,)).item()
             self.data.append(tensor)
             self.labels.append(label)
-    
+
     def __len__(self):
         """返回数据集的长度。"""
         return self.num_samples
-    
+
     def __getitem__(self, idx):
         """
         根据索引获取数据和标签。
-        
+
         参数:
             idx (int): 索引值。
-            
+
         返回:
             tuple: 包含张量和标签的元组。
         """
@@ -90,8 +94,12 @@ def run_inference_model(model, iterations=None):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            test_loss += F.nll_loss(
+                output, target, reduction='sum'
+            ).item()  # sum up batch loss
+            pred = output.argmax(
+                dim=1, keepdim=True
+            )  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
             iter_num = iter_num + 1
             if iter_num == iterations:
@@ -100,11 +108,13 @@ def run_inference_model(model, iterations=None):
     logger.info('iter_num %s', iter_num)
     data_length = iter_num * batch_size
     test_loss /= data_length
-    acc = 100. * correct / data_length
+    acc = 100.0 * correct / data_length
 
-    logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, data_length,
-        100. * correct / data_length))
+    logger.info(
+        '\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+            test_loss, correct, data_length, 100.0 * correct / data_length
+        )
+    )
 
     return test_loss, acc
 
@@ -117,7 +127,9 @@ def run_inference_model_auto_cali(model, iterations=2):
     iter_num = 0
     with torch.no_grad():
         for _ in range(iterations):
-            data = torch.tensor(np.random.uniform(0, 10, (32, 1, 28, 28)).astype(np.float32))
+            data = torch.tensor(
+                np.random.uniform(0, 10, (32, 1, 28, 28)).astype(np.float32)
+            )
             data = data.to(device)
             model(data)
             iter_num = iter_num + 1
@@ -131,15 +143,22 @@ def run_inference_onnx(onnx_file, iterations=None):
     onnx_model = onnx.load(onnx_file)
     onnx.checker.check_model(onnx_model)
 
-    ort_session = onnxruntime.InferenceSession(onnx_file, providers=['CPUExecutionProvider'])
+    ort_session = onnxruntime.InferenceSession(
+        onnx_file, providers=['CPUExecutionProvider']
+    )
     input_names = [input_onnx.name for input_onnx in ort_session.get_inputs()]
     output_names = [output_onnx.name for output_onnx in ort_session.get_outputs()]
     logger.info('inputs: %s', input_names)
     logger.info('otputs: %s', output_names)
 
     def to_numpy(tensor):
-        data_numpy = tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+        data_numpy = (
+            tensor.detach().cpu().numpy()
+            if tensor.requires_grad
+            else tensor.cpu().numpy()
+        )
         return data_numpy
+
     # prepare data
     batch_size = 16
     torch.manual_seed(1)
@@ -164,8 +183,12 @@ def run_inference_onnx(onnx_file, iterations=None):
             ort_outs = ort_session.run(output_names, ort_inputs)
             output = torch.Tensor(ort_outs[0])
             # cal acc
-            test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            test_loss += F.nll_loss(
+                output, target, reduction='sum'
+            ).item()  # sum up batch loss
+            pred = output.argmax(
+                dim=1, keepdim=True
+            )  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
             iter_num = iter_num + 1
             if iter_num == iterations:
@@ -174,10 +197,12 @@ def run_inference_onnx(onnx_file, iterations=None):
     logger.info('iter_num %s', iter_num)
     data_length = iter_num * batch_size
     test_loss /= data_length
-    acc = 100. * correct / data_length
+    acc = 100.0 * correct / data_length
 
-    logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, data_length,
-        100. * correct / data_length))
+    logger.info(
+        '\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+            test_loss, correct, data_length, 100.0 * correct / data_length
+        )
+    )
 
     return test_loss, acc

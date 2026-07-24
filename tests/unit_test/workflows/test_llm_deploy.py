@@ -23,15 +23,13 @@ cover the file-IO and helper logic in isolation.
 
 import importlib
 import json
-import os
-import shutil
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 import torch
-from safetensors.torch import load_file, save_file
+from safetensors.torch import save_file
 
 from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
 
@@ -68,7 +66,9 @@ def _make_pipeline_mock(num_layers=2, **overrides):
     return SimpleNamespace(**defaults)
 
 
-def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype="int8"):
+def _make_workflow(
+    model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype="int8"
+):
     workflow = LlmDeployWorkflow.__new__(LlmDeployWorkflow)
     args = SimpleNamespace(
         granularity=GRANULARITY_BLOCK,
@@ -89,6 +89,7 @@ def _make_workflow(model_path=FAKE_MODEL, output_dir=TMP_DEPLOY_OUT, quant_dtype
     workflow.pipeline = None
     return workflow
 
+
 # ---- dtype flag derivation ----------------------------------------------
 
 
@@ -106,6 +107,7 @@ def test_quant_dtype_flags_set_correctly(dtype, is_mx, is_int, is_hif):
     assert wf.is_int is is_int
     assert wf.is_hif is is_hif
 
+
 # ---- _is_weight_file -----------------------------------------------------
 
 
@@ -121,6 +123,7 @@ def test_quant_dtype_flags_set_correctly(dtype, is_mx, is_int, is_hif):
 )
 def test_is_weight_file_recognizes_safetensors_artifacts(name, expected):
     assert LlmDeployWorkflow._is_weight_file(Path(name)) is expected
+
 
 # ---- _copy_support_files -------------------------------------------------
 
@@ -162,14 +165,19 @@ def test_copy_support_files_skips_existing_destinations(tmp_path):
     wf._copy_support_files()
     assert (dst / CONFIG_JSON).read_text() == "old"
 
+
 # ---- _load_weight_index --------------------------------------------------
 
 
 def test_load_weight_index_reads_json(tmp_path):
-    index = {"weight_map": {"a.weight": KEY_SHARD1_SAFETENSORS}, METADATA_KEY: {"total_size": 999}}
+    index = {
+        "weight_map": {"a.weight": KEY_SHARD1_SAFETENSORS},
+        METADATA_KEY: {"total_size": 999},
+    }
     (tmp_path / SAFETENSORS_INDEX_JSON).write_text(json.dumps(index))
     wf = _make_workflow(model_path=str(tmp_path))
     assert wf._load_weight_index() == index
+
 
 # ---- _write_safetensor_file / _write_block_file ------------------------
 
@@ -193,9 +201,12 @@ def test_write_block_file_uses_zero_padded_filename_and_returns_routing(tmp_path
     wf = _make_workflow(output_dir=str(tmp_path))
     # Pretend the model has 12 layers so width = max(3, 2) = 3.
     wf.pipeline = SimpleNamespace(num_layers=12)
-    routing = wf._write_block_file(layer_idx=4, layer_tensors={"a.weight": torch.zeros(2, 3)})
+    routing = wf._write_block_file(
+        layer_idx=4, layer_tensors={"a.weight": torch.zeros(2, 3)}
+    )
     assert routing == {"a.weight": "layer_004.safetensors"}
     assert (tmp_path / "layer_004.safetensors").exists()
+
 
 # ---- _collect_replaced_original_weights ---------------------------------
 
@@ -242,6 +253,7 @@ def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
     assert saved[METADATA_KEY]["total_size"] == 150
     assert saved["weight_map"] == weight_map
 
+
 # ---- _refresh_config -----------------------------------------------------
 
 
@@ -267,6 +279,7 @@ def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
     wf._refresh_config(quant_ignore_layers=[])
     refreshed = json.loads((tmp_path / CONFIG_JSON).read_text())
     assert refreshed[QUANTIZATION_CONFIG]["format"] == "float-quantized"
+
 
 # ---- _write_remaining_original_weights ----------------------------------
 
@@ -303,14 +316,17 @@ def test_llm_deploy_run_blockwise(monkeypatch):
 
     def setup():
         return "sink"
+
     wf.setup = setup
 
     def _run_blockwise():
         return {"index_path": "/out", "num_output_files": 1}
+
     wf._run_blockwise = _run_blockwise
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.logger",
-        importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
+        importlib.import_module("types").SimpleNamespace(remove=lambda h: None),
+    )
     result = wf.run()
     assert result["index_path"] == "/out"
 
@@ -318,22 +334,33 @@ def test_llm_deploy_run_blockwise(monkeypatch):
 def test_llm_deploy_setup(monkeypatch):
     wf = _make_workflow()
     called = {}
-    monkeypatch.setattr(wf, "_register_components", lambda: called.update({"reg": True}))
+    monkeypatch.setattr(
+        wf, "_register_components", lambda: called.update({"reg": True})
+    )
     monkeypatch.setattr(wf, "_build_pipeline", lambda: called.update({"pipe": True}))
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.setup_run_logging", lambda log_dir, name: ("sink", None))
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.setup_run_logging",
+        lambda log_dir, name: ("sink", None),
+    )
     monkeypatch.setattr("os.makedirs", lambda p, exist_ok: None)
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.ensure_log_dir", lambda d: None)
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.ensure_log_dir", lambda d: None
+    )
     wf.setup()
     assert called.get("reg") is True
     assert called.get("pipe") is True
+
 
 # ---- Task 15: Additional deploy coverage ---------------------------------
 
 
 def _make_deploy_workflow(**overrides):
     defaults = dict(
-        model="/tmp/fake", model_name=MODEL_NAME_QWEN3, quant_dtype="int4",
-        granularity=GRANULARITY_BLOCK, output_dir="/tmp/fake",
+        model="/tmp/fake",
+        model_name=MODEL_NAME_QWEN3,
+        quant_dtype="int4",
+        granularity=GRANULARITY_BLOCK,
+        output_dir="/tmp/fake",
     )
     defaults.update(overrides)
     args = SimpleNamespace(**defaults)
@@ -374,15 +401,21 @@ def test_deploy_init_dtype_flags():
 
 def test_deploy_setup_creates_output_dir_and_registers(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.register_llm_models", lambda: None)
+        "amct_pytorch.workflows.llm_deploy.register_llm_models", lambda: None
+    )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.register_dtype", lambda: None)
+        "amct_pytorch.workflows.llm_deploy.register_dtype", lambda: None
+    )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.register_algorithms", lambda: None)
+        "amct_pytorch.workflows.llm_deploy.register_algorithms", lambda: None
+    )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.ensure_log_dir", lambda d: None)
+        "amct_pytorch.workflows.llm_deploy.ensure_log_dir", lambda d: None
+    )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.setup_run_logging", lambda log_dir, name: ("sink", None))
+        "amct_pytorch.workflows.llm_deploy.setup_run_logging",
+        lambda log_dir, name: ("sink", None),
+    )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.MODEL_REGISTRY",
         SimpleNamespace(get=lambda k: type("FM", (), {"__init__": lambda s, a: None})),
@@ -399,9 +432,11 @@ def test_deploy_run_unsupported_granularity():
 
     def setup():
         return "fake_sink"
+
     wf.setup = setup
     with pytest.raises(ValueError, match="Unsupported granularity"):
         wf.run()
+
 
 # ---- _run_blockwise (mocked helpers) -------------------------------------
 
@@ -418,7 +453,8 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
         _mock_export_block_deploy,
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.logger", MagicMock(),
+        "amct_pytorch.workflows.llm_deploy.logger",
+        MagicMock(),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",
@@ -428,15 +464,25 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
     wf.pipeline = _make_pipeline_mock(num_layers=2)
     wf._copy_support_files = MagicMock()
-    wf._load_weight_index = MagicMock(return_value={"weight_map": {
-        LAYER_WEIGHT: KEY_SHARD1_SAFETENSORS,
-    }})
-    wf._write_block_file = MagicMock(return_value={LAYER_WEIGHT: "layer_000.safetensors"})
+    wf._load_weight_index = MagicMock(
+        return_value={
+            "weight_map": {
+                LAYER_WEIGHT: KEY_SHARD1_SAFETENSORS,
+            }
+        }
+    )
+    wf._write_block_file = MagicMock(
+        return_value={LAYER_WEIGHT: "layer_000.safetensors"}
+    )
     wf._collect_replaced_original_weights = MagicMock(return_value={LAYER_WEIGHT})
-    wf._write_remaining_original_weights = MagicMock(return_value={
-        "other.weight": REST_00000,
-    })
-    wf._refresh_weight_index = MagicMock(return_value=str(tmp_path / SAFETENSORS_INDEX_JSON))
+    wf._write_remaining_original_weights = MagicMock(
+        return_value={
+            "other.weight": REST_00000,
+        }
+    )
+    wf._refresh_weight_index = MagicMock(
+        return_value=str(tmp_path / SAFETENSORS_INDEX_JSON)
+    )
     wf._refresh_config = MagicMock()
 
     result = wf._run_blockwise()
@@ -445,13 +491,17 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
     assert wf._write_block_file.call_count == 2
     wf._refresh_config.assert_called_once()
 
+
 # ---- __init__ via actual constructor -------------------------------------
 
 
 def test_deploy_init_sets_all_attrs():
     args = SimpleNamespace(
-        granularity=GRANULARITY_BLOCK, model_name=MODEL_NAME_QWEN3, model=FAKE_MODEL,
-        quant_dtype="int8", output_dir=TMP_DEPLOY_OUT,
+        granularity=GRANULARITY_BLOCK,
+        model_name=MODEL_NAME_QWEN3,
+        model=FAKE_MODEL,
+        quant_dtype="int8",
+        output_dir=TMP_DEPLOY_OUT,
     )
     wf = LlmDeployWorkflow(args)
     assert wf.args is args
@@ -467,21 +517,32 @@ def test_deploy_init_sets_all_attrs():
 
 
 def test_deploy_init_mx_flag():
-    wf = LlmDeployWorkflow(SimpleNamespace(
-        granularity=GRANULARITY_BLOCK, model_name="q", model="/m", quant_dtype="mxfp8",
-        output_dir="/out",
-    ))
+    wf = LlmDeployWorkflow(
+        SimpleNamespace(
+            granularity=GRANULARITY_BLOCK,
+            model_name="q",
+            model="/m",
+            quant_dtype="mxfp8",
+            output_dir="/out",
+        )
+    )
     assert wf.is_mx is True
     assert wf.is_int is False
     assert wf.is_hif is False
 
 
 def test_deploy_init_hif_flag():
-    wf = LlmDeployWorkflow(SimpleNamespace(
-        granularity=GRANULARITY_BLOCK, model_name="q", model="/m", quant_dtype="hifp8",
-        output_dir="/out",
-    ))
+    wf = LlmDeployWorkflow(
+        SimpleNamespace(
+            granularity=GRANULARITY_BLOCK,
+            model_name="q",
+            model="/m",
+            quant_dtype="hifp8",
+            output_dir="/out",
+        )
+    )
     assert wf.is_hif is True
+
 
 # ---- _write_remaining_original_weights: shard split -----------------------
 
@@ -503,6 +564,7 @@ def test_write_remaining_weights_splits_on_max_shard_size(tmp_path):
     assert BIG in updated
     assert (dst / REST_00000).exists()
 
+
 # ---- _write_remaining_original_weights: empty chunk -----------------------
 
 
@@ -510,6 +572,7 @@ def test_write_remaining_weights_empty_input_returns_empty():
     wf = _make_workflow()
     updated = wf._write_remaining_original_weights({}, set())
     assert updated == {}
+
 
 # ---- _run_blockwise: empty layer tensors ----------------------------------
 
@@ -520,7 +583,8 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
         lambda pipeline, layer_idx, quant_ignore_layers: ({}, {}),
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.logger", MagicMock(),
+        "amct_pytorch.workflows.llm_deploy.logger",
+        MagicMock(),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",
@@ -541,7 +605,6 @@ def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     assert "index_path" in result
 
 
-
 def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     src = tmp_path / "src"
     dst = tmp_path / "dst"
@@ -552,19 +615,28 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.load_file",
         lambda path, device="cpu": {
-            MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: torch.arange(6, dtype=torch.float32).reshape(2, 3),
+            MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: torch.arange(
+                6, dtype=torch.float32
+            ).reshape(2, 3),
         },
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.convert_state_dict",
-        lambda weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size: weight,
+        lambda weight,
+        weight_name,
+        scale_inv_name,
+        original_weight_map,
+        model_dir,
+        loaded_files,
+        block_size: weight,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",
         lambda iterable, desc="": iterable,
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.logger", MagicMock(),
+        "amct_pytorch.workflows.llm_deploy.logger",
+        MagicMock(),
     )
 
     wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
@@ -603,11 +675,14 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
 def _make_bit_policy():
     """Build a minimal BitPolicy suitable for constructor tests."""
     from amct_pytorch.quantization.bit_policy import BitPolicy
-    return BitPolicy({
-        "mlp": {"gate_proj": {"w_bits": 8, "a_bits": 8}},
-        "attn-linear": {},
-        "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-    })
+
+    return BitPolicy(
+        {
+            "mlp": {"gate_proj": {"w_bits": 8, "a_bits": 8}},
+            "attn-linear": {},
+            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+        }
+    )
 
 
 def test_convert_tensor_bf16():
@@ -642,6 +717,7 @@ def test_refresh_config_bf16_uses_pipeline_quant_config(tmp_path):
 def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     """When quant_dtype='int', weights in quant_layers go through quant_payload."""
     from amct_pytorch.quantization.dtypes import register_dtype
+
     register_dtype()
 
     src = tmp_path / "src"
@@ -654,10 +730,14 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
         {"layer.weight": torch.randn(4, 4, dtype=torch.float32)},
         str(src / KEY_SHARD1_SAFETENSORS),
     )
-    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
-        "metadata": {},
-        "weight_map": {"layer.weight": KEY_SHARD1_SAFETENSORS},
-    }))
+    (src / SAFETENSORS_INDEX_JSON).write_text(
+        json.dumps(
+            {
+                "metadata": {},
+                "weight_map": {"layer.weight": KEY_SHARD1_SAFETENSORS},
+            }
+        )
+    )
 
     logger = MagicMock()
     monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", logger)
@@ -669,7 +749,9 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="int")
     wf.granularity = "tensor"
     wf.pipeline = MagicMock()
-    wf.pipeline.get_scale_name = MagicMock(return_value=("_scale_inv", "missing_scale_inv"))
+    wf.pipeline.get_scale_name = MagicMock(
+        return_value=("_scale_inv", "missing_scale_inv")
+    )
     wf.pipeline.generate_tensorwise_quant_layers = MagicMock(return_value={"layer": 8})
     wf.pipeline.generate_tensorwise_ignore_layers = MagicMock(return_value=[])
     wf.pipeline.cache_scheme = MagicMock(return_value={})
@@ -684,7 +766,6 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     assert result["num_output_files"] == 1
     # quant_payload produces qweight + weight_scale + weight_bias
     assert "layer.weight" in refreshed_index["weight_map"]
-
 
 
 def test_load_weight_index_single_shard_synthesizes(tmp_path):

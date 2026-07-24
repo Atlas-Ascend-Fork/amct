@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,6 +27,7 @@ class ReplaceAntiQuantPass(BaseFusionPass):
     APIs: match_pattern, do_pass, get_np_array_from_conv,
           get_np_array_from_bn, write_fused_weights_bias_back
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -60,8 +61,9 @@ class ReplaceAntiQuantPass(BaseFusionPass):
         """
         # Step1: add a new_node
         attr_helper = AttributeProtoHelper(object_node.proto)
-        mul_node = add_fake_antiquant(graph, object_node.name,
-                                      attr_helper.get_attr_value('scale'))
+        mul_node = add_fake_antiquant(
+            graph, object_node.name, attr_helper.get_attr_value('scale')
+        )
 
         # remove input links
         in_index = 0
@@ -69,8 +71,7 @@ class ReplaceAntiQuantPass(BaseFusionPass):
         peer_output_anchor = in_anchor.get_peer_output_anchor()
         peer_node = peer_output_anchor.node
         peer_output_anchor_index = peer_output_anchor.index
-        graph.remove_edge(peer_node, peer_output_anchor_index,
-                          object_node, in_index)
+        graph.remove_edge(peer_node, peer_output_anchor_index, object_node, in_index)
         graph.add_edge(peer_node, peer_output_anchor_index, mul_node, 0)
         # remove output links
         output_anchor = object_node.get_output_anchor(0)
@@ -89,6 +90,8 @@ class ReplaceAntiQuantPass(BaseFusionPass):
 
         LOGGER.logd(
             "Replace anti-quant layer '{}' to fake anti-quant "
-            "layer '{}' success!".format(object_node.name,
-                                         object_node.name + '.fakequant'),
-            'ReplaceAntiQuantPass')
+            "layer '{}' success!".format(
+                object_node.name, object_node.name + '.fakequant'
+            ),
+            'ReplaceAntiQuantPass',
+        )

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -44,10 +44,11 @@ BATCH_NUM = 'batch_num'
 FAKEQUANT_PRECISION_MODE = 'fakequant_precision_mode'
 
 
-class RetrainConfigBase():
+class RetrainConfigBase:
     '''retraon config base'''
+
     def __init__(self, graph_objects, capacity):
-        ''' inner method '''
+        '''inner method'''
         self.graph_objects = graph_objects
         self.capacity = capacity
         self.graph_querier = graph_objects.graph_querier
@@ -57,7 +58,9 @@ class RetrainConfigBase():
         self.prune_type = NO_PRUNE
         self.prunable_types = {}
         self.prunable_types[FILTER] = self.capacity.get_value('PRUNABLE_TYPES')
-        self.prunable_types[SELECTIVE] = self.capacity.get_value('SELECTIVE_PRUNABLE_TYPES')
+        self.prunable_types[SELECTIVE] = self.capacity.get_value(
+            'SELECTIVE_PRUNABLE_TYPES'
+        )
         self.prunable_types[NO_PRUNE] = []
         self.enable_retrain = True
         self.enable_prune = False
@@ -74,7 +77,7 @@ class RetrainConfigBase():
         self.enable_prune = enable_prune
 
     def get_supported_layers(self, graph):
-        ''' inner method for retrain quant '''
+        '''inner method for retrain quant'''
         # get qat layer2type dict if has function
         if hasattr(self.graph_querier, 'get_support_qat_layer2type'):
             return self.graph_querier.get_support_qat_layer2type(graph)
@@ -94,32 +97,35 @@ class RetrainConfigBase():
         # only tensorflow need to check softmax and set channelwise
         if hasattr(self.graph_checker, 'set_softmax_channelwise'):
             self.graph_checker.set_softmax_channelwise(
-                ordered_config, graph, RETRAIN_WEIGHT_CONFIG)
+                ordered_config, graph, RETRAIN_WEIGHT_CONFIG
+            )
 
     def check_quant_layers_valid(self, graph, quant_layers):
         '''check quant layer's validation by the graph'''
         # only tensorflow need to check matmul_transpose and placeholder and
         # gradient_op
         if hasattr(self.graph_checker, 'check_data_type'):
-            quant_layers = self.graph_checker.check_data_type(
-                graph, quant_layers)
+            quant_layers = self.graph_checker.check_data_type(graph, quant_layers)
         if hasattr(self.graph_checker, 'check_gradient_op'):
-            quant_layers = self.graph_checker.check_gradient_op(
-                graph, quant_layers)
+            quant_layers = self.graph_checker.check_gradient_op(graph, quant_layers)
         if hasattr(self.graph_checker, 'check_matmul_transpose'):
             quant_layers = self.graph_checker.check_matmul_transpose(
-                graph, quant_layers)
+                graph, quant_layers
+            )
         if hasattr(self.graph_checker, 'check_quantize_placeholder'):
             quant_layers = self.graph_checker.check_quantize_placeholder(
-                graph, quant_layers)
+                graph, quant_layers
+            )
         return quant_layers
 
     def create_default_config(self, config_file, graph):
-        ''' inner method, only generate quant retrain config '''
+        '''inner method, only generate quant retrain config'''
         if self.enable_prune:
             raise RuntimeError("this function cannot support prune.")
         if not self.enable_retrain:
-            raise RuntimeError("this function only support retrain, but enable_retrain si False.")
+            raise RuntimeError(
+                "this function only support retrain, but enable_retrain si False."
+            )
 
         # qat support layers
         supported_layers = self.get_supported_layers(graph)
@@ -130,7 +136,9 @@ class RetrainConfigBase():
         ordered_config = self.config_tree.dump()
         self.set_config_by_graph_construct(ordered_config, graph)
 
-        self._del_reduant_config(ordered_config, supported_layers, prune_supported_layers={})
+        self._del_reduant_config(
+            ordered_config, supported_layers, prune_supported_layers={}
+        )
 
         config_file = create_empty_file(config_file, check_exist=True)
         with open(config_file, 'w') as fid:
@@ -153,10 +161,17 @@ class RetrainConfigBase():
 
         config = {}
         if self.enable_retrain:
-            _generate_retrain_config(proto, retrain_layers.get('qat_layers'), config, no_default)
+            _generate_retrain_config(
+                proto, retrain_layers.get('qat_layers'), config, no_default
+            )
         if self.enable_prune:
-            _generate_prune_config(proto, retrain_layers.get('prunable_layers'), no_default, config,
-                self.prune_type)
+            _generate_prune_config(
+                proto,
+                retrain_layers.get('prunable_layers'),
+                no_default,
+                config,
+                self.prune_type,
+            )
 
         return config
 
@@ -180,13 +195,15 @@ class RetrainConfigBase():
             proto_enable_quant, proto_enable_prune = proto.parse_proto_enable()
             self.set_ability(proto_enable_quant, proto_enable_prune)
 
-        supported_layers, retrain_supported_layers, prune_supported_layers \
-            = self.get_support_layers(graph)
+        supported_layers, retrain_supported_layers, prune_supported_layers = (
+            self.get_support_layers(graph)
+        )
         self._check_layer_empty(retrain_supported_layers, prune_supported_layers)
-        retrain_layers = {'support_layers': supported_layers,
-                          'qat_layers': retrain_supported_layers,
-                          'prunable_layers': prune_supported_layers
-                         }
+        retrain_layers = {
+            'support_layers': supported_layers,
+            'qat_layers': retrain_supported_layers,
+            'prunable_layers': prune_supported_layers,
+        }
         config = self.generate_layer_config(proto, retrain_layers, no_default)
         global_config = proto.get_proto_config()
         for item in global_config.keys():
@@ -198,12 +215,14 @@ class RetrainConfigBase():
         ordered_config = self.config_tree.dump()
         self.set_config_by_graph_construct(ordered_config, graph)
 
-        self._del_reduant_config(ordered_config, retrain_supported_layers, prune_supported_layers)
+        self._del_reduant_config(
+            ordered_config, retrain_supported_layers, prune_supported_layers
+        )
         if hasattr(self.graph_checker, 'check_weights_shared'):
             layer_names = get_layers_from_config(
-                ordered_config, self.config_tree.get_global_keys())
-            self.graph_checker.check_weights_shared(graph, ordered_config,
-                                                    layer_names)
+                ordered_config, self.config_tree.get_global_keys()
+            )
+            self.graph_checker.check_weights_shared(graph, ordered_config, layer_names)
 
         if isinstance(config_file, dict):
             config_file.clear()
@@ -231,9 +250,12 @@ class RetrainConfigBase():
             supported_layers = {**retrain_supported_layers}
         # prune support layers
         if self.enable_prune:
-            selective_prune_supported_layers = \
+            selective_prune_supported_layers = (
                 self.graph_querier.get_support_selective_prune_layer2type(graph)
-            filter_prune_supported_layers = self.graph_querier.get_support_prune_layer2type(graph)
+            )
+            filter_prune_supported_layers = (
+                self.graph_querier.get_support_prune_layer2type(graph)
+            )
             supported_layers.update(selective_prune_supported_layers)
             supported_layers.update(filter_prune_supported_layers)
             prune_supported_layers[FILTER] = filter_prune_supported_layers
@@ -250,6 +272,7 @@ class RetrainConfigBase():
         Returns:
         quant_config: quant config dict
         '''
+
         def _detect_repetitive_key_hook(lst):
             '''
             a hook function for detect repeated key in config file.
@@ -263,8 +286,7 @@ class RetrainConfigBase():
             return result
 
         with open(config_file, 'r') as fid:
-            quant_config = json.load(
-                fid, object_pairs_hook=_detect_repetitive_key_hook)
+            quant_config = json.load(fid, object_pairs_hook=_detect_repetitive_key_hook)
 
         valid_layers = self.get_supported_layers(graph)
 
@@ -276,22 +298,23 @@ class RetrainConfigBase():
 
         if hasattr(self.graph_checker, 'check_weights_shared'):
             layer_names = get_layers_from_config(
-                quant_config, self.config_tree.get_global_keys())
-            self.graph_checker.check_weights_shared(graph, quant_config,
-                                                    layer_names)
+                quant_config, self.config_tree.get_global_keys()
+            )
+            self.graph_checker.check_weights_shared(graph, quant_config, layer_names)
 
-        LOGGER.logd('quant_config is {}'.format(quant_config),
-                    module_name=_MODULE_NAME)
+        LOGGER.logd('quant_config is {}'.format(quant_config), module_name=_MODULE_NAME)
 
         quant_config['support_types'] = self.supported_types
 
         return quant_config
 
     def _clear_config_tree(self):
-        ''' inner method '''
+        '''inner method'''
         self.config_tree = RootConfig(self.graph_querier, self.capacity)
 
-    def _del_reduant_config(self, ordered_config, retrain_supported_layers, prune_supported_layers):
+    def _del_reduant_config(
+        self, ordered_config, retrain_supported_layers, prune_supported_layers
+    ):
         # clear reduant config
         if not self.enable_retrain:
             del ordered_config[BATCH_NUM]
@@ -306,7 +329,10 @@ class RetrainConfigBase():
             prune_config = ordered_config[key].get('regular_prune_config')
             if prune_config and prune_config.get('prune_type'):
                 prune_type = prune_config['prune_type']
-                if prune_supported_layers.get(prune_type) and key in prune_supported_layers[prune_type]:
+                if (
+                    prune_supported_layers.get(prune_type)
+                    and key in prune_supported_layers[prune_type]
+                ):
                     continue
             for layer_key in LayerConfig.prune_fields():
                 del ordered_config[key][layer_key]
@@ -323,22 +349,38 @@ class RetrainConfigBase():
     def _check_reduant_config(self, ordered_config):
         if not self.enable_retrain:
             if ordered_config.get(BATCH_NUM):
-                raise ValueError("not expect {} in config file if retrain is disable.".format(BATCH_NUM))
+                raise ValueError(
+                    "not expect {} in config file if retrain is disable.".format(
+                        BATCH_NUM
+                    )
+                )
         for key in ordered_config:
             if key in self.config_tree.get_global_keys():
                 continue
             if not isinstance(ordered_config[key], dict):
-                raise ValueError("{} is not valid config, its value should be a dict if it is a layer.".format(key))
+                raise ValueError(
+                    "{} is not valid config, its value should be a dict if it is a layer.".format(
+                        key
+                    )
+                )
             # check retrain config in layer config
             if not self.enable_retrain:
                 for layer_key in ordered_config[key].keys():
                     if layer_key in LayerConfig.retrain_fields():
-                        raise ValueError("not expect {} in config file if retrain is disable.".format(layer_key))
+                        raise ValueError(
+                            "not expect {} in config file if retrain is disable.".format(
+                                layer_key
+                            )
+                        )
             # check prune config in layer config
             if not self.enable_prune:
                 for layer_key in ordered_config[key].keys():
                     if layer_key in LayerConfig.prune_fields():
-                        raise ValueError("not expect {} in config file if prune is disable.".format(layer_key))
+                        raise ValueError(
+                            "not expect {} in config file if prune is disable.".format(
+                                layer_key
+                            )
+                        )
 
     def _check_proto_prune(self, proto, prunable_layers):
         regular_prune_skip_layers = proto.get_regular_prune_skip_layers()
@@ -347,17 +389,31 @@ class RetrainConfigBase():
         _, _, prune_override_layers = proto.get_override_layers()
         _, _, prune_override_types = proto.get_override_layer_types()
 
-        if not set(prune_override_layers.get(FILTER)).issubset(set(prunable_layers.get(FILTER).keys())):
+        if not set(prune_override_layers.get(FILTER)).issubset(
+            set(prunable_layers.get(FILTER).keys())
+        ):
             raise ValueError("some override_layer not in valid_layers for filter prune")
-        if not set(prune_override_layers.get(SELECTIVE)).issubset(set(prunable_layers.get(SELECTIVE).keys())):
-            raise ValueError("some override_layer not in valid_layers for selective prune")
-        if not set(regular_prune_skip_layers).issubset(set(prunable_layers.get(self.prune_type).keys())):
+        if not set(prune_override_layers.get(SELECTIVE)).issubset(
+            set(prunable_layers.get(SELECTIVE).keys())
+        ):
+            raise ValueError(
+                "some override_layer not in valid_layers for selective prune"
+            )
+        if not set(regular_prune_skip_layers).issubset(
+            set(prunable_layers.get(self.prune_type).keys())
+        ):
             raise ValueError("some regular_prune_skip_layers not in valid_layers")
-        if not set(prune_override_types.get(FILTER)).issubset(set(self.prunable_types.get(FILTER))):
+        if not set(prune_override_types.get(FILTER)).issubset(
+            set(self.prunable_types.get(FILTER))
+        ):
             raise ValueError("some override_types not supported for filter prune")
-        if not set(prune_override_types.get(SELECTIVE)).issubset(set(self.prunable_types.get(SELECTIVE))):
+        if not set(prune_override_types.get(SELECTIVE)).issubset(
+            set(self.prunable_types.get(SELECTIVE))
+        ):
             raise ValueError("some override_types not supported for selective prune")
-        if not set(regular_prune_skip_types).issubset(set(self.prunable_types.get(self.prune_type))):
+        if not set(regular_prune_skip_types).issubset(
+            set(self.prunable_types.get(self.prune_type))
+        ):
             raise ValueError("some regular_prune_skip_types not supported")
 
     def _check_proto_retrain(self, proto, qat_layers):
@@ -381,8 +437,9 @@ class RetrainConfigBase():
         global_skip_types = proto.get_skip_layer_types()
         if not set(global_skip_layers).issubset(set(support_layers.keys())):
             raise ValueError("some skip_layers not in valid_layers")
-        if not set(global_skip_types).issubset(set(self.supported_types)) and \
-            not set(global_skip_types).issubset(set(self.prunable_types.get(self.prune_type))):
+        if not set(global_skip_types).issubset(set(self.supported_types)) and not set(
+            global_skip_types
+        ).issubset(set(self.prunable_types.get(self.prune_type))):
             raise ValueError("some skip_layer_types not supported")
 
     def _check_proto(self, proto, retrain_layers):
@@ -411,15 +468,19 @@ class RetrainConfigBase():
         None.
         """
         # prune enable is True but prune_layers is empty
-        if self.enable_prune and prune_layers and \
-            not prune_layers[FILTER] and not prune_layers[SELECTIVE]:
+        if (
+            self.enable_prune
+            and prune_layers
+            and not prune_layers[FILTER]
+            and not prune_layers[SELECTIVE]
+        ):
             raise ValueError("Prune supported layer cannot be empty.")
         if self.enable_retrain and not retrain_layers:
             raise ValueError("Quant supported layer cannot be empty.")
 
 
 def get_layers_from_config(quant_config, global_keys):
-    '''Get all layer names form quant_config '''
+    '''Get all layer names form quant_config'''
     layer_names = []
     for key in quant_config:
         if key not in global_keys:
@@ -431,17 +492,27 @@ def check_dst_type_legal(layer_data_config, layer_weight_config):
     '''check if data/weight config has the same dst_type'''
     data_dst_type = layer_data_config.get(DST_TYPE, INT8)
     weights_dst_type = layer_weight_config.get(DST_TYPE, INT8)
-    act_wts_type = 'A{}W{}'.format(data_dst_type.split('INT')[-1], weights_dst_type.split('INT')[-1])
+    act_wts_type = 'A{}W{}'.format(
+        data_dst_type.split('INT')[-1], weights_dst_type.split('INT')[-1]
+    )
 
     if act_wts_type not in RETRAIN_ACT_WTS_TYPES:
         if not layer_data_config.get(DST_TYPE):
-            LOGGER.logw("dst_type of RetrainDataQuantConfig was not given in config, "
-                        "and was set to 'INT8' by defualt!", module_name=_MODULE_NAME)
+            LOGGER.logw(
+                "dst_type of RetrainDataQuantConfig was not given in config, "
+                "and was set to 'INT8' by defualt!",
+                module_name=_MODULE_NAME,
+            )
         if not layer_weight_config.get(DST_TYPE):
-            LOGGER.logw("dst_type of RetrainWeightQuantConfig was not given in config, "
-                        "and was set to 'INT8' by defualt!", module_name=_MODULE_NAME)
-        error_info = "Activation and weights data_type are not supported for now. Note, " \
+            LOGGER.logw(
+                "dst_type of RetrainWeightQuantConfig was not given in config, "
+                "and was set to 'INT8' by defualt!",
+                module_name=_MODULE_NAME,
+            )
+        error_info = (
+            "Activation and weights data_type are not supported for now. Note, "
             "activation is {} and weight is {}.".format(data_dst_type, weights_dst_type)
+        )
         LOGGER.loge(error_info, module_name=_MODULE_NAME)
         raise ValueError(error_info)
 
@@ -465,31 +536,39 @@ def _generate_retrain_config(proto, qat_layers, config, no_default):
         # set quant_enable
         if layer in skip_layers or layer_type in skip_layer_types:
             config[layer][RETRAIN_ENABLE] = False
-        elif no_default and not proto.proto_config.HasField('retrain_data_quant_config') and \
-            not proto.proto_config.HasField('retrain_weight_quant_config'):
+        elif (
+            no_default
+            and not proto.proto_config.HasField('retrain_data_quant_config')
+            and not proto.proto_config.HasField('retrain_weight_quant_config')
+        ):
             config[layer][RETRAIN_ENABLE] = False
         else:
             config[layer][RETRAIN_ENABLE] = True
         # set activation_quant_params and weight_quant_params
         if layer in override_layers:
-            retrain_data_params, retrain_weight_params, _ = \
-                proto.read_override_config(layer)
+            retrain_data_params, retrain_weight_params, _ = proto.read_override_config(
+                layer
+            )
             config[layer][RETRAIN_ENABLE] = True
             config[layer][RETRAIN_DATA_CONFIG] = retrain_data_params
             config[layer][RETRAIN_WEIGHT_CONFIG] = retrain_weight_params
         elif layer_type in override_types:
-            retrain_data_params, retrain_weight_params, _ = \
+            retrain_data_params, retrain_weight_params, _ = (
                 proto.read_override_type_config(layer_type)
+            )
             config[layer][RETRAIN_ENABLE] = True
             config[layer][RETRAIN_DATA_CONFIG] = retrain_data_params
             config[layer][RETRAIN_WEIGHT_CONFIG] = retrain_weight_params
         else:
             config[layer][RETRAIN_DATA_CONFIG] = data_config.copy()
             config[layer][RETRAIN_WEIGHT_CONFIG] = weights_config.copy()
-        check_dst_type_legal(config[layer][RETRAIN_DATA_CONFIG],
-                                config[layer][RETRAIN_WEIGHT_CONFIG])
-        if config[layer][RETRAIN_DATA_CONFIG].get(DST_TYPE, INT8) == INT4 \
-            and layer_type == 'AvgPool':
+        check_dst_type_legal(
+            config[layer][RETRAIN_DATA_CONFIG], config[layer][RETRAIN_WEIGHT_CONFIG]
+        )
+        if (
+            config[layer][RETRAIN_DATA_CONFIG].get(DST_TYPE, INT8) == INT4
+            and layer_type == 'AvgPool'
+        ):
             config[layer][RETRAIN_ENABLE] = False
 
 
@@ -509,7 +588,10 @@ def _generate_prune_config(proto, prunable_layers, no_default, config, prune_typ
         raise RuntimeError("the prune_config cannot be empty if do prune.")
 
     # if enable prune, fill params for prune
-    for layer, layer_type in {**prunable_layers[FILTER], **prunable_layers[SELECTIVE]}.items():
+    for layer, layer_type in {
+        **prunable_layers[FILTER],
+        **prunable_layers[SELECTIVE],
+    }.items():
         override_prune_params = None
         if layer in override_layers:
             _, _, override_prune_params = proto.read_override_config(layer)

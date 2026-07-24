@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,14 +21,15 @@ from typing import Tuple
 
 
 class AutoCalibrationEvaluatorBase:
-    """" the base class for ModelEvaluator"""
+    """ " the base class for ModelEvaluator"""
+
     def __init__(self):
         """
         Function:
                 __init__ function of class
         """
 
-    def calibration(self, model): # pylint: disable=R0201
+    def calibration(self, model):  # pylint: disable=R0201
         """
         Function:
                 do the calibration
@@ -44,7 +45,7 @@ class AutoCalibrationEvaluatorBase:
         """
         raise NotImplementedError
 
-    def evaluate(self, model): # pylint: disable=R0201
+    def evaluate(self, model):  # pylint: disable=R0201
         """
         Function:
                 evaluate the input models, get the eval metric of model
@@ -62,9 +63,7 @@ class AutoCalibrationEvaluatorBase:
         """
         raise NotImplementedError
 
-
-
-    def metric_eval(self, original_metric, new_metric) -> Tuple[bool, float]: # pylint: disable=R0201
+    def metric_eval(self, original_metric, new_metric) -> Tuple[bool, float]:  # pylint: disable=R0201
         """
         Function:
                 whether the gap between new metric and original metric

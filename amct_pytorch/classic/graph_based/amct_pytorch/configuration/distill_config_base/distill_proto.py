@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,7 +20,6 @@ from __future__ import division
 from __future__ import print_function
 
 from collections import OrderedDict
-from enum import IntEnum, unique
 from google.protobuf import text_format
 
 from ....amct_pytorch.common.utils.util import find_repeated_items
@@ -37,7 +36,7 @@ ULQ_DISTILL = 'ulq_distill'
 GROUP_SIZE = 'group_size'
 
 
-class DistillProtoConfig():
+class DistillProtoConfig:
     """
     Function: Cope with simple config file from proto.
     APIs: parse_data_type
@@ -53,6 +52,7 @@ class DistillProtoConfig():
         read_override_type_config
 
     """
+
     def __init__(self, config_proto_file, capacity=None):
         self.proto_config = self.read(config_proto_file)
         self.override_layer_proto = {}
@@ -63,7 +63,7 @@ class DistillProtoConfig():
 
     @staticmethod
     def read(config_proto_file):
-        """ Read config from config_proto_file. """
+        """Read config from config_proto_file."""
         proto_config = distill_config_pb2.AMCTDistillConfig()
         with open(config_proto_file, 'rb') as cfg_file:
             pbtxt_string = cfg_file.read()
@@ -87,11 +87,19 @@ class DistillProtoConfig():
         if hasattr(self.proto_config, BATCH_NUM):
             global_config[BATCH_NUM] = self._get_batch_num()
             if global_config[BATCH_NUM] < 1:
-                raise ValueError("batch_num({}) should be greater than zero".format(global_config[BATCH_NUM]))
+                raise ValueError(
+                    "batch_num({}) should be greater than zero".format(
+                        global_config[BATCH_NUM]
+                    )
+                )
         if hasattr(self.proto_config, GROUP_SIZE):
             global_config[GROUP_SIZE] = self._get_group_size()
             if global_config[GROUP_SIZE] < 1:
-                raise ValueError("group_size({}) should be greater than zero".format(global_config[GROUP_SIZE]))
+                raise ValueError(
+                    "group_size({}) should be greater than zero".format(
+                        global_config[GROUP_SIZE]
+                    )
+                )
         if hasattr(self.proto_config, 'data_dump'):
             global_config['data_dump'] = self._get_data_dump()
         return global_config
@@ -122,9 +130,11 @@ class DistillProtoConfig():
         quant_skip_layers = list(self.proto_config.quant_skip_layers)
         repeated_layers = find_repeated_items(quant_skip_layers)
         if repeated_layers:
-            LOGGER.logw("Please delete repeated items in quant_skip_layers, "
-                        "repeated items are {}.".format(repeated_layers),
-                        module_name="DistillProto")
+            LOGGER.logw(
+                "Please delete repeated items in quant_skip_layers, "
+                "repeated items are {}.".format(repeated_layers),
+                module_name="DistillProto",
+            )
         # remove the redundant layers
         quant_skip_layers = list(set(quant_skip_layers))
         return quant_skip_layers
@@ -138,9 +148,11 @@ class DistillProtoConfig():
         quant_skip_layer_types = list(self.proto_config.quant_skip_layer_types)
         repeated_types = find_repeated_items(quant_skip_layer_types)
         if repeated_types:
-            LOGGER.logw("Please delete repeated items in quant_skip_layer_types, "
-                        "repeated items are {}.".format(repeated_types),
-                        module_name="DistillProto")
+            LOGGER.logw(
+                "Please delete repeated items in quant_skip_layer_types, "
+                "repeated items are {}.".format(repeated_types),
+                module_name="DistillProto",
+            )
         # remove the redundant types
         quant_skip_layer_types = list(set(quant_skip_layer_types))
         return quant_skip_layer_types
@@ -161,7 +173,8 @@ class DistillProtoConfig():
         if repeated_layers:
             raise ValueError(
                 "Please delete repeated items in distill_override_layers, "
-                "repeated items are {}.".format(repeated_layers))
+                "repeated items are {}.".format(repeated_layers)
+            )
 
         return override_layers
 
@@ -181,27 +194,32 @@ class DistillProtoConfig():
         if repeated_types:
             raise ValueError(
                 "Please delete repeated items in distill_override_layer_types,  "
-                "repeated items are {}.".format(repeated_types))
+                "repeated items are {}.".format(repeated_types)
+            )
 
         return override_types
 
     def read_override_layer_config(self, override_layer):
-        """ Read the config of one override_layer. """
+        """Read the config of one override_layer."""
         config = self.override_layer_proto.get(override_layer)
         distill_data_params = self._get_distill_data_config(
-            config.distill_data_quant_config)
+            config.distill_data_quant_config
+        )
         distill_weight_params = self._get_distill_weight_config(
-            config.distill_weight_quant_config)
+            config.distill_weight_quant_config
+        )
 
         return distill_data_params, distill_weight_params
 
     def read_override_type_config(self, override_layer_type):
-        """ Read the config of one override_layer_type. """
+        """Read the config of one override_layer_type."""
         config = self.override_type_proto.get(override_layer_type)
         distill_data_params = self._get_distill_data_config(
-            config.distill_data_quant_config)
+            config.distill_data_quant_config
+        )
         distill_weight_params = self._get_distill_weight_config(
-            config.distill_weight_quant_config)
+            config.distill_weight_quant_config
+        )
 
         return distill_data_params, distill_weight_params
 
@@ -231,11 +249,10 @@ class DistillProtoConfig():
         return distill_groups
 
     def _check_distill_data_type(self, data_type):
-        """ check int4 distill capacity and config"""
+        """check int4 distill capacity and config"""
         int4_distill_enable = False
         if self.capacity.get_value('INT4_DISTILL') is not None:
-            int4_distill_enable = self.capacity.get_value(
-                'INT4_DISTILL')
+            int4_distill_enable = self.capacity.get_value('INT4_DISTILL')
         if not int4_distill_enable and data_type == INT4:
             raise ValueError("Int4 distillation is not supported.")
 
@@ -253,7 +270,8 @@ class DistillProtoConfig():
         if hasattr(distill_data_config, DST_TYPE):
             if distill_data_config.HasField(DST_TYPE):
                 distill_data_params[DST_TYPE] = self.parse_data_type(
-                    distill_data_config.dst_type)
+                    distill_data_config.dst_type
+                )
             else:
                 # default value is INT8
                 distill_data_params[DST_TYPE] = INT8
@@ -266,13 +284,12 @@ class DistillProtoConfig():
             distill_weight_params['algo'] = 'arq_distill'
             distill_weight_config = config_item.arq_distill
             if distill_weight_config.HasField(CHANNEL_WISE):
-                distill_weight_params[
-                    CHANNEL_WISE] = distill_weight_config.channel_wise
+                distill_weight_params[CHANNEL_WISE] = distill_weight_config.channel_wise
             if hasattr(distill_weight_config, DST_TYPE):
                 if distill_weight_config.HasField(DST_TYPE):
-                    distill_weight_params[
-                        DST_TYPE] = self.parse_data_type(
-                            distill_weight_config.dst_type)
+                    distill_weight_params[DST_TYPE] = self.parse_data_type(
+                        distill_weight_config.dst_type
+                    )
                 else:
                     distill_weight_params[DST_TYPE] = INT8
                 self._check_distill_data_type(distill_weight_params[DST_TYPE])
@@ -281,13 +298,12 @@ class DistillProtoConfig():
             distill_weight_config = config_item.ulq_distill
 
             if distill_weight_config.HasField(CHANNEL_WISE):
-                distill_weight_params[
-                    CHANNEL_WISE] = distill_weight_config.channel_wise
+                distill_weight_params[CHANNEL_WISE] = distill_weight_config.channel_wise
 
             if distill_weight_config.HasField(DST_TYPE):
-                distill_weight_params[
-                    DST_TYPE] = self.parse_data_type(
-                        distill_weight_config.dst_type)
+                distill_weight_params[DST_TYPE] = self.parse_data_type(
+                    distill_weight_config.dst_type
+                )
             else:
                 distill_weight_params[DST_TYPE] = INT8
             self._check_distill_data_type(distill_weight_params[DST_TYPE])

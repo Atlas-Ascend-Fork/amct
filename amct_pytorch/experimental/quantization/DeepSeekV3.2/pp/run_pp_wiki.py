@@ -18,17 +18,13 @@ import torch.nn as nn
 from loguru import logger
 import torch
 from tqdm import tqdm
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset
 
 
 def get_wikitext2(tokenizer):
-    testdata = load_dataset(
-        'wikitext', 'wikitext-2-raw-v1', split='test'
-    )
+    testdata = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
 
-    testenc = tokenizer(
-        '\n\n'.join(testdata['text']), return_tensors='pt'
-    )
+    testenc = tokenizer('\n\n'.join(testdata['text']), return_tensors='pt')
     return testenc.input_ids
 
 
@@ -41,7 +37,7 @@ def get_wiki_inputs(testenc, seq_len=4096):
         # Calculate end index
         j = min(i + bs, nsamples)
         # Prepare inputs and move to npu
-        inputs = testenc[:, (i * seq_len): (j * seq_len)].cpu()
+        inputs = testenc[:, (i * seq_len) : (j * seq_len)].cpu()
         inputs = inputs.reshape(j - i, seq_len)
         wiki_inputs.append(inputs)
     return wiki_inputs
@@ -53,11 +49,10 @@ def wikitext2_ppl(testenc, data_dir, seq_len=4096):
     nlls = []
     for i in tqdm(range(0, nsamples, bs), desc='Running wikitext2'):
         j = min(i + bs, nsamples)
-        inputs = testenc[:, (i * seq_len): (j * seq_len)].cpu()
+        inputs = testenc[:, (i * seq_len) : (j * seq_len)].cpu()
         inputs = inputs.reshape(j - i, seq_len)
 
-        output = torch.load(os.path.join(
-            data_dir, f'{i}.pkl'), weights_only=True)
+        output = torch.load(os.path.join(data_dir, f'{i}.pkl'), weights_only=True)
         # Forward pass through the model
         lm_logits = output[0].cpu()
 

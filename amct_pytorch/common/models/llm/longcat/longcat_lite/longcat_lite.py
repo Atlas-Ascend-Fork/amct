@@ -19,21 +19,28 @@ import os
 from pathlib import Path
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from loguru import logger
-from transformers.models.longcat_flash.modeling_longcat_flash import LongcatFlashDecoderLayer
+from transformers.models.longcat_flash.modeling_longcat_flash import (
+    LongcatFlashDecoderLayer,
+)
 
 try:
-    from transformers.models.longcat_flash.modeling_longcat_flash import is_flash_attention_requested
+    from transformers.models.longcat_flash.modeling_longcat_flash import (
+        is_flash_attention_requested,
+    )
 except ImportError:
+
     def is_flash_attention_requested(config):
         return getattr(config, "_attn_implementation", None) == "flash_attention_2"
+
 
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
 from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm.longcat.longcat_lite.quant_module import QuantLongcatMLA, QuantLongcatMLP
+from amct_pytorch.common.models.llm.longcat.longcat_lite.quant_module import (
+    QuantLongcatMLA,
+    QuantLongcatMLP,
+)
 from amct_pytorch.common.models.llm.common.moe_unpack import find_moe_module
 from amct_pytorch.common.models.llm.longcat.moe_common import QuantLongcatExperts
 
@@ -70,7 +77,10 @@ class LongcatLite(BaseModel):
         decoder_layer = self.block(layer_idx)
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             decoder_layer.self_attn = nn.ModuleList(
-                [QuantLongcatMLA(self.args, module) for module in decoder_layer.self_attn]
+                [
+                    QuantLongcatMLA(self.args, module)
+                    for module in decoder_layer.self_attn
+                ]
             )
         if "mlp" in self.quant_target:
             decoder_layer.mlps = nn.ModuleList(
@@ -79,7 +89,9 @@ class LongcatLite(BaseModel):
         if "moe" in self.quant_target:
             quant_moe = find_moe_module(decoder_layer)
             if quant_moe is None:
-                raise TypeError("LongCat MoE quantization expects a module with 'experts'.")
+                raise TypeError(
+                    "LongCat MoE quantization expects a module with 'experts'."
+                )
             quant_moe.experts = QuantLongcatExperts(
                 self.args,
                 quant_moe.experts,
@@ -87,7 +99,14 @@ class LongcatLite(BaseModel):
             )
         return decoder_layer
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,
@@ -110,10 +129,18 @@ class LongcatLite(BaseModel):
 
     def get_embed_load_specs(self):
         specs = super().get_embed_load_specs()
-        specs.extend([
-            (self.model.model.ngram_embeddings.embedders, "model.ngram_embeddings.embedders."),
-            (self.model.model.ngram_embeddings.post_projs, "model.ngram_embeddings.post_projs."),
-        ])
+        specs.extend(
+            [
+                (
+                    self.model.model.ngram_embeddings.embedders,
+                    "model.ngram_embeddings.embedders.",
+                ),
+                (
+                    self.model.model.ngram_embeddings.post_projs,
+                    "model.ngram_embeddings.post_projs.",
+                ),
+            ]
+        )
         return specs
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
@@ -130,7 +157,10 @@ class LongcatLite(BaseModel):
                 if len(parts) != 5:
                     raise ValueError(f"Unexpected LongCat expert module name: {name}")
                 _, _, _, expert_idx, proj_name = parts
-                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
+                yield (
+                    f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight",
+                    module,
+                )
                 continue
 
             yield f"{weight_prefix}{name}.weight", module
@@ -152,23 +182,34 @@ class LongcatLite(BaseModel):
                 raise TypeError("LongCat MoE PTQ expects a module with 'experts'.")
             experts = getattr(quant_moe, "experts", None)
             if experts is None:
-                raise TypeError("LongCat MoE PTQ expected 'experts' on the located MoE module.")
+                raise TypeError(
+                    "LongCat MoE PTQ expected 'experts' on the located MoE module."
+                )
 
             if hasattr(experts, "iter_ptq_expert_modules"):
                 ptq_items = experts.iter_ptq_expert_modules()
             elif hasattr(experts, "expert_modules"):
                 num_routed = getattr(experts, "num_routed_experts", None)
                 expert_modules = experts.expert_modules
-                ptq_items = expert_modules if num_routed is None else expert_modules[:num_routed]
+                ptq_items = (
+                    expert_modules
+                    if num_routed is None
+                    else expert_modules[:num_routed]
+                )
             else:
-                raise TypeError("LongCat MoE PTQ expects experts to expose PTQ iterable expert modules.")
+                raise TypeError(
+                    "LongCat MoE PTQ expects experts to expose PTQ iterable expert modules."
+                )
 
             yield from iter_indexed_units(
                 kind="moe",
                 name_prefix="expert",
                 layer_idx=layer_idx,
                 items=ptq_items,
-                metadata_fn=lambda expert_idx, _: {"expert_idx": expert_idx, "input_name": "moe"},
+                metadata_fn=lambda expert_idx, _: {
+                    "expert_idx": expert_idx,
+                    "input_name": "moe",
+                },
             )
             return
 
@@ -200,7 +241,9 @@ class LongcatLite(BaseModel):
             return super().load_unit_inputs(data_dir, unit)
         path = Path(data_dir) / f"block_{unit.layer_idx}_{input_name}_in.pkl"
         if not path.exists():
-            raise FileNotFoundError(f"PTQ inputs not found for unit '{unit.name}': {path}")
+            raise FileNotFoundError(
+                f"PTQ inputs not found for unit '{unit.name}': {path}"
+            )
         cached_inps = torch.load(path, weights_only=True)
         return cached_inps, kwargs
 
@@ -229,8 +272,14 @@ class LongcatLite(BaseModel):
         state_dict = self.load_layer_weight(prefix)
         return self._pack_expert_weights(state_dict)
 
-    def _pack_expert_weights(self, state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        gate_keys = [key for key in state_dict if key.startswith("mlp.experts.") and key.endswith(".gate_proj.weight")]
+    def _pack_expert_weights(
+        self, state_dict: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        gate_keys = [
+            key
+            for key in state_dict
+            if key.startswith("mlp.experts.") and key.endswith(".gate_proj.weight")
+        ]
         if not gate_keys:
             return state_dict
 
@@ -257,8 +306,14 @@ class LongcatLite(BaseModel):
             gate_key = f"mlp.experts.{expert_idx}.gate_proj.weight"
             up_key = f"mlp.experts.{expert_idx}.up_proj.weight"
             down_key = f"mlp.experts.{expert_idx}.down_proj.weight"
-            if gate_key not in state_dict or up_key not in state_dict or down_key not in state_dict:
-                raise KeyError(f"Missing routed expert weights for expert {expert_idx}.")
+            if (
+                gate_key not in state_dict
+                or up_key not in state_dict
+                or down_key not in state_dict
+            ):
+                raise KeyError(
+                    f"Missing routed expert weights for expert {expert_idx}."
+                )
             gate_up_proj[expert_idx] = torch.cat(
                 [state_dict.pop(gate_key), state_dict.pop(up_key)],
                 dim=0,
@@ -269,7 +324,13 @@ class LongcatLite(BaseModel):
         state_dict["mlp.experts.down_proj"] = down_proj
         return state_dict
 
-    def _register_named_hook(self, block, name_map: dict[str, str], storage: dict[str, list[torch.Tensor]], hooks):
+    def _register_named_hook(
+        self,
+        block,
+        name_map: dict[str, str],
+        storage: dict[str, list[torch.Tensor]],
+        hooks,
+    ):
         def save_output(_, __, output, save_name):
             if isinstance(output, (tuple, list)):
                 output = output[0]
@@ -278,12 +339,18 @@ class LongcatLite(BaseModel):
         for module_name, module in block.named_modules():
             if module_name not in name_map:
                 continue
-            hooks.append(module.register_forward_hook(lambda m, x, y, n=name_map[module_name]: save_output(m, x, y, n)))
+            hooks.append(
+                module.register_forward_hook(
+                    lambda m, x, y, n=name_map[module_name]: save_output(m, x, y, n)
+                )
+            )
 
     def _save_ptq_inputs(self, layer_idx: int, storage: dict[str, list[torch.Tensor]]):
         for save_name, tensors in storage.items():
             _save_tensor(
-                os.path.join(self.args.data_dir, f"block_{layer_idx}_{save_name}_in.pkl"),
+                os.path.join(
+                    self.args.data_dir, f"block_{layer_idx}_{save_name}_in.pkl"
+                ),
                 tensors,
             )
 

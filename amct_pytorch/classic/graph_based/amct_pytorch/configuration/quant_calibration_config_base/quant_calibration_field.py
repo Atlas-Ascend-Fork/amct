@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,26 +20,45 @@ from collections import OrderedDict
 from ....amct_pytorch.common.retrain_config.retrain_field import ConfigItem
 from ....amct_pytorch.common.retrain_config.retrain_field import BatchNum
 from ....amct_pytorch.common.config.field import NUM_OF_BINS_RANGE
-from ....amct_pytorch.utils.vars import ACT_ALGO, IFMR, BATCH_NUM, ASYMMETRIC,\
-    ACTIVATION_OFFSET, QUANT_GRANULARITY, MAX_PERCENTILE, MIN_PERCENTILE, SEARCH_STEP, SEARCH_RANGE, NUM_OF_BINS
+from ....amct_pytorch.utils.vars import (
+    ACT_ALGO,
+    IFMR,
+    BATCH_NUM,
+    ASYMMETRIC,
+    ACTIVATION_OFFSET,
+    QUANT_GRANULARITY,
+    MAX_PERCENTILE,
+    MIN_PERCENTILE,
+    SEARCH_STEP,
+    SEARCH_RANGE,
+    NUM_OF_BINS,
+)
 from ....amct_pytorch.common.utils.vars_util import (
-    DEFAULT_MAX_PERCENTILE, DEFAULT_MIN_PERCENTILE,
-    DEFAULT_SEARCH_RANGE_START, DEFAULT_SEARCH_RANGE_END,
-    DEFAULT_SEARCH_STEP, DEFUALT_NUM_OF_BINS,
-    SUPPORT_ACT_ALGO, PER_TENSOR_IDX, PER_CHANNEL_IDX,
+    DEFAULT_MAX_PERCENTILE,
+    DEFAULT_MIN_PERCENTILE,
+    DEFAULT_SEARCH_RANGE_START,
+    DEFAULT_SEARCH_RANGE_END,
+    DEFAULT_SEARCH_STEP,
+    DEFUALT_NUM_OF_BINS,
+    SUPPORT_ACT_ALGO,
+    PER_TENSOR_IDX,
+    PER_CHANNEL_IDX,
 )
 
 
 class ActAlgo(ConfigItem):
     '''an object for ActAlgo field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('ActAlgo', val, str, extra[0])
         if val not in SUPPORT_ACT_ALGO:
-            raise ValueError('Act algo {} is not supported.'\
-                'Supported act algo include ifmr and hfmg'.format(val))
+            raise ValueError(
+                'Act algo {} is not supported.'
+                'Supported act algo include ifmr and hfmg'.format(val)
+            )
         self.value = val
-    
+
     def build_default(self, extra):
         '''inner method'''
         self.value = IFMR
@@ -47,12 +66,15 @@ class ActAlgo(ConfigItem):
 
 class MaxPercentile(ConfigItem):
     '''an object for MaxPercentile field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('MaxPercentile', val, float, extra[0])
         if val <= 0.5 or val > 1.0:
-            raise ValueError("The max_percentile must be greater than 0.5 "\
-                "and less than or equal to 1.0")
+            raise ValueError(
+                "The max_percentile must be greater than 0.5 "
+                "and less than or equal to 1.0"
+            )
         self.value = val
 
     def build_default(self, extra):
@@ -62,6 +84,7 @@ class MaxPercentile(ConfigItem):
 
 class MinPercentile(ConfigItem):
     '''an object for MinPercentile field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('MinPercentile', val, float, extra[0])
@@ -74,6 +97,7 @@ class MinPercentile(ConfigItem):
 
 class SearchRange(ConfigItem):
     '''an object for SearchRange field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('SearchRange', val, (list, tuple), extra[0])
@@ -90,6 +114,7 @@ class SearchRange(ConfigItem):
 
 class SearchStep(ConfigItem):
     '''an object for SearchStep field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('SearchStep', val, float, extra[0])
@@ -104,6 +129,7 @@ class SearchStep(ConfigItem):
 
 class Asymmetric(ConfigItem):
     '''an object for Asymmetric field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('Asymmetric', val, (bool, type(None)), extra[0])
@@ -116,12 +142,14 @@ class Asymmetric(ConfigItem):
 
 class NumOfBins(ConfigItem):
     '''an object for NumOfBins field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('NumOfBins', val, int, extra[0])
         if val not in NUM_OF_BINS_RANGE:
-            raise ValueError("num_of_bins {} must be in {}".format(
-                val, NUM_OF_BINS_RANGE))
+            raise ValueError(
+                "num_of_bins {} must be in {}".format(val, NUM_OF_BINS_RANGE)
+            )
         self.value = val
 
     def build_default(self, extra):
@@ -131,6 +159,7 @@ class NumOfBins(ConfigItem):
 
 class ActivationOffset(ConfigItem):
     '''an object for ActivationOffset field'''
+
     def build(self, val):
         '''inner method'''
         self.check_type("ActivationOffset", val, bool)
@@ -143,6 +172,7 @@ class ActivationOffset(ConfigItem):
 
 class ActQuantGranularity(ConfigItem):
     '''an object for ActQuantGranularity field'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('QuantGranularity', val, int, extra[0])
@@ -157,6 +187,7 @@ class ActQuantGranularity(ConfigItem):
 
 class KVCacheDataConfig(ConfigItem):
     '''an object for KVCacheDataConfig field'''
+
     def build(self, val, extra):
         self.check_type('KVCacheDataConfig', val, dict, extra[0])
         if ACT_ALGO not in val.keys():
@@ -178,7 +209,7 @@ class KVCacheDataConfig(ConfigItem):
             self.build_config_by_key(NUM_OF_BINS, NumOfBins, val, extra)
             self.build_config_by_key(ASYMMETRIC, Asymmetric, val, extra)
             self.build_config_by_key(QUANT_GRANULARITY, ActQuantGranularity, val, extra)
-    
+
     def build_config_by_key(self, key, cls, val, extra):
         '''inner method'''
         if key in val.keys():
@@ -198,9 +229,8 @@ class KVCacheDataConfig(ConfigItem):
 
 class KVCacheLayerConfig(ConfigItem):
     '''an object for KVCacheLayerConfig field'''
-    fields = {
-        'kv_data_quant_config': KVCacheDataConfig
-    }
+
+    fields = {'kv_data_quant_config': KVCacheDataConfig}
 
     def build(self, val, extra):
         '''inner method'''
@@ -219,13 +249,15 @@ class KVCacheLayerConfig(ConfigItem):
 
 class KVCacheRootConfig(ConfigItem):
     '''an object for KVCacheRootConfig field'''
+
     def build(self, value, extra):
         kv_quant_layers = extra.get('kv_cache_quant_layers')
         for layer, layer_config in value.items():
             if layer not in kv_quant_layers.keys():
                 raise ValueError('unsupported layer %s' % layer)
-            self.build_util(layer, KVCacheLayerConfig, layer_config,
-                            (layer, kv_quant_layers[layer]))
+            self.build_util(
+                layer, KVCacheLayerConfig, layer_config, (layer, kv_quant_layers[layer])
+            )
 
     def build_default(self, extra):
         '''inner method'''
@@ -236,6 +268,7 @@ class KVCacheRootConfig(ConfigItem):
 
 class CalibrationGeneralConfigItem(ConfigItem):
     '''an object for CalibrationGeneralConfigItem field'''
+
     def build(self, value, extra):
         self.check_type('CalibrationGeneralConfigItem', value, dict)
         # handle batch_num
@@ -269,9 +302,10 @@ class CalibrationGeneralConfigItem(ConfigItem):
 
 class QuantCalibrationConfigRoot(ConfigItem):
     '''an object for QuantCalibrationConfigRoot field'''
+
     sub_fields = (
         ('general_config', CalibrationGeneralConfigItem),
-        ('kv_config', KVCacheRootConfig)
+        ('kv_config', KVCacheRootConfig),
     )
 
     def build(self, value, extra):
@@ -295,7 +329,7 @@ class QuantCalibrationConfigRoot(ConfigItem):
         return ordered_config
 
     def get_global_keys(self):
-        '''Get global config's keys '''
+        '''Get global config's keys'''
         global_keys = [ACTIVATION_OFFSET]
         if self.capacity.is_enable('BATCH_NUM'):
             global_keys.append(BATCH_NUM)

@@ -31,13 +31,24 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     batch, num_key_value_heads, slen, head_dim = hidden_states.shape
     if n_rep == 1:
         return hidden_states
-    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
+    hidden_states = hidden_states[:, :, None, :, :].expand(
+        batch, num_key_value_heads, n_rep, slen, head_dim
+    )
     return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
 
 
 # Efficient implementation equivalent to the following:
-def scaled_dot_product_attention(module, query, key, value, attn_mask=None, dropout_p=0.0,
-        is_causal=False, scale=None, enable_gqa=False) -> torch.Tensor:
+def scaled_dot_product_attention(
+    module,
+    query,
+    key,
+    value,
+    attn_mask=None,
+    dropout_p=0.0,
+    is_causal=False,
+    scale=None,
+    enable_gqa=False,
+) -> torch.Tensor:
     if hasattr(module, "num_key_value_groups"):
         key = repeat_kv(key, module.num_key_value_groups)
         value = repeat_kv(value, module.num_key_value_groups)
@@ -46,7 +57,9 @@ def scaled_dot_product_attention(module, query, key, value, attn_mask=None, drop
     attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)
     if is_causal:
         assert attn_mask is None
-        temp_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(diagonal=0)
+        temp_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(
+            diagonal=0
+        )
         attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
 
     if attn_mask is not None:

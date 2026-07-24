@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -47,7 +47,6 @@ class TestReplaceAvgpoolReshapePass(unittest.TestCase):
         cls.onnx_file = os.path.join(cls.temp_folder, 'mobilenet_tail.onnx')
         Parser.export_onnx(cls.model, cls.args, cls.onnx_file)
 
-
     @classmethod
     def tearDownClass(cls):
         os.popen('rm -r ' + cls.temp_folder)
@@ -73,4 +72,3 @@ class TestReplaceAvgpoolReshapePass(unittest.TestCase):
             self.assertTrue(is_matched)
             passer.do_pass(graph, avgpool_node)
             self.assertEqual(5, ori_len - len(graph.nodes))
-

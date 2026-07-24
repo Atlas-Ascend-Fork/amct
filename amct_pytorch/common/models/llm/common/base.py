@@ -26,10 +26,24 @@ from safetensors import safe_open
 from tqdm import tqdm
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
-from amct_pytorch.common.datasets.ptq_io import load_ptq_inps, save_ptq_inps, save_ptq_kwargs
-from amct_pytorch.common.models.llm.common.capture import Catcher, register_forward_hooks
-from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler, PtqParamStore
-from amct_pytorch.common.models.llm.common.ptq_units import PtqUnit, iter_indexed_units, make_ptq_unit
+from amct_pytorch.common.datasets.ptq_io import (
+    load_ptq_inps,
+    save_ptq_inps,
+    save_ptq_kwargs,
+)
+from amct_pytorch.common.models.llm.common.capture import (
+    Catcher,
+    register_forward_hooks,
+)
+from amct_pytorch.common.models.llm.common.ptq_params import (
+    PtqParamHandler,
+    PtqParamStore,
+)
+from amct_pytorch.common.models.llm.common.ptq_units import (
+    PtqUnit,
+    iter_indexed_units,
+    make_ptq_unit,
+)
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
@@ -49,11 +63,15 @@ class BaseModel(metaclass=ABCMeta):
         self.input_ids = None
         self.model_path = self.args.model
         self.config = AutoConfig.from_pretrained(
-            self.model_path, trust_remote_code=True)
+            self.model_path, trust_remote_code=True
+        )
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path, trust_remote_code=True)
+            self.model_path, trust_remote_code=True
+        )
         self.ptq_param_handler = PtqParamHandler()
-        self.ptq_param_store = PtqParamStore(self.ptq_param_handler, self.iter_ptq_units)
+        self.ptq_param_store = PtqParamStore(
+            self.ptq_param_handler, self.iter_ptq_units
+        )
 
     @staticmethod
     def block_size(weight):
@@ -74,26 +92,23 @@ class BaseModel(metaclass=ABCMeta):
 
     def float_model(self):
         model = AutoModelForCausalLM.from_pretrained(
-            self.model_path,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16)
+            self.model_path, trust_remote_code=True, torch_dtype=torch.bfloat16
+        )
         return model
 
     def empty_weights_model(self):
         with init_empty_weights():
             model = AutoModelForCausalLM.from_config(
-                self.config,
-                trust_remote_code=True,
-                torch_dtype=torch.bfloat16)
+                self.config, trust_remote_code=True, torch_dtype=torch.bfloat16
+            )
         return model
-
 
     def init_cls(self):
         pass
 
     def generate_tensorwise_quant_layers(self):
         raise NotImplementedError()
-    
+
     def generate_tensorwise_ignore_layers(self):
         raise NotImplementedError()
 
@@ -122,7 +137,6 @@ class BaseModel(metaclass=ABCMeta):
             module.to_empty(device="cpu")
             module.load_state_dict(self.load_layer_weight(prefix), strict=True)
 
-
     def load_layer_weight(self, prefix):
         weight_map = getattr(self, "_weight_map", None)
         if weight_map is None:
@@ -137,11 +151,10 @@ class BaseModel(metaclass=ABCMeta):
             with safe_open(full_path, framework="pt", device="cpu") as f:
                 for key in f.keys():
                     if key.startswith(prefix):
-                        new_key = key[len(prefix):]
+                        new_key = key[len(prefix) :]
                         state_dict[new_key] = f.get_tensor(key)
         state_dict.pop('self_attn.rotary_emb.inv_freq', None)
         return state_dict
-
 
     def block(self, layer_idx):
         decoder_layer = self.cls(self.config, layer_idx)
@@ -163,10 +176,9 @@ class BaseModel(metaclass=ABCMeta):
             kwargs["attention_mask"] = self.attention_mask.to(self.args.device)
         return kwargs
 
-
     def save_block_hook_inputs(self, act_stat, hook_name, layer_idx):
         if hook_name is None:
-            raise ValueError(f"hook_name cannot be None")
+            raise ValueError("hook_name cannot be None")
         save_target = (
             "attn"
             if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target
@@ -182,7 +194,9 @@ class BaseModel(metaclass=ABCMeta):
         layers[0] = layers[0].bfloat16()
         layers[0] = Catcher(layers[0], outs)
         with torch.no_grad():
-            for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc=f"Embedding Processing..."):
+            for bs, inputs in tqdm(
+                enumerate(samples), total=len(samples), desc="Embedding Processing..."
+            ):
                 try:
                     self.model(inputs)
                 except ValueError:
@@ -191,7 +205,12 @@ class BaseModel(metaclass=ABCMeta):
         self.position_embeddings = layers[0].position_embeddings
         self.attention_mask = layers[0].attention_mask
         if hook_name is not None:
-            save_ptq_kwargs(self.position_ids, self.position_embeddings, self.attention_mask, self.args.data_dir)
+            save_ptq_kwargs(
+                self.position_ids,
+                self.position_embeddings,
+                self.attention_mask,
+                self.args.data_dir,
+            )
         layers[0] = layers[0].module
         return outs
 
@@ -200,7 +219,9 @@ class BaseModel(metaclass=ABCMeta):
         self.model.lm_head.to(self.args.device)
         preds = []
         with torch.no_grad():
-            for idx, inp in tqdm(enumerate(inps), total=len(inps), desc='Head Processing...'):
+            for idx, inp in tqdm(
+                enumerate(inps), total=len(inps), desc='Head Processing...'
+            ):
                 inp = inp.to(self.args.device)
                 out = self.model.model.norm(inp)
                 out = self.model.lm_head(out)[:, :-1, :].contiguous()
@@ -210,15 +231,25 @@ class BaseModel(metaclass=ABCMeta):
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         act_stat = {}
         outs, hooks = [], []
-        block = self._build_block_for_forward(layer_idx, use_quant_block=use_quant_block)
+        block = self._build_block_for_forward(
+            layer_idx, use_quant_block=use_quant_block
+        )
         if use_quant_block:
             from amct_pytorch.common.models.llm.common.quant_apply import (
                 set_model_act_quant_state,
                 set_model_weight_quant_state,
             )
+
             set_model_weight_quant_state(block, enable_quant)
             set_model_act_quant_state(block, enable_quant)
 
@@ -232,7 +263,9 @@ class BaseModel(metaclass=ABCMeta):
             register_forward_hooks(block, hook_name, hooks, act_stat)
 
         block_kwargs = self.get_block_forward_kwargs()
-        input_ids_list = self.input_ids if self.input_ids is not None else [None] * len(samples)
+        input_ids_list = (
+            self.input_ids if self.input_ids is not None else [None] * len(samples)
+        )
         with torch.no_grad():
             for sample, ids in zip(samples, input_ids_list):
                 sample = sample.to(self.args.device)
@@ -249,6 +282,7 @@ class BaseModel(metaclass=ABCMeta):
             self.save_block_hook_inputs(act_stat, hook_name, layer_idx)
         try:
             from accelerate.hooks import remove_hook_from_module
+
             remove_hook_from_module(block, recurse=True)
         except Exception:
             pass
@@ -263,7 +297,9 @@ class BaseModel(metaclass=ABCMeta):
     def iter_ptq_units(self, layer_idx, block):
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             layer_type = getattr(block, "layer_type", None)
-            attn_name = "linear_attn" if layer_type == "linear_attention" else "self_attn"
+            attn_name = (
+                "linear_attn" if layer_type == "linear_attention" else "self_attn"
+            )
             quant_attn = getattr(block, attn_name, None)
             yield make_ptq_unit("attn", attn_name, layer_idx, quant_attn)
             return
@@ -296,12 +332,22 @@ class BaseModel(metaclass=ABCMeta):
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
-    def load_layer_ptq_params(self, layer_idx: int, block, param_dir: str, strict: bool = False):
-        return self.ptq_param_store.load_layer(layer_idx, block, param_dir, strict=strict)
+    def load_layer_ptq_params(
+        self, layer_idx: int, block, param_dir: str, strict: bool = False
+    ):
+        return self.ptq_param_store.load_layer(
+            layer_idx, block, param_dir, strict=strict
+        )
 
-    def load_selected_layer_ptq_params(self, layer_idx: int, block, strict: bool = False):
+    def load_selected_layer_ptq_params(
+        self, layer_idx: int, block, strict: bool = False
+    ):
         results = {}
-        quant_targets = self.quant_target if isinstance(self.quant_target, (list, tuple, set)) else [self.quant_target]
+        quant_targets = (
+            self.quant_target
+            if isinstance(self.quant_target, (list, tuple, set))
+            else [self.quant_target]
+        )
 
         target_specs = []
         if "attn-linear" in quant_targets:
@@ -327,7 +373,9 @@ class BaseModel(metaclass=ABCMeta):
                     continue
 
                 self.quant_target = [target_name]
-                result = self.load_layer_ptq_params(layer_idx, block, param_dir, strict=strict)
+                result = self.load_layer_ptq_params(
+                    layer_idx, block, param_dir, strict=strict
+                )
                 results[target_name] = result
 
                 if result["loaded"] and result["missing"]:

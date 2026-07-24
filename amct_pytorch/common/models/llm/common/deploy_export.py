@@ -29,16 +29,34 @@ def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=
     act_strategy = "group" if qtype == "float" else "token"
     w_strategy = "group" if qtype == "float" else "channel"
     group_size = 32 if qtype == "float" else None
-    quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": True,
-                                         "group_size": group_size, "num_bits": a_bits,
-                                         "observer": observer, "observer_kwargs": {},
-                                         "strategy": act_strategy, "symmetric": True, "type": qtype},
-                   "activation_use_clip": activation_use_clip,
-                   "output_activations": None,
-                   "weights": {"actorder": None, "block_structure": None, "dynamic": False,
-                               "group_size": group_size, "num_bits": w_bits,
-                               "observer": observer, "observer_kwargs": {},
-                               "strategy": w_strategy, "symmetric": True, "type": qtype}}
+    quant_group = {
+        "input_activations": {
+            "actorder": None,
+            "block_structure": None,
+            "dynamic": True,
+            "group_size": group_size,
+            "num_bits": a_bits,
+            "observer": observer,
+            "observer_kwargs": {},
+            "strategy": act_strategy,
+            "symmetric": True,
+            "type": qtype,
+        },
+        "activation_use_clip": activation_use_clip,
+        "output_activations": None,
+        "weights": {
+            "actorder": None,
+            "block_structure": None,
+            "dynamic": False,
+            "group_size": group_size,
+            "num_bits": w_bits,
+            "observer": observer,
+            "observer_kwargs": {},
+            "strategy": w_strategy,
+            "symmetric": True,
+            "type": qtype,
+        },
+    }
     return quant_group
 
 
@@ -59,14 +77,20 @@ def generate_quant_config(cache_scheme, ignores, is_mx=False, bits_scheme=None):
     config_groups = {}
     for idx, group in enumerate(bits_scheme):
         entry = {"targets": group["targets"]}
-        entry.update(generate_quant_group(a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype))
+        entry.update(
+            generate_quant_group(
+                a_bits=group["a_bits"], w_bits=group["w_bits"], qtype=qtype
+            )
+        )
         config_groups[f"group_{idx}"] = entry
-    quant_config = {"config_groups": config_groups,
-                    "format": "float-quantized" if is_mx else "int-quantized",
-                    "global_compression_ratio": 1,
-                    "ignore": ignores,
-                    "quant_method": "compressed-tensors",
-                    "quantization_status": "compressed"}
+    quant_config = {
+        "config_groups": config_groups,
+        "format": "float-quantized" if is_mx else "int-quantized",
+        "global_compression_ratio": 1,
+        "ignore": ignores,
+        "quant_method": "compressed-tensors",
+        "quantization_status": "compressed",
+    }
     if cache_scheme is not None:
         quant_config.update(cache_scheme)
     if is_mx:
@@ -129,7 +153,15 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
-def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map, model_dir, loaded_files, block_size):
+def convert_state_dict(
+    weight,
+    weight_name,
+    scale_inv_name,
+    original_weight_map,
+    model_dir,
+    loaded_files,
+    block_size,
+):
     if weight.element_size() == 1:
         # FP8 weight
         try:
@@ -140,12 +172,15 @@ def convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
             if weight.dtype == torch.int8:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True)
+                weight = weight_dequant(
+                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+                )
             else:
                 weight = weight_dequant(weight, scale_inv, block_size=block_size)
         except KeyError:
             logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
+                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+            )
     return weight
 
 

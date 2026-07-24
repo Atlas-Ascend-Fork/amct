@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import os
 
-import torch
 from torch import nn
 
 import amct_pytorch.classic.graph_based.amct_pytorch.optimizer as opt
@@ -25,21 +24,24 @@ from ..amct_pytorch.utils.log import LOGGER
 from ..amct_pytorch.common.utils.check_params import check_params
 from ..amct_pytorch.common.utils import files as files_util
 from ..amct_pytorch.utils.model_util import ModuleHelper
-from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
-from ..amct_pytorch.configuration.quant_calibration_config \
-    import inner_create_quant_calibration_config
-from ..amct_pytorch.configuration.quant_calibration_config import parse_cali_quant_config
+from ..amct_pytorch.configuration.quant_calibration_config import (
+    inner_create_quant_calibration_config,
+)
+from ..amct_pytorch.configuration.quant_calibration_config import (
+    parse_cali_quant_config,
+)
 from ..amct_pytorch.custom_op.recorder.recorder import Recorder
 
 
-@check_params(config_file=str,
-              model=nn.Module,
-              quant_layers=(type(None), dict),
-              config_defination=(type(None), str))
-def create_quant_cali_config(config_file,
-                             model,
-                             quant_layers=None,
-                             config_defination=None):
+@check_params(
+    config_file=str,
+    model=nn.Module,
+    quant_layers=(type(None), dict),
+    config_defination=(type(None), str),
+)
+def create_quant_cali_config(
+    config_file, model, quant_layers=None, config_defination=None
+):
     """
     Function: Create quantize configuration json file for amct_pytorch tool
     Parameter: config_file: file path of quantize configuration json file
@@ -52,13 +54,13 @@ def create_quant_cali_config(config_file,
     config_file = files_util.create_empty_file(config_file, check_exist=True)
 
     ModuleHelper(model).check_amct_op()
-    inner_create_quant_calibration_config(config_file, model, quant_layers, config_defination)
+    inner_create_quant_calibration_config(
+        config_file, model, quant_layers, config_defination
+    )
     LOGGER.logi('Create quant config file {} success.'.format(config_file))
 
 
-@check_params(config_file=str,
-              record_file=str,
-              model=nn.Module)
+@check_params(config_file=str, record_file=str, model=nn.Module)
 def create_quant_cali_model(config_file, record_file, model):
     """
     Function: Modify user's model for calibration in inference process.
@@ -74,7 +76,7 @@ def create_quant_cali_model(config_file, record_file, model):
 
     ModuleHelper(model).check_amct_op()
     cali_quant_config = parse_cali_quant_config(config_file, model)
- 
+
     recorder = Recorder(record_file)
     optimizer = opt.ModelOptimizer()
     optimizer.add_pass(opt.InsertKVCacheQuantPass(recorder, cali_quant_config))

@@ -121,7 +121,9 @@ class QuantGlmMoeDsaAttention(nn.Module):
 
         # ===== DSA Indexer (IndexShare: shared layers reuse, full layers compute) =====
         if self.indexer is not None:
-            indexer_mask = attention_mask[:, 0, :, :] if attention_mask is not None else None
+            indexer_mask = (
+                attention_mask[:, 0, :, :] if attention_mask is not None else None
+            )
             topk_indices = self.indexer(
                 hidden_states, q_resid, position_embeddings, indexer_mask, position_ids
             )
@@ -168,11 +170,13 @@ class QuantGlmMoeDsaAttention(nn.Module):
         """Build KV cache activation quantizers for attn-cache target."""
         self.q_cache_quantizer = (
             ActivationQuantizer(args, bits=args.bit_policy.cache_bits("q"))
-            if self.enable_attn_cache else nn.Identity()
+            if self.enable_attn_cache
+            else nn.Identity()
         )
         self.k_cache_quantizer = (
             ActivationQuantizer(args, bits=args.bit_policy.cache_bits("k"))
-            if self.enable_attn_cache else nn.Identity()
+            if self.enable_attn_cache
+            else nn.Identity()
         )
 
     def _build_activation_quantizers(self, args, bits, use_quant):
@@ -189,7 +193,8 @@ class QuantGlmMoeDsaAttention(nn.Module):
         o_a = self._get_bits(bits["o_proj"], _A)
         self.inp_afq = (
             ActivationQuantizer(args, kv_a_a)
-            if args.quant_dtype == "mxfp" else nn.Identity()
+            if args.quant_dtype == "mxfp"
+            else nn.Identity()
         )
         self.q_b_proj_afq = ActivationQuantizer(args, q_b_a)
         self.o_proj_afq = ActivationQuantizer(args, o_a)
@@ -225,25 +230,42 @@ class QuantGlmMoeDsaAttention(nn.Module):
         quant_q_a = use_quant and args.quant_dtype == "mxfp"
 
         self.q_a_proj = (
-            QuantLinear(args, attn_module.q_a_proj,
-                        w_bits=self._get_bits(q_a, _W), name="q_a_proj")
-            if quant_q_a else PlainLinear(attn_module.q_a_proj)
+            QuantLinear(
+                args,
+                attn_module.q_a_proj,
+                w_bits=self._get_bits(q_a, _W),
+                name="q_a_proj",
+            )
+            if quant_q_a
+            else PlainLinear(attn_module.q_a_proj)
         )
         self.q_b_proj = (
-            QuantLinear(args, attn_module.q_b_proj,
-                        w_bits=self._get_bits(q_b, _W), name="q_b_proj")
-            if use_quant else PlainLinear(attn_module.q_b_proj)
+            QuantLinear(
+                args,
+                attn_module.q_b_proj,
+                w_bits=self._get_bits(q_b, _W),
+                name="q_b_proj",
+            )
+            if use_quant
+            else PlainLinear(attn_module.q_b_proj)
         )
         self.kv_a_proj_with_mqa = (
-            QuantLinear(args, attn_module.kv_a_proj_with_mqa,
-                        w_bits=self._get_bits(kv_a, _W), name="kv_a_proj_with_mqa")
-            if quant_q_a else PlainLinear(attn_module.kv_a_proj_with_mqa)
+            QuantLinear(
+                args,
+                attn_module.kv_a_proj_with_mqa,
+                w_bits=self._get_bits(kv_a, _W),
+                name="kv_a_proj_with_mqa",
+            )
+            if quant_q_a
+            else PlainLinear(attn_module.kv_a_proj_with_mqa)
         )
         self.kv_b_proj = PlainLinear(attn_module.kv_b_proj)
         self.o_proj = (
-            QuantLinear(args, attn_module.o_proj,
-                        w_bits=self._get_bits(o, _W), name="o_proj")
-            if use_quant else PlainLinear(attn_module.o_proj)
+            QuantLinear(
+                args, attn_module.o_proj, w_bits=self._get_bits(o, _W), name="o_proj"
+            )
+            if use_quant
+            else PlainLinear(attn_module.o_proj)
         )
 
     def _build_indexer_projections(self, args, attn_module, bits, use_quant):
@@ -300,14 +322,24 @@ class QuantGlmIndexer(nn.Module):
         quant_wk = use_quant and args.quant_dtype == "mxfp"
 
         self.wq_b = (
-            QuantLinear(args, indexer.wq_b,
-                        w_bits=QuantGlmMoeDsaAttention._get_bits(wq_b, _W), name="wq_b")
-            if use_quant else PlainLinear(indexer.wq_b)
+            QuantLinear(
+                args,
+                indexer.wq_b,
+                w_bits=QuantGlmMoeDsaAttention._get_bits(wq_b, _W),
+                name="wq_b",
+            )
+            if use_quant
+            else PlainLinear(indexer.wq_b)
         )
         self.wk = (
-            QuantLinear(args, indexer.wk,
-                        w_bits=QuantGlmMoeDsaAttention._get_bits(wk, _W), name="wk")
-            if quant_wk else PlainLinear(indexer.wk)
+            QuantLinear(
+                args,
+                indexer.wk,
+                w_bits=QuantGlmMoeDsaAttention._get_bits(wk, _W),
+                name="wk",
+            )
+            if quant_wk
+            else PlainLinear(indexer.wk)
         )
         # k_norm and weights_proj are kept as raw modules (no weight quant).
         self.k_norm = indexer.k_norm
@@ -326,15 +358,18 @@ class QuantGlmIndexer(nn.Module):
         # Cache quantizers for attn-cache: quantize Q/K after RoPE before scoring.
         self.q_cache_quantizer = (
             ActivationQuantizer(args, bits=args.bit_policy.cache_bits("q"))
-            if self.enable_attn_cache else nn.Identity()
+            if self.enable_attn_cache
+            else nn.Identity()
         )
         self.k_cache_quantizer = (
             ActivationQuantizer(args, bits=args.bit_policy.cache_bits("k"))
-            if self.enable_attn_cache else nn.Identity()
+            if self.enable_attn_cache
+            else nn.Identity()
         )
 
-    def forward(self, hidden_states, q_resid, position_embeddings,
-                attention_mask, position_ids):
+    def forward(
+        self, hidden_states, q_resid, position_embeddings, attention_mask, position_ids
+    ):
         """Compute DSA top-k indices with quantization inserted.
 
         Mirrors HF GlmMoeDsaIndexer.forward exactly, adding activation/cache
@@ -362,15 +397,16 @@ class QuantGlmIndexer(nn.Module):
         q = self.q_cache_quantizer(q)  # [INSERT] cache quant on Q after RoPE
         k = self.k_cache_quantizer(k)  # [INSERT] cache quant on K after RoPE
 
-        scores = torch.matmul(
-            q.float(), k.transpose(-1, -2).float().unsqueeze(1)
-        ) * self.softmax_scale
+        scores = (
+            torch.matmul(q.float(), k.transpose(-1, -2).float().unsqueeze(1))
+            * self.softmax_scale
+        )
         scores = torch.relu(scores)
 
         x_q = self.x_afq(hidden_states)  # [INSERT] activation quant before weights_proj
-        weights = self.weights_proj(
-            x_q.to(self.weights_proj.weight.dtype)
-        ).float() * (self.n_heads ** -0.5)
+        weights = self.weights_proj(x_q.to(self.weights_proj.weight.dtype)).float() * (
+            self.n_heads**-0.5
+        )
         index_scores = torch.matmul(weights.unsqueeze(-2), scores).squeeze(-2)
 
         if attention_mask is not None:

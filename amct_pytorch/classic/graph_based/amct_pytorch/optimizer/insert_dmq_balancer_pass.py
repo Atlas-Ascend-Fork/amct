@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -29,6 +29,7 @@ class InsertDMQBalancerPass(BaseModuleFusionPass):
     Function: Insert DMQBalancer for quantizable module
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, torch_recorder):
         """
         Function: init object
@@ -56,8 +57,9 @@ class InsertDMQBalancerPass(BaseModuleFusionPass):
             return False
         if name not in self.conf.get_quant_config():
             return False
-        if not self.conf.get_layer_config(name) or \
-            not self.conf.get_layer_config(name).get('dmq_balancer_param'):
+        if not self.conf.get_layer_config(name) or not self.conf.get_layer_config(
+            name
+        ).get('dmq_balancer_param'):
             return False
         return True
 
@@ -76,12 +78,13 @@ class InsertDMQBalancerPass(BaseModuleFusionPass):
         parent_module = model_helper.get_parent_module(object_name)
 
         # Step2: construct a new module
-        migration_strength = self.conf.get_layer_config(
-            object_name).get('dmq_balancer_param')
+        migration_strength = self.conf.get_layer_config(object_name).get(
+            'dmq_balancer_param'
+        )
         dmq_balancer_args = {
             'record_module': self.record_module,
             'migration_strength': migration_strength,
-            'layers_name': [object_name]
+            'layers_name': [object_name],
         }
         dmq_balancer_module = DMQBalancer(object_module, **dmq_balancer_args)
 
@@ -89,8 +92,9 @@ class InsertDMQBalancerPass(BaseModuleFusionPass):
         setattr(parent_module, object_name.split('.')[-1], dmq_balancer_module)
 
         LOGGER.logd(
-            "Insert DMQBalancer module to '{}' success!".format(
-                object_name), 'InsertDMQBalancerPass')
+            "Insert DMQBalancer module to '{}' success!".format(object_name),
+            'InsertDMQBalancerPass',
+        )
 
     def tear_down(self):
         """
@@ -99,8 +103,3 @@ class InsertDMQBalancerPass(BaseModuleFusionPass):
         Return: None
         """
         self.record_module.record_quant_layer(self.dmq_layers_name)
-
-
-
-
-

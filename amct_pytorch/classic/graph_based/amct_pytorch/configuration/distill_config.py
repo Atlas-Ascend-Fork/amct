@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,16 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import torch
 
 from ...amct_pytorch.capacity import CAPACITY
 from ...amct_pytorch.common.utils.check_params import check_params
-from ...amct_pytorch.configuration.distill_config_base.distill_config_base \
-    import DistillConfigBase
-from ...amct_pytorch.configuration.distill_config_base.distill_config_base \
-    import GraphObjects
+from ...amct_pytorch.configuration.distill_config_base.distill_config_base import (
+    DistillConfigBase,
+)
+from ...amct_pytorch.configuration.distill_config_base.distill_config_base import (
+    GraphObjects,
+)
 from ...amct_pytorch.configuration.check import GraphQuerier
-from ...amct_pytorch.configuration.check import GraphChecker
 from ...amct_pytorch.graph.graph import Graph
 from ...amct_pytorch.utils.log import LOGGER
 

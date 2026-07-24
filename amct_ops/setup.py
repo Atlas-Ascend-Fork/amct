@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -34,6 +34,7 @@ from setuptools.dist import Distribution
 
 class BinaryDistribution(Distribution):
     """强制生成平台相关 wheel（包含编译 .so）"""
+
     def has_ext_modules(self):
         return True
 

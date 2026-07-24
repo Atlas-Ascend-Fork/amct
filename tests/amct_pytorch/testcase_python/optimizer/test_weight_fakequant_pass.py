@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,8 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
-import sys
 import unittest
 from copy import deepcopy
 from io import BytesIO
@@ -25,16 +23,8 @@ from unittest.mock import patch
 
 import numpy as np
 import torch
-from google.protobuf import text_format
 from onnx import onnx_pb
 
-import amct_pytorch.classic.graph_based.amct_pytorch as amct
-from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
-    files as files_util,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
-    Configuration,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
@@ -51,13 +41,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_weight_quan
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.weight_fakequant_pass import (
     WeightFakequantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parse_record_file import (
-    RecordFileParser,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
@@ -65,7 +49,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
 )
 
-from .util import models, record_file
 
 DATA_SCALE = 'data_scale'
 DATA_OFFSET = 'data_offset'
@@ -95,13 +78,18 @@ ADD1 = 'add1'
 def conv_sub_with_trans(graph, conv_name, inputs, outputs, quant_attrs):
     # Add Ascend Quant
     quant_node = graph.node.add()
-    quant_node.CopyFrom(construct_quant_node(inputs, ['%s_quant' % (conv_name)],
-        quant_attrs, conv_name))
+    quant_node.CopyFrom(
+        construct_quant_node(inputs, ['%s_quant' % (conv_name)], quant_attrs, conv_name)
+    )
     # Add conv
     conv = graph.node.add()
     conv.name = conv_name
     conv.op_type = 'Conv'
-    conv.input[:] = ['%s_quant' % (conv_name), S_TRANSPOSE % (conv_name), '%s.bias' % (conv_name)]
+    conv.input[:] = [
+        '%s_quant' % (conv_name),
+        S_TRANSPOSE % (conv_name),
+        '%s.bias' % (conv_name),
+    ]
     conv.output[:] = [conv_name]
     # add attribute "kernel_shape"
     kernel_shape = conv.attribute.add()
@@ -142,13 +130,18 @@ def conv_sub_with_trans(graph, conv_name, inputs, outputs, quant_attrs):
 def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
     # Add Ascend Quant
     quant_node = graph.node.add()
-    quant_node.CopyFrom(construct_quant_node(inputs, ['%s_quant' % (conv_name)],
-        quant_attrs, conv_name))
+    quant_node.CopyFrom(
+        construct_quant_node(inputs, ['%s_quant' % (conv_name)], quant_attrs, conv_name)
+    )
     # Add conv
     conv = graph.node.add()
     conv.name = conv_name
     conv.op_type = 'Conv'
-    conv.input[:] = ['%s_quant' % (conv_name), '%s.weights' % (conv_name), '%s.bias' % (conv_name)]
+    conv.input[:] = [
+        '%s_quant' % (conv_name),
+        '%s.weights' % (conv_name),
+        '%s.bias' % (conv_name),
+    ]
     conv.output[:] = [conv_name]
     # add attribute "kernel_shape"
     kernel_shape = conv.attribute.add()
@@ -183,13 +176,20 @@ def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
 def deconv_sub(graph, deconv_name, inputs, outputs, quant_attrs):
     # Add Ascend Quant
     quant_node = graph.node.add()
-    quant_node.CopyFrom(construct_quant_node(inputs, ['%s_quant' % (deconv_name)],
-        quant_attrs, deconv_name))
+    quant_node.CopyFrom(
+        construct_quant_node(
+            inputs, ['%s_quant' % (deconv_name)], quant_attrs, deconv_name
+        )
+    )
     # Add deconv
     deconv = graph.node.add()
     deconv.name = deconv_name
     deconv.op_type = 'ConvTranspose'
-    deconv.input[:] = ['%s_quant' % (deconv_name), '%s.weights' % (deconv_name), '%s.bias' % (deconv_name)]
+    deconv.input[:] = [
+        '%s_quant' % (deconv_name),
+        '%s.weights' % (deconv_name),
+        '%s.bias' % (deconv_name),
+    ]
     deconv.output[:] = [deconv_name]
     # add attribute "kernel_shape"
     kernel_shape = deconv.attribute.add()
@@ -248,14 +248,34 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         concat_node.input[:] = ['data0']
         concat_node.output[:] = [CONCAT0]
 
-        conv_sub(cls.graph, 'conv1', [CONCAT0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(cls.graph, 'conv2', [CONCAT0], ['conv2_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+        conv_sub(
+            cls.graph,
+            'conv1',
+            [CONCAT0],
+            ['conv1_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
+        conv_sub(
+            cls.graph,
+            'conv2',
+            [CONCAT0],
+            ['conv2_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
         conv_sub_with_trans(
-            cls.graph, 'conv3', [CONCAT0], ['conv3_output'],
-            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+            cls.graph,
+            'conv3',
+            [CONCAT0],
+            ['conv3_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
         deconv_sub(
-            cls.graph, 'deconv1', [CONCAT0], ['deconv1_output'],
-            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+            cls.graph,
+            'deconv1',
+            [CONCAT0],
+            ['deconv1_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
 
         # Add max_pooling
         pool0 = cls.graph.node.add()
@@ -267,7 +287,13 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         add1 = cls.graph.node.add()
         add1.name = ADD1
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', 'deconv1_output', POOL0]
+        add1.input[:] = [
+            'conv1_output',
+            'conv2_output',
+            'conv3_output',
+            'deconv1_output',
+            POOL0,
+        ]
         add1.output[:] = [ADD1]
         # Add average_pool
         pad0 = cls.graph.node.add()
@@ -302,33 +328,14 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
     def test_do_pass_int4_success(self):
         with patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-            return_value=4):
+            return_value=4,
+        ):
             with patch(
                 'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-                return_value=4):
-                records = {'conv1': {
-                        DATA_SCALE: 1.0,
-                        DATA_OFFSET: 0,
-                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
-                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
-                    }
-                }
-                test_model = deepcopy(self.model_proto)
-                graph = Graph(test_model)
-                optimizer = GraphOptimizer()
-                optimizer.add_pass(InsertWeightQuantPass(records))
-                optimizer.add_pass(ReplaceWeightQuantPass(records))
-                optimizer.do_optimizer(graph, test_model)
-                self.assertEqual(TensorProtoHelper(graph.nodes[0].proto).get_data().dtype, 'float32')
-
-    def test_do_pass_int4_trans_success(self):
-        with patch(
-            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-            return_value=4):
-            with patch(
-                'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-                return_value=4):
-                records = {'conv3': {
+                return_value=4,
+            ):
+                records = {
+                    'conv1': {
                         DATA_SCALE: 1.0,
                         DATA_OFFSET: 0,
                         WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
@@ -342,18 +349,20 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 optimizer.add_pass(ReplaceWeightQuantPass(records))
                 optimizer.do_optimizer(graph, test_model)
                 self.assertEqual(
-                    TensorProtoHelper(graph.get_node_by_name('conv3.weights').proto).get_data().dtype,
-                    'float32')
-                
+                    TensorProtoHelper(graph.nodes[0].proto).get_data().dtype, 'float32'
+                )
 
-    def test_do_pass_int4_deconv_success(self):
+    def test_do_pass_int4_trans_success(self):
         with patch(
             'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-            return_value=4):
+            return_value=4,
+        ):
             with patch(
                 'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-                return_value=4):
-                records = {'deconv1': {
+                return_value=4,
+            ):
+                records = {
+                    'conv3': {
                         DATA_SCALE: 1.0,
                         DATA_OFFSET: 0,
                         WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
@@ -366,8 +375,42 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 optimizer.add_pass(InsertWeightQuantPass(records))
                 optimizer.add_pass(ReplaceWeightQuantPass(records))
                 optimizer.do_optimizer(graph, test_model)
-                self.assertEqual(TensorProtoHelper(graph.get_node_by_name(
-                    'deconv1.weights').proto).get_data().dtype, 'float32')
+                self.assertEqual(
+                    TensorProtoHelper(graph.get_node_by_name('conv3.weights').proto)
+                    .get_data()
+                    .dtype,
+                    'float32',
+                )
+
+    def test_do_pass_int4_deconv_success(self):
+        with patch(
+            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+            return_value=4,
+        ):
+            with patch(
+                'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
+                return_value=4,
+            ):
+                records = {
+                    'deconv1': {
+                        DATA_SCALE: 1.0,
+                        DATA_OFFSET: 0,
+                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
+                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
+                    }
+                }
+                test_model = deepcopy(self.model_proto)
+                graph = Graph(test_model)
+                optimizer = GraphOptimizer()
+                optimizer.add_pass(InsertWeightQuantPass(records))
+                optimizer.add_pass(ReplaceWeightQuantPass(records))
+                optimizer.do_optimizer(graph, test_model)
+                self.assertEqual(
+                    TensorProtoHelper(graph.get_node_by_name('deconv1.weights').proto)
+                    .get_data()
+                    .dtype,
+                    'float32',
+                )
 
     def test_match_pattern_success(self):
         records = {
@@ -419,9 +462,14 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
             def forward(self, input_data, hx):
                 x = self.lstm(input_data, hx)
                 return x
+
         model = RNNModule()
         tmp_onnx = BytesIO()
-        Parser.export_onnx(model, (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))), tmp_onnx)
+        Parser.export_onnx(
+            model,
+            (torch.randn(1, 1, 10), (torch.randn(1, 1, 20), torch.randn(1, 1, 20))),
+            tmp_onnx,
+        )
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node_name = 'lstm'
         node = graph.get_node_by_name(node_name)
@@ -449,6 +497,7 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
                 x = self.conv1(input_data)
                 x = self.deconv1(x)
                 return x
+
         model = Conv1dModule()
         tmp_onnx = BytesIO()
         Parser.export_onnx(model, torch.randn(3, 3, 10), tmp_onnx)
@@ -457,12 +506,12 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         records = {
             'conv1': {
                 WEIGHT_SCALE: np.array([1.0] * 3, dtype=np.float32),
-                WEIGHT_OFFSET: np.array([0] * 3, dtype=np.int8)
+                WEIGHT_OFFSET: np.array([0] * 3, dtype=np.int8),
             },
             'deconv1': {
                 WEIGHT_SCALE: np.array([1.0] * 3, dtype=np.float32),
-                WEIGHT_OFFSET: np.array([0] * 3, dtype=np.int8)
-            }
+                WEIGHT_OFFSET: np.array([0] * 3, dtype=np.int8),
+            },
         }
 
         node_name = 'deconv1'
@@ -474,4 +523,3 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
         node_name = 'conv1'
         node = graph.get_node_by_name(node_name)
         passer.do_pass(graph, node)
-

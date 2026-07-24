@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,27 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
-from google.protobuf import text_format
 
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pb2,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.quantize_tool import (
-    create_quant_config,
     quantize_model,
-    save_model,
 )
 
-from .utils import models, record_file_utils
+from .utils import models
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +37,7 @@ class TestQuantizeModel(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_quantize_model')
@@ -74,13 +65,23 @@ class TestQuantizeModel(unittest.TestCase):
 
     def test_quantize_model(self):
         config_file = os.path.join(CUR_DIR, 'utils/test_quantize_model/model_002.json')
-        modfied_onnx_file = os.path.join(self.temp_folder, 'no_exit/model_modified.onnx')
+        modfied_onnx_file = os.path.join(
+            self.temp_folder, 'no_exit/model_modified.onnx'
+        )
         record_file = os.path.join(self.temp_folder, 'model_002.txt')
         logger.info("=*" * 30)
         for name, mod in self.model_002.named_modules():
             logger.info('%s %s', name, mod)
-        new_model = quantize_model(config_file, modfied_onnx_file, record_file,
-            self.model_002, self.args, None, None, None)
+        new_model = quantize_model(
+            config_file,
+            modfied_onnx_file,
+            record_file,
+            self.model_002,
+            self.args,
+            None,
+            None,
+            None,
+        )
 
         data = self.args[0]
         for _ in range(2):

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 from collections import OrderedDict
 from enum import Enum, unique
-from ..utils.vars_util import INT4, INT8, INT16
+from ..utils.vars_util import INT8
 from ..utils.vars_util import RETRAIN_DATA_TYPES
 from ..utils.vars_util import RETRAIN_ACT_WTS_TYPES
 
@@ -36,12 +36,14 @@ FAKEQUANT_PRECISION_MODE = ['DEFAULT', 'FORCE_FP16_QUANT']
 @unique
 class FakequantPrecision(Enum):
     '''enumeration of scale precision'''
+
     DEFAULT = 'DEFAULT'
     FORCE_FP16_QUANT = 'FORCE_FP16_QUANT'
 
 
-class ConfigItem():
+class ConfigItem:
     '''an class for ConfigItem filed'''
+
     def __init__(self, graph_querier, capacity, strong_check=True):
         '''inner method'''
         self.graph_querier = graph_querier
@@ -53,8 +55,11 @@ class ConfigItem():
     @staticmethod
     def check_type(name, variable, typeinfo, layer=None):
         '''inner method'''
-        error_msg = "Type of %s should be %s, but is %s" \
-                % (name, typeinfo, type(variable))
+        error_msg = "Type of %s should be %s, but is %s" % (
+            name,
+            typeinfo,
+            type(variable),
+        )
         if layer is not None:
             error_msg = "%s for layer %s" % (error_msg, layer)
         if not isinstance(variable, typeinfo):
@@ -98,6 +103,7 @@ class ConfigItem():
 
 class Version(ConfigItem):
     '''an object for Version filed'''
+
     def build(self, val):
         '''inner method'''
         self.check_type("Version", val, int)
@@ -112,12 +118,12 @@ class Version(ConfigItem):
 
 class BatchNum(ConfigItem):
     '''an object for BatchNum filed'''
+
     def build(self, val):
         '''inner method'''
         self.check_type("BatchNum", val, int)
         if val <= 0:
-            raise ValueError("batch_num(%d) should be greater than zero." \
-                             % val)
+            raise ValueError("batch_num(%d) should be greater than zero." % val)
         self.value = val
 
     def build_default(self):
@@ -127,14 +133,18 @@ class BatchNum(ConfigItem):
 
 class FakequantPrecisionMode(ConfigItem):
     '''an object for FakequantPrecisionMode filed'''
+
     def build(self, val):
         '''inner method'''
         self.check_type("FakequantPrecisionMode", val, str)
         if val not in FAKEQUANT_PRECISION_MODE:
             raise ValueError(
-                "Type of FakequantPrecisionMode should be {}".format(FAKEQUANT_PRECISION_MODE))
+                "Type of FakequantPrecisionMode should be {}".format(
+                    FAKEQUANT_PRECISION_MODE
+                )
+            )
         self.value = val
- 
+
     def build_default(self):
         '''inner method'''
         self.value = FakequantPrecision.DEFAULT.value
@@ -142,6 +152,7 @@ class FakequantPrecisionMode(ConfigItem):
 
 class RetrainEnable(ConfigItem):
     '''an object for RetrainEnable filed'''
+
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type("RetrainEnable", val, bool, extra[0])
@@ -154,12 +165,14 @@ class RetrainEnable(ConfigItem):
 
 class DataAlgo(ConfigItem):
     '''an object for DataAlgo filed'''
+
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type('DataAlgo', val, str)
         if val != 'ulq_quantize':
-            raise ValueError('DataAlgo only support ulq_quantize for layer %s'\
-                    % (extra[0]))
+            raise ValueError(
+                'DataAlgo only support ulq_quantize for layer %s' % (extra[0])
+            )
         self.value = val
 
     def build_default(self):
@@ -169,28 +182,29 @@ class DataAlgo(ConfigItem):
 
 class ClipMax(ConfigItem):
     '''an object for ClipMax filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('ClipMax', val, float, extra[0])
         if val <= 0:
-            raise ValueError('clip max should be larger than 0 for layer %s' \
-                    % extra[0])
+            raise ValueError('clip max should be larger than 0 for layer %s' % extra[0])
         self.value = val
 
 
 class ClipMin(ConfigItem):
     '''an object for ClipMin filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('ClipMin', val, float, extra[0])
         if val >= 0:
-            raise ValueError('clip min should be less than 0 for layer %s'\
-                    % extra[0])
+            raise ValueError('clip min should be less than 0 for layer %s' % extra[0])
         self.value = val
 
 
 class FixedMin(ConfigItem):
     '''an object for FixedMin filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('FixedMin', val, bool, extra[0])
@@ -199,21 +213,24 @@ class FixedMin(ConfigItem):
 
 class DataType(ConfigItem):
     '''an object for DataType filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type(DST_TYPE, val, str, extra[0])
         if val not in RETRAIN_DATA_TYPES:
             raise ValueError(
-                "now only support {}, but is {}".format(RETRAIN_DATA_TYPES, val))
+                "now only support {}, but is {}".format(RETRAIN_DATA_TYPES, val)
+            )
         self.value = val
 
-    def build_default(self, extra=None): # pylint: disable=W0613
+    def build_default(self, extra=None):  # pylint: disable=W0613
         '''inner method'''
         self.value = INT8
 
 
 class RetrainDataConfig(ConfigItem):
     '''an object for RetrainDataConfig filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('RetrainDataConfig', val, dict, extra[0])
@@ -240,8 +257,7 @@ class RetrainDataConfig(ConfigItem):
             self.build_default_util(DST_TYPE, DataType)
 
         if val.keys():
-            raise ValueError('Invalid keys in data config for layer %s'\
-                    % extra[0])
+            raise ValueError('Invalid keys in data config for layer %s' % extra[0])
 
     def build_default(self):
         '''inner method'''
@@ -251,36 +267,38 @@ class RetrainDataConfig(ConfigItem):
 
 class WeightAlgo(ConfigItem):
     '''an object for WeightAlgo filed'''
+
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type('WeightAlgo', val, str, extra[0])
         if val not in ['arq_retrain', 'ulq_retrain']:
             raise ValueError(
-                'WeightAlgo only supports [arq_retrain, ulq_retrain] ' \
-                    'for layer %s' % (extra[0]))
+                'WeightAlgo only supports [arq_retrain, ulq_retrain] '
+                'for layer %s' % (extra[0])
+            )
         self.value = val
 
-    def build_default(self, extra=None): # pylint: disable=W0613
+    def build_default(self, extra=None):  # pylint: disable=W0613
         '''inner method'''
         self.value = 'arq_retrain'
 
 
 class ChannelWise(ConfigItem):
     '''an object for ChannelWise filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('ChannelWise', val, bool, extra[0])
-        if extra[1] in [
-                'Linear', 'MatMul', 'InnerProduct', 'Pooling', 'AvgPool'
-        ] and val is True:
+        if (
+            extra[1] in ['Linear', 'MatMul', 'InnerProduct', 'Pooling', 'AvgPool']
+            and val is True
+        ):
             raise ValueError(' %s layer can not be channewised' % extra[0])
         self.value = val
 
     def build_default(self, extra):
         '''inner method'''
-        if extra[1] in [
-                'Linear', 'MatMul', 'InnerProduct', 'Pooling', 'AvgPool'
-        ]:
+        if extra[1] in ['Linear', 'MatMul', 'InnerProduct', 'Pooling', 'AvgPool']:
             self.value = False
         else:
             self.value = True
@@ -288,6 +306,7 @@ class ChannelWise(ConfigItem):
 
 class RetrainWeightConfig(ConfigItem):
     '''an object for RetrainWeightConfig filed'''
+
     def build(self, val, extra):
         '''inner method'''
         self.check_type('RetrainWeightConfig', val, dict, extra[0])
@@ -308,11 +327,11 @@ class RetrainWeightConfig(ConfigItem):
             self.build_config_by_key(DST_TYPE, DataType, val, extra)
             self.build_config_by_key(CHANNEL_WISE, ChannelWise, val, extra)
         else:
-            raise ValueError("only support [arq_retrain, ulq_retrain], "
-                             " but is {}".format(wts_algo))
+            raise ValueError(
+                "only support [arq_retrain, ulq_retrain],  but is {}".format(wts_algo)
+            )
         if val.keys():
-            raise ValueError('Invalid keys in weight config for layer %s'\
-                    % extra[0])
+            raise ValueError('Invalid keys in weight config for layer %s' % extra[0])
 
     def build_default(self, extra):
         '''inner method'''
@@ -331,6 +350,7 @@ class RetrainWeightConfig(ConfigItem):
 
 class RegularPruneEnable(ConfigItem):
     '''an object for RegularPruneEnable filed'''
+
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type("RegularPruneEnable", val, bool, extra[0])
@@ -343,6 +363,7 @@ class RegularPruneEnable(ConfigItem):
 
 class PruneRatio(ConfigItem):
     '''an object for PruneRatio filed'''
+
     @staticmethod
     def build_default():
         '''inner method'''
@@ -352,13 +373,16 @@ class PruneRatio(ConfigItem):
         '''inner method'''
         self.check_type("PruneRatio", val, float, extra[0])
         if val <= 0 or val >= 1:
-            raise ValueError('prune ration should be greater than 0 and less '\
-                    'than 1 for layer %s' % extra[0])
+            raise ValueError(
+                'prune ration should be greater than 0 and less '
+                'than 1 for layer %s' % extra[0]
+            )
         self.value = val
 
 
 class AscendOptimized(ConfigItem):
     '''an object for AscendOptimized filed'''
+
     def build(self, val, extra=None):
         '''inner method'''
         self.check_type("AscendOptimized", val, bool, extra[0])
@@ -371,6 +395,7 @@ class AscendOptimized(ConfigItem):
 
 class NOutOfMType(ConfigItem):
     '''an object for NOutOfMType filed'''
+
     def __init__(self, graph_querier, capacity, strong_check=True):
         super().__init__(graph_querier, capacity, strong_check)
         self.support_n_out_of_m_type = ['M4N2']
@@ -385,13 +410,15 @@ class NOutOfMType(ConfigItem):
         self.check_type("NOutOfMType", val, str, extra[0])
         if val not in self.support_n_out_of_m_type:
             raise ValueError(
-                'NOutOfMType only supports %s for layer %s' \
-                % (self.support_n_out_of_m_type, extra[0]))
+                'NOutOfMType only supports %s for layer %s'
+                % (self.support_n_out_of_m_type, extra[0])
+            )
         self.value = val
 
 
 class UpdateFreq(ConfigItem):
     '''an object for UpdateFreq filed'''
+
     @staticmethod
     def build_default():
         '''inner method'''
@@ -401,13 +428,16 @@ class UpdateFreq(ConfigItem):
         '''inner method'''
         self.check_type("UpdateFreq", val, int, extra[0])
         if val < 0:
-            raise ValueError('selective prune update freq should be no less than 0 '\
-                    'for layer %s' % extra[0])
+            raise ValueError(
+                'selective prune update freq should be no less than 0 '
+                'for layer %s' % extra[0]
+            )
         self.value = val
 
 
 class PruneType(ConfigItem):
     '''an object for PruneType filed'''
+
     __default_value = 'no_prune_enable'
 
     def __init__(self, graph_querier, capacity, strong_check=True):
@@ -428,17 +458,19 @@ class PruneType(ConfigItem):
         self.check_type('PruneType', val, str, extra[0])
         if val not in self.support_algos:
             raise ValueError(
-                'PruneType only supports %s for layer %s' \
-                % (self.support_algos, extra[0]))
+                'PruneType only supports %s for layer %s'
+                % (self.support_algos, extra[0])
+            )
         self.value = val
 
-    def build_default(self, extra=None): # pylint: disable=W0613
+    def build_default(self, extra=None):  # pylint: disable=W0613
         '''inner method'''
         self.value = self.__default_value
 
 
 class RegularPruneAlgo(ConfigItem):
     '''an object for RegularPruneAlgo filed'''
+
     def __init__(self, graph_querier, capacity, strong_check=True):
         super().__init__(graph_querier, capacity, strong_check)
         self.support_algos = ['balanced_l2_norm_filter_prune', 'l1_selective_prune']
@@ -457,17 +489,19 @@ class RegularPruneAlgo(ConfigItem):
         self.check_type('RegularPruneAlgo', val, str, extra[0])
         if val not in self.support_algos:
             raise ValueError(
-                'RegularPruneAlgo only supports %s for layer %s' \
-                % (self.support_algos, extra[0]))
+                'RegularPruneAlgo only supports %s for layer %s'
+                % (self.support_algos, extra[0])
+            )
         self.value = val
 
-    def build_default(self, extra=None): # pylint: disable=W0613
+    def build_default(self, extra=None):  # pylint: disable=W0613
         '''inner method'''
         pass
 
 
 class BcpPruneConfig(ConfigItem):
     '''an object for BcpPruneConfig filed'''
+
     fields = {
         PRUNE_RATIO: PruneRatio,
         'ascend_optimized': AscendOptimized,
@@ -488,8 +522,9 @@ class BcpPruneConfig(ConfigItem):
             add_one_field(key, self.fields.get(key), val)
 
         if val.keys():
-            raise ValueError('Invalid keys %s in prune config for layer %s'\
-                    % (val.keys(), extra[0]))
+            raise ValueError(
+                'Invalid keys %s in prune config for layer %s' % (val.keys(), extra[0])
+            )
 
     def build_default(self):
         '''inner method'''
@@ -507,6 +542,7 @@ class BcpPruneConfig(ConfigItem):
 
 class RegularPruneConfig(ConfigItem):
     '''an object for PruneConfig filed'''
+
     fields = {
         'prune_type': PruneType,
         ALGO: RegularPruneAlgo,
@@ -515,7 +551,7 @@ class RegularPruneConfig(ConfigItem):
         'ascend_optimized': AscendOptimized,
         # for l1_selective_prune
         'n_out_of_m_type': NOutOfMType,
-        'update_freq': UpdateFreq
+        'update_freq': UpdateFreq,
     }
 
     def build(self, val, extra):
@@ -540,8 +576,7 @@ class RegularPruneConfig(ConfigItem):
                 add_one_field(key, self.fields.get(key), val)
 
         if val.keys():
-            raise ValueError('Invalid keys in prune config for layer %s'\
-                    % extra[0])
+            raise ValueError('Invalid keys in prune config for layer %s' % extra[0])
 
     def build_default(self):
         '''inner method'''
@@ -559,6 +594,7 @@ class RegularPruneConfig(ConfigItem):
 
 class LayerConfig(ConfigItem):
     '''an object for LayerConfig filed'''
+
     fields = {
         'retrain_enable': RetrainEnable,
         'retrain_data_config': RetrainDataConfig,
@@ -612,23 +648,33 @@ class LayerConfig(ConfigItem):
 
 class RootConfig(ConfigItem):
     '''an object for RootConfig filed'''
+
     def check_layer_config_legal(self, layer):
         '''check layer config legal'''
-        weight_config = self.children.get(layer).children.get('retrain_weight_config').children
-        act_config = self.children.get(layer).children.get('retrain_data_config').children
+        weight_config = (
+            self.children.get(layer).children.get('retrain_weight_config').children
+        )
+        act_config = (
+            self.children.get(layer).children.get('retrain_data_config').children
+        )
         if DST_TYPE in weight_config:
             weight_dst = weight_config.get(DST_TYPE).value
             act_dst = act_config.get(DST_TYPE).value
-            act_wts_type = 'A{}W{}'.format(act_dst.split('INT')[-1], weight_dst.split('INT')[-1])
+            act_wts_type = 'A{}W{}'.format(
+                act_dst.split('INT')[-1], weight_dst.split('INT')[-1]
+            )
             if act_wts_type not in RETRAIN_ACT_WTS_TYPES:
                 raise ValueError(
                     "Now do not support activation and weights "
                     "data_type, activation is {} and weight "
-                    "is {}".format(act_dst, weight_dst))
-            if "AvgPool" in layer and self.children.get(layer).children.get('retrain_enable').value:
+                    "is {}".format(act_dst, weight_dst)
+                )
+            if (
+                "AvgPool" in layer
+                and self.children.get(layer).children.get('retrain_enable').value
+            ):
                 if weight_dst == 'INT4':
-                    raise RuntimeError(
-                        'Now AvgPool Layer does not support INT4')
+                    raise RuntimeError('Now AvgPool Layer does not support INT4')
 
     def build(self, value, extra):
         '''inner method'''
@@ -651,17 +697,17 @@ class RootConfig(ConfigItem):
         for layer, layer_config in value.items():
             if layer not in extra.keys():
                 raise ValueError("unsupported layer %s" % {layer})
-            if layer_config.get('retrain_enable') or layer_config.get('regular_prune_enable'):
+            if layer_config.get('retrain_enable') or layer_config.get(
+                'regular_prune_enable'
+            ):
                 all_disable = False
-            self.build_util(layer, LayerConfig, layer_config,
-                            (layer, extra[layer]))
+            self.build_util(layer, LayerConfig, layer_config, (layer, extra[layer]))
             self.check_layer_config_legal(layer)
             del extra[layer]
         disable_config = {}
         for layer, layer_type in extra.items():
             disable_config['retrain_enable'] = False
-            self.build_util(layer, LayerConfig, disable_config,
-                            (layer, layer_type))
+            self.build_util(layer, LayerConfig, disable_config, (layer, layer_type))
 
         if all_disable:
             raise ValueError('No layer retrain enabled')
@@ -681,14 +727,18 @@ class RootConfig(ConfigItem):
             self.build_default_util(layer, LayerConfig, (layer, layer_type))
 
     def get_global_keys(self):
-        '''Get global config's keys '''
+        '''Get global config's keys'''
         global_keys = ['version', 'fakequant_precision_mode']
         if self.capacity.is_enable(BATCH_NUM_UPPER):
             global_keys.append(BATCH_NUM)
         return global_keys
 
     def _build(self, key, value):
-        class_dict = {"version": Version, "batch_num": BatchNum, "fakequant_precision_mode": FakequantPrecisionMode}
+        class_dict = {
+            "version": Version,
+            "batch_num": BatchNum,
+            "fakequant_precision_mode": FakequantPrecisionMode,
+        }
         if key not in value and self.strong_check and key != "fakequant_precision_mode":
             raise ValueError("must has %s" % {key})
         if key not in value:

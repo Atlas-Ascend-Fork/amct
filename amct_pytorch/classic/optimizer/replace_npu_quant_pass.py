@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -29,6 +29,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
     Function: Replace npu quant module in graph.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -36,7 +37,7 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         Return: None
         """
         super().__init__()
-    
+
     @staticmethod
     def match_pattern(module, name):
         """
@@ -48,12 +49,14 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                 False: mismatch
         """
         module_type = type(module)
-        if module_type in AlgorithmRegistry.quant_to_deploy.keys() or \
-            module_type.__name__ in AlgorithmRegistry.quant_to_deploy.keys():
+        if (
+            module_type in AlgorithmRegistry.quant_to_deploy.keys()
+            or module_type.__name__ in AlgorithmRegistry.quant_to_deploy.keys()
+        ):
             return True
-        
+
         return False
-    
+
     def do_pass(self, model, object_module, object_name):
         """
         Function: Replace npu quantization op
@@ -66,26 +69,39 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
         deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type)
         if deploy_ops is None:
             deploy_ops = AlgorithmRegistry.quant_to_deploy.get(module_type.__name__)
-        
+
         if deploy_ops is None:
-            raise RuntimeError(f"The deploy_op for {module_type.__name__} is None! "
-                                "pls invoke algorithm_register to register deploy_op!")
-        
+            raise RuntimeError(
+                f"The deploy_op for {module_type.__name__} is None! "
+                "pls invoke algorithm_register to register deploy_op!"
+            )
+
         if isinstance(object_module, deploy_ops[0]):
             LOGGER.logd(f'{module_type.__name__} do not need to invoke convert')
             return
 
-        if type(object_module).__name__ == 'FlatQuantAttention' or type(object_module).__name__ == 'FlatQuantMLP':
+        if (
+            type(object_module).__name__ == 'FlatQuantAttention'
+            or type(object_module).__name__ == 'FlatQuantMLP'
+        ):
             # We needs to access layernorm and trans from higher level, so it cannot be done within the module
             # TODO: eventually we need to decouple the experimental part and avoid importing it in the main logic
-            from amct_pytorch.experimental.flatquant.reparam_utils import get_replacement_module
-            npu_module = get_replacement_module(model, type(object_module).__name__, object_name, object_module)
+            from amct_pytorch.experimental.flatquant.reparam_utils import (
+                get_replacement_module,
+            )
+
+            npu_module = get_replacement_module(
+                model, type(object_module).__name__, object_name, object_module
+            )
         else:
             npu_module = self._get_deploy_module(object_module, module_type)
-        
+
         ModuleHelper.replace_module_by_name(model, object_name, npu_module)
-        LOGGER.logd("Replace npu module to '{}' success!".format(object_name), 'ReplaceNpuQuantPass')
-    
+        LOGGER.logd(
+            "Replace npu module to '{}' success!".format(object_name),
+            'ReplaceNpuQuantPass',
+        )
+
     def _get_deploy_module(self, object_module, module_type):
         """
         Function: Get deploy module based on object type
@@ -109,7 +125,10 @@ class ReplaceNpuQuantModulePass(BaseModuleFusionPass):
                     deploy_op: deploy op function
         Return: bool
         """
-        if hasattr(object_module, 'ori_module_type') and object_module.ori_module_type == 'Conv2d':
+        if (
+            hasattr(object_module, 'ori_module_type')
+            and object_module.ori_module_type == 'Conv2d'
+        ):
             return deploy_op in [NpuQuantizationConv2d]
         elif hasattr(object_module, 'dynamic') and object_module.dynamic is True:
             return deploy_op == NpuQuantizationLinear

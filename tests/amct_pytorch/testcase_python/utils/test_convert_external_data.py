@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,17 +18,13 @@
 import copy
 import os
 import shutil
-import sys
 import unittest
 from unittest.mock import patch
 
 import numpy as np
-import onnx
 from onnx import onnx_pb
-from onnx.external_data_helper import convert_model_to_external_data
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
     TensorProtoHelper,
 )
@@ -131,7 +127,9 @@ class TestSave(unittest.TestCase):
         shutil.rmtree(self.temp_folder)
         pass
 
-    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch(
+        'amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1
+    )
     def test_convert_external_data_format(self):
         file_name = os.path.join(self.temp_folder, 'test_external_data.pth')
         test_model = copy.deepcopy(self.model_proto)
@@ -149,9 +147,13 @@ class TestSave(unittest.TestCase):
         bias_path = os.path.join(self.temp_folder, 'conv1.bias.external')
         weight_path = os.path.join(self.temp_folder, 'conv1.weights.external')
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
-        self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
+        self.assertTrue(
+            os.path.exists(weight_path), f"File {weight_path} does not exist."
+        )
 
-    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch(
+        'amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1
+    )
     def test_convert_external_data_format_fakequant(self):
         file_name = os.path.join(self.temp_folder, 'test_external_data_fake_quant.onnx')
         test_model = copy.deepcopy(self.model_proto)
@@ -160,9 +162,13 @@ class TestSave(unittest.TestCase):
         bias_path = os.path.join(self.temp_folder, 'conv1.bias_fakequant.external')
         weight_path = os.path.join(self.temp_folder, 'conv1.weights_fakequant.external')
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
-        self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
+        self.assertTrue(
+            os.path.exists(weight_path), f"File {weight_path} does not exist."
+        )
 
-    @patch('amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1)
+    @patch(
+        'amct_pytorch.classic.graph_based.amct_pytorch.utils.save.MAXIMUM_PROTOBUF', 1
+    )
     def test_convert_external_data_format_deploy(self):
         file_name = os.path.join(self.temp_folder, 'test_external_data_deploy.onnx')
         test_model = copy.deepcopy(self.model_proto)
@@ -171,8 +177,9 @@ class TestSave(unittest.TestCase):
         bias_path = os.path.join(self.temp_folder, 'conv1.bias_deploy.external')
         weight_path = os.path.join(self.temp_folder, 'conv1.weights_deploy.external')
         self.assertTrue(os.path.exists(bias_path), f"File {bias_path} does not exist.")
-        self.assertTrue(os.path.exists(weight_path), f"File {weight_path} does not exist.")
-
+        self.assertTrue(
+            os.path.exists(weight_path), f"File {weight_path} does not exist."
+        )
 
     # def test_convert_external_data_format_data_location_error(self):
     #     for initial in temp_model.graph.initializer:
