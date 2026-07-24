@@ -15,15 +15,6 @@ echo "start run test case, please wait ..."
 cd /home/taskspace
 WORKSPACE=/home/taskspace
 
-arm_package="cann-ops-transformer-custom_linux-aarch64.run"
-rm -f ${arm_package}
-wget -nv -O ${arm_package} https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/${obs_path}/${arm_package} || true
-if [ ! -f "${arm_package}" ] || [ ! -s "${arm_package}" ];then
-    echo "No custom package found, This PR no need excute smoke."
-    rm -f ${arm_package}
-    exit 0
-fi
-
 log() {
   local dt
   dt=$(date '+%Y%m%d.%H%M%S')
@@ -55,13 +46,9 @@ for op in "${ops[@]}"; do
   mode="eager"
   [ "$op" = "crop_and_resize" ] && mode="graph"
   source /usr/local/Ascend/cann/set_env.sh
-  arm_package="cann-ops-transformer-custom_linux-aarch64.run"
-  wget -nv -O ${arm_package} https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/${obs_path}/${arm_package} 2>/dev/null
-  chmod 755 ${arm_package}
-  unset LD_LIBRARY_PATH
-  unset ASCEND_HOME_PATH
-  bash ${arm_package}  2>&1 | tee -a ./run_test.log
-  source /usr/local/Ascend/cann/set_env.sh  &&  bash build.sh -f ./pr_filelist.txt 2>&1 | tee -a ./run_test.log
+  pip3 install onnx modelscope
+  echo "bash tests/smoke/run_smoke.sh --model_source modelscope"
+  bash tests/smoke/run_smoke.sh --model_source modelscope 2>&1 | tee -a ${WORKSPACE}/run_test.log
 done
 
 # ==============================
@@ -89,9 +76,9 @@ npu-smi info  2>&1 | tee ./npu_log/npu_info.log
 log "checking test results ..."
 
 date_time=`date +%Y%m%d`"."`date +%H%M%S`
-if grep -w -e "Example failed" "./run_test.log"; then
-    echo "$date_time : run test case failed"
-    exit 1
+if grep -w -e "AMCT_EXAMPLE_ALL_PASS" "./run_test.log"; then
+    echo "$date_time : run test case success"
 else
-  echo "$date_time : run test case success"
+  echo "$date_time : run test case failed"
+  exit 1
 fi
