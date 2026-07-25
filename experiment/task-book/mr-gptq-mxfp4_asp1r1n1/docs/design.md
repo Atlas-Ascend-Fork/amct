@@ -9,7 +9,7 @@
 | 测试集 / 指标     | WikiText2 / PPL（seq_len=4096, block 粒度）                        |
 | 精度目标          | delta = ppl_quant − ppl_bf16 ≤ 0.4；量化层(nn.Linear)占比 ≥ 70% |
 | 作者 / gitcode_id | 程逸雷 / asp1r1n1                                                  |
-| 版本              | v0.3（读三篇论文全文后校正算法/实现，含 weight-only 决策）          |
+| 版本              | v0.6（按评审意见补 §4.4 W4A4 精度评估方案与四项优化设计）           |
 
 > 交付目录 `experiment/task-book/mr-gptq-mxfp4_asp1r1n1/`；gitcode 账号 `asp1r1n1`，私仓 fork：https://gitcode.com/asp1r1n1/amct 。最终 PR 目标 `cann/amct` 的 `feature/community-tasks` 分支。
 
@@ -167,6 +167,19 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 - **实现**：`--increments hadamard scale_fitting act_quant` 启用；amct 配置仍为 weight-only 组合（放行），激活量化在自实现 fake-quant 路径完成，用于**精度评估**（真部署需低比特激活算子，属另一课题）；
 - **消融**：W4A4「旋转开 vs 关」对照，量化 Hadamard 对激活量化的关键作用；
 - W4A4 精度数据见自验证报告。预期 delta 明显大于 W4A16（激活敏感），作进阶精度补充、不改 W4A16 保底结论。
+
+**W4A4 精度优化设计**：在上述基础实现之上，针对 4-bit 激活的主要误差源（离群值 + scale 粗糙 +
+补偿输入失配）设计 4 项优化，均为可独立开关的增量，便于消融：
+
+| 优化 | 开关 | 设计要点 |
+|---|---|---|
+| 旋转块加强 | `--hadamard_k K` | 论文取 k=128 是**在线旋转算子**的开销权衡；本任务只做 fake-quant 精度评估、旋转无推理开销，故把 k 提升为可调（512/1024/4096），块越大离群值摊得越开。注意 `in_features % k == 0` 才旋转，且大 k 下旋转 matmul 须在 fp32 做（fp16 累加 4096 项误差会污染消融） |
+| 激活 scale-fitting | `--increments act_scale_fit` | 把权重侧已验证的附录 H 网格重映射（式2/3）复用到激活块 scale：以次幂次细网格替代 E8M0 幂次网格，减小激活 scale 的舍入误差 |
+| 联合补偿 | `--increments joint_comp` | `update_hessian` 中先对（旋转后）激活做 MXFP4 量化再累积 Hessian。GPTQ 补偿的最优性依赖 Hessian 与推理期输入分布一致；W4A4 下推理输入是量化激活，用 bf16 输入建的 Hessian 会系统性失配 |
+| 混合精度保护 | `--act_protect <子串...>` | 按层名子串把指定层的激活保留高精度（权重仍全程 MXFP4）。默认候选为 `down_proj`（输入 = 门控后中间激活）与 `o_proj`（输入 = 注意力输出）——两处离群值最重。需同时报告"仍跑真 4-bit 激活的层占比"，避免用保护面换数字 |
+
+各优化的边际收益消融与最终精度见自验证报告 §4.3。W4A4 属**进阶精度评估**，主线 W4A16
+的三项硬指标结论不依赖于它。
 
 ### 4.5 全链路调用（复用现有 CLI）
 
