@@ -65,6 +65,8 @@ __all__ = [
     'DeleteQatPass',
 ]
 
+# Explicit re-exports for ruff F401: keep optimizer submodules available from
+# this package while making the intent clear to the linter.
 from . import base_fusion_pass as base_fusion_pass
 from . import base_module_fusion_pass as base_module_fusion_pass
 from . import conv_bn_fusion_pass as conv_bn_fusion_pass
