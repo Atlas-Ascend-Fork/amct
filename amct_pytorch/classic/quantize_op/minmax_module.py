@@ -65,10 +65,8 @@ class MinMaxQuant(BaseQuantizeModule):
         self.scale_w2 = None
 
         self.batch_num = quant_config.get('batch_num')
-        if (
-            quant_config.get('inputs_cfg').get('enable_quant') is None
-            or quant_config.get('inputs_cfg').get('enable_quant') == True
-        ):
+        enable_quant = quant_config.get('inputs_cfg').get('enable_quant')
+        if enable_quant is None or enable_quant:
             self.weight_compress_only = False
             self.act_type = quant_config.get('inputs_cfg').get('quant_type')
             self.act_symmetric = quant_config.get('inputs_cfg').get('symmetric')

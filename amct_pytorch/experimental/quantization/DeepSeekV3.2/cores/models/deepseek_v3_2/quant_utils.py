@@ -157,7 +157,7 @@ def load_layer(
     state_dict = load_layer_weight(model_dir, rank, weight_map, layer_idx)
     try:
         state_dict.pop('self_attn.rotary_emb.inv_freq')
-    except:
+    except KeyError:
         logger.info("not find self_attn.rotary_emb.inv_freq in state_dict")
 
     decoder_layer.load_state_dict(state_dict)

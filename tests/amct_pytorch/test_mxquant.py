@@ -101,6 +101,7 @@ class TestMinMax(unittest.TestCase):
         self.assertIsNotNone(model.linear1.scale_w)
         convert(model)
         quant_out = model(self.inputs.npu())
+        self.assertIsNotNone(quant_out)
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
@@ -146,3 +147,4 @@ class TestMinMax(unittest.TestCase):
         self.assertIsNotNone(model.linear1.scale_w)
         convert(model)
         quant_out = model(self.inputs.npu())
+        self.assertIsNotNone(quant_out)

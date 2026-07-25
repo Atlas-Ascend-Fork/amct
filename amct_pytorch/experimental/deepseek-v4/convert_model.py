@@ -29,8 +29,8 @@ CUR_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.realpath(os.path.join(CUR_DIR, "../../../"))
 sys.path.append(ROOT_DIR)
 
-from mx_quantize import quantize_mx, pack_uint4, f32_to_f4_unpacked
-from convert_config import generate_quant_config, generate_ignore_item
+from mx_quantize import quantize_mx, pack_uint4, f32_to_f4_unpacked  # noqa: E402
+from convert_config import generate_quant_config, generate_ignore_item  # noqa: E402
 
 NUM_BITS_4 = 4
 NUM_BITS_8 = 8

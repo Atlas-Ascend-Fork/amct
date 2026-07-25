@@ -100,7 +100,6 @@ def do_calibration(model, args_shape, temp_folder):
     record_file = os.path.join(temp_folder, 'mnist_record.txt')
     modfied_onnx_file = os.path.join(temp_folder, 'mnist_modified.onnx')
     fake_quant_onnx = os.path.join(temp_folder, 'mnist_fake_quant_model.onnx')
-    deploy_onnx = os.path.join(temp_folder, 'mnist_deploy_model.onnx')
     save_model_path = os.path.join(temp_folder, 'mnist')
 
     input_data = tuple([torch.randn(input_shape) for input_shape in args_shape])

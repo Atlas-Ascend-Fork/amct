@@ -47,8 +47,6 @@ __all__ = [
     'create_quant_cali_model',
 ]
 
-import os
-
 from ..amct_pytorch.quantize_tool import create_quant_config
 from ..amct_pytorch.quantize_tool import quantize_preprocess
 from ..amct_pytorch.quantize_tool import quantize_model

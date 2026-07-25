@@ -192,7 +192,6 @@ class TestReplaceAntiQuantPass(unittest.TestCase):
             'conv2': {DATA_SCALE: 1, DATA_OFFSET: 0},
             'conv3': {DATA_SCALE: 1, DATA_OFFSET: 0},
         }
-        numbits = 8
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         data_node = graph.get_node_by_name('antiquant0.anti_quant')

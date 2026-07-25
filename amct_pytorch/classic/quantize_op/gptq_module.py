@@ -65,10 +65,8 @@ class GPTQuant(BaseQuantizeModule):
         self.hessian = None
         self.group_size = self.quant_config.get('weights_cfg').get('group_size')
         self.wts_type = self.quant_config.get('weights_cfg').get('quant_type')
-        if (
-            quant_config.get('inputs_cfg').get('enable_quant') is None
-            or quant_config.get('inputs_cfg').get('enable_quant') == True
-        ):
+        enable_quant = quant_config.get('inputs_cfg').get('enable_quant')
+        if enable_quant is None or enable_quant:
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')
 
     @torch.no_grad()
