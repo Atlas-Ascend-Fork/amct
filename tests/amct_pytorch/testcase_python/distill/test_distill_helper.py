@@ -95,6 +95,7 @@ class TestDistillHelper(unittest.TestCase):
             loss=None,
             sample_instance=None,
         )
+        self.assertIsNotNone(distill_helper)
         layer_names = ['conv']
         modules = DistillHelper.get_distill_modules(self.torch_model, layer_names)
         self.assertIsNotNone(modules)
@@ -107,6 +108,7 @@ class TestDistillHelper(unittest.TestCase):
             loss=None,
             sample_instance=None,
         )
+        self.assertIsNotNone(distill_helper)
         layer_names = ['conv_invalid']
         self.assertRaises(
             RuntimeError,

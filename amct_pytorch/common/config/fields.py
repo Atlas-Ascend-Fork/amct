@@ -99,7 +99,7 @@ class WeightsCfgField:
             raise ValueError(
                 f'Weights symmetric only support bool [True, False], but got {self.symmetric}'
             )
-        if self.symmetric == False and self.quant_type not in WTS_ASYMMETRIC_DTYPE:
+        if not self.symmetric and self.quant_type not in WTS_ASYMMETRIC_DTYPE:
             raise ValueError(
                 f'Weights symmetric only support to be True when '
                 f'weight quant_type is {self.quant_type}'
@@ -179,7 +179,7 @@ class InputsCfgField:
             raise ValueError(
                 f'Inputs symmetric only support bool [True, False], but got {self.symmetric}'
             )
-        if self.symmetric == False and self.quant_type not in ['int8']:
+        if not self.symmetric and self.quant_type not in ['int8']:
             raise ValueError(
                 f'Inputs symmetric is unsupported to be False when Inputs quant_type is {self.quant_type}'
             )
@@ -190,7 +190,7 @@ class InputsCfgField:
             raise ValueError(
                 f'Inputs strategy only support{SUPPORT_QUANT_STRATEGY_INPUT}, but got {self.strategy}'
             )
-        if self.strategy == 'token' and self.symmetric == False:
+        if self.strategy == 'token' and not self.symmetric:
             raise ValueError(
                 'Inputs strategy token do not support asymmetric quantization'
             )
@@ -539,7 +539,7 @@ class QuantConfig:
             quant_cfg['weights_cfg'] = weights_cfg.get_value()
         elif (
             quant_cfg['weights_cfg'] is None
-            and quant_cfg['kvcache_cfg'].get('enable_quant') == False
+            and quant_cfg['kvcache_cfg'].get('enable_quant') is False
         ):
             self._layer_config_cache[layer_name] = None
             return None

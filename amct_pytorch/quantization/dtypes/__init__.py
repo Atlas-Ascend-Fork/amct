@@ -29,8 +29,9 @@ def register_dtype():
     if _REGISTERED:
         return
 
-    from .int import QuantDequantInt
-    from .mxfp import QuantDequantMx
-    from .hifp import QuantDequantHifp
+    # Import dtypes for registration side effects.
+    from .int import QuantDequantInt  # noqa: F401
+    from .mxfp import QuantDequantMx  # noqa: F401
+    from .hifp import QuantDequantHifp  # noqa: F401
 
     _REGISTERED = True

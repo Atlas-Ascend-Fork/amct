@@ -16,5 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+__all__ = ["auto_decomposition", "decompose_network"]
+
 from .tensor_decompose import auto_decomposition
 from .tensor_decompose import decompose_network

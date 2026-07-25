@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+# ruff: noqa: F401
+
 __all__ = [
     'BaseFusionPass',
     'BaseModuleFusionPass',
@@ -57,6 +59,7 @@ __all__ = [
     'InsertFakequantLinearPass',
     'InsertFakequantAvgPool2dPass',
     'WeightFakequantModulePass',
+    'WeightFakequantPass',
     'BiasFakequantModulePass',
     'InsertDMQBalancerPass',
     'ApplyDMQBalancerPass',
@@ -64,6 +67,7 @@ __all__ = [
     'DeleteQatPass',
 ]
 
+# Keep optimizer submodules available from this package for compatibility.
 from . import base_fusion_pass
 from . import base_module_fusion_pass
 from . import conv_bn_fusion_pass

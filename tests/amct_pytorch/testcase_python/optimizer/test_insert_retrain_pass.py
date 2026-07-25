@@ -156,6 +156,7 @@ class TestInsertRetrainConv3dPass(unittest.TestCase):
                 module.acts_clip_min_pre.data = torch.tensor(1.0)
                 module.acts_clip_max_pre.data = torch.tensor(1.0)
         new_output = self.model_3d.forward(self.args[0])
+        self.assertIsNotNone(new_output)
         self.assertIsInstance(named_module_dict['layer1.0'], CompModuleConv3d)
 
 

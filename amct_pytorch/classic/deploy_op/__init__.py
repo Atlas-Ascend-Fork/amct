@@ -20,6 +20,7 @@ __all__ = [
     'NpuWeightQuantizedLinear',
     'NpuQuantizationConv2d',
     'NpuMXQuantizationLinear',
+    'NpuHIF8CastLinear',
 ]
 
 from amct_pytorch.classic.deploy_op.npu_quantization_linear import NpuQuantizationLinear

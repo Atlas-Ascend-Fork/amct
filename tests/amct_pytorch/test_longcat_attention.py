@@ -85,3 +85,4 @@ class TestLongcatFlashMLA(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         for _ in range(5):
             quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)
+            self.assertIsNotNone(quant_out)

@@ -1079,7 +1079,7 @@ class TestQwen35MoeMocked:
             "amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5_moe.QuantQwen35MLP",
             _MockQwen35MLP,
         )
-        result = model.build_quant_block(0)
+        model.build_quant_block(0)
         assert captured.get("called") is True
 
     def test_qwen3_5_moe_build_quant_block_moe_no_experts(self, monkeypatch):

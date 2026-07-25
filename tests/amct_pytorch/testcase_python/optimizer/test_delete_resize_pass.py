@@ -61,7 +61,6 @@ class TestDeleteResizePass(unittest.TestCase):
     def test_do_success_01(self):
         """now is fail"""
         graph = Parser.parse_net_to_graph(self.onnx_file)
-        ori_len = len(graph.nodes)
         resize_node = None
         for node in graph.nodes:
             if node.type == 'Resize':
