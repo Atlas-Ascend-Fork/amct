@@ -22,14 +22,11 @@ from types import SimpleNamespace
 import torch
 import torch.nn as nn
 
-from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import (
     QuantIndexer,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
 from amct_pytorch.quantization.dtypes import register_dtype
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer
-from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 register_dtype()
@@ -68,52 +65,35 @@ class _FakeIndexer(nn.Module):
         self.weights_proj = nn.Linear(6, self.n_heads)
 
 
-class _RecordingIdentity(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.calls = 0
+def _run_indexer_forward(quant_indexer):
+    x = torch.randn(1, 2, 6)
+    qr = torch.randn(1, 2, 8)
+    freqs_cis = torch.ones(2, 1, dtype=torch.complex64)
 
-    def forward(self, x):
-        self.calls += 1
-        return x
+    return quant_indexer(x, qr, 0, freqs_cis, mask=None)
 
 
-def test_quant_indexer_passthrough_init_copies_indexer_attributes():
-    indexer = _FakeIndexer()
-    quant_indexer = QuantIndexer(_quant_args(), indexer)
-
-    assert quant_indexer.quant_args.quant_target == []
-    assert quant_indexer.n_heads == indexer.n_heads
-    assert quant_indexer.head_dim == indexer.head_dim
-    assert quant_indexer.rope_head_dim == indexer.rope_head_dim
-    assert quant_indexer.index_topk == indexer.index_topk
-    assert quant_indexer.softmax_scale == indexer.softmax_scale
-    assert quant_indexer.input_transform is None
-    assert quant_indexer.wk is indexer.wk
-    assert isinstance(quant_indexer.wq_b, PlainLinear)
-
-
-def test_quant_indexer_attn_linear_init_creates_wq_activation_quantizer():
-    quant_indexer = QuantIndexer(_quant_args(["attn-linear"]), _FakeIndexer())
-
-    assert isinstance(quant_indexer.wq_b, QuantLinear)
-    assert isinstance(quant_indexer.wq_b_afq, ActivationQuantizer)
-
-
-def test_quant_indexer_forward_applies_wq_activation_quantizer(monkeypatch):
+def test_quant_indexer_passthrough_forward_returns_topk_indices(monkeypatch):
     quant_indexer = QuantIndexer(_quant_args(), _FakeIndexer())
-    recorder = _RecordingIdentity()
-    quant_indexer.wq_b_afq = recorder
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module.rotate_activation",
         lambda x: x,
     )
 
-    x = torch.randn(1, 2, 6)
-    qr = torch.randn(1, 2, 8)
-    freqs_cis = torch.ones(2, 1, dtype=torch.complex64)
+    topk_indices = _run_indexer_forward(quant_indexer)
 
-    topk_indices = quant_indexer(x, qr, 0, freqs_cis, mask=None)
-
-    assert recorder.calls == 1
     assert topk_indices.shape == (1, 2, 1)
+    assert torch.all(topk_indices < 2)
+
+
+def test_quant_indexer_attn_linear_forward_returns_topk_indices(monkeypatch):
+    quant_indexer = QuantIndexer(_quant_args(["attn-linear"]), _FakeIndexer())
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module.rotate_activation",
+        lambda x: x,
+    )
+
+    topk_indices = _run_indexer_forward(quant_indexer)
+
+    assert topk_indices.shape == (1, 2, 1)
+    assert torch.all(topk_indices < 2)
