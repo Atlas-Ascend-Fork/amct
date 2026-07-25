@@ -84,3 +84,4 @@ class TestDeepseekV3Attention(unittest.TestCase):
         self.assertEqual(type(model.attn).__name__, 'NpuDeepseekV3AttentionQuant')
         for _ in range(5):
             quant_out = model(self.hidden_states.npu(), past_key_values=self.kvcache)
+            self.assertIsNotNone(quant_out)

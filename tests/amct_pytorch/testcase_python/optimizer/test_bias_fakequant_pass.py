@@ -143,6 +143,7 @@ class TestReplaceBiasQuantPass(unittest.TestCase):
         graph = Parser.parse_net_to_graph(tmp_onnx)
         node_name = 'lstm'
         node = graph.get_node_by_name(node_name)
+        self.assertIsNotNone(node)
 
         records = {
             node_name: {

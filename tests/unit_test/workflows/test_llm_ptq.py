@@ -254,7 +254,6 @@ def test_build_block_solver_supports_block_kwarg_alias():
 
 
 def test_init_sets_solver_key_default_and_custom():
-    bp = SimpleNamespace()
     args = SimpleNamespace(
         quant_target=[QUANT_TARGET_MLP],
         granularity="block",
@@ -356,11 +355,11 @@ def test_run_blockwise_empty_units_warning(monkeypatch):
     wf.pipeline.iter_ptq_units = MagicMock(return_value=iter([]))
     wf.data_provider = MagicMock()
 
-    warns = []  # noqa: E1111
+    warns = []
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.logger",
         MagicMock(warning=lambda msg, *args: warns.append(msg)),
-    )  # noqa: E1111
+    )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.set_model_act_quant_state", lambda m, v: None
     )
@@ -605,7 +604,7 @@ def test_ptq_run_blockwise_mocked(monkeypatch):
         "amct_pytorch.workflows.llm_ptq.logger",
         MagicMock(),
     )
-    monkeypatch.setattr(torch, "save", lambda obj, f: None)  # noqa: E1111
+    monkeypatch.setattr(torch, "save", lambda obj, f: None)
 
     wf.args.start_block_idx = 0
     wf.args.end_block_idx = 1

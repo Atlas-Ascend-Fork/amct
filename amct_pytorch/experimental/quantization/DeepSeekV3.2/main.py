@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import json
+import os
 import torch
 from loguru import logger
 
@@ -27,7 +28,11 @@ from cores.models.deepseek_v3_2.quant_utils import QuantDeepseekV3MLP
 from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
 from cores.models.deepseek_v3_2.indexer import ModelArgs
 from cores.calibrator.dsv3_calib import cali_quant
-from cores.calibrator.utils import *
+from cores.calibrator.utils import (
+    get_mla_moe_inputs,
+    get_self_attn_inps_outs,
+    load_block_inps_outs,
+)
 
 
 def train_mla_layer(args, data_dir, layer_idx, dev=0, cls=QuantDSA):

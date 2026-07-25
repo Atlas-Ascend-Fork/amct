@@ -437,6 +437,7 @@ class TestSmoothQuant(unittest.TestCase):
         self.assertIsNotNone(model.linear1.scale_d)
         convert(model)
         quant_out = model(self.inputs.npu())
+        self.assertIsNotNone(quant_out)
         self.assertEqual(type(model.linear1).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear2).__name__, NPU_QUANTIZATION_LINEAR)
         self.assertEqual(type(model.linear3).__name__, NPU_QUANTIZATION_LINEAR)

@@ -18,3 +18,5 @@
 
 from .tensor_decompose import auto_decomposition
 from .tensor_decompose import decompose_network
+
+__all__ = ["auto_decomposition", "decompose_network"]

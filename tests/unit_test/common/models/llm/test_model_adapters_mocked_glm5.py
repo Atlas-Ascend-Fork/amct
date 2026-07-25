@@ -227,6 +227,7 @@ class TestGLM5_2Mocked:
         _mock_base_deps(monkeypatch, cfg)
         args = _make_mock_args(quant_target=[QUANT_TARGET_MOE])
         model = GLM5_2(args)
+        assert model is not None
 
         assert "glm5_2" in MODEL_REGISTRY
         item = MODEL_REGISTRY.get_item("glm5_2")

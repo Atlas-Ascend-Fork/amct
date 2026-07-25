@@ -54,23 +54,30 @@ def _linear_with_structure(hidden_states, linear, structure_transform=None, name
 class QuantIndexer(torch.nn.Module):
     def __init__(self, quant_args, module: Indexer):
         super().__init__()
+        self.quant_args = quant_args
         bits = quant_args.bit_policy["attn-linear"]
         wq_b = bits["wq_b"]
         self.enable_attn_linear = "attn-linear" in quant_args.quant_target
         self.enable_attn_cache = "attn-cache" in quant_args.quant_target
         self.q_lora_rank = module.q_lora_rank
+        self.n_heads = module.n_heads
+        self.head_dim = module.head_dim
+        self.rope_head_dim = module.rope_head_dim
+        self.index_topk = module.index_topk
+        self.softmax_scale = module.softmax_scale
+        self.input_transform = None
         self.wq_b = (
             QuantLinear(quant_args, module.wq_b, w_bits=wq_b.w, name="wq_b")
             if self.enable_attn_linear
             else PlainLinear(module.wq_b)
         )
 
-        self.wk = module.wq_b
+        self.wk = module.wk
         self.k_norm = module.k_norm
         self.weights_proj = module.weights_proj
         if self.enable_attn_linear:
             self._init_structure_transforms()
-            self.wq_b_afq = ActivationQuantizer(quant_args, q_b_proj.a)
+            self.wq_b_afq = ActivationQuantizer(quant_args, wq_b.a)
         else:
             self.wq_b_afq = nn.Identity()
 
@@ -86,7 +93,7 @@ class QuantIndexer(torch.nn.Module):
         end_pos = start_pos + seqlen
         if self.input_transform is not None:
             qr = self.input_transform(qr)
-        qr = self.q_b_proj_afq(qr)
+        qr = self.wq_b_afq(qr)
         q = self.wq_b(qr)
         q = q.view(bsz, seqlen, self.n_heads, self.head_dim)
         q_pe, q_nope = torch.split(

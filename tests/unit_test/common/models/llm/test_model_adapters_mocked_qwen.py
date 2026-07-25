@@ -542,7 +542,7 @@ class TestQwen3MoeMocked:
             "amct_pytorch.common.models.llm.qwen.qwen3.qwen3_moe.QuantQwen3MLP",
             _mock_mlp,
         )
-        result = model.build_quant_block(0)
+        model.build_quant_block(0)
         assert captured.get("called") is True
 
     def test_qwen3_moe_build_quant_block_moe_no_mlp(self, monkeypatch):
@@ -1471,7 +1471,7 @@ class TestQwen3NextMocked:
             "amct_pytorch.common.models.llm.qwen.qwen3_next.qwen3_next.QuantQwen3NextMLP",
             _MockQwen3NextMLP,
         )
-        result = model.build_quant_block(0)
+        model.build_quant_block(0)
         assert captured.get("called") is True
 
     def test_qwen3_next_build_quant_block_moe_no_experts(self, monkeypatch):

@@ -21,3 +21,11 @@ from . import retrain_config_pytorch_pb2 as retrain_config_pb2  # pylint: disabl
 from . import distill_config_pytorch_pb2 as distill_config_pb2
 from . import scale_offset_record_pytorch_pb2 as scale_offset_record_pb2  # pylint: disable=E0611, W0406
 from . import quant_calibration_config_pytorch_pb2 as quant_calibration_config_pb2
+
+__all__ = [
+    "calibration_config_pb2",
+    "distill_config_pb2",
+    "quant_calibration_config_pb2",
+    "retrain_config_pb2",
+    "scale_offset_record_pb2",
+]
