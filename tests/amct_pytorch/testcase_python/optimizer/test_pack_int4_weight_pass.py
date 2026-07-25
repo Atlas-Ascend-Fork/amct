@@ -36,7 +36,7 @@ class TestPackAlongAxis(unittest.TestCase):
 
     def test_pack_along_axis0(self):
         # Conv-like: [16, 4, 3, 3] pack along Cin axis 1 -> [16, 2, 3, 3]
-        vals = (np.arange(16 * 4 * 3 * 3, dtype=np.int8) % 15 - 7)
+        vals = np.arange(16 * 4 * 3 * 3, dtype=np.int8) % 15 - 7
         packed, new_dims = pack_along_axis(vals, [16, 4, 3, 3], 1)
         self.assertEqual(new_dims, [16, 2, 3, 3])
         self.assertEqual(packed.size, 16 * 2 * 3 * 3)
@@ -60,17 +60,18 @@ class TestPackInt4Weight(unittest.TestCase):
         self.passer = PackInt4WeightPass({})
 
     def test_match_pattern(self):
-        passer = PackInt4WeightPass({'conv': {'wts_type': 'INT4'},
-                                     'fc': {'wts_type': 'INT8'}})
+        passer = PackInt4WeightPass(
+            {'conv': {'wts_type': 'INT4'}, 'fc': {'wts_type': 'INT8'}}
+        )
         node_int4 = mock.MagicMock()
         node_int4.name = 'conv'
         node_int8 = mock.MagicMock()
         node_int8.name = 'fc'
         node_absent = mock.MagicMock()
         node_absent.name = 'other'
-        self.assertTrue(passer.match_pattern(node_int4))       # INT4 -> match
-        self.assertFalse(passer.match_pattern(node_int8))      # INT8 -> no
-        self.assertFalse(passer.match_pattern(node_absent))    # not in records -> no
+        self.assertTrue(passer.match_pattern(node_int4))  # INT4 -> match
+        self.assertFalse(passer.match_pattern(node_int8))  # INT8 -> no
+        self.assertFalse(passer.match_pattern(node_absent))  # not in records -> no
 
     _QOI = (
         'amct_pytorch.classic.graph_based.amct_pytorch.optimizer.'
@@ -92,8 +93,10 @@ class TestPackInt4Weight(unittest.TestCase):
         helper = mock.MagicMock()
         helper.get_data.return_value = np.arange(8, dtype=np.int8).reshape(2, 4)
         helper.tensor.dims = [2, 4]
-        with mock.patch(self._QOI) as m_qoi, \
-                mock.patch(self._HELPER, return_value=helper):
+        with (
+            mock.patch(self._QOI) as m_qoi,
+            mock.patch(self._HELPER, return_value=helper),
+        ):
             m_qoi.get_cin_axis.return_value = 1
             m_qoi.get_weight_node.return_value = weight_node
             m_qoi.get_recurrence_weight_node.return_value = None
@@ -113,8 +116,10 @@ class TestPackInt4Weight(unittest.TestCase):
         helper = mock.MagicMock()
         helper.get_data.return_value = np.arange(8, dtype=np.int8).reshape(1, 4, 2)
         helper.tensor.dims = [1, 4, 2]
-        with mock.patch(self._QOI) as m_qoi, \
-                mock.patch(self._HELPER, return_value=helper):
+        with (
+            mock.patch(self._QOI) as m_qoi,
+            mock.patch(self._HELPER, return_value=helper),
+        ):
             m_qoi.get_cin_axis.return_value = 2
             m_qoi.get_weight_node.return_value = wnode
             m_qoi.get_recurrence_weight_node.return_value = wnode

@@ -34,9 +34,7 @@ class TestInt4Pack(unittest.TestCase):
 
 
 class TestNativeInt4(unittest.TestCase):
-    @unittest.skipUnless(
-        hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4'
-    )
+    @unittest.skipUnless(hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4')
     def test_set_get_native_int4(self):
         t = TensorProto()
         helper = TensorProtoHelper(t)
@@ -47,9 +45,7 @@ class TestNativeInt4(unittest.TestCase):
         out = helper.get_data()
         np.testing.assert_array_equal(out.astype(np.int8), data)
 
-    @unittest.skipUnless(
-        hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4'
-    )
+    @unittest.skipUnless(hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4')
     def test_external_int4_roundtrip(self):
         # external data 路径下 INT4 需 pack/unpack 对称，且不因 numpy 无 int4 崩溃
         t = TensorProto()
@@ -67,8 +63,12 @@ class TestNativeInt4(unittest.TestCase):
 class TestParseExternalDataMeta(unittest.TestCase):
     def test_parse_all_fields(self):
         entries = []
-        for k, v in [('location', 'w.bin'), ('offset', '128'),
-                     ('length', '256'), ('amct_quantized_raw_data', '1')]:
+        for k, v in [
+            ('location', 'w.bin'),
+            ('offset', '128'),
+            ('length', '256'),
+            ('amct_quantized_raw_data', '1'),
+        ]:
             e = mock.MagicMock()
             e.key, e.value = k, v
             entries.append(e)
@@ -119,8 +119,11 @@ class TestExternalDataIO(unittest.TestCase):
         t.data_type = data_type
         t.dims.extend(list(np_value.shape))
         t.data_location = 1  # EXTERNAL
-        for k, v in [('location', 'w.bin'), ('offset', '0'),
-                     ('length', str(np_value.nbytes))]:
+        for k, v in [
+            ('location', 'w.bin'),
+            ('offset', '0'),
+            ('length', str(np_value.nbytes)),
+        ]:
             e = t.external_data.add()
             e.key, e.value = k, str(v)
         return t
@@ -132,17 +135,22 @@ class TestInt4BranchesViaMock(unittest.TestCase):
     传参即可覆盖，不依赖 onnx 原生 INT4 枚举。
     """
 
-    _MAP = ('amct_pytorch.classic.graph_based.amct_pytorch.utils.'
-            'onnx_initializer_util.TensorProtoHelper.data_type_maps')
+    _MAP = (
+        'amct_pytorch.classic.graph_based.amct_pytorch.utils.'
+        'onnx_initializer_util.TensorProtoHelper.data_type_maps'
+    )
 
     def test_resolve_np_dtype_int4(self):
         # 'int4' -> ml_dtypes.int4（ml_dtypes 为独立包，不依赖 onnx）
         import ml_dtypes
+
         self.assertIs(TensorProtoHelper.resolve_np_dtype('int4'), ml_dtypes.int4)
 
     def test_resolve_np_dtype_int4_without_ml_dtypes(self):
-        mod = ('amct_pytorch.classic.graph_based.amct_pytorch.utils.'
-               'onnx_initializer_util.ml_dtypes')
+        mod = (
+            'amct_pytorch.classic.graph_based.amct_pytorch.utils.'
+            'onnx_initializer_util.ml_dtypes'
+        )
         with mock.patch(mod, None):
             with self.assertRaises(ImportError):
                 TensorProtoHelper.resolve_np_dtype('int4')
@@ -203,8 +211,11 @@ class TestInt4BranchesViaMock(unittest.TestCase):
             t.data_type = TensorProto.INT8
             t.dims.extend([8])
             t.data_location = 1
-            for k, v in [('location', 'w.bin'), ('offset', '0'),
-                         ('length', str(packed.nbytes))]:
+            for k, v in [
+                ('location', 'w.bin'),
+                ('offset', '0'),
+                ('length', str(packed.nbytes)),
+            ]:
                 e = t.external_data.add()
                 e.key, e.value = k, v
             helper = TensorProtoHelper(t, model_path=tmp)

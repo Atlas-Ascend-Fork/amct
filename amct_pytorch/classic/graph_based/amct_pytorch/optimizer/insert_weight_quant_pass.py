@@ -119,10 +119,14 @@ class InsertWeightQuantPass(BaseFusionPass):
         offset_r = self.records.get(object_node.name).get('recurrence_weight_offset')
 
         if self.records.get(object_node.name).get('dst_type') == 'UNSET':
-            num_bits = QuantOpInfo.get_dst_num_bits(self.records, object_node.name, 'wts')
+            num_bits = QuantOpInfo.get_dst_num_bits(
+                self.records, object_node.name, 'wts'
+            )
         else:
             num_bits = QuantOpInfo.get_dst_num_bits(self.records, object_node.name)
-        int_recurrence_weight = weight_quant_np(recurrence_weight, scale_r, offset_r, num_bits)
+        int_recurrence_weight = weight_quant_np(
+            recurrence_weight, scale_r, offset_r, num_bits
+        )
         int_recurrence_weight = int_recurrence_weight.reshape([-1])
         recurrence_weight_helper.clear_data()
         # num_bits==4 时值域为 [-8,7]，写回 INT4 使 dtype 标签与实际值域一致

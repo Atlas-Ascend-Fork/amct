@@ -38,7 +38,8 @@ def pack_along_axis(int4_vals, dims, axis):
         # 配置阶段已拦截奇数量化轴，走到这里说明校验有漏，暴露而非静默补零
         raise RuntimeError(
             'INT4 quant-axis length {} is odd; should have been rejected '
-            'at config stage'.format(last))
+            'at config stage'.format(last)
+        )
     low = moved[..., 0::2] & 0x0F
     high = moved[..., 1::2] & 0x0F
     packed_moved = (low | (high << 4)).astype(np.uint8).astype(np.int8)
@@ -102,4 +103,3 @@ class PackInt4WeightPass(BaseFusionPass):
             "Pack INT4 weight (deploy) for layer '{}'".format(object_node.name),
             "PackInt4WeightPass",
         )
-

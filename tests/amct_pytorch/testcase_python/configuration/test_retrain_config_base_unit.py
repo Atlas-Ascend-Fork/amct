@@ -123,8 +123,9 @@ class TestDowngradeInt4UnpackableLayers(unittest.TestCase):
     def test_downgrade_unpackable_int4_layer_to_int8(self):
         obj, querier, _ = _make()
         # conv1 无法沿 Cin pack -> 降级；conv2 可以 -> 保持 INT4
-        querier.int4_cin_pack_unsupported.side_effect = \
-            lambda graph, layer: layer == 'conv1'
+        querier.int4_cin_pack_unsupported.side_effect = lambda graph, layer: (
+            layer == 'conv1'
+        )
         config = {
             'conv1': {'retrain_weight_config': {'dst_type': 'INT4'}},
             'conv2': {'retrain_weight_config': {'dst_type': 'INT4'}},

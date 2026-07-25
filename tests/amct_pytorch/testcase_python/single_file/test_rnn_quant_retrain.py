@@ -251,13 +251,15 @@ class TestGRUQATA8W4(unittest.TestCase):
         gru_hidden_size = 64
         num_gru_layers = 1
 
-        cls.model = rnn_model.Conv1dGRU(input_channels=channels,
-                            conv1d_kernel_size=conv1d_kernel_size,
-                            conv1d_out_channels=conv1d_out_channels,
-                            gru_hidden_size=gru_hidden_size,
-                            num_classes=cls.num_class,
-                            num_gru_layers=num_gru_layers,
-                            dropout=0.1)
+        cls.model = rnn_model.Conv1dGRU(
+            input_channels=channels,
+            conv1d_kernel_size=conv1d_kernel_size,
+            conv1d_out_channels=conv1d_out_channels,
+            gru_hidden_size=gru_hidden_size,
+            num_classes=cls.num_class,
+            num_gru_layers=num_gru_layers,
+            dropout=0.1,
+        )
 
         cls.temp_folder = os.path.join(CUR_DIR, 'test_rnn_a8w4')
         if not os.path.isdir(cls.temp_folder):
@@ -290,26 +292,39 @@ class TestGRUQATA8W4(unittest.TestCase):
             config_file=config_file,
             model=self.model,
             input_data=(self.input, self.h0),
-            config_defination=self.cfg)
-        self.assertTrue(os.path.exists(config_file), 'retrain config file must be created')
+            config_defination=self.cfg,
+        )
+        self.assertTrue(
+            os.path.exists(config_file), 'retrain config file must be created'
+        )
 
         # verify the cfg entry actually drove weight INT4 into the generated config
-        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {
+            'version',
+            'batch_num',
+            'activation_offset',
+            'fakequant_precision_mode',
+        }
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _wts_int4_seen = False
         for _lname, _lcfg in _cfg_after.items():
             if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
-            if 'retrain_weight_config' in _lcfg and \
-                    _lcfg['retrain_weight_config'].get('dst_type') == 'INT4':
+            if (
+                'retrain_weight_config' in _lcfg
+                and _lcfg['retrain_weight_config'].get('dst_type') == 'INT4'
+            ):
                 _wts_int4_seen = True
-        self.assertTrue(_wts_int4_seen,
-                        'A8W4 cfg must yield at least one layer with weight dst_type=INT4')
+        self.assertTrue(
+            _wts_int4_seen,
+            'A8W4 cfg must yield at least one layer with weight dst_type=INT4',
+        )
 
         # Step 2: build quantized retrain model using patched A8W4 config
         new_model = create_quant_retrain_model(
-            config_file, self.model, record_file, (self.input, self.h0))
+            config_file, self.model, record_file, (self.input, self.h0)
+        )
         self.assertIsNotNone(new_model, 'A8W4 retrain model must not be None')
 
         # Step 3: one training step
@@ -334,9 +349,12 @@ class TestGRUQATA8W4(unittest.TestCase):
             input_data=(self.input, self.h0),
             config_file=config_file,
             record_file=record_file,
-            save_path=save_path)
-        self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'),
-                        'A8W4 QAT deploy model must be saved')
+            save_path=save_path,
+        )
+        self.assertTrue(
+            os.path.exists(save_path + '_deploy_model.onnx'),
+            'A8W4 QAT deploy model must be saved',
+        )
 
 
 class TestGRUQATA16W8(unittest.TestCase):
@@ -355,13 +373,15 @@ class TestGRUQATA16W8(unittest.TestCase):
         gru_hidden_size = 64
         num_gru_layers = 1
 
-        cls.model = rnn_model.Conv1dGRU(input_channels=channels,
-                            conv1d_kernel_size=conv1d_kernel_size,
-                            conv1d_out_channels=conv1d_out_channels,
-                            gru_hidden_size=gru_hidden_size,
-                            num_classes=cls.num_class,
-                            num_gru_layers=num_gru_layers,
-                            dropout=0.1)
+        cls.model = rnn_model.Conv1dGRU(
+            input_channels=channels,
+            conv1d_kernel_size=conv1d_kernel_size,
+            conv1d_out_channels=conv1d_out_channels,
+            gru_hidden_size=gru_hidden_size,
+            num_classes=cls.num_class,
+            num_gru_layers=num_gru_layers,
+            dropout=0.1,
+        )
 
         cls.temp_folder = os.path.join(CUR_DIR, 'test_rnn_a16w8')
         if not os.path.isdir(cls.temp_folder):
@@ -393,26 +413,39 @@ class TestGRUQATA16W8(unittest.TestCase):
             config_file=config_file,
             model=self.model,
             input_data=(self.input, self.h0),
-            config_defination=self.cfg)
-        self.assertTrue(os.path.exists(config_file), 'retrain config file must be created')
+            config_defination=self.cfg,
+        )
+        self.assertTrue(
+            os.path.exists(config_file), 'retrain config file must be created'
+        )
 
         # verify the cfg entry actually drove activation INT16 into the generated config
-        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {
+            'version',
+            'batch_num',
+            'activation_offset',
+            'fakequant_precision_mode',
+        }
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _act_int16_seen = False
         for _lname, _lcfg in _cfg_after.items():
             if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
-            if 'retrain_data_config' in _lcfg and \
-                    _lcfg['retrain_data_config'].get('dst_type') == 'INT16':
+            if (
+                'retrain_data_config' in _lcfg
+                and _lcfg['retrain_data_config'].get('dst_type') == 'INT16'
+            ):
                 _act_int16_seen = True
-        self.assertTrue(_act_int16_seen,
-                        'A16W8 cfg must yield at least one layer with activation dst_type=INT16')
+        self.assertTrue(
+            _act_int16_seen,
+            'A16W8 cfg must yield at least one layer with activation dst_type=INT16',
+        )
 
         # Step 2: build quantized retrain model using patched A16W8 config
         new_model = create_quant_retrain_model(
-            config_file, self.model, record_file, (self.input, self.h0))
+            config_file, self.model, record_file, (self.input, self.h0)
+        )
         self.assertIsNotNone(new_model, 'A16W8 retrain model must not be None')
 
         # Step 3: one training step
@@ -437,9 +470,12 @@ class TestGRUQATA16W8(unittest.TestCase):
             input_data=(self.input, self.h0),
             config_file=config_file,
             record_file=record_file,
-            save_path=save_path)
-        self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'),
-                        'A16W8 QAT deploy model must be saved')
+            save_path=save_path,
+        )
+        self.assertTrue(
+            os.path.exists(save_path + '_deploy_model.onnx'),
+            'A16W8 QAT deploy model must be saved',
+        )
 
 
 class TestLSTMQATA8W4(unittest.TestCase):
@@ -458,13 +494,15 @@ class TestLSTMQATA8W4(unittest.TestCase):
         lstm_hidden_size = 64
         num_lstm_layers = 1
 
-        cls.model = rnn_model.Conv1dLSTM(input_channels=channels,
-                             conv1d_kernel_size=conv1d_kernel_size,
-                             conv1d_out_channels=conv1d_out_channels,
-                             lstm_hidden_size=lstm_hidden_size,
-                             num_classes=cls.num_class,
-                             num_lstm_layers=num_lstm_layers,
-                             dropout=0.1)
+        cls.model = rnn_model.Conv1dLSTM(
+            input_channels=channels,
+            conv1d_kernel_size=conv1d_kernel_size,
+            conv1d_out_channels=conv1d_out_channels,
+            lstm_hidden_size=lstm_hidden_size,
+            num_classes=cls.num_class,
+            num_lstm_layers=num_lstm_layers,
+            dropout=0.1,
+        )
 
         cls.temp_folder = os.path.join(CUR_DIR, 'test_lstm_a8w4')
         if not os.path.isdir(cls.temp_folder):
@@ -500,26 +538,39 @@ class TestLSTMQATA8W4(unittest.TestCase):
             config_file=config_file,
             model=self.model,
             input_data=(self.input, hx),
-            config_defination=self.cfg)
-        self.assertTrue(os.path.exists(config_file), 'LSTM retrain config file must be created')
+            config_defination=self.cfg,
+        )
+        self.assertTrue(
+            os.path.exists(config_file), 'LSTM retrain config file must be created'
+        )
 
         # verify the cfg entry actually drove weight INT4 into the generated config
-        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {
+            'version',
+            'batch_num',
+            'activation_offset',
+            'fakequant_precision_mode',
+        }
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _wts_int4_seen = False
         for _lname, _lcfg in _cfg_after.items():
             if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
-            if 'retrain_weight_config' in _lcfg and \
-                    _lcfg['retrain_weight_config'].get('dst_type') == 'INT4':
+            if (
+                'retrain_weight_config' in _lcfg
+                and _lcfg['retrain_weight_config'].get('dst_type') == 'INT4'
+            ):
                 _wts_int4_seen = True
-        self.assertTrue(_wts_int4_seen,
-                        'LSTM A8W4 cfg must yield at least one layer with weight dst_type=INT4')
+        self.assertTrue(
+            _wts_int4_seen,
+            'LSTM A8W4 cfg must yield at least one layer with weight dst_type=INT4',
+        )
 
         # Step 2: build quantized retrain model
         new_model = create_quant_retrain_model(
-            config_file, self.model, record_file, (self.input, hx))
+            config_file, self.model, record_file, (self.input, hx)
+        )
         self.assertIsNotNone(new_model, 'LSTM A8W4 retrain model must not be None')
 
         # Step 3: one training step
@@ -544,9 +595,12 @@ class TestLSTMQATA8W4(unittest.TestCase):
             input_data=(self.input, hx),
             config_file=config_file,
             record_file=record_file,
-            save_path=save_path)
-        self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'),
-                        'LSTM A8W4 QAT deploy model must be saved')
+            save_path=save_path,
+        )
+        self.assertTrue(
+            os.path.exists(save_path + '_deploy_model.onnx'),
+            'LSTM A8W4 QAT deploy model must be saved',
+        )
 
 
 class TestLSTMQATA16W8(unittest.TestCase):
@@ -565,13 +619,15 @@ class TestLSTMQATA16W8(unittest.TestCase):
         lstm_hidden_size = 64
         num_lstm_layers = 1
 
-        cls.model = rnn_model.Conv1dLSTM(input_channels=channels,
-                             conv1d_kernel_size=conv1d_kernel_size,
-                             conv1d_out_channels=conv1d_out_channels,
-                             lstm_hidden_size=lstm_hidden_size,
-                             num_classes=cls.num_class,
-                             num_lstm_layers=num_lstm_layers,
-                             dropout=0.1)
+        cls.model = rnn_model.Conv1dLSTM(
+            input_channels=channels,
+            conv1d_kernel_size=conv1d_kernel_size,
+            conv1d_out_channels=conv1d_out_channels,
+            lstm_hidden_size=lstm_hidden_size,
+            num_classes=cls.num_class,
+            num_lstm_layers=num_lstm_layers,
+            dropout=0.1,
+        )
 
         cls.temp_folder = os.path.join(CUR_DIR, 'test_lstm_a16w8')
         if not os.path.isdir(cls.temp_folder):
@@ -606,26 +662,39 @@ class TestLSTMQATA16W8(unittest.TestCase):
             config_file=config_file,
             model=self.model,
             input_data=(self.input, hx),
-            config_defination=cfg)
-        self.assertTrue(os.path.exists(config_file), 'LSTM retrain config file must be created')
+            config_defination=cfg,
+        )
+        self.assertTrue(
+            os.path.exists(config_file), 'LSTM retrain config file must be created'
+        )
 
         # verify the cfg entry actually drove activation INT16 into the generated config
-        _global_keys = {'version', 'batch_num', 'activation_offset', 'fakequant_precision_mode'}
+        _global_keys = {
+            'version',
+            'batch_num',
+            'activation_offset',
+            'fakequant_precision_mode',
+        }
         with open(config_file) as _fh:
             _cfg_after = _json.load(_fh)
         _act_int16_seen = False
         for _lname, _lcfg in _cfg_after.items():
             if _lname in _global_keys or not isinstance(_lcfg, dict):
                 continue
-            if 'retrain_data_config' in _lcfg and \
-                    _lcfg['retrain_data_config'].get('dst_type') == 'INT16':
+            if (
+                'retrain_data_config' in _lcfg
+                and _lcfg['retrain_data_config'].get('dst_type') == 'INT16'
+            ):
                 _act_int16_seen = True
-        self.assertTrue(_act_int16_seen,
-                        'LSTM A16W8 cfg must yield at least one layer with activation dst_type=INT16')
+        self.assertTrue(
+            _act_int16_seen,
+            'LSTM A16W8 cfg must yield at least one layer with activation dst_type=INT16',
+        )
 
         # Step 2: build quantized retrain model
         new_model = create_quant_retrain_model(
-            config_file, self.model, record_file, (self.input, hx))
+            config_file, self.model, record_file, (self.input, hx)
+        )
         self.assertIsNotNone(new_model, 'LSTM A16W8 retrain model must not be None')
 
         # Step 3: one training step
@@ -650,9 +719,12 @@ class TestLSTMQATA16W8(unittest.TestCase):
             input_data=(self.input, hx),
             config_file=config_file,
             record_file=record_file,
-            save_path=save_path)
-        self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'),
-                        'LSTM A16W8 QAT deploy model must be saved')
+            save_path=save_path,
+        )
+        self.assertTrue(
+            os.path.exists(save_path + '_deploy_model.onnx'),
+            'LSTM A16W8 QAT deploy model must be saved',
+        )
 
 
 class TestConvLinearPTQA8W4(unittest.TestCase):
@@ -692,7 +764,8 @@ class TestConvLinearPTQA8W4(unittest.TestCase):
             config_file=config_file,
             model=self.model,
             input_data=self.input,
-            config_defination=self.cfg)
+            config_defination=self.cfg,
+        )
         self.assertTrue(os.path.exists(config_file))
         # cfg entry drives weight INT4; Net001 has group/depthwise conv whose Cin
         # axis cannot be nibble-packed, so those layers are downgraded to INT8.
@@ -707,8 +780,13 @@ class TestConvLinearPTQA8W4(unittest.TestCase):
         self.assertTrue(wts_bits, 'no weight_quant_params.num_bits found in config')
         # regular conv/linear stay INT4; group/depthwise conv downgraded to INT8
         self.assertIn(4, wts_bits, 'A8W4 cfg should yield INT4 for regular layers')
-        self.assertIn(8, wts_bits,
-                      'group/depthwise conv should be downgraded to INT8, got {}'.format(wts_bits))
+        self.assertIn(
+            8,
+            wts_bits,
+            'group/depthwise conv should be downgraded to INT8, got {}'.format(
+                wts_bits
+            ),
+        )
 
     @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_quantize_and_save_a8w4(self):
@@ -720,10 +798,14 @@ class TestConvLinearPTQA8W4(unittest.TestCase):
         modified_model = os.path.join(self.temp_folder, 'modified_model.onnx')
         save_path = os.path.join(self.temp_folder, 'res')
         create_quant_config(
-            config_file=config_file, model=self.model,
-            input_data=self.input, config_defination=self.cfg)
+            config_file=config_file,
+            model=self.model,
+            input_data=self.input,
+            config_defination=self.cfg,
+        )
         new_model = quantize_model(
-            config_file, modified_model, record_file, self.model, self.input)
+            config_file, modified_model, record_file, self.model, self.input
+        )
         new_model(self.input)
         save_model(modified_model, record_file, save_path)
         self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'))
@@ -745,9 +827,14 @@ class TestGRUPTQA8W4A16W8(unittest.TestCase):
         width = 64
         gru_hidden_size = 64
         cls.model = rnn_model.Conv1dGRU(
-            input_channels=channels, conv1d_kernel_size=3,
-            conv1d_out_channels=16, gru_hidden_size=gru_hidden_size,
-            num_classes=10, num_gru_layers=1, dropout=0.1)
+            input_channels=channels,
+            conv1d_kernel_size=3,
+            conv1d_out_channels=16,
+            gru_hidden_size=gru_hidden_size,
+            num_classes=10,
+            num_gru_layers=1,
+            dropout=0.1,
+        )
         cls.model.eval()
         cls.input = torch.randn(1, time_steps, channels, height, width)
         cls.h0 = torch.zeros(1, 1, gru_hidden_size)
@@ -770,12 +857,15 @@ class TestGRUPTQA8W4A16W8(unittest.TestCase):
         modified_model = os.path.join(self.temp_folder, tag + '_modified.onnx')
         save_path = os.path.join(self.temp_folder, tag + '_res')
         create_quant_config(
-            config_file=config_file, model=self.model,
-            input_data=(self.input, self.h0), config_defination=cfg)
+            config_file=config_file,
+            model=self.model,
+            input_data=(self.input, self.h0),
+            config_defination=cfg,
+        )
         self.assertTrue(os.path.exists(config_file))
         new_model = quantize_model(
-            config_file, modified_model, record_file,
-            self.model, (self.input, self.h0))
+            config_file, modified_model, record_file, self.model, (self.input, self.h0)
+        )
         new_model(self.input, self.h0)
         save_model(modified_model, record_file, save_path)
         self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'))
@@ -783,8 +873,11 @@ class TestGRUPTQA8W4A16W8(unittest.TestCase):
         # (fixes _rnn_process dropping num_bits, which left RNN weights at INT8).
         if tag == 'a8w4':
             record_text = open(record_file).read()
-            self.assertIn('wts_type: "INT4"', record_text,
-                          'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)')
+            self.assertIn(
+                'wts_type: "INT4"',
+                record_text,
+                'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)',
+            )
 
     @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_gru_ptq_a8w4_e2e(self):
@@ -809,9 +902,14 @@ class TestLSTMPTQA8W4A16W8(unittest.TestCase):
         width = 64
         lstm_hidden_size = 64
         cls.model = rnn_model.Conv1dLSTM(
-            input_channels=channels, conv1d_kernel_size=3,
-            conv1d_out_channels=16, lstm_hidden_size=lstm_hidden_size,
-            num_classes=10, num_lstm_layers=1, dropout=0.1)
+            input_channels=channels,
+            conv1d_kernel_size=3,
+            conv1d_out_channels=16,
+            lstm_hidden_size=lstm_hidden_size,
+            num_classes=10,
+            num_lstm_layers=1,
+            dropout=0.1,
+        )
         cls.model.eval()
         cls.input = torch.randn(1, time_steps, channels, height, width)
         cls.h0 = torch.zeros(1, 1, lstm_hidden_size)
@@ -835,12 +933,19 @@ class TestLSTMPTQA8W4A16W8(unittest.TestCase):
         modified_model = os.path.join(self.temp_folder, tag + '_modified.onnx')
         save_path = os.path.join(self.temp_folder, tag + '_res')
         create_quant_config(
-            config_file=config_file, model=self.model,
-            input_data=(self.input, (self.h0, self.c0)), config_defination=cfg)
+            config_file=config_file,
+            model=self.model,
+            input_data=(self.input, (self.h0, self.c0)),
+            config_defination=cfg,
+        )
         self.assertTrue(os.path.exists(config_file))
         new_model = quantize_model(
-            config_file, modified_model, record_file,
-            self.model, (self.input, (self.h0, self.c0)))
+            config_file,
+            modified_model,
+            record_file,
+            self.model,
+            (self.input, (self.h0, self.c0)),
+        )
         new_model(self.input, (self.h0, self.c0))
         save_model(modified_model, record_file, save_path)
         self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'))
@@ -848,8 +953,11 @@ class TestLSTMPTQA8W4A16W8(unittest.TestCase):
         # (fixes _rnn_process dropping num_bits, which left RNN weights at INT8).
         if tag == 'a8w4':
             record_text = open(record_file).read()
-            self.assertIn('wts_type: "INT4"', record_text,
-                          'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)')
+            self.assertIn(
+                'wts_type: "INT4"',
+                record_text,
+                'A8W4 PTQ must record wts_type INT4 (incl. the RNN layer)',
+            )
 
     @unittest.skipUnless(_INT4_SUPPORTED, _SKIP_INT4_MSG)
     def test_lstm_ptq_a8w4_e2e(self):
@@ -890,11 +998,15 @@ class TestConvTransposePTQA8W4(unittest.TestCase):
         modified_model = os.path.join(self.temp_folder, 'modified.onnx')
         save_path = os.path.join(self.temp_folder, 'res')
         create_quant_config(
-            config_file=config_file, model=self.model,
-            input_data=self.input, config_defination=self.cfg)
+            config_file=config_file,
+            model=self.model,
+            input_data=self.input,
+            config_defination=self.cfg,
+        )
         self.assertTrue(os.path.exists(config_file))
         new_model = quantize_model(
-            config_file, modified_model, record_file, self.model, self.input)
+            config_file, modified_model, record_file, self.model, self.input
+        )
         new_model(self.input)
         save_model(modified_model, record_file, save_path)
         self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'))
@@ -931,11 +1043,15 @@ class TestConvTranspose1dPTQA8W4(unittest.TestCase):
         modified_model = os.path.join(self.temp_folder, 'modified.onnx')
         save_path = os.path.join(self.temp_folder, 'res')
         create_quant_config(
-            config_file=config_file, model=self.model,
-            input_data=self.input, config_defination=self.cfg)
+            config_file=config_file,
+            model=self.model,
+            input_data=self.input,
+            config_defination=self.cfg,
+        )
         self.assertTrue(os.path.exists(config_file))
         new_model = quantize_model(
-            config_file, modified_model, record_file, self.model, self.input)
+            config_file, modified_model, record_file, self.model, self.input
+        )
         new_model(self.input)
         save_model(modified_model, record_file, save_path)
         self.assertTrue(os.path.exists(save_path + '_deploy_model.onnx'))

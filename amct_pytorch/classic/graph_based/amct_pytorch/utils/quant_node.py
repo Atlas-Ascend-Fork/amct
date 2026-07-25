@@ -158,13 +158,19 @@ class QuantOpInfo:
                 or None if the node is not an RNN op (no recurrence_weight_index in
                 QUANT_INDEXES_MAP).
         '''
-        recurrence_weight_index = QuantOpInfo.get_quant_index(quantizable_node).get('recurrence_weight_index')
+        recurrence_weight_index = QuantOpInfo.get_quant_index(quantizable_node).get(
+            'recurrence_weight_index'
+        )
         if recurrence_weight_index is None:
             # Non-RNN ops (Conv, Gemm, etc.) have no recurrence_weight_index in
             # QUANT_INDEXES_MAP.  Return None so callers can skip cleanly.
             return None
-        recurrence_weight_in_anchor = quantizable_node.get_input_anchor(recurrence_weight_index)
-        recurrence_weight_param = recurrence_weight_in_anchor.get_peer_output_anchor().node
+        recurrence_weight_in_anchor = quantizable_node.get_input_anchor(
+            recurrence_weight_index
+        )
+        recurrence_weight_param = (
+            recurrence_weight_in_anchor.get_peer_output_anchor().node
+        )
         return recurrence_weight_param
 
     @staticmethod
@@ -282,12 +288,17 @@ class QuantOpInfo:
             return 0
         if node.type == 'Gemm':
             attr_helper = AttributeProtoHelper(node.proto)
-            if attr_helper.has_attr('transB') and attr_helper.get_attr_value('transB') == 1:
+            if (
+                attr_helper.has_attr('transB')
+                and attr_helper.get_attr_value('transB') == 1
+            ):
                 return 1
             return 0
         if node.type in ['LSTM', 'GRU']:
             return 2
-        raise RuntimeError("Unexpected node's type {} for get_cin_axis".format(node.type))
+        raise RuntimeError(
+            "Unexpected node's type {} for get_cin_axis".format(node.type)
+        )
 
     @staticmethod
     def get_node_tensor(node):

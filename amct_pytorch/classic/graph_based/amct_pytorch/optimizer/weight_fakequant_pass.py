@@ -89,7 +89,7 @@ class WeightFakequantPass(BaseFusionPass):
         if object_node.type == 'ConvTranspose' and get_deconv_group(object_node) > 1:
             group = get_deconv_group(object_node)
             quant_weight = adjust_deconv_weight_shape(group, quant_weight)
-            trans_axes = (1, 0, 2, 3, 4)[:len(quant_weight.shape)]
+            trans_axes = (1, 0, 2, 3, 4)[: len(quant_weight.shape)]
             quant_weight = np.transpose(quant_weight, trans_axes)
         weight_helper.clear_data()
 
@@ -100,7 +100,7 @@ class WeightFakequantPass(BaseFusionPass):
 
         if object_node.type == 'ConvTranspose' and get_deconv_group(object_node) > 1:
             group = get_deconv_group(object_node)
-            trans_axes = (1, 0, 2, 3, 4)[:len(fp_weight.shape)]
+            trans_axes = (1, 0, 2, 3, 4)[: len(fp_weight.shape)]
             fp_weight = np.transpose(fp_weight, trans_axes)
             fp_weight = adjust_deconv_weight_shape(group, fp_weight)
 
@@ -108,8 +108,12 @@ class WeightFakequantPass(BaseFusionPass):
 
         weight_helper.set_data(fp_weight, 'FLOAT')
 
-        LOGGER.logd("Fakequant (dequant) weight to float for layer '{}' " \
-            "success!".format(object_node.name), 'WeightFakequantPass')
+        LOGGER.logd(
+            "Fakequant (dequant) weight to float for layer '{}' success!".format(
+                object_node.name
+            ),
+            'WeightFakequantPass',
+        )
 
     def dequant_weight(self, object_node, is_recurrence_weight=False):
         """

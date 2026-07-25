@@ -17,6 +17,7 @@
 # ----------------------------------------------------------------------------
 import os
 import numpy as np
+
 try:
     import ml_dtypes
 except ImportError:
@@ -78,8 +79,8 @@ def parse_external_data_meta(external_data):
     return file_name, offset, length, quantized_data
 
 
-class TensorProtoHelper():
-    """ Help cope with onnx.TensorProto
+class TensorProtoHelper:
+    """Help cope with onnx.TensorProto
     APIs: map_data_location, map_np_type, get_data, clear_data, set_data
     """
 
@@ -240,8 +241,10 @@ class TensorProtoHelper():
         int4_entry = self.data_type_maps.get('INT4')
         if data_location == RAW_DATA:
             # INT4: nibble-pack two INT4 values into each INT8 byte
-            if int4_entry is not None and \
-                    self.tensor.data_type == int4_entry[self.proto_value_id]:
+            if (
+                int4_entry is not None
+                and self.tensor.data_type == int4_entry[self.proto_value_id]
+            ):
                 packed = pack_int4_to_int8(data)
                 setattr(self.tensor, RAW_DATA, bytes(packed.flatten().astype('uint8')))
             else:
@@ -265,8 +268,9 @@ class TensorProtoHelper():
         Return: value: raw_value or np_value; length: data length
         '''
         tensor_np_type = self.map_np_type(self.tensor.data_type)
-        file_name, offset, length, quantized_data = \
-            parse_external_data_meta(self.tensor.external_data)
+        file_name, offset, length, quantized_data = parse_external_data_meta(
+            self.tensor.external_data
+        )
 
         if quantized_data:
             return self._get_quantized_raw_data(tensor_np_type), length
@@ -315,13 +319,18 @@ class TensorProtoHelper():
         np_type = self.map_np_type(tensor_dtype)
         data_location = self.map_data_location(tensor_dtype)
         # INT4 以 packed 字节存储，按 uint8 搬运字节流；其余类型按自身 dtype
-        store_np_type = np.uint8 if np_type == 'int4' else self.resolve_np_dtype(np_type)
+        store_np_type = (
+            np.uint8 if np_type == 'int4' else self.resolve_np_dtype(np_type)
+        )
         byte_size = np.dtype(store_np_type).itemsize
-        # the list is index of TensorProto.Datetype 
-        if tensor_dtype not in TensorProtoHelper.data_type.values() \
-            or tensor_dtype == TensorProtoHelper.data_type.STRING:
-            LOGGER.logd("this patch does not support dtype %s for now" % (tensor_dtype),\
-                        'Utils')
+        # the list is index of TensorProto.Datetype
+        if (
+            tensor_dtype not in TensorProtoHelper.data_type.values()
+            or tensor_dtype == TensorProtoHelper.data_type.STRING
+        ):
+            LOGGER.logd(
+                "this patch does not support dtype %s for now" % (tensor_dtype), 'Utils'
+            )
             return
         # DEFAULT is 0, EXTERNAL is 1
         if self.tensor.data_location == 0:
@@ -374,7 +383,7 @@ class TensorProtoHelper():
         return data_location
 
     def _get_quantized_raw_data(self, tensor_np_type):
-        ''' read quantized data already stored in tensor.raw_data '''
+        '''read quantized data already stored in tensor.raw_data'''
         if tensor_np_type == 'int4':
             # raw_data 为 packed 字节，unpack 成 prod(dims) 个 INT4 再 reshape
             packed = np.frombuffer(self.tensor.raw_data, np.uint8)
@@ -384,8 +393,8 @@ class TensorProtoHelper():
         return np_value.reshape(self.tensor.dims)
 
     def _read_external_file(self, file_name, offset, length, tensor_np_type):
-        ''' read data from the external file for a typed (non-raw) tensor.
-        Returns (np_value, length). '''
+        '''read data from the external file for a typed (non-raw) tensor.
+        Returns (np_value, length).'''
         if tensor_np_type == 'int4':
             # 外部文件存 packed 字节，按 uint8 读入后 unpack 成 prod(dims) 个 INT4
             byte_len = length if length > 0 else -1

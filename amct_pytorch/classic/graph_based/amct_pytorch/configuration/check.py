@@ -342,10 +342,15 @@ class GraphQuerier:
         # group/depthwise conv: onnx weight Cin dim is Cin/groups, cannot pack
         if node.type in ('Conv', 'ConvTranspose'):
             attr_helper = AttributeProtoHelper(node.proto)
-            if attr_helper.has_attr('group') and attr_helper.get_attr_value('group') > 1:
+            if (
+                attr_helper.has_attr('group')
+                and attr_helper.get_attr_value('group') > 1
+            ):
                 return True
-        for wnode in (QuantOpInfo.get_weight_node(node),
-                      QuantOpInfo.get_recurrence_weight_node(node)):
+        for wnode in (
+            QuantOpInfo.get_weight_node(node),
+            QuantOpInfo.get_recurrence_weight_node(node),
+        ):
             if wnode is None:
                 continue
             dims = QuantOpInfo.get_node_tensor(wnode).dims
