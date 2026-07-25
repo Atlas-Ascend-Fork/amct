@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+# ruff: noqa: F401
+
 __all__ = [
     'BaseFusionPass',
     'BaseModuleFusionPass',
@@ -65,50 +67,49 @@ __all__ = [
     'DeleteQatPass',
 ]
 
-# Explicit re-exports for ruff F401: keep optimizer submodules available from
-# this package while making the intent clear to the linter.
-from . import base_fusion_pass as base_fusion_pass
-from . import base_module_fusion_pass as base_module_fusion_pass
-from . import conv_bn_fusion_pass as conv_bn_fusion_pass
-from . import delete_circular_padding_pass as delete_circular_padding_pass
-from . import delete_retrain_pass as delete_retrain_pass
-from . import delete_linear_add_pass as delete_linear_add_pass
-from . import delete_resize_pass as delete_resize_pass
-from . import delete_isolated_node_pass as delete_isolated_node_pass
-from . import gemm_transb_optimize_pass as gemm_transb_optimize_pass
-from . import graph_optimizer as graph_optimizer
-from . import insert_cali_quant as insert_cali_quant
-from . import insert_dequant_pass as insert_dequant_pass
-from . import insert_quant_pass as insert_quant_pass
-from . import insert_weight_quant_pass as insert_weight_quant_pass
-from . import insert_bias_quant_pass as insert_bias_quant_pass
-from . import insert_retrain_pass as insert_retrain_pass
-from . import insert_retrain_quant_pass as insert_retrain_quant_pass
-from . import insert_kv_cache_quant_pass as insert_kv_cache_quant_pass
-from . import model_optimizer as model_optimizer
-from . import mult_output_with_quant_optimizer as mult_output_with_quant_optimizer
-from . import quant_fusion_pass as quant_fusion_pass
-from . import replace_anti_quant_pass as replace_anti_quant_pass
-from . import replace_avgpool_flatten_pass as replace_avgpool_flatten_pass
-from . import replace_avgpool_reshape_pass as replace_avgpool_reshape_pass
-from . import replace_dequant_pass as replace_dequant_pass
-from . import replace_quant_pass as replace_quant_pass
-from . import replace_weight_quant_pass as replace_weight_quant_pass
-from . import replace_bias_quant_pass as replace_bias_quant_pass
-from . import replace_sync_bn_pass as replace_sync_bn_pass
-from . import set_recorder_pass as set_recorder_pass
-from . import share_act_comp_pass as share_act_comp_pass
-from . import weight_calibration as weight_calibration
-from . import insert_fakequant_conv_pass as insert_fakequant_conv_pass
-from . import insert_fakequant_convtranspose_pass as insert_fakequant_convtranspose_pass
-from . import insert_fakequant_linear_pass as insert_fakequant_linear_pass
-from . import insert_fakequant_avgpool2d_pass as insert_fakequant_avgpool2d_pass
-from . import weight_fakequant_module_pass as weight_fakequant_module_pass
-from . import bias_fakequant_module_pass as bias_fakequant_module_pass
-from . import insert_dmq_balancer_pass as insert_dmq_balancer_pass
-from . import apply_dmq_balancer_pass as apply_dmq_balancer_pass
-from . import insert_qat_pass as insert_qat_pass
-from . import delete_qat_pass as delete_qat_pass
+# Keep optimizer submodules available from this package for compatibility.
+from . import base_fusion_pass
+from . import base_module_fusion_pass
+from . import conv_bn_fusion_pass
+from . import delete_circular_padding_pass
+from . import delete_retrain_pass
+from . import delete_linear_add_pass
+from . import delete_resize_pass
+from . import delete_isolated_node_pass
+from . import gemm_transb_optimize_pass
+from . import graph_optimizer
+from . import insert_cali_quant
+from . import insert_dequant_pass
+from . import insert_quant_pass
+from . import insert_weight_quant_pass
+from . import insert_bias_quant_pass
+from . import insert_retrain_pass
+from . import insert_retrain_quant_pass
+from . import insert_kv_cache_quant_pass
+from . import model_optimizer
+from . import mult_output_with_quant_optimizer
+from . import quant_fusion_pass
+from . import replace_anti_quant_pass
+from . import replace_avgpool_flatten_pass
+from . import replace_avgpool_reshape_pass
+from . import replace_dequant_pass
+from . import replace_quant_pass
+from . import replace_weight_quant_pass
+from . import replace_bias_quant_pass
+from . import replace_sync_bn_pass
+from . import set_recorder_pass
+from . import share_act_comp_pass
+from . import weight_calibration
+from . import insert_fakequant_conv_pass
+from . import insert_fakequant_convtranspose_pass
+from . import insert_fakequant_linear_pass
+from . import insert_fakequant_avgpool2d_pass
+from . import weight_fakequant_module_pass
+from . import bias_fakequant_module_pass
+from . import insert_dmq_balancer_pass
+from . import apply_dmq_balancer_pass
+from . import insert_qat_pass
+from . import delete_qat_pass
 
 from .base_fusion_pass import BaseFusionPass
 from .base_module_fusion_pass import BaseModuleFusionPass
