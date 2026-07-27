@@ -21,12 +21,14 @@ This module exposes the documented import path
 ``from amct_pytorch.common.auto_calibration import AutoCalibrationEvaluatorBase``.
 """
 
-__all__ = ['AccuracyBasedAutoCalibrationBase',
-           'AutoCalibrationEvaluatorBase',
-           'AutoCalibrationStrategyBase',
-           'SensitivityBase',
-           'BinarySearchStrategy',
-           'CosineSimilaritySensitivity']
+__all__ = [
+    'AccuracyBasedAutoCalibrationBase',
+    'AutoCalibrationEvaluatorBase',
+    'AutoCalibrationStrategyBase',
+    'SensitivityBase',
+    'BinarySearchStrategy',
+    'CosineSimilaritySensitivity',
+]
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.auto_calibration import (
     AccuracyBasedAutoCalibrationBase,

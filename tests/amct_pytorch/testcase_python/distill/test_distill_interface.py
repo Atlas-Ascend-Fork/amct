@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,7 +21,6 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -98,7 +97,8 @@ class DistillNetMultiInputQat(nn.Module):
 
 
 class Conv2dLinear(nn.Module):
-    """ not do prune"""
+    """not do prune"""
+
     def __init__(self):
         super().__init__()
         # fc
@@ -184,36 +184,69 @@ class TestDistillInterface(unittest.TestCase):
         config_file = os.path.join(self.temp_folder, 'not_exist.json')
         config_defination = os.path.join(CUR_DIR, 'not_exist.cfg')
         with self.assertRaises(FileNotFoundError):
-            create_distill_config(config_file, self.torch_model, self.data, config_defination)
+            create_distill_config(
+                config_file, self.torch_model, self.data, config_defination
+            )
 
     def test_create_distill_config_cfg_exist(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         config_defination = os.path.join(CUR_DIR, './cfgs/config.cfg')
-        create_distill_config(config_file, self.torch_model, self.data, config_defination)
+        create_distill_config(
+            config_file, self.torch_model, self.data, config_defination
+        )
         self.assertTrue(os.access(config_file, os.F_OK))
 
     def test_distill_no_dump_success(self):
-        distill(self.torch_model, self.qat_model, self.cfg_file, self.train_loader, epochs=1, loss=None, optimizer=None)
+        distill(
+            self.torch_model,
+            self.qat_model,
+            self.cfg_file,
+            self.train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=None,
+        )
 
     def test_distill_dump_success(self):
         optimizer = torch.optim.AdamW(self.qat_model.parameters(), lr=0.1)
         distill(
-            self.torch_model, self.qat_model, self.dump_cfg_file, self.train_loader,
-            epochs=1, loss=None, optimizer=optimizer)
+            self.torch_model,
+            self.qat_model,
+            self.dump_cfg_file,
+            self.train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=optimizer,
+        )
 
     def test_distill_invalid_epochs(self):
         optimizer = torch.optim.AdamW(self.qat_model.parameters(), lr=0.1)
         self.assertRaises(
-            ValueError, distill, self.torch_model, self.qat_model,
-            self.dump_cfg_file, self.train_loader, epochs=0, loss=None,
-            optimizer=optimizer)
+            ValueError,
+            distill,
+            self.torch_model,
+            self.qat_model,
+            self.dump_cfg_file,
+            self.train_loader,
+            epochs=0,
+            loss=None,
+            optimizer=optimizer,
+        )
 
     def test_distill_invalid_cfg(self):
         optimizer = torch.optim.AdamW(self.qat_model.parameters(), lr=0.1)
         cfg = 'abcd.json'
         self.assertRaises(
-            OSError, distill, self.torch_model, self.qat_model, cfg,
-            self.train_loader, epochs=1, loss=None, optimizer=optimizer)
+            OSError,
+            distill,
+            self.torch_model,
+            self.qat_model,
+            cfg,
+            self.train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=optimizer,
+        )
 
     def test_distill_user_define_sample(self):
         model = DistillNetMultiInput()
@@ -225,8 +258,15 @@ class TestDistillInterface(unittest.TestCase):
         dataset = MultiDataset(data0, data1)
         train_loader = torch.utils.data.DataLoader(dataset)
         distill(
-            model, qat_model, self.cfg_file, train_loader,
-            epochs=1, loss=None, optimizer=None, sample_instance=sample)
+            model,
+            qat_model,
+            self.cfg_file,
+            train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=None,
+            sample_instance=sample,
+        )
 
     def test_distill_user_define_sample_dump(self):
         model = DistillNetMultiInput()
@@ -238,8 +278,15 @@ class TestDistillInterface(unittest.TestCase):
         dataset = MultiDataset(data0, data1)
         train_loader = torch.utils.data.DataLoader(dataset)
         distill(
-            model, qat_model, self.dump_cfg_file, train_loader,
-            epochs=1, loss=None, optimizer=None, sample_instance=sample)
+            model,
+            qat_model,
+            self.dump_cfg_file,
+            train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=None,
+            sample_instance=sample,
+        )
 
     def test_distill_user_define_invalid_sample(self):
         model = DistillNetMultiInput()
@@ -251,16 +298,31 @@ class TestDistillInterface(unittest.TestCase):
         dataset = MultiDataset(data0, data1)
         train_loader = torch.utils.data.DataLoader(dataset)
         self.assertRaises(
-            RuntimeError, distill, model, qat_model,
-            self.dump_cfg_file, train_loader, epochs=1, loss=None,
-            optimizer=None, sample_instance=sample)
+            RuntimeError,
+            distill,
+            model,
+            qat_model,
+            self.dump_cfg_file,
+            train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=None,
+            sample_instance=sample,
+        )
 
         sample = ModelMultiInvalidInputDict()
         self.assertRaises(
-            RuntimeError, distill, model, qat_model,
-            self.dump_cfg_file, train_loader, epochs=1, loss=None,
-            optimizer=None, sample_instance=sample)
-
+            RuntimeError,
+            distill,
+            model,
+            qat_model,
+            self.dump_cfg_file,
+            train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=None,
+            sample_instance=sample,
+        )
 
     def test_create_and_save_distill_model_with_default_record(self):
         ori_model = Conv2dLinear().to(torch.device("cpu"))
@@ -274,13 +336,25 @@ class TestDistillInterface(unittest.TestCase):
 
         train_loader = torch.utils.data.DataLoader(input_data)
         torch.optim.AdamW(student_model.parameters(), lr=0.1)
-        distill(ori_model, student_model, config_file, train_loader, epochs=1, loss=None, optimizer=None)
+        distill(
+            ori_model,
+            student_model,
+            config_file,
+            train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=None,
+        )
 
         save_path = os.path.join(self.temp_folder, 'save_distill')
         save_distill_model(student_model, save_path, input_data)
 
-        fake_quant_onnx = os.path.join(self.temp_folder, 'save_distill_fake_quant_model.onnx')
-        deploy_quant_onnx = os.path.join(self.temp_folder, 'save_distill_deploy_model.onnx')
+        fake_quant_onnx = os.path.join(
+            self.temp_folder, 'save_distill_fake_quant_model.onnx'
+        )
+        deploy_quant_onnx = os.path.join(
+            self.temp_folder, 'save_distill_deploy_model.onnx'
+        )
         record_file = os.path.join(self.amct_log_dir, 'scale_offset_record.txt')
         self.assertTrue(os.path.exists(fake_quant_onnx))
         self.assertTrue(os.path.exists(deploy_quant_onnx))
@@ -298,14 +372,28 @@ class TestDistillInterface(unittest.TestCase):
 
         train_loader = torch.utils.data.DataLoader(input_data)
         torch.optim.AdamW(student_model.parameters(), lr=0.1)
-        distill(ori_model, student_model, config_file, train_loader, epochs=1, loss=None, optimizer=None)
+        distill(
+            ori_model,
+            student_model,
+            config_file,
+            train_loader,
+            epochs=1,
+            loss=None,
+            optimizer=None,
+        )
 
         save_path = os.path.join(self.temp_folder, 'save_distill')
         record_file = os.path.join(self.temp_folder, 'scale_offset_record.txt')
-        save_distill_model(student_model, save_path, input_data, record_file=record_file)
+        save_distill_model(
+            student_model, save_path, input_data, record_file=record_file
+        )
 
-        fake_quant_onnx = os.path.join(self.temp_folder, 'save_distill_fake_quant_model.onnx')
-        deploy_quant_onnx = os.path.join(self.temp_folder, 'save_distill_deploy_model.onnx')
+        fake_quant_onnx = os.path.join(
+            self.temp_folder, 'save_distill_fake_quant_model.onnx'
+        )
+        deploy_quant_onnx = os.path.join(
+            self.temp_folder, 'save_distill_deploy_model.onnx'
+        )
         self.assertTrue(os.path.exists(fake_quant_onnx))
         self.assertTrue(os.path.exists(deploy_quant_onnx))
         self.assertTrue(os.path.exists(record_file))
@@ -318,8 +406,12 @@ class TestDistillInterface(unittest.TestCase):
         save_path = os.path.join(self.temp_folder, 'save_distill')
         save_distill_model(self.qat_model, save_path, self.data)
 
-        fake_quant_onnx = os.path.join(self.temp_folder, 'save_distill_fake_quant_model.onnx')
-        deploy_quant_onnx = os.path.join(self.temp_folder, 'save_distill_deploy_model.onnx')
+        fake_quant_onnx = os.path.join(
+            self.temp_folder, 'save_distill_fake_quant_model.onnx'
+        )
+        deploy_quant_onnx = os.path.join(
+            self.temp_folder, 'save_distill_deploy_model.onnx'
+        )
         record_file = os.path.join(self.amct_log_dir, 'scale_offset_record.txt')
         self.assertTrue(os.path.exists(fake_quant_onnx))
         self.assertTrue(os.path.exists(deploy_quant_onnx))

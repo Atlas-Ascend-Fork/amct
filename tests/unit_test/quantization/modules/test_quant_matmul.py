@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
-import pytest
 import torch
 
 from amct_pytorch.quantization.dtypes import register_dtype
@@ -83,6 +82,7 @@ def test_forward_runs_transforms_when_set():
     def right_t(x):
         seen.append("R")
         return x
+
     qm.left_transform = left_t
     qm.right_transform = right_t
     left = torch.randn(1, 2, 4)

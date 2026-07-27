@@ -17,15 +17,19 @@
 
 import torch
 from transformers.models.qwen3.modeling_qwen3 import (
-    Qwen3Attention,
     Qwen3Config,
     Qwen3DecoderLayer,
-    Qwen3MLP,
 )
 
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
-from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, apply_quant_to_moe_mlp
-from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import QuantQwen3Attn, QuantQwen3MLP
+from amct_pytorch.common.models.llm.common.quant_apply import (
+    apply_quant_to_attn,
+    apply_quant_to_moe_mlp,
+)
+from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import (
+    QuantQwen3Attn,
+    QuantQwen3MLP,
+)
 from amct_pytorch.common.models import MODEL_REGISTRY
 
 
@@ -69,7 +73,14 @@ class Qwen3(BaseModel):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,

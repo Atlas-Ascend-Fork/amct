@@ -65,22 +65,27 @@ def _quant_args(quant_target=(ATTN_LINEAR,)):
         quant_dtype="int",
         w_bits=8,
         a_bits=8,
-        q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+        q_bits=8,
+        k_bits=8,
+        p_bits=8,
+        v_bits=8,
         quant_target=list(quant_target),
-        bit_policy=BitPolicy({
-            ATTN_LINEAR: {
-                "q_proj": {W_BITS: 8, A_BITS: 8},
-                "k_proj": {W_BITS: 8, A_BITS: 8},
-                "v_proj": {W_BITS: 8, A_BITS: 8},
-                "o_proj": {W_BITS: 8, A_BITS: 8},
-            },
-            ATTN_CACHE: {"q": 8, "k": 8, "p": 8, "v": 8},
-            MLP: {
-                "gate_proj": {W_BITS: 8, A_BITS: 8},
-                "up_proj": {W_BITS: 8, A_BITS: 8},
-                "down_proj": {W_BITS: 8, A_BITS: 8},
-            },
-        }),
+        bit_policy=BitPolicy(
+            {
+                ATTN_LINEAR: {
+                    "q_proj": {W_BITS: 8, A_BITS: 8},
+                    "k_proj": {W_BITS: 8, A_BITS: 8},
+                    "v_proj": {W_BITS: 8, A_BITS: 8},
+                    "o_proj": {W_BITS: 8, A_BITS: 8},
+                },
+                ATTN_CACHE: {"q": 8, "k": 8, "p": 8, "v": 8},
+                MLP: {
+                    "gate_proj": {W_BITS: 8, A_BITS: 8},
+                    "up_proj": {W_BITS: 8, A_BITS: 8},
+                    "down_proj": {W_BITS: 8, A_BITS: 8},
+                },
+            }
+        ),
     )
 
 

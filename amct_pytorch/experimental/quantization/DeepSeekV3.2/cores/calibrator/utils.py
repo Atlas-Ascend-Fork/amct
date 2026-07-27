@@ -65,6 +65,7 @@ def layer_forward(layer, inps, bs=1):
     with torch.no_grad():
         for j in range(inps.shape[0] // bs):
             index = j * bs
+            batch_slice = slice(index, index + bs)
             attention_mask = None
             attention_mask_batch = _prepare_4d_causal_attention_mask(
                 attention_mask,
@@ -72,8 +73,10 @@ def layer_forward(layer, inps, bs=1):
                 torch.randn_like(inps),
                 0,
             )
-            attention_mask_batch = attention_mask_batch.to(next(layer.parameters()).device)
-            layer(inps[index:index + bs, ], attention_mask=attention_mask_batch)[0]
+            attention_mask_batch = attention_mask_batch.to(
+                next(layer.parameters()).device
+            )
+            layer(inps[batch_slice], attention_mask=attention_mask_batch)[0]
 
 
 def get_self_attn_inps_outs(layer, inps):
@@ -82,8 +85,10 @@ def get_self_attn_inps_outs(layer, inps):
     with torch.no_grad():
         for j in range(inps.shape[0] // bs):
             index = j * bs
-            outs[index:index + bs, ] = layer.input_layernorm(
-                inps[index:index + bs, ].to(layer.input_layernorm.weight.device))
+            batch_slice = slice(index, index + bs)
+            outs[batch_slice] = layer.input_layernorm(
+                inps[batch_slice].to(layer.input_layernorm.weight.device)
+            )
 
     return outs
 
@@ -136,6 +141,7 @@ def get_mla_moe_inputs(layer, fp_inps, dev="npu:0"):
     with torch.no_grad():
         for j in range(0, fp_inps.shape[0]):
             index = j * cali_bsz
+            batch_slice = slice(index, index + cali_bsz)
             attention_mask = None
             attention_mask_batch = _prepare_4d_causal_attention_mask(
                 attention_mask,
@@ -144,8 +150,9 @@ def get_mla_moe_inputs(layer, fp_inps, dev="npu:0"):
                 0,
             )
 
-            fp_outs[index:index + cali_bsz, ] = pre_forward(fp_inps[index:index + cali_bsz, ],
-                                                            attention_mask=attention_mask_batch)
+            fp_outs[batch_slice] = pre_forward(
+                fp_inps[batch_slice], attention_mask=attention_mask_batch
+            )
 
     layer.to('cpu')
     torch.npu.empty_cache()

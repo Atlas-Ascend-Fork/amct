@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -43,6 +43,7 @@ class TestSelectivePrune(unittest.TestCase):
     """
     The ST for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_selective_prune')
@@ -61,7 +62,9 @@ class TestSelectivePrune(unittest.TestCase):
         pass
 
     def test_prune_model_001(self):
-        config_defination = os.path.join(CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg')
+        config_defination = os.path.join(
+            CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg'
+        )
         record_file = os.path.join(self.temp_folder, 'model_001.txt')
         pth_file = os.path.join(self.temp_folder, 'pth_file.pth')
 
@@ -73,19 +76,24 @@ class TestSelectivePrune(unittest.TestCase):
         args = tuple(args)
         ori_output = ori_model.forward(args[0])
 
-        new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
+        new_model = create_prune_retrain_model(
+            ori_model, args, config_defination, record_file
+        )
         new_output = new_model.forward(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
         new_model2 = restore_prune_retrain_model(
-            ori_model, args, record_file, config_defination, pth_file, 'state_dict')
+            ori_model, args, record_file, config_defination, pth_file, 'state_dict'
+        )
         new_output2 = new_model2.forward(args[0])
 
         self.assertEqual(ori_output.shape, new_output.shape)
         self.assertEqual((new_output == new_output2).all(), torch.tensor(True))
 
     def test_prune_model_tprch_save(self):
-        config_defination = os.path.join(CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg')
+        config_defination = os.path.join(
+            CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg'
+        )
         record_file = os.path.join(self.temp_folder, 'model_001.txt')
         pth_file = os.path.join(self.temp_folder, 'pth_file.pth')
 
@@ -97,19 +105,24 @@ class TestSelectivePrune(unittest.TestCase):
         args = tuple(args)
         ori_output = ori_model.forward(args[0])
 
-        new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
+        new_model = create_prune_retrain_model(
+            ori_model, args, config_defination, record_file
+        )
         new_output = new_model.forward(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
         new_model2 = restore_prune_retrain_model(
-            ori_model, args, record_file, config_defination, pth_file, 'state_dict')
+            ori_model, args, record_file, config_defination, pth_file, 'state_dict'
+        )
         new_output2 = new_model2.forward(args[0])
 
         self.assertEqual(ori_output.shape, new_output.shape)
         self.assertEqual((new_output == new_output2).all(), torch.tensor(True))
 
     def test_prune_model_002(self):
-        config_defination = os.path.join(CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg')
+        config_defination = os.path.join(
+            CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg'
+        )
         record_file = os.path.join(self.temp_folder, 'model_002.txt')
 
         ori_model = models.Conv2dLinear().to(torch.device("cpu"))
@@ -121,7 +134,9 @@ class TestSelectivePrune(unittest.TestCase):
 
         ori_output = ori_model.forward(args[0])
 
-        new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
+        new_model = create_prune_retrain_model(
+            ori_model, args, config_defination, record_file
+        )
         new_output = new_model.forward(args[0])
         self.assertEqual(ori_output.shape, new_output.shape)
 
@@ -129,7 +144,9 @@ class TestSelectivePrune(unittest.TestCase):
         self.assertEqual(new_model.layer3.replaced_module.out_features, 80)
 
     def test_save_prune_retrain_model(self):
-        config_defination = os.path.join(CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg')
+        config_defination = os.path.join(
+            CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg'
+        )
         record_file = os.path.join(self.temp_folder, 'model_003.txt')
         pth_file = os.path.join(self.temp_folder, 'pth_file.pth')
 
@@ -141,24 +158,33 @@ class TestSelectivePrune(unittest.TestCase):
         args = tuple(args)
         ori_model.forward(args[0])
 
-        new_model = create_prune_retrain_model(ori_model, args, config_defination, record_file)
+        new_model = create_prune_retrain_model(
+            ori_model, args, config_defination, record_file
+        )
         new_model.forward(args[0])
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
         new_model2 = restore_prune_retrain_model(
-            ori_model, args, record_file, config_defination, pth_file, 'state_dict')
+            ori_model, args, record_file, config_defination, pth_file, 'state_dict'
+        )
 
         new_model2.eval()
         new_model2(args[0])
         save_path = os.path.join(self.temp_folder, 'save_model')
         save_prune_retrain_model(new_model2, save_path, args)
-        exists_deploy_path = os.path.join(self.temp_folder, 'save_model_deploy_model.onnx')
-        exists_fake_quant_path = os.path.join(self.temp_folder, 'save_model_fake_quant_model.onnx')
+        exists_deploy_path = os.path.join(
+            self.temp_folder, 'save_model_deploy_model.onnx'
+        )
+        exists_fake_quant_path = os.path.join(
+            self.temp_folder, 'save_model_fake_quant_model.onnx'
+        )
         self.assertTrue(exists_deploy_path)
         self.assertTrue(exists_fake_quant_path)
 
     def test_compressed_model_001(self):
-        config_defination = os.path.join(CUR_DIR, 'utils/test_selective_prune/net_001_compressed_complete.cfg')
+        config_defination = os.path.join(
+            CUR_DIR, 'utils/test_selective_prune/net_001_compressed_complete.cfg'
+        )
         record_file = os.path.join(self.temp_folder, 'model_001.txt')
         pth_file = os.path.join(self.temp_folder, 'pth_file.pth')
         save_path = os.path.join(self.temp_folder, 'save_compressed')
@@ -172,7 +198,9 @@ class TestSelectivePrune(unittest.TestCase):
 
         ori_output = ori_model.forward(args[0])
 
-        new_model = create_compressed_retrain_model(ori_model, args, config_defination, record_file)
+        new_model = create_compressed_retrain_model(
+            ori_model, args, config_defination, record_file
+        )
         new_output = new_model.forward(args[0])
 
         self.assertEqual(ori_output.shape, new_output.shape)
@@ -182,17 +210,24 @@ class TestSelectivePrune(unittest.TestCase):
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
         restore_compressed_retrain_model(
-            ori_model, args, config_defination, record_file, pth_file, 'state_dict')
+            ori_model, args, config_defination, record_file, pth_file, 'state_dict'
+        )
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
 
-        exists_deploy_path = os.path.join(self.temp_folder, 'save_compressed_deploy_model.onnx')
-        exists_fake_quant_path = os.path.join(self.temp_folder, 'save_compressed_fake_quant_model.onnx')
+        exists_deploy_path = os.path.join(
+            self.temp_folder, 'save_compressed_deploy_model.onnx'
+        )
+        exists_fake_quant_path = os.path.join(
+            self.temp_folder, 'save_compressed_fake_quant_model.onnx'
+        )
         self.assertTrue(exists_deploy_path)
         self.assertTrue(exists_fake_quant_path)
 
     def test_compressed_model_002(self):
-        config_defination = os.path.join(CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg')
+        config_defination = os.path.join(
+            CUR_DIR, 'utils/test_selective_prune/model_001_prune.cfg'
+        )
         record_file = os.path.join(self.temp_folder, 'model_001.txt')
         pth_file = os.path.join(self.temp_folder, 'pth_file.pth')
         save_path = os.path.join(self.temp_folder, 'save_compressed')
@@ -206,7 +241,9 @@ class TestSelectivePrune(unittest.TestCase):
 
         ori_output = ori_model.forward(args[0])
 
-        new_model = create_compressed_retrain_model(ori_model, args, config_defination, record_file)
+        new_model = create_compressed_retrain_model(
+            ori_model, args, config_defination, record_file
+        )
         new_output = new_model.forward(args[0])
 
         self.assertEqual(ori_output.shape, new_output.shape)
@@ -216,20 +253,22 @@ class TestSelectivePrune(unittest.TestCase):
 
         torch.save({'state_dict': new_model.state_dict()}, pth_file)
         restore_compressed_retrain_model(
-            ori_model, args, config_defination, record_file, pth_file, 'state_dict')
+            ori_model, args, config_defination, record_file, pth_file, 'state_dict'
+        )
 
         save_compressed_retrain_model(new_model, record_file, save_path, args)
 
-        exists_prune_deploy_path = os.path.join(self.temp_folder, 'save_compressed_deploy_model.onnx')
-        exists_prune_fake_quant_path = os.path.join(self.temp_folder, 'save_compressed_fake_quant_model.onnx')
+        exists_prune_deploy_path = os.path.join(
+            self.temp_folder, 'save_compressed_deploy_model.onnx'
+        )
+        exists_prune_fake_quant_path = os.path.join(
+            self.temp_folder, 'save_compressed_fake_quant_model.onnx'
+        )
         self.assertTrue(exists_prune_deploy_path)
         self.assertTrue(exists_prune_fake_quant_path)
 
-
     def test_check_param_onnx_export(self):
-        export_setting = {'input_names': None,
-                          'output_names': None,
-                          DYNAMIC_AXES: None}
+        export_setting = {'input_names': None, 'output_names': None, DYNAMIC_AXES: None}
         _check_param_onnx_export(**export_setting)
 
         export_setting[DYNAMIC_AXES] = {1: 1}
@@ -287,4 +326,3 @@ class TestSelectivePrune(unittest.TestCase):
         except Exception as e:
             flag = 'dynamic_axes value is invalid' in str(e)
             self.assertTrue(flag)
-

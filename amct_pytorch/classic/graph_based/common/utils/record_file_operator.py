@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -19,12 +19,10 @@
 from collections.abc import Iterable
 import os
 import sys
-import functools
 from google.protobuf import text_format
 from .util import proto_float_to_python_float
 from .vars_util import INT16
 from .vars_util import DATA_OFFSET_RANGE, DATA_OFFSET_RANGE_INT16
-from .files import create_empty_file
 from ..config.field import ACT_SUPPORT_NUM_BITS, WTS_SUPPORT_NUM_BITS
 
 DBL_EPSILON = sys.float_info.epsilon
@@ -40,10 +38,14 @@ def dst_type_generator(num_bits, support_scope):
     if num_bits in support_scope:
         return 'INT{}'.format(num_bits)
     else:
-        raise ValueError('Support num_bits is {}, current is {}.'.format(support_scope, num_bits))
+        raise ValueError(
+            'Support num_bits is {}, current is {}.'.format(support_scope, num_bits)
+        )
 
 
-def record_weights_scale_offset(records, layer_name, scale, offset, num_bits=None, scale_r=None, offset_r=None):
+def record_weights_scale_offset(
+    records, layer_name, scale, offset, num_bits=None, scale_r=None, offset_r=None
+):
     """
     Function: Write scale_w and offset_w to record file
     Parameters: records: ScaleOffsetRecord() object to write
@@ -59,7 +61,9 @@ def record_weights_scale_offset(records, layer_name, scale, offset, num_bits=Non
             record.value.scale_w[:] = scale
             record.value.offset_w[:] = offset
             if num_bits is not None:
-                record.value.wts_type = dst_type_generator(num_bits, WTS_SUPPORT_NUM_BITS)
+                record.value.wts_type = dst_type_generator(
+                    num_bits, WTS_SUPPORT_NUM_BITS
+                )
             if scale_r is not None:
                 record.value.scale_r[:] = scale_r
             if offset_r is not None:
@@ -138,19 +142,24 @@ def read_weights_scale_offset(records, layer_name):
         if record.key == layer_name:
             # Read scale_w from record file
             if not record.value.scale_w:
-                raise RuntimeError("Cannot find scale_w of layer '{}' " \
-                    "in record file".format(layer_name))
+                raise RuntimeError(
+                    "Cannot find scale_w of layer '{}' in record file".format(
+                        layer_name
+                    )
+                )
             scale.extend(record.value.scale_w)
             # Read offset_w from record file
             if not record.value.offset_w:
-                raise RuntimeError("Cannot find offset_w of layer \'{}\' " \
-                    "in record file".format(layer_name))
+                raise RuntimeError(
+                    "Cannot find offset_w of layer '{}' in record file".format(
+                        layer_name
+                    )
+                )
             offset.extend(record.value.offset_w)
             done_flag = True
             break
     if not done_flag:
-        raise RuntimeError("Cannot find layer '{}' in record " \
-            "file".format(layer_name))
+        raise RuntimeError("Cannot find layer '{}' in record file".format(layer_name))
     return scale, offset
 
 
@@ -188,13 +197,14 @@ def read_shift_bits(records, layer_name):
                 shift_bits.extend(record.value.shift_bit)
             break
     else:
-        raise RuntimeError("Cannot find layer '{}' in record "
-                           "file".format(layer_name))
+        raise RuntimeError("Cannot find layer '{}' in record file".format(layer_name))
 
     return shift_bits
 
 
-def record_activation_scale_offset(records, layer_name, scale, offset, num_bits=None, scale_h=None, offset_h=None):
+def record_activation_scale_offset(
+    records, layer_name, scale, offset, num_bits=None, scale_h=None, offset_h=None
+):
     """
     Function: Write scale_w and offset_w to record file
     Parameters: records: ScaleOffsetRecord() object to write
@@ -209,7 +219,9 @@ def record_activation_scale_offset(records, layer_name, scale, offset, num_bits=
             record.value.scale_d = scale
             record.value.offset_d = offset
             if num_bits is not None:
-                record.value.act_type = dst_type_generator(num_bits, ACT_SUPPORT_NUM_BITS)
+                record.value.act_type = dst_type_generator(
+                    num_bits, ACT_SUPPORT_NUM_BITS
+                )
             if scale_h is not None:
                 record.value.scale_h = scale_h
             if offset_h is not None:
@@ -244,19 +256,24 @@ def read_activation_scale_offset(records, layer_name):
         if record.key == layer_name:
             # Read scale_d from record file
             if not record.value.HasField('scale_d'):
-                raise RuntimeError("Cannot find scale_d of layer '{}' " \
-                    "in record file".format(layer_name))
+                raise RuntimeError(
+                    "Cannot find scale_d of layer '{}' in record file".format(
+                        layer_name
+                    )
+                )
             scale = record.value.scale_d
             # Read offset_d from record file
             if not record.value.HasField('offset_d'):
-                raise RuntimeError("Cannot find offset_d of layer '{}' " \
-                    "in record file".format(layer_name))
+                raise RuntimeError(
+                    "Cannot find offset_d of layer '{}' in record file".format(
+                        layer_name
+                    )
+                )
             offset = record.value.offset_d
             done_flag = True
             break
     if not done_flag:
-        raise RuntimeError("Cannot find layer '{}' in record " \
-            "file".format(layer_name))
+        raise RuntimeError("Cannot find layer '{}' in record file".format(layer_name))
     return scale, offset
 
 
@@ -349,13 +366,14 @@ def do_record_factors(record, quant_factors):
             setattr(record.value, name, value)
 
 
-class ScaleOffsetRecordHelper():
+class ScaleOffsetRecordHelper:
     """
     Utility class for reading, recording, modifying, and saving.
 
     Args:
         scale_offset_record (proto): proto message for scale and offset.
     """
+
     def __init__(self, scale_offset_record):
         self._record_file = None
         self._records = scale_offset_record()
@@ -392,11 +410,19 @@ class ScaleOffsetRecordHelper():
         """
         # scale_w and offset_w can be a vector, but must have same length
         if len(record_value.scale_w) != len(record_value.offset_w):
-            raise RuntimeError('{} scale_w and offset_w must be same length'.format(key))
+            raise RuntimeError(
+                '{} scale_w and offset_w must be same length'.format(key)
+            )
 
         # current layer is quant layer, need check parameters' legality
-        scales = [proto_float_to_python_float(record_value.scale_d)] if record_value.HasField('scale_d') else []
-        scales.extend([proto_float_to_python_float(value) for value in record_value.scale_w])
+        scales = (
+            [proto_float_to_python_float(record_value.scale_d)]
+            if record_value.HasField('scale_d')
+            else []
+        )
+        scales.extend(
+            [proto_float_to_python_float(value) for value in record_value.scale_w]
+        )
         for scale in scales:
             # scale_d and scale_w must in range DBL_EPSILON, 1/DBL_EPSILON
             if scale < DBL_EPSILON or scale > 1 / DBL_EPSILON:
@@ -406,8 +432,13 @@ class ScaleOffsetRecordHelper():
         else:
             data_range = DATA_OFFSET_RANGE
         # offset_d if int8 must in range -128, 127, if int16 must in range -32768, 32767
-        if record_value.offset_d < data_range[0] or record_value.offset_d > data_range[1]:
-            raise ValueError('Exist illegal offset_d {} in "{}"'.format(record_value.offset_d, key))
+        if (
+            record_value.offset_d < data_range[0]
+            or record_value.offset_d > data_range[1]
+        ):
+            raise ValueError(
+                'Exist illegal offset_d {} in "{}"'.format(record_value.offset_d, key)
+            )
         # offset_w must be zero
         for offset in record_value.offset_w:
             if offset != 0:
@@ -429,9 +460,9 @@ class ScaleOffsetRecordHelper():
                 text_format.Merge(pbtxt_string, self._records)
             except text_format.ParseError as e:
                 raise RuntimeError(
-                    "the record_file{%s} cannot be parsered, please ensure "\
-                    "it matches with scale_offset_record.proto!"
-                    % (record_file)) from e
+                    "the record_file{%s} cannot be parsered, please ensure "
+                    "it matches with scale_offset_record.proto!" % (record_file)
+                ) from e
         return self
 
     def init(self, records):
@@ -577,13 +608,15 @@ class ScaleOffsetRecordHelper():
             if record.key == key:
                 # Read scale_w from record file
                 if not record.value.scale_w:
-                    raise RuntimeError("Cannot find scale_w of layer '{}' " \
-                        "in record file".format(key))
+                    raise RuntimeError(
+                        "Cannot find scale_w of layer '{}' in record file".format(key)
+                    )
                 scale.extend(record.value.scale_w)
                 # Read offset_w from record file
                 if not record.value.offset_w:
-                    raise RuntimeError("Cannot find offset_w of layer \'{}\' " \
-                        "in record file".format(key))
+                    raise RuntimeError(
+                        "Cannot find offset_w of layer '{}' in record file".format(key)
+                    )
                 offset.extend(record.value.offset_w)
                 done_flag = True
                 break
@@ -728,19 +761,20 @@ class ScaleOffsetRecordHelper():
             if record.key == key:
                 # Read scale_d from record file
                 if not record.value.HasField('scale_d'):
-                    raise RuntimeError("Cannot find scale_d of layer '{}' " \
-                        "in record file".format(key))
+                    raise RuntimeError(
+                        "Cannot find scale_d of layer '{}' in record file".format(key)
+                    )
                 scale = record.value.scale_d
                 # Read offset_d from record file
                 if not record.value.HasField('offset_d'):
-                    raise RuntimeError("Cannot find offset_d of layer '{}' " \
-                        "in record file".format(key))
+                    raise RuntimeError(
+                        "Cannot find offset_d of layer '{}' in record file".format(key)
+                    )
                 offset = record.value.offset_d
                 done_flag = True
                 break
         if not done_flag:
-            raise RuntimeError("Cannot find layer '{}' in record " \
-                "file".format(key))
+            raise RuntimeError("Cannot find layer '{}' in record file".format(key))
         return scale, offset
 
     def update_record(self):
@@ -749,8 +783,9 @@ class ScaleOffsetRecordHelper():
             raise RuntimeError('Cannot update record without record file')
 
         with open(self._record_file, "w") as record_write_file:
-            record_write_file.write(text_format.MessageToString(
-                self._records, as_utf8=True))
+            record_write_file.write(
+                text_format.MessageToString(self._records, as_utf8=True)
+            )
 
     def dump(self, record_file):
         """
@@ -760,5 +795,6 @@ class ScaleOffsetRecordHelper():
             record_file (str): a string of record file path.
         """
         with open(record_file, "w") as record_write_file:
-            record_write_file.write(text_format.MessageToString(
-                self._records, as_utf8=True))
+            record_write_file.write(
+                text_format.MessageToString(self._records, as_utf8=True)
+            )

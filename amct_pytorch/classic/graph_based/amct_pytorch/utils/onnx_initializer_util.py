@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,7 +18,7 @@
 import os
 import numpy as np
 from google.protobuf.internal import api_implementation
-from onnx.onnx_pb import TensorProto # pylint: disable=E0401
+from onnx.onnx_pb import TensorProto  # pylint: disable=E0401
 
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.common.utils import files as files_util
@@ -26,11 +26,12 @@ from ...amct_pytorch.common.utils import files as files_util
 RAW_DATA = 'raw_data'
 
 
-class TensorProtoHelper():
-    """ Help cope with onnx.TensorProto
+class TensorProtoHelper:
+    """Help cope with onnx.TensorProto
     APIs: map_data_location, map_np_type, get_data, clear_data, set_data
     """
-    data_type = TensorProto.DataType # pylint: disable=E1101
+
+    data_type = TensorProto.DataType  # pylint: disable=E1101
     data_type_maps = {
         # DataType: proto_value, data_location, np.type
         'UNDEFINED': [data_type.UNDEFINED, RAW_DATA, None],
@@ -56,7 +57,7 @@ class TensorProtoHelper():
     np_type_id = 2
 
     def __init__(self, tensor, model_path=''):
-        ''' init function '''
+        '''init function'''
         super().__init__()
         self.tensor = tensor
         self.model_path = model_path
@@ -64,27 +65,27 @@ class TensorProtoHelper():
 
     @classmethod
     def map_data_location(cls, proto_value):
-        ''' find data_location according to TensorProto.data_type'''
+        '''find data_location according to TensorProto.data_type'''
         for key in cls.data_type_maps:
             value = cls.data_type_maps[key]
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.data_location_id]
 
-        raise ValueError(f'The data_type{{proto_value}} is UNEXCEPTED')
+        raise ValueError('The data_type{proto_value} is UNEXCEPTED')
 
     @classmethod
     def map_np_type(cls, proto_value):
-        ''' find np's dtype according to TensorProto.data_type'''
+        '''find np's dtype according to TensorProto.data_type'''
         for key in cls.data_type_maps:
             value = cls.data_type_maps[key]
             if proto_value == value[cls.proto_value_id]:
                 return value[cls.np_type_id]
 
-        raise ValueError(f'The data_type{{proto_value}} is UNEXCEPTED')
+        raise ValueError('The data_type{proto_value} is UNEXCEPTED')
 
     @classmethod
     def cast_ori_data(cls, value, tensor_np_type):
-        ''' cast ori-data to numpy type '''
+        '''cast ori-data to numpy type'''
         if tensor_np_type == 'float16':
             value = np.array(value).astype(np.uint16).tobytes()
             np_value = np.frombuffer(value, getattr(np, tensor_np_type))
@@ -110,8 +111,7 @@ class TensorProtoHelper():
         tensor_data_type = self.tensor.data_type
         byte_value = self.tensor.raw_data
 
-        if tensor_data_type == \
-            self.data_type_maps['UNDEFINED'][self.proto_value_id]:
+        if tensor_data_type == self.data_type_maps['UNDEFINED'][self.proto_value_id]:
             return byte_value
 
         np_type = self.map_np_type(tensor_data_type)
@@ -120,8 +120,7 @@ class TensorProtoHelper():
             # to modify np_value.flags['WRITEABLE'] as True
             np_value = np.array(np_value)
         else:
-            value = getattr(self.tensor,
-                            self.map_data_location(tensor_data_type))
+            value = getattr(self.tensor, self.map_data_location(tensor_data_type))
             np_value = self.cast_ori_data(value, np_type)
         np_value = np_value.reshape(self.tensor.dims)
         return np_value
@@ -137,8 +136,7 @@ class TensorProtoHelper():
         if byte_value:
             self.tensor.ClearField(RAW_DATA)
         else:
-            self.tensor.ClearField(
-                self.map_data_location(self.tensor.data_type))
+            self.tensor.ClearField(self.map_data_location(self.tensor.data_type))
 
     def set_data(self, data, type_string=None, dims=None):
         '''
@@ -159,7 +157,9 @@ class TensorProtoHelper():
             self.tensor.dims.extend(dims)
 
         data_location = self.map_data_location(self.tensor.data_type)
-        data_location_new = self._rematch_data_location(data_location, self.tensor.data_type)
+        data_location_new = self._rematch_data_location(
+            data_location, self.tensor.data_type
+        )
         if self.externel_data:
             return self.set_external_data(data)
         if data_location == RAW_DATA:
@@ -203,7 +203,7 @@ class TensorProtoHelper():
             np_value = np_value.reshape(self.tensor.dims)
             return np_value, length
         # file path relative to the filesystem directory where the ONNX protobuf model was stored
-        # Data stored in external data files will be in the same binary bytes string format as 
+        # Data stored in external data files will be in the same binary bytes string format as
         # is used by the raw_data field in current ONNX implementations.
         if file_name is None:
             raise ValueError('The external_data is UNEXCEPTED, unspecified file path')
@@ -214,7 +214,7 @@ class TensorProtoHelper():
                 f.seek(offset, 0)
                 raw_data = f.read(length)
             return raw_data, length
- 
+
         item_size = np.dtype(tensor_np_type).itemsize
         if length > 0:
             data_length = int(length / item_size)
@@ -231,13 +231,13 @@ class TensorProtoHelper():
             dim = dim * i
         if len(np_value.flatten()) != dim:
             raise ValueError('The external_data is not consistant with the shape')
- 
+
         np_value = np_value.reshape(self.tensor.dims)
         return np_value, length
 
     def set_external_data(self, data):
         '''
-        Function: append quantized data to raw_data. 
+        Function: append quantized data to raw_data.
         Parameters:
             data: np_value
         Return: None
@@ -259,11 +259,14 @@ class TensorProtoHelper():
         np_type = self.map_np_type(tensor_dtype)
         data_location = self.map_data_location(tensor_dtype)
         byte_size = np.dtype(np_type).itemsize
-        # the list is index of TensorProto.Datetype 
-        if tensor_dtype not in TensorProtoHelper.data_type.values() \
-            or tensor_dtype == TensorProtoHelper.data_type.STRING:
-            LOGGER.logd("this patch does not support dtype %s for now" % (tensor_dtype),\
-                        'Utils')
+        # the list is index of TensorProto.Datetype
+        if (
+            tensor_dtype not in TensorProtoHelper.data_type.values()
+            or tensor_dtype == TensorProtoHelper.data_type.STRING
+        ):
+            LOGGER.logd(
+                "this patch does not support dtype %s for now" % (tensor_dtype), 'Utils'
+            )
             return
         # DEFAULT is 0, EXTERNAL is 1
         if self.tensor.data_location == 0:
@@ -276,7 +279,9 @@ class TensorProtoHelper():
                 self.tensor.ClearField(RAW_DATA)
             else:
                 data_length = len(getattr(self.tensor, data_location)) * byte_size
-                np_value = np.array(getattr(self.tensor, data_location), getattr(np, np_type))
+                np_value = np.array(
+                    getattr(self.tensor, data_location), getattr(np, np_type)
+                )
                 self.tensor.ClearField(data_location)
             self.export_external_data(np_value, external_file, data_length)
             return
@@ -306,12 +311,11 @@ class TensorProtoHelper():
         length.value = str(data_length)
         with open(external_file, 'wb') as f:
             f.write(np_value.flatten())
-            LOGGER.logi("external data %s" % (external_file),\
-                        'Utils')
+            LOGGER.logi("external data %s" % (external_file), 'Utils')
         os.chmod(external_file, files_util.FILE_MODE)
-    
+
     def _rematch_data_location(self, data_location, tensor_data_type):
-        ''' rematch data location for save data '''
+        '''rematch data location for save data'''
         if tensor_data_type == self.data_type.FLOAT16:
             data_location = RAW_DATA
         return data_location

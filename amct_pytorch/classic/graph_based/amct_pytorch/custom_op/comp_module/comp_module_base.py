@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,15 +18,22 @@
 
 from collections import namedtuple
 import numpy as np
-import torch # pylint: disable=E0401
-import torch.nn as nn # pylint: disable=E0401
-from torch.nn.parameter import Parameter # pylint: disable=E0401
+import torch  # pylint: disable=E0401
+import torch.nn as nn  # pylint: disable=E0401
+from torch.nn.parameter import Parameter  # pylint: disable=E0401
 
 from ....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFunction
 from ....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFunction
-from ....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFunction
-from ....amct_pytorch.custom_op.selective_prune.selective_prune import SelectivePruneFunction
-from ....amct_pytorch.custom_op.selective_prune.selective_prune import add_mask_to_record, get_mask_from_record
+from ....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import (
+    UlqScaleRetrainFunction,
+)
+from ....amct_pytorch.custom_op.selective_prune.selective_prune import (
+    SelectivePruneFunction,
+)
+from ....amct_pytorch.custom_op.selective_prune.selective_prune import (
+    add_mask_to_record,
+    get_mask_from_record,
+)
 from ....amct_pytorch.custom_op.utils import copy_tensor
 from ....amct_pytorch.custom_op.utils import tensor
 from ....amct_pytorch.utils.vars import FLT_EPSILON
@@ -38,7 +45,9 @@ MASK_REFRESH = 'mask_refresh'
 DEVICE = 'device'
 S_REC_FLAG = 's_rec_flag'
 
-ActsQuantInfo = namedtuple('ActsQuantInfo', ['outputs', 'scale', 'offset', 'clip_max', 'clip_min'])
+ActsQuantInfo = namedtuple(
+    'ActsQuantInfo', ['outputs', 'scale', 'offset', 'clip_max', 'clip_min']
+)
 
 
 class CompModuleBase(nn.Module):
@@ -46,11 +55,15 @@ class CompModuleBase(nn.Module):
     Function: Base class module for quantized retrain.
     APIs: __init__, _init_output, forward
     """
-    def __init__(self, module,  # pylint: disable=R0913
-                 act_config=None,
-                 wts_config=None,
-                 common_config=None,
-                 acts_comp_reuse=None):
+
+    def __init__(
+        self,
+        module,  # pylint: disable=R0913
+        act_config=None,
+        wts_config=None,
+        common_config=None,
+        acts_comp_reuse=None,
+    ):
         super(CompModuleBase, self).__init__()
         self.replaced_module = module
         self.replaced_module_type = module._get_name()
@@ -82,14 +95,17 @@ class CompModuleBase(nn.Module):
         # Compress activations.
         if self.acts_comp_reuse:
             compressed_inputs = self.acts_comp_reuse.acts_comp(
-                inputs, self.act_config, self.common_config)
+                inputs, self.act_config, self.common_config
+            )
         else:
             compressed_inputs = self.acts_comp(
-                inputs, self.act_config, self.common_config)
+                inputs, self.act_config, self.common_config
+            )
 
         # Compress weights.
         compressed_weights = self.wts_comp(
-            self.replaced_module.weight, self.wts_config, self.common_config)
+            self.replaced_module.weight, self.wts_config, self.common_config
+        )
 
         if self.cur_batch < 100:
             self.cur_batch += 1
@@ -109,10 +125,14 @@ class CompModuleBase(nn.Module):
         }
         compressed_inputs = None
         if COMP_ALG_PRUNE in self.comp_algs:
-            compressed_inputs = acts_comp_types.get(COMP_ALG_PRUNE)(inputs, act_config, common_config)
+            compressed_inputs = acts_comp_types.get(COMP_ALG_PRUNE)(
+                inputs, act_config, common_config
+            )
             inputs = compressed_inputs
         if COMP_ALG_QUANT in self.comp_algs:
-            compressed_inputs = acts_comp_types.get(COMP_ALG_QUANT)(inputs, act_config, common_config)
+            compressed_inputs = acts_comp_types.get(COMP_ALG_QUANT)(
+                inputs, act_config, common_config
+            )
         return compressed_inputs
 
     def wts_comp(self, weights, wts_config, common_config):
@@ -130,49 +150,115 @@ class CompModuleBase(nn.Module):
 
         compressed_weights = None
         if COMP_ALG_PRUNE in self.comp_algs:
-            compressed_weights = wts_comp_types.get(COMP_ALG_PRUNE)(weights, wts_config, common_config)
+            compressed_weights = wts_comp_types.get(COMP_ALG_PRUNE)(
+                weights, wts_config, common_config
+            )
             weights = compressed_weights
         if COMP_ALG_QUANT in self.comp_algs:
-            compressed_weights = wts_comp_types.get(COMP_ALG_QUANT)(weights, wts_config, common_config)
+            compressed_weights = wts_comp_types.get(COMP_ALG_QUANT)(
+                weights, wts_config, common_config
+            )
         return compressed_weights
 
     def _init_output(self):
         # Register quantitative parameters.
-        self.register_buffer('cur_batch', tensor(0, device=self.common_config.get(DEVICE)))
+        self.register_buffer(
+            'cur_batch', tensor(0, device=self.common_config.get(DEVICE))
+        )
         if self.act_config:
             if self.act_config.get('ifmr_init'):
                 self.register_parameter(
                     'acts_clip_max',
-                    Parameter(tensor(1.0, requires_grad=True, device=self.common_config.get(DEVICE))))
+                    Parameter(
+                        tensor(
+                            1.0,
+                            requires_grad=True,
+                            device=self.common_config.get(DEVICE),
+                        )
+                    ),
+                )
                 self.register_parameter(
                     'acts_clip_min',
-                    Parameter(tensor(1.0, requires_grad=True, device=self.common_config.get(DEVICE))))
+                    Parameter(
+                        tensor(
+                            1.0,
+                            requires_grad=True,
+                            device=self.common_config.get(DEVICE),
+                        )
+                    ),
+                )
             else:
                 self.register_parameter(
                     'acts_clip_max',
-                    Parameter(tensor(self.act_config.get('clip_max'),
-                                    requires_grad=True, device=self.common_config.get(DEVICE))))
+                    Parameter(
+                        tensor(
+                            self.act_config.get('clip_max'),
+                            requires_grad=True,
+                            device=self.common_config.get(DEVICE),
+                        )
+                    ),
+                )
                 self.register_parameter(
                     'acts_clip_min',
-                    Parameter(tensor(self.act_config.get('clip_min'),
-                                    requires_grad=True, device=self.common_config.get(DEVICE))))
-            self.register_buffer('acts_clip_max_pre', tensor(np.nan, device=self.common_config.get(DEVICE)))
-            self.register_buffer('acts_clip_min_pre', tensor(np.nan, device=self.common_config.get(DEVICE)))
-            self.register_buffer('acts_scale', tensor(np.nan, device=self.common_config.get(DEVICE)))
-            self.register_buffer('acts_offset', tensor(np.nan, device=self.common_config.get(DEVICE)))
+                    Parameter(
+                        tensor(
+                            self.act_config.get('clip_min'),
+                            requires_grad=True,
+                            device=self.common_config.get(DEVICE),
+                        )
+                    ),
+                )
+            self.register_buffer(
+                'acts_clip_max_pre',
+                tensor(np.nan, device=self.common_config.get(DEVICE)),
+            )
+            self.register_buffer(
+                'acts_clip_min_pre',
+                tensor(np.nan, device=self.common_config.get(DEVICE)),
+            )
+            self.register_buffer(
+                'acts_scale', tensor(np.nan, device=self.common_config.get(DEVICE))
+            )
+            self.register_buffer(
+                'acts_offset', tensor(np.nan, device=self.common_config.get(DEVICE))
+            )
 
-        self.register_buffer('prune_cur_batch', tensor(0, device=self.common_config.get(DEVICE)))
-        self.register_buffer('wts_mask', torch.ones_like(self.replaced_module.weight).mul(np.nan))
+        self.register_buffer(
+            'prune_cur_batch', tensor(0, device=self.common_config.get(DEVICE))
+        )
+        self.register_buffer(
+            'wts_mask', torch.ones_like(self.replaced_module.weight).mul(np.nan)
+        )
 
-        self.register_parameter('wts_scales',
-                                Parameter(tensor([np.nan] * self.num_scales,
-                                          requires_grad=True, device=self.common_config.get(DEVICE))))
-        self.register_parameter('wts_offsets',
-                                Parameter(tensor([np.nan] * self.num_scales,
-                                          requires_grad=True, device=self.common_config.get(DEVICE))))
-        self.register_buffer(S_REC_FLAG,
-            tensor(False if self.wts_config.get(S_REC_FLAG) is None else self.wts_config.get(S_REC_FLAG),
-            device=self.common_config.get(DEVICE)))
+        self.register_parameter(
+            'wts_scales',
+            Parameter(
+                tensor(
+                    [np.nan] * self.num_scales,
+                    requires_grad=True,
+                    device=self.common_config.get(DEVICE),
+                )
+            ),
+        )
+        self.register_parameter(
+            'wts_offsets',
+            Parameter(
+                tensor(
+                    [np.nan] * self.num_scales,
+                    requires_grad=True,
+                    device=self.common_config.get(DEVICE),
+                )
+            ),
+        )
+        self.register_buffer(
+            S_REC_FLAG,
+            tensor(
+                False
+                if self.wts_config.get(S_REC_FLAG) is None
+                else self.wts_config.get(S_REC_FLAG),
+                device=self.common_config.get(DEVICE),
+            ),
+        )
 
     def _acts_comp_quant(self, inputs, act_config, common_config):
         """
@@ -188,7 +274,9 @@ class CompModuleBase(nn.Module):
 
         # Forward with fake-quantized activations.
         act_algo = act_config.get('algo')
-        acts_quant_info = acts_quant_dict.get(act_algo)(inputs, act_config, common_config)
+        acts_quant_info = acts_quant_dict.get(act_algo)(
+            inputs, act_config, common_config
+        )
         quant_inputs = acts_quant_info.outputs
 
         # Update quantization related parameters.
@@ -210,13 +298,18 @@ class CompModuleBase(nn.Module):
             'num_bits': act_config.get('num_bits'),
             'fixed_min': act_config.get('fixed_min'),
         }
-        outputs, scale, offset, clip_max, clip_min = \
-            UlqRetrainFunction.apply(
-                inputs, self.acts_clip_max, self.acts_clip_min,
-                self.acts_clip_max_pre, self.acts_clip_min_pre, act_qat_param,
-                self.cur_batch,
-                common_config.get('need_sync'), common_config.get('process_group'),
-                common_config.get('world_size'))
+        outputs, scale, offset, clip_max, clip_min = UlqRetrainFunction.apply(
+            inputs,
+            self.acts_clip_max,
+            self.acts_clip_min,
+            self.acts_clip_max_pre,
+            self.acts_clip_min_pre,
+            act_qat_param,
+            self.cur_batch,
+            common_config.get('need_sync'),
+            common_config.get('process_group'),
+            common_config.get('world_size'),
+        )
         return ActsQuantInfo._make([outputs, scale, offset, clip_max, clip_min])
 
     def _wts_quant(self, weights, wts_config, common_config):
@@ -234,8 +327,9 @@ class CompModuleBase(nn.Module):
 
         # Forward with fake-quantized weights.
         quant_algo = wts_config.get('algo')
-        quant_weights, scales, offsets = \
-            wts_quant_dict.get(quant_algo)(weights, wts_config, common_config)
+        quant_weights, scales, offsets = wts_quant_dict.get(quant_algo)(
+            weights, wts_config, common_config
+        )
 
         # Update quantization related parameters.
         with torch.no_grad():
@@ -253,10 +347,8 @@ class CompModuleBase(nn.Module):
             'module': self.replaced_module,
         }
         quantized_weight, scale, offset = ArqRetrainFunction.apply(
-            weights,
-            self.wts_scales,
-            self.wts_offsets,
-            wts_param)
+            weights, self.wts_scales, self.wts_offsets, wts_param
+        )
         return quantized_weight, scale, offset
 
     def _wts_quant_ulq(self, weights, wts_config, common_config):
@@ -271,8 +363,8 @@ class CompModuleBase(nn.Module):
             'module': self.replaced_module,
         }
         quantized_weight, scale, offset = UlqScaleRetrainFunction.apply(
-            weights,
-            self.wts_scales, self.wts_offsets, wts_param, self.cur_batch)
+            weights, self.wts_scales, self.wts_offsets, wts_param, self.cur_batch
+        )
         return quantized_weight, scale, offset
 
     def _wts_prune(self, weights, wts_config, common_config):
@@ -292,19 +384,22 @@ class CompModuleBase(nn.Module):
 
         if wts_config.get(MASK_REFRESH):
             prune_algo = wts_config.get('prune_algo')
-            updated_mask = wts_prune_dict.get(prune_algo)(weights, wts_config, common_config)
+            updated_mask = wts_prune_dict.get(prune_algo)(
+                weights, wts_config, common_config
+            )
             add_mask_to_record(wts_config.get('layer_name'), updated_mask)
 
         with torch.no_grad():
-            copy_tensor(self.wts_mask, get_mask_from_record(wts_config.get('layer_name')))
+            copy_tensor(
+                self.wts_mask, get_mask_from_record(wts_config.get('layer_name'))
+            )
         pruned_weights = weights.mul(self.wts_mask)
 
         return pruned_weights
 
     def _wts_select_prune(self, weights, wts_config, common_config):
         updated_mask = SelectivePruneFunction.apply(
-            weights,
-            wts_config.get('n_out_of_m_type'),
-            wts_config.get('prune_axis'))
+            weights, wts_config.get('n_out_of_m_type'), wts_config.get('prune_axis')
+        )
 
         return updated_mask

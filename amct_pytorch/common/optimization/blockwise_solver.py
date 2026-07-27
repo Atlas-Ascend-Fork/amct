@@ -20,7 +20,11 @@ import torch.nn as nn
 from loguru import logger
 
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
-from amct_pytorch.common.optimization.factory import build_lr_scheduler, build_optimizer, set_require_grad_all
+from amct_pytorch.common.optimization.factory import (
+    build_lr_scheduler,
+    build_optimizer,
+    set_require_grad_all,
+)
 
 from .base_solver import BaseSolver
 
@@ -30,12 +34,12 @@ class BlockwiseSolver(BaseSolver):
     granularity = "block"
 
     def __init__(
-            self,
-            args,
-            layer_idx: int,
-            model: nn.Module,
-            block_size: int = 128,
-            max_iters: int = 100,
+        self,
+        args,
+        layer_idx: int,
+        model: nn.Module,
+        block_size: int = 128,
+        max_iters: int = 100,
     ):
         super().__init__(args, layer_idx, model, None, None, max_iters)
         self.block_size = block_size
@@ -61,7 +65,9 @@ class BlockwiseSolver(BaseSolver):
 
     def _optimize_block(self, data_loader, forward_kwargs=None):
         if self.optimizer is None:
-            raise RuntimeError("Optimizer has not been initialized. Call solve() first.")
+            raise RuntimeError(
+                "Optimizer has not been initialized. Call solve() first."
+            )
 
         kwargs = forward_kwargs or {}
         total_loss = 0.0
@@ -106,5 +112,7 @@ class BlockwiseSolver(BaseSolver):
             return []
         return [{"params": trainable_params, "lr": self.args.base_lr * 10}]
 
-    def _reconstruction_loss(self, output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    def _reconstruction_loss(
+        self, output: torch.Tensor, target: torch.Tensor
+    ) -> torch.Tensor:
         return torch.nn.functional.mse_loss(output, target)

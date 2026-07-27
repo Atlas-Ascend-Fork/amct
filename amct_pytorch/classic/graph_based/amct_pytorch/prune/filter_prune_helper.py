@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,10 +16,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from ...amct_pytorch.common.prune.active_prune_helper_base import ActivePruneHelperBase
-from ...amct_pytorch.common.prune.passive_prune_helper_base import PassivePruneHelperBase
-from ...amct_pytorch.common.prune.eltwise_prune_helper_base import EltwisePruneHelperBase
+from ...amct_pytorch.common.prune.passive_prune_helper_base import (
+    PassivePruneHelperBase,
+)
+from ...amct_pytorch.common.prune.eltwise_prune_helper_base import (
+    EltwisePruneHelperBase,
+)
 from ...amct_pytorch.common.prune.concat_prune_helper_base import ConcatPruneHelperBase
-from ...amct_pytorch.common.prune.disable_prune_helper_base import DisablePruneHelperBase
+from ...amct_pytorch.common.prune.disable_prune_helper_base import (
+    DisablePruneHelperBase,
+)
 from ...amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
 from ...amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
 
@@ -74,6 +80,7 @@ def get_prune_group(node):
 
 class ActivePruneHelper(ActivePruneHelperBase):
     """FilterPruneHelper for active type node"""
+
     prunable_types = PRUNABLE_ONNX_TYPES
 
     @staticmethod
@@ -130,6 +137,7 @@ class ActivePruneHelper(ActivePruneHelperBase):
 
 class PassivePruneHelper(PassivePruneHelperBase):
     """FilterPruneHelper for passive type node"""
+
     prunable_types = PRUNABLE_ONNX_TYPES
 
     def __init__(self, node):
@@ -212,8 +220,11 @@ class PassivePruneHelper(PassivePruneHelperBase):
         if disable:
             while prune_records:
                 record_helper.delete_record(prune_records[0])
-            LOGGER.logd("Disable node {} for only support Linear-Linear and Conv-Conv, not support Linear-Conv "
-                        "and Conv-Linear".format(node.name), "PassivePruneHelper")
+            LOGGER.logd(
+                "Disable node {} for only support Linear-Linear and Conv-Conv, not support Linear-Conv "
+                "and Conv-Linear".format(node.name),
+                "PassivePruneHelper",
+            )
 
     @staticmethod
     def _set_producer_further_bn(node, record_helper):
@@ -240,7 +251,11 @@ class PassivePruneHelper(PassivePruneHelperBase):
             if disable:
                 while prune_records:
                     record_helper.delete_record(prune_records[0])
-                LOGGER.logd('Disable BatchNormalization {} for "MatMul+BatchNorm1d"'.format(node.name))
+                LOGGER.logd(
+                    'Disable BatchNormalization {} for "MatMul+BatchNorm1d"'.format(
+                        node.name
+                    )
+                )
         if torch_type == 'BatchNorm2d':
             prune_records = node.get_attr(PASSIVE_PRUNE_RECORDS)
             by_pass = False
@@ -253,8 +268,15 @@ class PassivePruneHelper(PassivePruneHelperBase):
                         break
             if by_pass:
                 PruneRecordHelper.delete_consumer_from_record(prune_record, node.name)
-                node.set_attr(PASSIVE_PRUNE_RECORDS, PassivePruneHelper.get_producer_record(node, 0))
-                LOGGER.logd('Bypass BatchNormalization {} for "MatMul+BatchNorm2d"'.format(node.name))
+                node.set_attr(
+                    PASSIVE_PRUNE_RECORDS,
+                    PassivePruneHelper.get_producer_record(node, 0),
+                )
+                LOGGER.logd(
+                    'Bypass BatchNormalization {} for "MatMul+BatchNorm2d"'.format(
+                        node.name
+                    )
+                )
 
     def get_group(self):
         """
@@ -276,6 +298,7 @@ class PassivePruneHelper(PassivePruneHelperBase):
 
 class EltwisePruneHelper(EltwisePruneHelperBase):
     """FilterPruneHelper for eltwise type node"""
+
     prunable_types = PRUNABLE_ONNX_TYPES
 
     @staticmethod
@@ -302,7 +325,9 @@ class ConcatPruneHelper(ConcatPruneHelperBase):
         Parameter: None
         Return: bool, matched or not
         """
-        if node.type not in ['Concat', ]:
+        if node.type not in [
+            'Concat',
+        ]:
             return False
         attr_helper = AttributeProtoHelper(node.proto)
         axis = 0
@@ -326,6 +351,7 @@ class ConcatPruneHelper(ConcatPruneHelperBase):
 
 class DisablePruneHelper(DisablePruneHelperBase):
     """FilterPruneHelper for disable type node"""
+
     prunable_types = PRUNABLE_ONNX_TYPES
 
     def __init__(self, node):
@@ -335,7 +361,14 @@ class DisablePruneHelper(DisablePruneHelperBase):
         Return: None
         """
         super().__init__(node)
-        self.known_types = ['graph_anchor', 'Split', 'Concat', 'Reshape', 'Flatten', 'Expand']
+        self.known_types = [
+            'graph_anchor',
+            'Split',
+            'Concat',
+            'Reshape',
+            'Flatten',
+            'Expand',
+        ]
         self.unknown_types = []
 
     def process(self, record_helper):

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -64,12 +64,13 @@ from .field import RegParamField
 from .field import NumIterationField
 from .field import WarmStartField
 from .field import BetaRangeField
-from ...utils.log import LOGGER # pylint: disable=relative-beyond-top-level
+from ...utils.log import LOGGER  # pylint: disable=relative-beyond-top-level
 from ..utils.files import create_empty_file
 from ...proto import calibration_config_pb2  # pylint: disable=import-error, relative-beyond-top-level
+
 try:
     from ...proto import calibration_config_ascend_pb2  # pylint: disable=import-error, relative-beyond-top-level
-except ImportError as ex:
+except ImportError:
     pass
 from ..capacity.query_capacity import ASCEND_CAPACITY_TYPE
 
@@ -85,18 +86,22 @@ BETA_RANGE = 'beta_range'
 FAKEQUANT_PRECISION_MODE = 'fakequant_precision_mode'
 
 
-class ConfigBase():
+class ConfigBase:
     """
     Function:
     APIs:
     """
-    def __init__(self, graph_objects, capacity, enable_quant=True, enable_approximate=False):
+
+    def __init__(
+        self, graph_objects, capacity, enable_quant=True, enable_approximate=False
+    ):
         self.enable_quant = enable_quant
         self.enable_approximate = enable_approximate
         if self.enable_quant and self.enable_approximate:
             raise RuntimeError(
                 "Do not support activation of quantization and"
-                "approximation at the same time")
+                "approximation at the same time"
+            )
         self.root = ContainerField(capacity)
         root = self.root
         root.add_child('version', VersionField(capacity))
@@ -144,26 +149,32 @@ class ConfigBase():
                 # default act calibration algo is ifmr
                 act_algo = act_config.get('act_algo', 'ifmr')
                 if act_algo == 'ifmr':
-                    act_config["search_range_start"] = \
-                        act_config.get(SEARCH_RANGE)[0]
-                    act_config["search_range_end"] = \
-                        act_config.get(SEARCH_RANGE)[1]
+                    act_config["search_range_start"] = act_config.get(SEARCH_RANGE)[0]
+                    act_config["search_range_end"] = act_config.get(SEARCH_RANGE)[1]
                     del act_config[SEARCH_RANGE]
                 # 1.2 add activation_offset
-                if quant_config.get(item).get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC) is None:
+                if (
+                    quant_config.get(item).get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC)
+                    is None
+                ):
                     with_offset = quant_config.get('activation_offset')
                 else:
-                    with_offset = quant_config.get(item).get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC)
+                    with_offset = (
+                        quant_config.get(item)
+                        .get(ACTIVATION_QUANT_PARAMS)
+                        .get(ASYMMETRIC)
+                    )
                 act_config['with_offset'] = with_offset
                 if quant_config.get(BATCH_NUM) is not None:
                     act_config[BATCH_NUM] = quant_config.get(BATCH_NUM)
                 if quant_config.get(FAKEQUANT_PRECISION_MODE) is not None:
-                    act_config[FAKEQUANT_PRECISION_MODE] = quant_config.get(FAKEQUANT_PRECISION_MODE)
+                    act_config[FAKEQUANT_PRECISION_MODE] = quant_config.get(
+                        FAKEQUANT_PRECISION_MODE
+                    )
 
                 # 2. adjust weight_quant_params
                 weight_config = quant_config.get(item).get("weight_quant_params")
-                weight_config["with_offset"] = \
-                    quant_config.get("weight_offset", False)
+                weight_config["with_offset"] = quant_config.get("weight_offset", False)
                 if num_bits is not None:
                     weight_config["num_bits"] = num_bits
                 if wts_algo is not None:
@@ -171,9 +182,9 @@ class ConfigBase():
 
     @staticmethod
     def _add_act_param(container, capacity):
-        act_param = \
-            container.add_child(ACTIVATION_QUANT_PARAMS,
-                                ActQuantParamsField(capacity))
+        act_param = container.add_child(
+            ACTIVATION_QUANT_PARAMS, ActQuantParamsField(capacity)
+        )
         act_param.add_child('num_bits', ActNumBitsField(capacity))
         act_param.add_child('max_percentile', MaxPercentileField(capacity))
         act_param.add_child('min_percentile', MinPercentileField(capacity))
@@ -201,13 +212,16 @@ class ConfigBase():
         Returns:
             None
         '''
-        proto_config = ProtoConfig(os.path.realpath(config_defination),
-                                   self.capacity,
-                                   self.graph_querier,
-                                   graph,
-                                   self._get_proto_config())
-        global_config, common_config, type_config, layer_config = \
+        proto_config = ProtoConfig(
+            os.path.realpath(config_defination),
+            self.capacity,
+            self.graph_querier,
+            graph,
+            self._get_proto_config(),
+        )
+        global_config, common_config, type_config, layer_config = (
             proto_config.get_proto_config(self.enable_quant, self.enable_approximate)
+        )
 
         if self.enable_approximate:
             return self._create_approx_config_from_proto(global_config, graph)
@@ -230,66 +244,105 @@ class ConfigBase():
         if common_config.get('dmq_balancer_param'):
             self.check_common_config_dmq_layers(graph)
         self.remove_config_not_support_dmq_balancer(graph, config, supported_layers)
-        if common_config.get(ACTIVATION_QUANT_PARAMS) and \
-            common_config.get(ACTIVATION_QUANT_PARAMS).get('num_bits', 8) == 16:
+        if (
+            common_config.get(ACTIVATION_QUANT_PARAMS)
+            and common_config.get(ACTIVATION_QUANT_PARAMS).get('num_bits', 8) == 16
+        ):
             self.check_int16_quantize_layers(graph, config, supported_layers)
 
         self.check_and_down_grade_winograd_num_bits(graph, config, supported_layers)
         act_common_config = self.get_common_activation_quant_config(common_config)
-        self._fill_default_activation_asymmetric(graph, config, supported_layers, act_common_config)
+        self._fill_default_activation_asymmetric(
+            graph, config, supported_layers, act_common_config
+        )
         self.root.check(None, config)
         if config.get(FAKEQUANT_PRECISION_MODE) == 'DEFAULT':
             del config[FAKEQUANT_PRECISION_MODE]
-        if common_config.get(WEIGHT_QUANT_PARAMS) and \
-            common_config.get(WEIGHT_QUANT_PARAMS).get('wts_algo') == 'ada_quantize':
+        if (
+            common_config.get(WEIGHT_QUANT_PARAMS)
+            and common_config.get(WEIGHT_QUANT_PARAMS).get('wts_algo') == 'ada_quantize'
+        ):
             self.check_ada_quantize_layers(graph, config, supported_layers)
         ordered_config = self.root.sort(config)
         config_file = create_empty_file(config_file, check_exist=True)
         with open(config_file, 'w') as fid:
             json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
 
-        LOGGER.logi('Generate config file:{} success!'.format(
-            config_file), module_name=_MODULE_NAME)
+        LOGGER.logi(
+            'Generate config file:{} success!'.format(config_file),
+            module_name=_MODULE_NAME,
+        )
 
     def check_ada_quantize_layers(self, graph, config, supported_layers):
         for layer in supported_layers:
-            if config.get(layer).get(WEIGHT_QUANT_PARAMS).get('wts_algo') == 'ada_quantize' and \
-                layer not in self.graph_querier.get_ada_quant_layers(graph):
+            if (
+                config.get(layer).get(WEIGHT_QUANT_PARAMS).get('wts_algo')
+                == 'ada_quantize'
+                and layer not in self.graph_querier.get_ada_quant_layers(graph)
+            ):
                 del config[layer][WEIGHT_QUANT_PARAMS]
 
     def check_common_config_dmq_layers(self, graph):
-        ''' check common_config layer support dmq_balancer '''
+        '''check common_config layer support dmq_balancer'''
         quant_layers = PARAM_POOL.get_quant_layers()
-        if not [layer for layer in quant_layers if layer in self.graph_querier.get_support_dmq_balancer_layers(graph)]:
-            LOGGER.logw("Except skip_layers or skip_types, no layer in graph support dmq_balancer, "
-                "please remove dmq_balancer in config file.")
+        if not [
+            layer
+            for layer in quant_layers
+            if layer in self.graph_querier.get_support_dmq_balancer_layers(graph)
+        ]:
+            LOGGER.logw(
+                "Except skip_layers or skip_types, no layer in graph support dmq_balancer, "
+                "please remove dmq_balancer in config file."
+            )
 
     def check_int16_quantize_layers(self, graph, config, supported_layers):
-        ''' check layer support int 16 ptq quantize '''
+        '''check layer support int 16 ptq quantize'''
         for layer in supported_layers:
-            if config.get(layer).get(ACTIVATION_QUANT_PARAMS).get('num_bits') == 16 and \
-                layer not in self.graph_querier.get_support_int16_quantizable_layers(graph):
+            if (
+                config.get(layer).get(ACTIVATION_QUANT_PARAMS).get('num_bits') == 16
+                and layer
+                not in self.graph_querier.get_support_int16_quantizable_layers(graph)
+            ):
                 config.get(layer).get(ACTIVATION_QUANT_PARAMS)['num_bits'] = 8
-                LOGGER.logw("Layer {} does not support int16_quantizable, set int8".format(layer))
+                LOGGER.logw(
+                    "Layer {} does not support int16_quantizable, set int8".format(
+                        layer
+                    )
+                )
 
     def check_and_down_grade_winograd_num_bits(self, graph, config, supported_layers):
         '''check quant num bits and turn it into 8 if it not support int6 int7 quant'''
         for layer in supported_layers:
-            wts_quant_bits = config.get(layer).get('weight_quant_params').get('num_bits')
-            if wts_quant_bits in WINOGRAD_NUM_BITS and \
-                layer not in self.graph_querier.get_support_winograd_quant_layers(graph):
-                config.get(layer).get('weight_quant_params')['num_bits'] = DEFAULT_NUM_BITS
-                LOGGER.logi("Layer {} does not support weight num bits {}, set int8".format(layer, wts_quant_bits))
-
+            wts_quant_bits = (
+                config.get(layer).get('weight_quant_params').get('num_bits')
+            )
+            if (
+                wts_quant_bits in WINOGRAD_NUM_BITS
+                and layer
+                not in self.graph_querier.get_support_winograd_quant_layers(graph)
+            ):
+                config.get(layer).get('weight_quant_params')['num_bits'] = (
+                    DEFAULT_NUM_BITS
+                )
+                LOGGER.logi(
+                    "Layer {} does not support weight num bits {}, set int8".format(
+                        layer, wts_quant_bits
+                    )
+                )
 
     def remove_config_not_support_dmq_balancer(self, graph, config, supported_layers):
-        ''' remove not support dmq_balancer layer in config'''
+        '''remove not support dmq_balancer layer in config'''
         for layer in supported_layers:
-            if config.get(layer).get('dmq_balancer_param') and \
-                layer not in self.graph_querier.get_support_dmq_balancer_layers(graph):
+            if config.get(layer).get(
+                'dmq_balancer_param'
+            ) and layer not in self.graph_querier.get_support_dmq_balancer_layers(
+                graph
+            ):
                 config.get(layer).pop('dmq_balancer_param')
-                LOGGER.logw("Layer {} does not support dmq_balancer, " \
-                    "remove dmq_balancer in config file".format(layer))
+                LOGGER.logw(
+                    "Layer {} does not support dmq_balancer, "
+                    "remove dmq_balancer in config file".format(layer)
+                )
 
     def check_skip_layers(self, graph, skip_layers):
         '''check skip layers'''
@@ -298,8 +351,7 @@ class ConfigBase():
         layer_type = self.graph_querier.get_name_type_dict(graph)
         for layer in skip_layers:
             if layer not in layer_type:
-                raise ValueError(
-                    "Layer {} does not exist in the graph.".format(layer))
+                raise ValueError("Layer {} does not exist in the graph.".format(layer))
         if self.enable_quant:
             target_type = self.quantizable_type
             feature = "quantization"
@@ -318,7 +370,8 @@ class ConfigBase():
         for item in skip_types:
             if item not in self.quantizable_type:
                 raise ValueError(
-                    "Layer type {} does not support quantize.".format(item))
+                    "Layer type {} does not support quantize.".format(item)
+                )
 
         quant_type = set(self.quantizable_type) - set(skip_types)
         if not quant_type:
@@ -336,8 +389,9 @@ class ConfigBase():
             raise ValueError('No layer support {} in the graph.'.format(feature))
         for item in self.root.get_keys():
             if item in supported_layers:
-                raise ValueError('{} is a global parameter, '
-                                 'can not be a layer name'.format(item))
+                raise ValueError(
+                    '{} is a global parameter, can not be a layer name'.format(item)
+                )
         return supported_layers
 
     def check_quant_tensor_valid(self, graph, quant_tensors):
@@ -361,16 +415,18 @@ class ConfigBase():
         PARAM_POOL.set_layer_type(layer_type)
 
     def set_skip_layers(self, graph):
-        """ set the skip layers for onnx"""
+        """set the skip layers for onnx"""
         skip_layers = self.graph_querier.get_skip_quant_layers(graph)
         PARAM_POOL.set_skip_layers(skip_layers)
 
-    def create_quant_config(self, # pylint: disable=too-many-arguments
-                            config_file,
-                            graph,
-                            skip_layers=None,
-                            batch_num=1,
-                            activation_offset=True):
+    def create_quant_config(
+        self,  # pylint: disable=too-many-arguments
+        config_file,
+        graph,
+        skip_layers=None,
+        batch_num=1,
+        activation_offset=True,
+    ):
         '''
         create json config file from parameters.
         Inputs:
@@ -400,11 +456,12 @@ class ConfigBase():
 
         if self.enable_quant:
             quant_config['activation_offset'] = activation_offset
-            # set parameter
+            # set parameter
             self.root.check(None, quant_config)
             self.root.fill_default(quant_config)
-            self._fill_default_activation_asymmetric(graph, quant_config,
-                supported_layers, ['any', activation_offset])
+            self._fill_default_activation_asymmetric(
+                graph, quant_config, supported_layers, ['any', activation_offset]
+            )
             if quant_config.get(FAKEQUANT_PRECISION_MODE, None) == 'DEFAULT':
                 del quant_config[FAKEQUANT_PRECISION_MODE]
             ordered_config = self.root.sort(quant_config)
@@ -412,10 +469,12 @@ class ConfigBase():
             config_file = create_empty_file(config_file, check_exist=True)
             with open(config_file, 'w') as fid:
                 json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
-            LOGGER.logi('Generate config file:{} success!'.format(
-                config_file), module_name=_MODULE_NAME)
+            LOGGER.logi(
+                'Generate config file:{} success!'.format(config_file),
+                module_name=_MODULE_NAME,
+            )
         elif self.enable_approximate:
-            # set parameter
+            # set parameter
             self.root.check(None, quant_config)
             self.root.fill_default(quant_config)
             if quant_config.get(FAKEQUANT_PRECISION_MODE, None) == 'DEFAULT':
@@ -423,18 +482,30 @@ class ConfigBase():
             ordered_config = self.root.sort(quant_config)
             return ordered_config
 
+        return None
+
     def check_activation_symmetric_valid(self, graph, config, layer_name):
         '''check current layer if support symmetric'''
-        symmetric_limit_layers = self.graph_querier.get_act_symmetric_limit_layers(graph)
-        if layer_name in symmetric_limit_layers and \
-            config.get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC) is True:
-            raise ValueError('current layer {} only support act symmetric quant.'.format(layer_name))
+        symmetric_limit_layers = self.graph_querier.get_act_symmetric_limit_layers(
+            graph
+        )
+        if (
+            layer_name in symmetric_limit_layers
+            and config.get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC) is True
+        ):
+            raise ValueError(
+                'current layer {} only support act symmetric quant.'.format(layer_name)
+            )
 
     def check_int16_quantize_valid(self, graph, layer_name):
         '''check current layer if support int16 quantize'''
-        int16_quantizable_layers = self.graph_querier.get_support_int16_quantizable_layers(graph)
+        int16_quantizable_layers = (
+            self.graph_querier.get_support_int16_quantizable_layers(graph)
+        )
         if layer_name not in int16_quantizable_layers:
-            raise ValueError('current layer {} does not support int16 quant.'.format(layer_name))
+            raise ValueError(
+                'current layer {} does not support int16 quant.'.format(layer_name)
+            )
 
     def parse_config_file(self, config_file, graph):
         '''
@@ -445,6 +516,7 @@ class ConfigBase():
         Returns:
             quant_config: calibration quant config dict
         '''
+
         def _detect_repetitive_key_hook(lst):
             '''a hook function for detect repeated key in config file.'''
             keys = [key for key, value in lst]
@@ -456,20 +528,30 @@ class ConfigBase():
             return result
 
         with open(config_file, 'r') as fid:
-            quant_config = json.load(
-                fid, object_pairs_hook=_detect_repetitive_key_hook)
+            quant_config = json.load(fid, object_pairs_hook=_detect_repetitive_key_hook)
 
         quant_layers = []
         layer_type = self.graph_querier.get_name_type_dict(graph)
         for item in quant_config:
             if item in self.root.get_keys():
                 continue
-            if item in layer_type and isinstance(quant_config.get(item), dict) \
-                and quant_config.get(item).get(ACTIVATION_QUANT_PARAMS).get('num_bits', 8) == 16:
+            if (
+                item in layer_type
+                and isinstance(quant_config.get(item), dict)
+                and quant_config.get(item)
+                .get(ACTIVATION_QUANT_PARAMS)
+                .get('num_bits', 8)
+                == 16
+            ):
                 self.check_int16_quantize_valid(graph, item)
-            if item in layer_type and isinstance(quant_config.get(item), dict) \
-                and quant_config.get(item).get('quant_enable', False):
-                self.check_activation_symmetric_valid(graph, quant_config.get(item), item)
+            if (
+                item in layer_type
+                and isinstance(quant_config.get(item), dict)
+                and quant_config.get(item).get('quant_enable', False)
+            ):
+                self.check_activation_symmetric_valid(
+                    graph, quant_config.get(item), item
+                )
                 quant_layers.append(item)
 
         # check quant layer's validation by the graph
@@ -498,7 +580,9 @@ class ConfigBase():
             root.add_child('weight_offset', WtsOffsetField(capacity))
 
         root.add_child('do_fusion', DoFusionField(capacity))
-        root.add_child('fakequant_precision_mode', FakequantPrecisionModeField(capacity))
+        root.add_child(
+            'fakequant_precision_mode', FakequantPrecisionModeField(capacity)
+        )
         root.add_child('skip_fusion_layers', SkipFusionLayersField(capacity))
 
         layer_plh = root.add_placeholder(LayerPlhField(capacity))
@@ -506,9 +590,9 @@ class ConfigBase():
         layer_plh.add_child('dmq_balancer_param', DMQBalancerParamField(capacity))
         self._add_act_param(layer_plh, capacity)
 
-        wgt_param = \
-            layer_plh.add_child('weight_quant_params',
-                                WgtQuantParamsField(capacity))
+        wgt_param = layer_plh.add_child(
+            'weight_quant_params', WgtQuantParamsField(capacity)
+        )
 
         wgt_param.add_child('num_bits', WtsNumBitsField(capacity))
         self._add_wts_param(wgt_param, capacity)
@@ -517,11 +601,10 @@ class ConfigBase():
 
         if capacity.is_enable('TENSOR_QUANTIZE'):
             tensor_container = root.add_child(
-                'tensor_quantize', TensorQuantizeField(capacity))
-            tensor_container.add_child('layer_name',
-                LayerNameField(capacity))
-            tensor_container.add_child('input_index',
-                InputIndexField(capacity))
+                'tensor_quantize', TensorQuantizeField(capacity)
+            )
+            tensor_container.add_child('layer_name', LayerNameField(capacity))
+            tensor_container.add_child('input_index', InputIndexField(capacity))
             self._add_act_param(tensor_container, capacity)
 
     def _init_approximate_tree(self, capacity):
@@ -560,7 +643,9 @@ class ConfigBase():
             quant_layers.append(item)
         # step4: check quant_layers empty and tensor quant invalid
         if not quant_layers and not tensor_quant_valid:
-            raise ValueError('Except skip_layers or skip_types, no layer need to quantize.')
+            raise ValueError(
+                'Except skip_layers or skip_types, no layer need to quantize.'
+            )
 
         self.set_param_pool(quant_layers, graph)
         return supported_layers, layer_type
@@ -577,8 +662,9 @@ class ConfigBase():
                 continue
             approx_layers.append(item)
         if not approx_layers:
-            raise ValueError('Except skip_layers or skip_types, '
-                             'no layer needs to be approximated.')
+            raise ValueError(
+                'Except skip_layers or skip_types, no layer needs to be approximated.'
+            )
         self.set_param_pool(approx_layers, graph)
         return supported_layers, layer_type
 
@@ -594,25 +680,39 @@ class ConfigBase():
         ordered_config = self.root.sort(config)
         return ordered_config
 
-    def _fill_default_activation_asymmetric(self, graph, config, supported_layers, act_common_config):
+    def _fill_default_activation_asymmetric(
+        self, graph, config, supported_layers, act_common_config
+    ):
         '''fill default asymmetric value for activation_quant_params.'''
-        symmetric_limit_layers = self.graph_querier.get_act_symmetric_limit_layers(graph)
+        symmetric_limit_layers = self.graph_querier.get_act_symmetric_limit_layers(
+            graph
+        )
         for item in supported_layers:
             if item in symmetric_limit_layers:
                 config.get(item).get(ACTIVATION_QUANT_PARAMS)[ASYMMETRIC] = False
-                LOGGER.logi("Layer {} does not support asymmetric quant, set symmetric".format(item))
+                LOGGER.logi(
+                    "Layer {} does not support asymmetric quant, set symmetric".format(
+                        item
+                    )
+                )
             if config.get(item).get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC) is None:
-                self.set_global_asymmetric(config.get(item).get(ACTIVATION_QUANT_PARAMS),
-                    act_common_config, config.get('activation_offset'))
+                self.set_global_asymmetric(
+                    config.get(item).get(ACTIVATION_QUANT_PARAMS),
+                    act_common_config,
+                    config.get('activation_offset'),
+                )
         # fill asymmetric value for tensor_quantize
         for item in config.get('tensor_quantize', []):
             if item.get(ACTIVATION_QUANT_PARAMS).get(ASYMMETRIC) is None:
-                self.set_global_asymmetric(item.get(ACTIVATION_QUANT_PARAMS),
-                    act_common_config, config.get('activation_offset'))
+                self.set_global_asymmetric(
+                    item.get(ACTIVATION_QUANT_PARAMS),
+                    act_common_config,
+                    config.get('activation_offset'),
+                )
 
 
 def check_config_quant_enable(quant_config):
-    """ check whether no quant enable layer"""
+    """check whether no quant enable layer"""
     quant_enable_layers = []
     for key, _ in quant_config.items():
         if not isinstance(quant_config[key], dict):
@@ -624,14 +724,17 @@ def check_config_quant_enable(quant_config):
     if quant_enable_layers == []:
         LOGGER.loge(
             "No quant enable layer in quant config file, "
-            "please check the quant config file.", module_name=_MODULE_NAME)
+            "please check the quant config file.",
+            module_name=_MODULE_NAME,
+        )
         raise RuntimeError(
             "No quant enable layer in quant config file, "
-            "please check the quant config file.")
+            "please check the quant config file."
+        )
 
 
 def check_config_dmq_balancer(quant_config):
-    """ check whether no dmq_balancer layer """
+    """check whether no dmq_balancer layer"""
     for key, _ in quant_config.items():
         if not isinstance(quant_config[key], dict):
             continue
@@ -639,7 +742,10 @@ def check_config_dmq_balancer(quant_config):
             return
     LOGGER.loge(
         "No dmq_balancer layer in quant config file, please check whether the quant config file matches "
-        "or whether a layer in graph that supports dmq_balancer.", module_name=_MODULE_NAME)
+        "or whether a layer in graph that supports dmq_balancer.",
+        module_name=_MODULE_NAME,
+    )
     raise RuntimeError(
         "No dmq_balancer layer in quant config file, "
-        "please check whether the quant config file matches or whether a layer in graph that supports dmq_balancer.")
+        "please check whether the quant config file matches or whether a layer in graph that supports dmq_balancer."
+    )

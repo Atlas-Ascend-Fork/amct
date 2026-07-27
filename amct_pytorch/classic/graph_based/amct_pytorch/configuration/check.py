@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,8 +17,11 @@
 # ----------------------------------------------------------------------------
 
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
-from ...amct_pytorch.common.utils.vars_util import LSTM_ATTRS_LIMIT_MAP, GRU_ATTRS_LIMIT_MAP
-from ...amct_pytorch.common.utils.vars_util import RNN_SEQ_LENS_INDEX, RNN_H_INDEX
+from ...amct_pytorch.common.utils.vars_util import (
+    LSTM_ATTRS_LIMIT_MAP,
+    GRU_ATTRS_LIMIT_MAP,
+)
+from ...amct_pytorch.common.utils.vars_util import RNN_H_INDEX
 from ...amct_pytorch.common.utils.vars_util import LSTM_C_INDEX, LSTM_P_INDEX
 from ...amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
 from ...amct_pytorch.utils.log import LOGGER
@@ -36,16 +39,15 @@ from ...amct_pytorch.utils.vars import PRUNABLE_ONNX_TYPES
 from ...amct_pytorch.utils.vars import SELECTIVE_PRUNABLE_TYPES
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
-from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.vars import QUANT_LAYER_SUFFIX
 from ...amct_pytorch.utils.onnx_conv_util import OnnxConvUtil
-from ...amct_pytorch.capacity import CAPACITY
 
 SYMMETRIC_LIMIT_TYPES = ['Conv3d']
 
 
-class GraphQuerier():
+class GraphQuerier:
     '''provide some APIs to query the model'''
+
     @staticmethod
     def get_name_type_dict(graph):
         '''get all layer name to type dict'''
@@ -53,13 +55,11 @@ class GraphQuerier():
         if graph.model is None:
             for node in graph.nodes:
                 layer_type[node.name] = node.type
-            LOGGER.logd("get name type dict from graph",
-                        module_name="Configuration")
+            LOGGER.logd("get name type dict from graph", module_name="Configuration")
         else:
             for name, mod in graph.model.named_modules():
                 layer_type[name] = type(mod).__name__
-            LOGGER.logd("get name type dict from model",
-                        module_name="Configuration")
+            LOGGER.logd("get name type dict from model", module_name="Configuration")
         return layer_type
 
     @staticmethod
@@ -70,14 +70,16 @@ class GraphQuerier():
             for node in graph.nodes:
                 if GraphChecker.check_graph_quantize_type(node):
                     layers[node.name] = node.type
-            LOGGER.logd("get support quant layer2type from graph",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support quant layer2type from graph", module_name="Configuration"
+            )
         else:
             for name, mod in graph.model.named_modules():
                 if GraphChecker.check_quantize_type(name, mod, graph):
                     layers[name] = type(mod).__name__
-            LOGGER.logd("get support quant layer2type from model",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support quant layer2type from model", module_name="Configuration"
+            )
         return layers
 
     @staticmethod
@@ -90,14 +92,16 @@ class GraphQuerier():
             for node in graph.nodes:
                 if GraphChecker.check_graph_retrain_type(node):
                     layer2type[node.name] = node.type
-            LOGGER.logd("get support retrain layer2type from graph",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support retrain layer2type from graph", module_name="Configuration"
+            )
         else:
             for name, mod in graph.model.named_modules():
                 if GraphChecker.check_retrain_type(name, mod, graph):
                     layer2type[name] = type(mod).__name__
-            LOGGER.logd("get support retrain layer2type from model",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support retrain layer2type from model", module_name="Configuration"
+            )
         return layer2type
 
     @staticmethod
@@ -109,8 +113,9 @@ class GraphQuerier():
         for name, mod in model.named_modules():
             if GraphChecker.check_distill_type(name, mod, graph):
                 layer2type[name] = type(mod).__name__
-        LOGGER.logd("get support distill layer2type from model",
-                    module_name="Configuration")
+        LOGGER.logd(
+            "get support distill layer2type from model", module_name="Configuration"
+        )
         return layer2type
 
     @staticmethod
@@ -119,7 +124,9 @@ class GraphQuerier():
         layers = []
         for name, mod in graph.model.named_modules():
             mod_type = type(mod).__name__
-            if mod_type in ADA_ROUND_TYPES and GraphChecker.check_shared_type(mod_type, name, mod, graph):
+            if mod_type in ADA_ROUND_TYPES and GraphChecker.check_shared_type(
+                mod_type, name, mod, graph
+            ):
                 layers.append(name)
         return layers
 
@@ -131,14 +138,16 @@ class GraphQuerier():
             for node in graph.nodes:
                 if GraphChecker.check_graph_quantize_type(node):
                     layers.append(node.name)
-            LOGGER.logd("get support quant nodes from graph",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support quant nodes from graph", module_name="Configuration"
+            )
         else:
             for name, mod in graph.model.named_modules():
                 if GraphChecker.check_quantize_type(name, mod, graph):
                     layers.append(name)
-            LOGGER.logd("get support quant modules from model",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support quant modules from model", module_name="Configuration"
+            )
         return layers
 
     @staticmethod
@@ -149,16 +158,19 @@ class GraphQuerier():
             for node in graph.nodes:
                 if GraphChecker.check_graph_int16_quantize_type(node):
                     layers.append(node.name)
-            LOGGER.logd("get support int16 quantize nodes from graph",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support int16 quantize nodes from graph",
+                module_name="Configuration",
+            )
         else:
             for name, mod in graph.model.named_modules():
                 if GraphChecker.check_int16_quantize_type(name, mod, graph):
                     layers.append(name)
-            LOGGER.logd("get support int16 quantize modules from model",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support int16 quantize modules from model",
+                module_name="Configuration",
+            )
         return layers
-
 
     @staticmethod
     def get_support_prune_layer2type(graph):
@@ -172,14 +184,16 @@ class GraphQuerier():
             for node in graph.nodes:
                 if GraphChecker.check_graph_prune_type(node):
                     layers[node.name] = node.type
-            LOGGER.logd("get support prune layer2type from graph",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support prune layer2type from graph", module_name="Configuration"
+            )
         else:
             for name, mod in graph.model.named_modules():
                 if GraphChecker.check_prune_type(name, mod, graph):
                     layers[name] = type(mod).__name__
-            LOGGER.logd("get support prune layer2type from model",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support prune layer2type from model", module_name="Configuration"
+            )
         return layers
 
     @staticmethod
@@ -194,8 +208,10 @@ class GraphQuerier():
             for name, mod in graph.model.named_modules():
                 if GraphChecker.check_selective_prune_type(name, mod, graph):
                     layers[name] = type(mod).__name__
-        LOGGER.logd("get support selective prune layer2type from graph",
-                    module_name="Configuration")
+        LOGGER.logd(
+            "get support selective prune layer2type from graph",
+            module_name="Configuration",
+        )
         return layers
 
     @staticmethod
@@ -217,8 +233,11 @@ class GraphQuerier():
                 continue
             if json_op not in original_graph_ids:
                 LOGGER.logd(
-                    "Op '{}' in the given mapping_file does not exist in the original graph. "\
-                    "The mapping_file may not match the original graph, please check!".format(json_op))
+                    "Op '{}' in the given mapping_file does not exist in the original graph. "
+                    "The mapping_file may not match the original graph, please check!".format(
+                        json_op
+                    )
+                )
 
     @staticmethod
     def get_act_symmetric_limit_types():
@@ -236,15 +255,17 @@ class GraphQuerier():
             for node in graph.nodes:
                 if node.type == 'Conv' and check_kernel_shape(node, [3]):
                     layers.append(node.name)
-            LOGGER.logd("get act symmetric limit layers from graph",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get act symmetric limit layers from graph", module_name="Configuration"
+            )
         else:
             for name, mod in graph.model.named_modules():
                 mod_type = type(mod).__name__
                 if mod_type in SYMMETRIC_LIMIT_TYPES:
                     layers.append(name)
-            LOGGER.logd("get act symmetric limit layers from model",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get act symmetric limit layers from model", module_name="Configuration"
+            )
 
         return layers
 
@@ -265,17 +286,26 @@ class GraphQuerier():
         layers = []
         if graph.model is None:
             for node in graph.nodes:
-                if GraphChecker.check_graph_quantize_type(node) and node.type != 'AveragePool':
+                if (
+                    GraphChecker.check_graph_quantize_type(node)
+                    and node.type != 'AveragePool'
+                ):
                     layers.append(node.name)
-            LOGGER.logd("get support dmq_balancer nodes from graph",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support dmq_balancer nodes from graph", module_name="Configuration"
+            )
         else:
             for name, mod in graph.model.named_modules():
                 mod_type = type(mod).__name__
-                if GraphChecker.check_quantize_type(name, mod, graph) and mod_type != 'AvgPool2d':
+                if (
+                    GraphChecker.check_quantize_type(name, mod, graph)
+                    and mod_type != 'AvgPool2d'
+                ):
                     layers.append(name)
-            LOGGER.logd("get support dmq_balancer modules from model",
-                        module_name="Configuration")
+            LOGGER.logd(
+                "get support dmq_balancer modules from model",
+                module_name="Configuration",
+            )
 
         return layers
 
@@ -300,8 +330,9 @@ class GraphQuerier():
         return ['Conv2d']
 
 
-class GraphChecker():
+class GraphChecker:
     """Check the model."""
+
     @staticmethod
     def check_retrain_type(mod_name, mod, graph=None):
         """
@@ -327,7 +358,7 @@ class GraphChecker():
 
     @staticmethod
     def check_quantize_type(mod_name, mod, graph=None):
-        """ check if mod in model can be quantized or not."""
+        """check if mod in model can be quantized or not."""
         mod_type = type(mod).__name__
         # check type
         if mod_type not in QUANTIZABLE_TYPES:
@@ -337,7 +368,7 @@ class GraphChecker():
 
     @staticmethod
     def check_int16_quantize_type(mod_name, mod, graph=None):
-        """ check if mod in model can be quantized or not."""
+        """check if mod in model can be quantized or not."""
         mod_type = type(mod).__name__
         # check type
         if mod_type not in INT16_QUANTIZABLE_TYPES:
@@ -381,10 +412,19 @@ class GraphChecker():
         """
         Function: padding mode check. PTQ & QAT common.
         """
-        if mod_type in ['Conv1d', 'Conv2d', 'Conv3d', 'ConvTranspose1d', 'ConvTranspose2d', 'ConvTranspose3d']:
+        if mod_type in [
+            'Conv1d',
+            'Conv2d',
+            'Conv3d',
+            'ConvTranspose1d',
+            'ConvTranspose2d',
+            'ConvTranspose3d',
+        ]:
             if mod.padding_mode != 'zeros':
-                LOGGER.logd(f"Layer {mod_name}'s padding_mode is {mod.padding_mode}.",
-                            module_name="Configuration")
+                LOGGER.logd(
+                    f"Layer {mod_name}'s padding_mode is {mod.padding_mode}.",
+                    module_name="Configuration",
+                )
                 return False
         return True
 
@@ -398,7 +438,8 @@ class GraphChecker():
                 if len(mod.dilation) != 3 or mod.dilation[0] != 1:
                     LOGGER.logd(
                         f"Layer {mod_name}'s dilation is {mod.dilation}.",
-                        module_name="Configuration")
+                        module_name="Configuration",
+                    )
                     return False
             else:
                 return False
@@ -426,16 +467,26 @@ class GraphChecker():
         if mod_type not in RNN_LAYER_TYPE:
             return True
         if mod.num_layers != 1:
-            LOGGER.logd("Layer {} cannot be quantized for num_layers isn't 1.".format(mod_name))
+            LOGGER.logd(
+                "Layer {} cannot be quantized for num_layers isn't 1.".format(mod_name)
+            )
             return False
         if mod.bidirectional:
-            LOGGER.logd("Layer {} cannot be quantized for bidirectional isn't False.".format(mod_name))
+            LOGGER.logd(
+                "Layer {} cannot be quantized for bidirectional isn't False.".format(
+                    mod_name
+                )
+            )
             return False
         if mod.dropout != 0:
-            LOGGER.logd("Layer {} cannot be quantized for dropout isn't 0.".format(mod_name))
+            LOGGER.logd(
+                "Layer {} cannot be quantized for dropout isn't 0.".format(mod_name)
+            )
             return False
         if hasattr(mod, 'proj_size') and mod.proj_size != 0:
-            LOGGER.logd("Layer {} cannot be quantized for proj_size isn't 0.".format(mod_name))
+            LOGGER.logd(
+                "Layer {} cannot be quantized for proj_size isn't 0.".format(mod_name)
+            )
             return False
         return True
 
@@ -452,7 +503,7 @@ class GraphChecker():
 
     @staticmethod
     def check_graph_quantize_type(node):
-        """ check if node in graph can be quantized or not."""
+        """check if node in graph can be quantized or not."""
         # check type
         if node.type not in QUANTIZABLE_ONNX_TYPES:
             return False
@@ -461,7 +512,7 @@ class GraphChecker():
 
     @staticmethod
     def check_graph_int16_quantize_type(node):
-        """ check if node in graph can be quantized or not."""
+        """check if node in graph can be quantized or not."""
         # check type
         if node.type not in INT16_QUANTIZABLE_ONNX_TYPES:
             return False
@@ -500,23 +551,30 @@ class GraphChecker():
 
     @staticmethod
     def check_special_limit(node):
-        """ Check if the node in graph satisfy special limits ro be quantized,
-            limits include:
-                1. Gemm's transA must be false
-                2. reused module is not support
-                3. MatMul shape must be 2
+        """Check if the node in graph satisfy special limits ro be quantized,
+        limits include:
+            1. Gemm's transA must be false
+            2. reused module is not support
+            3. MatMul shape must be 2
         """
         # Check not support Gemm with transA:True
         attr_helper = AttributeProtoHelper(node.proto)
         if node.type == 'Gemm':
-            if attr_helper.has_attr('transA') and \
-                    attr_helper.get_attr_value('transA') == 1:
-                LOGGER.logw('Cannot support quantize "Gemm" layer "{}" with '
-                            'transA:True.'.format(node.name))
+            if (
+                attr_helper.has_attr('transA')
+                and attr_helper.get_attr_value('transA') == 1
+            ):
+                LOGGER.logw(
+                    'Cannot support quantize "Gemm" layer "{}" with '
+                    'transA:True.'.format(node.name)
+                )
                 return False
         if node.type == 'GlobalAveragePool':
-            LOGGER.logw('Cannot support quantize global-average-pooling '
-                        'layer "{}".'.format(node.name))
+            LOGGER.logw(
+                'Cannot support quantize global-average-pooling layer "{}".'.format(
+                    node.name
+                )
+            )
             return False
         # Check not support reused node do quantize
         if node.has_attr('is_reuse') and node.get_attr('is_reuse'):
@@ -529,13 +587,16 @@ class GraphChecker():
                 return False
 
         # Check not support input_dimension_reduction node do quantize
-        if node.has_attr('input_dimension_reduction') and node.get_attr('input_dimension_reduction'):
-            LOGGER.logw(f'This module {node.name} is not supported for quantization '
-                        'because its input data is dimensionality reduced.')
+        if node.has_attr('input_dimension_reduction') and node.get_attr(
+            'input_dimension_reduction'
+        ):
+            LOGGER.logw(
+                f'This module {node.name} is not supported for quantization '
+                'because its input data is dimensionality reduced.'
+            )
             return False
 
         return True
-
 
     @staticmethod
     def check_quant_behaviours(graph):
@@ -559,8 +620,10 @@ class GraphChecker():
                     quant_defined_layers.append(name)
 
         if quant_defined_layers:
-            raise RuntimeError("The model cannot be quantized for following "\
-                "quant layers are in the model {}".format(quant_defined_layers))
+            raise RuntimeError(
+                "The model cannot be quantized for following "
+                "quant layers are in the model {}".format(quant_defined_layers)
+            )
 
     @staticmethod
     def check_prune_type(mod_name, mod, graph):
@@ -643,9 +706,13 @@ class GraphChecker():
             return False
 
         # Check not support input_dimension_reduction node do quantize
-        if node.has_attr('input_dimension_reduction') and node.get_attr('input_dimension_reduction'):
-            LOGGER.logw(f'This module {node.name} is not supported for quantization '
-                        'because its input data is dimensionality reduced.')
+        if node.has_attr('input_dimension_reduction') and node.get_attr(
+            'input_dimension_reduction'
+        ):
+            LOGGER.logw(
+                f'This module {node.name} is not supported for quantization '
+                'because its input data is dimensionality reduced.'
+            )
             return False
         return True
 
@@ -657,15 +724,28 @@ class GraphChecker():
         if not graph or not graph.model:
             return True
 
-        if mod_type not in ['Conv1d', 'Conv2d', 'Conv3d', 'ConvTranspose1d', 'ConvTranspose2d',
-            'ConvTranspose3d', 'Linear']:
+        if mod_type not in [
+            'Conv1d',
+            'Conv2d',
+            'Conv3d',
+            'ConvTranspose1d',
+            'ConvTranspose2d',
+            'ConvTranspose3d',
+            'Linear',
+        ]:
             return True
 
         weight_shared_count = 0
         for _, graph_mod in graph.model.named_modules():
             graph_mod_type = type(graph_mod).__name__
-            if graph_mod_type not in \
-                ['Conv2d', 'Conv3d', 'ConvTranspose1d', 'ConvTranspose2d', 'ConvTranspose3d', 'Linear']:
+            if graph_mod_type not in [
+                'Conv2d',
+                'Conv3d',
+                'ConvTranspose1d',
+                'ConvTranspose2d',
+                'ConvTranspose3d',
+                'Linear',
+            ]:
                 continue
             if id(mod.weight) == id(graph_mod.weight):
                 weight_shared_count += 1
@@ -676,12 +756,13 @@ class GraphChecker():
 
 
 def check_kernel_shape(node, kernel_shape_range):
-    """ Check whether the node's kernel_shape satisfy kernel_shape_range"""
-    kernel_shape = AttributeProtoHelper(
-        node.proto).get_attr_value('kernel_shape')
+    """Check whether the node's kernel_shape satisfy kernel_shape_range"""
+    kernel_shape = AttributeProtoHelper(node.proto).get_attr_value('kernel_shape')
     if len(kernel_shape) not in kernel_shape_range:
-        LOGGER.logd(f"Layer {node.name}'s kernel_shape is {kernel_shape}.",
-                    module_name="Configuration")
+        LOGGER.logd(
+            f"Layer {node.name}'s kernel_shape is {kernel_shape}.",
+            module_name="Configuration",
+        )
         return False
 
     return True
@@ -694,13 +775,19 @@ def _check_matmul(node):
     try:
         weight_tensor = QuantOpInfo.get_weight_tensor(node)
     except RuntimeError:
-        LOGGER.logd('Not support quantization for "MatMul" layer "{}" with no constant weight'.format(node.name))
+        LOGGER.logd(
+            'Not support quantization for "MatMul" layer "{}" with no constant weight'.format(
+                node.name
+            )
+        )
         return False
     shape = weight_tensor.dims
     if len(shape) != 2:
-        LOGGER.logd('Not support quantization for "MatMul" layer "{}" with weight '
-                    'dim({}) not 2.'.format(node.name, len(shape)),
-                    "Configuration")
+        LOGGER.logd(
+            'Not support quantization for "MatMul" layer "{}" with weight '
+            'dim({}) not 2.'.format(node.name, len(shape)),
+            "Configuration",
+        )
         return False
     return True
 
@@ -725,14 +812,16 @@ def _check_dilation(node, dilation_range):
     """
     dilation = AttributeProtoHelper(node.proto).get_attr_value('dilations')
     if dilation not in dilation_range:
-        LOGGER.logd("Layer %s's dilation is %s." % (node.name, dilation),
-                    module_name="Configuration")
+        LOGGER.logd(
+            "Layer %s's dilation is %s." % (node.name, dilation),
+            module_name="Configuration",
+        )
         return False
     return True
 
 
 def check_lstm_limit(node):
-    """ Check whether LSTM is quantizable. """
+    """Check whether LSTM is quantizable."""
     if not _check_lstm_input_limit(node):
         return False
     if not _check_output_num_limit(node, LSTM_OUTPUT_NUMS):
@@ -745,73 +834,99 @@ def check_lstm_limit(node):
 
 
 def _check_lstm_input_limit(node):
-    """ Check whether LSTM input meet quantization limit """
+    """Check whether LSTM input meet quantization limit"""
     node_input_anchors = node.input_anchors
-    if len(node_input_anchors) < LSTM_C_INDEX + 1 or \
-        node_input_anchors[LSTM_C_INDEX].get_peer_output_anchor() is None:
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for it has no initial_c input'.format(node.name))
+    if (
+        len(node_input_anchors) < LSTM_C_INDEX + 1
+        or node_input_anchors[LSTM_C_INDEX].get_peer_output_anchor() is None
+    ):
+        LOGGER.logd(
+            'Node {} cannot be quantized for it has no initial_c input'.format(
+                node.name
+            )
+        )
         return False
 
     initial_c = node_input_anchors[LSTM_C_INDEX].get_peer_output_anchor().node
     if not _check_node_linked_to_outside_input(initial_c):
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for its initial_c is not linked to graph input'.format(node.name))
+        LOGGER.logd(
+            'Node {} cannot be quantized '
+            'for its initial_c is not linked to graph input'.format(node.name)
+        )
         return False
 
     if node_input_anchors[RNN_H_INDEX].get_peer_output_anchor() is None:
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for it has no initial_h input'.format(node.name))
+        LOGGER.logd(
+            'Node {} cannot be quantized for it has no initial_h input'.format(
+                node.name
+            )
+        )
         return False
 
     initial_h = node_input_anchors[RNN_H_INDEX].get_peer_output_anchor().node
     if not _check_node_linked_to_outside_input(initial_h):
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for its initial_h is not linked to graph input'.format(node.name))
+        LOGGER.logd(
+            'Node {} cannot be quantized '
+            'for its initial_h is not linked to graph input'.format(node.name)
+        )
         return False
 
-    if len(node_input_anchors) > LSTM_P_INDEX and \
-        node_input_anchors[LSTM_P_INDEX].get_peer_output_anchor() is not None:
+    if (
+        len(node_input_anchors) > LSTM_P_INDEX
+        and node_input_anchors[LSTM_P_INDEX].get_peer_output_anchor() is not None
+    ):
         LOGGER.logd('Node {} cannot be quantized for it has P input'.format(node.name))
         return False
     return True
 
 
 def _check_output_num_limit(node, output_num):
-    """ Check whether LSTM output meet quantization limit """
+    """Check whether LSTM output meet quantization limit"""
     node_output_anchors = node.output_anchors
     if len(node_output_anchors) < output_num:
-        LOGGER.logd('Node {} cannot be quantized for its output is less than {}.'.format(node.name, output_num))
+        LOGGER.logd(
+            'Node {} cannot be quantized for its output is less than {}.'.format(
+                node.name, output_num
+            )
+        )
         return False
     for idx, output_anchor in enumerate(node_output_anchors):
         if output_anchor.get_peer_input_anchor is None:
-            LOGGER.logd('Node {} cannot be quantized for its {} output is None'.format(node.name, idx))
+            LOGGER.logd(
+                'Node {} cannot be quantized for its {} output is None'.format(
+                    node.name, idx
+                )
+            )
             return False
     return True
 
 
 def _check_rnn_weight_limit(node):
-    """ Check whether RNN weight meet quantization limit """
+    """Check whether RNN weight meet quantization limit"""
     weights_node = QuantOpInfo.get_weight_node(node)
     weight_tensor = QuantOpInfo.get_node_tensor(weights_node)
     weight_shape = weight_tensor.dims
     if weight_shape[0] != 1:
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for its num_directions is not equal to 1'.format(node.name))
+        LOGGER.logd(
+            'Node {} cannot be quantized '
+            'for its num_directions is not equal to 1'.format(node.name)
+        )
         return False
 
     recurrence_weights_node = QuantOpInfo.get_recurrence_weight_node(node)
     recurrence_weight_tensor = QuantOpInfo.get_node_tensor(recurrence_weights_node)
     recurrence_weight_shape = recurrence_weight_tensor.dims
     if recurrence_weight_shape[0] != 1:
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for its num_directions is not equal to 1'.format(node.name))
+        LOGGER.logd(
+            'Node {} cannot be quantized '
+            'for its num_directions is not equal to 1'.format(node.name)
+        )
         return False
     return True
 
 
 def _check_attrs_limit(node, attrs_limit_map):
-    """ Check whether operator's attributes in quant limit on map"""
+    """Check whether operator's attributes in quant limit on map"""
     attrs_helper = AttributeProtoHelper(node.proto)
 
     for attr_name, attr_limit in attrs_limit_map.items():
@@ -822,19 +937,25 @@ def _check_attrs_limit(node, attrs_limit_map):
             if isinstance(attr_value, bytes):
                 attr_value = attr_value.decode('utf-8')
             if attr_value != attr_limit:
-                LOGGER.logd("Node {}'s {} is {}, while limit is {}".format(
-                    node.name, attr_name, attr_value, attr_limit))
+                LOGGER.logd(
+                    "Node {}'s {} is {}, while limit is {}".format(
+                        node.name, attr_name, attr_value, attr_limit
+                    )
+                )
                 return False
         else:
             if attr_value is not None:
-                LOGGER.logd("Node {} can not be quantized for "
-                            "its {} is set.".format(node.name, attr_name))
+                LOGGER.logd(
+                    "Node {} can not be quantized for its {} is set.".format(
+                        node.name, attr_name
+                    )
+                )
                 return False
     return True
 
 
 def check_gru_limit(node):
-    """ Check whether GRU op is quantizable"""
+    """Check whether GRU op is quantizable"""
     if not _check_rnn_weight_limit(node):
         return False
     if not _check_gru_input_limit(node):
@@ -854,22 +975,29 @@ def check_gru_limit(node):
 
 def _check_gru_input_limit(node):
     node_input_anchors = node.input_anchors
-    if len(node_input_anchors) < RNN_H_INDEX + 1 or \
-        node_input_anchors[RNN_H_INDEX].get_peer_output_anchor() is None:
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for it has no initial_h input'.format(node.name))
+    if (
+        len(node_input_anchors) < RNN_H_INDEX + 1
+        or node_input_anchors[RNN_H_INDEX].get_peer_output_anchor() is None
+    ):
+        LOGGER.logd(
+            'Node {} cannot be quantized for it has no initial_h input'.format(
+                node.name
+            )
+        )
         return False
 
     initial_h = node_input_anchors[RNN_H_INDEX].get_peer_output_anchor().node
     if not _check_node_linked_to_outside_input(initial_h):
-        LOGGER.logd('Node {} cannot be quantized '
-                    'for its initial_h is not linked to graph input'.format(node.name))
+        LOGGER.logd(
+            'Node {} cannot be quantized '
+            'for its initial_h is not linked to graph input'.format(node.name)
+        )
         return False
     return True
 
 
 def _check_node_linked_to_outside_input(node):
-    """ Check whether node is linked to graph input directly or indirectly"""
+    """Check whether node is linked to graph input directly or indirectly"""
     if node.type == 'graph_anchor':
         return True
     flag = False

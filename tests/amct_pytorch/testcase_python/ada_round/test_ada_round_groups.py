@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -46,11 +46,7 @@ class TestAdaRoundGroups(unittest.TestCase):
             os.makedirs(cls.temp_folder)
 
         cls.quant_config = {
-            'linear': {
-                'weight_quant_params': {
-                    'wts_algo': 'ada_quantize'
-                }
-            }
+            'linear': {'weight_quant_params': {'wts_algo': 'ada_quantize'}}
         }
 
     @classmethod
@@ -236,13 +232,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         self.assertFalse(ret)
 
     def test_not_weight_ada_round(self):
-        quant_config = {
-            'name': {
-                'weight_quant_params': {
-                    'wts_algo': 'arq_quantize'
-                }
-            }
-        }
+        quant_config = {'name': {'weight_quant_params': {'wts_algo': 'arq_quantize'}}}
         ret = _is_weight_ada_round(quant_config, 'name')
         self.assertFalse(ret)
 
@@ -270,9 +260,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_03(self):
@@ -294,9 +282,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_04(self):
@@ -319,9 +305,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_05(self):
@@ -345,9 +329,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_06(self):
@@ -370,9 +352,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_07(self):
@@ -396,9 +376,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_08(self):
@@ -422,9 +400,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_09(self):
@@ -448,9 +424,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_01(self):
@@ -483,9 +457,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_03(self):
@@ -513,9 +485,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_04(self):
@@ -543,9 +513,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_05(self):
@@ -573,9 +541,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_06(self):
@@ -603,9 +569,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_07(self):
@@ -633,9 +597,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_08(self):
@@ -663,9 +625,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_09(self):
@@ -693,9 +653,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_10(self):
@@ -723,9 +681,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_11(self):
@@ -753,9 +709,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_12(self):
@@ -783,9 +737,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_13(self):
@@ -813,9 +765,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_gelu_tanh_14(self):
@@ -843,9 +793,7 @@ class TestAdaRoundGroups(unittest.TestCase):
         Parser.export_onnx(model, input_data, onnx_file)
         graph = Parser.parse_net_to_graph(onnx_file)
         ada_round_groups = get_ada_round_groups(graph, self.quant_config)
-        except_groups = [
-            ['linear', None]
-        ]
+        except_groups = [['linear', None]]
         self.assertEqual(ada_round_groups, except_groups)
 
     def test_match_rrelu_01(self):
@@ -913,20 +861,20 @@ class TestAdaRoundGroups(unittest.TestCase):
         clip_min_value.data_type = onnx_pb.TensorProto.DataType.FLOAT
         clip_min_value.float_data[:] = [1]
         clip_min_value.dims[:] = []
- 
+
         clip_max_value = model_proto.graph.initializer.add()
         clip_max_value.name = 'clip_max'
         clip_max_value.data_type = onnx_pb.TensorProto.DataType.FLOAT
         clip_max_value.float_data[:] = [5]
         clip_max_value.dims[:] = []
- 
+
         clip = model_proto.graph.node.add()
         clip.name = 'clip'
         clip.op_type = 'Clip'
         clip.input[:] = ['input', 'clip_min', 'clip_max']
         clip.output[:] = ['clip_out']
         graph = Graph(model_proto)
- 
+
         consumers = [graph.nodes[0]]
         ret = _get_other_activation(consumers)
         self.assertIsNone(ret)

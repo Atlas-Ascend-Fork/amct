@@ -20,6 +20,7 @@ and test_cast.py cannot reach: the hifloat8_supported() liveness probe and the
 hifloat8_fake_quant amct_ops fallback (quant_util.py). The fallback is the whole
 point of PR #147 -- run hifloat8 fake-quant when torch_npu lacks a native cast.
 """
+
 import sys
 import types
 import unittest
@@ -40,6 +41,7 @@ def _install_fake_torch_npu(with_hif8=True, cast_raises=False):
             if cast_raises:
                 raise RuntimeError('aclnnCast 161002: DT_HIFLOAT8 unsupported')
             return tensor
+
         mod.npu_dtype_cast = _cast
     sys.modules['torch_npu'] = mod
     return mod

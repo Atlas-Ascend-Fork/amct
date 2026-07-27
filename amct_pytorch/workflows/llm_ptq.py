@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import inspect
-import json
 import os
 from typing import Any
 
@@ -32,14 +31,16 @@ from amct_pytorch.common.optimization import register_solvers
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.common.models.llm.common.quant_apply import (
-    set_model_act_quant_state, set_model_weight_quant_state, set_model_to_observe)
+    set_model_act_quant_state,
+    set_model_weight_quant_state,
+    set_model_to_observe,
+)
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
-from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.common.utils.run_logging import setup_run_logging
 
 
 class LlmPtqWorkflow:
-
     def __init__(self, args):
         self.args = args
         if len(args.quant_target) != 1:
@@ -63,7 +64,9 @@ class LlmPtqWorkflow:
     def _unpack_tensor_batch(batch: Any):
         if isinstance(batch, (tuple, list)):
             if len(batch) != 1:
-                raise ValueError("Expected TensorDataset batches to contain exactly one tensor.")
+                raise ValueError(
+                    "Expected TensorDataset batches to contain exactly one tensor."
+                )
             return batch[0]
         return batch
 
@@ -87,9 +90,7 @@ class LlmPtqWorkflow:
         elif self.granularity == "model":
             results = self._run_modelwise(solver_cls)
         else:
-            raise ValueError(
-                f"Unsupported solver granularity '{self.granularity}'."
-            )
+            raise ValueError(f"Unsupported solver granularity '{self.granularity}'.")
         logger.remove(sink_id)
         return results
 
@@ -132,7 +133,9 @@ class LlmPtqWorkflow:
             return "attn_cache_param_dir"
         if self.quant_target in {"mlp", "moe"}:
             return "moe_mlp_param_dir"
-        raise ValueError(f"Unsupported quant_target '{self.quant_target}' for PTQ param dir.")
+        raise ValueError(
+            f"Unsupported quant_target '{self.quant_target}' for PTQ param dir."
+        )
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)
@@ -193,7 +196,9 @@ class LlmPtqWorkflow:
 
             layer_results = {}
             for unit in units:
-                if self._unit_result_path(unit) and os.path.exists(self._unit_result_path(unit)):
+                if self._unit_result_path(unit) and os.path.exists(
+                    self._unit_result_path(unit)
+                ):
                     logger.info(
                         f"Skip PTQ unit '{unit.name}' in layer {layer_idx}: "
                         f"params already exist at {self._unit_result_path(unit)}"
@@ -201,7 +206,9 @@ class LlmPtqWorkflow:
                     continue
                 unit_batch = self._prepare_unit_batch(unit)
                 solver = self._build_block_solver(solver_cls, layer_idx, unit.module)
-                logger.info(f"PTQ unit '{unit.name}' ({unit.kind}) in layer {layer_idx}")
+                logger.info(
+                    f"PTQ unit '{unit.name}' ({unit.kind}) in layer {layer_idx}"
+                )
                 solver.solve(unit_batch.data_loader, forward_kwargs=unit_batch.kwargs)
 
                 unit_result = solver.finalize()
@@ -217,8 +224,8 @@ class LlmPtqWorkflow:
 
     def _run_modelwise(self, solver_cls):
         raise ValueError(
-                f"Currently unsupported granularity '{self.granularity}' for ptq."
-            )
+            f"Currently unsupported granularity '{self.granularity}' for ptq."
+        )
 
     def _build_block_solver(self, solver_cls, layer_idx: int, block):
         kwargs = {}
@@ -251,4 +258,9 @@ class LlmPtqWorkflow:
     def _save_unit_result(self, unit: PtqUnit, result: Any):
         save_path = self._unit_result_path(unit)
         torch.save(result, save_path)
-        logger.info("Saved PTQ params for layer {} unit '{}' to {}", unit.layer_idx, unit.name, save_path)
+        logger.info(
+            "Saved PTQ params for layer {} unit '{}' to {}",
+            unit.layer_idx,
+            unit.name,
+            save_path,
+        )

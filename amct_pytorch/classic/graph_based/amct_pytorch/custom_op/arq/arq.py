@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -63,8 +63,11 @@ def weight_arq(weight_tensor, wts_param):
         weight_tensor = weight_tensor.to(dtype=torch.float)
 
     scale, offset, calied_weight = arq_cali_pytorch(
-        weight_tensor, wts_param.get('num_bits'),
-        wts_param.get('channel_wise'), wts_param.get('with_offset'))
+        weight_tensor,
+        wts_param.get('num_bits'),
+        wts_param.get('channel_wise'),
+        wts_param.get('with_offset'),
+    )
 
     scale_list = scale.cpu().numpy().tolist()
     offset_list = offset.cpu().numpy().tolist()
@@ -94,7 +97,8 @@ def weight_quant_np(weight_np, scale_list, offset_list, num_bit):
     check_scale_offset(scale, offset)
 
     int_weight_tensor = arq_real_pytorch(
-        weight_tensor, scale, offset.to(torch.int32), num_bit)
+        weight_tensor, scale, offset.to(torch.int32), num_bit
+    )
 
     int_weight_np = int_weight_tensor.numpy()
 

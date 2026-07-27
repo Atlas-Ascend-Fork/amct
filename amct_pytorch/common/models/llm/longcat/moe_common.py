@@ -16,7 +16,7 @@
 import torch
 import torch.nn as nn
 
-from amct_pytorch.common.models.llm.common.moe_unpack import find_moe_module, GatedExpertView
+from amct_pytorch.common.models.llm.common.moe_unpack import GatedExpertView
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP
 
 
@@ -46,43 +46,58 @@ class QuantLongcatExperts(nn.Module):
 
         expert_modules = [
             self.quant_mlp_cls(
-    self.args,
-    self.view_cls(
-        self.packed_experts,
-        expert_idx,
-        hidden_attr="hidden_size",
-        intermediate_attr="intermediate_size",
-         materialize=False))
+                self.args,
+                self.view_cls(
+                    self.packed_experts,
+                    expert_idx,
+                    hidden_attr="hidden_size",
+                    intermediate_attr="intermediate_size",
+                    materialize=False,
+                ),
+            )
             for expert_idx in range(self.num_routed_experts)
         ]
-        expert_modules.extend(nn.Identity() for _ in range(self.total_experts - self.num_routed_experts))
+        expert_modules.extend(
+            nn.Identity() for _ in range(self.total_experts - self.num_routed_experts)
+        )
         self.expert_modules = nn.ModuleList(expert_modules)
 
     def build_ptq_expert_module(self, expert_idx: int):
         if expert_idx >= self.num_routed_experts:
-            raise IndexError(f"expert_idx {expert_idx} out of routed expert range {self.num_routed_experts}.")
+            raise IndexError(
+                f"expert_idx {expert_idx} out of routed expert range {self.num_routed_experts}."
+            )
         return self.quant_mlp_cls(
             self.args,
             self.view_cls(
-    self.packed_experts,
-    expert_idx,
-    hidden_attr="hidden_size",
-    intermediate_attr="intermediate_size",
-     materialize=True),
+                self.packed_experts,
+                expert_idx,
+                hidden_attr="hidden_size",
+                intermediate_attr="intermediate_size",
+                materialize=True,
+            ),
         )
 
     def iter_ptq_expert_modules(self):
         for expert_idx in range(self.num_routed_experts):
             yield self.build_ptq_expert_module(expert_idx)
 
-    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor,
-                top_k_weights: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        top_k_index: torch.Tensor,
+        top_k_weights: torch.Tensor,
+    ) -> torch.Tensor:
         final_hidden_states = torch.zeros_like(hidden_states)
         if top_k_index.numel() == 0:
             return final_hidden_states
 
-        expert_mask = torch.nn.functional.one_hot(top_k_index, num_classes=self.total_experts).permute(2, 1, 0)
-        expert_hit = torch.greater(expert_mask.sum(dim=(-1, -2)), 0).nonzero(as_tuple=False)
+        expert_mask = torch.nn.functional.one_hot(
+            top_k_index, num_classes=self.total_experts
+        ).permute(2, 1, 0)
+        expert_hit = torch.greater(expert_mask.sum(dim=(-1, -2)), 0).nonzero(
+            as_tuple=False
+        )
 
         for expert_idx_tensor in expert_hit:
             expert_idx = int(expert_idx_tensor.reshape(-1)[0].item())
@@ -92,7 +107,11 @@ class QuantLongcatExperts(nn.Module):
 
             current_state = hidden_states[token_idx]
             current_hidden_states = self.expert_modules[expert_idx](current_state)
-            current_hidden_states = current_hidden_states * top_k_weights[token_idx, selection_idx, None]
-            final_hidden_states.index_add_(0, token_idx, current_hidden_states.to(final_hidden_states.dtype))
+            current_hidden_states = (
+                current_hidden_states * top_k_weights[token_idx, selection_idx, None]
+            )
+            final_hidden_states.index_add_(
+                0, token_idx, current_hidden_states.to(final_hidden_states.dtype)
+            )
 
         return final_hidden_states

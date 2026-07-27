@@ -25,6 +25,7 @@ hy_v3 module. ``TestHyV3Mocked`` (which drives ``HyV3.__init__`` via
 ``AutoModelForCausalLM.from_config``) cannot work with a mock config and is
 skipped via ``pytest_collection_modifyitems``.
 """
+
 import importlib
 import os
 import sys
@@ -102,7 +103,9 @@ def _build_hy_v3_mock():
             self.intermediate_dim = config.moe_intermediate_size
             self.act_fn = F.silu
             self.gate_up_proj = nn.Parameter(
-                torch.randn(self.num_experts, 2 * self.intermediate_dim, self.hidden_dim)
+                torch.randn(
+                    self.num_experts, 2 * self.intermediate_dim, self.hidden_dim
+                )
             )
             self.down_proj = nn.Parameter(
                 torch.randn(self.num_experts, self.hidden_dim, self.intermediate_dim)

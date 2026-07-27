@@ -26,7 +26,7 @@ class QuantConfig:
         activation_bits: int = 8,
         quant_dtype: str = "int",
         group_size: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ):
         self.algorithm = algorithm
         self.weight_bits = weight_bits
@@ -46,5 +46,5 @@ class QuantConfig:
             "activation_bits": self.activation_bits,
             "quant_dtype": self.quant_dtype,
             "group_size": self.group_size,
-            **self.extra_config
+            **self.extra_config,
         }

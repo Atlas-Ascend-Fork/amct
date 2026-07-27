@@ -8,10 +8,12 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 def get_qwen(model_path, seqlen=2048):
     print(f'Getting official pretrained {model_path}')
-    model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.float16)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, device_map="auto", torch_dtype=torch.float16
+    )
     model.seqlen = seqlen
     tokenizer = AutoTokenizer.from_pretrained(
-            model_path, use_fast=False, trust_remote_code=True
+        model_path, use_fast=False, trust_remote_code=True
     )
     return model, tokenizer
 

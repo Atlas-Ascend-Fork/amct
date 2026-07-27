@@ -25,6 +25,7 @@ class DeepseekV4Config(PretrainedConfig):
     read at runtime (`dim`, `n_layers`, ...). HF aliases win when both are
     provided so that loading the official config gives the right values.
     """
+
     model_type = "deepseek_v4"
 
     def __init__(

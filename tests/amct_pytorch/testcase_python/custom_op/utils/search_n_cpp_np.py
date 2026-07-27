@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -42,7 +42,6 @@ def kernel_func(inputs, do_cali=False, deq_scale=None):
         channel_wise = True
         deq_scale = deq_scale.reshape([-1, 1])
 
-
     # c++
     quanti_bit = 32
     clamp_min = -pow(2.0, quanti_bit - 1)
@@ -66,7 +65,7 @@ def kernel_func(inputs, do_cali=False, deq_scale=None):
         errs_list[-shift_bit] = err.reshape([1, -1])
 
     errs = torch.cat(errs_list, 0)
-    best_shift_bit = 16 - torch.argmin(errs, 0) # argmin, 同等大小取值后面的
+    best_shift_bit = 16 - torch.argmin(errs, 0)  # argmin, 同等大小取值后面的
     best_shift_bit = best_shift_bit.to(torch.int8)
     accum_inputs = None
     return torch.tensor(1), best_shift_bit
@@ -101,5 +100,3 @@ def test_fc():
 
 if __name__ == "__main__":
     test_fc()
-
-

@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import torch
-import torch.nn as nn
 from mock_torch_npu import (
     mock_npu,
     mock_npu_dtype_cast,
@@ -28,7 +27,7 @@ from mock_torch_npu import (
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
 )
-from utils import TestModel, TestModelBias
+from utils import TestModel
 
 from amct_pytorch import convert, quantize
 
@@ -46,6 +45,7 @@ class TestCast(unittest.TestCase):
     '''
     ST FOR CAST ALGORITHM
     '''
+
     @classmethod
     def setUpClass(cls):
         cls.test_model = TestModel().to(torch.bfloat16)
@@ -60,13 +60,16 @@ class TestCast(unittest.TestCase):
     def setUp(self):
         mock_torch_npu = MagicMock()
         sys.modules['torch_npu'] = mock_torch_npu
- 
+
     def tearDown(self):
         del sys.modules['torch_npu']
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     def test_hif8_weights_tensor_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
@@ -91,9 +94,14 @@ class TestCast(unittest.TestCase):
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
-    def test_hif8_weights_channel_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
+    def test_hif8_weights_channel_sym_cast_success(
+        self, mock_1, mock_2, mock_3, mock_4
+    ):
         cfg = {
             'batch_num': 1,
             'quant_cfg': {
@@ -116,7 +124,10 @@ class TestCast(unittest.TestCase):
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     def test_hif8_tensor_tensor_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {
@@ -150,7 +161,10 @@ class TestCast(unittest.TestCase):
 
     @patch('torch_npu.npu_dtype_cast', wraps=mock_npu_dtype_cast)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     def test_hif8_channel_tensor_sym_cast_success(self, mock_1, mock_2, mock_3, mock_4):
         cfg = {

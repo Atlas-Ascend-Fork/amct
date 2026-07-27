@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,8 +21,6 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import platform
-import sys
 
 import torch
 
@@ -61,7 +59,9 @@ SELECTIVE_PRUNABLE_TYPES = CAPACITY.get_value('SELECTIVE_PRUNABLE_TYPES')
 CHANNEL_UNRELATED_ONNX_TYPES_P1 = CAPACITY.get_value('CHANNEL_UNRELATED_ONNX_TYPES_P1')
 CHANNEL_UNRELATED_ONNX_TYPES_P2 = CAPACITY.get_value('CHANNEL_UNRELATED_ONNX_TYPES_P2')
 ELTWISE_ONNX_TYPES = CAPACITY.get_value('ELTWISE_ONNX_TYPES')
-CHANNEL_UNRELATED_ONNX_TYPES = CHANNEL_UNRELATED_ONNX_TYPES_P1 + CHANNEL_UNRELATED_ONNX_TYPES_P2
+CHANNEL_UNRELATED_ONNX_TYPES = (
+    CHANNEL_UNRELATED_ONNX_TYPES_P1 + CHANNEL_UNRELATED_ONNX_TYPES_P2
+)
 
 KV_CACHE_QUANTIZE_TYPES = CAPACITY.get_value('KV_CACHE_QUANTIZE_TYPES')
 ADA_ROUND_TYPES = CAPACITY.get_value('ADA_ROUND_TYPES')
@@ -73,7 +73,7 @@ QUANT_BIAS_BITS = 32
 ZERO = 0.0
 ONE = 1.0
 BASE = 2
-EPSILON = 1E-6
+EPSILON = 1e-6
 FLT_EPSILON = 1.192092896e-7
 MIN_FP16 = 2**-14
 MAX_FP16 = 65504.0

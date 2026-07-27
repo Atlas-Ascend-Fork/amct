@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,7 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
-from onnx import onnx_pb # pylint: disable=import-error
+from onnx import onnx_pb  # pylint: disable=import-error
 
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
@@ -33,6 +33,7 @@ class InsertBiasQuantPass(BaseFusionPass):
     Function: Quant weight from float32 to int8
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -61,10 +62,12 @@ class InsertBiasQuantPass(BaseFusionPass):
         cmp_ans = np.add(quant_bias < left_bound, quant_bias > right_bound)
         if cmp_ans.any():
             invalid_value = quant_bias[np.argmax(cmp_ans)]
-            LOGGER.loge('Quantized bias {} of layer "{}" exceed int32 ' \
+            LOGGER.loge(
+                'Quantized bias {} of layer "{}" exceed int32 '
                 'range:[{}, {}], please add it to skip layer.'.format(
-                    invalid_value, layer_name,
-                    left_bound, right_bound))
+                    invalid_value, layer_name, left_bound, right_bound
+                )
+            )
             raise RuntimeError('Do bias quantize failed.')
         quant_bias = quant_bias.astype(np.int32)
         return quant_bias
@@ -109,12 +112,15 @@ class InsertBiasQuantPass(BaseFusionPass):
                 bias,
                 self.records.get(object_node.name).get('weight_scale'),
                 self.records.get(object_node.name).get('data_scale'),
-                object_node.name)
+                object_node.name,
+            )
         bias_helper.set_data(int32_bias, 'INT32')
 
         # Determine the quantization type based on the value of dst_type and obtain the corresponding num_bits
         if self.records.get(object_node.name).get('dst_type') == 'UNSET':
-            num_bits = QuantOpInfo.get_dst_num_bits(self.records, object_node.name, 'act')
+            num_bits = QuantOpInfo.get_dst_num_bits(
+                self.records, object_node.name, 'act'
+            )
         else:
             num_bits = QuantOpInfo.get_dst_num_bits(self.records, object_node.name)
 
@@ -123,20 +129,24 @@ class InsertBiasQuantPass(BaseFusionPass):
             node_proto = construct_bias_quant_node(
                 inputs=['.'.join([object_node.name, 'bias_quant', 'input0'])],
                 outputs=['.'.join([object_node.name, 'bias_quant', 'output0'])],
-                layer_name=object_node.name)
+                layer_name=object_node.name,
+            )
             bias_quant_node = graph.add_node(node_proto)
 
             # Step2: Relink nodes in th graph
             # remove output links
             bias_index = QuantOpInfo.get_quant_index(object_node).get('bias_index')
-            graph.remove_edge(bias_param, 0,
-                            object_node, bias_index)
+            graph.remove_edge(bias_param, 0, object_node, bias_index)
             # add links
             graph.add_edge(bias_param, 0, bias_quant_node, 0)
             graph.add_edge(bias_quant_node, 0, object_node, bias_index)
 
-        LOGGER.logd("Quant bias from float32 to int32 for layer '{}' " \
-            "success!".format(object_node.name), 'BiasQuantPass')
+        LOGGER.logd(
+            "Quant bias from float32 to int32 for layer '{}' success!".format(
+                object_node.name
+            ),
+            'BiasQuantPass',
+        )
 
     def bias_quant_rnn(self, bias, layer_name):
         """
@@ -145,8 +155,8 @@ class InsertBiasQuantPass(BaseFusionPass):
         Return: bias_int32: quantized bias
         """
         bias_length = bias.shape[1]
-        weight_bias = bias.flatten()[:bias_length // 2]
-        recurrence_weight_bias = bias.flatten()[bias_length // 2:]
+        weight_bias = bias.flatten()[: bias_length // 2]
+        recurrence_weight_bias = bias.flatten()[bias_length // 2 :]
 
         # broad scale_w in per-tensor
         scale_w = self.records.get(layer_name).get('weight_scale')
@@ -154,28 +164,26 @@ class InsertBiasQuantPass(BaseFusionPass):
             scale_w = np.repeat(scale_w, weight_bias.size // scale_w.size)
         # do real quant for bias corresponding to w and r separately
         scale_d = self.records.get(layer_name).get('data_scale')
-        weight_bias_int32 = InsertBiasQuantPass.quant_bias(weight_bias,
-                                                           scale_w,
-                                                           scale_d,
-                                                           layer_name)
+        weight_bias_int32 = InsertBiasQuantPass.quant_bias(
+            weight_bias, scale_w, scale_d, layer_name
+        )
 
         # broadcast scale_r in per-tensor
         scale_r = self.records.get(layer_name).get('recurrence_weight_scale')
         if recurrence_weight_bias.size != scale_r.size:
             scale_r = np.repeat(scale_r, recurrence_weight_bias.size // scale_r.size)
         scale_h = self.records.get(layer_name).get('h_scale')
-        recurrence_weight_bias_int32 = InsertBiasQuantPass.quant_bias(recurrence_weight_bias,
-                                                                      scale_r,
-                                                                      scale_h,
-                                                                      layer_name)
+        recurrence_weight_bias_int32 = InsertBiasQuantPass.quant_bias(
+            recurrence_weight_bias, scale_r, scale_h, layer_name
+        )
 
-        bias_int32 = np.concatenate([weight_bias_int32, recurrence_weight_bias_int32], 0)
+        bias_int32 = np.concatenate(
+            [weight_bias_int32, recurrence_weight_bias_int32], 0
+        )
         return bias_int32
 
 
-def construct_bias_quant_node(inputs,
-                              outputs,
-                              layer_name):
+def construct_bias_quant_node(inputs, outputs, layer_name):
     """
     Function: construct quant node in onnx
     Inputs:

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,7 +21,7 @@ from ...utils.log import LOGGER
 
 
 class PassivePruneHelperBase(PruneHelperBase):
-    """ base class of PassivePruneHelperBase"""
+    """base class of PassivePruneHelperBase"""
 
     @staticmethod
     def set_producer_for_passive(node, group, record_helper, prune_records):
@@ -41,16 +41,24 @@ class PassivePruneHelperBase(PruneHelperBase):
             # cannot support "concat+group conv"
             if len(prune_records) > 1:
                 record_helper.delete_record_list(prune_records)
-                LOGGER.logd("disable {} {} for cannot set prune group for several passive prune_records"
-                            .format(node.type, node.name), "PassivePruneHelperBase")
+                LOGGER.logd(
+                    "disable {} {} for cannot set prune group for several passive prune_records".format(
+                        node.type, node.name
+                    ),
+                    "PassivePruneHelperBase",
+                )
                 return
 
             success = record_helper.set_prune_group(prune_records[0], group)
             # group_num1 + group_num2
             if not success:
                 record_helper.delete_record(prune_records[0])
-                LOGGER.logd("disable {} {} for prune group is unmatched".format(node.type, node.name),
-                            "PassivePruneHelperBase")
+                LOGGER.logd(
+                    "disable {} {} for prune group is unmatched".format(
+                        node.type, node.name
+                    ),
+                    "PassivePruneHelperBase",
+                )
                 return
 
         output_ranges = [0, 0]

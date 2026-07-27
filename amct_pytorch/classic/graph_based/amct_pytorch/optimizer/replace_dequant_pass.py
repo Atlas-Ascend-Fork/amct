@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -23,7 +23,6 @@ from ...amct_pytorch.module.dequant_module import add_fake_dequant
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
-from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 
 
 class ReplaceDequantPass(BaseFusionPass):
@@ -31,6 +30,7 @@ class ReplaceDequantPass(BaseFusionPass):
     Function: Replace AscendDequant to fakeqaunt 'Dequant' with onnx's ops
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -77,8 +77,7 @@ class ReplaceDequantPass(BaseFusionPass):
         input_anchor = object_node.get_input_anchor(0)
         # Step1: add a new_node
         quantized_node = input_anchor.get_peer_output_anchor().node
-        enter_node, out_node = _get_dequant_param(graph, quantized_node,
-                                                object_node)
+        enter_node, out_node = _get_dequant_param(graph, quantized_node, object_node)
         # Step2: Relink nodes in th graph
         # remove input links
         peer_output_anchor = input_anchor.get_peer_output_anchor()
@@ -102,19 +101,23 @@ class ReplaceDequantPass(BaseFusionPass):
         self._delete_ascend_dequant_node(graph, object_node)
 
         LOGGER.logd(
-            "Replace dequant layer '{}' to fake dequant layer '{}' success!".
-            format(object_node.name, \
-            '.'.join(object_node.name.split('.')[0:-1]) + '.fakedequant'),
-            'ReplaceDequantPass')
+            "Replace dequant layer '{}' to fake dequant layer '{}' success!".format(
+                object_node.name,
+                '.'.join(object_node.name.split('.')[0:-1]) + '.fakedequant',
+            ),
+            'ReplaceDequantPass',
+        )
 
 
 def _get_dequant_param(graph, quantized_node, node):
-    ''' get essential params for dequant'''
+    '''get essential params for dequant'''
     quantized_layer_name = '.'.join(node.name.split('.')[0:-1])
 
     weight_anchor = node.get_input_anchor(1)
     dequant_param = weight_anchor.get_peer_output_anchor().node
-    fused_quant_param = TensorProtoHelper(dequant_param.proto, dequant_param.model_path).get_data()
+    fused_quant_param = TensorProtoHelper(
+        dequant_param.proto, dequant_param.model_path
+    ).get_data()
     _, deq_scale_value = _split_dequant_param(fused_quant_param)
 
     dequant_shape = QuantOpInfo.get_dequant_shape(quantized_node)
@@ -123,13 +126,11 @@ def _get_dequant_param(graph, quantized_node, node):
 
 
 def _split_dequant_param(fused_quant_param):
-    '''split dequant_param to offset_w, n, deq_scale '''
+    '''split dequant_param to offset_w, n, deq_scale'''
     mask = int('0x0000ff0000000000', 16)
-    offset_weight = np.array((np.bitwise_and(fused_quant_param, mask)) >> 40,
-                             np.int8)
+    offset_weight = np.array((np.bitwise_and(fused_quant_param, mask)) >> 40, np.int8)
     mask = int('0x00000000ffffffff', 16)
-    deq_scale_value = np.array(np.bitwise_and(fused_quant_param, mask),
-                               np.uint32)
+    deq_scale_value = np.array(np.bitwise_and(fused_quant_param, mask), np.uint32)
     deq_scale_value = np.frombuffer(deq_scale_value, np.float32)
 
     return offset_weight, deq_scale_value
