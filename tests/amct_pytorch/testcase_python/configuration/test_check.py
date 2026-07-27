@@ -927,7 +927,8 @@ class TestCheckInt4CinPackSupported(unittest.TestCase):
         with mock.patch(self._QOI) as m_qoi:
             m_qoi.get_cin_axis.return_value = None
             ret = GraphQuerier.check_int4_cin_pack_supported(
-                self._graph_with(node), 'relu')
+                self._graph_with(node), 'relu'
+            )
         self.assertTrue(ret)
 
     def test_group_conv_not_supported(self):
@@ -938,7 +939,8 @@ class TestCheckInt4CinPackSupported(unittest.TestCase):
             m_attr.return_value.has_attr.return_value = True
             m_attr.return_value.get_attr_value.return_value = 16  # groups>1
             ret = GraphQuerier.check_int4_cin_pack_supported(
-                self._graph_with(node), 'conv')
+                self._graph_with(node), 'conv'
+            )
         self.assertFalse(ret)
 
     def test_odd_cin_not_supported(self):
@@ -952,7 +954,8 @@ class TestCheckInt4CinPackSupported(unittest.TestCase):
             m_qoi.get_recurrence_weight_node.return_value = None
             m_qoi.get_node_tensor.return_value.dims = [8, 3, 3, 3]  # cin=3 奇
             ret = GraphQuerier.check_int4_cin_pack_supported(
-                self._graph_with(node), 'conv')
+                self._graph_with(node), 'conv'
+            )
         self.assertFalse(ret)
 
     def test_even_cin_supported(self):
@@ -966,5 +969,6 @@ class TestCheckInt4CinPackSupported(unittest.TestCase):
             m_qoi.get_recurrence_weight_node.return_value = None
             m_qoi.get_node_tensor.return_value.dims = [8, 4, 3, 3]  # cin=4 偶
             ret = GraphQuerier.check_int4_cin_pack_supported(
-                self._graph_with(node), 'conv')
+                self._graph_with(node), 'conv'
+            )
         self.assertTrue(ret)
