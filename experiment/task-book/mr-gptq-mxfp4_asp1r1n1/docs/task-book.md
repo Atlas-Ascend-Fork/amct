@@ -17,33 +17,40 @@
 ## 核心开发要求及验收标准
 
 ### 功能实现要求
+
 1. 完成对LLM网络的低比特量化算法，目标数据类型可选择 hifloat8、mxfp4、int4。
 2. 低比特量化算法可以是对AMCT代码仓已有算法的优化，优化后的精度相比原本的需要有提升。
 3. 低比特量化算法可以是AMCT代码仓中未适配的算法，并实现低比特量化下的精度优化（进阶项）。
 
 ### 测试标准
+
 1. 自验证报告完整、可复现，所有测试用例执行通过。测试脚本和执行步骤参考：https://gitcode.com/cann/amct/tree/master/examples/algorithms/ofmr
 2. 测试模型：Qwen3-8B / Qwen3.6-35B-A3B
 3. 测试数据集：wikitext2
 
 ### 精度要求
+
 1. **hifloat8**：量化后精度相比原始BF16网络，PPL劣化不超过 **0.1**；量化层（torch.nn.Linear）占比不低于 **80%**。
 2. **mxfp4、int4**：量化后精度相比原始BF16网络，PPL劣化不超过 **0.4**；量化层（torch.nn.Linear）占比不低于 **70%**。
 
 ### 文档规范要求
+
 1. 设计文档内容完整、方案描述清晰准确，且必须通过评审。
 2. 自验证报告需覆盖所有功能场景，含测试用例执行日志/截图、整体测试通过截图、性能数据截图，可清晰指导算法的使用与测试。
 3. README 文档内容完整、规范。
 
 ## 验收交付件
+
 1. 自测用例、测试结果报告、测试步骤指导文档。
 2. 算法代码的私仓邀请链接、代码仓路径、分支、目录。
 3. 评审通过的设计文档（按模板填写），合入 amct 仓库 `feature/community-tasks`。
 
 ## PR 申请合入
+
 测试通过后，在昇腾AMCT开源仓提交 PR 申请，申请将开发完成的代码合入 https://gitcode.com/cann/amct/tree/feature/community-tasks 。
 
 ## 参考资料
+
 - LLM量化工具：https://gitcode.com/cann/amct/blob/master/docs/zh/AMCT_Pytorch_LLM.md
 - 量化工具数据介绍：https://gitcode.com/cann/amct/blob/master/docs/zh/compression_concepts.md
 - 量化工具算法介绍：https://gitcode.com/cann/amct/blob/master/docs/zh/algorithm_brief.md
@@ -55,10 +62,12 @@
 - hifloat8仿真算子：https://gitcode.com/cann/amct/tree/master/amct_ops/hifloat8_cast
 
 ## 环境获取
+
 1. 开源仓提供 100 小时免费时长，不使用时及时关闭，用时耗尽前务必保存资料并及时提交备份。
 2. hidevlab notebook 算力：https://hidevlab.huawei.com/online-develop-intro?from=hiascend
 
 ## 特别注意事项
+
 1. 严格遵循 Python 编程规范及开发相关要求。
 2. 所有交付件需提前完成自验证，确认符合验收标准后再提交验收申请。
 3. 开发前请阅读【社区任务】流程及注意事项：https://gitcode.com/org/cann/discussions/39
