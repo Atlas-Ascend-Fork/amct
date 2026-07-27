@@ -27,6 +27,7 @@ Usage:
     y = quant_dequant_mxfp4(x_npu)
     # or: torch.ops.amct.quant_dequant_mxfp4(x_flat, 1.0)
 """
+
 from __future__ import annotations
 
 __all__ = [

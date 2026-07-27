@@ -64,9 +64,7 @@ def quant_dequant_mxfp4(
 
     orig_dtype = x.dtype
     if not x.is_npu:
-        raise ValueError(
-            f"input must be on an NPU device, got device={x.device}"
-        )
+        raise ValueError(f"input must be on an NPU device, got device={x.device}")
     # Pad along the last dim first (per-row blocks), matching the PyTorch
     # reference. Flattening before pad would merge adjacent rows into the
     # same MXFP4 block when last_dim is not a multiple of block_size.
@@ -80,9 +78,7 @@ def quant_dequant_mxfp4(
     padded_shape = x_fp.shape
     x_flat = x_fp.reshape(-1).contiguous()
 
-    y_flat = torch.ops.amct.quant_dequant_mxfp4(
-        x_flat, float(inv_scale_factor_scale)
-    )
+    y_flat = torch.ops.amct.quant_dequant_mxfp4(x_flat, float(inv_scale_factor_scale))
 
     y_fp = y_flat.reshape(padded_shape)
     if pad:

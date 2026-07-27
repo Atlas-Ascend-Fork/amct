@@ -55,7 +55,8 @@ at::Tensor Mxfp4QuantDequantTorch(const at::Tensor &x, double invScaleFactorScal
     // truncated into a wrong totalLen. Reject it explicitly instead.
     int64_t numel = x.numel();
     TORCH_CHECK(numel > 0 && numel % MXFP4_BLOCK_SIZE == 0 && numel <= INT32_MAX,
-        "numel() must be a positive multiple of ", MXFP4_BLOCK_SIZE, " and <= INT32_MAX "
+        "numel() must be a positive multiple of ", MXFP4_BLOCK_SIZE,
+        " and <= INT32_MAX "
         "(this kernel uses int32 tiling), got ",
         numel);
     int32_t totalLen = static_cast<int32_t>(numel);
@@ -77,8 +78,7 @@ at::Tensor Mxfp4QuantDequantTorch(const at::Tensor &x, double invScaleFactorScal
     std::memcpy(&scaleBits, &invScaleMul, sizeof(float));
     Mxfp4TilingData hostTiling{totalLen, static_cast<int32_t>(numCores), scaleBits, 0};
     auto tiling = at::empty({MXFP4_TILING_INTS}, at::TensorOptions().dtype(at::kInt).device(x.device()));
-    auto tilingCpu =
-        at::from_blob(&hostTiling, {MXFP4_TILING_INTS}, at::TensorOptions().dtype(at::kInt)).clone();
+    auto tilingCpu = at::from_blob(&hostTiling, {MXFP4_TILING_INTS}, at::TensorOptions().dtype(at::kInt)).clone();
     tiling.copy_(tilingCpu, /*non_blocking=*/true);
 
     // IMPORTANT: pass need_empty=true so torch_npu drains its internal task
