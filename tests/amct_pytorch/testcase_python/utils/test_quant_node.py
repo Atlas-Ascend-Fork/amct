@@ -201,6 +201,6 @@ class TestGetCinAxis(unittest.TestCase):
             m_helper.return_value.has_attr.return_value = False
             self.assertEqual(QuantOpInfo.get_cin_axis(self._node('Gemm')), 0)
 
-    def test_unknown_type_raises(self):
-        with self.assertRaises(RuntimeError):
-            QuantOpInfo.get_cin_axis(self._node('Relu'))
+    def test_unknown_type_returns_none(self):
+        # 不支持的算子类型返回 None（不再抛异常）
+        self.assertIsNone(QuantOpInfo.get_cin_axis(self._node('Relu')))

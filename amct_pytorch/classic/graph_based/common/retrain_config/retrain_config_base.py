@@ -239,7 +239,7 @@ class RetrainConfigBase:
         配置阶段将其权重从 INT4 降级为 INT8(A8W8)。遍历所有配置了
         retrain_weight_config 的层。
         '''
-        if not hasattr(self.graph_querier, 'int4_cin_pack_unsupported'):
+        if not hasattr(self.graph_querier, 'check_int4_cin_pack_supported'):
             return
         for layer, layer_cfg in ordered_config.items():
             if not isinstance(layer_cfg, dict):
@@ -247,7 +247,7 @@ class RetrainConfigBase:
             wts = layer_cfg.get('retrain_weight_config')
             if wts is None or wts.get('dst_type') != 'INT4':
                 continue
-            if self.graph_querier.int4_cin_pack_unsupported(graph, layer):
+            if not self.graph_querier.check_int4_cin_pack_supported(graph, layer):
                 wts['dst_type'] = 'INT8'
                 LOGGER.logw(
                     "Layer {} weight cannot be INT4-packed along Cin (grouped "

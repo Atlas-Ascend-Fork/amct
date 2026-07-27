@@ -19,32 +19,22 @@ import logging
 import unittest
 from copy import deepcopy
 from io import BytesIO
-from unittest.mock import patch
 
 import numpy as np
 import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
-    GraphOptimizer,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
     construct_quant_node,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
     InsertWeightQuantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_weight_quant_pass import (
-    ReplaceWeightQuantPass,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.weight_fakequant_pass import (
     WeightFakequantPass,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-    TensorProtoHelper,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
 )

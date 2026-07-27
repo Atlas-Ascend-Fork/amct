@@ -327,7 +327,7 @@ class ConfigBase:
             )
             if not is_int4:
                 continue
-            if not self.graph_querier.int4_cin_pack_unsupported(graph, layer):
+            if self.graph_querier.check_int4_cin_pack_supported(graph, layer):
                 continue
             if wts_ptq is not None and wts_ptq.get('num_bits') == 4:
                 wts_ptq['num_bits'] = 8

@@ -280,7 +280,7 @@ class QuantOpInfo:
         """
         Cin 维在 onnx 权重张量里的轴位置（INT4 沿此轴 nibble-pack）。
         Conv 轴1；ConvTranspose/MatMul 轴0；Gemm 依 transB(0->轴0,1->轴1)；
-        LSTM/GRU 轴2(input/hidden)。
+        LSTM/GRU 轴2(input/hidden)。不支持的算子类型返回 None。
         """
         if node.type == 'Conv':
             return 1
@@ -296,9 +296,8 @@ class QuantOpInfo:
             return 0
         if node.type in ['LSTM', 'GRU']:
             return 2
-        raise RuntimeError(
-            "Unexpected node's type {} for get_cin_axis".format(node.type)
-        )
+        # 不支持的算子类型返回 None，由调用方判断（不以异常表达）
+        return None
 
     @staticmethod
     def get_node_tensor(node):
