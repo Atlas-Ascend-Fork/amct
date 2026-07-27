@@ -190,11 +190,14 @@ def calibrate(model, calib_blocks):
     # 只跑 transformer 主体，**不过 lm_head**：校准只需要各层 Hessian 与补偿，
     # logits 算完即弃，而它是 [n_blocks, seq, vocab]——128k token × 151936 词表
     # ≈ 36GiB，是全流程最大的单个张量，且纯属浪费（lm_head 本就在 skip_layers 里）。
+    # use_cache=False：校准是一次性整段前向、无增量解码，KV cache 建完即弃。
+    # Qwen3-8B(GQA, 8kv×128) 每层 K+V = 2·N·1024·2B，36 层在 128k token 下是 18.9GB
+    # 的纯浪费（256k token 时 37.7GB）。关掉不影响任何数值——缓存只服务增量解码。
     body = getattr(model, "model", None)
     if callable(body):
-        body(ids)
+        body(ids, use_cache=False)
     else:  # 兜底：模型结构不含 .model 时退回整模型前向
-        model(ids)
+        model(ids, use_cache=False)
     torch_npu.npu.empty_cache()
     print(f"[calib] done in {time.time() - t0:.1f}s")
 
@@ -213,7 +216,7 @@ def test_ppl(model, testenc, max_samples=0):
     t0 = time.time()
     for i in tqdm.tqdm(range(nsamples), desc="evaluating..."):
         batch = testenc[:, i * seqlen : (i + 1) * seqlen].to(dev)
-        logits = model(batch).logits
+        logits = model(batch, use_cache=False).logits  # 逐块整段前向，KV cache 无用
         shift_logits = logits[:, :-1, :].contiguous().float()
         # 多卡时 lm_head 输出可能落在另一张卡 → labels 对齐到 logits 所在设备
         shift_labels = testenc[:, i * seqlen : (i + 1) * seqlen][:, 1:].to(shift_logits.device)
