@@ -186,7 +186,15 @@ def calibrate(model, calib_blocks):
               f"最大层的 Hessian 估计不足、补偿可能过拟合校准集。"
               f"提高 --n_calib（注意它计的是语料【条数】不是块数）")
     t0 = time.time()
-    model(calib[:, : model.seqlen].to(input_device(model)))
+    ids = calib[:, : model.seqlen].to(input_device(model))
+    # 只跑 transformer 主体，**不过 lm_head**：校准只需要各层 Hessian 与补偿，
+    # logits 算完即弃，而它是 [n_blocks, seq, vocab]——128k token × 151936 词表
+    # ≈ 36GiB，是全流程最大的单个张量，且纯属浪费（lm_head 本就在 skip_layers 里）。
+    body = getattr(model, "model", None)
+    if callable(body):
+        body(ids)
+    else:  # 兜底：模型结构不含 .model 时退回整模型前向
+        model(ids)
     torch_npu.npu.empty_cache()
     print(f"[calib] done in {time.time() - t0:.1f}s")
 
