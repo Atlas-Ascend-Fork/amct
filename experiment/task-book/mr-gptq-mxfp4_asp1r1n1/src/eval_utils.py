@@ -167,7 +167,18 @@ def calibrate(model, calib_blocks):
     calib_blocks: list[[1, block_size]] → 堆成 [n_blocks, block_size]。
     """
     calib = torch.cat(calib_blocks, dim=0)
-    print(f"[calib] shape={tuple(calib.shape)}")
+    n_tok = calib.shape[0] * calib.shape[1]
+    # Hessian H=2XXᵀ 是 [in,in]，样本数少于 in_features 时秩亏、补偿等于对校准集过拟合。
+    # 全网最大的 in_features（Qwen3-8B 的 down_proj=12288）决定了所需样本量的下限。
+    max_in = max((m.in_features for m in model.modules()
+                  if isinstance(m, torch.nn.Linear)), default=0)
+    ratio = n_tok / max_in if max_in else float("inf")
+    print(f"[calib] shape={tuple(calib.shape)}  tokens={n_tok}  "
+          f"最大 in_features={max_in}  样本/维度比={ratio:.1f}:1")
+    if ratio < 4:
+        print(f"[calib] ⚠️  样本/维度比 {ratio:.1f}:1 偏低（GPTQ 常用 ≥20:1），"
+              f"最大层的 Hessian 估计不足、补偿可能过拟合校准集。"
+              f"提高 --n_calib（注意它计的是语料【条数】不是块数）")
     t0 = time.time()
     model(calib[:, : model.seqlen].to(input_device(model)))
     torch_npu.npu.empty_cache()

@@ -56,8 +56,16 @@ def build_args():
     ap.add_argument("--mode", required=True, choices=["bf16", "gptq_mxfp4", "mr_gptq"])
     ap.add_argument("--seq_len", type=int, default=2048,
                     help="PPL 分块长度；探索用 2048，最终交付用 4096")
-    ap.add_argument("--n_calib", type=int, default=64, help="校准样本数（OOM 就调小）")
-    ap.add_argument("--calib_block", type=int, default=512)
+    ap.add_argument("--n_calib", type=int, default=64,
+                    help="校准语料【条数】（不是块数！）。pile-val 每条 ≤--max_line_tokens，"
+                         "取 n_calib 条拼接后按 --calib_block 切块 → 总 token≈n_calib×平均条长。"
+                         "⚠️调大 --calib_block 而不同步调大本参数会【减少】总 token 数")
+    ap.add_argument("--calib_block", type=int, default=512,
+                    help="校准切块长度。注意单条语料上限受 --max_line_tokens 约束，"
+                         "块长超过它时块内是多条不相关短文拼接，不等于真实长上下文")
+    ap.add_argument("--max_line_tokens", type=int, default=512,
+                    help="校准语料单条 token 上限，超长整条丢弃。要真正的长上下文校准"
+                         "（与 seq_len=4096 评测对齐）需同时调大本参数与 --calib_block")
     ap.add_argument("--dtype", default="float16", choices=["float16", "bfloat16"])
     ap.add_argument("--device", default="npu:0")
     ap.add_argument("--device_map", default=None,
@@ -122,7 +130,8 @@ def main():
             cfg["skip_layers"] = set(cfg["skip_layers"]) | {"mlp.gate"}
         print(f"[cfg] skip_layers = {sorted(cfg['skip_layers'])}")
         calib = get_calib_dataset(tokenizer, n_samples=args.n_calib,
-                                  block_size=args.calib_block)
+                                  block_size=args.calib_block,
+                                  max_line_tokens=args.max_line_tokens)
         report_coverage_memory(model, skip_layers=cfg["skip_layers"])  # 量化前理论统计
         amct.quantize(model, cfg)
         calibrate(model, calib)
