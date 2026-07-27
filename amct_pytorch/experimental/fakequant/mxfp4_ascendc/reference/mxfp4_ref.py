@@ -48,8 +48,7 @@ def quant_dequant_mxfp4(
     y = x_view / scale
     y_abs = y.abs()
 
-    # FP4 e2m1 positive codebook nearest-quant via midpoint buckets:
-    # [0, 0.5, 1, 1.5, 2, 3, 4, 6]
+    # FP4 e2m1 positive codebook (nearest via midpoints): 0, 0.5, 1, 1.5, 2, 3, 4, 6
     q_abs = torch.zeros_like(y_abs)
     q_abs = torch.where(y_abs >= 0.25, 0.5, q_abs)
     q_abs = torch.where(y_abs >= 0.75, 1.0, q_abs)

@@ -48,6 +48,11 @@ public:
             invScaleMul = 1.0f;
         effInvScale = INV_SCALE_FACTOR * invScaleMul;
 
+        // Defense in depth: host and entry already clamp numCores>=1, but
+        // Init must not divide by zero if a bad tiling buffer reaches here.
+        if (numCores == 0)
+            numCores = 1;
+
         uint32_t coreIdx = GetBlockIdx();
         uint32_t nBlocks = totalLen / BLOCK_SIZE;
         uint32_t perCore = nBlocks / numCores;

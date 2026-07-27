@@ -112,16 +112,16 @@ def main():
 
     from mxfp4 import quant_dequant_mxfp4 as kernel
 
-    H = 3072
+    hidden_size = 3072
     intermediate_size = 1536
     shapes = [
-        ("decode    bs=1   x H", (1, H)),
-        ("decode    bs=32  x H", (32, H)),
-        ("decode    bs=64  x H", (64, H)),
-        ("prefill   bs=1024 x H", (1024, H)),
-        ("prefill   bs=4096 x H", (4096, H)),
-        ("prefill   bs=8192 x H", (8192, H)),
-        ("prefill   bs=32768 x H", (32768, H)),
+        ("decode    bs=1   x H", (1, hidden_size)),
+        ("decode    bs=32  x H", (32, hidden_size)),
+        ("decode    bs=64  x H", (64, hidden_size)),
+        ("prefill   bs=1024 x H", (1024, hidden_size)),
+        ("prefill   bs=4096 x H", (4096, hidden_size)),
+        ("prefill   bs=8192 x H", (8192, hidden_size)),
+        ("prefill   bs=32768 x H", (32768, hidden_size)),
         ("MoE expert 256 x I (n_tok=256)", (256, intermediate_size)),
         ("MoE expert 1024 x I", (1024, intermediate_size)),
         ("MoE expert 4096 x I", (4096, intermediate_size)),
@@ -130,7 +130,7 @@ def main():
     ]
 
     print(f"\n  device={device}  dtype={dtype}  iters={args.iters}")
-    print(f"  H={H} (hidden_size)  I={intermediate_size} (intermediate_size)")
+    print(f"  H={hidden_size} (hidden_size)  I={intermediate_size} (intermediate_size)")
     print()
     print(
         f"  {'shape':40s} {'numel':>12s}  {'torch':>12s}  "

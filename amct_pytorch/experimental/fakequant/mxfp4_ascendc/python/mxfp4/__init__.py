@@ -143,4 +143,16 @@ def _self_test_or_raise() -> None:
 _load_native_libs()
 _self_test_or_raise()
 
-from .ops import quant_dequant_mxfp4  # noqa: E402, F401
+
+def __getattr__(name: str):
+    """Lazy-export wrappers after native libs are loaded above.
+
+    Importing ``.ops`` only after ``_load_native_libs()`` keeps
+    ``torch.ops.amct.*`` registration ordered correctly, while avoiding a
+    mid-module import that trips G.FMT.05 / wrong-import-position checks.
+    """
+    if name == "quant_dequant_mxfp4":
+        from .ops import quant_dequant_mxfp4
+
+        return quant_dequant_mxfp4
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -33,19 +33,21 @@ def _banner(msg: str) -> None:
 
 
 def test_correctness(
-    shapes: list[tuple[int, ...]] = [
-        (4, 128),
-        (1, 32),
-        (16, 1024),
-        (64, 4096),
-        # last_dim not a multiple of 32: catches per-row vs flatten-then-pad
-        (2, 33),
-        (3, 17),
-        (4, 48, 33),
-    ],
+    shapes: list[tuple[int, ...]] | None = None,
     seed: int = 42,
     atol: float = 1e-6,
 ) -> bool:
+    if shapes is None:
+        shapes = [
+            (4, 128),
+            (1, 32),
+            (16, 1024),
+            (64, 4096),
+            # last_dim not a multiple of 32: catches per-row vs flatten-then-pad
+            (2, 33),
+            (3, 17),
+            (4, 48, 33),
+        ]
     _banner("Correctness")
     torch.manual_seed(seed)
     all_ok = True

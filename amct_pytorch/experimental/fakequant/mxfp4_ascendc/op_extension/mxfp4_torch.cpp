@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstring>
 
 #include "aclrtlaunch_mxfp4_quant_dequant.h"
 #include "mxfp4_tiling.h"
@@ -74,8 +73,13 @@ at::Tensor Mxfp4QuantDequantTorch(const at::Tensor &x, double invScaleFactorScal
     // completes—no unbounded device-memory growth across (totalLen, cores,
     // scale) keys.
     float invScaleMul = static_cast<float>(invScaleFactorScale);
-    int32_t scaleBits = 0;
-    std::memcpy(&scaleBits, &invScaleMul, sizeof(float));
+    // Bit-cast float bits into tiling int32 slot (same pattern as kernel side).
+    union {
+        float f;
+        int32_t i;
+    } scaleU;
+    scaleU.f = invScaleMul;
+    int32_t scaleBits = scaleU.i;
     Mxfp4TilingData hostTiling{totalLen, static_cast<int32_t>(numCores), scaleBits, 0};
     auto tiling = at::empty({MXFP4_TILING_INTS}, at::TensorOptions().dtype(at::kInt).device(x.device()));
     auto tilingCpu = at::from_blob(&hostTiling, {MXFP4_TILING_INTS}, at::TensorOptions().dtype(at::kInt)).clone();
