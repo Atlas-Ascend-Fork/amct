@@ -60,6 +60,10 @@ _ACT_PROTECT = []
 # 过大则补偿被削弱，是 GPTQ 少数值得一调的超参。
 _PERC_DAMP = None
 
+# Hessian 累积的分块大小（沿校准 batch 维，单位=块数；0 = 不分块，父类原行为）。
+# 与整块累积数学等价（父类 running-average），只降峰值显存，用于放大校准集。
+_HESSIAN_CHUNK = 0
+
 _PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始）
 
 _FP4_MAX_EXP = 2  # E2M1 最大指数（6 = 1.5·2²）；scale fitting 的 offset
@@ -130,7 +134,16 @@ class MRGPTQuant(GPTQuant):
                 input_data, self.group_size, self.increments.get("act_scale_fit", False),
                 self.increments.get("act_clip", False),
                 self.increments.get("act_fit_rowwise", False))
-        super().update_hessian(input_data)
+        # 分块累积 Hessian：父类要把输入转成 [cin, N] 的 fp32 转置副本再 matmul，
+        # 显存随校准 token 线性增长——down_proj(cin=12288) 在 n_calib=512 下需 12.35GiB 而 OOM。
+        # 父类是 running-average（hessian *= n/(n+b); n += b），故【分块与整块数学等价】：
+        #   整块 h=(2/B)·XXᵀ；两块 h=(2/B)(X₁X₁ᵀ+X₂X₂ᵀ) —— 相同。
+        # 仅对带 batch 维的 3D 输入分块（沿 dim0，即父类计数用的 batch_size 维）。
+        if _HESSIAN_CHUNK and input_data.dim() == 3 and input_data.shape[0] > _HESSIAN_CHUNK:
+            for chunk in torch.split(input_data, _HESSIAN_CHUNK, dim=0):
+                super().update_hessian(chunk)
+        else:
+            super().update_hessian(input_data)
 
     # ---- MXFP scale fitting（附录 H 式2/3）：E8M0 网格重映射 ----------------
     @staticmethod

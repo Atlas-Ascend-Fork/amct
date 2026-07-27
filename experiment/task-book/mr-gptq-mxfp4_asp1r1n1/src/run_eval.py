@@ -89,6 +89,11 @@ def build_args():
                          "（act_clip 实测为负结果，保留作消融）")
     ap.add_argument("--perc_damp", type=float, default=None,
                     help="GPTQ Hessian 阻尼系数（默认用 amct 内置值）；影响 Cholesky 稳定性与补偿强度")
+    ap.add_argument("--hessian_chunk", type=int, default=0,
+                    help="Hessian 分块累积的块数（0=不分块）。父类累积 Hessian 时要造 [cin,N] 的 "
+                         "fp32 转置副本，显存随校准 token 线性涨，down_proj(cin=12288) 在大校准集下"
+                         "会 OOM。父类是 running-average，分块与整块【数学等价】，只降峰值显存。"
+                         "放大 --n_calib 时配它使用，建议 32")
     return ap.parse_args()
 
 
@@ -111,6 +116,10 @@ def main():
             if args.perc_damp is not None:
                 mr_gptq_module._PERC_DAMP = args.perc_damp
                 print(f"[MR-GPTQ] GPTQ 阻尼系数 perc_damp = {args.perc_damp}")
+            if args.hessian_chunk:
+                mr_gptq_module._HESSIAN_CHUNK = args.hessian_chunk
+                print(f"[MR-GPTQ] Hessian 分块累积 = 每 {args.hessian_chunk} 块"
+                      f"（与整块数学等价，仅降峰值显存以放大校准集）")
             print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
             if args.hadamard_k != 128:
                 print(f"[MR-GPTQ] Hadamard 块大小 = {args.hadamard_k}（消融：>128 测更强旋转压离群值）")
