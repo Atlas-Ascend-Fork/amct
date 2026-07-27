@@ -303,7 +303,10 @@ class LlmDeployWorkflow:
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
+        if self.quant_dtype == "bf16":
+            self._refresh_config_tensor()
+        else:
+            self._refresh_config(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {

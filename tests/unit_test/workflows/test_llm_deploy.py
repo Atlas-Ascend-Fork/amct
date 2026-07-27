@@ -25,6 +25,7 @@ import importlib
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -605,6 +606,97 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
     }
     assert refreshed[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
+
+
+def test_deploy_parser_accepts_tensorwise_bf16(monkeypatch):
+    from amct_pytorch.cli.llm.args import parser_gen
+
+    monkeypatch.setattr(sys, "argv", [
+        "deploy.py",
+        "--granularity", "tensor",
+        "--quant_dtype", "bf16",
+    ])
+
+    args = parser_gen(command="deploy")
+
+    assert args.granularity == "tensor"
+    assert args.quant_dtype == "bf16"
+
+
+def test_run_tensorwise_bf16_dequantizes_without_quant_config(monkeypatch, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    dst.mkdir()
+    (src / CONFIG_JSON).write_text(json.dumps({
+        "torch_dtype": "float32",
+        "quantization_config": {"old": True},
+    }))
+    save_file(
+        {
+            "layer.weight_packed": torch.tensor([[0x21, 0x43]], dtype=torch.uint8),
+            "layer.weight_scale": torch.ones(1, 1, dtype=torch.uint8),
+            "other.weight": torch.ones(1, 4, dtype=torch.bfloat16),
+        },
+        str(src / KEY_SHARD1_SAFETENSORS),
+    )
+    (src / SAFETENSORS_INDEX_JSON).write_text(json.dumps({
+        "metadata": {},
+        "weight_map": {
+            "layer.weight_packed": KEY_SHARD1_SAFETENSORS,
+            "layer.weight_scale": KEY_SHARD1_SAFETENSORS,
+            "other.weight": KEY_SHARD1_SAFETENSORS,
+        },
+    }))
+
+    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.quant_payload",
+        MagicMock(side_effect=AssertionError("bf16 tensorwise must not quantize weights")),
+    )
+
+    def fake_convert_state_dict(weight, weight_name, *args, **kwargs):
+        if weight_name.endswith(".weight_packed"):
+            return torch.ones(1, 4, dtype=torch.bfloat16)
+        return weight
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.convert_state_dict",
+        fake_convert_state_dict,
+    )
+
+    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
+    wf.pipeline = MagicMock()
+    wf.pipeline.get_scale_name.side_effect = lambda name: (
+        ".weight_scale",
+        name.replace(".weight_packed", ".weight_scale"),
+    )
+    wf.pipeline.generate_tensorwise_quant_layers.return_value = {"layer": 4}
+    wf.pipeline.generate_tensorwise_ignore_layers.return_value = ["ignored.weight"]
+    wf.pipeline.block_size.return_value = 4
+    wf.pipeline.tensorwise_output_weight_name = (
+        lambda name: name.replace(".weight_packed", ".weight")
+    )
+
+    wf._run_tensorwise()
+
+    refreshed_index = json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())
+    refreshed_config = json.loads((dst / CONFIG_JSON).read_text())
+    saved = load_file(dst / KEY_SHARD1_SAFETENSORS)
+
+    assert refreshed_index["weight_map"] == {
+        "layer.weight": KEY_SHARD1_SAFETENSORS,
+        "other.weight": KEY_SHARD1_SAFETENSORS,
+    }
+    assert "layer.weight_scale" not in saved
+    assert saved["layer.weight"].dtype == torch.bfloat16
+    assert saved["other.weight"].dtype == torch.bfloat16
+    assert refreshed_config["torch_dtype"] == "bfloat16"
+    assert QUANTIZATION_CONFIG not in refreshed_config
 
 
 # ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
