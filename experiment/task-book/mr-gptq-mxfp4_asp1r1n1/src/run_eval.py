@@ -74,8 +74,8 @@ def build_args():
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
                     choices=["scale_fitting", "hadamard", "act_reorder", "act_quant",
-                             "act_scale_fit", "joint_comp"],
-                    help="mr_gptq 增量；act_quant=W4A4；act_scale_fit/joint_comp=W4A4 优化①②")
+                             "act_scale_fit", "joint_comp", "act_clip"],
+                    help="mr_gptq 增量；act_quant=W4A4；act_scale_fit/joint_comp/act_clip=W4A4 优化①②③")
     return ap.parse_args()
 
 

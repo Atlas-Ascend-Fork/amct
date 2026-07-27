@@ -34,7 +34,12 @@ _INCREMENTS = {
     "act_quant": False,       # W4A4：激活也做 MXFP4（动态、逐32块）；须配 hadamard 压离群值
     "act_scale_fit": False,   # W4A4 优化①：激活量化也用 scale fitting（次幂次细网格，非幂次）
     "joint_comp": False,      # W4A4 优化②：用量化后的激活建 Hessian，权重补偿适配 W4A4 输入
+    "act_clip": False,        # W4A4 优化③：激活 scale 裁剪，逐块搜 α 最小化 MSE（不加高精度层）
 }
+
+# 激活 scale 裁剪候选系数：scale ← α·scale。含 1.0（=不裁剪）→ 逐块取 MSE 最优者时，
+# 结果在 MSE 意义上**不可能劣于**不裁剪。跨度取宽（0.6~1.0）而非细密，因最优 α 未知且逐块异质。
+_ACT_CLIP_GRID = (1.0, 0.9, 0.8, 0.7, 0.6)
 
 _HADAMARD_K = 128  # block-wise Hadamard 尺寸；论文取 128 是为【在线算子】的开销权衡。
                    # 本项目 fake-quant 只测精度、旋转无推理开销 → 可经 --hadamard_k 调大
@@ -110,7 +115,8 @@ class MRGPTQuant(GPTQuant):
         # W4A4 优化②（联合补偿）：用【量化后】的激活建 Hessian，使权重补偿适配 W4A4 推理输入
         if self.increments.get("joint_comp") and self._do_act_quant():
             input_data = self._quant_act_mxfp4(
-                input_data, self.group_size, self.increments.get("act_scale_fit", False))
+                input_data, self.group_size, self.increments.get("act_scale_fit", False),
+                self.increments.get("act_clip", False))
         super().update_hessian(input_data)
 
     # ---- MXFP scale fitting（附录 H 式2/3）：E8M0 网格重映射 ----------------
@@ -153,12 +159,44 @@ class MRGPTQuant(GPTQuant):
         scale_full = blk_scale.repeat_interleave(group_size, dim=1)[:, :in_features]
         return float_to_fp4e2m1(weight / scale_full) * scale_full
 
+    # ---- 激活 scale 裁剪搜索（W4A4 优化③） ---------------------------------
+    @classmethod
+    def _quant_clip_search(cls, x2, blk_scale, group_size, grid=_ACT_CLIP_GRID):
+        """逐块搜裁剪系数 α：scale ← α·scale，取块内量化 MSE 最小的 α。
+
+        动机：默认 scale 让块内 |max| 恰好落到 E2M1 上界 6，即**最大的那个元素独占了全部
+        动态范围**；E2M1 仅 16 级，其余 31 个元素被挤在粗网格上。适度裁剪（牺牲长尾的
+        精确度）能显著提高块内多数元素的分辨率——这是不引入任何高精度层、纯 W4A4 的优化。
+
+        grid 含 1.0 → 每块取 argmin MSE 时，**结果在 MSE 意义上不劣于不裁剪**（最坏退化为原行为）。
+        x2[N, C]、blk_scale[N, n_groups]；返回 [N, C]。
+        """
+        n_rows, columns = x2.shape
+        n_groups = blk_scale.shape[1]
+        pad = n_groups * group_size - columns
+        xg = (F.pad(x2, (0, pad)) if pad else x2).reshape(n_rows, n_groups, group_size)
+
+        best_q = best_err = None
+        for alpha in grid:
+            s = (blk_scale * alpha).clamp_min(1e-20).unsqueeze(-1)   # [N, G, 1]
+            q = float_to_fp4e2m1(xg / s) * s
+            err = (q - xg).pow(2).sum(dim=-1, keepdim=True)          # [N, G, 1] 逐块 MSE
+            if best_q is None:
+                best_q, best_err = q, err
+            else:
+                take = err < best_err
+                best_q = torch.where(take, q, best_q)
+                best_err = torch.where(take, err, best_err)
+        out = best_q.reshape(n_rows, n_groups * group_size)
+        return out[:, :columns] if pad else out
+
     # ---- 激活 MXFP4 动态量化（W4A4，增量④） ---------------------------------
     @classmethod
-    def _quant_act_mxfp4(cls, x, group_size=32, scale_fit=False):
+    def _quant_act_mxfp4(cls, x, group_size=32, scale_fit=False, clip=False):
         """激活 MXFP4 动态伪量化：把 [*, in] 展平成 [N, in]，沿最后一维每 32 通道一块，
         **运行时**算 scale（激活是动态的，每次前向重算）→ 吸附到 E2M1。复用 _quant_direct。
         scale_fit=False：E8M0 幂次 scale；True：附录 H 次幂次细网格（W4A4 优化①，减小激活 scale 误差）。
+        clip=True：在此 scale 上再逐块搜裁剪系数（W4A4 优化③）。
         须先做 Hadamard 旋转压激活离群值，否则 4-bit 激活会崩。"""
         shape = x.shape
         x2 = x.reshape(-1, shape[-1]).float()
@@ -166,7 +204,10 @@ class MRGPTQuant(GPTQuant):
             blk = cls._fit_block_scale(x2, group_size)                   # 次幂次细网格
         else:
             blk = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(x2)))  # E8M0 幂次
-        xq = cls._quant_direct(x2, blk, group_size)
+        if clip:
+            xq = cls._quant_clip_search(x2, blk, group_size)
+        else:
+            xq = cls._quant_direct(x2, blk, group_size)
         return xq.reshape(shape).to(x.dtype)
 
     # ---- Hessian 逆的上三角 Cholesky（override 父类，全程 CPU） -------------
@@ -287,7 +328,8 @@ class MRGPTQuant(GPTQuant):
         # 注意：只在此 fake-quant 路径量化激活；校准前向走父类 F.linear、不量化激活。
         if self._do_act_quant():
             inputs = self._quant_act_mxfp4(
-                inputs, self.group_size, self.increments.get("act_scale_fit", False))
+                inputs, self.group_size, self.increments.get("act_scale_fit", False),
+                self.increments.get("act_clip", False))
         return F.linear(inputs, self.weight.to(inputs.dtype), self.bias)
 
 
