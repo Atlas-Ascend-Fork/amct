@@ -137,9 +137,8 @@ private:
     }
 
     // Phase 0 + 1a: |x| then BlockReduceMax + tile Max → per-block max at stride 32.
-    __aicore__ inline void ComputeAbsAndBlockMax(
-        const LocalTensor<float> &xL, LocalTensor<float> &yAbBuf, LocalTensor<float> &tmpBuf, uint32_t nblk,
-        uint32_t N) {
+    __aicore__ inline void ComputeAbsAndBlockMax(const LocalTensor<float> &xL, LocalTensor<float> &yAbBuf,
+        LocalTensor<float> &tmpBuf, uint32_t nblk, uint32_t N) {
         Abs(yAbBuf, xL, N);
         uint32_t totalRpt = nblk * 4;
         uint32_t doneRpt = 0;
@@ -173,9 +172,8 @@ private:
     }
 
     // Phase 1c: Duplicate invScale into tmpBuf; put scale*0.5 into yL; yAbs *= invScale.
-    __aicore__ inline void BroadcastInvScaleAndHalf(
-        LocalTensor<float> &yAbBuf, LocalTensor<float> &tmpBuf, LocalTensor<float> &yL, const float *invScaleArr,
-        uint32_t nblk, uint32_t N) {
+    __aicore__ inline void BroadcastInvScaleAndHalf(LocalTensor<float> &yAbBuf, LocalTensor<float> &tmpBuf,
+        LocalTensor<float> &yL, const float *invScaleArr, uint32_t nblk, uint32_t N) {
         uint32_t b = 0;
         for (; b + 7 < nblk; b += 8) {
             Duplicate(tmpBuf[(b)*BLOCK_SIZE], invScaleArr[b], BLOCK_SIZE);
@@ -227,9 +225,8 @@ private:
     }
 
     // Phase 3 + 4: apply scale*0.5, restore sign, enqueue output.
-    __aicore__ inline void ApplyScaleSignAndFinish(
-        LocalTensor<float> &xL, LocalTensor<float> &yL, LocalTensor<float> &yAbBuf, LocalTensor<float> &qAbBuf,
-        uint32_t N) {
+    __aicore__ inline void ApplyScaleSignAndFinish(LocalTensor<float> &xL, LocalTensor<float> &yL,
+        LocalTensor<float> &yAbBuf, LocalTensor<float> &qAbBuf, uint32_t N) {
         Mul(qAbBuf, qAbBuf, yL, N);
         Muls(yAbBuf, xL, BIG, N);
         Mins(yAbBuf, yAbBuf, 1.0f, N);
