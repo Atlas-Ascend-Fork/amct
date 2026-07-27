@@ -125,6 +125,26 @@ class MRGPTQuant(GPTQuant):
         return xr.reshape(shape).to(x.dtype)
 
     def update_hessian(self, input_data):
+        """分块入口：把【旋转 + 激活量化 + Hessian 累积】整条链路都放进分块循环。
+
+        三步的中间量都随校准 token 线性增长——旋转的 fp32 副本、`_quant_direct` 的
+        scale_full/除法/`float_to_fp4e2m1` 内部掩码、父类的 [cin, N] fp32 转置。
+        只分块最后一步不够：256k token 下前两步会先 OOM。
+        """
+        if _HESSIAN_CHUNK and input_data.dim() == 3 and input_data.shape[0] > _HESSIAN_CHUNK:
+            for chunk in torch.split(input_data, _HESSIAN_CHUNK, dim=0):
+                self._update_hessian_chunk(chunk)
+        else:
+            self._update_hessian_chunk(input_data)
+
+    def _update_hessian_chunk(self, input_data):
+        """单块的旋转 + （联合补偿下的）激活量化 + Hessian 累积。
+
+        等价性：Hessian 累积因父类 running-average 而与整块【严格等价】；旋转是逐 token
+        线性变换，同样与分块无关。唯一有差别的是 `act_scale_fit` 的细网格拟合——它取
+        全张量的 Lmin/Lmax，分块后变成逐块拟合。这反而更贴近推理期行为（评测时每个
+        block 单独前向，本就是逐 block 拟合），故取分块语义。
+        """
         # 旋转后累积 Hessian，使 H_r = RᵀHR 与旋转权重一致（转输入比转 Hessian 便宜）
         if self._do_hadamard():
             input_data = self._rotate_last_dim(input_data)
@@ -134,16 +154,9 @@ class MRGPTQuant(GPTQuant):
                 input_data, self.group_size, self.increments.get("act_scale_fit", False),
                 self.increments.get("act_clip", False),
                 self.increments.get("act_fit_rowwise", False))
-        # 分块累积 Hessian：父类要把输入转成 [cin, N] 的 fp32 转置副本再 matmul，
-        # 显存随校准 token 线性增长——down_proj(cin=12288) 在 n_calib=512 下需 12.35GiB 而 OOM。
-        # 父类是 running-average（hessian *= n/(n+b); n += b），故【分块与整块数学等价】：
+        # 父类 running-average（hessian *= n/(n+b); n += b）保证分块累积严格等价：
         #   整块 h=(2/B)·XXᵀ；两块 h=(2/B)(X₁X₁ᵀ+X₂X₂ᵀ) —— 相同。
-        # 仅对带 batch 维的 3D 输入分块（沿 dim0，即父类计数用的 batch_size 维）。
-        if _HESSIAN_CHUNK and input_data.dim() == 3 and input_data.shape[0] > _HESSIAN_CHUNK:
-            for chunk in torch.split(input_data, _HESSIAN_CHUNK, dim=0):
-                super().update_hessian(chunk)
-        else:
-            super().update_hessian(input_data)
+        super().update_hessian(input_data)
 
     # ---- MXFP scale fitting（附录 H 式2/3）：E8M0 网格重映射 ----------------
     @staticmethod

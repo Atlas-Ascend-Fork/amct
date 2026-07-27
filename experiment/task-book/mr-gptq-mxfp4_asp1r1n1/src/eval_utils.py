@@ -170,8 +170,14 @@ def calibrate(model, calib_blocks):
     n_tok = calib.shape[0] * calib.shape[1]
     # Hessian H=2XXᵀ 是 [in,in]，样本数少于 in_features 时秩亏、补偿等于对校准集过拟合。
     # 全网最大的 in_features（Qwen3-8B 的 down_proj=12288）决定了所需样本量的下限。
-    max_in = max((m.in_features for m in model.modules()
-                  if isinstance(m, torch.nn.Linear)), default=0)
+    # ⚠️本函数在 amct.quantize() 之后调用，nn.Linear 已被换成量化模块（非 nn.Linear
+    # 子类）——按 isinstance(nn.Linear) 扫只剩 lm_head，会把 in_features 报小。
+    # 改为扫所有持 2D weight 的模块，取 weight.shape[1]。
+    max_in = 0
+    for m in model.modules():
+        w = getattr(m, "weight", None)
+        if isinstance(w, torch.Tensor) and w.dim() == 2:
+            max_in = max(max_in, w.shape[1])
     ratio = n_tok / max_in if max_in else float("inf")
     print(f"[calib] shape={tuple(calib.shape)}  tokens={n_tok}  "
           f"最大 in_features={max_in}  样本/维度比={ratio:.1f}:1")
