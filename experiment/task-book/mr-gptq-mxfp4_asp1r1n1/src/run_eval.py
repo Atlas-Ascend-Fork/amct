@@ -74,9 +74,11 @@ def build_args():
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
                     choices=["scale_fitting", "hadamard", "act_reorder", "act_quant",
-                             "act_scale_fit", "joint_comp", "act_clip", "weight_clip"],
-                    help="mr_gptq 增量；act_quant=W4A4；act_scale_fit/joint_comp/act_clip/weight_clip"
-                         "=W4A4 优化①②③④（act_clip 实测为负结果，保留作消融）")
+                             "act_scale_fit", "joint_comp", "act_clip", "weight_clip",
+                             "act_fit_rowwise"],
+                    help="mr_gptq 增量；act_quant=W4A4；act_scale_fit/joint_comp/act_clip/"
+                         "weight_clip/act_fit_rowwise=W4A4 优化①②③④⑤"
+                         "（act_clip 实测为负结果，保留作消融）")
     ap.add_argument("--perc_damp", type=float, default=None,
                     help="GPTQ Hessian 阻尼系数（默认用 amct 内置值）；影响 Cholesky 稳定性与补偿强度")
     return ap.parse_args()

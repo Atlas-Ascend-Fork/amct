@@ -36,6 +36,7 @@ _INCREMENTS = {
     "joint_comp": False,      # W4A4 优化②：用量化后的激活建 Hessian，权重补偿适配 W4A4 输入
     "act_clip": False,        # W4A4 优化③：激活 scale 裁剪，逐块搜 α 最小化 MSE（❌实测负结果）
     "weight_clip": False,     # W4A4 优化④：权重 scale 裁剪搜索（校准期一次，评测零开销）
+    "act_fit_rowwise": False, # W4A4 优化⑤：激活细网格跨度逐 token 拟合（须配 act_scale_fit）
 }
 
 # 激活 scale 裁剪候选系数：scale ← α·scale。含 1.0（=不裁剪）→ 逐块取 MSE 最优者时，
@@ -127,16 +128,26 @@ class MRGPTQuant(GPTQuant):
         if self.increments.get("joint_comp") and self._do_act_quant():
             input_data = self._quant_act_mxfp4(
                 input_data, self.group_size, self.increments.get("act_scale_fit", False),
-                self.increments.get("act_clip", False))
+                self.increments.get("act_clip", False),
+                self.increments.get("act_fit_rowwise", False))
         super().update_hessian(input_data)
 
     # ---- MXFP scale fitting（附录 H 式2/3）：E8M0 网格重映射 ----------------
     @staticmethod
-    def _fit_block_scale(weight, block_size=32):
+    def _fit_block_scale(weight, block_size=32, per_row=False):
         """把每块连续 log-scale 重映射到 [L_min,L_max] 的 256 级细网格，
         得到次幂次(sub-power-of-two) scale，减小 E8M0 粗网格的 scale 量化误差。
         L = log2(block_max) − FP4_MAX_EXP；q=clamp(round(255·(L−Lmin)/(Lmax−Lmin)),0,255)；
         L_fit = Lmin + q·(Lmax−Lmin)/255；返回每块浮点 scale [out, n_groups]。
+
+        per_row=False（默认，**权重侧**）：Lmin/Lmax 取全张量极值。权重分布静态、良性，
+            全局网格拟合是论文原意，W4A16 主线结果基于此，勿改。
+        per_row=True（**激活侧**，W4A4 优化⑤）：Lmin/Lmax 逐行（逐 token）取。
+            激活是 [N_token, in]，全局拟合下**任一 token 上的离群值都会拉宽 256 级网格的
+            跨度、降低所有其它 token 的 scale 分辨率**——把静态权重的假设套到动态激活上
+            的错配。逐行拟合让每个 token 独享自己的网格跨度。
+            注意与 act_clip（负结果）机理不同：那是砍掉块内 max（削弱 attention sink），
+            这里 max 分毫不动，只是重新分配 256 个 scale 档位。
         """
         out, in_features = weight.shape
         n_groups = (in_features + block_size - 1) // block_size
@@ -147,7 +158,11 @@ class MRGPTQuant(GPTQuant):
         # 连续理想 log2(scale)：block_max/scale = 6（用满 E2M1 范围，非 4）
         L = torch.log2(block_max) - math.log2(6.0)
         L = torch.where(torch.isfinite(L), L, torch.zeros_like(L))  # 空块→0
-        Lmin, Lmax = L.min(), L.max()
+        if per_row:
+            Lmin = L.amin(dim=-1, keepdim=True)                      # [out, 1] 逐行
+            Lmax = L.amax(dim=-1, keepdim=True)
+        else:
+            Lmin, Lmax = L.min(), L.max()                            # 全局标量
         denom = (Lmax - Lmin).clamp_min(1e-6)
         q = torch.clamp(torch.round(255.0 * (L - Lmin) / denom), 0.0, 255.0)
         L_fit = Lmin + q * (Lmax - Lmin) / 255.0                    # 细网格
@@ -237,16 +252,18 @@ class MRGPTQuant(GPTQuant):
 
     # ---- 激活 MXFP4 动态量化（W4A4，增量④） ---------------------------------
     @classmethod
-    def _quant_act_mxfp4(cls, x, group_size=32, scale_fit=False, clip=False):
+    def _quant_act_mxfp4(cls, x, group_size=32, scale_fit=False, clip=False,
+                         fit_rowwise=False):
         """激活 MXFP4 动态伪量化：把 [*, in] 展平成 [N, in]，沿最后一维每 32 通道一块，
         **运行时**算 scale（激活是动态的，每次前向重算）→ 吸附到 E2M1。复用 _quant_direct。
         scale_fit=False：E8M0 幂次 scale；True：附录 H 次幂次细网格（W4A4 优化①，减小激活 scale 误差）。
-        clip=True：在此 scale 上再逐块搜裁剪系数（W4A4 优化③）。
+        clip=True：在此 scale 上再逐块搜裁剪系数（W4A4 优化③，❌负结果）。
+        fit_rowwise=True：细网格跨度逐 token 拟合而非全张量（W4A4 优化⑤，见 _fit_block_scale）。
         须先做 Hadamard 旋转压激活离群值，否则 4-bit 激活会崩。"""
         shape = x.shape
         x2 = x.reshape(-1, shape[-1]).float()
         if scale_fit:
-            blk = cls._fit_block_scale(x2, group_size)                   # 次幂次细网格
+            blk = cls._fit_block_scale(x2, group_size, per_row=fit_rowwise)  # 次幂次细网格
         else:
             blk = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(x2)))  # E8M0 幂次
         if clip:
@@ -378,7 +395,8 @@ class MRGPTQuant(GPTQuant):
         if self._do_act_quant():
             inputs = self._quant_act_mxfp4(
                 inputs, self.group_size, self.increments.get("act_scale_fit", False),
-                self.increments.get("act_clip", False))
+                self.increments.get("act_clip", False),
+                self.increments.get("act_fit_rowwise", False))
         return F.linear(inputs, self.weight.to(inputs.dtype), self.bias)
 
 
