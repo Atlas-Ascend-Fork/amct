@@ -1,9 +1,15 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["superpowers@git+https://github.com/obra/superpowers.git"],
-  "permission": {
-    "external_directory": {
-      "~/.config/**": "allow"
-    }
-  }
+	"$schema": "https://opencode.ai/config.json",
+	"plugin": [
+		"superpowers@git+https://github.com/obra/superpowers.git"
+	],
+	"permission": {
+		"external_directory": {
+			"~/.config/**": "allow"
+		}
+	},
+	"compaction": {
+		"auto": true,
+		"reserved": 20000
+	}
 }
