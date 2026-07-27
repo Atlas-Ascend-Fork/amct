@@ -8,7 +8,12 @@
 
 ```
 fakequant/
-├── mxfp4_ascendc/  # MXFP4 等特定格式的模拟伪量化实现
+├── mxfp4_ascendc/   # MXFP4 Ascend-C 伪量化算子（目录对齐 amct_ops/hifloat8_cast）
+│   ├── op_kernel/   # device kernel + tiling
+│   ├── op_extension/# Torch host + TORCH_LIBRARY 注册
+│   ├── python/mxfp4/# Python 包装
+│   ├── reference/   # 纯 PyTorch 参考实现
+│   └── tests/
 └── README.md
 ```
 
@@ -16,3 +21,4 @@ fakequant/
 
 - 本模块属于试验特性（`experimental`），接口与实现可能随硬件能力演进而调整。
 - 伪量化结果用于精度对齐与方案验证，不等同于目标硬件上的真实低比特算子性能表现。
+- MXFP4 算子实现参考 `amct_ops/hifloat8_cast` 的三层结构，但因试验阶段暂不迁入 `amct_ops/`。

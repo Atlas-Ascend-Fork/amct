@@ -1,0 +1,3 @@
+build/
+python/mxfp4/*.so
+python/mxfp4/*.so.*

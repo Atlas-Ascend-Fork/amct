@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /**
  * MXFP4 Quant-Dequant Ascend-C Kernel — Reciprocal + Cast floor
  *
@@ -11,14 +27,14 @@
  *      Cast(int32→float) for floor, reducing from 10 to 5 tile-wide ops.
  */
 #include "kernel_operator.h"
+#include "mxfp4_tiling.h"
 using namespace AscendC;
 
-constexpr int32_t BLOCK_SIZE = 32;
-constexpr float SCALE_FACTOR = 6.0f;
-constexpr float INV_SCALE_FACTOR = 1.0f / 6.0f;
-constexpr float MIN_SCALE_RAW = 9.313225746e-10f; // 2^-30
-constexpr int32_t BLOCKS_PER_TILE = 208;
-constexpr int32_t TILE_ELEMS = BLOCK_SIZE * BLOCKS_PER_TILE;
+constexpr int32_t BLOCK_SIZE = MXFP4_BLOCK_SIZE;
+constexpr float INV_SCALE_FACTOR = MXFP4_INV_SCALE_FACTOR;
+constexpr float MIN_SCALE_RAW = MXFP4_MIN_SCALE_RAW;
+constexpr int32_t BLOCKS_PER_TILE = MXFP4_BLOCKS_PER_TILE;
+constexpr int32_t TILE_ELEMS = MXFP4_TILE_ELEMS;
 constexpr float BIG = 1e20f;
 constexpr float STEP_EPS = 1e-6f;
 
@@ -322,13 +338,14 @@ private:
 
 extern "C" __global__ __aicore__ void mxfp4_quant_dequant(GM_ADDR x, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling) {
     GlobalTensor<int32_t> tilingGM;
-    tilingGM.SetGlobalBuffer((__gm__ int32_t *)tiling, 4);
+    tilingGM.SetGlobalBuffer((__gm__ int32_t *)tiling, MXFP4_TILING_INTS);
     uint32_t totalLen = (uint32_t)tilingGM.GetValue(0);
     uint32_t numCores = (uint32_t)tilingGM.GetValue(1);
     if (numCores == 0)
         numCores = 1;
 
-    // tiling[2] carries the float bit-pattern of the runtime scale multiplier.
+    // Mxfp4TilingData.invScaleMulBits carries the float bit-pattern of the
+    // runtime scale multiplier (see op_kernel/mxfp4_tiling.h).
     union {
         int32_t i;
         float f;

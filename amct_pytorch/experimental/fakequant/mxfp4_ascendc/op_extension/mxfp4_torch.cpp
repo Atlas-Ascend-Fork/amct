@@ -1,18 +1,28 @@
-/**
- * Pybind11 wrapper: launches the MXFP4 quant-dequant Ascend-C kernel
- * from a PyTorch-NPU tensor and returns the result as a tensor.
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-#include <pybind11/pybind11.h>
-#include <torch/extension.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 
 #include "aclrtlaunch_mxfp4_quant_dequant.h"
+#include "mxfp4_tiling.h"
+#include "ops.h"
 #include "tiling/platform/platform_ascendc.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
-
-namespace py = pybind11;
 
 namespace {
 
@@ -27,62 +37,58 @@ uint32_t GetAivCoreNum() {
     return n > 0u ? n : 20u;
 }
 
-}  // namespace
+} // namespace
 
-/* ---- exposed function ---- */
-at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, double inv_scale_factor_scale) {
+namespace AscendKernel {
+
+at::Tensor Mxfp4QuantDequantTorch(const at::Tensor &x, double invScaleFactorScale) {
     TORCH_CHECK(x.is_contiguous(), "input must be contiguous");
     TORCH_CHECK(x.scalar_type() == at::kFloat, "input must be float32 (got ", x.scalar_type(), ")");
-    TORCH_CHECK(x.device().type() == c10::DeviceType::PrivateUse1,
-        "input must be on NPU device, got ", x.device());
+    TORCH_CHECK(x.device().type() == c10::DeviceType::PrivateUse1, "input must be on NPU device, got ", x.device());
 
-    // inv_scale_factor_scale multiplies the kernel's built-in INV_SCALE_FACTOR
+    // invScaleFactorScale multiplies the kernel's built-in INV_SCALE_FACTOR
     // (1/6.0). Non-positive values make raw_scale=0 (→ NaN/inf) or invert the
-    // scale semantics; reject them the same way mxfp4.py rejects scale_factor<=0.
-    TORCH_CHECK(inv_scale_factor_scale > 0.0,
-        "inv_scale_factor_scale must be positive, got ", inv_scale_factor_scale);
+    // scale semantics; reject them the same way the reference rejects scale_factor<=0.
+    TORCH_CHECK(invScaleFactorScale > 0.0, "inv_scale_factor_scale must be positive, got ", invScaleFactorScale);
     // numel() is int64_t. The tiling layout and kernel index arithmetic are
     // int32/uint32, so a tensor with > INT32_MAX elements would be silently
     // truncated into a wrong totalLen. Reject it explicitly instead.
     int64_t numel = x.numel();
-    TORCH_CHECK(numel > 0 && numel % 32 == 0 && numel <= INT32_MAX,
-        "numel() must be a positive multiple of 32 and <= INT32_MAX "
+    TORCH_CHECK(numel > 0 && numel % MXFP4_BLOCK_SIZE == 0 && numel <= INT32_MAX,
+        "numel() must be a positive multiple of ", MXFP4_BLOCK_SIZE, " and <= INT32_MAX "
         "(this kernel uses int32 tiling), got ",
         numel);
     int32_t totalLen = static_cast<int32_t>(numel);
 
     // Launch / tiling core count must match. Cap by MXFP4 block count so tiny
     // tensors do not over-subscribe idle AIVs.
-    const uint32_t nBlocks = static_cast<uint32_t>(totalLen / 32);
+    const uint32_t nBlocks = static_cast<uint32_t>(totalLen / MXFP4_BLOCK_SIZE);
     const uint32_t numCores = std::max(1u, std::min(GetAivCoreNum(), nBlocks));
 
     auto y = at::empty_like(x);
 
-    // Tiling is only 4x int32. Allocate via the PyTorch NPU caching allocator
-    // instead of a process-global aclrtMalloc cache: each call gets a fresh
-    // buffer, and free is deferred until the launch stream completes—no
-    // unbounded device-memory growth across (totalLen, cores, scale) keys.
-    float invScaleMul = static_cast<float>(inv_scale_factor_scale);
+    // Tiling is only Mxfp4TilingData (4x int32). Allocate via the PyTorch NPU
+    // caching allocator instead of a process-global aclrtMalloc cache: each
+    // call gets a fresh buffer, and free is deferred until the launch stream
+    // completes—no unbounded device-memory growth across (totalLen, cores,
+    // scale) keys.
+    float invScaleMul = static_cast<float>(invScaleFactorScale);
     int32_t scaleBits = 0;
     std::memcpy(&scaleBits, &invScaleMul, sizeof(float));
-    int32_t host_tiling[4] = {totalLen, static_cast<int32_t>(numCores), scaleBits, 0};
-    auto tiling = at::empty({4}, at::TensorOptions().dtype(at::kInt).device(x.device()));
-    auto tiling_cpu = at::from_blob(host_tiling, {4}, at::TensorOptions().dtype(at::kInt)).clone();
-    tiling.copy_(tiling_cpu, /*non_blocking=*/true);
+    Mxfp4TilingData hostTiling{totalLen, static_cast<int32_t>(numCores), scaleBits, 0};
+    auto tiling = at::empty({MXFP4_TILING_INTS}, at::TensorOptions().dtype(at::kInt).device(x.device()));
+    auto tilingCpu =
+        at::from_blob(&hostTiling, {MXFP4_TILING_INTS}, at::TensorOptions().dtype(at::kInt)).clone();
+    tiling.copy_(tilingCpu, /*non_blocking=*/true);
 
     // IMPORTANT: pass need_empty=true so torch_npu drains its internal task
     // queue before returning the underlying aclrtStream. This MUST be done
     // AFTER all the aten prep ops above (empty_like, tiling alloc + copy_),
     // so those ops are actually submitted to the NPU stream before we bypass
     // the queue with ACLRT_LAUNCH_KERNEL below. Without this, prior PyTorch
-    // ops (the tiling H2D copy, fill_, contiguous, prior matmuls feeding `x`)
-    // may still sit in the task queue and have NOT been submitted to the NPU
-    // stream yet. The kernel we launch directly with ACLRT_LAUNCH_KERNEL would
-    // then race ahead of those producers, reading uninitialised memory for the
-    // tiling buffer (garbage totalLen/numCores/scale) or `x`, producing
-    // all-zero or numerically wrong outputs (silently, since the kernel return
-    // code is still 0). This was reproducible in vLLM's multi-process worker
-    // setup and breaks every MoE/Linear activation.
+    // ops may still sit in the task queue and have NOT been submitted to the
+    // NPU stream yet. The kernel launched with ACLRT_LAUNCH_KERNEL would then
+    // race ahead of those producers.
     auto stream = c10_npu::getCurrentNPUStream().stream(true);
 
     // The auto-generated host stub still returns 0 ("success") when the
@@ -104,9 +110,4 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, double inv_scale_factor_
     return y;
 }
 
-PYBIND11_MODULE(mxfp4_ascendc_ext, m) {
-    m.def("mxfp4_quant_dequant_npu", &mxfp4_quant_dequant_npu,
-        "MXFP4 quant-dequant on Ascend NPU (float32 in, float32 out). "
-        "AIV core count is queried via PlatformAscendC::GetCoreNumAiv().",
-        py::arg("x"), py::arg("inv_scale_factor_scale") = 1.0);
-}
+} // namespace AscendKernel

@@ -17,10 +17,10 @@ import time
 
 import torch
 
-# Package root (mxfp4_ascendc/) so `mxfp4_npu` is importable.
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+_PYTHON = os.path.join(_ROOT, "python")
+if _PYTHON not in sys.path:
+    sys.path.insert(0, _PYTHON)
 
 importlib.import_module("torch_npu")  # registers npu device on import
 
@@ -106,11 +106,11 @@ def main():
     device = torch.device(args.device)
     if device.type != "npu":
         raise ValueError(f"--device must be an NPU device, got {args.device!r}")
-    # Match current NPU (and thus getCurrentNPUStream / mxfp4_npu self-test)
+    # Match current NPU (and thus getCurrentNPUStream / mxfp4 self-test)
     # to --device; hardcoding set_device(0) breaks multi-NPU runs.
     torch.npu.set_device(device.index if device.index is not None else 0)
 
-    from mxfp4_npu import quant_dequant_mxfp4 as kernel
+    from mxfp4 import quant_dequant_mxfp4 as kernel
 
     H = 3072
     intermediate_size = 1536

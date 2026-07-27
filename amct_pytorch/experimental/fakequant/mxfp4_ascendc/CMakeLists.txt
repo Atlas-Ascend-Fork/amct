@@ -1,5 +1,26 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+#
+# Experimental MXFP4 Ascend-C operator (kept under amct_pytorch/experimental).
+# Layout mirrors amct_ops/hifloat8_cast: op_kernel / op_extension / python.
+# Build still uses ascendc.cmake (legacy ACLRT_LAUNCH_KERNEL path) rather than
+# the ASC language toolchain used by amct_ops.
+
 cmake_minimum_required(VERSION 3.16)
-project(ascendc_mxfp4)
+project(mxfp4_ascendc)
 
 set(SOC_VERSION "Ascend910B3" CACHE STRING "SoC version")
 set(RUN_MODE "npu" CACHE STRING "npu / cpu / sim")
@@ -24,18 +45,19 @@ else()
 endif()
 include(${ASCENDC_CMAKE_DIR}/ascendc.cmake)
 
-file(GLOB KERNEL_FILES ${CMAKE_CURRENT_SOURCE_DIR}/mxfp4_kernel.cpp)
-ascendc_library(ascendc_kernels_${RUN_MODE} SHARED ${KERNEL_FILES})
+ascendc_library(ascendc_kernels_${RUN_MODE} SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/mxfp4_kernel.cpp)
+
+# Device compile unit must see op_kernel/mxfp4_tiling.h
+if(TARGET ascendc_kernels_${RUN_MODE})
+    target_include_directories(ascendc_kernels_${RUN_MODE} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel)
+endif()
 
 # ==================================================================
-# 2.  Pybind11 extension  (mxfp4_ascendc_ext.so)
+# 2.  Torch extension  (libmxfp4_ops.so) — TORCH_LIBRARY + host launch
 # ==================================================================
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
-
-execute_process(
-    COMMAND ${Python3_EXECUTABLE} -m pybind11 --cmakedir
-    OUTPUT_VARIABLE pybind11_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-find_package(pybind11 REQUIRED)
 
 execute_process(
     COMMAND ${Python3_EXECUTABLE}
@@ -50,10 +72,6 @@ execute_process(
     OUTPUT_VARIABLE TORCH_NPU_INC OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE TORCH_NPU_INC_RET)
 
-# Fail fast if torch_npu is missing or the include path cannot be resolved.
-# An empty TORCH_NPU_INC would otherwise be silently appended to
-# target_include_directories (CMake only warns for missing dirs), deferring
-# the failure to compile time with harder-to-diagnose missing headers.
 if(NOT TORCH_NPU_INC_RET EQUAL 0)
     message(FATAL_ERROR
         "Failed to probe torch_npu include path (python exit code "
@@ -70,11 +88,7 @@ if(NOT EXISTS "${TORCH_NPU_INC}")
         "torch_npu include directory does not exist: '${TORCH_NPU_INC}'.")
 endif()
 
-# CANN ships arch-specific headers/libs under <arch>-linux (e.g. aarch64-linux,
-# x86_64-linux). Hardcoding aarch64 breaks x86_64 builds (dev hosts, simulator).
-# Prefer the ARCH passed by build.sh (from `uname -m`); fall back to the CMake
-# host processor. Only add the arch dir when it actually exists so we stay
-# robust to CANN layouts that place headers directly under include/.
+# CANN ships arch-specific headers/libs under <arch>-linux.
 if(NOT DEFINED ARCH OR ARCH STREQUAL "")
     set(ARCH ${CMAKE_HOST_SYSTEM_PROCESSOR})
 endif()
@@ -90,25 +104,12 @@ else()
     set(ASCEND_LIB ${ASCEND_CANN_PACKAGE_PATH}/lib64)
 endif()
 
-pybind11_add_module(mxfp4_ascendc_ext
-    ${CMAKE_CURRENT_SOURCE_DIR}/pybind_wrapper.cpp)
-
-target_include_directories(mxfp4_ascendc_ext PRIVATE
-    ${ASCEND_INC}
-    ${TORCH_NPU_INC}
-    ${CMAKE_CURRENT_BINARY_DIR})
-
 execute_process(
     COMMAND ${Python3_EXECUTABLE}
             -c "import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))"
     OUTPUT_VARIABLE TORCH_CXX11_ABI OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE TORCH_ABI_RET)
 
-# Never fall back to an empty macro: -D_GLIBCXX_USE_CXX11_ABI= expands to an
-# empty token, which PyTorch headers evaluate as 0 in #if, silently disabling
-# the CXX11 ABI and causing std::string/ABI mismatches (runtime crashes) when
-# the extension is loaded against a real ABI=1 PyTorch. If the probe fails or
-# returns anything other than 0/1, abort the build instead of guessing.
 if(NOT TORCH_ABI_RET EQUAL 0)
     message(FATAL_ERROR
         "Failed to probe torch._C._GLIBCXX_USE_CXX11_ABI (python exit code "
@@ -121,11 +122,30 @@ if(NOT (TORCH_CXX11_ABI STREQUAL "0" OR TORCH_CXX11_ABI STREQUAL "1"))
         "(expected 0 or 1). Refusing to build with an ambiguous ABI setting.")
 endif()
 
-target_compile_options(mxfp4_ascendc_ext PRIVATE
-    -O2 -std=c++17 -D_GLIBCXX_USE_CXX11_ABI=${TORCH_CXX11_ABI})
+add_library(mxfp4_ops SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/op_extension/mxfp4_torch.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/op_extension/register.cpp)
 
-target_link_directories(mxfp4_ascendc_ext PRIVATE ${ASCEND_LIB})
-target_link_libraries(mxfp4_ascendc_ext PRIVATE
+set_target_properties(mxfp4_ops PROPERTIES
+    OUTPUT_NAME "mxfp4_ops"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+target_include_directories(mxfp4_ops PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel
+    ${CMAKE_CURRENT_SOURCE_DIR}/op_extension
+    ${ASCEND_INC}
+    ${TORCH_NPU_INC}
+    ${TORCH_INCLUDE_DIRS}
+    ${Python3_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_BINARY_DIR})
+
+target_compile_options(mxfp4_ops PRIVATE
+    -O2 -std=c++17 -fPIC -D_GLIBCXX_USE_CXX11_ABI=${TORCH_CXX11_ABI})
+
+target_link_directories(mxfp4_ops PRIVATE ${ASCEND_LIB})
+target_link_libraries(mxfp4_ops PRIVATE
     ${TORCH_LIBRARIES}
     ascendc_kernels_${RUN_MODE}
     ascendcl)
+
+message(STATUS "Building libmxfp4_ops.so for SOC_VERSION=${SOC_VERSION}, ARCH=${ARCH}")

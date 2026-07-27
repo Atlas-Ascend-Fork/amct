@@ -2,7 +2,7 @@
 """
 Correctness + performance test for the MXFP4 Ascend-C kernel.
 
-Compares against the pure-PyTorch reference in ../mxfp4.py.
+Compares against the pure-PyTorch reference in ../reference/mxfp4_ref.py.
 """
 
 from __future__ import annotations
@@ -14,14 +14,16 @@ import time
 
 import torch
 
-# Package root (mxfp4_ascendc/) so `mxfp4` / `mxfp4_npu` are importable.
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+_PYTHON = os.path.join(_ROOT, "python")
+_REF = os.path.join(_ROOT, "reference")
+for _p in (_PYTHON, _REF):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 importlib.import_module("torch_npu")  # registers NPU device
-ref_qdq = importlib.import_module("mxfp4").quant_dequant_mxfp4  # PyTorch reference
-quant_dequant_mxfp4_npu = importlib.import_module("mxfp4_npu").quant_dequant_mxfp4
+ref_qdq = importlib.import_module("mxfp4_ref").quant_dequant_mxfp4
+quant_dequant_mxfp4_npu = importlib.import_module("mxfp4").quant_dequant_mxfp4
 
 
 def _banner(msg: str) -> None:

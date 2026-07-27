@@ -3,14 +3,14 @@
 #  MXFP4 Ascend-C Kernel — One-click Build
 # ==============================================================
 #  Usage:
-#    bash build.sh            # build
+#    bash build.sh            # build + copy .so into python/mxfp4/
 #    bash build.sh --clean    # clean build directory
 # ==============================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CSRC_DIR="${SCRIPT_DIR}/csrc"
 BUILD_DIR="${SCRIPT_DIR}/build"
+PYTHON_PKG_DIR="${SCRIPT_DIR}/python/mxfp4"
 
 PYTHON="${PYTHON:-$(which python3 2>/dev/null || which python)}"
 CANN_PATH="${ASCEND_TOOLKIT_HOME:-/usr/local/Ascend/ascend-toolkit/latest}"
@@ -22,8 +22,6 @@ fi
 CANN_PATH="${ASCEND_TOOLKIT_HOME:-$CANN_PATH}"
 
 # Auto-detect SoC version from npu-smi when SOC_VERSION is not provided.
-# Avoids silent failure when the host hardware (e.g. A3 Ascend910_9392)
-# does not match the previously hardcoded Ascend910B3 (A2) target.
 detect_soc() {
     command -v npu-smi >/dev/null 2>&1 || return 1
     local chip_name
@@ -53,9 +51,6 @@ detect_soc() {
             fi
         done
     done
-    # No matching platform_config .ini found. Do not invent an unverified
-    # Ascend910_${chip_name} — that makes CMake fail with an opaque missing
-    # config error instead of the caller's clear WARNING + Ascend910B3 fallback.
     return 1
 }
 
@@ -90,11 +85,9 @@ echo "======================================================"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-# CANN lays out arch-specific headers/libs under <arch>-linux; pass the host
-# arch so CMake picks the right directory (aarch64-linux vs x86_64-linux).
 ARCH="$(uname -m)"
 
-cmake "${CSRC_DIR}" \
+cmake "${SCRIPT_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DSOC_VERSION="${SOC_VERSION}" \
     -DRUN_MODE=npu \
@@ -105,13 +98,26 @@ cmake "${CSRC_DIR}" \
 
 cmake --build . -j"$(nproc)" 2>&1
 
+# Stage shared libraries next to the Python package (hifloat8_cast style).
+mkdir -p "${PYTHON_PKG_DIR}"
+OPS_SO="$(find "${BUILD_DIR}" -maxdepth 1 -name 'libmxfp4_ops.so' | head -n1)"
+KERNEL_SO="$(find "${BUILD_DIR}" -path '*/libascendc_kernels_npu.so' | head -n1)"
+if [[ -z "${OPS_SO}" || -z "${KERNEL_SO}" ]]; then
+    echo "[build] ERROR: expected artifacts not found under ${BUILD_DIR}" >&2
+    echo "  libmxfp4_ops.so:           ${OPS_SO:-MISSING}" >&2
+    echo "  libascendc_kernels_npu.so: ${KERNEL_SO:-MISSING}" >&2
+    exit 1
+fi
+cp -f "${OPS_SO}" "${PYTHON_PKG_DIR}/"
+cp -f "${KERNEL_SO}" "${PYTHON_PKG_DIR}/"
+
 echo ""
 echo "======================================================"
 echo "  Build artifacts"
 echo "======================================================"
-for f in mxfp4_ascendc_ext*.so lib/libascendc_kernels_npu.so; do
-    [[ -e "${BUILD_DIR}/${f}" ]] && ls -lh "${BUILD_DIR}/${f}"
-done
+ls -lh "${OPS_SO}" "${KERNEL_SO}"
+echo "  staged -> ${PYTHON_PKG_DIR}/"
+ls -lh "${PYTHON_PKG_DIR}/libmxfp4_ops.so" "${PYTHON_PKG_DIR}/libascendc_kernels_npu.so"
 echo "======================================================"
 echo "  Build complete!"
 echo "======================================================"
