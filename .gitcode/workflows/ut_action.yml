@@ -47,7 +47,7 @@ jobs:
       -
         name: ut_cov
         identifier: ut_cov
-        uses: tanghaoran7/.gitcode/actions/ut-cov-report@master
+        uses: cann/.gitcode/actions/ut-cov-report@master
         with:
           ut_process: ${{ steps.ut.outputs.ut_process }}
           workspace: ${{ steps.process_checkout.outputs.path }}
