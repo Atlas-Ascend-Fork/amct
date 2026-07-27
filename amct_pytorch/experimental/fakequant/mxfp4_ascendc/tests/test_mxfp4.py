@@ -14,11 +14,10 @@ import time
 
 import torch
 
-_DIR = os.path.dirname(os.path.abspath(__file__))
-_PARENT = os.path.dirname(_DIR)
-for _p in (_DIR, _PARENT):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+# Package root (mxfp4_ascendc/) so `mxfp4` / `mxfp4_npu` are importable.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 importlib.import_module("torch_npu")  # registers NPU device
 ref_qdq = importlib.import_module("mxfp4").quant_dequant_mxfp4  # PyTorch reference

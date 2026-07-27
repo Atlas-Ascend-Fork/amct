@@ -28,7 +28,9 @@ cp build/mxfp4_ascendc_ext.cpython-*-linux-gnu.so mxfp4_npu/_lib/
 cp build/lib/libascendc_kernels_npu.so mxfp4_npu/_lib/
 
 # 测试正确性 + 性能
-python test_mxfp4.py
+python tests/test_mxfp4.py
+# python tests/test_inv_scale.py   # inv_scale 参数正确性
+# python tests/bench_qdq.py       # 额外性能对比
 ```
 
 ## 快速使用
@@ -52,8 +54,8 @@ result = quant_dequant_mxfp4(x_npu)
 quant_dequant_mxfp4(
     x: torch.Tensor,       # 任意 shape，float32，在 NPU 设备上
     block_size: int = 32,   # 量化 block 宽度（必须为 32）
-    block_dim: int = 20,    # AI Core 数量（910B3 默认 20）
 ) -> torch.Tensor           # 同 shape / dtype / device
+# AIV 核数由 host 侧 PlatformAscendC::GetCoreNumAiv() 运行时查询，无需手动指定
 ```
 
 ### 性能
@@ -82,7 +84,9 @@ mxfp4_ascendc/
 │
 ├── build.sh                    # 一键编译脚本
 ├── build/                      # 编译中间产物（本地生成，勿提交）
-├── test_mxfp4.py               # 正确性 + benchmark 测试
-├── test_inv_scale.py           # inv_scale 相关正确性测试
+├── tests/                      # 测试与 benchmark
+│   ├── test_mxfp4.py           #    正确性 + benchmark 测试
+│   ├── test_inv_scale.py       #    inv_scale 相关正确性测试
+│   └── bench_qdq.py            #    Ascend-C vs torch 性能对比
 └── README.md                   # 本文件
 ```

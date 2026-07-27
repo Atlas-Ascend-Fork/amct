@@ -4,27 +4,38 @@
  */
 #include <pybind11/pybind11.h>
 #include <torch/extension.h>
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 
 #include "aclrtlaunch_mxfp4_quant_dequant.h"
+#include "tiling/platform/platform_ascendc.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 
 namespace py = pybind11;
 
+namespace {
+
+// Query AIV core count at runtime (Vector kernel). Fallback 20 matches the
+// historical 910B3 default used before auto-detection.
+uint32_t GetAivCoreNum() {
+    auto *platform = platform_ascendc::PlatformAscendCManager::GetInstance();
+    if (platform == nullptr) {
+        return 20u;
+    }
+    uint32_t n = platform->GetCoreNumAiv();
+    return n > 0u ? n : 20u;
+}
+
+}  // namespace
+
 /* ---- exposed function ---- */
-at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double inv_scale_factor_scale) {
+at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, double inv_scale_factor_scale) {
     TORCH_CHECK(x.is_contiguous(), "input must be contiguous");
     TORCH_CHECK(x.scalar_type() == at::kFloat, "input must be float32 (got ", x.scalar_type(), ")");
     TORCH_CHECK(x.device().type() == c10::DeviceType::PrivateUse1,
         "input must be on NPU device, got ", x.device());
 
-    // block_dim is both the kernel launch block dimension (number of AI Cores)
-    // and tiling[1] (numCores). A non-positive value is invalid for the launch
-    // API, and a negative value reinterpreted as uint32 in the kernel yields a
-    // huge numCores, causing most blocks to be dropped and the output to
-    // contain uninitialised memory (the kernel return code stays 0). Reject it.
-    TORCH_CHECK(block_dim > 0, "block_dim must be positive, got ", block_dim);
     // inv_scale_factor_scale multiplies the kernel's built-in INV_SCALE_FACTOR
     // (1/6.0). Non-positive values make raw_scale=0 (→ NaN/inf) or invert the
     // scale semantics; reject them the same way mxfp4.py rejects scale_factor<=0.
@@ -40,6 +51,11 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
         numel);
     int32_t totalLen = static_cast<int32_t>(numel);
 
+    // Launch / tiling core count must match. Cap by MXFP4 block count so tiny
+    // tensors do not over-subscribe idle AIVs.
+    const uint32_t nBlocks = static_cast<uint32_t>(totalLen / 32);
+    const uint32_t numCores = std::max(1u, std::min(GetAivCoreNum(), nBlocks));
+
     auto y = at::empty_like(x);
 
     // Tiling is only 4x int32. Allocate via the PyTorch NPU caching allocator
@@ -49,7 +65,7 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
     float invScaleMul = static_cast<float>(inv_scale_factor_scale);
     int32_t scaleBits = 0;
     std::memcpy(&scaleBits, &invScaleMul, sizeof(float));
-    int32_t host_tiling[4] = {totalLen, static_cast<int32_t>(block_dim), scaleBits, 0};
+    int32_t host_tiling[4] = {totalLen, static_cast<int32_t>(numCores), scaleBits, 0};
     auto tiling = at::empty({4}, at::TensorOptions().dtype(at::kInt).device(x.device()));
     auto tiling_cpu = at::from_blob(host_tiling, {4}, at::TensorOptions().dtype(at::kInt)).clone();
     tiling.copy_(tiling_cpu, /*non_blocking=*/true);
@@ -74,7 +90,7 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
     // check is defense-in-depth only. The Python wrapper performs an
     // additional output-value self-test on first load that reliably
     // detects silent registration failures.
-    uint32_t ret = ACLRT_LAUNCH_KERNEL(mxfp4_quant_dequant)(block_dim, stream, const_cast<void *>(x.data_ptr()),
+    uint32_t ret = ACLRT_LAUNCH_KERNEL(mxfp4_quant_dequant)(numCores, stream, const_cast<void *>(x.data_ptr()),
         y.data_ptr(), nullptr, /* workspace */
         tiling.data_ptr());
 
@@ -90,6 +106,7 @@ at::Tensor mxfp4_quant_dequant_npu(const at::Tensor &x, int block_dim, double in
 
 PYBIND11_MODULE(mxfp4_ascendc_ext, m) {
     m.def("mxfp4_quant_dequant_npu", &mxfp4_quant_dequant_npu,
-        "MXFP4 quant-dequant on Ascend NPU (float32 in, float32 out)", py::arg("x"), py::arg("block_dim") = 20,
-        py::arg("inv_scale_factor_scale") = 1.0);
+        "MXFP4 quant-dequant on Ascend NPU (float32 in, float32 out). "
+        "AIV core count is queried via PlatformAscendC::GetCoreNumAiv().",
+        py::arg("x"), py::arg("inv_scale_factor_scale") = 1.0);
 }

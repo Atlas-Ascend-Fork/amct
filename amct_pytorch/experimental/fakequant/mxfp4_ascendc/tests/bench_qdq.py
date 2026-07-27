@@ -9,11 +9,18 @@ vLLM `_quant_dequant_mxfp4`:
   * dq = sign(x) * code * scale
 """
 
-import importlib
-import time
 import argparse
+import importlib
+import os
+import sys
+import time
 
 import torch
+
+# Package root (mxfp4_ascendc/) so `mxfp4_npu` is importable.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 importlib.import_module("torch_npu")  # registers npu device on import
 

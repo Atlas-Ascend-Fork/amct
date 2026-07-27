@@ -115,7 +115,7 @@ def _self_test_or_raise() -> None:
 
     try:
         x = torch.ones(32, dtype=torch.float32, device="npu")
-        y = _ext.mxfp4_quant_dequant_npu(x, 20)
+        y = _ext.mxfp4_quant_dequant_npu(x)
         torch.npu.synchronize()
         diff = (y.float() - 0.75).abs().max().item()
     except Exception as e:
@@ -149,13 +149,13 @@ def _self_test_or_raise() -> None:
 def quant_dequant_mxfp4(
     x: torch.Tensor,
     block_size: int = 32,
-    block_dim: int = 20,
     inv_scale_factor_scale: float = 1.0,
 ) -> torch.Tensor:
     """MXFP4 quant-dequant on Ascend NPU.
 
     Drop-in replacement for the PyTorch reference ``quant_dequant_mxfp4()``.
-    Input tensor must be on an NPU device.
+    Input tensor must be on an NPU device. AIV core count is queried at
+    runtime via ``PlatformAscendC::GetCoreNumAiv()`` (no manual ``num_cores``).
 
     Parameters
     ----------
@@ -163,8 +163,6 @@ def quant_dequant_mxfp4(
         Any shape, float32 (or auto-cast), on ``npu`` device.
     block_size : int
         Quantisation block width. Must be 32.
-    block_dim : int
-        Number of AI Cores to launch (default 20 for 910B3).
     inv_scale_factor_scale : float
         Runtime multiplier applied on top of the kernel's built-in
         ``INV_SCALE_FACTOR`` (1/6.0). The effective inverse scale factor
@@ -190,9 +188,6 @@ def quant_dequant_mxfp4(
             f"only block_size=32 supported by the NPU kernel, got {block_size}"
         )
 
-    if block_dim <= 0:
-        raise ValueError(f"block_dim must be positive, got {block_dim}")
-
     if inv_scale_factor_scale <= 0:
         raise ValueError(
             f"inv_scale_factor_scale must be positive, got {inv_scale_factor_scale}"
@@ -217,7 +212,7 @@ def quant_dequant_mxfp4(
     x_flat = x_fp.reshape(-1).contiguous()
 
     y_flat = _ext.mxfp4_quant_dequant_npu(
-        x_flat, block_dim, float(inv_scale_factor_scale)
+        x_flat, float(inv_scale_factor_scale)
     )
 
     y_fp = y_flat.reshape(padded_shape)
