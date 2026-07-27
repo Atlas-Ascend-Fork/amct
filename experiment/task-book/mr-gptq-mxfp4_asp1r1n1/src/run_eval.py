@@ -74,8 +74,11 @@ def build_args():
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
                     choices=["scale_fitting", "hadamard", "act_reorder", "act_quant",
-                             "act_scale_fit", "joint_comp", "act_clip"],
-                    help="mr_gptq 增量；act_quant=W4A4；act_scale_fit/joint_comp/act_clip=W4A4 优化①②③")
+                             "act_scale_fit", "joint_comp", "act_clip", "weight_clip"],
+                    help="mr_gptq 增量；act_quant=W4A4；act_scale_fit/joint_comp/act_clip/weight_clip"
+                         "=W4A4 优化①②③④（act_clip 实测为负结果，保留作消融）")
+    ap.add_argument("--perc_damp", type=float, default=None,
+                    help="GPTQ Hessian 阻尼系数（默认用 amct 内置值）；影响 Cholesky 稳定性与补偿强度")
     return ap.parse_args()
 
 
@@ -95,6 +98,9 @@ def main():
                 mr_gptq_module._INCREMENTS[inc] = True
             mr_gptq_module._ACT_PROTECT = list(args.act_protect)
             mr_gptq_module._HADAMARD_K = args.hadamard_k
+            if args.perc_damp is not None:
+                mr_gptq_module._PERC_DAMP = args.perc_damp
+                print(f"[MR-GPTQ] GPTQ 阻尼系数 perc_damp = {args.perc_damp}")
             print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
             if args.hadamard_k != 128:
                 print(f"[MR-GPTQ] Hadamard 块大小 = {args.hadamard_k}（消融：>128 测更强旋转压离群值）")

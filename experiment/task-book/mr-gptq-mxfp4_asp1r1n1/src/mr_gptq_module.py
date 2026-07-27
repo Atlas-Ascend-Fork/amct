@@ -34,12 +34,17 @@ _INCREMENTS = {
     "act_quant": False,       # W4A4：激活也做 MXFP4（动态、逐32块）；须配 hadamard 压离群值
     "act_scale_fit": False,   # W4A4 优化①：激活量化也用 scale fitting（次幂次细网格，非幂次）
     "joint_comp": False,      # W4A4 优化②：用量化后的激活建 Hessian，权重补偿适配 W4A4 输入
-    "act_clip": False,        # W4A4 优化③：激活 scale 裁剪，逐块搜 α 最小化 MSE（不加高精度层）
+    "act_clip": False,        # W4A4 优化③：激活 scale 裁剪，逐块搜 α 最小化 MSE（❌实测负结果）
+    "weight_clip": False,     # W4A4 优化④：权重 scale 裁剪搜索（校准期一次，评测零开销）
 }
 
 # 激活 scale 裁剪候选系数：scale ← α·scale。含 1.0（=不裁剪）→ 逐块取 MSE 最优者时，
 # 结果在 MSE 意义上**不可能劣于**不裁剪。跨度取宽（0.6~1.0）而非细密，因最优 α 未知且逐块异质。
 _ACT_CLIP_GRID = (1.0, 0.9, 0.8, 0.7, 0.6)
+
+# 权重 scale 裁剪候选：比激活侧更密且更靠近 1.0——权重误差会被 GPTQ 逐列补偿掉一部分，
+# 最优裁剪通常较温和；且本搜索只在校准期跑一次，多给候选不增加评测开销。
+_WEIGHT_CLIP_GRID = (1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7)
 
 _HADAMARD_K = 128  # block-wise Hadamard 尺寸；论文取 128 是为【在线算子】的开销权衡。
                    # 本项目 fake-quant 只测精度、旋转无推理开销 → 可经 --hadamard_k 调大
@@ -49,6 +54,10 @@ _HADAMARD_K = 128  # block-wise Hadamard 尺寸；论文取 128 是为【在线�
 # W4A4 混合精度：层名含这些子串的层【不】量化激活（保 bf16/高精度），用于保护敏感层冲 0.4。
 # 例：['down_proj'] 保护所有 down_proj 的激活；空 = 全量 W4A4。
 _ACT_PROTECT = []
+
+# GPTQ Hessian 阻尼系数覆盖（None = 用 amct 父类内置值）。阻尼过小 Cholesky 易失稳、
+# 过大则补偿被削弱，是 GPTQ 少数值得一调的超参。
+_PERC_DAMP = None
 
 _PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始）
 
@@ -86,6 +95,8 @@ class MRGPTQuant(GPTQuant):
             raise ValueError(f"MR-GPTQ 目前仅支持 mxfp4_e2m1，收到 {self.wts_type}")
         self.hadamard_k = _HADAMARD_K
         self._H = _get_hadamard(self.hadamard_k)  # [k,k] CPU float32（全局缓存，同 k 共享）
+        if _PERC_DAMP is not None:
+            self.perc_damp = _PERC_DAMP
 
     # ---- W4A4：本层是否量化激活（混合精度下敏感层跳过，保高精度） ----------
     def _do_act_quant(self):
@@ -190,6 +201,40 @@ class MRGPTQuant(GPTQuant):
         out = best_q.reshape(n_rows, n_groups * group_size)
         return out[:, :columns] if pad else out
 
+    # ---- 权重 scale 裁剪搜索（W4A4 优化④） ---------------------------------
+    @classmethod
+    def _search_block_clip(cls, w, blk_scale, group_size, grid=_WEIGHT_CLIP_GRID):
+        """逐块搜权重 scale 的裁剪系数 α，**返回最优 scale**（而非量化值）。
+
+        与激活侧 `_quant_clip_search` 的两点关键区别：
+        1. **返回 scale**：选出的 scale 要交给 GPTQ 逐列补偿循环复用（`_quant_col`），
+           使裁剪与误差补偿协同——补偿会吸收一部分裁剪带来的偏差；
+        2. **机理不同故结论不同**：激活侧裁剪为负结果，因被裁的大激活承担 attention sink、
+           是模型的功能零件；权重无此性质，且权重误差可被 GPTQ 补偿，裁剪+补偿是
+           GPTQ/AWQ 的标准组合。默认 scale 让块内 |max| 恰好落在 E2M1 上界 6，
+           即最大元素独占动态范围、其余 31 个元素被挤在粗网格上。
+
+        仅在校准期（`get_opt_weight_and_quant_factor`，CPU）执行一次，**评测期零开销**。
+        候选含 1.0 → 最坏退化为不裁剪。w[out, in]、blk_scale[out, n_groups]。
+        """
+        out, columns = w.shape
+        n_groups = blk_scale.shape[1]
+        pad = n_groups * group_size - columns
+        wg = (F.pad(w, (0, pad)) if pad else w).reshape(out, n_groups, group_size)
+
+        best_scale = best_err = None
+        for alpha in grid:
+            s = (blk_scale * alpha).clamp_min(1e-20)              # [out, G]
+            q = float_to_fp4e2m1(wg / s.unsqueeze(-1)) * s.unsqueeze(-1)
+            err = (q - wg).pow(2).sum(dim=-1)                     # [out, G] 逐块 MSE
+            if best_scale is None:
+                best_scale, best_err = s, err
+            else:
+                take = err < best_err
+                best_scale = torch.where(take, s, best_scale)
+                best_err = torch.where(take, err, best_err)
+        return best_scale
+
     # ---- 激活 MXFP4 动态量化（W4A4，增量④） ---------------------------------
     @classmethod
     def _quant_act_mxfp4(cls, x, group_size=32, scale_fit=False, clip=False):
@@ -246,6 +291,10 @@ class MRGPTQuant(GPTQuant):
             blk_scale = self._fit_block_scale(weight, self.group_size)
         else:
             blk_scale = torch.pow(2.0, torch.nan_to_num(cal_shared_exponent(weight)))
+        # 增量④：权重 scale 裁剪搜索。放在此处 → 选出的 scale 同时供下方 GPTQ 逐列补偿
+        # 与各兜底分支的直接量化复用，裁剪与补偿协同。
+        if self.increments.get("weight_clip"):
+            blk_scale = self._search_block_clip(weight, blk_scale, self.group_size)
 
         # 2) MoE 冷 expert 兜底：校准前向从未路由到它 → 无 Hessian。
         #    （理论上 get_opt 只在 ≥1 次 update 后触发、hessian 不为 None；防御性保留）

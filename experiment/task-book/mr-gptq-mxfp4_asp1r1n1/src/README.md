@@ -5,11 +5,11 @@
 
 ## 文件
 
-| 文件 | 作用 |
-|------|------|
-| `data.py` | WikiText2 / pile-val 加载（fastparquet、jsonl.zst、HF 镜像、禁 Xet 已内置） |
-| `eval_utils.py` | 单卡模型加载、GPTQ 校准前向、PPL 评测 |
-| `run_eval.py` | 入口：`--mode {bf16, gptq_mxfp4, mr_gptq}` |
+| 文件              | 作用                                                                        |
+| ----------------- | --------------------------------------------------------------------------- |
+| `data.py`       | WikiText2 / pile-val 加载（fastparquet、jsonl.zst、HF 镜像、禁 Xet 已内置） |
+| `eval_utils.py` | 单卡模型加载、GPTQ 校准前向、PPL 评测                                       |
+| `run_eval.py`   | 入口：`--mode {bf16, gptq_mxfp4, mr_gptq}`                                |
 
 ## 依赖（首次）
 
