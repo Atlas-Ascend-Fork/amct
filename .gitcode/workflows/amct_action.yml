@@ -85,7 +85,6 @@ stages:
         - default
       JOB_shell:
         name: Test_get-shell
-        needs: []
         steps:
           -
             name: Checkout
