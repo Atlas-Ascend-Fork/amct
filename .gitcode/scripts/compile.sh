@@ -77,7 +77,7 @@ if [ "${GE_ST_RT2}X" == "torchX" ];then
         touch ${WORKSPACE}/build_out/cann-amct.tar.gz
         exit 0
     else
-        LOG_DO bash build.sh --torch --cann_3rd_lib_path="/home/jenkins/opensource"
+        LOG_DO bash build.sh --torch --cann_3rd_lib_path="${ASCEND_3RD_LIB_PATH}"
     fi
 else
     if [ "${GIT_TARGET_BRANCH}" = "feature/community-tasks" ];then
