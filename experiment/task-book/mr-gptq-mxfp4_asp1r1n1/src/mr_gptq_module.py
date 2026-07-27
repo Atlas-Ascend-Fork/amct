@@ -60,9 +60,10 @@ _ACT_PROTECT = []
 # 过大则补偿被削弱，是 GPTQ 少数值得一调的超参。
 _PERC_DAMP = None
 
-# Hessian 累积的分块大小（沿校准 batch 维，单位=块数；0 = 不分块，父类原行为）。
-# 与整块累积数学等价（父类 running-average），只降峰值显存，用于放大校准集。
-_HESSIAN_CHUNK = 0
+# 校准前向的分块大小（沿 batch 维，单位=块数；0 = 不分块，父类原行为）。
+# 作用于 Hessian 累积与 fake_quant_forward 两条链路，只降峰值显存以放大校准集。
+# 评测期输入 dim0=1，不触发。
+_CALIB_CHUNK = 0
 
 _PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始）
 
@@ -131,8 +132,8 @@ class MRGPTQuant(GPTQuant):
         scale_full/除法/`float_to_fp4e2m1` 内部掩码、父类的 [cin, N] fp32 转置。
         只分块最后一步不够：256k token 下前两步会先 OOM。
         """
-        if _HESSIAN_CHUNK and input_data.dim() == 3 and input_data.shape[0] > _HESSIAN_CHUNK:
-            for chunk in torch.split(input_data, _HESSIAN_CHUNK, dim=0):
+        if _CALIB_CHUNK and input_data.dim() == 3 and input_data.shape[0] > _CALIB_CHUNK:
+            for chunk in torch.split(input_data, _CALIB_CHUNK, dim=0):
                 self._update_hessian_chunk(chunk)
         else:
             self._update_hessian_chunk(input_data)
@@ -412,6 +413,28 @@ class MRGPTQuant(GPTQuant):
 
     @torch.no_grad()
     def fake_quant_forward(self, inputs):
+        """分块入口。父类状态机在补偿完成的**那一次前向里**就改走本函数出结果喂下游
+        （`gptq_module.forward`：cur_batch>batch_num → return fake_quant_forward），
+        所以校准期这里拿到的是整个校准 batch，旋转与激活量化的 fp32 中间量同样会 OOM。
+        评测期输入是 [1, seq, cin]，dim0=1 不触发分块，行为不变。
+        输出写进预分配缓冲区而非 torch.cat——cat 会在拼接瞬间双份占用（up_proj 的
+        out=12288 时整块输出就有 6.3GB）。
+        """
+        if _CALIB_CHUNK and inputs.dim() == 3 and inputs.shape[0] > _CALIB_CHUNK:
+            out = None
+            off = 0
+            for chunk in torch.split(inputs, _CALIB_CHUNK, dim=0):
+                r = self._fake_quant_forward_one(chunk)
+                if out is None:
+                    out = torch.empty((inputs.shape[0], *r.shape[1:]),
+                                      dtype=r.dtype, device=r.device)
+                out[off: off + r.shape[0]] = r
+                off += r.shape[0]
+            return out
+        return self._fake_quant_forward_one(inputs)
+
+    @torch.no_grad()
+    def _fake_quant_forward_one(self, inputs):
         # weight 已是（旋转+）量化后的权重；Hadamard 开时输入需同样旋转，
         # y = (x·R)·(W·R)ᵀ = x·Wᵀ（R 正交对称），weight-only 下 x·R 精确无损。
         if self._do_hadamard():
