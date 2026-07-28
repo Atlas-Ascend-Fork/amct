@@ -17,10 +17,8 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from onnx import onnx_pb  # pylint: disable=import-error
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.custom_op.arq.arq import weight_quant_np
-from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.quant_node import QuantOpInfo
 from ...amct_pytorch.utils.log import LOGGER
@@ -28,12 +26,10 @@ from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
-WEIGHT_QUANT = 'weight_quant'
-
 
 class InsertWeightQuantPass(BaseFusionPass):
     """
-    Function: Insert AscendWeightQuant
+    Function: Quantize weight and write it back into the weight tensor.
     APIs: match_pattern, do_pass
     """
 
@@ -60,7 +56,7 @@ class InsertWeightQuantPass(BaseFusionPass):
 
     def do_pass(self, graph, object_node, model=None):
         """
-        Function: Do actually inserting AscendWeightQuant.
+        Function: Quantize weight by num_bits and write it back into the weight tensor.
         Parameters:
             graph: graph structure
             object_node: node to process
@@ -85,52 +81,22 @@ class InsertWeightQuantPass(BaseFusionPass):
             weight = adjust_deconv_weight_shape(group, weight)
         scale_w = self.records.get(object_node.name).get('weight_scale')
         offset_w = self.records.get(object_node.name).get('weight_offset')
-        int8_weight = weight_quant_np(weight, scale_w, offset_w, num_bits)
+        quant_weight = weight_quant_np(weight, scale_w, offset_w, num_bits)
         if object_node.type == 'ConvTranspose':
             group = get_deconv_group(object_node)
-            int8_weight = adjust_deconv_weight_shape(group, int8_weight)
-        int8_weight = int8_weight.reshape([-1])
+            quant_weight = adjust_deconv_weight_shape(group, quant_weight)
+        quant_weight = quant_weight.reshape([-1])
 
         weight_helper.clear_data()
-        weight_helper.set_data(int8_weight, 'INT8')
+        # num_bits==4 时值域为 [-8,7]，写回 INT4 使 dtype 标签与实际值域一致
+        weight_helper.set_data(quant_weight, 'INT4' if num_bits == 4 else 'INT8')
 
         if object_node.type in RNN_LAYER_TYPE:
             self.quant_recurrence_weight(object_node)
-        if num_bits == 4:
-            # Step1: add a new_node
-            node_proto = construct_weight_quant_node(
-                inputs=[
-                    '.'.join([object_node.name, WEIGHT_QUANT, 'input0']),
-                    '.'.join([object_node.name, WEIGHT_QUANT, 'input1']),
-                ],
-                outputs=['.'.join([object_node.name, WEIGHT_QUANT, 'output0'])],
-                attrs={'dst_type': 'INT{:d}'.format(num_bits)},
-                layer_name=object_node.name,
-            )
-            weight_quant_node = graph.add_node(node_proto)
-            weight_quant_node.set_attr('object_node', object_node.name)
-            weight_offset_node = graph.add_node(
-                construct_weight_offset(
-                    layer_name=object_node.name, weight_offset=offset_w
-                )
-            )
-
-            # Step2: Relink nodes in th graph
-            # remove output links
-            input_anchor = object_node.get_input_anchor(1)
-            peer_output_anchor = input_anchor.get_peer_output_anchor()
-            peer_node = peer_output_anchor.node
-
-            peer_output_anchor_index = peer_output_anchor.index
-            graph.remove_edge(peer_node, peer_output_anchor_index, object_node, 1)
-            # add links
-            graph.add_edge(peer_node, peer_output_anchor_index, weight_quant_node, 0)
-            graph.add_edge(weight_offset_node, 0, weight_quant_node, 1)
-            graph.add_edge(weight_quant_node, 0, object_node, 1)
 
         LOGGER.logd(
-            "Quant weight from int32 to int8 for layer '{}' success!".format(
-                object_node.name
+            "Quant weight to int{} for layer '{}' success!".format(
+                num_bits, object_node.name
             ),
             'WeightQuantPass',
         )
@@ -152,56 +118,24 @@ class InsertWeightQuantPass(BaseFusionPass):
         scale_r = self.records.get(object_node.name).get('recurrence_weight_scale')
         offset_r = self.records.get(object_node.name).get('recurrence_weight_offset')
 
-        int8_recurrence_weight = weight_quant_np(
-            recurrence_weight, scale_r, offset_r, 8
+        if self.records.get(object_node.name).get('dst_type') == 'UNSET':
+            num_bits = QuantOpInfo.get_dst_num_bits(
+                self.records, object_node.name, 'wts'
+            )
+        else:
+            num_bits = QuantOpInfo.get_dst_num_bits(self.records, object_node.name)
+        int_recurrence_weight = weight_quant_np(
+            recurrence_weight, scale_r, offset_r, num_bits
         )
-        int8_recurrence_weight = int8_recurrence_weight.reshape([-1])
+        int_recurrence_weight = int_recurrence_weight.reshape([-1])
         recurrence_weight_helper.clear_data()
-        recurrence_weight_helper.set_data(int8_recurrence_weight, 'INT8')
-
-
-def construct_weight_quant_node(
-    inputs,  # pylint: disable=no-member
-    outputs,
-    attrs,
-    layer_name,
-):
-    """
-    Function: construct quant node in onnx
-    Inputs:
-        input: a list of inputs' name
-        output: a list of outputs' name
-        attrs: a dict of attrs including
-            scale: numpy.array
-            offset: numpy.array
-            dst_type: a string
-        quantize_layer: a string, layer to be quantized
-    """
-    node_proto = onnx_pb.NodeProto()
-
-    node_proto.name = '.'.join([layer_name, WEIGHT_QUANT])
-    node_proto.op_type = 'AscendWeightQuant'
-    node_proto.input.extend(inputs)  # pylint: disable=E1101
-    node_proto.output.extend(outputs)  # pylint: disable=E1101
-
-    attr_helper = AttributeProtoHelper(node_proto)
-    attr_helper.set_attr_value('dst_type', 'STRING', bytes(attrs['dst_type'], 'utf-8'))
-
-    return node_proto
-
-
-def construct_weight_offset(layer_name, weight_offset):
-    '''construct weight_offset op'''
-    node_proto = onnx_pb.NodeProto()
-    node_proto.name = '.'.join([layer_name, 'weight_offset'])
-    node_proto.op_type = 'Constant'
-    node_proto.doc_string = 'weight offset'
-    node_proto.output.extend(  # pylint: disable=E1101
-        ['.'.join([layer_name, 'weight_offset', 'output0'])]
-    )
-
-    AttributeProtoHelper(node_proto).set_attr_value('value', 'TENSOR', None)
-    attr = node_proto.attribute[0]  # pylint: disable=E1101
-    TensorProtoHelper(attr.t).set_data(weight_offset, 'INT8', list(weight_offset.shape))
-
-    return node_proto
+        # num_bits==4 时值域为 [-8,7]，写回 INT4 使 dtype 标签与实际值域一致
+        recurrence_weight_helper.set_data(
+            int_recurrence_weight, 'INT4' if num_bits == 4 else 'INT8'
+        )
+        LOGGER.logd(
+            "Quant recurrence_weight to int{} for layer '{}'".format(
+                num_bits, object_node.name
+            ),
+            'WeightQuantPass',
+        )

@@ -154,11 +154,17 @@ class QuantOpInfo:
         Parameters:
             quantizable_node: a rnn node, which is quantizable
         Return:
-            recurrence_weight_param: a node, it's quantizable rnn node's recurrence weight
+            recurrence_weight_param: a node, it's quantizable rnn node's recurrence weight,
+                or None if the node is not an RNN op (no recurrence_weight_index in
+                QUANT_INDEXES_MAP).
         '''
         recurrence_weight_index = QuantOpInfo.get_quant_index(quantizable_node).get(
             'recurrence_weight_index'
         )
+        if recurrence_weight_index is None:
+            # Non-RNN ops (Conv, Gemm, etc.) have no recurrence_weight_index in
+            # QUANT_INDEXES_MAP.  Return None so callers can skip cleanly.
+            return None
         recurrence_weight_in_anchor = quantizable_node.get_input_anchor(
             recurrence_weight_index
         )
@@ -268,6 +274,30 @@ class QuantOpInfo:
             else:
                 cin_length = tensor.dims[1]
         return cin_length
+
+    @staticmethod
+    def get_cin_axis(node):
+        """
+        Cin 维在 onnx 权重张量里的轴位置（INT4 沿此轴 nibble-pack）。
+        Conv 轴1；ConvTranspose/MatMul 轴0；Gemm 依 transB(0->轴0,1->轴1)；
+        LSTM/GRU 轴2(input/hidden)。不支持的算子类型返回 None。
+        """
+        if node.type == 'Conv':
+            return 1
+        if node.type in ['ConvTranspose', 'MatMul']:
+            return 0
+        if node.type == 'Gemm':
+            attr_helper = AttributeProtoHelper(node.proto)
+            if (
+                attr_helper.has_attr('transB')
+                and attr_helper.get_attr_value('transB') == 1
+            ):
+                return 1
+            return 0
+        if node.type in ['LSTM', 'GRU']:
+            return 2
+        # 不支持的算子类型返回 None，由调用方判断（不以异常表达）
+        return None
 
     @staticmethod
     def get_node_tensor(node):

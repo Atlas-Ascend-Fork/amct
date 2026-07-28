@@ -96,7 +96,7 @@ class Conv1dLSTM(nn.Module):
             bidirectional=False,
         )
 
-        self.fc - nn.Linear(lstm_hidden_size, num_classes)
+        self.fc = nn.Linear(lstm_hidden_size, num_classes)
 
     def forward(self, x, hx):
         batch_size, time_step, c, h, w = x.size()
@@ -111,3 +111,17 @@ class Conv1dLSTM(nn.Module):
         output = self.fc(lstm_out[:, -1, :])
 
         return output, (h_n, c_n)
+
+
+class ConvTranspose1dNet(nn.Module):
+    """Simple model containing ConvTranspose1d for A8W4 quant tests."""
+
+    def __init__(self, in_channels=3, out_channels=8, kernel_size=3):
+        super().__init__()
+        self.conv1d = nn.Conv1d(in_channels, out_channels, kernel_size)
+        self.deconv1d = nn.ConvTranspose1d(out_channels, out_channels, kernel_size)
+
+    def forward(self, x):
+        x = self.conv1d(x)
+        x = self.deconv1d(x)
+        return x

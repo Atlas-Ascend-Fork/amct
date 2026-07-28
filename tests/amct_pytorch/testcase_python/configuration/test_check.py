@@ -26,6 +26,7 @@ sys.path.append(
 )
 
 import unittest
+from unittest import mock
 
 import torch
 import torch.nn.functional as F
@@ -900,3 +901,74 @@ class TestCheckGraph(unittest.TestCase):
         mod_type = 'LSTM'
         mod_name = 'lstm'
         self.assertFalse(GraphChecker.check_rnn_limit(mod_type, mod_name, mod))
+
+
+class TestCheckInt4CinPackSupported(unittest.TestCase):
+    """GraphQuerier.check_int4_cin_pack_supported 各分支，不依赖 onnx 原生 INT4。"""
+
+    _QOI = (
+        'amct_pytorch.classic.graph_based.amct_pytorch.configuration.check.QuantOpInfo'
+    )
+    _ATTR = (
+        'amct_pytorch.classic.graph_based.amct_pytorch.configuration.check.'
+        'AttributeProtoHelper'
+    )
+
+    @staticmethod
+    def _graph_with(node):
+        graph = mock.MagicMock()
+        graph.get_node_by_name.return_value = node
+        return graph
+
+    def test_unknown_type_supported(self):
+        # get_cin_axis 对未知类型返回 None -> 非量化算子，放行(supported=True)
+        node = mock.MagicMock()
+        node.type = 'Relu'
+        with mock.patch(self._QOI) as m_qoi:
+            m_qoi.get_cin_axis.return_value = None
+            ret = GraphQuerier.check_int4_cin_pack_supported(
+                self._graph_with(node), 'relu'
+            )
+        self.assertTrue(ret)
+
+    def test_group_conv_not_supported(self):
+        node = mock.MagicMock()
+        node.type = 'Conv'
+        with mock.patch(self._QOI) as m_qoi, mock.patch(self._ATTR) as m_attr:
+            m_qoi.get_cin_axis.return_value = 1
+            m_attr.return_value.has_attr.return_value = True
+            m_attr.return_value.get_attr_value.return_value = 16  # groups>1
+            ret = GraphQuerier.check_int4_cin_pack_supported(
+                self._graph_with(node), 'conv'
+            )
+        self.assertFalse(ret)
+
+    def test_odd_cin_not_supported(self):
+        node = mock.MagicMock()
+        node.type = 'Conv'
+        wnode = mock.MagicMock()
+        with mock.patch(self._QOI) as m_qoi, mock.patch(self._ATTR) as m_attr:
+            m_qoi.get_cin_axis.return_value = 1
+            m_attr.return_value.has_attr.return_value = False  # 非 group
+            m_qoi.get_weight_node.return_value = wnode
+            m_qoi.get_recurrence_weight_node.return_value = None
+            m_qoi.get_node_tensor.return_value.dims = [8, 3, 3, 3]  # cin=3 奇
+            ret = GraphQuerier.check_int4_cin_pack_supported(
+                self._graph_with(node), 'conv'
+            )
+        self.assertFalse(ret)
+
+    def test_even_cin_supported(self):
+        node = mock.MagicMock()
+        node.type = 'Conv'
+        wnode = mock.MagicMock()
+        with mock.patch(self._QOI) as m_qoi, mock.patch(self._ATTR) as m_attr:
+            m_qoi.get_cin_axis.return_value = 1
+            m_attr.return_value.has_attr.return_value = False
+            m_qoi.get_weight_node.return_value = wnode
+            m_qoi.get_recurrence_weight_node.return_value = None
+            m_qoi.get_node_tensor.return_value.dims = [8, 4, 3, 3]  # cin=4 偶
+            ret = GraphQuerier.check_int4_cin_pack_supported(
+                self._graph_with(node), 'conv'
+            )
+        self.assertTrue(ret)

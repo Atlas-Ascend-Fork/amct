@@ -218,6 +218,7 @@ class RetrainConfigBase:
         self._del_reduant_config(
             ordered_config, retrain_supported_layers, prune_supported_layers
         )
+        self.downgrade_int4_unpackable_layers(graph, ordered_config)
         if hasattr(self.graph_checker, 'check_weights_shared'):
             layer_names = get_layers_from_config(
                 ordered_config, self.config_tree.get_global_keys()
@@ -231,6 +232,27 @@ class RetrainConfigBase:
             config_file = create_empty_file(config_file, check_exist=True)
             with open(config_file, 'w') as fid:
                 json.dump(ordered_config, fid, indent=4, separators=(',', ':'))
+
+    def downgrade_int4_unpackable_layers(self, graph, ordered_config):
+        '''
+        group/depthwise conv 或 Cin 为奇数的层无法沿 Cin pack INT4，
+        配置阶段将其权重从 INT4 降级为 INT8(A8W8)。遍历所有配置了
+        retrain_weight_config 的层。
+        '''
+        if not hasattr(self.graph_querier, 'check_int4_cin_pack_supported'):
+            return
+        for layer, layer_cfg in ordered_config.items():
+            if not isinstance(layer_cfg, dict):
+                continue
+            wts = layer_cfg.get('retrain_weight_config')
+            if wts is None or wts.get('dst_type') != 'INT4':
+                continue
+            if not self.graph_querier.check_int4_cin_pack_supported(graph, layer):
+                wts['dst_type'] = 'INT8'
+                LOGGER.logw(
+                    "Layer {} weight cannot be INT4-packed along Cin (grouped "
+                    "conv or odd Cin), downgraded to INT8 (A8W8).".format(layer)
+                )
 
     def get_support_layers(self, graph):
         """

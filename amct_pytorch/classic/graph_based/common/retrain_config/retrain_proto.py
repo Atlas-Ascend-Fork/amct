@@ -674,8 +674,13 @@ class RetrainProtoConfig:
                 ret.append(self._get_mapped_type(item, map_types))
         return ret
 
-    def _check_retrain_data_type(self, data_type):
-        """check int4 retrain capacity and config"""
+    def _check_retrain_int4_capability(self, data_type, is_weight=False):
+        """check int4 retrain capacity and config.
+        activation path (is_weight=False) is gated by INT4_RETRAIN;
+        weight path (is_weight=True) allows INT4, legality is left to the
+        RETRAIN_ACT_WTS_TYPES whitelist."""
+        if is_weight:
+            return
         int4_retrain_enable = False
         if self.capacity.get_value('INT4_RETRAIN') is not None:
             int4_retrain_enable = self.capacity.get_value('INT4_RETRAIN')
@@ -705,7 +710,7 @@ class RetrainProtoConfig:
             else:
                 # default value is INT8
                 retrain_data_params[DST_TYPE] = INT8
-            self._check_retrain_data_type(retrain_data_params[DST_TYPE])
+            self._check_retrain_int4_capability(retrain_data_params[DST_TYPE])
         return retrain_data_params
 
     def _get_retrain_weight_config(self, config_item):
@@ -724,7 +729,9 @@ class RetrainProtoConfig:
                     )
                 else:
                     retrain_weight_params[DST_TYPE] = INT8
-                self._check_retrain_data_type(retrain_weight_params[DST_TYPE])
+                self._check_retrain_int4_capability(
+                    retrain_weight_params[DST_TYPE], is_weight=True
+                )
         elif hasattr(config_item, ULQ_RETRAIN) and config_item.HasField(ULQ_RETRAIN):
             retrain_weight_params[ALGO] = ULQ_RETRAIN
             retrain_weight_config = config_item.ulq_retrain
@@ -738,7 +745,9 @@ class RetrainProtoConfig:
                 )
             else:
                 retrain_weight_params[DST_TYPE] = INT8
-            self._check_retrain_data_type(retrain_weight_params[DST_TYPE])
+            self._check_retrain_int4_capability(
+                retrain_weight_params[DST_TYPE], is_weight=True
+            )
 
         return retrain_weight_params
 
