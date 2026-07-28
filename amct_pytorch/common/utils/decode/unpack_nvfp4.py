@@ -51,7 +51,10 @@ if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
 from amct_pytorch.common.utils.decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
-from amct_pytorch.common.utils.checkpoint_io import walk_checkpoint  # noqa: E402
+from amct_pytorch.common.utils.checkpoint_io import (  # noqa: E402
+    resolve_index, invert_weight_map, save_shard, write_index,
+)
+from safetensors.torch import load_file  # noqa: E402
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -176,43 +179,56 @@ def main(argv: Optional[list] = None) -> None:
             verbose=args.verbose,
         )
 
-    if args.dry_run:
-        from amct_pytorch.common.utils.checkpoint_io import (
-            resolve_index, ShardCache, invert_weight_map,
-        )
-        import glob as glob_mod
+    # Small per-shard decode loop (output layout mirrors the source index; a weight's
+    # weight_scale/weight_scale_2 may live in another shard -> resolved via _lookup).
+    index = resolve_index(args.nvfp4_dir, args.bf16_index)
+    weight_map = index["weight_map"]
+    by_file = invert_weight_map(weight_map)
 
-        plan_index = resolve_index(args.nvfp4_dir, args.bf16_index)
-        by_file = invert_weight_map(plan_index["weight_map"])
-        source_shards = sorted(
-            glob_mod.glob(os.path.join(args.nvfp4_dir, "*.safetensors"))
-        )
-        cache = ShardCache(source_shards)
-        for shard_fname, keys in by_file.items():
-            print(f"\n[Shard] {shard_fname}: {len(keys)} tensors")
-            for k in keys:
-                tensor, _ = cache.find_key(k)
-                if tensor is None:
-                    print(f"  [MISS] {k}")
-                    continue
-                def _lookup(lk: str):
-                    return cache.find_key(lk)
-                _transform(k, tensor, _lookup)
-        return
+    _cache: dict = {}
 
-    stats = walk_checkpoint(
-        src_dir=args.nvfp4_dir,
-        index_path=args.bf16_index,
-        out_dir=str(out_dir),
-        transform_fn=_transform,
-        verbose=not args.verbose,
+    def _load(shard: str) -> dict:
+        if shard not in _cache:
+            _cache[shard] = load_file(os.path.join(args.nvfp4_dir, shard))
+        return _cache[shard]
+
+    def _lookup(key: str):
+        shard = weight_map.get(key)
+        if shard is None:
+            return None, None
+        return _load(shard).get(key), shard
+
+    stats = {"converted": 0, "copied": 0, "dropped": 0, "missing": 0}
+    out_weight_map: dict = {}
+    for shard, keys in by_file.items():
+        src = _load(shard)
+        out_tensors = {}
+        for key in keys:
+            tensor = src.get(key)
+            if tensor is None:
+                stats["missing"] += 1
+                if args.verbose:
+                    print(f"  [MISS] {key}")
+                continue
+            result = _transform(key, tensor, _lookup)
+            if result is None:
+                stats["dropped"] += 1
+                continue
+            stats["converted" if result is not tensor else "copied"] += 1
+            if not args.dry_run:
+                out_tensors[key] = result.contiguous()
+        if not args.dry_run and out_tensors:
+            save_shard(str(out_dir), shard, out_tensors)
+            for key in out_tensors:
+                out_weight_map[key] = shard
+
+    if not args.dry_run:
+        write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
+
+    print(
+        f"Final: converted={stats['converted']}, copied={stats['copied']}, "
+        f"dropped={stats['dropped']}, missing={stats['missing']}"
     )
-
-    if args.verbose:
-        print(
-            f"\nFinal: converted={stats['converted']}, copied={stats['copied']}, "
-            f"dropped={stats['dropped']}, missing={stats['missing']}"
-        )
 
 
 if __name__ == "__main__":
