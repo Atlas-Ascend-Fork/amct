@@ -186,7 +186,7 @@ def decode_to_bf16(model_dir: str, out_dir: str, fmt: str) -> str:
     os.makedirs(out_dir, exist_ok=True)
     if fmt == "nvfp4":
         from amct_pytorch.common.utils.decode.unpack_nvfp4 import main as run
-        run(["--nvfp4-dir", model_dir, "--out-dir", out_dir])
+        run(["--model", model_dir, "--output_dir", out_dir])
     elif fmt == "mxfp4":
         from amct_pytorch.common.utils.decode.unpack_mxfp4 import main as run
         run(["convert-dir", "--mxfp4-dir", model_dir, "--out-dir", out_dir])
