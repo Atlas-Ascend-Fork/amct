@@ -212,7 +212,6 @@ def main(argv: Optional[list] = None) -> None:
             return None, None
         return _load(shard).get(key), shard
 
-    stats = {"converted": 0, "copied": 0, "dropped": 0, "missing": 0}
     out_weight_map: dict = {}
     for shard, keys in by_file.items():
         src = _load(shard)
@@ -220,13 +219,10 @@ def main(argv: Optional[list] = None) -> None:
         for key in keys:
             tensor = src.get(key)
             if tensor is None:
-                stats["missing"] += 1
                 continue
             result = transform_fn(key, tensor, _lookup)
             if result is None:
-                stats["dropped"] += 1
                 continue
-            stats["converted" if result is not tensor else "copied"] += 1
             out_tensors[key] = result.contiguous()
         if out_tensors:
             save_shard(str(out_dir), shard, out_tensors)
@@ -234,10 +230,6 @@ def main(argv: Optional[list] = None) -> None:
                 out_weight_map[key] = shard
 
     write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
-    print(
-        f"[decode] nvfp4 -> bf16: converted={stats['converted']}, "
-        f"copied={stats['copied']}, dropped={stats['dropped']}, missing={stats['missing']}"
-    )
 
 
 if __name__ == "__main__":
