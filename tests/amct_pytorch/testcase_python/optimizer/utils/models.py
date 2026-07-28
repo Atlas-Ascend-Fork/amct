@@ -280,3 +280,14 @@ class Net1d(nn.Module):
         x = self.layer1(x)
 
         return x
+
+
+class LSTMNet(nn.Module):
+    """Single-layer LSTM model for RNN weight-quant UT."""
+
+    def __init__(self, input_size=10, hidden_size=20, num_layers=1):
+        super(LSTMNet, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers)
+
+    def forward(self, input_data, hx):
+        return self.lstm(input_data, hx)

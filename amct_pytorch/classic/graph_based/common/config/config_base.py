@@ -251,6 +251,7 @@ class ConfigBase:
             self.check_int16_quantize_layers(graph, config, supported_layers)
 
         self.check_and_down_grade_winograd_num_bits(graph, config, supported_layers)
+        self.check_int4_weight_quant_axis(graph, config, supported_layers)
         act_common_config = self.get_common_activation_quant_config(common_config)
         self._fill_default_activation_asymmetric(
             graph, config, supported_layers, act_common_config
@@ -309,6 +310,33 @@ class ConfigBase:
                         layer
                     )
                 )
+
+    def check_int4_weight_quant_axis(self, graph, config, supported_layers):
+        '''
+        INT4 沿 Cin 轴两两 pack。group/depthwise conv 或 Cin 为奇数的层
+        无法沿 Cin pack，配置阶段自动将其权重降级为 INT8(A8W8)。
+        同时兼容 PTQ(weight_quant_params/num_bits) 与 retrain
+        (retrain_weight_config/dst_type) 两种配置结构。
+        '''
+        for layer in supported_layers:
+            layer_cfg = config.get(layer)
+            wts_ptq = layer_cfg.get(WEIGHT_QUANT_PARAMS)
+            wts_retrain = layer_cfg.get('retrain_weight_config')
+            is_int4 = (wts_ptq is not None and wts_ptq.get('num_bits') == 4) or (
+                wts_retrain is not None and wts_retrain.get('dst_type') == 'INT4'
+            )
+            if not is_int4:
+                continue
+            if self.graph_querier.check_int4_cin_pack_supported(graph, layer):
+                continue
+            if wts_ptq is not None and wts_ptq.get('num_bits') == 4:
+                wts_ptq['num_bits'] = 8
+            if wts_retrain is not None and wts_retrain.get('dst_type') == 'INT4':
+                wts_retrain['dst_type'] = 'INT8'
+            LOGGER.logw(
+                "Layer {} weight cannot be INT4-packed along Cin (grouped "
+                "conv or odd Cin), downgraded to INT8 (A8W8).".format(layer)
+            )
 
     def check_and_down_grade_winograd_num_bits(self, graph, config, supported_layers):
         '''check quant num bits and turn it into 8 if it not support int6 int7 quant'''

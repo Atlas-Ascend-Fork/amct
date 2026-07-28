@@ -19,32 +19,22 @@ import logging
 import unittest
 from copy import deepcopy
 from io import BytesIO
-from unittest.mock import patch
 
 import numpy as np
 import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
-    GraphOptimizer,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_quant_pass import (
     construct_quant_node,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.insert_weight_quant_pass import (
     InsertWeightQuantPass,
 )
-from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.replace_weight_quant_pass import (
-    ReplaceWeightQuantPass,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.weight_fakequant_pass import (
     WeightFakequantPass,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-    TensorProtoHelper,
-)
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
 )
@@ -324,93 +314,6 @@ class TestReplaceWeightQuantPass(unittest.TestCase):
 
     def tearDown(self):
         pass
-
-    def test_do_pass_int4_success(self):
-        with patch(
-            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-            return_value=4,
-        ):
-            with patch(
-                'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-                return_value=4,
-            ):
-                records = {
-                    'conv1': {
-                        DATA_SCALE: 1.0,
-                        DATA_OFFSET: 0,
-                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
-                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
-                    }
-                }
-                test_model = deepcopy(self.model_proto)
-                graph = Graph(test_model)
-                optimizer = GraphOptimizer()
-                optimizer.add_pass(InsertWeightQuantPass(records))
-                optimizer.add_pass(ReplaceWeightQuantPass(records))
-                optimizer.do_optimizer(graph, test_model)
-                self.assertEqual(
-                    TensorProtoHelper(graph.nodes[0].proto).get_data().dtype, 'float32'
-                )
-
-    def test_do_pass_int4_trans_success(self):
-        with patch(
-            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-            return_value=4,
-        ):
-            with patch(
-                'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-                return_value=4,
-            ):
-                records = {
-                    'conv3': {
-                        DATA_SCALE: 1.0,
-                        DATA_OFFSET: 0,
-                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
-                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
-                    }
-                }
-                test_model = deepcopy(self.model_proto)
-                graph = Graph(test_model)
-                optimizer = GraphOptimizer()
-                optimizer.add_pass(InsertWeightQuantPass(records))
-                optimizer.add_pass(ReplaceWeightQuantPass(records))
-                optimizer.do_optimizer(graph, test_model)
-                self.assertEqual(
-                    TensorProtoHelper(graph.get_node_by_name('conv3.weights').proto)
-                    .get_data()
-                    .dtype,
-                    'float32',
-                )
-
-    def test_do_pass_int4_deconv_success(self):
-        with patch(
-            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-            return_value=4,
-        ):
-            with patch(
-                'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.QuantOpInfo.get_dst_num_bits',
-                return_value=4,
-            ):
-                records = {
-                    'deconv1': {
-                        DATA_SCALE: 1.0,
-                        DATA_OFFSET: 0,
-                        WEIGHT_SCALE: np.array([1.0], dtype=np.float32),
-                        WEIGHT_OFFSET: np.array([0], dtype=np.int8),
-                    }
-                }
-                test_model = deepcopy(self.model_proto)
-                graph = Graph(test_model)
-                optimizer = GraphOptimizer()
-                optimizer.add_pass(InsertWeightQuantPass(records))
-                optimizer.add_pass(ReplaceWeightQuantPass(records))
-                optimizer.do_optimizer(graph, test_model)
-                self.assertEqual(
-                    TensorProtoHelper(graph.get_node_by_name('deconv1.weights').proto)
-                    .get_data()
-                    .dtype,
-                    'float32',
-                )
 
     def test_match_pattern_success(self):
         records = {

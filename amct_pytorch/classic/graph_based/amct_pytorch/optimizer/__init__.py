@@ -51,6 +51,7 @@ __all__ = [
     'ReplaceBiasQuantPass',
     'RepalceSyncBNPass',
     'ReplaceRNNPass',
+    'PackInt4WeightPass',
     'SetRecorderPass',
     'ShareActCompPass',
     'WeightsCalibrationPass',
@@ -145,6 +146,7 @@ from .replace_weight_quant_pass import ReplaceWeightQuantPass
 from .replace_bias_quant_pass import ReplaceBiasQuantPass
 from .replace_sync_bn_pass import RepalceSyncBNPass
 from .replace_rnn_pass import ReplaceRNNPass
+from .pack_int4_weight_pass import PackInt4WeightPass
 from .set_recorder_pass import SetRecorderPass
 from .share_act_comp_pass import ShareActCompPass
 from .weight_calibration import WeightsCalibrationPass
