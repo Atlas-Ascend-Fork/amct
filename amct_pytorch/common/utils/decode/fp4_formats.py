@@ -21,7 +21,7 @@ The BF16 → HiF4 fake-quant step (e6m2) is handled by the existing
 ``amct_pytorch.common.utils.hifloat4_quant.quant_dequant_float``, not here.
 
 This module covers:
-  1. Raw FP4 codec: nibble unpack/pack, E2M1 decode.
+  1. Raw FP4 codec: nibble unpack, E2M1 decode.
   2. Scale helpers: E4M3 decode.
   3. FP4 → BF16 dequant: ``nvfp4_to_bf16``.
 """
@@ -80,20 +80,6 @@ def unpack_nibbles(packed_u8: Tensor, low_first: bool = True) -> Tensor:
     return out.reshape(
         *packed_u8.shape[:-1], packed_u8.shape[-1] * 2
     ).contiguous()
-
-
-def pack_nibbles(nibbles_u8: Tensor, low_first: bool = True) -> Tensor:
-    """Pack 4-bit nibble codes along the last dimension back into uint8 bytes."""
-    nibbles_u8 = _as_uint8(nibbles_u8, "nibbles_u8")
-    if nibbles_u8.shape[-1] % 2 != 0:
-        raise ValueError(
-            f"last dim must be even to pack nibbles, got {nibbles_u8.shape[-1]}"
-        )
-    a = nibbles_u8[..., 0::2] & 0x0F
-    b = nibbles_u8[..., 1::2] & 0x0F
-    if low_first:
-        return (a | (b << 4)).contiguous()
-    return ((a << 4) | b).contiguous()
 
 
 def decode_fp4_e2m1(codes: Tensor) -> Tensor:
