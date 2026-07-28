@@ -14,19 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""MXFP4 → BF16 decoder + HiF4 diagnostics (strategy + CLI).
+"""MXFP4 → BF16 decoder + HiF4_E6M0 diagnostics (strategy + CLI).
 
 ``convert-dir`` is decode-only (the deploy/ptq path)::
 
     MXFP4 packed  ──mxfp4_to_bf16──►  BF16
-                       (fp4_formats)
 
 HiF4 (pack via deploy, fake-quant via ptq) is applied downstream by ``hifloat4_quant``.
-The ``selftest`` / ``convert-pair`` subcommands keep the HiF4 e6m2/e6m0 round-trips as
-standalone validation utilities (they still exercise ``quant_dequant_float`` /
-``bf16_to_hif4_e6m0``).
+The ``selftest`` / ``convert-pair`` subcommands exercise the HiF4 e6m2/e6m0 round-trips as
+standalone validation utilities (``quant_dequant_float`` / ``bf16_to_hif4_e6m0``); they
+report only basic shape/error info (no quality-metrics module).
 
-Subcommands: selftest / list-keys / convert-pair / convert-dir.
+Subcommands: selftest / convert-pair / convert-dir.
 """
 
 from __future__ import annotations
@@ -55,20 +54,15 @@ from amct_pytorch.common.utils.decode.fp4_formats import (  # noqa: E402
     pack_nibbles,
 )
 from amct_pytorch.common.utils.checkpoint_io import (  # noqa: E402
-    load_index,
-    resolve_index,
-    load_tensor_from_spec,
-    save_convert_output,
-    ShardCache,
-    walk_checkpoint,
+    resolve_index, invert_weight_map, save_shard, write_index,
 )
-from amct_pytorch.common.utils.decode.metrics import make_stats  # noqa: E402
+from safetensors.torch import load_file  # noqa: E402
 
 _HIF4_QTYPE = QType("hifx4").dim(-1)
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Data classes
+# Data classes / small helpers
 # ══════════════════════════════════════════════════════════════════════
 
 
@@ -80,6 +74,53 @@ class ConvertMeta:
     e6_bias: int
     hif4_format: str
     note: str
+
+
+def _basic_err(ref: torch.Tensor, out: torch.Tensor) -> Dict[str, float]:
+    """Basic reconstruction error (max / mean abs); replaces the removed metrics module."""
+    diff = (ref.float() - out.float()).abs()
+    return {"max_abs": diff.max().item(), "mean_abs": diff.mean().item()}
+
+
+def _parse_spec(spec: str):
+    """Parse a ``path[:key]`` spec string."""
+    if ":" in spec:
+        path, key = spec.split(":", 1)
+        return path, key
+    return spec, None
+
+
+def _load_tensor_from_spec(spec: str, map_location: str = "cpu") -> torch.Tensor:
+    """Load a single tensor from ``.pt`` / ``.pth`` / ``.npy`` / ``.safetensors:key``."""
+    path, key = _parse_spec(spec)
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+    lower = path.lower()
+    if lower.endswith(".pt") or lower.endswith(".pth"):
+        obj = torch.load(path, map_location=map_location)
+        if key is not None:
+            if not isinstance(obj, dict):
+                raise TypeError(f"{path} is not a dict, cannot get key {key}")
+            obj = obj[key]
+        if not isinstance(obj, torch.Tensor):
+            raise TypeError(f"loaded object is not a tensor: {type(obj)}")
+        return obj
+    if lower.endswith(".npy"):
+        import numpy as np  # local import; only needed for .npy specs
+        if key is not None:
+            raise ValueError(".npy spec should not include a key")
+        return torch.from_numpy(np.load(path))
+    if lower.endswith(".safetensors"):
+        if key is None:
+            raise ValueError("safetensors spec must be path.safetensors:key")
+        return load_file(path, device=map_location)[key]
+    raise ValueError(f"unsupported input file type: {path}")
+
+
+def _save_convert_output(path: str, payload: Dict[str, Any]) -> None:
+    """Save conversion output as a ``.pt`` file."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    torch.save(payload, path)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -98,6 +139,7 @@ _MXFP4_DROP_CONTAINS = (
 
 
 def should_drop_key(key: str) -> bool:
+    """Return True if *key* is an MXFP4 quantization intermediate."""
     for suf in _MXFP4_DROP_SUFFIXES:
         if key.endswith(suf):
             return True
@@ -108,7 +150,7 @@ def should_drop_key(key: str) -> bool:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Per-tensor transform callback
+# Per-tensor transform callback (decode-only)
 # ══════════════════════════════════════════════════════════════════════
 
 
@@ -116,11 +158,8 @@ def transform_fn(
     key: str,
     tensor: torch.Tensor,
     lookup: Any,
-    hif4_format: str = "e6m2",
     low_first: bool = True,
     e8_bias: int = 127,
-    e6_rule: str = "unbiased",
-    e6_bias: int = 0,
     dry_run: bool = False,
     verbose: bool = False,
 ) -> Optional[torch.Tensor]:
@@ -138,8 +177,7 @@ def transform_fn(
 
     if key.endswith(".weight"):
         prefix = key[: -len(".weight")]
-        sf_key = prefix + ".weight_scale"
-        w_sf, _ = lookup(sf_key)
+        w_sf, _ = lookup(prefix + ".weight_scale")
         if w_sf is not None:
             out_features = tensor.shape[0]
             in_features = tensor.shape[1] * 2
@@ -161,7 +199,7 @@ def transform_fn(
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Subcommand: selftest
+# Subcommand: selftest (HiF4 e6m2/e6m0 round-trip validation)
 # ══════════════════════════════════════════════════════════════════════
 
 
@@ -195,9 +233,8 @@ def cmd_selftest(args: argparse.Namespace) -> None:
     if args.hif4_format == "e6m2":
         # quant_dequant_float round-trip
         y_bf16 = quant_dequant_float(x_bf16, _HIF4_QTYPE, force_py=True, force_fp32=True)
-        stats = make_stats(x_bf16, y_bf16)
         print("[OK] MXFP4 -> BF16 -> HiF4(E6M2) fake-quant -> BF16")
-        print(json.dumps(asdict(stats), indent=2, ensure_ascii=False))
+        print(json.dumps(_basic_err(x_bf16, y_bf16), indent=2, ensure_ascii=False))
         print(f"  bf16 in:  {tuple(x_bf16.shape)}")
         print(f"  bf16 out: {tuple(y_bf16.shape)}")
     else:
@@ -207,21 +244,20 @@ def cmd_selftest(args: argparse.Namespace) -> None:
             pack_low_first=args.low_first,
         )
         recon = hif4_e6m0_to_fp32(hif["e6_exp"], hif["e2"], hif["e3"], hif["s1p2"])
-        stats = make_stats(x_bf16, recon, hif["qmag"], hif["y_scaled"])
         print("[OK] MXFP4 -> BF16 -> HiF4_E6M0 -> FP32 reconstruction")
-        print(json.dumps(asdict(stats), indent=2, ensure_ascii=False))
+        print(json.dumps(_basic_err(x_bf16, recon), indent=2, ensure_ascii=False))
         for k in ("e6_exp", "e6_code", "e2", "e3", "s1p2", "s1p2_packed"):
             print(f"  {k:14s} {tuple(hif[k].shape)} {hif[k].dtype}")
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Subcommand: convert-pair
+# Subcommand: convert-pair (single tensor pair -> HiF4 e6m2/e6m0)
 # ══════════════════════════════════════════════════════════════════════
 
 
 def cmd_convert_pair(args: argparse.Namespace) -> None:
-    packed = load_tensor_from_spec(args.packed_spec, map_location=args.device)
-    scale = load_tensor_from_spec(args.scale_spec, map_location=args.device)
+    packed = _load_tensor_from_spec(args.packed_spec, map_location=args.device)
+    scale = _load_tensor_from_spec(args.scale_spec, map_location=args.device)
     x_bf16 = mxfp4_to_bf16(packed, scale, low_first=args.low_first, e8_bias=args.e8_bias)
 
     meta = ConvertMeta(
@@ -233,10 +269,9 @@ def cmd_convert_pair(args: argparse.Namespace) -> None:
 
     if args.hif4_format == "e6m2":
         y_bf16 = quant_dequant_float(x_bf16, _HIF4_QTYPE, force_py=True, force_fp32=True)
-        stats = make_stats(x_bf16, y_bf16)
         payload: Dict[str, Any] = {
             "bf16_in": x_bf16.cpu(), "bf16_out": y_bf16.cpu(),
-            "stats": asdict(stats), "meta": asdict(meta),
+            "stats": _basic_err(x_bf16, y_bf16), "meta": asdict(meta),
         }
     else:
         hif = bf16_to_hif4_e6m0(
@@ -245,43 +280,19 @@ def cmd_convert_pair(args: argparse.Namespace) -> None:
             pack_low_first=args.low_first,
         )
         recon = hif4_e6m0_to_fp32(hif["e6_exp"], hif["e2"], hif["e3"], hif["s1p2"])
-        stats = make_stats(x_bf16, recon, hif["qmag"], hif["y_scaled"])
         payload = {
             "bf16": x_bf16.cpu(),
             "hif4": {k: v.cpu() for k, v in hif.items() if k != "y_scaled"},
-            "stats": asdict(stats), "meta": asdict(meta),
+            "stats": _basic_err(x_bf16, recon), "meta": asdict(meta),
         }
 
-    save_convert_output(args.out, payload)
+    _save_convert_output(args.out, payload)
     print(f"[OK] saved: {args.out}")
     print(json.dumps(payload["stats"], indent=2, ensure_ascii=False))
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Subcommand: list-keys
-# ══════════════════════════════════════════════════════════════════════
-
-
-def cmd_list_keys(args: argparse.Namespace) -> None:
-    try:
-        from safetensors import safe_open
-    except ImportError as exc:
-        raise ImportError("pip install safetensors is required") from exc
-    filt = args.filter
-    with safe_open(args.file, framework="pt", device="cpu") as f:
-        keys = list(f.keys())
-        if filt:
-            keys = [k for k in keys if filt in k]
-        for k in keys:
-            try:
-                t = f.get_tensor(k)
-                print(f"{k}\tshape={tuple(t.shape)}\tdtype={t.dtype}")
-            except Exception:
-                print(k)
-
-
-# ══════════════════════════════════════════════════════════════════════
-# Subcommand: convert-dir
+# Subcommand: convert-dir (whole-checkpoint decode)
 # ══════════════════════════════════════════════════════════════════════
 
 
@@ -294,41 +305,60 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
 
     def _transform(key: str, tensor: torch.Tensor, lookup: Any) -> Optional[torch.Tensor]:
         return transform_fn(
-            key, tensor, lookup, hif4_format=args.hif4_format,
-            low_first=args.low_first, e8_bias=args.e8_bias,
-            e6_rule=args.e6_rule, e6_bias=args.e6_bias,
+            key, tensor, lookup, low_first=args.low_first, e8_bias=args.e8_bias,
             dry_run=args.dry_run, verbose=args.verbose,
         )
 
-    if args.dry_run:
-        import glob as glob_mod
-        plan_index = resolve_index(args.mxfp4_dir, args.bf16_index)
-        from amct_pytorch.common.utils.checkpoint_io import invert_weight_map
-        by_file = invert_weight_map(plan_index["weight_map"])
-        source_shards = sorted(glob_mod.glob(os.path.join(args.mxfp4_dir, "*.safetensors")))
-        cache = ShardCache(source_shards)
-        for shard_fname, keys in by_file.items():
-            print(f"\n[Shard] {shard_fname}: {len(keys)} tensors")
-            for k in keys:
-                tensor, _ = cache.find_key(k)
-                if tensor is None:
-                    print(f"  [MISS] {k}")
-                    continue
-                def _lookup(lk: str):
-                    return cache.find_key(lk)
-                _transform(k, tensor, _lookup)
-        return
+    # Small per-shard decode loop (output layout mirrors the source index; a weight's
+    # weight_scale may live in another shard -> resolved via _lookup).
+    index = resolve_index(args.mxfp4_dir, args.bf16_index)
+    weight_map = index["weight_map"]
+    by_file = invert_weight_map(weight_map)
 
-    stats = walk_checkpoint(
-        src_dir=args.mxfp4_dir, index_path=args.bf16_index,
-        out_dir=str(out_dir), transform_fn=_transform,
-        verbose=not args.verbose,
+    _cache: dict = {}
+
+    def _load(shard: str) -> dict:
+        if shard not in _cache:
+            _cache[shard] = load_file(os.path.join(args.mxfp4_dir, shard))
+        return _cache[shard]
+
+    def _lookup(key: str):
+        shard = weight_map.get(key)
+        if shard is None:
+            return None, None
+        return _load(shard).get(key), shard
+
+    stats = {"converted": 0, "copied": 0, "dropped": 0, "missing": 0}
+    out_weight_map: dict = {}
+    for shard, keys in by_file.items():
+        src = _load(shard)
+        out_tensors = {}
+        for key in keys:
+            tensor = src.get(key)
+            if tensor is None:
+                stats["missing"] += 1
+                if args.verbose:
+                    print(f"  [MISS] {key}")
+                continue
+            result = _transform(key, tensor, _lookup)
+            if result is None:
+                stats["dropped"] += 1
+                continue
+            stats["converted" if result is not tensor else "copied"] += 1
+            if not args.dry_run:
+                out_tensors[key] = result.contiguous()
+        if not args.dry_run and out_tensors:
+            save_shard(str(out_dir), shard, out_tensors)
+            for key in out_tensors:
+                out_weight_map[key] = shard
+
+    if not args.dry_run:
+        write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
+
+    print(
+        f"Final: converted={stats['converted']}, copied={stats['copied']}, "
+        f"dropped={stats['dropped']}, missing={stats['missing']}"
     )
-    if args.verbose:
-        print(
-            f"\nFinal: converted={stats['converted']}, copied={stats['copied']}, "
-            f"dropped={stats['dropped']}, missing={stats['missing']}"
-        )
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -337,7 +367,7 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="MXFP4 → BF16 → HiFloat4 converter")
+    p = argparse.ArgumentParser(description="MXFP4 → BF16 decoder + HiF4_E6M0 diagnostics")
     sub = p.add_subparsers(dest="cmd")
 
     common = argparse.ArgumentParser(add_help=False)
@@ -365,12 +395,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--out", required=True)
     sp.set_defaults(func=cmd_convert_pair)
 
-    sp = sub.add_parser("list-keys", help="List safetensors keys.")
-    sp.add_argument("--file", required=True)
-    sp.add_argument("--filter", default=None)
-    sp.set_defaults(func=cmd_list_keys)
-
-    sp = sub.add_parser("convert-dir", parents=[common], help="Whole-checkpoint conversion.")
+    sp = sub.add_parser("convert-dir", parents=[common], help="Whole-checkpoint decode.")
     sp.add_argument("--mxfp4-dir", type=str, required=True)
     sp.add_argument("--bf16-index", type=str, default=None,
                     help="Optional target sharding plan; if omitted, derived from the "
