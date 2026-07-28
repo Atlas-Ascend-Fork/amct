@@ -16,9 +16,10 @@
 # ----------------------------------------------------------------------------
 """Detect a checkpoint's quant source format and decode foreign formats to BF16.
 
-Used by the ptq/deploy entry points to route an input checkpoint: foreign FP4/FP8 formats
-(nvfp4/mxfp4/mxfp8) are decoded to BF16 first (via the decode unpackers), after which
-HiF4 fake-quant (ptq) or pack (deploy) is applied by ``hifloat4_quant``.
+Used by the ptq/deploy entry points to route an input checkpoint: the NVFP4 foreign format is
+decoded to BF16 first (via ``unpack_nvfp4``), after which HiF4 fake-quant (ptq) or pack (deploy)
+is applied by ``hifloat4_quant``. (MXFP4/MXFP8 are planned; their detection + dispatch are added
+on the ``mxfp4``/``mxfp8`` branches respectively -- this branch registers only NVFP4.)
 
 NOTE: ``detect_source_format`` is a best-effort heuristic (config + weight markers) and should
 be validated against real checkpoints of each format.
@@ -26,9 +27,9 @@ be validated against real checkpoints of each format.
 import json
 import os
 import shutil
-from typing import Optional, Set
+from typing import Set
 
-FOREIGN_FORMATS = ("nvfp4", "mxfp4", "mxfp8")
+FOREIGN_FORMATS = ("nvfp4",)
 
 _SIDE_FILES = (
     "config.json", "generation_config.json", "tokenizer_config.json",
@@ -94,19 +95,13 @@ def _peek_tensor(model_dir: str, key: str):
         return None, None
 
 
-def _peek_weight_dtype(model_dir: str, keys: Set[str]) -> Optional[str]:
-    """safetensors dtype string of the first ``*.weight`` (e.g. 'F8_E4M3', 'U8', 'BF16')."""
-    weight_keys = sorted(k for k in keys if k.endswith(".weight"))
-    if not weight_keys:
-        return None
-    return _peek_tensor(model_dir, weight_keys[0])[1]
-
-
 def detect_source_format(model_dir: str) -> str:
-    """Best-effort detection. Returns 'hif4'|'nvfp4'|'mxfp8'|'mxfp4'|'fp16'|'bf16'.
+    """Best-effort detection. Returns 'hif4'|'nvfp4'|'fp16'|'bf16'.
 
     Order: HiF4 pack marker (weight_scale shape) -> config.json quantization_config hint ->
-    weight-key markers (with a dtype peek to split mxfp4 vs mxfp8) -> float dtype fallback.
+    weight-key markers (NVFP4's weight_scale_2) -> float dtype fallback. A checkpoint that is
+    quantized but neither HiF4 nor NVFP4 raises ``ValueError`` (unsupported; not treated as
+    float). MXFP4/MXFP8 detection is added on their own branches.
     """
     keys = _tensor_keys(model_dir)
     # 1. HiF4 packed (our deploy pack): every quantized weight stores <w>.weight (uint8 codes)
@@ -129,20 +124,19 @@ def detect_source_format(model_dir: str) -> str:
     ).lower()
     if "nvfp4" in hint:
         return "nvfp4"
-    if "mxfp8" in hint:
-        return "mxfp8"
-    if "mxfp4" in hint:
-        return "mxfp4"
 
     # 3. weight-key markers
     if any(k.endswith(".weight_scale_2") for k in keys):
         return "nvfp4"  # NVFP4 carries both weight_scale (block) and weight_scale_2 (global)
-    if any(k.endswith(".weight_scale") for k in keys):
-        # mxfp4 (E2M1 packed -> uint8 weight) vs mxfp8 (E4M3 -> fp8 weight): split by dtype.
-        dt = (_peek_weight_dtype(model_dir, keys) or "").upper()
-        if dt.startswith("F8") or "E4M3" in dt or "E5M2" in dt:
-            return "mxfp8"
-        return "mxfp4"
+
+    # Unsupported quantized format: it carries quant markers (a `.weight_scale` tensor or a
+    # `quantization_config`) but is neither HiF4 nor NVFP4. Report clearly rather than silently
+    # treating packed bytes as float (which would corrupt the weights).
+    if any(k.endswith(".weight_scale") for k in keys) or qc:
+        raise ValueError(
+            f"Unsupported quantized checkpoint at {model_dir!r}: only NVFP4 (and HiF4) are "
+            f"supported on this branch. MXFP4/MXFP8 are planned (added on their own branches)."
+        )
 
     # 4. plain float (check bfloat16 first -- "float16" is a substring of "bfloat16")
     dt = str(cfg.get("torch_dtype", "")).lower()
@@ -178,21 +172,15 @@ def copy_side_files(src: str, dst: str) -> None:
 
 
 def decode_to_bf16(model_dir: str, out_dir: str, fmt: str) -> str:
-    """Decode a foreign FP4/FP8 checkpoint to a BF16 checkpoint at ``out_dir``; returns out_dir.
+    """Decode a foreign checkpoint to a BF16 checkpoint at ``out_dir``; returns out_dir.
 
-    Dispatches to the format's ``decode`` unpacker (decode-only; no HiF4). Imports are lazy so
-    this module loads on branches that only carry a subset of the unpackers.
+    Dispatches to the format's ``decode`` unpacker (decode-only; no HiF4). This branch registers
+    only NVFP4; the MXFP4/MXFP8 dispatch branches are added on their own branches.
     """
     os.makedirs(out_dir, exist_ok=True)
     if fmt == "nvfp4":
         from amct_pytorch.common.utils.decode.unpack_nvfp4 import main as run
         run(["--model", model_dir, "--output_dir", out_dir])
-    elif fmt == "mxfp4":
-        from amct_pytorch.common.utils.decode.unpack_mxfp4 import main as run
-        run(["convert-dir", "--mxfp4-dir", model_dir, "--out-dir", out_dir])
-    elif fmt == "mxfp8":
-        from amct_pytorch.common.utils.decode.unpack_mxfp8 import main as run
-        run(["--quant_model_dir", model_dir, "--output_dir", out_dir])
     else:
         raise ValueError(f"decode_to_bf16: {fmt!r} is not a foreign format {FOREIGN_FORMATS}")
     copy_side_files(model_dir, out_dir)
