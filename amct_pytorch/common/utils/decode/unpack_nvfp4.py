@@ -50,11 +50,68 @@ _ROOT_DIR = os.path.realpath(os.path.join(_CUR_DIR, "../../../"))
 if _ROOT_DIR not in sys.path:
     sys.path.insert(0, _ROOT_DIR)
 
-from amct_pytorch.common.utils.decode.fp4_formats import nvfp4_to_bf16  # noqa: E402
+from amct_pytorch.common.utils.decode.fp4_formats import (  # noqa: E402
+    unpack_nibbles, decode_fp4_e2m1,
+)
 from amct_pytorch.common.utils.checkpoint_io import (  # noqa: E402
     resolve_index, invert_weight_map, save_shard, write_index,
 )
 from safetensors.torch import load_file  # noqa: E402
+
+
+# ══════════════════════════════════════════════════════════════════════
+# NVFP4 format math (E2M1 codec × E4M3 block scale × global scale → BF16)
+# ══════════════════════════════════════════════════════════════════════
+
+
+def decode_sf_to_fp32(sf: torch.Tensor) -> torch.Tensor:
+    """Decode NVFP4 block-scale (E4M3 or uint8 view of E4M3) to float32."""
+    if sf.dtype == torch.float8_e4m3fn:
+        return sf.to(torch.float32)
+    if sf.dtype == torch.uint8:
+        return sf.view(torch.float8_e4m3fn).to(torch.float32)
+    return sf.to(torch.float32)
+
+
+def nvfp4_to_bf16(
+    weight_fp4_packed: torch.Tensor,
+    weight_scale: torch.Tensor,
+    weight_scale_2: torch.Tensor,
+    out_features: int,
+    in_features: int,
+    sf_vec_size: int = 16,
+) -> torch.Tensor:
+    """Decode NVFP4 (TRT-LLM) packed weight to BF16.
+
+    NVFP4 format: E2M1 packed weight × block-scale (E4M3, one per *sf_vec_size* elements) ×
+    global per-channel scale. Uses the shared E2M1 codec from ``fp4_formats``.
+    """
+    device = weight_fp4_packed.device
+
+    w_e2m1 = decode_fp4_e2m1(
+        unpack_nibbles(weight_fp4_packed, low_first=True)
+    ).to(torch.float32)
+
+    def _pad_up(x: int, m: int) -> int:
+        return ((x + m - 1) // m) * m
+
+    nrows = _pad_up(out_features, 128)
+    ncols = _pad_up(in_features // sf_vec_size, 4)
+
+    sf = weight_scale
+    if sf.dim() == 1:
+        sf = sf.view(nrows, ncols)
+    elif sf.dim() != 2:
+        raise ValueError(f"Unexpected weight_scale dim={sf.dim()}, expected 1 or 2")
+
+    sf = sf[:out_features, : in_features // sf_vec_size].contiguous()
+    sf = decode_sf_to_fp32(sf).to(device=device)
+
+    sf_full = sf.repeat_interleave(sf_vec_size, dim=1)
+    global_scale = weight_scale_2.to(torch.float32).to(device)
+
+    w_fp32 = w_e2m1[:out_features, :in_features] * sf_full * global_scale
+    return w_fp32.to(torch.bfloat16).contiguous()
 
 
 # ══════════════════════════════════════════════════════════════════════
