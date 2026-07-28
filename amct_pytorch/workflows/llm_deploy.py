@@ -80,12 +80,12 @@ class LlmDeployWorkflow:
         os.makedirs(self.output_dir, exist_ok=True)
         ensure_log_dir(self.args)
         self._register_components()
-        self._maybe_decode_source()
+        self._detect_and_decode_source()
         self.pipeline = self._build_pipeline()
         sink_id, _ = setup_run_logging(self.args, "deploy")
         return sink_id
 
-    def _maybe_decode_source(self):
+    def _detect_and_decode_source(self):
         """Auto-detect a foreign FP4/FP8 source and decode it to BF16 before deploy.
 
         Deploy loads a float model, then packs weights to HiF4 (``QuantDequantHiF4.export_deploy``).
