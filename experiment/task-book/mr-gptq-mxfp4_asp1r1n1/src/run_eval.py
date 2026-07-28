@@ -83,6 +83,11 @@ def build_args():
                          "Qwen3-8B 上唯一受影响的是 down_proj(in=12288)——它不是 2 的幂，"
                          "k=4096 下只能切成 3 个对角块，是全网唯一没拿到全宽旋转的层。"
                          "12288=12×1024 走 Paley H12 ⊗ Sylvester H1024（3 阶 Hadamard 不存在）")
+    ap.add_argument("--hadamard_random", action="store_true",
+                    help="randomized Hadamard：旋转前乘随机 ±1 对角阵（QuaRot/QuIP# 标准做法）。"
+                         "归一化 Sylvester 首行全 1 → (xH)[0]=√k·mean(x)，而 RMSNorm 输出不居中，"
+                         "于是旋转反而在坐标 0 制造离群值、顶高第 0 个 32 块的倍率。"
+                         "乘 D 打散 DC；D²=I 故数学无损")
     ap.add_argument("--skip_router", action="store_true",
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
@@ -119,6 +124,7 @@ def main():
             mr_gptq_module._ACT_PROTECT = list(args.act_protect)
             mr_gptq_module._HADAMARD_K = args.hadamard_k
             mr_gptq_module._HADAMARD_FULL = args.hadamard_full
+            mr_gptq_module._HADAMARD_RANDOM = args.hadamard_random
             if args.perc_damp is not None:
                 mr_gptq_module._PERC_DAMP = args.perc_damp
                 print(f"[MR-GPTQ] GPTQ 阻尼系数 perc_damp = {args.perc_damp}")
@@ -132,6 +138,9 @@ def main():
             if args.hadamard_full:
                 print("[MR-GPTQ] 全宽旋转：各层旋转块取满 in_features"
                       "（8B 上即 down_proj 12288 = Paley H12 ⊗ H1024）")
+            if args.hadamard_random:
+                print("[MR-GPTQ] randomized Hadamard：旋转前乘随机 ±1 对角阵"
+                      "（消除 Sylvester 首行把 DC 堆到坐标 0 的副作用）")
             if args.act_protect:
                 print(f"[MR-GPTQ] W4A4 混合精度：以下层名子串的层保激活高精度 = {args.act_protect}")
             inc = mr_gptq_module._INCREMENTS

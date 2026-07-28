@@ -137,19 +137,41 @@ def _build_hadamard(n):
     raise ValueError(f"无法构造 {n} 阶 Hadamard（不是 2 的幂，也无 Paley 分解）")
 
 
-_HADAMARD_CACHE = {}   # (k, device_str) -> 归一化 Hadamard
+# True：旋转前乘随机 ±1 对角阵 D（randomized Hadamard，QuaRot / QuIP# 的标准做法）。
+# 动机：归一化 Sylvester 的**第 0 行是全 1**，故 (xH)[0] = Σxⱼ/√k = √k·mean(x)。
+# 量化激活的几层其输入是 RMSNorm 输出，而 RMSNorm **不做中心化**、均值非零 →
+# 旋转反而在坐标 0 上**制造**一个 ~√k 倍于均值的离群值，把它所在的第 0 个 32 块的
+# 倍率顶高、连累同块另外 31 个坐标。乘 D 之后全 1 行变随机符号求和，DC 分量被打散。
+# 无损：D 对角且 D²=I → (xDH)(WDH)ᵀ = xD·HHᵀ·DWᵀ = xDDWᵀ = xWᵀ。
+_HADAMARD_RANDOM = False
+
+_HADAMARD_SIGN_SEED = 0  # D 的随机种子；权重与激活必须用同一个 D，故按 k 固定生成
+
+_HADAMARD_CACHE = {}   # (k, device_str, randomized) -> 归一化 Hadamard（随机化时已折入 D）
 
 
 def _get_hadamard(k, device="cpu"):
-    """按 (k, device) 缓存。矩阵可以很大（k=12288 → 604MB fp32），252 个量化模块
-    各建一份、或每次前向各搬一份上卡，都会撑爆内存 → 同一 (k, device) 全局共享只读。"""
-    key = (k, str(device))
+    """按 (k, device, 是否随机化) 缓存。矩阵可以很大（k=12288 → 576MiB fp32），252 个
+    量化模块各建一份、或每次前向各搬一份上卡，都会撑爆内存 → 全局共享只读。
+
+    随机化时**把 D 折进矩阵**：(x·D)·H = x·(D·H)，即按 dᵢ 翻转 H 的第 i 行。
+    这样旋转仍是一次 matmul，**不引入额外临时张量、不增加计算**——若在 `_rotate_last_dim`
+    里现乘 D，会多出一个与输入等大的 fp32 副本（down_proj 上就是 679MB），
+    且 `.float()` 在输入已是 fp32 时返回自身、就地乘会踩到别名。
+    """
+    key = (k, str(device), _HADAMARD_RANDOM)
     H = _HADAMARD_CACHE.get(key)
     if H is None:
-        cpu_key = (k, "cpu")
+        cpu_key = (k, "cpu", _HADAMARD_RANDOM)
         base = _HADAMARD_CACHE.get(cpu_key)
         if base is None:
             base = _build_hadamard(k)
+            if _HADAMARD_RANDOM:
+                # 固定种子 → 权重与激活拿到同一个 D（否则 (xD₁H)(WD₂H)ᵀ ≠ xWᵀ，结果直接错），
+                # 且跨进程可复现。
+                g = torch.Generator().manual_seed(_HADAMARD_SIGN_SEED + k)
+                d = torch.randint(0, 2, (k,), generator=g, dtype=torch.float32) * 2 - 1
+                base = base * d.unsqueeze(1)          # D·H：按 dᵢ 翻转第 i 行
             _HADAMARD_CACHE[cpu_key] = base
         H = base if key == cpu_key else base.to(device)
         _HADAMARD_CACHE[key] = H
