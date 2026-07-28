@@ -24,15 +24,15 @@ Pipeline::
 Decode only: dequantize NVFP4 → BF16 safetensors. HiF4 (pack via deploy, fake-quant via
 ptq) is applied downstream by ``hifloat4_quant`` on the decoded BF16 -- not here.
 
-The traversal/output plan is derived from the NVFP4 checkpoint's own index
-(``resolve_index``), so no separate bf16 reference is required; ``--bf16-index`` is an
-optional override.
-
-Usage::
+Minimal CLI (same ``--model`` / ``--output_dir`` flags as ptq/deploy); the output plan is
+derived from the NVFP4 checkpoint's own index (``resolve_index``), so nothing else is needed::
 
     python -m amct_pytorch.common.utils.decode.unpack_nvfp4 \\
-        --nvfp4-dir /path/to/nvfp4_ckpt \\
-        --out-dir /path/to/output          # plan derived from the nvfp4 checkpoint itself
+        --model /path/to/nvfp4_ckpt \\
+        --output_dir /path/to/output
+
+In practice this is invoked automatically by ``ptq``/``deploy --quant_dtype hifp`` (auto-detect
++ decode), so the user only ever passes ptq/deploy's own ``--model`` / ``--output_dir``.
 """
 
 from __future__ import annotations
@@ -88,14 +88,7 @@ def should_drop_key(key: str) -> bool:
 # ══════════════════════════════════════════════════════════════════════
 
 
-def transform_fn(
-    key: str,
-    tensor: torch.Tensor,
-    lookup: Any,
-    sf_vec_size: int = 16,
-    dry_run: bool = False,
-    verbose: bool = False,
-) -> Optional[torch.Tensor]:
+def transform_fn(key: str, tensor: torch.Tensor, lookup: Any) -> Optional[torch.Tensor]:
     """NVFP4 per-tensor strategy.
 
     1. Drop quantization intermediates → None.
@@ -104,33 +97,21 @@ def transform_fn(
     3. Copy everything else as BF16.
     """
     if should_drop_key(key):
-        if verbose:
-            print(f"  [DROP] {key}")
         return None
 
     if key.endswith(".weight"):
         prefix = key[: -len(".weight")]
-        sf_key = prefix + ".weight_scale"
-        sfg_key = prefix + ".weight_scale_2"
-        w_sf, _ = lookup(sf_key)
+        w_sf, _ = lookup(prefix + ".weight_scale")
         if w_sf is not None:
-            w_sfg, _ = lookup(sfg_key)
+            w_sfg, _ = lookup(prefix + ".weight_scale_2")
             out_features = tensor.shape[0]
             in_features = tensor.shape[1] * 2
-            if verbose:
-                print(f"  [CONVERT] {key}  shape=({out_features},{in_features})")
-            if dry_run:
-                return tensor
             # NVFP4 → BF16 (decode only). HiF4 is applied downstream by the caller
             # (deploy → pack, ptq → fake-quant) via hifloat4_quant, not here.
-            w_bf16 = nvfp4_to_bf16(
+            return nvfp4_to_bf16(
                 tensor, w_sf, w_sfg, out_features, in_features,
-                sf_vec_size=sf_vec_size,
-            )
-            return w_bf16.contiguous()
+            ).contiguous()
 
-    if verbose:
-        print(f"  [COPY]  {key}")
     if tensor.dtype in (torch.float16, torch.float32, torch.bfloat16):
         return tensor.to(torch.bfloat16).contiguous()
     return tensor
@@ -142,46 +123,22 @@ def transform_fn(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(
-        description="NVFP4 → BF16 → HiFloat4 checkpoint converter"
-    )
-    ap.add_argument("--nvfp4-dir", type=str, required=True,
+    ap = argparse.ArgumentParser(description="NVFP4 -> BF16 checkpoint decoder")
+    ap.add_argument("--model", type=str, required=True,
                     help="NVFP4 checkpoint directory with *.safetensors shards.")
-    ap.add_argument("--bf16-index", type=str, default=None,
-                    help="Optional target sharding plan (model.safetensors.index.json). "
-                         "If omitted, the plan is derived from the NVFP4 checkpoint's own "
-                         "index (self-sufficient; no bf16 reference required).")
-    ap.add_argument("--out-dir", type=str, required=True,
-                    help="Output directory for converted BF16 shards + index.")
-    ap.add_argument("--sf-vec-size", type=int, default=16,
-                    help="NVFP4 block-scale vector size (default 16).")
-    ap.add_argument("--device", type=str, default="cpu", choices=["cpu"])
-    ap.add_argument("--dry-run", action="store_true",
-                    help="Print decisions without writing output.")
-    ap.add_argument("--verbose", action="store_true",
-                    help="Print per-key decisions.")
+    ap.add_argument("--output_dir", type=str, required=True,
+                    help="Output directory for decoded BF16 shards + index.")
     return ap
 
 
 def main(argv: Optional[list] = None) -> None:
     args = build_parser().parse_args(argv)
-    out_dir = Path(args.out_dir)
+    out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.dry_run:
-        print("[DRY RUN] NVFP4 → BF16 (decode only)")
-
-    def _transform(key: str, tensor: torch.Tensor, lookup: Any) -> Optional[torch.Tensor]:
-        return transform_fn(
-            key, tensor, lookup,
-            sf_vec_size=args.sf_vec_size,
-            dry_run=args.dry_run,
-            verbose=args.verbose,
-        )
 
     # Small per-shard decode loop (output layout mirrors the source index; a weight's
     # weight_scale/weight_scale_2 may live in another shard -> resolved via _lookup).
-    index = resolve_index(args.nvfp4_dir, args.bf16_index)
+    index = resolve_index(args.model)
     weight_map = index["weight_map"]
     by_file = invert_weight_map(weight_map)
 
@@ -189,7 +146,7 @@ def main(argv: Optional[list] = None) -> None:
 
     def _load(shard: str) -> dict:
         if shard not in _cache:
-            _cache[shard] = load_file(os.path.join(args.nvfp4_dir, shard))
+            _cache[shard] = load_file(os.path.join(args.model, shard))
         return _cache[shard]
 
     def _lookup(key: str):
@@ -207,27 +164,22 @@ def main(argv: Optional[list] = None) -> None:
             tensor = src.get(key)
             if tensor is None:
                 stats["missing"] += 1
-                if args.verbose:
-                    print(f"  [MISS] {key}")
                 continue
-            result = _transform(key, tensor, _lookup)
+            result = transform_fn(key, tensor, _lookup)
             if result is None:
                 stats["dropped"] += 1
                 continue
             stats["converted" if result is not tensor else "copied"] += 1
-            if not args.dry_run:
-                out_tensors[key] = result.contiguous()
-        if not args.dry_run and out_tensors:
+            out_tensors[key] = result.contiguous()
+        if out_tensors:
             save_shard(str(out_dir), shard, out_tensors)
             for key in out_tensors:
                 out_weight_map[key] = shard
 
-    if not args.dry_run:
-        write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
-
+    write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
     print(
-        f"Final: converted={stats['converted']}, copied={stats['copied']}, "
-        f"dropped={stats['dropped']}, missing={stats['missing']}"
+        f"[decode] nvfp4 -> bf16: converted={stats['converted']}, "
+        f"copied={stats['copied']}, dropped={stats['dropped']}, missing={stats['missing']}"
     )
 
 
