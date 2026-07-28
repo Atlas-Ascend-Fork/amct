@@ -58,11 +58,7 @@
 
 ## wrapper 规则
 
-- 先复用 `QuantLinear`、`QuantGatedMLP`、`apply_quant_to_attn()`、`apply_quant_to_moe_mlp()`。
-- 同系列 attention/MLP wrapper 初始化、状态、forward 一样时必须合并。
-- attention wrapper 面向 blockwise BF16/PPL/PTQ/deploy，不默认保留 generate/cache 全分支。
-- `attn-linear` 只 wrap q/k/v/o 等投影时，不替换官方 attention kernel。
-- MoE shared experts 若 wrapper 走 `build_no_algo_args()`，adapter 不 yield `moe.shared`。
+复用顺序、合并判断和 MoE/shared experts 策略见 [wrapper-rules.md](wrapper-rules.md)，attention 细节见 [attention-rules.md](attention-rules.md)。本文件只保留一条落点约束：wrapper 是否新增由“结构或导出语义是否真实不同”决定，不由 dense/MoE 标签决定。
 
 ## BLOCKER
 
@@ -75,9 +71,6 @@
 
 ## 自验
 
-- 注册：检查 `MODEL_REGISTRY` 能取到新模型名。
-- 构建：至少一层 `block()` 和 `build_quant_block()` 成功。
-- PTQ unit：至少枚举一个 `PtqUnit`。
-- 等价：关闭量化后 quant block 与 float block forward 足够接近。
-- 数据：extract 产出的文件名能被该 unit 加载。
-- 单测：优先放 `tests/unit_test/common/models/llm/...`，必要时补 workflow mocked 测试。
+完成标准见 [validation.md](validation.md) §LLM adapter / wrapper 完成标准（注册、float block、quant block、PtqUnit、关量化等价、参数导出闭环六项）。
+
+本子能力额外要求：extract 产出的文件名能被该 unit 加载；单测优先放 `tests/unit_test/common/models/llm/...`，必要时补 workflow mocked 测试。

@@ -4,6 +4,15 @@
 
 当任务涉及 MLP、MoE-MLP、experts、shared experts、`QuantGatedMLP`、`QuantLinear`、模型专属 `quant_module.py` 或 wrapper 类新增/修改时读取本文件。
 
+## 事实来源
+
+合并原则和已知模型个案不在本文件维护：
+
+- 原则：`.agents/docs/repo-map.md` §Wrapper 合并原则。
+- 个案：`.agents/docs/casebook/structure-family-pitfalls.md` 与命中模型族的 L3 个案。
+
+本文件只写编码动作、必查项和禁止模式。原则与本文件冲突时以 repo-map 为准。
+
 ## 输入输出契约
 
 - 上游输入：原模型 MLP/MoE 模块结构、checkpoint expert 布局、已有 family helper、quant module 能力。
@@ -19,13 +28,6 @@
 4. 对 shared experts，同时检查 wrapper 是否清空算法以及 adapter 是否 yield 对应 `PtqUnit`。
 5. 确认 `unit.kind`、extract 文件名、solver 参数名和 deploy binding 一致。
 6. 关闭量化验证 wrapper 等价，再验证 PTQ 参数导出/回载。
-
-## 合并原则
-
-- 如果同系列两个 wrapper 的初始化、状态和 `forward` 一样，优先合并为一份实现。
-- 不要为了保留旧类名或减少 import 改动，长期保留行为完全重复的 wrapper。
-- 只有模块结构、导出语义、PTQ unit 边界或量化路径真实不同，才拆成两份。
-- “dense”和“moe”标签本身不构成拆分类理由；看实现是否真的不同。
 
 ## 复用顺序
 
@@ -72,9 +74,4 @@
 
 ## 验证
 
-wrapper 改动最低验证：
-
-- 构建至少一层 quant block。
-- 枚举至少一个 `PtqUnit`。
-- 关闭量化时 wrapper 与原始 float 模块前向等价或足够接近。
-- PTQ unit 至少能导出参数；推荐回载后 forward 一次。
+见 [validation.md](validation.md) §LLM adapter / wrapper 完成标准。wrapper 改动至少覆盖其中的 quant block 构建、`PtqUnit` 枚举、关量化等价、参数导出四项；推荐回载后 forward 一次。

@@ -87,22 +87,9 @@ ops / packaging / API：
 - `build.sh`
 - `pyproject.toml`
 
-## 场景矩阵
+## 场景落点
 
-| 场景 | 默认落点 | 不该改的位置 |
-| --- | --- | --- |
-| 新 quant dtype | `quantization/dtypes/`、CLI choices、deploy helper、bit policy | 模型 adapter 中硬编码 dtype |
-| 新通用 quant wrapper | `quantization/modules/` | wrapper 里判断具体模型名 |
-| 新 LLM PTQ 算法 | `algorithms/quant/` + `ALGO_REGISTRY` | classic `AlgorithmRegistry` |
-| 新 classic 算法 | `classic/quantize_op` / `classic/deploy_op` + `AlgorithmRegistry` | LLM `ALGO_REGISTRY` |
-| 新 LLM 模型 | `common/models/llm/<family>/...` | workflow/solver/quant module |
-| 捕获离线输入/GT | `common/datasets` 与 adapter hook | solver 内自行读文件 |
-| PTQ 参数导入导出 | `ptq_params.py`、算法/quant wrapper export/load hook | deploy 中手搓不同结构 |
-| 逐层调度 | `workflows/llm_ptq.py` + `BlockwiseSolver` | adapter 中启动训练循环 |
-| PPL eval | `llm_eval.py` + `eval_ppl.py` | 量化算法中算指标 |
-| safetensors deploy | `llm_deploy.py` + `deploy_export.py` + adapter binding | dtype 类之外写 real quant 细节 |
-| graph 压缩 | `classic/graph_based` | LLM new-path workflow |
-| NPU 算子 | `amct_ops/`，具体实现转 `amct-ops-dev` | `amct_pytorch` 中混 C++/kernel |
+各场景的默认落点见 `SKILL.md` §全局边界与 §子能力路由，本文件不复制。不该改的位置见 [layer-rules.md](layer-rules.md) §BLOCKER 检查。
 
 ## repo-map 与 casebook
 

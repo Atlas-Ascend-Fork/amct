@@ -11,13 +11,27 @@ description: AMCT 仓专属辅助编码总入口。用于新增或修改 AMCT �
 
 本 skill 不把所有知识塞进主文件。具体规则在 `references/` 下按场景拆分；使用时只读取命中的 playbook。
 
+原则性表述和模型个案不在 `references/` 维护：分层职责、attention 适配原则、wrapper 合并原则在 `.agents/docs/repo-map.md`，已踩的坑和模型个案在 `.agents/docs/casebook/`。references 只写编码动作、必查项、BLOCKER 和自验命令。
+
 ## 先做三件事
 
 1. 判断任务属于哪个子能力；如果跨多个子能力，按数据流顺序处理。
-2. 读取 [references/repo-scenarios.md](references/repo-scenarios.md)，确认分层边界和入口文件。
-3. 读取命中的场景 playbook，再读对应代码锚点。
+2. 读取命中的场景 playbook，再读对应代码锚点。
+3. 改完读 [references/validation.md](references/validation.md)，选最小验证。
+
+无法判断任务属于哪条代码体系（LLM new-path / classic / amct_ops），或需要入口文件清单时，才读 [references/repo-scenarios.md](references/repo-scenarios.md)。下面的全局边界已覆盖常见判断。
 
 回复默认使用中文。执行代码修改前，先简短说明准备修改的模块边界。
+
+## 读取预算
+
+按需加载只在读得少时才有意义。默认上限是 **3 个 reference**：主 playbook + 最多 1 个辅助规则 + `validation.md`。
+
+- 先只读主触发 playbook 就开工，不要预先读全上下游。
+- 实际触到跨层改动时再补读该层 playbook 的「上下游依赖」和「BLOCKER」两节，不必整篇读。
+- 已超过 3 个 reference 还没定位到落点，说明任务该拆或该委派，见 [references/delegation.md](references/delegation.md)。
+- 跨 3 个以上子能力的大改动，优先委派 subagent 承载源码阅读，主上下文只保留边界结论。
+- `.agents/docs/amct-coder-design.md` 是维护者文档，执行编码任务时不要读。
 
 ## 依赖关系
 
@@ -37,12 +51,14 @@ LLM new-path 的主依赖链是：
 - `ops-boundary` 是 `amct_pytorch` 调用 `amct_ops` 的边界检查；真正 kernel/C++/Meta 实现交给 `amct-ops-dev`。
 - `public-api-tests` 是用户可见 API、CLI、packaging、docs/examples 的下游闭环。
 
-跨子能力时按下面顺序读 playbook：
+跨子能力时的读取顺序，受上面的读取预算约束：
 
-1. `repo-scenarios` 和主触发 playbook。
-2. 主触发 playbook 的直接上游，确认输入契约是否稳定。
-3. 主触发 playbook 的直接下游，确认导出、回载、测试是否闭环。
+1. 主触发 playbook，整篇读。
+2. 只有改动真的要动上游契约时，才补读上游 playbook 的「上下游依赖」和「BLOCKER」两节。
+3. 只有改动会改变导出、回载或测试口径时，才补读下游 playbook 的同两节。
 4. 最后读 `validation`，只选择与实际改动匹配的最小验证。
+
+上面的依赖关系已经给出契约方向；能据此判断的，不要再去读对应 playbook。
 
 每个场景 playbook 至少回答：任务输入是什么、依赖哪些上游契约、要改哪些代码锚点、要同步哪些下游、哪些情况必须停下、如何最小自验。
 
@@ -60,13 +76,13 @@ LLM new-path 的主依赖链是：
 | `ops-boundary` | `amct_ops` 构建、wheel、`torch.ops.amct.*` 调用边界；真正写 NPU kernel/C++ extension | [references/ops-boundary.md](references/ops-boundary.md) |
 | `public-api-tests` | 顶层 API、`__all__`、懒加载、setup/build、测试选择、文档样例同步 | [references/public-api-tests.md](references/public-api-tests.md) |
 
-跨场景示例：
+跨场景示例。「主」整篇读，「补」只在实际触到时读该 playbook 的「上下游依赖」和「BLOCKER」两节：
 
-- “新增 mxfp-like dtype”：读 `dtype-quant-module` + `deploy-export-code` + `public-api-tests`。
-- “新增 LLM PTQ 算法”：读 `llm-algorithm` + `ptq-solver-params` + `public-api-tests`。
-- “适配新模型并支持 PTQ”：读 `llm-model-unit` + `llm-data-workflow` + `ptq-solver-params` + `deploy-export-code`。
-- “改 classic 量化算法”：读 `classic-graph`，不要套用 LLM `ALGO_REGISTRY` 规则。
-- “amct_pytorch 调用新 NPU 算子”：读 `ops-boundary`；若要写 kernel，转 `amct-ops-dev`。
+- “新增 mxfp-like dtype”：主 `dtype-quant-module`；补 `deploy-export-code`（若参与导出）、`public-api-tests`（若改 CLI choices）。
+- “新增 LLM PTQ 算法”：主 `llm-algorithm`；补 `ptq-solver-params`（若有可训练参数或统计状态）。
+- “适配新模型并支持 PTQ”：主 `llm-model-unit`；补 `llm-data-workflow`（unit 输入命名）。这类任务通常跨 4 个子能力，按读取预算应委派 subagent 承载源码阅读。
+- “改 classic 量化算法”：只读 `classic-graph`，不要套用 LLM `ALGO_REGISTRY` 规则。
+- “amct_pytorch 调用新 NPU 算子”：只读 `ops-boundary`；若要写 kernel，转 `amct-ops-dev`。
 
 ## 全局边界
 

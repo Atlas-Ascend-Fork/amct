@@ -22,15 +22,9 @@ repo-map 是稳定架构说明，不是实时注册清单。若锚点文件显�
 
 ## 层级职责
 
-| 层 | 主要位置 | 职责 | 默认规则 |
-| --- | --- | --- | --- |
-| CLI | `amct_pytorch/cli/llm/` | 参数解析、启动 workflow | 不放模型逻辑 |
-| Workflow | `amct_pytorch/workflows/` | 编排 eval、PTQ 数据提取、PTQ 训练、deploy | 不放模型细节 |
-| Model adapter | `amct_pytorch/common/models/llm/...` | 模型注册、block 构建、quant block、`PtqUnit`、输入重放、权重加载 | 新模型和模型专属逻辑默认落点 |
-| Quant modules | `amct_pytorch/quantization/modules/` | 通用量化 wrapper、量化器、`QuantLinear` | 保持通用，不写模型名分支 |
-| Algorithms | `amct_pytorch/algorithms/` | activation / weight / structure 算法 | 通过 LLM new-path registry 和 `targets` 分流 |
-| Optimization | `amct_pytorch/common/optimization/` | optimizer、epoch 循环、重建训练、solver | 不混入模型分支 |
-| Data | `amct_pytorch/common/datasets/` | PTQ 输入、GT、dataloader | 优先复用现有 provider |
+层与职责的权威表在 `.agents/docs/repo-map.md` §分层边界，本文件不复制。本文件只写落点判断和 BLOCKER 检查。
+
+`repo-map` 的分层表覆盖 CLI、Workflow、Model adapter、Quant modules、Algorithms、Optimization、Data 七层；deploy 相关落点见 [deploy-export-code.md](deploy-export-code.md)。
 
 ## 默认落点判断
 
@@ -56,17 +50,7 @@ repo-map 是稳定架构说明，不是实时注册清单。若锚点文件显�
 
 ## 模型适配前结构自检
 
-编码前先回答：
-
-1. checkpoint 的真实 key 模式是什么，不要只靠 config 或 `architectures` 推断。
-2. block / attention / MLP class 是什么。
-3. dense、MoE、MLA、混合 attention、自定义 modeling 分别命中哪些。
-4. experts 是磁盘展开还是运行时 packed。
-5. `lm_head` 是否 tied 到 `embed_tokens`。
-6. blockwise 路径需要哪些 `attention_mask`、`position_ids`、`position_embeddings`、`input_ids`。
-7. 要拆哪些 `PtqUnit`，`unit.kind` 是否和 extract 产物命名一致。
-
-这些问题答不清时，先读 checkpoint index、config 和已有同族 adapter，不要先写 workflow 兜底。
+适配前 7 问见 [llm-model-unit.md](llm-model-unit.md) §适配清单，本文件不复制。答不清时先读 checkpoint index、config 和已有同族 adapter，不要先写 workflow 兜底。
 
 ## 算法注册检查
 
