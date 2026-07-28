@@ -11,6 +11,7 @@
 HiF4 packed   ──hif4_bit_reconstruct──►  BF16 / FP16
 NVFP4 packed  ──nvfp4_to_bf16────────►   BF16
 MXFP4 packed  ──mxfp4_to_bf16────────►   BF16
+MXFP8 packed  ──weight_dequant───────►   BF16
                     (fp4_formats)
 ```
 
@@ -26,6 +27,7 @@ unpacker 解码为临时 BF16 checkpoint，再走 HiF4。
 | `unpack_hif4.py` | HiF4 packed → BF16/FP16 整库解码 |
 | `unpack_nvfp4.py` | NVFP4 packed → BF16 整库解码 |
 | `unpack_mxfp4.py` | MXFP4 packed → BF16 整库解码（含 e6m0 自测/单对诊断） |
+| `unpack_mxfp8.py` | MXFP8 packed → BF16 整库解码（自带 `ShardCache`） |
 
 每个 unpacker 自己跑一个小的「逐分片解码循环」，复用 `common/utils/checkpoint_io.py`
 的分片 I/O 原语（`resolve_index` / `invert_weight_map` / `save_shard` / `write_index`）。
@@ -43,6 +45,10 @@ python -m amct_pytorch.common.utils.decode.unpack_nvfp4 \
 # MXFP4 → BF16
 python -m amct_pytorch.common.utils.decode.unpack_mxfp4 convert-dir \
     --mxfp4-dir /path/to/mxfp4_ckpt --out-dir /path/to/output
+
+# MXFP8 → BF16
+python -m amct_pytorch.common.utils.decode.unpack_mxfp8 \
+    --quant_model_dir /path/to/mxfp8_ckpt --output_dir /path/to/output
 ```
 
 MXFP4 附带的诊断子命令（可选，非解码主路径）：
