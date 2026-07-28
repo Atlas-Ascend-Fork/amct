@@ -10,7 +10,7 @@
 ```
 HiF4 packed   ──hif4_bit_reconstruct──►  BF16 / FP16
 NVFP4 packed  ──nvfp4_to_bf16────────►   BF16
-                    (fp4_formats)
+              (unpack_nvfp4，复用 fp4_formats 共享 codec)
 ```
 
 ptq / deploy 入口通过 `detect.detect_source_format` 识别输入格式；外部格式先由对应
@@ -21,9 +21,9 @@ unpacker 解码为临时 BF16 checkpoint，再走 HiF4。
 | 文件 | 职责 |
 |------|------|
 | `detect.py` | 格式识别 + `decode_to_bf16` 分发 |
-| `fp4_formats.py` | 格式数学：FP4→BF16 反量化 |
+| `fp4_formats.py` | 共享 FP4 codec（E2M1 nibble 解包 + 码→值） |
 | `unpack_hif4.py` | HiF4 packed → BF16/FP16 整库解码 |
-| `unpack_nvfp4.py` | NVFP4 packed → BF16 整库解码 |
+| `unpack_nvfp4.py` | NVFP4 反量化 `nvfp4_to_bf16` + 整库解码（复用 fp4_formats codec） |
 
 每个 unpacker 自己跑一个小的「逐分片解码循环」，复用 `common/utils/checkpoint_io.py`
 的分片 I/O 原语（`resolve_index` / `invert_weight_map` / `save_shard` / `write_index`）。
@@ -34,9 +34,9 @@ unpacker 解码为临时 BF16 checkpoint，再走 HiF4。
 一般无需手动调用——`ptq --quant_dtype hifp` / `deploy` 会自动识别并解码。手动整库解码：
 
 ```bash
-# NVFP4 → BF16
+# NVFP4 → BF16（与 ptq/deploy 同名的 --model / --output_dir）
 python -m amct_pytorch.common.utils.decode.unpack_nvfp4 \
-    --nvfp4-dir /path/to/nvfp4_ckpt --out-dir /path/to/output
+    --model /path/to/nvfp4_ckpt --output_dir /path/to/output
 ```
 
 ## 依赖
