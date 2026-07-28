@@ -23,7 +23,7 @@ unpacker 解码为临时 BF16 checkpoint，再走 HiF4。
 | 文件 | 职责 |
 |------|------|
 | `detect.py` | 格式识别 + `decode_to_bf16` 分发 |
-| `fp4_formats.py` | 格式数学：FP4→BF16 反量化 + 可选 HiF4_E6M0 编解码 |
+| `fp4_formats.py` | 共享 FP4 codec（E2M1 nibble 解包 + 码→值） |
 | `unpack_hif4.py` | HiF4 packed → BF16/FP16 整库解码 |
 | `unpack_nvfp4.py` | NVFP4 packed → BF16 整库解码 |
 | `unpack_mxfp4.py` | MXFP4 packed → BF16 整库解码（含 e6m0 自测/单对诊断） |

@@ -525,7 +525,6 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
             return None, None
         return _load(shard).get(key), shard
 
-    stats = {"converted": 0, "copied": 0, "dropped": 0, "missing": 0}
     out_weight_map: dict = {}
     for shard, keys in by_file.items():
         src = _load(shard)
@@ -533,13 +532,10 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
         for key in keys:
             tensor = src.get(key)
             if tensor is None:
-                stats["missing"] += 1
                 continue
             result = _transform(key, tensor, _lookup)
             if result is None:
-                stats["dropped"] += 1
                 continue
-            stats["converted" if result is not tensor else "copied"] += 1
             out_tensors[key] = result.contiguous()
         if out_tensors:
             save_shard(str(out_dir), shard, out_tensors)
@@ -547,10 +543,6 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
                 out_weight_map[key] = shard
 
     write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
-    print(
-        f"[decode] mxfp4 -> bf16: converted={stats['converted']}, "
-        f"copied={stats['copied']}, dropped={stats['dropped']}, missing={stats['missing']}"
-    )
 
 
 # ══════════════════════════════════════════════════════════════════════
