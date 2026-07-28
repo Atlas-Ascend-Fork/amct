@@ -29,7 +29,7 @@ index, so no bf16 reference is needed.
 Typical usage::
 
     python -m amct_pytorch.common.utils.decode.unpack_mxfp8 \\
-        --quant_model_dir /path/to/MXFP8 \\
+        --model /path/to/MXFP8 \\
         --output_dir /path/to/output
 """
 
@@ -644,8 +644,9 @@ def parse_dtype(name: str) -> torch.dtype:
 # -----------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="MXFP8 → BF16 → HiFloat4 converter")
-    parser.add_argument("--quant_model_dir", type=str, required=True)
+    parser = argparse.ArgumentParser(description="MXFP8 -> BF16 checkpoint decoder")
+    parser.add_argument("--model", type=str, required=True,
+                        help="MXFP8 checkpoint directory (same flag as ptq/deploy).")
     parser.add_argument("--output_dir", type=str, required=True)
 
     parser.add_argument("--group_size", type=int, default=None,
@@ -668,7 +669,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list] = None) -> None:
     args = build_parser().parse_args(argv)
 
-    quant_model_dir = Path(args.quant_model_dir)
+    quant_model_dir = Path(args.model)
     output_dir = Path(args.output_dir)
     out_dtype = parse_dtype(args.out_dtype)
 

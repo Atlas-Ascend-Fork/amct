@@ -38,17 +38,18 @@ unpacker 解码为临时 BF16 checkpoint，再走 HiF4。
 一般无需手动调用——`ptq --quant_dtype hifp` / `deploy` 会自动识别并解码。手动整库解码：
 
 ```bash
+# 所有 unpacker 与 ptq/deploy 同名的 --model / --output_dir
 # NVFP4 → BF16
 python -m amct_pytorch.common.utils.decode.unpack_nvfp4 \
-    --nvfp4-dir /path/to/nvfp4_ckpt --out-dir /path/to/output
+    --model /path/to/nvfp4_ckpt --output_dir /path/to/output
 
 # MXFP4 → BF16
 python -m amct_pytorch.common.utils.decode.unpack_mxfp4 convert-dir \
-    --mxfp4-dir /path/to/mxfp4_ckpt --out-dir /path/to/output
+    --model /path/to/mxfp4_ckpt --output_dir /path/to/output
 
 # MXFP8 → BF16
 python -m amct_pytorch.common.utils.decode.unpack_mxfp8 \
-    --quant_model_dir /path/to/mxfp8_ckpt --output_dir /path/to/output
+    --model /path/to/mxfp8_ckpt --output_dir /path/to/output
 ```
 
 MXFP4 附带的诊断子命令（可选，非解码主路径）：

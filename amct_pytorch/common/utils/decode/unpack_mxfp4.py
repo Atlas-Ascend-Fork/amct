@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import torch
+from torch import Tensor
 
 _CUR_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT_DIR = os.path.realpath(os.path.join(_CUR_DIR, "../../../"))
@@ -47,11 +48,7 @@ if _ROOT_DIR not in sys.path:
 
 from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float  # noqa: E402
 from amct_pytorch.common.utils.decode.fp4_formats import (  # noqa: E402
-    bf16_to_hif4_e6m0,
-    e2m1_lut,
-    hif4_e6m0_to_fp32,
-    mxfp4_to_bf16,
-    pack_nibbles,
+    unpack_nibbles, decode_fp4_e2m1, e2m1_lut, _as_uint8,
 )
 from amct_pytorch.common.utils.checkpoint_io import (  # noqa: E402
     resolve_index, invert_weight_map, save_shard, write_index,
@@ -59,6 +56,212 @@ from amct_pytorch.common.utils.checkpoint_io import (  # noqa: E402
 from safetensors.torch import load_file  # noqa: E402
 
 _HIF4_QTYPE = QType("hifx4").dim(-1)
+
+
+# ============================================================
+# MXFP4 format math (moved from fp4_formats: dequant + E8M0 + HiF4_E6M0 codec)
+# ============================================================
+
+
+def pack_nibbles(nibbles_u8: Tensor, low_first: bool = True) -> Tensor:
+    """Pack 4-bit nibble codes along the last dimension back into uint8 bytes."""
+    nibbles_u8 = _as_uint8(nibbles_u8, "nibbles_u8")
+    if nibbles_u8.shape[-1] % 2 != 0:
+        raise ValueError(
+            f"last dim must be even to pack nibbles, got {nibbles_u8.shape[-1]}"
+        )
+    a = nibbles_u8[..., 0::2] & 0x0F
+    b = nibbles_u8[..., 1::2] & 0x0F
+    if low_first:
+        return (a | (b << 4)).contiguous()
+    return ((a << 4) | b).contiguous()
+
+
+def exp2_int(exp: Tensor) -> Tensor:
+    """Return ``2**exp`` for an integer exponent tensor."""
+    return torch.ldexp(
+        torch.ones_like(exp, dtype=torch.float32), exp.to(torch.int32)
+    )
+
+
+def e8m0_to_unbiased(e8m0_code: Tensor, e8_bias: int = 127) -> Tensor:
+    """Convert E8M0 scale codes to signed unbiased integer exponents."""
+    e8m0_code = _as_uint8(e8m0_code, "e8m0_code")
+    if bool((e8m0_code == 255).any()):
+        raise ValueError("E8M0 code 255 is reserved/NaN; found in scale tensor")
+    return e8m0_code.to(torch.int16) - int(e8_bias)
+
+
+def _round_to_int(x: Tensor, mode: str) -> Tensor:
+    """Round float tensor to integer by *mode* (``nearest_even`` / ``half_up``)."""
+    if mode == "nearest_even":
+        return torch.round(x)
+    if mode == "half_up":
+        return torch.floor(x + 0.5)
+    raise ValueError(f"unsupported round mode: {mode}")
+
+
+def mxfp4_to_bf16(
+    packed_fp4: Tensor,
+    e8m0_scale: Tensor,
+    *,
+    low_first: bool = True,
+    e8_bias: int = 127,
+    block_size: int = 32,
+) -> Tensor:
+    """Decode MXFP4 packed tensor to BF16.
+
+    One E8M0 scale code is shared by every ``block_size`` (=32) MXFP4 elements.
+    Real value = E2M1(nibble) × 2^(E8M0_code − e8_bias).
+    """
+    if block_size != 32:
+        raise ValueError("MXFP4 block_size is expected to be 32")
+    packed_fp4 = _as_uint8(packed_fp4, "packed_fp4")
+    e8m0_scale = _as_uint8(e8m0_scale, "e8m0_scale")
+
+    nibbles = unpack_nibbles(packed_fp4, low_first=low_first)
+    num_values = nibbles.shape[-1]
+    if num_values % block_size != 0:
+        raise ValueError(
+            f"decoded value dim must be multiple of {block_size}, got {num_values}"
+        )
+    if e8m0_scale.shape[-1] != num_values // block_size:
+        raise ValueError(
+            f"scale last dim mismatch: scale={e8m0_scale.shape[-1]}, "
+            f"expected={num_values // block_size}"
+        )
+    if packed_fp4.shape[:-1] != e8m0_scale.shape[:-1]:
+        raise ValueError(
+            f"prefix shape mismatch: packed={packed_fp4.shape[:-1]}, "
+            f"scale={e8m0_scale.shape[:-1]}"
+        )
+
+    vals = decode_fp4_e2m1(nibbles)
+    vals = vals.reshape(*vals.shape[:-1], e8m0_scale.shape[-1], block_size)
+
+    e8_exp = e8m0_to_unbiased(e8m0_scale, e8_bias=e8_bias)
+    scale = exp2_int(e8_exp).unsqueeze(-1)
+    x = vals * scale
+    return x.reshape(*nibbles.shape[:-1], num_values).to(torch.bfloat16).contiguous()
+
+
+def compute_e6_exp_from_e8_pair(
+    e8m0_scale: Tensor,
+    *,
+    e8_bias: int = 127,
+    e6_rule: str = "unbiased",
+) -> Tensor:
+    """Convert pairs of E8M0 scales into one level-1 E6 exponent per 64 values.
+
+    Args:
+        e8m0_scale: ``[..., G*2]`` uint8 E8M0 codes.
+        e8_bias: E8M0 exponent bias.
+        e6_rule: ``"unbiased"`` — ``e6_exp = max(e8_code − bias) − 2``;
+                 ``"raw"``      — ``e6_exp = max(e8_code) − 2``.
+
+    Returns:
+        ``[..., G]`` int16 exponent tensor.
+    """
+    e8m0_scale = _as_uint8(e8m0_scale, "e8m0_scale")
+    if e8m0_scale.shape[-1] % 2 != 0:
+        raise ValueError(
+            f"scale last dim must be even, got {e8m0_scale.shape[-1]}"
+        )
+    pair = e8m0_scale.reshape(
+        *e8m0_scale.shape[:-1], e8m0_scale.shape[-1] // 2, 2
+    )
+    if e6_rule == "unbiased":
+        pair_exp = e8m0_to_unbiased(pair, e8_bias=e8_bias)
+        return pair_exp.max(dim=-1).values.to(torch.int16) - 2
+    if e6_rule == "raw":
+        return pair.to(torch.int16).max(dim=-1).values - 2
+    raise ValueError("e6_rule must be 'unbiased' or 'raw'")
+
+
+def bf16_to_hif4_e6m0(
+    x_bf16: Tensor,
+    e8m0_scale: Tensor,
+    *,
+    e8_bias: int = 127,
+    e6_rule: str = "unbiased",
+    e6_bias: int = 0,
+    round_mode: str = "nearest_even",
+    pack_low_first: bool = True,
+) -> Dict[str, Tensor]:
+    """Encode BF16 tensor into HiFloat4_E6M0 components (**NOT official HiF4**).
+
+    64 values per group; Level-1 E6 exponent from two E8M0 scales;
+    Level-2 8×1-bit + Level-3 16×1-bit + 64×S1P2.
+
+    Returns dict: e6_exp, e6_code, e2, e3, s1p2, s1p2_packed, qmag, y_scaled.
+    """
+    if x_bf16.shape[-1] % 64 != 0:
+        raise ValueError(f"x last dim must be multiple of 64, got {x_bf16.shape[-1]}")
+    if e8m0_scale.shape[-1] * 32 != x_bf16.shape[-1]:
+        raise ValueError(
+            f"scale last dim mismatch: {e8m0_scale.shape[-1] * 32} vs {x_bf16.shape[-1]}"
+        )
+    if x_bf16.shape[:-1] != e8m0_scale.shape[:-1]:
+        raise ValueError("prefix shape mismatch")
+
+    x = x_bf16.to(torch.float32).reshape(
+        *x_bf16.shape[:-1], x_bf16.shape[-1] // 64, 64
+    )
+    e6_exp = compute_e6_exp_from_e8_pair(
+        e8m0_scale, e8_bias=e8_bias, e6_rule=e6_rule
+    ).to(x.device)
+    e6_code = torch.clamp(e6_exp.to(torch.int16) + int(e6_bias), 0, 63).to(torch.uint8)
+
+    base = exp2_int(e6_exp).unsqueeze(-1).to(x.device)
+    abs_x = x.abs()
+
+    m4 = abs_x.reshape(*abs_x.shape[:-1], 16, 4).amax(dim=-1)
+    m8 = m4.reshape(*m4.shape[:-1], 8, 2).amax(dim=-1)
+
+    e2 = (m8 > (3.5 * base)).to(torch.uint8)
+    e2_for_e3 = e2.repeat_interleave(2, dim=-1)
+    e3_threshold = 1.75 * base * torch.pow(2.0, e2_for_e3.float())
+    e3 = (m4 > e3_threshold).to(torch.uint8)
+
+    e2_elem = e2.repeat_interleave(8, dim=-1)
+    e3_elem = e3.repeat_interleave(4, dim=-1)
+    total_scale = base * torch.pow(2.0, e2_elem.float()) * torch.pow(2.0, e3_elem.float())
+
+    y = x / total_scale
+    qmag = _round_to_int(y.abs() * 4.0, round_mode).clamp(0, 7).to(torch.uint8)
+    sign = (y < 0).to(torch.uint8)
+    sign = torch.where(qmag == 0, torch.zeros_like(sign), sign)
+    s1p2 = ((sign << 3) | qmag).to(torch.uint8)
+    s1p2_packed = pack_nibbles(s1p2, low_first=pack_low_first)
+
+    return {
+        "e6_exp": e6_exp.to(torch.int16).contiguous(),
+        "e6_code": e6_code.contiguous(),
+        "e2": e2.contiguous(),
+        "e3": e3.contiguous(),
+        "s1p2": s1p2.contiguous(),
+        "s1p2_packed": s1p2_packed.contiguous(),
+        "qmag": qmag.contiguous(),
+        "y_scaled": y.contiguous(),
+    }
+
+
+def hif4_e6m0_to_fp32(
+    e6_exp: Tensor,
+    e2: Tensor,
+    e3: Tensor,
+    s1p2: Tensor,
+) -> Tensor:
+    """Reconstruct FP32 values from HiF4_E6M0 components (validation only)."""
+    if s1p2.shape[-1] != 64:
+        raise ValueError(f"s1p2 last dim should be 64, got {s1p2.shape[-1]}")
+    sign = torch.where(((s1p2 >> 3) & 1) != 0, -1.0, 1.0).to(torch.float32)
+    mag = (s1p2 & 0x07).to(torch.float32) / 4.0
+    base = exp2_int(e6_exp.to(torch.int16)).unsqueeze(-1).to(mag.device)
+    e2_elem = e2.repeat_interleave(8, dim=-1).to(torch.float32)
+    e3_elem = e3.repeat_interleave(4, dim=-1).to(torch.float32)
+    x = sign * mag * base * torch.pow(2.0, e2_elem) * torch.pow(2.0, e3_elem)
+    return x.reshape(*s1p2.shape[:-2], s1p2.shape[-2] * 64).contiguous()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -297,21 +500,15 @@ def cmd_convert_pair(args: argparse.Namespace) -> None:
 
 
 def cmd_convert_dir(args: argparse.Namespace) -> None:
-    out_dir = Path(args.out_dir)
+    out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.dry_run:
-        print("[DRY RUN] MXFP4 → BF16 (decode only)")
-
     def _transform(key: str, tensor: torch.Tensor, lookup: Any) -> Optional[torch.Tensor]:
-        return transform_fn(
-            key, tensor, lookup, low_first=args.low_first, e8_bias=args.e8_bias,
-            dry_run=args.dry_run, verbose=args.verbose,
-        )
+        return transform_fn(key, tensor, lookup, low_first=args.low_first, e8_bias=args.e8_bias)
 
     # Small per-shard decode loop (output layout mirrors the source index; a weight's
     # weight_scale may live in another shard -> resolved via _lookup).
-    index = resolve_index(args.mxfp4_dir, args.bf16_index)
+    index = resolve_index(args.model)
     weight_map = index["weight_map"]
     by_file = invert_weight_map(weight_map)
 
@@ -319,7 +516,7 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
 
     def _load(shard: str) -> dict:
         if shard not in _cache:
-            _cache[shard] = load_file(os.path.join(args.mxfp4_dir, shard))
+            _cache[shard] = load_file(os.path.join(args.model, shard))
         return _cache[shard]
 
     def _lookup(key: str):
@@ -337,27 +534,22 @@ def cmd_convert_dir(args: argparse.Namespace) -> None:
             tensor = src.get(key)
             if tensor is None:
                 stats["missing"] += 1
-                if args.verbose:
-                    print(f"  [MISS] {key}")
                 continue
             result = _transform(key, tensor, _lookup)
             if result is None:
                 stats["dropped"] += 1
                 continue
             stats["converted" if result is not tensor else "copied"] += 1
-            if not args.dry_run:
-                out_tensors[key] = result.contiguous()
-        if not args.dry_run and out_tensors:
+            out_tensors[key] = result.contiguous()
+        if out_tensors:
             save_shard(str(out_dir), shard, out_tensors)
             for key in out_tensors:
                 out_weight_map[key] = shard
 
-    if not args.dry_run:
-        write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
-
+    write_index(str(out_dir), out_weight_map, metadata=index.get("metadata", {}))
     print(
-        f"Final: converted={stats['converted']}, copied={stats['copied']}, "
-        f"dropped={stats['dropped']}, missing={stats['missing']}"
+        f"[decode] mxfp4 -> bf16: converted={stats['converted']}, "
+        f"copied={stats['copied']}, dropped={stats['dropped']}, missing={stats['missing']}"
     )
 
 
@@ -396,13 +588,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_convert_pair)
 
     sp = sub.add_parser("convert-dir", parents=[common], help="Whole-checkpoint decode.")
-    sp.add_argument("--mxfp4-dir", type=str, required=True)
-    sp.add_argument("--bf16-index", type=str, default=None,
-                    help="Optional target sharding plan; if omitted, derived from the "
-                         "MXFP4 checkpoint's own index (self-sufficient).")
-    sp.add_argument("--out-dir", type=str, required=True)
-    sp.add_argument("--dry-run", action="store_true")
-    sp.add_argument("--verbose", action="store_true")
+    sp.add_argument("--model", type=str, required=True,
+                    help="MXFP4 checkpoint directory (same flag as ptq/deploy).")
+    sp.add_argument("--output_dir", type=str, required=True,
+                    help="Output directory for decoded BF16 shards + index.")
     sp.set_defaults(func=cmd_convert_dir)
 
     return p
