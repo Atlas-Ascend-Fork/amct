@@ -182,9 +182,14 @@ def calibrate(model, calib_blocks):
     print(f"[calib] shape={tuple(calib.shape)}  tokens={n_tok}  "
           f"最大 in_features={max_in}  样本/维度比={ratio:.1f}:1")
     if ratio < 4:
-        print(f"[calib] ⚠️  样本/维度比 {ratio:.1f}:1 偏低（GPTQ 常用 ≥20:1），"
-              f"最大层的 Hessian 估计不足、补偿可能过拟合校准集。"
-              f"提高 --n_calib（注意它计的是语料【条数】不是块数）")
+        # 该比值仅作诊断，**不代表需要调高**。本项目实测（Qwen3-8B, W4A4）：
+        #   --n_calib 64→256（比值 1.1:1→5.2:1），全量 73 块 delta 0.4463→0.4520，
+        #   即无收益、略劣。20 块子集上曾显示 0.048 的"收益"，实为子集偏差假象
+        #   （同一对配置的 20/73 偏移在 −0.011 与 +0.042 之间摆动，摆幅 0.053）。
+        # 结论：Hessian 估计不足在理论上成立，但本设置下不是精度瓶颈。
+        print(f"[calib] 注：样本/维度比 {ratio:.1f}:1（GPTQ 文献常用 ≥20:1）。"
+              f"本项目实测提高到 5.2:1 在全量评测上未见收益（详见报告 §4.3），"
+              f"此处仅作诊断输出。--n_calib 计的是语料【条数】不是块数")
     t0 = time.time()
     ids = calib[:, : model.seqlen].to(input_device(model))
     # 只跑 transformer 主体，**不过 lm_head**：校准只需要各层 Hessian 与补偿，
