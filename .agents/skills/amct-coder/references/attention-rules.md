@@ -4,6 +4,8 @@
 
 当任务涉及 attention wrapper、`attn-linear`、`attn-cache`、mask、position、RoPE、SDPA、MLA、混合 attention 或 cache/generate 分支时读取本文件。
 
+**新增或结构性修改 attention wrapper 转 `model-adapter`**（见 [delegation.md](delegation.md)）。amct-coder 用本文件做三件事：review `model-adapter` 的产出、委派时交待必查项、修不改结构的局部 bug。下面的执行步骤同样是 review 时的核对顺序。
+
 ## 事实来源
 
 适配原则和已知模型个案不在本文件维护：

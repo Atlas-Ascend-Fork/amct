@@ -1,13 +1,15 @@
 ---
 name: amct-coder
-description: AMCT 仓专属辅助编码总入口。用于新增或修改 AMCT 代码时的场景识别、分层边界判断、实现路径选择和最小自验：覆盖 amct_pytorch LLM new-path 的量化 dtype/bit policy/quant module、算法实现与 ALGO_REGISTRY 注册、模型 MODEL_REGISTRY/adapter/wrapper/PtqUnit、eval/extract_ptq_data/PTQ/deploy workflow、离线输入/GT/PTQ 参数导入导出、block solver 调度；覆盖 classic PTQ/graph_based 图压缩、QAT/校准/剪枝/蒸馏/auto calibration、public API/packaging/tests；识别 amct_ops NPU 算子构建与 amct_pytorch 调用边界，并在需要写 Ascend C/C++/Meta kernel 时转 amct-ops-dev。也用于 AMCT 代码 review，重点检查越层改动、注册缺失、参数保存加载不闭环、验证缺失。
+description: AMCT 仓专属辅助编码总入口，负责模型层以外的编码实现。用于新增或修改 AMCT 代码时的场景识别、分层边界判断、实现路径选择和最小自验：覆盖 amct_pytorch LLM new-path 的量化 dtype/bit policy/quant module、算法实现与 ALGO_REGISTRY 注册、eval/extract_ptq_data/PTQ/deploy workflow、离线输入/GT/PTQ 参数导入导出、block solver 调度、deploy safetensors 导出；覆盖 classic PTQ/graph_based 图压缩、QAT/校准/剪枝/蒸馏/auto calibration、public API/packaging/tests；识别 amct_ops NPU 算子构建与 amct_pytorch 调用边界。也用于 AMCT 代码 review，重点检查越层改动、注册缺失、参数保存加载不闭环、验证缺失。不适用于：新增或修改模型 adapter、wrapper、attention/MLP/MoE 结构（→ model-adapter）；写 Ascend C/C++/Meta kernel（→ amct-ops-dev）；跑量化实验（→ quant-run）。
 ---
 
 # AMCT Coder
 
 ## 定位
 
-`amct-coder` 是 AMCT 仓辅助编码总入口。它先做场景分类，再进入对应子能力 playbook，最后按该场景做边界检查和自验。
+`amct-coder` 是 AMCT 仓辅助编码总入口，负责**模型层以外**的编码实现。它先做场景分类，再进入对应子能力 playbook，最后按该场景做边界检查和自验。
+
+模型层（`amct_pytorch/common/models/llm/...` 下的 adapter、wrapper、attention/MLP/MoE 结构、模型注册）的实现交给 `model-adapter`。amct-coder 在模型层只做两件事：**契约对齐检查**（`PtqUnit.kind` 与 extract 命名、hook 名、deploy binding 是否与下游一致）和 **review**（越层、注册缺失、验证缺失）。判断规则见 [references/delegation.md](references/delegation.md)。
 
 本 skill 不把所有知识塞进主文件。具体规则在 `references/` 下按场景拆分；使用时只读取命中的 playbook。
 
@@ -41,9 +43,9 @@ LLM new-path 的主依赖链是：
 
 其中：
 
-- `dtype-quant-module` 定义数值语义和 deploy payload，被 `llm-algorithm`、`llm-model-unit`、`deploy-export-code` 共同消费。
+- `dtype-quant-module` 定义数值语义和 deploy payload，被 `llm-algorithm`、模型层 wrapper、`deploy-export-code` 共同消费。
 - `llm-algorithm` 通过 `ALGO_REGISTRY` 和 `targets` 接入 `quantization/modules/quant_base.py`，训练态由 `ptq-solver-params` 消费，导出态由 `deploy-export-code` 消费。
-- `llm-model-unit` 提供 block 构建、quant block、`PtqUnit`、离线输入命名和 deploy binding，是 `llm-data-workflow`、`ptq-solver-params`、`deploy-export-code` 的上游。
+- 模型层提供 block 构建、quant block、`PtqUnit`、离线输入命名和 deploy binding，是 `llm-data-workflow`、`ptq-solver-params`、`deploy-export-code` 的上游。实现归 `model-adapter`；`llm-model-unit` 在本 skill 内只是这条上游契约的检查清单。
 - `llm-data-workflow` 产出 PTQ 输入和 GT 口径，被 `ptq-solver-params` 消费；它也决定 eval 结果能否和 PTQ 结果比较。
 - `ptq-solver-params` 保存和回载算法/quant module 状态，必须与 eval/deploy 使用的 `--algos`、target 和 unit 命名一致。
 - `deploy-export-code` 是 dtype payload、adapter binding、PTQ 参数和 safetensors index 的汇合点。
@@ -68,7 +70,7 @@ LLM new-path 的主依赖链是：
 | --- | --- | --- |
 | `dtype-quant-module` | 新量化数据类型、`quant_dtype`、fake quant、real quant、activation/weight quantizer、`QuantLinear`、`QuantizedMatmul`、bit config | [references/dtype-quant-module.md](references/dtype-quant-module.md) |
 | `llm-algorithm` | 新增/修改 LWC/LAC/AutoRound/OmniQuant/FlatQuant 类算法、`trainable_params()`、统计 buffer、`export_ptq_params()`、`targets` | [references/llm-algorithm.md](references/llm-algorithm.md) |
-| `llm-model-unit` | 模型注册、adapter、wrapper、attention/MLP/MoE、`PtqUnit`、权重 key、mask/position、tied lm_head | [references/llm-model-unit.md](references/llm-model-unit.md) |
+| `llm-model-unit` | **不承接实现，转 `model-adapter`**。仅用于：模型层契约对齐（`PtqUnit.kind` 与 extract 命名、hook 名、deploy binding）、模型层 review、局部 adapter bug 修复 | [references/llm-model-unit.md](references/llm-model-unit.md) |
 | `llm-data-workflow` | eval、extract_ptq_data、PTQ workflow、离线输入、GT、PPL、dataloader、逐层 forward | [references/llm-data-workflow.md](references/llm-data-workflow.md) |
 | `ptq-solver-params` | block solver、optimizer、scheduler、unit 调度、PTQ 参数保存/加载、参数导出回载 | [references/ptq-solver-params.md](references/ptq-solver-params.md) |
 | `deploy-export-code` | deploy workflow、safetensors、weight index、`quantization_config`、tensorwise/blockwise 导出 | [references/deploy-export-code.md](references/deploy-export-code.md) |
@@ -80,7 +82,7 @@ LLM new-path 的主依赖链是：
 
 - “新增 mxfp-like dtype”：主 `dtype-quant-module`；补 `deploy-export-code`（若参与导出）、`public-api-tests`（若改 CLI choices）。
 - “新增 LLM PTQ 算法”：主 `llm-algorithm`；补 `ptq-solver-params`（若有可训练参数或统计状态）。
-- “适配新模型并支持 PTQ”：主 `llm-model-unit`；补 `llm-data-workflow`（unit 输入命名）。这类任务通常跨 4 个子能力，按读取预算应委派 subagent 承载源码阅读。
+- “适配新模型并支持 PTQ”：适配部分转 `model-adapter`；amct-coder 只处理适配之外的 dtype / workflow / deploy 改动，并在结束时按 `llm-model-unit` 做契约对齐检查。
 - “改 classic 量化算法”：只读 `classic-graph`，不要套用 LLM `ALGO_REGISTRY` 规则。
 - “amct_pytorch 调用新 NPU 算子”：只读 `ops-boundary`；若要写 kernel，转 `amct-ops-dev`。
 
@@ -89,7 +91,7 @@ LLM new-path 的主依赖链是：
 - `amct_pytorch/quantization/dtypes/`：量化数据类型的 fake/export 语义。
 - `amct_pytorch/quantization/modules/`：通用量化模块，不写模型名分支。
 - `amct_pytorch/algorithms/quant/`：LLM new-path PTQ 算法，通过 `ALGO_REGISTRY` 和 `targets` 分流。
-- `amct_pytorch/common/models/llm/...`：LLM 模型 adapter、wrapper、`PtqUnit`、权重加载、mask/pos 捕获。
+- `amct_pytorch/common/models/llm/...`：LLM 模型 adapter、wrapper、`PtqUnit`、权重加载、mask/pos 捕获。**新增和结构性修改转 `model-adapter`**，本 skill 只做契约对齐、review 和局部 bug 修复。
 - `amct_pytorch/common/datasets/`：离线输入、GT、dataloader。
 - `amct_pytorch/common/optimization/`：solver、optimizer、scheduler，不混模型分支。
 - `amct_pytorch/workflows/`：CLI 背后的流程编排，不放模型细节和算法细节。
@@ -100,6 +102,7 @@ LLM new-path 的主依赖链是：
 
 遇到以下情况先停下并改方案：
 
+- 在本 skill 内新增模型 adapter、新增 wrapper 类、改 attention/MLP/MoE 结构或注册新模型——这些应转 `model-adapter`。
 - 把模型专属逻辑写进 CLI、workflow、solver 或通用 quant module。
 - 混用 LLM new-path `ALGO_REGISTRY` 和 classic `AlgorithmRegistry`。
 - 新 dtype 只加类，不更新 `register_dtype()`、CLI choices、bit policy 或 deploy 载荷。

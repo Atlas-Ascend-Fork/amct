@@ -24,7 +24,7 @@ references 需要引用原则或个案时，写一行指针指向 repo-map / cas
 | **多 Skill**（每个子能力一个 SKILL.md） | 每个 skill 职责清晰，可独立触发 | 全局 BLOCKER 规则散落在多个入口；跨子能力协调需要额外委派逻辑；OpenCode skill 数量膨胀 |
 | **单 Skill + 按需读参考文档** | 全局 BLOCKER 和路由集中维护；跨场景只需在主文件写清读取顺序；参考文档可独立演进不改主文件 | 主文件需要承载路由表；单个参考文档可能过长 |
 
-补充一条决定性理由：**skill 的 description 全量进上下文，body 才按需加载。** 拆成 9 个 coding skill 的真实代价不是文件数，而是 9 条 description 同时参与匹配；而 AMCT 编码任务天然跨子能力（"给 qwen3.6 加 attn-cache 量化" 同时命中 llm-model-unit + dtype-quant-module + deploy-export-code），需要一个先分类再排序的中心，客户端的 description 匹配做不了这件事。子能力能被用户单独说出来时拆 skill 才划算，这里做不到。
+**skill 的 description 全量进上下文，body 才按需加载。** 拆成 多个coding skill 的真实代价不是文件数，而是 多个 description 同时参与匹配；而 AMCT 编码任务天然跨子能力（"给 qwen3.6 加 attn-cache 量化" 同时命中 llm-model-unit + dtype-quant-module + deploy-export-code），需要一个先分类再排序的中心，客户端的 description 匹配做不了这件事。子能力能被用户单独说出来时拆 skill 才划算，这里做不到。
 
 另外当前 9 个子能力是按**契约边界**切的（dtype 定义数值语义、adapter 定义结构、solver 定义优化），不是按目录切的。这让"读上游确认契约、读下游确认闭环"这个动作有意义；按目录切会退化成索引。
 
@@ -326,3 +326,5 @@ SKILL.md（全局路由 + BLOCKER）
 | `AlgorithmRegistry` | `algorithms/__init__.py` | 8 种算法 / 12 条注册 | classic 量化算法，模块级直接注册，通过 `register(name, src_op, quant_op, deploy_op)` 四元组映射 |
 
 **关键边界**：LLM new-path 的 4 个 `Registry("...")` 实例和 classic 的 `AlgorithmRegistry` 是两套独立体系，不能混用。这是全局 BLOCKER 规则。
+
+目前可以优化的三个方向：1. skill的流程图，子能力编排，以及加上一些特例来进行映射

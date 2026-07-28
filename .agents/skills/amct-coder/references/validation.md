@@ -25,7 +25,7 @@
 | --- | --- |
 | `dtype-quant-module` | `pytest tests/unit_test/quantization/test_dtypes.py tests/unit_test/quantization/modules/test_quant_base.py` |
 | `llm-algorithm` | `pytest tests/unit_test/algorithms tests/unit_test/quantization/modules/test_quant_base.py` |
-| `llm-model-unit` | `pytest tests/unit_test/common/models/llm`，必要时 mocked workflow 测试 |
+| `llm-model-unit`（契约对齐 / review / 局部修复） | `pytest tests/unit_test/common/models/llm`，必要时 mocked workflow 测试 |
 | `llm-data-workflow` | `pytest tests/unit_test/workflows tests/unit_test/common/datasets tests/unit_test/common/evaluate` |
 | `ptq-solver-params` | `pytest tests/unit_test/common/optimization tests/unit_test/workflows/test_llm_ptq.py` |
 | `deploy-export-code` | `pytest tests/unit_test/workflows/test_llm_deploy.py` |

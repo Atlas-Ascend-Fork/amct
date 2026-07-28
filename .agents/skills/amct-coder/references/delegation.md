@@ -8,6 +8,7 @@
 
 | 用户需求 | 使用 skill | 处理方式 |
 | --- | --- | --- |
+| 新增模型 adapter、wrapper 类、attention/MLP/MoE 结构、注册新模型、改 unit 拆分策略 | `model-adapter` | 模型层实现全部转交；`amct-coder` 只做契约对齐和 review，见下节 |
 | 新增/修改 `amct_ops/` NPU 算子、Ascend C kernel、PyTorch C++ extension、Meta kernel、`ops_build.sh` | `amct-ops-dev` | `amct-coder` 只判断调用边界和构建入口；硬件实现转交 |
 | 跑直转 eval、提取校准数据、PTQ 训练、PTQ 结果评测命令 | `quant-run` | 本 skill 不执行实验调参 |
 | 端到端模型量化，从适配到方案、实验、deploy、归档 | `quant-workflow` | 由主编排 skill 分阶段处理 |
@@ -21,21 +22,29 @@
 
 ## 与 model-adapter 的关系
 
-`model-adapter` 是更窄的模型适配实现 skill。用户明确要求“新增模型 adapter / 补 wrapper / 注册模型 / 定义 PTQ unit”时：
+`model-adapter` 拥有模型层实现，位置是 `.agents/skills/quant-tools/model-adapter/`。这是硬规则，不是可选项：
 
-1. 先用 `amct-coder` 判断任务是否只属于模型层，是否触及 dtype/algorithm/workflow/deploy。
-2. 若确实是纯模型适配，进入 `model-adapter` 固定流程。
-3. 若同时涉及 dtype、算法、数据、solver、deploy，继续使用 `amct-coder` 的多个子能力 playbook。
+**凡是新增或结构性修改 `amct_pytorch/common/models/llm/...`，一律转 `model-adapter`。** 包括新增模型族、新增模型 adapter、注册新模型、新增 attention/MLP/MoE wrapper 类、改 wrapper 结构、改 `iter_ptq_units()` 的 unit 拆分策略。
+
+amct-coder 在模型层只保留三件事，见 [llm-model-unit.md](llm-model-unit.md)：
+
+1. 契约对齐检查：`PtqUnit.kind`、hook 名、deploy binding 与下游消费口径是否一致。
+2. review：越层、注册缺失、关量化不等价、验证缺失。
+3. 局部 bug 修复：不改结构、不新增 wrapper、不动注册链。
+
+任务同时含模型层实现和其它层改动时，拆开：模型层那部分转 `model-adapter`，dtype / 算法 / workflow / solver / deploy / public API 那部分留在 amct-coder，最后由 amct-coder 做契约对齐检查收口。
+
+判不清时，先答 [llm-model-unit.md](llm-model-unit.md) §适配清单 的 7 问：全部落在模型层就转 `model-adapter`。
 
 ## 不委派的编码场景
 
 这些任务继续由 `amct-coder` 处理：
 
-- 小范围修复 `amct_pytorch/common/models/llm/...` 的 adapter bug。
+- 修 `amct_pytorch/common/models/llm/...` 的局部 bug：权重 key 拼错、kwargs 漏传、命名不一致等不改结构的修复。
 - 修复算法注册、`targets`、导入注册链。
 - 修复 bit policy / dtype 策略代码。
 - 修复 PTQ 参数保存/加载的小范围代码问题。
-- 做 AMCT Python 代码 review，重点查越层、注册缺失、验证缺失。
+- 做 AMCT Python 代码 review，重点查越层、注册缺失、验证缺失；模型层代码和 `model-adapter` 的产出也由 amct-coder review。
 
 ## 委派时的回复要求
 

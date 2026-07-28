@@ -4,6 +4,8 @@
 
 当任务涉及 MLP、MoE-MLP、experts、shared experts、`QuantGatedMLP`、`QuantLinear`、模型专属 `quant_module.py` 或 wrapper 类新增/修改时读取本文件。
 
+**新增或结构性修改 wrapper 转 `model-adapter`**（见 [delegation.md](delegation.md)）。amct-coder 用本文件做三件事：review `model-adapter` 的产出、委派时交待必查项、修不改结构的局部 bug。下面的执行步骤同样是 review 时的核对顺序。
+
 ## 事实来源
 
 合并原则和已知模型个案不在本文件维护：
