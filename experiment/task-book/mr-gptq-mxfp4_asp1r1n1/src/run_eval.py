@@ -78,6 +78,11 @@ def build_args():
     ap.add_argument("--hadamard_k", type=int, default=128,
                     help="Hadamard 微旋转块大小（须为2的幂，且能整除各层 in_features）。论文默认128；"
                          "fake-quant 无在线开销，可调大(512/1024/4096)测更强旋转能否进一步压 W4A4 误差")
+    ap.add_argument("--hadamard_full", action="store_true",
+                    help="每层旋转块取满 in_features（全宽旋转），不可构造时退回 --hadamard_k。"
+                         "Qwen3-8B 上唯一受影响的是 down_proj(in=12288)——它不是 2 的幂，"
+                         "k=4096 下只能切成 3 个对角块，是全网唯一没拿到全宽旋转的层。"
+                         "12288=12×1024 走 Paley H12 ⊗ Sylvester H1024（3 阶 Hadamard 不存在）")
     ap.add_argument("--skip_router", action="store_true",
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
@@ -113,6 +118,7 @@ def main():
                 mr_gptq_module._INCREMENTS[inc] = True
             mr_gptq_module._ACT_PROTECT = list(args.act_protect)
             mr_gptq_module._HADAMARD_K = args.hadamard_k
+            mr_gptq_module._HADAMARD_FULL = args.hadamard_full
             if args.perc_damp is not None:
                 mr_gptq_module._PERC_DAMP = args.perc_damp
                 print(f"[MR-GPTQ] GPTQ 阻尼系数 perc_damp = {args.perc_damp}")
@@ -123,6 +129,9 @@ def main():
             print(f"[MR-GPTQ] increments = {mr_gptq_module._INCREMENTS}")
             if args.hadamard_k != 128:
                 print(f"[MR-GPTQ] Hadamard 块大小 = {args.hadamard_k}（消融：>128 测更强旋转压离群值）")
+            if args.hadamard_full:
+                print("[MR-GPTQ] 全宽旋转：各层旋转块取满 in_features"
+                      "（8B 上即 down_proj 12288 = Paley H12 ⊗ H1024）")
             if args.act_protect:
                 print(f"[MR-GPTQ] W4A4 混合精度：以下层名子串的层保激活高精度 = {args.act_protect}")
             inc = mr_gptq_module._INCREMENTS

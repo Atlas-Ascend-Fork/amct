@@ -47,6 +47,10 @@ _ACT_CLIP_GRID = (1.0, 0.9, 0.8, 0.7, 0.6)
 # 最优裁剪通常较温和；且本搜索只在校准期跑一次，多给候选不增加评测开销。
 _WEIGHT_CLIP_GRID = (1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7)
 
+# True：每层旋转块取满 in_features（全宽旋转），不可构造时退回 _HADAMARD_K。
+# 唯一受影响的是 in≠_HADAMARD_K 的层——Qwen3-8B 上就是 down_proj(in=12288)。
+_HADAMARD_FULL = False
+
 _HADAMARD_K = 128  # block-wise Hadamard 尺寸；论文取 128 是为【在线算子】的开销权衡。
                    # 本项目 fake-quant 只测精度、旋转无推理开销 → 可经 --hadamard_k 调大
                    # (512/1024/4096) 做消融：块越大离群值摊得越开，或能进一步压 W4A4 误差。
@@ -70,6 +74,10 @@ _PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始�
 _FP4_MAX_EXP = 2  # E2M1 最大指数（6 = 1.5·2²）；scale fitting 的 offset
 
 
+def _is_pow2(n):
+    return n > 0 and (n & (n - 1)) == 0
+
+
 def _sylvester_hadamard(k):
     """归一化 Sylvester-Hadamard H_k/√k（k 须为 2 的幂），正交且对称。"""
     H = torch.ones(1, 1)
@@ -78,16 +86,73 @@ def _sylvester_hadamard(k):
     return H / (k ** 0.5)
 
 
-_HADAMARD_CACHE = {}
+# Paley-I 可构造的非 2 幂阶：m = q+1，q 为素数且 q ≡ 3 (mod 4)。
+# 本项目只用到 12（= 12288/1024，见 _build_hadamard）；其余留作其它模型维度的兜底。
+_PALEY_ORDERS = (12, 20, 24, 44, 48, 60, 68, 72)
 
 
-def _get_hadamard(k):
-    """按 k 缓存 Hadamard 矩阵。k 大时矩阵不小（k=4096 → 64MB fp32），252 个量化模块
-    各建一份会撑爆内存，故同一 k 全局只造一次、共享只读。"""
-    H = _HADAMARD_CACHE.get(k)
+def _paley_hadamard(m):
+    """Paley I 型构造，阶 m = q+1（q 素数、q ≡ 3 mod 4）。
+
+    S = [[0, 1ᵀ], [−1, Q]]，Q[i,j] = χ(i−j mod q)，χ 为 GF(q) 上的二次剩余特征
+    （χ(0)=0，非零平方剩余取 +1，非剩余取 −1）。取 H = I + S，则 S 反对称、
+    S·Sᵀ = q·I，于是 H·Hᵀ = (I+S)(I−S) = I − S² = (1+q)·I = m·I。
+    注意：H **只保证正交，不对称**——但旋转只需要正交（y = (xH)(WH)ᵀ = x·Hᵀ H·Wᵀ = x·Wᵀ）。
+    """
+    q = m - 1
+    residues = {(i * i) % q for i in range(1, q)}
+    chi = [0.0 if a == 0 else (1.0 if a in residues else -1.0) for a in range(q)]
+    Q = torch.tensor([[chi[(i - j) % q] for j in range(q)] for i in range(q)])
+    S = torch.zeros(m, m)
+    S[0, 1:] = 1.0
+    S[1:, 0] = -1.0
+    S[1:, 1:] = Q
+    H = (torch.eye(m) + S) / (m ** 0.5)
+    err = (H.matmul(H.t()) - torch.eye(m)).abs().max().item()
+    if err > 1e-5:
+        raise ValueError(f"Paley-{m} 构造失败：正交性误差 {err:.2e}")
+    return H
+
+
+def _hadamard_order_ok(n):
+    """n 阶 Hadamard 是否可构造：2 的幂走 Sylvester，否则找 m·2ᵏ 分解。"""
+    if _is_pow2(n):
+        return True
+    return any(n % m == 0 and _is_pow2(n // m) for m in _PALEY_ORDERS)
+
+
+def _build_hadamard(n):
+    """构造 n 阶归一化 Hadamard。
+
+    n 为 2 的幂 → Sylvester。否则拆成 m·2ᵏ 走 Kronecker 积：正交矩阵的 Kronecker
+    积仍正交，故 H_n = H_m ⊗ H_{2ᵏ} 合法。
+    例：Qwen3-8B 的 down_proj in_features = 12288，**不是 2 的幂**，Sylvester 造不出来；
+    12288 = 3 × 4096 这条路走不通（3 阶 Hadamard 不存在），只能走 12288 = 12 × 1024。
+    """
+    if _is_pow2(n):
+        return _sylvester_hadamard(n)
+    for m in _PALEY_ORDERS:
+        if n % m == 0 and _is_pow2(n // m):
+            return torch.kron(_paley_hadamard(m), _sylvester_hadamard(n // m))
+    raise ValueError(f"无法构造 {n} 阶 Hadamard（不是 2 的幂，也无 Paley 分解）")
+
+
+_HADAMARD_CACHE = {}   # (k, device_str) -> 归一化 Hadamard
+
+
+def _get_hadamard(k, device="cpu"):
+    """按 (k, device) 缓存。矩阵可以很大（k=12288 → 604MB fp32），252 个量化模块
+    各建一份、或每次前向各搬一份上卡，都会撑爆内存 → 同一 (k, device) 全局共享只读。"""
+    key = (k, str(device))
+    H = _HADAMARD_CACHE.get(key)
     if H is None:
-        H = _sylvester_hadamard(k)
-        _HADAMARD_CACHE[k] = H
+        cpu_key = (k, "cpu")
+        base = _HADAMARD_CACHE.get(cpu_key)
+        if base is None:
+            base = _build_hadamard(k)
+            _HADAMARD_CACHE[cpu_key] = base
+        H = base if key == cpu_key else base.to(device)
+        _HADAMARD_CACHE[key] = H
     return H
 
 
@@ -99,8 +164,14 @@ class MRGPTQuant(GPTQuant):
         self.increments = dict(_INCREMENTS)
         if self.wts_type != MXFP4_E2M1:
             raise ValueError(f"MR-GPTQ 目前仅支持 mxfp4_e2m1，收到 {self.wts_type}")
+        # 旋转块大小：默认全局 _HADAMARD_K；开了 _HADAMARD_FULL 则按本层 in_features
+        # 取满（全宽旋转）——k=4096 下 in=12288 的 down_proj 只能切成 3 个对角块，
+        # 是全网唯一没拿到全宽旋转的层，而它恰是最大的层。
         self.hadamard_k = _HADAMARD_K
-        self._H = _get_hadamard(self.hadamard_k)  # [k,k] CPU float32（全局缓存，同 k 共享）
+        in_features = self.weight.shape[1]
+        if _HADAMARD_FULL and in_features != _HADAMARD_K and _hadamard_order_ok(in_features):
+            self.hadamard_k = in_features
+        _get_hadamard(self.hadamard_k)  # 预热 CPU 侧缓存（同 k 全局只造一次）
         if _PERC_DAMP is not None:
             self.perc_damp = _PERC_DAMP
 
@@ -121,7 +192,7 @@ class MRGPTQuant(GPTQuant):
         百分点，会污染消融；fp32 旋转对 k=128 影响可忽略、对大 k 是必需。"""
         k = self.hadamard_k
         shape = x.shape
-        H = self._H.to(device=x.device, dtype=torch.float32)
+        H = _get_hadamard(k, x.device)  # 按 (k, device) 全局共享，避免每次前向搬一份大矩阵
         xr = x.reshape(*shape[:-1], shape[-1] // k, k).float().matmul(H)
         return xr.reshape(shape).to(x.dtype)
 
@@ -436,7 +507,9 @@ class MRGPTQuant(GPTQuant):
     @torch.no_grad()
     def _fake_quant_forward_one(self, inputs):
         # weight 已是（旋转+）量化后的权重；Hadamard 开时输入需同样旋转，
-        # y = (x·R)·(W·R)ᵀ = x·Wᵀ（R 正交对称），weight-only 下 x·R 精确无损。
+        # y = (x·R)·(W·R)ᵀ = x·R·Rᵀ·Wᵀ = x·Wᵀ——**只需要 R 正交**（Sylvester 恰好还对称，
+        # 但全宽旋转下 down_proj 用的 Paley⊗Sylvester 不对称，不影响正确性）。
+        # weight-only 下 x·R 精确无损。
         if self._do_hadamard():
             inputs = self._rotate_last_dim(inputs)
         # W4A4：旋转后把激活也量化到 MXFP4（旋转已压离群值 → 激活可 4-bit）。
