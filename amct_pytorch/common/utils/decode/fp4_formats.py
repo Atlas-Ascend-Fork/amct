@@ -14,16 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""FP4 format math layer — NVFP4 → BF16 dequant.
+"""Shared FP4 codec — nibble ↔ byte, E2M1 code ↔ value.
 
-Provides the shared "calculator" for the NVFP4 conversion pipeline.
-The BF16 → HiF4 fake-quant step (e6m2) is handled by the existing
-``amct_pytorch.common.utils.hifloat4_quant.quant_dequant_float``, not here.
-
-This module covers:
-  1. Raw FP4 codec: nibble unpack, E2M1 decode.
-  2. Scale helpers: E4M3 decode.
-  3. FP4 → BF16 dequant: ``nvfp4_to_bf16``.
+The reusable "calculator" shared by the FP4 decoders (NVFP4, and downstream MXFP4): unpack
+uint8 bytes into 4-bit nibbles and decode E2M1 codes to values. **Format-specific dequant**
+(e.g. ``nvfp4_to_bf16``, the E4M3/E8M0 block-scale math) lives in each ``unpack_*.py``, not
+here, so this module stays stable as formats are added.
 """
 
 from __future__ import annotations
@@ -85,64 +81,4 @@ def unpack_nibbles(packed_u8: Tensor, low_first: bool = True) -> Tensor:
 def decode_fp4_e2m1(codes: Tensor) -> Tensor:
     """Decode E2M1 4-bit codes (0..15) to float32 values using a LUT."""
     return e2m1_lut(codes.device, torch.float32)[codes.long()]
-
-
-# ══════════════════════════════════════════════════════════════════════
-# 2. Scale helpers
-# ══════════════════════════════════════════════════════════════════════
-
-
-def decode_sf_to_fp32(sf: Tensor) -> Tensor:
-    """Decode NVFP4 block-scale (E4M3 or uint8 view of E4M3) to float32."""
-    if sf.dtype == torch.float8_e4m3fn:
-        return sf.to(torch.float32)
-    if sf.dtype == torch.uint8:
-        return sf.view(torch.float8_e4m3fn).to(torch.float32)
-    return sf.to(torch.float32)
-
-
-# ══════════════════════════════════════════════════════════════════════
-# 3. FP4 → BF16 dequant
-# ══════════════════════════════════════════════════════════════════════
-
-
-def nvfp4_to_bf16(
-    weight_fp4_packed: Tensor,
-    weight_scale: Tensor,
-    weight_scale_2: Tensor,
-    out_features: int,
-    in_features: int,
-    sf_vec_size: int = 16,
-) -> Tensor:
-    """Decode NVFP4 (TRT-LLM) packed weight to BF16.
-
-    NVFP4 format: E2M1 packed weight × block-scale (E4M3, one per *sf_vec_size*
-    elements) × global per-channel scale.
-    """
-    device = weight_fp4_packed.device
-
-    w_e2m1 = decode_fp4_e2m1(
-        unpack_nibbles(weight_fp4_packed, low_first=True)
-    ).to(torch.float32)
-
-    def _pad_up(x: int, m: int) -> int:
-        return ((x + m - 1) // m) * m
-
-    nrows = _pad_up(out_features, 128)
-    ncols = _pad_up(in_features // sf_vec_size, 4)
-
-    sf = weight_scale
-    if sf.dim() == 1:
-        sf = sf.view(nrows, ncols)
-    elif sf.dim() != 2:
-        raise ValueError(f"Unexpected weight_scale dim={sf.dim()}, expected 1 or 2")
-
-    sf = sf[:out_features, : in_features // sf_vec_size].contiguous()
-    sf = decode_sf_to_fp32(sf).to(device=device)
-
-    sf_full = sf.repeat_interleave(sf_vec_size, dim=1)
-    global_scale = weight_scale_2.to(torch.float32).to(device)
-
-    w_fp32 = w_e2m1[:out_features, :in_features] * sf_full * global_scale
-    return w_fp32.to(torch.bfloat16).contiguous()
 
