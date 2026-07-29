@@ -15,9 +15,18 @@
 ## 最小静态验证
 
 - Python 语法：`python -m py_compile <files>`。
-- ruff/pre-commit 可用时：`pre-commit run --files <changed files>`。
+- ruff/pre-commit：`pre-commit run --files <changed files>`。**不要用 `--all-files`**——全仓存量问题会盖掉本次改动的信号，判不出是不是自己引入的。
 - C/C++：遵循 `.clang-format`，行宽 120，4 空格缩进。
 - public API：跑静态 API 测试。
+
+## 越界自查
+
+改完对照 [layer-rules.md](layer-rules.md) §按层检查规则，逐个改动文件确认所在层的检查项都过。四个高频问题：
+
+1. 改动是否停在声明的落点层，没有顺手改上下游？
+2. 是否先复用了现有抽象（`QuantLinear` / `QuantGatedMLP` / family helper）再新增？
+3. 关闭量化时原浮点行为是否保住？
+4. 是否有没必要的框架级重构或 solver 改动？
 
 ## 场景测试索引
 

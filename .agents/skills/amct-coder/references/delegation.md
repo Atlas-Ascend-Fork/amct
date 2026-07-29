@@ -34,6 +34,14 @@ amct-coder 在模型层只保留三件事，见 [llm-model-unit.md](llm-model-un
 
 任务同时含模型层实现和其它层改动时，拆开：模型层那部分转 `model-adapter`，dtype / 算法 / workflow / solver / deploy / public API 那部分留在 amct-coder，最后由 amct-coder 做契约对齐检查收口。
 
+### 转交时要带上的信息
+
+`model-adapter` 自己会读 `repo-map` 和 casebook（其固定流程第 1、2 步），不要替它读、也不要复制它的适配步骤。但转交前把下面三项写进委派说明，省掉它重新定位的成本：
+
+1. 落点路径，精确到目录：例如 `amct_pytorch/common/models/llm/qwen/qwen3_next/`。
+2. 命中的 casebook 个案路径（存在才写）：`.agents/docs/casebook/<family>/<model>.md`。已有个案的模型族包括 qwen（`qwen3-dense` / `qwen3-moe` / `qwen3.5-3.6` / `qwen3-next-80b-a3b-instruct`）、deepseek（`deepseek-v3.2` / `deepseekv4`）、glm（`glm-5.1`）、hunyuan（`hy3-preview`）、longcat（`longcat`）。
+3. 本次任务里非模型层的部分（如果有），以及回来做契约对齐时要核对的契约项，见 [llm-model-unit.md](llm-model-unit.md) §契约清单。
+
 判不清时，先答 [llm-model-unit.md](llm-model-unit.md) §适配清单 的 7 问：全部落在模型层就转 `model-adapter`。
 
 ## 不委派的编码场景

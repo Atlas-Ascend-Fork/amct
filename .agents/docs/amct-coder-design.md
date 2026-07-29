@@ -32,7 +32,7 @@ references 需要引用原则或个案时，写一行指针指向 repo-map / cas
 
 ### 读取预算
 
-按需加载只在读得少时才有收益。SKILL.md §读取预算 规定默认上限 3 个 reference（主 playbook + 最多 1 个辅助规则 + validation），上下游 playbook 改为条件补读且只读「上下游依赖」「BLOCKER」两节。改 SKILL.md 路由时要保住这条，否则退化成"全量读 1250 行"，等于没拆。
+按需加载只在读得少时才有收益。SKILL.md §读取预算 规定默认软预算为 3 个 reference（主 playbook + 最多 1 个辅助规则 + validation），上下游 playbook 改为条件补读且只读「上下游依赖」「BLOCKER」两节。这个数字不是硬上限：任务确实命中 3 个以上子能力时允许分阶段补读，但不能一开始全量加载所有 reference。改 SKILL.md 路由时要保住这条，否则退化成"全量读 1250 行"，等于没拆。
 
 ### 触发重构的可观测信号
 
@@ -229,7 +229,7 @@ setup.py / build.sh      → public-api-tests.md      打包构建逻辑
 
 依赖链的权威表述在 `SKILL.md` §依赖关系（文字形式，逐条说明谁消费谁）。这里不再画 ASCII 图：原图的箭头方向语义不自洽，且把 `public-api-tests` 只挂在 deploy 下游，而它实际是所有子能力的共同下游。
 
-跨子能力读取顺序见 `SKILL.md` §依赖关系末段，受 §读取预算 约束（上下游为条件补读，不是必读）。
+跨子能力读取顺序见 `SKILL.md` §依赖关系末段，受 §读取预算 的软约束（上下游为条件补读，不是必读；命中 3 个以上子能力时分阶段补读）。
 
 ---
 
@@ -327,4 +327,62 @@ SKILL.md（全局路由 + BLOCKER）
 
 **关键边界**：LLM new-path 的 4 个 `Registry("...")` 实例和 classic 的 `AlgorithmRegistry` 是两套独立体系，不能混用。这是全局 BLOCKER 规则。
 
-目前可以优化的三个方向：1. skill的流程图，子能力编排，以及加上一些特例来进行映射
+---
+
+## 九、description 写法约束（触发失败复盘）
+
+2026-07-29 在 opencode 上用「在 workflow 里面加一段 attention 的计算」测试，没有触发 amct-coder。排查结论如下，改 description 前必须先看这节。
+
+### 客户端行为（决定了改哪里）
+
+- `opencode debug skill` 可列出所有被发现的 skill 及 location，是判断"发现问题"还是"匹配问题"的唯一手段。本次 amct-coder 正常出现在列表里，`.agents/` → `.opencode/skills` 的 symlink 投影正常。
+- opencode 只把 `name + description` 拼进 system prompt（binary 内 `SystemPrompt.skills`，格式 `- **name**: description`），body 要等 skill 工具调用才加载。所以**触发失败一律是 description 的问题**，改 SKILL.md 正文没用。
+- opencode 的项目级扫描 glob 是 `skills/**/SKILL.md`，支持任意深度，`quant-tools/<name>/SKILL.md` 这种嵌套没问题。
+- 改完 description 要重启客户端，config 和 skill 都不热加载。
+
+### 根因一：排除项按关键词写，不按落点写
+
+原 description 的「不适用于」写的是「新增或修改模型 adapter、wrapper、attention/MLP/MoE 结构（→ model-adapter）」。而 model-adapter 的 description 把 attention 写成肯定项（"补模型专属 attention·MLP wrapper"）。同一个词在一边是排除项、在另一边是包含项，模型看到 "attention" 只会走向 model-adapter。
+
+但「在 workflow 里加 attention 计算」恰恰是应该被 amct-coder 拦住的越层请求——正确响应是命中 amct-coder 然后报 BLOCKER，不是转走。
+
+**约束**：排除项必须写落点（路径 + 动作），不能只写结构名。凡是"结构名出现但落点不在模型层"的请求，description 里要有一条显式反例把它拉回来。
+
+### 根因二：description 用元语言，没有用户原话
+
+原文写的是"场景识别、分层边界判断、实现路径选择和最小自验"——这是维护者视角。用户实际说的是"加一段""这段放哪""这样写行不行"。仓内触发最稳的 `gitcode-pr` / `gitcode-issue` 都带显式的「必须触发此 skill 的场景」触发词清单。
+
+**约束**：description 用 YAML `|` 块标量写多行，首行一句定位，其后是「必须触发此 skill 的场景」分组触发词清单，末行是按落点写的排除项。与仓内其它 skill 保持同一体例。
+
+### 配套改动
+
+SKILL.md §子能力路由 末尾新增越层请求对照表，把「workflow 里加 attention」「solver 里按模型名分支」「通用 quant module 里判 MoE」「给 attention 加新 wrapper 类」四条列出落点判断和正确响应。前三条留在本 skill 报 BLOCKER，只有第四条转 model-adapter。
+
+### 触发验收用例（选项二下的正确期望）
+
+触发正确性必须成对验证：同样出现 attention / wrapper 字样，区分依据是**落点路径**，不是关键词。单测任一条都测不出 description 是否写对。
+
+| 测试语 | 落点 | 期望行为 |
+| --- | --- | --- |
+| 在 `amct_pytorch/workflows/llm_ptq.py` 里加一段 Qwen3 的 attention 计算 | `workflows/` | 命中 amct-coder，报越层 BLOCKER，把计算下沉到模型层 wrapper，workflow 只做编排。**不转 model-adapter** |
+| 给 Qwen3-Next 加一个新 wrapper | `common/models/llm/qwen/qwen3_next/` | 命中 amct-coder，判出落点在模型层，转 `model-adapter`；实现完成后回到 amct-coder 做契约对齐检查 |
+
+第二条的原始表述是"期望 agent 先读 repo-map 分层边界再读 casebook 个案，给出适配步骤"。选项二下这半段不成立：给出适配步骤是 `model-adapter` 的职责，其 SKILL.md 固定流程第 1、2 步已经要求先读 repo-map、再查 casebook 复用经验（`casebook/qwen/qwen3-next-80b-a3b-instruct.md` 已存在）。amct-coder 在这条用例里唯一要验的是**转对了**，不是转过去之后做了什么——否则等于要求 amct-coder 复制 model-adapter 的流程，把刚拆掉的重复又装回来。
+
+量化门槛（≥5 越层场景 100% 拦截 + ≥3 合法改动 ≥90% 放行）里，越层样本至少覆盖：workflow 加结构计算、solver 按模型名分支、通用 quant module 判 MoE、CLI 加模型分支、为单模型改通用 bit policy。合法样本至少覆盖：新增 dtype、新增 PTQ 算法、改 deploy safetensors 导出。
+
+### 后续风险
+
+- description 已压缩为三行：定位、触发入口、委派边界。后续再改时不要重新枚举完整子能力表；子能力细节留在 `SKILL.md` 正文的路由表中，description 只保留能影响触发和委派判断的关键词。
+- 反向不对称仍在：`model-adapter` 的 description 没写"在 workflow/solver 里加模型结构计算 → amct-coder"。受改动范围约束没动，靠 amct-coder 侧的正向声明兜。
+- 本次没能跑通端到端验证：`opencode providers list` 显示 0 credentials，`opencode run` 直接 Unauthorized。只验证了 skill 仍被发现、YAML 仍可解析。真实触发效果需要用户在有凭证的环境复测。
+
+### 2026-07-29 补齐状态
+
+已在 `SKILL.md` 补回三类入口信息：
+
+1. `执行流程`：说明用户请求如何先委派判断、再判代码体系、再命中主子能力。
+2. `子能力路由` 与 `子能力编排`：把 9 个主子能力和 5 个辅助 reference 的触发场景、读取顺序、依赖方向集中到主入口。
+3. `常见映射` 与 `越层请求对照`：用具体用户请求区分“同样出现 attention/wrapper/MoE 词时，按落点路径判断是拦截还是转 model-adapter”。
+
+后续仍要用触发验收样本复测真实客户端行为；没有凭证时只做 YAML/frontmatter 和 skill 发现校验。

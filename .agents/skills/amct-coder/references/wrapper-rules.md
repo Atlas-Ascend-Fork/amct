@@ -41,6 +41,19 @@
 6. 已有同族 `quant_module.py`
 7. 新增模型专属 wrapper
 
+## 合并判定清单
+
+新增 wrapper 前逐条判 yes/no。任一条判不出来就先读同族已有实现，不要先写新类。原则正文见 `repo-map.md` §Wrapper 合并原则。
+
+- 同族已有 wrapper 的 `__init__` 是否与要写的一致？
+- 持有的状态（buffer、Parameter、算法实例）是否一致？
+- `forward` 的实际计算是否一致？
+- 以上三条全 yes → 合并成一份，不新增类。任一条 no → 继续下面两条。
+- 差异是否来自模块结构、导出语义、`PtqUnit` 边界或量化路径的真实不同？是 → 可以拆两份。
+- 差异是否只是 dense / moe 标签，或只为保留旧类名、减少局部改动？是 → 仍应合并，标签本身不构成拆分理由。
+
+判定结果要写进回复，不要只说"新增了 wrapper"。
+
 ## MoE wrapper 检查
 
 - checkpoint 是否逐 expert 展开，运行时是否 packed。

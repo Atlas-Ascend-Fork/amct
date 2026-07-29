@@ -41,6 +41,7 @@
 - `scaled_dot_product_attention` 是否同时传了 `attn_mask` 和 `is_causal=True`；二者在当前 helper 中可能互斥。因果 LM 无 padding 时优先 `attn_mask=None, is_causal=True`；显式传 causal mask 时设 `is_causal=False`。
 - 混合 attention 是否区分 `linear_attention` 与 `full_attention` 的 mask；不能只复用 layer0 捕获到的 mask。
 - MLA 是否区分 `attn-linear` 与 `attn-cache` 两条量化路径；编码任务只实现必要路径，不替用户推断最终量化方案。
+- 逐个 `forward` 形参和每段 cache/generate 代码过一遍：在当前 blockwise / PPL / PTQ / deploy 路径下是否真的参与计算。判断依据是 debug 时看到的真实运行时传参，不是源码形参表。不参与的一律删，不要为了贴源码保留。`past_key_values.update(...)`、恒为 `None` 的 `attention_mask` 是最常见的两个。
 
 ## 禁止模式
 
