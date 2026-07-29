@@ -48,19 +48,21 @@ class PlainLinear(nn.Module):
 def set_model_act_quant_state(model, flag):
     for name, mod in model.named_modules():
         if isinstance(mod, ActivationQuantizer):
-            mod.enable = flag
-            mod.is_observe = not flag
+            mod.set_observe(not flag)
 
 
 def set_model_weight_quant_state(model, flag):
     for name, mod in model.named_modules():
         if isinstance(mod, WeightQuantizer):
-            mod.enable = flag
+            mod.set_observe(not flag)
 
 
 def set_model_to_observe(model, flag):
     for name, mod in model.named_modules():
-        if hasattr(mod, "is_observe"):
+        set_observe = getattr(mod, "set_observe", None)
+        if callable(set_observe):
+            set_observe(flag)
+        elif hasattr(mod, "is_observe"):
             mod.is_observe = flag
 
 
