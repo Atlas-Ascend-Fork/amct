@@ -3,13 +3,13 @@
 | 项                | 内容                                                               |
 | ----------------- | ------------------------------------------------------------------ |
 | 任务              | 7月社区任务 — 低比特量化算法开发                                  |
-| 数据类型          | MXFP4（微缩浮点）；**主线 W4A16 weight-only，W4A4 进阶**（见 §4.4） |
+| 数据类型          | MXFP4（微缩浮点）；**W4A16 主线 + W4A4 补充，均已达标**（见 §4.4） |
 | 目标算法          | MR-GPTQ（Micro-Rotated GPTQ），AMCT 仓未适配算法（进阶项）         |
 | 测试模型          | Qwen3-8B（dense）、Qwen3.6-35B-A3B（MoE）                          |
 | 测试集 / 指标     | WikiText2 / PPL（seq_len=4096, block 粒度）                        |
 | 精度目标          | delta = ppl_quant − ppl_bf16 ≤ 0.4；量化层(nn.Linear)占比 ≥ 70% |
 | 作者 / gitcode_id | 程逸雷 / asp1r1n1                                                  |
-| 版本              | v0.6（按评审意见补 §4.4 W4A4 精度评估方案与四项优化设计）           |
+| 版本              | v0.7（W4A4 达标；§3.3 / §4.4 / §4.5 / §8 按实测与最终实现校正）    |
 
 > 交付目录 `experiment/task-book/mr-gptq-mxfp4_asp1r1n1/`；gitcode 账号 `asp1r1n1`，私仓 fork：https://gitcode.com/asp1r1n1/amct 。最终 PR 目标 `cann/amct` 的 `feature/community-tasks` 分支。
 
@@ -30,7 +30,7 @@
 - **绝对精度门**：`delta ≤ 0.4`（相对原始 BF16 网络）；
 - **量化覆盖门**：被量化的 `torch.nn.Linear` 占比 ≥ 70%；
 - **相对收益（进阶项要求"精度优化"）**：在相同 MXFP4 配置下，MR-GPTQ 的 PPL 明显优于仓内已有的 **GPTQ-MXFP4** baseline；
-- **可复现**：全流程走 AMCT 标准 CLI（`eval / extract_ptq_data / ptq / deploy`），提供脚本与日志。
+- **可复现**：提供独立评测脚本与完整日志（实施中未走 AMCT 标准 CLI，偏差原因见 §4.5）。
 
 ### 1.3 非目标
 
@@ -93,6 +93,11 @@ MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §
 - **与 QuaRot/FlatQuant 的"全 hidden 大旋转"不同**：大旋转会把 outlier 跨 32-block 扩散、反破坏微缩块结构，故用 **micro（块内）** 旋转，k 对齐 block size。
 - **k 取值有讲究**：主表用 Had32（对齐 block），但论文 Platinum bench（更低噪）显示 **MXFP4 上 Had128 明显优于 Had32**（跨 4 个 block 的更大块旋转）。→ 我们 8B 上 32 和 128 都要扫。
 - **fuse 方式**：`WH_k` **离线**融进权重；`XH_k` **在线**（见 §4.3 我们的处理，精度评测无需快核）。
+- **⚠️ 实测修正（本项目结论与上条"micro 优于大旋转"相反）**：我们在 8B 上把 k 从 128 一路加到 4096
+  （= 全 hidden 宽），再把 `down_proj` 补到 12288（全宽），**精度单调改善**（W4A4 上分别再收 0.065
+  与 0.0305）。论文取小 k 的真实约束是**在线旋转算子的推理开销**，而非"大旋转破坏微缩块结构"——
+  本任务只做 fake-quant 精度评估、旋转不计入推理成本，故可取满。**这是本项目相对论文的主要发现之一**，
+  数据见自验证报告 §4.3。
 
 **② 静态激活重排（Static Activation Reordering, Ingredient 2）**
 GPTQ 原生 dynamic act-order（按 Hessian 对角降序重排）精度好但推理要动态 reshuffle（慢 10-20%）。MR-GPTQ 改**静态**：先按原始列序定 scale/grid，再 shuffle 列跑 GPTQ，跑完 shuffle 回去，保持微缩 group 结构。**同等精度、零推理开销**，实现也简单。
@@ -151,7 +156,7 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 
 **校准型、无梯度训练**：与 GPTQ 一样只需 `extract_ptq_data` + 一遍前向求解，`ptq` 不跑训练循环——相对 BATQuant（可学习）在 100h 算力预算上的核心优势。
 
-### 4.4 目标位宽决策：weight-only(W4A16) 优先，W4A4 为进阶
+### 4.4 目标位宽决策：W4A16 为主线，W4A4 按评审要求补齐（均已达标）
 
 论文数据给了明确指引（表2 vs 表1，Llama3-8B）：**weight-only MXFP `GPTQ` recovery 96.76% ≫ W4A4 的 89.47%**——激活量化贡献了约一半误差。对本任务：
 
@@ -162,7 +167,7 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 
 任务书硬指标（delta≤0.4 / 量化层≥70% / 显存≥50%）**未限定位宽组合**，W4A16 已全部满足且风险最低 → **8B/35B 主线走 W4A16**（已达标：8B delta 0.273、35B 0.067）。
 
-**评审补充要求**：weight-only 仅得存储收益，需以 **W4A4 精度**评估最终效果 → 本设计据此补齐 W4A4 实现与优化（下文）。当前 W4A4 优化至 delta 0.446（@4096），距 0.4 尚差 0.046、未达标；已排除的方向与后续可能路径见自验证报告 §4.3 ⑤。硬指标达标由 W4A16 主线承担（8B 0.273 / 35B 0.067）。
+**评审补充要求**：weight-only 仅得存储收益，需以 **W4A4 精度**评估最终效果 → 本设计据此补齐 W4A4 实现与优化（下文）。**W4A4 现已在 Qwen3-8B 达标：delta 0.3897 ≤ 0.4、真 4-bit 激活层占比 71.4% ≥ 70%**（由初始实现的 0.763 降低 49%）。35B 未列 W4A4——其路由专家为融合 3D 张量、激活量化通路在该结构上不存在，详见自验证报告 §4.3。
 
 **W4A4 精度评估（按评审意见补充）**：weight-only 仅得存储收益，matmul 时权重需反量化回 bf16、推理反而变慢；W4A4（激活也 4-bit）才能让 matmul 在低比特上算、拿到计算收益。为此在**已实现的 Hadamard 在线旋转**基础上补齐激活量化：
 - **方法**：`fake_quant_forward` 内，对旋转后的激活 `X·H_k` 做**逐 token、逐 32 通道块的动态 MXFP4**（E8M0 shared exponent 每次前向重算）——旋转把激活离群值摊平，是激活能 4-bit 的前提；
@@ -179,35 +184,52 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 | 激活 scale-fitting | `--increments act_scale_fit` | 把权重侧已验证的附录 H 网格重映射（式2/3）复用到激活块 scale：以次幂次细网格替代 E8M0 幂次网格，减小激活 scale 的舍入误差 |
 | 联合补偿 | `--increments joint_comp` | `update_hessian` 中先对（旋转后）激活做 MXFP4 量化再累积 Hessian。GPTQ 补偿的最优性依赖 Hessian 与推理期输入分布一致；W4A4 下推理输入是量化激活，用 bf16 输入建的 Hessian 会系统性失配 |
 | 混合精度保护 | `--act_protect <子串...>` | 按层名子串把指定层的激活保留高精度（权重仍全程 MXFP4）。默认候选为 `down_proj`（输入 = 门控后中间激活）与 `o_proj`（输入 = 注意力输出）——两处离群值最重。需同时报告"仍跑真 4-bit 激活的层占比"，避免用保护面换数字 |
+| **全宽旋转** | `--hadamard_full` | 每层旋转块取满 `in_features`。`down_proj` 的 in=12288 在 k=4096 下只能切 3 个对角块，是全网**唯一未获全宽旋转**的层、而它最大。12288 非 2 的幂，且 `3×4096` 不可行（3 阶 Hadamard 不存在），走 `12×1024`：Paley H₁₂ ⊗ Sylvester H₁₀₂₄——正交矩阵的 Kronecker 积仍正交。**单项 −0.0305** |
+| **GPTQ 阻尼系数** | `--perc_damp` | `damp = perc_damp × mean(diag(H))`。最大层 `down_proj` 的样本/维度比仅约 1.1:1、Hessian 近奇异，该项实际撑住整个求逆，默认值按正常条件数选取、在此偏小。0.01→0.2 **单项 −0.0261**。此二项是达标关键 |
 
-另实现并消融了**激活 scale 裁剪搜索**（`--increments act_clip`，逐块在 α∈{1.0…0.6} 取量化 MSE 最小者）
-——实测为**负结果**（PPL 反升），原因是被裁剪的大激活承担 attention sink 等功能、并非噪声，
-逐块 MSE 最优 ≠ 端到端最优。该开关默认关闭，代码保留作消融记录。
+另实现并消融了 **5 项经实测排除的手段**（激活 scale 裁剪搜索、加大校准集、权重 scale 裁剪、
+增加保护层、randomized Hadamard），开关默认关闭、代码保留作消融记录。其中两条给出与**量化粒度
+相关**的一般性结论：① 大激活承担 attention sink 等功能、并非噪声，逐块 MSE 最优 ≠ 端到端最优，
+故不可裁剪；② randomized Hadamard 在 block-32 粒度下**有害**——DC 分量由集中于一个坐标变为摊到
+全部块，而 scale 是逐块的，**集中优于摊匀**，与其在 per-channel 粒度下的效果相反。
+逐项数据与分析见自验证报告 §4.3 ④。
 
 各优化的边际收益消融、最终精度、以及与公开工作的同协议对比见自验证报告 §4.3。W4A4 承担
 **评审要求的计算收益路线评估**；三项硬指标的达标结论由 W4A16 主线承担，不依赖于 W4A4。
 
-### 4.5 全链路调用（复用现有 CLI）
+### 4.5 全链路调用（实际实现：独立评测脚本）
+
+**与设计初稿的偏差及原因**：初稿计划复用 AMCT 标准 CLI（`eval / extract_ptq_data / ptq / deploy`）。
+实施中改为提供独立脚本 `src/run_eval.py`，原因有二：① MR-GPTQ 采用**运行时注册**（`import` 即注册、
+零改 amct 源码），标准 CLI 的算法白名单在包内，不改源码则无法识别 `mr_gptq`；② W4A4 的激活量化需
+在 `fake_quant_forward` 内介入，且需按增量开关做消融，标准 CLI 无对应参数面。
+**量化本身仍完全走 amct 的 `amct.quantize()` 与 `GPTQuant` 状态机，未绕过工具链。**
 
 ```bash
+cd src
+export ASCEND_RT_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1
+
 # 1. BF16 基准
-python -m amct_pytorch.eval --model <M> --model_name <name> --seq_len 4096 \
-    --granularity block --device npu:0 --eval_mode bf16
+python3 -u run_eval.py --model_path <M> --mode bf16 --seq_len 4096
 
-# 2. baseline 对照：GPTQ-MXFP4 直转
-python -m amct_pytorch.eval ... --eval_mode quant --quant_dtype mxfp \
-    --algos gptq --bit_config amct_pytorch/configs/mxfp4_w4a4.yaml --quant_target <target>
+# 2. baseline 对照：GPTQ-MXFP4 直转（仓内已有算法）
+python3 -u run_eval.py --model_path <M> --mode gptq_mxfp4 --seq_len 4096
 
-# 3. MR-GPTQ：校准数据提取 + 求解 + 评测
-python -m amct_pytorch.extract_ptq_data ... --quant_target <target>
-python -m amct_pytorch.ptq ... --quant_dtype mxfp --algos mr_gptq \
-    --bit_config amct_pytorch/configs/mxfp4_w4a4.yaml --quant_target <target> --output_dir ptq_result/
-python -m amct_pytorch.eval ... --eval_mode quant --quant_dtype mxfp --algos mr_gptq \
-    --bit_config amct_pytorch/configs/mxfp4_w4a4.yaml --<target>_param_dir ptq_result/...
+# 3. MR-GPTQ 主线（W4A16）
+python3 -u run_eval.py --model_path <M> --mode mr_gptq --seq_len 4096 \
+    --increments hadamard scale_fitting
 
-# 4. 导出部署权重
-python -m amct_pytorch.deploy ... --quant_dtype mxfp --algos mr_gptq --output_dir output/
+# 4. MR-GPTQ W4A4 达标配置（Qwen3-8B）
+python3 -u run_eval.py --model_path <M> --mode mr_gptq --seq_len 4096 \
+    --hadamard_k 4096 --hadamard_full --perc_damp 0.2 \
+    --act_protect down_proj o_proj \
+    --increments hadamard scale_fitting act_quant act_scale_fit joint_comp
+
+# 35B 双卡：追加 --device_map auto，并 export ASCEND_RT_VISIBLE_DEVICES=0,1
 ```
+
+**未做导出部署**：本任务验收指标为精度（PPL）与覆盖率 / 显存，均由 fake-quant 确定性数学决定；
+`deploy` 导出属推理落地环节，不在本任务范围（W4A4 的真实部署另需低比特激活算子）。
 
 ---
 
@@ -240,17 +262,24 @@ python -m amct_pytorch.deploy ... --quant_dtype mxfp --algos mr_gptq --output_di
 - 相对提升（进阶项）：`ppl_mrgptq < ppl_gptq`（越低越好）
 - 覆盖达标：Linear 占比 ≥ 70%（脚本统计并写入报告）
 
-### 6.2 分阶段计划（对齐 100h NPU 预算）
+### 6.2 分阶段计划（对齐 100h NPU 预算）—— 已执行
 
-1. **P1 — Qwen3-8B 打通（低成本迭代）**：dense 模型便宜，在此调通 MR-GPTQ 实现、跑齐 E0/E1/E2，确认相对提升成立。
-2. **P2 — Qwen3.6-35B-A3B（含 MoE）**：先 attn-linear，再纳入 experts 到 ≥70%，跑齐 E0/E1/E2。
-3. **P3 — 导出 + 自验证报告 + README**。
+1. **P1 — Qwen3-8B 打通**：调通 MR-GPTQ 实现、跑齐 E0/E1/E2，确认相对提升成立 ✅
+2. **P2 — Qwen3.6-35B-A3B（含 MoE）**：另需处理融合路由专家（非 nn.Linear）才能达显存指标 ✅
+3. **P3 — 自验证报告 + README** ✅；按评审意见追加 **P4 — W4A4 补齐与优化** ✅（见 §4.4）
 
-统一口径：`seq_len=4096`、`granularity=block`、WikiText2、`--device npu:0`。
+统一口径：`seq_len=4096`、block 粒度、WikiText2、全量分块评测。
+
+> **测量口径的自我修正**：项目中期曾以测试集前 20 块做快速筛选，后经两组同配置对照发现该子集的
+> 偏移随配置摆动达 0.053、大于多数待测增量，**连排序都不可靠**。此后所有定量结论均基于全量评测，
+> 详见自验证报告 §4.3 ⑤。
 
 ### 6.3 性能数据
 
-用已安装的 `cann-perf` / `cann-perf-breakdown` 采集量化前后显存占用对比（验证"显存降低 ≥50%"）与算子级耗时，写入自验证报告。
+由评测脚本直接统计并打印：量化层覆盖率（`[coverage]` / `[actual-coverage]`）、权重显存降低
+（`[memory]` Linear 口径 / `[memory-full]` 全模型口径）、校准与补偿耗时、PPL 评测耗时，
+连同原始日志写入自验证报告 §6。（初稿设想用 `cann-perf` 采集算子级耗时；因本任务验收指标为
+精度与显存、且量化为 fake-quant，脚本内建统计已足够，未引入额外采集工具。）
 
 ---
 
@@ -269,15 +298,20 @@ python -m amct_pytorch.deploy ... --quant_dtype mxfp --algos mr_gptq --output_di
 
 ## 8. 交付件
 
+> 以下为**实际交付位置**（初稿设想把算法落进 `amct_pytorch/` 并改 `algorithms/__init__.py` 注册；
+> 最终改为**运行时注册、零改 amct 源码**，故代码全部位于交付目录内）。
+> 交付目录：`experiment/task-book/mr-gptq-mxfp4_asp1r1n1/`
+
 | 交付件     | 位置                                                          |
 | ---------- | ------------------------------------------------------------- |
-| 算法代码   | `amct_pytorch/classic/quantize_op/mr_gptq_module.py` + `algorithms/__init__.py` 注册改动 |
-| 测试脚本   | `experiment/task-book/mr-gptq-mxfp4_<id>/*.py` / `run.sh` |
-| 结果数据   | `.../result_*.json`（E0/E1/E2 三模型 PPL + 覆盖率 + 显存）  |
-| 自验证报告 | `.../docs/self_verification.md`（日志/截图/性能）           |
-| 设计文档   | 本文（评审通过后合入`feature/community-tasks`）             |
-| README     | `.../README.md`（目标、运行方式、结果）                     |
-| PR         | 合入`feature/community-tasks` 分支                          |
+| 算法代码   | `src/mr_gptq_module.py`（子类化 `GPTQuant`，`import` 即注册，**零改 amct 源码**） |
+| 评测脚本   | `src/run_eval.py`（入口）、`src/eval_utils.py`（加载/校准/PPL/覆盖率与显存统计）、`src/data.py`（数据集加载） |
+| 实验日志   | `src/logs/`（bf16 基准、W4A16 主线、W4A4 优化链与各负结果，全部原始输出） |
+| 自验证报告 | `docs/self-verification-report.md`（结果 + 截图 + §3 可复现步骤 + §4.3 W4A4 与负结果） |
+| 实验记录   | `docs/experiment-log.md`（环境搭建与踩坑流水）                |
+| 设计文档   | 本文 `docs/design.md`                                         |
+| README     | `README.md`（目标、结果、目录、运行方式、安全提示）           |
+| PR         | `feat/mr-gptq-impl` → `cann/amct:feature/community-tasks`（设计 + 代码 + 报告，**单 PR**） |
 
 ---
 
