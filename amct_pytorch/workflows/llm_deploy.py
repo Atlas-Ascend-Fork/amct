@@ -28,9 +28,6 @@ from loguru import logger
 from safetensors.torch import load_file
 from tqdm import tqdm
 
-from amct_pytorch.algorithms.quant import register_algorithms
-from amct_pytorch.common.models import MODEL_REGISTRY
-from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.block_export import (
     export_block_deploy,
     generate_quant_config,
@@ -38,83 +35,20 @@ from amct_pytorch.common.models.llm.common.block_export import (
     quant_payload,
 )
 from amct_pytorch.common.utils.checkpoint_io import CheckpointShardWriter
-from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
+from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
+from amct_pytorch.workflows.llm_export import LlmExportWorkflow
 
 
-class LlmDeployWorkflow:
-    """Export deploy-ready quantized artifacts."""
+class LlmDeployWorkflow(LlmExportWorkflow):
+    """Export deploy-ready quantized artifacts (real HiF4/int/mxfp pack).
 
-    def __init__(self, args):
-        self.args = args
-        self.granularity = args.granularity
-        self.pipeline = None
-        self.model_name = args.model_name
-        self.model_path = args.model
-        self.quant_dtype = args.quant_dtype
-        self.output_dir = self.args.output_dir
-        self.is_mx = self.quant_dtype.startswith("mx")
-        self.is_int = self.quant_dtype.startswith("int")
-        self.is_hif = self.quant_dtype.startswith("hif")
+    Inherits setup, the source-format detect/decode front-end, the block loop and the shard/index
+    writing from ``LlmExportWorkflow``; supplies the packing export hook, the quantized config rewrite,
+    and the tensor-granularity path."""
 
-    @staticmethod
-    def _register_components():
-        register_llm_models()
-        register_dtype()
-        register_algorithms()
-
-    def run(self):
-        sink_id = self.setup()
-        if self.granularity == "block":
-            results = self._run_blockwise()
-        elif self.granularity == "tensor":
-            results = self._run_tensorwise()
-        else:
-            raise ValueError(
-                f"Unsupported granularity '{self.granularity}' for deploy."
-            )
-        logger.remove(sink_id)
-        return results
-
-    def setup(self):
-        os.makedirs(self.output_dir, exist_ok=True)
-        ensure_log_dir(self.args)
-        self._register_components()
-        self._detect_and_decode_source()
-        self.pipeline = self._build_pipeline()
-        sink_id, _ = setup_run_logging(self.args, "deploy")
-        return sink_id
-
-    def _detect_and_decode_source(self):
-        """Auto-detect a foreign FP4/FP8 source and decode it to BF16 before deploy.
-
-        Deploy loads a float model, then packs weights to HiF4 (``QuantDequantHiF4.export_deploy``).
-        On this baseline branch ``FOREIGN_FORMATS`` is empty, so this is a detect-and-log no-op;
-        downstream branches register nvfp4/mxfp4/mxfp8 and this decodes them to a temp BF16
-        checkpoint first, pointing the pipeline at it. fp16/bf16 pass through unchanged.
-        """
-        from amct_pytorch.common.utils.decode.detect import (
-            detect_source_format, decode_to_bf16, FOREIGN_FORMATS,
-        )
-        fmt = detect_source_format(self.model_path)
-        logger.info("Deploy source format detected: {}", fmt)
-        if fmt in FOREIGN_FORMATS:
-            decoded = os.path.join(self.output_dir, "_decoded_bf16")
-            logger.info("Decoding {} -> BF16 at {} before HiF4 pack", fmt, decoded)
-            decode_to_bf16(self.model_path, decoded, fmt)
-            self.model_path = decoded
-            self.args.model = decoded
-
-    def _build_pipeline(self):
-        model_cls = MODEL_REGISTRY.get(self.model_name)
-        return model_cls(self.args)
-
-    def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
-        if self.quant_dtype == "bf16":
-            return tensor.to(torch.bfloat16)
-        raise NotImplementedError(
-            f"tensor granularity does not support quant_dtype '{self.quant_dtype}' yet"
-        )
+    def _export_block(self, layer_idx, quant_ignore_layers):
+        """Per-layer export hook. Real HiF4/int/mxfp pack (``export_block_deploy``)."""
+        return export_block_deploy(self.pipeline, layer_idx, quant_ignore_layers)
 
     def _refresh_config(self, quant_ignore_layers):
         config_file = os.path.join(self.output_dir, 'config.json')
@@ -135,6 +69,13 @@ class LlmDeployWorkflow:
         with open(new_config_file, "w") as f:
             json.dump(config, f, indent=2)
 
+    def _convert_tensor(self, weight_name: str, tensor: torch.Tensor) -> torch.Tensor:
+        if self.quant_dtype == "bf16":
+            return tensor.to(torch.bfloat16)
+        raise NotImplementedError(
+            f"tensor granularity does not support quant_dtype '{self.quant_dtype}' yet"
+        )
+
     def _refresh_config_tensor(self):
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
@@ -145,51 +86,7 @@ class LlmDeployWorkflow:
         with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
-    def _export_block(self, layer_idx, quant_ignore_layers):
-        """Per-layer export hook. Default: real HiF4/int/mxfp pack (``export_block_deploy``).
-        Subclasses (e.g. ptq convert) override this to emit fake-quantized float weights."""
-        return export_block_deploy(self.pipeline, layer_idx, quant_ignore_layers)
-
-    def _run_blockwise(self):
-        # Local writer bound to the *current* model_path (post foreign-format decode) / output_dir.
-        writer = CheckpointShardWriter(self.model_path, self.output_dir)
-        writer.copy_support_files()
-        quant_ignore_layers = []
-        original_index = writer.load_weight_index()
-        original_weight_map = dict(original_index.get("weight_map", {}))
-        updated_weight_map = {}
-        replaced_original_weights = set()
-        for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):
-            layer_tensors, tensor_routes = self._export_block(layer_idx, quant_ignore_layers)
-            if not layer_tensors:
-                continue
-            updated_weight_map.update(
-                writer.write_block_file(layer_idx, self.pipeline.num_layers, layer_tensors)
-            )
-            replaced_original_weights.update(
-                writer.collect_replaced_original_weights(
-                    layer_tensors,
-                    tensor_routes,
-                    original_weight_map,
-                )
-            )
-
-        updated_weight_map.update(
-            writer.write_remaining_original_weights(
-                original_weight_map,
-                replaced_original_weights,
-            )
-        )
-        index_path = writer.refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
-        logger.info("Exported deploy model to {}", self.output_dir)
-        logger.info("Refreshed weight index at {}", index_path)
-        return {
-            "index_path": index_path,
-            "num_output_files": len(set(updated_weight_map.values())),
-        }
-
-    def _run_tensorwise(self):
+    def _tensorwise_export(self):
         writer = CheckpointShardWriter(self.model_path, self.output_dir)
         writer.copy_support_files()
         original_index = writer.load_weight_index()
