@@ -16,6 +16,7 @@ _昇腾 NPU 原生模型压缩工具包_
 
 ---
 
+
 ## 🔥 最新动态
 
 - **[2026/05/28]** 新增当前主流 LLM 网络量化、PTQ 算法支持，并提供 [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) 和 [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) 的一站式样例
