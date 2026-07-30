@@ -275,3 +275,48 @@ class CheckpointShardWriter:
 
         flush_current()
         return updated_entries
+
+
+def export_blockwise(model_path, output_dir, num_blocks, export_block_fn, refresh_config_fn):
+    """Assemble an output checkpoint block-by-block, preserving un-replaced original weights.
+
+    Format/model-agnostic checkpoint assembly: iterate ``num_blocks`` blocks, get each block's
+    tensors from ``export_block_fn(block_idx, quant_ignore_layers)`` -> ``(tensors, routes)``, write
+    them via :class:`CheckpointShardWriter`, then write the remaining original weights and refresh
+    the index; ``refresh_config_fn(quant_ignore_layers)`` rewrites config.json. Callers (deploy pack
+    / ptq convert) supply the two callbacks. ``tqdm``/``loguru`` are imported lazily so importers
+    that only need the shard primitives (e.g. ``decode.unpack_hif4``) stay lightweight.
+    """
+    from loguru import logger
+    from tqdm import tqdm
+
+    writer = CheckpointShardWriter(model_path, output_dir)
+    writer.copy_support_files()
+    quant_ignore_layers = []
+    original_index = writer.load_weight_index()
+    original_weight_map = dict(original_index.get("weight_map", {}))
+    updated_weight_map = {}
+    replaced_original_weights = set()
+    for block_idx in tqdm(range(num_blocks), desc="Block Processing..."):
+        layer_tensors, tensor_routes = export_block_fn(block_idx, quant_ignore_layers)
+        if not layer_tensors:
+            continue
+        updated_weight_map.update(
+            writer.write_block_file(block_idx, num_blocks, layer_tensors)
+        )
+        replaced_original_weights.update(
+            writer.collect_replaced_original_weights(
+                layer_tensors, tensor_routes, original_weight_map,
+            )
+        )
+    updated_weight_map.update(
+        writer.write_remaining_original_weights(original_weight_map, replaced_original_weights)
+    )
+    index_path = writer.refresh_weight_index(original_index, updated_weight_map)
+    refresh_config_fn(quant_ignore_layers)
+    logger.info("Exported model to {}", output_dir)
+    logger.info("Refreshed weight index at {}", index_path)
+    return {
+        "index_path": index_path,
+        "num_output_files": len(set(updated_weight_map.values())),
+    }

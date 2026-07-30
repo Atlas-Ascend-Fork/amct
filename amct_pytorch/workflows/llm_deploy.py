@@ -28,23 +28,82 @@ from loguru import logger
 from safetensors.torch import load_file
 from tqdm import tqdm
 
+from amct_pytorch.algorithms.quant import register_algorithms
+from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.block_export import (
     export_block_deploy,
     generate_quant_config,
     convert_state_dict,
     quant_payload,
 )
-from amct_pytorch.common.utils.checkpoint_io import CheckpointShardWriter
-from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.workflows.llm_export import LlmExportWorkflow
+from amct_pytorch.common.utils.checkpoint_io import CheckpointShardWriter, export_blockwise
+from amct_pytorch.common.utils.decode.detect import detect_and_decode
+from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
+from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
 
-class LlmDeployWorkflow(LlmExportWorkflow):
+class LlmDeployWorkflow:
     """Export deploy-ready quantized artifacts (real HiF4/int/mxfp pack).
 
-    Inherits setup, the source-format detect/decode front-end, the block loop and the shard/index
-    writing from ``LlmExportWorkflow``; supplies the packing export hook, the quantized config rewrite,
-    and the tensor-granularity path."""
+    Detect/decode the source (``detect.detect_and_decode``), build the model, then assemble the
+    output checkpoint block-by-block (``checkpoint_io.export_blockwise``) with the packing hook, or
+    run the tensor-granularity path. No shared workflow base: the reusable pieces live in
+    ``checkpoint_io`` (assembly) and ``detect`` (detect/decode); this class only wires them plus the
+    pack hook and quantized config."""
+
+    def __init__(self, args):
+        self.args = args
+        self.granularity = args.granularity
+        self.pipeline = None
+        self.model_name = args.model_name
+        self.model_path = args.model
+        self.quant_dtype = args.quant_dtype
+        self.output_dir = args.output_dir
+        self.is_mx = self.quant_dtype.startswith("mx")
+        self.is_int = self.quant_dtype.startswith("int")
+        self.is_hif = self.quant_dtype.startswith("hif")
+
+    @staticmethod
+    def _register_components():
+        register_llm_models()
+        register_dtype()
+        register_algorithms()
+
+    def run(self):
+        sink_id = self.setup()
+        if self.granularity == "block":
+            results = self._run_blockwise_export()
+        elif self.granularity == "tensor":
+            results = self._run_tensorwise()
+        else:
+            raise ValueError(
+                f"Unsupported granularity '{self.granularity}' for deploy."
+            )
+        logger.remove(sink_id)
+        return results
+
+    def setup(self):
+        os.makedirs(self.output_dir, exist_ok=True)
+        ensure_log_dir(self.args)
+        self._register_components()
+        # Auto-detect the source format and decode foreign FP4/FP8 -> BF16 (no-op on this branch).
+        _, self.model_path = detect_and_decode(self.model_path, self.output_dir)
+        self.args.model = self.model_path
+        self.pipeline = self._build_pipeline()
+        sink_id, _ = setup_run_logging(self.args, "deploy")
+        return sink_id
+
+    def _build_pipeline(self):
+        model_cls = MODEL_REGISTRY.get(self.model_name)
+        return model_cls(self.args)
+
+    def _run_blockwise_export(self):
+        # Reuse the shared checkpoint-assembly loop; supply the pack hook + quantized config rewrite.
+        return export_blockwise(
+            self.model_path, self.output_dir, self.pipeline.num_layers,
+            self._export_block, self._refresh_config,
+        )
 
     def _export_block(self, layer_idx, quant_ignore_layers):
         """Per-layer export hook. Real HiF4/int/mxfp pack (``export_block_deploy``)."""
@@ -86,7 +145,7 @@ class LlmDeployWorkflow(LlmExportWorkflow):
         with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
-    def _tensorwise_export(self):
+    def _run_tensorwise(self):
         writer = CheckpointShardWriter(self.model_path, self.output_dir)
         writer.copy_support_files()
         original_index = writer.load_weight_index()

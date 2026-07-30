@@ -36,25 +36,32 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.workflows.llm_export import LlmExportWorkflow
+from amct_pytorch.common.utils.checkpoint_io import export_blockwise
+from amct_pytorch.common.utils.decode.detect import detect_and_decode
 from amct_pytorch.common.models.llm.common.block_export import export_block_fakequant
 
 
-class LlmPtqWorkflow(LlmExportWorkflow):
+class LlmPtqWorkflow:
     """Post-training quantization in one class, two modes:
 
     * with ``--algos`` (calibration dataset): native calibrated PTQ -> per-layer quant params.
     * no ``--algos`` (data-free): convert the whole model via HiF4 fake-quant to a plain float
-      checkpoint, reusing ``LlmExportWorkflow``'s detect/decode + block-export + shard-write machinery.
+      checkpoint, reusing ``detect.detect_and_decode`` + ``checkpoint_io.export_blockwise``.
     """
 
     def __init__(self, args):
-        super().__init__(args)
+        self.args = args
         if len(args.quant_target) != 1:
             raise ValueError("ptq only supports a single quant_target.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
+        self.granularity = args.granularity
+        self.pipeline = None
         self.data_provider = None
+        self.model_name = args.model_name
+        self.model_path = args.model
+        self.output_dir = args.output_dir
+        self.quant_dtype = args.quant_dtype
         self.solver_key = getattr(args, "solver", "blockwise")
         self.out_dtype = torch.bfloat16
 
@@ -118,11 +125,21 @@ class LlmPtqWorkflow(LlmExportWorkflow):
         return w_bits == 4
 
     def _run_convert(self):
-        # Base setup runs the source-format detect/decode front-end and builds the pipeline; the
-        # block-export loop + shard/index writing are inherited from LlmExportWorkflow.
-        sink_id = LlmExportWorkflow.setup(self)
-        self.out_dtype = torch.bfloat16 if self.source_fmt == "bf16" else torch.float16
-        results = self._blockwise_export()
+        # Data-free HiF4 fake-quant of the whole model to a plain float checkpoint: detect/decode
+        # the source (detect.detect_and_decode) + assemble the output checkpoint block-by-block
+        # (checkpoint_io.export_blockwise), supplying the fake-quant hook + float config.
+        os.makedirs(self.output_dir, exist_ok=True)
+        ensure_log_dir(self.args)
+        self._register_components()
+        fmt, self.model_path = detect_and_decode(self.model_path, self.output_dir)
+        self.args.model = self.model_path
+        self.out_dtype = torch.bfloat16 if fmt == "bf16" else torch.float16
+        self.pipeline = self._build_pipeline()
+        sink_id, _ = setup_run_logging(self.args, "ptq_convert")
+        results = export_blockwise(
+            self.model_path, self.output_dir, self.pipeline.num_layers,
+            self._export_block, self._refresh_config,
+        )
         logger.remove(sink_id)
         return results
 

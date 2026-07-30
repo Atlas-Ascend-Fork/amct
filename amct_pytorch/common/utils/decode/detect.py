@@ -208,3 +208,18 @@ def decode_to_bf16(model_dir: str, out_dir: str, fmt: str) -> str:
         raise ValueError(f"decode_to_bf16: {fmt!r} is not a foreign format {FOREIGN_FORMATS}")
     copy_side_files(model_dir, out_dir)
     return out_dir
+
+
+def detect_and_decode(model_path: str, output_dir: str):
+    """Detect the source format and decode foreign FP4/FP8 formats to a temp BF16 checkpoint.
+
+    Returns ``(fmt, path)`` -- ``path`` is the (possibly redirected) directory to build the model
+    from. HiF4 and plain float pass through unchanged; formats in ``FOREIGN_FORMATS`` are decoded to
+    a temp BF16 dir first.
+    """
+    fmt = detect_source_format(model_path)
+    if fmt in FOREIGN_FORMATS:
+        decoded = os.path.join(output_dir, "_decoded_bf16")
+        decode_to_bf16(model_path, decoded, fmt)
+        return fmt, decoded
+    return fmt, model_path
