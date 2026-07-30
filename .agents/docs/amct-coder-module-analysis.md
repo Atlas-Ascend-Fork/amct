@@ -32,6 +32,18 @@ flowchart LR
     class D data;
     class E out;
 ```
+### 流程与模块对照
+按照我之前的理解的流程，对应的主链阶段
+
+| 分步描述 | 对应模块层 | 实际代码入口 |
+|---|---|---|
+| 解析参数 | **入口层 Entry** | `cli/llm/args.py` |
+| 依次量化（直转评测） | **编排层 → 中介 Eval（计算PPL）** | `llm_eval.py` blockwise，fake_quant 全开 |
+| 保存输入输出（extract） | **编排层 → 中介 Extract** | `llm_extract_ptq_data.py` 存 `block_*_in.pkl` |
+| 再次重新进行 ptq | **量化核心层 Quant Core** | `llm_ptq.py` 加载离线输入 → solver → 存 `layer_*.pt` |
+| 保存优化参数 | **量化核心层 Quant Core** | solver `finalize()` → `_save_unit_result()` |
+| 导出 | **产物层 Product** | `llm_deploy.py` 读 PTQ 参数 → `export_deploy()` → safetensors |
+
 
 ### 四大模块职责
 
@@ -50,17 +62,6 @@ flowchart LR
 | **Extract Data 数据提取** | 提取 PTQ 校准数据和 GT | `common/datasets/`、`workflows/llm_extract_ptq_data.py` | Workflow → **Extract** → Solver（校准输入） |
 
 Eval 和 Extract Data 既不属于纯编排（它们包含具体的数据处理和评测逻辑），也不属于量化核心（它们不涉及 dtype / algorithm 语义）。把它们放在中介层，可以保持 Workflow 只做编排、Quant Core 只做量化语义。
-
-### 流程与模块对照
-
-| 你的视角（分步描述） | 对应模块层 | 实际代码入口 |
-|---|---|---|
-| 解析参数 | **入口层 Entry** | `cli/llm/args.py` |
-| 依次量化（直转评测） | **编排层 → 中介 Eval** | `llm_eval.py` blockwise，fake_quant 全开 |
-| 保存输入输出（extract） | **编排层 → 中介 Extract** | `llm_extract_ptq_data.py` 存 `block_*_in.pkl` |
-| 再次重新进行 ptq | **量化核心层 Quant Core** | `llm_ptq.py` 加载离线输入 → solver → 存 `layer_*.pt` |
-| 保存优化参数 | **量化核心层 Quant Core** | solver `finalize()` → `_save_unit_result()` |
-| 导出 | **产物层 Product** | `llm_deploy.py` 读 PTQ 参数 → `export_deploy()` → safetensors |
 
 ---
 
@@ -84,9 +85,10 @@ flowchart LR
 ```
 
 阅读顺序建议：
-1. 先用粗粒度主链判断请求落在入口层、编排层、量化核心层还是产物层。
-2. 再根据任务流判断它是在 eval、extract_ptq_data、ptq 还是 deploy 阶段。
-3. 最后下钻到后半部分的 9 个子能力，确认 OWN/NEED/PRODUCE/RIPPLE。
+1. fake quant隶属于ptq层，属于训练后反量化。
+2. 先用粗粒度主链判断请求落在入口层、编排层、量化核心层还是产物层。
+3. 再根据任务流判断它是在 eval、extract_ptq_data、ptq 还是 deploy 阶段。
+4. 最后下钻到后半部分的 9 个子能力，确认 OWN/NEED/PRODUCE/RIPPLE。
 
 ---
 
@@ -325,6 +327,10 @@ flowchart LR
 ---
 
 ### 4.7 classic-graph（独立体系）
+跟 LLM 主链完全没关系的两套逻辑：
+- classic-graph：走的是 amct_pytorch.quantize() 这种老 API，用来做 eager 模式量化、图压缩、QAT 微调。不依赖模型注册、block-wise forward、safetensors 导出那套 LLM 流程。
+- ops-boundary：管的是 amct_ops/ 目录下的 NPU 自定义算子——哪些算子需要 C++ 加速、Python fallback 怎么写、package_data 怎么配。
+之所以叫"独立体系"，因为 classic/ 里没有任何 from amct_pytorch.workflows 或 from amct_pytorch.common.models.llm 这样的 import——两套代码互相看不见。
 
 | 维度 Dimension | 内容 Content |
 |---|---|
@@ -384,6 +390,11 @@ flowchart LR
 ---
 
 ### 4.9 public-api-tests（公共 API 与测试）
+
+1. 用户能 import 什么 — __init__.py 里写 __all__，决定 import amct_pytorch 后你能调用什么
+2. pip 怎么装 — setup.py / build.sh，决定哪个文件进 wheel 包
+3. 用户命令行能填什么选项 — cli/llm/args.py 里 choices=["mlp", "moe", "attn-linear", ...]，这些 choices 的值不是自己编的，是从 dtype/algorithm 子能力同步来的
+它就是用户和代码之间的翻译层，自己不干活，只把其他子能力产出的东西包装成"用户能用的样子"。
 
 | 维度 Dimension | 内容 Content |
 |---|---|
@@ -612,7 +623,7 @@ flowchart LR
 
 ## 八、当前文档的隔离缺口
 
-以下条目是当前 reference playbook 中写得不够隔离的地方，按优先级排列：
+以下条目是当前 reference playbook 中写得不够隔离的地方，此处仅审查部分，后续对于子能力开发，需要持续更新更改，按优先级排列：
 
 1. `dtype-quant-module` 需要把"新增 dtype → public-api-tests + deploy-export-code + 条件 ops-boundary"写成显式下游，而不是只列文件。
 2. `llm-algorithm` 需要把 `targets`、`trainable_params()`、`export_ptq_params()`、`export_deploy()` 分别标成 solver / deploy / public API 的消费接口。
