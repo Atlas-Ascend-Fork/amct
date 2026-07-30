@@ -21,7 +21,7 @@ iterates its deploy bindings; they are twins that differ only in the final step:
   - ``export_block_deploy``   -> real HiF4/int/mxfp packed bytes (``module.export_deploy``),
     driven by ``deploy`` (``LlmDeployWorkflow``);
   - ``export_block_fakequant`` -> fake-quantized float weights (``weight_quantizer.fake_quant``),
-    driven by ``ptq`` (``LlmPtqConvertWorkflow``).
+    driven by ``ptq`` convert mode (``LlmPtqWorkflow`` with no ``--algos``).
 Both need the model pipeline, so they live in the model layer (not in the format-agnostic
 ``common/utils/checkpoint_io``). Also holds the deploy quant-config / tensor-mode helpers.
 """

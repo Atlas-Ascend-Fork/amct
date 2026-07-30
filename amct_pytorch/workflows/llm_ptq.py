@@ -36,23 +36,27 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.workflows.llm_deploy import LlmDeployWorkflow
+from amct_pytorch.workflows.llm_export import LlmExportWorkflow
 from amct_pytorch.common.models.llm.common.block_export import export_block_fakequant
 
 
-class LlmPtqWorkflow:
+class LlmPtqWorkflow(LlmExportWorkflow):
+    """Post-training quantization in one class, two modes:
+
+    * with ``--algos`` (calibration dataset): native calibrated PTQ -> per-layer quant params.
+    * no ``--algos`` (data-free): convert the whole model via HiF4 fake-quant to a plain float
+      checkpoint, reusing ``LlmExportWorkflow``'s detect/decode + block-export + shard-write machinery.
+    """
 
     def __init__(self, args):
-        self.args = args
+        super().__init__(args)
         if len(args.quant_target) != 1:
             raise ValueError("ptq only supports a single quant_target.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
-        self.granularity = args.granularity
-        self.pipeline = None
         self.data_provider = None
-        self.model_name = self.args.model_name
         self.solver_key = getattr(args, "solver", "blockwise")
+        self.out_dtype = torch.bfloat16
 
     @staticmethod
     def _register_components():
@@ -81,6 +85,9 @@ class LlmPtqWorkflow:
         return sink_id
 
     def run(self):
+        if self._is_convert_mode():
+            return self._run_convert()
+
         sink_id = self.setup()
 
         solver_cls = SOLVER_REGISTRY.get(self.granularity)
@@ -94,6 +101,32 @@ class LlmPtqWorkflow:
             )
         logger.remove(sink_id)
         return results
+
+    # -- convert mode (no calibration): data-free fake-quant -> plain float checkpoint -----------
+    def _is_convert_mode(self):
+        """No --algos requested -> skip calibration and convert the whole model."""
+        return not getattr(self.args, "algos", None)
+
+    def _run_convert(self):
+        # Base setup runs the source-format detect/decode front-end and builds the pipeline; the
+        # block-export loop + shard/index writing are inherited from LlmExportWorkflow.
+        sink_id = LlmExportWorkflow.setup(self)
+        self.out_dtype = torch.bfloat16 if self.source_fmt == "bf16" else torch.float16
+        results = self._blockwise_export()
+        logger.remove(sink_id)
+        return results
+
+    def _export_block(self, layer_idx, quant_ignore_layers):
+        return export_block_fakequant(self.pipeline, layer_idx, self.out_dtype)
+
+    def _refresh_config(self, quant_ignore_layers):
+        config_file = os.path.join(self.output_dir, "config.json")
+        with open(config_file, "r") as f:
+            config = json.load(f)
+        config.pop("quantization_config", None)  # plain float model, fake-quant baked in
+        config["torch_dtype"] = "float16" if self.out_dtype == torch.float16 else "bfloat16"
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=2)
 
     def _prepare_experiment_dirs(self):
         self.args.log_dir = os.path.join(self.args.output_dir, "logs")
@@ -254,27 +287,3 @@ class LlmPtqWorkflow:
         save_path = self._unit_result_path(unit)
         torch.save(result, save_path)
         logger.info("Saved PTQ params for layer {} unit '{}' to {}", unit.layer_idx, unit.name, save_path)
-
-
-class LlmPtqConvertWorkflow(LlmDeployWorkflow):
-    """ptq convert-only: per-model HiF4 fake-quant to a plain float checkpoint (no calibration).
-
-    Reuses LlmDeployWorkflow's per-model block / remaining-weight / index write machinery and its
-    foreign-format decode front-end, but emits fake-quantized *float* weights
-    (``export_block_fakequant``) instead of packed bytes, and writes a plain float config."""
-
-    def __init__(self, args, out_dtype=None):
-        super().__init__(args)
-        self.out_dtype = out_dtype or torch.bfloat16
-
-    def _export_block(self, layer_idx, quant_ignore_layers):
-        return export_block_fakequant(self.pipeline, layer_idx, self.out_dtype)
-
-    def _refresh_config(self, quant_ignore_layers):
-        config_file = os.path.join(self.output_dir, "config.json")
-        with open(config_file, "r") as f:
-            config = json.load(f)
-        config.pop("quantization_config", None)  # plain float model, fake-quant baked in
-        config["torch_dtype"] = "float16" if self.out_dtype == torch.float16 else "bfloat16"
-        with open(config_file, "w") as f:
-            json.dump(config, f, indent=2)
