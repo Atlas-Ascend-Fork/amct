@@ -51,6 +51,17 @@ flowchart LR
 
 Eval 和 Extract Data 既不属于纯编排（它们包含具体的数据处理和评测逻辑），也不属于量化核心（它们不涉及 dtype / algorithm 语义）。把它们放在中介层，可以保持 Workflow 只做编排、Quant Core 只做量化语义。
 
+### 流程与模块对照
+
+| 你的视角（分步描述） | 对应模块层 | 实际代码入口 |
+|---|---|---|
+| 解析参数 | **入口层 Entry** | `cli/llm/args.py` |
+| 依次量化（直转评测） | **编排层 → 中介 Eval** | `llm_eval.py` blockwise，fake_quant 全开 |
+| 保存输入输出（extract） | **编排层 → 中介 Extract** | `llm_extract_ptq_data.py` 存 `block_*_in.pkl` |
+| 再次重新进行 ptq | **量化核心层 Quant Core** | `llm_ptq.py` 加载离线输入 → solver → 存 `layer_*.pt` |
+| 保存优化参数 | **量化核心层 Quant Core** | solver `finalize()` → `_save_unit_result()` |
+| 导出 | **产物层 Product** | `llm_deploy.py` 读 PTQ 参数 → `export_deploy()` → safetensors |
+
 ---
 
 ## 二、四步任务流
