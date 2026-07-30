@@ -172,3 +172,18 @@ def decode_to_bf16(model_dir: str, out_dir: str, fmt: str) -> str:
     """
     os.makedirs(out_dir, exist_ok=True)
     raise ValueError(f"decode_to_bf16: {fmt!r} is not a foreign format {FOREIGN_FORMATS}")
+
+
+def detect_and_decode(model_path: str, output_dir: str):
+    """Detect the source format and decode foreign FP4/FP8 formats to a temp BF16 checkpoint.
+
+    Returns ``(fmt, path)`` -- ``path`` is the (possibly redirected) directory to build the model
+    from. HiF4 and plain float pass through unchanged. On this baseline branch ``FOREIGN_FORMATS``
+    is empty, so this only detects; downstream branches decode nvfp4/mxfp4/mxfp8 here.
+    """
+    fmt = detect_source_format(model_path)
+    if fmt in FOREIGN_FORMATS:
+        decoded = os.path.join(output_dir, "_decoded_bf16")
+        decode_to_bf16(model_path, decoded, fmt)
+        return fmt, decoded
+    return fmt, model_path
