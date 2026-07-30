@@ -148,25 +148,6 @@ class OSPlusMigrator:
         self.amn = min(self.activation.min().item(), 0.0)
         self.fp_output = torch.matmul(self.activation, self.weight.T)
 
-    def _compute_scale(self, st: float) -> torch.Tensor:
-        st_tensor = torch.tensor(st, dtype=torch.float32, device=self.device)
-        mx_scale = torch.where(
-            self.cmx > st_tensor, self.cmx / st_tensor, torch.ones_like(self.cmx)
-        )
-        mn_scale = torch.where(
-            self.cmn < -st_tensor, self.cmn / (-st_tensor), torch.ones_like(self.cmn)
-        )
-        return torch.max(mx_scale, mn_scale)
-
-    def _compute_loss(self, scale: torch.Tensor) -> float:
-        scaled_act = self.activation / scale.unsqueeze(0)
-        scaled_weight = self.weight * scale.unsqueeze(0)
-        q_act = fake_quantize_mxfp4_activation(scaled_act)
-        q_weight = fake_quantize_mxfp4_weight(scaled_weight)
-        q_output = torch.matmul(q_act, q_weight.T)
-        loss = (q_output - self.fp_output).pow(2).sum(dim=-1).mean()
-        return loss.item()
-
     def search(self) -> torch.Tensor:
         bounds_max = max(-self.amn, self.amx)
         bounds_min = 0.1
@@ -190,6 +171,25 @@ class OSPlusMigrator:
         )
         return best_scale
 
+    def _compute_scale(self, st: float) -> torch.Tensor:
+        st_tensor = torch.tensor(st, dtype=torch.float32, device=self.device)
+        mx_scale = torch.where(
+            self.cmx > st_tensor, self.cmx / st_tensor, torch.ones_like(self.cmx)
+        )
+        mn_scale = torch.where(
+            self.cmn < -st_tensor, self.cmn / (-st_tensor), torch.ones_like(self.cmn)
+        )
+        return torch.max(mx_scale, mn_scale)
+
+    def _compute_loss(self, scale: torch.Tensor) -> float:
+        scaled_act = self.activation / scale.unsqueeze(0)
+        scaled_weight = self.weight * scale.unsqueeze(0)
+        q_act = fake_quantize_mxfp4_activation(scaled_act)
+        q_weight = fake_quantize_mxfp4_weight(scaled_weight)
+        q_output = torch.matmul(q_act, q_weight.T)
+        loss = (q_output - self.fp_output).pow(2).sum(dim=-1).mean()
+        return loss.item()
+
 
 class OSPlusMigratorGQA(OSPlusMigrator):
     """带 GQA 折叠约束的 OSPlus 搜索。"""
@@ -207,23 +207,6 @@ class OSPlusMigratorGQA(OSPlusMigrator):
         self.num_attention_heads = num_attention_heads
         self.num_repeats = num_attention_heads // num_kv_heads
         self.head_dim = activation.shape[-1] // num_attention_heads
-
-    def _fold_scale_gqa(self, scale: torch.Tensor) -> torch.Tensor:
-        grouped = scale.view(self.num_kv_heads, self.num_repeats, self.head_dim)
-        kv_scale = grouped.max(dim=1, keepdim=True)[0]
-        return kv_scale.expand(
-            self.num_kv_heads, self.num_repeats, self.head_dim
-        ).reshape(-1)
-
-    def _compute_loss(self, scale: torch.Tensor) -> float:
-        folded = self._fold_scale_gqa(scale)
-        scaled_act = self.activation / folded.unsqueeze(0)
-        scaled_weight = self.weight * folded.unsqueeze(0)
-        q_act = fake_quantize_mxfp4_activation(scaled_act)
-        q_weight = fake_quantize_mxfp4_weight(scaled_weight)
-        q_output = torch.matmul(q_act, q_weight.T)
-        loss = (q_output - self.fp_output).pow(2).sum(dim=-1).mean()
-        return loss.item()
 
     def search(self) -> torch.Tensor:
         bounds_max = max(-self.amn, self.amx)
@@ -248,6 +231,23 @@ class OSPlusMigratorGQA(OSPlusMigrator):
             f"  best_loss={best_loss:.4f}, scale range=[{best_scale.min():.3f}, {best_scale.max():.3f}]"
         )
         return best_scale
+
+    def _fold_scale_gqa(self, scale: torch.Tensor) -> torch.Tensor:
+        grouped = scale.view(self.num_kv_heads, self.num_repeats, self.head_dim)
+        kv_scale = grouped.max(dim=1, keepdim=True)[0]
+        return kv_scale.expand(
+            self.num_kv_heads, self.num_repeats, self.head_dim
+        ).reshape(-1)
+
+    def _compute_loss(self, scale: torch.Tensor) -> float:
+        folded = self._fold_scale_gqa(scale)
+        scaled_act = self.activation / folded.unsqueeze(0)
+        scaled_weight = self.weight * folded.unsqueeze(0)
+        q_act = fake_quantize_mxfp4_activation(scaled_act)
+        q_weight = fake_quantize_mxfp4_weight(scaled_weight)
+        q_output = torch.matmul(q_act, q_weight.T)
+        loss = (q_output - self.fp_output).pow(2).sum(dim=-1).mean()
+        return loss.item()
 
 
 # ── Collect ALL layers' activations in ONE forward pass ───────────
@@ -279,7 +279,7 @@ def collect_all_activations(
     lock = Lock()
 
     def make_attn_hook(layer_idx):
-        def hook_fn(module, input, output):
+        def hook_fn(module, _input, output):
             with lock:
                 if attn_tokens[layer_idx] >= max_tokens:
                     return
@@ -331,7 +331,7 @@ def collect_all_activations(
                 logger.info("All layers reached max_tokens budget, stopping early.")
                 break
 
-            batch_ids = input_ids_list[i : i + batch_size]
+            batch_ids = input_ids_list[i:i + batch_size]
             max_len = max(ids.shape[0] for ids in batch_ids)
             padded = torch.zeros(len(batch_ids), max_len, dtype=torch.long)
             for j, ids in enumerate(batch_ids):
@@ -364,9 +364,13 @@ def collect_all_activations(
     del attn_buffers, oproj_buffers
     gc.collect()
 
+    attn0 = attn_acts.get(0)
+    oproj0 = oproj_acts.get(0)
+    if attn0 is None or oproj0 is None:
+        raise KeyError("Expected layer-0 activations after collection")
     logger.info(
-        f"Activations collected: attn={attn_acts[0].shape[0]} tokens, "
-        f"oproj={oproj_acts[0].shape[0]} tokens per layer (capped at {max_tokens})"
+        f"Activations collected: attn={attn0.shape[0]} tokens, "
+        f"oproj={oproj0.shape[0]} tokens per layer (capped at {max_tokens})"
     )
     return attn_acts, oproj_acts
 
@@ -424,9 +428,13 @@ def load_activations(
         oproj_acts[layer_idx] = torch.load(
             oproj_path, map_location="cpu", weights_only=True
         )
+    attn0 = attn_acts.get(0)
+    oproj0 = oproj_acts.get(0)
+    if attn0 is None or oproj0 is None:
+        raise KeyError("Expected layer-0 activations in activation cache")
     logger.info(
         f"Loaded cached activations from {act_dir}: "
-        f"{num_layers} layers, attn={attn_acts[0].shape}, oproj={oproj_acts[0].shape}"
+        f"{num_layers} layers, attn={attn0.shape}, oproj={oproj0.shape}"
     )
     return attn_acts, oproj_acts
 

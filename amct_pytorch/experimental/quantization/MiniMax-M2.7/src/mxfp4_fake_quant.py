@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -31,8 +32,7 @@ def _ensure_mxfp4_quantizer_on_path() -> None:
     """
 
     try:
-        import mxfp4_quantizer  # noqa: F401
-
+        importlib.import_module("mxfp4_quantizer")
         return
     except ImportError:
         pass
@@ -65,9 +65,14 @@ def _ensure_mxfp4_quantizer_on_path() -> None:
     )
 
 
-_ensure_mxfp4_quantizer_on_path()
+def _load_mxfp4_ops():
+    """Resolve path then load mxfp4 quantize/dequantize via importlib."""
+    _ensure_mxfp4_quantizer_on_path()
+    mod = importlib.import_module("mxfp4_quantizer")
+    return mod.mxfp4_quantize, mod.mxfp4_dequantize
 
-from mxfp4_quantizer import mxfp4_quantize, mxfp4_dequantize  # noqa: E402
+
+mxfp4_quantize, mxfp4_dequantize = _load_mxfp4_ops()
 
 
 def fake_quantize_mxfp4(tensor: torch.Tensor, axis: int = -1) -> torch.Tensor:
