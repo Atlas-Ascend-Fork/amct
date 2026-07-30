@@ -69,6 +69,8 @@ _PERC_DAMP = None
 # 评测期输入 dim0=1，不触发。
 _CALIB_CHUNK = 0
 
+_ACT_QUANT_SKIPPED = set()  # 因无法旋转而放弃激活量化的层名（去重打印，见 _do_act_quant）
+
 _PROGRESS = [0]  # 已补偿层计数（进度显示用；每进程从 0 开始）
 
 _FP4_MAX_EXP = 2  # E2M1 最大指数（6 = 1.5·2²）；scale fitting 的 offset
@@ -201,7 +203,23 @@ class MRGPTQuant(GPTQuant):
     def _do_act_quant(self):
         if not self.increments.get("act_quant"):
             return False
-        return not any(p in self.layer_name for p in _ACT_PROTECT)
+        if any(p in self.layer_name for p in _ACT_PROTECT):
+            return False
+        # ⚠️ W4A4 的前提是**旋转先把激活离群值压平**，4-bit 激活才不崩。若本层因
+        # in_features 不被 k 整除而跳过了旋转（见 _do_hadamard），仍量化激活会显著劣化，
+        # 且劣化容易被误读为"该模型难量化"。此处兜底：请求了旋转但本层拿不到 → 不量化激活。
+        # Qwen3-8B 各层 in ∈ {4096, 12288} 恒可整除，故该分支在 8B 上永不触发、行为不变；
+        # 维度较杂的模型（如 qwen3_5_moe 的部分 linear_attn 投影）才会命中。
+        # 注意条件用 increments["hadamard"]：全局不开旋转时（W4A4 无旋转消融）不应拦。
+        if self.increments["hadamard"] and not self._do_hadamard():
+            if self.layer_name not in _ACT_QUANT_SKIPPED:
+                _ACT_QUANT_SKIPPED.add(self.layer_name)
+                print(f"[MR-GPTQ] ⚠️ {self.layer_name} (in={self.weight.shape[1]}) 不被 "
+                      f"k={self.hadamard_k} 整除、无法旋转 → **跳过激活量化**"
+                      f"（W4A4 需旋转压离群值）。该层激活保高精度，"
+                      f"应计入「非真 4-bit 激活」层数", flush=True)
+            return False
+        return True
 
     # ---- block-wise Hadamard 旋转（增量①） --------------------------------
     def _do_hadamard(self):
