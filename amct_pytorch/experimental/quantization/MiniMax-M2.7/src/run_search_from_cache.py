@@ -106,7 +106,7 @@ def load_weights(
     return qkv, tensors[key_o]
 
 
-def main():
+def _parse_args():
     parser = argparse.ArgumentParser(
         description="Run OS+SQ search from cached activations + safetensors weights."
     )
@@ -138,18 +138,112 @@ def main():
         default=None,
         help="Optional comma-separated list / range of layer ids (e.g. '0,2,5-10').",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    # Resolve device with a CPU fallback if requested accelerator missing.
-    device = torch.device(args.search_device)
+
+def _resolve_search_device(search_device: str) -> torch.device:
+    device = torch.device(search_device)
     if device.type == "npu" and not (
         hasattr(torch, "npu") and torch.npu.is_available()
     ):
         print(f"[WARN] requested {device}, but NPU unavailable; falling back to CPU.")
-        device = torch.device("cpu")
-    elif device.type == "cuda" and not torch.cuda.is_available():
+        return torch.device("cpu")
+    if device.type == "cuda" and not torch.cuda.is_available():
         print(f"[WARN] requested {device}, but CUDA unavailable; falling back to CPU.")
-        device = torch.device("cpu")
+        return torch.device("cpu")
+    return device
+
+
+def _parse_layers(layers_arg: str | None, num_layers: int) -> list[int]:
+    if not layers_arg:
+        return list(range(num_layers))
+    layers: list[int] = []
+    for chunk in layers_arg.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "-" in chunk:
+            a, b = chunk.split("-", 1)
+            layers.extend(range(int(a), int(b) + 1))
+        else:
+            layers.append(int(chunk))
+    return layers
+
+
+def _filter_layers_for_resume(layers: list[int], record_dir: Path) -> list[int]:
+    skipped = []
+    keep = []
+    for li in layers:
+        a = record_dir / f"layer_{li}_attn_scale.pt"
+        o = record_dir / f"layer_{li}_oproj_scale.pt"
+        if a.is_file() and o.is_file():
+            skipped.append(li)
+        else:
+            keep.append(li)
+    if skipped:
+        print(f"Resume: skipping {len(skipped)} already-done layers.")
+    return keep
+
+
+def _search_one_layer(
+    model_dir: str,
+    layer_idx: int,
+    weight_map: dict[str, str],
+    act_dir: Path,
+    record_dir: Path,
+    device: torch.device,
+) -> tuple[float, float, float]:
+    """Run OS+ search for one layer. Returns (w_secs, g1_secs, g2_secs)."""
+    t_w = time.perf_counter()
+    qkv_w, o_w = load_weights(model_dir, layer_idx, weight_map)
+    qkv_w = qkv_w.to(device)
+    o_w = o_w.to(device)
+    _sync(device)
+    w_secs = time.perf_counter() - t_w
+
+    attn_act = torch.load(
+        act_dir / f"layer_{layer_idx}_attn_act.pt",
+        map_location="cpu",
+        weights_only=True,
+    ).to(device=device, dtype=torch.float32)
+    oproj_act = torch.load(
+        act_dir / f"layer_{layer_idx}_oproj_act.pt",
+        map_location="cpu",
+        weights_only=True,
+    ).to(device=device, dtype=torch.float32)
+
+    t_g1 = time.perf_counter()
+    attn_scale = OSPlusMigrator(attn_act, qkv_w).search()
+    _sync(device)
+    g1_secs = time.perf_counter() - t_g1
+    del attn_act, qkv_w
+    gc.collect()
+    _release(device)
+
+    t_g2 = time.perf_counter()
+    oproj_scale = OSPlusMigratorGQA(
+        oproj_act,
+        o_w,
+        num_kv_heads=NUM_KEY_VALUE_HEADS,
+        num_attention_heads=NUM_ATTENTION_HEADS,
+    ).search()
+    _sync(device)
+    g2_secs = time.perf_counter() - t_g2
+    del oproj_act, o_w
+    gc.collect()
+    _release(device)
+
+    torch.save(attn_scale.cpu(), record_dir / f"layer_{layer_idx}_attn_scale.pt")
+    torch.save(oproj_scale.cpu(), record_dir / f"layer_{layer_idx}_oproj_scale.pt")
+    del attn_scale, oproj_scale
+    gc.collect()
+    _release(device)
+    return w_secs, g1_secs, g2_secs
+
+
+def main():
+    args = _parse_args()
+    device = _resolve_search_device(args.search_device)
     print(f"Using search device: {device}")
 
     record_dir = Path(args.record_dir)
@@ -157,94 +251,22 @@ def main():
     if not act_dir.is_dir():
         raise FileNotFoundError(f"Missing activations/ under {record_dir}")
 
-    # Parse layer subset
-    if args.layers:
-        layers: list[int] = []
-        for chunk in args.layers.split(","):
-            chunk = chunk.strip()
-            if not chunk:
-                continue
-            if "-" in chunk:
-                a, b = chunk.split("-", 1)
-                layers.extend(range(int(a), int(b) + 1))
-            else:
-                layers.append(int(chunk))
-    else:
-        layers = list(range(args.num_layers))
-
-    # Resume: skip layers with both scale files already present
+    layers = _parse_layers(args.layers, args.num_layers)
     if args.resume:
-        skipped = []
-        keep = []
-        for li in layers:
-            a = record_dir / f"layer_{li}_attn_scale.pt"
-            o = record_dir / f"layer_{li}_oproj_scale.pt"
-            if a.is_file() and o.is_file():
-                skipped.append(li)
-            else:
-                keep.append(li)
-        if skipped:
-            print(f"Resume: skipping {len(skipped)} already-done layers.")
-        layers = keep
-
+        layers = _filter_layers_for_resume(layers, record_dir)
     if not layers:
         print("Nothing to do.")
         return
 
-    # Load weight index once
     with open(os.path.join(args.model_dir, "model.safetensors.index.json")) as f:
         weight_map = json.load(f)["weight_map"]
 
     t_overall = time.perf_counter()
     for idx, li in enumerate(layers):
         t_layer = time.perf_counter()
-
-        # 1. Load weights for this layer
-        t_w = time.perf_counter()
-        qkv_w, o_w = load_weights(args.model_dir, li, weight_map)
-        qkv_w = qkv_w.to(device)
-        o_w = o_w.to(device)
-        _sync(device)
-        w_secs = time.perf_counter() - t_w
-
-        # 2. Load activations for this layer (bf16 -> float32 on the search device)
-        attn_act = torch.load(
-            act_dir / f"layer_{li}_attn_act.pt", map_location="cpu", weights_only=True
-        ).to(device=device, dtype=torch.float32)
-        oproj_act = torch.load(
-            act_dir / f"layer_{li}_oproj_act.pt", map_location="cpu", weights_only=True
-        ).to(device=device, dtype=torch.float32)
-
-        # 3. Group 1 search
-        t_g1 = time.perf_counter()
-        attn_scale = OSPlusMigrator(attn_act, qkv_w).search()
-        _sync(device)
-        g1_secs = time.perf_counter() - t_g1
-        del attn_act, qkv_w
-        gc.collect()
-        _release(device)
-
-        # 4. Group 2 search (GQA-constrained)
-        t_g2 = time.perf_counter()
-        oproj_scale = OSPlusMigratorGQA(
-            oproj_act,
-            o_w,
-            num_kv_heads=NUM_KEY_VALUE_HEADS,
-            num_attention_heads=NUM_ATTENTION_HEADS,
-        ).search()
-        _sync(device)
-        g2_secs = time.perf_counter() - t_g2
-        del oproj_act, o_w
-        gc.collect()
-        _release(device)
-
-        # 5. Save
-        torch.save(attn_scale.cpu(), record_dir / f"layer_{li}_attn_scale.pt")
-        torch.save(oproj_scale.cpu(), record_dir / f"layer_{li}_oproj_scale.pt")
-        del attn_scale, oproj_scale
-        gc.collect()
-        _release(device)
-
+        w_secs, g1_secs, g2_secs = _search_one_layer(
+            args.model_dir, li, weight_map, act_dir, record_dir, device
+        )
         layer_secs = time.perf_counter() - t_layer
         elapsed = time.perf_counter() - t_overall
         done = idx + 1

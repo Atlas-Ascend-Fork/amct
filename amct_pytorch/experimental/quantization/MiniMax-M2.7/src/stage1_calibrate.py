@@ -258,66 +258,108 @@ def get_module(model, path: str):
     return module
 
 
-def collect_all_activations(
-    model,
+def _append_capped_chunk(
+    buffers: dict[int, list[torch.Tensor]],
+    tokens: dict[int, int],
+    layer_idx: int,
+    chunk: torch.Tensor,
+    max_tokens: int,
+) -> None:
+    remaining = max_tokens - tokens[layer_idx]
+    if remaining <= 0:
+        return
+    if chunk.shape[0] > remaining:
+        chunk = chunk[:remaining]
+    buffers[layer_idx].append(chunk)
+    tokens[layer_idx] += chunk.shape[0]
+
+
+def _make_attn_hook(
+    layer_idx: int,
+    attn_buffers: dict[int, list[torch.Tensor]],
+    attn_tokens: dict[int, int],
+    max_tokens: int,
+    lock: Lock,
+):
+    def hook_fn(module, _input, output):
+        with lock:
+            if attn_tokens[layer_idx] >= max_tokens:
+                return
+            chunk = output.detach().reshape(-1, output.shape[-1]).cpu()
+            _append_capped_chunk(
+                attn_buffers, attn_tokens, layer_idx, chunk, max_tokens
+            )
+
+    return hook_fn
+
+
+def _make_oproj_hook(
+    layer_idx: int,
+    oproj_buffers: dict[int, list[torch.Tensor]],
+    oproj_tokens: dict[int, int],
+    max_tokens: int,
+    lock: Lock,
+):
+    def hook_fn(module, inputs):
+        with lock:
+            if oproj_tokens[layer_idx] >= max_tokens:
+                return
+            inp = inputs[0] if isinstance(inputs, tuple) else inputs
+            chunk = inp.detach().reshape(-1, inp.shape[-1]).cpu()
+            _append_capped_chunk(
+                oproj_buffers, oproj_tokens, layer_idx, chunk, max_tokens
+            )
+
+    return hook_fn
+
+
+def _register_activation_hooks(
+    decoder_layers,
     num_layers: int,
-    input_ids_list: list[torch.Tensor],
-    batch_size: int = 2,
-    max_tokens: int = 4096,
-) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
-    """在所有层挂 hook，一次前向同时收集 input_layernorm 输出（Group 1）与
-    o_proj 输入（Group 2）激活。
-
-    在 NPU 上，``device`` 会解析为 ``npu:*``（因模型以 NPU-aware ``device_map`` 加载）。
-    """
-    decoder_layers = get_module(model, "model.layers")
-
-    attn_buffers: dict[int, list[torch.Tensor]] = {i: [] for i in range(num_layers)}
-    oproj_buffers: dict[int, list[torch.Tensor]] = {i: [] for i in range(num_layers)}
-    attn_tokens: dict[int, int] = {i: 0 for i in range(num_layers)}
-    oproj_tokens: dict[int, int] = {i: 0 for i in range(num_layers)}
-    lock = Lock()
-
-    def make_attn_hook(layer_idx):
-        def hook_fn(module, _input, output):
-            with lock:
-                if attn_tokens[layer_idx] >= max_tokens:
-                    return
-                chunk = output.detach().reshape(-1, output.shape[-1]).cpu()
-                remaining = max_tokens - attn_tokens[layer_idx]
-                if chunk.shape[0] > remaining:
-                    chunk = chunk[:remaining]
-                attn_buffers[layer_idx].append(chunk)  # noqa: F821
-                attn_tokens[layer_idx] += chunk.shape[0]
-
-        return hook_fn
-
-    def make_oproj_hook(layer_idx):
-        def hook_fn(module, inputs):
-            with lock:
-                if oproj_tokens[layer_idx] >= max_tokens:
-                    return
-                inp = inputs[0] if isinstance(inputs, tuple) else inputs
-                chunk = inp.detach().reshape(-1, inp.shape[-1]).cpu()
-                remaining = max_tokens - oproj_tokens[layer_idx]
-                if chunk.shape[0] > remaining:
-                    chunk = chunk[:remaining]
-                oproj_buffers[layer_idx].append(chunk)  # noqa: F821
-                oproj_tokens[layer_idx] += chunk.shape[0]
-
-        return hook_fn
-
+    attn_buffers: dict[int, list[torch.Tensor]],
+    oproj_buffers: dict[int, list[torch.Tensor]],
+    attn_tokens: dict[int, int],
+    oproj_tokens: dict[int, int],
+    max_tokens: int,
+    lock: Lock,
+):
     handles = []
     for i in range(num_layers):
         layer = decoder_layers[i]
-        handles.append(layer.input_layernorm.register_forward_hook(make_attn_hook(i)))
         handles.append(
-            layer.self_attn.o_proj.register_forward_pre_hook(make_oproj_hook(i))
+            layer.input_layernorm.register_forward_hook(
+                _make_attn_hook(
+                    i, attn_buffers, attn_tokens, max_tokens, lock
+                )
+            )
         )
+        handles.append(
+            layer.self_attn.o_proj.register_forward_pre_hook(
+                _make_oproj_hook(
+                    i, oproj_buffers, oproj_tokens, max_tokens, lock
+                )
+            )
+        )
+    return handles
 
-    logger.info(
-        f"Registered hooks on all {num_layers} layers (input_layernorm + o_proj), running forward pass..."
-    )
+
+def _resolve_model_device(model, decoder_layers) -> torch.device:
+    try:
+        return decoder_layers[0].input_layernorm.weight.device
+    except Exception:
+        return next(model.parameters()).device
+
+
+def _run_activation_forward(
+    model,
+    decoder_layers,
+    input_ids_list: list[torch.Tensor],
+    batch_size: int,
+    num_layers: int,
+    attn_tokens: dict[int, int],
+    oproj_tokens: dict[int, int],
+    max_tokens: int,
+) -> None:
     model.eval()
     with torch.no_grad():
         for i in tqdm(
@@ -337,16 +379,16 @@ def collect_all_activations(
             for j, ids in enumerate(batch_ids):
                 padded[j, : ids.shape[0]] = ids
 
-            try:
-                device = decoder_layers[0].input_layernorm.weight.device
-            except Exception:
-                device = next(model.parameters()).device
+            device = _resolve_model_device(model, decoder_layers)
             padded = padded.to(device)
             model(padded, use_cache=False)
 
-    for h in handles:
-        h.remove()
 
+def _finalize_activation_buffers(
+    num_layers: int,
+    attn_buffers: dict[int, list[torch.Tensor]],
+    oproj_buffers: dict[int, list[torch.Tensor]],
+) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
     attn_acts = {}
     oproj_acts = {}
     for i in range(num_layers):
@@ -360,10 +402,29 @@ def collect_all_activations(
             if oproj_buffers[i]
             else torch.zeros(0, HIDDEN_SIZE)
         )
+    return attn_acts, oproj_acts
 
-    del attn_buffers, oproj_buffers
-    gc.collect()
 
+def _init_activation_buffers(
+    num_layers: int,
+) -> tuple[
+    dict[int, list[torch.Tensor]],
+    dict[int, list[torch.Tensor]],
+    dict[int, int],
+    dict[int, int],
+]:
+    attn_buffers = {i: [] for i in range(num_layers)}
+    oproj_buffers = {i: [] for i in range(num_layers)}
+    attn_tokens = {i: 0 for i in range(num_layers)}
+    oproj_tokens = {i: 0 for i in range(num_layers)}
+    return attn_buffers, oproj_buffers, attn_tokens, oproj_tokens
+
+
+def _log_collected_activations(
+    attn_acts: dict[int, torch.Tensor],
+    oproj_acts: dict[int, torch.Tensor],
+    max_tokens: int,
+) -> None:
     attn0 = attn_acts.get(0)
     oproj0 = oproj_acts.get(0)
     if attn0 is None or oproj0 is None:
@@ -372,6 +433,57 @@ def collect_all_activations(
         f"Activations collected: attn={attn0.shape[0]} tokens, "
         f"oproj={oproj0.shape[0]} tokens per layer (capped at {max_tokens})"
     )
+
+
+def collect_all_activations(
+    model,
+    num_layers: int,
+    input_ids_list: list[torch.Tensor],
+    batch_size: int = 2,
+    max_tokens: int = 4096,
+) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
+    """在所有层挂 hook，一次前向同时收集 input_layernorm 输出（Group 1）与
+    o_proj 输入（Group 2）激活。
+
+    在 NPU 上，``device`` 会解析为 ``npu:*``（因模型以 NPU-aware ``device_map`` 加载）。
+    """
+    decoder_layers = get_module(model, "model.layers")
+    attn_buffers, oproj_buffers, attn_tokens, oproj_tokens = _init_activation_buffers(
+        num_layers
+    )
+    lock = Lock()
+    handles = _register_activation_hooks(
+        decoder_layers,
+        num_layers,
+        attn_buffers,
+        oproj_buffers,
+        attn_tokens,
+        oproj_tokens,
+        max_tokens,
+        lock,
+    )
+    logger.info(
+        f"Registered hooks on all {num_layers} layers "
+        f"(input_layernorm + o_proj), running forward pass..."
+    )
+    _run_activation_forward(
+        model,
+        decoder_layers,
+        input_ids_list,
+        batch_size,
+        num_layers,
+        attn_tokens,
+        oproj_tokens,
+        max_tokens,
+    )
+    for h in handles:
+        h.remove()
+    attn_acts, oproj_acts = _finalize_activation_buffers(
+        num_layers, attn_buffers, oproj_buffers
+    )
+    del attn_buffers, oproj_buffers
+    gc.collect()
+    _log_collected_activations(attn_acts, oproj_acts, max_tokens)
     return attn_acts, oproj_acts
 
 
@@ -519,7 +631,7 @@ def compute_and_save_layer_scales(
 
 
 # ── Main ───────────────
-def main():
+def _parse_args():
     parser = argparse.ArgumentParser(
         description="OS+SQ Stage 1 (HF on NPU): Calibration and scale computation"
     )
@@ -554,24 +666,16 @@ def main():
         default=0,
         help="If >0, only search the first N layers (smoke test).",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    os.makedirs(args.record_dir, exist_ok=True)
 
+def _load_stage1_model(model_dir: str, load_device_map: str):
     from transformers import AutoModelForCausalLM
 
-    tokenizer_dir = args.model_files_dir if args.model_files_dir else args.model_dir
-
-    logger.info(f"Loading calibration data from {args.calib_data}...")
-    input_ids_list = load_calib_data(
-        args.calib_data, tokenizer_dir, args.num_calib_data, args.seq_len
-    )
-
-    device_map = "auto" if args.load_device_map == "auto" else {"": "cpu"}
-
-    logger.info(f"Loading model from {args.model_dir} with device_map={device_map}...")
+    device_map = "auto" if load_device_map == "auto" else {"": "cpu"}
+    logger.info(f"Loading model from {model_dir} with device_map={device_map}...")
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_dir,
+        model_dir,
         torch_dtype=torch.bfloat16,
         device_map=device_map,
         trust_remote_code=True,
@@ -579,107 +683,116 @@ def main():
         low_cpu_mem_usage=True,
     )
     model.eval()
+    return model
 
-    decoder_layers = get_module(model, "model.layers")
-    num_layers = len(decoder_layers)
-    logger.info(f"Model loaded: {num_layers} decoder layers")
 
-    layers_to_process = list(range(num_layers))
-    if args.resume:
-        skipped = []
-        for i in list(layers_to_process):
-            attn_path = os.path.join(args.record_dir, f"layer_{i}_attn_scale.pt")
-            oproj_path = os.path.join(args.record_dir, f"layer_{i}_oproj_scale.pt")
-            if os.path.isfile(attn_path) and os.path.isfile(oproj_path):
-                skipped.append(i)
-                layers_to_process.remove(i)
-        if skipped:
-            logger.info(
-                f"Resuming: skipping {len(skipped)} already-completed layers: {skipped}"
-            )
-
-    if not layers_to_process and not args.record_only:
-        logger.info("All layers already completed. Nothing to do.")
-    else:
-        # Phase 1: Get activations (load from cache or collect via forward pass)
-        cached = load_activations(args.record_dir, num_layers)
-        if cached is not None:
-            attn_acts, oproj_acts = cached
-            del input_ids_list
-        else:
-            logger.info(
-                f"Phase 1: Collecting activations for all {num_layers} layers in one forward pass..."
-            )
-            attn_acts, oproj_acts = collect_all_activations(
-                model,
-                num_layers,
-                input_ids_list,
-                batch_size=args.batch_size,
-                max_tokens=args.max_tokens_per_layer,
-            )
-            del input_ids_list
-            gc.collect()
-
-            save_activations(args.record_dir, attn_acts, oproj_acts)
-
-        if args.record_only:
-            logger.info(
-                "record_only=1: activations cached; skipping OS+ search and metadata write."
-            )
-            return
-
-        # Phase 2: Run OS+ search in parallel
-        layers_for_search = list(layers_to_process)
-        if args.max_layers_to_search > 0:
-            kept = layers_for_search[: args.max_layers_to_search]
-            if len(kept) < len(layers_for_search):
-                logger.info(
-                    f"Smoke mode: --max_layers_to_search={args.max_layers_to_search} "
-                    f"limits search to layers {kept}"
-                )
-            layers_for_search = kept
-
-        devices_used = set()
-        for layer_idx in layers_for_search:
-            dev = get_module(
-                decoder_layers[layer_idx], "self_attn.q_proj"
-            ).weight.device
-            devices_used.add(str(dev))
-        num_devs = len(devices_used)
-        num_workers = min(args.num_workers, len(layers_for_search), max(num_devs, 1))
+def _layers_to_process(record_dir: str, num_layers: int, resume: bool) -> list[int]:
+    layers = list(range(num_layers))
+    if not resume:
+        return layers
+    skipped = []
+    for i in list(layers):
+        attn_path = os.path.join(record_dir, f"layer_{i}_attn_scale.pt")
+        oproj_path = os.path.join(record_dir, f"layer_{i}_oproj_scale.pt")
+        if os.path.isfile(attn_path) and os.path.isfile(oproj_path):
+            skipped.append(i)
+            layers.remove(i)
+    if skipped:
         logger.info(
-            f"Phase 2: Running OS+SQ search for {len(layers_for_search)} layers "
-            f"with {num_workers} workers across {num_devs} devices {devices_used}"
+            f"Resuming: skipping {len(skipped)} already-completed layers: {skipped}"
         )
+    return layers
 
-        completed = 0
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            futures = {}
-            for layer_idx in layers_for_search:
-                fut = executor.submit(
-                    compute_and_save_layer_scales,
-                    model,
-                    layer_idx,
-                    attn_acts[layer_idx],
-                    oproj_acts[layer_idx],
-                    args.record_dir,
+
+def _prepare_activations(
+    model,
+    num_layers: int,
+    input_ids_list: list[torch.Tensor],
+    record_dir: str,
+    batch_size: int,
+    max_tokens_per_layer: int,
+) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
+    cached = load_activations(record_dir, num_layers)
+    if cached is not None:
+        return cached
+
+    logger.info(
+        f"Phase 1: Collecting activations for all {num_layers} layers "
+        f"in one forward pass..."
+    )
+    attn_acts, oproj_acts = collect_all_activations(
+        model,
+        num_layers,
+        input_ids_list,
+        batch_size=batch_size,
+        max_tokens=max_tokens_per_layer,
+    )
+    gc.collect()
+    save_activations(record_dir, attn_acts, oproj_acts)
+    return attn_acts, oproj_acts
+
+
+def _select_layers_for_search(
+    layers_to_process: list[int], max_layers_to_search: int
+) -> list[int]:
+    layers_for_search = list(layers_to_process)
+    if max_layers_to_search <= 0:
+        return layers_for_search
+    kept = layers_for_search[:max_layers_to_search]
+    if len(kept) < len(layers_for_search):
+        logger.info(
+            f"Smoke mode: --max_layers_to_search={max_layers_to_search} "
+            f"limits search to layers {kept}"
+        )
+    return kept
+
+
+def _run_osplus_search(
+    model,
+    decoder_layers,
+    layers_for_search: list[int],
+    attn_acts: dict[int, torch.Tensor],
+    oproj_acts: dict[int, torch.Tensor],
+    record_dir: str,
+    num_workers: int,
+) -> None:
+    devices_used = {
+        str(get_module(decoder_layers[i], "self_attn.q_proj").weight.device)
+        for i in layers_for_search
+    }
+    num_devs = len(devices_used)
+    workers = min(num_workers, len(layers_for_search), max(num_devs, 1))
+    logger.info(
+        f"Phase 2: Running OS+SQ search for {len(layers_for_search)} layers "
+        f"with {workers} workers across {num_devs} devices {devices_used}"
+    )
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(
+                compute_and_save_layer_scales,
+                model,
+                layer_idx,
+                attn_acts[layer_idx],
+                oproj_acts[layer_idx],
+                record_dir,
+            ): layer_idx
+            for layer_idx in layers_for_search
+        }
+        for fut in as_completed(futures):
+            layer_idx = futures[fut]
+            try:
+                fut.result()
+                completed += 1
+                logger.info(
+                    f"  [{completed}/{len(layers_for_search)}] Layer {layer_idx} done."
                 )
-                futures[fut] = layer_idx
+            except Exception as e:
+                logger.error(f"  Layer {layer_idx} FAILED: {e}", exc_info=True)
 
-            for fut in as_completed(futures):
-                layer_idx = futures[fut]
-                try:
-                    fut.result()
-                    completed += 1
-                    logger.info(
-                        f"  [{completed}/{len(layers_for_search)}] Layer {layer_idx} done."
-                    )
-                except Exception as e:
-                    logger.error(f"  Layer {layer_idx} FAILED: {e}", exc_info=True)
 
-        del attn_acts, oproj_acts
-        gc.collect()
-
+def _write_stage1_metadata(args, num_layers: int) -> None:
     metadata = {
         "model_dir": args.model_dir,
         "calib_data": args.calib_data,
@@ -707,6 +820,58 @@ def main():
     with open(os.path.join(args.record_dir, "metadata.json"), "w") as f:
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
+
+def main():
+    args = _parse_args()
+    os.makedirs(args.record_dir, exist_ok=True)
+
+    tokenizer_dir = args.model_files_dir if args.model_files_dir else args.model_dir
+    logger.info(f"Loading calibration data from {args.calib_data}...")
+    input_ids_list = load_calib_data(
+        args.calib_data, tokenizer_dir, args.num_calib_data, args.seq_len
+    )
+
+    model = _load_stage1_model(args.model_dir, args.load_device_map)
+    decoder_layers = get_module(model, "model.layers")
+    num_layers = len(decoder_layers)
+    logger.info(f"Model loaded: {num_layers} decoder layers")
+
+    layers = _layers_to_process(args.record_dir, num_layers, args.resume)
+    if not layers and not args.record_only:
+        logger.info("All layers already completed. Nothing to do.")
+    else:
+        attn_acts, oproj_acts = _prepare_activations(
+            model,
+            num_layers,
+            input_ids_list,
+            args.record_dir,
+            args.batch_size,
+            args.max_tokens_per_layer,
+        )
+        del input_ids_list
+
+        if args.record_only:
+            logger.info(
+                "record_only=1: activations cached; skipping OS+ search and metadata write."
+            )
+            return
+
+        layers_for_search = _select_layers_for_search(
+            layers, args.max_layers_to_search
+        )
+        _run_osplus_search(
+            model,
+            decoder_layers,
+            layers_for_search,
+            attn_acts,
+            oproj_acts,
+            args.record_dir,
+            args.num_workers,
+        )
+        del attn_acts, oproj_acts
+        gc.collect()
+
+    _write_stage1_metadata(args, num_layers)
     logger.info(f"Done. Scales saved to {args.record_dir}")
 
 

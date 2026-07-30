@@ -152,12 +152,13 @@ def quantize_linear_weight(
     return name, packed_all, scale_all
 
 
-def build_export_state_dict(
+def _collect_export_params_and_jobs(
     model,
     quant_devices: list[torch.device],
-    max_inflight_jobs: int,
-    row_chunk_size: int,
-) -> dict[str, torch.Tensor]:
+) -> tuple[
+    dict[str, torch.Tensor],
+    list[tuple[str, torch.Tensor, torch.device | None]],
+]:
     state_dict: dict[str, torch.Tensor] = {}
     quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]] = []
     quant_device_set = {str(device) for device in quant_devices}
@@ -183,44 +184,84 @@ def build_export_state_dict(
             continue
         if name not in state_dict:
             state_dict[name] = buf.data.cpu().clone()
+    return state_dict, quant_jobs
 
-    if not quant_jobs:
-        return state_dict
 
-    if len(quant_devices) == 1:
-        quant_device = quant_devices[0]
-        for name, weight, preferred_device in tqdm(
-            quant_jobs, desc=f"RTN quant on {quant_device}"
-        ):
-            run_device = preferred_device or quant_device
-            _, packed, scale_e8m0 = quantize_linear_weight(
-                name, weight, run_device, row_chunk_size=row_chunk_size
-            )
-            state_dict[name] = packed
-            state_dict[name.replace(".weight", ".weight_scale")] = scale_e8m0
-        print(f"[RTN] Quantized {len(quant_jobs)} linear weights on {quant_device}")
-        return state_dict
+def _store_quantized_weight(
+    state_dict: dict[str, torch.Tensor],
+    name: str,
+    packed: torch.Tensor,
+    scale_e8m0: torch.Tensor,
+) -> None:
+    state_dict[name] = packed
+    state_dict[name.replace(".weight", ".weight_scale")] = scale_e8m0
 
+
+def _run_single_device_quant(
+    state_dict: dict[str, torch.Tensor],
+    quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]],
+    quant_device: torch.device,
+    row_chunk_size: int,
+) -> dict[str, torch.Tensor]:
+    for name, weight, preferred_device in tqdm(
+        quant_jobs, desc=f"RTN quant on {quant_device}"
+    ):
+        run_device = preferred_device or quant_device
+        _, packed, scale_e8m0 = quantize_linear_weight(
+            name, weight, run_device, row_chunk_size=row_chunk_size
+        )
+        _store_quantized_weight(state_dict, name, packed, scale_e8m0)
+    print(f"[RTN] Quantized {len(quant_jobs)} linear weights on {quant_device}")
+    return state_dict
+
+
+def _pick_quant_device(
+    preferred_device: torch.device | None,
+    quant_devices: list[torch.device],
+    job_idx: int,
+) -> torch.device:
+    return preferred_device or quant_devices[job_idx % len(quant_devices)]
+
+
+def _submit_quant_job(
+    executor: cf.ThreadPoolExecutor,
+    quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]],
+    job_idx: int,
+    quant_devices: list[torch.device],
+    row_chunk_size: int,
+) -> tuple[cf.Future, str, torch.device]:
+    name, weight, preferred_device = quant_jobs[job_idx]
+    quant_device = _pick_quant_device(preferred_device, quant_devices, job_idx)
+    future = executor.submit(
+        quantize_linear_weight,
+        name,
+        weight,
+        quant_device,
+        row_chunk_size,
+    )
+    return future, name, quant_device
+
+
+def _run_multi_device_quant(
+    state_dict: dict[str, torch.Tensor],
+    quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]],
+    quant_devices: list[torch.device],
+    max_inflight_jobs: int,
+    row_chunk_size: int,
+) -> dict[str, torch.Tensor]:
     max_workers = len(quant_devices)
     max_inflight = max(max_inflight_jobs, max_workers)
     print(
-        f"[RTN] Quantizing {len(quant_jobs)} linear weights across {len(quant_devices)} devices"
+        f"[RTN] Quantizing {len(quant_jobs)} linear weights across "
+        f"{len(quant_devices)} devices"
     )
 
     next_job_idx = 0
     future_to_meta: dict[cf.Future, tuple[str, torch.device]] = {}
     with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
         while next_job_idx < len(quant_jobs) and len(future_to_meta) < max_inflight:
-            name, weight, preferred_device = quant_jobs[next_job_idx]
-            quant_device = (
-                preferred_device or quant_devices[next_job_idx % len(quant_devices)]
-            )
-            future = executor.submit(
-                quantize_linear_weight,
-                name,
-                weight,
-                quant_device,
-                row_chunk_size,
+            future, name, quant_device = _submit_quant_job(
+                executor, quant_jobs, next_job_idx, quant_devices, row_chunk_size
             )
             future_to_meta[future] = (name, quant_device)
             next_job_idx += 1
@@ -229,25 +270,18 @@ def build_export_state_dict(
         while future_to_meta:
             done, _ = cf.wait(future_to_meta, return_when=cf.FIRST_COMPLETED)
             for future in done:
-                name, _device = future_to_meta.pop(future)
+                future_to_meta.pop(future)
                 finished_name, packed, scale_e8m0 = future.result()
-                state_dict[finished_name] = packed
-                state_dict[finished_name.replace(".weight", ".weight_scale")] = (
-                    scale_e8m0
+                _store_quantized_weight(
+                    state_dict, finished_name, packed, scale_e8m0
                 )
                 progress.update(1)
-
                 if next_job_idx < len(quant_jobs):
-                    next_name, next_weight, preferred_device = quant_jobs[next_job_idx]
-                    quant_device = (
-                        preferred_device
-                        or quant_devices[next_job_idx % len(quant_devices)]
-                    )
-                    new_future = executor.submit(
-                        quantize_linear_weight,
-                        next_name,
-                        next_weight,
-                        quant_device,
+                    new_future, next_name, quant_device = _submit_quant_job(
+                        executor,
+                        quant_jobs,
+                        next_job_idx,
+                        quant_devices,
                         row_chunk_size,
                     )
                     future_to_meta[new_future] = (next_name, quant_device)
@@ -259,6 +293,24 @@ def build_export_state_dict(
         + ", ".join(str(device) for device in quant_devices)
     )
     return state_dict
+
+
+def build_export_state_dict(
+    model,
+    quant_devices: list[torch.device],
+    max_inflight_jobs: int,
+    row_chunk_size: int,
+) -> dict[str, torch.Tensor]:
+    state_dict, quant_jobs = _collect_export_params_and_jobs(model, quant_devices)
+    if not quant_jobs:
+        return state_dict
+    if len(quant_devices) == 1:
+        return _run_single_device_quant(
+            state_dict, quant_jobs, quant_devices[0], row_chunk_size
+        )
+    return _run_multi_device_quant(
+        state_dict, quant_jobs, quant_devices, max_inflight_jobs, row_chunk_size
+    )
 
 
 def build_exclude_modules(model) -> list[str]:

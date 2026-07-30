@@ -295,17 +295,28 @@ class StreamingShardWriter:
             json.dump(index, f, ensure_ascii=False, indent=2)
 
 
-def export_model_bf16(
-    model_dir: str,
-    record_dir: str,
-    output_dir: str,
-    model_files_dir: str | None = None,
-) -> None:
-    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+def _strip_stale_quantization_config(cfg) -> None:
+    """Remove leftover FP8 quantization_config from a BF16 source checkpoint."""
+    stale_quant = getattr(cfg, "quantization_config", None)
+    if stale_quant is None:
+        return
+    if isinstance(stale_quant, dict):
+        stale_method = stale_quant.get("quant_method", "?")
+    else:
+        stale_method = getattr(stale_quant, "quant_method", "?")
+    print(
+        f"[Stage 2 BF16] Stripping stale config.quantization_config "
+        f"(quant_method={stale_method}) from the source BF16 checkpoint."
+    )
+    try:
+        delattr(cfg, "quantization_config")
+    except (AttributeError, TypeError):
+        cfg.quantization_config = None
+    cfg.__dict__.pop("quantization_config", None)
 
-    if os.path.isdir(output_dir) and os.listdir(output_dir):
-        raise FileExistsError(f"Output directory is not empty: {output_dir}")
-    os.makedirs(output_dir, exist_ok=True)
+
+def _load_bf16_model(model_dir: str):
+    from transformers import AutoConfig, AutoModelForCausalLM
 
     # Source BF16 checkpoint (e.g. MiniMax-M2.7-bf16) ships with a stale
     # ``quantization_config = {"quant_method": "fp8"}`` left over from the
@@ -315,21 +326,7 @@ def export_model_bf16(
     # ``hasattr``).
     print(f"[Stage 2 BF16] Loading config from {model_dir} ...")
     cfg = AutoConfig.from_pretrained(model_dir, trust_remote_code=True)
-    stale_quant = getattr(cfg, "quantization_config", None)
-    if stale_quant is not None:
-        if isinstance(stale_quant, dict):
-            stale_method = stale_quant.get("quant_method", "?")
-        else:
-            stale_method = getattr(stale_quant, "quant_method", "?")
-        print(
-            f"[Stage 2 BF16] Stripping stale config.quantization_config "
-            f"(quant_method={stale_method}) from the source BF16 checkpoint."
-        )
-        try:
-            delattr(cfg, "quantization_config")
-        except (AttributeError, TypeError):
-            cfg.quantization_config = None
-        cfg.__dict__.pop("quantization_config", None)
+    _strip_stale_quantization_config(cfg)
 
     print(f"[Stage 2 BF16] Loading BF16 model from {model_dir} ...")
     model = AutoModelForCausalLM.from_pretrained(
@@ -342,14 +339,14 @@ def export_model_bf16(
         low_cpu_mem_usage=True,
     )
     model.eval()
-    total_parameters = count_unique_parameters(model)
+    return model
 
+
+def _apply_osplus_scales(model, record_dir: str) -> None:
     decoder_layers = get_module(model, "model.layers")
     num_layers = len(decoder_layers)
-
     scales = load_scales(record_dir, num_layers)
     print(f"[Stage 2 BF16] Loaded OS+SQ scales for {num_layers} layers.")
-
     print(
         "[Stage 2 BF16] Applying OS+SQ scale fusion "
         "(Group 1: ln \u2192 qkv ; Group 2: v \u2192 o, GQA-aware) "
@@ -357,7 +354,12 @@ def export_model_bf16(
     )
     for layer_idx, layer in enumerate(tqdm(decoder_layers, desc="OS+SQ Fusion")):
         apply_scales_to_layer(layer, layer_idx, scales)
+    del scales
+    gc.collect()
+    clear_accelerator_cache()
 
+
+def _save_bf16_model_config(model, output_dir: str) -> None:
     # IMPORTANT: do NOT attach quantization_config -- this is a pure BF16
     # checkpoint. ``cfg`` already had it stripped above; remove from the
     # model.config object too in case transformers re-instated it.
@@ -372,10 +374,8 @@ def export_model_bf16(
     if getattr(model, "generation_config", None) is not None:
         model.generation_config.save_pretrained(output_dir)
 
-    del scales
-    gc.collect()
-    clear_accelerator_cache()
 
+def _stream_bf16_shards(model, output_dir: str, total_parameters: int) -> None:
     print("[Stage 2 BF16] Streaming BF16 shards (no quantization) ...")
     shard_writer = StreamingShardWriter(
         output_dir=output_dir,
@@ -392,12 +392,14 @@ def export_model_bf16(
         )
     shard_writer.finalize()
 
-    files_src = model_files_dir if model_files_dir else model_dir
+
+def _copy_tokenizer_and_sidecar_files(files_src: str, output_dir: str) -> None:
+    from transformers import AutoTokenizer
+
     tokenizer = AutoTokenizer.from_pretrained(
         files_src, padding_side="left", trust_remote_code=True
     )
     tokenizer.save_pretrained(output_dir)
-
     for filename in COPY_FILES:
         src = os.path.join(files_src, filename)
         dst = os.path.join(output_dir, filename)
@@ -405,6 +407,25 @@ def export_model_bf16(
             shutil.copy2(src, dst)
             print(f"[Stage 2 BF16] Copied {filename}")
 
+
+def export_model_bf16(
+    model_dir: str,
+    record_dir: str,
+    output_dir: str,
+    model_files_dir: str | None = None,
+) -> None:
+    if os.path.isdir(output_dir) and os.listdir(output_dir):
+        raise FileExistsError(f"Output directory is not empty: {output_dir}")
+    os.makedirs(output_dir, exist_ok=True)
+
+    model = _load_bf16_model(model_dir)
+    total_parameters = count_unique_parameters(model)
+    _apply_osplus_scales(model, record_dir)
+    _save_bf16_model_config(model, output_dir)
+    _stream_bf16_shards(model, output_dir, total_parameters)
+
+    files_src = model_files_dir if model_files_dir else model_dir
+    _copy_tokenizer_and_sidecar_files(files_src, output_dir)
     print(f"[Stage 2 BF16] Done. Exported fused-scale BF16 model to {output_dir}")
 
 
