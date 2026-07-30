@@ -1,19 +1,25 @@
 # -*- coding: UTF-8 -*-
 """MR-GPTQ MXFP4 评测入口。
 
-用法：
-    export ASCEND_RT_VISIBLE_DEVICES=0
-    python run_eval.py --model_path /path/to/Qwen3-8B --mode bf16
-    python run_eval.py --model_path /path/to/Qwen3-8B --mode gptq_mxfp4
-    python run_eval.py --model_path /path/to/Qwen3-8B --mode mr_gptq        # 待实现
-
 mode 说明：
     bf16        原始网络 PPL 基准（不量化）
     gptq_mxfp4  MXFP4 + 仓内 GPTQ（baseline 对照）
     mr_gptq     MXFP4 + MR-GPTQ（本任务算法）
 
-依赖以源码方式运行 amct（改动即时生效、天然进 git）：
-    PYTHONPATH=<amct 仓库根> python run_eval.py ...
+用法（详见 README.md）：
+    export ASCEND_RT_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1
+
+    # bf16 基准
+    python run_eval.py --model_path <Qwen3-8B> --mode bf16 --seq_len 4096
+
+    # MR-GPTQ 主线（W4A16）
+    python run_eval.py --model_path <Qwen3-8B> --mode mr_gptq --seq_len 4096         --increments hadamard scale_fitting
+
+    # MR-GPTQ W4A4 达标配置（delta 0.3897）
+    python run_eval.py --model_path <Qwen3-8B> --mode mr_gptq --seq_len 4096         --hadamard_k 4096 --hadamard_full --perc_damp 0.2         --act_protect down_proj o_proj         --increments hadamard scale_fitting act_quant act_scale_fit joint_comp
+
+MR-GPTQ 由 `import mr_gptq_module` 运行时注册，**零改 amct 源码**；量化本身仍走
+amct 的 `amct.quantize()` 与 `GPTQuant` 状态机。amct 按已安装包使用即可，无需设 PYTHONPATH。
 """
 import argparse
 
@@ -41,7 +47,7 @@ MXFP4_GPTQ_CFG = {
     "skip_layers": {"lm_head"},
 }
 
-# 本任务：MXFP4 + MR-GPTQ（注册名 'mr_gptq'，待 mr_gptq_module.py 实现并注册后启用）。
+# 本任务：MXFP4 + MR-GPTQ（注册名 'mr_gptq'，由 mr_gptq_module 于 import 时注册）。
 MXFP4_MR_GPTQ_CFG = {
     "batch_num": 1,
     "quant_cfg": {"weights": dict(_MXFP4_WEIGHTS)},
@@ -91,7 +97,7 @@ def build_args():
     ap.add_argument("--skip_router", action="store_true",
                     help="MoE：跳过 router（mlp.gate）量化，避免路由被 MXFP4 扰动改变 top-k")
     ap.add_argument("--increments", nargs="*", default=[],
-                    choices=["scale_fitting", "hadamard", "act_reorder", "act_quant",
+                    choices=["scale_fitting", "hadamard", "act_quant",
                              "act_scale_fit", "joint_comp", "act_clip", "weight_clip",
                              "act_fit_rowwise"],
                     help="mr_gptq 增量；act_quant=W4A4；act_scale_fit/joint_comp/act_clip/"

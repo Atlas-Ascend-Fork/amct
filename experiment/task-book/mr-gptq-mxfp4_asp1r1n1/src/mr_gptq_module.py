@@ -6,11 +6,16 @@
      取代 stock 的 per-column `.repeat(1,2)` 非标准缩放；
   2. **shared exponent 预计算一次 + CPU 上做补偿**——消除 stock 每列重算 20+ 小算子、
      百万次 NPU kernel 启动的开销（2h → 分钟级）；
-  3. MR-GPTQ 三增量（按开关渐进加入）：
-       - block-wise Hadamard 微旋转
-       - MXFP scale fitting（附录 H）
-       - 静态激活重排
-     本文件先落地 ①②（= 干净的 GPTQ-mxfp4 baseline），增量在 _INCREMENTS 开关下逐个加。
+  3. MR-GPTQ 的增量（`_INCREMENTS` 开关控制，便于消融）：
+       - `hadamard`      block-wise Hadamard 微旋转
+       - `scale_fitting` MXFP scale fitting（论文附录 H）
+     论文的第三项增量「静态激活重排」**有意未实现**——本实现可对每层施加全宽旋转
+     （`_HADAMARD_FULL`），旋转后各通道近似可交换，按幅度分组已无物可分。
+     （GPTQ 自带的 act-order，即按 Hessian 对角降序处理列，在补偿主循环中始终启用，
+     与论文那项增量是两回事。）
+  4. W4A4（评审补充要求）：`act_quant` 及其优化项 `act_scale_fit` / `joint_comp` /
+     `_HADAMARD_FULL` / `_PERC_DAMP` / `_ACT_PROTECT`。另有 3 个实测为负结果的开关
+     （`act_clip` / `weight_clip` / `act_fit_rowwise`）默认关闭、保留作消融记录。
 
 零改 amct 源码：import 本模块即运行时注册 'mr_gptq'。
 """
@@ -30,7 +35,8 @@ from amct_pytorch.common.utils.vars import MXFP4_E2M1
 _INCREMENTS = {
     "hadamard": False,        # block-wise Hadamard 微旋转
     "scale_fitting": False,   # MXFP scale fitting（附录 H），作用于权重
-    "act_reorder": False,     # 静态激活重排
+    # 注：论文第三项增量「静态激活重排」有意未实现（理由见模块 docstring 与设计文档 §3.3），
+    # 故此处不设开关——留一个永不生效的开关会让日志显示 True 却无任何行为，比没有更糟。
     "act_quant": False,       # W4A4：激活也做 MXFP4（动态、逐32块）；须配 hadamard 压离群值
     "act_scale_fit": False,   # W4A4 优化①：激活量化也用 scale fitting（次幂次细网格，非幂次）
     "joint_comp": False,      # W4A4 优化②：用量化后的激活建 Hessian，权重补偿适配 W4A4 输入
