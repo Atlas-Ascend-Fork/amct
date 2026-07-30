@@ -242,6 +242,75 @@ def _submit_quant_job(
     return future, name, quant_device
 
 
+def _prime_quant_jobs(
+    executor: cf.ThreadPoolExecutor,
+    quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]],
+    quant_devices: list[torch.device],
+    row_chunk_size: int,
+    max_inflight: int,
+) -> tuple[int, dict[cf.Future, tuple[str, torch.device]]]:
+    next_job_idx = 0
+    future_to_meta: dict[cf.Future, tuple[str, torch.device]] = {}
+    while next_job_idx < len(quant_jobs) and len(future_to_meta) < max_inflight:
+        future, name, quant_device = _submit_quant_job(
+            executor, quant_jobs, next_job_idx, quant_devices, row_chunk_size
+        )
+        future_to_meta[future] = (name, quant_device)
+        next_job_idx += 1
+    return next_job_idx, future_to_meta
+
+
+def _handle_finished_quant_job(
+    future: cf.Future,
+    future_to_meta: dict[cf.Future, tuple[str, torch.device]],
+    state_dict: dict[str, torch.Tensor],
+    progress,
+    executor: cf.ThreadPoolExecutor,
+    quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]],
+    next_job_idx: int,
+    quant_devices: list[torch.device],
+    row_chunk_size: int,
+) -> int:
+    future_to_meta.pop(future)
+    finished_name, packed, scale_e8m0 = future.result()
+    _store_quantized_weight(state_dict, finished_name, packed, scale_e8m0)
+    progress.update(1)
+    if next_job_idx >= len(quant_jobs):
+        return next_job_idx
+    new_future, next_name, quant_device = _submit_quant_job(
+        executor, quant_jobs, next_job_idx, quant_devices, row_chunk_size
+    )
+    future_to_meta[new_future] = (next_name, quant_device)
+    return next_job_idx + 1
+
+
+def _drain_quant_jobs(
+    executor: cf.ThreadPoolExecutor,
+    quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]],
+    quant_devices: list[torch.device],
+    row_chunk_size: int,
+    next_job_idx: int,
+    future_to_meta: dict[cf.Future, tuple[str, torch.device]],
+    state_dict: dict[str, torch.Tensor],
+) -> None:
+    progress = tqdm(total=len(quant_jobs), desc="RTN quant multi-device")
+    while future_to_meta:
+        done, _ = cf.wait(future_to_meta, return_when=cf.FIRST_COMPLETED)
+        for future in done:
+            next_job_idx = _handle_finished_quant_job(
+                future,
+                future_to_meta,
+                state_dict,
+                progress,
+                executor,
+                quant_jobs,
+                next_job_idx,
+                quant_devices,
+                row_chunk_size,
+            )
+    progress.close()
+
+
 def _run_multi_device_quant(
     state_dict: dict[str, torch.Tensor],
     quant_jobs: list[tuple[str, torch.Tensor, torch.device | None]],
@@ -256,37 +325,19 @@ def _run_multi_device_quant(
         f"{len(quant_devices)} devices"
     )
 
-    next_job_idx = 0
-    future_to_meta: dict[cf.Future, tuple[str, torch.device]] = {}
     with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        while next_job_idx < len(quant_jobs) and len(future_to_meta) < max_inflight:
-            future, name, quant_device = _submit_quant_job(
-                executor, quant_jobs, next_job_idx, quant_devices, row_chunk_size
-            )
-            future_to_meta[future] = (name, quant_device)
-            next_job_idx += 1
-
-        progress = tqdm(total=len(quant_jobs), desc="RTN quant multi-device")
-        while future_to_meta:
-            done, _ = cf.wait(future_to_meta, return_when=cf.FIRST_COMPLETED)
-            for future in done:
-                future_to_meta.pop(future)
-                finished_name, packed, scale_e8m0 = future.result()
-                _store_quantized_weight(
-                    state_dict, finished_name, packed, scale_e8m0
-                )
-                progress.update(1)
-                if next_job_idx < len(quant_jobs):
-                    new_future, next_name, quant_device = _submit_quant_job(
-                        executor,
-                        quant_jobs,
-                        next_job_idx,
-                        quant_devices,
-                        row_chunk_size,
-                    )
-                    future_to_meta[new_future] = (next_name, quant_device)
-                    next_job_idx += 1
-        progress.close()
+        next_job_idx, future_to_meta = _prime_quant_jobs(
+            executor, quant_jobs, quant_devices, row_chunk_size, max_inflight
+        )
+        _drain_quant_jobs(
+            executor,
+            quant_jobs,
+            quant_devices,
+            row_chunk_size,
+            next_job_idx,
+            future_to_meta,
+            state_dict,
+        )
 
     print(
         f"[RTN] Quantized {len(quant_jobs)} linear weights on "
