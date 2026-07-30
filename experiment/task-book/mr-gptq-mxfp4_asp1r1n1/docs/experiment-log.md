@@ -82,7 +82,7 @@ export HF_HUB_DISABLE_XET=1
 
 **消融进展（2026-07-14）**：GPTQ 10.1332(+0.418,超门槛) → +Hadamard 10.0747(+0.359,**达标**)。复现论文核心：Hadamard 是 MXFP4 头号杠杆，纯 GPTQ 不够、需微旋转。⚠️坑：box 单分支 clone `git pull` 拉不动新分支提交，须 `git fetch origin <branch> && git reset --hard FETCH_HEAD`（否则跑的是旧代码，hadamard flag 成 no-op → 结果=baseline）。下一步：把 scale fitting 改为论文式(2)/(3) 的 grid remapping（当前 MSE 搜索版是错的），叠在 Hadamard 上冲击 <9.95。
 
-**关键观察（2026-07-14）**：我们自研 MRGPTQuant（CPU 补偿 + 标准 block-32 MXFP4）跑通，增量全关时 PPL=10.1332（delta 0.418）。与论文一致——纯 MXFP4 上 GPTQ 几乎不比 RTN 强，AWQ（9.954）反而更好；MR-GPTQ 的收益来自三增量（scale fitting 最大）。补偿从 stock 的 ~2h 降到几分钟（CPU 卸载 + shared exponent 预计算 + 标准量化）。下一步加 scale fitting。
+**关键观察（2026-07-14）**：我们自研 MRGPTQuant（CPU 补偿 + 标准 block-32 MXFP4）跑通，增量全关时 PPL=10.1332（delta 0.418）。与论文一致——纯 MXFP4 上 GPTQ 几乎不比 RTN 强，AWQ（9.954）反而更好；MR-GPTQ 的收益来自各增量（**当时判断 scale fitting 最大——后被推翻**：实测头号杠杆是 Hadamard 旋转，且旋转块越大越好；scale fitting 须叠在旋转之上才发力，见 §5 与设计文档 §3.3）。补偿从 stock 的 ~2h 降到几分钟（CPU 卸载 + shared exponent 预计算 + 标准量化）。下一步加 scale fitting。
 
 > 冒烟实验 A 仅用于验证「MXFP4 量化 → 校准 → WikiText2 PPL」全链路在 910B 跑通
 > （无 amct_ops 报错），非最终交付项；最终交付用 GPTQ 系列 + seq_len=4096。
@@ -114,9 +114,32 @@ export HF_HUB_DISABLE_XET=1
 
 **架构与坑（2026-07-15）**：模型实为 **`qwen3_5_moe` 混合架构**（30 层 linear_attn + 10 层 self_attn，每层 MoE 带 256 路由专家 + 共享专家）。⚠️**路由专家是 `Qwen3_5MoeExperts` 的融合 3D 张量（gate_up_proj/down_proj，占 ~32B/35B），非 nn.Linear → amct 覆盖不到**，不处理则显存降<50% 必挂。解法：`quantize_fused_experts` 对融合张量沿收缩维做 **scale-fitting MXFP4 RTN**（不做 Hadamard；scale fitting 对 RTN 是加分项）。nn.Linear（attn/linear_attn/shared_expert，250 个）走完整 MR-GPTQ。⚠️融合专家量化的 fp32 临时量在多卡塞满的卡上会 OOM → 全程 CPU 计算、回写先释放旧张量再挪回。router 保 fp16。日志：`src/logs/mrgptq_full_35b_4096.log`、`e0_bf16_35b_4096.log`。
 
-## 6. 交付收尾（8B + 35B 均达标，剩交付动作）
+## 6. W4A4 补充（2026-07-27 ~ 07-29，按评审意见）
 
-1. ✅ 8B/35B 全部达标（见 5.1/5.2）。
-2. 把 35B 两份日志存进 `src/logs/`（`mrgptq_full_35b_4096.log`、`e0_bf16_35b_4096.log`）并 commit。
-3. 补截图：8B、35B 各一组运行末尾（覆盖率/显存/Score）+ bf16 基准。
-4. 推设计文档评审（`feat/mr-gptq-mxfp4` 分支的 MR 合入 `feature/community-tasks`）。
+评审要求以 **W4A4** 评估最终效果（weight-only 只有存储收益，matmul 仍需反量化回 bf16）。
+在已有 Hadamard 旋转基础上于 `fake_quant_forward` 内补齐激活量化，**Qwen3-8B 达标：
+delta 0.763 → 0.3897（降低 49%），真 4-bit 激活层占比 71.4%**。
+
+达标的两项关键手段都不在论文里：
+
+1. **全宽旋转**（`--hadamard_full`，−0.0305）：`down_proj` 的 in=12288 在 k=4096 下只能切
+   3 个对角块，是全网唯一未获全宽旋转的层。12288 非 2 的幂、`3×4096` 不可行（3 阶 Hadamard
+   不存在），走 `12×1024` = Paley H₁₂ ⊗ Sylvester H₁₀₂₄。
+2. **GPTQ 阻尼系数**（`--perc_damp` 0.01→0.2，−0.0261）：最大层样本/维度比仅 1.1:1、
+   Hessian 近奇异，默认阻尼偏小。
+
+**同期 5 项手段实测为负结果**（激活 scale 裁剪、加大校准集、权重 scale 裁剪、增加保护层、
+randomized Hadamard），逐项机理见自验证报告 §4.3 ④。
+
+**⚠️ 测量口径的自我修正**：中期曾用测试集前 20 块做快速筛选，后经两组同配置对照发现其偏移
+随配置摆动达 0.053、大于多数待测增量——**连排序都不可靠**。此后所有定量结论改用全量评测，
+并重跑最优配置验证可复现（PPL 与记录值逐位吻合）。
+
+## 7. 交付收尾
+
+1. ✅ 8B / 35B W4A16 达标；8B W4A4 达标。
+2. ✅ 全部实验日志入 `src/logs/`。
+3. ✅ 运行截图入 `docs/img/`。
+4. ✅ 设计文档、自验证报告、README 同步至最终态。
+5. 交付方式：**单 PR** —— `feat/mr-gptq-impl` → `cann/amct:feature/community-tasks`，
+   含设计文档 + 算法代码 + 自验证报告（早期设想的设计文档独立分支路线已废弃）。

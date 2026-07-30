@@ -137,11 +137,11 @@ AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLi
 # 若最终走 W4A4 全量化(激活也 mxfp)，改用 NpuMXQuantizationLinear，实施时按导出验证选定。
 ```
 
-### 4.3 MRGPTQuant 实现要点（复用父类 GPTQuant，三增量分步落地）
+### 4.3 MRGPTQuant 实现要点（复用父类 GPTQuant，增量分步落地）
 
 父类 `GPTQuant` 已提供：Hessian 累积（`update_hessian`）、求逆（`cal_hessian_inverse`，Cholesky）、贪心量化+误差补偿主循环（`get_opt_weight_and_quant_factor`）、MXFP4 分支（`cal_scale_offset_static` 返回 `None,None`）、fake-quant 缓存。
 
-按论文三增量分步实现（**建议实现顺序 = 投入产出比排序**）：
+按论文各增量分步实现（**实现顺序 = 投入产出比排序**；第三项静态激活重排最终有意未采用，理由见 §3.3 与 §4.4）：
 
 > **顺序修正（v0.4，基于实测 + 论文表 11）**：原计划"scale fitting 先做/单独用"是错的——它单独会让 GPTQ 在 Qwen3-8B 变差（实测 10.13→10.26，与论文表 11 的 −1.8 一致）。MXFP4 的头号杠杆是 **Hadamard**（论文标题即此），scale fitting 须叠在其上才发力。故新顺序：
 
