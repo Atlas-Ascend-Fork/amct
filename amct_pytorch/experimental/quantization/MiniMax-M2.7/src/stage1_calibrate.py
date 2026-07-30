@@ -328,16 +328,12 @@ def _register_activation_hooks(
         layer = decoder_layers[i]
         handles.append(
             layer.input_layernorm.register_forward_hook(
-                _make_attn_hook(
-                    i, attn_buffers, attn_tokens, max_tokens, lock
-                )
+                _make_attn_hook(i, attn_buffers, attn_tokens, max_tokens, lock)
             )
         )
         handles.append(
             layer.self_attn.o_proj.register_forward_pre_hook(
-                _make_oproj_hook(
-                    i, oproj_buffers, oproj_tokens, max_tokens, lock
-                )
+                _make_oproj_hook(i, oproj_buffers, oproj_tokens, max_tokens, lock)
             )
         )
     return handles
@@ -373,7 +369,7 @@ def _run_activation_forward(
                 logger.info("All layers reached max_tokens budget, stopping early.")
                 break
 
-            batch_ids = input_ids_list[i:i + batch_size]
+            batch_ids = input_ids_list[i : i + batch_size]
             max_len = max(ids.shape[0] for ids in batch_ids)
             padded = torch.zeros(len(batch_ids), max_len, dtype=torch.long)
             for j, ids in enumerate(batch_ids):
@@ -856,9 +852,7 @@ def main():
             )
             return
 
-        layers_for_search = _select_layers_for_search(
-            layers, args.max_layers_to_search
-        )
+        layers_for_search = _select_layers_for_search(layers, args.max_layers_to_search)
         _run_osplus_search(
             model,
             decoder_layers,
