@@ -104,8 +104,18 @@ class LlmPtqWorkflow(LlmExportWorkflow):
 
     # -- convert mode (no calibration): data-free fake-quant -> plain float checkpoint -----------
     def _is_convert_mode(self):
-        """No --algos requested -> skip calibration and convert the whole model."""
-        return not getattr(self.args, "algos", None)
+        """HiF4 convert (no calibration): quant_dtype ``hifp`` + 4-bit bit_config + empty --algos.
+
+        Only this exact combination converts the whole model to a plain float checkpoint. Anything
+        else -- a real dtype (int/mxfp), a non-empty --algos, or a non-4-bit width -- keeps the
+        native calibrated PTQ path."""
+        if getattr(self.args, "algos", None):
+            return False
+        if self.quant_dtype != "hifp":
+            return False
+        bit_policy = getattr(self.args, "bit_policy", None)
+        w_bits = getattr(bit_policy, "w_bits", 16) if bit_policy is not None else 16
+        return w_bits == 4
 
     def _run_convert(self):
         # Base setup runs the source-format detect/decode front-end and builds the pipeline; the
