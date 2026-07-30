@@ -2,7 +2,7 @@
 
 - **任务**：AMCT 低比特量化算法开发（量化算法方向，进阶项"未适配新算法"）
 - **算法**：MR-GPTQ（Micro-Rotated GPTQ，arXiv:2509.23202），子类化 AMCT `GPTQuant` 实现，运行时注册、**零改 amct 源码**
-- **数据类型**：MXFP4（weight-only W4A16）
+- **数据类型**：MXFP4（block=32，E2M1 元素 + E8M0 共享指数）。主线 **W4A16**（weight-only）；按评审意见补充 **W4A4**（权重+激活均 4-bit），8B 亦达标
 - **测试模型**：Qwen3-8B（dense）、Qwen3.6-35B-A3B（`qwen3_5_moe` 混合 MoE）　|　**数据集**：WikiText2　|　**指标**：PPL（seq_len=4096）
 - **精度目标**：`delta = ppl_quant − ppl_bf16 ≤ 0.4`；量化层（nn.Linear）占比 ≥ 70%；显存降低 ≥ 50%
 - **提交者**：程逸雷 / gitcode `asp1r1n1`
@@ -14,6 +14,10 @@
 | Qwen3-8B（dense） | 8.9893 | 9.2621 | **0.273** | 99.6%（nn.Linear） | **67.4%** | ✅ |
 | Qwen3.6-35B-A3B（MoE） | 6.311 | 6.3781 | **0.067** | 71.4% nn.Linear / **全参数 97%** | **71.2%** | ✅ |
 
+**W4A4（激活也量化，按评审意见补充）**：Qwen3-8B delta **0.3897 ≤ 0.4** ✅，真 4-bit 激活层占比
+**71.4% ≥ 70%** ✅（由初始实现的 0.763 降低 49%）。35B 未列 W4A4——其 256 个路由专家为融合 3D
+张量而非 nn.Linear，激活量化通路在该结构上不存在，详见报告 §4.3。
+
 要求：delta ≤ 0.4、覆盖 ≥ 70%、显存降 ≥ 50%。详见 [自验证报告](docs/self-verification-report.md)、[实验记录](docs/experiment-log.md)。
 
 ## 目录
@@ -22,7 +26,7 @@
 mr-gptq-mxfp4_asp1r1n1/
 ├── README.md
 ├── docs/
-│   ├── design.md                    # 设计文档（评审对象，v0.5 含实现补记）
+│   ├── design.md                    # 设计文档（评审对象，v0.6）
 │   ├── task-book.md                 # 任务书原文存档
 │   ├── experiment-log.md            # 实验流水与踩坑
 │   ├── self-verification-report.md  # 自验证报告（数据+截图）
@@ -37,7 +41,9 @@ mr-gptq-mxfp4_asp1r1n1/
 
 ## 方案概述
 
-MR-GPTQ = GPTQ 骨架 + 三增量：① **block-wise Hadamard 微旋转**（k=128，正态化权重分布、摊平离群值）② **MXFP scale fitting**（附录 H，E8M0 scale 网格重映射为次幂次）③ 静态激活重排。以仓内 GPTQ-MXFP4 为 baseline 对照证明精度提升。
+MR-GPTQ = GPTQ 骨架 + ① **block-wise Hadamard 微旋转**（正态化权重分布、摊平离群值）② **MXFP scale fitting**（附录 H，E8M0 scale 网格重映射为次幂次）。论文的第三项增量「静态激活重排」**有意未采用**——本实现已对每层施加全宽旋转，旋转后各通道近似可交换、按幅度分组已无物可分（报告 §5）。以仓内 GPTQ-MXFP4 为 baseline 对照证明精度提升。
+
+W4A4 在此基础上另加：**全宽旋转**（补 `down_proj` 的 12288 维旋转缺口，走 `12288 = 12×1024` 的 Paley H₁₂ ⊗ Sylvester H₁₀₂₄）与 **GPTQ 阻尼系数调优**——两项合计贡献 −0.057，是达标的关键。报告 §4.3 另记录 5 项经实测排除的手段。
 
 工程要点：MXFP4 是纯 torch fake-quant（无需 NPU 算子）；GPTQ 补偿移到 CPU 消除 per-column kernel 启动开销（~15× 提速）；MoE 融合路由专家（非 nn.Linear、amct 覆盖不到）额外实现 MXFP4 量化以达显存指标。详见 [design.md](docs/design.md)。
 
@@ -58,6 +64,11 @@ python3 -u run_eval.py --model_path <35B> --mode bf16    --seq_len 4096 --device
 python3 -u run_eval.py --model_path <35B> --mode mr_gptq --increments hadamard scale_fitting --seq_len 4096 --device_map auto
 ```
 
+```bash
+# --- W4A4 达标配置（Qwen3-8B，单卡；delta 0.3897）---
+python3 -u run_eval.py --model_path <Qwen3-8B> --mode mr_gptq --seq_len 4096     --hadamard_k 4096 --hadamard_full --perc_damp 0.2     --act_protect down_proj o_proj     --increments hadamard scale_fitting act_quant act_scale_fit joint_comp
+```
+
 运行即打印：量化层覆盖率（`[coverage]`/`[actual-coverage]`）、融合专家量化（`[fused-experts]`）、显存降低（`[memory-full]`）、WikiText2 PPL（`Score:`）。环境搭建见 [experiment-log.md](docs/experiment-log.md) §2。
 
 ## ⚠️ 安全提示
@@ -75,5 +86,9 @@ HuggingFace 模型仓内的 `modeling_*.py` / `tokenization_*.py` 等自定义�
 
 ## 交付说明
 
-- **设计文档**（交付 #3）：分支 `feat/mr-gptq-mxfp4`，MR 合入 `cann/amct:feature/community-tasks`（评审对象）。
-- **算法代码 + 自验证报告**（交付 #1/#2）：本分支 `feat/mr-gptq-impl`，目录 `experiment/task-book/mr-gptq-mxfp4_asp1r1n1/`。
+设计文档、算法代码与自验证报告**统一由单个 PR 交付**：分支 `feat/mr-gptq-impl` →
+`cann/amct:feature/community-tasks`，目录 `experiment/task-book/mr-gptq-mxfp4_asp1r1n1/`。
+
+- 交付 #1 自测用例 / 测试报告 / 步骤文档 → `docs/self-verification-report.md`（§3 为可复现步骤）、`src/logs/`
+- 交付 #2 算法代码 → `src/`（核心为 `mr_gptq_module.py`）
+- 交付 #3 设计文档 → `docs/design.md`
