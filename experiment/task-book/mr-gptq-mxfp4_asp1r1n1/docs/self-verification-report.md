@@ -2,14 +2,16 @@
 
 > 本报告覆盖 MR-GPTQ（Micro-Rotated GPTQ, arXiv:2509.23202）在 AMCT 上对 MXFP4 权重量化的
 > 实现、测试与验收。方案见 [design.md](design.md)，逐次实验流水见 [experiment-log.md](experiment-log.md)。
-> 目标数据类型 **MXFP4**（weight-only W4A16）；验收标准（任务书）：PPL 劣化 ≤ 0.4、量化层占比 ≥ 70%、显存降低 ≥ 50%。
+> 目标数据类型 **MXFP4**。主线为 weight-only **W4A16**（§4.1 / §4.2），并按评审要求补充
+> **W4A4**（权重与激活均 4-bit）评估（§4.3，已达标）。
+> 验收标准（任务书）：PPL 劣化 ≤ 0.4、量化层占比 ≥ 70%、显存降低 ≥ 50%。
 
 ## 1. 概述
 
 | 项       | 值                                                                                            |
 | -------- | --------------------------------------------------------------------------------------------- |
-| 算法     | MR-GPTQ（GPTQ + block-wise Hadamard 微旋转 + MXFP scale fitting + 静态激活重排）              |
-| 数据类型 | MXFP4（block=32，E2M1 元素 + E8M0 共享指数），weight-only                                     |
+| 算法     | MR-GPTQ（GPTQ + block-wise Hadamard 微旋转 + MXFP scale fitting）；论文第三项增量「静态激活重排」经分析后**有意未采用**，理由见 §5 |
+| 数据类型 | MXFP4（block=32，E2M1 元素 + E8M0 共享指数）；主线 W4A16，W4A4 见 §4.3                        |
 | 测试模型 | Qwen3-8B（dense）、Qwen3.6-35B-A3B（MoE）                                                     |
 | 数据集   | WikiText2（test）                                                                             |
 | 指标     | PPL；`delta = PPL_量化 − PPL_bf16`                                                         |
@@ -39,11 +41,27 @@ python3 -u run_eval.py --model_path <model> --mode bf16 --seq_len 4096
 # MR-GPTQ（全增量）
 python3 -u run_eval.py --model_path <model> --mode mr_gptq \
     --increments hadamard scale_fitting --seq_len 4096
+
+# W4A4 达标配置（§4.3）
+python3 -u run_eval.py --model_path <model> --mode mr_gptq --seq_len 4096     --hadamard_k 4096 --hadamard_full --perc_damp 0.2     --act_protect down_proj o_proj     --increments hadamard scale_fitting act_quant act_scale_fit joint_comp
+
+# 35B 追加：--device_map auto（双卡），并设 ASCEND_RT_VISIBLE_DEVICES=0,1
 ```
 
 运行即打印：量化层覆盖率、权重显存降低、per-layer 补偿进度、WikiText2 PPL（`Score:`）。
 
 ## 4. 测试用例与结果
+
+> **显存口径说明**（脚本同时打印三个数，此处统一，后文各表按此引用）：
+>
+> | 日志字段 | 数值（8B） | 含义 |
+> |---|---|---|
+> | `[actual-memory]` | 73.4% | **被量化张量自身**的压缩率：16 → 4.25 bit，即 1 − 4.25/16 |
+> | `[memory-full]` | **62.3%** | **全模型参数口径**：量化占比 84.8%（6.95B / 8.19B），其余（embedding / lm_head）保 fp16 |
+> | `[memory]` | 67.4% | 量化**前**的理论估算，分母较窄（推算对应量化占比 91.8%，即未计入 embedding 权重） |
+>
+> 三者只是分母不同、并不矛盾。**验收以最保守的 `[memory-full]` 全模型口径为准**
+> （8B 62.3%、35B 71.2%），均远高于 50% 门槛。
 
 ### 4.1 Qwen3-8B（seq_len=4096）—— ✅ 达标
 
@@ -53,7 +71,7 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq \
 | MR-GPTQ PPL            | 9.2621                     | —     | —   |
 | **PPL delta**    | **0.273**            | ≤ 0.4 | ✅   |
 | **量化层覆盖率** | **99.6%**（252/253） | ≥ 70% | ✅   |
-| **显存降低**     | **67.4%**            | ≥ 50% | ✅   |
+| **显存降低**     | **62.3%**（全模型口径）/ 67.4%（`[memory]` 口径） | ≥ 50% | ✅   |
 
 - 日志：`src/logs/mrgptq_full_8b_4096.log`、`src/logs/e0_bf16_4096.log`
 - MR-GPTQ 运行结果（覆盖率 / 显存 / Score / RESULT）：
@@ -140,6 +158,14 @@ python run_eval.py --model_path <Qwen3-8B> --mode mr_gptq \
 
 日志：`src/logs/w4a4_damp20_73.log`
 
+- 达标运行——配置（`perc_damp=0.2` / 全宽旋转 / 保护层 / 激活量化开启）与覆盖率、显存：
+
+  ![8B W4A4 达标运行-1](img/w4a4_damp20_73_1.png)
+
+- 同一运行的校准耗时、评测耗时与结果（`Score` / `RESULT`）：
+
+  ![8B W4A4 达标运行-2](img/w4a4_damp20_73_2.png)
+
 **混合精度的口径披露**：对 `o_proj`（输入 = 注意力输出）与 `down_proj`（输入 = 门控后中间激活）
 两类离群值最重的层保留高精度激活，其余层为真 4-bit 激活；**权重全程 MXFP4 不变**。
 
@@ -216,7 +242,8 @@ Hessian 接近奇异，该阻尼项实际撑住了整个求逆。默认值按正
 **测量方法的自我修正**：早期为节省时间曾用测试集**前 20 块**做快速筛选。
 后经两组同配置的 20/73 对照发现，其偏移在 **−0.011 与 +0.042 之间摆动（摆幅 0.053）**，
 大于多数待测增量——即该子集不仅有偏，**偏差还随配置变化，故连排序都不可靠**。
-**本节所有定量结论均基于全量 73 块**；20 块数据仅用于早期筛选，不作定量依据（见 §5 说明）。
+**本报告所有定量结论均基于全量评测**（W4A4 为 73 块 @4096，§5 为 146 块 @2048）；
+20 块数据仅用于早期方向筛选，不作定量依据。
 
 #### ⑥ 与已发表结果的量级参照（⚠️ 非对等对比）
 
@@ -244,7 +271,9 @@ scale，本工作 MXFP4 block-32 = 每行 128 个 scale，属**格式代差**而
 - 说明：本节为 **fake-quant 精度评估**；真实 W4A4 部署需低比特激活算子（Ascend C），
   属推理加速课题，不在本量化算法任务范围。
 
-## 5. 消融实验（算法有效性验证，Qwen3-8B，seq_len=2048）
+## 5. W4A16 增量消融（算法有效性验证，Qwen3-8B，seq_len=2048）
+
+> 本节验证 **weight-only 主线**各增量的贡献；W4A4 的优化路径见 §4.3 ②。
 
 逐个开启增量，验证每一步的贡献：
 
@@ -264,10 +293,8 @@ scale，本工作 MXFP4 block-32 = 每行 128 个 scale，属**格式代差**而
 
 - 消融各次运行 `Score:` 见日志：`src/logs/mrgptq_had128_8b.log`（+Hadamard）、
   `mrgptq_had_sf_8b.log`（+scale fitting）、`mrgptq_v1_8b.log`（无增量 baseline）等。
-- **评测口径说明**：本节各行均为**全量**评测（seq_len=2048，146 块）。项目早期曾以测试集
-  前 20 块做快速筛选，后经两组同配置的 20/73 对照发现其偏移在 −0.011 与 +0.042 之间摆动
-  （摆幅 0.053）——该子集不仅有偏，**偏差还随配置变化**。故本报告所有定量结论均基于全量评测，
-  20 块数据仅用于早期方向筛选、不作定量依据（详见 §4.3 ⑤）。
+- **评测口径**：本节各行均为**全量**评测（seq_len=2048，146 块）。关于早期 20 块快速筛选
+  为何不作定量依据，见 §4.3 ⑤。
 
 ## 6. 性能数据
 
@@ -295,7 +322,8 @@ scale，本工作 MXFP4 block-32 = 每行 128 个 scale，属**格式代差**而
 - Qwen3-8B（dense）：MXFP4 weight-only 下 MR-GPTQ 三项硬指标（delta 0.273 / 覆盖 99.6% / 显存 67.4%）全部达标 ✅。
 - Qwen3.6-35B-A3B（qwen3_5_moe 混合 MoE）：delta 0.067 / nn.Linear 覆盖 71.4% / 全参数 97.0% / 显存 71.2%，全部达标 ✅。
   额外解决 amct 覆盖不到融合路由专家（占 32B）的问题，自实现融合专家 MXFP4 量化。
-- 算法实现自包含、零改 amct 源码、运行时注册，消融链证明各增量有效。
+- 算法实现自包含、**零改 amct 源码**、运行时注册。消融链验证了所采用各增量的贡献（§5）；
+  论文第三项增量经分析后未采用，理由见 §5。
 - **W4A4（按评审意见补充）：Qwen3-8B 已达标 ✅**——delta **0.3897 ≤ 0.40**、真 4-bit 激活层
   **71.4% ≥ 70%**（按层数口径）、权重量化层 99.6%、显存降低 62.3%。W4A4 delta 由初始实现的
   **0.763 降至 0.3897（降低 49%）**。关键为两项此前未覆盖的改动：全宽旋转（补 `down_proj`
