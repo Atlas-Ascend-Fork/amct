@@ -369,7 +369,8 @@ def _run_activation_forward(
                 logger.info("All layers reached max_tokens budget, stopping early.")
                 break
 
-            batch_ids = input_ids_list[i : i + batch_size]
+            end = i + batch_size
+            batch_ids = input_ids_list[i:end]
             max_len = max(ids.shape[0] for ids in batch_ids)
             padded = torch.zeros(len(batch_ids), max_len, dtype=torch.long)
             for j, ids in enumerate(batch_ids):
