@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-set +e
+set -euo pipefail
 
 echo "start run test case, please wait ..."
 cd /home/taskspace
