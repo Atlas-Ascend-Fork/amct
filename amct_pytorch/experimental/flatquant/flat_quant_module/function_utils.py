@@ -72,10 +72,10 @@ def print_trainable_parameters(model):
         all_param += param.numel()
         if param.requires_grad:
             trainable_params += param.numel()
+    trainable_ratio = 100 * trainable_params / all_param
     print(
-        f"trainable params: {trainable_params} || all params: {
-            all_param
-        } || trainable: {100 * trainable_params / all_param:.2f}%"
+        f"trainable params: {trainable_params} || all params: {all_param} "
+        f"|| trainable: {trainable_ratio:.2f}%"
     )
 
 
