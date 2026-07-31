@@ -51,7 +51,41 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
     return samples
 
 
-def get_pileval(tokenizer, n_samples, seq_len=512):
+def get_pileval(tokenizer, n_samples, seq_len=512, data_dir=None):
+    # AMCT_LOCAL_PILEVAL_SUPPORT
+    if data_dir:
+        from pathlib import Path
+        import random
+
+        data_path = Path(data_dir)
+        if data_path.is_dir():
+            data_path = data_path / "pileval.txt"
+
+        if not data_path.is_file():
+            raise FileNotFoundError(
+                f"Local calibration text not found: {data_path}"
+            )
+
+        dataset_text = data_path.read_text(encoding="utf-8")
+        encoded = tokenizer(dataset_text, return_tensors="pt").input_ids
+
+        token_count = encoded.shape[1]
+        if token_count < seq_len:
+            raise ValueError(
+                f"Local calibration data has {token_count} tokens, "
+                f"but seq_len={seq_len}"
+            )
+
+        rng = random.Random(0)
+        max_start = token_count - seq_len
+        samples = []
+
+        for _ in range(n_samples):
+            start = rng.randint(0, max_start) if max_start > 0 else 0
+            samples.append(encoded[:, start:start + seq_len].cpu())
+
+        return samples
+
     testdata = load_dataset('mit-han-lab/pile-val-backup', split='validation')
 
     samples = pileval_awq(testdata, tokenizer, n_samples, seq_len)
@@ -59,15 +93,24 @@ def get_pileval(tokenizer, n_samples, seq_len=512):
     return samples
 
 
-def get_wikitext2(tokenizer):
-    testdata = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+def get_wikitext2(tokenizer, data_dir=None):
+    if data_dir:
+        from pathlib import Path
 
-    testenc = tokenizer('\n\n'.join(testdata['text']), return_tensors='pt')
-    return testenc
+        data_path = Path(data_dir)
+        if data_path.is_dir():
+            data_path = data_path / "wikitext2_test.txt"
+        if not data_path.is_file():
+            raise FileNotFoundError(f"Local evaluation text not found: {data_path}")
+        dataset_text = data_path.read_text(encoding="utf-8")
+    else:
+        testdata = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
+        dataset_text = "\n\n".join(testdata["text"])
 
+    return tokenizer(dataset_text, return_tensors="pt")
 
-def get_wiki_inputs(tokenizer, seq_len=4096):
-    testenc = get_wikitext2(tokenizer).input_ids
+def get_wiki_inputs(tokenizer, seq_len=4096, data_dir=None):
+    testenc = get_wikitext2(tokenizer, data_dir=data_dir).input_ids
     wiki_inputs = []
     nsamples = testenc.numel() // seq_len
     bs = 1

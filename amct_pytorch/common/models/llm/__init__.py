@@ -34,8 +34,19 @@ def register_llm_models():
     from .qwen.qwen3_next.qwen3_next import Qwen3Next  # noqa: F401
     from .qwen.qwen3.qwen3_moe import Qwen3Moe  # noqa: F401
     from .glm.glm5.glm5 import GLM5  # noqa: F401
-    from .hyv3.hyv3 import HyV3  # noqa: F401
-    from .glm.glm5_2.glm5_2 import GLM5_2  # noqa: F401
+    try:
+        from .hyv3.hyv3 import HyV3  # noqa: F401
+    except ModuleNotFoundError as exc:
+        if exc.name != "transformers.models.hy_v3":
+            raise
+    try:
+        from .glm.glm5_2.glm5_2 import GLM5_2  # noqa: F401
+    except ImportError as exc:
+        if not (
+            "apply_rotary_pos_emb_interleave" in str(exc)
+            and "transformers.models.glm_moe_dsa" in str(exc)
+        ):
+            raise
 
     _REGISTERED = True
 
