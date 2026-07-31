@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 210" font-family="DejaVu Sans, Arial, sans-serif">
+  <rect x="0" y="0" width="1240" height="210" fill="#ffffff"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#5f6368"/>
+    </marker>
+    <style>
+      text{font-size:13px;fill:#111;text-anchor:middle}
+      .s{font-size:11px;fill:#444}
+      .edge{stroke:#5f6368;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .lbl{font-size:11px;fill:#5f6368;text-anchor:middle}
+      .step{fill:#E8F0FE;stroke:#4285F4;stroke-width:1.5}
+      .opt{fill:#FEF7E0;stroke:#F9AB00;stroke-width:1.5}
+    </style>
+  </defs>
+
+  <!-- edges -->
+  <path class="edge" d="M200,48 L244,94"/>
+  <path class="edge" d="M200,156 L244,110"/>
+  <path class="edge" d="M430,102 L466,102"/>
+  <path class="edge" d="M666,102 L702,102"/>
+  <path class="edge" d="M894,102 L919,102"/>
+  <path class="edge" d="M1010,84 L1058,62"/>
+  <path class="edge" d="M1010,120 L1058,152"/>
+  <path class="edge" d="M1144,82 L1144,130"/>
+  <text class="lbl" x="1042" y="64">yes</text>
+  <text class="lbl" x="1040" y="146">no</text>
+
+  <!-- nodes -->
+  <rect class="step" x="20" y="24" width="180" height="48" rx="7"/>
+  <text x="110" y="42">torch.nn.Module</text><text class="s" x="110" y="60">(weights already loaded)</text>
+
+  <rect class="step" x="20" y="132" width="180" height="48" rx="7"/>
+  <text x="110" y="150">calibration data</text><text class="s" x="110" y="168">(a few forward batches)</text>
+
+  <rect class="step" x="248" y="78" width="182" height="48" rx="7"/>
+  <text x="339" y="96">saliency scoring</text><text class="s" x="339" y="114">variance / mass / LS</text>
+
+  <rect class="step" x="470" y="68" width="196" height="68" rx="7"/>
+  <text x="568" y="88">structural prune (in-place)</text><text class="s" x="568" y="106">rewrite config dims:</text><text class="s" x="568" y="122">intermediate_size / num_experts</text>
+
+  <rect class="step" x="702" y="78" width="192" height="48" rx="7"/>
+  <text x="798" y="96">recovery</text><text class="s" x="798" y="114">slice / bias-fold / LS reconstruct</text>
+
+  <polygon class="opt" points="985,60 1049,102 985,144 921,102"/>
+  <text x="985" y="98">quantize?</text><text class="s" x="985" y="114">(optional)</text>
+
+  <rect class="opt" x="1058" y="40" width="172" height="42" rx="7"/>
+  <text x="1144" y="66">amct.quantize &#8594; convert</text>
+
+  <rect class="step" x="1058" y="130" width="172" height="50" rx="7"/>
+  <text x="1144" y="150">deploy pruned model</text><text class="s" x="1144" y="168">(smaller, save / reload)</text>
+</svg>

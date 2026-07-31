@@ -947,7 +947,9 @@ KV Cache量化接口调用流程如下图所示。
 
 ## 稀疏
 
-AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行稀疏优化，最后生成onnx量化模型。
+AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行稀疏优化，最后生成onnx量化模型。本节的通道稀疏与4选2结构化稀疏均基于该方式实现。
+
+除本节介绍的基于图/ONNX的稀疏方式外，AMCT还提供了eager模式的结构化剪枝特性`amct_pytorch.pruning`：无需先转换为ONNX图，直接对已实例化的`torch.nn.Module`原地剪除稠密FFN中间维、CNN通道与MoE专家，同时改写模型config中的相关维度，剪枝后的模型可直接保存与加载，也可继续进行量化。详细配置与使用方法请参见[结构化剪枝使用说明](../amct_pytorch/pruning/README.md)。
 
 ### 通道稀疏
 
