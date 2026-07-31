@@ -123,6 +123,9 @@ stages:
               pr_number: ${{ atomgit.event.pull_request.number }}
               token: ${{ secrets.GIT_TOKEN }}
               apply_label: ${{ vars.APPLY_LABEL }}
+          - name: associate-pr-comment
+            uses: associate-pr-comment
+            if: env.online == 'true'
         runs-on: [dedicate-hosted, x64, small]
         container:
           image: swr.cn-north-4.myhuaweicloud.com/ci_cann/ubuntu20.04.05_x86:k8s_v1.1006
@@ -341,11 +344,3 @@ post:
       runs-on: [dedicate-hosted, x64, small]
       container:
         image: swr.cn-north-4.myhuaweicloud.com/ci_cann/${{ jobs.JOB_image.outputs.codecheck }}
-    job_comment:
-      name: Test_pr_comment
-      steps:
-        - name: associate-pr-comment
-          uses: associate-pr-comment
-      if: env.online == 'true'
-      runs-on:
-        - default
