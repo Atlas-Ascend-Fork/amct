@@ -84,7 +84,7 @@ class TestPackInt4Weight(unittest.TestCase):
 
     def test_do_pass_conv_packs_weight_only(self):
         # 通过公有入口 do_pass 覆盖 pack_int4_weight_node：Conv 无 recurrence
-        # (recurrence_weight_node=None 走 no-op 分支)，主权重写回 INT8。
+        # (recurrence_weight_node=None 走 no-op 分支)，主权重写回 packed INT4。
         node = mock.MagicMock()
         node.type = 'Conv'
         node.name = 'conv'
@@ -102,12 +102,12 @@ class TestPackInt4Weight(unittest.TestCase):
             m_qoi.get_recurrence_weight_node.return_value = None
             self.passer.do_pass(None, node)
         helper.clear_data.assert_called_once()
-        args, kwargs = helper.set_data.call_args
-        self.assertEqual(args[1], 'INT8')
-        self.assertEqual(kwargs.get('dims'), [2, 2])
+        args, _ = helper.set_packed_int4_data.call_args
+        self.assertEqual(args[1], [2, 2])
+        helper.set_data.assert_not_called()
 
     def test_do_pass_rnn_packs_weight_and_recurrence(self):
-        # RNN：主权重 + recurrence_weight 都被打包(两次 set_data)
+        # RNN：主权重 + recurrence_weight 都被打包(两次专用 INT4 写入)
         node = mock.MagicMock()
         node.type = 'LSTM'
         node.name = 'lstm'
@@ -124,8 +124,8 @@ class TestPackInt4Weight(unittest.TestCase):
             m_qoi.get_weight_node.return_value = wnode
             m_qoi.get_recurrence_weight_node.return_value = wnode
             self.passer.do_pass(None, node)
-        # 主 + recurrence 各一次 set_data
-        self.assertEqual(helper.set_data.call_count, 2)
+        self.assertEqual(helper.set_packed_int4_data.call_count, 2)
+        helper.set_data.assert_not_called()
 
 
 if __name__ == '__main__':
