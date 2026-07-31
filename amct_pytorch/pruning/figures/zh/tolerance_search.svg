@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 456" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','WenQuanYi Micro Hei',sans-serif">
+  <rect x="0" y="0" width="600" height="456" fill="#ffffff"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5f6368"/></marker>
+    <style>
+      text{font-size:13px;fill:#111;text-anchor:middle}
+      .s{font-size:11px;fill:#444}
+      .edge{stroke:#5f6368;stroke-width:1.5;fill:none;marker-end:url(#a)}
+      .lbl{font-size:11px;fill:#5f6368;text-anchor:middle}
+      .step{fill:#E8F0FE;stroke:#4285F4;stroke-width:1.5}
+      .dec{fill:#FEF7E0;stroke:#F9AB00;stroke-width:1.5}
+      .done{fill:#E6F4EA;stroke:#34A853;stroke-width:1.5}
+    </style>
+  </defs>
+
+  <path class="edge" d="M300,64 L300,90"/>
+  <path class="edge" d="M300,136 L300,162"/>
+  <path class="edge" d="M300,224 L300,248"/>
+  <path class="edge" d="M370,292 L392,292"/>
+  <path class="edge" d="M230,292 L208,292"/>
+  <polyline class="edge" points="480,270 480,82 312,82 312,90" fill="none"/>
+  <polyline class="edge" points="112,270 112,82 288,82 288,90" fill="none"/>
+  <path class="edge" d="M300,336 L300,388"/>
+  <text class="lbl" x="384" y="284">是</text>
+  <text class="lbl" x="216" y="284">否</text>
+
+  <rect class="step" x="175" y="16" width="250" height="48" rx="7"/>
+  <text x="300" y="38">ratio_grid（升序）</text><text class="s" x="300" y="56">0.1  0.2  ...  0.8</text>
+
+  <rect class="step" x="195" y="90" width="210" height="46" rx="7"/>
+  <text x="300" y="118">在网格上二分查找</text>
+
+  <rect class="step" x="110" y="162" width="380" height="62" rx="7"/>
+  <text x="300" y="184">试探候选 r：</text><text class="s" x="300" y="202">剪一份副本 &#8594;（可选微调）&#8594;</text><text class="s" x="300" y="218">测量相对原模型的精度下降</text>
+
+  <polygon class="dec" points="300,248 372,292 300,336 228,292"/>
+  <text x="300" y="296">下降 &#8804; tolerance？</text>
+
+  <rect class="done" x="392" y="266" width="196" height="52" rx="7"/>
+  <text x="490" y="288">r 可行</text><text class="s" x="490" y="306">&#8594; 试更大的 r</text>
+
+  <rect class="dec" x="12" y="266" width="196" height="52" rx="7"/>
+  <text x="110" y="288">r 过激进</text><text class="s" x="110" y="306">&#8594; 试更小的 r</text>
+
+  <rect class="done" x="150" y="388" width="300" height="56" rx="7"/>
+  <text x="300" y="410">应用最大可行 r</text><text class="s" x="300" y="428">剪枝 / 前向失败 = 不可接受</text>
+</svg>
