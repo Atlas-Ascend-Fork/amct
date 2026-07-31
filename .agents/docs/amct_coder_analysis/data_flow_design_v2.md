@@ -80,7 +80,7 @@ flowchart TD
     B --> C["① adapter: build_quant_block() / iter_ptq_units()<br/>← llm-model-unit<br/>→ 构建可量化的 block 和 unit"]
     C --> D["② dtype: quantizer / fake_quant<br/>← dtype-quant-module<br/>→ 数值语义已就位，quant module 已替换"]
     D --> E["③ algorithm: trainable_params() / export_ptq_params()<br/>← llm-algorithm<br/>→ 告诉 solver 哪些参数可训练、统计 buffer 怎么导出"]
-    E --> F["④ data_provider: load_unit_inputs / materialize_gt<br/>← llm-data-workflow<br/>→ 回灌 extract 产物的离线输入，不跑整网 forward"]
+    E --> F["④ data_provider: load_unit_inputs / materialize_gt<br/>← llm-data-workflow<br/>→ 将extract 产物的离线输入，不跑整网 forward"]
     F --> G["⑤ solver: solve() → finalize() → layer_&lt;idx&gt;_&lt;name&gt;.pt<br/>← ptq-solver-params<br/>→ 优化 + 保存参数"]
 ```
 
@@ -107,7 +107,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["CLI(args)"] --> B["LlmDeployWorkflow.run()"]
-    B --> C["① ptq_param_store: load_layer()<br/>← ptq-solver-params<br/>→ 参数回灌：把 layer_*.pt 注入模型"]
+    B --> C["① ptq_param_store: load_layer()<br/>← ptq-solver-params<br/>→ 把 layer_*.pt（优化参数储存文件） 注入模型"]
     C --> D["② adapter: iter_deploy_bindings()<br/>← llm-model-unit<br/>→ 确定哪些参数导出、哪些跳过"]
     D --> E["③ dtype: export_deploy() payload<br/>← dtype-quant-module<br/>→ 量化信息写进 quantization_config"]
     E --> F["④ algorithm: export_deploy() hook<br/>← llm-algorithm<br/>→ 算法专属导出逻辑（如有）"]
@@ -210,4 +210,8 @@ flowchart LR
 - **架构分层**（现有 `module-analysis.md`）：回答"这个文件该放哪个目录、不该 import 什么"
 - **阶段协作**（本文件）：回答"我这个需求走哪个流程、要调哪些子能力、数据怎么流"
 
-落地方式：在 `amct-coder` skill 中新增 `stage-flow.md` reference，主文件路由先判阶段、再定子能力。
+新增任务流转阶段判子能力的流转，按照整合思路，目前我的想法是：
+1. 对于用户提出的需求，先进行整体的判定边界：根据skill.md中现存的边界内容（全局Blocker+跃层边界）可以直接判定是否越界；若合法，则可以继续进行改动
+2. 体系判定：如果是独立的，例如classic这些，直接落到对应的子能力；否则判定对应的任务流（属于哪一部分或者是跨层的任务）
+3. 读取阶段任务流的文档，数据流转过程（代码架构），判定要改动的部分属于哪些，然后读取对应的越界红线，子能力，然后进行读取修改
+4. 编码，自验
