@@ -104,36 +104,25 @@ flowchart LR
 | **产物层 Product** | `deploy-export-code`（权重导出 + config） |
 | **独立体系 Independent** | `classic-graph`（classic 量化）、`ops-boundary`（NPU 算子边界） |
 
-```
-                          ┌──────────────────────┐
-                          │    入口层 Entry       │
-                          │  public-api-tests     │
-                          └──────────┬───────────┘
-                                     │
-                          ┌──────────▼───────────┐
-                          │   编排层 Orchestration │
-                          │  llm-data-workflow     │
-                          └──────────┬───────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    │                │                │
-          ┌─────────▼──────┐  ┌─────▼──────┐  ┌──────▼──────────┐
-          │ 中介 Middleware │  │ 中介 Middle│  │ 量化核心层       │
-          │ Eval           │  │ Extract    │  │ Quant Core       │
-          └────────────────┘  └────────────┘  │ dtype-quant      │
-                                              │ llm-algorithm    │
-                    ┌─────────────────────────│ llm-model-unit   │
-                    │                         │ ptq-solver-params│
-                    │                         └──────────────────┘
-          ┌─────────▼───────────┐
-          │   产物层 Product      │
-          │  deploy-export-code   │
-          └─────────────────────┘
+```mermaid
+flowchart TD
+    ENTRY["入口层 Entry<br/>public-api-tests"]
+    ORCH["编排层 Orchestration<br/>llm-data-workflow"]
+    MID_E["中介 Middleware<br/>Eval"]
+    MID_X["中介 Middleware<br/>Extract"]
+    CORE["量化核心层 Quant Core<br/>dtype-quant-module<br/>llm-algorithm<br/>llm-model-unit<br/>ptq-solver-params"]
+    PROD["产物层 Product<br/>deploy-export-code"]
+    IND["独立体系 Independent<br/>classic-graph / ops-boundary"]
 
-          独立体系 Independent:
-          ┌──────────────┐  ┌──────────────┐
-          │ classic-graph │  │ ops-boundary  │
-          └──────────────┘  └──────────────┘
+    ENTRY --> ORCH
+    ORCH --> MID_E
+    ORCH --> MID_X
+    ORCH --> CORE
+    MID_E --> PROD
+    MID_X --> PROD
+    CORE --> PROD
+
+    style IND fill:#f5f5f5,stroke:#999,stroke-dasharray:5 5
 ```
 
 同一模块内的子能力共享相近的 OWN 目录层级，跨模块调用必须通过显式接口（PRODUCE/NEED）。

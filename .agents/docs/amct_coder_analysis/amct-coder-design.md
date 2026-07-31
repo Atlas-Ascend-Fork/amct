@@ -227,9 +227,9 @@ setup.py / build.sh      → public-api-tests.md      打包构建逻辑
 
 ## 四、子能力依赖链
 
-依赖链的权威表述在 `SKILL.md` §依赖关系（文字形式，逐条说明谁消费谁）。这里不再画 ASCII 图：原图的箭头方向语义不自洽，且把 `public-api-tests` 只挂在 deploy 下游，而它实际是所有子能力的共同下游。
+依赖链的权威表述在 `SKILL.md` 依赖关系（文字形式，逐条说明谁消费谁）。这里不再画 ASCII 图：原图的箭头方向语义不自洽，且把 `public-api-tests` 只挂在 deploy 下游，而它实际是所有子能力的共同下游。
 
-跨子能力读取顺序见 `SKILL.md` §依赖关系末段，受 §读取预算 的软约束（上下游为条件补读，不是必读；命中 3 个以上子能力时分阶段补读）。
+跨子能力读取顺序见 `SKILL.md` 依赖关系末段，受 §读取预算 的软约束（上下游为条件补读，不是必读；命中 3 个以上子能力时分阶段补读）。
 
 ---
 
@@ -246,22 +246,22 @@ SKILL.md（全局路由 + BLOCKER）
 
 `wrapper-rules.md` 和 `attention-rules.md` 本质上是 `llm-model-unit` 的细化规则。它们被提升为独立文件的原因是：
 - attention 和 MoE wrapper 是高频改动点，独立文件便于快速定位
-- 行为独立，不依赖 llm-model-unit 的全部内容
+- 行为独立，不依赖 llm-model-unit 的全部内容，相关rule在原仓库中有源文档
 
 `layer-rules.md` 和 `repo-scenarios.md` 的分工：
-- `repo-scenarios.md`：三条代码体系的拓扑和入口文件清单（告诉 agent 代码在哪）
+- `repo-scenarios.md`：三条代码体系的拓扑和入口文件清单（告诉 agent 代码在哪），负责索引
 - `layer-rules.md`：落点判断和 BLOCKER 检查（告诉 agent 什么不能做）
 
 以下规则各自只有一个正文位置，其余位置只允许写指针：
 
 | 规则 | 唯一正文位置 |
 | --- | --- |
-| 分层职责表 | `docs/repo-map.md` §分层边界 |
-| Attention 适配原则 | `docs/repo-map.md` §Attention 适配原则 |
-| Wrapper 合并原则 | `docs/repo-map.md` §Wrapper 合并原则 |
-| 适配前 7 问 | `references/llm-model-unit.md` §适配清单 |
+| 分层职责表 | `docs/repo-map.md` 分层边界 |
+| Attention 适配原则 | `docs/repo-map.md` Attention 适配原则 |
+| Wrapper 合并原则 | `docs/repo-map.md` Wrapper 合并原则 |
+| 适配前 7 问 | `references/llm-model-unit.md` 适配清单 |
 | adapter/wrapper 完成标准 | `references/validation.md` |
-| 场景默认落点 | `SKILL.md` §全局边界 + §子能力路由 |
+| 场景默认落点 | `SKILL.md` 全局边界 + 任务流转阶段判定 + 子能力路由 |
 
 ---
 
@@ -386,3 +386,15 @@ SKILL.md §子能力路由 末尾新增越层请求对照表，把「workflow �
 3. `常见映射` 与 `越层请求对照`：用具体用户请求区分“同样出现 attention/wrapper/MoE 词时，按落点路径判断是拦截还是转 model-adapter”。
 
 后续仍要用触发验收样本复测真实客户端行为；没有凭证时只做 YAML/frontmatter 和 skill 发现校验。
+
+---
+
+## 十、边界视图与流程视图的整合（2026-07-30 设计讨论）
+
+### 结论
+
+新增任务流转阶段判子能力的流转，按照整合思路，目前我的想法是：
+1. 对于用户提出的需求，先进行整体的判定边界：根据skill.md中现存的边界内容（全局Blocker+跃层边界）可以直接判定是否越界；若合法，则可以继续进行改动
+2. 体系判定：如果是独立的，例如classic这些，直接落到对应的子能力；否则判定对应的任务流（属于哪一部分或者是跨层的任务）
+3. 读取阶段任务流的文档，数据流转过程（代码架构），判定要改动的部分属于哪些，然后读取对应的越界红线，子能力，然后进行读取修改
+4. 编码，自验

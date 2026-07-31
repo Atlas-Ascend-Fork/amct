@@ -19,11 +19,12 @@
 **入口**：`python -m amct_pytorch.eval` → `LlmEvalWorkflow.run()`
 
 **调用链**：
-```
-CLI(args) → LlmEvalWorkflow.run()
-  ├─ adapter: do_embedding_forward() / do_block_forward()  ← llm-model-unit（提供 hook）
-  ├─ datasets: get_wiki_inputs()                            ← llm-data-workflow（数据加载）
-  └─ evaluate: wikitext2_ppl()                              ← llm-data-workflow（PPL 计算）
+```mermaid
+flowchart TD
+    A["CLI(args)"] --> B["LlmEvalWorkflow.run()"]
+    B --> C["adapter: do_embedding_forward() / do_block_forward()<br/>← llm-model-unit（提供 hook）"]
+    B --> D["datasets: get_wiki_inputs()<br/>← llm-data-workflow（数据加载）"]
+    B --> E["evaluate: wikitext2_ppl()<br/>← llm-data-workflow（PPL 计算）"]
 ```
 
 **产出**：PPL（bf16 或 quant）
@@ -45,12 +46,12 @@ CLI(args) → LlmEvalWorkflow.run()
 **入口**：`python -m amct_pytorch.extract_ptq_data` → `LlmExtractPtqDataWorkflow.run()`
 
 **调用链**：
-```
-CLI(args) → LlmExtractPtqDataWorkflow.run()
-  ├─ adapter: do_embedding_forward() / do_block_forward()  ← llm-model-unit
-  │   （hook 命名决定提取文件名，必须与 PTQ 阶段消费时一致）
-  ├─ datasets: get_pileval()                                ← llm-data-workflow（校准数据加载）
-  └─ 产出: block_<layer>_<target>_in.pkl                   → ptq 阶段消费
+```mermaid
+flowchart TD
+    A["CLI(args)"] --> B["LlmExtractPtqDataWorkflow.run()"]
+    B --> C["adapter: do_embedding_forward() / do_block_forward()<br/>← llm-model-unit<br/>（hook 命名决定提取文件名，必须与 PTQ 阶段消费时一致）"]
+    B --> D["datasets: get_pileval()<br/>← llm-data-workflow（校准数据加载）"]
+    B --> E["产出: block_&lt;layer&gt;_&lt;target&gt;_in.pkl<br/>→ ptq 阶段消费"]
 ```
 
 **产出**：离线 block 输入 tensor
@@ -73,18 +74,14 @@ CLI(args) → LlmExtractPtqDataWorkflow.run()
 **入口**：`python -m amct_pytorch.ptq` → `LlmPtqWorkflow.run()`
 
 **调用链（按执行顺序）**：
-```
-CLI(args) → LlmPtqWorkflow.run()
-  ① adapter: build_quant_block() / iter_ptq_units()        ← llm-model-unit
-     → 构建可量化的 block 和 unit
-  ② dtype: quantizer / fake_quant                           ← dtype-quant-module
-     → 数值语义已就位，quant module 已替换
-  ③ algorithm: trainable_params() / export_ptq_params()     ← llm-algorithm
-     → 告诉 solver 哪些参数可训练、统计 buffer 怎么导出
-  ④ data_provider: load_unit_inputs / materialize_gt        ← llm-data-workflow
-     → 回灌 extract 产物的离线输入，不跑整网 forward
-  ⑤ solver: solve() → finalize() → layer_<idx>_<name>.pt   ← ptq-solver-params
-     → 优化 + 保存参数
+```mermaid
+flowchart TD
+    A["CLI(args)"] --> B["LlmPtqWorkflow.run()"]
+    B --> C["① adapter: build_quant_block() / iter_ptq_units()<br/>← llm-model-unit<br/>→ 构建可量化的 block 和 unit"]
+    C --> D["② dtype: quantizer / fake_quant<br/>← dtype-quant-module<br/>→ 数值语义已就位，quant module 已替换"]
+    D --> E["③ algorithm: trainable_params() / export_ptq_params()<br/>← llm-algorithm<br/>→ 告诉 solver 哪些参数可训练、统计 buffer 怎么导出"]
+    E --> F["④ data_provider: load_unit_inputs / materialize_gt<br/>← llm-data-workflow<br/>→ 回灌 extract 产物的离线输入，不跑整网 forward"]
+    F --> G["⑤ solver: solve() → finalize() → layer_&lt;idx&gt;_&lt;name&gt;.pt<br/>← ptq-solver-params<br/>→ 优化 + 保存参数"]
 ```
 
 **产出**：`layer_*.pt`（PTQ 优化后的参数文件）
@@ -107,17 +104,14 @@ CLI(args) → LlmPtqWorkflow.run()
 **入口**：`python -m amct_pytorch.deploy` → `LlmDeployWorkflow.run()`
 
 **调用链（按执行顺序）**：
-```
-CLI(args) → LlmDeployWorkflow.run()
-  ① ptq_param_store: load_layer()                           ← ptq-solver-params
-     → 参数回灌：把 layer_*.pt 注入模型
-  ② adapter: iter_deploy_bindings()                         ← llm-model-unit
-     → 确定哪些参数导出、哪些跳过
-  ③ dtype: export_deploy() payload                          ← dtype-quant-module
-     → 量化信息写进 quantization_config
-  ④ algorithm: export_deploy() hook                         ← llm-algorithm
-     → 算法专属导出逻辑（如有）
-  ⑤ 产出: model.safetensors / index.json / config.json      ← deploy-export-code
+```mermaid
+flowchart TD
+    A["CLI(args)"] --> B["LlmDeployWorkflow.run()"]
+    B --> C["① ptq_param_store: load_layer()<br/>← ptq-solver-params<br/>→ 参数回灌：把 layer_*.pt 注入模型"]
+    C --> D["② adapter: iter_deploy_bindings()<br/>← llm-model-unit<br/>→ 确定哪些参数导出、哪些跳过"]
+    D --> E["③ dtype: export_deploy() payload<br/>← dtype-quant-module<br/>→ 量化信息写进 quantization_config"]
+    E --> F["④ algorithm: export_deploy() hook<br/>← llm-algorithm<br/>→ 算法专属导出逻辑（如有）"]
+    F --> G["⑤ 产出: model.safetensors / index.json / config.json<br/>← deploy-export-code"]
 ```
 
 **产出**：safetensors 权重文件 + 配置文件
@@ -130,17 +124,45 @@ CLI(args) → LlmDeployWorkflow.run()
 
 ## 跨阶段数据流总览
 
-```
-eval                     extract_ptq_data              ptq                       deploy
-│                            │                          │                          │
-├─ 校准数据(wikitext)         ├─ 校准数据(pileval)         ├─ block_*_in.pkl ──────────┤
-├─ adapter hook ──────────────├─ adapter hook             ├─ adapter build_quant_block │
-└─ PPL(bf16/quant)            └─ block_*_in.pkl ──────────┼─ algorithm                  │
-                                                          ├─ solver → layer_*.pt ──────┤
-                                                          └─ PtqParamStore ────────────┼─ adapter deploy binding
-                                                                                        ├─ dtype export_deploy()
-                                                                                        ├─ algorithm export_deploy()
-                                                                                        └─ safetensors + config.json
+```mermaid
+flowchart LR
+    subgraph EVAL["eval"]
+        E1["校准数据(wikitext)"]
+        E2["adapter hook"]
+        E3["PPL(bf16/quant)"]
+    end
+
+    subgraph EXTRACT["extract_ptq_data"]
+        X1["校准数据(pileval)"]
+        X2["adapter hook"]
+        X3["block_*_in.pkl"]
+    end
+
+    subgraph PTQ["ptq"]
+        P1["block_*_in.pkl"]
+        P2["adapter build_quant_block"]
+        P3["algorithm"]
+        P4["solver → layer_*.pt"]
+        P5["PtqParamStore"]
+    end
+
+    subgraph DEPLOY["deploy"]
+        D1["adapter deploy binding"]
+        D2["dtype export_deploy()"]
+        D3["algorithm export_deploy()"]
+        D4["safetensors + config.json"]
+    end
+
+    X3 -. "跨阶段数据" .-> P1
+    P4 -. "layer_*.pt 参数" .-> D1
+    P4 -. "layer_*.pt 参数" .-> D2
+    P4 -. "layer_*.pt 参数" .-> D3
+    P5 -. "参数回载" .-> D1
+    P5 -. "参数回载" .-> D2
+    P5 -. "参数回载" .-> D3
+    D1 --> D4
+    D2 --> D4
+    D3 --> D4
 ```
 
 ## 独立体系（不参与四个阶段）
@@ -167,17 +189,19 @@ eval                     extract_ptq_data              ptq                      
 
 ## 子能力与阶段参与关系
 
-```
-llm-data-workflow   → eval（主编排） + extract_ptq_data（主编排） + ptq（数据回灌）
-llm-model-unit      → 全四阶段（hook → build_quant_block → deploy binding）
-dtype-quant-module  → eval（量化评估） + ptq（fake_quant） + deploy（export payload）
-llm-algorithm       → ptq（trainable_params） + deploy（export hook）
-ptq-solver-params   → ptq（solver 主产出） + deploy（参数回载）
-deploy-export-code  → deploy（safetensors 主产出）
-public-api-tests    → 跨阶段（纯下游同步）
-classic-graph       → 不参与（独立体系）
-ops-boundary        → 条件参与（NPU 加速时）
-```
+参与角色如下（`—` 表示不参与该阶段）：
+
+| 子能力 | eval | extract_ptq_data | ptq | deploy | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| `llm-data-workflow` | 主编排 | 主编排 | 数据回灌 | — | |
+| `llm-model-unit` | hook | hook | build_quant_block | deploy binding | 全四阶段 |
+| `dtype-quant-module` | 量化评估 | — | fake_quant | export payload | |
+| `llm-algorithm` | — | — | trainable_params | export hook | |
+| `ptq-solver-params` | — | — | solver 主产出 | 参数回载 | |
+| `deploy-export-code` | — | — | — | safetensors 主产出 | |
+| `public-api-tests` | 纯下游同步 | 纯下游同步 | 纯下游同步 | 纯下游同步 | 跨阶段，不产生语义 |
+| `classic-graph` | — | — | — | — | 不参与（独立体系） |
+| `ops-boundary` | 条件参与 | 条件参与 | 条件参与 | 条件参与 | 仅 NPU 加速时 |
 
 ## 与现有分层的关系
 
