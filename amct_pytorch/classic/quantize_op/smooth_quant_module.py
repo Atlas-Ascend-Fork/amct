@@ -176,7 +176,7 @@ class SmoothQuant(BaseQuantizeModule):
                 ),
                 smooth_factor,
             )
-            LOGGER.logd("The smooth factor is calculated as abnormal and set to 1")
+            LOGGER.logd("The smooth factor is non-finite or zero and is set to 1")
 
         return smooth_factor
 
