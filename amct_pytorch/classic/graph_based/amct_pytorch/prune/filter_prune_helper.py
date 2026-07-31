@@ -114,7 +114,7 @@ class ActivePruneHelper(ActivePruneHelperBase):
             return 1
         if self.node.type in ['MatMul', 'Gemm']:
             return -1
-        raise RuntimeError('unexpected node type {}'.foramt(self.node.type))
+        raise RuntimeError('unexpected node type {}'.format(self.node.type))
 
     def get_cout_length(self):
         """
@@ -161,7 +161,7 @@ class PassivePruneHelper(PassivePruneHelperBase):
             return 1
         if node.type in ['MatMul', 'Gemm']:
             return -1
-        raise RuntimeError('unexpected node type {}'.foramt(node.type))
+        raise RuntimeError('unexpected node type {}'.format(node.type))
 
     @staticmethod
     def match_pattern(node):
