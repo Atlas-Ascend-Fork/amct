@@ -97,14 +97,13 @@ _MOCK_QUANT_ARGS = SimpleNamespace(w_bits=8, quant_dtype="int", algos=[])
 class _StubActQuantizer(ActivationQuantizer):
     def __init__(self):
         super().__init__(_MOCK_QUANT_ARGS, bits=8)
-        self.enable = False
         self.is_observe = True
 
 
 class _StubWeightQuantizer(WeightQuantizer):
     def __init__(self):
         super().__init__(_MOCK_QUANT_ARGS)
-        self.enable = False
+        self.is_observe = True
 
 
 def _model_with_quantizers():
@@ -120,21 +119,19 @@ def _model_with_quantizers():
 def test_set_model_act_quant_state_toggles_only_activation_modules(flag):
     m = _model_with_quantizers()
     set_model_act_quant_state(m, flag)
-    assert m.act_a.enable is flag
-    assert m.act_b.enable is flag
     assert m.act_a.is_observe is (not flag)
     assert m.act_b.is_observe is (not flag)
     # Non-activation modules untouched.
-    assert m.wq.enable is False
+    assert m.wq.is_observe is True
 
 
 @pytest.mark.parametrize("flag", [True, False])
 def test_set_model_weight_quant_state_toggles_only_weight_quantizer(flag):
     m = _model_with_quantizers()
     set_model_weight_quant_state(m, flag)
-    assert m.wq.enable is flag
+    assert m.wq.is_observe is (not flag)
     # Activation flags should not be touched.
-    assert m.act_a.enable is False
+    assert m.act_a.is_observe is True
 
 
 @pytest.mark.parametrize("flag", [True, False])
@@ -143,8 +140,7 @@ def test_set_model_to_observe_only_targets_modules_with_attribute(flag):
     set_model_to_observe(m, flag)
     assert m.act_a.is_observe is flag
     assert m.act_b.is_observe is flag
-    # weight quantizer has no `is_observe` attribute and must remain unchanged.
-    assert not hasattr(m.wq, "is_observe")
+    assert m.wq.is_observe is flag
 
 
 # ---- apply_quant_to_attn / apply_quant_to_moe_mlp -------------------------
@@ -284,8 +280,8 @@ def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
         return x
 
     gated.hidden_transform = hidden_transform
-    gated.input_quant.enable = True
-    gated.hidden_quant.enable = True
+    gated.input_quant.is_observe = False
+    gated.hidden_quant.is_observe = False
 
     x = torch.randn(2, 8)
     gated(x)
