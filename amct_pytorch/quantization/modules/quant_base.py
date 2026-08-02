@@ -83,21 +83,21 @@ def _build_algorithm(algo_cls, args, *ctor_args):
 def set_quantizer_state(model, enable=True):
     for m in model.modules():
         if isinstance(m, (WeightQuantizer, ActivationQuantizer)):
-            m.enable = enable
+            m.set_observe(not enable)
     return model
 
 
 def set_weight_quantizer_state(model, enable=True):
     for m in model.modules():
         if isinstance(m, WeightQuantizer):
-            m.enable = enable
+            m.set_observe(not enable)
     return model
 
 
 def set_act_quantizer_state(model, enable=True):
     for m in model.modules():
         if isinstance(m, ActivationQuantizer):
-            m.enable = enable
+            m.set_observe(not enable)
     return model
 
 
@@ -111,17 +111,24 @@ class ActivationQuantizer(torch.nn.Module):
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(
             bits=self.bits, is_act=True
         )
-        self.enable = False
+        self.is_observe = False
 
     def deploy(self):
         pass
 
+    def set_observe(self, flag: bool):
+        self.is_observe = flag
+        for algo in self.algorithms.values():
+            if hasattr(algo, "is_observe"):
+                algo.is_observe = flag
+
     def fake_quant(self, x):
+        if self.is_observe:
+            return x
         return self.quant_obj(x)
 
     def forward(self, x):
-        if not self.enable:
-            return x
+        self.set_observe(self.is_observe)
         for algo in self.algorithms.values():
             x = algo(x)
         return self.fake_quant(x)
@@ -148,7 +155,13 @@ class WeightQuantizer(torch.nn.Module):
         self.algorithms = nn.ModuleDict()
         self._init_algo()
         self.quant_obj = DTYPE_REGISTRY.get(args.quant_dtype)(bits=self.bits)
-        self.enable = False
+        self.is_observe = False
+
+    def set_observe(self, flag: bool):
+        self.is_observe = flag
+        for algo in self.algorithms.values():
+            if hasattr(algo, "is_observe"):
+                algo.is_observe = flag
 
     def algo_forward(self, x):
         quantize_algo = None
@@ -184,8 +197,9 @@ class WeightQuantizer(torch.nn.Module):
         return self.quant_obj(x)
 
     def forward(self, x):
-        if not self.enable:
+        if self.is_observe:
             return x
+        self.set_observe(False)
         x, quantize_algo = self.algo_forward(x)
         if quantize_algo is not None:
             return quantize_algo.quantize(x, self.quant_obj)
