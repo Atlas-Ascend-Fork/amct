@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,7 +27,9 @@ from ...amct_pytorch.custom_op.ada_round_quant import GAMMA, ZETA, ANNEAL_COEFFI
 from ...amct_pytorch.ada_round.ada_round_data_manager import AdaRoundDataManager
 
 
-def replace_adaround_module(object_module_name, model, data_tensor, tensor_balance_factor):
+def replace_adaround_module(
+    object_module_name, model, data_tensor, tensor_balance_factor
+):
     '''
     Function: Replace the adaround module.
     Parameters:
@@ -46,14 +48,16 @@ def replace_adaround_module(object_module_name, model, data_tensor, tensor_balan
 
     # Step2: generate new model
     wts_param = conf.get_quant_config()[object_module_name].get('weight_quant_params')
-    new_ada_module = AdaRoundQuant(module, wts_param, data_tensor, tensor_balance_factor)
+    new_ada_module = AdaRoundQuant(
+        module, wts_param, data_tensor, tensor_balance_factor
+    )
 
     # Step3: replace new model
     model_helper.replace_module_by_name(model, object_module_name, new_ada_module)
     LOGGER.logd(
-        "replace AdaRoundQuant module to '{}' success!".format(
-            object_module_name))
- 
+        "replace AdaRoundQuant module to '{}' success!".format(object_module_name)
+    )
+
     return new_ada_module
 
 
@@ -95,14 +99,14 @@ def optimize_alpha(model, model_all_input, groups, graph):
         # input data from quantize model and output data from original model
         set_ada_module_model(module_helper, groups, False)
         output_data_o = sampler.get_output_data(model_all_input, group[0])
-        act_module = group[1] # activation function
+        act_module = group[1]  # activation function
         if act_module:
             act_module.to(output_data_o.device)
             output_data_o = act_module(output_data_o)
 
         set_ada_module_model(module_helper, groups, True)
         input_data_q = sampler.get_input_data(model_all_input, group[0])
-        
+
         optimizer = torch.optim.Adam([ada_module.alpha])
 
         wts_param = ada_module.wts_param
@@ -111,7 +115,7 @@ def optimize_alpha(model, model_all_input, groups, graph):
             indices = torch.randperm(input_data_q.size(0))[:32]
             input_data_rand = input_data_q[indices].to(device)
             output_data_rand = output_data_o[indices].to(device)
- 
+
             optimizer.zero_grad()
             x = input_data_rand
             x = ada_module.forward(x)
@@ -123,12 +127,14 @@ def optimize_alpha(model, model_all_input, groups, graph):
             if not torch.isfinite(total_loss):
                 raise RuntimeError(
                     "{}'s activation quant loss has invalid value, inf or nan. "
-                    "Please check activation value.".format(group[0]))
+                    "Please check activation value.".format(group[0])
+                )
             total_loss.backward()
             optimizer.step()
 
-        LOGGER.logd('Do layer \'{}\' weights AdaRound fine-tuning success!'
-                    .format(group[0]))
+        LOGGER.logd(
+            'Do layer \'{}\' weights AdaRound fine-tuning success!'.format(group[0])
+        )
 
     model.eval()
     set_ada_module_model(module_helper, groups, False)
@@ -143,9 +149,14 @@ def optimize_alpha(model, model_all_input, groups, graph):
 
         # set calied_weight to graph
         object_node = graph.get_node_by_name(group[0])
-        opt.WeightsCalibrationPass._graph_weight_set_process(object_node=object_node,
-                                                            object_module=ada_module.module,
-                                                            weight=ada_module.module.weight.data)
+        graph_weight_set_process = getattr(
+            opt.WeightsCalibrationPass, '_graph_weight_set_process'
+        )
+        graph_weight_set_process(
+            object_node=object_node,
+            object_module=ada_module.module,
+            weight=ada_module.module.weight.data,
+        )
         # Set the adaround module back
         ModuleHelper.replace_module_by_name(model, group[0], ada_module.module)
 
@@ -204,16 +215,19 @@ def _compute_round_loss(alpha, opt_params, cur_iter):
     if cur_iter >= opt_params.get('num_iteration') * opt_params.get('warm_start'):
         # calculate the rectified sigmoid function of the parameter 'alpha' to map it to the range between 0 and 1
         h_alpha = torch.clamp(torch.sigmoid(alpha) * (ZETA - GAMMA) + GAMMA, 0, 1)
- 
+
         # calculate beta parameter
-        beta = _compute_beta(opt_params.get('num_iteration'), cur_iter, 
-                             tuple(opt_params.get('beta_range')), opt_params.get('warm_start'))
- 
+        beta = _compute_beta(
+            opt_params.get('num_iteration'),
+            cur_iter,
+            tuple(opt_params.get('beta_range')),
+            opt_params.get('warm_start'),
+        )
+
         # calculate the regularization term, Convergence of parameters to 0 or 1
         term = -(torch.add(2 * h_alpha, -1).abs()).pow(beta)
         reg_term = torch.add(1, term).sum()
- 
-        round_loss = opt_params.get('reg_param') * reg_term
- 
-    return round_loss
 
+        round_loss = opt_params.get('reg_param') * reg_term
+
+    return round_loss

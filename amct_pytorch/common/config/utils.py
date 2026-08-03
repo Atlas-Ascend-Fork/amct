@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,7 +26,7 @@ def get_alg_name_from_config(alg):
     elif isinstance(alg, str):
         return [alg], [None]
     else:
-        raise ValueError(f'invalid algo name, pls check config')
+        raise ValueError('invalid algo name, pls check config')
 
 
 def match_fuzzy_pattern(layer_name, pattern):
@@ -39,12 +39,12 @@ def match_fuzzy_pattern(layer_name, pattern):
     """
     if '*' not in pattern:
         return layer_name == pattern
-    
+
     if fnmatch.fnmatch(layer_name, pattern):
         return True
-    
+
     for suffix in ['.weights', '.inputs', '.kvcache']:
         if fnmatch.fnmatch(layer_name + suffix, pattern):
             return True
-    
+
     return False

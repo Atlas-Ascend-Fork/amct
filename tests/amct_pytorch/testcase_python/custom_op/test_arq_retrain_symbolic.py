@@ -19,6 +19,7 @@ The symbolic() method only builds ONNX ops through the graph builder `g`, so it
 can be exercised directly with a mocked graph instead of a full ONNX export
 (which the CPU CI environment cannot run due to opset incompatibility).
 """
+
 import unittest
 from unittest.mock import MagicMock
 

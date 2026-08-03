@@ -54,20 +54,22 @@ def _quant_args(algos=None, quant_target=("attn-linear",)):
         epochs=1,
         nsamples=1,
         cali_bsz=1,
-        bit_policy=BitPolicy({
-            "attn-linear": {
-                "wq_a": {"w_bits": 8, "a_bits": 8},
-                "wq_b": {"w_bits": 8, "a_bits": 8},
-                "wkv": {"w_bits": 8, "a_bits": 8},
-                "wo_a": {"w_bits": 8, "a_bits": 8},
-                "wo_b": {"w_bits": 8, "a_bits": 8},
-                "comp_wkv": {"w_bits": 8, "a_bits": 8},
-                "comp_wgate": {"w_bits": 8, "a_bits": 8},
-                "idx_wq_b": {"w_bits": 8, "a_bits": 8},
-                "idx_weights_proj": {"w_bits": 8, "a_bits": 8},
-            },
-            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-        }),
+        bit_policy=BitPolicy(
+            {
+                "attn-linear": {
+                    "wq_a": {"w_bits": 8, "a_bits": 8},
+                    "wq_b": {"w_bits": 8, "a_bits": 8},
+                    "wkv": {"w_bits": 8, "a_bits": 8},
+                    "wo_a": {"w_bits": 8, "a_bits": 8},
+                    "wo_b": {"w_bits": 8, "a_bits": 8},
+                    "comp_wkv": {"w_bits": 8, "a_bits": 8},
+                    "comp_wgate": {"w_bits": 8, "a_bits": 8},
+                    "idx_wq_b": {"w_bits": 8, "a_bits": 8},
+                    "idx_weights_proj": {"w_bits": 8, "a_bits": 8},
+                },
+                "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+            }
+        ),
     )
 
 
@@ -131,7 +133,9 @@ class _FakeV4Attention(nn.Module):
         self.attn_sink = nn.Parameter(torch.zeros(self.n_local_heads))
         self.q_norm = nn.Identity()
         self.kv_norm = nn.Identity()
-        self.register_buffer("freqs_cis", torch.ones(8, self.rope_head_dim // 2, dtype=torch.complex64))
+        self.register_buffer(
+            "freqs_cis", torch.ones(8, self.rope_head_dim // 2, dtype=torch.complex64)
+        )
 
         self.wq_a = nn.Linear(self.dim, self.q_lora_rank, bias=False)
         self.wq_b = nn.Linear(
@@ -145,7 +149,9 @@ class _FakeV4Attention(nn.Module):
             self.n_local_groups * self.o_lora_rank,
             bias=False,
         )
-        self.wo_b = nn.Linear(self.n_local_groups * self.o_lora_rank, self.dim, bias=False)
+        self.wo_b = nn.Linear(
+            self.n_local_groups * self.o_lora_rank, self.dim, bias=False
+        )
         if self.compress_ratio:
             self.compressor = _FakeV4Compressor(
                 self.dim,
@@ -182,7 +188,9 @@ def test_quant_v4_attention_flatquant_exposes_trainable_structure_params():
 
 
 def test_quant_v4_attention_attn_cache_uses_quantized_matmul_path():
-    qattn = QuantV4Attention(_quant_args(quant_target=["attn-cache"]), _FakeV4Attention())
+    qattn = QuantV4Attention(
+        _quant_args(quant_target=["attn-cache"]), _FakeV4Attention()
+    )
 
     assert isinstance(qattn.qk_matmul, QuantizedMatmul)
     assert isinstance(qattn.pv_matmul, QuantizedMatmul)
@@ -195,7 +203,9 @@ def test_quant_v4_attention_attn_cache_uses_quantized_matmul_path():
     kv = torch.randn(1, 2, 4)
     topk_idxs = torch.tensor([[[0], [1]]], dtype=torch.int32)
 
-    output = qattn.sparse_attn(query, kv, qattn.attn_sink.float(), topk_idxs, qattn.softmax_scale)
+    output = qattn.sparse_attn(
+        query, kv, qattn.attn_sink.float(), topk_idxs, qattn.softmax_scale
+    )
 
     assert output.shape == query.shape
     assert qattn.qk_matmul.calls == 1

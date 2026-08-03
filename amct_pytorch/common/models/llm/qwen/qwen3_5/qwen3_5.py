@@ -28,7 +28,9 @@ from amct_pytorch.common.models.llm.common.quant_apply import (
     apply_quant_to_moe_mlp,
 )
 from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
-    QuantQwen35Attn, QuantQwen35LinearAttn, QuantQwen35MLP,
+    QuantQwen35Attn,
+    QuantQwen35LinearAttn,
+    QuantQwen35MLP,
 )
 
 
@@ -51,7 +53,9 @@ class Qwen3_5(BaseModel):
 
     def parse_quant_mode(self):
         if "moe" in self.quant_target:
-            raise ValueError("Qwen3.5 < 7B is a dense model and does not support quant_target='moe'.")
+            raise ValueError(
+                "Qwen3.5 < 7B is a dense model and does not support quant_target='moe'."
+            )
 
     def float_model(self):
         return super().float_model()
@@ -74,7 +78,14 @@ class Qwen3_5(BaseModel):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,

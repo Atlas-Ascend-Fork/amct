@@ -86,9 +86,7 @@ def _run_native(hifp_impl, fp_tensor):
     try:
         return "native", hifp_impl._native_hifloat8_fake_quant(fp_tensor)
     except BACKEND_ERRORS as exc:
-        raise BackendUnavailable(
-            f"native HiFloat8 cast failed: {exc}"
-        ) from exc
+        raise BackendUnavailable(f"native HiFloat8 cast failed: {exc}") from exc
 
 
 def _run_amct_ops(hifp_impl, fp_tensor):
@@ -98,9 +96,7 @@ def _run_amct_ops(hifp_impl, fp_tensor):
     try:
         output = hifp_impl._amct_ops_hifloat8_fake_quant(fp_tensor, *ops)
     except BACKEND_ERRORS as exc:
-        raise BackendUnavailable(
-            f"amct_ops hifloat8_cast failed: {exc}"
-        ) from exc
+        raise BackendUnavailable(f"amct_ops hifloat8_cast failed: {exc}") from exc
     return "amct_ops", output
 
 
@@ -159,14 +155,12 @@ def _environment_info(torch, torch_npu, device):
     except (AttributeError, RuntimeError, TypeError):
         device_name = None
     return {
-        "cann_home": os.getenv("ASCEND_HOME_PATH")
-        or os.getenv("ASCEND_TOOLKIT_HOME"),
+        "cann_home": os.getenv("ASCEND_HOME_PATH") or os.getenv("ASCEND_TOOLKIT_HOME"),
         "device": device,
         "device_name": device_name,
         "torch": torch.__version__,
         "torch_npu": getattr(torch_npu, "__version__", None),
-        "amct_ops": _package_version("amct-ops")
-        or _package_version("amct_ops"),
+        "amct_ops": _package_version("amct-ops") or _package_version("amct_ops"),
     }
 
 
@@ -201,12 +195,8 @@ def main():
         with torch.inference_mode():
             for dtype in (torch.float16, torch.bfloat16):
                 fp_tensor = _build_input(torch, dtype).to(args.device)
-                backend, output = _run_backend(
-                    hifp_impl, fp_tensor, args.backend
-                )
-                results.append(
-                    _build_result(torch, backend, fp_tensor, output)
-                )
+                backend, output = _run_backend(hifp_impl, fp_tensor, args.backend)
+                results.append(_build_result(torch, backend, fp_tensor, output))
     except (BackendUnavailable, RuntimeError, OSError, ValueError) as exc:
         print(
             json.dumps(_error_payload(args.backend, str(exc)), sort_keys=True),

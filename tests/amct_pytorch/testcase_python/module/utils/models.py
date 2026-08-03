@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,13 +18,14 @@
 """
 Generate model for ut.
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class Net001(nn.Module):
-    """ args_shape: [(1, 2, 28, 28)]
+    """args_shape: [(1, 2, 28, 28)]
     conv + bn
     conv(with bias) + bn
     depthwise_conv + bn
@@ -34,32 +35,36 @@ class Net001(nn.Module):
     fc + bn
     fc(bias) + bn
     """
+
     def __init__(self):
         super(Net001, self).__init__()
         # conv + bn
         self.layer1 = nn.Sequential(
-            nn.Conv2d(2, 16, kernel_size=3, bias=False),
-            nn.BatchNorm2d(16))
+            nn.Conv2d(2, 16, kernel_size=3, bias=False), nn.BatchNorm2d(16)
+        )
         self.layer2 = nn.Sequential(
             nn.Conv2d(16, 16, kernel_size=3, bias=True),
             nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True))
+            nn.ReLU(inplace=True),
+        )
         # depthwise_conv + bn
         self.layer3 = nn.Sequential(
-            nn.Conv2d(16, 16, kernel_size=3, groups=16),
-            nn.BatchNorm2d(16))
+            nn.Conv2d(16, 16, kernel_size=3, groups=16), nn.BatchNorm2d(16)
+        )
         self.layer4 = nn.Sequential(
             nn.Conv2d(16, 16, kernel_size=3, groups=16),
             nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True))
+            nn.ReLU(inplace=True),
+        )
         # group_conv + bn
         self.layer5 = nn.Sequential(
-            nn.Conv2d(16, 32, kernel_size=3, groups=4),
-            nn.BatchNorm2d(32))
+            nn.Conv2d(16, 32, kernel_size=3, groups=4), nn.BatchNorm2d(32)
+        )
         self.layer6 = nn.Sequential(
             nn.Conv2d(32, 8, kernel_size=3, groups=8),
             nn.BatchNorm2d(8),
-            nn.ReLU(inplace=True))
+            nn.ReLU(inplace=True),
+        )
         self.avg_pool = nn.AvgPool2d(kernel_size=1, stride=1, padding=0)
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         # fc
@@ -69,7 +74,8 @@ class Net001(nn.Module):
             nn.Linear(1024, 128, bias=False),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.Linear(128, 10, bias=True))
+            nn.Linear(128, 10, bias=True),
+        )
 
     def forward(self, x):
         x = self.layer1(x)

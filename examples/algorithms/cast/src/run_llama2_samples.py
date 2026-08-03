@@ -12,10 +12,8 @@
 # ----------------------------------------------------------------------------
 
 import argparse
-import torch
-import torch_npu
 
-from utils import get_test_dataset, get_llama2, get_calib_dataset, infer_model, test_ppl
+from utils import get_test_dataset, get_llama2, test_ppl
 import amct_pytorch as amct
 
 if __name__ == '__main__':

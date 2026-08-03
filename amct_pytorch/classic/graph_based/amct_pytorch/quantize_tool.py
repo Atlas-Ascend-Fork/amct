@@ -722,9 +722,11 @@ def _generate_model(graph, records, save_path):
     graph_copy = graph.deep_copy()
 
     # generate and save deploy model
-    optimizer = opt.GraphOptimizer()
-    optimizer.add_pass(opt.ReplaceRNNPass(records))
-    optimizer.do_optimizer(graph)
+    # PackInt4WeightPass must run BEFORE ReplaceRNNPass to pack INT4 while RNN nodes are still present.
+    deploy_optimizer = opt.GraphOptimizer()
+    deploy_optimizer.add_pass(opt.PackInt4WeightPass(records))
+    deploy_optimizer.add_pass(opt.ReplaceRNNPass(records))
+    deploy_optimizer.do_optimizer(graph)
     deploy_file = generate_onnx_file_name(save_dir, save_prefix, 'Deploy')
     save_onnx_model(graph, deploy_file, 'Deploy', None, ['op_data_type'])
 
@@ -732,8 +734,7 @@ def _generate_model(graph, records, save_path):
     optimizer = opt.GraphOptimizer()
     optimizer.add_pass(opt.InsertRNNFakeQuantPass(records))
     optimizer.add_pass(opt.ReplaceQuantPass(records))
-    optimizer.add_pass(opt.ReplaceWeightQuantPass(records))  # AscendWeightQuant op only
-    optimizer.add_pass(opt.WeightFakequantPass(records))  # int8 case only
+    optimizer.add_pass(opt.WeightFakequantPass(records))
     optimizer.add_pass(opt.ReplaceDequantPass(records))
     optimizer.add_pass(opt.ReplaceAntiQuantPass(records))
     optimizer.add_pass(opt.ReplaceBiasQuantPass(records))

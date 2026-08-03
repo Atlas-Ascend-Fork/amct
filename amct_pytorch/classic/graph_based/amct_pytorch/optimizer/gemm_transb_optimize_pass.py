@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -30,6 +30,7 @@ class GemmTransBOptimizePass(BaseFusionPass):
     Function: If gemm transB is true, do transpose offline, and set it to false
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -50,8 +51,10 @@ class GemmTransBOptimizePass(BaseFusionPass):
         if node.type != 'Gemm' or node.name not in self.records:
             return False
         attr_helper = AttributeProtoHelper(node.proto)
-        if not attr_helper.has_attr('transB') or \
-                attr_helper.get_attr_value('transB') != 1:
+        if (
+            not attr_helper.has_attr('transB')
+            or attr_helper.get_attr_value('transB') != 1
+        ):
             return False
 
         return True
@@ -67,8 +70,10 @@ class GemmTransBOptimizePass(BaseFusionPass):
         Return: None
         """
         if len(object_node.input_anchors) < 2:
-            LOGGER.logd('Cannot find weights of "%s".' % (object_node.name),
-                        'GemmTransBOptimizePass')
+            LOGGER.logd(
+                'Cannot find weights of "%s".' % (object_node.name),
+                'GemmTransBOptimizePass',
+            )
             return
         weights_param = QuantOpInfo.get_weight_node(object_node)
         weight_helper = TensorProtoHelper(weights_param.proto, weights_param.model_path)
@@ -83,11 +88,13 @@ class GemmTransBOptimizePass(BaseFusionPass):
                 'The shape of onnx Gemm operator\'s input '
                 'tensor B should be (K, N) if transB is 0, or (N, K) if '
                 'transB is non-zero, but got from "{}" is {}'.format(
-                    object_node.name, weights.shape))
+                    object_node.name, weights.shape
+                )
+            )
         weights = np.transpose(weights, (1, 0))
-        weight_helper.set_data(weights.flatten(),
-                               type_string='FLOAT',
-                               dims=weights.shape)
+        weight_helper.set_data(
+            weights.flatten(), type_string='FLOAT', dims=weights.shape
+        )
 
         attr_helper = AttributeProtoHelper(object_node.proto)
         attr_helper.set_attr_value('transB', 'INT', 0)

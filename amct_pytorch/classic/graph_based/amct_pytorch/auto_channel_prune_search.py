@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -25,12 +25,16 @@ import torch
 from ..amct_pytorch.utils.log import LOGGER
 from ..amct_pytorch.utils.model_util import ModuleHelper
 from ..amct_pytorch.parser.parser import Parser
-from ..amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper \
-    import AutoChannelPruneConfigHelper
+from ..amct_pytorch.common.auto_channel_prune.auto_channel_prune_config_helper import (
+    AutoChannelPruneConfigHelper,
+)
 from ..amct_pytorch.common.utils.check_params import check_params
-from ..amct_pytorch.common.auto_channel_prune.auto_channel_prune_search_base \
-    import AutoChannelPruneSearchBase
-from ..amct_pytorch.common.auto_channel_prune.search_channel_base import SearchChannelBase
+from ..amct_pytorch.common.auto_channel_prune.auto_channel_prune_search_base import (
+    AutoChannelPruneSearchBase,
+)
+from ..amct_pytorch.common.auto_channel_prune.search_channel_base import (
+    SearchChannelBase,
+)
 from ..amct_pytorch.common.auto_channel_prune.sensitivity_base import SensitivityBase
 from ..amct_pytorch.common.utils.net_params import ParamsHelper
 from ..amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
@@ -47,8 +51,13 @@ from ..amct_pytorch.utils.singleton_record import SingletonScaleOffsetRecord
 
 class AutoChannelPruneSearch(AutoChannelPruneSearchBase):
     """ """
-    def __init__(self, graph, input_data, config_helper, sensitivity, search_alg, output_cfg):
-        super().__init__(graph, input_data, config_helper, sensitivity, search_alg, output_cfg)
+
+    def __init__(
+        self, graph, input_data, config_helper, sensitivity, search_alg, output_cfg
+    ):
+        super().__init__(
+            graph, input_data, config_helper, sensitivity, search_alg, output_cfg
+        )
 
     def get_search_ops(self, graph, prune_config):
         RetrainConfig.amc_init(graph, self.config_item.config_file)
@@ -92,31 +101,35 @@ class AutoChannelPruneSearch(AutoChannelPruneSearchBase):
         in_channel *= group
         # not module.bias cause to boolean value of Tensor with more than one value is ambiguous
         has_bias = module.bias is not None
-        flops = ParamsHelper.calc_conv_flops(in_channel=in_channel,
-                                            out_channel=out_channel,
-                                            k_h=k_h,
-                                            k_w=k_w,
-                                            out_h=out_h,
-                                            out_w=out_w,
-                                            group=1,
-                                            has_bias=has_bias)
+        flops = ParamsHelper.calc_conv_flops(
+            in_channel=in_channel,
+            out_channel=out_channel,
+            k_h=k_h,
+            k_w=k_w,
+            out_h=out_h,
+            out_w=out_w,
+            group=1,
+            has_bias=has_bias,
+        )
         flops *= output_shape[0]
         bitops = flops * ((module.weight.element_size() * 8) ** 2)
         return in_channel, out_channel, bitops
-
 
     def _cal_matmul_flops(self, module):
         input_shape = module.weight.shape
         output_shape = OutputShape(module)(input_shape)
         has_bias = module.bias is not None
-        flops = ParamsHelper.calc_matmul_flops(input_shape, output_shape, has_bias=has_bias)
+        flops = ParamsHelper.calc_matmul_flops(
+            input_shape, output_shape, has_bias=has_bias
+        )
         flops *= output_shape[0]
         bitops = flops * ((module.weight.element_size() * 8) ** 2)
         return input_shape[-1], output_shape[-1], bitops
 
 
 class TaylorLossSensitivity(SensitivityBase):
-    """ TaylorLossSensitivity """
+    """TaylorLossSensitivity"""
+
     def __init__(self):
         super(TaylorLossSensitivity, self).__init__()
         self.set_loss_func()
@@ -128,7 +141,9 @@ class TaylorLossSensitivity(SensitivityBase):
     def set_loss_func(self, loss_func=torch.nn.L1Loss()):
         self.loss_func = loss_func
 
-    def setup_initialization(self, graph_tuple, input_data, test_iteration, output_nodes=None):
+    def setup_initialization(
+        self, graph_tuple, input_data, test_iteration, output_nodes=None
+    ):
         """
         Function: setup initialization
         Param: graph_tuple (graph, graph_info)
@@ -169,9 +184,12 @@ class TaylorLossSensitivity(SensitivityBase):
                     continue
                 consumer_list.append(consumer.name)
 
-            sensitivity = \
-                sum(self.compute_taylor_by_channel(x, ch_info) for x in producer_list) + \
-                sum(self.compute_taylor_by_channel(x, ch_info, is_consumer=True) for x in consumer_list)
+            sensitivity = sum(
+                self.compute_taylor_by_channel(x, ch_info) for x in producer_list
+            ) + sum(
+                self.compute_taylor_by_channel(x, ch_info, is_consumer=True)
+                for x in consumer_list
+            )
 
             attr_helper = AttrProtoHelper(prune_record.producer[0])
             attr_helper.set_attr_value('sensitivity', 'FLOATS', sensitivity.tolist())
@@ -189,9 +207,15 @@ class TaylorLossSensitivity(SensitivityBase):
         taylor = taylor.split(self.graph_info.get(layer_name).get('cout'), cout_axis)[0]
         taylor = taylor.split(self.graph_info.get(layer_name).get('cin'), cin_axis)[0]
         ch_axis = cin_axis if is_consumer else cout_axis
-        sum_dims = [_ for _ in range(len(self.weights.get(layer_name).shape)) if _ != ch_axis]
+        sum_dims = [
+            _ for _ in range(len(self.weights.get(layer_name).shape)) if _ != ch_axis
+        ]
         taylor_arr = taylor.norm(p=1, dim=sum_dims).cpu()
-        taylor_arr = taylor_arr if is_consumer else taylor_arr[ch_info.get('begin'): ch_info.get('end')]
+        taylor_arr = (
+            taylor_arr
+            if is_consumer
+            else taylor_arr[ch_info.get('begin') : ch_info.get('end')]
+        )
         return taylor_arr
 
     def get_backward_grad(self, input_data, test_iteration, batch_num=1):
@@ -201,7 +225,9 @@ class TaylorLossSensitivity(SensitivityBase):
         Return: grads, weights
         """
         if input_data[0].shape[0] < test_iteration * batch_num:
-            raise RuntimeError('insufficient input data for iterative testing : ' + str(test_iteration))
+            raise RuntimeError(
+                'insufficient input data for iterative testing : ' + str(test_iteration)
+            )
         device = next(iter(self.graph.model.parameters())).device
         grads_collection = {}
         wts_collection = {}
@@ -210,15 +236,19 @@ class TaylorLossSensitivity(SensitivityBase):
         self.graph.model.eval()
         x_data, y_label = input_data
         for i in range(test_iteration):
-            y_pred = self.graph.model(x_data[i * batch_num: (i + 1) * batch_num])
-            loss = self.loss_func(y_pred, y_label[i * batch_num: (i + 1) * batch_num].to(device))
+            y_pred = self.graph.model(x_data[i * batch_num : (i + 1) * batch_num])
+            loss = self.loss_func(
+                y_pred, y_label[i * batch_num : (i + 1) * batch_num].to(device)
+            )
             loss.backward()
             # reduce and clear grads
             for layer_name in self.graph_info.keys():
                 with torch.no_grad():
                     module = model_helper.get_module(layer_name)
                     if grads_collection.get(layer_name):
-                        grads_collection[layer_name] += copy.deepcopy(module.weight.grad)
+                        grads_collection[layer_name] += copy.deepcopy(
+                            module.weight.grad
+                        )
                     else:
                         grads_collection[layer_name] = copy.deepcopy(module.weight.grad)
             self.graph.model.zero_grad()
@@ -230,15 +260,23 @@ class TaylorLossSensitivity(SensitivityBase):
         return grads_collection, wts_collection
 
 
-@check_params(model=torch.nn.Module,
-              config=str,
-              input_data=list,
-              output_cfg=str,
-              sensitivity=(str, SensitivityBase),
-              search_alg=(str, SearchChannelBase))
-def auto_channel_prune_search(model, config, input_data, output_cfg,
-                              sensitivity='TaylorLossSensitivity', search_alg='GreedySearch'):
-    """ Auto search quant bit for a model based calibration.
+@check_params(
+    model=torch.nn.Module,
+    config=str,
+    input_data=list,
+    output_cfg=str,
+    sensitivity=(str, SensitivityBase),
+    search_alg=(str, SearchChannelBase),
+)
+def auto_channel_prune_search(
+    model,
+    config,
+    input_data,
+    output_cfg,
+    sensitivity='TaylorLossSensitivity',
+    search_alg='GreedySearch',
+):
+    """Auto search quant bit for a model based calibration.
 
     Args:
         model (torch.nn.Module): model to be processed.
@@ -277,5 +315,7 @@ def auto_channel_prune_search(model, config, input_data, output_cfg,
             raise ValueError("sensitivity not support.")
 
     config_helper = AutoChannelPruneConfigHelper(graph, config, GraphQuerier, CAPACITY)
-    amc = AutoChannelPruneSearch(graph, input_data, config_helper, sensitivity, search_alg, output_cfg)
+    amc = AutoChannelPruneSearch(
+        graph, input_data, config_helper, sensitivity, search_alg, output_cfg
+    )
     amc.run(input_data)

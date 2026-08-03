@@ -1,20 +1,57 @@
-# hifloat4_cast — HiFloat4 FP→HiF4→FP fake-quant operator
+# hifloat4_cast — HiFloat4 quantization operator
 
-FP16/BF16 → HiFloat4 → FP16/BF16 simulation (fake-quant) for Ascend NPU. HiFloat4 (hifx4) is a
-4-bit block-scaling float: per element **S1P2** (1 sign + 2-bit mantissa, 8 magnitudes) plus a
-per-64-element **3-level scale** (L1 `scale_factor` E6M2 over the 64-block, L2 over each 8, L3
-over each 4). This op does a one-shot FP→FP round trip (it does **not** pack real 4-bit); it is
-the NPU backend for `amct_pytorch`'s `hifloat4_fake_quant`, used for off-NPU-equivalent accuracy
-/ PPL evaluation.
+HiFloat4 (hifx4) is a 4-bit block-scaling float format: per element **S1P2** (1 sign + 2-bit
+mantissa, 8 magnitudes) plus a per-64-element **3-level scale** (L1 `scale_factor` E6M2 over the
+64-block, L2 over each 8, L3 over each 4).
 
-Unlike `hifloat8_cast`, there is **no lookup table**: the scale is an arithmetic per-block
-reduction and S1P2 has only 8 magnitudes, so a LUT buys nothing.
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CLI (amct_pytorch/cli/llm/)                            │
+│  --quant_dtype hifp  →  auto-detect source format       │
+│    ├─ PTQ:   fake-quant + unpack (HiF4 → float)         │
+│    └─ Deploy: pack (float → HiF4 bytes)                 │
+├─────────────────────────────────────────────────────────┤
+│  Python (amct_pytorch/common/utils/hifloat4_quant/)      │
+│  ├─ _hif4_encode_decode.py  shared encode/decode math    │
+│  ├─ hif4_pack_unpack.py     float ↔ HiF4 uint8 packer   │
+│  └─ quant_dequant.py        fake-quant entry point       │
+├─────────────────────────────────────────────────────────┤
+│  NPU Kernel (op_kernel/hifloat4_cast_kernel.cpp)         │
+│  └─ hifx_kernel / hifx_kernel_bf16   FP→HiF4→FP round   │
+│     trip (fake-quant only; pack/unpack is in Python)     │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **1 NPU kernel**: `hifx_kernel` (fp32) / `hifx_kernel_bf16` (bf16), performs a single FP→HiF4→FP
+  simulation round trip
+- **Pack/unpack**: pure PyTorch (`hif4_pack_unpack.py`), encodes float weights to uint8 HiF4 bytes
+  or decodes bytes back to float
+- **Shared encode/decode**: fake-quant and pack share the same `_hif4_encode_decode` logic,
+  guaranteeing the evaluation path and deployed weight never drift
+
+## CLI workflow
+
+```bash
+# PTQ: fake-quant simulation or HiF4 unpack
+python -m amct_pytorch.cli.llm.ptq \
+    --model /path/to/model --quant_dtype hifp --output_dir ./output
+
+# Deploy: float → HiF4 uint8 bytes, outputs safetensors
+python -m amct_pytorch.cli.llm.deploy \
+    --model /path/to/model --quant_dtype hifp --output_dir ./output
+```
+
+When `--quant_dtype hifp`, the CLI **auto-detects** the input model format:
+- **hif4 packed** → PTQ directly unpacks to a float checkpoint (no model build needed)
+- **bf16/fp16 raw weights** → PTQ runs fake-quant evaluation, or deploy runs real packing
 
 ## API
 
 The device op `torch.ops.amct.hifloat4_fake_quant(Tensor input, int qdim=-1) -> Tensor` takes
 FP16/BF16, returns the same shape/dtype, and forms 64-element shared-scale blocks along `qdim`.
-`qdim` is a schema arg; the permute/pad/slice layout work lives in the **C++ host** (python is a
+`qdim` is a schema arg; the permute/pad/slice layout work lives in the **C++ host** (Python is a
 thin passthrough):
 
 ```python
@@ -29,7 +66,7 @@ block max), calls the kernel, then slices off the pad and restores the dim order
 
 ## Correctness (acceptance red-line)
 
-The kernel reproduces amct's pure-python reference exactly. Validate on device against it:
+The kernel reproduces AMCT's pure-python reference exactly. Validate on device against it:
 
 ```python
 import torch
@@ -47,6 +84,19 @@ assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
 
 `tests/amct_ops/test_hifloat4_cast.py` cross-checks the kernel against this CPU reference when an NPU is present.
 
+## Packed format
+
+```
+scale : uint8 [M, N // 64, 4]     one 4-byte record per 64-group
+    byte 0 : E6M2                 level-1 scale factor, E6M2 = 8 bits
+    byte 1 : E1_8  (8 × 1 bit)   per-8-subgroup exponent bit
+    byte 2 : E1_16 high 8 bits   per-4-subgroup exponent bit, blocks 0..7
+    byte 3 : E1_16 low  8 bits   blocks 8..15
+value : uint8 [M, N // 2]        two adjacent 4-bit codes packed into one byte
+    each nibble = (sign << 3) | code,  code = round(|in_grp| * 4) in 0..7
+    low-bit-first: element 0 in low nibble, element 1 in high nibble
+```
+
 ## Build
 
 ```bash
@@ -59,7 +109,11 @@ pip install amct_ops/dist/amct_ops-*.whl
 
 ## Status / notes
 
-- Simulation only. Real 4-bit packed codec + low-bit matmul is future work.
-- The kernel does the block reduction and quant in fp32 (bf16 / E6M2 rounding via the hardware
+- **NPU kernel**: does the block reduction and quant in fp32 (bf16 / E6M2 rounding via the hardware
   `vconv`). The kernel body is guarded by `__DAV_C220_VEC__` (A2/A3, dav-2201 = C220, covering
   910B/910C); other arches compile to a no-op, so validate on the target NPU.
+- **Pack/unpack**: done in Python, shares the same encode/decode math (`_hif4_encode_decode`) as the
+  NPU kernel, guaranteeing bit-identical results.
+- **NaN/Inf handling**: non-finite values are zeroed before scale computation and restored
+  element-by-element after dequant (NaN→NaN, +Inf→+Inf, -Inf→-Inf), so a single bad element
+  never pollutes the rest of the group.

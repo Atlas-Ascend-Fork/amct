@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
-from unittest import mock
 
 import torch
 
@@ -26,7 +25,7 @@ from amct_pytorch.classic.graph_based.amct_pytorch.prune.pruner_helper import (
     PruneHelper,
 )
 
-from .utils import models, record_utils
+from .utils import models
 
 DEVICE = 'cpu'
 
@@ -37,6 +36,7 @@ class TestFilterPruneHelper(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_prune_helper')
@@ -54,8 +54,10 @@ class TestFilterPruneHelper(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_train_branch(self,):
-        """ test active, passive, disable"""
+    def test_train_branch(
+        self,
+    ):
+        """test active, passive, disable"""
         model = models.NetTrainBranch().to(torch.device("cpu"))
         args_shape = [(1, 2, 28, 28)]
         args = list()

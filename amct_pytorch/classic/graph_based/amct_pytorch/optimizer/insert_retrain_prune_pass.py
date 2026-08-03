@@ -27,7 +27,6 @@ from ...amct_pytorch.custom_op.comp_module.comp_module_base import COMP_ALG_PRUN
 from .insert_retrain_pass import REPLACE_DICT, get_node_onnx_type
 
 
-
 class InsertRetrainPrunePass(BaseFusionPass):
     """
     Function: Insert some mudule about retrain quantization.

@@ -1,5 +1,4 @@
-
-class FlatConfig():
+class FlatConfig:
     # activation
     a_bits = 4
     a_groupsize = -1

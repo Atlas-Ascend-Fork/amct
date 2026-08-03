@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -28,6 +28,7 @@ class InsertFakequantConvTransposePass(BaseModuleFusionPass):
     Function: insert fakequant ConvTranpose module
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records, num_bits):
         """
         Function: init object
@@ -47,12 +48,15 @@ class InsertFakequantConvTransposePass(BaseModuleFusionPass):
         Return: True: matched
                 False: mismatch
         """
-        if type(module).__name__ not in ["ConvTranspose1d", "ConvTranspose2d", "ConvTranspose3d"]:
+        if type(module).__name__ not in [
+            "ConvTranspose1d",
+            "ConvTranspose2d",
+            "ConvTranspose3d",
+        ]:
             return False
         if name not in self.records:
             return False
         return True
-
 
     def do_pass(self, model, object_module, object_name, graph=None):
         """
@@ -73,12 +77,15 @@ class InsertFakequantConvTransposePass(BaseModuleFusionPass):
         channel_wise = len(quant_params['weight_scale'].flatten()) > 1
         quant_params['channel_wise'] = channel_wise
         fakequant_module = FakeQuantizedConvTranspose(
-            object_module, quant_params, object_name, self.num_bits)
+            object_module, quant_params, object_name, self.num_bits
+        )
 
         # Step3: replace new model
-        setattr(parent_module, object_name.split('.')[-1],
-                fakequant_module)
+        setattr(parent_module, object_name.split('.')[-1], fakequant_module)
 
         LOGGER.logd(
             "Insert FakeQuantizedConvTranspose module to '{}' success!".format(
-                object_name), 'InsertFakequantConvTranpose2dPass')
+                object_name
+            ),
+            'InsertFakequantConvTranpose2dPass',
+        )

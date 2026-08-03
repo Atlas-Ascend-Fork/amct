@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,7 +20,6 @@
  * @version 1.0
  */
 
-
 #ifndef TENSOR_DECOMPOSITION_H
 #define TENSOR_DECOMPOSITION_H
 
@@ -28,11 +27,11 @@
 
 namespace TensorDecompose {
 enum class DecomposeMode {
-    DM_UNCHANGE                         = 0,
-    DM_FIRST_CHANNEL_FIRST_KERNEL       = 1,
-    DM_FIRST_CHANNEL_SECOND_KERNEL      = 2,
-    DM_SECOND_CHANNEL_FIRST_KERNEL      = 3,
-    DM_SECOND_CHANNEL_SECOND_KERNEL     = 4,
+    DM_UNCHANGE = 0,
+    DM_FIRST_CHANNEL_FIRST_KERNEL = 1,
+    DM_FIRST_CHANNEL_SECOND_KERNEL = 2,
+    DM_SECOND_CHANNEL_FIRST_KERNEL = 3,
+    DM_SECOND_CHANNEL_SECOND_KERNEL = 4,
 };
 
 struct ConvInfo {
@@ -50,9 +49,8 @@ struct ConvInfo {
 class TensorDecomposition {
 public:
     static TdError Sigma2(double &obj, double sigma2, unsigned int sizeL, unsigned int sizeM, const Vector &vecS);
-    static TdError ArgMin(double &resultOut, double lowerBound, double upperBound,
-                           unsigned int sizeL, unsigned int sizeM,
-                           const Vector &vecS, double xatol = 1e-5, unsigned int maxIter = 500);
+    static TdError ArgMin(double &resultOut, double lowerBound, double upperBound, unsigned int sizeL,
+        unsigned int sizeM, const Vector &vecS, double xatol = 1e-5, unsigned int maxIter = 500);
     static TdError Tau(Vector &vecRes, const Vector &vecX, double alpha);
     static TdError EVBMF(unsigned int &resultOut, int sizeL, int sizeM, const Vector &vecS);
     static TdError MakeDivisible(unsigned int &newV, int rank, int divisior, int minVal);
@@ -62,23 +60,22 @@ public:
     static bool CheckScalar(int val, bool checkLargerThanZero = false);
     static bool CheckScalar(unsigned int val);
     static bool CheckScalar(double val, bool checkLargerThanZero = false);
-    static void Calculation1(const double &p, const double &q, const double &r, const double &a,
-                             const double &xf, const double &b, double &rat, double &x, const double &tol2,
-                             const double &xm, const double &tol1, bool &golden);
-    static void Calculation2(double &rat, const bool &golden, const double &xf, const double &xm,
-                             double &e, const double &a, const double &b, const double &goldenMean);
+    static void Calculation1(const double &p, const double &q, const double &r, const double &a, const double &xf,
+        const double &b, double &rat, double &x, const double &tol2, const double &xm, const double &tol1,
+        bool &golden);
+    static void Calculation2(double &rat, const bool &golden, const double &xf, const double &xm, double &e,
+        const double &a, const double &b, const double &goldenMean);
     static void Calculation3(const double &x, double &xg, double &fa, double &fb, double &ngc, double &gulc,
-                             double &gngc, double &ggulc, double &gx, const double &gu);
+        double &gngc, double &ggulc, double &gx, const double &gu);
     static void Calculation4(const double &x, const double &xg, double &fa, double &fb, const double &gu, double &gngc,
-                             double &ngc, double &gulc, double &ggulc);
+        double &ngc, double &gulc, double &ggulc);
     static void UpdateSI(double &si, const double &rat);
     static void UpdateP(double &p, const double &q);
-    static TdError LoopCalculation(double &xf, double &xm, double &tol2, double &b, double &a, double &e,
-                                    double &tol1, double &nfc, double &fx, double &ffulc, double &fulc, double &fnfc,
-                                    double &rat, double &x, const double &goldenMean, unsigned int sizeL,
-                                    unsigned int sizeM, const Vector &vecS, unsigned int num, const double &sqrtEps,
-                                    const double &xatol, unsigned int maxIter);
+    static TdError LoopCalculation(double &xf, double &xm, double &tol2, double &b, double &a, double &e, double &tol1,
+        double &nfc, double &fx, double &ffulc, double &fulc, double &fnfc, double &rat, double &x,
+        const double &goldenMean, unsigned int sizeL, unsigned int sizeM, const Vector &vecS, unsigned int num,
+        const double &sqrtEps, const double &xatol, unsigned int maxIter);
 };
-}
+} // namespace TensorDecompose
 
 #endif

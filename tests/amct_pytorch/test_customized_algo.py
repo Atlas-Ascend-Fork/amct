@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -57,17 +57,24 @@ class TestCustomizedAlgo(unittest.TestCase):
     '''
     ST FOR CUSTOMIZED ALGORITHM
     '''
+
     @classmethod
     def setUpClass(cls):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
-        cls.ori_out = cls.test_model(cls.inputs).to(torch.float32).detach().to('cpu').numpy().astype(np.float32)
+        cls.ori_out = (
+            cls.test_model(cls.inputs)
+            .to(torch.float32)
+            .detach()
+            .to('cpu')
+            .numpy()
+            .astype(np.float32)
+        )
         logger.info('TestCustomizedAlgo START!')
 
     @classmethod
     def tearDownClass(cls):
         logger.info('TestCustomizedAlgo END!')
-
 
     def test_customize_algo_quantize_success(self):
         cfg = {
@@ -77,7 +84,7 @@ class TestCustomizedAlgo(unittest.TestCase):
                     'type': 'int8',
                     'symmetric': False,
                     'strategy': 'group',
-                    'group_size': 32
+                    'group_size': 32,
                 },
                 'inputs': {
                     'type': 'int8',
@@ -85,12 +92,14 @@ class TestCustomizedAlgo(unittest.TestCase):
                     'strategy': 'tensor',
                 },
             },
-            'algorithm': {AA: {'BB': 0.8}}
+            'algorithm': {AA: {'BB': 0.8}},
         }
         model = self.test_model.to(torch.bfloat16)
         algorithm_register(AA, 'Linear', CustomQuant, CustomDeployQuant)
         self.assertEqual(AlgorithmRegistry.algo[AA]['Linear'], CustomQuant)
-        self.assertEqual(AlgorithmRegistry.quant_to_deploy[CustomQuant], [CustomDeployQuant])
+        self.assertEqual(
+            AlgorithmRegistry.quant_to_deploy[CustomQuant], [CustomDeployQuant]
+        )
         model = copy.deepcopy(self.test_model).to(torch.bfloat16)
         quantize(model, cfg)
         self.assertEqual(type(model.linear1).__name__, CUSTOMQUANT)

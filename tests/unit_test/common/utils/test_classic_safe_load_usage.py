@@ -30,9 +30,12 @@ PARAM_SCALE_VALUE = 1.0
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SAFE_LOAD_PATH = REPO_ROOT / "amct_pytorch/common/utils/safe_load.py"
 MODULE_RECORD_PARSER_PATH = (
-    REPO_ROOT / "amct_pytorch/classic/graph_based/amct_pytorch/parser/module_based_record_parser.py"
+    REPO_ROOT
+    / "amct_pytorch/classic/graph_based/amct_pytorch/parser/module_based_record_parser.py"
 )
-MODEL_UTIL_PATH = REPO_ROOT / "amct_pytorch/classic/graph_based/amct_pytorch/utils/model_util.py"
+MODEL_UTIL_PATH = (
+    REPO_ROOT / "amct_pytorch/classic/graph_based/amct_pytorch/utils/model_util.py"
+)
 
 
 def _install_package(monkeypatch, module_name):
@@ -74,9 +77,15 @@ def _prepare_module_based_record_parser(monkeypatch):
     _install_package(monkeypatch, "amct_pytorch.classic")
     _install_package(monkeypatch, "amct_pytorch.classic.graph_based")
     _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch")
-    _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.parser")
-    _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common")
-    _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common.utils")
+    _install_package(
+        monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.parser"
+    )
+    _install_package(
+        monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common"
+    )
+    _install_package(
+        monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common.utils"
+    )
     _install_module(
         monkeypatch,
         "amct_pytorch.classic.graph_based.amct_pytorch.common.utils.util",
@@ -94,9 +103,15 @@ def _prepare_model_util(monkeypatch):
     _install_package(monkeypatch, "amct_pytorch.classic")
     _install_package(monkeypatch, "amct_pytorch.classic.graph_based")
     _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch")
-    _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.configuration")
-    _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common")
-    _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common.utils")
+    _install_package(
+        monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.configuration"
+    )
+    _install_package(
+        monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common"
+    )
+    _install_package(
+        monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.common.utils"
+    )
     _install_package(monkeypatch, "amct_pytorch.classic.graph_based.amct_pytorch.utils")
     _install_module(
         monkeypatch,
@@ -128,8 +143,12 @@ def test_get_layer_quant_params_uses_safe_load_with_mmap(monkeypatch, tmp_path):
         captured["kwargs"] = kwargs
         return {LAYER_NAME: {"scale": torch.tensor([PARAM_SCALE_VALUE])}}
 
-    monkeypatch.setattr(module_based_record_parser, "safe_torch_load", fake_safe_torch_load)
-    monkeypatch.setattr(module_based_record_parser, "version_higher_than", lambda *_: True)
+    monkeypatch.setattr(
+        module_based_record_parser, "safe_torch_load", fake_safe_torch_load
+    )
+    monkeypatch.setattr(
+        module_based_record_parser, "version_higher_than", lambda *_: True
+    )
 
     quant_params = module_based_record_parser.get_layer_quant_params(
         {"quant_result_path": str(quant_result)}, LAYER_NAME
@@ -147,8 +166,7 @@ def test_load_pth_file_uses_safe_load_for_deserialization(monkeypatch, tmp_path)
     model = torch.nn.Linear(LINEAR_IN_FEATURES, LINEAR_OUT_FEATURES)
     checkpoint = {
         MODEL_STATE_DICT_NAME: {
-            key: torch.ones_like(value)
-            for key, value in model.state_dict().items()
+            key: torch.ones_like(value) for key, value in model.state_dict().items()
         }
     }
     captured = {}

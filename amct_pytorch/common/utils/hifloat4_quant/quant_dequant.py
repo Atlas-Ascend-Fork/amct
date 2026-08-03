@@ -73,7 +73,8 @@ def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32:
     ng = Q.man_bits - 1                       # HiF4: man_bits=3 -> ng=2
     xb = x.unflatten(qdim, (-1, 8, 2, 4)).to(torch.float32)
     enc = hif4_encode(xb, ng=ng)
-    out = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=ng).flatten(qdim - 3, qdim)
+    out = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=ng,
+                      special_vals=enc.special_vals).flatten(qdim - 3, qdim)
 
     # slice the pad off. Use a tuple (basic indexing) -- a list of slices is treated as
     # advanced indexing by torch/numpy and would not mean "slice every dim".

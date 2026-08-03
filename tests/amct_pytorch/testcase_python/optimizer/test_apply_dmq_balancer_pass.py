@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,14 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
-import sys
 import unittest
 from copy import deepcopy
 
 import numpy as np
-import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
@@ -124,32 +120,27 @@ class TestInsertQuantPass(unittest.TestCase):
         pass
 
     def test_match_pattern_success(self):
-        records = {CONV1: {
-                'data_scale': 1,
-                'data_offset': 0,
-                'tensor_balance_factor': 1.5
-            }
+        records = {
+            CONV1: {'data_scale': 1, 'data_offset': 0, 'tensor_balance_factor': 1.5}
         }
         test_model = deepcopy(self.model_proto)
         conv_node = Graph(test_model).get_node_by_name(CONV1)
         self.assertTrue(ApplyDMQBalancerPass(records).match_pattern(conv_node))
 
     def test_match_pattern_not_in_quantizable_types(self):
-        records = {CONV1: {
-                'data_scale': 1,
-                'data_offset': 0,
-                'tensor_balance_factor': 1.5
-            }
+        records = {
+            CONV1: {'data_scale': 1, 'data_offset': 0, 'tensor_balance_factor': 1.5}
         }
         test_model = deepcopy(self.model_proto)
         relu_node = Graph(test_model).get_node_by_name(RELU1)
         self.assertFalse(ApplyDMQBalancerPass(records).match_pattern(relu_node))
 
     def test_match_pattern_failed_with_avgpool(self):
-        records = {'avg_pool1': {
+        records = {
+            'avg_pool1': {
                 'data_scale': 1,
                 'data_offset': 0,
-                'tensor_balance_factor': [1.5]
+                'tensor_balance_factor': [1.5],
             }
         }
         test_model = deepcopy(self.model_proto)
@@ -157,22 +148,19 @@ class TestInsertQuantPass(unittest.TestCase):
         self.assertFalse(ApplyDMQBalancerPass(records).match_pattern(avg_node))
 
     def test_match_pattern_not_in_records(self):
-        records = {CONV1: {
-                'data_scale': 1,
-                'data_offset': 0
-            }
-        }
+        records = {CONV1: {'data_scale': 1, 'data_offset': 0}}
         test_model = deepcopy(self.model_proto)
         conv_node = Graph(test_model).get_node_by_name(CONV1)
         self.assertFalse(ApplyDMQBalancerPass(records).match_pattern(conv_node))
 
     def test_do_pass_success(self):
-        records = {CONV1: {
+        records = {
+            CONV1: {
                 'data_scale': 1.0,
                 'data_offset': 0,
                 'weight_scale': np.array([1.0], dtype=np.float32),
                 'weight_offset': np.array([0], dtype=np.int8),
-                'tensor_balance_factor': np.array([1.0], dtype=np.float32)
+                'tensor_balance_factor': np.array([1.0], dtype=np.float32),
             }
         }
         test_model = deepcopy(self.model_proto)
@@ -182,5 +170,3 @@ class TestInsertQuantPass(unittest.TestCase):
         ApplyDMQBalancerPass(records).do_pass(graph, conv_node)
         after_nodes_num = len(graph.nodes)
         self.assertEqual(after_nodes_num - before_nodes_num, 2)
-
-

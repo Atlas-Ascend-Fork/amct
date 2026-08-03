@@ -1,3 +1,4 @@
+from __future__ import annotations
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -17,7 +18,7 @@
 
 from typing import Callable, Iterable, Optional, TypeVar
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 
 T = TypeVar("T")
@@ -36,7 +37,9 @@ class PtqUnit:
         return self.name.replace(".", "_")
 
 
-def make_ptq_unit(kind: str, name: str, layer_idx: int | None, module, metadata: Optional[dict] = None) -> PtqUnit:
+def make_ptq_unit(
+    kind: str, name: str, layer_idx: int | None, module, metadata: Optional[dict] = None
+) -> PtqUnit:
     return PtqUnit(
         kind=kind,
         name=name,

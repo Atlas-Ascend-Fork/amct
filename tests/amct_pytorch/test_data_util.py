@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -54,6 +54,7 @@ class Testfloat2fp4e2m1(unittest.TestCase):
     '''
     UT FOR DATA TRANSFORMATION FROM FLOAT 2 FP4E2M1
     '''
+
     @classmethod
     def setUpClass(cls):
         logger.info('Testfloat2fp4e2m1 START!')

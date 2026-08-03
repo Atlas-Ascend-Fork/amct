@@ -13,17 +13,25 @@ class FlatQuantizedLinear(nn.Module):
 
         quantizer_size = linear.weight.shape[0]
         self.weight_quantizer = WeightQuantizer(shape=(quantizer_size, 1))
-        self.weight_quantizer.configure(quant_config.w_bits, perchannel=True, sym=quant_config.w_sym, mse=False)
-        self.act_quantizer = ActivationQuantizer(quant_config.a_bits, sym=quant_config.a_sym, lac=lac)
+        self.weight_quantizer.configure(
+            quant_config.w_bits, perchannel=True, sym=quant_config.w_sym, mse=False
+        )
+        self.act_quantizer = ActivationQuantizer(
+            quant_config.a_bits, sym=quant_config.a_sym, lac=lac
+        )
 
         self.lwc = quant_config.lwc
         if self.lwc:
             lwc_dim = self.linear.weight.shape[0]
-            init_value = 4.
+            init_value = 4.0
             dev = self.linear.weight.device
 
-            self.clip_factor_w_max = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True)
-            self.clip_factor_w_min = nn.Parameter(torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True)
+            self.clip_factor_w_max = nn.Parameter(
+                torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True
+            )
+            self.clip_factor_w_min = nn.Parameter(
+                torch.ones((lwc_dim, 1)).to(dev) * init_value, requires_grad=True
+            )
 
             self.sigmoid = nn.Sigmoid()
 
@@ -38,22 +46,24 @@ class FlatQuantizedLinear(nn.Module):
 
     def apply_trans(self, weight, qa_trans):
         if isinstance(qa_trans, list):
-            weight = kronecker_matmul(weight, qa_trans[0].to(weight), qa_trans[1].to(weight))
+            weight = kronecker_matmul(
+                weight, qa_trans[0].to(weight), qa_trans[1].to(weight)
+            )
         else:
             weight = qa_trans(weight, inv_t=True)
         return weight
-    
+
     def get_quantized_weight(self, qa_trans=None, out_trans=None, quantonly=False):
         weight = self.linear.weight.data
         # quantization-adaptive transform
         if qa_trans is not None:
             weight = self.apply_trans(weight, qa_trans)
-        # learnable weight clipping 
+        # learnable weight clipping
         if self.lwc:
             weight = self.apply_wclip(weight)
         if out_trans is not None:
             weight = out_trans(weight.T).T
-        
+
         # quantize weight
         self.weight_quantizer.find_params(weight)
         if quantonly:
@@ -81,7 +91,9 @@ class FlatQuantizedLinear(nn.Module):
 
     def forward(self, hidden_states, qa_trans=None, out_trans=None):
         if not self._eval_mode:
-            return self._train_forward(hidden_states, qa_trans=qa_trans, out_trans=out_trans)
+            return self._train_forward(
+                hidden_states, qa_trans=qa_trans, out_trans=out_trans
+            )
         else:
             return self._eval_forward(hidden_states)
 
@@ -105,7 +117,7 @@ class FlatQuantizedLinear(nn.Module):
             weight = out_trans(weight.T).T
         if out_trans is not None and self.linear.bias is not None:
             self.linear.bias.data = out_trans(self.linear.bias.data)
-        
+
         self.linear.weight.data = weight.to(ori_dtype)
         self.lac_ratio = self.act_quantizer.clip_factor_a
         self._eval_mode = True

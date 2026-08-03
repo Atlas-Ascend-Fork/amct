@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -29,11 +29,8 @@ class ModelEvaluator(AutoCalibrationEvaluatorBase):
     '''
     Evaluator: an evaluator based on dataset.
     '''
-    @check_params(
-        input_shape=str,
-        data_dir=str,
-        data_types=str
-    )
+
+    @check_params(input_shape=str, data_dir=str, data_types=str)
     def __init__(self, data_dir, input_shape, data_types):
         """
         input_shape: string, the input shape to feed into the model.
@@ -86,14 +83,13 @@ class ModelEvaluator(AutoCalibrationEvaluatorBase):
     def _preprocess_batch_num(batch_num):
         """The number of data batches used to run PTQ calibration. Default is set to 1."""
         if batch_num <= 0:
-            raise ValueError("Invalid batch_num {} has been given, should be greater or equal to 0."
-            "Please check it.".format(batch_num))
+            raise ValueError(
+                "Invalid batch_num {} has been given, should be greater or equal to 0."
+                "Please check it.".format(batch_num)
+            )
         return batch_num
 
-    @check_params(
-        modified_model=torch.nn.Module,
-        batch_num=int
-    )
+    @check_params(modified_model=torch.nn.Module, batch_num=int)
     def calibration(self, modified_model, batch_num):
         '''
         Function: calibration
@@ -102,10 +98,7 @@ class ModelEvaluator(AutoCalibrationEvaluatorBase):
         self.evaluate(modified_model, batch_num)
         LOGGER.logi("Calibration Done.", "ModelEvaluator")
 
-    @check_params(
-        modified_model=torch.nn.Module,
-        iterations=int
-    )
+    @check_params(modified_model=torch.nn.Module, iterations=int)
     def evaluate(self, modified_model, iterations):
         '''
         Function: evaluate the modified_model with given iterations
@@ -115,11 +108,8 @@ class ModelEvaluator(AutoCalibrationEvaluatorBase):
         modified_model.eval()
 
         for data_map in data_handler.load_data(
-                self.input_shape,
-                self.data_dir,
-                self.data_types,
-                iterations
-            ):
+            self.input_shape, self.data_dir, self.data_types, iterations
+        ):
             with torch.no_grad():
                 for value in data_map.values():
                     input_tensors = [torch.tensor(value)]

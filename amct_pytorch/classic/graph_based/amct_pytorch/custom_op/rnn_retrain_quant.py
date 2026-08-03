@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -32,18 +32,18 @@ DATA_NUM_BITS = 'data_num_bits'
 WTS_NUM_BITS = 'wts_num_bits'
 NUM_BITS = 'num_bits'
 LAYERS_NAME = 'layers_name'
-RNN_TENSOR_SEQUENCE = {
-    'LSTM': [0, 3, 1, 2],
-    'GRU': [1, 0, 2]
-}
-ActRetrainParams = namedtuple('ActRetrainParams',
-                              ['scale', 'offset', 'clip_max', 'clip_min', 'clip_max_pre', 'clip_min_pre'])
+RNN_TENSOR_SEQUENCE = {'LSTM': [0, 3, 1, 2], 'GRU': [1, 0, 2]}
+ActRetrainParams = namedtuple(
+    'ActRetrainParams',
+    ['scale', 'offset', 'clip_max', 'clip_min', 'clip_max_pre', 'clip_min_pre'],
+)
 
 
 class RNNRetrainQuant(nn.Module):
     """
     record quantization factor.
     """
+
     def __init__(self, quant_module, record_module):
         """
         Function: init function
@@ -54,7 +54,7 @@ class RNNRetrainQuant(nn.Module):
         """
         super().__init__()
         self.common_config = quant_module.common_config
-        self.quant_module = quant_module # comp_module
+        self.quant_module = quant_module  # comp_module
         self.quant_module_type = get_quant_type(quant_module)
         self.do_init = quant_module.act_config.get('ifmr_init')
         self.init_module = None
@@ -63,11 +63,13 @@ class RNNRetrainQuant(nn.Module):
             self.init_module = IFMR(
                 num_bits=self.quant_module.act_config.get(NUM_BITS),
                 layers_name=self.common_config.get(LAYERS_NAME),
-                batch_num=self.common_config.get(BATCH_NUM))
+                batch_num=self.common_config.get(BATCH_NUM),
+            )
             self.init_module_h = IFMR(
                 num_bits=self.quant_module.act_config.get(NUM_BITS),
                 layers_name=self.common_config.get(LAYERS_NAME),
-                batch_num=self.common_config.get(BATCH_NUM))
+                batch_num=self.common_config.get(BATCH_NUM),
+            )
         self.record_module = record_module
         self.cur_batch = 0
         self.type = 'RNNRetrainQuant'
@@ -113,17 +115,21 @@ class RNNRetrainQuant(nn.Module):
             need_sync = world_size > 1
             if need_sync:
                 clip_max_all = torch.empty(
-                    world_size, 1, dtype=clip_max.dtype, device=clip_max.device)
+                    world_size, 1, dtype=clip_max.dtype, device=clip_max.device
+                )
                 clip_min_all = torch.empty(
-                    world_size, 1, dtype=clip_min.dtype, device=clip_min.device)
+                    world_size, 1, dtype=clip_min.dtype, device=clip_min.device
+                )
 
                 clip_max_l = list(clip_max_all.unbind(0))
                 clip_min_l = list(clip_min_all.unbind(0))
 
                 clip_max_all_reduce = torch.distributed.all_gather(
-                    clip_max_l, clip_max, process_group, async_op=True)
+                    clip_max_l, clip_max, process_group, async_op=True
+                )
                 clip_min_all_reduce = torch.distributed.all_gather(
-                    clip_min_l, clip_min, process_group, async_op=True)
+                    clip_min_l, clip_min, process_group, async_op=True
+                )
 
                 # wait on the async communication to finish
                 clip_max_all_reduce.wait()
@@ -136,7 +142,9 @@ class RNNRetrainQuant(nn.Module):
             clip_min = inputs[0].min()
             clip_max = inputs[0].max()
 
-        return is_init, ActRetrainParams._make([scale, offset, clip_max, clip_min, clip_max, clip_min])
+        return is_init, ActRetrainParams._make(
+            [scale, offset, clip_max, clip_min, clip_max, clip_min]
+        )
 
     @staticmethod
     def _reorganize_rnn_quant_factor(quant_factor, module_name, module_type):
@@ -147,7 +155,10 @@ class RNNRetrainQuant(nn.Module):
         tensor_sequence = RNN_TENSOR_SEQUENCE.get(module_type)
         if length % len(tensor_sequence) != 0:
             raise RuntimeError(
-                'Layer\'s quant factor length {} is not suitable mutiple of {}'.format(length, module_name))
+                'Layer\'s quant factor length {} is not suitable mutiple of {}'.format(
+                    length, module_name
+                )
+            )
         splited_quant_factor = np.split(quant_factor, len(tensor_sequence))
         temp_list = list()
         for idx in tensor_sequence:
@@ -166,20 +177,24 @@ class RNNRetrainQuant(nn.Module):
         """
         layers_name = self.common_config.get(LAYERS_NAME)
         if not isinstance(inputs, torch.Tensor):
-            raise ValueError("Only support input type \'torch.Tensor\'.")
+            raise ValueError("Only support input type 'torch.Tensor'.")
         if len(inputs.shape) != 3:
-            raise ValueError("Layer {} input data only support 3-D shape.".format(layers_name))
+            raise ValueError(
+                "Layer {} input data only support 3-D shape.".format(layers_name)
+            )
         if self.quant_module_type in RNN_LAYER_TYPE:
             if self.quant_module.replaced_module.batch_first:
                 self.sequence_length = inputs.shape[1]
             else:
                 self.sequence_length = inputs.shape[0]
         if hx is None:
-            raise ValueError("Layer {} except second input, but got None.".format(layers_name))
+            raise ValueError(
+                "Layer {} except second input, but got None.".format(layers_name)
+            )
 
         if self.do_init:
             self._acts_quant_init(inputs, hx)
-        
+
         outputs = self.quant_module(inputs, hx)
 
         if not self.training and not self.do_init:
@@ -189,23 +204,43 @@ class RNNRetrainQuant(nn.Module):
 
             if not self.write_done_flag:
                 self.record_module(
-                    layers_name, 'ifmr',
-                    {'scale_d': self.scale_d.cpu().tolist(),
-                     'scale_h': self.scale_h.cpu().tolist(),
-                     'offset_d': int(self.offset_d.cpu().tolist()),
-                     'offset_h': int(self.offset_h.cpu().tolist()),
-                     'num_bits': self.quant_module.act_config.get(NUM_BITS)})
+                    layers_name,
+                    'ifmr',
+                    {
+                        'scale_d': self.scale_d.cpu().tolist(),
+                        'scale_h': self.scale_h.cpu().tolist(),
+                        'offset_d': int(self.offset_d.cpu().tolist()),
+                        'offset_h': int(self.offset_h.cpu().tolist()),
+                        'num_bits': self.quant_module.act_config.get(NUM_BITS),
+                    },
+                )
                 self.record_module(
-                    layers_name, 'arq',
-                    {'scale_w': self._reorganize_rnn_quant_factor(
-                        self.scale_w.cpu().numpy(), layers_name[0], self.quant_module_type),
-                     'scale_r': self._reorganize_rnn_quant_factor(
-                        self.scale_r.cpu().numpy(), layers_name[0], self.quant_module_type),
-                     'offset_w': self._reorganize_rnn_quant_factor(
-                        self.offset_w.cpu().numpy().astype(np.int32), layers_name[0], self.quant_module_type),
-                     'offset_r': self._reorganize_rnn_quant_factor(
-                        self.offset_r.cpu().numpy().astype(np.int32), layers_name[0], self.quant_module_type),
-                     'num_bits': self.quant_module.wts_config.get(NUM_BITS)})
+                    layers_name,
+                    'arq',
+                    {
+                        'scale_w': self._reorganize_rnn_quant_factor(
+                            self.scale_w.cpu().numpy(),
+                            layers_name[0],
+                            self.quant_module_type,
+                        ),
+                        'scale_r': self._reorganize_rnn_quant_factor(
+                            self.scale_r.cpu().numpy(),
+                            layers_name[0],
+                            self.quant_module_type,
+                        ),
+                        'offset_w': self._reorganize_rnn_quant_factor(
+                            self.offset_w.cpu().numpy().astype(np.int32),
+                            layers_name[0],
+                            self.quant_module_type,
+                        ),
+                        'offset_r': self._reorganize_rnn_quant_factor(
+                            self.offset_r.cpu().numpy().astype(np.int32),
+                            layers_name[0],
+                            self.quant_module_type,
+                        ),
+                        'num_bits': self.quant_module.wts_config.get(NUM_BITS),
+                    },
+                )
                 self.write_done_flag = True
         else:
             self.cur_batch = 0
@@ -234,8 +269,12 @@ class RNNRetrainQuant(nn.Module):
                 scale_id = idx
             wts_scale = self.quant_module.wts_scales.data[scale_id]
             rec_wts_scale = self.quant_module.rec_wts_scales.data[scale_id]
-            self.scale_w.data[idx] = 1 / wts_scale if self.quant_module.s_rec_flag else wts_scale
-            self.scale_r.data[idx] = 1 / rec_wts_scale if self.quant_module.s_rec_flag else rec_wts_scale
+            self.scale_w.data[idx] = (
+                1 / wts_scale if self.quant_module.s_rec_flag else wts_scale
+            )
+            self.scale_r.data[idx] = (
+                1 / rec_wts_scale if self.quant_module.s_rec_flag else rec_wts_scale
+            )
 
             offset_id = 0
             if self.quant_module.wts_scales.numel() != 1:
@@ -244,17 +283,29 @@ class RNNRetrainQuant(nn.Module):
             self.offset_r.data[idx] = self.quant_module.rec_wts_offsets.data[offset_id]
 
         self.scale_d, self.offset_d = process_scale(
-            self.scale_d, self.offset_d, True,
-            self.quant_module.act_config.get(NUM_BITS))
+            self.scale_d,
+            self.offset_d,
+            True,
+            self.quant_module.act_config.get(NUM_BITS),
+        )
         self.scale_h, self.offset_h = process_scale(
-            self.scale_h, self.offset_h, True,
-            self.quant_module.act_config.get(NUM_BITS))
+            self.scale_h,
+            self.offset_h,
+            True,
+            self.quant_module.act_config.get(NUM_BITS),
+        )
         self.scale_w, self.offset_w = process_scale(
-            self.scale_w, self.offset_w, False,
-            self.quant_module.wts_config.get(NUM_BITS))
+            self.scale_w,
+            self.offset_w,
+            False,
+            self.quant_module.wts_config.get(NUM_BITS),
+        )
         self.scale_r, self.offset_r = process_scale(
-            self.scale_r, self.offset_r, False,
-            self.quant_module.wts_config.get(NUM_BITS))
+            self.scale_r,
+            self.offset_r,
+            False,
+            self.quant_module.wts_config.get(NUM_BITS),
+        )
 
     def _acts_quant_init(self, inputs, hx):
         """
@@ -272,13 +323,13 @@ class RNNRetrainQuant(nn.Module):
         if self.quant_module_type == 'LSTM':
             initial_h = hx[0]
         else:
-            initial_h = hx # 1, B, H
-        if self.sequence_length > 1: 
-            # cal quant factors with all hx 
-            outputs = self.quant_module.replaced_module.forward(inputs, hx) 
-            h_all = outputs[0] 
-            if self.quant_module.replaced_module.batch_first:  
-                h_all = h_all.permute(1, 0, 2) # B, T, H -> T, B, H 
+            initial_h = hx  # 1, B, H
+        if self.sequence_length > 1:
+            # cal quant factors with all hx
+            outputs = self.quant_module.replaced_module.forward(inputs, hx)
+            h_all = outputs[0]
+            if self.quant_module.replaced_module.batch_first:
+                h_all = h_all.permute(1, 0, 2)  # B, T, H -> T, B, H
             initial_h = torch.cat((initial_h, h_all[:-1, :, :]), dim=0)
         is_init_h, act_h_retrain_params = self._do_ifmr(initial_h, self.init_module_h)
         if is_init_h:
@@ -289,15 +340,35 @@ class RNNRetrainQuant(nn.Module):
             if not self.quant_module.acts_comp_reuse:
                 copy_tensor(self.quant_module.acts_scale, act_retrain_params.scale)
                 copy_tensor(self.quant_module.acts_offset, act_retrain_params.offset)
-                copy_tensor(self.quant_module.acts_clip_max, act_retrain_params.clip_max)
-                copy_tensor(self.quant_module.acts_clip_min, act_retrain_params.clip_min)
-                copy_tensor(self.quant_module.acts_clip_max_pre, act_retrain_params.clip_max_pre)
-                copy_tensor(self.quant_module.acts_clip_min_pre, act_retrain_params.clip_min_pre)
+                copy_tensor(
+                    self.quant_module.acts_clip_max, act_retrain_params.clip_max
+                )
+                copy_tensor(
+                    self.quant_module.acts_clip_min, act_retrain_params.clip_min
+                )
+                copy_tensor(
+                    self.quant_module.acts_clip_max_pre, act_retrain_params.clip_max_pre
+                )
+                copy_tensor(
+                    self.quant_module.acts_clip_min_pre, act_retrain_params.clip_min_pre
+                )
                 copy_tensor(self.quant_module.acts_h_scale, act_h_retrain_params.scale)
-                copy_tensor(self.quant_module.acts_h_offset, act_h_retrain_params.offset)
-                copy_tensor(self.quant_module.acts_h_clip_max, act_h_retrain_params.clip_max)
-                copy_tensor(self.quant_module.acts_h_clip_min, act_h_retrain_params.clip_min)
-                copy_tensor(self.quant_module.acts_h_clip_max_pre, act_h_retrain_params.clip_max_pre)
-                copy_tensor(self.quant_module.acts_h_clip_min_pre, act_h_retrain_params.clip_min_pre)
+                copy_tensor(
+                    self.quant_module.acts_h_offset, act_h_retrain_params.offset
+                )
+                copy_tensor(
+                    self.quant_module.acts_h_clip_max, act_h_retrain_params.clip_max
+                )
+                copy_tensor(
+                    self.quant_module.acts_h_clip_min, act_h_retrain_params.clip_min
+                )
+                copy_tensor(
+                    self.quant_module.acts_h_clip_max_pre,
+                    act_h_retrain_params.clip_max_pre,
+                )
+                copy_tensor(
+                    self.quant_module.acts_h_clip_min_pre,
+                    act_h_retrain_params.clip_min_pre,
+                )
 
         self.do_init = not is_init

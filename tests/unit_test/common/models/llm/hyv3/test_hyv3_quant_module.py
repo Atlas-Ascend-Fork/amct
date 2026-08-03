@@ -22,6 +22,7 @@ forward, so they require a real ``transformers.models.hy_v3`` (>= 5.12.1).
 When conftest has fallen back to a mock (older transformers), the whole
 module is skipped via ``pytest_collection_modifyitems`` in conftest.py.
 """
+
 import torch
 import torch.nn as nn
 from transformers.models.hy_v3.modeling_hy_v3 import HYV3Attention, HYV3MoE
@@ -137,6 +138,7 @@ class TestQuantHYV3MoE:
         assert torch.equal(qmoe.e_score_correction_bias, moe.e_score_correction_bias)
         from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts
         from amct_pytorch.common.models.llm.hyv3.quant_module import QuantHYV3MLP
+
         assert isinstance(qmoe.experts, QuantGatedExperts)
         assert isinstance(qmoe.shared_experts, QuantHYV3MLP)
 

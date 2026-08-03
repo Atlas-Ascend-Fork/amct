@@ -53,9 +53,7 @@ class OfmrQuant(BaseQuantizeModule):
         self.act_type = quant_config.get('inputs_cfg').get('quant_type')
 
         self.weight_compress_only = (
-            True
-            if quant_config.get("inputs_cfg").get("enable_quant") == False
-            else False
+            quant_config.get("inputs_cfg").get("enable_quant") is False
         )
         self.device = ori_module.weight.device
         self.act_quant_loss = torch.zeros(

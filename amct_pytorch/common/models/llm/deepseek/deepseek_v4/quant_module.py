@@ -23,13 +23,17 @@ to drop kv_cache / decode branches. They do NOT register kv_cache / kv_state /
 score_state buffers themselves — those live on the wrapped Attention/Compressor/
 Indexer instances and are simply unused under prefill.
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
+from amct_pytorch.quantization.modules.quant_base import (
+    ActivationQuantizer,
+    build_algorithms_by_target,
+)
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
@@ -80,7 +84,9 @@ class QuantV4Expert(QuantGatedMLP):
         if self.hidden_transform is not None:
             hidden = self.hidden_transform(hidden)
         hidden_q = self.hidden_quant(hidden)
-        out = self.down_proj(hidden_q, structure_transform=self.hidden_transform).to(dtype)
+        out = self.down_proj(hidden_q, structure_transform=self.hidden_transform).to(
+            dtype
+        )
         if weights is not None:
             out = weights * out
         return out
@@ -105,8 +111,12 @@ class QuantV4Compressor(nn.Module):
         if self.enable_attn_linear:
             bits = quant_args.bit_policy["attn-linear"]
             wkv, wgate = bits["comp_wkv"], bits["comp_wgate"]
-            self.wkv = QuantLinear(quant_args, compressor.wkv, w_bits=wkv.w, name="comp_wkv")
-            self.wgate = QuantLinear(quant_args, compressor.wgate, w_bits=wgate.w, name="comp_wgate")
+            self.wkv = QuantLinear(
+                quant_args, compressor.wkv, w_bits=wkv.w, name="comp_wkv"
+            )
+            self.wgate = QuantLinear(
+                quant_args, compressor.wgate, w_bits=wgate.w, name="comp_wgate"
+            )
             self.inp_afq = ActivationQuantizer(quant_args, wkv.a)
         else:
             self.wkv = PlainLinear(compressor.wkv)
@@ -171,12 +181,15 @@ class QuantV4Indexer(nn.Module):
         if self.enable_attn_linear:
             bits = quant_args.bit_policy["attn-linear"]
             wq_b, weights_proj = bits["idx_wq_b"], bits["idx_weights_proj"]
-            self.wq_b = QuantLinear(quant_args, indexer.wq_b, w_bits=wq_b.w, name="idx_wq_b")
+            self.wq_b = QuantLinear(
+                quant_args, indexer.wq_b, w_bits=wq_b.w, name="idx_wq_b"
+            )
             self.weights_proj = QuantLinear(
-    quant_args,
-    indexer.weights_proj,
-    w_bits=weights_proj.w,
-     name="idx_weights_proj")
+                quant_args,
+                indexer.weights_proj,
+                w_bits=weights_proj.w,
+                name="idx_weights_proj",
+            )
             self.qr_afq = ActivationQuantizer(quant_args, wq_b.a)
             self.x_afq = ActivationQuantizer(quant_args, weights_proj.a)
         else:
@@ -198,17 +211,23 @@ class QuantV4Indexer(nn.Module):
         q = rotate_activation(q)
         compressed_kv = self.compressor(x, 0)
         x_q = self.x_afq(x)
-        weights = self.weights_proj(x_q) * (self.softmax_scale * self.n_local_heads ** -0.5)
+        weights = self.weights_proj(x_q) * (
+            self.softmax_scale * self.n_local_heads**-0.5
+        )
         end_pos = seqlen
-        index_score = torch.einsum("bshd,btd->bsht", q, compressed_kv[:bsz, : end_pos // ratio])
+        index_score = torch.einsum(
+            "bshd,btd->bsht", q, compressed_kv[:bsz, : end_pos // ratio]
+        )
         index_score = (index_score.relu_() * weights.unsqueeze(-1)).sum(dim=2)
         device = x.device
-        causal_mask = torch.arange(seqlen // ratio, device=device).repeat(seqlen, 1) >= (
-            torch.arange(1, seqlen + 1, device=device).unsqueeze(1) // ratio
-        )
+        causal_mask = torch.arange(seqlen // ratio, device=device).repeat(
+            seqlen, 1
+        ) >= (torch.arange(1, seqlen + 1, device=device).unsqueeze(1) // ratio)
         index_score = index_score + torch.where(causal_mask, float("-inf"), 0.0)
         topk_idxs = index_score.topk(min(self.index_topk, end_pos // ratio), dim=-1)[1]
-        oob_mask = topk_idxs >= (torch.arange(1, seqlen + 1, device=device).unsqueeze(1) // ratio)
+        oob_mask = topk_idxs >= (
+            torch.arange(1, seqlen + 1, device=device).unsqueeze(1) // ratio
+        )
         topk_idxs = torch.where(oob_mask, -1, topk_idxs + offset)
         return topk_idxs
 
@@ -262,6 +281,7 @@ class QuantV4Attention(nn.Module):
             self.wkv = QuantLinear(quant_args, module.wkv, w_bits=wkv.w, name="wkv")
             self.wo_b = QuantLinear(quant_args, module.wo_b, w_bits=wo_b.w, name="wo_b")
             from amct_pytorch.quantization.modules.quant_base import WeightQuantizer
+
             self.wo_a = module.wo_a
             self.quant_args.w_size = module.wo_a.weight.data.shape
             self.wo_a_name = "wo_a"
@@ -302,7 +322,8 @@ class QuantV4Attention(nn.Module):
             self.compressor = QuantV4Compressor(quant_args, module.compressor)
             self.indexer = (
                 QuantV4Indexer(quant_args, module.indexer)
-                if module.indexer is not None else None
+                if module.indexer is not None
+                else None
             )
         else:
             self.compressor = None
@@ -325,9 +346,13 @@ class QuantV4Attention(nn.Module):
         q_idx, k_idx, m_idx = torch.where(valid_mask)
         index_mask[:, q_idx, k_idx, topk_idxs[q_idx, k_idx, m_idx]] = 0
         attn_weights = attn_weights + index_mask[..., :-1]
-        sinks = attn_sink.reshape(1, -1, 1, 1).expand(query_states.shape[0], -1, query_states.shape[2], -1)
+        sinks = attn_sink.reshape(1, -1, 1, 1).expand(
+            query_states.shape[0], -1, query_states.shape[2], -1
+        )
         combined_logits = torch.cat([attn_weights, sinks], dim=-1)
-        combined_logits = combined_logits - combined_logits.max(dim=-1, keepdim=True).values
+        combined_logits = (
+            combined_logits - combined_logits.max(dim=-1, keepdim=True).values
+        )
         probs = F.softmax(combined_logits, dim=-1, dtype=combined_logits.dtype)
         scores = probs[..., :-1]
         attn_output = self.pv_matmul(scores.to(query_states.dtype), kv_states)
@@ -372,8 +397,12 @@ class QuantV4Attention(nn.Module):
             if self.indexer is not None:
                 compress_topk_idxs = self.indexer(x, qr_orig, 0, offset)
             else:
-                compress_topk_idxs = get_compress_topk_idxs(ratio, bsz, seqlen, 0, offset)
-            topk_idxs = torch.cat([topk_idxs.to(compress_topk_idxs.device), compress_topk_idxs], dim=-1)
+                compress_topk_idxs = get_compress_topk_idxs(
+                    ratio, bsz, seqlen, 0, offset
+                )
+            topk_idxs = torch.cat(
+                [topk_idxs.to(compress_topk_idxs.device), compress_topk_idxs], dim=-1
+            )
         topk_idxs = topk_idxs.int()
 
         if self.compress_ratio:
@@ -381,7 +410,9 @@ class QuantV4Attention(nn.Module):
             if kv_compress is not None:
                 kv = torch.cat([kv, kv_compress], dim=1)
 
-        o = self.sparse_attn(q, kv, self.attn_sink.float(), topk_idxs.to(q.device), self.softmax_scale)
+        o = self.sparse_attn(
+            q, kv, self.attn_sink.float(), topk_idxs.to(q.device), self.softmax_scale
+        )
         apply_rotary_emb(o[..., -rd:], freqs_cis, True)
 
         o = o.view(bsz, seqlen, self.n_local_groups, -1)
@@ -405,6 +436,12 @@ class QuantV4Attention(nn.Module):
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.q_lora_rank)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.n_local_groups * self.o_lora_rank)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
+        ctx = AlgoBuildContext(
+            matrix_size=128, dim_size=self.n_local_groups * self.o_lora_rank
+        )
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )

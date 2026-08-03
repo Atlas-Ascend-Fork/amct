@@ -53,7 +53,7 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
             break
     samples = torch.cat(samples, dim=1)
     n_split = samples.shape[1] // seq_len
-    samples = [samples[:, i * seq_len:(i + 1) * seq_len] for i in range(n_split)]
+    samples = [samples[:, i * seq_len : (i + 1) * seq_len] for i in range(n_split)]
     return samples
 
 

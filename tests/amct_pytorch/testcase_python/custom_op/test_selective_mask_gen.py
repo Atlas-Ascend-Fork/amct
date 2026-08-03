@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,13 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
 import math
 import os
-import sys
 import unittest
-from unittest import mock
 
 import numpy as np
 import torch
@@ -45,6 +42,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
     """
     The UT for SelectiveMaskGen
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_selective_mask_gen')
@@ -64,7 +62,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
 
     # @unittest.skip('*')
     def test_algo_001(self):
-        """ not to refresh mask, return [1, 1, ..., 1] """
+        """not to refresh mask, return [1, 1, ..., 1]"""
         # prepare input
         tensor_shape = [2, 4, 3, 3]
         tensor_input = torch.randn(tensor_shape)
@@ -77,8 +75,12 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info('ori_data:', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
-        prune_mask = selective_mask_gen(tensor_input, algo_param[PRUNE_AXIS_KEY], \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE])
+        prune_mask = selective_mask_gen(
+            tensor_input,
+            algo_param[PRUNE_AXIS_KEY],
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+        )
         logger.info(prune_mask[0])
         logger.info(prune_mask.shape)
         mask_counter = np.sum(prune_mask.cpu().numpy()).astype(int)
@@ -87,9 +89,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
             shape_counter *= val
         self.assertEqual(mask_counter, shape_counter)
 
-
     def test_algo_002(self):
-        """ selective prune  4:2,  prun """
+        """selective prune  4:2,  prun"""
         # prepare input
         tensor_shape = [160, 4, 3, 3]
         tensor_input = torch.randn(tensor_shape)
@@ -102,14 +103,22 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info('ori_data:', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
-        prune_mask = selective_mask_gen(tensor_input, algo_param[PRUNE_AXIS_KEY], \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE])
+        prune_mask = selective_mask_gen(
+            tensor_input,
+            algo_param[PRUNE_AXIS_KEY],
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+        )
         logger.info(prune_mask[0])
         logger.info(prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
-        prune_mask_faker = SelectiveMaskFaker(tensor_input, \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE], algo_param[PRUNE_AXIS_KEY]).do()
+        prune_mask_faker = SelectiveMaskFaker(
+            tensor_input,
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+            algo_param[PRUNE_AXIS_KEY],
+        ).do()
         logger.info(prune_mask_faker.shape)
         logger.info(prune_mask_faker[0])
 
@@ -118,9 +127,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
-
     def test_algo_003(self):
-        """ selective prune  4:2 """
+        """selective prune  4:2"""
         # prepare input
         tensor_shape = [160, 7, 3, 3]
         tensor_input = torch.randn(tensor_shape)
@@ -133,14 +141,22 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info('ori_data:', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
-        prune_mask = selective_mask_gen(tensor_input, algo_param[PRUNE_AXIS_KEY], \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE])
+        prune_mask = selective_mask_gen(
+            tensor_input,
+            algo_param[PRUNE_AXIS_KEY],
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+        )
         logger.info(prune_mask[0])
         logger.info(prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
-        prune_mask_faker = SelectiveMaskFaker(tensor_input, \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE], algo_param[PRUNE_AXIS_KEY]).do()
+        prune_mask_faker = SelectiveMaskFaker(
+            tensor_input,
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+            algo_param[PRUNE_AXIS_KEY],
+        ).do()
         logger.info(prune_mask_faker.shape)
         logger.info(prune_mask_faker[0])
 
@@ -150,7 +166,7 @@ class TestSelectiveMaskGen(unittest.TestCase):
         self.assertTrue(is_equal)
 
     def test_algo_004(self):
-        """ selective prune  4:2 """
+        """selective prune  4:2"""
         # prepare input
         tensor_shape = [160, 3, 3, 3]
         tensor_input = torch.randn(tensor_shape)
@@ -163,14 +179,22 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info('ori_data:', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
-        prune_mask = selective_mask_gen(tensor_input, algo_param[PRUNE_AXIS_KEY], \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE])
+        prune_mask = selective_mask_gen(
+            tensor_input,
+            algo_param[PRUNE_AXIS_KEY],
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+        )
         logger.info(prune_mask[0])
         logger.info(prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
-        prune_mask_faker = SelectiveMaskFaker(tensor_input, \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE], algo_param[PRUNE_AXIS_KEY]).do()
+        prune_mask_faker = SelectiveMaskFaker(
+            tensor_input,
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+            algo_param[PRUNE_AXIS_KEY],
+        ).do()
         logger.info(prune_mask_faker.shape)
         logger.info(prune_mask_faker[0])
 
@@ -179,9 +203,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
-
     def test_algo_005(self):
-        """ selective prune  4:2 """
+        """selective prune  4:2"""
         # prepare input
         tensor_shape = [1, 4, 3, 3]
         tensor_input = torch.randn(tensor_shape)
@@ -194,14 +217,22 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info('ori_data:', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
-        prune_mask = selective_mask_gen(tensor_input, algo_param[PRUNE_AXIS_KEY], \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE])
+        prune_mask = selective_mask_gen(
+            tensor_input,
+            algo_param[PRUNE_AXIS_KEY],
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+        )
         logger.info(prune_mask[0])
         logger.info(prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
-        prune_mask_faker = SelectiveMaskFaker(tensor_input, \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE], algo_param[PRUNE_AXIS_KEY]).do()
+        prune_mask_faker = SelectiveMaskFaker(
+            tensor_input,
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+            algo_param[PRUNE_AXIS_KEY],
+        ).do()
         logger.info(prune_mask_faker.shape)
         logger.info(prune_mask_faker[0])
 
@@ -210,9 +241,8 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info(is_equal)
         self.assertTrue(is_equal)
 
-
     def test_algo_006(self):
-        """ selective prune  4:2 """
+        """selective prune  4:2"""
         # prepare input
         tensor_shape = [16, 6, 3, 3]
         tensor_input = torch.randn(tensor_shape)
@@ -221,19 +251,27 @@ class TestSelectiveMaskGen(unittest.TestCase):
             GROUP_SIZE_KEY: 4,
             PRUNE_SIZE: 2,
             PRUNE_AXIS_KEY: prune_axis,
-            'is_refresh': True
+            'is_refresh': True,
         }
         logger.info('ori_data:', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
-        prune_mask = selective_mask_gen(tensor_input, algo_param[PRUNE_AXIS_KEY], \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE])
+        prune_mask = selective_mask_gen(
+            tensor_input,
+            algo_param[PRUNE_AXIS_KEY],
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+        )
         logger.info(prune_mask[0])
         logger.info(prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
-        prune_mask_faker = SelectiveMaskFaker(tensor_input, \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE], algo_param[PRUNE_AXIS_KEY]).do()
+        prune_mask_faker = SelectiveMaskFaker(
+            tensor_input,
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+            algo_param[PRUNE_AXIS_KEY],
+        ).do()
         logger.info(prune_mask_faker.shape)
         logger.info(prune_mask_faker[0])
 
@@ -256,14 +294,22 @@ class TestSelectiveMaskGen(unittest.TestCase):
         logger.info('ori_data:', tensor_input.type())
         logger.info(tensor_input[0])
         # call seletive_mask_gen_op
-        prune_mask = selective_mask_gen(tensor_input, algo_param[PRUNE_AXIS_KEY], \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE])
+        prune_mask = selective_mask_gen(
+            tensor_input,
+            algo_param[PRUNE_AXIS_KEY],
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+        )
         logger.info(prune_mask[0])
         logger.info(prune_mask.shape)
 
         # call numpy seletive_mask_gen_op
-        prune_mask_faker = SelectiveMaskFaker(tensor_input, \
-            algo_param[GROUP_SIZE_KEY], algo_param[PRUNE_SIZE], algo_param[PRUNE_AXIS_KEY]).do()
+        prune_mask_faker = SelectiveMaskFaker(
+            tensor_input,
+            algo_param[GROUP_SIZE_KEY],
+            algo_param[PRUNE_SIZE],
+            algo_param[PRUNE_AXIS_KEY],
+        ).do()
         logger.info(prune_mask_faker.shape)
         logger.info(prune_mask_faker[0])
 
@@ -280,7 +326,6 @@ class SelectiveMaskFaker:
         self.prune_size = prune_size
         self.prune_axis = prune_axis
 
-
     def generate_mask(self, weights, group_size=4, pruned_size=2, dim=1):
         in_channels = weights.shape[dim]
         if in_channels < group_size:
@@ -291,23 +336,30 @@ class SelectiveMaskFaker:
         mask = torch.ones_like(weights_group)
         mask.scatter_(dim + 1, sort_indices, 0.0)
 
-        ungroup_shape = weights.shape[:dim] + (-1,) + weights.shape[dim + 1:]
+        ungroup_shape = weights.shape[:dim] + (-1,) + weights.shape[dim + 1 :]
         return mask.reshape(ungroup_shape).split(in_channels, dim=dim)[0]
 
     def do(self):
-        prune_mask = self.generate_mask(self.data_tensor,
-            self.group_size, self.prune_size, self.prune_axis)
+        prune_mask = self.generate_mask(
+            self.data_tensor, self.group_size, self.prune_size, self.prune_axis
+        )
         return prune_mask
-
 
     def _padding_and_reshape(self, weights, in_channels, group_size, dim):
         num_groups = int(math.ceil(in_channels / group_size))
         in_padding = num_groups * group_size - in_channels
-        group_shape = weights.shape[:dim] + (num_groups, group_size) + weights.shape[dim + 1:]
+        group_shape = (
+            weights.shape[:dim] + (num_groups, group_size) + weights.shape[dim + 1 :]
+        )
 
-        padding_shape = weights.shape[:dim] + (in_padding,) + weights.shape[dim + 1:]
-        weights_padding = torch.cat((weights.abs(), \
-            torch.zeros(padding_shape, dtype=weights.dtype, device=weights.device)), dim=dim)
+        padding_shape = weights.shape[:dim] + (in_padding,) + weights.shape[dim + 1 :]
+        weights_padding = torch.cat(
+            (
+                weights.abs(),
+                torch.zeros(padding_shape, dtype=weights.dtype, device=weights.device),
+            ),
+            dim=dim,
+        )
         weights_group = weights_padding.reshape(group_shape)
 
         return weights_group
