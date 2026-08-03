@@ -107,32 +107,6 @@ bash amct_ops/ops_build.sh                                  # build + package al
 pip install amct_ops/dist/amct_ops-*.whl
 ```
 
-## Changes from reference
-
-Based on [HiFloat4](https://github.com/global-computing-consortium/HiFloat4), with the following
-updates (the rest of the algorithm is identical):
-
-**NPU fake-quant kernel** (`hifloat4_cast_kernel.cpp`):
-- Added tail masking: when N is not a multiple of BATCH=512, the kernel walks backward from
-  BATCH-64 zeroing all tail elements (the original code only zeroed the last 64-block repeatedly,
-  leaving stale data in between)
-- Otherwise identical to the reference: 3-level shared scale (L1 E6M2 / L2 E1 8x / L3 E1 16x)
-  + S1P2 mantissa, fp32 internal precision, bf16/E6M2 rounding via hardware `vconv`
-
-**Python encode/decode** (`_hif4_encode_decode.py`):
-- **`keepdim` + explicit `qdim`**: block max reduction uses `amax(dim=qdim, keepdim=True)` instead
-  of `amax(dim=-1)` chains, matching the reference — all intermediate tensors share the same ndim,
-  broadcasting is automatic, no manual permute needed
-- After removing the block scale and computing lv2/lv3 scaling, **round to bf16 before quantizing
-  to S1P2**
-- When a 64-block contains NaN / +Inf / -Inf: **whole block → NaN** (block-poison). Scale byte 0
-  is stored as `0xFF`; reconstruction restores the entire block to NaN
-
-**Pack/unpack** (`hif4_pack_unpack.py`):
-- 4-bit packing uses **low-bit-first**: element 0 in low nibble, element 1 in high nibble
-- Scale packed as 4 bytes: `[E6M2, E1_8, E1_16_hi, E1_16_lo]`
-- Non-finite blocks: scale byte 0 = `0xFF` → `hif4_bit_reconstruct` restores the whole block as NaN
-
 ## Status / notes
 
 - **NPU kernel**: does the block reduction and quant in fp32 (bf16 / E6M2 rounding via the hardware

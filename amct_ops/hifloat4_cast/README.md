@@ -100,24 +100,6 @@ bash amct_ops/ops_build.sh                                  # 编译并打包全
 pip install amct_ops/dist/amct_ops-*.whl
 ```
 
-## 相对参考实现的改动
-
-本实现基于 [HiFloat4](https://github.com/global-computing-consortium/HiFloat4)，在此基础上做了以下更新，其余算法部分保持一致：
-
-**NPU 伪量化 kernel**（`hifloat4_cast_kernel.cpp`）：
-- 增加 tail masking 修复：当 N 不是 BATCH=512 的整数倍时，从 BATCH-64 反向遍历清零所有尾元素（原本只重复清零最后一个 64-block，中间 stale 数据污染 block max）
-- 其余与参考相同：3 级共享 scale（L1 E6M2 / L2 E1 8x / L3 E1 16x）+ S1P2 尾数，fp32 内部精度，bf16/E6M2 舍入用硬件 `vconv`
-
-**Python 编解码**（`_hif4_encode_decode.py`）：
-- **`keepdim` + 显式 `qdim`**：block max 归约使用 `amax(dim=qdim, keepdim=True)` 代替 `amax(dim=-1)` 链，匹配参考实现 —— 所有中间 tensor 保持同一 ndim，broadcast 自动处理，不需要手动 permute
-- 在元素除掉块 scale、做完二三级缩放后，**量化成 S1P2 之前先做一次 `round_to_bf16`**
-- 64-block 内出现 NaN / +Inf / -Inf 时：**整块置 NaN**（block-poison），打包 scale byte 0 写入 `0xFF`，解码时整块恢复为 NaN
-
-**打包/解包**（`hif4_pack_unpack.py`）：
-- 4-bit 打包采用**低位优先**：元素 0 放在低 4 bit，元素 1 放在高 4 bit
-- scale 打包为 4 bytes：`[E6M2, E1_8, E1_16_hi, E1_16_lo]`
-- 64-block 有非有限值时：scale byte 0 = `0xFF` → `hif4_bit_reconstruct` 将整块恢复为 NaN
-
 ## 状态 / 说明
 
 - **NPU kernel**：fp32 下做块内归约与量化（bf16 / E6M2 舍入用硬件 `vconv`）。内核体由 `__DAV_C220_VEC__`
