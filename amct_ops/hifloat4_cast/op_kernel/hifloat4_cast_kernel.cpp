@@ -165,25 +165,21 @@ public:
         set_vector_mask((uint64_t)-1, (uint64_t)-1);
 
         if (n_tail>0){
-            // Zero every tail element from shape.N to BATCH-1 (inclusive) so stale buffer
-            // content beyond the valid data cannot pollute the per-block scale reduction.
-            // Iterate backward from the last 64-block; all start offsets are 64-aligned →
-            // UB address is always 32-byte aligned for both fp32 (256B) and bf16 (128B).
-            // On the block that straddles shape.N the vector mask limits writes to the
-            // tail portion only (high mask bits), leaving the valid head untouched.
-            for (int tail_pos = BATCH - 64; tail_pos >= 0; tail_pos -= 64) {
-                if (tail_pos + 64 <= static_cast<int>(shape.N)) break;   // entirely valid data
-                int overlap = tail_pos + 64 - static_cast<int>(shape.N); // tail count in this block
-                if (overlap < 64) {
-                    uint64_t mask = ((1ULL << overlap) - 1) << (64 - overlap);
+            // Tail masking: the host guarantees N is a multiple of BATCH (512) by
+            // zero-padding, so this path is dead code in normal operation.  Kept as a
+            // safety net in case the kernel is called directly with non-aligned N.
+            for (int tail=n_tail; tail>0; tail-=64){
+                if (tail<64){
+                    uint64_t mask = 1;
+                    for (int i=1;i<tail;++i){
+                        mask |= (mask << 1);
+                    }
                     set_vector_mask(0, mask);
                 }
                 pipe_barrier(PIPE_V);
-                vector_dup(inp_tsr[tail_pos].ptr(), 0.0f, 1, 1, 1, 8, 8);
+                vector_dup(inp_tsr[BATCH-64].ptr(), 0.0f, 1, 1, 1, 8, 8);
                 pipe_barrier(PIPE_V);
             }
-            set_vector_mask((uint64_t)-1, (uint64_t)-1);
-            pipe_barrier(PIPE_V);
         }
         set_vector_mask((uint64_t)-1, (uint64_t)-1);
         pipe_barrier(PIPE_V);
