@@ -88,10 +88,10 @@ def hif4_cast(x, output="packed"):
     # Shared HiF4 encode (same _hif4_encode_decode as quant_dequant_float, bit-for-bit identical).
     enc = hif4_encode(xg, ng=NG)
 
-    # ---- HiF4 -> float: dequantize the codes, restoring original NaN/Inf element-by-element ----
+    # ---- HiF4 -> float: dequantize the codes; block-poison (whole 64-group -> NaN) on non-finite --
     if output == "dequant":
         dequant = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=NG,
-                              special_vals=enc.special_vals)
+                              block_nan=enc.block_nan)
         return dequant.reshape(M, N).to(dtype_ori)
 
     # ---- pack value: nibble = sign*8 + code, pair adjacent along N (even -> low nibble) ----
@@ -101,10 +101,9 @@ def hif4_cast(x, output="packed"):
     # ---- pack scale (integer arithmetic, no bitwise ops) ----
     byte_e6m2 = ((enc.e_e6 + E6_OFFSET).to(torch.int32) * (2 ** E6M2_MBITS)
                  + (enc.q.to(torch.int32) - 4))                        # [M,gn]
-    # NaN/Inf block poison: if any element in the 64-group is non-finite (NaN/Inf), store the
-    # reserved 0xFF E6M2 code so reconstruction yields NaN for the whole block.
-    block_nan = (enc.special_vals != 0).flatten(2).any(dim=-1)          # [M,gn]
-    byte_e6m2 = torch.where(block_nan,
+    # NaN/Inf block poison: if the 64-group has any non-finite (NaN/Inf), store the reserved 0xFF
+    # E6M2 code so reconstruction yields NaN for the whole block (same flag the decode path uses).
+    byte_e6m2 = torch.where(enc.block_nan,
                             torch.full_like(byte_e6m2, 0xFF), byte_e6m2)
 
     pw8 = _pow2(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(torch.int32)  # [128..1]
