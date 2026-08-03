@@ -40,3 +40,4 @@ tmp/
 /.opencode/
 /CLAUDE.md
 **/hadamard.safetensors
+coverage.xml

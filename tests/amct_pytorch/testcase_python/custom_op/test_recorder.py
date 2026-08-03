@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,7 +18,6 @@
 import os
 import unittest
 
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
@@ -48,7 +47,9 @@ class TestRecorder(unittest.TestCase):
 
     def test_record_kv_cache_factors_success(self):
         # recorder
-        record_file = os.path.join(self.temp_folder, 'test_record_kv_cache_factors_success.txt')
+        record_file = os.path.join(
+            self.temp_folder, 'test_record_kv_cache_factors_success.txt'
+        )
         if not os.path.exists(record_file):
             with open(record_file, 'w') as f:
                 f.write('')
@@ -57,33 +58,32 @@ class TestRecorder(unittest.TestCase):
         record_module.record_quant_layer(LAYER_NAME)
         scale = [0.1, 0.2]
         offset = [1, 2]
-        record_module.forward(LAYER_NAME, 'kv_cache', {'scale': scale, 'offset': offset})
+        record_module.forward(
+            LAYER_NAME, 'kv_cache', {'scale': scale, 'offset': offset}
+        )
         self.assertTrue(os.path.exists(record_file))
 
     def test_add_kv_cache_factors_num_error(self):
         # recorder
-        record_file = os.path.join(self.temp_folder, 'test_add_kv_cache_factors_num_error.txt')
+        record_file = os.path.join(
+            self.temp_folder, 'test_add_kv_cache_factors_num_error.txt'
+        )
         record_module = Recorder(record_file, enable_kv_cache_quant=True)
-        quant_factors = {
-            'scale': [0.1, 0.2],
-            'offset': [1, 2]
-        }
+        quant_factors = {'scale': [0.1, 0.2], 'offset': [1, 2]}
         with self.assertRaises(RuntimeError):
             record_module._add_kv_cache_factors(LAYER_NAME, quant_factors)
 
     def test_add_kv_cache_factors_factor_error(self):
         # recorder
-        record_file = os.path.join(self.temp_folder, 'test_add_kv_cache_factors_factor_error.txt')
+        record_file = os.path.join(
+            self.temp_folder, 'test_add_kv_cache_factors_factor_error.txt'
+        )
         if not os.path.exists(record_file):
             with open(record_file, 'w') as f:
                 f.write('')
         record_module = Recorder(record_file, enable_kv_cache_quant=True)
         record_module.record_quant_layer(LAYER_NAME)
         record_module._read_record_file()
-        quant_factors = {
-            'scale': None,
-            'offset': None
-        }
+        quant_factors = {'scale': None, 'offset': None}
         with self.assertRaises(ValueError):
             record_module._add_kv_cache_factors(LAYER_NAME, quant_factors)
-

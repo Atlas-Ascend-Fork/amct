@@ -40,11 +40,11 @@ def test_check_linear_input_dim_rejects_out_of_range(dim):
     [
         (0.0, 0.0),
         (0.1, 0.0),
-        (0.25, 0.0),     # boundary: 0.25 rounds to 0
+        (0.25, 0.0),  # boundary: 0.25 rounds to 0
         (0.4, 0.5),
         (0.5, 0.5),
         (0.74, 0.5),
-        (0.75, 1.0),     # boundary
+        (0.75, 1.0),  # boundary
         (1.0, 1.0),
         (1.25, 1.0),
         (1.5, 1.5),
@@ -54,7 +54,7 @@ def test_check_linear_input_dim_rejects_out_of_range(dim):
         (3.0, 3.0),
         (3.5, 4.0),
         (5.0, 4.0),
-        (6.0, 6.0),     # > 5.0 saturates to 6
+        (6.0, 6.0),  # > 5.0 saturates to 6
         (100.0, 6.0),
     ],
 )

@@ -22,12 +22,20 @@ from torch import nn
 from tqdm import tqdm
 
 from cores.models.deepseek_v3_2.quant_dsa import QuantDSA
-from cores.models.deepseek_v3_2.quant_utils import apply_quant_to_moe, get_float_block, apply_quant_to_mla
+from cores.models.deepseek_v3_2.quant_utils import (
+    apply_quant_to_moe,
+    get_float_block,
+    apply_quant_to_mla,
+)
 from cores.quantization.utils import load_quant_params
 from cores.utils.safe_load import safe_torch_load
 from cores.utils.utils import get_device_map, load_embed_state_dict
-from pp.forward.custom import model_causal_forward_only_pre, model_causal_forward_only_post, model_forward_only_post, \
-    model_forward_only_pre
+from pp.forward.custom import (
+    model_causal_forward_only_pre,
+    model_causal_forward_only_post,
+    model_forward_only_post,
+    model_forward_only_pre,
+)
 
 
 def load_file(param_dir, layer_idx):
@@ -54,7 +62,8 @@ def prepare_layer(args, layer, layer_idx, cls=QuantDSA):  # use for quantization
     if layer_idx < args.start_block_idx or layer_idx > args.end_block_idx:
         logger.warning(
             f'Layer idx {layer_idx} not in the range '
-            f'{args.start_block_idx}-{args.end_block_idx}, not replace quant layer.')
+            f'{args.start_block_idx}-{args.end_block_idx}, not replace quant layer.'
+        )
         return layer
     if args.train_mode == "mla":
         layer = apply_quant_to_mla(args, layer, cls=cls)
@@ -105,7 +114,9 @@ def do_embedding_forward(args, model, layers, samples, output_dir, dtype):
     layers[0] = Catcher(layers[0], outs)
     with torch.no_grad():
         # Loop through each batch
-        for bs, inputs in tqdm(enumerate(samples), desc=f"Layer Embedding Processing..."):
+        for bs, inputs in tqdm(
+            enumerate(samples), desc="Layer Embedding Processing..."
+        ):
             try:
                 model(inputs)
             except ValueError:
@@ -113,18 +124,20 @@ def do_embedding_forward(args, model, layers, samples, output_dir, dtype):
     position_ids = layers[0].position_ids
     attention_mask = layers[0].attention_mask
 
-    attention_mask = attention_mask.to(
-        dtype) if attention_mask is not None else None
+    attention_mask = attention_mask.to(dtype) if attention_mask is not None else None
     torch.save(position_ids, os.path.join(output_dir, 'position_ids.pkl'))
-    torch.save(attention_mask, os.path.join(
-        output_dir, 'attention_mask.pkl'))
+    torch.save(attention_mask, os.path.join(output_dir, 'attention_mask.pkl'))
     torch.save(outs, os.path.join(output_dir, 'layer_-1_out.pkl'))
     layers[0] = layers[0].module
 
 
-def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_dir, num_npus=1):
+def do_one_layer_forward(
+    args, model, layers, layer_idxes, num_layers, output_dir, num_npus=1
+):
     for layer_idx in layer_idxes:
-        layer = get_float_block(args.model, layer_idx, 'cpu', model_args=args.model_args)
+        layer = get_float_block(
+            args.model, layer_idx, 'cpu', model_args=args.model_args
+        )
         # replace quantization layer
         layer = prepare_layer(args, layer, layer_idx)
         logger.info(f'Dispatching {layer_idx} to all NPU.')
@@ -132,9 +145,16 @@ def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_di
         get_device_map(layer, f'npu:{layer_idx % num_npus}', num_npus=num_npus)
 
     device = torch.device(f'npu:{layer_idxes[0] % num_npus}')
-    inps = safe_torch_load(os.path.join(output_dir, f'layer_{layer_idxes[0] - 1}_out.pkl'), map_location=device)
-    attention_mask = safe_torch_load(os.path.join(output_dir, 'attention_mask.pkl'), map_location=device)
-    position_ids = safe_torch_load(os.path.join(output_dir, 'position_ids.pkl'), map_location=device)
+    inps = safe_torch_load(
+        os.path.join(output_dir, f'layer_{layer_idxes[0] - 1}_out.pkl'),
+        map_location=device,
+    )
+    attention_mask = safe_torch_load(
+        os.path.join(output_dir, 'attention_mask.pkl'), map_location=device
+    )
+    position_ids = safe_torch_load(
+        os.path.join(output_dir, 'position_ids.pkl'), map_location=device
+    )
 
     outs = [[] for _ in range(len(layer_idxes))]
 
@@ -147,19 +167,28 @@ def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_di
                 # load lm_head and norm
                 load_embed_state_dict(model, args.model)
                 model.model.forward_only_pre = types.MethodType(
-                    model_forward_only_pre, model.model)
+                    model_forward_only_pre, model.model
+                )
                 model.model.forward_only_post = types.MethodType(
-                    model_forward_only_post, model.model)
+                    model_forward_only_post, model.model
+                )
                 model.forward_only_pre = types.MethodType(
-                    model_causal_forward_only_pre, model)
+                    model_causal_forward_only_pre, model
+                )
                 model.forward_only_post = types.MethodType(
-                    model_causal_forward_only_post, model)
+                    model_causal_forward_only_post, model
+                )
                 model.model.norm.to(device)
                 model.lm_head.to(device)
                 os.makedirs(args.wikitext_final_out, exist_ok=True)
 
-            out = layer(inp.to(device), position_ids=position_ids.to(device),
-                        attention_mask=attention_mask.to(device) if attention_mask is not None else None)
+            out = layer(
+                inp.to(device),
+                position_ids=position_ids.to(device),
+                attention_mask=attention_mask.to(device)
+                if attention_mask is not None
+                else None,
+            )
 
             out = out[0]
             outs[layer_i].append(out.to('cpu'))
@@ -171,6 +200,5 @@ def do_one_layer_forward(args, model, layers, layer_idxes, num_layers, output_di
     for layer_idx in layer_idxes:
         layers[layer_idx].to_empty(device="meta")
     for i, layer_idx in enumerate(layer_idxes):
-        torch.save(outs[i], os.path.join(
-            output_dir, f'layer_{layer_idx}_out.pkl'))
+        torch.save(outs[i], os.path.join(output_dir, f'layer_{layer_idx}_out.pkl'))
     torch.npu.empty_cache()

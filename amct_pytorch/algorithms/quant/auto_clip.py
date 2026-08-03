@@ -31,11 +31,15 @@ class LWC(torch.nn.Module):
         self.args = args
         self.w_size = args.w_size
         self.quant_dtype = args.quant_dtype
-        self.init_value = 4.
+        self.init_value = 4.0
         self._update_clip_dim()
         self.sigmoid = torch.nn.Sigmoid()
-        self.clip_factor_max = torch.nn.Parameter(torch.ones((self.clip_dim, 1)) * self.init_value, requires_grad=True)
-        self.clip_factor_min = torch.nn.Parameter(torch.ones((self.clip_dim, 1)) * self.init_value, requires_grad=True)
+        self.clip_factor_max = torch.nn.Parameter(
+            torch.ones((self.clip_dim, 1)) * self.init_value, requires_grad=True
+        )
+        self.clip_factor_min = torch.nn.Parameter(
+            torch.ones((self.clip_dim, 1)) * self.init_value, requires_grad=True
+        )
 
     def trainable_params(self):
         return [self.clip_factor_min, self.clip_factor_max]
@@ -48,10 +52,14 @@ class LWC(torch.nn.Module):
 
     def load_ptq_params(self, params):
         self.clip_factor_min.data.copy_(
-            params["clip_factor_min"].to(device=self.clip_factor_min.device, dtype=self.clip_factor_min.dtype)
+            params["clip_factor_min"].to(
+                device=self.clip_factor_min.device, dtype=self.clip_factor_min.dtype
+            )
         )
         self.clip_factor_max.data.copy_(
-            params["clip_factor_max"].to(device=self.clip_factor_max.device, dtype=self.clip_factor_max.dtype)
+            params["clip_factor_max"].to(
+                device=self.clip_factor_max.device, dtype=self.clip_factor_max.dtype
+            )
         )
 
     def apply_clip(self, x):
@@ -85,12 +93,16 @@ class LAC(torch.nn.Module):
         self.args = args
         self.is_observe = False
         self.is_per_tensor = args.is_per_tensor
-        self.init_value = 4.
+        self.init_value = 4.0
         self.sigmoid = torch.nn.Sigmoid()
-        self.clip_factor_max = torch.nn.Parameter(torch.ones((1,)) * self.init_value, requires_grad=True)
-        self.clip_factor_min = torch.nn.Parameter(torch.ones((1,)) * self.init_value, requires_grad=True)
-        self.register_buffer(f'maxval', torch.zeros((1)))
-        self.register_buffer(f'minval', torch.zeros((1)))
+        self.clip_factor_max = torch.nn.Parameter(
+            torch.ones((1,)) * self.init_value, requires_grad=True
+        )
+        self.clip_factor_min = torch.nn.Parameter(
+            torch.ones((1,)) * self.init_value, requires_grad=True
+        )
+        self.register_buffer('maxval', torch.zeros((1)))
+        self.register_buffer('minval', torch.zeros((1)))
 
     def trainable_params(self):
         return [self.clip_factor_min, self.clip_factor_max]
@@ -105,13 +117,21 @@ class LAC(torch.nn.Module):
 
     def load_ptq_params(self, params):
         self.clip_factor_min.data.copy_(
-            params["clip_factor_min"].to(device=self.clip_factor_min.device, dtype=self.clip_factor_min.dtype)
+            params["clip_factor_min"].to(
+                device=self.clip_factor_min.device, dtype=self.clip_factor_min.dtype
+            )
         )
         self.clip_factor_max.data.copy_(
-            params["clip_factor_max"].to(device=self.clip_factor_max.device, dtype=self.clip_factor_max.dtype)
+            params["clip_factor_max"].to(
+                device=self.clip_factor_max.device, dtype=self.clip_factor_max.dtype
+            )
         )
-        self.maxval.copy_(params["maxval"].to(device=self.maxval.device, dtype=self.maxval.dtype))
-        self.minval.copy_(params["minval"].to(device=self.minval.device, dtype=self.minval.dtype))
+        self.maxval.copy_(
+            params["maxval"].to(device=self.maxval.device, dtype=self.maxval.dtype)
+        )
+        self.minval.copy_(
+            params["minval"].to(device=self.minval.device, dtype=self.minval.dtype)
+        )
 
     def apply_clip(self, x):
         if self.is_per_tensor:

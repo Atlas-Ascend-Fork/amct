@@ -22,38 +22,55 @@ class NpuQuantizationConv2d(torch.nn.Module):
     Function: Customized torch.nn.Module of the npu quantized convert operator.
     APIs: forward
     """
+
     def __init__(self, quant_module):
         super().__init__()
-        import torch_npu
         device = quant_module.weight.device
         act_type = quant_module.act_type
         wts_type = quant_module.wts_type
-    
+
         self.output_dtype = quant_module.weight.dtype
         scale_d = quant_module.scale_d
-        offset_d = quant_module.offset_d if quant_module.offset_d is not None else torch.tensor([0])
+        offset_d = (
+            quant_module.offset_d
+            if quant_module.offset_d is not None
+            else torch.tensor([0])
+        )
         offset_d = offset_d.repeat(scale_d.shape)
-        self.register_buffer('act_scale', torch.Tensor((1 / scale_d)).to(device=device).to(self.output_dtype))
-        self.register_buffer('act_offset', torch.Tensor(offset_d).to(device=device).to(self.output_dtype))
+        self.register_buffer(
+            'act_scale',
+            torch.Tensor((1 / scale_d)).to(device=device).to(self.output_dtype),
+        )
+        self.register_buffer(
+            'act_offset', torch.Tensor(offset_d).to(device=device).to(self.output_dtype)
+        )
 
         self.stride = quant_module.ori_module.stride
         self.padding = quant_module.ori_module.padding
         self.dilation = quant_module.ori_module.dilation
         self.groups = quant_module.ori_module.groups
         if isinstance(self.padding, str):
-            self.padding = self.calc_padding(self.padding, self.dilation, quant_module.ori_module.kernel_size)
+            self.padding = self.calc_padding(
+                self.padding, self.dilation, quant_module.ori_module.kernel_size
+            )
         self.asymmetric_pad = self.is_asymmetric_pad(self.padding)
 
         self.input_dtype = None
         self.weight_dtype = None
         self.init_dtype(act_type, wts_type)
 
-        scale_d_tensor = torch.Tensor(quant_module.scale_d.to(self.output_dtype)).to(device=device)
-        scale_w_tensor = torch.Tensor(quant_module.scale_w.to(self.output_dtype)).to(device=device)
+        scale_d_tensor = torch.Tensor(quant_module.scale_d.to(self.output_dtype)).to(
+            device=device
+        )
+        scale_w_tensor = torch.Tensor(quant_module.scale_w.to(self.output_dtype)).to(
+            device=device
+        )
         deq_scale_tensor = scale_d_tensor * scale_w_tensor
         if deq_scale_tensor.shape[0] == 1:
             deq_scale_tensor = deq_scale_tensor.expand(quant_module.weight.shape[0])
-        weight_tensor = NpuQuantizationConv2d.quant_wts(quant_module.weight.data, scale_w_tensor, wts_type)
+        weight_tensor = NpuQuantizationConv2d.quant_wts(
+            quant_module.weight.data, scale_w_tensor, wts_type
+        )
         self.register_buffer('deq_scale', deq_scale_tensor)
         self.register_buffer('quantized_weight', weight_tensor.contiguous())
         if quant_module.bias is not None:
@@ -121,6 +138,7 @@ class NpuQuantizationConv2d(torch.nn.Module):
 
     def init_dtype(self, act_type, wts_type):
         import torch_npu
+
         if act_type == HIFLOAT8:
             self.input_dtype = torch_npu.hifloat8
             self.npu_quantize_act_type = torch_npu.hifloat8
@@ -132,13 +150,27 @@ class NpuQuantizationConv2d(torch.nn.Module):
 
     def forward(self, x):
         import torch_npu
+
         pads = self.padding
         if self.asymmetric_pad:
             x = torch.nn.functional.pad(x, self.padding)
             pads = 0
-        quant_x = torch_npu.npu_quantize(x, self.act_scale, None, self.npu_quantize_act_type, div_mode=False)
+        quant_x = torch_npu.npu_quantize(
+            x, self.act_scale, None, self.npu_quantize_act_type, div_mode=False
+        )
         deq_scale = torch_npu.npu_trans_quant_param(self.deq_scale.to(torch.float32))
-        output = torch_npu.npu_quant_conv2d(quant_x, self.quantized_weight, deq_scale, self.stride,
-            pads, self.dilation, self.groups, offset_x=0, output_dtype=self.output_dtype,
-            bias=self.bias, input_dtype=self.input_dtype, weight_dtype=self.weight_dtype)
+        output = torch_npu.npu_quant_conv2d(
+            quant_x,
+            self.quantized_weight,
+            deq_scale,
+            self.stride,
+            pads,
+            self.dilation,
+            self.groups,
+            offset_x=0,
+            output_dtype=self.output_dtype,
+            bias=self.bias,
+            input_dtype=self.input_dtype,
+            weight_dtype=self.weight_dtype,
+        )
         return output

@@ -15,11 +15,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import torch
-from loguru import logger
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.quantization.dtypes.int_impl import weight_quant, dynamic_per_token_quant
+from amct_pytorch.quantization.dtypes.int_impl import (
+    weight_quant,
+    dynamic_per_token_quant,
+)
 
 
 @DTYPE_REGISTRY.register(name="int", description="quant dequant for int")
@@ -42,8 +46,8 @@ class QuantDequantInt(torch.nn.Module):
             return x
         return self.fake_quant(x, v=v)
 
-    def export_deploy(self, x: Tensor):
-        qx, scale, bias = weight_quant(x, self.bits, real_quant=True)
+    def export_deploy(self, x: Tensor, v: Tensor | float = 0.0):
+        qx, scale, bias = weight_quant(x, self.bits, real_quant=True, v=v)
         return {
             "qweight": qx.detach().cpu(),
             "weight_scale": scale.detach().cpu(),

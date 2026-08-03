@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb # pylint: disable=import-error
+from onnx import onnx_pb  # pylint: disable=import-error
 
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.common.graph_base.graph_base import GraphBase
@@ -24,14 +24,14 @@ from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
 MODULE_NAME = 'Graph'
-RNN_LAYER_TYPE = ["GRU", "LSTM"]
 
 
-class Graph(GraphBase): # pylint: disable=no-member
+class Graph(GraphBase):  # pylint: disable=no-member
     """
     Function: Data structure of graph IR
     APIs: add_node, remove_node, net, dump_proto
     """
+
     def __init__(self, network, model_path=''):
         super().__init__(network)
         self.model_path = model_path
@@ -87,7 +87,11 @@ class Graph(GraphBase): # pylint: disable=no-member
         search_queue.append(root)
         while search_queue:
             current = search_queue.pop(0)
-            if current.type == 'Conv' or current.type == 'ConvTranspose' or current.type in RNN_LAYER_TYPE:
+            if (
+                current.type == "Conv"
+                or current.type == "ConvTranspose"
+                or current.type in RNN_LAYER_TYPE
+            ):
                 consumer = current
                 break
 
@@ -119,7 +123,6 @@ class Graph(GraphBase): # pylint: disable=no-member
             for next_node in next_nodes:
                 search_queue.append(next_node)
         return consumer
-
 
     def add_node(self, node_proto, index=None):
         """
@@ -158,17 +161,21 @@ class Graph(GraphBase): # pylint: disable=no-member
         for index, node in enumerate(self._nodes + self._in_out_nodes):
             if node == delete_node:
                 if isinstance(node.proto, onnx_pb.ValueInfoProto):
-                    raise RuntimeError('Cannot remove ValueInfoProto node ' \
-                        '{} from graph.'.format(node.name))
+                    raise RuntimeError(
+                        "Cannot remove ValueInfoProto node {} from graph.".format(
+                            node.name
+                        )
+                    )
                 del self._nodes[index]
                 remove_done = True
                 break
         if not remove_done:
-            raise RuntimeError(f'Remove {delete_node.name} from graph failed, cannot found')
+            raise RuntimeError(
+                f"Remove {delete_node.name} from graph failed, cannot found"
+            )
 
     def add_model(self, model):
-        """ Add model for graph
-        """
+        """Add model for graph"""
         self.model = model
 
     def dump_proto(self):
@@ -180,23 +187,25 @@ class Graph(GraphBase): # pylint: disable=no-member
 
         net = onnx_pb.ModelProto()
         net.CopyFrom(self._net)
-        graph = net.graph # pylint: disable=E1101
+        graph = net.graph  # pylint: disable=E1101
         for node in self._nodes:
             if isinstance(node.proto, onnx_pb.NodeProto):
-                node_proto = graph.node.add() # pylint: disable=E1101
+                node_proto = graph.node.add()  # pylint: disable=E1101
                 node_proto.CopyFrom(node.dump_proto())
             elif isinstance(node.proto, onnx_pb.TensorProto):
                 tensor = graph.initializer.add()  # pylint: disable=E1101
                 tensor.CopyFrom(node.dump_proto())
             elif isinstance(node.proto, onnx_pb.SparseTensorProto):
-                sparse = graph.sparse_initializer.add() # pylint: disable=E1101
+                sparse = graph.sparse_initializer.add()  # pylint: disable=E1101
                 sparse.CopyFrom(node.dump_proto())
             elif isinstance(node.proto, onnx_pb.ValueInfoProto):
                 continue
             else:
-                raise TypeError("Unexpected node_proto {}! only [NodeProto, "
-                                "TensorProto, SparseTensorProto] are "
-                                "supported.".format(type(node.proto)))
+                raise TypeError(
+                    "Unexpected node_proto {}! only [NodeProto, "
+                    "TensorProto, SparseTensorProto] are "
+                    "supported.".format(type(node.proto))
+                )
         return net
 
     def remove_initializer(self, delete_node):
@@ -209,28 +218,33 @@ class Graph(GraphBase): # pylint: disable=no-member
         for index, node in enumerate(self._nodes):
             if node == delete_node:
                 if not isinstance(node.proto, onnx_pb.TensorProto):
-                    raise RuntimeError('Cannot only remove initializer node ' \
-                        'from graph by this api. "%s" is "%s"' % (node.name, \
-                        node.type))
+                    raise RuntimeError(
+                        "Cannot only remove initializer node "
+                        'from graph by this api. "%s" is "%s"' % (node.name, node.type)
+                    )
                 if delete_node.get_output_anchor(0).get_peer_input_anchor():
-                    LOGGER.logd('Node "%s" still connect to other node, cannot'
-                                'remove it now.' % (delete_node.name))
+                    LOGGER.logd(
+                        'Node "%s" still connect to other node, cannot'
+                        "remove it now." % (delete_node.name)
+                    )
                     return
                 del self._nodes[index]
 
                 initializer_name = node.ori_name
                 for i, del_node in enumerate(self._in_out_nodes):
-                    if isinstance(del_node.proto, onnx_pb.ValueInfoProto) and \
-                            del_node.ori_name == initializer_name:
+                    if (
+                        isinstance(del_node.proto, onnx_pb.ValueInfoProto)
+                        and del_node.ori_name == initializer_name
+                    ):
                         del self._in_out_nodes[i]
 
                 is_removed = True
-                LOGGER.logd('Remove node "%s" from graph success.' %
-                            (delete_node.name))
+                LOGGER.logd('Remove node "%s" from graph success.' % (delete_node.name))
                 break
         if not is_removed:
-            raise RuntimeError('Remove %s from graph failed, cannot found' %
-                               (delete_node.name))
+            raise RuntimeError(
+                "Remove %s from graph failed, cannot found" % (delete_node.name)
+            )
 
     def deep_copy(self):
         """
@@ -288,13 +302,16 @@ class Graph(GraphBase): # pylint: disable=no-member
 
     def _init_graph_output_node(self, output_record):
         for output_desc in self._net.graph.output:
-            graph_output_node = Node(self._tail, output_desc, model_path=self.model_path)
+            graph_output_node = Node(
+                self._tail, output_desc, model_path=self.model_path
+            )
             graph_output_node.add_input_anchor(output_desc.name)
             self._in_out_nodes.append(graph_output_node)
             # Add link to output
             if output_desc.name not in output_record:
-                raise ReferenceError('Cannot find tensor %s in model.' % (
-                    output_desc.name))
+                raise ReferenceError(
+                    "Cannot find tensor %s in model." % (output_desc.name)
+                )
             src_node, src_index = output_record[output_desc.name]
             self.add_edge(src_node, src_index, graph_output_node, 0)
 
@@ -306,7 +323,9 @@ class Graph(GraphBase): # pylint: disable=no-member
 
     def _parse_sparse_initializer(self, output_record):
         for sparse_initializer_proto in self._net.graph.sparse_initializer:
-            node = Node(self._tail, sparse_initializer_proto, model_path=self.model_path)
+            node = Node(
+                self._tail, sparse_initializer_proto, model_path=self.model_path
+            )
             self._nodes.append(node)
             output_record[node.name] = [node, 0]
 
@@ -325,22 +344,25 @@ class Graph(GraphBase): # pylint: disable=no-member
                 if input_anchor.name not in output_record:
                     if input_anchor.name == '':
                         continue
-                    raise ReferenceError('Cannot find tensor %s in model.'
-                                         % (input_anchor.name))
+                    raise ReferenceError(
+                        "Cannot find tensor %s in model." % (input_anchor.name)
+                    )
                 src_node, src_index = output_record[input_anchor.name]
                 self.add_edge(src_node, src_index, node, input_anchor.index)
 
     def _update_node_names(self):
         def set_name_node(node, new_name):
-            """set node's name as new_name. """
+            """set node's name as new_name."""
             LOGGER.logd('set "%s" to "%s"' % (new_name, node.name), MODULE_NAME)
             try:
                 target_node = self.get_node_by_name(new_name)
             except RuntimeError:
                 LOGGER.logd('"%s" is unique in graph.' % (new_name), MODULE_NAME)
             else:
-                LOGGER.logd('"%s" already exist in graph, may be reused module'
-                            '.' % (new_name), MODULE_NAME)
+                LOGGER.logd(
+                    '"%s" already exist in graph, may be reused module.' % (new_name),
+                    MODULE_NAME,
+                )
                 node.set_attr('is_reuse', True)
                 target_node.set_attr('is_reuse', True)
 
@@ -352,14 +374,19 @@ class Graph(GraphBase): # pylint: disable=no-member
         for node in self._nodes:
             if node.type == 'QuantIdentity':
                 attr_helper = AttributeProtoHelper(node.proto)
-                layer_name = str(attr_helper.get_attr_value('op_name'),
-                                 encoding="utf-8")
-                layer_module_type = str(attr_helper.get_attr_value('module_type'),
-                                 encoding="utf-8")
+                layer_name = str(
+                    attr_helper.get_attr_value("op_name"), encoding="utf-8"
+                )
+                layer_module_type = str(
+                    attr_helper.get_attr_value("module_type"), encoding="utf-8"
+                )
                 consumers, _ = node.get_consumers(0)
                 consumer = consumers[0]
-                
-                if layer_module_type in RNN_LAYER_TYPE and consumer.type not in RNN_LAYER_TYPE:
+
+                if (
+                    layer_module_type in RNN_LAYER_TYPE
+                    and consumer.type not in RNN_LAYER_TYPE
+                ):
                     consumer = Graph._parse_rnn_nodes(node, layer_module_type)
 
                 if consumer.type == 'Pad':
@@ -376,7 +403,11 @@ class Graph(GraphBase): # pylint: disable=no-member
                     consumer = Graph._parse_unsqueeze_nodes(node)
 
                 # handle circular padding for conv2d
-                if layer_module_type == 'Conv2d' and consumer.type != 'Conv' and consumer.type != 'Unsqueeze':
+                if (
+                    layer_module_type == "Conv2d"
+                    and consumer.type != "Conv"
+                    and consumer.type != "Unsqueeze"
+                ):
                     consumer = Graph._parse_circular_padding_nodes(node)
 
                 set_name_node(consumer, layer_name)

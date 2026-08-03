@@ -14,6 +14,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.pytest.ini_options]
 testpaths = ["tests/unit_test", "tests/amct_pytorch"]
 markers = [
@@ -30,9 +34,6 @@ env = [
 source = ["amct_pytorch"]
 omit = [
     "*/experimental/*",
-    "*/cli/*",
-    "**/__init__.py",
-    "*/common/models/llm/deepseek/*",
 ]
 
 [tool.coverage.report]
@@ -43,3 +44,6 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+
+[tool.ruff.format]
+quote-style = "preserve"

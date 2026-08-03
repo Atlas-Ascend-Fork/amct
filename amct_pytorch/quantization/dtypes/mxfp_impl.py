@@ -19,7 +19,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum, IntEnum
 
 import torch
 from torch import Tensor
@@ -34,10 +33,28 @@ EBITS_F4_E2M1, MBITS_F4_E2M1 = 2, 1
 
 
 def unpack_mxfloat4_to_fp32(packed_tensor):
-    e2m1_values = torch.tensor([
-        0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0,
-        -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0
-    ], dtype=torch.float32, device=packed_tensor.device)
+    e2m1_values = torch.tensor(
+        [
+            0.0,
+            0.5,
+            1.0,
+            1.5,
+            2.0,
+            3.0,
+            4.0,
+            6.0,
+            -0.0,
+            -0.5,
+            -1.0,
+            -1.5,
+            -2.0,
+            -3.0,
+            -4.0,
+            -6.0,
+        ],
+        dtype=torch.float32,
+        device=packed_tensor.device,
+    )
 
     low_4bits = packed_tensor & 0x0F
     high_4bits = (packed_tensor // 16) & 0x0F
@@ -51,8 +68,13 @@ def unpack_mxfloat4_to_fp32(packed_tensor):
     return fp32_tensor.view(*new_shape)
 
 
-def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 128, 
-                   is_mx: bool = False, is_packed: bool = False) -> torch.Tensor:
+def weight_dequant(
+    weight: torch.Tensor,
+    scale: torch.Tensor,
+    block_size: int = 128,
+    is_mx: bool = False,
+    is_packed: bool = False,
+) -> torch.Tensor:
     """
     Dequantizes the given weight tensor using the provided scale tensor, efficiently handling cases where
     `weight` is not a multiple of `block_size` by broadcasting `scale`.
@@ -74,26 +96,31 @@ def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 
     M, N = weight.shape
     weight = weight.to(torch.float32)
     scale = scale.to(torch.float32)
+    if block_size != 1:
+        if is_mx:
+            scale_expanded = scale.repeat_interleave(block_size, dim=1)
+        else:
+            # Compute the effective block dimensions for scale
+            scale_m, scale_n = scale.shape
+            assert scale_m == (M + block_size - 1) // block_size, (
+                "Mismatch in scale rows and weight rows."
+            )
+            assert scale_n == (N + block_size - 1) // block_size, (
+                "Mismatch in scale columns and weight columns."
+            )
 
-    if is_mx:
-        scale_expanded = scale.repeat_interleave(block_size, dim=1)
+            # Expand scale to match the weight tensor's shape
+            scale_expanded = scale.repeat_interleave(
+                block_size, dim=0
+            ).repeat_interleave(block_size, dim=1)
+
+        # Trim scale_expanded to match weight's shape if necessary
+        scale_expanded = scale_expanded[:M, :N]
+
+        # Perform element-wise multiplication
+        dequantized_weight = weight * scale_expanded
     else:
-        # Compute the effective block dimensions for scale
-        scale_m, scale_n = scale.shape
-        assert scale_m == (
-            M + block_size - 1) // block_size, "Mismatch in scale rows and weight rows."
-        assert scale_n == (
-            N + block_size - 1) // block_size, "Mismatch in scale columns and weight columns."
-
-        # Expand scale to match the weight tensor's shape
-        scale_expanded = scale.repeat_interleave(
-            block_size, dim=0).repeat_interleave(block_size, dim=1)
-
-    # Trim scale_expanded to match weight's shape if necessary
-    scale_expanded = scale_expanded[:M, :N]
-
-    # Perform element-wise multiplication
-    dequantized_weight = weight * scale_expanded
+        dequantized_weight = weight * scale
 
     # Convert the output to the default dtype
     dequantized_weight = dequantized_weight.to(torch.get_default_dtype())

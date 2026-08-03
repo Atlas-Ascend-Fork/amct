@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,15 +16,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import copy
-import json
 import os
-import sys
 import unittest
 from io import BytesIO
-from unittest import mock
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.configuration import (
@@ -90,7 +86,7 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         pass
 
     def test_fuse(self):
-        ''' test: conv(+ bias), Gemm, Matmul '''
+        '''test: conv(+ bias), Gemm, Matmul'''
         torch_recorder = Recorder(self.record_file)
         optimizer = ModelOptimizer()
         optimizer.add_pass(InsertCaliQuantPass(torch_recorder))
@@ -99,20 +95,34 @@ class TestInsertCaliQuantPass(unittest.TestCase):
 
         named_module_dict = {name: mod for name, mod in model.named_modules()}
 
-        self.assertEqual(True, isinstance(named_module_dict['layer1.0'].cali_quant_module, IFMR))
-        self.assertEqual(True, isinstance(named_module_dict['layer2.0'].cali_quant_module, IFMR))
-        self.assertEqual(True, isinstance(named_module_dict['layer3.0'].cali_quant_module, IFMR))
-        self.assertEqual(True, isinstance(named_module_dict['layer4.0'].cali_quant_module, IFMR))
-        self.assertEqual(True, isinstance(named_module_dict['layer5.0'].cali_quant_module, IFMR))
-        self.assertEqual(True, isinstance(named_module_dict['layer6.0'].cali_quant_module, IFMR))
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer1.0'].cali_quant_module, IFMR)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer2.0'].cali_quant_module, IFMR)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer3.0'].cali_quant_module, IFMR)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer4.0'].cali_quant_module, IFMR)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer5.0'].cali_quant_module, IFMR)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer6.0'].cali_quant_module, IFMR)
+        )
 
         self.assertEqual(True, isinstance(named_module_dict['fc.0'], torch.nn.Linear))
-        self.assertEqual(True, isinstance(named_module_dict['fc.2'].cali_quant_module, IFMR))
+        self.assertEqual(
+            True, isinstance(named_module_dict['fc.2'].cali_quant_module, IFMR)
+        )
         self.assertEqual(True, isinstance(named_module_dict['fc.5'], torch.nn.Linear))
 
     @patch.object(Configuration, 'get_layer_config')
     def test_insert_hfmg(self, mock_get_layer_config):
-        ''' test: conv(+ bias), Gemm, Matmul '''
+        '''test: conv(+ bias), Gemm, Matmul'''
         mock_get_layer_config.return_value = {
             "quant_enable": True,
             "activation_quant_params": {
@@ -120,13 +130,13 @@ class TestInsertCaliQuantPass(unittest.TestCase):
                 "num_of_bins": 4096,
                 "with_offset": True,
                 "batch_num": 2,
-                "num_bits": 8
+                "num_bits": 8,
             },
             "weight_quant_params": {
                 "channel_wise": True,
                 "num_bits": 8,
-                "with_offset": False
-            }
+                "with_offset": False,
+            },
         }
         model = copy.deepcopy(self.model_001)
         torch_recorder = Recorder(self.record_file)
@@ -135,15 +145,29 @@ class TestInsertCaliQuantPass(unittest.TestCase):
         optimizer.do_optimizer(model, self.graph)
 
         named_module_dict = {name: mod for name, mod in model.named_modules()}
-        self.assertEqual(True, isinstance(named_module_dict['layer1.0'].cali_quant_module, HFMG))
-        self.assertEqual(True, isinstance(named_module_dict['layer2.0'].cali_quant_module, HFMG))
-        self.assertEqual(True, isinstance(named_module_dict['layer3.0'].cali_quant_module, HFMG))
-        self.assertEqual(True, isinstance(named_module_dict['layer4.0'].cali_quant_module, HFMG))
-        self.assertEqual(True, isinstance(named_module_dict['layer5.0'].cali_quant_module, HFMG))
-        self.assertEqual(True, isinstance(named_module_dict['layer6.0'].cali_quant_module, HFMG))
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer1.0'].cali_quant_module, HFMG)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer2.0'].cali_quant_module, HFMG)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer3.0'].cali_quant_module, HFMG)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer4.0'].cali_quant_module, HFMG)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer5.0'].cali_quant_module, HFMG)
+        )
+        self.assertEqual(
+            True, isinstance(named_module_dict['layer6.0'].cali_quant_module, HFMG)
+        )
 
         self.assertEqual(True, isinstance(named_module_dict['fc.0'], torch.nn.Linear))
-        self.assertEqual(True, isinstance(named_module_dict['fc.2'].cali_quant_module, HFMG))
+        self.assertEqual(
+            True, isinstance(named_module_dict['fc.2'].cali_quant_module, HFMG)
+        )
         self.assertEqual(True, isinstance(named_module_dict['fc.5'], torch.nn.Linear))
 
     @patch.object(Configuration, 'get_layer_config')
@@ -155,16 +179,14 @@ class TestInsertCaliQuantPass(unittest.TestCase):
                 "num_of_bins": 4096,
                 "with_offset": True,
                 "batch_num": 2,
-                "num_bits": 8
+                "num_bits": 8,
             },
             "weight_quant_params": {
                 "channel_wise": True,
                 "num_bits": 8,
-                "with_offset": False
+                "with_offset": False,
             },
-            'dmq_balancer_param': {
-                0.5
-            }
+            'dmq_balancer_param': {0.5},
         }
 
         class Conv1dModule(torch.nn.Module):
@@ -174,6 +196,7 @@ class TestInsertCaliQuantPass(unittest.TestCase):
 
             def forward(self, x):
                 return self.conv1d(x)
+
         conv1d_module = Conv1dModule()
         tmp_onnx = BytesIO()
         Parser.export_onnx(conv1d_module, torch.randn(1, 1, 1), tmp_onnx)
@@ -186,4 +209,3 @@ class TestInsertCaliQuantPass(unittest.TestCase):
 
         cali_quant_pass = InsertCaliQuantPass(None, records=records)
         cali_quant_pass.broad_cast_tensor_balance_factor(CONV1D, conv1d_mod, graph)
-

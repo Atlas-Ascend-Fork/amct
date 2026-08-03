@@ -18,7 +18,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 import torch
 
 from amct_pytorch.algorithms.quant.auto_clip import LAC, LWC
@@ -44,8 +43,12 @@ def test_lwc_clip_dim_for_mxfp_uses_w_size_product_over_32():
 
 def test_lwc_init_value_equals_4():
     lwc = LWC(_lwc_args(), w_bits=8)
-    assert torch.allclose(lwc.clip_factor_min.data, torch.full_like(lwc.clip_factor_min.data, 4.0))
-    assert torch.allclose(lwc.clip_factor_max.data, torch.full_like(lwc.clip_factor_max.data, 4.0))
+    assert torch.allclose(
+        lwc.clip_factor_min.data, torch.full_like(lwc.clip_factor_min.data, 4.0)
+    )
+    assert torch.allclose(
+        lwc.clip_factor_max.data, torch.full_like(lwc.clip_factor_max.data, 4.0)
+    )
 
 
 def test_lwc_trainable_params_returns_both_clip_factors():

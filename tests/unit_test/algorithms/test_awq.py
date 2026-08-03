@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -25,8 +25,6 @@ from amct_pytorch.algorithms.quant.awq import (
     process_weights_for_layers,
     search_scale,
 )
-from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
-from amct_pytorch.common.utils.vars import INT8
 
 
 def test_calculate_scale_offset_by_granularity_int_symmetric():
@@ -82,11 +80,18 @@ def test_process_weights_for_layers_int8(monkeypatch):
         qdq_calls.append((wts_type, group_size))
         return tensor
 
-    monkeypatch.setattr("amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq)
+    monkeypatch.setattr(
+        "amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq
+    )
 
     layer = nn.Linear(4, 8)
     quant_config = {
-        "weights_cfg": {"quant_type": "int8", "strategy": "channel", "group_size": None, "symmetric": True}
+        "weights_cfg": {
+            "quant_type": "int8",
+            "strategy": "channel",
+            "group_size": None,
+            "symmetric": True,
+        }
     }
     scale_awq = torch.full((1, 4), 2.0)
     process_weights_for_layers([layer], scale_awq, quant_config)
@@ -101,12 +106,18 @@ def test_process_weights_for_layers_mxfp4(monkeypatch):
         qdq_calls.append((wts_type, group_size))
         return tensor
 
-    monkeypatch.setattr("amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq)
+    monkeypatch.setattr(
+        "amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq
+    )
     from amct_pytorch.common.utils.vars import MXFP4_E2M1
 
     layer = nn.Linear(8, 32)
     quant_config = {
-        "weights_cfg": {"quant_type": MXFP4_E2M1, "strategy": "channel", "group_size": 32}
+        "weights_cfg": {
+            "quant_type": MXFP4_E2M1,
+            "strategy": "channel",
+            "group_size": 32,
+        }
     }
     scale_awq = torch.full((1, 8), 2.0)
     process_weights_for_layers([layer], scale_awq, quant_config)
@@ -140,11 +151,18 @@ def test_search_scale_grid_returns_best_scale(monkeypatch):
     def fake_qdq(tensor, wts_type, scale, offset, group_size):
         return tensor
 
-    monkeypatch.setattr("amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq)
+    monkeypatch.setattr(
+        "amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq
+    )
 
     quant_config = {
         "algorithm": {"awq": {"grids_num": 3}},
-        "weights_cfg": {"quant_type": "int8", "strategy": "channel", "group_size": None, "symmetric": True},
+        "weights_cfg": {
+            "quant_type": "int8",
+            "strategy": "channel",
+            "group_size": None,
+            "symmetric": True,
+        },
     }
 
     scale = search_scale(inputs, [layer], block, quant_config)
@@ -196,11 +214,18 @@ def test_search_scale_handles_tuple_block_output(monkeypatch):
     def fake_qdq(tensor, wts_type, scale, offset, group_size):
         return tensor
 
-    monkeypatch.setattr("amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq)
+    monkeypatch.setattr(
+        "amct_pytorch.algorithms.quant.awq.quant_dequant_tensor", fake_qdq
+    )
 
     quant_config = {
         "algorithm": {"awq": {"grids_num": 3}},
-        "weights_cfg": {"quant_type": "int8", "strategy": "channel", "group_size": None, "symmetric": True},
+        "weights_cfg": {
+            "quant_type": "int8",
+            "strategy": "channel",
+            "group_size": None,
+            "symmetric": True,
+        },
     }
 
     scale = search_scale(inputs, [layer], block, quant_config)
@@ -216,6 +241,7 @@ def test_search_best_scale_raises_on_invalid_loss():
 
         def forward(self, x, **kwargs):
             return torch.tensor(float("nan"))
+
     block = _NanBlock()
     layer = nn.Module()
     layer.weight = nn.Parameter(torch.ones(2, 4))
@@ -224,7 +250,12 @@ def test_search_best_scale_raises_on_invalid_loss():
             torch.randn(2, 4, 4),
             [layer],
             block,
-            {"algorithm": {"awq": {"grids_num": 3}},
-             "weights_cfg": {"quant_type": "int8", "strategy": "channel",
-                             "group_size": None}},
+            {
+                "algorithm": {"awq": {"grids_num": 3}},
+                "weights_cfg": {
+                    "quant_type": "int8",
+                    "strategy": "channel",
+                    "group_size": None,
+                },
+            },
         )

@@ -1,11 +1,30 @@
 #!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 """SubagentStop hook: quant-implementer 自验证检查 + 外循环重试限制（amct 量化 agent）"""
 
+import glob
 import json
 import logging
 import os
 import re
 import sys
+import tempfile
+import time
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -22,8 +41,25 @@ SELF_VERIFY_TEMPLATE = """自验证不完整：progress.md 的「### 自验证�
 - 指标：ppl_bf16 / ppl_quant / delta
 - 产物：index 0 missing？config.json num_bits/strategy 是否符合方案？"""
 
-RETRY_LIMIT_MSG = ("重试上限：当前阶段已执行 {n} 轮 implementer/reviewer 循环，超过 5 轮上限。"
-                   "请回退当前阶段改动，向用户报告阻塞点。")
+RETRY_LIMIT_MSG = (
+    "重试上限：当前阶段已执行 {n} 轮 implementer/reviewer 循环，超过 5 轮上限。"
+    "请回退当前阶段改动，向用户报告阻塞点。"
+)
+
+
+COUNTER_TTL_SECONDS = 48 * 3600
+
+
+def cleanup_stale_counters():
+    """删除临时目录下超过 48 小时的 hook_retry_*.count 文件（懒清理，静默失败）。"""
+    cutoff = time.time() - COUNTER_TTL_SECONDS
+    pattern = os.path.join(tempfile.gettempdir(), "hook_retry_*.count")
+    for path in glob.glob(pattern):
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+        except OSError:
+            pass
 
 
 def find_progress_md(cwd):
@@ -44,7 +80,9 @@ def find_progress_md(cwd):
 
 def get_current_stage(content):
     """优先取机读状态块 STAGE，回退 '## 阶段 N'"""
-    m = re.findall(r"STAGE:\s*(\d+)", content) or re.findall(r"## 阶段\s*(\d+)", content)
+    m = re.findall(r"STAGE:\s*(\d+)", content) or re.findall(
+        r"## 阶段\s*(\d+)", content
+    )
     return m[-1] if m else "0"
 
 
@@ -68,6 +106,7 @@ def check_self_verification(data, content):
 def check_retry_limit(data, content):
     """检查 2：外循环重试限制（阻断）"""
     import fcntl
+
     if data.get("agent_type", "") not in ("quant-implementer", "quant-reviewer"):
         return None
     stage = get_current_stage(content)
@@ -80,7 +119,9 @@ def check_retry_limit(data, content):
         # 无 session_id：跳过计数，不退化到共享 "unknown" key
         # （否则不同会话/任务的重试计数互相累加，误触发上限阻断）
         return None
-    counter_file = f"/tmp/hook_retry_{session_id}_{stage}.count"
+    counter_file = os.path.join(
+        tempfile.gettempdir(), f"hook_retry_{session_id}_{stage}.count"
+    )
     # flock 保护读-改-写原子性（防极端并发下计数丢失）
     with open(counter_file, "a+") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
@@ -100,6 +141,7 @@ def check_retry_limit(data, content):
 
 
 def main():
+    cleanup_stale_counters()
     data = json.load(sys.stdin)
     cwd = data.get("cwd", ".")
     progress_path = find_progress_md(cwd)

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,45 +17,51 @@
 # ----------------------------------------------------------------------------
 
 import os
-import shutil
 from shutil import copyfileobj
 from io import BytesIO
 import pathlib
 
-import torch # pylint: disable=E0401
-import onnx
+import torch  # pylint: disable=E0401
 
-from onnx import onnx_pb # pylint: disable=E0401
+from onnx import onnx_pb  # pylint: disable=E0401
 from onnx.onnx_pb import AttributeProto
 from ...amct_pytorch.utils.log import LOGGER
 from ...amct_pytorch.graph.graph import Graph
 from ...amct_pytorch.configuration.check import GraphChecker
 from ...amct_pytorch.common.utils import files as files_util
 from ...amct_pytorch.utils.model_util import ModuleHelper
-from ...amct_pytorch.custom_op.quant_identity.quant_identity import \
-    MarkedQuantizableModule
+from ...amct_pytorch.custom_op.quant_identity.quant_identity import (
+    MarkedQuantizableModule,
+)
 from ...amct_pytorch.common.utils.util import version_higher_than
-from ...amct_pytorch.utils.vars import TORCH_VERSION
 from ...amct_pytorch.utils.vars import PRUNABLE_TYPES
 from ...amct_pytorch.utils.vars import PASSIVE_PRUNABLE_TYPES
 from ...amct_pytorch.optimizer.conv_bn_fusion_pass import ConvBnFusionPass
 from ...amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
 
-SUPPORT_TYPES = (torch.nn.BatchNorm3d, torch.nn.BatchNorm2d, torch.nn.ReLU6, torch.nn.ReLU,
-    torch.nn.LeakyReLU, torch.nn.Sigmoid, torch.nn.Tanh, torch.nn.Softmax)
+SUPPORT_TYPES = (
+    torch.nn.BatchNorm3d,
+    torch.nn.BatchNorm2d,
+    torch.nn.ReLU6,
+    torch.nn.ReLU,
+    torch.nn.LeakyReLU,
+    torch.nn.Sigmoid,
+    torch.nn.Tanh,
+    torch.nn.Softmax,
+)
 
 TMP_PATH = os.path.realpath(os.path.join(os.getcwd(), 'amct_temp'))
 
 
 class Parser:
-    """ Helper of onnx file
-    """
+    """Helper of onnx file"""
+
     def __init__(self, ckpt_path):
         self.__ckpt_path = ckpt_path
 
     @staticmethod
     def parse_proto(proto_file):
-        """ parse the onnx pb pb file to """
+        """parse the onnx pb pb file to"""
         if isinstance(proto_file, str):
             with open(proto_file, 'rb') as onnx_pb_file:
                 onnx_pb_str = onnx_pb_file.read()
@@ -67,15 +73,14 @@ class Parser:
             onnx_pb_str = proto_file.getvalue()
             model = onnx_pb.ModelProto()
             model.ParseFromString(onnx_pb_str)
-            LOGGER.logd(f'Parse onnx model from {proto_file} success.')
+            LOGGER.logd(f"Parse onnx model from {proto_file} success.")
             return model
         else:
             raise TypeError(f'Not support proto type: "{type(proto_file)}"')
 
     @staticmethod
     def parse_net_to_graph(proto_file):
-        """" parse the onnx pb graph to inner graph,
-        """
+        """ " parse the onnx pb graph to inner graph,"""
         if isinstance(proto_file, str):
             proto_file_path = pathlib.Path(proto_file)
             # parse by proto
@@ -90,10 +95,7 @@ class Parser:
         return graph
 
     @staticmethod
-    def export_onnx(model,
-                    args,
-                    onnx_file,
-                    export_setting=None):
+    def export_onnx(model, args, onnx_file, export_setting=None):
         """
         Function: Save nn.module to onnx
         Inputs: model: an instance of torch.nn.Module
@@ -118,8 +120,9 @@ class Parser:
             export_setting['opset_version'] = 11
         if version_higher_than(torch.__version__, '1.12.0'):
             export_setting['keep_initializers_as_inputs'] = True
-        if version_higher_than(torch.__version__, '1.5.0') and \
-            not version_higher_than(torch.__version__, '1.11.0'):
+        if version_higher_than(torch.__version__, "1.5.0") and not version_higher_than(
+            torch.__version__, "1.11.0"
+        ):
             export_setting['enable_onnx_checker'] = False
 
         try:
@@ -181,14 +184,18 @@ class Parser:
                 continue
             for setting in export_setting.get(setting_key):
                 if not isinstance(setting, str):
-                    raise RuntimeError('{} type must be list(string)'.format(setting_key))
+                    raise RuntimeError(
+                        "{} type must be list(string)".format(setting_key)
+                    )
         if not export_setting.get('dynamic_axes'):
             return
 
         for key, value in export_setting.get('dynamic_axes').items():
             if not isinstance(key, str) or not isinstance(value, (dict, list)):
-                raise RuntimeError('dynamic_axes type is invalid,'
-                        'type must be dict<string, dict<python:int, string>> or dict<string, list(int)>')
+                raise RuntimeError(
+                    "dynamic_axes type is invalid,"
+                    "type must be dict<string, dict<python:int, string>> or dict<string, list(int)>"
+                )
             Parser.check_dynamic_axes_sub_item(value)
 
     @staticmethod
@@ -200,19 +207,27 @@ class Parser:
         if isinstance(value, dict):
             for x, y in value.items():
                 if not isinstance(x, int) or not isinstance(y, str):
-                    raise RuntimeError('dynamic_axes type is invalid,'
-                        'type must be dict<string, dict<python:int, string>> or dict<string, list(int)>')
+                    raise RuntimeError(
+                        "dynamic_axes type is invalid,"
+                        "type must be dict<string, dict<python:int, string>> or dict<string, list(int)>"
+                    )
                 if x < 0:
-                    raise RuntimeError('dynamic_axes value is invalid,'
-                        'The int value of axis indicators cannot be a negative number.')
+                    raise RuntimeError(
+                        "dynamic_axes value is invalid,"
+                        "The int value of axis indicators cannot be a negative number."
+                    )
         else:
             for item in value:
                 if not isinstance(item, int):
-                    raise RuntimeError('dynamic_axes type is invalid,'
-                        'type must be dict<string, dict<python:int, string>> or dict<string, list(int)>')
+                    raise RuntimeError(
+                        "dynamic_axes type is invalid,"
+                        "type must be dict<string, dict<python:int, string>> or dict<string, list(int)>"
+                    )
                 if item < 0:
-                    raise RuntimeError('dynamic_axes value is invalid,'
-                        'The int value of axis indicators cannot be a negative number.')
+                    raise RuntimeError(
+                        "dynamic_axes value is invalid,"
+                        "The int value of axis indicators cannot be a negative number."
+                    )
 
 
 def _write_attr_to_node_proto(node_proto, attr):
@@ -221,11 +236,9 @@ def _write_attr_to_node_proto(node_proto, attr):
     Inputs: node_proto: onnx.AttributeProto
             attr: str, attribute need to be written to node proto
     """
-    attr_value = getattr(attr,
-                    AttrProtoHelper.map_value_location(attr.type))
+    attr_value = getattr(attr, AttrProtoHelper.map_value_location(attr.type))
     if attr.type == AttributeProto.AttributeType.STRINGS:
-        attr_value = [byte_string.decode('utf-8') \
-            for byte_string in attr_value]
+        attr_value = [byte_string.decode("utf-8") for byte_string in attr_value]
     elif attr.type == AttributeProto.AttributeType.STRING:
         attr_value = attr_value.decode('utf-8')
     node_proto.set_attr(attr.name, attr_value)
@@ -269,8 +282,9 @@ def _export_to_onnx(model, args, onnx_file, export_setting):
         if '2G' in str(exception):
             torch_out = _export_oversize_model(model, args, onnx_file, export_setting)
         else:
-            raise RuntimeError("The model cannot export to onnx, "
-                                "exception is: {}".format(exception)) from exception
+            raise RuntimeError(
+                "The model cannot export to onnx, exception is: {}".format(exception)
+            ) from exception
     else:
         if isinstance(onnx_file, BytesIO) and len(onnx_file.getvalue()) == 0:
             export_success = False
@@ -278,7 +292,9 @@ def _export_to_onnx(model, args, onnx_file, export_setting):
             export_success = False
 
     if not export_success:
-        raise RuntimeError('Model cannot be quantized for it cannot be export to onnx! onnx file len is 0')
+        raise RuntimeError(
+            "Model cannot be quantized for it cannot be export to onnx! onnx file len is 0"
+        )
 
     return torch_out
 

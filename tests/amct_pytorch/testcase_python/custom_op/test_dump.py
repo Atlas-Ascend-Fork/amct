@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,16 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
-import math
 import os
-import sys
 import unittest
-from unittest import mock
-from unittest.mock import patch
 
-import numpy as np
 import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
@@ -32,9 +26,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import (
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils import struct_helper
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.dump.dump import DUMP
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.auto_calibration_helper import (
-    AutoCalibrationHelper,
-)
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -45,20 +36,15 @@ class TestDumpForward(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_dump_forward')
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
-        dump_config = struct_helper.DumpConfig(
-            batch_num=-1,
-            dump_dir=cls.temp_folder
-        )
+        dump_config = struct_helper.DumpConfig(batch_num=-1, dump_dir=cls.temp_folder)
         layers_name = ['test_layer']
-        cls.dump_module = DUMP(
-            layers_name=layers_name,
-            dump_config=dump_config
-        )
+        cls.dump_module = DUMP(layers_name=layers_name, dump_config=dump_config)
 
     @classmethod
     def tearDownClass(cls):

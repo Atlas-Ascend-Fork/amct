@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,7 +18,7 @@
 import torch
 
 
-class DistillSampleBase():
+class DistillSampleBase:
     @staticmethod
     def get_model_input_data(samples):
         '''
@@ -26,7 +26,9 @@ class DistillSampleBase():
         Parameter: samples: samples from dataloader
         Return: model's input data, list, tuple, torch.Tensor
         '''
-        raise NotImplementedError("get_model_input_data needs to be implemented for distill!")
+        raise NotImplementedError(
+            "get_model_input_data needs to be implemented for distill!"
+        )
 
 
 class ModelSingleTensorInput(DistillSampleBase):
@@ -36,12 +38,16 @@ class ModelSingleTensorInput(DistillSampleBase):
         single_tensor = samples
         if isinstance(samples, (list, tuple)):
             if len(samples) == 0:
-                raise ValueError('default sample instance get empty sample,'
-                    ' please check the distill sample func')
+                raise ValueError(
+                    'default sample instance get empty sample,'
+                    ' please check the distill sample func'
+                )
             single_tensor = samples[0]
 
         if not isinstance(single_tensor, torch.Tensor):
-            raise ValueError('default sample instance get no tensor value,'
-                ' please check the train_loader')
+            raise ValueError(
+                'default sample instance get no tensor value,'
+                ' please check the train_loader'
+            )
 
         return single_tensor

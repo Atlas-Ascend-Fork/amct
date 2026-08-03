@@ -39,31 +39,33 @@ from amct_pytorch.quantization.modules.quant_base import (
     WeightQuantizer,
 )
 
-_MLP_BIT_POLICY = BitPolicy({
-    "mlp": {
-        "gate_proj": {"w_bits": 8, "a_bits": 8},
-        "up_proj": {"w_bits": 8, "a_bits": 8},
-        "down_proj": {"w_bits": 8, "a_bits": 8},
-    },
-    "moe": {
-        "routed": {
+_MLP_BIT_POLICY = BitPolicy(
+    {
+        "mlp": {
             "gate_proj": {"w_bits": 8, "a_bits": 8},
             "up_proj": {"w_bits": 8, "a_bits": 8},
             "down_proj": {"w_bits": 8, "a_bits": 8},
         },
-        "shared": {
-            "gate_proj": {"w_bits": 8, "a_bits": 8},
-            "up_proj": {"w_bits": 8, "a_bits": 8},
-            "down_proj": {"w_bits": 8, "a_bits": 8},
+        "moe": {
+            "routed": {
+                "gate_proj": {"w_bits": 8, "a_bits": 8},
+                "up_proj": {"w_bits": 8, "a_bits": 8},
+                "down_proj": {"w_bits": 8, "a_bits": 8},
+            },
+            "shared": {
+                "gate_proj": {"w_bits": 8, "a_bits": 8},
+                "up_proj": {"w_bits": 8, "a_bits": 8},
+                "down_proj": {"w_bits": 8, "a_bits": 8},
+            },
         },
-    },
-    "attn-linear": {
-        "q_proj": {"w_bits": 8, "a_bits": 8},
-        "k_proj": {"w_bits": 8, "a_bits": 8},
-        "v_proj": {"w_bits": 8, "a_bits": 8},
-        "o_proj": {"w_bits": 8, "a_bits": 8},
-    },
-})
+        "attn-linear": {
+            "q_proj": {"w_bits": 8, "a_bits": 8},
+            "k_proj": {"w_bits": 8, "a_bits": 8},
+            "v_proj": {"w_bits": 8, "a_bits": 8},
+            "o_proj": {"w_bits": 8, "a_bits": 8},
+        },
+    }
+)
 
 register_dtype()
 
@@ -150,6 +152,7 @@ def test_set_model_to_observe_only_targets_modules_with_attribute(flag):
 
 class _FakeQuantWrapper(nn.Module):
     """Records the wrapped child so we can assert replacement behavior."""
+
     def __init__(self, args, original, group=None):
         super().__init__()
         self.args = args
@@ -217,8 +220,12 @@ def test_apply_quant_to_moe_mlp_with_routed_expert_bits():
     layer.mlp = nn.Module()
     layer.mlp.experts = nn.ModuleList([nn.Linear(4, 4)])
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, bit_policy=_MLP_BIT_POLICY,
-        quant_target=["moe"], algos=[], quant_dtype="int",
+        w_bits=8,
+        a_bits=8,
+        bit_policy=_MLP_BIT_POLICY,
+        quant_target=["moe"],
+        algos=[],
+        quant_dtype="int",
     )
     apply_quant_to_moe_mlp(args=args, model=layer, cls=_FakeQuantWrapper)
     assert isinstance(layer.mlp.experts[0], _FakeQuantWrapper)
@@ -229,8 +236,12 @@ def test_apply_quant_to_moe_mlp_with_shared_experts():
     layer = nn.Module()
     layer.shared_experts = nn.Linear(4, 4)
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, bit_policy=_MLP_BIT_POLICY,
-        quant_target=["moe"], algos=[], quant_dtype="int",
+        w_bits=8,
+        a_bits=8,
+        bit_policy=_MLP_BIT_POLICY,
+        quant_target=["moe"],
+        algos=[],
+        quant_dtype="int",
     )
     apply_quant_to_moe_mlp(args=args, model=layer, cls=_FakeQuantWrapper)
     assert isinstance(layer.shared_experts, _FakeQuantWrapper)
@@ -252,7 +263,12 @@ def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
     cmds = []
 
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
+        w_bits=8,
+        a_bits=8,
+        quant_dtype="int",
+        quant_target=["mlp"],
+        algos=[],
+        bit_policy=_MLP_BIT_POLICY,
     )
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
@@ -279,7 +295,12 @@ def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
 
 def test_quant_gated_mlp_forward_passthrough_when_quant_disabled():
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
+        w_bits=8,
+        a_bits=8,
+        quant_dtype="int",
+        quant_target=["mlp"],
+        algos=[],
+        bit_policy=_MLP_BIT_POLICY,
     )
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
@@ -295,23 +316,35 @@ def test_quant_gated_mlp_export_ptq_params_returns_module_params(monkeypatch):
     monkeypatch.setattr(PtqParamHandler, "export_trainable_module", lambda m: {})
 
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
+        w_bits=8,
+        a_bits=8,
+        quant_dtype="int",
+        quant_target=["mlp"],
+        algos=[],
+        bit_policy=_MLP_BIT_POLICY,
     )
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
     result = gated.export_ptq_params()
     assert result == {"sub": {"k": 1}}
-    original = False
     trainable = False
 
     from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 
     monkeypatch.setattr(PtqParamHandler, "export_module", lambda m: {})
-    monkeypatch.setattr(PtqParamHandler, "export_trainable_module",
-                        lambda m: trainable or {"trainable": [1]})
+    monkeypatch.setattr(
+        PtqParamHandler,
+        "export_trainable_module",
+        lambda m: trainable or {"trainable": [1]},
+    )
 
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
+        w_bits=8,
+        a_bits=8,
+        quant_dtype="int",
+        quant_target=["mlp"],
+        algos=[],
+        bit_policy=_MLP_BIT_POLICY,
     )
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
@@ -323,11 +356,22 @@ def test_quant_gated_mlp_load_ptq_params_nested_dicts(monkeypatch):
     loaded = {}
     from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 
-    monkeypatch.setattr(PtqParamHandler, "load_module", lambda m, p: loaded.update({"module": True}))
-    monkeypatch.setattr(PtqParamHandler, "load_trainable_module", lambda m, p: loaded.update({"trainable": True}))
+    monkeypatch.setattr(
+        PtqParamHandler, "load_module", lambda m, p: loaded.update({"module": True})
+    )
+    monkeypatch.setattr(
+        PtqParamHandler,
+        "load_trainable_module",
+        lambda m, p: loaded.update({"trainable": True}),
+    )
 
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
+        w_bits=8,
+        a_bits=8,
+        quant_dtype="int",
+        quant_target=["mlp"],
+        algos=[],
+        bit_policy=_MLP_BIT_POLICY,
     )
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
@@ -339,11 +383,22 @@ def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
     loaded = {}
     from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 
-    monkeypatch.setattr(PtqParamHandler, "load_module", lambda m, p: loaded.update({"module": True}))
-    monkeypatch.setattr(PtqParamHandler, "load_trainable_module", lambda m, p: loaded.update({"trainable": True}))
+    monkeypatch.setattr(
+        PtqParamHandler, "load_module", lambda m, p: loaded.update({"module": True})
+    )
+    monkeypatch.setattr(
+        PtqParamHandler,
+        "load_trainable_module",
+        lambda m, p: loaded.update({"trainable": True}),
+    )
 
     args = argparse.Namespace(
-        w_bits=8, a_bits=8, quant_dtype="int", quant_target=["mlp"], algos=[], bit_policy=_MLP_BIT_POLICY,
+        w_bits=8,
+        a_bits=8,
+        quant_dtype="int",
+        quant_target=["mlp"],
+        algos=[],
+        bit_policy=_MLP_BIT_POLICY,
     )
     mlp = _FakeMLP()
     gated = QuantGatedMLP(args, mlp)
@@ -352,7 +407,9 @@ def test_quant_gated_mlp_load_ptq_params_non_nested(monkeypatch):
 
 
 def test_quant_gated_mlp_forward():
-    args = SimpleNamespace(algos=[], quant_dtype="int", w_bits=8, a_bits=8, quant_target=["mlp"])
+    args = SimpleNamespace(
+        algos=[], quant_dtype="int", w_bits=8, a_bits=8, quant_target=["mlp"]
+    )
     mlp = QuantGatedMLP(args, _FakeMLP(hidden_size=4, intermediate_size=8))
     x = torch.randn(2, 4)
     out = mlp(x)

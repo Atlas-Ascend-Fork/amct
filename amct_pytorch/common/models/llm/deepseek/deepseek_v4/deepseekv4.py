@@ -20,7 +20,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from accelerate import init_empty_weights, dispatch_model
+from accelerate import init_empty_weights
 from accelerate.hooks import AlignDevicesHook, add_hook_to_module
 from accelerate.utils import set_module_tensor_to_device
 from loguru import logger
@@ -33,9 +33,16 @@ from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.capture import Catcher
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_moe_mlp
-from amct_pytorch.common.models.llm.common.ptq_units import iter_indexed_units, make_ptq_unit
-from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.configuration_deepseek_v4 import DeepseekV4Config
-from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import Block
+from amct_pytorch.common.models.llm.common.ptq_units import (
+    iter_indexed_units,
+    make_ptq_unit,
+)
+from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.configuration_deepseek_v4 import (
+    DeepseekV4Config,
+)
+from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (
+    Block,
+)
 from amct_pytorch.common.models.llm.deepseek.deepseek_v4.quant_module import (
     QuantV4Attention,
     QuantV4Expert,
@@ -69,6 +76,11 @@ class DeepseekV4(BaseModel):
         self.model = self.empty_weights_model()
         self.num_layers = self.config.n_layers
         self.sharded_block = False
+
+    @staticmethod
+    def block_size(weight):
+        bs = 32 if weight.dtype == torch.int8 else 128
+        return bs
 
     @staticmethod
     def _resolve_param_device(local_name, device_map):
@@ -133,7 +145,14 @@ class DeepseekV4(BaseModel):
             )
         return decoder_layer
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,
@@ -153,7 +172,9 @@ class DeepseekV4(BaseModel):
         hc_mult = self.model.hc_mult
 
         with torch.no_grad():
-            for inputs in tqdm(samples, total=len(samples), desc="Embedding Processing..."):
+            for inputs in tqdm(
+                samples, total=len(samples), desc="Embedding Processing..."
+            ):
                 try:
                     h = embed(inputs)
                     h = h.unsqueeze(2).repeat(1, 1, hc_mult, 1)
@@ -201,7 +222,9 @@ class DeepseekV4(BaseModel):
                 torch_dtype=torch.bfloat16,
             )
         from amct_pytorch.common.models.llm.deepseek.deepseek_v4.modeling.modeling_deepseek_v4 import (
-            precompute_freqs_cis)
+            precompute_freqs_cis,
+        )
+
         precompute_freqs_cis.cache_clear()
         return model
 
@@ -248,6 +271,17 @@ class DeepseekV4(BaseModel):
         super().load_embed_state_dict()
         self._load_top_level_hc_head_params()
 
+    def cache_scheme(self):
+        cache_type = "int" if self.quant_dtype == "int" else "float"
+        scheme = {
+            "kv_cache_scheme": {"num_bits": 8, "type": "float"},
+            "li_cache_scheme": {
+                "type": cache_type,
+                "num_bits": 8,
+            },
+        }
+        return scheme
+
     def _block_sharded(self, layer_idx):
         """Meta build + per-tensor direct send to target NPU. Avoids the
         ~35 GB CPU staging + 75s Module construction of BaseModel.block."""
@@ -267,7 +301,7 @@ class DeepseekV4(BaseModel):
         for full_name, file_name in weight_map.items():
             if not full_name.startswith(weight_prefix):
                 continue
-            local_name = full_name[len(weight_prefix):]
+            local_name = full_name[len(weight_prefix) :]
             if local_name not in expected:
                 continue
             file_to_keys.setdefault(file_name, []).append((full_name, local_name))
@@ -280,7 +314,9 @@ class DeepseekV4(BaseModel):
                     if tensor.is_floating_point() and tensor.dtype != torch.bfloat16:
                         tensor = tensor.to(torch.bfloat16)
                     target_dev = self._resolve_param_device(local_name, device_map)
-                    set_module_tensor_to_device(block, local_name, target_dev, value=tensor)
+                    set_module_tensor_to_device(
+                        block, local_name, target_dev, value=tensor
+                    )
 
         missing = [name for name, p in block.named_parameters() if p.is_meta]
         if missing:
@@ -293,7 +329,9 @@ class DeepseekV4(BaseModel):
             target_dev = self._resolve_param_device(name, device_map)
             if str(buf.device) == target_dev:
                 continue
-            set_module_tensor_to_device(block, name, target_dev, value=buf.to(target_dev))
+            set_module_tensor_to_device(
+                block, name, target_dev, value=buf.to(target_dev)
+            )
 
         block.eval()
         return block
@@ -313,9 +351,13 @@ class DeepseekV4(BaseModel):
             indexer_dev = 2 % n_npu
             device_map["attn.indexer"] = f"npu:{indexer_dev}"
             reserved.add(indexer_dev)
-        expert_devices = [d for d in range(n_npu) if d not in reserved] or list(range(n_npu))
+        expert_devices = [d for d in range(n_npu) if d not in reserved] or list(
+            range(n_npu)
+        )
         for i in range(len(block.ffn.experts)):
-            device_map[f"ffn.experts.{i}"] = f"npu:{expert_devices[i % len(expert_devices)]}"
+            device_map[f"ffn.experts.{i}"] = (
+                f"npu:{expert_devices[i % len(expert_devices)]}"
+            )
         return device_map
 
     def _dispatch_block(self, module):
@@ -337,7 +379,9 @@ class DeepseekV4(BaseModel):
         return module
 
     def _load_top_level_hc_head_params(self):
-        weight_map = getattr(self, "_weight_map", None) or get_weight_mappings(self.model_path)
+        weight_map = getattr(self, "_weight_map", None) or get_weight_mappings(
+            self.model_path
+        )
         self._weight_map = weight_map
         for name in ("hc_head_fn", "hc_head_scale", "hc_head_base"):
             key = next((k for k in (name, f"model.{name}") if k in weight_map), None)

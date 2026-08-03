@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+# ruff: noqa: F401
+
 __all__ = [
     'BaseFusionPass',
     'BaseModuleFusionPass',
@@ -49,6 +51,7 @@ __all__ = [
     'ReplaceBiasQuantPass',
     'RepalceSyncBNPass',
     'ReplaceRNNPass',
+    'PackInt4WeightPass',
     'SetRecorderPass',
     'ShareActCompPass',
     'WeightsCalibrationPass',
@@ -57,13 +60,15 @@ __all__ = [
     'InsertFakequantLinearPass',
     'InsertFakequantAvgPool2dPass',
     'WeightFakequantModulePass',
+    'WeightFakequantPass',
     'BiasFakequantModulePass',
     'InsertDMQBalancerPass',
     'ApplyDMQBalancerPass',
     'InsertQatPass',
-    'DeleteQatPass'
+    'DeleteQatPass',
 ]
 
+# Keep optimizer submodules available from this package for compatibility.
 from . import base_fusion_pass
 from . import base_module_fusion_pass
 from . import conv_bn_fusion_pass
@@ -141,6 +146,7 @@ from .replace_weight_quant_pass import ReplaceWeightQuantPass
 from .replace_bias_quant_pass import ReplaceBiasQuantPass
 from .replace_sync_bn_pass import RepalceSyncBNPass
 from .replace_rnn_pass import ReplaceRNNPass
+from .pack_int4_weight_pass import PackInt4WeightPass
 from .set_recorder_pass import SetRecorderPass
 from .share_act_comp_pass import ShareActCompPass
 from .weight_calibration import WeightsCalibrationPass

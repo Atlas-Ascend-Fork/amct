@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,9 +16,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from torch import nn
-import torch
 
-from ....amct_pytorch.custom_op.dmq_balancer.dmq_balancer_func import DMQBalancerFunction
+from ....amct_pytorch.custom_op.dmq_balancer.dmq_balancer_func import (
+    DMQBalancerFunction,
+)
 from ....amct_pytorch.utils.module_info import ModuleInfo
 from ....amct_pytorch.utils.log import LOGGER
 
@@ -28,6 +29,7 @@ class DMQBalancer(nn.Module):
     Function: Run calibration process for dmq_balancer of the given layer.
     APIs: forward
     """
+
     act_channel_dims = {
         'Conv2d': 1,
         'Conv3d': 1,
@@ -66,25 +68,36 @@ class DMQBalancer(nn.Module):
 
         if act_channel_num != wts_channel_num:
             raise ValueError(
-                "the activation channel_num[{}] of {} must equal to weight channel_num[{}]"
-                .format(act_channel_num, self.layers_name, wts_channel_num))
+                "the activation channel_num[{}] of {} must equal to weight channel_num[{}]".format(
+                    act_channel_num, self.layers_name, wts_channel_num
+                )
+            )
 
         tensor_balance_factor = DMQBalancerFunction.apply(
-            input_data, input_weight, self.migration_strength)
+            input_data, input_weight, self.migration_strength
+        )
 
         # save tensor_balance_factor to record_module
-        self.record_module(self.layers_name, self.dmq_algo_name,
-                           {'tensor_balance_factor': tensor_balance_factor.cpu().tolist()})
+        self.record_module(
+            self.layers_name,
+            self.dmq_algo_name,
+            {'tensor_balance_factor': tensor_balance_factor.cpu().tolist()},
+        )
 
-        LOGGER.logi("Do layer {} dmq_balancer calibration succeeded!"
-                    .format(self.layers_name), 'DMQBalancer')
+        LOGGER.logi(
+            "Do layer {} dmq_balancer calibration succeeded!".format(self.layers_name),
+            'DMQBalancer',
+        )
 
         return sub_out
 
     def _transpose_wts_for_dmq_balancer(self, module_type, weights):
-        """ transpose activation and weight to c-first format """
+        """transpose activation and weight to c-first format"""
         _, wts_cin_axis = ModuleInfo.get_wts_cout_cin(self.replaced_module)
-        if module_type in ('Conv1d', 'Conv2d', 'Conv3d') and self.replaced_module.groups > 1:
+        if (
+            module_type in ('Conv1d', 'Conv2d', 'Conv3d')
+            and self.replaced_module.groups > 1
+        ):
             group = self.replaced_module.groups
             weight_shape = weights.shape
             new_shape = tuple([group, -1] + list(weight_shape)[1:])
@@ -96,7 +109,3 @@ class DMQBalancer(nn.Module):
             weights = weights.transpose(0, wts_cin_axis)
 
         return weights
-
-
-
-

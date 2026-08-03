@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,7 +26,8 @@ ROLL_BACK_CONFIG = 'roll_back_config'
 
 
 class BinarySearchStrategy(AutoCalibrationStrategyBase):
-    """ the binary search class for auto fallback"""
+    """the binary search class for auto fallback"""
+
     def __init__(self):
         """
         Function:
@@ -55,22 +56,21 @@ class BinarySearchStrategy(AutoCalibrationStrategyBase):
         """
         self.cos_dict = ranking_info
         self.record = 'init'
-        self.sorted_cos_dict_list = sorted(
-            self.cos_dict.items(), key=lambda d: d[1])
+        self.sorted_cos_dict_list = sorted(self.cos_dict.items(), key=lambda d: d[1])
         self.sorted_cos_quant_dict = self.init_sorted_cos_quant_dict()
         self.left = 0
         self.mid = 0
         self.right = len(self.cos_dict) - 1
 
     def init_sorted_cos_quant_dict(self):
-        """ init sorted cosine similarity dict"""
+        """init sorted cosine similarity dict"""
         sorted_dict = collections.OrderedDict()
         for item in self.sorted_cos_dict_list:
             sorted_dict[item[0]] = True
         return sorted_dict
 
     def reset_sorted_cos_dict(self, stop_layer):
-        """ update sorted cosine similarity dict"""
+        """update sorted cosine similarity dict"""
         self.set_flag = True
 
         for item in self.sorted_cos_dict_list:
@@ -82,7 +82,7 @@ class BinarySearchStrategy(AutoCalibrationStrategyBase):
                 self.set_flag = False
 
     def binary_search(self):
-        """ binary search function"""
+        """binary search function"""
         layer_name = self.sorted_cos_dict_list[self.mid][0]
         return layer_name
 
