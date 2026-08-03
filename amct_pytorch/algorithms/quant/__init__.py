@@ -1,3 +1,4 @@
+from __future__ import annotations
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -21,6 +22,7 @@ __all__ = [
 ]
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 _REGISTERED = False
@@ -42,5 +44,5 @@ def register_algorithms():
 
 @dataclass
 class AlgoBuildContext:
-    matrix_size: int | None = None
-    dim_size: int | None = None
+    matrix_size: Optional[int] = None
+    dim_size: Optional[int] = None

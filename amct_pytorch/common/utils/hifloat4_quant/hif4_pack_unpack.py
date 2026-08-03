@@ -35,7 +35,7 @@ scale : uint8 [M, N // 64, 4]      one 4-byte record per 64-group
     byte 3 : E1_16 low  8 bits     blocks 8..15                                        (block 8 at MSB)
 value : uint8 [M, N // 2]          two adjacent 4-bit codes packed into one byte
     each 4-bit nibble = (sign << 3) | E1M2,  E1M2 = round(|in_grp| * 4) in 0..7 (S1P2)
-    the first (even-index) element goes in the HIGH nibble, the next in the LOW nibble
+    the first (even-index) element goes in the LOW nibble, the next in the HIGH nibble
 
 Note E1_8 / E1_16 are named "level-1 / level-2 scale" per the requested byte layout;
 they correspond to the level-2 (8x) and level-3 (16x) exponents inside the shared ``_hif4_encode_decode`` encode.
@@ -88,21 +88,23 @@ def hif4_cast(x, output="packed"):
     # Shared HiF4 encode (same _hif4_encode_decode as quant_dequant_float, bit-for-bit identical).
     enc = hif4_encode(xg, ng=NG)
 
-    # ---- HiF4 -> float: dequantize the codes we just produced (same bits a stored weight has) ----
+    # ---- HiF4 -> float: dequantize the codes, restoring original NaN/Inf element-by-element ----
     if output == "dequant":
-        dequant = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=NG)
+        dequant = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=NG,
+                              special_vals=enc.special_vals)
         return dequant.reshape(M, N).to(dtype_ori)
 
-    # ---- pack value: nibble = sign*8 + code, pair adjacent along N (even -> high nibble) ----
+    # ---- pack value: nibble = sign*8 + code, pair adjacent along N (even -> low nibble) ----
     nibble = (enc.sign_bit * 8 + enc.code).reshape(M, N // 2, 2)
-    value = (nibble[..., 0] * 16 + nibble[..., 1]).to(torch.uint8)      # [M, N//2]
+    value = (nibble[..., 0] + nibble[..., 1] * 16).to(torch.uint8)      # [M, N//2]
 
     # ---- pack scale (integer arithmetic, no bitwise ops) ----
     byte_e6m2 = ((enc.e_e6 + E6_OFFSET).to(torch.int32) * (2 ** E6M2_MBITS)
                  + (enc.q.to(torch.int32) - 4))                        # [M,gn]
-    # NaN/Inf block poison: hif4_encode flags non-finite groups by making the E6M2 scale NaN;
-    # store them as the reserved 0xFF E6M2 code (2^15 * 1.75) so the block decodes back to NaN.
-    byte_e6m2 = torch.where(torch.isnan(enc.e6m2),
+    # NaN/Inf block poison: if any element in the 64-group is non-finite (NaN/Inf), store the
+    # reserved 0xFF E6M2 code so reconstruction yields NaN for the whole block.
+    block_nan = (enc.special_vals != 0).flatten(2).any(dim=-1)          # [M,gn]
+    byte_e6m2 = torch.where(block_nan,
                             torch.full_like(byte_e6m2, 0xFF), byte_e6m2)
 
     pw8 = _pow2(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(torch.int32)  # [128..1]
@@ -145,7 +147,7 @@ def hif4_bit_reconstruct(scale, value):
     lo = (b_l2_lo[..., None] >> (7 - a_idx)) & 1
     e1_16 = np.concatenate([hi, lo], axis=-1).reshape(M, gn, 8, 2).astype(np.float64)
 
-    nib = np.stack([value >> 4, value & 0xF], axis=-1).reshape(M, N)      # [M,N]
+    nib = np.stack([value & 0xF, value >> 4], axis=-1).reshape(M, N)      # [M,N] element 0 in low nibble
     nib = nib.reshape(M, gn, 8, 2, 4)
     sign = np.where((nib >> 3) & 1 == 1, -1.0, 1.0)
     code = (nib & 0x7).astype(np.float64)

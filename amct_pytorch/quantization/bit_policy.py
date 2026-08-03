@@ -1,3 +1,4 @@
+from __future__ import annotations
 # coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #

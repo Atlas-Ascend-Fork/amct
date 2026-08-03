@@ -44,6 +44,7 @@ class Hif4Encoded(NamedTuple):
     e1_16: Tensor       # bool  [*B, 8, 2]     level-3 (16x) exponent bit (for byte packing)
     e_e6: Tensor        # fp32  [*B]           E6M2 unbiased exponent (for byte packing)
     q: Tensor           # fp32  [*B]           E6M2 mantissa quotient in {4..7} (for packing)
+    special_vals: Tensor  # fp32 [*B, 8, 2, 4]  original non-finite values (NaN/Inf), 0 for finite
 
 
 def _pow2(e: Tensor) -> Tensor:
@@ -65,12 +66,12 @@ def hif4_encode(xg: Tensor, ng: int = 2) -> Hif4Encoded:
     packer's ``reshape(M, N // 64, 8, 2, 4)``. ``ng`` is the S1P2 in-group mantissa bit count
     (HiF4: 2, so the in-group code is 3 bits and value = code / 2**ng).
     """
-    # Non-finite handling, matching the HiF4 hardware / reference (To_HiFX, hif4_bit_dump):
-    # a 64-group carries NaN/Inf *only* in its block-level E6M2 scale. Compute the codes from
-    # the finite values (non-finite -> 0), but if ANY element of the (8, 2, 4) group is
-    # non-finite (NaN or +/-Inf) the whole group is later poisoned to NaN via the E6M2 scale.
-    xf = torch.where(torch.isfinite(xg), xg, torch.zeros_like(xg))
-    block_nan = (~torch.isfinite(xg)).flatten(-3, -1).any(dim=-1)  # [*B] any non-finite in group
+    # Non-finite handling, matching the reference (hifx.py To_HiFX):
+    # zero non-finite values before the max reduction so they don't pollute the shared scale,
+    # then restore the original NaN/Inf element-by-element after decode.
+    finite_mask = torch.isfinite(xg)                          # [*B, 8, 2, 4]
+    special_vals = torch.where(finite_mask, torch.zeros_like(xg), xg)
+    xf = torch.where(finite_mask, xg, torch.zeros_like(xg))
     tmp = xf.abs()
     sign_bit = (xf < 0).to(torch.int32)
 
@@ -100,17 +101,24 @@ def hif4_encode(xg: Tensor, ng: int = 2) -> Hif4Encoded:
     in_grp = _to_bf16(in_grp) * (2 ** ng)                    # extra bf16 rounding
     code = torch.floor(in_grp + 0.5).clamp(0, (1 << (ng + 1)) - 1).to(torch.int32)
 
-    # NaN/Inf poison: record non-finite groups in the E6M2 scale (the reserved 0xFF code the
-    # byte packer emits). decode multiplies every element by e6m2, so a NaN scale turns the
-    # whole 64-group to NaN -- computed *after* the codes above so finite math is unaffected.
-    e6m2 = torch.where(block_nan, torch.full_like(e6m2, float("nan")), e6m2)
-
-    return Hif4Encoded(sign_bit, e6m2, de, code, e1_8, e1_16, e_e6, q)
+    return Hif4Encoded(sign_bit, e6m2, de, code, e1_8, e1_16, e_e6, q, special_vals)
 
 
 @torch.no_grad()
-def hif4_decode(sign_bit: Tensor, e6m2: Tensor, de: Tensor, code: Tensor, ng: int = 2) -> Tensor:
-    """Decode encoder outputs back to fp32, shaped like ``code`` (``[*B, 8, 2, 4]``)."""
+def hif4_decode(sign_bit: Tensor, e6m2: Tensor, de: Tensor, code: Tensor, ng: int = 2,
+                special_vals: Tensor | None = None) -> Tensor:
+    """Decode encoder outputs back to fp32, shaped like ``code`` (``[*B, 8, 2, 4]``).
+
+    If ``special_vals`` is provided, it contains the original non-finite values (NaN/Inf) where
+    the input was non-finite and 0 elsewhere. Adding it to the decoded tensor restores the exact
+    original NaN/Inf per element — matching the private hifx.py reference (NaN→NaN, +Inf→+Inf,
+    -Inf→-Inf). The IEEE 754 addition ``finite + NaN = NaN``, ``0 + Inf = Inf`` makes this exact.
+    """
     de64 = de.unsqueeze(-1).expand(*de.shape, 4)
     sign = 1.0 - 2.0 * sign_bit.to(torch.float32)            # +1 / -1 (zero -> +1)
-    return sign * e6m2[..., None, None, None] * _pow2(de64) * (code.to(torch.float32) / (2 ** ng))
+    out = sign * e6m2[..., None, None, None] * _pow2(de64) * (code.to(torch.float32) / (2 ** ng))
+
+    if special_vals is not None:
+        # Restore original non-finite values element-by-element (0 + NaN → NaN, 0 + Inf → Inf).
+        out = out + special_vals
+    return out
