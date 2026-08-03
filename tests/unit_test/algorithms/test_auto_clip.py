@@ -105,10 +105,16 @@ def test_lac_observe_mode_updates_min_max_buffers():
     lac.is_observe = True
     x1 = torch.tensor([[-3.0, 5.0]])
     x2 = torch.tensor([[-1.0, 7.0]])
+    snapshot1 = x1.clone()
+    snapshot2 = x2.clone()
     out1 = lac(x1)
     out2 = lac(x2)
+    assert out1 is x1
+    assert out2 is x2
     assert torch.equal(out1, x1)
     assert torch.equal(out2, x2)
+    assert torch.equal(x1, snapshot1)
+    assert torch.equal(x2, snapshot2)
     assert lac.maxval.item() == 7.0
     assert lac.minval.item() == -3.0
 
