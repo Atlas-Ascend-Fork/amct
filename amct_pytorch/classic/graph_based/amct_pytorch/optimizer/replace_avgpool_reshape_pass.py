@@ -51,7 +51,7 @@ class ReplaceAvgpoolReshapePass(BaseFusionPass):
         consumers, in_idxs = node.get_consumers(0)
         if len(consumers) != 1 or consumers[0].type != 'Reshape':
             LOGGER.logd(
-                "node {} match_pattern fail for it must have only one consumer Reshape.".format(
+                "node {} does not match the pattern because it must have only one consumer Reshape.".format(
                     node.name
                 ),
                 'ReplaceAvgpoolReshapePass',
