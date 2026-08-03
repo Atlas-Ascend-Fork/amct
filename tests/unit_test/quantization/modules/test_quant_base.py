@@ -57,6 +57,41 @@ def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=(), w_size=(4, 8))
     )
 
 
+class _ObserveActivationAlgo(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.is_observe = False
+        self.call_count = 0
+        self.received = None
+
+    def forward(self, x):
+        self.call_count += 1
+        self.received = x
+        return x
+
+
+class _RegularActivationAlgo(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.call_count = 0
+
+    def forward(self, x):
+        self.call_count += 1
+        return x + 1
+
+
+class _FakeQuantSpy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.call_count = 0
+        self.received = None
+
+    def forward(self, x):
+        self.call_count += 1
+        self.received = x
+        return x - 3
+
+
 # ---- get_algo_names_by_target / build_algorithms_by_target ---------------
 
 
@@ -217,6 +252,98 @@ def test_activation_quantizer_observe_state_reaches_inner_algorithm():
         x = torch.randn(2, 8)
         assert torch.equal(aq(x), x)
         assert aq.algorithms[name].called_in_observe is True
+    finally:
+        ALGO_REGISTRY._items.pop(name, None)
+
+
+def test_activation_quantizer_observe_runs_only_observe_algorithms():
+    observe_name = "_ut_act_observe_only"
+    regular_name = "_ut_act_regular"
+    ALGO_REGISTRY.register(name=observe_name, targets=("activation",))(
+        _ObserveActivationAlgo
+    )
+    ALGO_REGISTRY.register(name=regular_name, targets=("activation",))(
+        _RegularActivationAlgo
+    )
+
+    try:
+        aq = ActivationQuantizer(
+            _args(algos=[observe_name, regular_name]), bits=8
+        )
+        aq.quant_obj = _FakeQuantSpy()
+        aq.set_observe(True)
+        x = torch.randn(2, 8)
+        snapshot = x.clone()
+
+        out = aq(x)
+
+        observe_algo = aq.algorithms[observe_name]
+        regular_algo = aq.algorithms[regular_name]
+        assert observe_algo.call_count == 1
+        assert observe_algo.is_observe is True
+        assert observe_algo.received is x
+        assert regular_algo.call_count == 0
+        assert aq.quant_obj.call_count == 0
+        assert out is x
+        assert torch.equal(x, snapshot)
+    finally:
+        ALGO_REGISTRY._items.pop(observe_name, None)
+        ALGO_REGISTRY._items.pop(regular_name, None)
+
+
+def test_activation_quantizer_non_observe_runs_all_algorithms_and_fake_quant():
+    observe_name = "_ut_act_non_observe_aware"
+    regular_name = "_ut_act_non_observe_regular"
+    ALGO_REGISTRY.register(name=observe_name, targets=("activation",))(
+        _ObserveActivationAlgo
+    )
+    ALGO_REGISTRY.register(name=regular_name, targets=("activation",))(
+        _RegularActivationAlgo
+    )
+
+    try:
+        aq = ActivationQuantizer(
+            _args(algos=[observe_name, regular_name]), bits=8
+        )
+        aq.quant_obj = _FakeQuantSpy()
+        aq.set_observe(False)
+        x = torch.tensor([1.0, 2.0])
+
+        out = aq(x)
+
+        observe_algo = aq.algorithms[observe_name]
+        regular_algo = aq.algorithms[regular_name]
+        expected_algo_out = x + 1
+        assert observe_algo.call_count == 1
+        assert observe_algo.is_observe is False
+        assert regular_algo.call_count == 1
+        assert aq.quant_obj.call_count == 1
+        assert torch.equal(aq.quant_obj.received, expected_algo_out)
+        assert torch.equal(out, expected_algo_out - 3)
+    finally:
+        ALGO_REGISTRY._items.pop(observe_name, None)
+        ALGO_REGISTRY._items.pop(regular_name, None)
+
+
+@pytest.mark.parametrize(
+    ("quantizer_state", "algorithm_state"), [(True, False), (False, True)]
+)
+def test_activation_quantizer_forward_repairs_algorithm_observe_state(
+    quantizer_state, algorithm_state
+):
+    name = "_ut_act_observe_state_repair"
+    ALGO_REGISTRY.register(name=name, targets=("activation",))(
+        _ObserveActivationAlgo
+    )
+
+    try:
+        aq = ActivationQuantizer(_args(algos=[name]), bits=8)
+        aq.is_observe = quantizer_state
+        aq.algorithms[name].is_observe = algorithm_state
+
+        aq(torch.randn(2, 8))
+
+        assert aq.algorithms[name].is_observe is quantizer_state
     finally:
         ALGO_REGISTRY._items.pop(name, None)
 

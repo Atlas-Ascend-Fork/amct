@@ -129,6 +129,13 @@ class ActivationQuantizer(torch.nn.Module):
 
     def forward(self, x):
         self.set_observe(self.is_observe)
+        if self.is_observe:
+            # Only algorithms exposing `is_observe` participate in calibration:
+            # they record activation statistics and must return the original tensor.
+            for algo in self.algorithms.values():
+                if hasattr(algo, "is_observe"):
+                    x = algo(x)
+            return x
         for algo in self.algorithms.values():
             x = algo(x)
         return self.fake_quant(x)
