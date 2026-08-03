@@ -39,3 +39,4 @@ tmp/
 /.claude/
 /.opencode/
 /CLAUDE.md
+**/hadamard.safetensors
