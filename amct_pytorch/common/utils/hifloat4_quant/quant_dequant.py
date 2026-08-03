@@ -70,10 +70,9 @@ def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32:
 
     # HiF4 fake-quant: reshape quant dim into (-1, 8, 2, 4) blocks, then shared encode -> decode
     # in fp32 (same math as hif4_pack_unpack.hif4_cast, see _hif4_encode_decode).
-    # hif4_encode requires the block dims (8,2,4) as the trailing three dims. After unflatten
-    # they sit at qdim+1..qdim+3; when qdim != -1 extra non-quant dims follow. Find (8,2,4)
-    # by size and permute them to the end (matching the C++ host's move-qdim-to-last logic),
-    # then undo after decode.
+    # hif4_encode requires the block dims (8,2,4) as the trailing three. After unflatten they
+    # sit at qdim+1..qdim+3; when qdim != -1 extra non-quant dims follow, so we permute them to
+    # the end (matching the C++ host's move-qdim-to-last logic), then undo after decode.
     ng = Q.man_bits - 1                       # HiF4: man_bits=3 -> ng=2
     xb = x.unflatten(qdim, (-1, 8, 2, 4)).to(torch.float32)
     nd = xb.ndim
