@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""Shared HiF4 (N=4) quantization core -- one copy of the 3-level-scale + S1P2 math.
+"""Shared HiF4 (N=4) quantization core — one copy of the 3-level-scale + S1P2 math.
 
 Both the fake-quant path (``quant_dequant.quant_dequant_float``) and the real byte packer
 (``hif4_pack_unpack.hif4_cast``) call the same ``hif4_encode`` / ``hif4_decode`` here, so the
@@ -58,68 +58,113 @@ def _to_bf16(x: Tensor) -> Tensor:
 
 
 @torch.no_grad()
-def hif4_encode(xg: Tensor, ng: int = 2) -> Hif4Encoded:
-    """Encode a tensor whose trailing dims are ``(..., 8, 2, 4)`` -- one 64-group per (8, 2, 4).
+def hif4_encode(xg: Tensor, ng: int = 2, qdim: int = -1) -> Hif4Encoded:
+    """Encode a tensor whose block hierarchy dims ``(8, 2, 4)`` are located at
+    ``(qdim-2, qdim-1, qdim)`` — ``qdim`` is the dim index of the innermost ``4``
+    block-sub-dim (negative, relative to ``xg.ndim``).
 
-    ``xg`` must already be float32. Everything before the (8, 2, 4) is treated as batch, so
-    this serves both the fake-quant reshape ``unflatten(qdim, (-1, 8, 2, 4))`` and the
-    packer's ``reshape(M, N // 64, 8, 2, 4)``. ``ng`` is the S1P2 in-group mantissa bit count
-    (HiF4: 2, so the in-group code is 3 bits and value = code / 2**ng).
+    Uses ``amax(dim=…, keepdim=True)`` matching the private ``hifx.py`` reference
+    (``torch.max(..., dim=qdim, keepdim=True)``).  With ``keepdim`` every intermediate
+    tensor shares the same ndim as ``xg``, so broadcasting of ``rec`` is automatic --
+    no manual ``unsqueeze`` / ``expand``.
+
+    When the caller guarantees ``(8, 2, 4)`` are the trailing three dims (as
+    ``hif4_pack_unpack.hif4_cast`` does), the default ``qdim=-1`` is correct.
+    ``quant_dequant_float`` passes the adjusted negative ``qdim`` from ``Q.q_dim``
+    (after ``unflatten`` the innermost block-sub-dim "4" sits at that index).
     """
-    # Non-finite handling -- HiF4 block-poison, matching the NPU reference (hifx.py To_HiFX):
-    # zero non-finite values before the max reduction so they don't pollute the shared scale; if a
-    # 64-group has ANY non-finite (NaN or +-Inf), the whole group decodes to NaN (see hif4_decode).
-    finite_mask = torch.isfinite(xg)                          # [*B, 8, 2, 4]
-    block_nan = (~finite_mask).flatten(start_dim=-3).any(dim=-1)   # [*B]  any non-finite in the group
+    # Non-finite handling -- HiF4 block-poison: zero non-finite values before the max
+    # reduction; if any element in a 64-group is non-finite the whole group becomes NaN.
+    finite_mask = torch.isfinite(xg)
+    block_nan = (~finite_mask).flatten(start_dim=qdim - 2).any(dim=-1)
     xf = torch.where(finite_mask, xg, torch.zeros_like(xg))
     tmp = xf.abs()
     sign_bit = (xf < 0).to(torch.int32)
 
-    # Max values along the block hierarchy
-    v16 = tmp.amax(dim=-1)                                    # [*B, 8, 2]
-    v8 = v16.amax(dim=-1)                                     # [*B, 8]
-    vmax = v8.amax(dim=-1)                                    # [*B]
+    # Max hierarchy with keepdim=True (matching private hifx.py).
+    # All tensors below share xg.ndim; 1s in reduced dims make broadcast with rec trivial.
+    v16 = tmp.amax(dim=qdim, keepdim=True)
+    v8 = v16.amax(dim=qdim - 1, keepdim=True)
+    vmax = v8.amax(dim=qdim - 2, keepdim=True)
 
-    # E6M2 (level-1 scale): e = floor(log2(sf)); q = round(sf * 2^(2-e)) in {4..7}
+    # E6M2 (level-1 scale)
     const_rec = _to_bf16(torch.tensor(1.0 / 7.0, dtype=torch.float32, device=xg.device))
     sf = _to_bf16(vmax * const_rec)
     sf_c = sf.clamp(2.0 ** -E6_OFFSET, 2.0 ** 15 * 1.5)
     e_e6 = torch.floor(torch.log2(sf_c))
-    q = torch.round(sf_c * _pow2(2.0 - e_e6))                # {4, 5, 6, 7}
-    e6m2 = q * _pow2(e_e6 - 2.0)                              # E6M2 value
-    rec = _to_bf16(1.0 / e6m2)                               # reciprocal, bf16-rounded
+    q = torch.round(sf_c * _pow2(2.0 - e_e6))
+    e6m2_val = q * _pow2(e_e6 - 2.0)
+    rec = _to_bf16(1.0 / e6m2_val)
 
-    # Level-2 (8x) and level-3 (16x) exponent bits
-    e1_8 = (v8 * rec.unsqueeze(-1) >= 4.0)                    # [*B, 8] bool
-    e1_8x2 = e1_8.unsqueeze(-1).expand(*e1_8.shape, 2)       # [*B, 8, 2]
-    e1_16 = (v16 * rec[..., None, None] * _pow2(-e1_8x2.to(torch.float32)) >= 2.0)
+    # Level-2 (8x) and level-3 (16x) exponent bits — all same ndim, rec broadcasts naturally.
+    e1_8 = (v8 * rec >= 4.0)                                  # [*B, 8, 1, 1, …]
+    # Expand the "2" keepdim (at qdim-1) from 1 → 2.
+    pl = e1_8.ndim + qdim - 1                                  # split before "2" keepdim
+    e1_8x2 = e1_8.expand(*e1_8.shape[:pl], 2, *e1_8.shape[pl + 1:])
+    e1_16 = (v16 * rec * _pow2(-e1_8x2.to(torch.float32)) >= 2.0)
 
     # In-group S1P2 code
-    de = e1_16.to(torch.float32) + e1_8x2.to(torch.float32)  # {0, 1, 2}
-    de64 = de.unsqueeze(-1).expand(*de.shape, 4)             # [*B, 8, 2, 4]
-    in_grp = tmp * rec[..., None, None, None] * _pow2(-de64)
-    in_grp = _to_bf16(in_grp) * (2 ** ng)                    # extra bf16 rounding
+    de = e1_16.to(torch.float32) + e1_8x2.to(torch.float32)
+    in_grp = tmp * rec * _pow2(-de.to(tmp.dtype))
+    in_grp = _to_bf16(in_grp) * (2 ** ng)
     code = torch.floor(in_grp + 0.5).clamp(0, (1 << (ng + 1)) - 1).to(torch.int32)
 
-    return Hif4Encoded(sign_bit, e6m2, de, code, e1_8, e1_16, e_e6, q, block_nan)
+    # Collapse keepdim-1s back to the shapes expected by hif4_decode / packer.
+    # ─ sign_bit, code: original xg shape, no squeeze needed.
+    # ─ e6m2_val, e_e6, q: 3 keepdim 1s at qdim-2, qdim-1, qdim → squeeze all.
+    # ─ e1_8: 2 keepdim 1s at qdim-1, qdim → squeeze from the right.
+    # ─ e1_16, de: 1 keepdim 1 at qdim → squeeze that one.
+    e1_8_sq = e1_8.squeeze(qdim).squeeze(qdim - 1)
+    return Hif4Encoded(
+        sign_bit,
+        e6m2_val.squeeze(),
+        de.squeeze(qdim),
+        code,
+        e1_8_sq,
+        e1_16.squeeze(qdim),
+        e_e6.squeeze(),
+        q.squeeze(),
+        block_nan,
+    )
 
 
 @torch.no_grad()
 def hif4_decode(sign_bit: Tensor, e6m2: Tensor, de: Tensor, code: Tensor, ng: int = 2,
-                block_nan: Tensor | None = None) -> Tensor:
+                block_nan: Tensor | None = None, qdim: int = -1) -> Tensor:
     """Decode encoder outputs back to fp32, shaped like ``code`` (``[*B, 8, 2, 4]``).
 
-    If ``block_nan`` (bool ``[*B]``) is provided, every 64-group flagged there is set **entirely to
-    NaN** — HiF4 **block-poison**: a group that had any non-finite input (NaN or +-Inf) reconstructs
-    as an all-NaN group, matching the NPU kernel (private ``hifx.py``) and the packed-byte path
-    (reserved ``E6M2 == 0xFF``). This is deliberately coarser than a per-element restore: +-Inf does
-    NOT round-trip to +-Inf — the whole group becomes NaN.
+    ``qdim`` is the innermost block-sub-dim index (negative) of the *original* encoded
+    tensor.  It controls where the three broadcast dimensions are inserted so that
+    ``e6m2`` and ``block_nan`` line up with the block hierarchy regardless of whether
+    ``(8, 2, 4)`` are trailing.  Default ``-1`` = trailing (the packer path).
+
+    If ``block_nan`` is provided, every 64-group flagged there is set **entirely to
+    NaN** — HiF4 **block-poison**: a group that had any non-finite input (NaN or +-Inf)
+    reconstructs as an all-NaN group.
     """
-    de64 = de.unsqueeze(-1).expand(*de.shape, 4)
-    sign = 1.0 - 2.0 * sign_bit.to(torch.float32)            # +1 / -1 (zero -> +1)
-    out = sign * e6m2[..., None, None, None] * _pow2(de64) * (code.to(torch.float32) / (2 ** ng))
+    # Expand de from [*B, 8, 2] to [*B, 8, 2, 4].
+    de64 = de.unsqueeze(qdim)
+    target = list(de64.shape)
+    target[de64.ndim + qdim] = 4
+    de64 = de64.expand(target)
+
+    sign = 1.0 - 2.0 * sign_bit.to(torch.float32)
+
+    # Broadcast e6m2 [*B] to match sign's ndim: insert 1s at positions
+    # qdim-2 (8), qdim-1 (2), qdim (4) of the target tensor.
+    e6m2_exp = e6m2
+    nd_target = sign.ndim
+    for pos in sorted([nd_target + qdim - 2, nd_target + qdim - 1, nd_target + qdim]):
+        e6m2_exp = e6m2_exp.unsqueeze(pos)
+
+    out = sign * e6m2_exp * _pow2(de64) * (code.to(torch.float32) / (2 ** ng))
 
     if block_nan is not None:
-        # HiF4 block-poison: whole 64-group -> NaN if it had any non-finite input.
-        out = torch.where(block_nan[..., None, None, None], torch.full_like(out, float("nan")), out)
+        bn_exp = block_nan
+        # Insert 1s at the block-keepdim positions, then pad any trailing dims.
+        for pos in sorted([nd_target + qdim - 2, nd_target + qdim - 1, nd_target + qdim]):
+            bn_exp = bn_exp.unsqueeze(pos)
+        while bn_exp.ndim < nd_target:
+            bn_exp = bn_exp.unsqueeze(-1)
+        out = torch.where(bn_exp, torch.full_like(out, float("nan")), out)
     return out
