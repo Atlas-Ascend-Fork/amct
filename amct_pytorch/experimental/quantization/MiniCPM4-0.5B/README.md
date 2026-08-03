@@ -69,9 +69,6 @@ pip install -r requirements.txt
 需先 `source` CANN 的环境脚本（如 `/usr/local/Ascend/ascend-toolkit/set_env.sh`）使
 `torch_npu` 可用；设备由 Python 入口自动探测，无需手动指定。
 
-### CUDA
-
-以 `TORCH_DEVICE=cuda` 运行即可（`torch==2.5.1`，无需 `torch_npu`）。
 
 ## 快速开始（以 MiniCPM4-0.5B 为例）
 
