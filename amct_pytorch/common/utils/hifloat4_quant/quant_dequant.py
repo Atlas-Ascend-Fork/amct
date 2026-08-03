@@ -72,9 +72,32 @@ def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32:
     # in fp32 (same math as hif4_pack_unpack.hif4_cast, see _hif4_encode_decode).
     ng = Q.man_bits - 1                       # HiF4: man_bits=3 -> ng=2
     xb = x.unflatten(qdim, (-1, 8, 2, 4)).to(torch.float32)
+
+    # hif4_encode expects the block hierarchy dims (8, 2, 4) as the trailing three dims.
+    # After unflatten they may not be the last three when qdim != -1 (extra non-quant dims
+    # end up after them). Find the consecutive (8, 2, 4) by their sizes and permute them to
+    # the end; after encode/decode undo the permute. This mirrors the C++ host which always
+    # moves qdim to the last axis before calling the kernel.
+    nd = xb.ndim
+    perm = None
+    if not (nd >= 3 and xb.shape[-3] == 8 and xb.shape[-2] == 2 and xb.shape[-1] == 4):
+        for i in range(nd - 2):
+            if xb.shape[i] == 8 and xb.shape[i + 1] == 2 and xb.shape[i + 2] == 4:
+                perm = [j for j in range(nd) if j < i or j >= i + 3] + [i, i + 1, i + 2]
+                xb = xb.permute(perm).contiguous()
+                break
+
     enc = hif4_encode(xb, ng=ng)
     out = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=ng,
-                      block_nan=enc.block_nan).flatten(qdim - 3, qdim)
+                      block_nan=enc.block_nan)
+
+    if perm is not None:
+        inv = [0] * nd
+        for i, p in enumerate(perm):
+            inv[p] = i
+        out = out.permute(inv).contiguous()
+
+    out = out.flatten(qdim - 3, qdim)
 
     # slice the pad off. Use a tuple (basic indexing) -- a list of slices is treated as
     # advanced indexing by torch/numpy and would not mean "slice every dim".
