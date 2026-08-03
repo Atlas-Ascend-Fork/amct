@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import MagicMock
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
-from amct_pytorch.classic.graph_based.amct_pytorch.common.config import config_base as cb
 from amct_pytorch.classic.graph_based.amct_pytorch.common.config.config_base import (
     ConfigBase,
     GraphObjects,
@@ -37,8 +36,9 @@ WGT = 'weight_quant_params'
 def _make_config(enable_quant=True, enable_approximate=False, querier=None):
     querier = querier or MagicMock()
     go = GraphObjects(graph_querier=querier, graph_checker=MagicMock())
-    return ConfigBase(go, CAPACITY, enable_quant=enable_quant,
-                      enable_approximate=enable_approximate)
+    return ConfigBase(
+        go, CAPACITY, enable_quant=enable_quant, enable_approximate=enable_approximate
+    )
 
 
 class TestConfigBaseStatic(unittest.TestCase):
@@ -51,8 +51,9 @@ class TestConfigBaseStatic(unittest.TestCase):
         self.assertTrue(cfg.enable_approximate)
 
     def test_get_common_activation_quant_config_empty(self):
-        self.assertEqual(ConfigBase.get_common_activation_quant_config(None),
-                         [None, None])
+        self.assertEqual(
+            ConfigBase.get_common_activation_quant_config(None), [None, None]
+        )
 
     def test_get_common_activation_quant_config_value(self):
         common = {ACT: {'act_algo': 'ifmr', 'asymmetric': True}}
@@ -76,12 +77,17 @@ class TestConfigBaseStatic(unittest.TestCase):
             'batch_num': 4,
             'fakequant_precision_mode': 'FORCE_FP16',
             'layer1': {
-                ACT: {'act_algo': 'ifmr', 'search_range': [0.7, 1.3],
-                      'asymmetric': None},
+                ACT: {
+                    'act_algo': 'ifmr',
+                    'search_range': [0.7, 1.3],
+                    'asymmetric': None,
+                },
                 WGT: {},
             },
         }
-        ConfigBase.add_global_to_layer(quant_config, num_bits=8, wts_algo='arq_quantize')
+        ConfigBase.add_global_to_layer(
+            quant_config, num_bits=8, wts_algo='arq_quantize'
+        )
         layer = quant_config.get('layer1')
         act = layer.get(ACT)
         wgt = layer.get(WGT)
@@ -102,15 +108,21 @@ class TestConfigBaseModuleFuncs(unittest.TestCase):
         check_config_quant_enable({'tensor_quantize': [{'x': 1}], 'v': 1})
 
     def test_check_config_quant_enable_raises(self):
-        self.assertRaises(RuntimeError, check_config_quant_enable,
-                          {'l1': {'quant_enable': False}, 'scalar': 1})
+        self.assertRaises(
+            RuntimeError,
+            check_config_quant_enable,
+            {'l1': {'quant_enable': False}, 'scalar': 1},
+        )
 
     def test_check_config_dmq_balancer_ok(self):
         check_config_dmq_balancer({'l1': {'dmq_balancer_param': {'a': 1}}})
 
     def test_check_config_dmq_balancer_raises(self):
-        self.assertRaises(RuntimeError, check_config_dmq_balancer,
-                          {'l1': {'quant_enable': True}, 'scalar': 1})
+        self.assertRaises(
+            RuntimeError,
+            check_config_dmq_balancer,
+            {'l1': {'quant_enable': True}, 'scalar': 1},
+        )
 
 
 if __name__ == '__main__':

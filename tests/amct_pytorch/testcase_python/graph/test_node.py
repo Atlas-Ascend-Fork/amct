@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,15 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import logging
 import os
-import sys
 import unittest
 from copy import deepcopy
 
-import numpy as np
-import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
@@ -112,20 +108,12 @@ class TestNode(unittest.TestCase):
     def test_unsupport_type(self):
         graph_proto = onnx_pb.GraphProto()
         graph_proto.name = CONV
-        self.assertRaises(
-            TypeError,
-            Node,
-            0,
-            graph_proto)
+        self.assertRaises(TypeError, Node, 0, graph_proto)
 
     def test_sparse_initializer_without_data(self):
         sparse_initializer = onnx_pb.SparseTensorProto()
         sparse_initializer.dims[:] = [3, 3, 3, 3]
-        self.assertRaises(
-            RuntimeError,
-            Node,
-            0,
-            sparse_initializer)
+        self.assertRaises(RuntimeError, Node, 0, sparse_initializer)
 
     def test_sparse_initializer_with_values(self):
         sparse_initializer = onnx_pb.SparseTensorProto()
@@ -169,20 +157,14 @@ class TestNode(unittest.TestCase):
         sparse_initializer.dims[:] = [3, 3, 3, 3]
         sparse_initializer.values.name = SPARSE_INITIALIZER
         sparse_node = Node(0, sparse_initializer)
-        self.assertRaises(
-            RuntimeError,
-            sparse_node.add_input_anchor,
-            'input')
+        self.assertRaises(RuntimeError, sparse_node.add_input_anchor, 'input')
 
     def test_add_input_anchor_to_graph_anchor(self):
         graph_anchor = onnx_pb.ValueInfoProto()
         graph_anchor.name = 'graph_anchor'
         graph_anchor_node = Node(0, graph_anchor)
         graph_anchor_node.add_input_anchor('input0')
-        self.assertRaises(
-            RuntimeError,
-            graph_anchor_node.add_input_anchor,
-            'input1')
+        self.assertRaises(RuntimeError, graph_anchor_node.add_input_anchor, 'input1')
 
     def test_get_output_anchor_index_success(self):
         test_proto = deepcopy(self.node_proto)
@@ -192,20 +174,14 @@ class TestNode(unittest.TestCase):
     def test_get_output_anchor_index_failed(self):
         test_proto = deepcopy(self.node_proto)
         node_conv = Node(0, test_proto)
-        self.assertRaises(
-            ValueError,
-            node_conv.get_output_anchor_index,
-            'not_exist')
+        self.assertRaises(ValueError, node_conv.get_output_anchor_index, 'not_exist')
 
     def test_add_output_anchor_failed(self):
         graph_anchor = onnx_pb.ValueInfoProto()
         graph_anchor.name = 'graph_anchor'
         graph_anchor_node = Node(0, graph_anchor)
         graph_anchor_node.add_output_anchor('output0')
-        self.assertRaises(
-            RuntimeError,
-            graph_anchor_node.add_output_anchor,
-            'output1')
+        self.assertRaises(RuntimeError, graph_anchor_node.add_output_anchor, 'output1')
 
     def test_get_output_anchor_by_name_success(self):
         test_proto = deepcopy(self.node_proto)
@@ -215,10 +191,7 @@ class TestNode(unittest.TestCase):
     def test_get_output_anchor_by_name_failed(self):
         test_proto = deepcopy(self.node_proto)
         node_conv = Node(0, test_proto)
-        self.assertRaises(
-            ValueError,
-            node_conv.get_output_anchor_by_name,
-            'not_exist')
+        self.assertRaises(ValueError, node_conv.get_output_anchor_by_name, 'not_exist')
 
     def test_dump_proto_exceed_input_index(self):
         test_proto0 = deepcopy(self.node_proto)
@@ -231,9 +204,7 @@ class TestNode(unittest.TestCase):
         dst_anchor.add_link(src_anchor)
         src_anchor._index = 1
 
-        self.assertRaises(
-            RuntimeError,
-            node_conv1.dump_proto)
+        self.assertRaises(RuntimeError, node_conv1.dump_proto)
 
     def test_dump_graph_anchor_failed(self):
         graph_anchor = onnx_pb.ValueInfoProto()
@@ -242,9 +213,7 @@ class TestNode(unittest.TestCase):
         graph_anchor_node.add_input_anchor('output0')
         graph_anchor_node.add_output_anchor('output0')
 
-        self.assertRaises(
-            RuntimeError,
-            graph_anchor_node.dump_proto)
+        self.assertRaises(RuntimeError, graph_anchor_node.dump_proto)
 
     def test_dump_graph_anchor_failed_002(self):
         test_proto = deepcopy(self.node_proto)
@@ -260,17 +229,11 @@ class TestNode(unittest.TestCase):
         src_anchor.add_link(dst_anchor)
         dst_anchor.add_link(src_anchor)
 
-        self.assertRaises(
-            RuntimeError,
-            graph_anchor_node.dump_proto)
-
+        self.assertRaises(RuntimeError, graph_anchor_node.dump_proto)
 
     def test_dump_node_failed(self):
         test_proto = deepcopy(self.node_proto)
         node_conv = Node(0, test_proto)
 
         node_conv._node_proto = onnx_pb.GraphProto()
-        self.assertRaises(
-            TypeError,
-            node_conv.dump_proto)
-
+        self.assertRaises(TypeError, node_conv.dump_proto)

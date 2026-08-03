@@ -52,4 +52,3 @@ class QuantizedMatmul(nn.Module):
     def _eval_forward(self, act, weight):
         output = torch.matmul(act, weight)
         return output
-

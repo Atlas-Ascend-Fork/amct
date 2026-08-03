@@ -655,7 +655,11 @@ def _make_qc_for_comb_rules(wts_type, act_type, wts_sym, wts_strat, act_strat):
         {
             "batch_num": 1,
             "quant_cfg": {
-                "weights": {"type": wts_type, "symmetric": wts_sym, "strategy": wts_strat}
+                "weights": {
+                    "type": wts_type,
+                    "symmetric": wts_sym,
+                    "strategy": wts_strat,
+                }
             },
             "algorithm": {MINMAX: {}},
         },
@@ -692,7 +696,9 @@ def test_comb_rules_raises_int8_int4_with_channel_act_strategy():
     from amct_pytorch.common.config.parser import _check_quant_dtype_comb_rules
 
     qc = _make_qc_for_comb_rules("int4", "int8", True, "tensor", "channel")
-    with pytest.raises(ValueError, match="only support activation quant strategy tensor"):
+    with pytest.raises(
+        ValueError, match="only support activation quant strategy tensor"
+    ):
         _check_quant_dtype_comb_rules("int8 int4", qc)
 
 

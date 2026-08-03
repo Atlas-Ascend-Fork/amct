@@ -1,5 +1,4 @@
 import argparse
-import torch
 from utils import get_qwen, get_test_dataset, test_ppl
 from hifloat8_fakequant_linear import Hifloat8FakequantLinear
 import amct_pytorch as amct
@@ -12,7 +11,9 @@ if __name__ == '__main__':
     model, tokenizer = get_qwen(args.model_path)
     quant_model = model.eval().npu()
 
-    amct.algorithm_register('hifloat8_fakequant', 'Linear', Hifloat8FakequantLinear, None)
+    amct.algorithm_register(
+        'hifloat8_fakequant', 'Linear', Hifloat8FakequantLinear, None
+    )
 
     # Phase1: quantize model
     hifloat8_fakequant_cfg = {
@@ -29,7 +30,7 @@ if __name__ == '__main__':
             },
         },
         'algorithm': {'hifloat8_fakequant'},
-        'skip_layers': {'lm_head'}
+        'skip_layers': {'lm_head'},
     }
     amct.quantize(quant_model, hifloat8_fakequant_cfg)
 

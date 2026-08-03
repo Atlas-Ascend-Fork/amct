@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -33,7 +33,7 @@ LOGGING_LEVEL_MAP = {
     'DEBUG': logging.DEBUG,
     'INFO': logging.INFO,
     'WARNING': logging.WARNING,
-    'ERROR': logging.ERROR
+    'ERROR': logging.ERROR,
 }
 
 
@@ -44,17 +44,20 @@ def check_level(level, name):
                name: level's name
     """
     if level.upper() not in LOGGING_LEVEL_MAP:
-        raise ValueError("%s{'%s'} is invalid, only support %s"
-                         % (name, level, list(LOGGING_LEVEL_MAP)))
+        raise ValueError(
+            "%s{'%s'} is invalid, only support %s"
+            % (name, level, list(LOGGING_LEVEL_MAP))
+        )
 
 
 def split_str_by_length(string, length):
-    ''' split string on given length '''
-    return [string[i: i + length].strip() for i in range(0, len(string), length)]
+    '''split string on given length'''
+    return [string[i : i + length].strip() for i in range(0, len(string), length)]
 
 
 def log_split_deco(length=500):
-    ''' check whether input string length and split it to smaller strings '''
+    '''check whether input string length and split it to smaller strings'''
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -65,15 +68,18 @@ def log_split_deco(length=500):
                 input_key = tuple(kwargs.keys())[0]
                 kwargs[input_key] = split_str_by_length(str(kwargs[input_key]), length)
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
-class LoggerBase():
+class LoggerBase:
     """
     Function：Record debug，info，warning，error level log
     API：logd, logi, logw, loge, set_debug_level
     """
+
     def __init__(self, log_dir, log_name):
         """
         Function：Create logger， console handler and file handler
@@ -171,7 +177,7 @@ class LoggerBase():
             self.logger.error("[%s]: %s", module_name, msg)
 
     def is_file_debug_level(self):
-        """ is file_handler in debug mode. """
+        """is file_handler in debug mode."""
         if self.file_handler.level == logging.DEBUG:
             return True
         return False

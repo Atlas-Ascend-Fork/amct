@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -30,11 +30,21 @@ class UlqRetrainFunction(Function):
     Function: Run calibration process for quantization of the given layer.
     APIs: forward
     """
+
     @staticmethod
-    def forward(ctx,
-                inputs, clip_max, clip_min, clip_max_pre, clip_min_pre,
-                act_qat_param, cur_batch, need_sync,
-                process_group, world_size):
+    def forward(
+        ctx,
+        inputs,
+        clip_max,
+        clip_min,
+        clip_max_pre,
+        clip_min_pre,
+        act_qat_param,
+        cur_batch,
+        need_sync,
+        process_group,
+        world_size,
+    ):
         """
         Function: UlqRetrain foward funtion.
         """
@@ -47,21 +57,26 @@ class UlqRetrainFunction(Function):
             clip_min_pre,
             act_qat_param.get('num_bits'),
             act_qat_param.get('fixed_min'),
-            act_qat_param.get('asymmetric', True))
+            act_qat_param.get('asymmetric', True),
+        )
 
         if need_sync:
             clip_max_all = torch.empty(
-                world_size, 1, dtype=clip_max.dtype, device=clip_max.device)
+                world_size, 1, dtype=clip_max.dtype, device=clip_max.device
+            )
             clip_min_all = torch.empty(
-                world_size, 1, dtype=clip_min.dtype, device=clip_min.device)
+                world_size, 1, dtype=clip_min.dtype, device=clip_min.device
+            )
 
             clip_max_l = list(clip_max_all.unbind(0))
             clip_min_l = list(clip_min_all.unbind(0))
 
             clip_max_all_reduce = torch.distributed.all_gather(
-                clip_max_l, clip_max, process_group, async_op=True)
+                clip_max_l, clip_max, process_group, async_op=True
+            )
             clip_min_all_reduce = torch.distributed.all_gather(
-                clip_min_l, clip_min, process_group, async_op=True)
+                clip_min_l, clip_min, process_group, async_op=True
+            )
 
             # wait on the async communication to finish
             clip_max_all_reduce.wait()
@@ -78,24 +93,29 @@ class UlqRetrainFunction(Function):
         return outputs, scale, offset, clip_max, clip_min
 
     @staticmethod
-    def backward(ctx,
-                 grad_outputs, grad_scale,
-                 grad_offset, grad_max, grad_min):
+    def backward(ctx, grad_outputs, grad_scale, grad_offset, grad_max, grad_min):
         """
         Function: UlqRetrain backward funtion required by torch
                   torch.autograd.
         """
         inputs, clip_max, clip_min = ctx.saved_tensors
-        res = ulq_retrain_backward_pytorch(inputs,
-            grad_outputs,
-            clip_max,
-            clip_min,
-            ctx.num_bits,
-            ctx.asymmetric)
+        res = ulq_retrain_backward_pytorch(
+            inputs, grad_outputs, clip_max, clip_min, ctx.num_bits, ctx.asymmetric
+        )
 
         grad_input, grad_acts_clip_max, grad_acts_clip_min = res
-        return grad_input, grad_acts_clip_max, grad_acts_clip_min, \
-            None, None, None, None, None, None, None
+        return (
+            grad_input,
+            grad_acts_clip_max,
+            grad_acts_clip_min,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
 
 
 class UlqRetrainFuncQAT(UlqRetrainFunction):
@@ -106,12 +126,19 @@ class UlqRetrainFuncQAT(UlqRetrainFunction):
         Args:
             g (Graph): graph to write the ONNX representation into.
         """
-        output = g.op("DequantizeLinear",
-                      g.op("QuantizeLinear", inputs[0],
-                           inputs[5].get("acts_scale"),
-                           inputs[5].get("acts_offset")),
-                      inputs[5].get("acts_scale"),
-                      inputs[5].get("acts_offset"))
-        LOGGER.logi(f'Convert ULQ op to onnx to onnx QuantizeLinear and DequantizeLinear op successfully.')
+        output = g.op(
+            "DequantizeLinear",
+            g.op(
+                "QuantizeLinear",
+                inputs[0],
+                inputs[5].get("acts_scale"),
+                inputs[5].get("acts_offset"),
+            ),
+            inputs[5].get("acts_scale"),
+            inputs[5].get("acts_offset"),
+        )
+        LOGGER.logi(
+            'Convert ULQ op to onnx to onnx QuantizeLinear and DequantizeLinear op successfully.'
+        )
         ret = (output, None, None, None, None)
         return ret

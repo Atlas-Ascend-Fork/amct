@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,7 +22,9 @@ import threading
 from google.protobuf import text_format
 
 import amct_pytorch.classic.graph_based.amct_pytorch.optimizer as opt
-from ...amct_pytorch.common.optimizer.delete_pass_through_node import DeletePassThroughNodePass
+from ...amct_pytorch.common.optimizer.delete_pass_through_node import (
+    DeletePassThroughNodePass,
+)
 from ...amct_pytorch.common.prune.prune_recorder_helper import PruneRecordHelper
 from ...amct_pytorch.common.utils.prune_record_attr_util import AttrProtoHelper
 from ...amct_pytorch.parser.parse_record_file import RecordFileParser
@@ -38,7 +40,8 @@ from ...amct_pytorch.utils.log import LOGGER
 
 
 class PruneHelper:
-    """ Helper to do Prune"""
+    """Helper to do Prune"""
+
     def __init__(self, graph, input_data, record_file):
         self.graph = graph
         self.record_file = record_file
@@ -62,17 +65,16 @@ class PruneHelper:
         # parse record_file
         lock = threading.Lock()
         lock.acquire()
-        record_parser = RecordFileParser(self.record_file, self.graph, '', enable_quant=False, enable_prune=True)
+        record_parser = RecordFileParser(
+            self.record_file, self.graph, '', enable_quant=False, enable_prune=True
+        )
         if record_parser.is_records_empty():
-            LOGGER.logw(
-                "record_file is empty, no layers to be pruned. "
-            )
+            LOGGER.logw("record_file is empty, no layers to be pruned. ")
         prune_record, _ = record_parser.parse()
         lock.release()
         self.record.prune_record.extend(prune_record)
         # really prune model
         RegularModelPruner(self.graph, self.record, self.mode_input_data).do_prune()
-
 
     def preprocess_graph(self):
         """
@@ -115,14 +117,17 @@ class PruneHelper:
         lock.acquire()
         file_flags = os.O_WRONLY + os.O_CREAT + os.O_TRUNC
         file_mode = stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP
-        with os.fdopen(os.open(self.record_file, file_flags, file_mode), 'w',
-                   encoding='UTF-8', newline='') as fid:
-            fid.write(text_format.MessageToString(self.record,
-                                                  as_utf8=True))
+        with os.fdopen(
+            os.open(self.record_file, file_flags, file_mode),
+            'w',
+            encoding='UTF-8',
+            newline='',
+        ) as fid:
+            fid.write(text_format.MessageToString(self.record, as_utf8=True))
         lock.release()
 
     def find_prune_consumers(self):
-        """ find prune producer and consumer"""
+        """find prune producer and consumer"""
         for node in self.graph.nodes + self.graph._in_out_nodes:
             helper = create_filter_prune_helper(node)
             helper.process(self.record_helper)
@@ -149,10 +154,11 @@ class PruneHelper:
             if del_consumer:
                 prune_record.consumer.remove(del_consumer)
 
-
     def _find_prune_cout(self):
-        """ find prune index"""
+        """find prune index"""
         model_helper = ModuleHelper(self.graph.model)
         for prune_record in self.record.prune_record:
-            index_helper = PuneIndexHelper(model_helper, prune_record, self.record_helper)
+            index_helper = PuneIndexHelper(
+                model_helper, prune_record, self.record_helper
+            )
             index_helper.cal_prune_cout()

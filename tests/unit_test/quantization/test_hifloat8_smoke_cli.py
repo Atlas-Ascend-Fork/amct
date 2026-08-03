@@ -21,9 +21,7 @@ from pathlib import Path
 
 
 SMOKE_SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "amct_ops"
-    / "run_hifloat8_dtype_smoke.py"
+    Path(__file__).resolve().parents[2] / "amct_ops" / "run_hifloat8_dtype_smoke.py"
 )
 
 

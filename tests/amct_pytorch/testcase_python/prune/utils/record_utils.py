@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -36,8 +36,8 @@ def read_record_file(record_file):
             text_format.Merge(pbtxt_string, record)
         except text_format.ParseError as exc:
             raise RuntimeError(
-                "the record_file{%s} cannot be parsered, please ensure "\
-                "it matches with scale_offset_record.proto!"
-                % (record_file)) from exc
+                "the record_file{%s} cannot be parsered, please ensure "
+                "it matches with scale_offset_record.proto!" % (record_file)
+            ) from exc
 
     return record

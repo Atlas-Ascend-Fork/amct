@@ -16,14 +16,9 @@
 # ----------------------------------------------------------------------------
 
 import torch
-from loguru import logger
-from safetensors import safe_open
 from compressed_tensors.utils.safetensors_load import get_weight_mappings
-from transformers import AutoModelForCausalLM
 from transformers.models.qwen3_next.modeling_qwen3_next import (
-    Qwen3NextConfig,
     Qwen3NextDecoderLayer,
-    Qwen3NextMLP,
 )
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
 from amct_pytorch.common.models.llm.common.moe_unpack import find_moe_module
@@ -39,7 +34,9 @@ from amct_pytorch.common.models.llm.qwen.moe_common import (
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.qwen.qwen3_next.quant_module import (
-    QuantQwen3NextAttn, QuantQwen3NextLinearAttn, QuantQwen3NextMLP,
+    QuantQwen3NextAttn,
+    QuantQwen3NextLinearAttn,
+    QuantQwen3NextMLP,
 )
 
 
@@ -60,7 +57,9 @@ class Qwen3Next(BaseModel):
 
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
-            raise ValueError("Qwen3-next is a moe model and does not support quant_target='mlp'.")
+            raise ValueError(
+                "Qwen3-next is a moe model and does not support quant_target='mlp'."
+            )
 
     def float_model(self):
         return super().float_model()
@@ -90,7 +89,14 @@ class Qwen3Next(BaseModel):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,
@@ -112,11 +118,17 @@ class Qwen3Next(BaseModel):
             if quant_moe is not None:
                 experts = getattr(quant_moe, "experts", None)
                 if experts is not None and is_packed_experts(experts):
-                    quant_moe.experts = QuantGatedExperts(self.args, experts, group="moe.routed")
+                    quant_moe.experts = QuantGatedExperts(
+                        self.args, experts, group="moe.routed"
+                    )
                 shared_expert = getattr(quant_moe, "shared_expert", None)
-                if shared_expert is not None and not isinstance(shared_expert, QuantQwen3NextMLP):
+                if shared_expert is not None and not isinstance(
+                    shared_expert, QuantQwen3NextMLP
+                ):
                     shared_expert_args = build_no_algo_args(self.args)
-                    quant_moe.shared_expert = QuantQwen3NextMLP(shared_expert_args, shared_expert, group="moe.shared")
+                    quant_moe.shared_expert = QuantQwen3NextMLP(
+                        shared_expert_args, shared_expert, group="moe.shared"
+                    )
         return decoder_layer
 
     def apply_quant_attn(self, decoder_layer):
@@ -141,9 +153,14 @@ class Qwen3Next(BaseModel):
             if name.startswith("mlp.experts.expert_modules."):
                 parts = name.split(".")
                 if len(parts) != 5:
-                    raise ValueError(f"Unexpected Qwen3-Next expert module name: {name}")
+                    raise ValueError(
+                        f"Unexpected Qwen3-Next expert module name: {name}"
+                    )
                 _, _, _, expert_idx, proj_name = parts
-                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
+                yield (
+                    f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight",
+                    module,
+                )
                 continue
 
             yield f"{weight_prefix}{name}.weight", module

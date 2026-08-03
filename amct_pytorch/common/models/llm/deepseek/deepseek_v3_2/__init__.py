@@ -23,7 +23,9 @@ __all__ = [
 
 from transformers import AutoConfig, AutoModelForCausalLM
 
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.configuration_deepseek import DeepseekV32Config
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.configuration_deepseek import (
+    DeepseekV32Config,
+)
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import (
     DeepseekV32ForCausalLM,
     DeepseekV32PreTrainedModel,

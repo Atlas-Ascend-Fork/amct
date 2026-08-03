@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb # pylint: disable=import-error
+from onnx import onnx_pb  # pylint: disable=import-error
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.common.utils.onnx_node_util import AttributeProtoHelper
 from ...amct_pytorch.utils.log import LOGGER
@@ -28,6 +28,7 @@ class InsertQuantPass(BaseFusionPass):
     Function: Insert AscendQuant
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -72,13 +73,12 @@ class InsertQuantPass(BaseFusionPass):
             inputs=['.'.join([object_node.name, 'quant', 'input0'])],
             outputs=['.'.join([object_node.name, 'quant', 'output0'])],
             attrs={
-                'scale':
-                1.0 / self.records.get(object_node.name).get('data_scale'),
-                'offset':
-                self.records.get(object_node.name).get('data_offset'),
-                'dst_type': 'INT{:d}'.format(num_bits)
+                'scale': 1.0 / self.records.get(object_node.name).get('data_scale'),
+                'offset': self.records.get(object_node.name).get('data_offset'),
+                'dst_type': 'INT{:d}'.format(num_bits),
             },
-            layer_name=object_node.name)
+            layer_name=object_node.name,
+        )
         quant_node = graph.add_node(node_proto)
         quant_node.set_attr('object_node', object_node.name)
 
@@ -98,21 +98,25 @@ class InsertQuantPass(BaseFusionPass):
                     peer_node = peer_output_anchor.node
 
         peer_output_anchor_index = peer_output_anchor.index
-        graph.remove_edge(peer_node, peer_output_anchor_index,
-                          object_node, 0)
+        graph.remove_edge(peer_node, peer_output_anchor_index, object_node, 0)
         # add links
         graph.add_edge(peer_node, peer_output_anchor_index, quant_node, 0)
         graph.add_edge(quant_node, 0, object_node, 0)
 
-        LOGGER.logd("Insert quant layer '{}' before '{}' " \
-            "success!".format(quant_node.name, object_name), \
-                              'InsertQuantPass')
+        LOGGER.logd(
+            "Insert quant layer '{}' before '{}' success!".format(
+                quant_node.name, object_name
+            ),
+            'InsertQuantPass',
+        )
 
 
-def construct_quant_node(inputs, # pylint: disable=no-member
-                         outputs,
-                         attrs,
-                         layer_name):
+def construct_quant_node(
+    inputs,  # pylint: disable=no-member
+    outputs,
+    attrs,
+    layer_name,
+):
     """
     Function: construct quant node in onnx
     Inputs:
@@ -128,8 +132,8 @@ def construct_quant_node(inputs, # pylint: disable=no-member
 
     node_proto.name = '.'.join([layer_name, 'quant'])
     node_proto.op_type = 'AscendQuant'
-    node_proto.input.extend(inputs) # pylint: disable=E1101
-    node_proto.output.extend(outputs) # pylint: disable=E1101
+    node_proto.input.extend(inputs)  # pylint: disable=E1101
+    node_proto.output.extend(outputs)  # pylint: disable=E1101
 
     attr_helper = AttributeProtoHelper(node_proto)
     attr_helper.set_attr_value('scale', 'FLOAT', attrs['scale'])

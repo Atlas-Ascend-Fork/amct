@@ -31,7 +31,6 @@ MLP = 'mlp'
 
 
 @pytest.fixture(autouse=True)
-
 def _stub_npu_empty_cache(monkeypatch):
     fake = type("F", (), {"empty_cache": staticmethod(lambda: None)})()
     monkeypatch.setattr(torch, "npu", fake, raising=False)
@@ -111,7 +110,7 @@ def test_build_unit_batch_with_gts_pairs_inputs_and_targets():
     batch = provider.build_unit_batch(unit, inps, kwargs=None, gts=gts)
     assert batch.has_gts is True
     assert batch.kwargs is None
-    (x, y), = list(batch.data_loader)
+    ((x, y),) = list(batch.data_loader)
     assert torch.equal(x, inps)
     assert torch.equal(y, gts)
 
@@ -155,7 +154,7 @@ def test_materialize_gt_passes_forward_kwargs():
     provider = _make_provider(cali_bsz=2)
     inps = torch.ones(4, 2)
     out = provider.materialize_gt(inps, _M(), kwargs={"scale": 3.0})
-    assert seen == [3.0, 3.0]   # 4 samples / cali_bsz=2 -> 2 batches
+    assert seen == [3.0, 3.0]  # 4 samples / cali_bsz=2 -> 2 batches
     assert torch.equal(out, inps * 3.0)
 
 
@@ -180,4 +179,3 @@ def test_materialize_gt_non_floating_point_input():
     out = provider.materialize_gt(inps, _EmbeddingModule())
     assert out.shape == (4,)
     assert out.dtype == torch.float32
-

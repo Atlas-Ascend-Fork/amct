@@ -61,8 +61,9 @@ def test_native_probe_returns_true_after_round_trip():
         return tensor
 
     module = _fake_torch_npu(cast_fn=fake_cast)
-    with patch.dict(sys.modules, {"torch_npu": module}), patch.object(
-        torch.Tensor, "npu", lambda self: self, create=True
+    with (
+        patch.dict(sys.modules, {"torch_npu": module}),
+        patch.object(torch.Tensor, "npu", lambda self: self, create=True),
     ):
         assert hifp_impl.is_native_hifloat8_cast_available()
     assert calls == [
@@ -76,8 +77,9 @@ def test_native_probe_returns_false_when_round_trip_raises():
         raise RuntimeError("native hifloat8 cast is unavailable")
 
     module = _fake_torch_npu(cast_fn=fake_cast)
-    with patch.dict(sys.modules, {"torch_npu": module}), patch.object(
-        torch.Tensor, "npu", lambda self: self, create=True
+    with (
+        patch.dict(sys.modules, {"torch_npu": module}),
+        patch.object(torch.Tensor, "npu", lambda self: self, create=True),
     ):
         assert not hifp_impl.is_native_hifloat8_cast_available()
 
@@ -171,12 +173,13 @@ def test_native_backend_is_preferred():
     native_result = x + 1
     native_calls = []
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=True
-    ), patch.object(
-        hifp_impl,
-        "_native_hifloat8_fake_quant",
-        side_effect=lambda tensor: native_calls.append(tensor) or native_result,
+    with (
+        patch.object(hifp_impl, "is_native_hifloat8_cast_available", return_value=True),
+        patch.object(
+            hifp_impl,
+            "_native_hifloat8_fake_quant",
+            side_effect=lambda tensor: native_calls.append(tensor) or native_result,
+        ),
     ):
         out = hifp_impl.hifloat8_fake_quant(x)
 
@@ -192,14 +195,16 @@ def test_native_backend_does_not_load_amct_ops():
     x = torch.randn(2, 8, dtype=torch.bfloat16)
     native_result = x + 1
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=True
-    ), patch.object(
-        hifp_impl, "_native_hifloat8_fake_quant", return_value=native_result
-    ), patch.object(
-        hifp_impl,
-        "_load_amct_ops_cast",
-        side_effect=AssertionError("amct_ops must not be loaded"),
+    with (
+        patch.object(hifp_impl, "is_native_hifloat8_cast_available", return_value=True),
+        patch.object(
+            hifp_impl, "_native_hifloat8_fake_quant", return_value=native_result
+        ),
+        patch.object(
+            hifp_impl,
+            "_load_amct_ops_cast",
+            side_effect=AssertionError("amct_ops must not be loaded"),
+        ),
     ):
         assert hifp_impl.hifloat8_fake_quant(x) is native_result
 
@@ -215,18 +220,21 @@ def test_native_unavailable_uses_amct_ops():
         fallback_calls.append((tensor, loaded_encode, loaded_decode))
         return fallback_result
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
-    ), patch.object(
-        hifp_impl,
-        "_native_hifloat8_fake_quant",
-        side_effect=AssertionError("native backend must not be called"),
-    ), patch.object(
-        hifp_impl, "_load_amct_ops_cast", return_value=(encode, decode)
-    ), patch.object(
-        hifp_impl,
-        "_amct_ops_hifloat8_fake_quant",
-        side_effect=fake_fallback,
+    with (
+        patch.object(
+            hifp_impl, "is_native_hifloat8_cast_available", return_value=False
+        ),
+        patch.object(
+            hifp_impl,
+            "_native_hifloat8_fake_quant",
+            side_effect=AssertionError("native backend must not be called"),
+        ),
+        patch.object(hifp_impl, "_load_amct_ops_cast", return_value=(encode, decode)),
+        patch.object(
+            hifp_impl,
+            "_amct_ops_hifloat8_fake_quant",
+            side_effect=fake_fallback,
+        ),
     ):
         out = hifp_impl.hifloat8_fake_quant(x)
 
@@ -247,16 +255,17 @@ def test_native_execution_error_falls_back_to_amct_ops(error_type):
     def fail_native(tensor):
         raise error_type("native failed")
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=True
-    ), patch.object(
-        hifp_impl, "_native_hifloat8_fake_quant", side_effect=fail_native
-    ), patch.object(
-        hifp_impl, "_load_amct_ops_cast", return_value=(object(), object())
-    ), patch.object(
-        hifp_impl,
-        "_amct_ops_hifloat8_fake_quant",
-        return_value=fallback_result,
+    with (
+        patch.object(hifp_impl, "is_native_hifloat8_cast_available", return_value=True),
+        patch.object(hifp_impl, "_native_hifloat8_fake_quant", side_effect=fail_native),
+        patch.object(
+            hifp_impl, "_load_amct_ops_cast", return_value=(object(), object())
+        ),
+        patch.object(
+            hifp_impl,
+            "_amct_ops_hifloat8_fake_quant",
+            return_value=fallback_result,
+        ),
     ):
         assert hifp_impl.hifloat8_fake_quant(x) is fallback_result
 
@@ -268,14 +277,18 @@ def test_amct_ops_execution_error_raises_backend_requirement(error_type):
     def fail_amct_ops(tensor, encode, decode):
         raise error_type("amct_ops failed")
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
-    ), patch.object(
-        hifp_impl, "_load_amct_ops_cast", return_value=(object(), object())
-    ), patch.object(
-        hifp_impl,
-        "_amct_ops_hifloat8_fake_quant",
-        side_effect=fail_amct_ops,
+    with (
+        patch.object(
+            hifp_impl, "is_native_hifloat8_cast_available", return_value=False
+        ),
+        patch.object(
+            hifp_impl, "_load_amct_ops_cast", return_value=(object(), object())
+        ),
+        patch.object(
+            hifp_impl,
+            "_amct_ops_hifloat8_fake_quant",
+            side_effect=fail_amct_ops,
+        ),
     ):
         with pytest.raises(RuntimeError) as error:
             hifp_impl.hifloat8_fake_quant(x)
@@ -287,9 +300,12 @@ def test_amct_ops_execution_error_raises_backend_requirement(error_type):
 def test_both_backends_unavailable_raises_backend_requirement():
     x = torch.randn(2, 8)
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
-    ), patch.object(hifp_impl, "_load_amct_ops_cast", return_value=None):
+    with (
+        patch.object(
+            hifp_impl, "is_native_hifloat8_cast_available", return_value=False
+        ),
+        patch.object(hifp_impl, "_load_amct_ops_cast", return_value=None),
+    ):
         with pytest.raises(RuntimeError) as error:
             hifp_impl.hifloat8_fake_quant(x)
 
@@ -301,12 +317,15 @@ def test_both_backends_unavailable_raises_backend_requirement():
 def test_amct_ops_load_error_raises_backend_requirement(error_type):
     x = torch.randn(2, 8)
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=False
-    ), patch.object(
-        hifp_impl,
-        "_load_amct_ops_cast",
-        side_effect=error_type("failed to load amct_ops"),
+    with (
+        patch.object(
+            hifp_impl, "is_native_hifloat8_cast_available", return_value=False
+        ),
+        patch.object(
+            hifp_impl,
+            "_load_amct_ops_cast",
+            side_effect=error_type("failed to load amct_ops"),
+        ),
     ):
         with pytest.raises(RuntimeError) as error:
             hifp_impl.hifloat8_fake_quant(x)
@@ -321,10 +340,9 @@ def test_unexpected_native_error_is_not_swallowed():
     def fail_native(tensor):
         raise ValueError("invalid input")
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=True
-    ), patch.object(
-        hifp_impl, "_native_hifloat8_fake_quant", side_effect=fail_native
+    with (
+        patch.object(hifp_impl, "is_native_hifloat8_cast_available", return_value=True),
+        patch.object(hifp_impl, "_native_hifloat8_fake_quant", side_effect=fail_native),
     ):
         with pytest.raises(ValueError, match="invalid input"):
             hifp_impl.hifloat8_fake_quant(x)
@@ -343,16 +361,17 @@ def test_both_backend_execution_failures_raise_backend_requirement():
         fallback_attempts.append(tensor)
         raise RuntimeError("amct_ops failed")
 
-    with patch.object(
-        hifp_impl, "is_native_hifloat8_cast_available", return_value=True
-    ), patch.object(
-        hifp_impl, "_native_hifloat8_fake_quant", side_effect=fail_native
-    ), patch.object(
-        hifp_impl, "_load_amct_ops_cast", return_value=(object(), object())
-    ), patch.object(
-        hifp_impl,
-        "_amct_ops_hifloat8_fake_quant",
-        side_effect=fail_amct_ops,
+    with (
+        patch.object(hifp_impl, "is_native_hifloat8_cast_available", return_value=True),
+        patch.object(hifp_impl, "_native_hifloat8_fake_quant", side_effect=fail_native),
+        patch.object(
+            hifp_impl, "_load_amct_ops_cast", return_value=(object(), object())
+        ),
+        patch.object(
+            hifp_impl,
+            "_amct_ops_hifloat8_fake_quant",
+            side_effect=fail_amct_ops,
+        ),
     ):
         with pytest.raises(RuntimeError) as error:
             hifp_impl.hifloat8_fake_quant(x)

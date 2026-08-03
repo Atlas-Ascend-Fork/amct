@@ -165,8 +165,13 @@ class TestSimpleFields(unittest.TestCase):
 class TestContainerFields(unittest.TestCase):
     def test_retrain_data_config_full(self):
         item = _item(rf.RetrainDataConfig)
-        val = {'algo': 'ulq_quantize', 'clip_max': 1.0, 'clip_min': -1.0,
-               'fixed_min': True, 'dst_type': 'INT8'}
+        val = {
+            'algo': 'ulq_quantize',
+            'clip_max': 1.0,
+            'clip_min': -1.0,
+            'fixed_min': True,
+            'dst_type': 'INT8',
+        }
         item.build(val, [LAYER])
         dumped = item.dump()
         self.assertEqual(dumped.get('algo'), 'ulq_quantize')
@@ -184,8 +189,10 @@ class TestContainerFields(unittest.TestCase):
 
     def test_retrain_weight_config_arq(self):
         item = _item(rf.RetrainWeightConfig)
-        item.build({'algo': 'arq_retrain', 'channel_wise': True,
-                    'dst_type': 'INT8'}, [LAYER, 'Conv2d'])
+        item.build(
+            {'algo': 'arq_retrain', 'channel_wise': True, 'dst_type': 'INT8'},
+            [LAYER, 'Conv2d'],
+        )
         self.assertEqual(item.dump().get('algo'), 'arq_retrain')
 
     def test_retrain_weight_config_default(self):
@@ -195,13 +202,15 @@ class TestContainerFields(unittest.TestCase):
 
     def test_retrain_weight_config_invalid_algo(self):
         item = _item(rf.RetrainWeightConfig)
-        self.assertRaises(ValueError, item.build,
-                          {'algo': 'bad_algo'}, [LAYER, 'Conv2d'])
+        self.assertRaises(
+            ValueError, item.build, {'algo': 'bad_algo'}, [LAYER, 'Conv2d']
+        )
 
     def test_retrain_weight_config_invalid_key(self):
         item = _item(rf.RetrainWeightConfig)
-        self.assertRaises(ValueError, item.build,
-                          {'algo': 'arq_retrain', 'bad': 1}, [LAYER, 'Conv2d'])
+        self.assertRaises(
+            ValueError, item.build, {'algo': 'arq_retrain', 'bad': 1}, [LAYER, 'Conv2d']
+        )
 
 
 if __name__ == '__main__':

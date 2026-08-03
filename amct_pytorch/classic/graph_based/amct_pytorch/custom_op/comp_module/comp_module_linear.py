@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,18 +15,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import torch # pylint: disable=E0401
-import torch.nn.functional as F # pylint: disable=E0401
+import torch  # pylint: disable=E0401
+import torch.nn.functional as F  # pylint: disable=E0401
 
-from ....amct_pytorch.custom_op.comp_module.comp_module_base \
-    import CompModuleBase
+from ....amct_pytorch.custom_op.comp_module.comp_module_base import CompModuleBase
 
 
-class CompModuleLinear(CompModuleBase): # pylint: disable=R0903
+class CompModuleLinear(CompModuleBase):  # pylint: disable=R0903
     """
     Function: Quantization module class after linear encapsulation.
     APIs: __init__, forward
     """
+
     def __init__(self, *args, **kwargs):
         super(CompModuleLinear, self).__init__(*args, **kwargs)
         self.num_scales = 1
@@ -37,12 +37,14 @@ class CompModuleLinear(CompModuleBase): # pylint: disable=R0903
         Defines the computation performed at every call.
         Should be overridden by all subclasses.
         """
-        compressed_inputs, compressed_weights = \
-            super(CompModuleLinear, self).forward(inputs)
+        compressed_inputs, compressed_weights = super(CompModuleLinear, self).forward(
+            inputs
+        )
 
         # Forward
         with torch.enable_grad():
-            output = F.linear(compressed_inputs, compressed_weights,
-                              self.replaced_module.bias)
+            output = F.linear(
+                compressed_inputs, compressed_weights, self.replaced_module.bias
+            )
 
         return output

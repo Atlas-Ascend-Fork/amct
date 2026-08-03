@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,20 +16,21 @@
 # ----------------------------------------------------------------------------
 
 
-class ModuleHelper():
+class ModuleHelper:
     """
     Funtion: Helper for torch.nn.module
     APIS: get_module, get_parent_module
     """
+
     def __init__(self, model):
-        ''' init function '''
+        '''init function'''
         self.named_module_dict = {}
         for name, mod in model.named_modules():
             self.named_module_dict[name] = mod
 
     @staticmethod
     def replace_module_by_name(model, name, mod):
-        """ replace module in model by a new mod according to module name """
+        """replace module in model by a new mod according to module name"""
         tokens = name.split('.')
         sub_tokens = tokens[:-1]
         cur_mod = model

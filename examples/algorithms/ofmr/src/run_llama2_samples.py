@@ -33,7 +33,7 @@ if __name__ == '__main__':
     # Phase1: quantize model
     cfg = amct.HIFP8_OFMR_CFG
     amct.quantize(quant_model, cfg)
-    
+
     # Phase2: inference calibration model to cal quantized factors
     infer_model(quant_model, samples)
     torch_npu.npu.empty_cache()

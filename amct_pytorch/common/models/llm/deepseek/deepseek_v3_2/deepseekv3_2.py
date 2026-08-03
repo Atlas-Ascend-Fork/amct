@@ -15,22 +15,23 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import os
-import json
-from pathlib import Path
 import torch
-from loguru import logger
-from safetensors import safe_open
 from tqdm import tqdm
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.common.capture import Catcher
-from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn, apply_quant_to_moe_mlp
-from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import Block
+from amct_pytorch.common.models.llm.common.quant_apply import (
+    apply_quant_to_attn,
+    apply_quant_to_moe_mlp,
+)
+from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.modeling.modeling_deepseek_v3_2 import (
+    Block,
+)
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.quant_module import (
-    QuantDeepseekV3MLP, QuantDeepseekV3Attention)
+    QuantDeepseekV3MLP,
+    QuantDeepseekV3Attention,
+)
 from amct_pytorch.common.datasets.ptq_io import save_ptq_kwargs
-
 
 
 @MODEL_REGISTRY.register(
@@ -87,7 +88,9 @@ class DeepseekV32(BaseModel):
         layers[0] = layers[0].bfloat16()
         layers[0] = Catcher(layers[0], outs)
         with torch.no_grad():
-            for bs, inputs in tqdm(enumerate(samples), total=len(samples), desc=f"Embedding Processing..."):
+            for bs, inputs in tqdm(
+                enumerate(samples), total=len(samples), desc="Embedding Processing..."
+            ):
                 try:
                     self.model(inputs)
                 except ValueError:
@@ -96,11 +99,23 @@ class DeepseekV32(BaseModel):
         self.position_embeddings = layers[0].position_embeddings
         self.attention_mask = layers[0].attention_mask
         if hook_name is not None:
-            save_ptq_kwargs(self.position_ids, self.position_embeddings, self.attention_mask, self.args.data_dir)
+            save_ptq_kwargs(
+                self.position_ids,
+                self.position_embeddings,
+                self.attention_mask,
+                self.args.data_dir,
+            )
         layers[0] = layers[0].module
         return outs
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,
@@ -114,7 +129,9 @@ class DeepseekV32(BaseModel):
         self.model.head.to(self.args.device)
         preds = []
         with torch.no_grad():
-            for idx, inp in tqdm(enumerate(inps), total=len(inps), desc='Head Processing...'):
+            for idx, inp in tqdm(
+                enumerate(inps), total=len(inps), desc='Head Processing...'
+            ):
                 inp = inp.to(self.args.device)
                 out = self.model.norm(inp)
                 out = self.model.head(out)[:, :-1, :].contiguous()
@@ -129,7 +146,9 @@ class DeepseekV32(BaseModel):
         if "moe" in self.quant_target:
             self.apply_quant_moe_mlp(decoder_layer)
         if "mlp" in self.quant_target:
-            raise ValueError("Deepseek V32 is a moe model and does not support quant_target='mlp'.")
+            raise ValueError(
+                "Deepseek V32 is a moe model and does not support quant_target='mlp'."
+            )
 
         return decoder_layer
 

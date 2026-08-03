@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -23,29 +23,34 @@ from ....amct_pytorch.utils.log import LOGGER
 ASCNED_OPTIMIZED_VALUE = 16
 
 
-def check_params(tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized):
-    """ check inputs params is valid for bcp """
+def check_params(
+    tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized
+):
+    """check inputs params is valid for bcp"""
     tensor_num = len(tensor_list)
     flag = True
     if tensor_num != len(prune_axis_list):
         LOGGER.loge("bcp input tensor num is not equal to prune axis num.")
         flag = False
-    
+
     if prune_ratio >= 1 or prune_ratio <= 0:
         raise RuntimeError(
-                "prune_ratio should be larger than 0 and samller than 1, pls check config.")
+            "prune_ratio should be larger than 0 and samller than 1, pls check config."
+        )
 
     for i in range(0, tensor_num):
         if tensor_list[i].dim() <= prune_axis_list[i]:
             LOGGER.loge("bcp input tensor[{}] dim is less than prune axis.".format(i))
             flag = False
-    
+
         cout_length = tensor_list[i].shape[prune_axis_list[i]]
         if cout_length < prune_group:
             LOGGER.loge("bcp input tensor[{}] cout is less than prune group.".format(i))
             flag = False
         if not ascend_optimized and cout_length % prune_group != 0:
-            LOGGER.loge("bcp input tensor[{}] cout is not multiple of prune group.".format(i))
+            LOGGER.loge(
+                "bcp input tensor[{}] cout is not multiple of prune group.".format(i)
+            )
             flag = False
 
     if not flag:
@@ -53,11 +58,13 @@ def check_params(tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_
 
 
 def cal_prune_num(num, prune_ratio, ascend_optimized, prune_group=1):
-    """ calculate the prune channel num in total """
+    """calculate the prune channel num in total"""
     remain_num = num - round(num * prune_ratio)
     # make sure remain is multiple of prune group
     if ascend_optimized:
-        remain_num = math.ceil(remain_num / ASCNED_OPTIMIZED_VALUE) * ASCNED_OPTIMIZED_VALUE
+        remain_num = (
+            math.ceil(remain_num / ASCNED_OPTIMIZED_VALUE) * ASCNED_OPTIMIZED_VALUE
+        )
         if remain_num == 0:
             remain_num = ASCNED_OPTIMIZED_VALUE
     # for multi groups, make sure each group prune same channel num
@@ -69,7 +76,7 @@ def cal_prune_num(num, prune_ratio, ascend_optimized, prune_group=1):
 
 
 def cal_tensor_norm(tensor, prune_axis):
-    """ calculate norm value for each tensor, norm.shape = [num_channel] = [prune_group * group_len] """
+    """calculate norm value for each tensor, norm.shape = [num_channel] = [prune_group * group_len]"""
     group_size = tensor.numel() // tensor.shape[0]
     norm_axis = []
     for axis in range(0, tensor.dim()):
@@ -93,7 +100,7 @@ def gen_mask_by_group(num_channel, prune_group, group_len, prune_num_group, norm
     """
     groups_mask = torch.zeros(num_channel)
     for i in range(prune_group):
-        norm_group = norm_sum[i * group_len: (i + 1) * group_len]
+        norm_group = norm_sum[i * group_len : (i + 1) * group_len]
         indexed_data = sorted(enumerate(norm_group), key=lambda x: x[1])
         # original_indices is a list of idx sorted by the norm value
         original_indices = [idx for idx, val in indexed_data]
@@ -114,13 +121,20 @@ def bcp(tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized
     prune_group: num of prune groups
     ascend_optimized: bool, is optimation for ascend is needed
     """
-    check_params(tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized)
+    check_params(
+        tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized
+    )
     # prune axis channel num in total
     num_channel = tensor_list[0].shape[prune_axis_list[0]]
     # prune axis channel num in each group
     group_len = num_channel // prune_group
-    # prune channel in total 
-    prune_num = cal_prune_num(tensor_list[0].shape[prune_axis_list[0]], prune_ratio, ascend_optimized, prune_group)
+    # prune channel in total
+    prune_num = cal_prune_num(
+        tensor_list[0].shape[prune_axis_list[0]],
+        prune_ratio,
+        ascend_optimized,
+        prune_group,
+    )
     # prune channel in each group
     prune_num_group = prune_num // prune_group
 
@@ -128,6 +142,7 @@ def bcp(tensor_list, prune_axis_list, prune_ratio, prune_group, ascend_optimized
     for i, tensor in enumerate(tensor_list):
         norm_sum += cal_tensor_norm(tensor, prune_axis_list[i])
 
-    groups_mask = gen_mask_by_group(num_channel, prune_group, group_len, prune_num_group, norm_sum)
+    groups_mask = gen_mask_by_group(
+        num_channel, prune_group, group_len, prune_num_group, norm_sum
+    )
     return groups_mask.to(tensor_list[0].device)
-

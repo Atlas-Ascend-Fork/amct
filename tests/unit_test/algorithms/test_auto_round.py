@@ -133,7 +133,9 @@ def test_auto_round_load_ptq_params():
     min_scale = torch.randn(4)
     max_scale = torch.randn(4)
     ar.load_ptq_params({"value": value, "min_scale": min_scale, "max_scale": max_scale})
-    assert torch.equal(ar.value.data, value.to(dtype=ar.value.dtype, device=ar.value.device))
+    assert torch.equal(
+        ar.value.data, value.to(dtype=ar.value.dtype, device=ar.value.device)
+    )
 
 
 def test_auto_round_compute_clip_range():

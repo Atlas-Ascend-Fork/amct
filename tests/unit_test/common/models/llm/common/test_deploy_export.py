@@ -66,7 +66,9 @@ def test_generate_quant_group_default_int():
 
 
 def test_generate_quant_group_custom_bits_and_qtype():
-    group = generate_quant_group(a_bits=4, w_bits=4, qtype=INT, activation_use_clip=True)
+    group = generate_quant_group(
+        a_bits=4, w_bits=4, qtype=INT, activation_use_clip=True
+    )
     assert group[INPUT_ACTIVATIONS][NUM_BITS] == 4
     assert group[WEIGHTS][NUM_BITS] == 4
     assert group[INPUT_ACTIVATIONS]["type"] == INT
@@ -103,7 +105,9 @@ def test_generate_quant_config_moegmm_w4a8_via_bits_scheme():
         {"targets": ["Linear"], "w_bits": 8, "a_bits": 8},
         {"targets": ["MoEGMM"], "w_bits": 8, "a_bits": 8},
     ]
-    cfg = generate_quant_config(cache_scheme={}, ignores=[], is_mx=True, bits_scheme=scheme)
+    cfg = generate_quant_config(
+        cache_scheme={}, ignores=[], is_mx=True, bits_scheme=scheme
+    )
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][WEIGHTS][NUM_BITS] == 8
     assert cfg[CONFIG_GROUPS_KEY][GROUP_1][INPUT_ACTIVATIONS][NUM_BITS] == 8
 
@@ -139,6 +143,7 @@ def test_get_quant_ignore_linear_names_skips_quant_linear_prefix():
             from types import SimpleNamespace
 
             from amct_pytorch.quantization.dtypes import register_dtype
+
             register_dtype()
             args = SimpleNamespace(w_bits=4, quant_dtype=INT, algos=[])
             super().__init__(args, nn.Linear(4, 4))
@@ -195,8 +200,13 @@ def test_convert_state_dict_non_fp8_passthrough(tmp_path):
 
     weight = torch.randn(4, 4, dtype=torch.float32)
     result = convert_state_dict(
-        weight, "layer.weight", "layer.weight_scale_inv",
-        {}, tmp_path, {}, 32,
+        weight,
+        "layer.weight",
+        "layer.weight_scale_inv",
+        {},
+        tmp_path,
+        {},
+        32,
     )
     assert result is weight
 
@@ -215,8 +225,13 @@ def test_convert_state_dict_fp8_with_scale_inv_loaded(tmp_path):
     loaded_files = {}
 
     result = convert_state_dict(
-        weight, "layer.weight", "layer.weight_scale_inv",
-        weight_map, tmp_path, loaded_files, block_size=32,
+        weight,
+        "layer.weight",
+        "layer.weight_scale_inv",
+        weight_map,
+        tmp_path,
+        loaded_files,
+        block_size=32,
     )
     # int8 packed dequant unpacks columns, so shape changes
     assert result.dtype != torch.int8
@@ -228,13 +243,20 @@ def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monke
     from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
 
     warnings = []
-    monkeypatch.setattr(deploy_export_mod.logger, "warning", lambda message: warnings.append(message))
+    monkeypatch.setattr(
+        deploy_export_mod.logger, "warning", lambda message: warnings.append(message)
+    )
 
     weight = torch.ones(4, 4, dtype=torch.int8)
     weight_map = {}  # no scale_inv entry
     result = deploy_export_mod.convert_state_dict(
-        weight, "layer.weight", "layer.weight_scale_inv",
-        weight_map, tmp_path, {}, 32,
+        weight,
+        "layer.weight",
+        "layer.weight_scale_inv",
+        weight_map,
+        tmp_path,
+        {},
+        32,
     )
     assert any("Missing scale_inv" in message for message in warnings)
     assert result is weight
@@ -254,8 +276,13 @@ def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
     loaded_files = {}
 
     result = convert_state_dict(
-        weight, "layer.weight", "layer.weight_scale_inv",
-        weight_map, tmp_path, loaded_files, block_size=1,
+        weight,
+        "layer.weight",
+        "layer.weight_scale_inv",
+        weight_map,
+        tmp_path,
+        loaded_files,
+        block_size=1,
     )
     assert result.dtype != torch.uint8
 
@@ -270,14 +297,20 @@ def test_convert_state_dict_reuses_loaded_file(tmp_path):
 
     # Pre-load the file
     from safetensors.torch import load_file as sf_load
+
     loaded_files = {"shard.safetensors": sf_load(str(tmp_path / "shard.safetensors"))}
 
     weight = torch.ones(2, 4, dtype=torch.int8)
     weight_map = {"layer.weight_scale_inv": "shard.safetensors"}
 
     result = convert_state_dict(
-        weight, "layer.weight", "layer.weight_scale_inv",
-        weight_map, tmp_path, loaded_files, block_size=32,
+        weight,
+        "layer.weight",
+        "layer.weight_scale_inv",
+        weight_map,
+        tmp_path,
+        loaded_files,
+        block_size=32,
     )
     assert result.dtype != torch.int8
 
@@ -352,4 +385,3 @@ def test_get_quant_ignore_linear_names_mixed_plain_and_plain_linear():
     block.wrapped = PlainLinear(nn.Linear(4, 4))
     names = get_quant_ignore_linear_names(block, "")
     assert sorted(names) == ["plain_fc", "wrapped"]
-

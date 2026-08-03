@@ -88,8 +88,9 @@ class TestFiles(unittest.TestCase):
         self.assertRaises(ValueError, files.is_valid_save_prefix, 'a' * 242)
 
     def test_check_file_path_missing(self):
-        self.assertRaises(RuntimeError, files.check_file_path,
-                          self._path('not_exist.bin'), 'feature')
+        self.assertRaises(
+            RuntimeError, files.check_file_path, self._path('not_exist.bin'), 'feature'
+        )
 
     def test_check_file_path_ok(self):
         file_name = files.create_empty_file(self._path('ok.bin'))
@@ -157,7 +158,9 @@ class TestFiles(unittest.TestCase):
 
     def test_parse_dump_data_with_type(self):
         # layout (with type): | type, dim, shape... | data |
-        head = np.array([0.0, 1.0, 2.0], np.float32)  # type=0(float32), dim=1, shape=[2]
+        head = np.array(
+            [0.0, 1.0, 2.0], np.float32
+        )  # type=0(float32), dim=1, shape=[2]
         data = np.array([4.0, 5.0], np.float32)
         raw = head.tobytes() + data.tobytes()
         bin_path = self._path('dump_with_type.bin')

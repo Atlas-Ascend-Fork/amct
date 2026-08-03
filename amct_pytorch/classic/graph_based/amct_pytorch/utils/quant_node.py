@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -31,10 +31,11 @@ from ...amct_pytorch.utils.onnx_initializer_util import TensorProtoHelper
 from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
 
 
-class QuantOpInfo():
+class QuantOpInfo:
     '''
     Find infomation of quant_op.
     '''
+
     @staticmethod
     def get_scale_shape(node, channel_wise):
         """
@@ -47,13 +48,14 @@ class QuantOpInfo():
             scale_length : a number, the length of scale.
         """
 
-        if node.type not in CAPACITY.get_value('QUANTIZABLE_ONNX_TYPES') and \
-            node.type not in CAPACITY.get_value('RETRAIN_ONNX_TYPES'):
+        if node.type not in CAPACITY.get_value(
+            'QUANTIZABLE_ONNX_TYPES'
+        ) and node.type not in CAPACITY.get_value('RETRAIN_ONNX_TYPES'):
             raise RuntimeError(
-                'Not supported get scale shape from type:%s(%s)' %
-                (node.type, node.name))
-        if channel_wise and node.type in CAPACITY.get_value(
-                'CHANNEL_WISE_ONNX_TYPES'):
+                'Not supported get scale shape from type:%s(%s)'
+                % (node.type, node.name)
+            )
+        if channel_wise and node.type in CAPACITY.get_value('CHANNEL_WISE_ONNX_TYPES'):
             weight_param = QuantOpInfo.get_weight_tensor(node)
             if node.type == 'ConvTranspose':
                 # deconv2d or deconv3d
@@ -90,12 +92,15 @@ class QuantOpInfo():
             act_index: the act's index in inputs of node.
             weight_index: the weight's index in inputs of node.
         """
-        if node.type not in CAPACITY.get_value('QUANTIZABLE_ONNX_TYPES') and \
-            node.type not in CAPACITY.get_value('RETRAIN_ONNX_TYPES'):
+        if node.type not in CAPACITY.get_value(
+            'QUANTIZABLE_ONNX_TYPES'
+        ) and node.type not in CAPACITY.get_value('RETRAIN_ONNX_TYPES'):
             raise RuntimeError("%s is not supported." % (node.type))
 
         if node.type not in QUANT_INDEXES_MAP:
-            raise RuntimeError(f'Node {node.name} type {node.type} cannot get quant index map.')
+            raise RuntimeError(
+                f'Node {node.name} type {node.type} cannot get quant index map.'
+            )
         return QUANT_INDEXES_MAP.get(node.type)
 
     @staticmethod
@@ -149,11 +154,23 @@ class QuantOpInfo():
         Parameters:
             quantizable_node: a rnn node, which is quantizable
         Return:
-            recurrence_weight_param: a node, it's quantizable rnn node's recurrence weight
+            recurrence_weight_param: a node, it's quantizable rnn node's recurrence weight,
+                or None if the node is not an RNN op (no recurrence_weight_index in
+                QUANT_INDEXES_MAP).
         '''
-        recurrence_weight_index = QuantOpInfo.get_quant_index(quantizable_node).get('recurrence_weight_index')
-        recurrence_weight_in_anchor = quantizable_node.get_input_anchor(recurrence_weight_index)
-        recurrence_weight_param = recurrence_weight_in_anchor.get_peer_output_anchor().node
+        recurrence_weight_index = QuantOpInfo.get_quant_index(quantizable_node).get(
+            'recurrence_weight_index'
+        )
+        if recurrence_weight_index is None:
+            # Non-RNN ops (Conv, Gemm, etc.) have no recurrence_weight_index in
+            # QUANT_INDEXES_MAP.  Return None so callers can skip cleanly.
+            return None
+        recurrence_weight_in_anchor = quantizable_node.get_input_anchor(
+            recurrence_weight_index
+        )
+        recurrence_weight_param = (
+            recurrence_weight_in_anchor.get_peer_output_anchor().node
+        )
         return recurrence_weight_param
 
     @staticmethod
@@ -169,8 +186,7 @@ class QuantOpInfo():
             return QuantOpInfo.get_bias_for_matmul(quantizable_node)
 
         bias_index = QuantOpInfo.get_quant_index(quantizable_node).get('bias_index')
-        if bias_index is None or \
-                bias_index >= len(quantizable_node.input_anchors):
+        if bias_index is None or bias_index >= len(quantizable_node.input_anchors):
             return None
 
         bias_in_anchor = quantizable_node.get_input_anchor(bias_index)
@@ -203,7 +219,9 @@ class QuantOpInfo():
         Return: cout_length
         """
         if node.type not in CAPACITY.get_value('PASSIVE_PRUNABLE_ONNX_TYPES'):
-            raise RuntimeError("Unexpected node's type {} for {}".format(node.type, node.name))
+            raise RuntimeError(
+                "Unexpected node's type {} for {}".format(node.type, node.name)
+            )
         cout_length = None
         if node.type == 'BatchNormalization':
             scale_node, _ = node.get_producer(1)
@@ -219,7 +237,10 @@ class QuantOpInfo():
                 cout_length = tensor.dims[1]
             elif node.type == 'Gemm':
                 attr_helper = AttributeProtoHelper(node.proto)
-                if not attr_helper.has_attr('transB') or attr_helper.get_attr_value('transB') == 0:
+                if (
+                    not attr_helper.has_attr('transB')
+                    or attr_helper.get_attr_value('transB') == 0
+                ):
                     cout_length = tensor.dims[1]
                 else:
                     cout_length = tensor.dims[0]
@@ -233,7 +254,9 @@ class QuantOpInfo():
         Return: cin_length
         """
         if node.type not in CAPACITY.get_value('QUANTIZABLE_ONNX_TYPES'):
-            raise RuntimeError("Unexpected node's type {} for {}".format(node.type, node.name))
+            raise RuntimeError(
+                "Unexpected node's type {} for {}".format(node.type, node.name)
+            )
         cin_length = None
         tensor = QuantOpInfo.get_weight_tensor(node)
         if node.type == 'Conv':
@@ -243,11 +266,38 @@ class QuantOpInfo():
             cin_length = tensor.dims[0]
         elif node.type == 'Gemm':
             attr_helper = AttributeProtoHelper(node.proto)
-            if not attr_helper.has_attr('transB') or attr_helper.get_attr_value('transB') == 0:
+            if (
+                not attr_helper.has_attr('transB')
+                or attr_helper.get_attr_value('transB') == 0
+            ):
                 cin_length = tensor.dims[0]
             else:
                 cin_length = tensor.dims[1]
         return cin_length
+
+    @staticmethod
+    def get_cin_axis(node):
+        """
+        Cin 维在 onnx 权重张量里的轴位置（INT4 沿此轴 nibble-pack）。
+        Conv 轴1；ConvTranspose/MatMul 轴0；Gemm 依 transB(0->轴0,1->轴1)；
+        LSTM/GRU 轴2(input/hidden)。不支持的算子类型返回 None。
+        """
+        if node.type == 'Conv':
+            return 1
+        if node.type in ['ConvTranspose', 'MatMul']:
+            return 0
+        if node.type == 'Gemm':
+            attr_helper = AttributeProtoHelper(node.proto)
+            if (
+                attr_helper.has_attr('transB')
+                and attr_helper.get_attr_value('transB') == 1
+            ):
+                return 1
+            return 0
+        if node.type in ['LSTM', 'GRU']:
+            return 2
+        # 不支持的算子类型返回 None，由调用方判断（不以异常表达）
+        return None
 
     @staticmethod
     def get_node_tensor(node):
@@ -259,7 +309,11 @@ class QuantOpInfo():
         '''
         node_type = node.type
         if node_type not in ['initializer', 'Constant']:
-            raise RuntimeError("Do not support get tensor from node {} with type {}".format(node.name, node_type))
+            raise RuntimeError(
+                "Do not support get tensor from node {} with type {}".format(
+                    node.name, node_type
+                )
+            )
         if node_type == 'initializer':
             # for 'initializer' type
             node_tensor = node.proto
@@ -323,7 +377,8 @@ class QuantOpInfo():
         """
         if records is None or records.get(op_name) is None:
             raise RuntimeError(
-                'records is None or layer [{}] not in records.'.format(op_name))
+                'records is None or layer [{}] not in records.'.format(op_name)
+            )
 
         default_num_bits = 8
         if data_type is not None:
@@ -337,7 +392,8 @@ class QuantOpInfo():
                 else:
                     raise RuntimeError(
                         'act_type in layer [{}] is not INT8 or INT16,'
-                        'actual value is {}'.format(op_name, dst_type))
+                        'actual value is {}'.format(op_name, dst_type)
+                    )
             elif data_type == 'wts':
                 dst_type_dict = {INT4: 4, 'INT6': 6, 'INT7': 7, INT8: 8}
                 dst_type = records.get(op_name).get('wts_type')
@@ -347,8 +403,10 @@ class QuantOpInfo():
                     num_bit = default_num_bits
                 else:
                     raise RuntimeError(
-                        'wts_type in layer [{}] is not INT8, '
-                        'actual value is {}'.format(op_name, dst_type))
+                        'wts_type in layer [{}] is not INT8, actual value is {}'.format(
+                            op_name, dst_type
+                        )
+                    )
         elif 'dst_type' in records.get(op_name):
             dst_type_dict = {INT4: 4, INT8: 8}
             dst_type = records.get(op_name).get('dst_type')
@@ -357,7 +415,8 @@ class QuantOpInfo():
             else:
                 raise RuntimeError(
                     'dst_type in layer [{}] is not INT4 or INT8,'
-                    'actual value is {}'.format(op_name, dst_type))
+                    'actual value is {}'.format(op_name, dst_type)
+                )
         else:
             num_bit = default_num_bits
         return num_bit

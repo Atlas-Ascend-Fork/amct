@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,7 +21,7 @@ from ...utils.log import LOGGER
 
 
 class ConcatPruneHelperBase(PruneHelperBase):
-    """ base class of concate prune helper"""
+    """base class of concate prune helper"""
 
     @staticmethod
     def _set_producer_not_prune(prune_records, record_helper, do_prune):
@@ -89,8 +89,12 @@ class ConcatPruneHelperBase(PruneHelperBase):
         # case2: not do prune
         do_prune = self._set_producer_not_prune(prune_records, record_helper, do_prune)
         if not do_prune:
-            LOGGER.logd("disable Concat {} for input range is not determinate or prune axis differs"
-                        .format(self.node.name), "ConcatPruneHelperBase")
+            LOGGER.logd(
+                "disable Concat {} for input range is not determinate or prune axis differs".format(
+                    self.node.name
+                ),
+                "ConcatPruneHelperBase",
+            )
             return
         # case3: do prune
         for prune_record, output_range in zip(prune_records, output_ranges):
@@ -101,7 +105,9 @@ class ConcatPruneHelperBase(PruneHelperBase):
             attr_helper.set_attr_value('begin', 'INT', output_range[0])
             attr_helper.set_attr_value('end', 'INT', output_range[1])
         # the passive node has different list with active node, but the item is same one
-        self.node.set_attr('passive_prune_records', [record for record in prune_records])
+        self.node.set_attr(
+            'passive_prune_records', [record for record in prune_records]
+        )
 
     def process(self, record_helper):
         """

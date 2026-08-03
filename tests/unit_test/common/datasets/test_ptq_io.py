@@ -16,9 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import os
 
-import pytest
 import torch
 
 from amct_pytorch.common.datasets import ptq_io
@@ -65,7 +63,11 @@ def test_save_ptq_inps_concatenates_outs_along_dim0(tmp_path):
         "hookA_out": [torch.zeros(2, 4), torch.ones(3, 4)],
     }
     ptq_io.save_ptq_inps(
-        act_stat, hook_name="hookA", quant_target="mlp", layer_idx=7, data_dir=str(tmp_path)
+        act_stat,
+        hook_name="hookA",
+        quant_target="mlp",
+        layer_idx=7,
+        data_dir=str(tmp_path),
     )
     saved = torch.load(tmp_path / "block_7_mlp_in.pkl")
     assert saved.shape == (5, 4)

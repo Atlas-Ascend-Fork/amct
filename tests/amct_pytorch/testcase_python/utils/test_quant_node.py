@@ -18,6 +18,7 @@
 import logging
 import unittest
 from io import BytesIO
+from unittest import mock
 
 import torch
 import torch.nn as nn
@@ -163,3 +164,43 @@ class TestQuantOpInfo(unittest.TestCase):
             if node.type == 'MatMul':
                 bias_node = QuantOpInfo.get_bias_for_matmul(node)
                 self.assertIsNone(bias_node)
+
+
+class TestGetCinAxis(unittest.TestCase):
+    """UT for QuantOpInfo.get_cin_axis (INT4 pack axis mapping)."""
+
+    @staticmethod
+    def _node(node_type):
+        node = mock.MagicMock()
+        node.type = node_type
+        return node
+
+    def test_conv_cin_axis_is_1(self):
+        self.assertEqual(QuantOpInfo.get_cin_axis(self._node('Conv')), 1)
+
+    def test_convtranspose_matmul_cin_axis_is_0(self):
+        self.assertEqual(QuantOpInfo.get_cin_axis(self._node('ConvTranspose')), 0)
+        self.assertEqual(QuantOpInfo.get_cin_axis(self._node('MatMul')), 0)
+
+    def test_rnn_cin_axis_is_2(self):
+        self.assertEqual(QuantOpInfo.get_cin_axis(self._node('LSTM')), 2)
+        self.assertEqual(QuantOpInfo.get_cin_axis(self._node('GRU')), 2)
+
+    def test_gemm_cin_axis_depends_on_transb(self):
+        helper_mod = (
+            'amct_pytorch.classic.graph_based.amct_pytorch.utils.quant_node.'
+            'AttributeProtoHelper'
+        )
+        # transB == 1 -> axis 1
+        with mock.patch(helper_mod) as m_helper:
+            m_helper.return_value.has_attr.return_value = True
+            m_helper.return_value.get_attr_value.return_value = 1
+            self.assertEqual(QuantOpInfo.get_cin_axis(self._node('Gemm')), 1)
+        # transB absent/0 -> axis 0
+        with mock.patch(helper_mod) as m_helper:
+            m_helper.return_value.has_attr.return_value = False
+            self.assertEqual(QuantOpInfo.get_cin_axis(self._node('Gemm')), 0)
+
+    def test_unknown_type_returns_none(self):
+        # 不支持的算子类型返回 None（不再抛异常）
+        self.assertIsNone(QuantOpInfo.get_cin_axis(self._node('Relu')))

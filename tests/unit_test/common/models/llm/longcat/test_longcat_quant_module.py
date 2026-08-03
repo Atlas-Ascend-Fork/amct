@@ -20,7 +20,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 import torch
 import torch.nn as nn
 from transformers.models.longcat_flash.configuration_longcat_flash import (
@@ -73,22 +72,27 @@ def _quant_args(quant_target=("attn-linear",)):
         quant_dtype="int",
         w_bits=8,
         a_bits=8,
-        q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+        q_bits=8,
+        k_bits=8,
+        p_bits=8,
+        v_bits=8,
         quant_target=list(quant_target),
-        bit_policy=BitPolicy({
-            "mlp": {
-                "gate_proj": {W_BITS: 8, A_BITS: 8},
-                "up_proj": {W_BITS: 8, A_BITS: 8},
-                "down_proj": {W_BITS: 8, A_BITS: 8},
-            },
-            "attn-linear": {
-                "q_proj": {W_BITS: 8, A_BITS: 8},
-                "k_proj": {W_BITS: 8, A_BITS: 8},
-                "v_proj": {W_BITS: 8, A_BITS: 8},
-                "o_proj": {W_BITS: 8, A_BITS: 8},
-            },
-            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-        }),
+        bit_policy=BitPolicy(
+            {
+                "mlp": {
+                    "gate_proj": {W_BITS: 8, A_BITS: 8},
+                    "up_proj": {W_BITS: 8, A_BITS: 8},
+                    "down_proj": {W_BITS: 8, A_BITS: 8},
+                },
+                "attn-linear": {
+                    "q_proj": {W_BITS: 8, A_BITS: 8},
+                    "k_proj": {W_BITS: 8, A_BITS: 8},
+                    "v_proj": {W_BITS: 8, A_BITS: 8},
+                    "o_proj": {W_BITS: 8, A_BITS: 8},
+                },
+                "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+            }
+        ),
     )
 
 
@@ -97,19 +101,27 @@ def _quant_args(quant_target=("attn-linear",)):
 
 def test_packed_expert_linear_view_returns_full_slice():
     experts = SimpleNamespace(gate_up_proj=torch.randn(2, 6, 4))
-    view = LongcatPackedExpertLinearView(experts, expert_idx=1, weight_name="gate_up_proj")
+    view = LongcatPackedExpertLinearView(
+        experts, expert_idx=1, weight_name="gate_up_proj"
+    )
     assert torch.equal(view.weight, experts.gate_up_proj[1])
 
 
 def test_packed_expert_linear_view_returns_partial_slice():
-    experts = SimpleNamespace(gate_up_proj=torch.arange(2 * 6 * 4, dtype=torch.float32).reshape(2, 6, 4))
-    view = LongcatPackedExpertLinearView(experts, expert_idx=0, weight_name="gate_up_proj", start=0, end=3)
+    experts = SimpleNamespace(
+        gate_up_proj=torch.arange(2 * 6 * 4, dtype=torch.float32).reshape(2, 6, 4)
+    )
+    view = LongcatPackedExpertLinearView(
+        experts, expert_idx=0, weight_name="gate_up_proj", start=0, end=3
+    )
     assert torch.equal(view.weight, experts.gate_up_proj[0, 0:3])
 
 
 def test_packed_expert_linear_view_bias_default_none():
     experts = SimpleNamespace(gate_up_proj=torch.zeros(2, 6, 4))
-    view = LongcatPackedExpertLinearView(experts, expert_idx=0, weight_name="gate_up_proj")
+    view = LongcatPackedExpertLinearView(
+        experts, expert_idx=0, weight_name="gate_up_proj"
+    )
     assert view.bias is None
 
 
@@ -264,22 +276,29 @@ def _mla_attn_cache_args():
     return SimpleNamespace(
         algos=[],
         quant_dtype="int",
-        w_bits=8, a_bits=8, q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+        w_bits=8,
+        a_bits=8,
+        q_bits=8,
+        k_bits=8,
+        p_bits=8,
+        v_bits=8,
         quant_target=["attn-cache"],
-        bit_policy=BitPolicy({
-            "mlp": {},
-            "attn-linear": {
-                "q_proj": {"w_bits": 8, "a_bits": 8},
-                "k_proj": {"w_bits": 8, "a_bits": 8},
-                "v_proj": {"w_bits": 8, "a_bits": 8},
-                "o_proj": {"w_bits": 8, "a_bits": 8},
-                "kv_a_proj_with_mqa": {"w_bits": 8, "a_bits": 8},
-                "kv_b_proj": {"w_bits": 8, "a_bits": 8},
-                "q_a_proj": {"w_bits": 8, "a_bits": 8},
-                "q_b_proj": {"w_bits": 8, "a_bits": 8},
-            },
-            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-        }),
+        bit_policy=BitPolicy(
+            {
+                "mlp": {},
+                "attn-linear": {
+                    "q_proj": {"w_bits": 8, "a_bits": 8},
+                    "k_proj": {"w_bits": 8, "a_bits": 8},
+                    "v_proj": {"w_bits": 8, "a_bits": 8},
+                    "o_proj": {"w_bits": 8, "a_bits": 8},
+                    "kv_a_proj_with_mqa": {"w_bits": 8, "a_bits": 8},
+                    "kv_b_proj": {"w_bits": 8, "a_bits": 8},
+                    "q_a_proj": {"w_bits": 8, "a_bits": 8},
+                    "q_b_proj": {"w_bits": 8, "a_bits": 8},
+                },
+                "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+            }
+        ),
     )
 
 
@@ -287,22 +306,29 @@ def _mla_attn_linear_args():
     return SimpleNamespace(
         algos=[],
         quant_dtype="int",
-        w_bits=8, a_bits=8, q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+        w_bits=8,
+        a_bits=8,
+        q_bits=8,
+        k_bits=8,
+        p_bits=8,
+        v_bits=8,
         quant_target=["attn-linear", "attn-cache"],
-        bit_policy=BitPolicy({
-            "mlp": {},
-            "attn-linear": {
-                "q_proj": {"w_bits": 8, "a_bits": 8},
-                "k_proj": {"w_bits": 8, "a_bits": 8},
-                "v_proj": {"w_bits": 8, "a_bits": 8},
-                "o_proj": {"w_bits": 8, "a_bits": 8},
-                "kv_a_proj_with_mqa": {"w_bits": 8, "a_bits": 8},
-                "kv_b_proj": {"w_bits": 8, "a_bits": 8},
-                "q_a_proj": {"w_bits": 8, "a_bits": 8},
-                "q_b_proj": {"w_bits": 8, "a_bits": 8},
-            },
-            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-        }),
+        bit_policy=BitPolicy(
+            {
+                "mlp": {},
+                "attn-linear": {
+                    "q_proj": {"w_bits": 8, "a_bits": 8},
+                    "k_proj": {"w_bits": 8, "a_bits": 8},
+                    "v_proj": {"w_bits": 8, "a_bits": 8},
+                    "o_proj": {"w_bits": 8, "a_bits": 8},
+                    "kv_a_proj_with_mqa": {"w_bits": 8, "a_bits": 8},
+                    "kv_b_proj": {"w_bits": 8, "a_bits": 8},
+                    "q_a_proj": {"w_bits": 8, "a_bits": 8},
+                    "q_b_proj": {"w_bits": 8, "a_bits": 8},
+                },
+                "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+            }
+        ),
     )
 
 
@@ -339,4 +365,3 @@ def test_unpacked_experts_forward_non_empty():
     top_k_weights = torch.tensor([[1.0], [0.5], [0.8], [0.3]])
     out = unpacked(h, top_k_index, top_k_weights)
     assert out.shape == (4, experts.hidden_size)
-

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -146,7 +146,7 @@ class TestReplaceRNNPass(unittest.TestCase):
                 'weight_scale': np.ones(4),
                 'weight_offset': np.zeros(4),
                 'recurrence_weight_scale': np.ones(4),
-                'recurrence_weight_offset': np.zeros(4)
+                'recurrence_weight_offset': np.zeros(4),
             }
         }
 
@@ -173,8 +173,12 @@ class TestReplaceRNNPass(unittest.TestCase):
 
     def test_construct_deq_scale_node(self):
         lstm_0 = self.graph.get_node_by_name('lstm_0')
-        deq_scale_node = ReplaceRNNPass(self.records).construct_deq_scale_node(self.graph, lstm_0)
-        deq_scale = TensorProtoHelper(QuantOpInfo.get_node_tensor(deq_scale_node)).get_data()
+        deq_scale_node = ReplaceRNNPass(self.records).construct_deq_scale_node(
+            self.graph, lstm_0
+        )
+        deq_scale = TensorProtoHelper(
+            QuantOpInfo.get_node_tensor(deq_scale_node)
+        ).get_data()
         self.assertEqual(deq_scale.shape, (8,))
 
 
@@ -280,7 +284,7 @@ class TestReplaceRNNPassGRU(unittest.TestCase):
                 'weight_scale': np.ones(3),
                 'weight_offset': np.zeros(3),
                 'recurrence_weight_scale': np.ones(3),
-                'recurrence_weight_offset': np.zeros(3)
+                'recurrence_weight_offset': np.zeros(3),
             }
         }
 
@@ -303,6 +307,10 @@ class TestReplaceRNNPassGRU(unittest.TestCase):
 
     def test_construct_deq_scale_node(self):
         gru_0 = self.graph.get_node_by_name('gru_0')
-        deq_scale_node = ReplaceRNNPass(self.records).construct_deq_scale_node(self.graph, gru_0)
-        deq_scale = TensorProtoHelper(QuantOpInfo.get_node_tensor(deq_scale_node)).get_data()
+        deq_scale_node = ReplaceRNNPass(self.records).construct_deq_scale_node(
+            self.graph, gru_0
+        )
+        deq_scale = TensorProtoHelper(
+            QuantOpInfo.get_node_tensor(deq_scale_node)
+        ).get_data()
         self.assertEqual(deq_scale.shape, (6,))
