@@ -257,7 +257,7 @@ clean_build_out() {
 
 build_package() {
   echo "--------------- build package start ---------------"
-  bash install_graph.sh --cann_3rd_lib_path=${CANN_3RD_LIB_PATH}
+  cmake -DAMCT_OPEN_DIR="${BASEPATH}" -DCANN_3RD_LIB_PATH="${CANN_3RD_LIB_PATH}" -DASCEND_HOME_PATH="${ASCEND_HOME_PATH}" -P "${BASEPATH}/cmake/install_graph.cmake"
   build || { echo "Build failed."; exit 1; }
   echo "--------------- build package end ---------------"
 }
