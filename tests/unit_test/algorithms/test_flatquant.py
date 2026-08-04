@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from amct_pytorch.algorithms.quant.flatquant import (
@@ -28,6 +29,9 @@ from amct_pytorch.algorithms.quant.flatquant import (
     _InvFlatSingleTransform,
     _kronecker_matmul,
     _random_orthogonal,
+)
+from amct_pytorch.experimental.flatquant.flat_quant_module.function_utils import (
+    print_trainable_parameters,
 )
 
 
@@ -159,6 +163,19 @@ def test_trainable_params_returns_all_parameters():
     assert len(trainable_params) == len(parameters)
     assert all(
         actual is expected for actual, expected in zip(trainable_params, parameters)
+    )
+
+
+def test_print_trainable_parameters_reports_ratio(capsys):
+    model = nn.Sequential(nn.Linear(2, 3), nn.Linear(3, 1))
+    model[1].weight.requires_grad = False
+    model[1].bias.requires_grad = False
+
+    print_trainable_parameters(model)
+
+    assert (
+        capsys.readouterr().out.strip()
+        == "trainable params: 9 || all params: 13 || trainable: 69.23%"
     )
 
 
