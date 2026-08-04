@@ -97,6 +97,6 @@ def unpack_hif4_checkpoint(input_dir: str, output_dir: str,
             print(f"[shard] {shard}: {len(out_tensors)} tensors written", flush=True)
 
     write_index(output_dir, out_weight_map, total_size=total_bytes)
-    copy_side_files(input_dir, output_dir)
+    copy_side_files(input_dir, output_dir, torch_dtype=out_dtype or "fp16")
 
     print(f"[unpack] hif4 -> float | weights={n_deq} copied={n_copy} -> {output_dir}", flush=True)

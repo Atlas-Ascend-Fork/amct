@@ -112,19 +112,22 @@ def hif4_encode(xg: Tensor, ng: int = 2, qdim: int = -1) -> Hif4Encoded:
 
     # Collapse keepdim-1s back to the shapes expected by hif4_decode / packer.
     # ─ sign_bit, code: original xg shape, no squeeze needed.
-    # ─ e6m2_val, e_e6, q: 3 keepdim 1s at qdim-2, qdim-1, qdim → squeeze all.
-    # ─ e1_8: 2 keepdim 1s at qdim-1, qdim → squeeze from the right.
+    # ─ e6m2_val, e_e6, q: 3 keepdim 1s at qdim-2, qdim-1, qdim → squeeze backwards.
+    # ─ e1_8: 2 keepdim 1s at qdim-1, qdim → squeeze backwards.
     # ─ e1_16, de: 1 keepdim 1 at qdim → squeeze that one.
     e1_8_sq = e1_8.squeeze(qdim).squeeze(qdim)       # squeeze backwards: after first, the remaining 1 shifts to qdim
+    e6m2_sq = e6m2_val.squeeze(qdim).squeeze(qdim).squeeze(qdim)
+    e_e6_sq = e_e6.squeeze(qdim).squeeze(qdim).squeeze(qdim)
+    q_sq = q.squeeze(qdim).squeeze(qdim).squeeze(qdim)
     return Hif4Encoded(
         sign_bit,
-        e6m2_val.squeeze(),
+        e6m2_sq,
         de.squeeze(qdim),
         code,
         e1_8_sq,
         e1_16.squeeze(qdim),
-        e_e6.squeeze(),
-        q.squeeze(),
+        e_e6_sq,
+        q_sq,
         block_nan,
     )
 
