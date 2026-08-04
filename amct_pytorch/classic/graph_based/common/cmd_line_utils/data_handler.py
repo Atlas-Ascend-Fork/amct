@@ -16,13 +16,9 @@ http://www.apache.org/licenses/LICENSE-2.0
 Data handle functions for amct command line tools.
 
 """
+
 import os
-from datetime import datetime
-from datetime import timezone
-from datetime import timedelta
-import secrets
 import numpy as np
-from ..utils.files import delete_dir
 
 
 def load_data(inputs, data_paths, data_types, num=None):
@@ -48,15 +44,19 @@ def load_data(inputs, data_paths, data_types, num=None):
         if num is None:
             num = len(data_file_list)
         if len(data_file_list) < num:
-            raise RuntimeError("The number of given data batches is not enough "
-                    "to run calibration with the given batch_num. Total batches"
-                    " found: {}, but trying to load: {}.".format(len(data_file_list), num))
+            raise RuntimeError(
+                "The number of given data batches is not enough "
+                "to run calibration with the given batch_num. Total batches"
+                " found: {}, but trying to load: {}.".format(len(data_file_list), num)
+            )
 
     for i in range(num):
         data_map = {}
         for index, input_node_name in enumerate(input_names):
             data_file_name = os.path.join(data_paths[index], data_file_lists[index][i])
-            data_input = load_bin_data(data_file_name, data_types[index], data_shapes[index])
+            data_input = load_bin_data(
+                data_file_name, data_types[index], data_shapes[index]
+            )
             data_map[input_node_name] = data_input
         yield data_map
 
@@ -72,21 +72,23 @@ def load_bin_data(data_file_name, data_types, data_shapes):
     data_input: numpy array
     '''
     np_type_mapping = {
-            'float64': np.float64,
-            'float32': np.float32,
-            'float16': np.float16,
-            'int8': np.int8,
-            'int16': np.int16,
-            'int64': np.int64,
-            'int32': np.int32,
-            'uint8': np.uint8,
-            'uint16': np.uint16,
-            'uint32': np.uint32,
-            'uint64': np.uint64,
-            'bool': np.bool_
-            }
+        'float64': np.float64,
+        'float32': np.float32,
+        'float16': np.float16,
+        'int8': np.int8,
+        'int16': np.int16,
+        'int64': np.int64,
+        'int32': np.int32,
+        'uint8': np.uint8,
+        'uint16': np.uint16,
+        'uint32': np.uint32,
+        'uint64': np.uint64,
+        'bool': np.bool_,
+    }
 
     if data_types not in np_type_mapping.keys():
         raise TypeError('Unsupported data type[{}]!'.format(data_types))
 
-    return np.fromfile(data_file_name, np_type_mapping.get(data_types)).reshape(data_shapes)
+    return np.fromfile(data_file_name, np_type_mapping.get(data_types)).reshape(
+        data_shapes
+    )

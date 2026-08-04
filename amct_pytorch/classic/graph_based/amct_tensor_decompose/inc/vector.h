@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -43,7 +43,7 @@ public:
 
     // 使用以dataIn为起点的、长度为lengthIn的连续内存数据构建向量(深拷贝)
     // 成功返回TD_SUCCESS，失败返回错误码，失败时清空本向量
-    TdError Create(const double* const dataIn, unsigned int lengthIn);
+    TdError Create(const double *const dataIn, unsigned int lengthIn);
 
     // 获取向量长度
     unsigned int GetLength() const;
@@ -122,8 +122,8 @@ public:
     TdError Slice(Vector &vectorOut, unsigned int startIdx, unsigned int endIdx) const;
 
 protected:
-    unsigned int length;      // 向量长度
-    double* data;             // 向量数据
+    unsigned int length; // 向量长度
+    double *data;        // 向量数据
 
     // 回收内存
     void Destroy();
@@ -148,13 +148,10 @@ protected:
     // checkNonNegative：是否检查数据都为非负
     // checkValid：是否检查数据中不存在nan或inf
     static bool CheckData(const Vector &vectorIn, bool checkNonEmpty = false, bool checkNoZero = false,
-                          bool checkNonNegative = false, bool checkValid = false);
+        bool checkNonNegative = false, bool checkValid = false);
 
     // 检查数值是否不存在nan或inf
-    inline static bool CheckValid(const double &value)
-    {
-        return (!std::isnan(value) && !std::isinf(value));
-    }
+    inline static bool CheckValid(const double &value) { return (!std::isnan(value) && !std::isinf(value)); }
 
     // 用于SelectToCache，针对各类比较的情况
     TdError SelectToCacheGTE(const Vector &cacheVec, unsigned int &cacheLengthOut, double value) const;
@@ -166,8 +163,8 @@ protected:
     // selectLarger：true时选择大于(等于)value的值，否则选择小于(等于)value的值
     // allowEqual：true时允许选择等于value的值，否则不允许
     // 成功返回TD_SUCCESS，失败返回错误码
-    TdError SelectToCache(Vector &cacheVec, unsigned int &cacheLengthOut, double value, bool selectLarger,
-                           bool allowEqual) const;
+    TdError SelectToCache(
+        Vector &cacheVec, unsigned int &cacheLengthOut, double value, bool selectLarger, bool allowEqual) const;
 
     // CheckVector与CheckVectorAndValue的公用部分
     TdError CheckVectorCommon(Vector &vectorOut) const;
@@ -179,14 +176,14 @@ protected:
     TdError CheckVectorAndValue(Vector &vectorOut, double value, bool checkNanInf) const;
 
     // 向量与向量在运算前的检查
-    TdError CheckVectorAndVector(Vector &vectorOut, const Vector &vectorIn, bool checkNanInf,
-                                  bool checkVectorInNoZero) const;
+    TdError CheckVectorAndVector(
+        Vector &vectorOut, const Vector &vectorIn, bool checkNanInf, bool checkVectorInNoZero) const;
 
 private:
     // 禁用拷贝构造和拷贝赋值，因安全规范不允许在构造函数中使用可能失败的操作(如new)
     Vector(const Vector &);
     Vector &operator=(const Vector &);
 };
-}
+} // namespace TensorDecompose
 
 #endif /* VECTOR_H */

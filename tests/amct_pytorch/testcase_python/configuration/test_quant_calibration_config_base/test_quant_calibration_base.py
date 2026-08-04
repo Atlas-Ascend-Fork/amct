@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -19,15 +19,15 @@ import json
 import logging
 import os
 import shutil
-import sys
 import unittest
 
 import torch
 
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration \
-    .quant_calibration_config_base.quant_calibration_config_base import (
-    QuantCalibrationConfigBase,
+from amct_pytorch.classic.graph_based.amct_pytorch.configuration.quant_calibration_config_base import (
+    quant_calibration_config_base as qccb,
 )
+
+QuantCalibrationConfigBase = qccb.QuantCalibrationConfigBase
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -111,10 +111,25 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
             },
         }
         QuantCalibrationConfigBase.add_global_to_layer(config)
-        self.assertEqual(2, config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('batch_num'))
-        self.assertEqual(True, config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('with_offset'))
-        self.assertEqual(0.8, config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('search_range_start'))
-        self.assertEqual(1.2, config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('search_range_end'))
+        self.assertEqual(
+            2, config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('batch_num')
+        )
+        self.assertEqual(
+            True,
+            config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('with_offset'),
+        )
+        self.assertEqual(
+            0.8,
+            config.get(MATMUL1_LAYER_NAME)
+            .get(KV_DATA_QUANT_CONFIG)
+            .get('search_range_start'),
+        )
+        self.assertEqual(
+            1.2,
+            config.get(MATMUL1_LAYER_NAME)
+            .get(KV_DATA_QUANT_CONFIG)
+            .get('search_range_end'),
+        )
 
     def test_get_quant_layer_config(self):
         ret = QuantCalibrationConfigBase.get_quant_layer_config(MATMUL1_LAYER_NAME, {})
@@ -130,20 +145,23 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
             },
         }
         ret = QuantCalibrationConfigBase.get_quant_layer_config(
-            MATMUL1_LAYER_NAME, full_config)
+            MATMUL1_LAYER_NAME, full_config
+        )
         self.assertIn(KV_DATA_QUANT_CONFIG, ret)
 
     def test_create_default_config(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
         quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
-        QuantCalibrationConfigBase().create_default_config(config_file, model, quant_layers)
+        QuantCalibrationConfigBase().create_default_config(
+            config_file, model, quant_layers
+        )
 
         with open(config_file) as f:
             config = json.load(f)
             self.assertIn(MATMUL1_LAYER_NAME, config)
             self.assertIn('matmul2', config)
-        
+
     def test_create_default_config_no_quant_layers(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
@@ -159,9 +177,10 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
     def test_create_config_from_proto(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
-        QuantCalibrationConfigBase().create_config_from_proto(config_file, model, config_proto)
+        QuantCalibrationConfigBase().create_config_from_proto(
+            config_file, model, config_proto
+        )
 
         with open(config_file) as f:
             config = json.load(f)
@@ -169,13 +188,19 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
             self.assertIn('matmul2', config)
             self.assertIn('matmul3', config)
 
-            self.assertEqual('hfmg', config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('act_algo'))
-            self.assertEqual('ifmr', config.get('matmul3').get(KV_DATA_QUANT_CONFIG).get('act_algo'))
+            self.assertEqual(
+                'hfmg',
+                config.get(MATMUL1_LAYER_NAME)
+                .get(KV_DATA_QUANT_CONFIG)
+                .get('act_algo'),
+            )
+            self.assertEqual(
+                'ifmr', config.get('matmul3').get(KV_DATA_QUANT_CONFIG).get('act_algo')
+            )
 
     def test_create_config_from_proto_no_quant_layer(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_01.cfg')
         self.assertRaises(
             RuntimeError,
@@ -188,14 +213,19 @@ class TestQuantCalibrationConfigBase(unittest.TestCase):
     def test_parse_quant_config(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
-        quant_layers = {KV_CACHE_QUANT_LAYERS: [MATMUL1_LAYER_NAME, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
-        QuantCalibrationConfigBase().create_config_from_proto(config_file, model, config_proto)
+        QuantCalibrationConfigBase().create_config_from_proto(
+            config_file, model, config_proto
+        )
         config = QuantCalibrationConfigBase().parse_quant_config(config_file, model)
         self.assertIn(MATMUL1_LAYER_NAME, config)
         self.assertIn('matmul2', config)
         self.assertIn('matmul3', config)
 
-        self.assertEqual('hfmg', config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('act_algo'))
-        self.assertEqual('ifmr', config.get('matmul3').get(KV_DATA_QUANT_CONFIG).get('act_algo'))
-
+        self.assertEqual(
+            'hfmg',
+            config.get(MATMUL1_LAYER_NAME).get(KV_DATA_QUANT_CONFIG).get('act_algo'),
+        )
+        self.assertEqual(
+            'ifmr', config.get('matmul3').get(KV_DATA_QUANT_CONFIG).get('act_algo')
+        )

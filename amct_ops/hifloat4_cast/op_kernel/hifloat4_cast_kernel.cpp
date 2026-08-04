@@ -165,10 +165,11 @@ public:
         set_vector_mask((uint64_t)-1, (uint64_t)-1);
 
         if (n_tail>0){
-            // if tail, mask out the unused numbers
+            // Tail masking: the host guarantees N is a multiple of BATCH (512) by
+            // zero-padding, so this path is dead code in normal operation.  Kept as a
+            // safety net in case the kernel is called directly with non-aligned N.
             for (int tail=n_tail; tail>0; tail-=64){
                 if (tail<64){
-                    // uint64_t mask = 0x8000000000000000;
                     uint64_t mask = 1;
                     for (int i=1;i<tail;++i){
                         mask |= (mask << 1);

@@ -62,26 +62,30 @@ class TestScaleOffsetRecordHelper(unittest.TestCase):
     def test_check_record_length_mismatch(self):
         self.helper.record_weights_scale_offset('l1', [0.5, 0.6], [0])
         rec = self.helper.get_record('l1')
-        self.assertRaises(RuntimeError,
-                          rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec)
+        self.assertRaises(
+            RuntimeError, rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec
+        )
 
     def test_check_record_illegal_scale(self):
         self.helper.record_activation_scale_offset('l1', 0.0, 0)
         rec = self.helper.get_record('l1')
-        self.assertRaises(ValueError,
-                          rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec)
+        self.assertRaises(
+            ValueError, rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec
+        )
 
     def test_check_record_illegal_offset_w(self):
         self.helper.record_weights_scale_offset('l1', [0.5], [3])
         rec = self.helper.get_record('l1')
-        self.assertRaises(ValueError,
-                          rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec)
+        self.assertRaises(
+            ValueError, rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec
+        )
 
     def test_check_record_illegal_offset_d(self):
         self.helper.record_activation_scale_offset('l1', 0.5, 9999)
         rec = self.helper.get_record('l1')
-        self.assertRaises(ValueError,
-                          rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec)
+        self.assertRaises(
+            ValueError, rfo.ScaleOffsetRecordHelper.check_record, 'l1', rec
+        )
 
     def test_init_from_file_and_update_and_dump(self):
         # build a record, dump to file, then re-init from it
@@ -144,7 +148,7 @@ class TestScaleOffsetRecordHelper(unittest.TestCase):
         self.assertTrue(self.helper.get_record('l1').skip_fusion)
         self.helper.record_skip_status('l1', False)  # update existing
         self.assertFalse(self.helper.get_record('l1').skip_fusion)
-        self.helper.record_skip_status('l2', True)   # add new
+        self.helper.record_skip_status('l2', True)  # add new
 
     def test_read_weights_scale_offset(self):
         self.helper.record_weights_scale_offset('l1', [0.5, 0.6], [0, 0])
@@ -166,7 +170,9 @@ class TestScaleOffsetRecordHelper(unittest.TestCase):
     def test_record_activation_variants(self):
         self.helper.record_activation_scale_offset('l1', 0.5, 0, dst_type='INT8')
         self.assertEqual(self.helper.get_record('l1').act_type, 'INT8')
-        self.helper.record_activation_scale_offset('l1', 0.9, 1, dst_type='INT16')  # update
+        self.helper.record_activation_scale_offset(
+            'l1', 0.9, 1, dst_type='INT16'
+        )  # update
         self.helper.record_activation_h_scale_offset('l1', 0.3, 0)
         self.helper.record_activation_h_scale_offset('l2', 0.4, 0)  # add new
 
@@ -174,7 +180,9 @@ class TestScaleOffsetRecordHelper(unittest.TestCase):
         self.helper.record_activation_scale_offset('l1', 0.5, 3)
         scale, offset = self.helper.read_activation_scale_offset('l1')
         self.assertEqual(offset, 3)
-        self.assertRaises(RuntimeError, self.helper.read_activation_scale_offset, 'ghost')
+        self.assertRaises(
+            RuntimeError, self.helper.read_activation_scale_offset, 'ghost'
+        )
 
     def test_read_activation_missing_scale_d(self):
         self.helper.record_skip_status('l1', True)

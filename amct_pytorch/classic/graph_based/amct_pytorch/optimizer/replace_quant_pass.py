@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,6 +27,7 @@ class ReplaceQuantPass(BaseFusionPass):
     Function: Replace AscendQuant to fakeqaunt 'Quant' with onnx's ops
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -41,13 +42,16 @@ class ReplaceQuantPass(BaseFusionPass):
     def _generate_fake_quant_nodes(graph, object_node):
         """Generate fake Quant nodes"""
         attr_helper = AttributeProtoHelper(object_node.proto)
-        num_bits = int(str(attr_helper.get_attr_value('dst_type'), encoding="utf-8")[3:])
+        num_bits = int(
+            str(attr_helper.get_attr_value('dst_type'), encoding="utf-8")[3:]
+        )
         enter_node, out_node = add_fakequant(
             graph,
             object_node.name,
             attr_helper.get_attr_value('scale'),
             attr_helper.get_attr_value('offset'),
-            num_bits)
+            num_bits,
+        )
         return enter_node, out_node
 
     def match_pattern(self, node):
@@ -73,8 +77,7 @@ class ReplaceQuantPass(BaseFusionPass):
         Return: None
         """
         # Step1: add a new_node
-        enter_node, out_node = \
-            self._generate_fake_quant_nodes(graph, object_node)
+        enter_node, out_node = self._generate_fake_quant_nodes(graph, object_node)
 
         # Step2: Relink nodes in th graph
         # remove input links
@@ -100,6 +103,8 @@ class ReplaceQuantPass(BaseFusionPass):
         graph.remove_node(object_node)
 
         LOGGER.logd(
-            "Replace quant layer '{}' to fake quant layer '{}' success!".
-            format(object_node.name,
-                   object_node.name + '.fakequant'), 'ReplaceQuantPass')
+            "Replace quant layer '{}' to fake quant layer '{}' success!".format(
+                object_node.name, object_node.name + '.fakequant'
+            ),
+            'ReplaceQuantPass',
+        )

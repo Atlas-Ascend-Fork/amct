@@ -1,3 +1,4 @@
+from __future__ import annotations
 # coding=utf-8
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 #
@@ -66,7 +67,9 @@ class BitPolicy:
         with open(path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f) or {}
         if not isinstance(cfg, dict):
-            raise ValueError(f"bit_config yaml at {path} must be a mapping at top level")
+            raise ValueError(
+                f"bit_config yaml at {path} must be a mapping at top level"
+            )
         _validate_bit_config(cfg)
         return cls(cfg)
 
@@ -87,7 +90,9 @@ class BitPolicy:
                 return True
         return False
 
-    def linear_bits(self, name: str | None = None, group: str | None = None) -> tuple[int, int]:
+    def linear_bits(
+        self, name: str | None = None, group: str | None = None
+    ) -> tuple[int, int]:
         """Resolve (w_bits, a_bits) along ``group`` (dotted) / ``name``.
 
         Walks from most-specific (leaf name) to least-specific (top group),
@@ -115,7 +120,12 @@ class BitPolicy:
         return self.w_bits, self.a_bits
 
     def summary(self) -> str:
-        return "BitPolicy:\n" + yaml.safe_dump(self.cfg, sort_keys=False, default_flow_style=False).rstrip()
+        return (
+            "BitPolicy:\n"
+            + yaml.safe_dump(
+                self.cfg, sort_keys=False, default_flow_style=False
+            ).rstrip()
+        )
 
     def _validate(self):
         """Enforce: any nested entry that mentions one of w_bits/a_bits must

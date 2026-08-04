@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -28,6 +28,7 @@ from ....amct_pytorch.utils.log import LOGGER
 
 class DUMP(nn.Module):
     """Dump tensor data to binary files and pass through inputs."""
+
     _DTYPE_INDEX = {torch.float32: 0, torch.float64: 1, torch.int32: 2}
 
     def __init__(self, layers_name, dump_config):
@@ -59,7 +60,9 @@ class DUMP(nn.Module):
             return inputs
 
         self._dump(inputs)
-        LOGGER.logi(f"[{self.layer_name}] dump {self.cur_batch}/{self.batch_num}", 'DUMP')
+        LOGGER.logi(
+            f"[{self.layer_name}] dump {self.cur_batch}/{self.batch_num}", 'DUMP'
+        )
 
         return inputs
 
@@ -83,7 +86,9 @@ class DUMP(nn.Module):
         header = [self._DTYPE_INDEX[tensor.dtype], len(data.shape), *data.shape]
 
         os.makedirs(self.dump_dir, exist_ok=True)
-        path = os.path.join(self.dump_dir, f"{self.layer_name}_activation_batch{self.cur_batch}.bin")
+        path = os.path.join(
+            self.dump_dir, f"{self.layer_name}_activation_batch{self.cur_batch}.bin"
+        )
 
         with open(path, 'wb') as f:
             f.write(np.array(header, dtype=np.float32).tobytes())

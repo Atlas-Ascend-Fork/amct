@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,14 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
-import sys
 import unittest
 from copy import deepcopy
 
-import numpy as np
-import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
@@ -75,13 +70,20 @@ class TestQuantFusionPass(unittest.TestCase):
         def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
             # Add Ascend Quant
             quant_node = graph.node.add()
-            quant_node.CopyFrom(construct_quant_node(inputs, ['%s_quant' % (conv_name)],
-                quant_attrs, conv_name))
+            quant_node.CopyFrom(
+                construct_quant_node(
+                    inputs, ['%s_quant' % (conv_name)], quant_attrs, conv_name
+                )
+            )
             # Add conv
             conv = graph.node.add()
             conv.name = conv_name
             conv.op_type = 'Conv'
-            conv.input[:] = ['%s_quant' % (conv_name), '%s.weights' % (conv_name), '%s.bias' % (conv_name)]
+            conv.input[:] = [
+                '%s_quant' % (conv_name),
+                '%s.weights' % (conv_name),
+                '%s.bias' % (conv_name),
+            ]
             conv.output[:] = [conv_name]
             # add attribute "kernel_shape"
             kernel_shape = conv.attribute.add()
@@ -111,10 +113,28 @@ class TestQuantFusionPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = [conv_name]
             relu1.output[:] = outputs
-        conv_sub(self.graph, 'conv1', [DATA0], ['conv1_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv2', [DATA0], ['conv2_output'],
-                 {SCALE: 0.99999, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv3', [DATA0], ['conv3_output'], {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+
+        conv_sub(
+            self.graph,
+            'conv1',
+            [DATA0],
+            ['conv1_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
+        conv_sub(
+            self.graph,
+            'conv2',
+            [DATA0],
+            ['conv2_output'],
+            {SCALE: 0.99999, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
+        conv_sub(
+            self.graph,
+            'conv3',
+            [DATA0],
+            ['conv3_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
         # Add add
         add1 = self.graph.node.add()
         add1.name = 'add1'
@@ -169,8 +189,4 @@ class TestQuantFusionPass(unittest.TestCase):
         QuantFusionPass(records).do_pass(graph, data_node)
         after_length = len(graph.nodes)
         self.assertEqual(before_length - after_length, 1)
-        self.assertRaises(
-            RuntimeError,
-            graph.get_node_by_name,
-            'conv3_quant')
-
+        self.assertRaises(RuntimeError, graph.get_node_by_name, 'conv3_quant')

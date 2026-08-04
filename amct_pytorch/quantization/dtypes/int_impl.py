@@ -26,7 +26,7 @@ def round_ste(x: torch.Tensor) -> torch.Tensor:
 def dynamic_per_token_quant(tensor: torch.Tensor, bits: int) -> torch.Tensor:
     dtype = tensor.dtype
     qmax = 2 ** (bits - 1) - 1
-    qmin = -2 ** (bits - 1)
+    qmin = -(2 ** (bits - 1))
     abs_max = torch.abs(tensor).max(dim=-1, keepdim=True)[0].clamp(min=1e-5)
     scale = (abs_max / qmax).clamp_min(1e-9)
     tensor = round_ste(tensor / scale)

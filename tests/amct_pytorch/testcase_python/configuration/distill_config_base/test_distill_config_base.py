@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,13 +18,9 @@
 import logging
 import os
 import shutil
-import sys
 import unittest
-from collections import OrderedDict
-from unittest import mock
 from unittest.mock import patch
 
-import numpy as np
 import torch
 from onnx import onnx_pb
 
@@ -90,7 +86,8 @@ class TestDistillConfigBase(unittest.TestCase):
         cls.graph.model = cls.model_001
 
         cls.distill_config_base = DistillConfigBase(
-            GraphObjects(graph_querier=GraphQuerier, graph_checker=None), CAPACITY)
+            GraphObjects(graph_querier=GraphQuerier, graph_checker=None), CAPACITY
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -98,31 +95,21 @@ class TestDistillConfigBase(unittest.TestCase):
         logger.info('TestDistillConfigBase end!')
 
     def test_check_dst_type_legal_default_data(self):
-        data_config = {
-            ALGO: ULQ_QUANTIZE
-        }
-        weight_config = {
-            ALGO: 'arq_distill',
-            CHANNEL_WISE: True,
-            DST_TYPE: 'INT4'
-        }
+        data_config = {ALGO: ULQ_QUANTIZE}
+        weight_config = {ALGO: 'arq_distill', CHANNEL_WISE: True, DST_TYPE: 'INT4'}
         with self.assertRaises(ValueError):
             self.distill_config_base.check_dst_type_legal(data_config, weight_config)
 
     def test_check_dst_type_legal_default_weight(self):
-        data_config = {
-            ALGO: ULQ_QUANTIZE,
-            DST_TYPE: 'INT4'
-        }
-        weight_config = {
-            ALGO: 'arq_distill',
-            CHANNEL_WISE: True
-        }
+        data_config = {ALGO: ULQ_QUANTIZE, DST_TYPE: 'INT4'}
+        weight_config = {ALGO: 'arq_distill', CHANNEL_WISE: True}
         with self.assertRaises(ValueError):
             self.distill_config_base.check_dst_type_legal(data_config, weight_config)
 
     def test_get_cascade_unit_not_in_unit(self):
-        cascade_unit = self.distill_config_base.get_cascade_unit(self.graph, [], 1, self.graph.nodes[0], [])
+        cascade_unit = self.distill_config_base.get_cascade_unit(
+            self.graph, [], 1, self.graph.nodes[0], []
+        )
         self.assertEqual(cascade_unit, [])
 
     def test_get_cascade_unit_equal_group_size(self):
@@ -139,7 +126,8 @@ class TestDistillConfigBase(unittest.TestCase):
 
         distill_unit = [[node_proto1.name]]
         cascade_unit = self.distill_config_base.get_cascade_unit(
-            graph, distill_unit, 1, node1, [])
+            graph, distill_unit, 1, node1, []
+        )
         self.assertEqual(cascade_unit, distill_unit)
 
     def test_get_cascade_unit_two_groups(self):
@@ -167,7 +155,8 @@ class TestDistillConfigBase(unittest.TestCase):
         ) as mock_get_consumers:
             mock_get_consumers.return_value = [[node2], []]
             cascade_unit = self.distill_config_base.get_cascade_unit(
-                graph, distill_unit, 2, node1, [])
+                graph, distill_unit, 2, node1, []
+            )
             self.assertEqual(cascade_unit, [sum(distill_unit, [])])
 
     def test_get_distill_cascade_unit(self):
@@ -189,7 +178,9 @@ class TestDistillConfigBase(unittest.TestCase):
         node2.set_module_name(node_proto2.name)
 
         distill_unit = [[node_proto1.name, node_proto2.name]]
-        cascade_units = self.distill_config_base.get_distill_cascade_unit(graph, distill_unit, 1)
+        cascade_units = self.distill_config_base.get_distill_cascade_unit(
+            graph, distill_unit, 1
+        )
         self.assertEqual(cascade_units, distill_unit)
 
     def test_check_groups_intersection(self):
@@ -232,7 +223,9 @@ class TestDistillConfigBase(unittest.TestCase):
 
         distill_groups = [[node_proto2.name]]
         cascade_unit = [[node_proto1.name]]
-        sort_groups = self.distill_config_base.sort_distill_group(graph, distill_groups, cascade_unit)
+        sort_groups = self.distill_config_base.sort_distill_group(
+            graph, distill_groups, cascade_unit
+        )
         self.assertEqual(sort_groups, distill_groups + cascade_unit)
 
     def test_create_default_config_success(self):
@@ -240,23 +233,26 @@ class TestDistillConfigBase(unittest.TestCase):
         self.distill_config_base.create_default_config(config_file, self.graph)
 
         # check json
-        config = self.distill_config_base.parse_distill_config(config_file, self.graph.model)
+        config = self.distill_config_base.parse_distill_config(
+            config_file, self.graph.model
+        )
         self.assertEqual(config.get('batch_num'), 1)
         self.assertEqual(config.get('group_size'), 1)
         self.assertFalse(config.get('data_dump'))
-        distill_groups = [['conv1', 'bn1'], ['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']]
+        distill_groups = [
+            ['conv1', 'bn1'],
+            ['conv2', 'relu1'],
+            ['conv3', 'bn2', 'relu2'],
+        ]
         self.assertEqual(config.get('distill_group'), distill_groups)
         layer_config = {
             QUANT_ENABLE: True,
-            DISTILL_DATA_CONFIG: {
-                ALGO: ULQ_QUANTIZE,
-                DST_TYPE: INT8
-            },
+            DISTILL_DATA_CONFIG: {ALGO: ULQ_QUANTIZE, DST_TYPE: INT8},
             DISTILL_WEIGHT_CONFIG: {
                 ALGO: ARQ_DISTILL,
                 CHANNEL_WISE: True,
-                DST_TYPE: INT8
-            }
+                DST_TYPE: INT8,
+            },
         }
         self.assertEqual(config.get('conv1'), layer_config)
         self.assertEqual(config.get('conv2'), layer_config)
@@ -265,26 +261,31 @@ class TestDistillConfigBase(unittest.TestCase):
     def test_create_config_from_proto_success(self):
         config_file = os.path.join(self.temp_folder, 'config.json')
         config_proto_file = os.path.join(CUR_DIR, './utils/distill.cfg')
-        self.distill_config_base.create_config_from_proto(config_file, self.graph, config_proto_file)
+        self.distill_config_base.create_config_from_proto(
+            config_file, self.graph, config_proto_file
+        )
 
         # check json
-        config = self.distill_config_base.parse_distill_config(config_file, self.graph.model)
+        config = self.distill_config_base.parse_distill_config(
+            config_file, self.graph.model
+        )
         self.assertEqual(config.get('batch_num'), 2)
         self.assertEqual(config.get('group_size'), 2)
         self.assertTrue(config.get('data_dump'))
-        distill_groups = [['conv1', 'bn1'], ['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']]
+        distill_groups = [
+            ['conv1', 'bn1'],
+            ['conv2', 'relu1'],
+            ['conv3', 'bn2', 'relu2'],
+        ]
         self.assertEqual(config.get('distill_group'), distill_groups)
         conv1_config = {
             QUANT_ENABLE: False,
-            DISTILL_DATA_CONFIG: {
-                ALGO: ULQ_QUANTIZE,
-                DST_TYPE: INT8
-            },
+            DISTILL_DATA_CONFIG: {ALGO: ULQ_QUANTIZE, DST_TYPE: INT8},
             DISTILL_WEIGHT_CONFIG: {
                 ALGO: ARQ_DISTILL,
                 CHANNEL_WISE: True,
-                DST_TYPE: INT8
-            }
+                DST_TYPE: INT8,
+            },
         }
         self.assertEqual(config.get('conv1'), conv1_config)
         conv2_config = {
@@ -294,13 +295,13 @@ class TestDistillConfigBase(unittest.TestCase):
                 "clip_max": 6.0,
                 "clip_min": -6.0,
                 "fixed_min": True,
-                DST_TYPE: INT8
+                DST_TYPE: INT8,
             },
             DISTILL_WEIGHT_CONFIG: {
                 ALGO: ARQ_DISTILL,
                 CHANNEL_WISE: False,
-                DST_TYPE: INT8
-            }
+                DST_TYPE: INT8,
+            },
         }
         self.assertEqual(config.get('conv2'), conv2_config)
         conv3_config = {
@@ -309,13 +310,13 @@ class TestDistillConfigBase(unittest.TestCase):
                 ALGO: ULQ_QUANTIZE,
                 "clip_max": 3.0,
                 "clip_min": -3.0,
-                DST_TYPE: "INT4"
+                DST_TYPE: "INT4",
             },
             DISTILL_WEIGHT_CONFIG: {
                 ALGO: ARQ_DISTILL,
                 CHANNEL_WISE: False,
-                DST_TYPE: "INT4"
-            }
+                DST_TYPE: "INT4",
+            },
         }
         self.assertEqual(config.get('conv3'), conv3_config)
 
@@ -335,7 +336,9 @@ class TestDistillConfigBase(unittest.TestCase):
 
     def test_get_supported_layers_success(self):
         layer2type = self.distill_config_base._get_supported_layers(self.graph.model)
-        self.assertEqual(layer2type, {'conv1': CONV2D, 'conv2': CONV2D, 'conv3': CONV2D})
+        self.assertEqual(
+            layer2type, {'conv1': CONV2D, 'conv2': CONV2D, 'conv3': CONV2D}
+        )
 
     def test_check_proto_skip_layer(self):
         supported_layer2type = {'layer': 'type'}
@@ -392,22 +395,30 @@ class TestDistillConfigBase(unittest.TestCase):
     def test_get_distill_unit(self):
         distill_groups = [['conv1', 'bn1']]
         supported_distill_layers = {'conv1': CONV2D, 'conv2': CONV2D, 'conv3': CONV2D}
-        distill_unit = self.distill_config_base._get_distill_unit(self.graph, distill_groups, supported_distill_layers)
+        distill_unit = self.distill_config_base._get_distill_unit(
+            self.graph, distill_groups, supported_distill_layers
+        )
         self.assertEqual(distill_unit, [['conv2', 'relu1'], ['conv3', 'bn2', 'relu2']])
 
     def test_check_distill_group_type_empty(self):
         distill_groups = []
-        self.distill_config_base._check_distill_group_type(distill_groups, self.graph.model)
+        self.distill_config_base._check_distill_group_type(
+            distill_groups, self.graph.model
+        )
 
     def test_check_distill_group_type_not_module(self):
         distill_groups = [['not_module']]
         with self.assertRaises(ValueError):
-            self.distill_config_base._check_distill_group_type(distill_groups, self.graph.model)
+            self.distill_config_base._check_distill_group_type(
+                distill_groups, self.graph.model
+            )
 
     def test_check_distill_group_type_not_supported(self):
         distill_groups = [['conv_transpose']]
         with self.assertRaises(ValueError):
-            self.distill_config_base._check_distill_group_type(distill_groups, self.graph.model)
+            self.distill_config_base._check_distill_group_type(
+                distill_groups, self.graph.model
+            )
 
     def test_dfs_search_bn_reused(self):
         node_proto = onnx_pb.NodeProto()
@@ -442,4 +453,3 @@ class TestDistillConfigBase(unittest.TestCase):
         layers = {'start_layer': 'layer'}
         with self.assertRaises(ValueError):
             self.distill_config_base._get_all_nodes_between_two_layers(layers, graph)
-

@@ -200,14 +200,21 @@ def check_quant_op_constraint(mod, layer_name, quant_data_comb, quant_config):
     # This constraint only applies to weight-only quantization scenarios
     # (where activation is NOT_QUANTIZE), not to full quantization combos.
     npu_weight_quant_dim_limit = 65535
-    weight_only_combs = [c for c in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB if c.startswith('NOT_QUANTIZE')]
+    weight_only_combs = [
+        c for c in ALGORITHM_SUPPORTED_QUANT_TYPE_COMB if c.startswith('NOT_QUANTIZE')
+    ]
     if quant_data_comb in weight_only_combs:
-        if mod.weight.shape[0] > npu_weight_quant_dim_limit or mod.weight.shape[1] > npu_weight_quant_dim_limit:
+        if (
+            mod.weight.shape[0] > npu_weight_quant_dim_limit
+            or mod.weight.shape[1] > npu_weight_quant_dim_limit
+        ):
             LOGGER.logw(
                 "layer:{} cannot be quantized, weight shape [{}, {}] exceeds NPU "
                 "weight-quant operator dimension limit (max {})".format(
-                    layer_name, mod.weight.shape[0], mod.weight.shape[1],
-                    npu_weight_quant_dim_limit
+                    layer_name,
+                    mod.weight.shape[0],
+                    mod.weight.shape[1],
+                    npu_weight_quant_dim_limit,
                 )
             )
             return False

@@ -23,10 +23,14 @@ import torch.nn as nn
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 
 
-def _reshape_pad_tensor_by_group_size(tensor: torch.Tensor, group_size: int, pad_value: float = 0.0):
+def _reshape_pad_tensor_by_group_size(
+    tensor: torch.Tensor, group_size: int, pad_value: float = 0.0
+):
     orig_shape = tensor.shape
     if tensor.ndim != 2:
-        raise ValueError(f"AutoRound currently expects 2D weight tensors, got shape {orig_shape}")
+        raise ValueError(
+            f"AutoRound currently expects 2D weight tensors, got shape {orig_shape}"
+        )
 
     if group_size in (0, -1) or tensor.shape[-1] <= group_size:
         return tensor.reshape(tensor.shape[0], -1), orig_shape, 0
@@ -39,7 +43,9 @@ def _reshape_pad_tensor_by_group_size(tensor: torch.Tensor, group_size: int, pad
 
 def _revert_tensor_by_pad(tensor: torch.Tensor, orig_shape, pad_len: int):
     if len(orig_shape) != 2:
-        raise ValueError(f"AutoRound currently expects 2D weight tensors, got shape {orig_shape}")
+        raise ValueError(
+            f"AutoRound currently expects 2D weight tensors, got shape {orig_shape}"
+        )
     if pad_len > 0:
         rows, cols = orig_shape
         tensor = tensor.reshape(rows, cols + pad_len)[..., :cols]
@@ -72,7 +78,9 @@ class AutoRound(nn.Module):
 
         weight_shape = tuple(args.w_size)
         dummy_weight = torch.zeros(weight_shape)
-        grouped_weight, _, _ = _reshape_pad_tensor_by_group_size(dummy_weight, self.group_size)
+        grouped_weight, _, _ = _reshape_pad_tensor_by_group_size(
+            dummy_weight, self.group_size
+        )
         scale_shape = _get_scale_shape(weight_shape, self.group_size)
 
         # Core AutoRound idea: learn per-group rounding offsets.
@@ -109,12 +117,24 @@ class AutoRound(nn.Module):
         }
 
     def load_ptq_params(self, params):
-        self.value.data.copy_(params["value"].to(device=self.value.device, dtype=self.value.dtype))
-        self.min_scale.data.copy_(params["min_scale"].to(device=self.min_scale.device, dtype=self.min_scale.dtype))
-        self.max_scale.data.copy_(params["max_scale"].to(device=self.max_scale.device, dtype=self.max_scale.dtype))
+        self.value.data.copy_(
+            params["value"].to(device=self.value.device, dtype=self.value.dtype)
+        )
+        self.min_scale.data.copy_(
+            params["min_scale"].to(
+                device=self.min_scale.device, dtype=self.min_scale.dtype
+            )
+        )
+        self.max_scale.data.copy_(
+            params["max_scale"].to(
+                device=self.max_scale.device, dtype=self.max_scale.dtype
+            )
+        )
 
     def prepare_deploy_weight(self, weight: torch.Tensor):
-        grouped_weight, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(weight, self.group_size)
+        grouped_weight, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(
+            weight, self.group_size
+        )
         clip_min, clip_max = self._compute_clip_range(grouped_weight)
 
         clipped_weight = torch.clamp(grouped_weight, min=clip_min, max=clip_max)
@@ -135,17 +155,25 @@ class AutoRound(nn.Module):
         return weight
 
     def _reshape_scale(self, scale_param: torch.Tensor, grouped_weight: torch.Tensor):
-        return scale_param.to(grouped_weight.device, grouped_weight.dtype).reshape(-1, 1)
+        return scale_param.to(grouped_weight.device, grouped_weight.dtype).reshape(
+            -1, 1
+        )
 
     def _compute_clip_range(self, grouped_weight: torch.Tensor):
-        min_scale = torch.clamp(self._reshape_scale(self.min_scale, grouped_weight), 0.0, 1.0)
-        max_scale = torch.clamp(self._reshape_scale(self.max_scale, grouped_weight), 0.0, 1.0)
+        min_scale = torch.clamp(
+            self._reshape_scale(self.min_scale, grouped_weight), 0.0, 1.0
+        )
+        max_scale = torch.clamp(
+            self._reshape_scale(self.max_scale, grouped_weight), 0.0, 1.0
+        )
 
         group_min = torch.clamp(grouped_weight.amin(dim=-1, keepdim=True), max=0)
         group_max = torch.clamp(grouped_weight.amax(dim=-1, keepdim=True), min=0)
         tuned_min = -(group_min.abs() * min_scale)
         tuned_max = group_max * max_scale
-        max_abs = torch.maximum(tuned_min.abs(), tuned_max.abs()).clamp(min=self.q_scale_thresh)
+        max_abs = torch.maximum(tuned_min.abs(), tuned_max.abs()).clamp(
+            min=self.q_scale_thresh
+        )
         clip_min = -max_abs
         clip_max = max_abs
         return clip_min, clip_max

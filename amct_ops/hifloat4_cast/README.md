@@ -1,12 +1,46 @@
-# hifloat4_cast — HiFloat4 FP→HiF4→FP 仿真算子
+# hifloat4_cast — HiFloat4 量化算子
 
-FP16/BF16 → HiFloat4 → FP16/BF16 仿真（fake-quant），面向昇腾 NPU。HiFloat4（hifx4）是 4-bit
-块缩放浮点：每元素 **S1P2**（1 符号 + 2 位尾数，8 档幅值），再配**每 64 元素共享的 3 级 scale**
-（L1 `scale_factor` E6M2 覆盖 64 块、L2 覆盖每 8、L3 覆盖每 4）。本算子做一次 FP→FP 往返
-（**不真打包 4-bit**），是 `amct_pytorch` 中 `hifloat4_fake_quant` 的 NPU 后端，用于离线精度 / PPL 评估。
+HiFloat4（hifx4）是 4-bit 块缩放浮点格式：每元素 **S1P2**（1 符号 + 2 位尾数，8 档幅值），配**每 64 元素共享的 3 级 scale**（L1 `scale_factor` E6M2 覆盖 64 块、L2 覆盖每 8、L3 覆盖每 4）。
 
-与 `hifloat8_cast` 不同，**没有查找表（LUT）**：scale 是块内归约（算术），S1P2 只有 8 档幅值，
-LUT 无收益。
+## 架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CLI (amct_pytorch/cli/llm/)                            │
+│  --quant_dtype hifp  →  auto-detect source format       │
+│    ├─ PTQ:   fake-quant + unpack (HiF4 → float)         │
+│    └─ Deploy: pack (float → HiF4 bytes)                 │
+├─────────────────────────────────────────────────────────┤
+│  Python (amct_pytorch/common/utils/hifloat4_quant/)      │
+│  ├─ _hif4_encode_decode.py  共享编解码（fake-quant & pack）│
+│  ├─ hif4_pack_unpack.py     float ↔ HiF4 uint8 打包/解包  │
+│  └─ quant_dequant.py         fake-quant 入口             │
+├─────────────────────────────────────────────────────────┤
+│  NPU Kernel (op_kernel/hifloat4_cast_kernel.cpp)         │
+│  └─ hifx_kernel / hifx_kernel_bf16    FP→HiF4→FP 往返   │
+│     （仅 fake-quant；打包/解包在 Python 侧完成）            │
+└─────────────────────────────────────────────────────────┘
+```
+
+- **1 个 NPU kernel**：`hifx_kernel`（fp32）/ `hifx_kernel_bf16`（bf16），做一次 FP→HiF4→FP 仿真往返
+- **打包/解包**：纯 PyTorch 实现（`hif4_pack_unpack.py`），将 float 权重编码为 uint8 HiF4 字节，或从字节解码为 float
+- **共享编解码**：fake-quant 和 pack 共用同一套 `_hif4_encode_decode`，保证评估路径和部署权重永远一致
+
+## CLI 工作流
+
+```bash
+# PTQ（后训练量化）：fake-quant 仿真 or HiF4 解包
+python -m amct_pytorch.cli.llm.ptq \
+    --model /path/to/model --quant_dtype hifp --output_dir ./output
+
+# Deploy（部署打包）：float → HiF4 uint8 字节，输出 safetensors
+python -m amct_pytorch.cli.llm.deploy \
+    --model /path/to/model --quant_dtype hifp --output_dir ./output
+```
+
+当 `--quant_dtype hifp` 时，CLI 会**自动检测**输入模型格式：
+- **hif4 已打包** → PTQ 直接解包为 float checkpoint（无需构建模型）
+- **bf16/fp16 原始权重** → PTQ 走 fake-quant 评估 or deploy 走真打包
 
 ## 接口
 
@@ -25,7 +59,7 @@ host 会把 `qdim` 移到最后一维、补零到 64 的整数倍（补零不影
 
 ## 正确性（验收红线）
 
-kernel 逐步复刻纯 python 参考，逐元素对齐到 ~0 误差。在设备上对拍 amct 的 CPU 参考：
+kernel 逐步复刻纯 python 参考，逐元素对齐到 ~0 误差。在设备上对拍 AMCT 的 CPU 参考：
 
 ```python
 import torch
@@ -43,6 +77,19 @@ assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
 
 `tests/amct_ops/test_hifloat4_cast.py` 在有 NPU 时对拍 kernel 与该 CPU 参考。
 
+## 打包格式
+
+```
+scale : uint8 [M, N // 64, 4]     每 64-group 一条 4-byte 记录
+    byte 0 : E6M2                  level-1 scale factor，E6M2 = 8 bits
+    byte 1 : E1_8  (8 x 1 bit)    per-8-subgroup exponent bit
+    byte 2 : E1_16 high 8 bits    per-4-subgroup exponent bit，块 0..7
+    byte 3 : E1_16 low  8 bits    块 8..15
+value : uint8 [M, N // 2]         相邻两个 4-bit code 打包为一个 byte
+    每 nibble = (sign << 3) | code,  code = round(|in_grp| * 4) in 0..7
+    低位优先：元素0放在低4位，元素1放在高4位
+```
+
 ## 构建
 
 ```bash
@@ -55,6 +102,6 @@ pip install amct_ops/dist/amct_ops-*.whl
 
 ## 状态 / 说明
 
-- 仅仿真。真 4-bit 打包 codec + 低比特 matmul 为后续工作。
-- kernel 在 fp32 下做块内归约与量化（bf16 / E6M2 舍入用硬件 `vconv`）。内核体由 `__DAV_C220_VEC__`
+- **NPU kernel**：fp32 下做块内归约与量化（bf16 / E6M2 舍入用硬件 `vconv`）。内核体由 `__DAV_C220_VEC__`
   守卫（A2/A3，dav-2201 = C220，覆盖 910B/910C）；其它架构为空实现，需在目标 NPU 上验证。
+- **打包/解包**：Python 侧完成，与 NPU kernel 共享同一套编解码（`_hif4_encode_decode`），保证精度一致。

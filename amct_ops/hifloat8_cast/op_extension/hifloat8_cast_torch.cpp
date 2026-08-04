@@ -61,7 +61,7 @@ constexpr uint32_t HIF8_DOT_TABLE[16] = {
     (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
     (0x1e << 24) | (1 << 16) | (4 << 8) | (4 << 4) | 1,
 };
-}
+} // namespace
 
 static uint32_t HostHif8ToFpBits(uint8_t inData, uint32_t expBits, uint32_t fracBits, uint32_t expBias) {
     if (inData == 0) {
@@ -74,7 +74,7 @@ static uint32_t HostHif8ToFpBits(uint8_t inData, uint32_t expBits, uint32_t frac
     if (inData == 0x6F)
         return expMax << fracBits;
     if (inData == 0xEF)
-        return (1u << 15) | (expMax << fracBits);  // 15: FP16/BF16符号位位置
+        return (1u << 15) | (expMax << fracBits); // 15: FP16/BF16符号位位置
 
     uint8_t dot = (inData & 0x78) >> 3;
     uint32_t info = HIF8_DOT_TABLE[dot];
@@ -96,7 +96,7 @@ static uint32_t HostHif8ToFpBits(uint8_t inData, uint32_t expBits, uint32_t frac
         if (biasedExp <= 0) {
             int32_t shift = biasedExp - 1 + static_cast<int32_t>(fracBits);
             uint32_t mantissa = (shift >= 0) ? (1u << static_cast<uint32_t>(shift)) : 0u;
-            return (sign << 15) | mantissa;  // 15: FP16/BF16符号位位置
+            return (sign << 15) | mantissa; // 15: FP16/BF16符号位位置
         }
         expFpN = static_cast<uint32_t>(biasedExp);
         fracFpN = 0;
@@ -110,12 +110,12 @@ static uint32_t HostHif8ToFpBits(uint8_t inData, uint32_t expBits, uint32_t frac
             uint32_t S = (1u << fracHiF8Bits) | fracFpN;
             uint32_t mantissa =
                 (shift >= 0) ? (S << static_cast<uint32_t>(shift)) : (S >> static_cast<uint32_t>(-shift));
-            return (sign << 15) | mantissa;  // 15: FP16/BF16符号位位置
+            return (sign << 15) | mantissa; // 15: FP16/BF16符号位位置
         }
         expFpN = static_cast<uint32_t>(biasedExp);
     }
 
-    return (sign << 15) | (expFpN << fracBits) | (fracFpN << (fracBits - fracHiF8Bits));  // 15: FP16/BF16符号位位置
+    return (sign << 15) | (expFpN << fracBits) | (fracFpN << (fracBits - fracHiF8Bits)); // 15: FP16/BF16符号位位置
 }
 
 static at::Tensor BuildLut8Cpu(int64_t castMode) {
@@ -139,57 +139,58 @@ static void HostGetHif8BitsNum(int32_t expNoBias, uint32_t &dotValue, uint32_t &
     if (expNoBias == 0) {
         dotValue = 0x01;
         expBitsOut = 0;
-        fracBitsOut = 3;  // 3: HiFloat8尾数位数，dotValue=1场景
+        fracBitsOut = 3; // 3: HiFloat8尾数位数，dotValue=1场景
     } else if (absExp == 1) {
         dotValue = 0x02;
         expBitsOut = 1;
-        fracBitsOut = 3;  // 3: HiFloat8尾数位数，dotValue=2场景
-    } else if (absExp >= 2 && absExp <= 3) {  // HiFloat8指数区间[2, 3]
+        fracBitsOut = 3;                     // 3: HiFloat8尾数位数，dotValue=2场景
+    } else if (absExp >= 2 && absExp <= 3) { // HiFloat8指数区间[2, 3]
         dotValue = 0x04;
-        expBitsOut = 2;   // 2: HiFloat8指数位数，dotValue=4场景
-        fracBitsOut = 3;  // 3: HiFloat8尾数位数，dotValue=4场景
-    } else if (absExp >= 4 && absExp <= 7) {  // HiFloat8指数区间[4, 7]
+        expBitsOut = 2;                      // 2: HiFloat8指数位数，dotValue=4场景
+        fracBitsOut = 3;                     // 3: HiFloat8尾数位数，dotValue=4场景
+    } else if (absExp >= 4 && absExp <= 7) { // HiFloat8指数区间[4, 7]
         dotValue = 0x08;
-        expBitsOut = 3;   // 3: HiFloat8指数位数，dotValue=8场景
-        fracBitsOut = 2;  // 2: HiFloat8尾数位数，dotValue=8场景
+        expBitsOut = 3;                      // 3: HiFloat8指数位数，dotValue=8场景
+        fracBitsOut = 2;                     // 2: HiFloat8尾数位数，dotValue=8场景
     } else {
         dotValue = 0x0C;
-        expBitsOut = 4;   // 4: HiFloat8指数位数，dotValue=0xc场景
-        fracBitsOut = 1;  // 1: HiFloat8尾数位数，dotValue=0xc场景
+        expBitsOut = 4;  // 4: HiFloat8指数位数，dotValue=0xc场景
+        fracBitsOut = 1; // 1: HiFloat8尾数位数，dotValue=0xc场景
     }
 }
 
 static uint8_t HostFp32MagnitudeToHif8(uint32_t inData) {
-    uint32_t expFp = (inData >> 23) & 0xFF;  // 23: FP32尾数位数
+    uint32_t expFp = (inData >> 23) & 0xFF; // 23: FP32尾数位数
     uint32_t fracFp = inData & 0x7FFFFF;
     // Host LUT 只编码正数幅值，符号位由 device encode 阶段补回。
     if (expFp == 0)
         return 0x00;
-    if (expFp == 255)  // 255: FP32指数最大值（全1）
+    if (expFp == 255) // 255: FP32指数最大值（全1）
         return fracFp > 0 ? 0x80 : 0x6F;
 
-    int32_t expNoBias = static_cast<int32_t>(expFp) - 127;  // 127: FP32指数偏置
+    int32_t expNoBias = static_cast<int32_t>(expFp) - 127; // 127: FP32指数偏置
     // 超出 HiFloat8 表示范围时，饱和到最大正有限值。
-    if (expNoBias >= 15)  // 15: HiFloat8最大指数
+    if (expNoBias >= 15) // 15: HiFloat8最大指数
         return 0x6E;
 
     // HiFloat8 denormal 区间；过小值归零，边界值保留最小非零编码。
-    if (expNoBias < -15) {  // 15: HiFloat8最大指数
+    if (expNoBias < -15) {    // 15: HiFloat8最大指数
         if (expNoBias < -23)  // 23: FP32尾数位数
             return 0x00;
-        if (expNoBias == -23)  // 23: FP32尾数位数
+        if (expNoBias == -23) // 23: FP32尾数位数
             return 0x01;
 
         uint32_t fracHiF8 = static_cast<uint32_t>(HIF8_DENORMAL_EXP_BIAS + expNoBias);
-        if ((fracFp >> 22) >= 1u)  // 22: FP32尾数位数-1
+        if ((fracFp >> 22) >= 1u) // 22: FP32尾数位数-1
             ++fracHiF8;
-        return fracHiF8 >= 8u ? HIF8_POSITIVE_MIN_NORMAL : static_cast<uint8_t>(fracHiF8);  // 8: HiFloat8非规格化数最大值
+        return fracHiF8 >= 8u ? HIF8_POSITIVE_MIN_NORMAL :
+                                static_cast<uint8_t>(fracHiF8); // 8: HiFloat8非规格化数最大值
     }
     uint32_t dotValue = 0;
     uint32_t expHiF8Bits = 0;
     uint32_t fracHiF8Bits = 0;
     HostGetHif8BitsNum(expNoBias, dotValue, expHiF8Bits, fracHiF8Bits);
-    uint32_t fracShift = 23 - fracHiF8Bits - 1;  // 23: FP32尾数位数
+    uint32_t fracShift = 23 - fracHiF8Bits - 1; // 23: FP32尾数位数
     uint32_t fractmp = fracFp >> fracShift;
     uint32_t fracMax = (1u << (fracHiF8Bits + 1)) - 1;
     uint32_t fracHiF8 = 0;
@@ -234,21 +235,21 @@ static at::Tensor BuildLut16Cpu(int64_t castMode) {
                 fp32Bits = 0u;
             } else {
                 // p: position of leading 1 bit; __builtin_clz is UB for 0, guarded above.
-                uint32_t p = 31u - static_cast<uint32_t>(__builtin_clz(frac));  // 31: uint32_t位数-1
+                uint32_t p = 31u - static_cast<uint32_t>(__builtin_clz(frac)); // 31: uint32_t位数-1
                 // fp32Exp = (1 - expBias) + (p - fracBitsN) + 127
                 int32_t fp32Exp = static_cast<int32_t>(p) - static_cast<int32_t>(fracBitsN) -
-                                  static_cast<int32_t>(expBias - 1u) + 127;  // 127: FP32指数偏置
-                uint32_t fp32Frac = (frac & ((1u << p) - 1u)) << (23u - p);  // 23: FP32尾数位数
-                fp32Bits = (fp32Exp > 0) ? ((static_cast<uint32_t>(fp32Exp) << 23) | fp32Frac) : 0u;  // 23: FP32尾数位数
+                                  static_cast<int32_t>(expBias - 1u) + 127; // 127: FP32指数偏置
+                uint32_t fp32Frac = (frac & ((1u << p) - 1u)) << (23u - p); // 23: FP32尾数位数
+                fp32Bits = (fp32Exp > 0) ? ((static_cast<uint32_t>(fp32Exp) << 23) | fp32Frac) : 0u; // 23: FP32尾数位数
             }
         } else {
             // exp 全 1 表示 Inf/NaN：必须显式映射到 FP32 exp=255，
             // 否则 FP16 的 exp=31 会被加上 (127-15)=112 偏置变为 143，丢掉特殊值语义。
             uint32_t expMaxN = (1u << expBitsN) - 1;
-            uint32_t expFp32 = (exp == expMaxN) ? 255u : (exp + (127u - expBias));  // 255/127: FP32指数最大值/偏置
-            fp32Bits = (expFp32 << 23) | (frac << (23u - fracBitsN));  // 23: FP32尾数位数
+            uint32_t expFp32 = (exp == expMaxN) ? 255u : (exp + (127u - expBias)); // 255/127: FP32指数最大值/偏置
+            fp32Bits = (expFp32 << 23) | (frac << (23u - fracBitsN));              // 23: FP32尾数位数
         }
-        data[i] = HostFp32MagnitudeToHif8(fp32Bits); // magnitude only, no sign
+        data[i] = HostFp32MagnitudeToHif8(fp32Bits);                               // magnitude only, no sign
     }
     return lut;
 }
@@ -258,18 +259,18 @@ static at::Tensor BuildLut16Cpu(int64_t castMode) {
 static uint32_t GetAivCoreNum() {
     auto *platform = platform_ascendc::PlatformAscendCManager::GetInstance();
     if (platform == nullptr)
-        return 32u;  // 32: 默认AIV核数
+        return 32u;          // 32: 默认AIV核数
     uint32_t n = platform->GetCoreNumAiv();
-    return n > 0u ? n : 32u;  // 32: 默认AIV核数
+    return n > 0u ? n : 32u; // 32: 默认AIV核数
 }
 
 static uint32_t GetUbSizeBytes() {
     auto *platform = platform_ascendc::PlatformAscendCManager::GetInstance();
     if (platform == nullptr)
-        return 256u * 1024u;  // 256KB: 默认UB大小
+        return 256u * 1024u; // 256KB: 默认UB大小
     uint64_t ub = 0;
     platform->GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub);
-    return ub > 0u ? static_cast<uint32_t>(ub) : 256u * 1024u;  // 256KB: 默认UB大小
+    return ub > 0u ? static_cast<uint32_t>(ub) : 256u * 1024u; // 256KB: 默认UB大小
 }
 
 static uint32_t ComputeMaxTileLength(uint32_t ubBytes, bool isEncode) {
@@ -284,7 +285,7 @@ static uint32_t ComputeMaxTileLength(uint32_t ubBytes, bool isEncode) {
     maxTile = std::min(maxTile, 65536u); // A3 UB 实测最大可用 tile
     // ≥ 32768 时对齐到 32768 的整数倍，使 CopyIn 大块走 Case B（{n, 32768}），
     // 避免 DataCopyParams.blockLen(uint16_t) 溢出
-    if (maxTile >= 32768u) {  // 32768: tile对齐阈值，避免blockLen溢出
+    if (maxTile >= 32768u) { // 32768: tile对齐阈值，避免blockLen溢出
         return (maxTile / 32768u) * 32768u;
     }
     return std::max((maxTile / 32u) * 32u, 32u); // 小 tile 对齐到 32（向量指令粒度）

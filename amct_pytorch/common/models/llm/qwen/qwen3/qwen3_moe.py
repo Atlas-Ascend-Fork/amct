@@ -24,8 +24,14 @@ from transformers.models.qwen3_moe.modeling_qwen3_moe import (
 
 from amct_pytorch.common.models.llm.common.base import BaseModel, PtqUnit
 from amct_pytorch.common.models.llm.common.quant_apply import apply_quant_to_attn
-from amct_pytorch.common.models.llm.qwen.moe_common import QuantGatedExperts, pack_gated_expert_weights
-from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import QuantQwen3Attn, QuantQwen3MLP
+from amct_pytorch.common.models.llm.qwen.moe_common import (
+    QuantGatedExperts,
+    pack_gated_expert_weights,
+)
+from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import (
+    QuantQwen3Attn,
+    QuantQwen3MLP,
+)
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.common.models import MODEL_REGISTRY
 
@@ -50,7 +56,9 @@ class Qwen3Moe(BaseModel):
 
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
-            raise ValueError("Qwen3-MoE is a moe model and does not support quant_target='mlp'.")
+            raise ValueError(
+                "Qwen3-MoE is a moe model and does not support quant_target='mlp'."
+            )
 
     def float_model(self):
         return super().float_model()
@@ -75,7 +83,14 @@ class Qwen3Moe(BaseModel):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,
@@ -113,7 +128,10 @@ class Qwen3Moe(BaseModel):
                 if len(parts) != 5:
                     raise ValueError(f"Unexpected Qwen3 MoE expert module name: {name}")
                 _, _, _, expert_idx, proj_name = parts
-                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
+                yield (
+                    f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight",
+                    module,
+                )
                 continue
 
             yield f"{weight_prefix}{name}.weight", module

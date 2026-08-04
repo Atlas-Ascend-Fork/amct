@@ -24,5 +24,6 @@ def main():
     workflow = LlmExtractPtqDataWorkflow(args)
     workflow.run()
 
+
 if __name__ == "__main__":
     main()

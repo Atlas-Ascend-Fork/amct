@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -31,6 +31,7 @@ Usage:
     encode_to_hifloat8(x)
     decode_from_hifloat8(y, torch.float16)
 """
+
 __all__ = [
     'encode_to_hifloat8',
     'decode_from_hifloat8',
@@ -40,7 +41,9 @@ import os
 import torch_npu  # noqa: F401 — registers PrivateUse1 backend
 import torch
 
-_lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libhifloat8_cast_ops.so")
+_lib_path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "libhifloat8_cast_ops.so"
+)
 torch.ops.load_library(_lib_path)
 
 from .ops import encode_to_hifloat8, decode_from_hifloat8  # noqa: E402, F401

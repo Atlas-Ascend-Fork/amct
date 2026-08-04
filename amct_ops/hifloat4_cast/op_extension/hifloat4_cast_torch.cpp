@@ -61,15 +61,23 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
     }
 
     int64_t n = xp.size(-1);
-    int64_t m = xp.numel() / n;
+    int64_t m_raw = xp.numel() / n;
 
-    // Kernel variants: BF16 -> bf16 kernel, FP32 -> fp32 kernel. FP16 has no dedicated kernel,
-    // so run it through the FP32 kernel on an up-converted copy and cast the result back --
-    // mirroring the reference dispatcher (QTensor.get_npu_func's cvt_fp32 fallback). Feeding raw
-    // FP16 bytes to the FP32 kernel would misread element width (2-byte data as 4-byte).
+    // Pad N to a multiple of BATCH (512) so the kernel never sees a partial tail --
+    // matching the private reference which requires aligned input (groups of 64).
+    // The kernel's tail-masking path becomes dead code; all tail handling is done here.
+    constexpr int64_t BATCH = 512;
+    int64_t n_pad = ((n + BATCH - 1) / BATCH) * BATCH;
+    bool needSlice = (n_pad != n);
+
     auto inDtype = input.scalar_type();
     bool cvtFp32 = (inDtype == at::kHalf);
     at::Tensor xin = cvtFp32 ? xp.to(at::kFloat) : xp;
+    if (needSlice) {
+        xin = at::constant_pad_nd(xin, {0, n_pad - n}, 0.0);
+    }
+    int64_t n_kernel = n_pad;
+    int64_t m = xin.numel() / n_kernel;
     at::Tensor output = at::empty_like(xin);
 
     auto stream = c10_npu::getCurrentNPUStream(input.device().index());
@@ -77,11 +85,16 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
     auto *xptr = reinterpret_cast<uint8_t *>(xin.data_ptr());
     auto *optr = reinterpret_cast<uint8_t *>(output.data_ptr());
     if (inDtype == at::kBFloat16) {
-        run_hifx_kernel_bf16(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n),
+        run_hifx_kernel_bf16(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel),
             HIF4_MANT_BIT);
     } else {
-        run_hifx_kernel(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n),
+        run_hifx_kernel(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel),
             HIF4_MANT_BIT);
+    }
+
+    // Slice off the pad, restoring the original N.
+    if (needSlice) {
+        output = output.slice(-1, 0, n);
     }
 
     if (cvtFp32) {

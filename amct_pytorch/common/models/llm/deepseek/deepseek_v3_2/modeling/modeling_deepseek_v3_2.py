@@ -546,7 +546,7 @@ class DeepseekV3Attention(nn.Module):
 
             scores = scores.softmax(dim=-1)
             x = torch.einsum("bsht,btc->bshc", scores, kv)
-            x = torch.einsum("bshc,hdc->bshd", x, wkv_b[:, -self.v_head_dim:])
+            x = torch.einsum("bshc,hdc->bshd", x, wkv_b[:, -self.v_head_dim :])
         x = self.o_proj(x.flatten(2))
         return x
 

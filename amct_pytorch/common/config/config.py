@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -14,19 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-''' predefined quant config '''
+'''predefined quant config'''
 
 INT4_AWQ_WEIGHT_QUANT_CFG = {
     'batch_num': 1,
     'quant_cfg': {
-        'weights': {
-            'type': 'int4',
-            'symmetric': True,
-            'strategy': 'channel'
-        },
+        'weights': {'type': 'int4', 'symmetric': True, 'strategy': 'channel'},
     },
     'algorithm': {'awq': {'grids_num': 20}},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -40,7 +36,7 @@ INT4_GPTQ_WEIGHT_QUANT_CFG = {
         },
     },
     'algorithm': {'gptq'},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -59,7 +55,7 @@ INT8_SMOOTHQUANT_CFG = {
         },
     },
     'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -73,7 +69,7 @@ INT8_MINMAX_WEIGHT_QUANT_CFG = {
         },
     },
     'algorithm': {'minmax'},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -91,7 +87,7 @@ HIFP8_OFMR_CFG = {
             'strategy': 'tensor',
         },
     },
-    'algorithm': {'ofmr'}
+    'algorithm': {'ofmr'},
 }
 
 
@@ -110,7 +106,7 @@ FP8_OFMR_CFG = {
         },
     },
     'algorithm': {'ofmr'},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -130,7 +126,7 @@ MXFP8_QUANT_CFG = {
         },
     },
     'algorithm': {'mxquant'},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -141,11 +137,11 @@ MXFP4_AWQ_WEIGHT_QUANT_CFG = {
             'type': 'mxfp4_e2m1',
             'symmetric': True,
             'strategy': 'group',
-            'group_size': 32
+            'group_size': 32,
         },
     },
     'algorithm': {'awq': {'grids_num': 20}},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 HIFP8_CAST_CFG = {
@@ -162,7 +158,7 @@ HIFP8_CAST_CFG = {
         },
     },
     'algorithm': {'cast'},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -181,7 +177,7 @@ HIFP8_QUANTILE_CFG = {
         },
     },
     'algorithm': {'quantile'},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }
 
 
@@ -194,7 +190,7 @@ HIFP8_KVCACHE_CFG = {
             'strategy': 'tensor',
         },
     },
-    'algorithm': {'quantile'}
+    'algorithm': {'quantile'},
 }
 
 
@@ -213,5 +209,5 @@ HIFP8_SMOOTHQUANT_CFG = {
         },
     },
     'algorithm': {'smoothquant': {'smooth_strength': 0.5}},
-    'skip_layers': {'lm_head'}
+    'skip_layers': {'lm_head'},
 }

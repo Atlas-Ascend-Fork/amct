@@ -70,10 +70,14 @@ def quant_dequant_float(x: Tensor, Q: QType, force_py: bool = False, force_fp32:
 
     # HiF4 fake-quant: reshape quant dim into (-1, 8, 2, 4) blocks, then shared encode -> decode
     # in fp32 (same math as hif4_pack_unpack.hif4_cast, see _hif4_encode_decode).
+    # After unflatten, qdim (adjusted negative) points to the "4" block-sub-dim.
+    # Pass it through so encode/decode use explicit dim indices (keepdim=True),
+    # matching the private hifx.py reference.
     ng = Q.man_bits - 1                       # HiF4: man_bits=3 -> ng=2
     xb = x.unflatten(qdim, (-1, 8, 2, 4)).to(torch.float32)
-    enc = hif4_encode(xb, ng=ng)
-    out = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=ng).flatten(qdim - 3, qdim)
+    enc = hif4_encode(xb, ng=ng, qdim=qdim)
+    out = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=ng,
+                      block_nan=enc.block_nan, qdim=qdim).flatten(qdim - 3, qdim)
 
     # slice the pad off. Use a tuple (basic indexing) -- a list of slices is treated as
     # advanced indexing by torch/numpy and would not mean "slice every dim".

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,8 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-__all__ = ['create_path', 'create_empty_file', 'is_valid_name', 'split_save_path', 'concat_name',
-           'is_valid_save_prefix', 'create_file_path', 'delete_dir', 'check_files_exist']
+__all__ = [
+    'create_path',
+    'create_empty_file',
+    'is_valid_name',
+    'split_save_path',
+    'concat_name',
+    'is_valid_save_prefix',
+    'create_file_path',
+    'delete_dir',
+    'check_files_exist',
+]
 
 import os
 import shutil
@@ -32,7 +41,7 @@ SAVE_PREFIX_PATTERN = "^[^/]{0,241}$"
 
 
 def create_path(file_path, mode=DIR_MODE):
-    ''' Create path '''
+    '''Create path'''
     file_dir = os.path.realpath(file_path)
     try:
         os.makedirs(file_dir, mode, exist_ok=True)
@@ -41,7 +50,7 @@ def create_path(file_path, mode=DIR_MODE):
 
 
 def create_file_path(file_name, mode=DIR_MODE, check_exist=False):
-    ''' Create path '''
+    '''Create path'''
     file_name = os.path.realpath(file_name)
     file_dir = os.path.split(file_name)[0]
     if check_exist:
@@ -50,7 +59,7 @@ def create_file_path(file_name, mode=DIR_MODE, check_exist=False):
 
 
 def create_empty_file(file_name, check_exist=False):
-    '''Create empty file '''
+    '''Create empty file'''
     file_realpath = os.path.realpath(file_name)
     # set path's permission 750
     create_file_path(file_realpath, check_exist=check_exist)
@@ -63,40 +72,41 @@ def create_empty_file(file_name, check_exist=False):
 
 
 def is_valid_name(input_file, name):
-    ''' check input_file as inputs'''
+    '''check input_file as inputs'''
     if input_file == '':
         raise ValueError('empty string is an invalid value for %s' % (name))
 
     if input_file[-1] == '/':
-        raise ValueError("%s{%s} should be a file's name but a path."
-                         % (name, input_file))
+        raise ValueError(
+            "%s{%s} should be a file's name but a path." % (name, input_file)
+        )
 
     # check input_file without path
     file_name = os.path.split(os.path.realpath(input_file))[1]
     if not re.match(FILE_NAME_PATTERN, file_name):
         raise ValueError(
             "%s's name{%s} is invalid, '/' is "
-            "reserved characters, length should be less than 255." %
-            (name, file_name))
+            "reserved characters, length should be less than 255." % (name, file_name)
+        )
 
 
 def is_valid_save_prefix(save_prefix):
-    ''' check save_prefix. '''
+    '''check save_prefix.'''
     if not re.match(SAVE_PREFIX_PATTERN, save_prefix):
         raise ValueError(
             "prefix{%s} is invalid. '/' is reserved "
-            "characters, length should be less than 242." % (save_prefix))
+            "characters, length should be less than 242." % (save_prefix)
+        )
 
 
 def check_file_path(file_path, name):
-    """ check whether file exits. """
+    """check whether file exits."""
     if not os.path.exists(os.path.realpath(file_path)):
-        raise RuntimeError(
-            'Can not find the {} at {}'.format(name, file_path))
+        raise RuntimeError('Can not find the {} at {}'.format(name, file_path))
 
 
 def delete_dir(path):
-    ''' Function: delete tmp dir '''
+    '''Function: delete tmp dir'''
     shutil.rmtree(path, True)
 
 
@@ -104,12 +114,14 @@ def check_files_exist(file_names):
     '''check if file_name already exists'''
     for file_name in file_names:
         if os.path.exists(file_name):
-            LOGGER.logw('The file already exists at {}, and '
-                'it will be overwritten by AMCT'.format(file_name))
+            LOGGER.logw(
+                'The file already exists at {}, and '
+                'it will be overwritten by AMCT'.format(file_name)
+            )
 
 
 def split_save_path(save_path):
-    """ split save_path to save_dir and save_prefix
+    """split save_path to save_dir and save_prefix
 
     Args:
         save_path (string): the path where to store model and model's name.
@@ -132,7 +144,7 @@ def split_save_path(save_path):
 
 
 def concat_name(save_path, prefix, tail):
-    """ Concat file's name.
+    """Concat file's name.
 
     Args:
         save_path (string): the folder's path to save file
@@ -151,7 +163,7 @@ def concat_name(save_path, prefix, tail):
 
 
 def save_to_json(file_name, content):
-    """ Save content to a json file.
+    """Save content to a json file.
 
     Args:
         file_name (string): the flile to save content.
@@ -163,7 +175,7 @@ def save_to_json(file_name, content):
 
 
 def find_dump_file(data_dir, name_prefix):
-    """ Find dump file with data_dir and name_prefix.
+    """Find dump file with data_dir and name_prefix.
 
     Args:
         data_dir (string): the path to find file.
@@ -189,7 +201,7 @@ def find_dump_file(data_dir, name_prefix):
 
 
 def parse_dump_data(file_path, with_type=False):
-    """ Parse the dump file, with rule as follows:
+    """Parse the dump file, with rule as follows:
     | (type), dim, shape[0], shape[1] ... | data[0], data[1], ... |
     |   float32                           |      type             |
 
@@ -206,13 +218,13 @@ def parse_dump_data(file_path, with_type=False):
     if with_type:
         type_info = int(np.frombuffer(dump_data[0:4], np.float32)[0])
         dim_info = int(np.frombuffer(dump_data[4:8], np.float32)[0])
-        shape_info = list(np.frombuffer(dump_data[8:8 + dim_info * 4], np.float32))
+        shape_info = list(np.frombuffer(dump_data[8 : 8 + dim_info * 4], np.float32))
         shape = list(map(int, shape_info))
         info_length = 8 + dim_info * 4
     else:
         type_info = 0
         dim_info = int(np.frombuffer(dump_data[0:4], np.float32)[0])
-        shape_info = list(np.frombuffer(dump_data[4: 4 + dim_info * 4], np.float32))
+        shape_info = list(np.frombuffer(dump_data[4 : 4 + dim_info * 4], np.float32))
         shape = list(map(int, shape_info))
         info_length = 4 + dim_info * 4
     # 1) keep same with c++; 2) each amct shoule be same if use this function
@@ -221,4 +233,3 @@ def parse_dump_data(file_path, with_type=False):
     shape = list(map(int, shape))
     np_feature_map_data = data_info.reshape(shape)
     return np_feature_map_data
-

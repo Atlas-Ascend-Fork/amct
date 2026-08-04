@@ -95,6 +95,7 @@ def test_base_algo_init_with_empty_config():
 
         def get_config(self):
             return super().get_config()
+
     algo = _Concrete({})
     assert algo.config == {}
     assert algo.name == "_Concrete"
@@ -108,5 +109,6 @@ def test_abstract_apply_body_executes_via_super_call():
 
         def get_config(self):
             return super().get_config()
+
     obj = _CallsSuper({})
     obj.apply(None)

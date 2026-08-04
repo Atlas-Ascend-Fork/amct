@@ -34,7 +34,6 @@ from amct_pytorch.quantization.dtypes.mxfp import QuantDequantMx
 from amct_pytorch.quantization.dtypes.mxfp_impl import (
     down_size,
     f4_unpacked_to_f32,
-    f32_to_f4_unpacked,
     pack_uint4 as mx_pack_uint4,
     quantize_elewise,
     round_to_decimal,
@@ -368,7 +367,9 @@ def test_hifp_forward_shape_and_dtype_preserved():
 
     y = qdq(x)
 
-    assert torch.mean(abs(x - y)) > 0.0, f"HiFloat8 quant-dequant diff should be larger than 0."
+    assert torch.mean(abs(x - y)) > 0.0, (
+        "HiFloat8 quant-dequant diff should be larger than 0."
+    )
     assert y.shape == x.shape
     assert y.dtype == x.dtype
 
@@ -377,9 +378,7 @@ def test_hifp_quant_passes_gradient_through_ste():
     x = torch.randn(2, 8, dtype=torch.float32, requires_grad=True)
     quantized = torch.full_like(x, 0.25)
 
-    with patch.object(
-        hifp_dtype, "hifloat8_fake_quant", return_value=quantized
-    ):
+    with patch.object(hifp_dtype, "hifloat8_fake_quant", return_value=quantized):
         out = QuantDequantHifp(bits=8)(x)
 
     assert torch.equal(out, quantized)
