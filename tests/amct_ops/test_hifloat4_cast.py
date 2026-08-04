@@ -19,12 +19,17 @@
 Compares the AscendC kernel against amct's CPU reference (quant_dequant_float)
 to ~0 error (< 1e-6), including zero-input blocks. Requires an Ascend NPU; skipped otherwise.
 """
+import json
+import os
+import shutil
+import tempfile
 import unittest
 
 import torch
 
 from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
 from amct_pytorch.common.utils.hifloat4_quant.hif4_pack_unpack import hif4_cast
+from amct_pytorch.common.utils.decode.unpack_hif4 import unpack_hif4_checkpoint
 
 
 def _npu_available():
@@ -118,6 +123,78 @@ class TestHiFloat4CastShapes(unittest.TestCase):
         scale, value = hif4_cast(x, output="packed")
         self.assertEqual(scale.shape, (1, 1, 4))
         self.assertEqual(value.shape, (1, 32))
+
+
+class TestUnpackConfigCleanup(unittest.TestCase):
+    """Verify config.json is cleaned up after unpack: quantization_config removed,
+    torch_dtype updated to match the unpack output dtype."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.outdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+        shutil.rmtree(self.outdir, ignore_errors=True)
+
+    def _make_checkpoint(self, torch_dtype="float32", with_quant_config=True):
+        """Create a minimal HiF4 packed checkpoint with the given config.json."""
+        import numpy as np
+        from safetensors.torch import save_file
+
+        # Create two packed weights
+        w1 = torch.randn(4, 64, dtype=torch.bfloat16)
+        w2 = torch.randn(8, 128, dtype=torch.bfloat16)
+        scale1, val1 = hif4_cast(w1, output="packed")
+        scale2, val2 = hif4_cast(w2, output="packed")
+
+        save_file({"model.layers.0.weight": val1,
+                    "model.layers.0.weight_scale": scale1},
+                   os.path.join(self.tmpdir, "model-00001-of-00002.safetensors"))
+        save_file({"model.layers.1.weight": val2,
+                    "model.layers.1.weight_scale": scale2},
+                   os.path.join(self.tmpdir, "model-00002-of-00002.safetensors"))
+
+        weight_map = {
+            "model.layers.0.weight": "model-00001-of-00002.safetensors",
+            "model.layers.0.weight_scale": "model-00001-of-00002.safetensors",
+            "model.layers.1.weight": "model-00002-of-00002.safetensors",
+            "model.layers.1.weight_scale": "model-00002-of-00002.safetensors",
+        }
+        index = {"metadata": {"total_size": 0}, "weight_map": weight_map}
+        with open(os.path.join(self.tmpdir, "model.safetensors.index.json"), "w") as f:
+            json.dump(index, f)
+
+        cfg = {"torch_dtype": torch_dtype, "hidden_size": 64}
+        if with_quant_config:
+            cfg["quantization_config"] = {"quant_method": "hif4"}
+        with open(os.path.join(self.tmpdir, "config.json"), "w") as f:
+            json.dump(cfg, f)
+
+    def _read_config(self):
+        with open(os.path.join(self.outdir, "config.json"), "r") as f:
+            return json.load(f)
+
+    def test_fp16_removes_quant_config_and_updates_dtype(self):
+        self._make_checkpoint(torch_dtype="float32", with_quant_config=True)
+        unpack_hif4_checkpoint(self.tmpdir, self.outdir, out_dtype="fp16", quiet=True)
+        cfg = self._read_config()
+        self.assertNotIn("quantization_config", cfg)
+        self.assertEqual(cfg["torch_dtype"], "float16")
+
+    def test_bf16_removes_quant_config_and_updates_dtype(self):
+        self._make_checkpoint(torch_dtype="float32", with_quant_config=True)
+        unpack_hif4_checkpoint(self.tmpdir, self.outdir, out_dtype="bf16", quiet=True)
+        cfg = self._read_config()
+        self.assertNotIn("quantization_config", cfg)
+        self.assertEqual(cfg["torch_dtype"], "bfloat16")
+
+    def test_no_quant_config_still_updates_dtype(self):
+        self._make_checkpoint(torch_dtype="float32", with_quant_config=False)
+        unpack_hif4_checkpoint(self.tmpdir, self.outdir, out_dtype="bf16", quiet=True)
+        cfg = self._read_config()
+        self.assertNotIn("quantization_config", cfg)
+        self.assertEqual(cfg["torch_dtype"], "bfloat16")
 
 
 if __name__ == '__main__':

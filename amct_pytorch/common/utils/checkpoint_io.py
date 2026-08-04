@@ -122,12 +122,18 @@ def write_index(
 
 
 # ----------------------------------------------------------------------- side files
-def copy_side_files(src_dir: str, out_dir: str, skip=()) -> None:
+def copy_side_files(src_dir: str, out_dir: str, skip=(),
+                    torch_dtype: Optional[str] = None) -> None:
     """Copy the known text/config :data:`SIDE_FILES` (whitelist) from *src_dir* to *out_dir*.
 
     If the source ``config.json`` contains ``quantization_config`` it is automatically
-    stripped so the copy is not recognised as a quantised model.
+    stripped so the copy is not recognised as a quantised model.  When *torch_dtype* is
+    given (e.g. ``"fp16"`` or ``"bf16"``), ``config.json``'s ``torch_dtype`` is set to
+    the corresponding long-form name (``"float16"`` / ``"bfloat16"``).
     """
+    _DTYPE_MAP = {"fp16": "float16", "float16": "float16",
+                  "bf16": "bfloat16", "bfloat16": "bfloat16"}
+
     os.makedirs(out_dir, exist_ok=True)
     for fn in SIDE_FILES:
         if fn in skip:
@@ -136,13 +142,20 @@ def copy_side_files(src_dir: str, out_dir: str, skip=()) -> None:
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(out_dir, fn))
 
-    # Unpack targets are always float — strip any stale quantization_config.
+    # Unpack targets are always float — strip any stale quantization_config
+    # and update torch_dtype to match the unpacked weight dtype.
     config_path = os.path.join(out_dir, "config.json")
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
+        changed = False
         if "quantization_config" in cfg:
             del cfg["quantization_config"]
+            changed = True
+        if torch_dtype is not None:
+            cfg["torch_dtype"] = _DTYPE_MAP.get(torch_dtype, "float16")
+            changed = True
+        if changed:
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
 
