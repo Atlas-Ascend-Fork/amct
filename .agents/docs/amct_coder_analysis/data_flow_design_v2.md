@@ -22,7 +22,7 @@
 ```mermaid
 flowchart TD
     A["CLI(args)"] --> B["LlmEvalWorkflow.run()"]
-    B --> C["adapter: do_embedding_forward() / do_block_forward()<br/>← llm-model-unit（提供 hook）"]
+    B --> C["adapter: do_embedding_forward() / do_block_forward()<br/>← llm-model-unit（提供 adapter forward 接口）"]
     B --> D["datasets: get_wiki_inputs()<br/>← llm-data-workflow（数据加载）"]
     B --> E["evaluate: wikitext2_ppl()<br/>← llm-data-workflow（PPL 计算）"]
 ```
@@ -128,7 +128,7 @@ flowchart TD
 flowchart LR
     subgraph EVAL["eval"]
         E1["校准数据(wikitext)"]
-        E2["adapter hook"]
+        E2["adapter forward"]
         E3["PPL(bf16/quant)"]
     end
 
@@ -194,7 +194,7 @@ flowchart LR
 | 子能力 | eval | extract_ptq_data | ptq | deploy | 备注 |
 | --- | --- | --- | --- | --- | --- |
 | `llm-data-workflow` | 主编排 | 主编排 | 数据回灌 | — | |
-| `llm-model-unit` | hook | hook | build_quant_block | deploy binding | 全四阶段 |
+| `llm-model-unit` | adapter forward | hook_name + adapter forward | build_quant_block / iter_ptq_units | deploy binding | 全四阶段；eval 通常不注册用于保存 tensor 的 forward hook |
 | `dtype-quant-module` | 量化评估 | — | fake_quant | export payload | |
 | `llm-algorithm` | — | — | trainable_params | export hook | |
 | `ptq-solver-params` | — | — | solver 主产出 | 参数回载 | |
@@ -209,6 +209,8 @@ flowchart LR
 
 - **架构分层**（现有 `module-analysis.md`）：回答"这个文件该放哪个目录、不该 import 什么"
 - **阶段协作**（本文件）：回答"我这个需求走哪个流程、要调哪些子能力、数据怎么流"
+
+术语说明：本文早期草稿曾把 eval 阶段的 `llm-model-unit` 参与角色也简称为 "hook"。更准确的表述是：eval 复用 adapter forward 接口；extract_ptq_data 才通过 `hook_name` 捕获中间 tensor，并保存为 `block_<layer>_<target>_in.pkl`。
 
 新增任务流转阶段判子能力的流转，按照整合思路，目前我的想法是：
 1. 对于用户提出的需求，先进行整体的判定边界：根据skill.md中现存的边界内容（全局Blocker+跃层边界）可以直接判定是否越界；若合法，则可以继续进行改动
