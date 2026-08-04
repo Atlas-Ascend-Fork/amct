@@ -114,7 +114,7 @@ def hif4_encode(xg: Tensor, ng: int = 2, qdim: int = -1) -> Hif4Encoded:
     # ─ e6m2_val, e_e6, q: 3 keepdim 1s at qdim-2, qdim-1, qdim → squeeze all.
     # ─ e1_8: 2 keepdim 1s at qdim-1, qdim → squeeze from the right.
     # ─ e1_16, de: 1 keepdim 1 at qdim → squeeze that one.
-    e1_8_sq = e1_8.squeeze(qdim).squeeze(qdim - 1)
+    e1_8_sq = e1_8.squeeze(qdim).squeeze(qdim)       # squeeze backwards: after first, the remaining 1 shifts to qdim
     return Hif4Encoded(
         sign_bit,
         e6m2_val.squeeze(),
