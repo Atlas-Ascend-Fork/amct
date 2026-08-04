@@ -8,14 +8,16 @@
 三个阶段分别是：
 
 1. `scripts/run_stage1.sh`（校准搜索阶段）：以 BF16 模型为后端做单批 eager 前向，通过
-   forward hook 在两类位置收集校准激活，再逐层运行 OSPlus 阈值搜索，为每层产出两组
-   SmoothQuant 等价缩放 scale。
+   forward hook 在两类位置收集校准激活——`input_layernorm` 输出侧（Group 1，供 q/k/v
+   投影缩放）与 `self_attn.o_proj` 输入侧（Group 2，供 v→o 路径缩放）——再逐层运行
+   OSPlus 阈值搜索，为每层产出两组 SmoothQuant 等价缩放 scale。
 2. `scripts/run_stage2_bf16.sh`（融合导出阶段）：读取原始 BF16 检查点与 stage1 产出的
    全部 scale，按等价变换公式逐层在 fp32 下完成融合后再 cast 回 BF16，导出一份与原模型
    同 shape、同 dtype 的 **融合后 BF16 HuggingFace 检查点**（不携带任何 `quantization_config`）。
 3. `scripts/run_stage3_mxfp4.sh`（MXFP4 转换阶段）：读取 stage2 的融合后 BF16 检查点，
    对可量化的 Linear 权重做 round-to-nearest（RTN）MXFP4 量化并打包，导出可直接部署的
-   **MXFP4 HuggingFace 检查点**（`config.json` 携带 quark 风格的 `quantization_config`）。
+   **MXFP4 HuggingFace 检查点**（`config.json` 携带 quark 风格的 `quantization_config`；
+   Quark 风格说明见文末附录）。
 
 > stage2 的融合后 BF16 检查点在数学上与原模型仅相差 BF16 舍入误差，本身可作为后续量化
 > （MXFP4 / W4A8 / W8A8 / INT4 …）的标准 BF16 起点；stage3 即在此基础上完成到 MXFP4 的
@@ -26,10 +28,12 @@
 - `scripts/`：运行入口脚本（stage1 校准搜索、stage2 融合导出、stage3 MXFP4 转换）
 - `src/`：stage1/stage2/stage3 核心实现
   - `stage1_calibrate.py`：加载模型 → 一次前向收集激活 → 逐层 OSPlus 搜索 → 落盘 scale
+    （仅 channel-wise scale，不含经典 OS+ 的 channel-wise shift）
   - `run_search_from_cache.py`：stage1 「仅记录激活」模式下，基于缓存激活 + safetensors
     权重离线、可并行地补跑 scale 搜索
   - `stage2_export_bf16.py`：读取 scale，在 fp32 下融合并导出融合后的 BF16 检查点
   - `export_rtn_mxfp4.py`：把融合后的 BF16 检查点用 RTN 转换为 Quark 风格 MXFP4 并导出
+    （Quark 风格具体信息见文末附录）
   - `mxfp4_fake_quant.py`：OSPlus 搜索目标所用的 MXFP4 伪量化算子
   - `common.py`：MXFP4 导出所需的架构常量与工具函数
 - `mxfp4_quantizer/`：与昇腾 MXFP4 反量化路径对齐的纯 torch MXFP4 量化/反量化实现
@@ -88,8 +92,9 @@ export MODEL_DIR=/model/MiniMax-M2.7-bf16
 
 ## Stage 1：校准与 OSPlus 搜索
 
-stage1 以 BF16 模型为后端做单批 eager 前向，在两类位置挂 hook 收集激活，逐层运行 OSPlus
-阈值搜索，并把每层的两组 scale（以及激活缓存）落盘到 `RECORD_DIR`。
+stage1 以 BF16 模型为后端做单批 eager 前向，在两类位置挂 hook 收集激活——`input_layernorm`
+输出侧（Group 1）与 `self_attn.o_proj` 输入侧（Group 2）——逐层运行 OSPlus 阈值搜索，并
+把每层的两组 scale（以及激活缓存）落盘到 `RECORD_DIR`。
 
 该阶段支持两种工作模式（由 `RECORD_ONLY` 控制），以及断点续算（由 `RESUME` 控制）：
 
@@ -203,7 +208,7 @@ bash scripts/run_stage3_mxfp4.sh
 
 ### 产物
 
-stage3 完成后，`OUTPUT_DIR` 下会生成 Quark 风格的 MXFP4 导出结果：
+stage3 完成后，`OUTPUT_DIR` 下会生成 Quark 风格的 MXFP4 导出结果（详见文末附录）：
 
 - `model-00001-of-xxxxx.safetensors` 等分片（可量化 Linear 权重以 `*.weight` 打包 uint8
   FP4 载荷 + `*.weight_scale` uint8 e8m0 scale 存储，其余张量保持原 dtype）
@@ -333,8 +338,28 @@ BF16 HuggingFace 检查点。
 | OSPlus SmoothQuant | 89.02 | 95.20 | 91.00 | 51.29 | 82.58 |
 | M2.7 baseline（BF16） | 91.60 | 95.55 | 91.26 | 54.87 | 88.88 |
 
-上述精度评测使用的推理框架为 [cann-recipes-infer / minimax_m2.5_mxfp4](https://gitcode.com/cann/cann-recipes-infer/tree/master/integration/vllm/minimax_m2.5_mxfp4)，并额外开启了 KV cache 的 MXFP4 量化。
+上述精度评测使用的推理框架为 [cann-recipes-infer / minimax_m2.5_mxfp4](https://gitcode.com/cann/cann-recipes-infer/tree/master/integration/vllm/minimax_m2.5_mxfp4)，并额外开启了
+KV cache 的 MXFP4 量化：对 KV 做 token-wise、group size 32 的 MXFP4 量化；前 32 个 token 的 KV
+保持 BF16 精度，之后 token 的 KV 再量化为 MXFP4；同时对 Q 与 K cache 做 block=32 的 Hadamard
+旋转，以降低量化带来的误差。
 
 > 说明：上述为 OSPlus SmoothQuant 等价缩放 + W4A4 MXFP4 的阶段性精度，评测受采样温度、随机性
 > 与推理后端实现差异等因素影响，复现时同一配置下数值可能存在小幅波动，建议以多次取均值或在相同
 > 框架版本下复现为准。
+
+## 附录：Quark 风格 MXFP4 与常见 HF MXFP4 存储差异
+
+「Quark 风格」指的是检查点落盘约定（张量命名 + `quantization_config`），不是另一套数值编码。
+底层仍是 OCP MXFP4：E2M1 元素、每 32 个共享一个 E8M0 scale、两枚 FP4 打成一个 `uint8`。
+
+与常见 HF / GPT-OSS MXFP4（`quant_method: mxfp4`）的差异主要如下：
+
+| | 本样例（Quark 风格） | 常见 HF / GPT-OSS MXFP4 |
+|---|---|---|
+| 权重张量名 | 仍叫 `*.weight`（packed uint8） | `*_blocks`（packed uint8） |
+| scale 张量名 | 并列 `*.weight_scale`（uint8 e8m0） | 并列 `*_scales` |
+| `quant_method` | `"quark"` | `"mxfp4"` |
+| config 结构 | Quark 嵌套 schema（`global_quant_config`、`export.pack_method=reorder`、`weight_format=real_quantized`、`scale_format=e8m0` 等） | 较简，多为 `modules_to_not_convert` + `quant_method` |
+| 消费方 | Quark / 对齐 Quark 的推理路径（如 cann-recipes-infer MiniMax MXFP4） | Transformers MXFP4 / GPT-OSS 加载路径 |
+
+一句话：数值格式一样，差在「键名叫什么、config 长什么样、给谁加载」；本 stage3 刻意对齐 AMD Quark 的 HF 导出，所以称为 Quark 风格。

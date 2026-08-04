@@ -12,8 +12,10 @@ The three stages are:
 
 1. `scripts/run_stage1.sh` (calibration & search): run a single-batch eager forward
    with the BF16 model as backend, collect calibration activations at two positions
-   via forward hooks, then run the OSPlus threshold search layer-by-layer to produce
-   two groups of SmoothQuant equivalent scales per layer.
+   via forward hooks — the output of `input_layernorm` (Group 1, for q/k/v projection
+   scaling) and the input of `self_attn.o_proj` (Group 2, for the v→o path scaling) —
+   then run the OSPlus threshold search layer-by-layer to produce two groups of
+   SmoothQuant equivalent scales per layer.
 2. `scripts/run_stage2_bf16.sh` (fusion & export): read the original BF16 checkpoint
    and all stage-1 scales, fuse the equivalent scaling layer-by-layer in fp32 and cast
    back to BF16, exporting a **fused BF16 HuggingFace checkpoint** (with no
@@ -21,7 +23,8 @@ The three stages are:
 3. `scripts/run_stage3_mxfp4.sh` (MXFP4 conversion): read the fused BF16 checkpoint from
    stage 2, apply round-to-nearest (RTN) MXFP4 quantization and packing to the
    quantizable Linear weights, and export a deployable **MXFP4 HuggingFace checkpoint**
-   (`config.json` carries a quark-style `quantization_config`).
+   (`config.json` carries a quark-style `quantization_config`; see the appendix for
+   Quark-style details).
 
 > The stage-2 fused BF16 checkpoint is mathematically equivalent to the original model
 > up to BF16 rounding error, and can serve as a standard BF16 starting point for
@@ -35,11 +38,13 @@ The three stages are:
   stage-3 MXFP4 conversion)
 - `src/`: stage-1 / stage-2 / stage-3 core implementation
   - `stage1_calibrate.py`: load model → one forward to collect activations → per-layer
-    OSPlus search → dump scales
+    OSPlus search → dump scales (channel-wise scale only; no classic OS+
+    channel-wise shift)
   - `run_search_from_cache.py`: in stage-1 "record-only" mode, run the scale search
     offline and in parallel from cached activations + safetensors weights
   - `stage2_export_bf16.py`: read scales, fuse in fp32 and export the fused BF16 checkpoint
-  - `export_rtn_mxfp4.py`: convert the fused BF16 checkpoint to Quark-style MXFP4 via RTN and export
+  - `export_rtn_mxfp4.py`: convert the fused BF16 checkpoint to Quark-style MXFP4 via RTN
+    and export (see the appendix for Quark-style details)
   - `mxfp4_fake_quant.py`: the MXFP4 fake-quant operators used by the OSPlus objective
   - `common.py`: architecture constants and helpers used by the MXFP4 export
 - `mxfp4_quantizer/`: pure-torch MXFP4 quantize/dequantize aligned with the Ascend
@@ -100,8 +105,10 @@ has no `messages` but a `text` field, `text` is used directly. Single-line examp
 ## Stage 1: Calibration & OSPlus Search
 
 Stage 1 runs a single-batch eager forward with the BF16 model as backend, hooks two
-positions to collect activations, runs the OSPlus threshold search layer-by-layer, and
-dumps each layer's two scale groups (plus an activation cache) to `RECORD_DIR`.
+positions to collect activations — the output of `input_layernorm` (Group 1) and the
+input of `self_attn.o_proj` (Group 2) — runs the OSPlus threshold search
+layer-by-layer, and dumps each layer's two scale groups (plus an activation cache) to
+`RECORD_DIR`.
 
 It supports two working modes (via `RECORD_ONLY`) and resumable runs (via `RESUME`):
 
@@ -225,7 +232,7 @@ BF16 model) by pointing `BF16_MODEL_DIR` at that directory.
 
 ### Outputs
 
-After stage 3, `OUTPUT_DIR` contains a Quark-style MXFP4 export:
+After stage 3, `OUTPUT_DIR` contains a Quark-style MXFP4 export (see the appendix):
 
 - `model-00001-of-xxxxx.safetensors` shards (quantizable Linear weights stored as
   `*.weight` packed uint8 FP4 payload + `*.weight_scale` uint8 e8m0 scale; other tensors
@@ -390,10 +397,35 @@ W4A4 results of the OSPlus SmoothQuant model are as follows:
 | OSPlus SmoothQuant | 89.02 | 95.20 | 91.00 | 51.29 | 82.58 |
 | M2.7 baseline (BF16) | 91.60 | 95.55 | 91.26 | 54.87 | 88.88 |
 
-The accuracy evaluation above uses the inference framework [cann-recipes-infer / minimax_m2.5_mxfp4](https://gitcode.com/cann/cann-recipes-infer/tree/master/integration/vllm/minimax_m2.5_mxfp4), with MXFP4 quantization of the KV cache additionally enabled.
+The accuracy evaluation above uses the inference framework
+[cann-recipes-infer / minimax_m2.5_mxfp4](https://gitcode.com/cann/cann-recipes-infer/tree/master/integration/vllm/minimax_m2.5_mxfp4),
+with MXFP4 quantization of the KV cache additionally enabled: KV is quantized token-wise
+with MXFP4 group size 32; the first 32 tokens' KV stay in BF16, and subsequent tokens' KV
+are quantized to MXFP4; Q and the K cache also apply a block=32 Hadamard rotation to reduce
+quantization error.
 
 > Note: the above are preliminary accuracies for OSPlus SmoothQuant equivalent scaling +
 > W4A4 MXFP4. Evaluation is affected by sampling temperature, randomness, and inference
 > backend implementation differences; reproduced numbers may fluctuate slightly under the
 > same configuration. We recommend averaging over multiple runs or reproducing under the
 > same framework version.
+
+## Appendix: Quark-style MXFP4 vs Common HF MXFP4 Storage
+
+"Quark-style" refers to the checkpoint packaging convention (tensor naming +
+`quantization_config`), not a different numerical encoding. The underlying format remains
+OCP MXFP4: E2M1 elements, one shared E8M0 scale per group of 32, and two FP4 values packed
+into one `uint8`.
+
+Differences from the common HF / GPT-OSS MXFP4 layout (`quant_method: mxfp4`) are mainly:
+
+| | This sample (Quark-style) | Common HF / GPT-OSS MXFP4 |
+|---|---|---|
+| Weight tensor name | Still `*.weight` (packed uint8) | `*_blocks` (packed uint8) |
+| Scale tensor name | Sibling `*.weight_scale` (uint8 e8m0) | Sibling `*_scales` |
+| `quant_method` | `"quark"` | `"mxfp4"` |
+| Config schema | Quark nested schema (`global_quant_config`, `export.pack_method=reorder`, `weight_format=real_quantized`, `scale_format=e8m0`, etc.) | Simpler, typically `modules_to_not_convert` + `quant_method` |
+| Consumers | Quark / Quark-aligned inference paths (e.g. cann-recipes-infer MiniMax MXFP4) | Transformers MXFP4 / GPT-OSS loaders |
+
+In short: the numerical format is the same; the difference is key naming, config shape, and
+who loads it. Stage 3 deliberately matches AMD Quark's HF export, hence "Quark-style".
