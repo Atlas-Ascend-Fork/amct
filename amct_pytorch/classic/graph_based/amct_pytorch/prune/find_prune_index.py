@@ -67,7 +67,7 @@ class PuneIndexHelper:
                 module = self.model_helper.get_module(name)
                 return module
             except RuntimeError:
-                LOGGER.logd('Cannot find "%s" in model, cannot do pune ' % (name))
+                LOGGER.logd('Cannot find "%s" in model, cannot do prune ' % (name))
                 return None
 
         self.global_prune_group = self.record_helper.get_prune_group(self.record)
