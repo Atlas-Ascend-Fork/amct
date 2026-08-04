@@ -55,6 +55,20 @@ review 涉及 attention 或 wrapper 细节时，再读 [attention-rules.md](atte
 
 模型专属逻辑落 `amct_pytorch/common/models/llm/<family>/<model>/...`；只在共享抽象确实跨多个模型族复用时才动 `common/models/llm/common/`。发现改动要越出这个范围时停下——这通常意味着任务不是纯模型适配，需要回到对应子能力 playbook。
 
+模型专属 `QuantLinear` 子类、expert 行为或权重布局不能放进 `common/quant_apply.py` 或通用 quant modules。只有多个模型族已经出现相同契约、现有 family helper 无法承载，并且抽象不需要读取模型身份时，才考虑上提共享层。
+
+## 局部 bug 事实核验
+
+问题报告不是根因结论。对 kwargs、mask、position、hook 或参数回载问题，按实际链路依次检查：
+
+1. 捕获端是否产生并保存了值。
+2. 离线产物是否按当前 unit 契约保存和加载。
+3. adapter 是否把值注入 block forward。
+4. 原始 block 是否继续传给目标 wrapper。
+5. wrapper 是否以正确形状和语义消费。
+
+链路未查完时列出候选丢失点和复现证据，不使用“唯一根因”。当前源码反证题设时，停止无依据修复，给出最小复现或断言计划；这属于正确 review。
+
 ## 适配清单
 
 用于判断任务是否为纯模型层，也用于 review 时核对 `model-adapter` 的输入是否完整：

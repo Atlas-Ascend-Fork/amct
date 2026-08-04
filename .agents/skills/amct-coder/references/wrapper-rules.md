@@ -82,10 +82,13 @@
 ## 禁止模式
 
 - 自写一个只适用于单模型的 experts 类，却放到通用 quant modules。
+- 为单个模型新增 `QuantLinear` 子类，却放到 `common/quant_apply.py`；模型专属实现留在 model/family 层，通用数值或算法语义回到 dtype/algorithm 抽象。
 - 给同一行为保留 dense wrapper 和 moe wrapper 两份实现。
 - 跳过 `QuantGatedMLP` 直接复制大段 MLP forward，除非结构确实不同。
 - 在 adapter 中 yield 一个 extract 从不产出的 `unit.kind`。
 - PTQ 参数能保存但训练没有真实优化，还继续声称 smoke 成功。
+
+需求只说“单独量化分支”时，先确认差异是 bit/group 配置、算法行为、权重布局还是部署 payload。未确认前不得先设计新 wrapper 或子类；现有 group/bit policy 能表达时优先零结构改动。
 
 ## 验证
 

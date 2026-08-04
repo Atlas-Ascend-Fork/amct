@@ -51,6 +51,7 @@
 - `quantization/dtypes/` 只描述数值量化/反量化与 deploy payload，不读取模型名。
 - `quantization/modules/` 只组合 dtype + algorithm + torch module，不写某个模型族的 if 分支。
 - 模型专属哪些 Linear 要量化，放 adapter 的 wrapper/binding。
+- 模型专属权重布局或 expert 行为放 model/family wrapper；跨模型通用的数值格式放 dtype，通用训练/统计行为放 algorithm。不要用通用 `QuantLinear` 子类混合这三类职责。
 - 硬件高性能实现若需要 NPU kernel，转 `amct-ops-dev`；本层只调用 `torch.ops.amct.*` 或保持 Python fallback。
 
 ## BLOCKER

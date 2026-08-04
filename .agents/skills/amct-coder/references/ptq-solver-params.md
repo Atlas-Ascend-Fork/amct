@@ -40,6 +40,8 @@
 ## solver 规则
 
 - solver 不写模型名分支。
+- unit 是否枚举或跳过由 adapter 的 `iter_ptq_units()` 或已定义的通用 unit 契约表达，solver 不查看其它 unit 决定过滤策略。
+- 仅服务单个模型族的 unit 过滤参数不能直接加入通用 CLI；只有证明为跨模型通用能力并定义稳定语义后，才同步 CLI/API/workflow 闭环。
 - trainable 参数只从 module 的 `trainable_params()` 收集。
 - 无 trainable 参数时 solver 应直接返回，不假装训练。
 - reconstruction loss 默认比较 unit output 与 GT。
