@@ -123,7 +123,11 @@ def write_index(
 
 # ----------------------------------------------------------------------- side files
 def copy_side_files(src_dir: str, out_dir: str, skip=()) -> None:
-    """Copy the known text/config :data:`SIDE_FILES` (whitelist) from *src_dir* to *out_dir*."""
+    """Copy the known text/config :data:`SIDE_FILES` (whitelist) from *src_dir* to *out_dir*.
+
+    If the source ``config.json`` contains ``quantization_config`` it is automatically
+    stripped so the copy is not recognised as a quantised model.
+    """
     os.makedirs(out_dir, exist_ok=True)
     for fn in SIDE_FILES:
         if fn in skip:
@@ -131,6 +135,16 @@ def copy_side_files(src_dir: str, out_dir: str, skip=()) -> None:
         src = os.path.join(src_dir, fn)
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(out_dir, fn))
+
+    # Unpack targets are always float — strip any stale quantization_config.
+    config_path = os.path.join(out_dir, "config.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        if "quantization_config" in cfg:
+            del cfg["quantization_config"]
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
 
 
 def is_weight_file(path: Path) -> bool:

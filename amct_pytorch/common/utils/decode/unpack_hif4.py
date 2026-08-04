@@ -98,4 +98,5 @@ def unpack_hif4_checkpoint(input_dir: str, output_dir: str,
 
     write_index(output_dir, out_weight_map, total_size=total_bytes)
     copy_side_files(input_dir, output_dir)
+
     print(f"[unpack] hif4 -> float | weights={n_deq} copied={n_copy} -> {output_dir}", flush=True)
