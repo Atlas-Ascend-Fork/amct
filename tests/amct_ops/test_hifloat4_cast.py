@@ -24,6 +24,7 @@ import unittest
 import torch
 
 from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
+from amct_pytorch.common.utils.hifloat4_quant.hif4_pack_unpack import hif4_cast
 
 
 def _npu_available():
@@ -76,6 +77,47 @@ class TestHiFloat4Kernel(unittest.TestCase):
         out = hifloat4_fake_quant(z)
         self.assertFalse(torch.isnan(out).any())
         self.assertEqual(out.abs().max().item(), 0.0)
+
+
+class TestHiFloat4CastShapes(unittest.TestCase):
+    """CPU-only shape regression tests for hif4_cast (no NPU required).
+
+    Guards against the squeeze index-shifting bug: the two consecutive keepdim-1
+    dims on e1_8 must be collapsed from the right (squeeze(qdim) twice), otherwise
+    the second squeeze lands on the wrong dimension and causes a shape mismatch.
+    """
+
+    def test_packed_shape_2x128(self):
+        """Exact regression case from review: hif4_cast(randn(2,128), output='packed')."""
+        x = torch.randn(2, 128, dtype=torch.bfloat16)
+        scale, value = hif4_cast(x, output="packed")
+        self.assertEqual(scale.shape, (2, 2, 4))
+        self.assertEqual(value.shape, (2, 64))
+        self.assertEqual(scale.dtype, torch.uint8)
+        self.assertEqual(value.dtype, torch.uint8)
+
+    def test_dequant_shape_2x128(self):
+        x = torch.randn(2, 128, dtype=torch.bfloat16)
+        out = hif4_cast(x, output="dequant")
+        self.assertEqual(out.shape, x.shape)
+        self.assertEqual(out.dtype, x.dtype)
+
+    def test_packed_shape_3x512(self):
+        x = torch.randn(3, 512, dtype=torch.bfloat16)
+        scale, value = hif4_cast(x, output="packed")
+        self.assertEqual(scale.shape, (3, 8, 4))
+        self.assertEqual(value.shape, (3, 256))
+
+    def test_dequant_shape_3x512(self):
+        x = torch.randn(3, 512, dtype=torch.bfloat16)
+        out = hif4_cast(x, output="dequant")
+        self.assertEqual(out.shape, x.shape)
+
+    def test_packed_shape_1x64(self):
+        x = torch.randn(1, 64, dtype=torch.bfloat16)
+        scale, value = hif4_cast(x, output="packed")
+        self.assertEqual(scale.shape, (1, 1, 4))
+        self.assertEqual(value.shape, (1, 32))
 
 
 if __name__ == '__main__':
