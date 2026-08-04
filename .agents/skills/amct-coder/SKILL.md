@@ -1,174 +1,122 @@
 ---
 name: amct-coder
 description: |
-  AMCT 仓辅助编码入口：新增、修改或 review AMCT 代码时，用于场景识别、分层/越层判断、子能力路由和最小自验。
-  使用：改 workflow/CLI/solver/dtype/quant module/LLM PTQ 算法/deploy/classic/public API/tests/docs/examples；问“代码放哪/这样写行不行/是不是越层/怎么映射子能力”；在 workflow/CLI/solver/通用 quant module 加模型专属 attention/MLP/MoE/mask/position/weight-key。
-  边界：模型层 adapter/wrapper/attention/MLP/MoE 结构实现或模型注册，先判落点后转 `model-adapter`；NPU kernel/C++/Meta 转 `amct-ops-dev`；跑量化实验转 `quant-run`；判读精度转 `direct-quant-eval`/`algorithm-validation`。
+  AMCT 仓源代码编码与 review 入口：用于新增、修改、调试或审查 workflow/CLI、solver、dtype、通用 quant module、LLM PTQ 算法、deploy 实现、classic graph、public API、tests、docs 和 examples；也用于判断“代码放哪”“是否越层”“需要补哪些上下游闭环”。
+  路由边界：模型 adapter/wrapper/attention/MLP/MoE 结构实现或模型注册转 `model-adapter`；NPU kernel/C++ extension/Meta backend 转 `amct-ops-dev`；实际跑 eval/extract/PTQ 转 `quant-run`；精度判读转 `direct-quant-eval`/`algorithm-validation`；deploy-ready 产物导出转 `deploy-export`。
 ---
 
 # AMCT Coder
 
 ## 定位
 
-`amct-coder` 是 AMCT 仓辅助编码总入口。它不直接承接所有实现，而是先判断任务属于哪条代码体系和哪个子能力，再进入对应 playbook，最后按场景做边界检查和自验。
+把 `amct-coder` 作为 AMCT 编码与 review 的总入口。先判断任务职责归属和仓库边界，再选择一个主子能力 playbook，最后按实际改动做最小验证。
 
-模型层（`amct_pytorch/common/models/llm/...` 下的 adapter、wrapper、attention/MLP/MoE 结构、模型注册）实现交给 `model-adapter`。amct-coder 在模型层只保留三件事：委派前落点判断、契约对齐检查（`PtqUnit.kind`、extract 命名、hook 名、deploy binding 等是否与下游一致）和 review。判断规则见 [references/delegation.md](references/delegation.md)。
+不要把本 skill 当成量化实验或模型适配编排器。命中外部 skill 时切换到对应流程并继续完成请求，不要只回复“应使用某 skill”后结束。BLOCKER 只阻止错误落点或错误方案；正确替代方案明确时继续执行。
 
-本 skill 不把所有知识塞进主文件。具体编码规则在 `references/` 下按子能力拆分；使用时只读取命中的 playbook。原则性表述和模型个案不在 `references/` 维护：分层职责、attention 适配原则、wrapper 合并原则在 `.agents/docs/repo-map.md`，已踩坑和模型个案在 `.agents/docs/casebook/`。
+默认使用中文。修改代码前，简短说明主落点层和允许改动范围。
 
-## 执行流程
+## 固定流程
 
-```
+```text
 用户请求
-  -> 判断是否应委派：delegation.md
-  -> 判定代码体系：LLM new-path / classic / amct_ops / public API
-  -> 命中一个主子能力 playbook
-  -> 必要时补读一个辅助规则：layer-rules / attention-rules / wrapper-rules
-  -> 修改或 review
-  -> 读取 validation.md，选择最小验证
+  -> 1. 按动作判断职责归属，路由外部 skill
+  -> 2. amct-coder 承接后读取 repo-map 边界，声明落点
+  -> 3. 判定代码体系，选择一个主子能力
+  -> 4. 必要时检查阶段影响并加载辅助资料
+  -> 5. 读取源码锚点，编码或 review
+  -> 6. 读取 validation.md，执行最小验证
 ```
 
-回复默认使用中文。执行代码修改前，先简短说明准备修改的模块边界。
+## 1. 先判任务职责归属
 
-## 先做三件事
+先根据用户要执行的动作路由，不要只看 `eval`、`deploy`、`attention` 等关键词。
 
-1. 判断任务属于哪个子能力；如果跨多个子能力，按数据流顺序处理。
-2. 读取命中的场景 playbook，再读对应代码锚点。
-3. 改完读 [references/validation.md](references/validation.md)，选最小验证。
-
-无法判断任务属于哪条代码体系（LLM new-path / classic / amct_ops），或需要入口文件清单时，才读 [references/repo-scenarios.md](references/repo-scenarios.md)。下面的全局边界和子能力路由覆盖常见判断。
-
-## 读取预算
-
-按需加载只在读得少时才有意义。这里的预算是**软预算**，限制的是一次性加载 reference 的数量，不限制任务实际命中的子能力数量。默认先控制在 **3 个 reference**：主 playbook + 最多 1 个辅助规则 + `validation.md`。
-
-- 先只读主触发 playbook，不要预先读全上下游。
-- 实际触到跨层改动时再补读该层 playbook 的「上下游依赖」和「BLOCKER」两节，不必整篇读。
-- 已超过 3 个 reference 还没定位到落点，说明任务可能需要先拆阶段或先做委派判断，见 [references/delegation.md](references/delegation.md)。
-- 任务确实命中 3 个以上子能力时，不要硬停；按依赖链分阶段处理，每阶段只读当前需要的 playbook，并在最终回复说明为什么超出默认预算。
-- 跨 3 个以上子能力的大改动，可委派 subagent 承载源码阅读，主上下文保留边界结论和当前阶段必须执行的规则。
-- `.agents/docs/amct-coder-design.md` 是维护者文档，执行编码任务时不要读。
-
-## 子能力路由
-
-子能力不是独立 skill，而是本 skill 下的 reference playbook。映射入口就在这张表；命中后只读对应文件。
-
-| 子能力 | 触发语 / 场景 | 必读 playbook |
-| --- | --- | --- |
-| `dtype-quant-module` | 新量化数据类型、`quant_dtype`、fake quant、real quant、activation/weight quantizer、`QuantLinear`、`QuantizedMatmul`、bit config | [references/dtype-quant-module.md](references/dtype-quant-module.md) |
-| `llm-algorithm` | 新增/修改 LWC/LAC/AutoRound/OmniQuant/FlatQuant 类算法、`trainable_params()`、统计 buffer、`export_ptq_params()`、`targets`、`ALGO_REGISTRY` | [references/llm-algorithm.md](references/llm-algorithm.md) |
-| `llm-model-unit` | **不承接模型层实现，转 `model-adapter`**。仅用于模型层契约对齐、模型层 review、局部 adapter bug 修复 | [references/llm-model-unit.md](references/llm-model-unit.md) |
-| `llm-data-workflow` | eval、extract_ptq_data、PTQ workflow、离线输入、GT、PPL、dataloader、逐层 forward | [references/llm-data-workflow.md](references/llm-data-workflow.md) |
-| `ptq-solver-params` | block solver、optimizer、scheduler、unit 调度、PTQ 参数保存/加载、参数导出回载 | [references/ptq-solver-params.md](references/ptq-solver-params.md) |
-| `deploy-export-code` | deploy workflow、safetensors、weight index、`quantization_config`、tensorwise/blockwise 导出 | [references/deploy-export-code.md](references/deploy-export-code.md) |
-| `classic-graph` | classic `quantize/convert/algorithm_register`、graph_based、QAT、校准、剪枝、蒸馏、auto calibration、tensor decomposition | [references/classic-graph.md](references/classic-graph.md) |
-| `ops-boundary` | `amct_pytorch` 调用 `amct_ops`、wheel/schema/import/Meta 边界；真正写 NPU kernel/C++ extension 时转 `amct-ops-dev` | [references/ops-boundary.md](references/ops-boundary.md) |
-| `public-api-tests` | 顶层 API、`__all__`、懒加载、CLI choices、setup/build、测试选择、文档样例同步 | [references/public-api-tests.md](references/public-api-tests.md) |
-
-辅助规则按需读取：
-
-| 辅助文件 | 何时读取 |
+| 任务实质 | 路由 |
 | --- | --- |
-| [references/layer-rules.md](references/layer-rules.md) | 涉及跨层落点、越层判断、全局 BLOCKER、repo-map 写回 |
-| [references/attention-rules.md](references/attention-rules.md) | 涉及 attention wrapper 的 review、委派说明或局部非结构 bug |
-| [references/wrapper-rules.md](references/wrapper-rules.md) | 涉及 MLP/MoE/attention wrapper 复用、合并、命名、PTQ unit 边界 |
-| [references/delegation.md](references/delegation.md) | 需要判断是否转 `model-adapter`、`amct-ops-dev`、`quant-run` 等其它 skill |
-| [references/validation.md](references/validation.md) | 每次修改或 review 结束前必读 |
+| 端到端量化生命周期，或需要自动判断适配/方案/实验/deploy 阶段 | `quant-workflow` |
+| 新模型族、模型注册、`PtqUnit`/quant block、attention/MLP/MoE wrapper 结构实现 | `model-adapter` |
+| `amct_ops/` kernel、Ascend C、C++ extension、schema、Meta backend、算子构建调试 | `amct-ops-dev` |
+| 实际运行 bf16/quant eval、extract、PTQ、PTQ 结果评测 | `quant-run` |
+| 第一轮方案或下一步 PTQ 算法推荐 | `scheme-recommendation` / `algorithm-recommendation` |
+| 直转结果或 PTQ 算法收益判读 | `direct-quant-eval` / `algorithm-validation` |
+| 导出 deploy-ready 模型目录和 `deploy_quantization.md` | `deploy-export` |
+| GitCode PR/issue 操作 | `gitcode-pr` / `gitcode-issue`；缺失或用户要求更新时用 `default-skills` |
 
-## 子能力编排
+修改 eval/deploy **实现代码**仍属于 amct-coder；运行命令拿结果或导出交付产物属于上表外部 skill。用户点名 skill 时，只有不违反仓库边界和该 skill 的“不适用”条件才遵从。
 
-LLM new-path 的主依赖链：
+混合任务按职责归属拆分：本 skill 处理边界、review 和非外部 skill 代码，其余部分进入对应 skill；全部完成后统一检查契约并汇总。
 
-`CLI args` -> `workflow` -> `model adapter / PtqUnit` -> `quant module + dtype + algorithm` -> `data provider` -> `solver / ptq params` -> `eval / deploy` -> `public API / docs / examples`
+详细边界不清时读 [delegation.md](references/delegation.md)。
 
-依赖方向用于决定补读顺序：
+## 2. 强制声明仓库边界
 
-- `dtype-quant-module` 定义数值语义和 deploy payload，被 `llm-algorithm`、模型层 wrapper、`deploy-export-code` 共同消费。
-- `llm-algorithm` 通过 `ALGO_REGISTRY` 和 `targets` 接入 `quantization/modules/quant_base.py`，训练态由 `ptq-solver-params` 消费，导出态由 `deploy-export-code` 消费。
-- 模型层提供 block 构建、quant block、`PtqUnit`、离线输入命名和 deploy binding，是 `llm-data-workflow`、`ptq-solver-params`、`deploy-export-code` 的上游。模型层实现归 `model-adapter`，本 skill 的 `llm-model-unit` 只做契约检查。
-- `llm-data-workflow` 产出 PTQ 输入和 GT 口径，被 `ptq-solver-params` 消费；它也决定 eval 结果能否和 PTQ 结果比较。
-- `ptq-solver-params` 保存和回载算法/quant module 状态，必须与 eval/deploy 使用的 `--algos`、target 和 unit 命名一致。
-- `deploy-export-code` 是 dtype payload、adapter binding、PTQ 参数和 safetensors index 的汇合点。
-- `classic-graph` 与 LLM new-path 独立，只共享顶层 package/API 边界；不要把两套算法注册体系互相套用。
-- `ops-boundary` 是 `amct_pytorch` 调用 `amct_ops` 的边界检查；真正 kernel/C++/Meta 实现交给 `amct-ops-dev`。
-- `public-api-tests` 是用户可见 API、CLI、packaging、docs/examples 的下游闭环。
+只有确认由 amct-coder 承接编码或 review 后，才执行本节；已经路由到外部 skill 的任务不要预读 repo-map。
 
-跨子能力读取顺序：
+1. 读取 [repo-map.md](../../docs/repo-map.md) 的「分层边界」和「更新规则」。
+2. 抽查候选落点直接相关的源码锚点，确认 map 与当前实现一致。
+3. 在内部形成边界声明：主落点层、允许范围、禁止事项、必要辅助层、是否需要写回 repo-map。
 
-1. 主触发 playbook，整篇读。
-2. 只有改动真的要动上游契约时，才补读上游 playbook 的「上下游依赖」和「BLOCKER」两节。
-3. 只有改动会改变导出、回载或测试口径时，才补读下游 playbook 的同两节。
-4. 最后读 `validation.md`，只选择与实际改动匹配的最小验证。
+repo-map 是稳定架构契约，源码是当前行为事实。两者冲突时，先判断源码是否越层；源码代表预期的新边界或核心流程时，把 repo-map 修正纳入本次任务。
 
-## 常见映射
+repo-map 前置读取不代表默认写回。仅在框架边界、核心流程、实际注册集合、公共契约变化，或 map 已确认落后于预期源码时更新受影响 section。局部 bug、普通算法文件、未接主链目录和不改变复用边界的模型细节默认不更新。
 
-| 用户请求 | 主子能力 | 补读 / 动作 |
+## 3. 选择主子能力
+
+先判代码体系：LLM blockwise/new-path、classic graph、`amct_ops` Python 调用边界或 public API/packaging。无法定位体系或入口时读 [repo-scenarios.md](references/repo-scenarios.md)。
+
+每次先选择**一个主子能力**；公开面、测试或上下游闭环只作为辅助项。主子能力按动作和被修改契约判断，不按目录相邻或关键词堆叠判断。
+
+| 主子能力 | 使用场景 | Playbook |
 | --- | --- | --- |
-| “新增 mxfp-like dtype / bit config / quant_dtype” | `dtype-quant-module` | 若参与导出补 `deploy-export-code`；若改 CLI choices 补 `public-api-tests` |
-| “新增一个 LLM PTQ 算法 / 改 LWC 参数导出” | `llm-algorithm` | 若有可训练参数或统计状态补 `ptq-solver-params` |
-| “适配新模型并支持 PTQ” | `llm-model-unit` | 模型层实现转 `model-adapter`；非模型层的 dtype / workflow / deploy 改动留在本 skill |
-| “改 extract_ptq_data / PPL / 离线输入 / GT” | `llm-data-workflow` | 若影响参数保存回载补 `ptq-solver-params` |
-| “改 block solver / optimizer / PTQ 参数加载” | `ptq-solver-params` | 若影响算法状态补 `llm-algorithm` |
-| “改 deploy safetensors / index / quantization_config” | `deploy-export-code` | 若新增公开开关补 `public-api-tests` |
-| “改 classic 量化算法 / graph_based pass / QAT” | `classic-graph` | 不套用 LLM `ALGO_REGISTRY` |
-| “amct_pytorch 要调用新 NPU 算子” | `ops-boundary` | 只处理上层调用边界；写 kernel 转 `amct-ops-dev` |
-| “新增公开 API / CLI 参数 / 包内容 / 测试入口” | `public-api-tests` | 若参数会影响 LLM 主链，补对应主子能力 |
+| `dtype-quant-module` | dtype、bit policy、fake/real quant、quantizer、通用 quant module | [dtype-quant-module.md](references/dtype-quant-module.md) |
+| `llm-algorithm` | LWC/LAC/AutoRound/OmniQuant/FlatQuant 类算法、`targets`、训练/统计参数导出 | [llm-algorithm.md](references/llm-algorithm.md) |
+| `llm-model-unit` | 模型契约 review、契约对齐、局部非结构 adapter bug；结构实现转 `model-adapter` | [llm-model-unit.md](references/llm-model-unit.md) |
+| `llm-data-workflow` | eval/extract/PTQ workflow、dataloader、离线输入、GT、PPL、逐层 forward | [llm-data-workflow.md](references/llm-data-workflow.md) |
+| `ptq-solver-params` | solver、optimizer、scheduler、unit 调度、PTQ 参数保存/加载/回载 | [ptq-solver-params.md](references/ptq-solver-params.md) |
+| `deploy-export-code` | deploy workflow、safetensors/index、`quantization_config`、导出实现 | [deploy-export-code.md](references/deploy-export-code.md) |
+| `classic-graph` | classic quantize/convert/algorithm register、graph_based、QAT、剪枝、蒸馏 | [classic-graph.md](references/classic-graph.md) |
+| `ops-boundary` | `amct_pytorch` 调用 `amct_ops` 的 import/schema/wheel/Python 侧边界 | [ops-boundary.md](references/ops-boundary.md) |
+| `public-api-tests` | 顶层 API、`__all__`、懒加载、CLI choices、packaging、tests/docs/examples 闭环 | [public-api-tests.md](references/public-api-tests.md) |
 
-## 越层请求对照
+读取主 playbook 后再读目标源码和测试。只有实际改变上游契约或下游产物时，才补读相关 playbook 的「上下游依赖」和「BLOCKER」小节。
 
-同样出现 attention、wrapper、MoE 等词时，判断依据是**落点路径和动作**，不是关键词。
+## 4. 按需检查阶段影响
 
-| 用户请求 | 落点判断 | 正确响应 |
-| --- | --- | --- |
-| 在 `amct_pytorch/workflows/llm_ptq.py` 里加一段 Qwen3 attention 计算 | `workflows/` 出现模型结构计算 | 留在本 skill，报越层 BLOCKER；计算应下沉到模型层 wrapper，workflow 只做编排 |
-| 在 solver 里按 Qwen/DeepSeek 模型名分支 | `common/optimization/` 出现模型分支 | 留在本 skill，报越层 BLOCKER；模型差异应由 adapter、`PtqUnit` 或 block 抽象表达 |
-| 在 `quantization/modules/` 里判断 MoE 或具体模型名 | 通用 quant module 出现结构家族分支 | 留在本 skill，报越层 BLOCKER；通用模块只能表达通用量化语义 |
-| 在 CLI 里 import 某个模型类并按模型名分流 | `cli/llm/` 出现模型逻辑 | 留在本 skill，报越层 BLOCKER；CLI 只解析参数并启动 workflow |
-| 给 Qwen3-Next 新增 attention wrapper 类 | `common/models/llm/...` 模型层结构实现 | 先用本 skill 判定落点，再转 `model-adapter`；回来后按 `llm-model-unit` 做契约对齐 |
-| 修某个已有 wrapper 的局部非结构 bug | `common/models/llm/...` 局部修复 | 可留在本 skill；按 `llm-model-unit`，必要时补 `attention-rules` 或 `wrapper-rules` |
+阶段只描述 LLM 数据流影响，不决定代码职责归属。仅在修改 LLM CLI/workflow、阶段产物或跨阶段契约时检查；classic、ops 和纯 public API/packaging 标记为“不适用”。
 
-## 全局边界
+| 阶段 | 主要检查 |
+| --- | --- |
+| eval | 输入、PPL 口径、bit policy、adapter forward |
+| extract_ptq_data | hook、离线输入命名、kwargs、`PtqUnit.kind` |
+| ptq | unit 输入/GT、算法参数、solver、参数保存/回载 |
+| deploy | PTQ 参数加载、deploy binding、dtype/algo payload、safetensors/config |
 
-- `amct_pytorch/quantization/dtypes/`：量化数据类型的 fake/export 语义。
-- `amct_pytorch/quantization/modules/`：通用量化模块，不写模型名分支。
-- `amct_pytorch/algorithms/quant/`：LLM new-path PTQ 算法，通过 `ALGO_REGISTRY` 和 `targets` 分流。
-- `amct_pytorch/common/models/llm/...`：LLM 模型 adapter、wrapper、`PtqUnit`、权重加载、mask/pos 捕获。新增和结构性修改转 `model-adapter`，本 skill 只做契约对齐、review 和局部 bug 修复。
-- `amct_pytorch/common/datasets/`：离线输入、GT、dataloader。
-- `amct_pytorch/common/optimization/`：solver、optimizer、scheduler，不混模型分支。
-- `amct_pytorch/workflows/`：CLI 背后的流程编排，不放模型细节和算法细节。
-- `amct_pytorch/classic/`：classic eager/module 替换和 graph_based 图压缩体系。
-- `amct_ops/`：NPU 自定义算子层；算法逻辑不进入 kernel，kernel 不 import `amct_pytorch`。
+通用 dtype、quant module 或算法可能同时影响多个阶段，不要强行选择单阶段；列出需要闭环的受影响阶段即可。跨阶段改动按数据流顺序处理，不要预读全部阶段 playbook。
+
+## 5. 渐进加载资料
+
+基础读取固定为：repo-map 最小边界切片 + 主 playbook + 目标源码/测试 + 修改结束前的 [validation.md](references/validation.md)。其余资料按风险追加：
+
+- 落点或越层仍不清楚：读 [layer-rules.md](references/layer-rules.md)。
+- attention/wrapper review 或局部模型 bug：读 [attention-rules.md](references/attention-rules.md) 或 [wrapper-rules.md](references/wrapper-rules.md)。
+- 模型结构、checkpoint/config 或模型相关精度异常：按 L1 -> L2 -> L3 读取 [casebook](../../docs/casebook/README.md)。
+- 主路径或 map/源码差异仍不清楚：只补读 repo-map 对应 section 并扩大源码锚点抽查。
+
+默认一次只加载：repo-map 最小切片 + 1 个主 playbook + `validation.md`，再追加最多 1 份辅助资料。真实跨契约任务按阶段分批加载；读取预算用于防止预读，不用于阻止完成任务。
 
 ## 全局 BLOCKER
 
-遇到以下情况先停下并改方案：
+遇到 BLOCKER 时停止当前错误方案，定位正确层并继续；只有正确方案存在无法从仓库判断的行为、兼容性或范围决策时才询问用户。
 
-- 在本 skill 内新增模型 adapter、新增 wrapper 类、改 attention/MLP/MoE 结构或注册新模型；这些应转 `model-adapter`。
-- 把模型专属逻辑写进 CLI、workflow、solver 或通用 quant module。
-- 混用 LLM new-path `ALGO_REGISTRY` 和 classic `AlgorithmRegistry`。
-- 新 dtype 只加类，不更新 `register_dtype()`、CLI choices、bit policy 或 deploy 载荷。
-- 新算法没有 `targets`、没有 `trainable_params()`/统计导出策略，或无法被 `build_algorithms_by_target()` 选中。
-- `PtqUnit.kind` 与 extract 产出的 `block_<layer>_<target>_in.pkl` 命名不一致。
-- PTQ 参数保存、加载、deploy 三段结构不一致。
-- eval/deploy 加载 PTQ 参数时漏掉训练时一致的 `--algos`。
-- 新 public API 只改源模块，不更新 `__all__` / re-export / 测试。
-- 新 NPU 算子绕过 `TORCH_LIBRARY_FRAGMENT(amct, ...)`、缺 Meta backend 或把算法逻辑塞进 kernel。
+- 不在 CLI、workflow、solver 或通用 quant module 中加入模型专属分支。
+- 不在本 skill 内新增或结构性修改模型 adapter/wrapper/attention/MLP/MoE；路由 `model-adapter` 后做契约 review。
+- 不混用 LLM new-path `ALGO_REGISTRY` 与 classic `AlgorithmRegistry`。
+- 新 dtype、算法或 public API 必须完成注册、选择入口、导出/回载和公开面闭环，不能只加局部实现。
+- `PtqUnit.kind`、extract 文件命名、PTQ 参数保存/加载、eval/deploy `--algos` 和 deploy binding 必须保持一致。
+- 新 NPU 算子实现路由 `amct-ops-dev`；上层调用不得绕过 schema/Meta/import 边界。
 
-## 文档写回
+## 编码与验证
 
-只有框架边界或核心流程语义变化时更新 `.agents/docs/repo-map.md`。新增算法文件、局部 wrapper bug、未接主链模型目录、模型专属细节变更默认不改 repo-map。
+以源码和测试为事实依据，优先复用现有抽象，限制改动在边界声明范围内。修改前说明主落点；修改后读取 `validation.md`，只运行与实际改动匹配的静态检查、单测或构建。
 
-改 `amct-coder` 结构时可读 `.agents/docs/amct-coder-design.md`；执行普通编码任务时不要读它。
-
-## 验证
-
-改完必须读取 [references/validation.md](references/validation.md)，选择与命中子能力匹配的最小验证。最终回复写清：
-
-1. 命中的子能力。
-2. 修改了哪些层，是否触及敏感层。
-3. 复用了哪些已有抽象。
-4. 跑了哪些验证。
-5. 哪些验证没跑及原因。
-6. 是否需要更新 `.agents/docs/repo-map.md`、casebook、docs/examples。
-
-不要把“未跑实验”包装成“已验证”。缺 NPU、CANN、模型权重或数据集时，明确写阻塞。
+最终说明：主子能力和改动层、复用的抽象、已跑验证、未跑验证及原因、repo-map/casebook/docs/examples 是否需要更新。缺 NPU、CANN、模型权重或数据集时明确写出，不能把未跑实验表述为已验证。
