@@ -27,7 +27,12 @@ from ...common.utils.log import LOGGER
 from ..config import MethodSpec, PruneConfig
 from ..context import PruneContext
 from ..domains.base import BasePruningDomain
-from ..domains.moe import MoEPruningDomain, MoETarget, route_topk_from_output
+from ..domains.moe import (
+    DEFAULT_TOP_K,
+    MoEPruningDomain,
+    MoETarget,
+    route_topk_from_output,
+)
 from ..report import PruneReport
 from ..utils import (
     record_prune_size,
@@ -45,7 +50,7 @@ class ActivationCounter:
     counts: torch.Tensor | None = None
     num_experts: int = 0
 
-    def update(self, router_output: torch.Tensor, top_k: int = 8) -> None:
+    def update(self, router_output: torch.Tensor, top_k: int = DEFAULT_TOP_K) -> None:
         """Update counts from router output (logits / tuple / fused TopKRouter)."""
         topk_idx, _ = route_topk_from_output(router_output, self.num_experts, top_k)
         if topk_idx is None:
@@ -129,7 +134,8 @@ class MassMoEPruningMethod(BasePruningMethod):
 
     kwargs:
         prune_ratio (float): Fraction of experts to remove. Default 0.50.
-        top_k (int): Number of experts selected per token. Default 8.
+        top_k (int): Experts selected per token. Default: read from the
+            router / model config (see MoEPruningDomain.resolve_top_k).
     """
 
     domain = "moe"
@@ -154,7 +160,8 @@ class MassMoEPruningMethod(BasePruningMethod):
             raise TypeError("MassMoEPruningMethod requires MoEPruningDomain.")
 
         prune_ratio = float(spec.kwargs.get("prune_ratio", 0.50))
-        top_k = int(spec.kwargs.get("top_k", 8))
+        top_k = spec.kwargs.get("top_k")
+        top_k = None if top_k is None else int(top_k)
         if prune_ratio <= 0:
             return
 

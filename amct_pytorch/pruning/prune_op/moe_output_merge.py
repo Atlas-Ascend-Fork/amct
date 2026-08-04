@@ -226,7 +226,7 @@ def _merge_target(model, domain, target, x_tokens, keep_ratio, top_k, config):
     )
     _bake_merged_weights(gate, groups, hidden_list, biases, probs, outs, last_list, x)
     keep_idx = sorted(groups.keys())
-    domain.prune_experts(model, target, keep_idx, top_k)
+    domain.prune_experts(model, target, keep_idx, domain.resolve_top_k(model, target, top_k))
     return e_n, len(keep_idx), len(dropped)
 
 
@@ -371,7 +371,8 @@ class OutputMergeMoEPruningMethod(BasePruningMethod):
     kwargs:
         keep_ratio (float): Fraction of experts to keep. Default 0.50.
         prune_ratio (float): Optional alias (= 1 - keep_ratio).
-        top_k (int): Experts per token (router patching). Default 8.
+        top_k (int): Experts per token (router patching). Default: read
+            from the router / model config (see MoEPruningDomain.resolve_top_k).
         selector (str): 'calib_nll' (default) or 'none'.
     """
 
@@ -398,7 +399,8 @@ class OutputMergeMoEPruningMethod(BasePruningMethod):
         keep_ratio = float(spec.kwargs.get("keep_ratio", 0.50))
         if "prune_ratio" in spec.kwargs:
             keep_ratio = 1.0 - float(spec.kwargs["prune_ratio"])
-        top_k = int(spec.kwargs.get("top_k", 8))
+        top_k = spec.kwargs.get("top_k")
+        top_k = None if top_k is None else int(top_k)
         selector = str(spec.kwargs.get("selector", "calib_nll"))
         if selector not in ("calib_nll", "none"):
             raise ValueError(

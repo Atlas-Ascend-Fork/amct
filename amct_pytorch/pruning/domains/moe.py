@@ -107,6 +107,31 @@ _EXPERT_COUNT_ATTRS = (
     "n_routed_experts",
 )
 _EXPERT_GROUP_ATTRS = ("n_group", "n_groups", "num_expert_group", "topk_group")
+_TOPK_ATTRS = (
+    "top_k",
+    "topk",
+    "num_experts_per_tok",
+    "moe_top_k",
+    "num_selected_experts",
+)
+DEFAULT_TOP_K = 8
+
+
+def read_positive_int(obj: object, names: Tuple[str, ...]) -> Optional[int]:
+    """First attribute in ``names`` that reads back as a positive int, else None."""
+    if obj is None:
+        return None
+    for name in names:
+        value = getattr(obj, name, None)
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            ivalue = int(value)
+        except (TypeError, ValueError):
+            continue
+        if ivalue > 0:
+            return ivalue
+    return None
 
 
 def _expert_slice_axis(module: nn.Module, name: str, dims: List[int]) -> Optional[int]:
@@ -239,6 +264,36 @@ class MoEPruningDomain(BasePruningDomain):
         if target.router_path is None:
             return None
         return get_submodule(model, target.router_path)
+
+    def resolve_top_k(
+        self, model: nn.Module, target: MoETarget, override: Optional[int] = None
+    ) -> int:
+        """Experts-per-token as this model actually routes it.
+
+        Looked up on the router, then the MoE block, then ``model.config``,
+        under every spelling in use (``top_k`` / ``num_experts_per_tok`` / ...).
+        A hardcoded value misestimates per-expert activation counts on models
+        that do not route 8 per token -- Mixtral routes 2, Kimi-VL routes 6 --
+        which in turn skews which experts a mass/merge criterion decides to
+        drop. ``override`` (the ``top_k`` kwarg) still wins when given.
+        """
+        if override is not None:
+            return int(override)
+        module = (
+            get_submodule(model, target.module_path) if target.module_path else model
+        )
+        holders = (self.get_router(model, target), module, getattr(model, "config", None))
+        for holder in holders:
+            found = read_positive_int(holder, _TOPK_ATTRS)
+            if found is not None:
+                return found
+        LOGGER.logw(
+            f"[amct.prune] could not read experts-per-token for "
+            f"'{target.module_path or target.experts_path}'; falling back to "
+            f"top_k={DEFAULT_TOP_K}. Pass top_k=... if the model routes a different number.",
+            "amct_prune",
+        )
+        return DEFAULT_TOP_K
 
     def get_experts(self, model: nn.Module, target: MoETarget) -> nn.ModuleList:
         experts = get_submodule(model, target.experts_path)

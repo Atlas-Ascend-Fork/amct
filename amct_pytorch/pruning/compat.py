@@ -47,6 +47,22 @@ def detect_backend(model: nn.Module) -> ModelBackend:
     return ModelBackend(name=name)
 
 
+_MOE_COUNT_CONFIG_ATTRS = (
+    "num_local_experts",
+    "num_experts",
+    "n_routed_experts",
+    "n_experts",
+)
+# Experts-per-token must never exceed the surviving expert count, or the router
+# asks for more experts than exist and the model dies on the first forward.
+_MOE_TOPK_CONFIG_ATTRS = (
+    "num_experts_per_tok",
+    "moe_top_k",
+    "top_k",
+    "num_selected_experts",
+)
+
+
 def _try_set_int_attr(obj: Any, name: str, value: Any) -> None:
     if not hasattr(obj, name):
         return
@@ -59,6 +75,29 @@ def _try_set_int_attr(obj: Any, name: str, value: Any) -> None:
             f"pruned weights (save/reload could mismatch).",
             "amct_prune",
         )
+
+
+def _clamp_int_attrs(obj: Any, names: tuple, cap: Any) -> None:
+    """Lower each present attribute in ``names`` to ``cap`` when it exceeds it."""
+    try:
+        cap_int = int(cap)
+    except (TypeError, ValueError):
+        return
+    for name in names:
+        current = getattr(obj, name, None)
+        if current is None or isinstance(current, bool):
+            continue
+        try:
+            current_int = int(current)
+        except (TypeError, ValueError):
+            continue
+        if current_int > cap_int:
+            _try_set_int_attr(obj, name, cap_int)
+            LOGGER.logi(
+                f"[amct.prune] clamped config.{name} {current_int} -> {cap_int} "
+                f"to match the pruned expert count.",
+                "amct_prune",
+            )
 
 
 def patch_common_config(model: nn.Module) -> None:
@@ -87,6 +126,11 @@ def patch_common_config(model: nn.Module) -> None:
             f"[amct.prune] per-layer expert counts differ {sorted(moe_widths)}; not modifying"
             f" config.num_experts (a single scalar cannot describe non-uniform expert counts;"
             f" save/reload needs per-layer sizes).", "amct_prune")
+        # The count stays unwritten, but experts-per-token is still a single
+        # scalar and must fit the *thinnest* layer, otherwise that layer routes
+        # to experts that no longer exist.
+        _clamp_int_attrs(config, _MOE_TOPK_CONFIG_ATTRS, min(moe_widths))
     elif moe_experts is not None:
-        for name in ("num_local_experts", "num_experts"):
+        for name in _MOE_COUNT_CONFIG_ATTRS:
             _try_set_int_attr(config, name, moe_experts)
+        _clamp_int_attrs(config, _MOE_TOPK_CONFIG_ATTRS, moe_experts)

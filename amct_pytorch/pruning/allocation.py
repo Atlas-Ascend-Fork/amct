@@ -72,7 +72,7 @@ def _prunable_target_paths(model: nn.Module, base_cfg: dict) -> List[str]:
             targets = domain.find_targets(model, cfg)
         except (RuntimeError, ValueError, TypeError, AttributeError, KeyError, IndexError) as exc:
             LOGGER.logw(
-                f"[allocation] {domain.name} find_targets failed; per-layer "
+                f"[allocation] {domain.name} find_targets did not return targets; per-layer "
                 f"isolation may be incomplete ({type(exc).__name__}: {exc}).", "amct_prune")
             continue
         for target in targets:
@@ -142,7 +142,7 @@ def measure_layer_sensitivity(
             sens[key] = 1.0 - float(fid(cand))
         except (RuntimeError, ValueError, TypeError, AttributeError, KeyError, IndexError) as exc:
             LOGGER.logw(
-                f"[allocation] layer '{key}' sensitivity probe failed "
+                f"[allocation] layer '{key}' sensitivity probe did not complete "
                 f"({type(exc).__name__}: {exc}); treating as maximally sensitive.", "amct_prune")
             sens[key] = 1.0
     return sens

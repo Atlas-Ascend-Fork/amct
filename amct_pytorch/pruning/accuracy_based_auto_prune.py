@@ -171,7 +171,7 @@ def _prunable_param_count(model: nn.Module, base_cfg: dict) -> int:
             targets = domain.find_targets(model, cfg)
         except (RuntimeError, ValueError, TypeError, AttributeError, KeyError, IndexError) as exc:
             LOGGER.logw(
-                f"[budget] {domain.name} domain find_targets failed, prunable mass may be underestimated: "
+                f"[budget] {domain.name} domain find_targets did not return targets, prunable mass may be underestimated: "
                 f"{type(exc).__name__}: {exc}", "amct_prune")
             continue
         for target in targets:
@@ -372,7 +372,7 @@ def _make_trial_fn(
             q = float(quality_fn(pruned))
         except (RuntimeError, ValueError, TypeError, AttributeError, KeyError, IndexError) as exc:
             LOGGER.logw(
-                f"[{warn_tag}] ratio={ratio} trial failed (not a normal rejection): "
+                f"[{warn_tag}] ratio={ratio} trial did not complete (not a normal rejection): "
                 f"{type(exc).__name__}: {exc}", "amct_prune")
             return TrialResult(ratio, float("-inf"), float("inf"), params_before, 0.0, False)
         drop = baseline_quality - q
@@ -602,7 +602,7 @@ def _menu_trial(
             del pruned
         except (RuntimeError, ValueError, TypeError, AttributeError, KeyError, IndexError) as exc:
             LOGGER.logw(
-                f"[menu-prune] variant {name!r} trial failed (not a normal rejection): "
+                f"[menu-prune] variant {name!r} trial did not complete (not a normal rejection): "
                 f"{type(exc).__name__}: {exc}", "amct_prune")
             quality[name] = float("-inf")
             pa_by_name[name] = params_before

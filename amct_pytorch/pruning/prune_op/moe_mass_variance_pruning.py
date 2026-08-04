@@ -27,7 +27,12 @@ from ...common.utils.log import LOGGER
 from ..config import MethodSpec, PruneConfig
 from ..context import PruneContext
 from ..domains.base import BasePruningDomain
-from ..domains.moe import MoEPruningDomain, MoETarget, route_topk_from_output
+from ..domains.moe import (
+    DEFAULT_TOP_K,
+    MoEPruningDomain,
+    MoETarget,
+    route_topk_from_output,
+)
 from ..report import PruneReport
 from ..utils import (
     record_prune_size,
@@ -48,7 +53,7 @@ class LayerRoutingStats:
     expert_var: torch.Tensor
     expert_max: torch.Tensor
     num_experts: int = 0
-    top_k: int = 8
+    top_k: int = DEFAULT_TOP_K
 
 
 def _make_router_hook(stats: "LayerRoutingStats", k: int):
@@ -188,7 +193,8 @@ class MassVarianceMoEPruningMethod(BasePruningMethod):
 
     kwargs:
         prune_ratio (float): Fraction of experts to remove. Default 0.50.
-        top_k (int): Number of experts per token. Default 8.
+        top_k (int): Experts per token. Default: read from the router /
+            model config (see MoEPruningDomain.resolve_top_k).
         boundary (int | "auto" | list[int]): fixed split (default 10), "auto", or explicit
                         variance-layer indices; -1 makes every layer use variance.
         variance_score (str): "cond" (default), "peak", or "cvxpeak".
@@ -214,7 +220,8 @@ class MassVarianceMoEPruningMethod(BasePruningMethod):
             raise TypeError("Requires MoEPruningDomain.")
 
         prune_ratio = float(spec.kwargs.get("prune_ratio", 0.50))
-        top_k = int(spec.kwargs.get("top_k", 8))
+        top_k = spec.kwargs.get("top_k")
+        top_k = None if top_k is None else int(top_k)
         boundary_raw = spec.kwargs.get("boundary", 10)
         if boundary_raw == "auto" or isinstance(
             boundary_raw, (list, tuple, set, frozenset)
