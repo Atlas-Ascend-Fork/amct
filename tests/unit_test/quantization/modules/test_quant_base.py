@@ -267,9 +267,7 @@ def test_activation_quantizer_observe_runs_only_observe_algorithms():
     )
 
     try:
-        aq = ActivationQuantizer(
-            _args(algos=[observe_name, regular_name]), bits=8
-        )
+        aq = ActivationQuantizer(_args(algos=[observe_name, regular_name]), bits=8)
         aq.quant_obj = _FakeQuantSpy()
         aq.set_observe(True)
         x = torch.randn(2, 8)
@@ -302,9 +300,7 @@ def test_activation_quantizer_non_observe_runs_all_algorithms_and_fake_quant():
     )
 
     try:
-        aq = ActivationQuantizer(
-            _args(algos=[observe_name, regular_name]), bits=8
-        )
+        aq = ActivationQuantizer(_args(algos=[observe_name, regular_name]), bits=8)
         aq.quant_obj = _FakeQuantSpy()
         aq.set_observe(False)
         x = torch.tensor([1.0, 2.0])
@@ -332,9 +328,7 @@ def test_activation_quantizer_forward_repairs_algorithm_observe_state(
     quantizer_state, algorithm_state
 ):
     name = "_ut_act_observe_state_repair"
-    ALGO_REGISTRY.register(name=name, targets=("activation",))(
-        _ObserveActivationAlgo
-    )
+    ALGO_REGISTRY.register(name=name, targets=("activation",))(_ObserveActivationAlgo)
 
     try:
         aq = ActivationQuantizer(_args(algos=[name]), bits=8)
