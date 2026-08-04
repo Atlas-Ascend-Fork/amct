@@ -77,7 +77,9 @@ def test_cmake_install_graph_uses_cann_version_for_newest_weekly_package(tmp_pat
         env=_env_without_ascend_home(),
     )
 
-    assert (work_dir / "amctgraph" / "marker.txt").read_text(encoding="utf-8") == "remote-newest"
+    assert (work_dir / "amctgraph" / "marker.txt").read_text(
+        encoding="utf-8"
+    ) == "remote-newest"
     assert not (work_dir / "amctgraph" / tarball_name).exists()
 
 
@@ -101,7 +103,9 @@ def test_cmake_install_graph_prefers_local_build_tarball(tmp_path):
         env=_env_without_ascend_home(),
     )
 
-    assert (work_dir / "amctgraph" / "marker.txt").read_text(encoding="utf-8") == "local-build"
+    assert (work_dir / "amctgraph" / "marker.txt").read_text(
+        encoding="utf-8"
+    ) == "local-build"
 
 
 def test_cmake_install_graph_defaults_arch_from_uname_in_script_mode(tmp_path):
@@ -125,10 +129,14 @@ def test_cmake_install_graph_defaults_arch_from_uname_in_script_mode(tmp_path):
         env=_env_without_ascend_home(),
     )
 
-    assert (work_dir / "amctgraph" / "marker.txt").read_text(encoding="utf-8") == "default-arch"
+    assert (work_dir / "amctgraph" / "marker.txt").read_text(
+        encoding="utf-8"
+    ) == "default-arch"
 
 
-def test_cmake_install_graph_falls_back_to_version_range_without_version_source(tmp_path):
+def test_cmake_install_graph_falls_back_to_version_range_without_version_source(
+    tmp_path,
+):
     obs_dir = tmp_path / "obs" / "CANN" / "20260528_newest"
     obs_dir.mkdir(parents=True)
     tarball_name = "cann-amct-graph_10.4.0_linux-x86_64.tar.gz"
@@ -148,7 +156,9 @@ def test_cmake_install_graph_falls_back_to_version_range_without_version_source(
         env=_env_without_ascend_home(),
     )
 
-    assert (work_dir / "amctgraph" / "marker.txt").read_text(encoding="utf-8") == "fallback-version"
+    assert (work_dir / "amctgraph" / "marker.txt").read_text(
+        encoding="utf-8"
+    ) == "fallback-version"
 
 
 def test_cmake_install_graph_reads_version_from_cann_install_info(tmp_path):
@@ -176,4 +186,6 @@ def test_cmake_install_graph_reads_version_from_cann_install_info(tmp_path):
         env=_env_without_ascend_home(),
     )
 
-    assert (work_dir / "amctgraph" / "marker.txt").read_text(encoding="utf-8") == "install-info-version"
+    assert (work_dir / "amctgraph" / "marker.txt").read_text(
+        encoding="utf-8"
+    ) == "install-info-version"
