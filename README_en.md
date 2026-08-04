@@ -18,6 +18,7 @@ _Ascend NPU Native Model Compression Toolkit_
 
 ## 🔥 Latest Updates
 
+- **[2026/08/03]** Added a one-stop single-card sample for the [Kimi-VL-A3B-Thinking](./examples/models/kimi-vl/Kimi-VL-A3B-Thinking_en.md) multimodal model
 - **[2026/05/28]** Added current mainstream LLM network quantization, PTQ algorithm support, and provided [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) and [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) one-stop samples
 - **[2026/04/24]** Added [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) model INT8 quantization support
 - **[2026/04/17]** Added HiFloat8 quantile quantization (Quantile) algorithm
@@ -116,6 +117,7 @@ The "One-Stop Platform" is an NPU environment provided for developers, internall
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | Complete Qwen3.6-MoE model quantization, data extraction, and PTQ in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience. |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | Complete DeepSeek-V4 Flash model single-card inference in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience.    |
+| [Kimi-VL-A3B-Thinking](./examples/models/kimi-vl/Kimi-VL-A3B-Thinking_en.md) | Complete quantization, data extraction, and PTQ of the language side of the Kimi-VL-A3B-Thinking multimodal model on a single Atlas A3 card. With 16B total / 2.8B activated parameters and roughly 32GB of BF16 weights, the whole flow fits on one card with no multi-card sharding. |
 
 ## 📖 Documentation Samples
 

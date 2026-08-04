@@ -18,6 +18,7 @@ _昇腾 NPU 原生模型压缩工具包_
 
 ## 🔥 最新动态
 
+- **[2026/08/03]** 新增 [Kimi-VL-A3B-Thinking](./examples/models/kimi-vl/Kimi-VL-A3B-Thinking.md) 多模态模型的一站式单卡样例
 - **[2026/05/28]** 新增当前主流 LLM 网络量化、PTQ 算法支持，并提供 [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) 和 [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) 的一站式样例
 - **[2026/04/24]** 新增 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) 模型 INT8 量化支持
 - **[2026/04/17]** 新增 HiFloat8 分位量化（Quantile）算法
@@ -115,6 +116,7 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | 在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。 |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的单卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。    |
+| [Kimi-VL-A3B-Thinking](./examples/models/kimi-vl/Kimi-VL-A3B-Thinking.md) | 在 Atlas A3 单卡环境中完成 Kimi-VL-A3B-Thinking 多模态模型语言侧的量化、数据提取以及 PTQ。模型总参数 16B、激活 2.8B，BF16 权重约 32GB，单卡即可完成全流程，无需多卡切分。 |
 
 ## 📖 文档样例
 
