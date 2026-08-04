@@ -35,6 +35,7 @@
 ```
 amct_ops/
 ├── hifloat8_cast/          # HiFloat8 转换算子源码（kernel + binding + Python 接口）
+├── svd_quant/              # 使用混合Mxfp4/Bf16算子的SVD量化方法
 ├── ops_build.sh            # 统一构建入口
 ├── setup.py                # wheel 打包配置
 └── ops_init.py             # 打包时复制为 __init__.py，提供包接口和文档
