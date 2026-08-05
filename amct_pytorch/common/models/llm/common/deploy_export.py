@@ -163,24 +163,44 @@ def convert_state_dict(
     block_size,
 ):
     if weight.element_size() == 1:
-        # FP8 weight
-        try:
-            # Get scale_inv from the correct file
-            file_name = original_weight_map[scale_inv_name]
-            if file_name not in loaded_files:
-                file_path = model_dir / file_name
-                loaded_files[file_name] = load_file(file_path, device="cpu")
-            scale_inv = loaded_files[file_name][scale_inv_name]
-            if weight.dtype == torch.int8:
-                weight = weight_dequant(
-                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+        scale_name = weight_name + "_scale"
+        if scale_name in original_weight_map:
+            # HiF4 packed weight — decode via hif4_unpack
+            try:
+                from amct_pytorch.quantization.dtypes.hifp_impl import (
+                    hif4_unpack,
                 )
-            else:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size)
-        except KeyError:
-            logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
-            )
+                file_name = original_weight_map[scale_name]
+                if file_name not in loaded_files:
+                    file_path = model_dir / file_name
+                    loaded_files[file_name] = load_file(file_path, device="cpu")
+                scale = loaded_files[file_name][scale_name]
+                weight = torch.from_numpy(
+                    hif4_unpack(scale, weight)
+                ).to(torch.float32)
+            except Exception:
+                logger.warning(
+                    f"Warning: Failed to decode HiF4 weight {weight_name}, "
+                    f"passing through as-is"
+                )
+        else:
+            # FP8 weight
+            try:
+                file_name = original_weight_map[scale_inv_name]
+                if file_name not in loaded_files:
+                    file_path = model_dir / file_name
+                    loaded_files[file_name] = load_file(file_path, device="cpu")
+                scale_inv = loaded_files[file_name][scale_inv_name]
+                if weight.dtype == torch.int8:
+                    weight = weight_dequant(
+                        weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+                    )
+                else:
+                    weight = weight_dequant(weight, scale_inv, block_size=block_size)
+            except KeyError:
+                logger.warning(
+                    f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+                )
     return weight
 
 
