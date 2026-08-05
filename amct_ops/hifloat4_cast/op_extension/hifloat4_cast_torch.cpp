@@ -64,7 +64,7 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
     int64_t m_raw = xp.numel() / n;
 
     // Pad N to a multiple of BATCH (512) so the kernel never sees a partial tail --
-    // matching the private reference which requires aligned input (groups of 64).
+    // the kernel requires aligned input (groups of 64).
     // The kernel's tail-masking path becomes dead code; all tail handling is done here.
     constexpr int64_t BATCH = 512;
     int64_t n_pad = ((n + BATCH - 1) / BATCH) * BATCH;

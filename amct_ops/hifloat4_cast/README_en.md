@@ -67,7 +67,7 @@ block max), calls the kernel, then slices off the pad and restores the dim order
 
 ## Correctness (acceptance red-line)
 
-The kernel reproduces AMCT's pure-python reference exactly. Validate on device against it:
+The kernel is numerically equivalent to the PyTorch implementation. Validate on device:
 
 ```python
 import torch
@@ -85,7 +85,7 @@ y_npu = hifloat4_fake_quant(x.npu()).cpu()
 assert (y_npu.float() - y).abs().max() < 1e-6
 ```
 
-`tests/amct_ops/test_hifloat4_cast.py` cross-checks the kernel against this CPU reference when an NPU is present.
+`tests/amct_ops/test_hifloat4_cast.py` cross-checks the kernel against the CPU implementation when an NPU is present.
 
 ## Packed format
 
