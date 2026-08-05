@@ -33,7 +33,7 @@ from typing import Dict, Optional
 
 import torch
 
-from ..hifloat4_quant.hif4_pack_unpack import hif4_bit_reconstruct
+from amct_pytorch.quantization.dtypes.hifp_impl import hif4_bit_reconstruct
 from ..checkpoint_io import resolve_index, invert_weight_map, write_index, copy_side_files, save_shard
 
 # unpack --dtype name -> the torch float dtype the reconstructed weight is emitted as.

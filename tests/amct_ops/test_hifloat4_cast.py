@@ -27,8 +27,8 @@ import unittest
 
 import torch
 
-from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
-from amct_pytorch.common.utils.hifloat4_quant.hif4_pack_unpack import hif4_cast
+from amct_pytorch.quantization.dtypes.hifp_impl import (QType, quant_dequant_float,
+                                                         hif4_cast, hif4_bit_reconstruct)
 from amct_pytorch.common.utils.decode.unpack_hif4 import unpack_hif4_checkpoint
 
 

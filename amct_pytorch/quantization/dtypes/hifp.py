@@ -21,8 +21,8 @@ import torch
 from torch import Tensor
 
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.quantization.dtypes.hifp_impl import hifloat8_fake_quant
-from amct_pytorch.common.utils.hifloat4_quant import hifloat4_fake_quant, hif4_cast
+from amct_pytorch.quantization.dtypes.hifp_impl import (hifloat8_fake_quant,
+                                                        hifloat4_fake_quant, hif4_cast)
 
 
 @DTYPE_REGISTRY.register(name="hifp", description="quant dequant for hifloat")
