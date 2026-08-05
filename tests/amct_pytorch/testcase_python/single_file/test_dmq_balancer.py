@@ -86,7 +86,7 @@ class TestDMQBalancer(unittest.TestCase):
             model, self.args_shape, self.temp_folder
         )
         run_inference_onnx(fake_quant_onnx, iterations=test_iter)
-        logger.info('%s reesult %s', '=' * 50, '=' * 50)
+        logger.info('%s result %s', '=' * 50, '=' * 50)
         self.assertTrue(os.path.exists(fake_quant_onnx))
 
     def test_create_quant_config_with_dmq_balancer(self):
@@ -472,7 +472,7 @@ def run_inference_onnx(onnx_file, iterations=2):
     input_names = [input_onnx.name for input_onnx in ort_session.get_inputs()]
     output_names = [output_onnx.name for output_onnx in ort_session.get_outputs()]
     logger.info('inputs: %s', input_names)
-    logger.info('otputs: %s', output_names)
+    logger.info('outputs: %s', output_names)
 
     def to_numpy(tensor):
         data_numpy = (
