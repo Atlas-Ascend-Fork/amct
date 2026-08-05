@@ -4,14 +4,15 @@
 
 用户提到公开 API、`__all__`、顶层 `amct_pytorch`、package、build、setup、requirements、examples/docs、测试选择、CI/pre-commit 时使用。
 
-## 必读文件
+## 源码锚点（按需选择）
+
+以下路径不是全文必读清单。先按 public API、CLI、packaging、docs/examples 或测试入口选择当前用户可见契约的直接锚点。
 
 - `amct_pytorch/__init__.py`
 - `amct_pytorch/classic/graph_based/amct_pytorch/__init__.py`
 - `setup.py`
 - `pyproject.toml`
 - `build.sh`
-- `AGENTS.md`
 - `tests/unit_test/test_public_api.py`
 - `tests/unit_test/test_packaging.py`
 - `tests/unit_test/cli/test_llm_module_entrypoints.py`

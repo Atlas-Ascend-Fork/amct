@@ -24,9 +24,9 @@ amct-coder 在模型层只保留三件事：
 
 委派时先简短说明原因，例如：“这是新增模型 adapter 和 wrapper，属模型层实现，应使用 `model-adapter`。”其余委派场景见 [delegation.md](delegation.md)。
 
-## 必读文件
+## 源码锚点（按需选择）
 
-做契约对齐或 review 时读：
+以下路径不是全文必读清单。做契约对齐或 review 时，按主 skill 的读取预算选择与当前模型和契约直接相关的锚点：
 
 - `.agents/docs/repo-map.md`
 - `amct_pytorch/common/models/llm/common/base.py`

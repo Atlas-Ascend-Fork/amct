@@ -1,76 +1,82 @@
 # 子能力：deploy-export-code
 
-## 触发
+## 简介
 
-用户提到 deploy workflow、deploy-ready、safetensors、`model.safetensors.index.json`、`quantization_config`、blockwise/tensorwise 导出、`export_deploy()`、weight scale/bias、FP8 转 BF16/MXFP/INT 时使用。
+解决量化模型导出代码应该怎样修改和验证的问题，确保模型权重、分片索引、量化配置及导出文档彼此一致，并同时覆盖分块导出和逐张量导出路径。本子能力只处理导出功能的编码与审查，不负责实际运行导出任务。
 
-## 必读文件
+## 触发与边界
 
-- `amct_pytorch/workflows/llm_deploy.py`
-- `amct_pytorch/common/models/llm/common/deploy_export.py`
-- `amct_pytorch/common/models/llm/common/base.py`
-- `amct_pytorch/quantization/dtypes/int.py`
-- `amct_pytorch/quantization/dtypes/mxfp.py`
-- `amct_pytorch/quantization/modules/quant_linear.py`
-- `tests/unit_test/workflows/test_llm_deploy.py`
-- 相关 adapter 的 `iter_deploy_bindings()`、`generate_tensorwise_quant_layers()`、`bits_scheme()`、`cache_scheme()`
+修改 deploy workflow、safetensors/index、`quantization_config`、blockwise/tensorwise 导出、`export_deploy()` 消费逻辑时使用。实际运行导出并生成交付目录转 `deploy-export`；本子能力只负责实现与 review。
 
-## 上下游依赖
+OWN：`amct_pytorch/workflows/llm_deploy.py`、`amct_pytorch/common/models/llm/common/deploy_export.py`。它是 LLM 导出链最下游汇合点，消费 dtype payload、algorithm 导出 hook、adapter binding 和 PTQ 参数，不重新定义这些上游语义。
 
-- 上游：deploy 消费 adapter 的 deploy binding、dtype 的 `export_deploy()`、algorithm 的导出 hook、PTQ 参数 store 和原始 safetensors index。
-- 平级：deploy workflow 只编排导出，不在 workflow 中重新定义 real quant 数值细节或模型结构特例。
-- 下游：导出目录、`config.json`、`quantization_config`、weight index、docs/examples 是交付契约。
-- 若新增 dtype、algorithm deploy hook 或 public config 字段，要同时读 `dtype-quant-module`、`llm-algorithm`、`public-api-tests`。
+## 按任务选择源码锚点
 
-## 执行步骤
+以下分支互斥起步，不要全文读取所有路径：
 
-1. 明确导出模式是 blockwise 还是 tensorwise，以及是否需要加载 PTQ 参数。
-2. 检查 adapter binding 是否能定位原始 weight、量化模块和 ignore layers。
-3. 检查 dtype/algorithm `export_deploy()` 返回字段，确定 safetensors 命名和 `tensor_routes`。
-4. 写出 quantized tensor 后刷新 index，并确保被替换的原始 weight 不重复保留。
-5. 处理单 shard 和多 shard 两种原始权重布局。
-6. 更新 `config.json` 的 `quantization_config`、bits scheme、cache scheme 和 ignore 列表。
-7. 补 mocked safetensors/index、PTQ 参数回载、新 dtype payload 或 adapter binding 的最小测试。
+| 当前动作 | 首轮锚点 | 确认影响后再读 |
+| --- | --- | --- |
+| index metadata、单/多 shard、剩余权重 | `llm_deploy.py` 的 `_load_weight_index()`、`_refresh_weight_index()`、两处调用方；对应 workflow 测试 | `_write_remaining_original_weights()`、下游 loader 契约 |
+| `config.json` / `quantization_config` | `_refresh_config()`、`generate_quant_config()` 及其直接测试 | adapter `cache_scheme()` / `bits_scheme()`；公开字段成立时读 `public-api-tests` |
+| blockwise payload/binding | `_run_blockwise()`、`export_block_deploy()`、`QuantLinear.export_deploy()` | 命中 adapter 的 `iter_deploy_bindings()`、PTQ 参数回载；payload 变化时读 `dtype-quant-module` 或 `llm-algorithm` |
+| tensorwise 转换 | `_run_tensorwise()`、`convert_state_dict()`、`quant_payload()` | 命中 adapter 的 `generate_tensorwise_*()`、`get_scale_name()`、`block_size()` |
+| 用户文档或交付格式 | 实际产物写入点、`docs/zh/AMCT_Pytorch_LLM.md` 的 deploy 小节 | 命中的 examples 和 `public-api-tests` |
 
-## 导出路径
+先用 `rg` 确认定义和调用方。当前源码中 `_refresh_config_tensor()`、`_convert_tensor()` 只有定义和直接单测，没有运行时调用方；不得把它们描述成当前 bf16/tensorwise 主路径。blockwise 与 tensorwise 当前都在结束时调用 `_refresh_config()`。
 
-blockwise:
+## 当前数据流
 
-1. 复制非权重支持文件。
-2. 加载原始 weight index。
-3. 每层 `build_quant_block()`。
-4. `load_selected_layer_ptq_params()`。
-5. `export_block_deploy()` 遍历 `QuantLinear.export_deploy()`。
-6. 每层写 `layer_xxx.safetensors`。
-7. 剩余原始权重写 `rest_xxxxx.safetensors`。
-8. 刷新 index 与 `config.json`。
+blockwise：
 
-tensorwise:
+1. 复制非权重支持文件，读取或为单 shard 合成原始 index。
+2. 每层构建 quant block，回载所选 PTQ 参数，通过 adapter binding 调 `module.export_deploy()`。
+3. `tensor_routes` 把 qweight/scale/bias 等新 tensor 映射回被替换的原始 weight。
+4. 写 `layer_xxx.safetensors`，把未替换权重重分片为 `rest_xxxxx.safetensors`。
+5. 重算 index `total_size`、保留原 metadata、刷新 weight map，再写 config。
 
-1. adapter 给出 quant/ignore layer。
-2. 按原 safetensors 文件流式转换。
-3. dtype `export_deploy()` 产出 qweight/scale。
-4. 刷新 index 与 config。
+tensorwise：
 
-## 规则
+1. 按原始 weight map 分 shard 读取，必要时用 scale inverse 把 FP8/MXFP 权重转换为浮点。
+2. adapter 给出 quant/ignore layer；当前只对 `quant_dtype in ["int", "mxfp"]` 调 `quant_payload()`。
+3. 复用原 shard 文件名写新 tensor，刷新 index 和 config。
 
-- dtype 的 real quant 细节应在 dtype 类或 algorithm `export_deploy()` 中，不写在 workflow 分支里。
-- `tensor_routes` 用于标记新 tensor 替换了哪个原始 weight，避免重复保留旧权重。
-- `quant_ignore_layers` 应收集未量化 Linear，写入 config ignore。
-- 单 shard 模型要合成 index，不能假设一定有 `model.safetensors.index.json`。
-- `config.json` 中 `quantization_config` 要与 dtype、cache scheme、bits scheme 一致。
+## 实施门禁
+
+1. 先确认 blockwise/tensorwise、单/多 shard、量化或 bf16 转换范围。
+2. 新 metadata/config 字段先冻结字段名、层级、类型、值来源、适用路径、覆盖策略、下游消费者和旧产物兼容性；还未确认时只列候选 helper，不改签名。
+3. 字段要求同时写 index 和 config 时，先确认两处是否表达同一语义以及谁是权威来源，避免复制后漂移。
+4. 修改已有 helper 前必须反查所有调用方；无调用 helper 不能作为当前行为依据。
+5. 新 dtype payload 先确认 `export_deploy()` 字段和 `quant_payload()`/`export_block_deploy()` 命名规则，再修改 workflow；数值与 packing 留在 dtype。
+6. algorithm 有自定义 `quantize()` 或 `export_deploy()` 时，确认 PTQ 参数已回载且 hook 契约可被 `WeightQuantizer.export_deploy()` 消费。
+7. adapter 只提供 binding、ignore、bits/cache scheme 等模型事实；workflow 不加入模型名分支。需要新增或结构性修改 adapter 时转 `model-adapter`。
+8. tensorwise 逐 shard 行为要核对 `loaded_files` 生命周期和峰值内存，不把“按 shard 循环”等同于内存已受控。
+
+## 产物与测试矩阵
+
+| 改动面 | 最小断言 |
+| --- | --- |
+| index metadata | 新旧字段、类型、同名覆盖策略、原 metadata 保留、`total_size` 重算、weight map 不丢项 |
+| shard 兼容 | 有 index 的多 shard路径、无 index 的单 shard合成、源权重文件缺失报错 |
+| blockwise | replaced weight 不重复写入、extra tensor 路由、空层、rest 分片、PTQ 参数回载 |
+| tensorwise | FP8/非 FP8 转换、缺 scale 告警、int/mxfp payload、ignore layers、每个输出 tensor 都进 index |
+| config | 原 config 字段保留、quantization_config 格式/bits/cache/ignore 一致、旧 config 缺字段可兼容 |
+| 静态产物 | JSON 可解析、safetensors 文件真实存在、index 中每个文件名可解析到输出目录 |
+
+优先在 `tests/unit_test/workflows/test_llm_deploy.py` 覆盖 workflow，在 `tests/unit_test/common/models/llm/common/test_deploy_export.py` 覆盖纯 helper。真实模型导出未运行时只能声称 mocked/单测覆盖。
 
 ## BLOCKER
 
-- 新 dtype deploy 载荷字段 deploy workflow 不认识。
-- PTQ 参数未加载却导出成“PTQ 后模型”。
-- quantized tensor 写出后 index 未刷新或遗漏剩余原始权重。
-- `config.json` 保留了与实际权重不一致的 quantization_config。
-- tensorwise 直接加载所有 shard 导致内存不可控。
+- 新字段的 schema、来源或消费者未确认，却直接写入 index/config。
+- 把未调用 helper 当成当前主路径，或只改 helper 不接调用方。
+- dtype/algorithm payload 字段变化后，safetensors 命名、`tensor_routes`、index 或 config 未同步。
+- PTQ 参数未回载却导出成“PTQ 后模型”。
+- quantized tensor 写出后仍重复保留原 weight，或 index 指向不存在的文件。
+- `config.json` 与真实权重 dtype、bits、cache scheme 或 ignore 列表不一致。
+- workflow 出现模型专属分支，或 tensorwise 改动无峰值内存分析。
 
 ## 自验
 
-- `pytest tests/unit_test/workflows/test_llm_deploy.py`。
-- 新 dtype：加跑 dtype/quant module 单测。
-- 新 adapter deploy：用 mocked safetensors/index 测试 `iter_deploy_bindings()` 与 ignore 列表。
-- 真实导出若未跑，明确缺模型权重/NPU/CANN。
+- `pytest tests/unit_test/workflows/test_llm_deploy.py`
+- helper 变化：`pytest tests/unit_test/common/models/llm/common/test_deploy_export.py`
+- 新 dtype/algorithm/adapter：再加跑对应子能力测试。
+- 真实导出需要模型权重和目标运行环境；未执行时明确说明。

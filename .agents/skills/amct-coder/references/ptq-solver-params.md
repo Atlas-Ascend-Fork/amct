@@ -4,7 +4,9 @@
 
 用户提到 solver、blockwise/global、optimizer、scheduler、epoch loss、`trainable_params()`、PTQ 参数保存/加载、`PtqParamHandler`、`PtqParamStore`、导出回载、unit 调度时使用。
 
-## 必读文件
+## 源码锚点（按需选择）
+
+以下路径不是全文必读清单。先按优化循环、factory、参数 store 或回载动作选择直接定义、调用方和测试锚点。
 
 - `amct_pytorch/common/optimization/__init__.py`
 - `amct_pytorch/common/optimization/base_solver.py`

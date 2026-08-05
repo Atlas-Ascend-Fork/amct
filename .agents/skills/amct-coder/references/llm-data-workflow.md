@@ -4,7 +4,9 @@
 
 用户提到 `eval`、`extract_ptq_data`、PTQ workflow、PPL、Wikitext、Pileval、离线输入、GT、hook、dataloader、逐层 forward、`attention_mask`/`position_embeddings` 保存加载时使用。
 
-## 必读文件
+## 源码锚点（按需选择）
+
+以下路径不是全文必读清单。先按 eval、extract、PTQ 或 data provider 的当前动作选择直接链路，再按保存端/加载端契约扩展。
 
 - `amct_pytorch/cli/llm/args.py`
 - `amct_pytorch/workflows/llm_eval.py`

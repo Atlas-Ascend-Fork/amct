@@ -4,7 +4,9 @@
 
 用户提到 LLM new-path 算法、LWC、LAC、AutoRound、OmniQuant、FlatQuant、`ALGO_REGISTRY`、`targets`、可训练参数、统计参数、clip、round、structure transform 时使用。
 
-## 必读文件
+## 源码锚点（按需选择）
+
+以下路径不是全文必读清单。按主 skill 的读取预算，先根据当前改动选择直接定义、调用方和测试锚点，再按已确认的上下游影响扩展。
 
 - `amct_pytorch/algorithms/registry_factory.py`
 - `amct_pytorch/algorithms/quant/__init__.py`

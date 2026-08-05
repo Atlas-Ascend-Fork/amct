@@ -26,7 +26,7 @@ description: |
   -> 3. 判定代码体系，选择一个主子能力
   -> 4. 必要时检查阶段影响并加载辅助资料
   -> 5. 读取源码锚点，编码或 review
-  -> 6. 读取 validation.md，执行最小验证
+  -> 6. 有实际改动时读取 validation.md，执行最小验证
 ```
 
 ## 1. 先判任务职责归属
@@ -60,6 +60,8 @@ description: |
 
 - 先查现有实现和测试，避免重复新增已经存在的类、注册或闭环。
 - 输入输出、数值语义、兼容范围或用户控制方式未明确时，不自行发明类名、CLI 参数、schema、文件名或 payload 字段。
+- 上述契约未冻结时，具体源码文件或函数只能列为待核验的候选锚点，不能写成已经确定的最终落点。
+- 区分“函数存在”和“活跃调用链已接通”；没有核对调用方、注册或编排入口前，不把未调用 helper 当成当前运行路径。
 - 用户描述与当前源码冲突时，以可引用的源码行为为准；可以反证题设并停止无依据修改。
 - 没有排查完整数据链前，不使用“唯一根因”“已经完整覆盖”等强结论。
 
@@ -95,7 +97,7 @@ repo-map 前置读取不代表默认写回。仅在框架边界、核心流程�
 | `ops-boundary` | `amct_pytorch` 调用 `amct_ops` 的 import/schema/wheel/Python 侧边界 | [ops-boundary.md](references/ops-boundary.md) |
 | `public-api-tests` | 顶层 API、`__all__`、懒加载、CLI choices、packaging、tests/docs/examples 闭环 | [public-api-tests.md](references/public-api-tests.md) |
 
-读取主 playbook 后再读目标源码和测试。只有实际改变上游契约或下游产物时，才补读相关 playbook 的「上下游依赖」和「BLOCKER」小节。
+完整读取主 playbook 后再查目标源码和测试。只有实际改变上游契约或下游产物时，才把对应 playbook 作为辅助资料完整读取；不要仅因文件列表相邻而加载。
 
 ## 4. 按需检查阶段影响
 
@@ -110,22 +112,31 @@ repo-map 前置读取不代表默认写回。仅在框架边界、核心流程�
 
 通用 dtype、quant module 或算法可能同时影响多个阶段，不要强行选择单阶段；列出需要闭环的受影响阶段即可。跨阶段改动按数据流顺序处理，不要预读全部阶段 playbook。
 
-## 5. 渐进加载资料
+## 5. 渐进披露与读取预算
 
-基础读取固定为：repo-map 最小边界切片 + 主 playbook + 目标源码/测试 + 修改结束前的 [validation.md](references/validation.md)。其余资料按风险追加：
+reference 是任务规则，源码列表只是候选锚点。不要把 playbook 中列出的源码路径理解为全文必读清单。按以下层级加载：
+
+1. 确认由 amct-coder 承接后，只读 repo-map 的「分层边界」「更新规则」和一个主 playbook。
+2. 用 `rg` 定位题目中的符号、调用方和直接测试；首轮默认选择 2～4 个最相关的源码/测试锚点，只读相关定义、调用链和断言切片。
+3. 边界或契约仍不清楚时，再扩大同一链路的源码切片；只有真实跨契约影响已经成立时，才追加一个辅助 reference。
+4. 实际修改代码后、准备选择验证命令时，读取 [validation.md](references/validation.md)。纯只读规划默认不加载；review 只有在判断测试证据等级或验证完整性时才加载。
+
+以下风险出现时再追加资料：
 
 - 落点或越层仍不清楚：读 [layer-rules.md](references/layer-rules.md)。
 - attention/wrapper review 或局部模型 bug：读 [attention-rules.md](references/attention-rules.md) 或 [wrapper-rules.md](references/wrapper-rules.md)。
 - 模型结构、checkpoint/config 或模型相关精度异常：按 L1 -> L2 -> L3 读取 [casebook](../../docs/casebook/README.md)。
 - 主路径或 map/源码差异仍不清楚：只补读 repo-map 对应 section 并扩大源码锚点抽查。
 
-默认一次只加载：repo-map 最小切片 + 1 个主 playbook + `validation.md`，再追加最多 1 份辅助资料。真实跨契约任务按阶段分批加载；读取预算用于防止预读，不用于阻止完成任务。
+达到以下条件时停止扩张上下文：仓库边界已确定；活跃调用链或未接通状态已有源码证据；已能区分确认事实、待确认契约和条件式方案；修改面与最小验证范围已经明确。不要为了穷举目录、填满 playbook 文件列表或证明无关分支而继续读取。
 
-同一会话处理连续任务时，可以复用已经读取且未变化的资料，但要重新按当前动作做职责判断，不能沿用前一任务的结论。优先 `rg` 和目标行切片，不重复读取完整大文件；已有证据足够支持边界、落点和验证计划时停止扩张上下文。
+默认预算是 repo-map 最小切片 + 1 个主 playbook + 首轮 2～4 个源码/测试锚点；辅助 reference 默认最多 1 份。真实跨契约任务按数据流分批加载，每批重新检查是否已经满足停止条件。读取预算用于防止预读，不用于阻止完成任务；若必须超出，说明触发扩张的冲突或缺失证据。
+
+同一会话处理连续任务时，可以复用已经读取且未变化的资料，但要重新按当前动作做职责判断，不能沿用前一任务的结论。记录本轮新增读取和复用项；不重复读取完整大文件，也不能用旧结论替代当前题设的事实核验。
 
 ## 全局 BLOCKER
 
-遇到 BLOCKER 时停止当前错误方案，定位正确层并继续；只有正确方案存在无法从仓库判断的行为、兼容性或范围决策时才询问用户。
+遇到 BLOCKER 时停止当前错误方案，定位正确层并继续询问用户。
 
 - 不在 CLI、workflow、solver 或通用 quant module 中加入模型专属分支。
 - 不在本 skill 内新增或结构性修改模型 adapter/wrapper/attention/MLP/MoE；路由 `model-adapter` 后做契约 review。
