@@ -1,10 +1,10 @@
 # Adapted from QuIP# (Cornell-RelaxML/quip-sharp), licensed under GPLv3.
 # Source: https://github.com/Cornell-RelaxML/quip-sharp/blob/main/lib/utils/matmul_had.py
 # Modified for MiniCPM quantization on Ascend NPU.
+import math
 import os
 import time
-import math
-from os.path import join, dirname
+from os.path import dirname, join
 
 import torch
 from safetensors import safe_open
@@ -49,9 +49,13 @@ try:
     import fast_hadamard_transform as _fast_had
 except ImportError:
     try:
+        from fast_hadamard_ascend import (
+            can_use_native_runtime as _can_use_native_runtime,
+        )
         from fast_hadamard_ascend import hadamard_transform as _fast_hadamard_transform
-        from fast_hadamard_ascend import can_use_native_runtime as _can_use_native_runtime
-        from fast_hadamard_ascend import native_runtime_not_ready_reason as _native_runtime_not_ready_reason
+        from fast_hadamard_ascend import (
+            native_runtime_not_ready_reason as _native_runtime_not_ready_reason,
+        )
         from fast_hadamard_ascend import native_runtime_ready as _native_runtime_ready
     except ImportError:
         _fast_had = None
@@ -97,7 +101,7 @@ def _is_prime_power(q):
     """Return (is_prime_power, prime, exponent) for q."""
     if q < 2:
         return False, 0, 0
-    for p in range(2, int(math.isqrt(q)) + 1):
+    for p in range(2, math.isqrt(q) + 1):
         if q % p == 0:
             k = 0
             while q % p == 0:
@@ -196,7 +200,7 @@ def _paley_type1_prime(p):
 def _paley_type1_prime_power(p, k):
     """Paley Type I construction over GF(p^k)."""
     q = p ** k
-    legendre, poly = _make_gf_legendre(p, k)
+    legendre, _ = _make_gf_legendre(p, k)
 
     Q = torch.zeros(q, q, dtype=torch.float32)
     for i in range(q):
@@ -227,7 +231,7 @@ def _generate_hadamard_mats():
     mats = {}
 
     # 2-power matrices via Sylvester construction
-    for k in range(0, 9):  # 1, 2, 4, 8, 16, 32, 64, 128, 256
+    for k in range(9):  # 1, 2, 4, 8, 16, 32, 64, 128, 256
         n = 2 ** k
         mats[n] = _hadamard_sylvester(n)
 
@@ -2443,7 +2447,7 @@ if os.path.exists(_HADAMARD_CACHE_PATH):
     hadamard_mats = {}
     with safe_open(_HADAMARD_CACHE_PATH, framework="pt", device="cpu") as f:
         k_sort = []
-        for k in f.keys():
+        for k in f.keys():  # noqa: SIM118
             k_sort.append((int(k), f.get_tensor(k)))
     k_sort.sort(key=lambda x: x[0], reverse=True)
     hadamard_mats = {x[0]: x[1] for x in k_sort}
@@ -2458,7 +2462,7 @@ else:
 
 def get_hadK(n, transpose=False):
     hadK, K = None, None
-    for prefetch_k in hadamard_mats.keys():
+    for prefetch_k in hadamard_mats:
         if n % prefetch_k == 0:
             assert (is_pow2(n//prefetch_k))
             K = prefetch_k
