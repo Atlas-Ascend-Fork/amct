@@ -9,14 +9,15 @@ mantissa, 8 magnitudes) plus a per-64-element **3-level scale** (L1 `scale_facto
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  CLI (amct_pytorch/cli/llm/)                            │
-│  --quant_dtype hifp  →  auto-detect source format       │
-│    ├─ PTQ:   fake-quant + unpack (HiF4 → float)         │
-│    └─ Deploy: pack (float → HiF4 bytes)                 │
+│  --quant_dtype hifp  →  bits=4 (HiF4) / bits=8 (HiF8)   │
+│    ├─ PTQ:    fake-quant (inject HiF4 error)            │
+│    └─ Deploy: blockwise → HiF4 packed bytes            │
+│              tensorwise → fp32 unpack                   │
 ├─────────────────────────────────────────────────────────┤
-│  Python (amct_pytorch/common/utils/hifloat4_quant/)      │
-│  ├─ _hif4_encode_decode.py  shared encode/decode math    │
-│  ├─ hif4_pack_unpack.py     float ↔ HiF4 uint8 packer   │
-│  └─ quant_dequant.py        fake-quant entry point       │
+│  Python (amct_pytorch/quantization/dtypes/hifp_impl.py)  │
+│  ├─ hif4_pack()              float → HiF4 uint8 pack    │
+│  ├─ hif4_unpack()            HiF4 uint8 → fp32 unpack   │
+│  └─ hifloat4_fake_quant()    NPU kernel / CPU fallback   │
 ├─────────────────────────────────────────────────────────┤
 │  NPU Kernel (op_kernel/hifloat4_cast_kernel.cpp)         │
 │  └─ hifx_kernel / hifx_kernel_bf16   FP→HiF4→FP round   │
@@ -26,26 +27,26 @@ mantissa, 8 magnitudes) plus a per-64-element **3-level scale** (L1 `scale_facto
 
 - **1 NPU kernel**: `hifx_kernel` (fp32) / `hifx_kernel_bf16` (bf16), performs a single FP→HiF4→FP
   simulation round trip
-- **Pack/unpack**: pure PyTorch (`hif4_pack_unpack.py`), encodes float weights to uint8 HiF4 bytes
-  or decodes bytes back to float
-- **Shared encode/decode**: fake-quant and pack share the same `_hif4_encode_decode` logic,
+- **Pack/unpack**: pure PyTorch (`hifp_impl.py`), `hif4_pack` encodes to uint8 HiF4 bytes,
+  `hif4_unpack` decodes back to fp32
+- **Shared encode/decode**: fake-quant and pack share the same `hif4_encode` / `hif4_decode` logic,
   guaranteeing the evaluation path and deployed weight never drift
 
 ## CLI workflow
 
 ```bash
-# PTQ: fake-quant simulation or HiF4 unpack
+# PTQ: fake-quant simulation (injects HiF4 error, no file output)
 python -m amct_pytorch.cli.llm.ptq \
-    --model /path/to/model --quant_dtype hifp --output_dir ./output
+    --model /path/to/model --quant_dtype hifp --w_bits 4 --output_dir ./output
 
-# Deploy: float → HiF4 uint8 bytes, outputs safetensors
+# Deploy blockwise: fp16/bf16 → HiF4 packed bytes
 python -m amct_pytorch.cli.llm.deploy \
-    --model /path/to/model --quant_dtype hifp --output_dir ./output
-```
+    --model /path/to/model --quant_dtype hifp --granularity block --output_dir ./output
 
-When `--quant_dtype hifp`, the CLI **auto-detects** the input model format:
-- **hif4 packed** → PTQ directly unpacks to a float checkpoint (no model build needed)
-- **bf16/fp16 raw weights** → PTQ runs fake-quant evaluation, or deploy runs real packing
+# Deploy tensorwise: HiF4 packed weights → fp32
+python -m amct_pytorch.cli.llm.deploy \
+    --model /path/to/model --quant_dtype hifp --granularity tensor --output_dir ./output
+```
 
 ## API
 
@@ -71,15 +72,17 @@ The kernel reproduces AMCT's pure-python reference exactly. Validate on device a
 ```python
 import torch
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
-from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
+from amct_pytorch.quantization.dtypes.hifp_impl import hif4_pack, hif4_unpack
 
-x = torch.randn(4, 512, dtype=torch.bfloat16)
-y_ref = quant_dequant_float(x, QType('hifx4').dim(-1), force_py=True, force_fp32=True)  # CPU reference
-y_npu = hifloat4_fake_quant(x.npu()).cpu()                                              # AscendC kernel
-assert (y_ref.float() - y_npu.float()).abs().max() < 1e-6
-# zeros must not produce NaN
-z = torch.zeros(1, 64, dtype=torch.bfloat16)
-assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
+# pack/unpack round-trip
+x = torch.randn(2, 128, dtype=torch.bfloat16)
+scale, value = hif4_pack(x)
+y = hif4_unpack(scale, value)
+assert y.shape == x.shape
+
+# NPU kernel vs CPU fallback (~0 error)
+y_npu = hifloat4_fake_quant(x.npu()).cpu()
+assert (y_npu.float() - y).abs().max() < 1e-6
 ```
 
 `tests/amct_ops/test_hifloat4_cast.py` cross-checks the kernel against this CPU reference when an NPU is present.

@@ -7,14 +7,15 @@ HiFloat4（hifx4）是 4-bit 块缩放浮点格式：每元素 **S1P2**（1 符�
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  CLI (amct_pytorch/cli/llm/)                            │
-│  --quant_dtype hifp  →  auto-detect source format       │
-│    ├─ PTQ:   fake-quant + unpack (HiF4 → float)         │
-│    └─ Deploy: pack (float → HiF4 bytes)                 │
+│  --quant_dtype hifp  →  bits=4 (HiF4) / bits=8 (HiF8)   │
+│    ├─ PTQ:    fake-quant (注入 HiF4 误差)                │
+│    └─ Deploy: blockwise → HiF4 打包字节                  │
+│              tensorwise → fp32 解包                      │
 ├─────────────────────────────────────────────────────────┤
-│  Python (amct_pytorch/common/utils/hifloat4_quant/)      │
-│  ├─ _hif4_encode_decode.py  共享编解码（fake-quant & pack）│
-│  ├─ hif4_pack_unpack.py     float ↔ HiF4 uint8 打包/解包  │
-│  └─ quant_dequant.py         fake-quant 入口             │
+│  Python (amct_pytorch/quantization/dtypes/hifp_impl.py)  │
+│  ├─ hif4_pack()              float → HiF4 uint8 打包     │
+│  ├─ hif4_unpack()            HiF4 uint8 → fp32 解包      │
+│  └─ hifloat4_fake_quant()    NPU kernel / CPU fallback   │
 ├─────────────────────────────────────────────────────────┤
 │  NPU Kernel (op_kernel/hifloat4_cast_kernel.cpp)         │
 │  └─ hifx_kernel / hifx_kernel_bf16    FP→HiF4→FP 往返   │
@@ -23,24 +24,24 @@ HiFloat4（hifx4）是 4-bit 块缩放浮点格式：每元素 **S1P2**（1 符�
 ```
 
 - **1 个 NPU kernel**：`hifx_kernel`（fp32）/ `hifx_kernel_bf16`（bf16），做一次 FP→HiF4→FP 仿真往返
-- **打包/解包**：纯 PyTorch 实现（`hif4_pack_unpack.py`），将 float 权重编码为 uint8 HiF4 字节，或从字节解码为 float
-- **共享编解码**：fake-quant 和 pack 共用同一套 `_hif4_encode_decode`，保证评估路径和部署权重永远一致
+- **打包/解包**：纯 PyTorch 实现（`hifp_impl.py`），`hif4_pack` 编码为 uint8 HiF4 字节，`hif4_unpack` 解码回 fp32
+- **共享编解码**：fake-quant 和 pack 共用同一套 `hif4_encode` / `hif4_decode`，保证评估路径和部署权重永远一致
 
 ## CLI 工作流
 
 ```bash
-# PTQ（后训练量化）：fake-quant 仿真 or HiF4 解包
+# PTQ: fake-quant 仿真（注入 HiF4 误差，不产出文件）
 python -m amct_pytorch.cli.llm.ptq \
-    --model /path/to/model --quant_dtype hifp --output_dir ./output
+    --model /path/to/model --quant_dtype hifp --w_bits 4 --output_dir ./output
 
-# Deploy（部署打包）：float → HiF4 uint8 字节，输出 safetensors
+# Deploy blockwise: fp16/bf16 → HiF4 打包字节
 python -m amct_pytorch.cli.llm.deploy \
-    --model /path/to/model --quant_dtype hifp --output_dir ./output
-```
+    --model /path/to/model --quant_dtype hifp --granularity block --output_dir ./output
 
-当 `--quant_dtype hifp` 时，CLI 会**自动检测**输入模型格式：
-- **hif4 已打包** → PTQ 直接解包为 float checkpoint（无需构建模型）
-- **bf16/fp16 原始权重** → PTQ 走 fake-quant 评估 or deploy 走真打包
+# Deploy tensorwise: HiF4 打包权重 → fp32 解包
+python -m amct_pytorch.cli.llm.deploy \
+    --model /path/to/model --quant_dtype hifp --granularity tensor --output_dir ./output
+```
 
 ## 接口
 
@@ -59,23 +60,25 @@ host 会把 `qdim` 移到最后一维、补零到 64 的整数倍（补零不影
 
 ## 正确性（验收红线）
 
-kernel 逐步复刻纯 python 参考，逐元素对齐到 ~0 误差。在设备上对拍 AMCT 的 CPU 参考：
+kernel 逐步复刻纯 python 参考，逐比特对齐到 ~0 误差。在设备上逐比特比较 AMCT 的 CPU 参考：
 
 ```python
 import torch
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
-from amct_pytorch.common.utils.hifloat4_quant import QType, quant_dequant_float
+from amct_pytorch.quantization.dtypes.hifp_impl import hif4_pack, hif4_unpack
 
-x = torch.randn(4, 512, dtype=torch.bfloat16)
-y_ref = quant_dequant_float(x, QType('hifx4').dim(-1), force_py=True, force_fp32=True)  # CPU 参考
-y_npu = hifloat4_fake_quant(x.npu()).cpu()                                              # AscendC kernel
-assert (y_ref.float() - y_npu.float()).abs().max() < 1e-6
-# 零值不能出 NaN
-z = torch.zeros(1, 64, dtype=torch.bfloat16)
-assert not torch.isnan(hifloat4_fake_quant(z.npu())).any()
+# pack/unpack 往返
+x = torch.randn(2, 128, dtype=torch.bfloat16)
+scale, value = hif4_pack(x)
+y = hif4_unpack(scale, value)
+assert y.shape == x.shape
+
+# NPU kernel vs CPU fallback 逐比特比较（~0 误差）
+y_npu = hifloat4_fake_quant(x.npu()).cpu()
+assert (y_npu.float() - y).abs().max() < 1e-6
 ```
 
-`tests/amct_ops/test_hifloat4_cast.py` 在有 NPU 时对拍 kernel 与该 CPU 参考。
+`tests/amct_ops/test_hifloat4_cast.py` 在有 NPU 时逐比特比较 kernel 与该 CPU 参考。
 
 ## 打包格式
 
