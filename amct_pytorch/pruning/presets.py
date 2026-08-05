@@ -90,7 +90,7 @@ MOE_VARIANCE_MENU_CFG = {
     "methods": {
         "moe": {
             "name": "activation_count",
-            "kwargs": {"prune_ratio": 0.50, "top_k": 8},
+            "kwargs": {"prune_ratio": 0.50},
             "menu": _MOE_CRITERION_MENU,
         },
     },

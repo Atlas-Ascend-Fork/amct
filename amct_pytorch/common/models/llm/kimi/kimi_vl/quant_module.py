@@ -1,0 +1,31 @@
+# -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
+from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP
+
+
+class QuantKimiVLMLP(QuantGatedMLP):
+    """Kimi-VL feed-forward quant wrapper.
+
+    The language backbone reuses DeepSeek-V3's `DeepseekV3MLP` verbatim
+    (`hidden_size` / `intermediate_size` / `act_fn` / `gate_proj` / `up_proj` /
+    `down_proj`), which is exactly the shape `QuantGatedMLP` expects, so the
+    dense MLP, the routed experts and the shared experts all go through the
+    shared implementation.
+    """
+
+    pass

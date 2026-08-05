@@ -21,7 +21,12 @@ from typing import Callable, Dict, List, Optional, Tuple, TypeVar
 import torch
 import torch.nn as nn
 
-from ..domains.moe import MoEPruningDomain, MoETarget
+from ..domains.moe import (
+    DEFAULT_TOP_K,
+    MoEPruningDomain,
+    MoETarget,
+    read_positive_int,
+)
 from ..utils import get_submodule, record_prune_width
 
 Accumulator = TypeVar("Accumulator")
@@ -31,7 +36,7 @@ def register_router_hooks(
     model: nn.Module,
     domain: MoEPruningDomain,
     targets: List[MoETarget],
-    top_k: int,
+    top_k: Optional[int],
     make_accumulator: Callable[[MoEPruningDomain, nn.Module, MoETarget, int], "Accumulator"],
     make_hook: Callable[["Accumulator", int], Callable],
 ) -> Tuple[Dict[str, "Accumulator"], List["torch.utils.hooks.RemovableHandle"]]:
@@ -42,9 +47,10 @@ def register_router_hooks(
         if target.router_path is None:
             continue
         router = get_submodule(model, target.router_path)
-        accumulator = make_accumulator(domain, model, target, top_k)
+        layer_k = domain.resolve_top_k(model, target, top_k)
+        accumulator = make_accumulator(domain, model, target, layer_k)
         accumulators[target.router_path] = accumulator
-        hooks.append(router.register_forward_hook(make_hook(accumulator, top_k)))
+        hooks.append(router.register_forward_hook(make_hook(accumulator, layer_k)))
     return accumulators, hooks
 
 
@@ -52,7 +58,7 @@ def patch_router_module(
     model: nn.Module,
     target: MoETarget,
     keep_idx: List[int],
-    top_k: int,
+    top_k: Optional[int],
 ) -> None:
     """Constrain the router to the kept experts (narrow topk + slice expert_bias to kept)."""
     moe_module = (
@@ -69,7 +75,9 @@ def patch_router_module(
     if hasattr(router, "group_limited_topk"):
 
         def _simple_topk(scores, _router=router, _k=top_k):
-            k = min(getattr(_router, "top_k", _k), scores.shape[-1])
+            router_k = read_positive_int(_router, ("top_k",))
+            k = router_k if router_k is not None else (_k or DEFAULT_TOP_K)
+            k = min(int(k), scores.shape[-1])
             return torch.topk(scores, k=k, dim=-1)
 
         router.group_limited_topk = _simple_topk
@@ -99,11 +107,12 @@ def prune_one_layer(
     domain: MoEPruningDomain,
     target: MoETarget,
     keep_idx: List[int],
-    top_k: int,
+    top_k: Optional[int],
 ) -> None:
     """Land the prune (domain dispatches ModuleList rebuild / fused slice) + patch the router."""
-    domain.prune_experts(model, target, keep_idx, top_k)
-    patch_router_module(model, target, keep_idx, top_k)
+    layer_k = domain.resolve_top_k(model, target, top_k)
+    domain.prune_experts(model, target, keep_idx, layer_k)
+    patch_router_module(model, target, keep_idx, layer_k)
 
 
 def prune_moe_layers(
@@ -112,7 +121,7 @@ def prune_moe_layers(
     domain: MoEPruningDomain,
     targets: List[MoETarget],
     report,
-    top_k: int,
+    top_k: Optional[int],
     select_fn: Callable,
 ) -> Optional[int]:
     """Shared per-layer MoE prune loop; select_fn(idx, target) -> (keep_idx, num_experts, message)."""
