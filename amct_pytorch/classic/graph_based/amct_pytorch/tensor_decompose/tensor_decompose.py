@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -24,8 +24,7 @@ import json
 import torch
 import torch.nn as nn
 
-from ...amct_pytorch.common.decomposition.decomposition import \
-    tensor_decomposition
+from ...amct_pytorch.common.decomposition.decomposition import tensor_decomposition
 from ...amct_pytorch.common.utils.files import check_files_exist
 from ...amct_pytorch.utils.log import LOGGER
 
@@ -69,7 +68,8 @@ def auto_decomposition(model, decompose_info_path=None):
             continue
         LOGGER.logi('Processing: \'{}\''.format(layer_name))
         new_layer_packs, decom_info = _decompose_one_layer(
-            layer_name, layer, param_dict)
+            layer_name, layer, param_dict
+        )
         if len(new_layer_packs) == 0:
             continue
         new_layer_groups.append([layer_name, new_layer_packs])
@@ -107,8 +107,12 @@ def decompose_network(model, decompose_info_path):
             ['conv2.0', 'conv2.1'], ...}. Only the changed layers are included.
     """
     LOGGER.logi('decompose_network start.')
-    with open(_check_decom_net_input(model, decompose_info_path), 'r',
-              encoding='UTF-8', newline='') as json_file:
+    with open(
+        _check_decom_net_input(model, decompose_info_path),
+        'r',
+        encoding='UTF-8',
+        newline='',
+    ) as json_file:
         decom_info_list = json.load(json_file)
     named_modules = dict(model.named_modules())
     param_dict = {}
@@ -116,19 +120,25 @@ def decompose_network(model, decompose_info_path):
     for decom_info in decom_info_list:
         layer_name = decom_info['ori_layer_info']['name']
         if layer_name not in named_modules:
-            raise ValueError(
-                'Cannot find layer \'{}\' in model.'.format(layer_name))
+            raise ValueError('Cannot find layer \'{}\' in model.'.format(layer_name))
         layer = named_modules[layer_name]
         if not _check_type(layer, nn.Conv2d):
-            raise ValueError('Layer \'{}\' should be a torch.nn.Conv2d object.'
-                             .format(layer_name))
+            raise ValueError(
+                'Layer \'{}\' should be a torch.nn.Conv2d object.'.format(layer_name)
+            )
         _check_layer_info(layer_name, layer, decom_info['ori_layer_info'])
         mode = decom_info['mode']
         new_layer_packs = []
         for pos in ['first', 'last']:
-            new_layer_packs.append(_create_new_layer(
-                layer, pos, mode,
-                decom_info['decom_nodes'][pos]['weight_shape'], param_dict))
+            new_layer_packs.append(
+                _create_new_layer(
+                    layer,
+                    pos,
+                    mode,
+                    decom_info['decom_nodes'][pos]['weight_shape'],
+                    param_dict,
+                )
+            )
         new_layer_groups.append([layer_name, new_layer_packs])
     model, changes = _replace_layers(model, new_layer_groups)
     LOGGER.logi('decompose_network complete.')
@@ -217,18 +227,22 @@ def _save_decom_info(decom_info_list, decompose_info_path):
         return
     save_root = os.path.dirname(decompose_info_path)
     if os.path.isfile(save_root):
-        raise IOError('Failed to create path, {} is a file.'.format(
-            save_root))
+        raise IOError('Failed to create path, {} is a file.'.format(save_root))
     dir_mode = stat.S_IRWXU + stat.S_IRGRP + stat.S_IXGRP
     file_flags = os.O_WRONLY + os.O_CREAT + os.O_TRUNC
     file_mode = stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP
     os.makedirs(save_root, dir_mode, exist_ok=True)
     check_files_exist([decompose_info_path])
-    with os.fdopen(os.open(decompose_info_path, file_flags, file_mode), 'w',
-                   encoding='UTF-8', newline='') as json_file:
+    with os.fdopen(
+        os.open(decompose_info_path, file_flags, file_mode),
+        'w',
+        encoding='UTF-8',
+        newline='',
+    ) as json_file:
         json.dump(decom_info_list, json_file, indent='\t')
-    LOGGER.logi('Decomposition information file is saved to: {}'.format(
-        decompose_info_path))
+    LOGGER.logi(
+        'Decomposition information file is saved to: {}'.format(decompose_info_path)
+    )
 
 
 def _log_decomposed_layers(model, ori_layer_name, new_layers):
@@ -246,8 +260,7 @@ def _log_decomposed_layers(model, ori_layer_name, new_layers):
     module_names = {v: k for k, v in model.named_modules()}
     for new_layer in new_layers:
         new_layer_names.append(module_names[new_layer])
-    LOGGER.logi('Decompose: \'{}\' -> {}'.format(
-        ori_layer_name, new_layer_names))
+    LOGGER.logi('Decompose: \'{}\' -> {}'.format(ori_layer_name, new_layer_names))
     change = {ori_layer_name: new_layer_names}
     return change
 
@@ -261,7 +274,7 @@ def _check_type(obj, target_type):
     Return:
         Whether the object matches the type.
     """
-    return isinstance(obj, target_type) 
+    return isinstance(obj, target_type)
 
 
 def _fmt_param(param, using_list=False):
@@ -318,7 +331,8 @@ def _check_param(layer_name, layer_info, param_name, param):
         raise ValueError(
             '{} of layer \'{}\' does not match the original model, please '
             'check the model definition and the decomposition information '
-            'file.'.format(param_name, layer_name))
+            'file.'.format(param_name, layer_name)
+        )
 
 
 def _check_layer_info(layer_name, layer, layer_info):
@@ -358,32 +372,33 @@ def _decompose_one_layer(layer_name, layer, param_dict):
     if layer.weight in param_dict:
         decom_res = param_dict[layer.weight]['decom_res']
     else:
-        if layer.weight.data.dtype not in [
-                torch.float16, torch.float32, torch.float64]:
-            LOGGER.logw('Unsupported data type {} of layer \'{}\', ignored.'
-                        .format(layer.weight.data.dtype, layer_name))
+        if layer.weight.data.dtype not in [torch.float16, torch.float32, torch.float64]:
+            LOGGER.logw(
+                'Unsupported data type {} of layer \'{}\', ignored.'.format(
+                    layer.weight.data.dtype, layer_name
+                )
+            )
             return [], {}
         # C_out, C_in, K_h, K_w
         tensor = layer.weight.data.cpu().to(torch.float64).numpy()
         decom_res = tensor_decomposition(
-            tensor, _fmt_param(layer.stride),
-            layer.groups, _fmt_param(layer.dilation))
+            tensor, _fmt_param(layer.stride), layer.groups, _fmt_param(layer.dilation)
+        )
         param_dict[layer.weight] = {'decom_res': decom_res}
     mode = decom_res.get('mode').name
     if mode == 'UNCHANGE':
         return [], {}
     new_layer_packs = []
-    decom_info = {
-        'ori_layer_info': _get_layer_info(layer_name, layer), 'mode': mode}
+    decom_info = {'ori_layer_info': _get_layer_info(layer_name, layer), 'mode': mode}
     decom_nodes = {}
     for pos in ['first', 'last']:
         weight = decom_res.get(pos)
-        new_layer_pack = _create_new_layer(
-            layer, pos, mode, weight.shape, param_dict)
+        new_layer_pack = _create_new_layer(layer, pos, mode, weight.shape, param_dict)
         new_layer = new_layer_pack[0]
-        new_layer.weight.data = _modify_memory_format(_modify_data_type(
-            torch.from_numpy(weight).contiguous(), layer.weight.data),
-            layer.weight.data)
+        new_layer.weight.data = _modify_memory_format(
+            _modify_data_type(torch.from_numpy(weight).contiguous(), layer.weight.data),
+            layer.weight.data,
+        )
         if new_layer.bias is not None:
             new_bias = layer.bias.data.detach().clone()
             new_layer.bias.data = new_bias.cpu()
@@ -408,8 +423,9 @@ def _create_new_layer(ori_layer, pos, mode, weight_shape, param_dict):
         new_layer_pack: A list containing the created new layer and the devices
             of its data to be placed.
     """
-    if (pos == 'first' and mode in ['FCSK', 'SCFK']) or \
-            (pos == 'last' and mode in ['FCFK', 'SCSK']):
+    if (pos == 'first' and mode in ['FCSK', 'SCFK']) or (
+        pos == 'last' and mode in ['FCFK', 'SCSK']
+    ):
         modify_idx = 1  # width index
     else:
         modify_idx = 0  # height index
@@ -426,14 +442,16 @@ def _create_new_layer(ori_layer, pos, mode, weight_shape, param_dict):
         dilation=dilation,
         groups=ori_layer.groups,
         bias=bias,
-        padding_mode=ori_layer.padding_mode)
+        padding_mode=ori_layer.padding_mode,
+    )
     bias_device = None
     if ori_layer.weight in param_dict and pos in param_dict[ori_layer.weight]:
         new_layer.weight = param_dict[ori_layer.weight][pos]
     else:
-        new_layer.weight.data = _modify_memory_format(_modify_data_type(
-            new_layer.weight.data, ori_layer.weight.data),
-            ori_layer.weight.data)
+        new_layer.weight.data = _modify_memory_format(
+            _modify_data_type(new_layer.weight.data, ori_layer.weight.data),
+            ori_layer.weight.data,
+        )
         if ori_layer.weight not in param_dict:
             param_dict[ori_layer.weight] = {}
         param_dict[ori_layer.weight][pos] = new_layer.weight
@@ -442,7 +460,8 @@ def _create_new_layer(ori_layer, pos, mode, weight_shape, param_dict):
             new_layer.bias = param_dict[ori_layer.bias]
         else:
             new_layer.bias.data = _modify_data_type(
-                new_layer.bias.data, ori_layer.bias.data)
+                new_layer.bias.data, ori_layer.bias.data
+            )
             param_dict[ori_layer.bias] = new_layer.bias
         bias_device = ori_layer.bias.data.device
     new_layer_pack = [new_layer, ori_layer.weight.data.device, bias_device]
@@ -530,8 +549,9 @@ def _modify_data_type(src_tensor, tar_tensor):
     src_type = src_tensor.dtype
     tar_type = tar_tensor.dtype
     f16, f32, f64 = torch.float16, torch.float32, torch.float64
-    if (src_type == f64 and tar_type in [f16, f32]) or \
-            (src_type == f32 and tar_type == f16):
+    if (src_type == f64 and tar_type in [f16, f32]) or (
+        src_type == f32 and tar_type == f16
+    ):
         tar_data_info = torch.finfo(tar_type)
         src_tensor = src_tensor.clamp(tar_data_info.min, tar_data_info.max)
     return src_tensor.to(tar_type)
@@ -550,8 +570,10 @@ def _check_obj_type(obj, obj_name, expected_type, expected_type_name=None):
         if expected_type_name is None:
             expected_type_name = expected_type.__name__
         raise TypeError(
-            '\'{}\' type is wrong. Expected type \'{}\', got \'{}\' instead.'
-            .format(obj_name, expected_type_name, type(obj).__name__))
+            '\'{}\' type is wrong. Expected type \'{}\', got \'{}\' instead.'.format(
+                obj_name, expected_type_name, type(obj).__name__
+            )
+        )
 
 
 def _check_file_existence(file_path):

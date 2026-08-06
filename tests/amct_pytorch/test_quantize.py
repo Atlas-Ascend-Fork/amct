@@ -27,7 +27,7 @@ from mock_torch_npu import (
     mock_npu_quant_matmul,
     mock_npu_quantize,
     mock_npu_weight_quant_batchmatmul,
-    mock_npu
+    mock_npu,
 )
 
 from amct_pytorch import (
@@ -38,8 +38,6 @@ from amct_pytorch import (
     convert,
     quantize,
 )
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
-from amct_pytorch.common.config import parse_config
 
 torch.manual_seed(0)
 
@@ -64,11 +62,19 @@ class TestDefQuantize(unittest.TestCase):
     '''
     ST FOR QUANTIZATION
     '''
+
     @classmethod
     def setUpClass(cls):
         cls.test_model = TestModel().to(torch.bfloat16)
         cls.inputs = torch.randn(64, 64).to(torch.bfloat16)
-        cls.ori_out = cls.test_model(cls.inputs).to(torch.float32).detach().to('cpu').numpy().astype(np.float32)
+        cls.ori_out = (
+            cls.test_model(cls.inputs)
+            .to(torch.float32)
+            .detach()
+            .to('cpu')
+            .numpy()
+            .astype(np.float32)
+        )
         logger.info('TestDefQuantize START!')
 
     @classmethod
@@ -84,8 +90,14 @@ class TestDefQuantize(unittest.TestCase):
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -101,12 +113,18 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -122,12 +140,18 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -143,13 +167,18 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear2.quantized_weight.dtype, torch.int32)
-        quant_out = model(self.inputs.npu())
-
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.weight_npu_quant_module.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -164,12 +193,18 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
+        model(self.inputs.npu())
 
     @patch('torch_npu.npu_quantize', wraps=mock_npu_quantize)
     @patch('torch_npu.npu_quant_matmul', wraps=mock_npu_quant_matmul)
-    @patch('torch_npu.npu_weight_quant_batchmatmul', wraps=mock_npu_weight_quant_batchmatmul)
-    @patch('torch_npu.npu_convert_weight_to_int4pack', wraps=mock_npu_convert_weight_to_int4pack)
+    @patch(
+        'torch_npu.npu_weight_quant_batchmatmul',
+        wraps=mock_npu_weight_quant_batchmatmul,
+    )
+    @patch(
+        'torch_npu.npu_convert_weight_to_int4pack',
+        wraps=mock_npu_convert_weight_to_int4pack,
+    )
     @patch(
         'amct_pytorch.classic.deploy_op.npu_quantization_linear.check_parameters_in_schema',
         MagicMock(return_value=True),
@@ -186,5 +221,4 @@ class TestDefQuantize(unittest.TestCase):
         torch.Tensor.npu = mock_npu
         convert(model)
         self.assertEqual(model.linear3.quantized_weight.dtype, torch.int8)
-        quant_out = model(self.inputs.npu())
-
+        model(self.inputs.npu())

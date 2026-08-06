@@ -15,5 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+__all__ = ["Qwen3", "Qwen3Moe"]
+
 from .qwen3 import Qwen3
 from .qwen3_moe import Qwen3Moe

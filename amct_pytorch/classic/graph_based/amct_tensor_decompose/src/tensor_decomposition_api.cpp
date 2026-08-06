@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -28,24 +28,21 @@ using namespace std;
 using namespace TensorDecompose;
 
 extern "C" {
-int GetRank(ConvInfo info, const double *s, unsigned int length)
-{
+int GetRank(ConvInfo info, const double *s, unsigned int length) {
     if (length == 0) {
         return 0;
     }
 
     Vector vecS;
     TdError vecRet = vecS.Create(s, length);
-    if (vecRet !=TdError::TD_SUCCESS) {
+    if (vecRet != TdError::TD_SUCCESS) {
         return length;
     }
     int res = TensorDecomposition::Estimation(info, vecS, length);
     return res;
 }
 
-
-DecomposeMode FastFilterConv(ConvInfo info)
-{
+DecomposeMode FastFilterConv(ConvInfo info) {
     int minChannel = 64;
     int channelRound = 16;
     int ksThreshold = 7;

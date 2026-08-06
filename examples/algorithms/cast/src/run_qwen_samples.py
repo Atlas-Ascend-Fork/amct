@@ -12,8 +12,6 @@
 # ----------------------------------------------------------------------------
 
 import argparse
-import torch
-import torch_npu
 
 from utils import get_test_dataset, get_qwen, test_ppl
 import amct_pytorch as amct

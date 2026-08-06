@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -28,6 +28,7 @@ class InsertFakequantAvgPool2dPass(BaseModuleFusionPass):
     Function: insert fakequant avgpool2d module
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records, num_bits):
         """
         Function: init object
@@ -70,12 +71,13 @@ class InsertFakequantAvgPool2dPass(BaseModuleFusionPass):
         # Step2: fake quant
         quant_params = self.records[object_name]
         fakequant_avgpool2d_module = FakeQuantizedAvgPool2d(
-            object_module, quant_params, object_name, self.num_bits)
+            object_module, quant_params, object_name, self.num_bits
+        )
 
         # Step3: replace new model
-        setattr(
-            parent_module, object_name.split('.')[-1], fakequant_avgpool2d_module)
+        setattr(parent_module, object_name.split('.')[-1], fakequant_avgpool2d_module)
 
         LOGGER.logd(
-            "Insert FakeQuantizedAvgPool2d module to '{}' success!".format(
-                object_name), 'InsertFakequantAvgPool2dPass')
+            "Insert FakeQuantizedAvgPool2d module to '{}' success!".format(object_name),
+            'InsertFakequantAvgPool2dPass',
+        )

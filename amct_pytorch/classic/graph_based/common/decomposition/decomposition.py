@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,7 +22,7 @@ import ctypes
 from enum import Enum
 from enum import unique
 import numpy as np
-from ... import lib # pylint: disable=E0402
+from ... import lib  # pylint: disable=E0402
 
 FIRST = 'first'
 LAST = 'last'
@@ -31,30 +31,42 @@ LAST = 'last'
 @unique
 class DecomposeMode(Enum):
     """Enumeration class indicating different decomposition mode"""
+
     UNCHANGE = 0  # do not decompose
-    FCFK = 1      # decompose First Channel and First Kernel
-    FCSK = 2      # decompose First Channel and Second Kernel
-    SCFK = 3      # decompose Second Channel and First Kernel
-    SCSK = 4      # decompose Second Channel and Second Kernel
+    FCFK = 1  # decompose First Channel and First Kernel
+    FCSK = 2  # decompose First Channel and Second Kernel
+    SCFK = 3  # decompose Second Channel and First Kernel
+    SCSK = 4  # decompose Second Channel and Second Kernel
 
 
-class ConvInfoCtypes(ctypes.Structure): # pylint: disable=R0903
+class ConvInfoCtypes(ctypes.Structure):  # pylint: disable=R0903
     """Class for Python and C++ interaction"""
-    _fields_ = [('in_channel', ctypes.c_int),
-                ('out_channel', ctypes.c_int),
-                ('kernel_size_h', ctypes.c_int),
-                ('kernel_size_w', ctypes.c_int),
-                ('stride_h', ctypes.c_int),
-                ('stride_w', ctypes.c_int),
-                ('group', ctypes.c_int),
-                ('dilation_h', ctypes.c_int),
-                ('dilation_w', ctypes.c_int)]
+
+    _fields_ = [
+        ('in_channel', ctypes.c_int),
+        ('out_channel', ctypes.c_int),
+        ('kernel_size_h', ctypes.c_int),
+        ('kernel_size_w', ctypes.c_int),
+        ('stride_h', ctypes.c_int),
+        ('stride_w', ctypes.c_int),
+        ('group', ctypes.c_int),
+        ('dilation_h', ctypes.c_int),
+        ('dilation_w', ctypes.c_int),
+    ]
 
 
-class ConvInfo: # pylint: disable=R0902, R0903
+class ConvInfo:  # pylint: disable=R0902, R0903
     """attributes of conv2d layer"""
-    def __init__(self, in_channel, out_channel, # pylint: disable=R0913
-                 kernel_size, stride, group, dilation):
+
+    def __init__(
+        self,
+        in_channel,
+        out_channel,  # pylint: disable=R0913
+        kernel_size,
+        stride,
+        group,
+        dilation,
+    ):
         self.in_channel = in_channel
         self.out_channel = out_channel
         self.group = group
@@ -77,15 +89,17 @@ class ConvInfo: # pylint: disable=R0902, R0903
         else:
             self.dilation_h = self.dilation_w = dilation
 
-        self.conv_info_ctype = ConvInfoCtypes(self.in_channel,
-                                              self.out_channel,
-                                              self.kernel_size_h,
-                                              self.kernel_size_w,
-                                              self.stride_h,
-                                              self.stride_w,
-                                              self.group,
-                                              self.dilation_h,
-                                              self.dilation_w)
+        self.conv_info_ctype = ConvInfoCtypes(
+            self.in_channel,
+            self.out_channel,
+            self.kernel_size_h,
+            self.kernel_size_w,
+            self.stride_h,
+            self.stride_w,
+            self.group,
+            self.dilation_h,
+            self.dilation_w,
+        )
 
 
 def fast_filter_conv(info):
@@ -97,9 +111,7 @@ def fast_filter_conv(info):
             if true, do not decompose
     """
     lib_dir = os.path.dirname(lib.__file__)
-    cpp_lib = ctypes.cdll.LoadLibrary(
-        os.path.join(lib_dir, "libtensor_decompose.so")
-    )
+    cpp_lib = ctypes.cdll.LoadLibrary(os.path.join(lib_dir, "libtensor_decompose.so"))
     is_filter = cpp_lib.FastFilterConv(info.conv_info_ctype)
     return is_filter
 
@@ -120,9 +132,7 @@ def get_rank(singular_value, info):
     data_p = singular_value.ctypes.data_as(c_double_p)
     carray_length = ctypes.c_int(len(singular_value))
     lib_dir = os.path.dirname(lib.__file__)
-    cpp_lib = ctypes.cdll.LoadLibrary(
-        os.path.join(lib_dir, "libtensor_decompose.so")
-    )
+    cpp_lib = ctypes.cdll.LoadLibrary(os.path.join(lib_dir, "libtensor_decompose.so"))
     rank = cpp_lib.GetRank(info.conv_info_ctype, data_p, carray_length)
     return rank
 
@@ -138,9 +148,7 @@ def unfold(tensor, dim):
     if len(tensor.shape) < 2:
         raise ValueError('dimension of input tensor must be more than 1')
     if dim >= len(tensor.shape):
-        raise ValueError(
-            'input dim must be less than dimension of input tensor'
-        )
+        raise ValueError('input dim must be less than dimension of input tensor')
 
     axis = list(range(len(tensor.shape)))
     axis[0], axis[dim] = axis[dim], axis[0]
@@ -160,16 +168,15 @@ def tensor_dim_dot(tensor, matrix, dim):
     if len(tensor.shape) < 2:
         raise ValueError('dimension of input tensor must be more than 1')
     if dim >= len(tensor.shape):
-        raise ValueError(
-            'input dim must be less than dimension of input tensor'
-        )
+        raise ValueError('input dim must be less than dimension of input tensor')
     if len(matrix.shape) != 2:
         raise ValueError('dimension of input matrix must be 2')
     if matrix.shape[1] != tensor.shape[dim]:
         raise ValueError(
             'shapes {0} and {1} not aligned in dim-{2} '.format(
                 matrix.shape, tensor.shape, dim
-            ))
+            )
+        )
 
     res = matrix.dot(unfold(tensor, dim))
 
@@ -183,7 +190,7 @@ def tensor_dim_dot(tensor, matrix, dim):
     return res.reshape(-1, *res_shape).transpose(*axis)
 
 
-def tensor_decomposition(tensor, stride=1, group=1, dilation=1): # pylint: disable=R0914
+def tensor_decomposition(tensor, stride=1, group=1, dilation=1):  # pylint: disable=R0914
     """decompose 4d tensor to 2 samll tensors,
        if tensor can not decompose, return DecomposeMode.UNCHANGE
 
@@ -199,29 +206,20 @@ def tensor_decomposition(tensor, stride=1, group=1, dilation=1): # pylint: disab
     return: dict of ndarray
     """
     if len(tensor.shape) != 4:
-        raise ValueError(
-            'weight tensor must have shape (Cout, Cin, KH, KW)'
-        )
+        raise ValueError('weight tensor must have shape (Cout, Cin, KH, KW)')
 
     if np.isinf(np.sum(tensor)) or np.isnan(np.sum(tensor)):
-        raise ValueError(
-            'weight tensor contains invalid number(inf or nan)'
-        )
+        raise ValueError('weight tensor contains invalid number(inf or nan)')
 
     in_channel = tensor.shape[1] * group
     out_channel = tensor.shape[0]
     kernel_size = (tensor.shape[2], tensor.shape[3])
 
-    info = ConvInfo(in_channel, out_channel,
-                    kernel_size, stride, group, dilation)
+    info = ConvInfo(in_channel, out_channel, kernel_size, stride, group, dilation)
 
     mode = DecomposeMode(fast_filter_conv(info))
 
-    res = {
-        'mode': mode,
-        FIRST: None,
-        LAST: None
-    }
+    res = {'mode': mode, FIRST: None, LAST: None}
 
     if mode == DecomposeMode.UNCHANGE:
         return res
@@ -242,19 +240,23 @@ def tensor_decomposition(tensor, stride=1, group=1, dilation=1): # pylint: disab
 
     if mode == DecomposeMode.FCFK:
         res[FIRST] = np.expand_dims(core.transpose(1, 0, 2), axis=2)
-        res[LAST] = np.expand_dims(portion.reshape(out_channel, -1, rank)
-                                     .transpose(0, 2, 1), axis=3)
+        res[LAST] = np.expand_dims(
+            portion.reshape(out_channel, -1, rank).transpose(0, 2, 1), axis=3
+        )
     if mode == DecomposeMode.FCSK:
         res[FIRST] = np.expand_dims(core.transpose(1, 0, 2), axis=3)
-        res[LAST] = np.expand_dims(portion.reshape(out_channel, -1, rank)
-                                     .transpose(0, 2, 1), axis=2)
+        res[LAST] = np.expand_dims(
+            portion.reshape(out_channel, -1, rank).transpose(0, 2, 1), axis=2
+        )
     if mode == DecomposeMode.SCFK:
-        res[FIRST] = np.expand_dims(portion.transpose(1, 0)
-                                      .reshape(rank, in_channel, -1), axis=3)
+        res[FIRST] = np.expand_dims(
+            portion.transpose(1, 0).reshape(rank, in_channel, -1), axis=3
+        )
         res[LAST] = np.expand_dims(core, axis=2)
     if mode == DecomposeMode.SCSK:
-        res[FIRST] = np.expand_dims(portion.transpose(1, 0)
-                                      .reshape(rank, in_channel, -1), axis=2)
+        res[FIRST] = np.expand_dims(
+            portion.transpose(1, 0).reshape(rank, in_channel, -1), axis=2
+        )
         res[LAST] = np.expand_dims(core, axis=3)
 
     return res

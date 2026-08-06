@@ -44,23 +44,43 @@ def float8_e4m3fn():
     return
 
 
-def npu_quant_matmul(x1, x2, x2_scale, offset=None, bias=None, pertoken_scale=None,
-    output_dtype=torch.bfloat16, x2_dtype=None, pertoken_scale_dtype=None,
-    scale_dtype=None, group_sizes=None):
+def npu_quant_matmul(
+    x1,
+    x2,
+    x2_scale,
+    offset=None,
+    bias=None,
+    pertoken_scale=None,
+    output_dtype=torch.bfloat16,
+    x2_dtype=None,
+    pertoken_scale_dtype=None,
+    scale_dtype=None,
+    group_sizes=None,
+):
     if len(x1.shape) < 2 or len(x1.shape) > 6:
         raise RuntimeError()
     if x2.dtype == torch.float8_e4m3fn:
         x2_scale = x2_scale.reshape(x2_scale.shape[0], -1)
     if bias is not None:
         bias = bias.to(torch.float32)
-    out = torch.nn.functional.linear(x1.to(torch.float32), x2.to(torch.float32), bias).to(output_dtype)
+    out = torch.nn.functional.linear(
+        x1.to(torch.float32), x2.to(torch.float32), bias
+    ).to(output_dtype)
     return out
 
 
-def mock_npu_weight_quant_batchmatmul(x, weight, antiquant_scale,
-    antiquant_offset=None, quant_scale=None, quant_offset=None,
-    bias=None, antiquant_group_size=0, inner_precise=0,
-    weight_dtype=None):
+def mock_npu_weight_quant_batchmatmul(
+    x,
+    weight,
+    antiquant_scale,
+    antiquant_offset=None,
+    quant_scale=None,
+    quant_offset=None,
+    bias=None,
+    antiquant_group_size=0,
+    inner_precise=0,
+    weight_dtype=None,
+):
     ori_dtype = x.dtype
     x_fp32 = x.float()
     weight_fp32 = weight.float()
@@ -103,10 +123,20 @@ def _unpack_int4_from_int8(packed):
     return out
 
 
-def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
-    output_dtype=torch.float32, x1_dtype=None, x2_dtype=None,
-    group_sizes=None, y_scale=None, pertoken_scale_dtype=None,
-    scale_dtype=None):
+def mock_npu_quant_matmul(
+    x,
+    weight,
+    scale,
+    pertoken_scale,
+    bias=None,
+    output_dtype=torch.float32,
+    x1_dtype=None,
+    x2_dtype=None,
+    group_sizes=None,
+    y_scale=None,
+    pertoken_scale_dtype=None,
+    scale_dtype=None,
+):
     x = x.to(torch.float32)
     weight = weight.to(torch.float32)
     if bias is not None:
@@ -115,7 +145,9 @@ def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
         n, k = weight.shape
         new_weight = torch.randn((n, 2 * k), dtype=weight.dtype, device=weight.device)
         new_weight[:, :k] = weight
-        new_weight = new_weight.reshape(-1, int(new_weight.shape[-1] / scale.shape[-1])) * scale.reshape(-1, 1)
+        new_weight = new_weight.reshape(
+            -1, int(new_weight.shape[-1] / scale.shape[-1])
+        ) * scale.reshape(-1, 1)
         weight = new_weight.reshape(n, 2 * k)
     elif x2_dtype is not None and 'int4' in str(x2_dtype):
         # int8 * int4: weight is int4 packed into int8 along the cout axis with
@@ -135,8 +167,9 @@ def mock_npu_quant_matmul(x, weight, scale, pertoken_scale, bias=None,
     return out
 
 
-def mock_npu_quantize(input_val, scales, zero_points=None,
-    dtype=torch.qint8, axis=1, div_mode=True):
+def mock_npu_quantize(
+    input_val, scales, zero_points=None, dtype=torch.qint8, axis=1, div_mode=True
+):
     if div_mode:
         out = input_val / scales
     else:
@@ -157,12 +190,13 @@ def mock_npu_convert_weight_to_int4pack(weight, inner_k_tiles=0):
     return weight
 
 
-def mock_npu_dynamic_mx_quant(weight, axis=None, round_mode=None,
-        dst_type=None, block_size=None):
+def mock_npu_dynamic_mx_quant(
+    weight, axis=None, round_mode=None, dst_type=None, block_size=None
+):
     shape = (weight.shape[0], math.ceil(weight.shape[1] / 64), 2)
     scale = torch.randn(shape)
     if dst_type != torch.float8_e4m3fn:
-        weight = weight[:, :int(weight.shape[1] // 2)]
+        weight = weight[:, : int(weight.shape[1] // 2)]
     return weight, scale
 
 
@@ -173,7 +207,7 @@ def mock_npu_dtype_cast(weight, dtype, input_dtype=None):
         new_weight[:, :k] = weight
         weight = new_weight
     if 'float4_e2m1fn_x2' in str(dtype):
-        weight = weight[:, :int(weight.shape[1] // 2)]
+        weight = weight[:, : int(weight.shape[1] // 2)]
     return weight
 
 
@@ -191,9 +225,20 @@ def mock_npu_trans_quant_param(scale, offset=None):
     return scale, offset
 
 
-def mocked_npu_quant_conv2d(x, weight, scale, stride, pads,
-    dilation, groups, offset_x, output_dtype, bias=None,
-    input_dtype=None, weight_dtype=None):
+def mocked_npu_quant_conv2d(
+    x,
+    weight,
+    scale,
+    stride,
+    pads,
+    dilation,
+    groups,
+    offset_x,
+    output_dtype,
+    bias=None,
+    input_dtype=None,
+    weight_dtype=None,
+):
     x = x.to(torch.float32)
     weight = weight.to(torch.float32)
     if bias is not None:
@@ -221,4 +266,3 @@ def mock_npu_dynamic_quant(x, dst_type=None, dst_type_max=None):
     quant_x = x
     pertoken_scale = torch.ones(x.shape[0], 1, dtype=torch.float32, device=x.device)
     return quant_x, pertoken_scale
-

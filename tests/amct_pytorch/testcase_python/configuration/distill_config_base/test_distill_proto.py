@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,15 +17,9 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import shutil
-import sys
 import unittest
-from collections import OrderedDict
-from unittest import mock
 from unittest.mock import patch
 
-import numpy as np
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
 from amct_pytorch.classic.graph_based.amct_pytorch.common.utils.vars_util import (
@@ -63,21 +57,35 @@ class TestDistillProto(unittest.TestCase):
 
     def test_get_proto_global_config(self):
         global_config = self.distill_proto_config.get_proto_global_config()
-        self.assertEqual(global_config, {'batch_num': 2, 'group_size': 2, 'data_dump': True})
+        self.assertEqual(
+            global_config, {'batch_num': 2, 'group_size': 2, 'data_dump': True}
+        )
 
     def test_get_distill_groups(self):
         distill_groups = self.distill_proto_config.get_distill_groups()
-        self.assertEqual(distill_groups, [{'start_layer': 'conv2', 'end_layer': 'relu1'}])
+        self.assertEqual(
+            distill_groups, [{'start_layer': 'conv2', 'end_layer': 'relu1'}]
+        )
 
     def test_get_distill_data_quant_config(self):
         data_config = self.distill_proto_config.get_distill_data_quant_config()
         self.assertEqual(
             data_config,
-            {'algo': 'ulq_quantize', 'clip_max': 6, 'clip_min': -6, 'fixed_min': True, 'dst_type': 'INT8'})
+            {
+                'algo': 'ulq_quantize',
+                'clip_max': 6,
+                'clip_min': -6,
+                'fixed_min': True,
+                'dst_type': 'INT8',
+            },
+        )
 
     def test_get_distill_weight_quant_config(self):
         weight_config = self.distill_proto_config.get_distill_weight_quant_config()
-        self.assertEqual(weight_config, {'algo': 'arq_distill', 'channel_wise': False, 'dst_type': 'INT8'})
+        self.assertEqual(
+            weight_config,
+            {'algo': 'arq_distill', 'channel_wise': False, 'dst_type': 'INT8'},
+        )
 
     def test_get_quant_skip_layers(self):
         skip_layers = self.distill_proto_config.get_quant_skip_layers()
@@ -108,16 +116,36 @@ class TestDistillProto(unittest.TestCase):
         self.assertEqual(override_types, ['Conv2d'])
 
     def test_read_override_layer_config(self):
-        data_config, weight_config = self.distill_proto_config.read_override_layer_config('conv3')
-        self.assertEqual(data_config, {'algo': 'ulq_quantize', 'clip_max': 3, 'clip_min': -3, 'dst_type': 'INT4'})
-        self.assertEqual(weight_config, {'algo': 'arq_distill', 'channel_wise': False, 'dst_type': 'INT4'})
-
-    def test_read_override_type_config(self):
-        data_config, weight_config = self.distill_proto_config.read_override_type_config('Conv2d')
+        data_config, weight_config = (
+            self.distill_proto_config.read_override_layer_config('conv3')
+        )
         self.assertEqual(
             data_config,
-            {'algo': 'ulq_quantize', 'clip_max': 9, 'clip_min': -9, 'fixed_min': False, 'dst_type': 'INT8'})
-        self.assertEqual(weight_config, {'algo': 'arq_distill', 'channel_wise': True, 'dst_type': 'INT8'})
+            {'algo': 'ulq_quantize', 'clip_max': 3, 'clip_min': -3, 'dst_type': 'INT4'},
+        )
+        self.assertEqual(
+            weight_config,
+            {'algo': 'arq_distill', 'channel_wise': False, 'dst_type': 'INT4'},
+        )
+
+    def test_read_override_type_config(self):
+        data_config, weight_config = (
+            self.distill_proto_config.read_override_type_config('Conv2d')
+        )
+        self.assertEqual(
+            data_config,
+            {
+                'algo': 'ulq_quantize',
+                'clip_max': 9,
+                'clip_min': -9,
+                'fixed_min': False,
+                'dst_type': 'INT8',
+            },
+        )
+        self.assertEqual(
+            weight_config,
+            {'algo': 'arq_distill', 'channel_wise': True, 'dst_type': 'INT8'},
+        )
 
     def test_check_distill_data_type_not_enable_int4(self):
         with patch(
@@ -135,5 +163,10 @@ class TestDistillProto(unittest.TestCase):
         weight_param = distill_config_pb2.DistillWeightQuantConfig()
         weight_param.ulq_distill.CopyFrom(ulq_param)
 
-        weight_config = self.distill_proto_config._get_distill_weight_config(weight_param)
-        self.assertEqual(weight_config, {'algo': 'ulq_distill', 'channel_wise': False, 'dst_type': 'INT4'})
+        weight_config = self.distill_proto_config._get_distill_weight_config(
+            weight_param
+        )
+        self.assertEqual(
+            weight_config,
+            {'algo': 'ulq_distill', 'channel_wise': False, 'dst_type': 'INT4'},
+        )

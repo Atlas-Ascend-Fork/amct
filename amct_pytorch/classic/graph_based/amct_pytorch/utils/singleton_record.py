@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -39,11 +39,12 @@ def singleton(cls):
 
 
 @singleton
-class SingletonScaleOffsetRecord():
+class SingletonScaleOffsetRecord:
     """
     Function: singleton for ScaleOffsetRecord.
     APIs: __init__, forward
     """
+
     def __init__(self, *args, **kwargs):
         self.record = scale_offset_record_pb2.ScaleOffsetRecord()
         self.prune_record = {}

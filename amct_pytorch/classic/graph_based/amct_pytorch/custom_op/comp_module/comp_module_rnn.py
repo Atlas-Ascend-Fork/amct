@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,10 +22,11 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 
 from ....amct_pytorch.common.utils.vars_util import RNN_TENSOR_NUM
-from ....amct_pytorch.common.utils.util import quant_dequant_tensor
 from ....amct_pytorch.custom_op.arq_retrain.arq_retrain import ArqRetrainFunction
 from ....amct_pytorch.custom_op.ulq_retrain.ulq_retrain import UlqRetrainFunction
-from ....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import UlqScaleRetrainFunction
+from ....amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain import (
+    UlqScaleRetrainFunction,
+)
 from ....amct_pytorch.custom_op.utils import copy_tensor
 from ....amct_pytorch.custom_op.utils import tensor
 from ....amct_pytorch.utils.vars import NUM_BITS, FIXED_MIN, H_FIXED_MIN, FLT_EPSILON
@@ -41,13 +42,17 @@ class CompModuleRNN(nn.Module):
     Function: module of quantized retrain for RNN.
     APIs: __init__, forward
     """
-    def __init__(self, module,
-                 act_config=None,
-                 wts_config=None,
-                 common_config=None,
-                 acts_comp_reuse=None):
+
+    def __init__(
+        self,
+        module,
+        act_config=None,
+        wts_config=None,
+        common_config=None,
+        acts_comp_reuse=None,
+    ):
         super().__init__()
-        self.replaced_module = module # ori_module
+        self.replaced_module = module  # ori_module
         self.replaced_module_type = module._get_name()
         self.act_config = act_config
         self.wts_config = wts_config
@@ -77,12 +82,22 @@ class CompModuleRNN(nn.Module):
         output_cell = []
         current_state = None
         for i in range(0, self.sequence_length):
-            xi = inputs[:, i:i + 1, :] if self.replaced_module.batch_first else inputs[i:i + 1, :, :]
-            acts_comp_func = self.acts_comp_reuse._acts_comp_quant if self.acts_comp_reuse else self._acts_comp_quant
+            xi = (
+                inputs[:, i : i + 1, :]
+                if self.replaced_module.batch_first
+                else inputs[i : i + 1, :, :]
+            )
+            acts_comp_func = (
+                getattr(self.acts_comp_reuse, '_acts_comp_quant')
+                if self.acts_comp_reuse
+                else self._acts_comp_quant
+            )
             shape = xi.shape
             xi = xi.reshape(shape[0] * shape[1], shape[-1])
             xi, h_next = acts_comp_func(xi, h_next)
-            compressed_weights = self._wts_quant(self.replaced_module.weight_ih_l0, self.replaced_module.weight_hh_l0)
+            compressed_weights = self._wts_quant(
+                self.replaced_module.weight_ih_l0, self.replaced_module.weight_hh_l0
+            )
             rnn_cell.weight_ih.data = compressed_weights[0].data
             rnn_cell.weight_hh.data = compressed_weights[1].data
             if self.replaced_module_type == "GRU":
@@ -95,7 +110,7 @@ class CompModuleRNN(nn.Module):
                 current_state = (h_next, c_next)
         axis = 1 if self.replaced_module.batch_first else 0
         full_output = torch.stack(output_cell, dim=axis)
-        return full_output, current_state 
+        return full_output, current_state
 
     def forward(self, inputs, hx=None):
         """
@@ -123,31 +138,75 @@ class CompModuleRNN(nn.Module):
 
         if self.cur_batch < 100:
             self.cur_batch += 1
-            
+
         with torch.enable_grad():
             output = self.for_loop_rnncell_forward(inputs, hx)
 
         return output
-            
+
     def _init_output(self):
         device = self.common_config.get('device')
         # Register quantitative parameters.
         self.register_buffer('cur_batch', tensor(0, device=device))
         if self.act_config:
             if self.act_config.get('ifmr_init'):
-                self.register_parameter('acts_clip_max', Parameter(tensor(1.0, requires_grad=True, device=device)))
-                self.register_parameter('acts_clip_min', Parameter(tensor(-1.0, requires_grad=True, device=device)))
-                self.register_parameter('acts_h_clip_max', Parameter(tensor(1.0, requires_grad=True, device=device)))
-                self.register_parameter('acts_h_clip_min', Parameter(tensor(-1.0, requires_grad=True, device=device)))
+                self.register_parameter(
+                    'acts_clip_max',
+                    Parameter(tensor(1.0, requires_grad=True, device=device)),
+                )
+                self.register_parameter(
+                    'acts_clip_min',
+                    Parameter(tensor(-1.0, requires_grad=True, device=device)),
+                )
+                self.register_parameter(
+                    'acts_h_clip_max',
+                    Parameter(tensor(1.0, requires_grad=True, device=device)),
+                )
+                self.register_parameter(
+                    'acts_h_clip_min',
+                    Parameter(tensor(-1.0, requires_grad=True, device=device)),
+                )
             else:
-                self.register_parameter('acts_clip_max',
-                    Parameter(tensor(self.act_config.get('clip_max'), requires_grad=True, device=device)))
-                self.register_parameter('acts_clip_min',
-                    Parameter(tensor(self.act_config.get('clip_min'), requires_grad=True, device=device)))
-                self.register_parameter('acts_h_clip_max',
-                    Parameter(tensor(self.act_config.get('clip_max'), requires_grad=True, device=device)))
-                self.register_parameter('acts_h_clip_min',
-                    Parameter(tensor(self.act_config.get('clip_min'), requires_grad=True, device=device)))
+                self.register_parameter(
+                    'acts_clip_max',
+                    Parameter(
+                        tensor(
+                            self.act_config.get('clip_max'),
+                            requires_grad=True,
+                            device=device,
+                        )
+                    ),
+                )
+                self.register_parameter(
+                    'acts_clip_min',
+                    Parameter(
+                        tensor(
+                            self.act_config.get('clip_min'),
+                            requires_grad=True,
+                            device=device,
+                        )
+                    ),
+                )
+                self.register_parameter(
+                    'acts_h_clip_max',
+                    Parameter(
+                        tensor(
+                            self.act_config.get('clip_max'),
+                            requires_grad=True,
+                            device=device,
+                        )
+                    ),
+                )
+                self.register_parameter(
+                    'acts_h_clip_min',
+                    Parameter(
+                        tensor(
+                            self.act_config.get('clip_min'),
+                            requires_grad=True,
+                            device=device,
+                        )
+                    ),
+                )
             self.register_buffer('acts_clip_max_pre', tensor(np.nan, device=device))
             self.register_buffer('acts_clip_min_pre', tensor(np.nan, device=device))
             self.register_buffer('acts_h_clip_max_pre', tensor(np.nan, device=device))
@@ -157,17 +216,39 @@ class CompModuleRNN(nn.Module):
             self.register_buffer('acts_h_scale', tensor(np.nan, device=device))
             self.register_buffer('acts_h_offset', tensor(np.nan, device=device))
 
-        self.register_parameter('wts_scales',
-                                Parameter(tensor([np.nan] * self.num_scales, requires_grad=True, device=device)))
-        self.register_parameter('wts_offsets',
-                                Parameter(tensor([np.nan] * self.num_scales, requires_grad=True, device=device)))
-        self.register_parameter('rec_wts_scales',
-                                Parameter(tensor([np.nan] * self.num_scales, requires_grad=True, device=device)))
-        self.register_parameter('rec_wts_offsets',
-                                Parameter(tensor([np.nan] * self.num_scales, requires_grad=True, device=device)))
-        self.register_buffer(S_REC_FLAG,
-            tensor(False if self.wts_config.get(S_REC_FLAG) is None else self.wts_config.get(S_REC_FLAG),
-            device=device))
+        self.register_parameter(
+            'wts_scales',
+            Parameter(
+                tensor([np.nan] * self.num_scales, requires_grad=True, device=device)
+            ),
+        )
+        self.register_parameter(
+            'wts_offsets',
+            Parameter(
+                tensor([np.nan] * self.num_scales, requires_grad=True, device=device)
+            ),
+        )
+        self.register_parameter(
+            'rec_wts_scales',
+            Parameter(
+                tensor([np.nan] * self.num_scales, requires_grad=True, device=device)
+            ),
+        )
+        self.register_parameter(
+            'rec_wts_offsets',
+            Parameter(
+                tensor([np.nan] * self.num_scales, requires_grad=True, device=device)
+            ),
+        )
+        self.register_buffer(
+            S_REC_FLAG,
+            tensor(
+                False
+                if self.wts_config.get(S_REC_FLAG) is None
+                else self.wts_config.get(S_REC_FLAG),
+                device=device,
+            ),
+        )
 
     def _acts_comp_quant(self, inputs, hx):
         """
@@ -180,13 +261,18 @@ class CompModuleRNN(nn.Module):
             FIXED_MIN: self.act_config.get(FIXED_MIN),
         }
         # forward with fake-quantized activations
-        quant_inputs, scale, offset, clip_max, clip_min = \
-            UlqRetrainFunction.apply(
-                inputs, self.acts_clip_max, self.acts_clip_min,
-                self.acts_clip_max_pre, self.acts_clip_min_pre, act_qat_param,
-                self.cur_batch,
-                self.common_config.get('need_sync'), self.common_config.get('process_group'),
-                self.common_config.get('world_size'))
+        quant_inputs, scale, offset, clip_max, clip_min = UlqRetrainFunction.apply(
+            inputs,
+            self.acts_clip_max,
+            self.acts_clip_min,
+            self.acts_clip_max_pre,
+            self.acts_clip_min_pre,
+            act_qat_param,
+            self.cur_batch,
+            self.common_config.get('need_sync'),
+            self.common_config.get('process_group'),
+            self.common_config.get('world_size'),
+        )
 
         act_h_qat_param = {
             NUM_BITS: self.act_config.get(NUM_BITS),
@@ -194,13 +280,20 @@ class CompModuleRNN(nn.Module):
         }
         # forward with fake-quantized initial_h
 
-        quant_initial_h, scale_h, offset_h, clip_max_h, clip_min_h = \
+        quant_initial_h, scale_h, offset_h, clip_max_h, clip_min_h = (
             UlqRetrainFunction.apply(
-                hx, self.acts_h_clip_max, self.acts_h_clip_min,
-                self.acts_h_clip_max_pre, self.acts_h_clip_min_pre, act_h_qat_param,
+                hx,
+                self.acts_h_clip_max,
+                self.acts_h_clip_min,
+                self.acts_h_clip_max_pre,
+                self.acts_h_clip_min_pre,
+                act_h_qat_param,
                 self.cur_batch,
-                self.common_config.get('need_sync'), self.common_config.get('process_group'),
-                self.common_config.get('world_size'))
+                self.common_config.get('need_sync'),
+                self.common_config.get('process_group'),
+                self.common_config.get('world_size'),
+            )
+        )
 
         # Update quantization related parameters
         with torch.no_grad():
@@ -233,10 +326,12 @@ class CompModuleRNN(nn.Module):
         quant_algo = self.wts_config.get('algo')
         # Forward with fake-quantized weights
         quant_weights, scales, offsets = wts_quant_dict.get(quant_algo)(
-            weights, self.wts_scales, self.wts_offsets)
+            weights, self.wts_scales, self.wts_offsets
+        )
         # Forward with fake-quantized rec_weights
         quant_rec_weights, scales_r, offsets_r = wts_quant_dict.get(quant_algo)(
-            rec_weights, self.rec_wts_scales, self.rec_wts_offsets)
+            rec_weights, self.rec_wts_scales, self.rec_wts_offsets
+        )
 
         # Update quantization related parameters
         with torch.no_grad():
@@ -257,7 +352,8 @@ class CompModuleRNN(nn.Module):
         }
         wts_group = 1 if self.wts_config.get('channel_wise') else self.num_scales
         quantized_weight, scale, offset = ArqRetrainFunction.apply(
-            weights, wts_scales, wts_offsets, wts_param, None, wts_group)
+            weights, wts_scales, wts_offsets, wts_param, None, wts_group
+        )
         return quantized_weight, scale, offset
 
     def _wts_quant_ulq(self, weights, wts_scales, wts_offsets):
@@ -273,5 +369,6 @@ class CompModuleRNN(nn.Module):
         }
         wts_group = 1 if self.wts_config.get('channel_wise') else self.num_scales
         quantized_weight, scale, offset = UlqScaleRetrainFunction.apply(
-            weights, wts_scales, wts_offsets, wts_param, self.cur_batch, None, wts_group)
+            weights, wts_scales, wts_offsets, wts_param, self.cur_batch, None, wts_group
+        )
         return quantized_weight, scale, offset

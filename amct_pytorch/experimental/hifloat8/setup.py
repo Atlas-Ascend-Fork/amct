@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -17,14 +17,13 @@
 # ----------------------------------------------------------------------------
 
 import os
-import sys
 import setuptools
-import torch
 from torch.utils import cpp_extension
 
 
 class BuildExtensionAcc(cpp_extension.BuildExtension):
-    '''set parallel of BuildExtension to accelerate '''
+    '''set parallel of BuildExtension to accelerate'''
+
     def __init__(self, *args, **kwargs):
         kwargs['use_ninja'] = False
         super().__init__(*args, **kwargs)
@@ -40,22 +39,23 @@ class BuildExtensionAcc(cpp_extension.BuildExtension):
 def setup():
     extra_compile_args = ['-fopenmp', '-O3']
     extra_link_args = ['-fopenmp']
-    
+
     ext_modules = [
         cpp_extension.CppExtension(
             name='hifloat8_cast',
             sources=['hifloat8_cast.cpp'],
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
-            define_macros=[('_GLIBCXX_USE_CXX11_ABI=0', None)]
+            define_macros=[('_GLIBCXX_USE_CXX11_ABI=0', None)],
         )
     ]
-    
+
     setuptools.setup(
         name='hifloat8_cast',
         ext_modules=ext_modules,
-        cmdclass={'build_ext': BuildExtensionAcc}
+        cmdclass={'build_ext': BuildExtensionAcc},
     )
+
 
 if __name__ == '__main__':
     setup()

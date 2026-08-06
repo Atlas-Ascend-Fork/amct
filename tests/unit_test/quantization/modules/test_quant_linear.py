@@ -17,10 +17,8 @@
 # ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
-import pytest
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
@@ -63,7 +61,11 @@ def test_quant_linear_train_forward_enabled_quantizer_changes_output():
     q.weight_quantizer.enable = True
     # Make weights large so int8 quantization is visible.
     with torch.no_grad():
-        linear.weight.copy_(torch.linspace(-10, 10, steps=linear.weight.numel()).reshape_as(linear.weight))
+        linear.weight.copy_(
+            torch.linspace(-10, 10, steps=linear.weight.numel()).reshape_as(
+                linear.weight
+            )
+        )
     x = torch.randn(2, 4)
     plain = linear(x)
     quantized = q(x)

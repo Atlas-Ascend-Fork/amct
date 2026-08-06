@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -19,18 +19,19 @@
 from ...amct_pytorch.utils.model_util import ModuleHelper
 
 
-class BaseModuleFusionPass():# pylint: disable=unused-argument, no-self-use
+class BaseModuleFusionPass:  # pylint: disable=unused-argument, no-self-use
     """
     Function: Base class of graph optimizer pass
     APIs: set_up, tear_down, match_pattern, do_fusion, run
     """
+
     def __init__(self):
         """
         Function: init object
         Parameter: None
         Return: None
         """
-        pass # pylint: disable=unnecessary-pass
+        pass  # pylint: disable=unnecessary-pass
 
     @staticmethod
     def match_pattern(self, module, name, graph=None):
@@ -47,7 +48,7 @@ class BaseModuleFusionPass():# pylint: disable=unused-argument, no-self-use
         Parameter: None
         Return: None
         """
-        pass # pylint: disable=unnecessary-pass
+        pass  # pylint: disable=unnecessary-pass
 
     def tear_down(self):
         """
@@ -55,7 +56,7 @@ class BaseModuleFusionPass():# pylint: disable=unused-argument, no-self-use
         Parameter: None
         Return: None
         """
-        pass # pylint: disable=unnecessary-pass
+        pass  # pylint: disable=unnecessary-pass
 
     def do_pass(self, model, object_module, object_name, graph=None):
         """
@@ -66,7 +67,7 @@ class BaseModuleFusionPass():# pylint: disable=unused-argument, no-self-use
                     graph: graph structure
         Return: None
         """
-        pass # pylint: disable=unnecessary-pass
+        pass  # pylint: disable=unnecessary-pass
 
     def run(self, model, graph):
         """

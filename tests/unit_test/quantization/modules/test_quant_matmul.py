@@ -17,7 +17,6 @@
 # ----------------------------------------------------------------------------
 from types import SimpleNamespace
 
-import pytest
 import torch
 
 from amct_pytorch.quantization.dtypes import register_dtype
@@ -52,6 +51,15 @@ def test_forward_passthrough_when_attn_cache_disabled_is_l_at_r_t():
     assert torch.allclose(out, expected, atol=1e-6)
 
 
+def test_forward_can_skip_right_transpose_for_value_matmul():
+    qm = QuantizedMatmul(_args(), transpose_right=False)
+    left = torch.randn(2, 3, 5)
+    right = torch.randn(2, 5, 4)
+    out = qm(left, right)
+    expected = torch.matmul(left, right)
+    assert torch.allclose(out, expected, atol=1e-6)
+
+
 def test_forward_quantizes_when_attn_cache_enabled_and_quantizers_active():
     qm = QuantizedMatmul(_args(quant_target=["attn-cache"]))
     qm.l_node.enable = True
@@ -74,6 +82,7 @@ def test_forward_runs_transforms_when_set():
     def right_t(x):
         seen.append("R")
         return x
+
     qm.left_transform = left_t
     qm.right_transform = right_t
     left = torch.randn(1, 2, 4)

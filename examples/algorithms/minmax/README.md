@@ -14,6 +14,9 @@
 
 注意：量化数据类型组合float8_e4m3fn * float4_e2m1只支持量化原始数据类型为torch.bfloat16，请注意修改src/utils.py文件中获取模型的数据类型。
 
+> **NPU 算子维度限制说明：** NPU 量化算子 `aclnnWeightQuantBatchMatmulV2` 的 k（输入特征维度）和 n（输出特征维度）上限为 65535。Qwen2-7B / Qwen3-8B 等大词表模型的词表大小约 152K，远超此限制，会导致 `lm_head` 层在 PPL 评估阶段调用该算子时失败。内置量化配置 `INT8_MINMAX_WEIGHT_QUANT_CFG` 已默认将 `lm_head` 加入 `skip_layers`，工具也会在 `check_quant_op_constraint` 中自动跳过超出维度限制的层。如果用户自定义量化配置，请确保对大词表模型将 `lm_head` 加入 `skip_layers`：
+> 
+
 ### 1.3 简易量化配置
 本sample中使用的量化配置已经内置在工具中，可以通过下述方式获取并使用：
 

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -23,10 +23,13 @@ import numpy as np
 
 
 class ParamsHelper:
-    """ help to get node's param info like flops, bitops. """
+    """help to get node's param info like flops, bitops."""
+
     @staticmethod
-    def calc_conv_flops(in_channel, out_channel, k_h, k_w, out_h, out_w, group, has_bias):
-        """ Calculate flops for conv node.
+    def calc_conv_flops(
+        in_channel, out_channel, k_h, k_w, out_h, out_w, group, has_bias
+    ):
+        """Calculate flops for conv node.
 
         Args:
             in_channel (int): channle for input fearuremap.
@@ -49,7 +52,9 @@ class ParamsHelper:
         return flops
 
     @staticmethod
-    def calc_deconv_flops(in_channel, out_channel, k_h, k_w, in_h, in_w, group, has_bias):
+    def calc_deconv_flops(
+        in_channel, out_channel, k_h, k_w, in_h, in_w, group, has_bias
+    ):
         """Calculate flops for deconv node.
 
         Args:
@@ -75,7 +80,7 @@ class ParamsHelper:
 
     @staticmethod
     def calc_matmul_flops(input_shape, output_shape, has_bias):
-        """ Calculate flops for matmul node, including matmul, gemm, batch_matmul and so on.
+        """Calculate flops for matmul node, including matmul, gemm, batch_matmul and so on.
 
         Args:
             input_shape (list of int): shape of input fearuremap.
@@ -94,7 +99,7 @@ class ParamsHelper:
 
     @staticmethod
     def cal_bitops(flops, wts_bits, act_bits):
-        """ Calculate bitops from flops.
+        """Calculate bitops from flops.
 
         Args:
             flops (float/int): flops value.

@@ -21,7 +21,7 @@ import os
 
 
 def process_data_shape(values):
-    """ Process data_shape to several shape info.
+    """Process data_shape to several shape info.
     For example, "input_name1:n1,c1,h1,w1;input_name2:n1,c1,h1,w1" to
     {"input_name1": [n1,c1,h1,w1], "input_name2": [n1,c1,h1,w1]},
 
@@ -49,7 +49,8 @@ def process_data_shape(values):
             raise ValueError(
                 "Invalid input_shape. Input name and shapes of each input node"
                 " should be ':' split. E.g.: input_name1:n1,c1,h1,w1"
-                " or input_name2:0:n1,c1,h1,w1")
+                " or input_name2:0:n1,c1,h1,w1"
+            )
         data_shape = [int(shape_dim) for shape_dim in dims]
         input_dict[data_name] = data_shape
 

@@ -178,7 +178,9 @@ class TestRecordManagerGetters(unittest.TestCase):
         r = recs.record.add()
         r.key = 'AvgPool_1'
         r.value.dst_type = 'INT4'
-        self.assertRaises(RuntimeError, _mgr(record=r, node_name='AvgPool_1').get_dst_type)
+        self.assertRaises(
+            RuntimeError, _mgr(record=r, node_name='AvgPool_1').get_dst_type
+        )
 
     def test_get_act_type_unset(self):
         self.assertEqual(_mgr().get_act_type(), 'UNSET')
@@ -208,10 +210,14 @@ class TestRecordManagerGetters(unittest.TestCase):
         self.assertEqual(params, {})
 
     def test_get_act_quant_factor_missing(self):
-        self.assertRaises(RuntimeError, _mgr().get_act_quant_factor, 'scale_d', np.float32)
+        self.assertRaises(
+            RuntimeError, _mgr().get_act_quant_factor, 'scale_d', np.float32
+        )
 
     def test_get_wts_quant_factor_desirable_missing(self):
-        self.assertRaises(RuntimeError, _mgr().get_wts_quant_factor, 'scale_w', np.float32)
+        self.assertRaises(
+            RuntimeError, _mgr().get_wts_quant_factor, 'scale_w', np.float32
+        )
 
     def test_get_wts_quant_factor_not_desirable_default(self):
         arr = _mgr().get_wts_quant_factor('scale_w', np.float32, desirable=False)

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import shutil
-import sys
 import unittest
 
 import torch
@@ -68,7 +67,9 @@ class TestQuantCalibrationInterface(unittest.TestCase):
         config_file = os.path.join(self.temp_dir, 'config.json')
         model = CustomizedModel()
         quant_layers = {'kv_cache_quant_layers': [MATMUL1, 'matmul2']}
-        amct_pytorch.classic.graph_based.amct_pytorch.create_quant_cali_config(config_file, model, quant_layers)
+        amct_pytorch.classic.graph_based.amct_pytorch.create_quant_cali_config(
+            config_file, model, quant_layers
+        )
 
         with open(config_file) as f:
             config = json.load(f)
@@ -81,7 +82,8 @@ class TestQuantCalibrationInterface(unittest.TestCase):
         quant_layers = {'kv_cache_quant_layers': [MATMUL1, 'matmul2']}
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
         amct_pytorch.classic.graph_based.amct_pytorch.create_quant_cali_config(
-            config_file, model, quant_layers, config_proto)
+            config_file, model, quant_layers, config_proto
+        )
 
         with open(config_file) as f:
             config = json.load(f)
@@ -89,8 +91,13 @@ class TestQuantCalibrationInterface(unittest.TestCase):
             self.assertIn('matmul2', config)
             self.assertIn('matmul3', config)
 
-            self.assertEqual('hfmg', config.get(MATMUL1).get('kv_data_quant_config').get('act_algo'))
-            self.assertEqual('ifmr', config.get('matmul3').get('kv_data_quant_config').get('act_algo'))
+            self.assertEqual(
+                'hfmg', config.get(MATMUL1).get('kv_data_quant_config').get('act_algo')
+            )
+            self.assertEqual(
+                'ifmr',
+                config.get('matmul3').get('kv_data_quant_config').get('act_algo'),
+            )
 
     def test_create_quant_cali_model(self):
         config_file = os.path.join(self.temp_dir, 'config.json')
@@ -99,7 +106,9 @@ class TestQuantCalibrationInterface(unittest.TestCase):
         config_proto = os.path.join(CUR_DIR, 'utils/test_case_config_00.cfg')
         record_file = os.path.join(self.temp_dir, 'record.txt')
         amct_pytorch.classic.graph_based.amct_pytorch.create_quant_cali_config(
-            config_file, model, quant_layers, config_proto)
-        amct_pytorch.classic.graph_based.amct_pytorch.create_quant_cali_model(config_file, record_file, model)
+            config_file, model, quant_layers, config_proto
+        )
+        amct_pytorch.classic.graph_based.amct_pytorch.create_quant_cali_model(
+            config_file, record_file, model
+        )
         self.assertRaises(RuntimeError, ModuleHelper(model).check_amct_op)
-

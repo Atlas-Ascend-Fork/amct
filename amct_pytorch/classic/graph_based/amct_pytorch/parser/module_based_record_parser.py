@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -33,11 +33,15 @@ def get_layer_quant_params(records, layer_name):
     return: dict, include current layer params
     """
     if records.get('quant_result_path') is None:
-        raise RuntimeError("quant_result_path not exists in record!".format(layer_name))
+        raise RuntimeError("quant_result_path not exists in record!")
 
     quant_result_path = records.get('quant_result_path')
     if not os.path.exists(quant_result_path):
-        raise RuntimeError("quant_result_path {} not exists. Please check your record file.".format(quant_result_path))
+        raise RuntimeError(
+            "quant_result_path {} not exists. Please check your record file.".format(
+                quant_result_path
+            )
+        )
     if version_higher_than(torch.__version__, '2.1.0'):
         load_kwargs = {'mmap': True}
     else:
@@ -47,5 +51,7 @@ def get_layer_quant_params(records, layer_name):
     except Exception as e:
         raise RuntimeError("obtain quant_params params from file failed!") from e
     if quant_params.get(layer_name) is None:
-        raise RuntimeError("obtain quant_params param for layer {} failed!".format(layer_name))
+        raise RuntimeError(
+            "obtain quant_params param for layer {} failed!".format(layer_name)
+        )
     return quant_params.get(layer_name)

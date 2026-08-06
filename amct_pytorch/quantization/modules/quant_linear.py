@@ -16,7 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -43,8 +42,13 @@ class QuantLinear(nn.Module):
         structure_transform=None,
     ):
         if self.eval_mode:
-            transform_key = None if structure_transform is None else id(structure_transform)
-            if self.cached_eval_weight is None or self._cached_transform_key != transform_key:
+            transform_key = (
+                None if structure_transform is None else id(structure_transform)
+            )
+            if (
+                self.cached_eval_weight is None
+                or self._cached_transform_key != transform_key
+            ):
                 weight = self.linear.weight
                 if structure_transform is not None:
                     weight = structure_transform(weight, inv_t=True, name=self.name)
