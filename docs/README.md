@@ -947,7 +947,7 @@ KV Cache量化接口调用流程如下图所示。
 
 ## 稀疏
 
-AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行稀疏优化，最后生成onnx量化模型。
+AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行稀疏优化，最后生成onnx量化模型。本节的通道稀疏与4选2结构化稀疏均基于该方式实现。
 
 ### 通道稀疏
 
@@ -1701,6 +1701,75 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 #### 手工调优
 
 组合压缩后，模型精度不满足要求，则需要参见[稀疏](#稀疏)下的手动调优章节和[量化感知训练](#量化感知训练)下的章节分别进行调优。
+
+## 剪枝
+
+AMCT提供eager模式的结构化剪枝特性`amct_pytorch.pruning`：无需先转换为ONNX图，直接对已实例化的`torch.nn.Module`原地剪除稠密FFN中间维、CNN通道与MoE专家，同时改写模型config中的相关维度，剪枝后的模型可直接保存与加载，也可继续进行量化。详细配置与使用方法请参见[结构化剪枝使用说明](../amct_pytorch/pruning/README.md)。
+
+### 剪枝流程
+
+结构化剪枝接口调用流程如下图所示，整个流程在PyTorch的CPU或NPU环境下完成，无需模型转换步骤：
+
+![](./zh/figures/pruning_interface.png "结构化剪枝接口调用流程")
+
+蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
+
+1. 用户准备已加载权重的原始模型和少量校准数据（几批前向即可）。可选：先调用[prune\_diagnose](./zh/api/prune_diagnose.md)接口做dry-run，确认模型中可剪的目标与预估收益，该接口不改动原模型。
+2. 调用[prune](./zh/api/prune.md)接口执行剪枝。未指定搜索参数时，按配置中的固定剪枝率一次剪完，不复制模型；指定`tolerance`、`size_budget`或菜单配置时进入搜索，逐个候选剪枝率在整模型副本上试剪并评估，最终应用满足要求的剪枝率。可直接使用的预置配置见 [prune](./zh/api/prune.md) 的「预定义配置」章节。
+3. 剪枝在原模型上原地生效，同时改写config中的相关维度，剪了什么与参数量变化记录在`PruneReport`中。如需恢复精度，可调用[prune\_finetune](./zh/api/prune_finetune.md)接口做轻量微调；如需进一步压缩，可在剪枝之后继续执行量化流程。
+
+### 调用示例
+
+> [!NOTE]说明
+>
+>- 如下示例标有“由用户补充处理”的步骤，需要用户根据自己的模型和数据集进行补充处理，示例中仅为示例代码。
+>- 如下示例调用AMCT的部分，函数入参请根据实际情况进行调整。
+
+1. 导入AMCT包，并通过[工具构建](./zh/build.md)中的环境变量设置日志级别。
+
+   ```python
+   import amct_pytorch as amct
+   from amct_pytorch.pruning import PruneReport
+   ```
+
+2. （可选，由用户补充处理）在PyTorch原始环境中验证推理脚本及环境。
+
+   建议使用原始待剪枝的模型和测试集，在PyTorch环境下推理，验证环境、推理脚本是否正常。
+
+   推荐执行该步骤，请确保原始模型可以完成推理且精度正常；执行该步骤时，可以使用部分测试集，减少运行时间。
+
+   ```python
+   user_do_inference_torch(ori_model, test_data, test_iterations)
+   ```
+
+3. （由用户补充处理）准备校准数据。
+
+   剪枝按激活统计量挑选要移除的结构，因此需要少量能代表部署场景的前向输入，通常几个批次即可。
+
+   ```python
+   calib_data = user_prepare_calib_data(batch_num=8)
+   ```
+
+4. 调用AMCT，剪枝模型。
+
+   调用[prune](./zh/api/prune.md)接口对已实例化的模型原地剪枝。传入`report`即可拿到本次剪了什么与参数量变化；预置配置可直接使用，详见[prune](./zh/api/prune.md)的“预定义配置”章节。
+
+   ```python
+   cfg = {"methods": {"dense": {"name": "low_variance",
+                                "kwargs": {"prune_ratio": 0.5}}}}
+   report = PruneReport()
+   amct.prune(ori_model, cfg, data=calib_data, report=report)
+   print(report.as_dict())
+   ```
+
+5. （可选，由用户补充处理）验证剪枝后模型的精度，并保存模型。
+
+   剪枝已同步改写模型config中的相关维度，因此可直接保存，无需额外的模型转换步骤。
+
+   ```python
+   user_do_inference_torch(ori_model, test_data, test_iterations)
+   ori_model.save_pretrained('./pruned_model')
+   ```
 
 ## 逐层蒸馏
 
