@@ -18,6 +18,7 @@ _Ascend NPU Native Model Compression Toolkit_
 
 ## 🔥 Latest Updates
 
+- **[2026/08/07]** Added structured pruning (`amct_pytorch.pruning`) for MoE experts / dense FFN / CNN channels, with a [Qwen3.6-MoE structured pruning](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning_en.md) one-stop single-card sample
 - **[2026/05/28]** Added current mainstream LLM network quantization, PTQ algorithm support, and provided [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) and [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) one-stop samples
 - **[2026/04/24]** Added [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) model INT8 quantization support
 - **[2026/04/17]** Added HiFloat8 quantile quantization (Quantile) algorithm
@@ -48,6 +49,7 @@ AMCT is an Ascend NPU native model quantization compression tool. After quantiza
 | **HiFloat8 Quantization** | Huawei self-developed 8-bit floating-point format, tapered precision + large dynamic range, see [HiFloat8 Introduction](docs/zh/context/hifloat8_quantization.md) |
 | **NPU Custom Operators** | Self-developed operators based on NPU, Ascend C kernel implementation, see [amct_ops](amct_ops/README.md) |
 | **Large Model Quantization** | DeepSeek-V3.2 / V4 quantization solutions, see [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
+| **Structured Pruning** | Structured pruning of dense FFN intermediate dims / CNN channels / MoE experts, see [Structured Pruning](amct_pytorch/pruning/README_en.md) |
 
 
 ## 📊 Performance Benefits
@@ -116,6 +118,7 @@ The "One-Stop Platform" is an NPU environment provided for developers, internall
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | Complete Qwen3.6-MoE model quantization, data extraction, and PTQ in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience. |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | Complete DeepSeek-V4 Flash model single-card inference in Atlas A3 environment, providing standard launch process and related configurations for one-stop platform scenarios, helping users quickly get started to complete an end-to-end NPU inference experience.    |
+| [Qwen3.6-MoE Structured Pruning](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning_en.md) | Structurally prune the MoE experts of Qwen3.6-MoE on Atlas A3, shrinking a model that does not fit one card until it does; the pruned model can still be quantized. |
 
 ## 📖 Documentation Samples
 
@@ -137,6 +140,7 @@ amct/
 │   ├── common/                     # Common utilities, models, and data processing
 │   ├── configs/                    # Quantization configuration templates
 │   ├── experimental/               # Experimental features (HiFloat8, DeepSeek, etc.)
+│   ├── pruning/                    # Structured pruning
 │   ├── quantization/               # Quantization data types and basic modules
 │   └── workflows/                  # LLM quantization, evaluation, and deployment workflows
 ├── amct_ops/                      # AMCT custom NPU operators
