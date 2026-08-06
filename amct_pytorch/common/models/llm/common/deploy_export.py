@@ -163,17 +163,19 @@ def convert_state_dict(
     block_size,
 ):
     if weight.element_size() == 1:
-        # Use scale_inv_name resolved by the caller via pipeline.get_scale_name()
-        # (different models use different naming: _scale, .scale, _scale_inv, etc.)
+        # scale_inv_name is resolved by the caller via pipeline.get_scale_name()
+        # (different models use different naming: .scale, _scale, _scale_inv, etc.)
         try:
-            file_name = original_weight_map.get(scale_inv_name)
-            if file_name is None:
-                raise KeyError(scale_inv_name)
+            file_name = original_weight_map[scale_inv_name]
             if file_name not in loaded_files:
                 file_path = model_dir / file_name
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
-            if weight.dtype == torch.int8:
+            # Detect HiF4 packed format: uint8 scale [M, N//64, 4] -> hif4_unpack
+            if scale_inv.dtype == torch.uint8 and scale_inv.dim() == 3 and scale_inv.shape[-1] == 4:
+                from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+                weight = torch.from_numpy(hif4_unpack(scale_inv, weight)).to(torch.float32)
+            elif weight.dtype == torch.int8:
                 weight = weight_dequant(
                     weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
                 )
