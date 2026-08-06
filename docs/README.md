@@ -947,7 +947,7 @@ KV Cache量化接口调用流程如下图所示。
 
 ## 稀疏
 
-AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行稀疏优化，最后生成onnx量化模型。
+AMCT提供了基于图的torch模型稀疏方法，这种方法通过将torch模型转成onnx模型来获取torch模型的图结构，并基于解析的图结构进行稀疏优化，最后生成onnx量化模型。本节的通道稀疏与4选2结构化稀疏均基于该方式实现。
 
 ### 通道稀疏
 
@@ -1701,6 +1701,22 @@ prune_retrain_model = amct.10.6.3-save_prune_retrain_model(
 #### 手工调优
 
 组合压缩后，模型精度不满足要求，则需要参见[稀疏](#稀疏)下的手动调优章节和[量化感知训练](#量化感知训练)下的章节分别进行调优。
+
+## 剪枝
+
+AMCT提供eager模式的结构化剪枝特性`amct_pytorch.pruning`：无需先转换为ONNX图，直接对已实例化的`torch.nn.Module`原地剪除稠密FFN中间维、CNN通道与MoE专家，同时改写模型config中的相关维度，剪枝后的模型可直接保存与加载，也可继续进行量化。详细配置与使用方法请参见[结构化剪枝使用说明](../amct_pytorch/pruning/README.md)。
+
+### 剪枝流程
+
+结构化剪枝接口调用流程如下图所示，整个流程在PyTorch的CPU或NPU环境下完成，无需模型转换步骤：
+
+![](./zh/figures/pruning_interface.png "结构化剪枝接口调用流程")
+
+蓝色部分为用户实现，灰色部分为用户调用AMCT提供的API实现：
+
+1. 用户准备已加载权重的原始模型和少量校准数据（几批前向即可）。可选：先调用[prune\_diagnose](./zh/api/prune_diagnose.md)接口做dry-run，确认模型中可剪的目标与预估收益，该接口不改动原模型。
+2. 调用[prune](./zh/api/prune.md)接口执行剪枝。未指定搜索参数时，按配置中的固定剪枝率一次剪完，不复制模型；指定`tolerance`、`size_budget`或菜单配置时进入搜索，逐个候选剪枝率在整模型副本上试剪并评估，最终应用满足要求的剪枝率。可直接使用的预置配置见[预定义剪枝配置](./zh/api/pruning_configs.md)。
+3. 剪枝在原模型上原地生效，同时改写config中的相关维度，剪了什么与参数量变化记录在`PruneReport`中。如需恢复精度，可调用[prune\_finetune](./zh/api/prune_finetune.md)接口做轻量微调；如需进一步压缩，可在剪枝之后继续执行量化流程。
 
 ## 逐层蒸馏
 
