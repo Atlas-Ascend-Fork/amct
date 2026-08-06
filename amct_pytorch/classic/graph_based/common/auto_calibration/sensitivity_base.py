@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -23,13 +23,14 @@ import numpy as np
 
 
 class SensitivityBase:
-    """ base class of sensitivity"""
+    """base class of sensitivity"""
+
     def __init__(self):
         pass
 
     @staticmethod
     def normalize_data(data):
-        """ normalize data to [0,1]
+        """normalize data to [0,1]
 
         Args:
             data (np.array): data to do normalize
@@ -39,20 +40,23 @@ class SensitivityBase:
         """
         max_val = data.max()
         min_val = data.min()
-        normalized_data = (data - min_val) / (max_val - min_val + np.finfo(np.float32).eps)
+        normalized_data = (data - min_val) / (
+            max_val - min_val + np.finfo(np.float32).eps
+        )
         return normalized_data
 
     def compare(self, data, other):
-        """ calculate the compare metric of original single layer output
-            and fake quant single layer output
+        """calculate the compare metric of original single layer output
+        and fake quant single layer output
         """
         raise NotImplementedError
 
 
 class MseSensitivity(SensitivityBase):
-    """ class of mse similarity sensitivity"""
+    """class of mse similarity sensitivity"""
+
     def __init__(self, do_normalization=False):
-        """ Init func.
+        """Init func.
 
         Args:
             do_normalization (bool, optional): normalize data befor calculating mse. Defaults to False.
@@ -61,7 +65,7 @@ class MseSensitivity(SensitivityBase):
         self.do_normalization = do_normalization
 
     def compare(self, data, other):
-        """ Calculate the cosine similarity of data and other data
+        """Calculate the cosine similarity of data and other data
 
         Args:
             data (np.array): the data to compare

@@ -2,10 +2,17 @@
 from amct_pytorch.algorithms import AlgorithmRegistry
 
 from .flat_quant_module.default_model_utils import FlatQuantAttention, FlatQuantMLP
-from .npu_flat_quant_module.flat_quant_module import NpuFlatQuantAttention, NpuFlatQuantMLP
+from .npu_flat_quant_module.flat_quant_module import (
+    NpuFlatQuantAttention,
+    NpuFlatQuantMLP,
+)
 
-AlgorithmRegistry.register('flatquant', 'LlamaAttention', FlatQuantAttention, NpuFlatQuantAttention)
+AlgorithmRegistry.register(
+    'flatquant', 'LlamaAttention', FlatQuantAttention, NpuFlatQuantAttention
+)
 AlgorithmRegistry.register('flatquant', 'LlamaMLP', FlatQuantMLP, NpuFlatQuantMLP)
 
-AlgorithmRegistry.register('flatquant', 'Qwen3Attention', FlatQuantAttention, NpuFlatQuantAttention)
+AlgorithmRegistry.register(
+    'flatquant', 'Qwen3Attention', FlatQuantAttention, NpuFlatQuantAttention
+)
 AlgorithmRegistry.register('flatquant', 'Qwen3MLP', FlatQuantMLP, NpuFlatQuantMLP)

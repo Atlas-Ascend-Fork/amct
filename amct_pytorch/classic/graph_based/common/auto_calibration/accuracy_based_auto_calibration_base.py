@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -27,7 +27,7 @@ from datetime import timedelta
 import numpy as np
 
 from ..utils import files
-from ...utils.log import LOGGER # pylint: disable=E0402
+from ...utils.log import LOGGER  # pylint: disable=E0402
 from ..utils.log_base import LOG_FILE_DIR
 from ..utils.util import find_repeated_items
 from ..utils.util import check_no_repeated
@@ -44,7 +44,7 @@ ROLL_BACK_CONFIG = 'roll_back_config'
 METRIC_EVAL = 'metric_eval'
 
 
-class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
+class AccuracyBasedAutoCalibrationBase:  # pylint: disable=R0902
     """The superclass of automatic calibration based on accuracy.
 
     This superclass contains the main control of automatic calibration
@@ -64,24 +64,33 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
         sensitivity (SensitivityBase): A instance inherited
         from 'SensitivityBase' and all the methods are implemented.
     """
-    def __init__(self, # pylint: disable=R0913
-                 record_file: str,
-                 config_file: str,
-                 save_dir: str,
-                 evaluator: AutoCalibrationEvaluatorBase,
-                 strategy: AutoCalibrationStrategyBase,
-                 sensitivity: SensitivityBase):
+
+    def __init__(
+        self,  # pylint: disable=R0913
+        record_file: str,
+        config_file: str,
+        save_dir: str,
+        evaluator: AutoCalibrationEvaluatorBase,
+        strategy: AutoCalibrationStrategyBase,
+        sensitivity: SensitivityBase,
+    ):
         self.record_file = os.path.realpath(record_file)
 
         self.config_file = os.path.realpath(config_file)
-        files.check_file_path(os.path.split(self.config_file)[0], os.path.split(self.config_file)[1])
+        files.check_file_path(
+            os.path.split(self.config_file)[0], os.path.split(self.config_file)[1]
+        )
 
         self.save_dir = os.path.realpath(save_dir)
         files.create_file_path(self.save_dir)
 
         self.amct_log_dir = os.path.join(os.getcwd(), LOG_FILE_DIR)
-        time_stamp = datetime.now(tz=timezone(offset=timedelta(hours=8))).strftime('%Y%m%d%H%M%S%f')
-        self.temp_dir = os.path.join(os.path.split(self.save_dir)[0], 'temp{}'.format(time_stamp))
+        time_stamp = datetime.now(tz=timezone(offset=timedelta(hours=8))).strftime(
+            '%Y%m%d%H%M%S%f'
+        )
+        self.temp_dir = os.path.join(
+            os.path.split(self.save_dir)[0], 'temp{}'.format(time_stamp)
+        )
         files.create_path(self.temp_dir)
 
         self.evaluator = evaluator
@@ -119,7 +128,9 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
         LOGGER.logi("quant layers:")
         start = 0
         while start < len(record.get(ROLL_BACK_CONFIG).items()):
-            end = min(start + MAX_PRINT_INFO_NUM, len(record.get(ROLL_BACK_CONFIG).items()))
+            end = min(
+                start + MAX_PRINT_INFO_NUM, len(record.get(ROLL_BACK_CONFIG).items())
+            )
             LOGGER.logi(list(record.get(ROLL_BACK_CONFIG).items())[start:end])
             start += MAX_PRINT_INFO_NUM
         LOGGER.logi("metric_eval: {}".format(record.get(METRIC_EVAL)))
@@ -167,7 +178,10 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
     def fine_search(self):
         """Find the best quantized config by 'strategy' instance."""
         strategy_result = self.strategy.update_quant_config(
-            self.evaluator.metric_eval(self.original_accuracy, self.global_quant_accuracy))
+            self.evaluator.metric_eval(
+                self.original_accuracy, self.global_quant_accuracy
+            )
+        )
         self.history_configs = copy.deepcopy(strategy_result[ROLL_BACK_CONFIG])
 
         fine_search_step = 0
@@ -175,30 +189,38 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
         while not fine_search_end_flag:
             fine_search_step += 1
             fine_search_end_flag = strategy_result['stop_flag']
-            if fine_search_end_flag and (strategy_result[
-                    ROLL_BACK_CONFIG] == self.history_configs):
+            if fine_search_end_flag and (
+                strategy_result[ROLL_BACK_CONFIG] == self.history_configs
+            ):
                 break
             if self.is_all_roll_backed(strategy_result[ROLL_BACK_CONFIG]):
                 metric_eval = self.evaluator.metric_eval(
-                    self.original_accuracy, self.original_accuracy)
+                    self.original_accuracy, self.original_accuracy
+                )
                 record = {
                     ROLL_BACK_CONFIG: copy.deepcopy(strategy_result[ROLL_BACK_CONFIG]),
-                    METRIC_EVAL: metric_eval
+                    METRIC_EVAL: metric_eval,
                 }
                 for key in record.get(ROLL_BACK_CONFIG).keys():
                     record.get(ROLL_BACK_CONFIG)[key] = False
                 self.final_config = copy.deepcopy(record.get(ROLL_BACK_CONFIG))
                 self.history_records.append(record)
                 return ALL_ROLL_BACK
-            current_accuracy = self.roll_back_and_evaluate_model(strategy_result[ROLL_BACK_CONFIG])
+            current_accuracy = self.roll_back_and_evaluate_model(
+                strategy_result[ROLL_BACK_CONFIG]
+            )
             self.saved_model_accuracy = current_accuracy
-            metric_eval = self.evaluator.metric_eval(self.original_accuracy, current_accuracy)
+            metric_eval = self.evaluator.metric_eval(
+                self.original_accuracy, current_accuracy
+            )
             record = {
                 ROLL_BACK_CONFIG: copy.deepcopy(strategy_result[ROLL_BACK_CONFIG]),
-                METRIC_EVAL: metric_eval
+                METRIC_EVAL: metric_eval,
             }
 
-            LOGGER.logi("{} fine search step {} {}".format('*' * 20, fine_search_step, '*' * 20))
+            LOGGER.logi(
+                "{} fine search step {} {}".format('*' * 20, fine_search_step, '*' * 20)
+            )
             AccuracyBasedAutoCalibrationBase.show_record_info(record)
             self.history_records.append(record)
             self.final_config = copy.deepcopy(strategy_result[ROLL_BACK_CONFIG])
@@ -214,10 +236,15 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
         elif isinstance(obj, list):
             return [self.convert_to_serializable(item) for item in obj]
         elif isinstance(obj, dict):
-            return {key: self.convert_to_serializable(value) for key, value in obj.items()}
+            return {
+                key: self.convert_to_serializable(value) for key, value in obj.items()
+            }
         elif isinstance(obj, tuple):
             obj_left, obj_right = obj
-            return (self.convert_to_serializable(obj_left), self.convert_to_serializable(obj_right))
+            return (
+                self.convert_to_serializable(obj_left),
+                self.convert_to_serializable(obj_right),
+            )
         else:
             return obj
 
@@ -226,34 +253,60 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
         them after automatic calibration.
         """
         ranking_file = files.create_empty_file(
-            os.path.join(os.path.split(self.save_dir)[0], 'accuracy_based_auto_calibration_ranking_information.json'),
-            check_exist=True)
+            os.path.join(
+                os.path.split(self.save_dir)[0],
+                'accuracy_based_auto_calibration_ranking_information.json',
+            ),
+            check_exist=True,
+        )
         sorted_ranking_info = sorted(self.ranking_info.items(), key=lambda d: d[1])
         sorted_ranking_info = self.convert_to_serializable(sorted_ranking_info)
         with open(ranking_file, 'w') as dump_file:
             json_object = json.dumps(
-                sorted_ranking_info, sort_keys=False, indent=4, separators=(',', ':'), ensure_ascii=False)
+                sorted_ranking_info,
+                sort_keys=False,
+                indent=4,
+                separators=(',', ':'),
+                ensure_ascii=False,
+            )
             dump_file.write(json_object)
 
     def save_history_records(self):
         """Save the automatic calibration search history."""
         history_record_file = files.create_empty_file(
-            os.path.join(self.amct_log_dir, 'accuracy_based_auto_calibration_record.json'),
-            check_exist=True)
+            os.path.join(
+                self.amct_log_dir, 'accuracy_based_auto_calibration_record.json'
+            ),
+            check_exist=True,
+        )
         with open(history_record_file, 'w') as dump_file:
             for record in self.history_records:
-                if isinstance(record[METRIC_EVAL], (tuple, list)) and len(record[METRIC_EVAL]) == METRIC_RET_LEN:
-                    record[METRIC_EVAL] = [record[METRIC_EVAL][0], float(record[METRIC_EVAL][1])]
-                json_object = json.dumps(record, sort_keys=False, indent=4, separators=(',', ':'), ensure_ascii=False)
+                if (
+                    isinstance(record[METRIC_EVAL], (tuple, list))
+                    and len(record[METRIC_EVAL]) == METRIC_RET_LEN
+                ):
+                    record[METRIC_EVAL] = [
+                        record[METRIC_EVAL][0],
+                        float(record[METRIC_EVAL][1]),
+                    ]
+                json_object = json.dumps(
+                    record,
+                    sort_keys=False,
+                    indent=4,
+                    separators=(',', ':'),
+                    ensure_ascii=False,
+                )
                 dump_file.write(json_object)
 
-
     def save_final_config(self):
-        """ save the accuracy based auto calibration final quant config"""
+        """save the accuracy based auto calibration final quant config"""
         final_config_file = files.create_empty_file(
-            os.path.join(os.path.split(self.save_dir)[0],
-                'accuracy_based_auto_calibration_final_config.json'),
-                check_exist=True)
+            os.path.join(
+                os.path.split(self.save_dir)[0],
+                'accuracy_based_auto_calibration_final_config.json',
+            ),
+            check_exist=True,
+        )
 
         def _detect_repeated_key_hook(json_object):
             '''a hook function for detect repeated key in config file.'''
@@ -266,22 +319,28 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
             return result
 
         with open(self.config_file, 'r') as fid:
-            quant_config = json.load(
-                fid, object_pairs_hook=_detect_repeated_key_hook)
+            quant_config = json.load(fid, object_pairs_hook=_detect_repeated_key_hook)
         # update the modified config to original config file
         for key, value in self.final_config.items():
             # copy quant config when node is anonymous
             if key not in quant_config:
-                LOGGER.logi("Node {} is an anonymous node, its quant config is copied on its type")
-                anonymous_node_name = self.original_graph.get_node_by_name(key).type + '::common'
+                LOGGER.logi(
+                    "Node {} is an anonymous node, its quant config is copied on its type"
+                )
+                anonymous_node_name = (
+                    self.original_graph.get_node_by_name(key).type + '::common'
+                )
                 quant_config[key] = quant_config.get(anonymous_node_name)
             quant_config[key]['quant_enable'] = value
         with open(final_config_file, 'w') as dump_file:
             json_object = json.dumps(
-                quant_config, sort_keys=False, indent=4,
-                separators=(',', ':'), ensure_ascii=False)
+                quant_config,
+                sort_keys=False,
+                indent=4,
+                separators=(',', ':'),
+                ensure_ascii=False,
+            )
             dump_file.write(json_object)
-
 
     def clear(self):
         """Delete the generated model files when all layers are rolled
@@ -296,22 +355,29 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
     def run(self):
         """The main control of automatic calibration."""
         self.original_accuracy = self.get_original_accuracy()
-        is_satisfied, _ = self.evaluator.metric_eval(self.original_accuracy, self.original_accuracy)
+        is_satisfied, _ = self.evaluator.metric_eval(
+            self.original_accuracy, self.original_accuracy
+        )
         if not is_satisfied:
             LOGGER.loge(
                 "Compare between original_accuracy and original_accuracy can not satisfy the acc requirement, please "
-                "check the metric_eval() function.")
+                "check the metric_eval() function."
+            )
             raise ValueError(
                 "Compare between original_accuracy and original_accuracy can not satisfy the acc requirement, please "
-                "check the metric_eval() function.")
+                "check the metric_eval() function."
+            )
 
         self.global_quant_accuracy = self.get_global_quant_accuracy()
         self.ranking_info = self.get_ranking_info()
-        is_global_satisfied, _ = self.evaluator.metric_eval(self.original_accuracy, self.global_quant_accuracy)
+        is_global_satisfied, _ = self.evaluator.metric_eval(
+            self.original_accuracy, self.global_quant_accuracy
+        )
         if is_global_satisfied:
             self.saved_model_accuracy = self.global_quant_accuracy
             LOGGER.logi(
-                "The model satisfy the requirement after all layers are quantized, automatic calibration succeed!")
+                "The model satisfy the requirement after all layers are quantized, automatic calibration succeed!"
+            )
         elif self.ranking_info:
             self.strategy.initialize(self.ranking_info)
             roll_back_status = self.fine_search()
@@ -320,21 +386,38 @@ class AccuracyBasedAutoCalibrationBase: # pylint: disable=R0902
             for record in self.history_records:
                 AccuracyBasedAutoCalibrationBase.show_record_info(record)
         else:
-            LOGGER.logi('No layer can be rolled back in your model . Accuracy based auto calibration search stopped.')
+            LOGGER.logi(
+                'No layer can be rolled back in your model . Accuracy based auto calibration search stopped.'
+            )
             roll_back_status = ALL_ROLL_BACK
 
         self.save_ranking_info()
         self.save_history_records()
         LOGGER.logi("Accuracy of original model is {}".format(self.original_accuracy))
-        LOGGER.logi("Accuracy of global quantized model is {}".format(self.global_quant_accuracy))
+        LOGGER.logi(
+            "Accuracy of global quantized model is {}".format(
+                self.global_quant_accuracy
+            )
+        )
         if is_global_satisfied or roll_back_status == PARTIAL_ROLL_BACK:
             self.save_final_config()
-            LOGGER.logi("Accuracy of saved model is {}".format(self.saved_model_accuracy))
-            LOGGER.logi("The generated model is stored in dir: {}".format(os.path.split(self.save_dir)[0]))
-            LOGGER.logi("The records file is stored in dir: {}".format(os.path.split(self.record_file)[0]))
+            LOGGER.logi(
+                "Accuracy of saved model is {}".format(self.saved_model_accuracy)
+            )
+            LOGGER.logi(
+                "The generated model is stored in dir: {}".format(
+                    os.path.split(self.save_dir)[0]
+                )
+            )
+            LOGGER.logi(
+                "The records file is stored in dir: {}".format(
+                    os.path.split(self.record_file)[0]
+                )
+            )
         else:
             self.clear()
             LOGGER.logi(
                 "No quantized model are generated due to all quant layers are roll backed, "
-                "the accuracy target may be too difficult to achieve.")
+                "the accuracy target may be too difficult to achieve."
+            )
         shutil.rmtree(self.temp_dir)

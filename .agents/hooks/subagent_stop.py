@@ -41,8 +41,10 @@ SELF_VERIFY_TEMPLATE = """自验证不完整：progress.md 的「### 自验证�
 - 指标：ppl_bf16 / ppl_quant / delta
 - 产物：index 0 missing？config.json num_bits/strategy 是否符合方案？"""
 
-RETRY_LIMIT_MSG = ("重试上限：当前阶段已执行 {n} 轮 implementer/reviewer 循环，超过 5 轮上限。"
-                   "请回退当前阶段改动，向用户报告阻塞点。")
+RETRY_LIMIT_MSG = (
+    "重试上限：当前阶段已执行 {n} 轮 implementer/reviewer 循环，超过 5 轮上限。"
+    "请回退当前阶段改动，向用户报告阻塞点。"
+)
 
 
 COUNTER_TTL_SECONDS = 48 * 3600
@@ -78,7 +80,9 @@ def find_progress_md(cwd):
 
 def get_current_stage(content):
     """优先取机读状态块 STAGE，回退 '## 阶段 N'"""
-    m = re.findall(r"STAGE:\s*(\d+)", content) or re.findall(r"## 阶段\s*(\d+)", content)
+    m = re.findall(r"STAGE:\s*(\d+)", content) or re.findall(
+        r"## 阶段\s*(\d+)", content
+    )
     return m[-1] if m else "0"
 
 
@@ -102,6 +106,7 @@ def check_self_verification(data, content):
 def check_retry_limit(data, content):
     """检查 2：外循环重试限制（阻断）"""
     import fcntl
+
     if data.get("agent_type", "") not in ("quant-implementer", "quant-reviewer"):
         return None
     stage = get_current_stage(content)
@@ -114,7 +119,9 @@ def check_retry_limit(data, content):
         # 无 session_id：跳过计数，不退化到共享 "unknown" key
         # （否则不同会话/任务的重试计数互相累加，误触发上限阻断）
         return None
-    counter_file = os.path.join(tempfile.gettempdir(), f"hook_retry_{session_id}_{stage}.count")
+    counter_file = os.path.join(
+        tempfile.gettempdir(), f"hook_retry_{session_id}_{stage}.count"
+    )
     # flock 保护读-改-写原子性（防极端并发下计数丢失）
     with open(counter_file, "a+") as f:
         fcntl.flock(f, fcntl.LOCK_EX)

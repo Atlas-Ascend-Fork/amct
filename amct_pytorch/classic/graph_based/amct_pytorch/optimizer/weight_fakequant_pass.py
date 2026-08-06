@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,7 +26,7 @@ from ...amct_pytorch.utils.weight_quant_api import get_deconv_group
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 
-WTS_FAKEQUANT_NUM_BITS = (6, 7, 8)
+WTS_FAKEQUANT_NUM_BITS = (4, 6, 7, 8)
 
 
 class WeightFakequantPass(BaseFusionPass):
@@ -34,6 +34,7 @@ class WeightFakequantPass(BaseFusionPass):
     Function: Fakequant weight from int8 to int9
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -84,31 +85,35 @@ class WeightFakequantPass(BaseFusionPass):
         weight_param = QuantOpInfo.get_weight_node(object_node)
         weight_helper = TensorProtoHelper(weight_param.proto, weight_param.model_path)
         # get data
-        int8_weight = weight_helper.get_data()
+        quant_weight = weight_helper.get_data()
         if object_node.type == 'ConvTranspose' and get_deconv_group(object_node) > 1:
             group = get_deconv_group(object_node)
-            int8_weight = adjust_deconv_weight_shape(group, int8_weight)
-            trans_axes = (1, 0, 2, 3, 4)[:len(int8_weight.shape)]
-            int8_weight = np.transpose(int8_weight, trans_axes)
+            quant_weight = adjust_deconv_weight_shape(group, quant_weight)
+            trans_axes = (1, 0, 2, 3, 4)[: len(quant_weight.shape)]
+            quant_weight = np.transpose(quant_weight, trans_axes)
         weight_helper.clear_data()
 
         weight_offset = self.records.get(object_node.name).get('weight_offset')
-        int9_weight = int8_weight.astype(np.float32)
+        fp_weight = quant_weight.astype(np.float32)
         if not np.all(weight_offset == 0):
-            int9_weight = int9_weight - weight_offset.astype(np.float32)
+            fp_weight = fp_weight - weight_offset.astype(np.float32)
 
         if object_node.type == 'ConvTranspose' and get_deconv_group(object_node) > 1:
             group = get_deconv_group(object_node)
-            trans_axes = (1, 0, 2, 3, 4)[:len(int9_weight.shape)]
-            int9_weight = np.transpose(int9_weight, trans_axes)
-            int9_weight = adjust_deconv_weight_shape(group, int9_weight)
+            trans_axes = (1, 0, 2, 3, 4)[: len(fp_weight.shape)]
+            fp_weight = np.transpose(fp_weight, trans_axes)
+            fp_weight = adjust_deconv_weight_shape(group, fp_weight)
 
-        int9_weight = int9_weight.reshape([-1])
+        fp_weight = fp_weight.reshape([-1])
 
-        weight_helper.set_data(int9_weight, 'FLOAT')
+        weight_helper.set_data(fp_weight, 'FLOAT')
 
-        LOGGER.logd("Fakequant weight from int8 to int9 for layer '{}' " \
-            "success!".format(object_node.name), 'WeightFakequantPass')
+        LOGGER.logd(
+            "Fakequant (dequant) weight to float for layer '{}' success!".format(
+                object_node.name
+            ),
+            'WeightFakequantPass',
+        )
 
     def dequant_weight(self, object_node, is_recurrence_weight=False):
         """
@@ -126,7 +131,9 @@ class WeightFakequantPass(BaseFusionPass):
             scale = self.records.get(object_node.name).get('recurrence_weight_scale')
             offset = self.records.get(object_node.name).get('recurrence_weight_offset')
         weight_tensor = QuantOpInfo.get_node_tensor(weight_node)
-        weight_helper = TensorProtoHelper(weight_tensor, model_path=weight_node.model_path)
+        weight_helper = TensorProtoHelper(
+            weight_tensor, model_path=weight_node.model_path
+        )
         weight = weight_helper.get_data().astype(np.float32)
         weight_helper.clear_data()
 

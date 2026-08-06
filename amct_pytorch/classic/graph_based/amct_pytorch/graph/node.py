@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from onnx import onnx_pb # pylint: disable=import-error
+from onnx import onnx_pb  # pylint: disable=import-error
 from ...amct_pytorch.common.graph_base.node_base import NodeBase
 from ...amct_pytorch.graph.anchor import InputAnchor
 from ...amct_pytorch.graph.anchor import OutputAnchor
@@ -23,7 +23,7 @@ from ...amct_pytorch.graph.anchor import OutputAnchor
 TYPE = 'type'
 
 
-class Node(NodeBase): # pylint: disable=no-member
+class Node(NodeBase):  # pylint: disable=no-member
     """
     Function: Data structure of node which contains nodeParameter info
     APIs: is_data_node, index, set_index, name, type, node, get_input_anchor,
@@ -31,6 +31,7 @@ class Node(NodeBase): # pylint: disable=no-member
           get_data, get_all_data, set_data, set_all_data, add_data,
           dump_proto
     """
+
     def __init__(self, node_index, node_proto, model_path=None):
         """
         Function: init object
@@ -63,7 +64,8 @@ class Node(NodeBase): # pylint: disable=no-member
             self._basic_info.get('ori_name'),
             self._basic_info.get('name'),
             [x.name for x in self._input_anchors],
-            [x.name for x in self._output_anchors])
+            [x.name for x in self._output_anchors],
+        )
 
     @property
     def ori_name(self):
@@ -90,12 +92,18 @@ class Node(NodeBase): # pylint: disable=no-member
         Return: None
         """
         if self._basic_info.get(TYPE) in ('initializer', 'sparse_initializer'):
-            raise RuntimeError('Cannot add input anchor to data node: {}'.format(
-                self._basic_info.get('name')))
+            raise RuntimeError(
+                'Cannot add input anchor to data node: {}'.format(
+                    self._basic_info.get('name')
+                )
+            )
         index = len(self._input_anchors)
         if index > 0 and self._basic_info.get(TYPE) == 'graph_anchor':
-            raise RuntimeError('Can only add one anchor to graph inout: {}'.format(
-                self._basic_info.get('name')))
+            raise RuntimeError(
+                'Can only add one anchor to graph inout: {}'.format(
+                    self._basic_info.get('name')
+                )
+            )
         self._input_anchors.append(InputAnchor(self, index, name))
 
     def get_output_anchor_index(self, name):
@@ -109,9 +117,15 @@ class Node(NodeBase): # pylint: disable=no-member
         """Add output anchor to current node"""
         index = len(self._output_anchors)
         if index > 0 and self._basic_info.get(TYPE) in (
-                'graph_anchor', 'initializer', 'sparse_initializer'):
-            raise RuntimeError('Can only add one anchor to node: {}'.format(
-                self._basic_info.get('name')))
+            'graph_anchor',
+            'initializer',
+            'sparse_initializer',
+        ):
+            raise RuntimeError(
+                'Can only add one anchor to node: {}'.format(
+                    self._basic_info.get('name')
+                )
+            )
         self._output_anchors.append(OutputAnchor(self, index, name))
 
     def get_output_anchor_by_name(self, name):
@@ -142,42 +156,46 @@ class Node(NodeBase): # pylint: disable=no-member
         # update graph input/output
         if isinstance(self._node_proto, onnx_pb.ValueInfoProto):
             if self._input_anchors and self._output_anchors:
-                raise RuntimeError('Graph input/output {} cannot have both ' \
-                    'input, output'.format(self._basic_info.get('ori_name')))
+                raise RuntimeError(
+                    'Graph input/output {} cannot have both input, output'.format(
+                        self._basic_info.get('ori_name')
+                    )
+                )
 
             if self._input_anchors:
                 peer_anchor = self._input_anchors[0].get_peer_output_anchor()
                 if peer_anchor.name != self.name:
-                    raise RuntimeError('Cannot change output name "{}"- ' \
-                        '!= >"{}"'.format(peer_anchor.name, self.name))
+                    raise RuntimeError(
+                        'Cannot change output name "{}"- != >"{}"'.format(
+                            peer_anchor.name, self.name
+                        )
+                    )
 
             node_proto = onnx_pb.ValueInfoProto()
             node_proto.CopyFrom(self._node_proto)
             return node_proto
-        raise TypeError("Unexpected node_proto type:\"{}\"! only [NodeProto,"
-                        " TensorProto, SparseTensorProto ValueInfoProto] are "
-                        "supported.".format(type(self._node_proto)))
+        raise TypeError(
+            "Unexpected node_proto type:\"{}\"! only [NodeProto,"
+            " TensorProto, SparseTensorProto ValueInfoProto] are "
+            "supported.".format(type(self._node_proto))
+        )
 
     def _init(self):
-        """Parse node from onnx_pb proto define
-        """
+        """Parse node from onnx_pb proto define"""
         if isinstance(self._node_proto, onnx_pb.NodeProto):
             # init input anchors
             for index, input_name in enumerate(self._node_proto.input):
-                self._input_anchors.append(InputAnchor(self, index,
-                                                       input_name))
+                self._input_anchors.append(InputAnchor(self, index, input_name))
             # init output anchors
             for index, output_name in enumerate(self._node_proto.output):
-                self._output_anchors.append(OutputAnchor(self, index,
-                                                         output_name))
-        elif isinstance(self._node_proto,
-                        (onnx_pb.TensorProto, onnx_pb.SparseTensorProto)):
-            self._output_anchors.append(OutputAnchor(self, 0,
-                                                     self.name))
+                self._output_anchors.append(OutputAnchor(self, index, output_name))
+        elif isinstance(
+            self._node_proto, (onnx_pb.TensorProto, onnx_pb.SparseTensorProto)
+        ):
+            self._output_anchors.append(OutputAnchor(self, 0, self.name))
 
     def _trans_type(self):
-        """translate node type to unique
-        """
+        """translate node type to unique"""
         if isinstance(self._node_proto, onnx_pb.NodeProto):
             self._basic_info[TYPE] = self._node_proto.op_type
         elif isinstance(self._node_proto, onnx_pb.ValueInfoProto):
@@ -203,8 +221,11 @@ class Node(NodeBase): # pylint: disable=no-member
                 index = input_anchor.get_peer_output_anchor().index
 
                 if index >= len(peer_node.output_anchors):
-                    raise RuntimeError('Get {} output from {} failed, ' \
-                        'out of range'.format(index, peer_node.name))
+                    raise RuntimeError(
+                        'Get {} output from {} failed, out of range'.format(
+                            index, peer_node.name
+                        )
+                    )
                 peer_name = peer_node.get_output_anchor(index).name
                 input_anchor.set_name(peer_name)
             else:

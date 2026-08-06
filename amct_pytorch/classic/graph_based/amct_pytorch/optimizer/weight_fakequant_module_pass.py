@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,8 +17,8 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from torch import Tensor # pylint: disable=E0401
-from torch.nn.parameter import Parameter # pylint: disable=E0401
+from torch import Tensor  # pylint: disable=E0401
+from torch.nn.parameter import Parameter  # pylint: disable=E0401
 
 from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from ...amct_pytorch.custom_op.arq.arq import weight_quant_np
@@ -34,6 +34,7 @@ class WeightFakequantModulePass(BaseModuleFusionPass):
     Function: Fakequant weight from int8 to int9
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records, num_bits):
         """
         Function: init object
@@ -77,31 +78,37 @@ class WeightFakequantModulePass(BaseModuleFusionPass):
         if type(object_module).__name__ == FAKE_CONV_TRANSPOSE:
             group = object_module.sub_module.groups
             weight_np = adjust_deconv_weight_shape(group, weight_np)
-            trans_axes = (1, 0, 2, 3, 4)[:len(weight_np.shape)]
+            trans_axes = (1, 0, 2, 3, 4)[: len(weight_np.shape)]
             weight_np = weight_np.transpose(trans_axes)
         int8_weight = weight_quant_np(
             weight_np,
             self.records.get(object_name).get('weight_scale'),
             self.records.get(object_name).get('weight_offset'),
-            self.num_bits)
+            self.num_bits,
+        )
         if type(object_module).__name__ == FAKE_CONV_TRANSPOSE:
-            weight_offset = weight_offset.astype(np.float32).reshape(
-                [1, -1, 1, 1])
+            weight_offset = weight_offset.astype(np.float32).reshape([1, -1, 1, 1])
         elif type(object_module).__name__ == FAKE_CONV:
             reshaped_weight_shape = [1] * len(object_module.sub_module.weight.shape)
             reshaped_weight_shape[0] = -1
             weight_offset = weight_offset.astype(np.float32).reshape(
-                reshaped_weight_shape)
+                reshaped_weight_shape
+            )
 
         int9_weight = int8_weight.astype(np.float32) - weight_offset
         if type(object_module).__name__ == FAKE_CONV_TRANSPOSE:
-            trans_axes = (1, 0, 2, 3, 4)[:len(weight_np.shape)]
+            trans_axes = (1, 0, 2, 3, 4)[: len(weight_np.shape)]
             int9_weight = int9_weight.transpose(trans_axes)
             group = object_module.sub_module.groups
             weight_np = adjust_deconv_weight_shape(group, int9_weight)
         int9_weight = int9_weight.reshape(ori_weight_shape)
         object_module.sub_module.weight = Parameter(
-            Tensor(int9_weight).to(device=object_module.sub_module.weight.device))
+            Tensor(int9_weight).to(device=object_module.sub_module.weight.device)
+        )
 
-        LOGGER.logd("Fakequant weight from float32 to int9 for module '{}' " \
-            "success!".format(object_name), 'WeightFakequantModulePass')
+        LOGGER.logd(
+            "Fakequant weight from float32 to int9 for module '{}' success!".format(
+                object_name
+            ),
+            'WeightFakequantModulePass',
+        )

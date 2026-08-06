@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,19 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
 import unittest
 
-import numpy as np
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.distill_config import (
     get_enable_quant_layers,
     get_quant_layer_config,
 )
 
-from .utils import models
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
 
@@ -36,21 +32,16 @@ class TestDistillConfig(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.distill_config = {
-            'conv1' : {
-                'quant_enable' : True,
-                'distill_data_config' : {
-                    'algo' : 'ulq_quantize',
-                    'dst_type' : 'INT8'
+            'conv1': {
+                'quant_enable': True,
+                'distill_data_config': {'algo': 'ulq_quantize', 'dst_type': 'INT8'},
+                'distill_weight_config': {
+                    'algo': 'arq_distill',
+                    'channel_wise': True,
+                    'dst_type': 'INT8',
                 },
-                'distill_weight_config' : {
-                    'algo' : 'arq_distill',
-                    'channel_wise' : True,
-                    'dst_type' : 'INT8'
-                }
             },
-            'conv2' : {
-                'quant_enable' : False
-            }
+            'conv2': {'quant_enable': False},
         }
 
     @classmethod

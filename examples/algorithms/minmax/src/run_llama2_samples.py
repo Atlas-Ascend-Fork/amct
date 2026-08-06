@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     # Phase1: quantize model
     cfg = amct.INT8_MINMAX_WEIGHT_QUANT_CFG
     amct.quantize(quant_model, cfg)
-    
+
     # Phase2: inference calibration model to cal quantized factors
     infer_model(quant_model, samples)
     torch_npu.npu.empty_cache()

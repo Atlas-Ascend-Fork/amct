@@ -34,9 +34,6 @@ env = [
 source = ["amct_pytorch"]
 omit = [
     "*/experimental/*",
-    "*/cli/*",
-    "**/__init__.py",
-    "*/common/models/llm/deepseek/*",
 ]
 
 [tool.coverage.report]
@@ -47,3 +44,6 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
+
+[tool.ruff.format]
+quote-style = "preserve"

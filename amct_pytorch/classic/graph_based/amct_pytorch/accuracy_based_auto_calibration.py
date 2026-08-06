@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,7 +22,7 @@ import copy
 import json
 from collections import OrderedDict
 
-import torch # pylint: disable=E0401
+import torch  # pylint: disable=E0401
 from ..amct_pytorch import quantize_tool
 from ..amct_pytorch.quantize_tool import inner_quantize_model
 from ..amct_pytorch.quantize_tool import generate_fakequant_module
@@ -47,21 +47,24 @@ AUTO_CALI_SATISFY = 0
 AUTO_CALI_KEEP_SEARCH = 1
 
 
-class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: disable=R0902
-    """ the class for accuracy_based_auto_calibration API"""
-    def __init__(self, # pylint: disable=R0913
-                 model,
-                 model_evaluator,
-                 config_file,
-                 record_file,
-                 save_dir,
-                 strategy,
-                 sensitivity,
-                 input_data,
-                 input_names=None,
-                 output_names=None,
-                 dynamic_axes=None):
-        """ init function for class AccuracyBasedAutoCalibration
+class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase):  # pylint: disable=R0902
+    """the class for accuracy_based_auto_calibration API"""
+
+    def __init__(
+        self,  # pylint: disable=R0913
+        model,
+        model_evaluator,
+        config_file,
+        record_file,
+        save_dir,
+        strategy,
+        sensitivity,
+        input_data,
+        input_names=None,
+        output_names=None,
+        dynamic_axes=None,
+    ):
+        """init function for class AccuracyBasedAutoCalibration
         Parameters:
                 model: the pytorch model instance
                 model_evaluator: the user implemented evaluator instance
@@ -70,12 +73,8 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
                 save_dir: prefix of filename of save model
         """
         super().__init__(
-            record_file,
-            config_file,
-            save_dir,
-            model_evaluator,
-            strategy,
-            sensitivity)
+            record_file, config_file, save_dir, model_evaluator, strategy, sensitivity
+        )
         self.original_model = model
         self.input_data = input_data
         self.input_names = input_names
@@ -87,12 +86,11 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
         self.ranking_info = None
         self.auto_calibration_helper = None
         self.final_config = None
-        self.modified_onnx_file = os.path.join(
-            self.temp_dir, "modified_model.onnx")
+        self.modified_onnx_file = os.path.join(self.temp_dir, "modified_model.onnx")
 
     @staticmethod
     def get_quant_enable_layers(quant_config):
-        """ find the quant enable layers from quant config"""
+        """find the quant enable layers from quant config"""
         quant_enable_layers = []
         for key, value in quant_config.items():
             if isinstance(value, dict) and value['quant_enable']:
@@ -100,36 +98,39 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
         return quant_enable_layers
 
     def get_original_accuracy(self):
-        """ get orginal_metrics and test eval model """
+        """get orginal_metrics and test eval model"""
         # save the original model to pth file
         self.original_accuracy = self.evaluator.evaluate(self.original_model)
-        LOGGER.logi("original evaluation accurcay: {}".format(
-            self.original_accuracy), 'auto_calibration')
+        LOGGER.logi(
+            "original evaluation accurcay: {}".format(self.original_accuracy),
+            'auto_calibration',
+        )
         return self.original_accuracy
 
     def get_global_quant_accuracy(self):
-        """ do the calibration and get accuracy of fake quant model """
+        """do the calibration and get accuracy of fake quant model"""
         global_fake_quant_accuracy = self.global_calibration()
         quant_config_torch = Configuration().get_quant_config()
         self.original_quant_config = quant_config_torch
         # record the layers that need quantization
-        self.quant_layers = \
-            AccuracyBasedAutoCalibration.get_quant_enable_layers(quant_config_torch)
+        self.quant_layers = AccuracyBasedAutoCalibration.get_quant_enable_layers(
+            quant_config_torch
+        )
         roll_back_config = OrderedDict()
         for layer in self.quant_layers:
             roll_back_config[layer] = True
         record = {
             'roll_back_config': roll_back_config,
             'metric_eval': self.evaluator.metric_eval(
-                self.original_accuracy, global_fake_quant_accuracy)
+                self.original_accuracy, global_fake_quant_accuracy
+            ),
         }
         self.final_config = roll_back_config
         self.history_records.append(record)
         return global_fake_quant_accuracy
 
-
     def global_calibration(self):
-        """ do the calibration without joint quantization"""
+        """do the calibration without joint quantization"""
         # do the calibration and save fake quant deploy model
         model = self.get_original_model()
 
@@ -146,31 +147,40 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
             output_names=self.output_names,
             dynamic_axes=self.dynamic_axes,
             dump_config=dump_config,
-            weight_fakequant=True)
+            weight_fakequant=True,
+        )
         # activation calibration process
         self.evaluator.calibration(modified_module)
         quantize_tool.save_model(
-            self.modified_onnx_file, self.record_file, self.save_dir)
+            self.modified_onnx_file, self.record_file, self.save_dir
+        )
 
         # evaluate the generated fake quant model
-        self.fake_quant_module = generate_fakequant_module(model, self.config_file, self.record_file,
-            self.input_data, self.input_names, self.output_names, self.dynamic_axes)
+        self.fake_quant_module = generate_fakequant_module(
+            model,
+            self.config_file,
+            self.record_file,
+            self.input_data,
+            self.input_names,
+            self.output_names,
+            self.dynamic_axes,
+        )
         # generate the fake quant model in  torch.nn.Module
-        current_accuracy = self.evaluator.evaluate(
-            self.fake_quant_module)
+        current_accuracy = self.evaluator.evaluate(self.fake_quant_module)
         LOGGER.logi(
-            "global calibration accuracy: {}".format(
-                current_accuracy), 'auto_calibration')
+            "global calibration accuracy: {}".format(current_accuracy),
+            'auto_calibration',
+        )
 
         return current_accuracy
 
     def generate_tmp_file_path(self, file_name):
-        """ generate the file path for modified model, fused model"""
+        """generate the file path for modified model, fused model"""
         file_path = os.path.join(self.temp_dir, file_name)
         return file_path
 
     def get_ranking_info(self):
-        """ get the ranking information of accuracy based auto calibration"""
+        """get the ranking information of accuracy based auto calibration"""
         model = self.get_original_model()
         # generate the fused pytorch module for single layer and
         # single fake quant layer cosine similarity compare
@@ -181,7 +191,8 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
             input_data=self.input_data,
             input_names=self.input_names,
             output_names=self.output_names,
-            dynamic_axes=self.dynamic_axes)
+            dynamic_axes=self.dynamic_axes,
+        )
 
         auto_calibration_helper = AutoCalibrationHelper(
             fused_module,
@@ -189,15 +200,15 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
             self.quant_layers,
             self.record_file,
             self.temp_dir,
-            self.sensitivity)
+            self.sensitivity,
+        )
         ranking_info, _ = auto_calibration_helper.calc_ranking_info()
         self.ranking_info = ranking_info
         return ranking_info
 
-
     def roll_back_and_evaluate_model(self, roll_back_config):
-        """ generate the roll-back fake quant model and
-            evaluate the fake quant model
+        """generate the roll-back fake quant model and
+        evaluate the fake quant model
         """
         model = self.get_original_model()
         quant_config = copy.deepcopy(self.original_quant_config)
@@ -211,9 +222,15 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
                 config_dict[key]['quant_enable'] = value
 
         with open(self.config_file, 'w') as config_file:
-            config_file.write(json.dumps(
-                config_dict, sort_keys=False, indent=4,
-                separators=(',', ':'), ensure_ascii=False))
+            config_file.write(
+                json.dumps(
+                    config_dict,
+                    sort_keys=False,
+                    indent=4,
+                    separators=(',', ':'),
+                    ensure_ascii=False,
+                )
+            )
 
         modified_module = inner_quantize_model(
             config_file=self.config_file,
@@ -225,50 +242,59 @@ class AccuracyBasedAutoCalibration(AccuracyBasedAutoCalibrationBase): # pylint: 
             output_names=self.output_names,
             dynamic_axes=self.dynamic_axes,
             dump_config=None,
-            weight_fakequant=True)
+            weight_fakequant=True,
+        )
         # activation calibration process
         self.evaluator.calibration(modified_module)
 
         quantize_tool.save_model(
-            self.modified_onnx_file, self.record_file, self.save_dir)
+            self.modified_onnx_file, self.record_file, self.save_dir
+        )
 
-        self.fake_quant_module = generate_fakequant_module(model, self.config_file, self.record_file,
-            self.input_data, self.input_names, self.output_names, self.dynamic_axes)
+        self.fake_quant_module = generate_fakequant_module(
+            model,
+            self.config_file,
+            self.record_file,
+            self.input_data,
+            self.input_names,
+            self.output_names,
+            self.dynamic_axes,
+        )
 
-        current_fq_metric = self.evaluator.evaluate(
-            self.fake_quant_module)
+        current_fq_metric = self.evaluator.evaluate(self.fake_quant_module)
         return current_fq_metric
 
-
     def get_original_model(self):
-        """ get the original model"""
+        """get the original model"""
         try:
             model = ModuleHelper.deep_copy(self.original_model)
         except RuntimeError as exception:
-            LOGGER.logw(
-                exception, "accuracy_based_auto_calibration deep_copy model")
+            LOGGER.logw(exception, "accuracy_based_auto_calibration deep_copy model")
         return model
 
 
-@check_params(model=torch.nn.Module,
-              config_file=str,
-              record_file=str,
-              save_dir=str,
-              input_names=(list, type(None)),
-              output_names=(list, type(None)),
-              dynamic_axes=(dict, type(None)))
-def accuracy_based_auto_calibration( # pylint: disable=too-many-arguments
-        model,
-        model_evaluator,
-        config_file,
-        record_file,
-        save_dir,
-        input_data,
-        input_names=None,
-        output_names=None,
-        dynamic_axes=None,
-        strategy='BinarySearch',
-        sensitivity='CosineSimilarity'):
+@check_params(
+    model=torch.nn.Module,
+    config_file=str,
+    record_file=str,
+    save_dir=str,
+    input_names=(list, type(None)),
+    output_names=(list, type(None)),
+    dynamic_axes=(dict, type(None)),
+)
+def accuracy_based_auto_calibration(  # pylint: disable=too-many-arguments
+    model,
+    model_evaluator,
+    config_file,
+    record_file,
+    save_dir,
+    input_data,
+    input_names=None,
+    output_names=None,
+    dynamic_axes=None,
+    strategy='BinarySearch',
+    sensitivity='CosineSimilarity',
+):
     """
     Function:
             calibration the input model automatically, decide which layers need
@@ -300,32 +326,35 @@ def accuracy_based_auto_calibration( # pylint: disable=too-many-arguments
     else:
         if not isinstance(strategy, AutoCalibrationStrategyBase):
             raise RuntimeError(
-                "strategy is not inherited from base class"
-                " AutoCalibrationStrategyBase")
+                "strategy is not inherited from base class AutoCalibrationStrategyBase"
+            )
 
     if sensitivity == 'CosineSimilarity':
         sensitivity = CosineSimilaritySensitivity()
     else:
         if not isinstance(sensitivity, SensitivityBase):
             raise RuntimeError(
-                "sensitivity is not inherited from base class SensitivityBase")
+                "sensitivity is not inherited from base class SensitivityBase"
+            )
 
     files_util.check_file_path(config_file, 'config_file')
     if not isinstance(model_evaluator, AutoCalibrationEvaluatorBase):
         raise RuntimeError(
             "the model evaluator is not inherited from base class"
-            " AutoCalibrationEvaluatorBase")
+            " AutoCalibrationEvaluatorBase"
+        )
 
-    auto_calibration_controller = \
-        AccuracyBasedAutoCalibration(model=model,
-                                     model_evaluator=model_evaluator,
-                                     config_file=config_file,
-                                     record_file=record_file,
-                                     save_dir=save_dir,
-                                     strategy=strategy,
-                                     sensitivity=sensitivity,
-                                     input_data=input_data,
-                                     input_names=input_names,
-                                     output_names=output_names,
-                                     dynamic_axes=dynamic_axes)
+    auto_calibration_controller = AccuracyBasedAutoCalibration(
+        model=model,
+        model_evaluator=model_evaluator,
+        config_file=config_file,
+        record_file=record_file,
+        save_dir=save_dir,
+        strategy=strategy,
+        sensitivity=sensitivity,
+        input_data=input_data,
+        input_names=input_names,
+        output_names=output_names,
+        dynamic_axes=dynamic_axes,
+    )
     auto_calibration_controller.run()

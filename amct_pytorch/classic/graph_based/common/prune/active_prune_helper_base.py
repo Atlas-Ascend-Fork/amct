@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,7 +21,7 @@ from .passive_prune_helper_base import PassivePruneHelperBase
 
 
 class ActivePruneHelperBase(PruneHelperBase):
-    """ base class of active prune helper"""
+    """base class of active prune helper"""
 
     def get_group(self):
         """
@@ -55,7 +55,9 @@ class ActivePruneHelperBase(PruneHelperBase):
         """
         prune_records = self.get_producer_record(self.node, 0)
         group = self.get_group()
-        PassivePruneHelperBase.set_producer_for_passive(self.node, group, record_helper, prune_records)
+        PassivePruneHelperBase.set_producer_for_passive(
+            self.node, group, record_helper, prune_records
+        )
 
     def create_record(self, record_helper):
         """

@@ -39,16 +39,16 @@ def remap_hyv3_keys(state_dict):
     new_state_dict = {}
     for key, tensor in state_dict.items():
         new_key = key
-        
+
         if "mlp.router.gate.weight" in key:
             new_key = key.replace("mlp.router.gate.weight", "mlp.gate.weight")
         elif "mlp.expert_bias" in key:
             new_key = key.replace("mlp.expert_bias", "mlp.e_score_correction_bias")
         elif "mlp.shared_mlp." in key:
             new_key = key.replace("mlp.shared_mlp.", "mlp.shared_experts.")
-        
+
         new_state_dict[new_key] = tensor
-    
+
     return new_state_dict
 
 
@@ -80,7 +80,9 @@ class HyV3(BaseModel):
 
     def parse_quant_mode(self):
         if "mlp" in self.quant_target:
-            raise ValueError("HyV3 is a MoE model and does not support quant_target='mlp'. Use 'moe' instead.")
+            raise ValueError(
+                "HyV3 is a MoE model and does not support quant_target='mlp'. Use 'moe' instead."
+            )
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
         return f"model.layers.{layer_idx}."
@@ -89,15 +91,17 @@ class HyV3(BaseModel):
         state_dict = super().load_layer_weight(prefix)
         state_dict = remap_hyv3_keys(state_dict)
         if "mlp.experts.0.gate_proj.weight" in state_dict:
-            state_dict = pack_gated_expert_weights(state_dict, expert_prefix="mlp.experts")
+            state_dict = pack_gated_expert_weights(
+                state_dict, expert_prefix="mlp.experts"
+            )
         return state_dict
 
     def build_quant_block(self, layer_idx):
         decoder_layer = self.block(layer_idx)
-        
+
         if "attn-linear" in self.quant_target or "attn-cache" in self.quant_target:
             apply_quant_to_attn(self.args, decoder_layer, QuantHYV3Attn)
-        
+
         if "moe" in self.quant_target:
             mlp = getattr(decoder_layer, "mlp", None)
             if mlp is not None:
@@ -105,7 +109,7 @@ class HyV3(BaseModel):
                     decoder_layer.mlp = QuantHYV3MoE(self.args, mlp)
                 else:
                     decoder_layer.mlp = QuantHYV3MLP(self.args, mlp, group="mlp")
-        
+
         return decoder_layer
 
     def iter_ptq_units(self, layer_idx, block):
@@ -121,7 +125,10 @@ class HyV3(BaseModel):
                 if len(parts) != 5:
                     raise ValueError(f"Unexpected HyV3 MoE expert module name: {name}")
                 _, _, _, expert_idx, proj_name = parts
-                yield f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight", module
+                yield (
+                    f"{weight_prefix}mlp.experts.{expert_idx}.{proj_name}.weight",
+                    module,
+                )
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
@@ -130,7 +137,9 @@ class HyV3(BaseModel):
         scale_inv_name = f"{weight_name}_scale"
         return scale_prefix, scale_inv_name
 
-    def generate_tensorwise_quant_layers(self,):
+    def generate_tensorwise_quant_layers(
+        self,
+    ):
         bit_policy = ensure_bit_policy(self.args)
         num_hidden_layers = self.config.num_hidden_layers
         num_nextn_predict_layers = self.config.num_nextn_predict_layers
@@ -157,17 +166,20 @@ class HyV3(BaseModel):
         for n in self.MLP_LINEAR_NAMES:
             ignore.append(f"model.layers.0.mlp.{n}")
         ignore.append(f"model.layers.{self.num_layers}.eh_proj")
-        ignore.append(f"model.embed_tokens")
-        ignore.append(f"lm_head")
+        ignore.append("model.embed_tokens")
+        ignore.append("lm_head")
         return ignore
 
     def bits_scheme(self):
-        """Per-group (targets, w_bits, a_bits) for the deploy config groups.
-        """
+        """Per-group (targets, w_bits, a_bits) for the deploy config groups."""
         bit_policy = ensure_bit_policy(self.args)
         routed = bit_policy["moe.routed"].default
         return [
-            {"targets": ["Linear"], "w_bits": bit_policy.w_bits, "a_bits": bit_policy.a_bits},
+            {
+                "targets": ["Linear"],
+                "w_bits": bit_policy.w_bits,
+                "a_bits": bit_policy.a_bits,
+            },
             {"targets": ["MoEGMM"], "w_bits": routed.w, "a_bits": routed.a},
         ]
 
@@ -181,5 +193,6 @@ class HyV3(BaseModel):
                 "group_size": -1,
                 "dynamic": "True",
                 "symmetric": "True",
-            }}
+            }
+        }
         return scheme

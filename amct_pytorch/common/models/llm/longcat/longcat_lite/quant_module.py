@@ -17,21 +17,23 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from transformers.models.longcat_flash.modeling_longcat_flash import (
-    LongcatFlashDecoderLayer,
     LongcatFlashMLA,
-    LongcatFlashMLP,
     apply_rotary_pos_emb_interleave,
 )
 from amct_pytorch.algorithms.quant import AlgoBuildContext
-from amct_pytorch.common.models.llm.common.attention_forward import scaled_dot_product_attention
+from amct_pytorch.common.models.llm.common.attention_forward import (
+    scaled_dot_product_attention,
+)
 from amct_pytorch.common.models.llm.common.quant_apply import (
     PlainLinear,
     QuantGatedMLP,
 )
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
+from amct_pytorch.quantization.modules.quant_base import (
+    ActivationQuantizer,
+    build_algorithms_by_target,
+)
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 
@@ -41,8 +43,14 @@ class QuantLongcatMLP(QuantGatedMLP):
 
 
 class LongcatPackedExpertLinearView:
-    def __init__(self, experts_module, expert_idx: int, weight_name: str,
-                 start: int | None = None, end: int | None = None):
+    def __init__(
+        self,
+        experts_module,
+        expert_idx: int,
+        weight_name: str,
+        start: int | None = None,
+        end: int | None = None,
+    ):
         super().__init__()
         self.experts_module = experts_module
         self.expert_idx = expert_idx
@@ -56,7 +64,7 @@ class LongcatPackedExpertLinearView:
         weight_tensor = getattr(self.experts_module, self.weight_name)[self.expert_idx]
         if self.start is None and self.end is None:
             return weight_tensor
-        return weight_tensor[self.start:self.end]
+        return weight_tensor[self.start : self.end]
 
 
 class LongcatPackedExpertView(nn.Module):
@@ -96,17 +104,27 @@ class LongcatUnpackedExperts(nn.Module):
             QuantLongcatMLP(args, LongcatPackedExpertView(experts_module, expert_idx))
             for expert_idx in range(self.num_routed_experts)
         ]
-        expert_modules.extend(nn.Identity() for _ in range(self.total_experts - self.num_routed_experts))
+        expert_modules.extend(
+            nn.Identity() for _ in range(self.total_experts - self.num_routed_experts)
+        )
         self.expert_modules = nn.ModuleList(expert_modules)
 
-    def forward(self, hidden_states: torch.Tensor, top_k_index: torch.Tensor,
-                top_k_weights: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        top_k_index: torch.Tensor,
+        top_k_weights: torch.Tensor,
+    ) -> torch.Tensor:
         final_hidden_states = torch.zeros_like(hidden_states)
         if top_k_index.numel() == 0:
             return final_hidden_states
 
-        expert_mask = torch.nn.functional.one_hot(top_k_index, num_classes=self.total_experts).permute(2, 1, 0)
-        expert_hit = torch.greater(expert_mask.sum(dim=(-1, -2)), 0).nonzero(as_tuple=False)
+        expert_mask = torch.nn.functional.one_hot(
+            top_k_index, num_classes=self.total_experts
+        ).permute(2, 1, 0)
+        expert_hit = torch.greater(expert_mask.sum(dim=(-1, -2)), 0).nonzero(
+            as_tuple=False
+        )
 
         for expert_idx_tensor in expert_hit:
             expert_idx = int(expert_idx_tensor.reshape(-1)[0].item())
@@ -116,8 +134,12 @@ class LongcatUnpackedExperts(nn.Module):
 
             current_state = hidden_states[token_idx]
             current_hidden_states = self.expert_modules[expert_idx](current_state)
-            current_hidden_states = current_hidden_states * top_k_weights[token_idx, selection_idx, None]
-            final_hidden_states.index_add_(0, token_idx, current_hidden_states.to(final_hidden_states.dtype))
+            current_hidden_states = (
+                current_hidden_states * top_k_weights[token_idx, selection_idx, None]
+            )
+            final_hidden_states.index_add_(
+                0, token_idx, current_hidden_states.to(final_hidden_states.dtype)
+            )
 
         return final_hidden_states
 
@@ -135,45 +157,52 @@ class QuantLongcatMLA(LongcatFlashMLA):
         kv_a, kv_b, o = bits["kv_a_proj_with_mqa"], bits["kv_b_proj"], bits["o_proj"]
         if hasattr(attn_module, "q_proj"):
             q = bits["q_proj"]
-            self.q_proj = QuantLinear(
-    quant_args,
-    attn_module.q_proj,
-    w_bits=q.w,
-    name="q_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_proj)
+            self.q_proj = (
+                QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj")
+                if self.enable_attn_linear
+                else PlainLinear(attn_module.q_proj)
+            )
         else:
             q_a, q_b = bits["q_a_proj"], bits["q_b_proj"]
-            self.q_a_proj = QuantLinear(
-    quant_args,
-    attn_module.q_a_proj,
-    w_bits=q_a.w,
-    name="q_a_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_a_proj)
+            self.q_a_proj = (
+                QuantLinear(
+                    quant_args, attn_module.q_a_proj, w_bits=q_a.w, name="q_a_proj"
+                )
+                if self.enable_attn_linear
+                else PlainLinear(attn_module.q_a_proj)
+            )
             self.q_a_layernorm = attn_module.q_a_layernorm
-            self.q_b_proj = QuantLinear(
-    quant_args,
-    attn_module.q_b_proj,
-    w_bits=q_b.w,
-    name="q_b_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_b_proj)
+            self.q_b_proj = (
+                QuantLinear(
+                    quant_args, attn_module.q_b_proj, w_bits=q_b.w, name="q_b_proj"
+                )
+                if self.enable_attn_linear
+                else PlainLinear(attn_module.q_b_proj)
+            )
 
         self.kv_a_proj_with_mqa = (
-            QuantLinear(quant_args, attn_module.kv_a_proj_with_mqa, w_bits=kv_a.w, name="kv_a_proj_with_mqa")
-            if self.enable_attn_linear else PlainLinear(attn_module.kv_a_proj_with_mqa)
+            QuantLinear(
+                quant_args,
+                attn_module.kv_a_proj_with_mqa,
+                w_bits=kv_a.w,
+                name="kv_a_proj_with_mqa",
+            )
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.kv_a_proj_with_mqa)
         )
         self.kv_a_layernorm = attn_module.kv_a_layernorm
-        self.kv_b_proj = QuantLinear(
-    quant_args,
-    attn_module.kv_b_proj,
-    w_bits=kv_b.w,
-    name="kv_b_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.kv_b_proj)
-        self.o_proj = QuantLinear(
-    quant_args,
-    attn_module.o_proj,
-    w_bits=o.w,
-    name="o_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.o_proj)
+        self.kv_b_proj = (
+            QuantLinear(
+                quant_args, attn_module.kv_b_proj, w_bits=kv_b.w, name="kv_b_proj"
+            )
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.kv_b_proj)
+        )
+        self.o_proj = (
+            QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.o_proj)
+        )
         self.qk_matmul = QuantizedMatmul(
             self.quant_args,
             l_bits=quant_args.bit_policy.cache_bits("q"),
@@ -208,29 +237,42 @@ class QuantLongcatMLA(LongcatFlashMLA):
     ):
         batch_size, seq_length = hidden_states.shape[:-1]
         query_shape = (batch_size, seq_length, -1, self.qk_head_dim)
-        key_shape = (batch_size, seq_length, -1, self.qk_nope_head_dim + self.v_head_dim)
+        key_shape = (
+            batch_size,
+            seq_length,
+            -1,
+            self.qk_nope_head_dim + self.v_head_dim,
+        )
         if self.input_transform is not None:
             hidden_states = self.input_transform(hidden_states)
         hidden_states = self.inp_afq(hidden_states)
 
         if hasattr(self, "q_proj"):
-            q_states = self.q_proj(
-    hidden_states,
-    structure_transform=self.input_transform).view(query_shape).transpose(
-        1,
-         2)
+            q_states = (
+                self.q_proj(hidden_states, structure_transform=self.input_transform)
+                .view(query_shape)
+                .transpose(1, 2)
+            )
         else:
             q_states = self.q_b_proj(
-    self.q_a_layernorm(
-        self.q_a_proj(
-            hidden_states,
-             structure_transform=self.input_transform)))
+                self.q_a_layernorm(
+                    self.q_a_proj(
+                        hidden_states, structure_transform=self.input_transform
+                    )
+                )
+            )
             q_states = q_states.view(query_shape).transpose(1, 2)
 
-        q_pass, q_rot = torch.split(q_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
+        q_pass, q_rot = torch.split(
+            q_states, [self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1
+        )
 
-        compressed_kv = self.kv_a_proj_with_mqa(hidden_states, structure_transform=self.input_transform)
-        k_pass, k_rot = torch.split(compressed_kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1)
+        compressed_kv = self.kv_a_proj_with_mqa(
+            hidden_states, structure_transform=self.input_transform
+        )
+        k_pass, k_rot = torch.split(
+            compressed_kv, [self.kv_lora_rank, self.qk_rope_head_dim], dim=-1
+        )
         k_pass = self.kv_a_layernorm(k_pass)
 
         q_pass = q_pass * self.mla_scale_q_lora
@@ -238,7 +280,9 @@ class QuantLongcatMLA(LongcatFlashMLA):
         k_pass = k_pass * self.mla_scale_kv_lora
 
         k_pass = self.kv_b_proj(k_pass).view(key_shape).transpose(1, 2)
-        k_pass, value_states = torch.split(k_pass, [self.qk_nope_head_dim, self.v_head_dim], dim=-1)
+        k_pass, value_states = torch.split(
+            k_pass, [self.qk_nope_head_dim, self.v_head_dim], dim=-1
+        )
 
         k_rot = k_rot.view(batch_size, 1, seq_length, self.qk_rope_head_dim)
         cos, sin = position_embeddings
@@ -250,7 +294,9 @@ class QuantLongcatMLA(LongcatFlashMLA):
 
         if past_key_values is not None:
             cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
-            key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx, cache_kwargs)
+            key_states, value_states = past_key_values.update(
+                key_states, value_states, self.layer_idx, cache_kwargs
+            )
 
         attn_output = scaled_dot_product_attention(
             self,
@@ -272,6 +318,10 @@ class QuantLongcatMLA(LongcatFlashMLA):
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )

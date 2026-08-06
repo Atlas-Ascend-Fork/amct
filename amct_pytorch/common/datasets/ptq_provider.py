@@ -73,7 +73,9 @@ class LlmPtqDataProvider:
     def materialize_gt(self, inps, ori_module, kwargs=None):
         ori_module.float().eval().to(self.device)
         forward_kwargs = kwargs or {}
-        ori_loader = DataLoader(TensorDataset(inps), batch_size=self.args.cali_bsz, shuffle=False)
+        ori_loader = DataLoader(
+            TensorDataset(inps), batch_size=self.args.cali_bsz, shuffle=False
+        )
         gts = []
         with torch.no_grad():
             for (x,) in ori_loader:
@@ -87,7 +89,6 @@ class LlmPtqDataProvider:
                 gts.append(gt.detach())
         torch.npu.empty_cache()
         return torch.cat(gts, dim=0)
-
 
     def get_model_data(self) -> dict[str, int | str]:
         return {

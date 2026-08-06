@@ -27,7 +27,6 @@ from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logg
 
 
 class LlmExtractPtqDataWorkflow:
-
     def __init__(self, args):
         self.args = args
         self.seq_len = args.seq_len
@@ -72,7 +71,9 @@ class LlmExtractPtqDataWorkflow:
     def _run_blockwise(self):
         tokenizer = self.pipeline.tokenizer
         attn_hook_name = getattr(self.pipeline, "attn_norm_name", "input_layernorm")
-        ffn_hook_name = getattr(self.pipeline, "ffn_norm_name", "post_attention_layernorm")
+        ffn_hook_name = getattr(
+            self.pipeline, "ffn_norm_name", "post_attention_layernorm"
+        )
         hook_name = (
             attn_hook_name
             if self.quant_target in ("attn", "attn-linear", "attn-cache")
@@ -84,5 +85,9 @@ class LlmExtractPtqDataWorkflow:
             len(samples),
         )
         inter_io = self.pipeline.do_embedding_forward(samples, hook_name=hook_name)
-        for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):
-            inter_io = self.pipeline.do_block_forward(layer_idx, inter_io, hook_name=hook_name)
+        for layer_idx in tqdm(
+            range(self.pipeline.num_layers), desc="Block Processing..."
+        ):
+            inter_io = self.pipeline.do_block_forward(
+                layer_idx, inter_io, hook_name=hook_name
+            )

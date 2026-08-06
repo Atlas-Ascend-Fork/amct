@@ -20,7 +20,10 @@ import torch.nn.functional as F
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.classic.quantize_op.utils import calculate_hifloat8_weight_scale
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
-from amct_pytorch.common.utils.quant_util import quant_dequant_weight, hifloat8_fake_quant
+from amct_pytorch.common.utils.quant_util import (
+    quant_dequant_weight,
+    hifloat8_fake_quant,
+)
 from amct_pytorch.common.utils.log import LOGGER
 
 
@@ -35,6 +38,7 @@ class HIF8CastQuant(BaseQuantizeModule):
     native deploy op NpuHIF8CastLinear. The deploy op is rebuilt from this module at
     convert time and keeps its own native compute path unchanged.
     """
+
     def __init__(self, ori_module, layer_name, quant_config):
         """
         Function: init objective.
@@ -53,15 +57,24 @@ class HIF8CastQuant(BaseQuantizeModule):
         self.wts_type = quant_config.get('weights_cfg').get('quant_type')
 
         self.weight_compress_only = True
-        if quant_config.get('inputs_cfg').get('enable_quant') is None or \
-                quant_config.get('inputs_cfg').get('enable_quant') is True:
+        if (
+            quant_config.get('inputs_cfg').get('enable_quant') is None
+            or quant_config.get('inputs_cfg').get('enable_quant') is True
+        ):
             self.weight_compress_only = False
 
         # Channel/tensor weight scale (1-D), mirroring NpuHIF8CastLinear.
         strategy = quant_config.get('weights_cfg').get('strategy')
         self.scale_w = calculate_hifloat8_weight_scale(self.weight, strategy)
-        self.cached_dq_w = quant_dequant_weight(self.weight.data, self.wts_type, self.scale_w)
-        LOGGER.logd("Calculate cast quant params of layer '{}' success!".format(self.layer_name), 'HIF8CastQuant')
+        self.cached_dq_w = quant_dequant_weight(
+            self.weight.data, self.wts_type, self.scale_w
+        )
+        LOGGER.logd(
+            "Calculate cast quant params of layer '{}' success!".format(
+                self.layer_name
+            ),
+            'HIF8CastQuant',
+        )
 
     @torch.no_grad()
     def forward(self, inputs):

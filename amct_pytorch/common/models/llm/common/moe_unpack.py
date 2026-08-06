@@ -37,7 +37,9 @@ class ExpertLinearView(nn.Module):
         self._weight = None
         if materialize:
             weight_tensor = self._slice_weight(experts_module)
-            self._weight = nn.Parameter(weight_tensor.detach().clone(), requires_grad=False)
+            self._weight = nn.Parameter(
+                weight_tensor.detach().clone(), requires_grad=False
+            )
         else:
             object.__setattr__(self, "_experts_module", experts_module)
 
@@ -51,7 +53,7 @@ class ExpertLinearView(nn.Module):
         weight_tensor = getattr(experts_module, self.weight_name)[self.expert_idx]
         if self.start is None and self.end is None:
             return weight_tensor
-        return weight_tensor[self.start:self.end]
+        return weight_tensor[self.start : self.end]
 
 
 class GatedExpertView(nn.Module):
@@ -86,8 +88,9 @@ class GatedExpertView(nn.Module):
             None,
             materialize=materialize,
         )
-        self.down_proj = ExpertLinearView(experts_module, expert_idx, down_name, materialize=materialize)
-
+        self.down_proj = ExpertLinearView(
+            experts_module, expert_idx, down_name, materialize=materialize
+        )
 
 
 def find_moe_module(block):

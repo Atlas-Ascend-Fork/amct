@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from amct_pytorch.algorithms.quant.flatquant import (
@@ -28,6 +29,9 @@ from amct_pytorch.algorithms.quant.flatquant import (
     _InvFlatSingleTransform,
     _kronecker_matmul,
     _random_orthogonal,
+)
+from amct_pytorch.experimental.flatquant.flat_quant_module.function_utils import (
+    print_trainable_parameters,
 )
 
 
@@ -132,7 +136,9 @@ def test_flatquant_transform_keeps_linear_result_equivalent():
     weight = torch.tensor([[1.0, 0.5, 0.25, 0.125], [2.0, 1.0, 0.5, 0.25]])
     transformed_x = flat(x)
     transformed_weight = flat(weight, inv_t=True)
-    assert torch.allclose(F.linear(transformed_x, transformed_weight), F.linear(x, weight), atol=1e-5)
+    assert torch.allclose(
+        F.linear(transformed_x, transformed_weight), F.linear(x, weight), atol=1e-5
+    )
 
 
 def test_constructor_raises_when_dim_size_is_missing():
@@ -155,7 +161,22 @@ def test_trainable_params_returns_all_parameters():
     trainable_params = flat.trainable_params()
     parameters = list(flat.parameters())
     assert len(trainable_params) == len(parameters)
-    assert all(actual is expected for actual, expected in zip(trainable_params, parameters))
+    assert all(
+        actual is expected for actual, expected in zip(trainable_params, parameters)
+    )
+
+
+def test_print_trainable_parameters_reports_ratio(capsys):
+    model = nn.Sequential(nn.Linear(2, 3), nn.Linear(3, 1))
+    model[1].weight.requires_grad = False
+    model[1].bias.requires_grad = False
+
+    print_trainable_parameters(model)
+
+    assert (
+        capsys.readouterr().out.strip()
+        == "trainable params: 9 || all params: 13 || trainable: 69.23%"
+    )
 
 
 def test_export_load_round_trip_for_decomposed_transform():

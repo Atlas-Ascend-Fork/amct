@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,31 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import math
 import os
-import sys
 import unittest
-from unittest import mock
 
-import numpy as np
-import torch
-
-from amct_pytorch.classic.graph_based.amct_pytorch.common.prune.prune_recorder_helper import (
-    PruneRecordHelper,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.configuration import (
-    retrain_config,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
-from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
-    scale_offset_record_pytorch_pb2,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.prune.filter_prune_helper import (
-    create_filter_prune_helper,
-)
-
-from .utils import models, record_utils
 
 DEVICE = 'cuda:0'
 
@@ -50,6 +28,7 @@ class TestPruneIndexHelper(unittest.TestCase):
     """
     The UT for QuantizeTool
     """
+
     @classmethod
     def setUpClass(cls):
         cls.temp_folder = os.path.join(CUR_DIR, 'test_filter_prune_helper')
@@ -66,5 +45,3 @@ class TestPruneIndexHelper(unittest.TestCase):
 
     def tearDown(self):
         pass
-
-

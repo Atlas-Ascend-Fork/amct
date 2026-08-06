@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -49,6 +49,5 @@ def float_to_fp4e2m1(tensor):
     fp4e2m1_tensor[(absvalues > 2.5) & (absvalues < 3.5)] = 3.0
     fp4e2m1_tensor[(absvalues >= 3.5) & (absvalues <= 5.0)] = 4.0
     fp4e2m1_tensor[absvalues > 5.0] = 6.0
-    
-    return (fp4e2m1_tensor * sign)
 
+    return fp4e2m1_tensor * sign

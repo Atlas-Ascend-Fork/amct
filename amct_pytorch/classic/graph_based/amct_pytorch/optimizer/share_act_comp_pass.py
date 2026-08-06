@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,8 +18,7 @@
 
 from ...amct_pytorch.common.utils.vars_util import RNN_LAYER_TYPE
 from ...amct_pytorch.common.utils.vars_util import LSTM_OUTPUT_NUMS, GRU_OUTPUT_NUMS
-from ...amct_pytorch.configuration.retrain_config import RetrainConfig as \
-    Configuration
+from ...amct_pytorch.configuration.retrain_config import RetrainConfig as Configuration
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.utils.vars import RETRAIN_ONNX_TYPES
@@ -33,6 +32,7 @@ class ShareActCompPass(BaseFusionPass):
     Function: Share the ActQAT layer and parameters.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -70,13 +70,16 @@ class ShareActCompPass(BaseFusionPass):
         lgroups = []
         for peer_input_anchor in output_anchor.get_peer_input_anchor():
             consumer = peer_input_anchor.node
-            if consumer.type in RETRAIN_ONNX_TYPES and \
-                self.conf.retrain_enable(consumer.name):
+            if consumer.type in RETRAIN_ONNX_TYPES and self.conf.retrain_enable(
+                consumer.name
+            ):
                 for l_g in lgroups:
                     name = self.group_info.get(l_g).get(MEMBERS)[0]
                     # if already has group
-                    if self.conf.get_quant_config()[consumer.name] ==\
-                            self.conf.get_quant_config()[name]:
+                    if (
+                        self.conf.get_quant_config()[consumer.name]
+                        == self.conf.get_quant_config()[name]
+                    ):
                         self.op_group_map[consumer.name] = l_g
                         self.group_info.get(l_g).get(MEMBERS).append(consumer.name)
                         break
@@ -105,8 +108,9 @@ class ShareActCompPass(BaseFusionPass):
         object_node_name = object_node.name
         model_helper = ModuleHelper(model)
         object_module = model_helper.get_module(object_node_name)
-        main_module_names = \
-            self.group_info.get(self.op_group_map.get(object_node_name)).get(MEMBERS)
+        main_module_names = self.group_info.get(
+            self.op_group_map.get(object_node_name)
+        ).get(MEMBERS)
         for item in model.named_modules():
             if item[0] in main_module_names:
                 main_module_name = item[0]
@@ -129,5 +133,6 @@ class ShareActCompPass(BaseFusionPass):
                 del object_module.acts_h_offset
 
         LOGGER.logd(
-            "Share ActivationQAT module to '{}' "
-            "success!".format(object_node.name), 'ShareActCompPass')
+            "Share ActivationQAT module to '{}' success!".format(object_node.name),
+            'ShareActCompPass',
+        )

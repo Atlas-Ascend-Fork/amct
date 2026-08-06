@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,7 +18,7 @@
 from copy import deepcopy
 
 
-class NodeBase():
+class NodeBase:
     """
     Function: Data structure of node which contains LayerParameter info
     APIs: is_data_node, index, set_index, name, type, layer, get_input_anchor,
@@ -26,15 +26,14 @@ class NodeBase():
           get_data, get_all_data, set_data, set_all_data, add_data,
           dump_proto
     """
+
     def __init__(self, node_id, node_index, node_proto):
         """
         Function: init object
         Parameter: None
         Return: None
         """
-        self._basic_info = {'node_index': node_index,
-                            'name': node_id,
-                            'type': ''}
+        self._basic_info = {'node_index': node_index, 'name': node_id, 'type': ''}
         self._input_anchors = []
         self._output_anchors = []
         self._attrs = {}
@@ -158,9 +157,9 @@ class NodeBase():
         Return: None
         """
         if key not in self._attrs:
-            raise RuntimeError('Cannot find {} in node {}'.format(
-                key,
-                self._basic_info.get('name')))
+            raise RuntimeError(
+                'Cannot find {} in node {}'.format(key, self._basic_info.get('name'))
+            )
         return self._attrs[key]
 
     def delete_attr(self, key):
@@ -170,9 +169,9 @@ class NodeBase():
         Return: None
         """
         if key not in self._attrs:
-            raise RuntimeError('Cannot find {} in node {}'.format(
-                key,
-                self._basic_info.get('name')))
+            raise RuntimeError(
+                'Cannot find {} in node {}'.format(key, self._basic_info.get('name'))
+            )
         del self._attrs[key]
 
     def set_index(self, node_index):
@@ -190,8 +189,11 @@ class NodeBase():
         Return: Input anchor
         """
         if index >= len(self._input_anchors):
-            raise RuntimeError('Node:{} get {} input out of range'.format(
-                self._basic_info.get('name'), index))
+            raise RuntimeError(
+                'Node:{} get {} input out of range'.format(
+                    self._basic_info.get('name'), index
+                )
+            )
         return self._input_anchors[index]
 
     def get_output_anchor(self, index):
@@ -201,8 +203,11 @@ class NodeBase():
         Return: Output anchor
         """
         if index >= len(self._output_anchors):
-            raise RuntimeError('Node:{} get {} output out of range'.format(
-                self._basic_info.get('name'), index))
+            raise RuntimeError(
+                'Node:{} get {} output out of range'.format(
+                    self._basic_info.get('name'), index
+                )
+            )
         return self._output_anchors[index]
 
     def get_producer(self, input_index):
@@ -238,4 +243,3 @@ class NodeBase():
         Return: proto object
         """
         raise NotImplementedError
-

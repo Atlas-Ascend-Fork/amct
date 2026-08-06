@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,14 +22,16 @@ from ....amct_pytorch.custom_op.utils import calculate_scale_offset
 from ....amct_pytorch.custom_op.utils import apply_fake_quantize_and_anti_quantize
 
 
-def ulq_retrain_forward_pytorch(data,
-                clip_max,
-                clip_min,
-                clip_max_pre,
-                clip_min_pre,
-                num_bits,
-                fixed_min,
-                asymmetric):
+def ulq_retrain_forward_pytorch(
+    data,
+    clip_max,
+    clip_min,
+    clip_max_pre,
+    clip_min_pre,
+    num_bits,
+    fixed_min,
+    asymmetric,
+):
     """
     Perform the forward pass for ULQ.
 
@@ -42,7 +44,7 @@ def ulq_retrain_forward_pytorch(data,
         num_bits (int): The number of bits used for quantization.
         fixed_min (bool): If True, the minimum clipping value is fixed to zero.
         asymmetric (bool): Whether to use asymmetric quantization.
-    
+
     Returns:
         tuple: A tuple containing:
             - output (torch.Tensor): The quantized output tensor.
@@ -61,7 +63,7 @@ def ulq_retrain_forward_pytorch(data,
         clip_max = clip_max_pre
     elif (clip_min > 0).all():
         clip_min = clip_min_pre
-    
+
     data_type = 'INT' + str(num_bits)
     scale, offset = calculate_scale_offset(clip_max, clip_min, asymmetric, data_type)
     data = apply_fake_quantize_and_anti_quantize(data, scale, offset, data_type)
@@ -69,12 +71,9 @@ def ulq_retrain_forward_pytorch(data,
     return data, scale, offset, clip_max, clip_min
 
 
-def ulq_retrain_backward_pytorch(data,
-                         grad_outputs,
-                         clip_max,
-                         clip_min,
-                         num_bits,
-                         asymmetric):
+def ulq_retrain_backward_pytorch(
+    data, grad_outputs, clip_max, clip_min, num_bits, asymmetric
+):
     """
     Perform the backward pass for ULQ.
 
@@ -85,7 +84,7 @@ def ulq_retrain_backward_pytorch(data,
         clip_min (torch.Tensor): The minimum value to which the input tensor is clipped before quantization.
         num_bits (int): The number of bits used for quantization.
         asymmetric (bool): Whether to use asymmetric quantization.
-    
+
     Returns:
         grad_inputs (torch.Tensor) The gradient of the loss with respect to the input of the quantization function.
         grad_acts_clip_max (torch.Tensor) The gradient of the loss with respect to the maximum clipping value.
@@ -102,11 +101,14 @@ def ulq_retrain_backward_pytorch(data,
 
     round_tensor = torch.round(not_round_tensor)
     quant_error = (round_tensor - not_round_tensor) / (pow(2, num_bits) - 1)
-    
+
     grad_acts_clip_max = torch.sum((quant_error + upper_mask) * grad_outputs)
     grad_acts_clip_min = torch.sum((lower_mask - quant_error) * grad_outputs)
 
     grad_inputs = torch.where(
-        (upper_mask + lower_mask < 1), grad_outputs, torch.tensor(0., dtype=torch.float32, device=data.device))
+        (upper_mask + lower_mask < 1),
+        grad_outputs,
+        torch.tensor(0.0, dtype=torch.float32, device=data.device),
+    )
 
     return grad_inputs, grad_acts_clip_max, grad_acts_clip_min

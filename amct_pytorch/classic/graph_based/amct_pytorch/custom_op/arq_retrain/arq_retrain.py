@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -36,35 +36,50 @@ class ArqRetrainFunction(Function):
     Function: Run weight retrain process for quantization of the given layer.
     APIs: forward, backward
     """
+
     @staticmethod
-    def forward(ctx, weight_tensor, scale, offset, wts_param, offset_deploy=None, group=1, axis=0):
+    def forward(
+        ctx,
+        weight_tensor,
+        scale,
+        offset,
+        wts_param,
+        offset_deploy=None,
+        group=1,
+        axis=0,
+    ):
         """
         Function: ArqRetrain foward funtion.
         """
         # check weight tensor
         check_quant_data(weight_tensor, 'weight')
-        weight_tensor_processed = process_tensor_shape(weight_tensor, wts_param.get('module_type'),
-            wts_param.get('module'))
-        
+        weight_tensor_processed = process_tensor_shape(
+            weight_tensor, wts_param.get("module_type"), wts_param.get("module")
+        )
+
         # trans quantized axis to 0 in group wise
-        group_wise = check_group_param(weight_tensor, wts_param.get('channel_wise'), group, axis)
+        group_wise = check_group_param(
+            weight_tensor, wts_param.get("channel_wise"), group, axis
+        )
         if group_wise:
-            processed_tensor = adjust_axis_for_group_wise(axis, weight_tensor)
+            adjust_axis_for_group_wise(axis, weight_tensor)
         scale_out, offset_out, quantized_weight = arq_retrain_forward_pytorch(
             weight_tensor_processed,
             wts_param.get('num_bits'),
             wts_param.get('channel_wise'),
-            wts_param.get('with_offset'))
+            wts_param.get("with_offset"),
+        )
 
         scale.data.copy_(scale_out.data)
         offset.data.copy_(offset_out.data)
-        quantized_weight = process_tensor_shape(quantized_weight, wts_param.get('module_type'),
-            wts_param.get('module'))
+        quantized_weight = process_tensor_shape(
+            quantized_weight, wts_param.get("module_type"), wts_param.get("module")
+        )
         quantized_weight = quantized_weight.to(weight_tensor.device)
-        
+
         # transpose wts axis back in group wise
         if group_wise and axis > 0:
-            processed_tensor = adjust_axis_for_group_wise(axis, quantized_weight)
+            adjust_axis_for_group_wise(axis, quantized_weight)
 
         return quantized_weight, scale, offset
 
@@ -109,11 +124,22 @@ class ArqRetrainFuncQAT(ArqRetrainFunction):
             quant = g.op(QUANTIZE_LINEAR, inputs[0], inputs[1], inputs[4])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
         elif module_type in RNN_TENSOR_NUM:
-            shape = g.op('Constant', value_t=torch.tensor(
-                [1, RNN_TENSOR_NUM.get(module_type) * inputs[3]['module'].hidden_size, -1], dtype=torch.int64))
+            shape = g.op(
+                "Constant",
+                value_t=torch.tensor(
+                    [
+                        1,
+                        RNN_TENSOR_NUM.get(module_type)
+                        * inputs[3]["module"].hidden_size,
+                        -1,
+                    ],
+                    dtype=torch.int64,
+                ),
+            )
             reshape = g.op('Reshape', inputs[0], shape)
             quant = g.op(QUANTIZE_LINEAR, reshape, inputs[1], inputs[4])
             out_node = g.op(DEQUANTIZE_LINEAR, quant, inputs[1], inputs[4])
         LOGGER.logi(
-            f'Convert ARQ op to onnx QuantizeLinear and DequantizeLinear op successfully.')
+            "Convert ARQ op to onnx QuantizeLinear and DequantizeLinear op successfully."
+        )
         return out_node, None, None
