@@ -17,7 +17,7 @@ python -m amct_pytorch.ptq \
     --granularity block \
     --device npu:0 \
     --data_dir ptq_data/qwen3_5/attn-linear \
-    --quant_dtype hifloat4 \
+    --quant_dtype hifp \
     --algos higptq \
     --bit_config amct_pytorch/configs/hifloat4.yaml \
     --quant_target attn-linear \
@@ -32,7 +32,7 @@ python -m amct_pytorch.ptq \
     --granularity block \
     --device npu:0 \
     --data_dir ptq_data/qwen3_5/mlp \
-    --quant_dtype hifloat4 \
+    --quant_dtype hifp \
     --algos higptq \
     --bit_config amct_pytorch/configs/hifloat4.yaml \
     --quant_target mlp \

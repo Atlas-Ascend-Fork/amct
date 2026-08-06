@@ -12,5 +12,5 @@ python -m amct_pytorch.eval \
      --device npu:0 \
      --eval_mode quant \
      --quant_target mlp attn-linear \
-     --quant_dtype hifloat4 \
+     --quant_dtype hifp \
      --bit_config amct_pytorch/configs/hifloat4.yaml
