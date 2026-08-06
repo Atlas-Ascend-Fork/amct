@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,13 +18,10 @@
 import os
 import unittest
 from io import BytesIO
-from unittest.mock import patch
 
 import torch
-from onnx import AttributeProto, onnx_pb
+from onnx import onnx_pb
 
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
-from amct_pytorch.classic.graph_based.amct_pytorch.graph.node import Node
 from amct_pytorch.classic.graph_based.amct_pytorch.module import quant_module
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 
@@ -65,7 +62,9 @@ class TestQuantModule(unittest.TestCase):
         scale = 1.0
         offset = 0
         quant_bit = 8
-        enter_node, out_node = quant_module.add_fakequant(self.graph, 'layer1.0.quant', scale, offset, quant_bit)
+        enter_node, out_node = quant_module.add_fakequant(
+            self.graph, 'layer1.0.quant', scale, offset, quant_bit
+        )
         self.assertEqual(enter_node.proto.op_type, "Cast")
 
     def test_float32_add_quant_module(self):
@@ -74,12 +73,16 @@ class TestQuantModule(unittest.TestCase):
         scale = 1.0
         offset = 0
         quant_bit = 8
-        enter_node, out_node = quant_module.add_fakequant(self.graph, 'layer1.0.quant', scale, offset, quant_bit)
+        enter_node, out_node = quant_module.add_fakequant(
+            self.graph, 'layer1.0.quant', scale, offset, quant_bit
+        )
         self.assertEqual(enter_node.proto.op_type, "Mul")
 
     def test_construct_fakequant_cast_fp32(self):
         layer_name = "Conv_1"
-        node_proto = quant_module.construct_fake_quant_dequant_cast_op(layer_name, "float32")
+        node_proto = quant_module.construct_fake_quant_dequant_cast_op(
+            layer_name, "float32"
+        )
         self.assertEqual(node_proto.op_type, "Cast")
         self.assertEqual(node_proto.name, "Conv_1.cast")
         for attr in node_proto.attribute:

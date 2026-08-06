@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,12 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -29,9 +26,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.configuration.retrain_config 
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_conv2d import (
     CompModuleConv2d,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.comp_module.comp_module_linear import (
-    CompModuleLinear,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.custom_op.recorder.recorder import (
     Recorder,
@@ -104,7 +98,9 @@ class TestInsertRetrainSearchNPass(unittest.TestCase):
         self.assertIsInstance(named_module_dict['branch1'], RetrainQuant)
         self.assertIsInstance(named_module_dict['branch2'], nn.Conv2d)
         self.assertIsInstance(named_module_dict['branch3'], RetrainQuant)
-        self.assertIsInstance(named_module_dict['branch3'].quant_module.acts_comp_reuse, CompModuleConv2d)
+        self.assertIsInstance(
+            named_module_dict['branch3'].quant_module.acts_comp_reuse, CompModuleConv2d
+        )
         self.assertIsInstance(named_module_dict['branch4'], RetrainQuant)
         self.assertIsInstance(named_module_dict['conv'], RetrainQuant)
         self.assertIsInstance(named_module_dict['bn'], nn.Identity)

@@ -18,10 +18,12 @@
 from __future__ import annotations
 
 import torch
-from loguru import logger
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.quantization.dtypes.int_impl import weight_quant, dynamic_per_token_quant
+from amct_pytorch.quantization.dtypes.int_impl import (
+    weight_quant,
+    dynamic_per_token_quant,
+)
 
 
 @DTYPE_REGISTRY.register(name="int", description="quant dequant for int")

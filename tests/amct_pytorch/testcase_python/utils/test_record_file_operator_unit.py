@@ -35,9 +35,11 @@ class TestDstTypeGenerator(unittest.TestCase):
         from amct_pytorch.classic.graph_based.amct_pytorch.common.config.field import (
             WTS_SUPPORT_NUM_BITS,
         )
+
         bits = list(WTS_SUPPORT_NUM_BITS)[0]
-        self.assertEqual(rfo.dst_type_generator(bits, WTS_SUPPORT_NUM_BITS),
-                         'INT{}'.format(bits))
+        self.assertEqual(
+            rfo.dst_type_generator(bits, WTS_SUPPORT_NUM_BITS), 'INT{}'.format(bits)
+        )
 
     def test_invalid(self):
         self.assertRaises(ValueError, rfo.dst_type_generator, 7, [4, 8])
@@ -48,13 +50,15 @@ class TestModuleFuncs(unittest.TestCase):
         self.records = REC()
 
     def test_record_weights_scale_offset_add_and_update(self):
-        rfo.record_weights_scale_offset(self.records, 'l1', [0.5], [0],
-                                        num_bits=8, scale_r=[0.1], offset_r=[0])
+        rfo.record_weights_scale_offset(
+            self.records, 'l1', [0.5], [0], num_bits=8, scale_r=[0.1], offset_r=[0]
+        )
         self.assertEqual(len(self.records.record), 1)
         self.assertEqual(self.records.record[0].value.wts_type, 'INT8')
         # update existing key
-        rfo.record_weights_scale_offset(self.records, 'l1', [0.7], [0],
-                                        num_bits=8, scale_r=[0.2], offset_r=[0])
+        rfo.record_weights_scale_offset(
+            self.records, 'l1', [0.7], [0], num_bits=8, scale_r=[0.2], offset_r=[0]
+        )
         self.assertEqual(len(self.records.record), 1)
         self.assertAlmostEqual(self.records.record[0].value.scale_w[0], 0.7, places=5)
 
@@ -78,14 +82,16 @@ class TestModuleFuncs(unittest.TestCase):
         self.assertEqual(offset, [0, 0])
 
     def test_read_weights_scale_offset_missing_layer(self):
-        self.assertRaises(RuntimeError, rfo.read_weights_scale_offset,
-                          self.records, 'ghost')
+        self.assertRaises(
+            RuntimeError, rfo.read_weights_scale_offset, self.records, 'ghost'
+        )
 
     def test_read_weights_scale_offset_missing_scale(self):
         rec = self.records.record.add()
         rec.key = 'l1'  # no scale_w/offset_w set
-        self.assertRaises(RuntimeError, rfo.read_weights_scale_offset,
-                          self.records, 'l1')
+        self.assertRaises(
+            RuntimeError, rfo.read_weights_scale_offset, self.records, 'l1'
+        )
 
     def test_record_and_read_shift_bits(self):
         rfo.record_shift_bits(self.records, 'l1', [2, 3])
@@ -97,11 +103,13 @@ class TestModuleFuncs(unittest.TestCase):
         self.assertRaises(RuntimeError, rfo.read_shift_bits, self.records, 'ghost')
 
     def test_record_activation_scale_offset_add_update(self):
-        rfo.record_activation_scale_offset(self.records, 'l1', 0.5, 0,
-                                           num_bits=8, scale_h=0.1, offset_h=0)
+        rfo.record_activation_scale_offset(
+            self.records, 'l1', 0.5, 0, num_bits=8, scale_h=0.1, offset_h=0
+        )
         self.assertEqual(self.records.record[0].value.act_type, 'INT8')
-        rfo.record_activation_scale_offset(self.records, 'l1', 0.9, 1,
-                                           num_bits=8, scale_h=0.2, offset_h=1)
+        rfo.record_activation_scale_offset(
+            self.records, 'l1', 0.9, 1, num_bits=8, scale_h=0.2, offset_h=1
+        )
         self.assertAlmostEqual(self.records.record[0].value.scale_d, 0.9, places=5)
 
     def test_read_activation_scale_offset_ok(self):
@@ -111,14 +119,16 @@ class TestModuleFuncs(unittest.TestCase):
         self.assertEqual(offset, 3)
 
     def test_read_activation_scale_offset_missing_layer(self):
-        self.assertRaises(RuntimeError, rfo.read_activation_scale_offset,
-                          self.records, 'ghost')
+        self.assertRaises(
+            RuntimeError, rfo.read_activation_scale_offset, self.records, 'ghost'
+        )
 
     def test_read_activation_scale_offset_missing_scale_d(self):
         rec = self.records.record.add()
         rec.key = 'l1'
-        self.assertRaises(RuntimeError, rfo.read_activation_scale_offset,
-                          self.records, 'l1')
+        self.assertRaises(
+            RuntimeError, rfo.read_activation_scale_offset, self.records, 'l1'
+        )
 
     def test_record_dmq_balancer_factor_add_update(self):
         rfo.record_dmq_balancer_factor(self.records, 'l1', [1.0, 2.0])
@@ -138,7 +148,9 @@ class TestModuleFuncs(unittest.TestCase):
         self.assertEqual(len(self.records.record[0].kv_cache_value.scale), 2)
 
     def test_record_quant_factors_add_update(self):
-        rfo.record_quant_factors(self.records, 'l1', {'scale_w': [0.5], 'offset_w': [0]})
+        rfo.record_quant_factors(
+            self.records, 'l1', {'scale_w': [0.5], 'offset_w': [0]}
+        )
         self.assertEqual(len(self.records.record), 1)
         rfo.record_quant_factors(self.records, 'l1', {'scale_d': 0.3})
         self.assertEqual(len(self.records.record), 1)

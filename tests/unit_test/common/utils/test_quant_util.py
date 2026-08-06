@@ -16,6 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import math
+import sys
+import types
+from unittest.mock import patch
 
 import pytest
 import torch
@@ -317,3 +320,94 @@ def test_quant_weight_no_group_size_with_offset():
     q = qu.quant_weight(w, INT8, scale=scale, offset=offset, group_size=None)
     assert q.shape == w.shape
     assert q.dtype == torch.int8
+
+
+# ---- NPU-dependent paths covered via mock -----------------------------------
+
+
+def _make_fake_torch_npu():
+    mod = types.ModuleType("torch_npu")
+    mod.hifloat8 = "hifloat8_enum"
+    mod.npu_quantize = lambda t, s, z, dtype: t.to(torch.float32)
+    mod.npu_dynamic_mx_quant = lambda t, axis, round_mode, dst_type, block_size: (
+        t.to(torch.float32),
+        torch.zeros(t.shape[0], (t.shape[1] + block_size - 1) // block_size),
+    )
+    mod.npu_dtype_cast = lambda t, dtype, input_dtype=None: t
+    return mod
+
+
+def test_quant_tensor_hifloat8_uses_npu_quantize():
+    from amct_pytorch.common.utils.vars import HIFLOAT8
+
+    fake_npu = _make_fake_torch_npu()
+    with patch.dict(sys.modules, {"torch_npu": fake_npu}):
+        t = torch.randn(2, 4)
+        scale = torch.ones(2, 1)
+        saved = getattr(torch.Tensor, "npu", None)
+        torch.Tensor.npu = lambda self: self
+        try:
+            q, shared = qu.quant_tensor(t, HIFLOAT8, scale=scale)
+        finally:
+            if saved is not None:
+                torch.Tensor.npu = saved
+            elif hasattr(torch.Tensor, "npu"):
+                delattr(torch.Tensor, "npu")
+    assert q.shape == t.shape
+    assert shared is None
+
+
+def test_quant_tensor_float8_e4m3fn_uses_npu_quantize():
+    from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN
+
+    fake_npu = _make_fake_torch_npu()
+    with patch.dict(sys.modules, {"torch_npu": fake_npu}):
+        t = torch.randn(2, 4)
+        scale = torch.ones(2, 1)
+        saved = getattr(torch.Tensor, "npu", None)
+        torch.Tensor.npu = lambda self: self
+        try:
+            q, shared = qu.quant_tensor(t, FLOAT8_E4M3FN, scale=scale)
+        finally:
+            if saved is not None:
+                torch.Tensor.npu = saved
+            elif hasattr(torch.Tensor, "npu"):
+                delattr(torch.Tensor, "npu")
+    assert q.shape == t.shape
+    assert shared is None
+
+
+def test_quant_tensor_mxfp8_uses_npu_dynamic_mx_quant():
+    from amct_pytorch.common.utils.vars import MXFP8_E4M3FN
+
+    fake_npu = _make_fake_torch_npu()
+    with patch.dict(sys.modules, {"torch_npu": fake_npu}):
+        t = torch.randn(2, 64)
+        saved = getattr(torch.Tensor, "npu", None)
+        torch.Tensor.npu = lambda self: self
+        try:
+            q, shared = qu.quant_tensor(t, MXFP8_E4M3FN)
+        finally:
+            if saved is not None:
+                torch.Tensor.npu = saved
+            elif hasattr(torch.Tensor, "npu"):
+                delattr(torch.Tensor, "npu")
+    assert shared is not None
+
+
+def test_quant_dequant_tensor_mxfp8_round_trip_shape():
+    from amct_pytorch.common.utils.vars import MXFP8_E4M3FN
+
+    fake_npu = _make_fake_torch_npu()
+    with patch.dict(sys.modules, {"torch_npu": fake_npu}):
+        t = torch.randn(2, 64)
+        saved = getattr(torch.Tensor, "npu", None)
+        torch.Tensor.npu = lambda self: self
+        try:
+            out = qu.quant_dequant_tensor(t, MXFP8_E4M3FN)
+        finally:
+            if saved is not None:
+                torch.Tensor.npu = saved
+            elif hasattr(torch.Tensor, "npu"):
+                delattr(torch.Tensor, "npu")
+    assert out.shape == t.shape

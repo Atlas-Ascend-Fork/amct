@@ -158,7 +158,9 @@ def test_load_module_raises_when_submodule_has_no_load_ptq_params():
 
 def test_export_unit_uses_module_export_ptq_params_when_available():
     handler = PtqParamHandler()
-    unit = make_ptq_unit(MLP_UNIT, MLP_UNIT, 0, module=_Exportable({"k": torch.tensor([1.0])}))
+    unit = make_ptq_unit(
+        MLP_UNIT, MLP_UNIT, 0, module=_Exportable({"k": torch.tensor([1.0])})
+    )
     out = handler.export_unit(unit)
     assert torch.equal(out["k"], torch.tensor([1.0]))
 
@@ -211,7 +213,9 @@ def test_load_unit_routes_flat_dict_to_trainable_loader():
 
 
 def _make_store():
-    return PtqParamStore(PtqParamHandler(), iter_ptq_units_fn=lambda layer_idx, block: iter([]))
+    return PtqParamStore(
+        PtqParamHandler(), iter_ptq_units_fn=lambda layer_idx, block: iter([])
+    )
 
 
 def test_load_saved_unit_layer_indexed_filename(tmp_path):
@@ -276,6 +280,7 @@ def test_ptq_param_store_load_layer_strict_raises_on_missing(tmp_path):
     def _fake_iter_units(layer_idx, block):
         unit = make_ptq_unit(MLP_UNIT, MLP_UNIT, layer_idx=layer_idx, module=block)
         yield unit
+
     handler = PtqParamHandler()
     store = PtqParamStore(handler, _fake_iter_units)
     block = nn.Module()
@@ -287,6 +292,7 @@ def test_ptq_param_store_load_layer_nonstrict_missing_ok(tmp_path):
     def _fake_iter_units(layer_idx, block):
         unit = make_ptq_unit(MLP_UNIT, MLP_UNIT, layer_idx=layer_idx, module=block)
         yield unit
+
     handler = PtqParamHandler()
     store = PtqParamStore(handler, _fake_iter_units)
     block = nn.Module()
@@ -299,4 +305,3 @@ def test_ptq_param_store_init():
     handler = PtqParamHandler()
     store = PtqParamStore(handler, lambda layer, block: [])
     assert store is not None
-

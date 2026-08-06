@@ -52,7 +52,12 @@ class LongcatNext(LongcatLite):
                 "text_vocab_plus_multimodal_special_token_size",
                 self.config.vocab_size,
             )
-            model.lm_head = nn.Linear(self.config.hidden_size, lm_head_vocab_size, bias=False, dtype=torch.bfloat16)
+            model.lm_head = nn.Linear(
+                self.config.hidden_size,
+                lm_head_vocab_size,
+                bias=False,
+                dtype=torch.bfloat16,
+            )
         return model
 
     def get_layer_weight_prefix(self, layer_idx: int) -> str:
@@ -73,7 +78,14 @@ class LongcatNext(LongcatLite):
     def do_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
         return super().do_embedding_forward(samples, dtype=dtype, hook_name=hook_name)
 
-    def do_block_forward(self, layer_idx, samples, hook_name=None, use_quant_block=False, enable_quant=False):
+    def do_block_forward(
+        self,
+        layer_idx,
+        samples,
+        hook_name=None,
+        use_quant_block=False,
+        enable_quant=False,
+    ):
         return super().do_block_forward(
             layer_idx,
             samples,

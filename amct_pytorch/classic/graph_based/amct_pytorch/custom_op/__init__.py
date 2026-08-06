@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -32,20 +32,29 @@ __all__ = [
     'hfmg_arq_pytorch',
     'hfmg_merge_pytorch',
     'hfmg_forward_pytorch',
-    'hfmg_backward_pytorch']
-
-import os
-
-CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+    'hfmg_backward_pytorch',
+]
 
 from ...amct_pytorch.custom_op.ifmr.ifmr_impl import ifmr_forward_pytorch
 from ...amct_pytorch.custom_op.ifmr.ifmr_impl import ifmr_backward_pytorch
-from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import arq_retrain_forward_pytorch
-from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import arq_retrain_backward_pytorch
-from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import ulq_retrain_forward_pytorch
-from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import ulq_retrain_backward_pytorch
-from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import ulq_scale_retrain_forward_pytorch
-from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import ulq_scale_retrain_backward_pytorch
+from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import (
+    arq_retrain_forward_pytorch,
+)
+from ...amct_pytorch.custom_op.arq_retrain.arq_retrain_impl import (
+    arq_retrain_backward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import (
+    ulq_retrain_forward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_retrain.ulq_retrain_impl import (
+    ulq_retrain_backward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import (
+    ulq_scale_retrain_forward_pytorch,
+)
+from ...amct_pytorch.custom_op.ulq_scale_retrain.ulq_scale_retrain_impl import (
+    ulq_scale_retrain_backward_pytorch,
+)
 from ...amct_pytorch.custom_op.arq.arq_impl import arq_cali_pytorch
 from ...amct_pytorch.custom_op.arq.arq_impl import arq_real_pytorch
 from ...amct_pytorch.custom_op.hfmg.hfmg_impl import hfmg_arq_pytorch

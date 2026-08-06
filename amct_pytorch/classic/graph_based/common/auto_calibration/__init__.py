@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,12 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-__all__ = ['AccuracyBasedAutoCalibrationBase',
-           'AutoCalibrationEvaluatorBase',
-           'AutoCalibrationStrategyBase',
-           'SensitivityBase',
-           'BinarySearchStrategy',
-           'CosineSimilaritySensitivity']
+__all__ = [
+    'AccuracyBasedAutoCalibrationBase',
+    'AutoCalibrationEvaluatorBase',
+    'AutoCalibrationStrategyBase',
+    'SensitivityBase',
+    'BinarySearchStrategy',
+    'CosineSimilaritySensitivity',
+]
 
 from .accuracy_based_auto_calibration_base import AccuracyBasedAutoCalibrationBase
 from .auto_calibration_evaluator_base import AutoCalibrationEvaluatorBase

@@ -71,7 +71,9 @@ def _load_base_model(model_name_or_path):
 
 
 def _dummy_input(vocab_size, device):
-    return torch.randint(0, min(vocab_size, 1000), (_CALIB_BATCH, _SEQLEN), device=device)
+    return torch.randint(
+        0, min(vocab_size, 1000), (_CALIB_BATCH, _SEQLEN), device=device
+    )
 
 
 def _verify_forward(model, device):
@@ -100,6 +102,7 @@ def _run_case(name, base_model, cfg, device, needs_calib, skip_convert=False):
             quant_model(_dummy_input(quant_model.config.vocab_size, device))
     if device.startswith("npu"):
         import torch_npu
+
         torch_npu.npu.empty_cache()
 
     # Phase3: convert deploy model
@@ -157,14 +160,26 @@ def _build_cases(amct):
     return [
         # cast: 依赖原生 hifloat8 或 amct_ops，环境不满足时整个用例 SKIP
         {
-            "name": "cast", "cfg": amct.HIFP8_CAST_CFG, "needs_calib": True,
+            "name": "cast",
+            "cfg": amct.HIFP8_CAST_CFG,
+            "needs_calib": True,
             "skip_convert": True,
             "skip_on": ("hifloat8", "amct_ops"),
         },
         # minmax 仅权重量化，自定义 cfg 跳过 lm_head（vocab 超 NPU 算子 n<=65535 限制）
-        {"name": "minmax", "cfg": minmax_cfg, "needs_calib": True, "skip_convert": False},
+        {
+            "name": "minmax",
+            "cfg": minmax_cfg,
+            "needs_calib": True,
+            "skip_convert": False,
+        },
         # smoothquant W8A8 全量化，自定义 cfg 跳过 lm_head + down_proj
-        {"name": "smoothquant", "cfg": smoothquant_cfg, "needs_calib": True, "skip_convert": False},
+        {
+            "name": "smoothquant",
+            "cfg": smoothquant_cfg,
+            "needs_calib": True,
+            "skip_convert": False,
+        },
         # awq INT4 group 量化，grids_num=1 仅验证流程完整性
         {"name": "awq", "cfg": awq_cfg, "needs_calib": True, "skip_convert": False},
     ]

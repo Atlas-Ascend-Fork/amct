@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -25,9 +25,9 @@ class InputAnchor(InputAnchorBase):
     APIs: node, index, name, set_name, add_link, del_link,
           get_peer_output_anchor
     """
+
     def __repr__(self):
-        anchor_info = '< index: {}, name: {} >'.format(
-            self._index, self._anchor_name)
+        anchor_info = '< index: {}, name: {} >'.format(self._index, self._anchor_name)
         return anchor_info
 
 
@@ -37,7 +37,7 @@ class OutputAnchor(OutputAnchorBase):
     APIs: node, index, name, set_name, add_link, del_link,
           get_peer_input_anchor, get_reused_info
     """
+
     def __repr__(self):
-        anchor_info = '< index: {}, name: {} >'.format(
-            self._index, self._anchor_name)
+        anchor_info = '< index: {}, name: {} >'.format(self._index, self._anchor_name)
         return anchor_info

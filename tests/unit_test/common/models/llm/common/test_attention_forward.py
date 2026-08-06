@@ -18,7 +18,6 @@
 
 import math
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -126,11 +125,11 @@ def test_sdpa_with_additive_float_mask_added_to_bias():
 
 def test_sdpa_repeats_kv_heads_when_module_declares_groups():
     torch.manual_seed(0)
-    q = torch.randn(1, 4, 3, 8)            # 4 attention heads
-    k = torch.randn(1, 2, 3, 8)            # 2 kv heads
+    q = torch.randn(1, 4, 3, 8)  # 4 attention heads
+    k = torch.randn(1, 2, 3, 8)  # 2 kv heads
     v = torch.randn(1, 2, 3, 8)
     module = _StdAttnModule()
-    module.num_key_value_groups = 2        # repeat each kv head twice -> 4 heads
+    module.num_key_value_groups = 2  # repeat each kv head twice -> 4 heads
     out = scaled_dot_product_attention(module, q, k, v)
 
     expected_k = repeat_kv(k, 2)

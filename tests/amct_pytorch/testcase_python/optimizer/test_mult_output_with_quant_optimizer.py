@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,14 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
-import sys
 import unittest
 from copy import deepcopy
 
-import numpy as np
-import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
@@ -58,7 +53,9 @@ POOL0 = 'pool0'
 class TestQuantFusionPass(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        MULT_OUTPUT_TYPES.extend(['Concat', 'MaxPool', 'AvgPool', 'Conv', 'Add', 'Mul', 'Gemm', 'MatMul'])
+        MULT_OUTPUT_TYPES.extend(
+            ['Concat', 'MaxPool', 'AvgPool', 'Conv', 'Add', 'Mul', 'Gemm', 'MatMul']
+        )
         pass
 
     @classmethod
@@ -88,13 +85,20 @@ class TestQuantFusionPass(unittest.TestCase):
         def conv_sub(graph, conv_name, inputs, outputs, quant_attrs):
             # Add Ascend Quant
             quant_node = graph.node.add()
-            quant_node.CopyFrom(construct_quant_node(inputs, ['%s_quant' % (conv_name)],
-                quant_attrs, conv_name))
+            quant_node.CopyFrom(
+                construct_quant_node(
+                    inputs, ['%s_quant' % (conv_name)], quant_attrs, conv_name
+                )
+            )
             # Add conv
             conv = graph.node.add()
             conv.name = conv_name
             conv.op_type = 'Conv'
-            conv.input[:] = ['%s_quant' % (conv_name), '%s.weights' % (conv_name), '%s.bias' % (conv_name)]
+            conv.input[:] = [
+                '%s_quant' % (conv_name),
+                '%s.weights' % (conv_name),
+                '%s.bias' % (conv_name),
+            ]
             conv.output[:] = [conv_name]
             # add attribute "kernel_shape"
             kernel_shape = conv.attribute.add()
@@ -124,12 +128,28 @@ class TestQuantFusionPass(unittest.TestCase):
             relu1.op_type = 'Relu'
             relu1.input[:] = [conv_name]
             relu1.output[:] = outputs
-        conv_sub(self.graph, 'conv1', [CONCAT_0_NAME], ['conv1_output'],
-                 {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv2', [CONCAT_0_NAME], ['conv2_output'],
-                 {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
-        conv_sub(self.graph, 'conv3', [CONCAT_0_NAME], ['conv3_output'],
-                 {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8})
+
+        conv_sub(
+            self.graph,
+            'conv1',
+            [CONCAT_0_NAME],
+            ['conv1_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
+        conv_sub(
+            self.graph,
+            'conv2',
+            [CONCAT_0_NAME],
+            ['conv2_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
+        conv_sub(
+            self.graph,
+            'conv3',
+            [CONCAT_0_NAME],
+            ['conv3_output'],
+            {SCALE: 1, OFFSET: 0, QUANT_BIT: 8, DST_TYPE: INT8},
+        )
         # Add max_pooling
         pool0 = self.graph.node.add()
         pool0.name = POOL0
@@ -150,7 +170,6 @@ class TestQuantFusionPass(unittest.TestCase):
 
     def tearDown(self):
         pass
-
 
     def test_match_pattern_success(self):
         records = {
@@ -191,7 +210,13 @@ class TestQuantFusionPass(unittest.TestCase):
         add1 = test_model.graph.node.add()
         add1.name = 'add1'
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', POOL0, AVE_POOL_0_NAME]
+        add1.input[:] = [
+            'conv1_output',
+            'conv2_output',
+            'conv3_output',
+            POOL0,
+            AVE_POOL_0_NAME,
+        ]
         add1.output[:] = ['output']
 
         graph = Graph(test_model)
@@ -235,7 +260,9 @@ class TestQuantFusionPass(unittest.TestCase):
         after_length = len(graph.nodes)
         self.assertEqual(after_length - before_length, 2)
         self.assertEqual(graph.get_node_by_name('pool0.quant').name, 'pool0.quant')
-        self.assertEqual(graph.get_node_by_name('pool0.anti_quant').name, 'pool0.anti_quant')
+        self.assertEqual(
+            graph.get_node_by_name('pool0.anti_quant').name, 'pool0.anti_quant'
+        )
 
     def test_do_pass_with_not_supported_type(self):
         records = {
@@ -254,7 +281,13 @@ class TestQuantFusionPass(unittest.TestCase):
         add1 = test_model.graph.node.add()
         add1.name = 'add1'
         add1.op_type = 'Add'
-        add1.input[:] = ['conv1_output', 'conv2_output', 'conv3_output', POOL0, AVE_POOL_0_NAME]
+        add1.input[:] = [
+            'conv1_output',
+            'conv2_output',
+            'conv3_output',
+            POOL0,
+            AVE_POOL_0_NAME,
+        ]
         add1.output[:] = ['output']
 
         graph = Graph(test_model)
@@ -281,4 +314,3 @@ class TestQuantFusionPass(unittest.TestCase):
         MultQuantOptimizerPass(records).do_pass(graph, concat_node)
         after_length = len(graph.nodes)
         self.assertEqual(after_length, before_length)
-

@@ -16,7 +16,6 @@
 # ----------------------------------------------------------------------------
 
 from amct_pytorch.classic.optimizer.base_module_fusion_pass import BaseModuleFusionPass
-from amct_pytorch.classic.quantize_op.gptq_module import GPTQuant
 from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.config.utils import get_alg_name_from_config
 from amct_pytorch.common.utils.model_util import ModuleHelper
@@ -28,6 +27,7 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
     Function: insert quantize operator in model for quantifiable layer
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, quant_config):
         """
         Function: init object of insert quantize op quant pass
@@ -53,12 +53,14 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
             return False
         alg = self.config[name].get('algorithm')
         alg_names, _ = get_alg_name_from_config(alg)
-        alg_name = alg_names[0] # each module corresponds to only one algo
+        alg_name = alg_names[0]  # each module corresponds to only one algo
         if AlgorithmRegistry.algo.get(alg_name):
             ori_ops = AlgorithmRegistry.algo.get(alg_name).keys()
             for ori_op in ori_ops:
                 if type(module).__name__ == ori_op:
-                    self.quantize_ops[name] = AlgorithmRegistry.algo.get(alg_name).get(ori_op)
+                    self.quantize_ops[name] = AlgorithmRegistry.algo.get(alg_name).get(
+                        ori_op
+                    )
                     return True
 
         return False
@@ -72,9 +74,13 @@ class InsertQuantizeModulePass(BaseModuleFusionPass):
         Return: None
         """
         layer_config = self.config.get(object_name)
-        new_module = self.quantize_ops[object_name](object_module, object_name, layer_config)
+        new_module = self.quantize_ops[object_name](
+            object_module, object_name, layer_config
+        )
 
         helper = ModuleHelper(model)
         helper.replace_module_by_name(model, object_name, new_module)
-        LOGGER.logd("Insert quantize op module to '{}' success!".format(object_name), 'InsertQuantizeModulePass')
-
+        LOGGER.logd(
+            "Insert quantize op module to '{}' success!".format(object_name),
+            'InsertQuantizeModulePass',
+        )

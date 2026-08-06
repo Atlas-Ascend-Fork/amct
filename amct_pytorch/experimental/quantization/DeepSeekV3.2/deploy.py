@@ -40,14 +40,15 @@ def get_had_pow2(n, norm=True):
         raise ValueError(f"n must be a positive power of 2, got{n}")
     had = torch.ones(1, 1)
     while had.shape[0] != n:
-        had = torch.cat((torch.cat([had, had], 1),
-                        torch.cat([had, -had], 1)), 0)
+        had = torch.cat((torch.cat([had, had], 1), torch.cat([had, -had], 1)), 0)
         if norm:
             had /= math.sqrt(2)
     return had
 
 
-def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 128) -> torch.Tensor:
+def weight_dequant(
+    weight: torch.Tensor, scale: torch.Tensor, block_size: int = 128
+) -> torch.Tensor:
     """
     Dequantizes the given weight tensor using the provided scale tensor, efficiently handling cases where
     `weight` is not a multiple of `block_size` by broadcasting `scale`.
@@ -69,17 +70,20 @@ def weight_dequant(weight: torch.Tensor, scale: torch.Tensor, block_size: int = 
 
     # Compute the effective block dimensions for scale
     scale_m, scale_n = scale.shape
-    assert scale_m == (
-        M + block_size - 1) // block_size, "Mismatch in scale rows and weight rows."
-    assert scale_n == (
-        N + block_size - 1) // block_size, "Mismatch in scale columns and weight columns."
+    assert scale_m == (M + block_size - 1) // block_size, (
+        "Mismatch in scale rows and weight rows."
+    )
+    assert scale_n == (N + block_size - 1) // block_size, (
+        "Mismatch in scale columns and weight columns."
+    )
 
     # Convert weight to float32 for calculations
     weight = weight.to(torch.float32)
 
     # Expand scale to match the weight tensor's shape
-    scale_expanded = scale.repeat_interleave(
-        block_size, dim=0).repeat_interleave(block_size, dim=1)
+    scale_expanded = scale.repeat_interleave(block_size, dim=0).repeat_interleave(
+        block_size, dim=1
+    )
 
     # Trim scale_expanded to match weight's shape if necessary
     scale_expanded = scale_expanded[:M, :N]
@@ -196,47 +200,77 @@ def generate_w4a8_quant(num_layers, first_k_dense_replace):
     return quant_w4a8_layers
 
 
-def generate_quant_group(a_num_bits=8, w_num_bits=8, targets=None, activation_use_clip=False):
-    quant_group = {"input_activations": {"actorder": None, "block_structure": None, "dynamic": True,
-                                         "group_size": None, "num_bits": a_num_bits,
-                                         "observer": "memoryless", "observer_kwargs": {},
-                                         "strategy": "token", "symmetric": True, "type": "int"},
-                   "activation_use_clip": activation_use_clip,
-                   "output_activations": None,
-                   "targets": targets,
-                   "weights": {"actorder": None, "block_structure": None, "dynamic": False,
-                               "group_size": None, "num_bits": w_num_bits,
-                               "observer": "minmax", "observer_kwargs": {},
-                               "strategy": "channel", "symmetric": True, "type": "int"}}
+def generate_quant_group(
+    a_num_bits=8, w_num_bits=8, targets=None, activation_use_clip=False
+):
+    quant_group = {
+        "input_activations": {
+            "actorder": None,
+            "block_structure": None,
+            "dynamic": True,
+            "group_size": None,
+            "num_bits": a_num_bits,
+            "observer": "memoryless",
+            "observer_kwargs": {},
+            "strategy": "token",
+            "symmetric": True,
+            "type": "int",
+        },
+        "activation_use_clip": activation_use_clip,
+        "output_activations": None,
+        "targets": targets,
+        "weights": {
+            "actorder": None,
+            "block_structure": None,
+            "dynamic": False,
+            "group_size": None,
+            "num_bits": w_num_bits,
+            "observer": "minmax",
+            "observer_kwargs": {},
+            "strategy": "channel",
+            "symmetric": True,
+            "type": "int",
+        },
+    }
     return quant_group
 
 
 def generate_quant_config(c8, ignores, w4a8=False, clip=False):
     """
-    Generate a quantization configuration dictionary based on the specified parameters. 
+    Generate a quantization configuration dictionary based on the specified parameters.
     """
-    kv_cache_scheme = {"num_bits": 8,
-                       "type": 'float',
-                       "strategy": 'group',
-                       "group_size": 128,
-                       "dynamic": 'true',
-                       "symmetric": 'true'} if c8 else None
+    kv_cache_scheme = (
+        {
+            "num_bits": 8,
+            "type": 'float',
+            "strategy": 'group',
+            "group_size": 128,
+            "dynamic": 'true',
+            "symmetric": 'true',
+        }
+        if c8
+        else None
+    )
     config_groups = {"group_0": {}}
     if w4a8:
         config_groups.update({"group_1": {}})
-    quant_config = {"config_groups": config_groups,
-                    "format": "int-quantized",
-                    "global_compression_ratio": 1,
-                    "ignore": ignores,
-                    "kv_cache_scheme": kv_cache_scheme,
-                    "quant_method": "compressed-tensors",
-                    "quantization_status": "compressed"}
+    quant_config = {
+        "config_groups": config_groups,
+        "format": "int-quantized",
+        "global_compression_ratio": 1,
+        "ignore": ignores,
+        "kv_cache_scheme": kv_cache_scheme,
+        "quant_method": "compressed-tensors",
+        "quantization_status": "compressed",
+    }
     targets = ["Linear"]
     quant_config["config_groups"]["group_0"] = generate_quant_group(
-        a_num_bits=8, w_num_bits=8, targets=targets)
+        a_num_bits=8, w_num_bits=8, targets=targets
+    )
     if w4a8:
         quant_config["config_groups"]["group_1"] = generate_quant_group(
-            a_num_bits=8, w_num_bits=4, targets=["MoEGMM"], activation_use_clip=clip)
+            a_num_bits=8, w_num_bits=4, targets=["MoEGMM"], activation_use_clip=clip
+        )
     return quant_config
 
 
@@ -244,8 +278,7 @@ def generate_li_hadamard_matrix(num_layers, dim=128):
     hadamard_matrixs = {}
     for layer_idx in range(0, num_layers):
         key = f'model.layers.{layer_idx}.self_attn.indexer.hadamard_matrix'
-        hadamard_matrixs[key] = get_had_pow2(
-            dim, norm=True).to(torch.bfloat16)
+        hadamard_matrixs[key] = get_had_pow2(dim, norm=True).to(torch.bfloat16)
     return hadamard_matrixs
 
 
@@ -261,7 +294,9 @@ def copy_py_json(src, target):
                 shutil.copy2(src_path, dst_path)
 
 
-def load_clip_params(num_hidden_layers, num_nextn_predict_layers, mla_param_path, moe_param_path):
+def load_clip_params(
+    num_hidden_layers, num_nextn_predict_layers, mla_param_path, moe_param_path
+):
     num_layers = num_hidden_layers + num_nextn_predict_layers
     kv_clip_params = {}
     act_clip_params = {}
@@ -270,24 +305,36 @@ def load_clip_params(num_hidden_layers, num_nextn_predict_layers, mla_param_path
     clip_param_files.sort()
     for layer_idx in range(0, num_layers):
         expected_file = os.path.join(
-            mla_param_path, f'quant_parameters_{layer_idx}.pth')
+            mla_param_path, f'quant_parameters_{layer_idx}.pth'
+        )
         if not os.path.exists(expected_file):
             if layer_idx < num_hidden_layers:
                 raise ValueError(
-                    f"{expected_file} not found, please check the {mla_param_path}")
+                    f"{expected_file} not found, please check the {mla_param_path}"
+                )
             else:
                 # For layer >= num_hidden_layers, if not found, use num_hidden_layers-1's quant params with factor 1.0
                 expected_file = os.path.join(
-                    mla_param_path, f'quant_parameters_{num_hidden_layers - 1}.pth')
+                    mla_param_path, f'quant_parameters_{num_hidden_layers - 1}.pth'
+                )
                 old_quant_params = safe_torch_load(expected_file)
-                old_quant_params.update(safe_torch_load(expected_file.replace(mla_param_path, moe_param_path)))
+                old_quant_params.update(
+                    safe_torch_load(
+                        expected_file.replace(mla_param_path, moe_param_path)
+                    )
+                )
                 old_quant_params = convert_clip_factors(layer_idx, old_quant_params)
                 quant_params = {
-                    k.replace(f'layers.{num_hidden_layers - 1}', f'layers.{layer_idx}'): torch.tensor(1.0).to(v.dtype)
-                    for k, v in old_quant_params.items()}
+                    k.replace(
+                        f'layers.{num_hidden_layers - 1}', f'layers.{layer_idx}'
+                    ): torch.tensor(1.0).to(v.dtype)
+                    for k, v in old_quant_params.items()
+                }
         else:
             quant_params = safe_torch_load(expected_file)
-            quant_params.update(safe_torch_load(expected_file.replace(mla_param_path, moe_param_path)))
+            quant_params.update(
+                safe_torch_load(expected_file.replace(mla_param_path, moe_param_path))
+            )
             quant_params = convert_clip_factors(layer_idx, quant_params)
         for name, factor in quant_params.items():
             complete_name = f"model.layers.{layer_idx}.{name}"
@@ -301,7 +348,6 @@ def load_clip_params(num_hidden_layers, num_nextn_predict_layers, mla_param_path
 
 
 def convert_clip_factors(block_id, merge_quant_param):
-
     all_clip_param_num = 0
     kv_clip_param_num = 0
     down_clip_param_num = 0
@@ -313,13 +359,17 @@ def convert_clip_factors(block_id, merge_quant_param):
             new_key = None
             if "max" in key:
                 if "k_cache_quantizer.clip_factor_a_max" in key:
-                    new_key = key.replace("k_cache_quantizer.clip_factor_a_max", "ckv_a_alpha")
+                    new_key = key.replace(
+                        "k_cache_quantizer.clip_factor_a_max", "ckv_a_alpha"
+                    )
                     kv_clip_param_num += 1
                 elif "clip_factor_w_max" in key:
                     new_key = key.replace("clip_factor_w_max", "w_alpha")
                     w_clip_param_num += 1
                 elif "afq_down.clip_factor_a_max" in key:
-                    new_key = key.replace("afq_down.clip_factor_a_max", "down_proj.alpha")
+                    new_key = key.replace(
+                        "afq_down.clip_factor_a_max", "down_proj.alpha"
+                    )
                     down_clip_param_num += 1
                     if block_id <= 2:
                         print(f'{key} is set to 10.0')
@@ -329,28 +379,33 @@ def convert_clip_factors(block_id, merge_quant_param):
                     save_clip_factor_param[new_key] = factor_param
 
         all_clip_param_num += len(save_clip_factor_param)
-        assert all_clip_param_num == kv_clip_param_num + down_clip_param_num + w_clip_param_num
+        assert (
+            all_clip_param_num
+            == kv_clip_param_num + down_clip_param_num + w_clip_param_num
+        )
 
     return save_clip_factor_param
 
 
 def main(
-        weight_path,
-        output_path,
-        quant_type, clip=False,
-        mla_param_path=None,
-        moe_param_path=None,):
+    weight_path,
+    output_path,
+    quant_type,
+    clip=False,
+    mla_param_path=None,
+    moe_param_path=None,
+):
     """
     Converts FP8 weights to BF16 and saves the converted weights.
 
     This function reads FP8 weights from the specified directory, converts them to BF16,
-    and saves the converted weights to another specified directory. It also updates the 
+    and saves the converted weights to another specified directory. It also updates the
     model index file to reflect the changes.
 
     Args:
     weight_path (str): The path to the directory containing the FP8 weights and model index file.
     output_path (str): The path to the directory where the converted BF16/INT8 weights will be saved.
-    quant_type (str): The type of quantization to apply. Supported values are "bfloat16", 
+    quant_type (str): The type of quantization to apply. Supported values are "bfloat16",
     "w8a8c16", "w8a8c8", "w4a8c16", and "w4a8c8".
     clip (bool, optional): Whether to apply clipping during quantization. Defaults to False.
     quant_param_path (str, optional): The path to the directory containing quantization parameters.
@@ -366,8 +421,9 @@ def main(
     """
     torch.set_default_dtype(torch.bfloat16)
     os.makedirs(output_path, exist_ok=True)
-    assert quant_type in [
-        "bfloat16", "w8a8c16", "w8a8c8", "w4a8c16", "w4a8c8"], f"Unsupported quant_type: {quant_type}"
+    assert quant_type in ["bfloat16", "w8a8c16", "w8a8c8", "w4a8c16", "w4a8c8"], (
+        f"Unsupported quant_type: {quant_type}"
+    )
     model_index_file = os.path.join(weight_path, "model.safetensors.index.json")
     config_file = os.path.join(weight_path, 'config.json')
     with open(model_index_file, "r") as f:
@@ -390,14 +446,15 @@ def main(
     w8a8 = quant_type.startswith("w8a8")
     if w8a8 or w4a8:
         quant_ignore_layers = generate_ignore_item(
-            num_layers, num_hidden_layers, first_k_dense_replace)
+            num_layers, num_hidden_layers, first_k_dense_replace
+        )
         quantization_config = generate_quant_config(
-            c8, quant_ignore_layers, w4a8=w4a8, clip=clip)
+            c8, quant_ignore_layers, w4a8=w4a8, clip=clip
+        )
         config['quantization_config'] = quantization_config
 
     if w4a8:
-        quant_w4a8_layers = generate_w4a8_quant(
-            num_layers, first_k_dense_replace)
+        quant_w4a8_layers = generate_w4a8_quant(num_layers, first_k_dense_replace)
 
     # Cache for loaded safetensor files
     loaded_files = {}
@@ -425,7 +482,8 @@ def main(
 
     if c8 and clip:
         kv_clip_params, act_clip_params, weight_clip_params = load_clip_params(
-            num_hidden_layers, num_nextn_predict_layers, mla_param_path, moe_param_path)
+            num_hidden_layers, num_nextn_predict_layers, mla_param_path, moe_param_path
+        )
 
     safetensor_files = list(glob(os.path.join(weight_path, "*.safetensors")))
     safetensor_files.sort()
@@ -449,24 +507,31 @@ def main(
                     bf16_weight = weight_dequant(weight, scale_inv)
                     if w8a8 or w4a8:
                         is_ignore_layer = is_match_layer_name(
-                            weight_name, quant_ignore_layers)
+                            weight_name, quant_ignore_layers
+                        )
                         if is_ignore_layer:
                             print(f'Ignore quantization {weight_name}')
                         if not is_ignore_layer:
                             if clip:
                                 weight_clip_name = weight_name.replace(
-                                    "weight", "w_alpha")
+                                    "weight", "w_alpha"
+                                )
                                 weight_clip_factor = weight_clip_params.get(
-                                    weight_clip_name, None)
+                                    weight_clip_name, None
+                                )
                             else:
                                 weight_clip_factor = None
                             bits = 8
                             if is_match_layer_name(weight_name, quant_w4a8_layers):
                                 bits = 4
                             int_weight, scale_inv, bias = int_weight_quant(
-                                bf16_weight, bits=bits, weight_clip_factor=weight_clip_factor)
+                                bf16_weight,
+                                bits=bits,
+                                weight_clip_factor=weight_clip_factor,
+                            )
                             new_scale_name = scale_inv_name.replace(
-                                '_scale_inv', '_scale')
+                                '_scale_inv', '_scale'
+                            )
 
                             new_state_dict[weight_name] = int_weight
                             new_state_dict[new_scale_name] = scale_inv
@@ -475,8 +540,7 @@ def main(
                             new_weight_map[new_scale_name] = file_name
 
                             if w4a8 and bias is not None:
-                                bias_name = weight_name.replace(
-                                    '.weight', '.bias')
+                                bias_name = weight_name.replace('.weight', '.bias')
                                 new_state_dict[bias_name] = bias
                                 new_weight_map[bias_name] = file_name
                         else:
@@ -487,25 +551,31 @@ def main(
                         new_weight_map[weight_name] = file_name
                 except KeyError:
                     print(
-                        f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion")
+                        f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+                    )
                     new_state_dict[weight_name] = weight
                     new_weight_map[weight_name] = file_name
             else:
                 scale_inv_name = f"{weight_name}_scale_inv"
                 bf16_weight = weight
-                if re.search("(gate|up|down|o|q_b)_proj", weight_name) or "wq_b" in weight_name:
+                if (
+                    re.search("(gate|up|down|o|q_b)_proj", weight_name)
+                    or "wq_b" in weight_name
+                ):
                     if clip:
-                        weight_clip_name = weight_name.replace(
-                            "weight", "w_alpha")
+                        weight_clip_name = weight_name.replace("weight", "w_alpha")
                         weight_clip_factor = weight_clip_params.get(
-                            weight_clip_name, None)
+                            weight_clip_name, None
+                        )
                     else:
                         weight_clip_factor = None
-                    bits = 4 if is_match_layer_name(weight_name, quant_w4a8_layers) else 8
+                    bits = (
+                        4 if is_match_layer_name(weight_name, quant_w4a8_layers) else 8
+                    )
                     int_weight, scale_inv, bias = int_weight_quant(
-                        bf16_weight, bits=bits, weight_clip_factor=weight_clip_factor)
-                    new_scale_name = scale_inv_name.replace(
-                        '_scale_inv', '_scale')
+                        bf16_weight, bits=bits, weight_clip_factor=weight_clip_factor
+                    )
+                    new_scale_name = scale_inv_name.replace('_scale_inv', '_scale')
 
                     new_state_dict[weight_name] = int_weight
                     new_state_dict[new_scale_name] = scale_inv
@@ -513,8 +583,7 @@ def main(
                     new_weight_map[weight_name] = file_name
                     new_weight_map[new_scale_name] = file_name
                     if w4a8 and bias is not None:
-                        bias_name = weight_name.replace(
-                            '.weight', '.bias')
+                        bias_name = weight_name.replace('.weight', '.bias')
                         new_state_dict[bias_name] = bias
                         new_weight_map[bias_name] = file_name
                 else:
@@ -522,8 +591,7 @@ def main(
                     new_weight_map[weight_name] = file_name
 
         new_safetensor_file = os.path.join(output_path, file_name)
-        save_file(new_state_dict, new_safetensor_file,
-                    metadata={'format': 'pt'})
+        save_file(new_state_dict, new_safetensor_file, metadata={'format': 'pt'})
 
         # Memory management: keep only the 2 most recently used files
         if len(loaded_files) > 2:
@@ -531,8 +599,7 @@ def main(
             del loaded_files[oldest_file]
 
     if c8 or clip:
-        safetensor_files = list(
-            glob(os.path.join(output_path, "*.safetensors")))
+        safetensor_files = list(glob(os.path.join(output_path, "*.safetensors")))
         safetensor_files.sort()
         first_safetensor_file = safetensor_files[-1]
         file_name = os.path.basename(safetensor_file)
@@ -540,8 +607,7 @@ def main(
 
         if c8:
             # Add Hadamard matrix to the first safetensor file
-            hadamard_matrixs = generate_li_hadamard_matrix(
-                num_layers, dim=128)
+            hadamard_matrixs = generate_li_hadamard_matrix(num_layers, dim=128)
             first_safetensor_dict.update(hadamard_matrixs)
 
             # Update weight map
@@ -558,14 +624,12 @@ def main(
             new_weight_map[weight_name] = file_name
 
         new_safetensor_file = os.path.join(output_path, file_name)
-        save_file(first_safetensor_dict, new_safetensor_file,
-                  metadata={'format': 'pt'})
+        save_file(first_safetensor_dict, new_safetensor_file, metadata={'format': 'pt'})
 
     copy_py_json(weight_path, output_path)
 
     # Update model index
-    new_model_index_file = os.path.join(
-        output_path, "model.safetensors.index.json")
+    new_model_index_file = os.path.join(output_path, "model.safetensors.index.json")
     new_config_file = os.path.join(output_path, "config.json")
     with open(new_model_index_file, "w") as f:
         json.dump({"metadata": {}, "weight_map": new_weight_map}, f, indent=2)
@@ -578,12 +642,22 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--input_weight_path", type=str, required=True)
     parser.add_argument("--output_weight_path", type=str, required=True)
-    parser.add_argument("--quant_type", type=str, default="bfloat16",
-                        choices=["bfloat16", "w8a8c16", "w8a8c8", "w4a8c16", "w4a8c8"])
+    parser.add_argument(
+        "--quant_type",
+        type=str,
+        default="bfloat16",
+        choices=["bfloat16", "w8a8c16", "w8a8c8", "w4a8c16", "w4a8c8"],
+    )
     parser.add_argument("--clip", action='store_true')
     parser.add_argument("--mla_param_path", type=str, default=None)
     parser.add_argument("--moe_param_path", type=str, default=None)
     args = parser.parse_args()
 
-    main(args.input_weight_path, args.output_weight_path,
-         args.quant_type, args.clip, args.mla_param_path, args.moe_param_path)
+    main(
+        args.input_weight_path,
+        args.output_weight_path,
+        args.quant_type,
+        args.clip,
+        args.mla_param_path,
+        args.moe_param_path,
+    )

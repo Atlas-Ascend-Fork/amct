@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -33,6 +33,7 @@ class ReplaceRNNPass(BaseFusionPass):
     Function: replace rnn op
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -46,7 +47,7 @@ class ReplaceRNNPass(BaseFusionPass):
     def match_pattern(self, node):
         """
         Function: Match pattern of node which type is rnn and name in record
-        Parameters: 
+        Parameters:
             node: node in graph to be matched
         Return: True: matched
                 False: mismatch
@@ -66,11 +67,17 @@ class ReplaceRNNPass(BaseFusionPass):
         Return: None
         """
         if object_node.type == 'LSTM' and not check_lstm_limit(object_node):
-            raise RuntimeError("Layer {} don't support quantization, "
-                "but in record file.".format(object_node.name))
+            raise RuntimeError(
+                "Layer {} don't support quantization, but in record file.".format(
+                    object_node.name
+                )
+            )
         if object_node.type == 'GRU' and not check_gru_limit(object_node):
-            raise RuntimeError("Layer {} don't support quantization, "
-                "but in record file.".format(object_node.name))
+            raise RuntimeError(
+                "Layer {} don't support quantization, but in record file.".format(
+                    object_node.name
+                )
+            )
         input_order_map = RNN_INPUT_ORDER_MAP.get(object_node.type)
         # make up input_anchors
         if len(object_node.input_anchors) < len(input_order_map):
@@ -82,10 +89,12 @@ class ReplaceRNNPass(BaseFusionPass):
 
         if object_node.type == 'LSTM':
             new_node_proto = BasicLSTMInplaceFillWindowCache.construct_node_proto(
-                object_node.dump_proto(), self.records)
+                object_node.dump_proto(), self.records
+            )
         else:
             new_node_proto = BasicGRUInplaceFillWindowCache.construct_node_proto(
-                object_node.dump_proto(), self.records)
+                object_node.dump_proto(), self.records
+            )
 
         new_node = graph.add_node(new_node_proto)
         new_node.set_attr('object_node', object_node.name)
@@ -94,32 +103,43 @@ class ReplaceRNNPass(BaseFusionPass):
 
         # relink input to new node
         for index in range(len(object_node.input_anchors)):
-            producer_anchor = object_node.get_input_anchor(index).get_peer_output_anchor()
+            producer_anchor = object_node.get_input_anchor(
+                index
+            ).get_peer_output_anchor()
             # skip optional input
             if not producer_anchor:
                 new_node.input_anchors[input_order_map.get(index)].set_name('')
                 continue
             producer = producer_anchor.node
             graph.remove_edge(producer, producer_anchor.index, object_node, index)
-            graph.add_edge(producer, producer_anchor.index, new_node, input_order_map.get(index))
+            graph.add_edge(
+                producer, producer_anchor.index, new_node, input_order_map.get(index)
+            )
 
         # set empty input clean_cache
         new_node.add_input_anchor('')
         # link deq_scale to new node
         deq_scale_node = self.construct_deq_scale_node(graph, object_node)
         new_node.add_input_anchor(deq_scale_node.name)
-        graph.add_edge(deq_scale_node, 0, new_node, RNN_DEQ_SCALE_INDEX.get(object_node.type))
+        graph.add_edge(
+            deq_scale_node, 0, new_node, RNN_DEQ_SCALE_INDEX.get(object_node.type)
+        )
 
         # relink output to new node
         for index in range(len(object_node.output_anchors)):
-            consumer_anchors = object_node.get_output_anchor(index).get_peer_input_anchor().copy()
+            consumer_anchors = (
+                object_node.get_output_anchor(index).get_peer_input_anchor().copy()
+            )
             for consumer_anchor in consumer_anchors:
                 consumer = consumer_anchor.node
                 graph.remove_edge(object_node, index, consumer, consumer_anchor.index)
                 graph.add_edge(new_node, index, consumer, consumer_anchor.index)
 
         graph.remove_node(object_node)
-        LOGGER.logd("Replace RNN node '{}' success.".format(new_node.proto.name), 'ReplaceRNNPass')
+        LOGGER.logd(
+            "Replace RNN node '{}' success.".format(new_node.proto.name),
+            'ReplaceRNNPass',
+        )
 
     def construct_deq_scale_node(self, graph, object_node):
         """
@@ -135,8 +155,12 @@ class ReplaceRNNPass(BaseFusionPass):
         deq_scale_x = scale_d * scale_w_array
 
         scale_h = self.records.get(object_node.name).get('h_scale')
-        scale_r_array = self.records.get(object_node.name).get('recurrence_weight_scale')
-        offset_r_array = self.records.get(object_node.name).get('recurrence_weight_offset')
+        scale_r_array = self.records.get(object_node.name).get(
+            'recurrence_weight_scale'
+        )
+        offset_r_array = self.records.get(object_node.name).get(
+            'recurrence_weight_offset'
+        )
         deq_scale_h = scale_h * scale_r_array
 
         deq_scale = np.concatenate([deq_scale_x, deq_scale_h])

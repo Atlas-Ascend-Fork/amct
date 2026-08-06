@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -26,6 +26,7 @@ class DeleteLinearAddPass(BaseFusionPass):
     Function: Delete 'Add' node in graph if 'Add' is from Linear.
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -62,8 +63,10 @@ class DeleteLinearAddPass(BaseFusionPass):
         object_node: node to process
         Return: None
         """
-        LOGGER.logd("Doing: delete node {} in graph.".format(object_node.name),
-                    'DeleteLinearAddPass')
+        LOGGER.logd(
+            "Doing: delete node {} in graph.".format(object_node.name),
+            'DeleteLinearAddPass',
+        )
 
         producer_name = ''
         input_anchor_index = 0
@@ -84,5 +87,7 @@ class DeleteLinearAddPass(BaseFusionPass):
         graph.delete_node(object_node, input_anchor_index, 0)
         graph.remove_node(object_node)
 
-        LOGGER.logd("Finished: delete node {} in graph.".format(object_node.name),
-                    'DeleteLinearAddPass')
+        LOGGER.logd(
+            "Finished: delete node {} in graph.".format(object_node.name),
+            'DeleteLinearAddPass',
+        )

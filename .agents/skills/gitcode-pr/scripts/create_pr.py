@@ -110,17 +110,14 @@ def create_pull_request(
             # 使用模板
             template = load_pr_template()
             if template:
-                body = template.replace('{{issue}}', issue).replace('{{description}}', description)
+                body = template.replace('{{issue}}', issue).replace(
+                    '{{description}}', description
+                )
         else:
             body = ""
 
     # PR 信息
-    pr_data = {
-        "title": title,
-        "head": head,
-        "base": base,
-        "body": body
-    }
+    pr_data = {"title": title, "head": head, "base": base, "body": body}
 
     print("正在创建 Pull Request...")
     print(f"目标仓库: {owner}/{repo}")
@@ -132,7 +129,7 @@ def create_pull_request(
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
     }
 
     try:
@@ -144,7 +141,9 @@ def create_pull_request(
             result = response.json()
             print("✅ Pull Request 创建成功！")
             print(f"PR 编号: #{result.get('number', '未知')}")
-            print(f"PR 链接: {result.get('web_url', result.get('html_url', '获取失败'))}")
+            print(
+                f"PR 链接: {result.get('web_url', result.get('html_url', '获取失败'))}"
+            )
             print(f"状态: {result.get('state', '未知')}")
             return result
         else:
@@ -181,7 +180,7 @@ def main():
         body=args.body,
         issue=args.issue,
         description=args.description or "",
-        token=args.token
+        token=args.token,
     )
 
     if result:

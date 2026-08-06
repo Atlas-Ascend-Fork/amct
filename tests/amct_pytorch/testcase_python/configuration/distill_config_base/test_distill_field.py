@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,15 +17,8 @@
 # ----------------------------------------------------------------------------
 import logging
 import os
-import shutil
-import sys
 import unittest
-from collections import OrderedDict
-from unittest import mock
-from unittest.mock import patch
 
-import numpy as np
-import torch
 
 from amct_pytorch.classic.graph_based.amct_pytorch.capacity import CAPACITY
 from amct_pytorch.classic.graph_based.amct_pytorch.configuration.check import (
@@ -115,11 +108,13 @@ class TestDistillField(unittest.TestCase):
 
     def test_distill_data_config_all(self):
         obj = distill_field.DistillDataConfig(GraphQuerier, CAPACITY)
-        val = {ALGO: 'ulq_quantize',
+        val = {
+            ALGO: "ulq_quantize",
             'clip_max': 1.0,
             'clip_min': -1.0,
             'fixed_min': True,
-            DST_TYPE: INT8}
+            DST_TYPE: INT8,
+        }
         extra = (CONV1, 'Conv2d')
         obj.build(val.copy(), extra)
         self.assertEqual(obj.dump(), val)
@@ -160,7 +155,9 @@ class TestDistillField(unittest.TestCase):
         val = {ALGO: 'arq_distill', 'channel_wise': False}
         extra = (CONV1, 'Conv2d')
         obj.build(val, extra)
-        self.assertEqual(obj.dump(), {ALGO: 'arq_distill', 'channel_wise': False, DST_TYPE: INT8})
+        self.assertEqual(
+            obj.dump(), {ALGO: "arq_distill", "channel_wise": False, DST_TYPE: INT8}
+        )
 
     def test_distill_weight_config_invalid(self):
         obj = distill_field.DistillWeightConfig(GraphQuerier, CAPACITY)
@@ -173,37 +170,65 @@ class TestDistillField(unittest.TestCase):
         obj = distill_field.DistillWeightConfig(GraphQuerier, CAPACITY)
         extra = (CONV1, 'Conv2d')
         obj.build_default(extra)
-        self.assertEqual(obj.dump(), {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: INT8})
+        self.assertEqual(
+            obj.dump(), {ALGO: "arq_distill", "channel_wise": True, DST_TYPE: INT8}
+        )
 
     def test_layer_config_set_data_config(self):
         obj = distill_field.LayerConfig(GraphQuerier, CAPACITY)
-        val = {QUANT_ENABLE: True, 'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: 'INT4'}}
+        val = {
+            QUANT_ENABLE: True,
+            'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: 'INT4'},
+        }
         extra = (CONV1, 'Conv2d')
         obj.build(val, extra)
-        except_val = {QUANT_ENABLE: True,
+        except_val = {
+            QUANT_ENABLE: True,
             'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: 'INT4'},
-            'distill_weight_config': {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: INT8}}
+            "distill_weight_config": {
+                ALGO: "arq_distill",
+                "channel_wise": True,
+                DST_TYPE: INT8,
+            },
+        }
         self.assertEqual(obj.dump(), except_val)
 
     def test_layer_config_set_weight_config(self):
         obj = distill_field.LayerConfig(GraphQuerier, CAPACITY)
-        val = {QUANT_ENABLE: True,
-               'distill_weight_config':
-               {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: 'INT4'}}
+        val = {
+            QUANT_ENABLE: True,
+            "distill_weight_config": {
+                ALGO: "arq_distill",
+                "channel_wise": True,
+                DST_TYPE: "INT4",
+            },
+        }
         extra = (CONV1, 'Conv2d')
         obj.build(val, extra)
-        except_val = {QUANT_ENABLE: True,
+        except_val = {
+            QUANT_ENABLE: True,
             'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: INT8},
-            'distill_weight_config': {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: 'INT4'}}
+            "distill_weight_config": {
+                ALGO: "arq_distill",
+                "channel_wise": True,
+                DST_TYPE: "INT4",
+            },
+        }
         self.assertEqual(obj.dump(), except_val)
 
     def test_layer_config_default(self):
         obj = distill_field.LayerConfig(GraphQuerier, CAPACITY)
         extra = (CONV1, 'Conv2d')
         obj.build_default(extra)
-        except_val = {QUANT_ENABLE: True,
+        except_val = {
+            QUANT_ENABLE: True,
             'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: INT8},
-            'distill_weight_config': {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: INT8}}
+            "distill_weight_config": {
+                ALGO: "arq_distill",
+                "channel_wise": True,
+                DST_TYPE: INT8,
+            },
+        }
         self.assertEqual(obj.dump(), except_val)
 
     def test_distill_group(self):
@@ -214,48 +239,91 @@ class TestDistillField(unittest.TestCase):
 
     def test_distill_root_config_not_supported_layer(self):
         obj = distill_field.DistillRootConfig(GraphQuerier, CAPACITY)
-        value = {'version': 1, 'batch_num': 1, 'group_size': 1, 'data_dump': False,
+        value = {
+            "version": 1,
+            "batch_num": 1,
+            "group_size": 1,
+            "data_dump": False,
             'distill_group': [['layer1', 'layer2']],
-            'not_supported_layer': {}}
+            "not_supported_layer": {},
+        }
         extra = {CONV1: 'Conv2d'}
         with self.assertRaises(ValueError):
             obj.build(value, extra)
 
     def test_distill_root_config_no_enabled_layer(self):
         obj = distill_field.DistillRootConfig(GraphQuerier, CAPACITY)
-        value = {'version': 1, 'batch_num': 1, 'group_size': 1, 'data_dump': False,
+        value = {
+            "version": 1,
+            "batch_num": 1,
+            "group_size": 1,
+            "data_dump": False,
             'distill_group': [['layer1', 'layer2']],
-            CONV1: {QUANT_ENABLE: False}}
+            CONV1: {QUANT_ENABLE: False},
+        }
         extra = {CONV1: 'Conv2d'}
         with self.assertRaises(ValueError):
             obj.build(value, extra)
 
     def test_distill_root_config_layer_dst_type_not_equal(self):
         obj = distill_field.DistillRootConfig(GraphQuerier, CAPACITY)
-        value = {'version': 1, 'batch_num': 1, 'group_size': 1, 'data_dump': False,
+        value = {
+            "version": 1,
+            "batch_num": 1,
+            "group_size": 1,
+            "data_dump": False,
             'distill_group': [['layer1', 'layer2']],
-            CONV1: {QUANT_ENABLE: True,
-                'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: INT8},
-                'distill_weight_config': {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: 'INT4'}}}
+            CONV1: {
+                QUANT_ENABLE: True,
+                "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},
+                "distill_weight_config": {
+                    ALGO: "arq_distill",
+                    "channel_wise": True,
+                    DST_TYPE: "INT4",
+                },
+            },
+        }
         extra = {CONV1: 'Conv2d'}
         with self.assertRaises(ValueError):
             obj.build(value, extra)
 
     def test_distill_root_config_success(self):
         obj = distill_field.DistillRootConfig(GraphQuerier, CAPACITY)
-        value = {'version': 1, 'batch_num': 2, 'group_size': 2, 'data_dump': True,
+        value = {
+            "version": 1,
+            "batch_num": 2,
+            "group_size": 2,
+            "data_dump": True,
             'distill_group': [['layer1', 'layer2']],
-            CONV1: {QUANT_ENABLE: True}}
+            CONV1: {QUANT_ENABLE: True},
+        }
         extra = {CONV1: 'Conv2d', 'conv2': 'Conv2d'}
         obj.build(value, extra)
-        except_val = {'version': 1, 'batch_num': 2, 'group_size': 2, 'data_dump': True,
+        except_val = {
+            "version": 1,
+            "batch_num": 2,
+            "group_size": 2,
+            "data_dump": True,
             'distill_group': [['layer1', 'layer2']],
-            CONV1: {QUANT_ENABLE: True,
-                'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: INT8},
-                'distill_weight_config': {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: INT8}},
-            'conv2': {QUANT_ENABLE: False,
-                'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: INT8},
-                'distill_weight_config': {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: INT8}}}
+            CONV1: {
+                QUANT_ENABLE: True,
+                "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},
+                "distill_weight_config": {
+                    ALGO: "arq_distill",
+                    "channel_wise": True,
+                    DST_TYPE: INT8,
+                },
+            },
+            "conv2": {
+                QUANT_ENABLE: False,
+                "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},
+                "distill_weight_config": {
+                    ALGO: "arq_distill",
+                    "channel_wise": True,
+                    DST_TYPE: INT8,
+                },
+            },
+        }
         self.assertEqual(obj.dump(), except_val)
 
     def test_distill_root_config_default(self):
@@ -263,10 +331,20 @@ class TestDistillField(unittest.TestCase):
         groups = [['layer1', 'layer2']]
         extra = {CONV1: 'Conv2d'}
         obj.build_default(groups, extra)
-        except_val = {'version': 1, 'batch_num': 1, 'group_size': 1, 'data_dump': False,
+        except_val = {
+            "version": 1,
+            "batch_num": 1,
+            "group_size": 1,
+            "data_dump": False,
             'distill_group': [['layer1', 'layer2']],
-            CONV1: {QUANT_ENABLE: True,
-                'distill_data_config': {ALGO: 'ulq_quantize', DST_TYPE: INT8},
-                'distill_weight_config': {ALGO: 'arq_distill', 'channel_wise': True, DST_TYPE: INT8}}}
+            CONV1: {
+                QUANT_ENABLE: True,
+                "distill_data_config": {ALGO: "ulq_quantize", DST_TYPE: INT8},
+                "distill_weight_config": {
+                    ALGO: "arq_distill",
+                    "channel_wise": True,
+                    DST_TYPE: INT8,
+                },
+            },
+        }
         self.assertEqual(obj.dump(), except_val)
-

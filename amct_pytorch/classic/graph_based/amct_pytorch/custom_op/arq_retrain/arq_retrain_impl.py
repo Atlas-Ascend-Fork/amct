@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,10 +21,7 @@ from ....amct_pytorch.custom_op.utils import calculate_scale_offset
 from ....amct_pytorch.custom_op.utils import apply_fake_quantize_and_anti_quantize
 
 
-def arq_retrain_forward_pytorch(data,
-                                num_bits,
-                                channel_wise,
-                                with_offset):
+def arq_retrain_forward_pytorch(data, num_bits, channel_wise, with_offset):
     """
     Perform the forward pass for ARQ.
 

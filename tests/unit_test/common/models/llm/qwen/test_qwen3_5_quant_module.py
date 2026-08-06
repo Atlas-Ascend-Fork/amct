@@ -86,27 +86,32 @@ def _quant_args(quant_target=("attn-linear",)):
         quant_dtype="int",
         w_bits=8,
         a_bits=8,
-        q_bits=8, k_bits=8, p_bits=8, v_bits=8,
+        q_bits=8,
+        k_bits=8,
+        p_bits=8,
+        v_bits=8,
         quant_target=list(quant_target),
-        bit_policy=BitPolicy({
-            "attn-linear": {
-                "q_proj": {W_BITS: 8, A_BITS: 8},
-                "k_proj": {W_BITS: 8, A_BITS: 8},
-                "v_proj": {W_BITS: 8, A_BITS: 8},
-                "o_proj": {W_BITS: 8, A_BITS: 8},
-                "out_proj": {W_BITS: 8, A_BITS: 8},
-                "in_proj_qkv": {W_BITS: 8, A_BITS: 8},
-                "in_proj_z": {W_BITS: 8, A_BITS: 8},
-                "in_proj_b": {W_BITS: 8, A_BITS: 8},
-                "in_proj_a": {W_BITS: 8, A_BITS: 8},
-            },
-            "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
-            "mlp": {
-                "gate_proj": {W_BITS: 8, A_BITS: 8},
-                "up_proj": {W_BITS: 8, A_BITS: 8},
-                "down_proj": {W_BITS: 8, A_BITS: 8},
-            },
-        }),
+        bit_policy=BitPolicy(
+            {
+                "attn-linear": {
+                    "q_proj": {W_BITS: 8, A_BITS: 8},
+                    "k_proj": {W_BITS: 8, A_BITS: 8},
+                    "v_proj": {W_BITS: 8, A_BITS: 8},
+                    "o_proj": {W_BITS: 8, A_BITS: 8},
+                    "out_proj": {W_BITS: 8, A_BITS: 8},
+                    "in_proj_qkv": {W_BITS: 8, A_BITS: 8},
+                    "in_proj_z": {W_BITS: 8, A_BITS: 8},
+                    "in_proj_b": {W_BITS: 8, A_BITS: 8},
+                    "in_proj_a": {W_BITS: 8, A_BITS: 8},
+                },
+                "attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8},
+                "mlp": {
+                    "gate_proj": {W_BITS: 8, A_BITS: 8},
+                    "up_proj": {W_BITS: 8, A_BITS: 8},
+                    "down_proj": {W_BITS: 8, A_BITS: 8},
+                },
+            }
+        ),
     )
 
 
@@ -115,14 +120,18 @@ def _quant_args(quant_target=("attn-linear",)):
 
 def test_quant_qwen35_mlp_forward_preserves_shape():
     cfg = _tiny_config()
-    qmlp = QuantQwen35MLP(_quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size))
+    qmlp = QuantQwen35MLP(
+        _quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size)
+    )
     x = torch.randn(1, 4, cfg.hidden_size)
     assert qmlp(x).shape == x.shape
 
 
 def test_quant_qwen35_mlp_uses_quant_linear_for_projections():
     cfg = _tiny_config()
-    qmlp = QuantQwen35MLP(_quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size))
+    qmlp = QuantQwen35MLP(
+        _quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size)
+    )
     assert isinstance(qmlp.up_proj, QuantLinear)
     assert isinstance(qmlp.gate_proj, QuantLinear)
     assert isinstance(qmlp.down_proj, QuantLinear)
@@ -130,14 +139,18 @@ def test_quant_qwen35_mlp_uses_quant_linear_for_projections():
 
 def test_quant_qwen35_mlp_has_activation_quantizers():
     cfg = _tiny_config()
-    qmlp = QuantQwen35MLP(_quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size))
+    qmlp = QuantQwen35MLP(
+        _quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size)
+    )
     assert isinstance(qmlp.input_quant, ActivationQuantizer)
     assert isinstance(qmlp.hidden_quant, ActivationQuantizer)
 
 
 def test_quant_qwen35_mlp_export_ptq_params():
     cfg = _tiny_config()
-    qmlp = QuantQwen35MLP(_quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size))
+    qmlp = QuantQwen35MLP(
+        _quant_args(quant_target=["mlp"]), Qwen3_5MLP(cfg, cfg.intermediate_size)
+    )
     params = qmlp.export_ptq_params()
     assert isinstance(params, dict)
 
@@ -218,7 +231,13 @@ def _make_linear_attn(quant_target):
 
 def test_quant_qwen35_linear_attn_attn_linear_branch_uses_quant_linear():
     qla = _make_linear_attn(["attn-linear"])
-    for proj in (qla.in_proj_qkv, qla.in_proj_z, qla.in_proj_b, qla.in_proj_a, qla.out_proj):
+    for proj in (
+        qla.in_proj_qkv,
+        qla.in_proj_z,
+        qla.in_proj_b,
+        qla.in_proj_a,
+        qla.out_proj,
+    ):
         assert isinstance(proj, QuantLinear)
 
 
@@ -230,7 +249,13 @@ def test_quant_qwen35_linear_attn_attn_linear_branch_has_activation_quantizers()
 
 def test_quant_qwen35_linear_attn_passthrough_branch_uses_plain_linear():
     qla = _make_linear_attn(["attn-cache"])
-    for proj in (qla.in_proj_qkv, qla.in_proj_z, qla.in_proj_b, qla.in_proj_a, qla.out_proj):
+    for proj in (
+        qla.in_proj_qkv,
+        qla.in_proj_z,
+        qla.in_proj_b,
+        qla.in_proj_a,
+        qla.out_proj,
+    ):
         assert isinstance(proj, PlainLinear)
     assert qla.input_transform is None
     assert qla.out_transform is None
@@ -306,4 +331,3 @@ def test_quant_qwen35_attn_forward_with_structure_transform():
     sin = torch.randn(bs, seq, cfg.head_dim)
     out, weights = qattn(h, position_embeddings=(cos, sin))
     assert out.shape == h.shape
-

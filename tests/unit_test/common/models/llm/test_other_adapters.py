@@ -20,7 +20,6 @@
 from types import SimpleNamespace
 
 import pytest
-import torch.nn as nn
 
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm.longcat.longcat_lite.longcat_lite import LongcatLite
@@ -79,4 +78,3 @@ def test_qwen3_6_moe_registers_in_model_registry():
 )
 def test_other_adapters_register_under_expected_keys(key, expected_cls):
     assert MODEL_REGISTRY.get(key) is expected_cls
-

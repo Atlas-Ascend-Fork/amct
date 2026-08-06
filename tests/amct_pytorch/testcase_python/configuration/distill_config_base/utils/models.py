@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,20 +18,16 @@
 """
 Generate model for ut.
 """
+
 from __future__ import print_function
 
-import argparse  # Python 命令行解析工具
-import copy
 
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 
 
 def create_onnx(model, args_shapes, onnx_file, mode='eval'):
-    """ save onnx """
+    """save onnx"""
     args = list()
     for input_shape in args_shapes:
         args.append(torch.randn(input_shape))
@@ -52,15 +48,14 @@ def create_onnx(model, args_shapes, onnx_file, mode='eval'):
         args,
         onnx_file,
         opset_version=11,
-        do_constant_folding=False,   # 是否执行常量折叠优化
-        )
-        # input_names=["input"],  # 输入名
-        # output_names=["output"],    # 输出名
-        # dynamic_axes={"input":{0:"batch_size"},  # 批处理变量
-        #               "output":{0:"batch_size"}})
+        do_constant_folding=False,  # 是否执行常量折叠优化
+    )
+    # input_names=["input"],  # 输入名
+    # output_names=["output"],    # 输出名
+    # dynamic_axes={"input":{0:"batch_size"},  # 批处理变量
+    #               "output":{0:"batch_size"}})
 
     return torch_in, torch_out
-
 
 
 def save_state_dict(model, name):
@@ -72,11 +67,12 @@ def restore_model(model, state_dict_path):
 
 
 class Net001(nn.Module):
-    """ args_shape: [(1, 2, 28, 28)]
+    """args_shape: [(1, 2, 28, 28)]
     conv + bn
     conv + relu
     conv + bn + relu
     """
+
     def __init__(self):
         super(Net001, self).__init__()
         # conv + bn
@@ -103,4 +99,3 @@ class Net001(nn.Module):
         x = self.conv_transpose(x)
 
         return x
-
