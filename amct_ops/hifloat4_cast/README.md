@@ -1,84 +1,58 @@
-# hifloat4_cast — HiFloat4 量化算子
+# hifloat4_cast — HiFloat4 数据类型转换算子
 
-HiFloat4（hifx4）是 4-bit 块缩放浮点格式：每元素 **S1P2**（1 符号 + 2 位尾数，8 档幅值），配**每 64 元素共享的 3 级 scale**（L1 `scale_factor` E6M2 覆盖 64 块、L2 覆盖每 8、L3 覆盖每 4）。
+HiFloat4 数据类型转换算子，支持 FP16/BF16 → HiFloat4 → FP16/BF16 fake-quant 仿真（64 元素块缩放，S1P2 尾数）。
 
-## 架构
+## 功能介绍
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  CLI (amct_pytorch/cli/llm/)                            │
-│  --quant_dtype hifp  →  bits=4 (HiF4) / bits=8 (HiF8)   │
-│    ├─ PTQ:    fake-quant (注入 HiF4 误差)                │
-│    └─ Deploy: blockwise → HiF4 打包字节                  │
-│              tensorwise → fp32 解包                      │
-├─────────────────────────────────────────────────────────┤
-│  Python (amct_pytorch/quantization/dtypes/hifp_impl.py)  │
-│  ├─ hif4_pack()              float → HiF4 uint8 打包     │
-│  ├─ hif4_unpack()            HiF4 uint8 → fp32 解包      │
-│  └─ hifloat4_fake_quant()    NPU kernel / CPU fallback   │
-├─────────────────────────────────────────────────────────┤
-│  NPU Kernel (op_kernel/hifloat4_cast_kernel.cpp)         │
-│  └─ hifx_kernel / hifx_kernel_bf16    FP→HiF4→FP 往返   │
-│     （仅 fake-quant；打包/解包在 Python 侧完成）            │
-└─────────────────────────────────────────────────────────┘
-```
+HiFloat4（hifx4）是 4-bit 块缩放浮点格式：每元素 **S1P2**（1 符号 + 2-bit 尾数，8 档幅值），配**每 64 元素共享的 3 级 scale**（L1 `scale_factor` E6M2 覆盖 64 块、L2 覆盖每 8、L3 覆盖每 4）。
 
-- **1 个 NPU kernel**：`hifx_kernel`（fp32）/ `hifx_kernel_bf16`（bf16），做一次 FP→HiF4→FP 仿真往返
-- **打包/解包**：纯 PyTorch 实现（`hifp_impl.py`），`hif4_pack` 编码为 uint8 HiF4 字节，`hif4_unpack` 解码回 fp32
-- **共享编解码**：fake-quant 和 pack 共用同一套 `hif4_encode` / `hif4_decode`，保证评估路径和部署权重永远一致
+底层由 `hifx_kernel`（fp32）/ `hifx_kernel_bf16`（bf16）实现一次 FP→HiF4→FP 仿真往返。打包/解包由 Python 侧 `hif4_pack` / `hif4_unpack`（`hifp_impl.py`）完成，fake-quant 和 pack 共享同一套编解码逻辑，保证评估路径与部署权重永远一致。
 
-## CLI 工作流
+## 接口说明
 
-```bash
-# PTQ: fake-quant 仿真（注入 HiF4 误差，不产出文件）
-python -m amct_pytorch.cli.llm.ptq \
-    --model /path/to/model --quant_dtype hifp --w_bits 4 --output_dir ./output
+### hifloat4_fake_quant(x: Tensor, qdim: int = -1) -> Tensor
 
-# Deploy blockwise: fp16/bf16 → HiF4 打包字节
-python -m amct_pytorch.cli.llm.deploy \
-    --model /path/to/model --quant_dtype hifp --granularity block --output_dir ./output
+将 FP16/BF16 张量沿 `qdim` 维度分块（每 64 元素一个共享 scale 块），做一次 FP→HiF4→FP 仿真往返。
 
-# Deploy tensorwise: HiF4 打包权重 → fp32 解包
-python -m amct_pytorch.cli.llm.deploy \
-    --model /path/to/model --quant_dtype hifp --granularity tensor --output_dir ./output
-```
+**参数**：
+- `x`：输入张量（NPU 设备），dtype 为 `torch.float16` 或 `torch.bfloat16`，任意非空 shape
+- `qdim`：分块维度，默认 `-1`（最后一维）
 
-## 接口
+**返回**：
+- 同 shape/dtype 的张量（注入了 HiF4 量化误差）
 
-设备算子 `torch.ops.amct.hifloat4_fake_quant(Tensor input, int qdim=-1) -> Tensor`：输入 FP16/BF16，
-输出同 shape/dtype，沿 `qdim` 每 64 元素构成一个共享 scale 块。`qdim` 是 schema 参数，permute/pad/切回
-的布局处理在 **C++ host** 完成（Python 只是薄透传）：
+**异常**：
+- `RuntimeError`：dtype 不是 float16 / bfloat16，或输入不在 NPU 上
 
+**示例**：
 ```python
 from amct_ops.hifloat4_cast import hifloat4_fake_quant
-y = hifloat4_fake_quant(x)                     # 沿最后一维分块
-y = hifloat4_fake_quant(w, qdim=1)             # 例：Linear 权重 [out, in] 沿 in
-y = torch.ops.amct.hifloat4_fake_quant(x, -1)  # 等价
+y = hifloat4_fake_quant(x)                      # 沿最后一维分块
+y = hifloat4_fake_quant(w, qdim=1)              # Linear 权重 [out, in] 沿 in
+y = torch.ops.amct.hifloat4_fake_quant(x, -1)   # torch.ops 等价调用
 ```
 
 host 会把 `qdim` 移到最后一维、补零到 64 的整数倍（补零不影响块内 max）、调 kernel，再切回、还原维序。
 
-## 正确性（验收红线）
+## 目录结构
 
-kernel 逐步复刻纯 python 参考，逐比特对齐到 ~0 误差。在设备上逐比特比较 AMCT 的 CPU 参考：
-
-```python
-import torch
-from amct_ops.hifloat4_cast import hifloat4_fake_quant
-from amct_pytorch.quantization.dtypes.hifp_impl import hif4_pack, hif4_unpack
-
-# pack/unpack 往返
-x = torch.randn(2, 128, dtype=torch.bfloat16)
-scale, value = hif4_pack(x)
-y = hif4_unpack(scale, value)
-assert y.shape == x.shape
-
-# NPU kernel vs CPU fallback 逐比特比较（~0 误差）
-y_npu = hifloat4_fake_quant(x.npu()).cpu()
-assert (y_npu.float() - y).abs().max() < 1e-6
 ```
-
-`tests/amct_ops/test_hifloat4_cast.py` 在有 NPU 时逐比特比较 kernel 与该 CPU 参考。
+hifloat4_cast/
+├── op_kernel/
+│   ├── hifloat4_cast_kernel.cpp   # device 端 kernel（FP→HiF4→FP 仿真往返）
+│   └── tensorutils.h              # 张量工具函数（补零、切回、维度变换）
+├── op_extension/
+│   ├── hifloat4_cast_torch.cpp    # PyTorch host 实现（qdim 预处理，调用 kernel）
+│   ├── ops.h                      # PyTorch C++ 扩展函数声明
+│   └── register.cpp               # TORCH_LIBRARY 注册
+├── python/
+│   └── hifloat4_cast/
+│       ├── __init__.py            # Python 包入口（加载 .so、注册算子）
+│       └── ops.py                 # Python 接口实现
+├── CMakeLists.txt                 # CMake 构建配置
+├── README.md                      # 算子说明文档（中文）
+└── README_en.md                   # 算子说明文档（英文）
+```
 
 ## 打包格式
 
@@ -93,18 +67,130 @@ value : uint8 [M, N // 2]         相邻两个 4-bit code 打包为一个 byte
     低位优先：元素0放在低4位，元素1放在高4位
 ```
 
-## 构建
+## 环境依赖
+
+| SOC | 平台 | 标称 UB / core | CANN 实测可用 UB |
+|-----|------|--------------|----------------|
+| `ascend910b` | Atlas A2系列产品 | 256 KB | ~192 KB |
+| `ascend910_93` | Atlas A3系列产品 | 512 KB | ~384 KB |
+| `ascend950` | Ascend950PR/Ascend950DT | 512 KB+ | — |
+
+> CANN 运行时会保留部分 UB，`tileLength` 在每次调用时由 `GetCoreMemSize()` 查询实际可用量并计算，无需手动指定。
+
+- CANN 9.0.0
+- Python ≥ 3.9
+- PyTorch + torch_npu（适配对应 CANN 版本）
+
+## 编译
+
+### 方式一：统一打包（推荐）
 
 ```bash
-# 先 source CANN set_env.sh（设置 ASCEND_HOME_PATH）
-bash amct_ops/ops_build.sh hifloat4_cast                    # A2 (ascend910b)，仅此算子
-bash amct_ops/ops_build.sh --soc ascend910_93 hifloat4_cast # A3
-bash amct_ops/ops_build.sh                                  # 编译并打包全部算子为一个 wheel
-pip install amct_ops/dist/amct_ops-*.whl
+cd amct_ops
+bash ops_build.sh [--soc <soc>] [hifloat4_cast]
 ```
 
-## 状态 / 说明
+| `--soc` | 平台 | `--npu-arch` | 默认 |
+|---------|------|-------------|------|
+| `ascend910b` | A2（910B1/B2/B3，UB 256 KB） | `dav-2201` | ✓ |
+| `ascend910_93` | A3（910_93，UB 512 KB） | `dav-2201` | |
+| `ascend950` | A5（UB 512 KB+） | `dav-3510` | |
 
-- **NPU kernel**：fp32 下做块内归约与量化（bf16 / E6M2 舍入用硬件 `vconv`）。内核体由 `__DAV_C220_VEC__`
-  守卫（A2/A3，dav-2201 = C220，覆盖 910B/910C）；其它架构为空实现，需在目标 NPU 上验证。
-- **打包/解包**：Python 侧完成，与 NPU kernel 共享同一套编解码（`_hif4_encode_decode`），保证精度一致。
+> A2/A3 共用同一 ISA（`dav-2201`），编译产物相同；UB 大小差异由运行时平台 API 区分，自动选择最优 `tileLength`。
+> A5 构建要求当前 CANN 编译器支持 `dav-3510`。如果 `bisheng` 报 `Unsupported NPU architecture or soc`，需要更换支持 A5 目标的 CANN 编译环境。
+
+```bash
+bash ops_build.sh                                   # 全部算子，默认平台
+bash ops_build.sh --soc ascend910_93                # 全部算子，指定平台
+bash ops_build.sh hifloat4_cast                     # 指定算子，默认平台
+bash ops_build.sh --soc ascend950 hifloat4_cast     # 指定算子，指定平台
+pip install dist/amct_ops-*.whl
+```
+
+### 方式二：单算子独立编译（开发调试）
+
+针对单个算子进行独立编译，适用于开发调试场景。
+
+通过 `-DNPU_ARCH` 指定目标平台（默认 A2）：
+
+| 平台 | `-DNPU_ARCH` |
+|------|-------------|
+| Atlas A2系列产品 | `dav-2201`（默认） |
+| Atlas A3系列产品 | `dav-2201`（同 A2） |
+| Ascend950PR/Ascend950DT | `dav-3510` |
+
+```bash
+cd amct_ops/hifloat4_cast
+source $ASCEND_HOME_PATH/set_env.sh
+mkdir -p build && cd build
+
+cmake .. -DNPU_ARCH=dav-2201   # A2 / A3（默认）
+# cmake .. -DNPU_ARCH=dav-3510  # A5
+
+make -j8
+```
+
+编译产物：`build/libhifloat4_cast_ops.so`
+
+#### 已知 CMake 告警
+
+使用 pip 安装的 PyTorch 构建时，`find_package(Torch)` 可能输出如下告警：
+
+```text
+static library kineto_LIBRARY-NOTFOUND not found.
+```
+
+该告警来自 PyTorch 自带的 `TorchConfig.cmake`，表示未找到 Kineto profiler 的静态库。`hifloat4_cast` 不依赖 PyTorch profiler / Kineto 能力；只要 CMake configure、编译和链接成功，该告警可以忽略。
+
+## 使用示例
+
+```python
+import torch
+import torch_npu
+from amct_ops.hifloat4_cast import hifloat4_fake_quant
+
+# Fake-quant 仿真（FP16/BF16 → HiF4 → FP16/BF16）
+x = torch.randn(1024, 256, dtype=torch.bfloat16, device='npu')
+y = hifloat4_fake_quant(x)                     # shape [1024, 256], dtype bfloat16
+
+# 指定分块维度
+w = torch.randn(4096, 1024, dtype=torch.float16, device='npu')
+y = hifloat4_fake_quant(w, qdim=1)             # 沿 in_features 分块
+```
+
+也可直接通过 `torch.ops.amct` 调用底层算子：
+
+```python
+y = torch.ops.amct.hifloat4_fake_quant(x, -1)
+```
+
+## 精度验证
+
+精度验证通过以下方式进行：
+- **NPU API 综合测试**：类型推断、边界值、特殊值、非规格化数，见 `tests/amct_ops/test_hifloat4_cast.py`
+- **kernel vs CPU 参考**：逐比特比较 NPU kernel 与 Python CPU 实现（`hif4_pack` / `hif4_unpack`），误差 ~0
+
+| 测试场景 | 结果 |
+|---------|------|
+| 随机 FP16/BF16 fake-quant roundtrip | ✓ 相对误差在 HiFloat4 精度范围内 |
+| pack/unpack 往返 | ✓ shape 一致，逐比特恢复 |
+| NPU kernel vs CPU fallback | ✓ 逐比特一致（max abs diff < 1e-6） |
+
+## 测试方法
+
+```bash
+# 在仓库根目录执行。先构建 amct_ops，再通过 staging 运行测试。
+bash amct_ops/ops_build.sh hifloat4_cast
+
+# Python API 综合测试（类型推断、边界值、特殊值、非规格化数）
+PYTHONPATH=amct_ops/staging python3 -m unittest tests.amct_ops.test_hifloat4_cast
+```
+
+也可以先安装 wheel 后再执行测试：
+
+```bash
+pip install amct_ops/dist/amct_ops-*.whl
+python3 -m unittest tests.amct_ops.test_hifloat4_cast
+```
+
+更多测试执行说明见 `tests/amct_ops/README.md`。
