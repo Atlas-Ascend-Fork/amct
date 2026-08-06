@@ -21,7 +21,7 @@ python -m amct_pytorch.eval \
     --device npu:0 \
     --eval_mode quant \
     --quant_target mlp attn-linear \
-    --quant_dtype hifloat4 \
+    --quant_dtype hifp \
     --bit_config amct_pytorch/configs/hifloat4.yaml \
     --attn_linear_param_dir ptq_result/ptq_params/qwen3_5/attn-linear \
     --moe_mlp_param_dir ptq_result/ptq_params/qwen3_5/mlp

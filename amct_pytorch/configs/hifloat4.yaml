@@ -16,10 +16,10 @@
 
 # HiFloat4 weight-only fake-quant across all linears, including MoE experts.
 #
-# Use with:  --quant_dtype hifloat4 --eval_mode quant --bit_config configs/hifloat4.yaml
+# Use with:  --quant_dtype hifp --eval_mode quant --bit_config configs/hifloat4.yaml
 #
 # w_bits: 4  -> every weight <16-bit uses the HiFloat4 (S1P2 + 64-elem block scale) format.
-# a_bits: 16 -> activations stay in bf16 (QuantDequantHiF4 passes through at bits==16).
+# a_bits: 16 -> activations stay in bf16 (QuantDequantHifp passes through at bits==16).
 # The MoE routed/shared experts are unpacked by QuantGatedExperts and inherit these
 # bit-widths, so this single config covers dense + MoE models. Bump a_bits to 4 to also
 # fake-quant activations (W4A4-style HiF4).
