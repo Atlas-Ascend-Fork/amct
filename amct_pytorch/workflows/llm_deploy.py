@@ -40,6 +40,7 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     convert_state_dict,
     quant_payload,
 )
+from amct_pytorch.common.utils.nvfp4_format import is_nvfp4_scale_key
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
@@ -267,9 +268,9 @@ class LlmDeployWorkflow:
             new_state_dict = {}
             for weight_name, weight in current_state_dict.items():
                 scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
-                if weight_name.endswith(scale_prefix):
+                if weight_name.endswith(scale_prefix) or is_nvfp4_scale_key(weight_name):
                     continue
-                # FP8 -> bf16
+                # FP8 / NVFP4 -> bf16
                 block_size = self.pipeline.block_size(weight)
                 weight = convert_state_dict(
                     weight,
@@ -280,6 +281,8 @@ class LlmDeployWorkflow:
                     loaded_files,
                     block_size,
                 )
+                if self.quant_dtype == "bf16" and weight.is_floating_point():
+                    weight = self._convert_tensor(weight_name, weight)
                 new_state_dict[weight_name] = weight
                 if self.quant_dtype in ["int", "mxfp"]:
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
