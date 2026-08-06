@@ -114,18 +114,42 @@ source "$ASCEND_HOME_PATH/set_env.sh"
 
 # ── 编译各算子 ────────────────────────────────────────────────────────────────
 echo "[2/4] 编译算子 (HOST=${HOST_MACHINE}, CANN_ARCH_DIR=${CANN_ARCH_DIR}, SOC=${SOC}, NPU_ARCH=${NPU_ARCH})..."
-
+SKIP_OP_LIST=()
 build_op() {
     local op_name="$1"
     local op_dir="$SCRIPT_DIR/$op_name"
-
+    
     echo "  编译 $op_name ..."
-    rm -rf "$op_dir/build" && mkdir "$op_dir/build"
-    cmake -S "$op_dir" -B "$op_dir/build" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DNPU_ARCH="${NPU_ARCH}" \
-        -DASCEND_ARCH_DIR="${CANN_ARCH_DIR}" > /dev/null
-    cmake --build "$op_dir/build" -j"$(nproc)"
+    if [ $op_name == "svd_quant" ]; then
+        if [ ${SOC} != "ascend950" ]; then
+            echo "'svd_quant' operator builds for ascend950 socket only"
+            SKIP_OP_LIST+=("$op_name")
+            return
+        fi
+        rm -rf "build" "output" && mkdir -p "build" && cd "build"
+        cmake .. \
+            -DBUILD_OPEN_PROJECT=ON \
+            -DCMAKE_CXX_FLAGS="-w" \
+            -DCMAKE_C_FLAGS="-w" \
+            -DASCEND_COMPUTE_UNIT="${SOC}" \
+            -DASCEND_OP_NAME="$op_name" \
+            -DCUSTOM_ASCEND_CANN_PACKAGE_PATH="$ASCEND_HOME_PATH" \
+            -DCHECK_COMPATIBLE=true
+        cmake --build . --target package -j"$(nproc)"
+        cd "-"
+        rm -rf "$op_dir/build" "$op_dir/svd_quant.egg-info" "$op_dir/dist"
+        cd "$op_dir"
+        python3 "$op_dir/python/setup.py" build bdist_wheel
+        find "$op_dir/build" -maxdepth 2 -name "*.so" -exec mv {} "$op_dir/build/libsvd_quant.so" \;
+        cd "-"
+    else
+        rm -rf "$op_dir/build" && mkdir "$op_dir/build"
+        cmake -S "$op_dir" -B "$op_dir/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNPU_ARCH="${NPU_ARCH}" \
+            -DASCEND_ARCH_DIR="${CANN_ARCH_DIR}" > /dev/null
+        cmake --build "$op_dir/build" -j"$(nproc)"
+    fi
 }
 
 if [ -n "$OP_NAME" ]; then
@@ -146,6 +170,10 @@ collect_op() {
     local op_name="$1"
     local op_dir="$SCRIPT_DIR/$op_name"
     local python_src="$op_dir/python"
+
+    for skip_op_name in "${SKIP_OP_LIST[@]}"; do
+        [[ ${skip_op_name} == ${op_name} ]] && return
+    done
 
     [ -d "$python_src" ] || return
 
