@@ -49,7 +49,7 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
         consumers, _ = node.get_consumers(0)
         if len(consumers) != 1 or consumers[0].type != 'Flatten':
             LOGGER.logd(
-                "node {} match_pattern fail for it must have only one consumer Flatten.".format(
+                "node {} does not match the pattern because it must have only one consumer Flatten.".format(
                     node.name
                 ),
                 'ReplaceAvgpoolFlattenPass',
@@ -63,7 +63,7 @@ class ReplaceAvgpoolFlattenPass(BaseFusionPass):
             axis = attr_helper.get_attr_value('axis')
         if axis != 1:
             LOGGER.logd(
-                "node {} match_pattern fail for its consumer Flatten has axis {} not equal to 1.".format(
+                "node {} does not match the pattern because its consumer Flatten has axis {}, which is not 1.".format(
                     node.name, axis
                 ),
                 'ReplaceAvgpoolFlattenPass',

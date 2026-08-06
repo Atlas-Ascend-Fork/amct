@@ -138,7 +138,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
             return False
         if not module.affine or not module.track_running_stats:
             LOGGER.logd(
-                'Cannot do conv + bn:\'{}\' fuison for affine and '
+                'Cannot do conv + bn:\'{}\' fusion because affine and '
                 'track_running_stats must be True!'.format(name),
                 'ConvBnFusionPass',
             )
@@ -149,7 +149,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
             bn_node = graph.get_node_by_name(name)
         except RuntimeError:
             LOGGER.logd(
-                'Cannot find module "%s" in graph, means it not used '
+                'Cannot find module "%s" in graph, which means it is not used '
                 'in forward.' % (name)
             )
             return False
@@ -167,7 +167,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
         # return false if moudle is in training mode
         if module.training:
             LOGGER.logw(
-                'Cannot do conv:\'{}\' + bn:\'{}\' fuison for training must be False! '
+                'Cannot do conv:\'{}\' + bn:\'{}\' fusion because training must be False! '
                 'Conv + bn fusion process will be skipped.'.format(
                     conv_node.name, name
                 ),
@@ -210,7 +210,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
             conv_module = ModuleHelper(model).get_module(conv_name)
         except RuntimeError:
             LOGGER.logd(
-                'Cannot find "%s" in model, cannot do Conv+BN fuison.' % (conv_name)
+                'Cannot find "%s" in model, cannot do Conv+BN fusion.' % (conv_name)
             )
             return
         if not self.is_fusionable_conv(conv_module, conv_name):
@@ -226,7 +226,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
             or torch.isnan(checked_module.bias).any()
         ):
             LOGGER.logw(
-                f'Conv+BN fusion for {conv_name} skipped because data is abnormal after fusion.'
+                f'Conv+BN fusion for {conv_name} skipped because data is non-finite after fusion.'
             )
             return
         # delete bn in graph
@@ -239,7 +239,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
         if self.record_helper is not None and self.record_helper.has_key(conv_name):
             self._update_record_for_fusion(conv_node, object_module)
             LOGGER.logd(
-                'Update record for conv:\'{}\' + bn:\'{}\' fuison!'.format(
+                'Update record for conv:\'{}\' + bn:\'{}\' fusion!'.format(
                     conv_name, object_name
                 ),
                 'ConvBnFusionPass',
@@ -250,7 +250,7 @@ class ConvBnFusionPass(BaseModuleFusionPass):
         self.set_fused_data_back(fused_conv_module, conv_node, graph)
 
         LOGGER.logd(
-            'Do conv:\'{}\' + bn:\'{}\' fuison success!'.format(conv_name, object_name),
+            'Conv:\'{}\' + bn:\'{}\' fusion succeeded.'.format(conv_name, object_name),
             'ConvBnFusionPass',
         )
 
