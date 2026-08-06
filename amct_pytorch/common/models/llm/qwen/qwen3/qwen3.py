@@ -31,6 +31,7 @@ from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import (
     QuantQwen3MLP,
 )
 from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
 
 @MODEL_REGISTRY.register(
@@ -105,6 +106,17 @@ class Qwen3(BaseModel):
 
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)
+
+    def bits_scheme(self):
+        """Return the dense Linear bit widths written to deploy metadata."""
+        bit_policy = ensure_bit_policy(self.args)
+        return [
+            {
+                "targets": ["Linear"],
+                "w_bits": bit_policy.w_bits,
+                "a_bits": bit_policy.a_bits,
+            }
+        ]
 
     def load_unit_inputs(self, data_dir, unit: PtqUnit):
         return super().load_unit_inputs(data_dir, unit)
