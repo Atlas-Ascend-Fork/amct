@@ -328,33 +328,7 @@ python -m amct_pytorch.eval \
 | LWC+LAC | `lwc lac` |
 | OmniQuant | `omniquant` |
 | AutoRound | `autoround` |
-| FlatQuant | `flatquant` |## 10. Deploy 与 clean reload
-
-七种量化方案均完成 Deploy，并通过 clean reload。
-
-统一检查结果为：
-
-```text
-MISSING_KEYS=[]
-UNEXPECTED_KEYS_COUNT=0
-MISMATCHED_KEYS_COUNT=0
-ERROR_MSGS_COUNT=0
-TOTAL_QUANTIZED_COUNT=304
-LAYER0_QUANTIZED_COUNT=5
-VISION_QUANTIZED_COUNT=0
-LM_HEAD_HAS_WEIGHT_SCALE=False
-CLEAN_RELOAD=PASS
-EXIT_CODE=0
-```
-
-Clean reload 中采用了以下兼容处理：
-
-1. 仅在内存配置中移除两个 `activation_use_clip` 字段。
-2. 使用 `torch.bfloat16` 初始化模型骨架和未量化浮点组件。
-3. 忽略 Vision、Visual 和 Image 相关分支。
-4. 忽略 `lm_head`。
-5. 忽略输入维度不能被 MXFP block size 32 整除的 Linear。
-6. 不修改正式 Deploy 目录中的原始 `config.json`。
+| FlatQuant | `flatquant` |
 
 ## 9. 已知兼容性问题
 

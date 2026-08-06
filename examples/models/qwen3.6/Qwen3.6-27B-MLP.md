@@ -353,17 +353,19 @@ clean reload 检查确认：
 
 ### 5.2 环境进入方式
 
-容器内使用以下脚本加载 AMCT 运行环境：
+环境初始化脚本和 AMCT 仓库位置由实际部署环境决定。进入运行环境并切换到仓库根目录的通用形式如下：
 
 ```bash
-source /data0/l50064263/qwen36_27b_mxfp4/scripts/enter_amct_env.sh
+source "${AMCT_ENV_SCRIPT}"
+cd "${AMCT_REPO_DIR}"
 ```
 
-AMCT 仓库目录为：
+其中：
 
-```text
-/data0/l50064263/qwen36_27b_mxfp4/code/amct
-```
+- `AMCT_ENV_SCRIPT` 表示实际环境初始化脚本；
+- `AMCT_REPO_DIR` 表示 AMCT 仓库根目录；
+- 本文档不记录服务器专属绝对路径。
+
 ## 6. 已知警告和兼容性问题
 
 ### 6.1 内部架构名称
