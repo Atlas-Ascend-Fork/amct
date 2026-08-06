@@ -17,7 +17,7 @@ python scripts/export_higptq_bf16.py \
     --model_name qwen3_5 \
     --device npu:0 \
     --quant_target attn-linear mlp \
-    --quant_dtype hifloat4 \
+    --quant_dtype hifp \
     --bit_config amct_pytorch/configs/hifloat4.yaml \
     --attn_linear_param_dir ptq_result/ptq_params/qwen3_5/attn-linear \
     --moe_mlp_param_dir ptq_result/ptq_params/qwen3_5/mlp \

@@ -21,18 +21,18 @@
 ptq_result/ only stores the Hessian-error-compensated *floating-point* weight
 (QuantLinear.export_ptq_params() just returns self.linear.weight) -- it is not
 yet quantized. amct_pytorch.eval fake-quantizes it on the fly at forward time
-via WeightQuantizer -> QuantDequantHiF4.forward() (hifloat4_fake_quant), which
-is a pure quant/dequant simulation and needs no bit-packing. amct_pytorch.deploy
-instead calls QuantDequantHiF4.export_deploy(), which raises NotImplementedError
-because real HiFloat4 4-bit packing isn't implemented yet (see
-amct_pytorch/quantization/dtypes/hifloat4.py).
+via WeightQuantizer -> QuantDequantHifp.forward() (hifloat4_fake_quant, bits=4),
+which is a pure quant/dequant simulation and needs no bit-packing. With
+--quant_dtype hifp, amct_pytorch.deploy can also call
+QuantDequantHifp.export_deploy() for real HiFloat4 4-bit packing (see
+amct_pytorch/quantization/dtypes/hifp.py).
 
-This script sidesteps that gap for deployment on engines that don't have a
-HiFloat4 kernel (e.g. vLLM): it runs each calibrated weight through the same
-fake-quant simulation eval already exercises, bakes the result into BF16, and
-writes a normal HF/vLLM-loadable checkpoint (safetensors + copied config/
-tokenizer files) -- no packing required, at the cost of storing weights at
-BF16 size rather than HiFloat4 size.
+This script instead targets deployment on engines that don't have a HiFloat4
+kernel (e.g. vLLM): it runs each calibrated weight through the same fake-quant
+simulation eval already exercises, bakes the result into BF16, and writes a
+normal HF/vLLM-loadable checkpoint (safetensors + copied config/tokenizer
+files) -- no packing required, at the cost of storing weights at BF16 size
+rather than HiFloat4 size.
 
 Mirrors amct_pytorch/common/models/llm/common/deploy_export.py's
 export_block_deploy() and amct_pytorch/workflows/llm_deploy.py's safetensors
@@ -50,7 +50,7 @@ matches amct_pytorch.deploy's existing behavior, not a new gap.
     python scripts/export_higptq_bf16.py \
         --model /path/to/Qwen3.5-9B \
         --model_name qwen3_5 \
-        --quant_dtype hifloat4 \
+        --quant_dtype hifp \
         --bit_config amct_pytorch/configs/hifloat4.yaml \
         --quant_target attn-linear mlp \
         --attn_linear_param_dir ptq_result/ptq_params/qwen3_5/attn-linear \
@@ -177,8 +177,9 @@ def _export_block_fakequant_bf16(pipeline, layer_idx):
 
     Uses the WeightQuantizer's fake-quant *simulation* path
     (module.weight_quantizer(weight), same as amct_pytorch.eval) rather than
-    its export_deploy() packing path, since the latter isn't implemented for
-    HiFloat4 yet.
+    its export_deploy() real-packing path -- this script's whole point is a
+    dense BF16 checkpoint for engines without a HiFloat4 kernel, not a packed
+    one (use amct_pytorch.deploy for that).
     """
     block = pipeline.build_quant_block(layer_idx).to(pipeline.args.device).eval()
     pipeline.load_selected_layer_ptq_params(layer_idx, block, strict=False)

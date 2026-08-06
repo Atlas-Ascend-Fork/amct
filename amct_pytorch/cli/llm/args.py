@@ -99,7 +99,7 @@ def parser_gen(command=None):
         "--quant_dtype",
         type=str,
         default="",
-        choices=['int', 'mxfp', 'hifloat4', 'hifp'],
+        choices=['int', 'mxfp', 'hifp'],
         help='Quantization data type.',
     )
 
