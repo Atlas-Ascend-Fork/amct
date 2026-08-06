@@ -22,6 +22,7 @@ from safetensors.torch import load_file
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -153,6 +154,15 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
+def _load_scale(scale_name, original_weight_map, model_dir, loaded_files):
+    """Read a scale tensor from its shard, loading and caching the shard on first use."""
+    file_name = original_weight_map[scale_name]
+    if file_name not in loaded_files:
+        file_path = model_dir / file_name
+        loaded_files[file_name] = load_file(file_path, device="cpu")
+    return loaded_files[file_name][scale_name]
+
+
 def convert_state_dict(
     weight,
     weight_name,
@@ -161,26 +171,53 @@ def convert_state_dict(
     model_dir,
     loaded_files,
     block_size,
+    weight_scale_name=None,
+    weight_scale_2_name=None,
 ):
-    if weight.element_size() == 1:
-        # FP8 weight
-        try:
-            # Get scale_inv from the correct file
-            file_name = original_weight_map[scale_inv_name]
-            if file_name not in loaded_files:
-                file_path = model_dir / file_name
-                loaded_files[file_name] = load_file(file_path, device="cpu")
-            scale_inv = loaded_files[file_name][scale_inv_name]
-            if weight.dtype == torch.int8:
-                weight = weight_dequant(
-                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
-                )
-            else:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size)
-        except KeyError:
-            logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+    """Dequantize a quantized checkpoint tensor to float; pass other tensors through.
+
+    NVFP4 is packed two elements per byte just like MXFP4, so it cannot be recognised by
+    dtype alone. It is identified instead by its companion scales: `weight_scale` (E4M3,
+    per 16 elements) plus the per-tensor `weight_scale_2`, the latter being unique to
+    NVFP4. Both default to the standard `<weight>_scale` / `<weight>_scale_2` names and
+    can be overridden for checkpoints that name them differently.
+    """
+    if weight.element_size() != 1:
+        return weight
+
+    if weight_scale_name is None:
+        weight_scale_name = f"{weight_name}_scale"
+    if weight_scale_2_name is None:
+        weight_scale_2_name = f"{weight_name}_scale_2"
+    is_nvfp4 = (
+        weight_scale_name in original_weight_map
+        and weight_scale_2_name in original_weight_map
+    )
+
+    try:
+        if is_nvfp4:
+            # NVFP4 weight
+            weight_scale = _load_scale(
+                weight_scale_name, original_weight_map, model_dir, loaded_files
             )
+            weight_scale_2 = _load_scale(
+                weight_scale_2_name, original_weight_map, model_dir, loaded_files
+            )
+            return nvfp4_weight_dequant(weight, weight_scale, weight_scale_2)
+        # FP8 weight
+        scale_inv = _load_scale(
+            scale_inv_name, original_weight_map, model_dir, loaded_files
+        )
+        if weight.dtype == torch.int8:
+            weight = weight_dequant(
+                weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+            )
+        else:
+            weight = weight_dequant(weight, scale_inv, block_size=block_size)
+    except KeyError:
+        logger.warning(
+            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+        )
     return weight
 
 
