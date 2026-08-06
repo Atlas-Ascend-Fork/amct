@@ -80,7 +80,8 @@ def get_pileval(tokenizer, n_samples, seq_len=512, data_dir=None):
 
         for _ in range(n_samples):
             start = rng.randint(0, max_start) if max_start > 0 else 0
-            samples.append(encoded[:, start : start + seq_len].cpu())
+            end = start + seq_len
+            samples.append(encoded[:, start:end].cpu())
 
         return samples
 
