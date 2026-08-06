@@ -48,8 +48,8 @@ class RegularModelPruner:
         # try to run the original model in train mode
         if not self.run_model_train_forward():
             raise RuntimeError(
-                "the model cannot do prune for do run forward fail in training mode with "
-                "input_data.",
+                "The model cannot be pruned because the forward pass failed in training "
+                "mode with input_data.",
                 "RegularModelPruner",
             )
         self.split_info = PruneRecordHelper.prepare_split_info(self.record.prune_record)
@@ -81,7 +81,7 @@ class RegularModelPruner:
         for delete_record in delete_records:
             for producer in delete_record.producer:
                 LOGGER.logw(
-                    "Disable prune layer {} for fail to run forward. Please skip it by setting "
+                    "Disable pruning for layer {} because the forward pass cannot run. Please skip it by setting "
                     "regular_prune_skip_layers, which will help to reduce execution time of "
                     "create_prune_retrain_model".format(producer.name),
                     "RegularModelPruner",
@@ -161,7 +161,7 @@ class RegularModelPruner:
             module = self.model_helper.get_module(name)
             return module
         except RuntimeError:
-            LOGGER.logd('Cannot find "%s" in model, cannot do pune ' % (name))
+            LOGGER.logd('Cannot find "%s" in model, cannot do prune ' % (name))
             return None
 
     def prune_producer_cout(self, producer, node_backup):

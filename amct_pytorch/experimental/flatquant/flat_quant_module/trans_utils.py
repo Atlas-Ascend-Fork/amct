@@ -209,7 +209,7 @@ class SVDDecomposeTransMatrix(nn.Module):
         if hasattr(self, 'matrix_left'):
             res += f", matrix.shape={self.matrix_left.shape}, matrix_right.shape={self.matrix_right.shape}, )"
         else:
-            res += f", matrix.shape={
-                self.linear_u_left.weight.shape
-            }, linear_right.shape={self.linear_u_right.weight.shape}, )"
+            matrix_shape = self.linear_u_left.weight.shape
+            right_shape = self.linear_u_right.weight.shape
+            res += f", matrix.shape={matrix_shape}, linear_right.shape={right_shape}, )"
         return res
