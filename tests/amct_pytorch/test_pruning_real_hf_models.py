@@ -360,11 +360,53 @@ class TestMoERealHF(unittest.TestCase):
         )
         self._assert_prune_forward(model)
 
+    # Kimi-VL-A3B's language backbone is an MLA + sigmoid-routed MoE stack with
+    # shared experts and a dense first layer. It ships as remote code, so the
+    # equivalent transformers config class is used here to build the same shape
+    # without pulling weights over the network at test time.
     @unittest.skipUnless(
         _HAS_TF and _has("DeepseekV3Config", "DeepseekV3ForCausalLM"),
-        "DeepseekV3 unavailable",
+        "MLA MoE config unavailable",
     )
-    def test_deepseekv3_grouped_router_pruning(self):
+    def test_kimi_vl_style_moe_pruning(self):
+        torch.manual_seed(0)
+        model = self._build_or_skip(
+            lambda: transformers.DeepseekV3ForCausalLM(
+                transformers.DeepseekV3Config(
+                    vocab_size=128,
+                    hidden_size=64,
+                    intermediate_size=128,
+                    moe_intermediate_size=64,
+                    num_hidden_layers=2,
+                    num_attention_heads=4,
+                    num_key_value_heads=2,
+                    max_position_embeddings=64,
+                    n_routed_experts=8,
+                    num_experts_per_tok=6,
+                    n_group=1,
+                    topk_group=1,
+                    topk_method="noaux_tc",
+                    scoring_func="sigmoid",
+                    n_shared_experts=2,
+                    first_k_dense_replace=1,
+                    qk_rope_head_dim=16,
+                    qk_nope_head_dim=16,
+                    v_head_dim=16,
+                    kv_lora_rank=16,
+                    q_lora_rank=None,
+                )
+            )
+        )
+        self._assert_prune_forward(model)
+
+    # Grouped routing (n_group/topk_group) is a separate code path from the
+    # Kimi-VL shape above -- it exercises expert-group collapsing -- so it keeps
+    # its own case rather than riding along with a model that does not group.
+    @unittest.skipUnless(
+        _HAS_TF and _has("DeepseekV3Config", "DeepseekV3ForCausalLM"),
+        "grouped-router config unavailable",
+    )
+    def test_grouped_router_pruning(self):
         torch.manual_seed(0)
         model = self._build_or_skip(
             lambda: transformers.DeepseekV3ForCausalLM(

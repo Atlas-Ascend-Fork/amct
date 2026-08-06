@@ -89,7 +89,7 @@ def _forward_ok(
         return bool(torch.isfinite(logits).all().item())
     except Exception as exc:
         LOGGER.logw(
-            f"[diagnose] forward check failed: {type(exc).__name__}: {exc}", "amct_prune")
+            f"[diagnose] forward check did not complete: {type(exc).__name__}: {exc}", "amct_prune")
         return False
 
 
@@ -115,7 +115,7 @@ def _diag_fixed_ratio(model, base_cfg, prune_ratio, *, data, batch_adapter, note
         return after < before, reduction, forward_ok
     except Exception as exc:
         LOGGER.logw(
-            f"[diagnose] fixed-ratio prune dry-run error: {type(exc).__name__}: {exc}",
+            f"[diagnose] fixed-ratio prune dry-run did not complete: {type(exc).__name__}: {exc}",
             "amct_prune")
         notes.append(f"fixed-ratio prune dry-run error: {type(exc).__name__}: {exc}")
         return False, 0.0, None
@@ -142,7 +142,7 @@ def _diag_acc_search(model, config, *, data, tolerance, batch_adapter, notes):
         return res.chosen_ratio is not None, res.chosen_ratio
     except Exception as exc:
         LOGGER.logw(
-            f"[diagnose] acc search dry-run error: {type(exc).__name__}: {exc}", "amct_prune")
+            f"[diagnose] acc search dry-run did not complete: {type(exc).__name__}: {exc}", "amct_prune")
         notes.append(f"acc search dry-run error: {type(exc).__name__}: {exc}")
         return False, None
 
