@@ -9,6 +9,7 @@ AMCT（Ascend Model Compression Toolkit）是一款昇腾 AI 处理器亲和的�
 主要功能：
 - **量化压缩**：支持多种量化算法（AWQ、GPTQ、SmoothQuant、Minmax 等）
 - **HiFloat8**：支持 HiFloat8/FP8/FP4 数据量化和分位量化
+- **结构化剪枝**：eager 模式剪除稠密 FFN 中间维 / CNN 通道 / MoE 专家
 - **图压缩**：基于计算图的压缩优化（张量分解等）
 - **NPU 算子**：量化相关的昇腾 NPU 算子实现
 - **试验特性**：DeepSeekV3.2/V4 等前沿模型的量化支持
@@ -101,6 +102,7 @@ python3 -c "import amct_pytorch as amct; print('successfully installed AMCT')"
 | `amct_pytorch/` | PyTorch 量化压缩核心源码 |
 | `amct_pytorch/experimental/` | 试验特性（HiFloat8、DeepSeek 等） |
 | `amct_pytorch/classic/graph_based/` | 基于计算图的压缩优化（张量分解等） |
+| `amct_pytorch/pruning/` | eager 模式结构化剪枝（稠密 FFN / CNN 通道 / MoE 专家） |
 | `amct_ops/` | 量化相关的昇腾 NPU 算子代码 |
 | `tests/` | 单元测试 |
 | `examples/` | 端到端样例开发和调用示例 |
