@@ -18,6 +18,7 @@ _昇腾 NPU 原生模型压缩工具包_
 
 ## 🔥 最新动态
 
+- **[2026/08/07]** 新增结构化剪枝（`amct_pytorch.pruning`），支持 MoE 专家 / Dense FFN / CNN 通道剪枝，并提供 [Qwen3.6-MoE 结构化剪枝](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md) 的一站式单卡样例
 - **[2026/05/28]** 新增当前主流 LLM 网络量化、PTQ 算法支持，并提供 [DeepSeek-V4](./examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) 和 [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md) 的一站式样例
 - **[2026/04/24]** 新增 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) 模型 INT8 量化支持
 - **[2026/04/17]** 新增 HiFloat8 分位量化（Quantile）算法
@@ -48,6 +49,7 @@ AMCT 是昇腾 NPU 原生的模型量化压缩工具。量化后模型体积减�
 | **HiFloat8 量化** | 华为自研 8-bit 浮点格式，锥形精度 + 大动态范围，详见 [HiFloat8 介绍](docs/zh/context/hifloat8_quantization.md) |
 | **NPU 自定义算子** | 基于NPU的自研算子，Ascend C kernel 实现，详见 [amct_ops](amct_ops/README.md) |
 | **大模型量化** | DeepSeek-V3.2 / V4 量化方案，详见 [DeepSeek-V4](./amct_pytorch/experimental/deepseek-v4/README.md) |
+| **结构化剪枝** | 稠密 FFN 中间维 / CNN 通道 / MoE 专家的结构化剪枝，详见 [结构化剪枝](amct_pytorch/pruning/README.md) |
 
 
 ## 📊 性能收益
@@ -115,6 +117,7 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | 在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。 |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的单卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。    |
+| [Qwen3.6-MoE 结构化剪枝](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md) | 在 Atlas A3 环境中对 Qwen3.6-MoE 做 MoE 专家结构化剪枝，把单卡装不下的模型压到单卡以内，剪枝后可继续量化。 |
 
 ## 📖 文档样例
 
@@ -136,6 +139,7 @@ amct/
 │   ├── common/                     # 通用工具、模型和数据处理
 │   ├── configs/                    # 量化配置模板
 │   ├── experimental/               # 实验特性（HiFloat8、DeepSeek 等）
+│   ├── pruning/                    # 结构化剪枝
 │   ├── quantization/               # 量化数据类型与基础模块
 │   └── workflows/                  # LLM 量化、评估和部署流程
 ├── amct_ops/                      # AMCT 自定义 NPU 算子
