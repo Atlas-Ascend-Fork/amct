@@ -16,8 +16,11 @@
 # ----------------------------------------------------------------------------
 
 import functools
+from typing import NamedTuple
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 
 
 _HIFLOAT8_BACKEND_ERRORS = (RuntimeError, OSError)
@@ -109,3 +112,208 @@ def hifloat8_fake_quant(fp_tensor):
             pass
 
     raise RuntimeError(_HIFLOAT8_BACKEND_REQUIRED)
+
+
+# ---- HiF4 encode / pack ------------------------------------------------
+E6_OFFSET = 48
+E6M2_MBITS = 2
+N_FMT = 4
+NG = N_FMT - 2      # S1PNg, Ng=2 -> in-group code 3 bits
+
+
+def _pow2(e):
+    """Exact 2**e via ldexp (bit-exact on NPU)."""
+    return torch.ldexp(torch.ones_like(e, dtype=torch.float32), e.to(torch.int32))
+
+
+def _to_bf16(x):
+    """Round to bf16 and back to fp32 (round-half-to-even)."""
+    return x.bfloat16().float()
+
+
+class Hif4Encoded(NamedTuple):
+    sign_bit: torch.Tensor
+    e6m2: torch.Tensor
+    de: torch.Tensor
+    code: torch.Tensor
+    e1_8: torch.Tensor
+    e1_16: torch.Tensor
+    e_e6: torch.Tensor
+    q: torch.Tensor
+    block_nan: torch.Tensor
+
+
+@torch.no_grad()
+def hif4_encode(xg, ng=2, qdim=-1):
+    """HiF4 encode: 3-level block scale + S1P2 in-group code."""
+    finite_mask = torch.isfinite(xg)
+    block_nan = (~finite_mask).flatten(start_dim=qdim - 2).any(dim=-1)
+    xf = torch.where(finite_mask, xg, torch.zeros_like(xg))
+    tmp = xf.abs()
+    sign_bit = (xf < 0).to(torch.int32)
+
+    v16 = tmp.amax(dim=qdim, keepdim=True)
+    v8 = v16.amax(dim=qdim - 1, keepdim=True)
+    vmax = v8.amax(dim=qdim - 2, keepdim=True)
+
+    const_rec = _to_bf16(torch.tensor(1.0 / 7.0, dtype=torch.float32, device=xg.device))
+    sf = _to_bf16(vmax * const_rec)
+    sf_c = sf.clamp(2.0 ** -E6_OFFSET, 2.0 ** 15 * 1.5)
+    e_e6 = torch.floor(torch.log2(sf_c))
+    q = torch.round(sf_c * _pow2(2.0 - e_e6))
+    e6m2_val = q * _pow2(e_e6 - 2.0)
+    rec = _to_bf16(1.0 / e6m2_val)
+
+    e1_8 = (v8 * rec >= 4.0)
+    pl = e1_8.ndim + qdim - 1
+    e1_8x2 = e1_8.expand(*e1_8.shape[:pl], 2, *e1_8.shape[pl + 1:])
+    e1_16 = (v16 * rec * _pow2(-e1_8x2.to(torch.float32)) >= 2.0)
+
+    de = e1_16.to(torch.float32) + e1_8x2.to(torch.float32)
+    in_grp = tmp * rec * _pow2(-de.to(tmp.dtype))
+    in_grp = _to_bf16(in_grp) * (2 ** ng)
+    code = torch.floor(in_grp + 0.5).clamp(0, (1 << (ng + 1)) - 1).to(torch.int32)
+
+    e1_8_sq = e1_8.squeeze(qdim).squeeze(qdim)
+    e6m2_sq = e6m2_val.squeeze(qdim).squeeze(qdim).squeeze(qdim)
+    e_e6_sq = e_e6.squeeze(qdim).squeeze(qdim).squeeze(qdim)
+    q_sq = q.squeeze(qdim).squeeze(qdim).squeeze(qdim)
+    return Hif4Encoded(
+        sign_bit, e6m2_sq, de.squeeze(qdim), code,
+        e1_8_sq, e1_16.squeeze(qdim), e_e6_sq, q_sq, block_nan,
+    )
+
+
+@torch.no_grad()
+def hif4_decode(sign_bit, e6m2, de, code, ng=2, block_nan=None, qdim=-1):
+    """HiF4 decode: reconstruct fp32 from encode outputs."""
+    de64 = de.unsqueeze(qdim)
+    target = list(de64.shape)
+    target[de64.ndim + qdim] = 4
+    de64 = de64.expand(target)
+
+    sign = 1.0 - 2.0 * sign_bit.to(torch.float32)
+    e6m2_exp = e6m2
+    nd_target = sign.ndim
+    for pos in sorted([nd_target + qdim - 2, nd_target + qdim - 1, nd_target + qdim]):
+        e6m2_exp = e6m2_exp.unsqueeze(pos)
+
+    out = sign * e6m2_exp * _pow2(de64) * (code.to(torch.float32) / (2 ** ng))
+
+    if block_nan is not None:
+        bn_exp = block_nan
+        for pos in sorted([nd_target + qdim - 2, nd_target + qdim - 1, nd_target + qdim]):
+            bn_exp = bn_exp.unsqueeze(pos)
+        while bn_exp.ndim < nd_target:
+            bn_exp = bn_exp.unsqueeze(-1)
+        out = torch.where(bn_exp, torch.full_like(out, float("nan")), out)
+    return out
+
+
+@torch.no_grad()
+def hif4_pack(x):
+    """Pack [M, N] tensor to HiF4 bytes (scale, value)."""
+    x = x.detach().to(torch.float32)
+    assert x.dim() == 2, "input must be [M, N]"
+    M, N = x.shape
+    assert N % 64 == 0, "N must be a multiple of 64"
+    gn = N // 64
+
+    xg = x.reshape(M, gn, 8, 2, 4)
+    enc = hif4_encode(xg, ng=NG)
+
+    nibble = (enc.sign_bit * 8 + enc.code).reshape(M, N // 2, 2)
+    value = (nibble[..., 0] + nibble[..., 1] * 16).to(torch.uint8)
+
+    byte_e6m2 = ((enc.e_e6 + E6_OFFSET).to(torch.int32) * (2 ** E6M2_MBITS)
+                 + (enc.q.to(torch.int32) - 4))
+    byte_e6m2 = torch.where(enc.block_nan,
+                            torch.full_like(byte_e6m2, 0xFF), byte_e6m2)
+
+    pw8 = _pow2(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(torch.int32)
+    byte_l1 = (enc.e1_8.to(torch.int32) * pw8).sum(dim=-1)
+    e1_16f = enc.e1_16.reshape(M, gn, 16).to(torch.int32)
+    byte_l2_hi = (e1_16f[..., 0:8] * pw8).sum(dim=-1)
+    byte_l2_lo = (e1_16f[..., 8:16] * pw8).sum(dim=-1)
+
+    scale = torch.stack([byte_e6m2.to(torch.int32), byte_l1,
+                         byte_l2_hi, byte_l2_lo], dim=-1).to(torch.uint8)
+    return scale, value
+
+
+def hif4_unpack(scale, value):
+    """Reconstruct fp32 [M, N] from packed HiF4 (scale, value) bytes."""
+    if isinstance(scale, torch.Tensor):
+        scale = scale.cpu().numpy()
+    if isinstance(value, torch.Tensor):
+        value = value.cpu().numpy()
+    scale = np.asarray(scale, dtype=np.int64)
+    value = np.asarray(value, dtype=np.int64)
+    M, gn, _ = scale.shape
+    N = gn * 64
+
+    b_e6m2 = scale[..., 0]
+    b_l1 = scale[..., 1]
+    b_l2_hi = scale[..., 2]
+    b_l2_lo = scale[..., 3]
+
+    e = (b_e6m2 >> E6M2_MBITS) - E6_OFFSET
+    mant = b_e6m2 & ((1 << E6M2_MBITS) - 1)
+    e6m2 = torch.from_numpy(2.0 ** e * (1.0 + mant / (2 ** E6M2_MBITS))).float()
+
+    a_idx = np.arange(8)
+    e1_8 = torch.from_numpy(((b_l1[..., None] >> (7 - a_idx)) & 1).astype(np.float32))
+    hi = torch.from_numpy(((b_l2_hi[..., None] >> (7 - a_idx)) & 1).astype(np.float32))
+    lo = torch.from_numpy(((b_l2_lo[..., None] >> (7 - a_idx)) & 1).astype(np.float32))
+    de = torch.cat([hi, lo], dim=-1).reshape(M, gn, 8, 2) + e1_8.unsqueeze(-1)
+
+    # Unpack nibbles: even element in low nibble
+    lo = value & 0xF
+    hi = (value >> 4) & 0xF
+    nib = np.stack([lo, hi], axis=-1).reshape(M, gn, 8, 2, 4)
+    sign_bit = torch.from_numpy(((nib >> 3) & 1).astype(np.int32))
+    code = torch.from_numpy((nib & 0x7).astype(np.int32))
+    block_nan = torch.from_numpy((b_e6m2 == 0xFF))
+
+    out = hif4_decode(sign_bit, e6m2, de, code, ng=NG, block_nan=block_nan)
+    return out.reshape(M, N).numpy().astype(np.float32)
+
+
+def _load_amct_ops_hif4_cast():
+    """Load amct_ops HiF4 fake-quant kernel only when requested."""
+    try:
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as _npu_fq
+    except ImportError:
+        return None
+    return _npu_fq
+
+
+@torch.no_grad()
+def hifloat4_fake_quant(fp_tensor, qdim=-1):
+    """HiF4 fake-quant: NPU kernel when available, else pure-torch fallback."""
+    if fp_tensor.device.type == "npu" and fp_tensor.dtype in (torch.float16, torch.bfloat16):
+        _npu_fq = _load_amct_ops_hif4_cast()
+        if _npu_fq is not None:
+            return _npu_fq(fp_tensor, qdim=qdim)
+
+    # Pure-torch fallback: pad → encode → decode → unpad
+    dtype_ori = fp_tensor.dtype
+    x = fp_tensor.to(torch.float32)
+
+    if qdim >= 0:
+        qdim = qdim - len(x.shape)
+    C = x.shape[qdim]
+    padC = (64 - C % 64) % 64
+    if padC > 0:
+        x = F.pad(x, [0] * (-qdim * 2 - 1) + [padC], value=0.0)
+
+    xb = x.unflatten(qdim, (-1, 8, 2, 4))
+    enc = hif4_encode(xb, ng=NG, qdim=qdim)
+    out = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=NG,
+                      block_nan=enc.block_nan, qdim=qdim).flatten(qdim - 3, qdim)
+
+    if padC > 0:
+        slices = [slice(0, out.shape[i]) for i in range(len(fp_tensor.shape) + qdim)] + [slice(0, C)]
+        out = out[tuple(slices)]
+
+    return out.to(dtype_ori)
