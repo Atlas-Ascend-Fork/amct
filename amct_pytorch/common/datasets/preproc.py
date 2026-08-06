@@ -62,9 +62,7 @@ def get_pileval(tokenizer, n_samples, seq_len=512, data_dir=None):
             data_path = data_path / "pileval.txt"
 
         if not data_path.is_file():
-            raise FileNotFoundError(
-                f"Local calibration text not found: {data_path}"
-            )
+            raise FileNotFoundError(f"Local calibration text not found: {data_path}")
 
         dataset_text = data_path.read_text(encoding="utf-8")
         encoded = tokenizer(dataset_text, return_tensors="pt").input_ids
@@ -82,7 +80,7 @@ def get_pileval(tokenizer, n_samples, seq_len=512, data_dir=None):
 
         for _ in range(n_samples):
             start = rng.randint(0, max_start) if max_start > 0 else 0
-            samples.append(encoded[:, start:start + seq_len].cpu())
+            samples.append(encoded[:, start : start + seq_len].cpu())
 
         return samples
 
@@ -108,6 +106,7 @@ def get_wikitext2(tokenizer, data_dir=None):
         dataset_text = "\n\n".join(testdata["text"])
 
     return tokenizer(dataset_text, return_tensors="pt")
+
 
 def get_wiki_inputs(tokenizer, seq_len=4096, data_dir=None):
     testenc = get_wikitext2(tokenizer, data_dir=data_dir).input_ids
