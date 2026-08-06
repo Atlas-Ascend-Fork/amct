@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,8 +18,9 @@
 from onnx.onnx_pb import AttributeProto
 
 
-class AttributeProtoHelper():
+class AttributeProtoHelper:
     """docstring for AttributeProtoHelper"""
+
     attribute_type = AttributeProto.AttributeType
     attribute_type_map = {
         # type_string ,type_proto_value, location
@@ -94,8 +95,9 @@ class AttributeProtoHelper():
                 continue
             attr_value = getattr(attr, self.map_value_location(attr.type))
             return attr_value
-        raise RuntimeError("node %s has no attribute %s" %
-                           (self.node_proto.name, attr_name))
+        raise RuntimeError(
+            "node %s has no attribute %s" % (self.node_proto.name, attr_name)
+        )
 
     def set_attr_value(self, attr_name, type_string, value):
         """

@@ -19,17 +19,20 @@ import torch.nn.functional as F
 from transformers.models.qwen3_next.modeling_qwen3_next import (
     Qwen3NextAttention,
     Qwen3NextGatedDeltaNet,
-    Qwen3NextMLP,
-    apply_mask_to_padding_states,
     apply_rotary_pos_emb,
 )
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
-from amct_pytorch.common.models.llm.common.attention_forward import scaled_dot_product_attention
+from amct_pytorch.common.models.llm.common.attention_forward import (
+    scaled_dot_product_attention,
+)
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.modules.quant_matmul import QuantizedMatmul
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
-from amct_pytorch.quantization.modules.quant_base import ActivationQuantizer, build_algorithms_by_target
+from amct_pytorch.quantization.modules.quant_base import (
+    ActivationQuantizer,
+    build_algorithms_by_target,
+)
 
 
 class QuantQwen3NextMLP(QuantGatedMLP):
@@ -51,24 +54,25 @@ class QuantQwen3NextLinearAttn(Qwen3NextGatedDeltaNet):
         self.norm = attn_module.norm
         bits = quant_args.bit_policy["attn-linear"]
         out, qkvz, ba = bits["out_proj"], bits["in_proj_qkvz"], bits["in_proj_ba"]
-        self.out_proj = QuantLinear(
-            quant_args,
-            attn_module.out_proj,
-            w_bits=out.w,
-            name="out_proj") if self.enable_attn_linear else PlainLinear(
-            attn_module.out_proj)
-        self.in_proj_qkvz = QuantLinear(
-            quant_args,
-            attn_module.in_proj_qkvz,
-            w_bits=qkvz.w,
-            name="in_proj_qkvz") if self.enable_attn_linear else PlainLinear(
-            attn_module.in_proj_qkvz)
-        self.in_proj_ba = QuantLinear(
-            quant_args,
-            attn_module.in_proj_ba,
-            w_bits=ba.w,
-            name="in_proj_ba") if self.enable_attn_linear else PlainLinear(
-            attn_module.in_proj_ba)
+        self.out_proj = (
+            QuantLinear(quant_args, attn_module.out_proj, w_bits=out.w, name="out_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.out_proj)
+        )
+        self.in_proj_qkvz = (
+            QuantLinear(
+                quant_args, attn_module.in_proj_qkvz, w_bits=qkvz.w, name="in_proj_qkvz"
+            )
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.in_proj_qkvz)
+        )
+        self.in_proj_ba = (
+            QuantLinear(
+                quant_args, attn_module.in_proj_ba, w_bits=ba.w, name="in_proj_ba"
+            )
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.in_proj_ba)
+        )
         self.input_transform = None
         self.out_transform = None
         if self.enable_attn_linear:
@@ -90,10 +94,18 @@ class QuantQwen3NextLinearAttn(Qwen3NextGatedDeltaNet):
             hidden_states = self.input_transform(hidden_states)
         hidden_states = self.inp_afq(hidden_states)
 
-        projected_states_qkvz = self.in_proj_qkvz(hidden_states, structure_transform=self.input_transform)
-        projected_states_ba = self.in_proj_ba(hidden_states, structure_transform=self.input_transform)
-        query, key, value, z, b, a = self.fix_query_key_value_ordering(projected_states_qkvz, projected_states_ba)
-        query, key, value = (x.reshape(x.shape[0], x.shape[1], -1) for x in (query, key, value))
+        projected_states_qkvz = self.in_proj_qkvz(
+            hidden_states, structure_transform=self.input_transform
+        )
+        projected_states_ba = self.in_proj_ba(
+            hidden_states, structure_transform=self.input_transform
+        )
+        query, key, value, z, b, a = self.fix_query_key_value_ordering(
+            projected_states_qkvz, projected_states_ba
+        )
+        query, key, value = (
+            x.reshape(x.shape[0], x.shape[1], -1) for x in (query, key, value)
+        )
 
         mixed_qkv = torch.cat((query, key, value), dim=-1).transpose(1, 2)
         mixed_qkv = F.silu(self.conv1d(mixed_qkv)[:, :, :seq_len])
@@ -130,7 +142,9 @@ class QuantQwen3NextLinearAttn(Qwen3NextGatedDeltaNet):
         z = z.reshape(-1, z.shape[-1])
         core_attn_out = self.norm(core_attn_out, z)
         core_attn_out = core_attn_out.reshape(z_shape_og)
-        core_attn_out = core_attn_out.reshape(core_attn_out.shape[0], core_attn_out.shape[1], -1)
+        core_attn_out = core_attn_out.reshape(
+            core_attn_out.shape[0], core_attn_out.shape[1], -1
+        )
         if self.out_transform is not None:
             core_attn_out = self.out_transform(core_attn_out)
         core_attn_out = self.o_proj_afq(core_attn_out)
@@ -140,9 +154,13 @@ class QuantQwen3NextLinearAttn(Qwen3NextGatedDeltaNet):
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
 
 
 class QuantQwen3NextAttn(Qwen3NextAttention):
@@ -155,30 +173,26 @@ class QuantQwen3NextAttn(Qwen3NextAttention):
         self.value_dim = attn_module.config.num_attention_heads * self.head_dim
         bits = quant_args.bit_policy["attn-linear"]
         q, k, v, o = bits["q_proj"], bits["k_proj"], bits["v_proj"], bits["o_proj"]
-        self.q_proj = QuantLinear(
-    quant_args,
-    attn_module.q_proj,
-    w_bits=q.w,
-    name="q_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.q_proj)
-        self.k_proj = QuantLinear(
-    quant_args,
-    attn_module.k_proj,
-    w_bits=k.w,
-    name="k_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.k_proj)
-        self.v_proj = QuantLinear(
-    quant_args,
-    attn_module.v_proj,
-    w_bits=v.w,
-    name="v_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.v_proj)
-        self.o_proj = QuantLinear(
-    quant_args,
-    attn_module.o_proj,
-    w_bits=o.w,
-    name="o_proj") if self.enable_attn_linear else PlainLinear(
-        attn_module.o_proj)
+        self.q_proj = (
+            QuantLinear(quant_args, attn_module.q_proj, w_bits=q.w, name="q_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.q_proj)
+        )
+        self.k_proj = (
+            QuantLinear(quant_args, attn_module.k_proj, w_bits=k.w, name="k_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.k_proj)
+        )
+        self.v_proj = (
+            QuantLinear(quant_args, attn_module.v_proj, w_bits=v.w, name="v_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.v_proj)
+        )
+        self.o_proj = (
+            QuantLinear(quant_args, attn_module.o_proj, w_bits=o.w, name="o_proj")
+            if self.enable_attn_linear
+            else PlainLinear(attn_module.o_proj)
+        )
         self.q_norm = attn_module.q_norm
         self.k_norm = attn_module.k_norm
         self.qk_matmul = QuantizedMatmul(
@@ -217,26 +231,30 @@ class QuantQwen3NextAttn(Qwen3NextAttention):
         hidden_states = self.inp_afq(hidden_states)
 
         query_states, gate = torch.chunk(
-    self.q_proj(
-        hidden_states, structure_transform=self.input_transform).view(
-            *input_shape, -1, self.head_dim * 2), 2, dim=-1)
+            self.q_proj(hidden_states, structure_transform=self.input_transform).view(
+                *input_shape, -1, self.head_dim * 2
+            ),
+            2,
+            dim=-1,
+        )
         gate = gate.reshape(*input_shape, -1)
 
         query_states = self.q_norm(query_states.view(hidden_shape)).transpose(1, 2)
         key_states = self.k_norm(
-    self.k_proj(
-        hidden_states,
-        structure_transform=self.input_transform).view(hidden_shape)).transpose(
-            1,
-             2)
-        value_states = self.v_proj(
-    hidden_states,
-    structure_transform=self.input_transform).view(hidden_shape).transpose(
-        1,
-         2)
+            self.k_proj(hidden_states, structure_transform=self.input_transform).view(
+                hidden_shape
+            )
+        ).transpose(1, 2)
+        value_states = (
+            self.v_proj(hidden_states, structure_transform=self.input_transform)
+            .view(hidden_shape)
+            .transpose(1, 2)
+        )
 
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+        query_states, key_states = apply_rotary_pos_emb(
+            query_states, key_states, cos, sin
+        )
 
         attn_output = scaled_dot_product_attention(
             self,
@@ -258,6 +276,10 @@ class QuantQwen3NextAttn(Qwen3NextAttention):
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(self.quant_args, "structure", ctx)
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )

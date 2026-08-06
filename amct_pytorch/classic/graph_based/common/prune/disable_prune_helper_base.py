@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,14 +21,15 @@ from ...utils.log import LOGGER
 
 
 class DisablePruneHelperBase(PruneHelperBase):
-    """ base class of DisablePruneHelperBase"""
+    """base class of DisablePruneHelperBase"""
 
     @staticmethod
     def match_pattern(node):
-        """ match pattern """
+        """match pattern"""
         raise NotImplementedError(
             "The match_pattern is not implemented for DisablePruneHelperBase for there's"
-            "no blacklist.")
+            "no blacklist."
+        )
 
     def process(self, record_helper):
         """
@@ -43,4 +44,7 @@ class DisablePruneHelperBase(PruneHelperBase):
             if prune_records is None:
                 continue
             record_helper.delete_record_list(prune_records)
-            LOGGER.logd("disable {} for it is not in whitelist.".format(self.node.name), "DisablePruneHelperBase")
+            LOGGER.logd(
+                "disable {} for it is not in whitelist.".format(self.node.name),
+                "DisablePruneHelperBase",
+            )

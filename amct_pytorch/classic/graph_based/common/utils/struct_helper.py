@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,16 +21,12 @@ from __future__ import print_function
 
 import os
 
-from ..auto_calibration.sensitivity_base import SensitivityBase
-from ..auto_calibration.sensitivity_base import MseSensitivity
-from . import files as files_util
-from . import vars_util
-
 
 class DumpConfig:
-    """ Config info for dump data. """
+    """Config info for dump data."""
+
     def __init__(self, dump_dir, batch_num):
-        """ Init func.
+        """Init func.
 
         Args:
             dump_dir (string): the path to save dump file.
@@ -42,33 +38,40 @@ class DumpConfig:
         self.check_params()
 
     def check_params(self):
-        """ check params"""
+        """check params"""
         self.dump_dir = os.path.realpath(self.dump_dir)
 
 
 class GraphInfoBase:
-    """ Config info for graph. """
+    """Config info for graph."""
+
     def __init__(self, graph):
-        """ Init func """
+        """Init func"""
         self.graph = graph
 
         self.check_params()
 
     def check_params(self):
-        """ check params"""
+        """check params"""
         pass
 
 
 class CalibrationConfigInfo:
-    """ Config info for Calibration. """
+    """Config info for Calibration."""
+
     def __init__(self, config_defination):
-        """ Init func """
+        """Init func"""
         self.config_defination = config_defination
         self.batch_num = None
         self.check_params()
 
     def check_params(self):
-        """ check params"""
-        if self.config_defination is not None and not os.path.exists(self.config_defination):
-            raise RuntimeError("The config_defination {} does not exist, please check the file path.".format(
-                self.config_defination))
+        """check params"""
+        if self.config_defination is not None and not os.path.exists(
+            self.config_defination
+        ):
+            raise RuntimeError(
+                "The config_defination {} does not exist, please check the file path.".format(
+                    self.config_defination
+                )
+            )

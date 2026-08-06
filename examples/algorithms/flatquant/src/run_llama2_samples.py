@@ -18,23 +18,42 @@ from datetime import datetime
 
 import torch
 import torch_npu
-from utils import get_llama, build_enc, seed_everything, get_wikitext2, create_logger, eval_total
+from utils import (
+    get_llama,
+    build_enc,
+    seed_everything,
+    get_wikitext2,
+    create_logger,
+    eval_total,
+)
 import amct_pytorch as amct
 
 from amct_pytorch.experimental.flatquant.config import INT4_FLAT_QUANT_CFG
-from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import save_flat_matrices, load_flat_matrices
-from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import cali_flat_quant
+from amct_pytorch.experimental.flatquant.flat_quant_module.flat_utils import (
+    save_flat_matrices,
+    load_flat_matrices,
+)
+from amct_pytorch.experimental.flatquant.flat_quant_module.train_utils import (
+    cali_flat_quant,
+)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, required=True, help='model location')
     parser.add_argument('--device', type=str, default="npu:0", help='NPU device')
-    parser.add_argument('--load_matrix', action='store_true', help="whether to load matrix")
-    parser.add_argument('--flat_matrix_path', type=str, 
-        default="./outputs/llama2_7b/flat_matrices.pth", help='flat matrix location'
+    parser.add_argument(
+        '--load_matrix', action='store_true', help="whether to load matrix"
     )
-    parser.add_argument('--eval_fake_quant', action='store_true', help="whether to evaluate fake quant")
+    parser.add_argument(
+        '--flat_matrix_path',
+        type=str,
+        default="./outputs/llama2_7b/flat_matrices.pth",
+        help='flat matrix location',
+    )
+    parser.add_argument(
+        '--eval_fake_quant', action='store_true', help="whether to evaluate fake quant"
+    )
     args = parser.parse_args()
 
     logger = create_logger()
@@ -45,8 +64,12 @@ if __name__ == '__main__':
     model = get_llama(args.model_path)
     model.to(args.device)
     tokenizer = build_enc(args.model_path)
-    calib_dataset = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer)
-    calib_dataset_eval = get_wikitext2(nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer, eval_mode=True)
+    calib_dataset = get_wikitext2(
+        nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer
+    )
+    calib_dataset_eval = get_wikitext2(
+        nsamples=128, seed=0, seqlen=2048, tokenizer=tokenizer, eval_mode=True
+    )
 
     # Prompt to test speed
     text = "Hello world! Please say something"

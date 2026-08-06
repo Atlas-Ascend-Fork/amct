@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,7 +17,7 @@
 # ----------------------------------------------------------------------------
 import numpy as np
 
-from onnx import onnx_pb # pylint: disable=import-error
+from onnx import onnx_pb  # pylint: disable=import-error
 from ...amct_pytorch.optimizer.base_fusion_pass import BaseFusionPass
 
 from ...amct_pytorch.utils.log import LOGGER
@@ -34,6 +34,7 @@ class InsertDequantPass(BaseFusionPass):
     Function: Insert AscendDequant
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records):
         """
         Function: init object
@@ -68,12 +69,14 @@ class InsertDequantPass(BaseFusionPass):
         Return: None
         """
         # Step1: add dequant_node and dequant_param in graph
-        dequant_node, dequant_param = self.insert_layer(
-            graph, object_node)
+        dequant_node, dequant_param = self.insert_layer(graph, object_node)
         insert_node = object_node
         # if 'MatMul' has 'Add' bias, insert dequant after 'Add'
-        if MATMUL_DEQUANT_AFTER_ADD and object_node.type == 'MatMul' and \
-            QuantOpInfo.get_bias_node(object_node) is not None:
+        if (
+            MATMUL_DEQUANT_AFTER_ADD
+            and object_node.type == 'MatMul'
+            and QuantOpInfo.get_bias_node(object_node) is not None
+        ):
             insert_node = object_node.get_consumers(0)[0][0]
         # Step2: Relink nodes in th graph
         output_anchor = insert_node.get_output_anchor(0)
@@ -89,16 +92,18 @@ class InsertDequantPass(BaseFusionPass):
             # If peer_input_node is graph.output, rename insert_node name
             # and set dequant output name to graph.output.name
             if peer_input_node.type == 'graph_anchor':
-                insert_node.get_output_anchor(0).set_name('{}_output0'.format(
-                    insert_node.name))
-                dequant_node.get_output_anchor(0).set_name(
-                    peer_input_node.name)
+                insert_node.get_output_anchor(0).set_name(
+                    '{}_output0'.format(insert_node.name)
+                )
+                dequant_node.get_output_anchor(0).set_name(peer_input_node.name)
 
         graph.add_edge(insert_node, 0, dequant_node, 0)
         graph.add_edge(dequant_param, 0, dequant_node, 1)
 
         LOGGER.logd(
-            f'Add dequant "{dequant_node.name}" to "{object_node.name}" success.', 'InsertDequantPass')
+            f'Add dequant "{dequant_node.name}" to "{object_node.name}" success.',
+            'InsertDequantPass',
+        )
 
     def insert_layer(self, graph, object_node):
         """
@@ -111,39 +116,42 @@ class InsertDequantPass(BaseFusionPass):
             dequant_param: a node containing dequant_param
         """
         # concat dequant param to uint64
-        deq_scale = self.records.get(object_node.name).get('weight_scale') * \
-            self.records.get(object_node.name).get('data_scale')
-        if self.records.get(object_node.name).get('fakequant_precision_mode') == 'FORCE_FP16_QUANT':
+        deq_scale = self.records.get(object_node.name).get(
+            'weight_scale'
+        ) * self.records.get(object_node.name).get('data_scale')
+        if (
+            self.records.get(object_node.name).get('fakequant_precision_mode')
+            == 'FORCE_FP16_QUANT'
+        ):
             deq_scale = np.vectorize(cast_to_s19)(deq_scale).astype(np.float32)
         quant_param = fuse_dequant_param(
-            deq_scale,
-            self.records.get(object_node.name).get('weight_offset'))
+            deq_scale, self.records.get(object_node.name).get('weight_offset')
+        )
         # add quant_param as initializer in graph
         if object_node.has_attr('op_data_type'):
             op_data_type = object_node.get_attr('op_data_type')
         else:
             op_data_type = 'float32'
         dtype = AttributeProtoHelper.ge_dtype_map.get(op_data_type, 0)
-        initializer_proto = construct_dequant_param(quant_param,
-                                                    object_node.name)
+        initializer_proto = construct_dequant_param(quant_param, object_node.name)
         dequant_param = graph.add_node(initializer_proto)
         # add dequant ad node in graph
         node_proto = construct_dequant_node(
             inputs=[
-                object_node.name + '.dequant.input0', \
-                object_node.name + '.dequant.param'
+                object_node.name + '.dequant.input0',
+                object_node.name + '.dequant.param',
             ],
             outputs=[object_node.name + '.dequant.output0'],
             layer_name=object_node.name,
-            dtype=dtype)
+            dtype=dtype,
+        )
         dequant_node = graph.add_node(node_proto)
 
         return dequant_node, dequant_param
 
 
 def fuse_dequant_param(float32_deq_scale, int8_offset_w):
-    """Fused dequant scale, offset_w and shift_bits to uint64 data
-    """
+    """Fused dequant scale, offset_w and shift_bits to uint64 data"""
     uint32_deq_scale = np.frombuffer(float32_deq_scale, np.uint32)
     uint8_offset_w = np.frombuffer(int8_offset_w, np.uint8)
 
@@ -154,15 +162,17 @@ def fuse_dequant_param(float32_deq_scale, int8_offset_w):
     quant_param = np.zeros(scale_length, dtype=np.uint64)
     for index in range(scale_length):
         quant_param[index] = uint8_offset_w[index]
-        quant_param[index] = (quant_param[index] << np.uint32(32))\
-                                + uint32_deq_scale[index]
+        quant_param[index] = (quant_param[index] << np.uint32(32)) + uint32_deq_scale[
+            index
+        ]
     return quant_param
 
 
-def construct_dequant_param(dequant_param, # pylint: disable=no-member
-                            layer_name):
-    """ Construct a initializer for dequant_param
-    """
+def construct_dequant_param(
+    dequant_param,  # pylint: disable=no-member
+    layer_name,
+):
+    """Construct a initializer for dequant_param"""
     initializer_proto = onnx_pb.TensorProto()
     initializer_proto.name = layer_name + '.dequant.param'
     tensor_helper = TensorProtoHelper(initializer_proto)
@@ -171,10 +181,12 @@ def construct_dequant_param(dequant_param, # pylint: disable=no-member
     return initializer_proto
 
 
-def construct_dequant_node(inputs, # pylint: disable=no-member
-                           outputs,
-                           layer_name,
-                           dtype):
+def construct_dequant_node(
+    inputs,  # pylint: disable=no-member
+    outputs,
+    layer_name,
+    dtype,
+):
     """
     Function: construct quant node in onnx
     Inputs:
@@ -188,8 +200,8 @@ def construct_dequant_node(inputs, # pylint: disable=no-member
     node_proto.name = layer_name + '.dequant'
     node_proto.op_type = 'AscendDequant'
 
-    node_proto.input.extend(inputs) # pylint: disable=E1101
-    node_proto.output.extend(outputs) # pylint: disable=E1101
+    node_proto.input.extend(inputs)  # pylint: disable=E1101
+    node_proto.output.extend(outputs)  # pylint: disable=E1101
     attr_helper = AttributeProtoHelper(node_proto)
     attr_helper.set_attr_value('dtype', 'INT', dtype)
     return node_proto

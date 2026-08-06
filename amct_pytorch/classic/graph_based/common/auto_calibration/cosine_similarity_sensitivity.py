@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,13 +20,14 @@ import numpy as np
 from .sensitivity_base import SensitivityBase
 
 
-class CosineSimilaritySensitivity(SensitivityBase): # pylint: disable=R0903
-    """ class of cosine similarity sensitivity"""
-    def __init__(self): # pylint: disable=W0235
+class CosineSimilaritySensitivity(SensitivityBase):  # pylint: disable=R0903
+    """class of cosine similarity sensitivity"""
+
+    def __init__(self):  # pylint: disable=W0235
         super(CosineSimilaritySensitivity, self).__init__()
 
     def compare(self, data, other):
-        """ calculate the cosine similarity of original output data and fake quant output data
+        """calculate the cosine similarity of original output data and fake quant output data
 
         Args:
             data (np.array): the original data to compare

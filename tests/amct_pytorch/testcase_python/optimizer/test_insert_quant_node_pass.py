@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,14 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
-import os
-import sys
 import unittest
 from copy import deepcopy
 
-import numpy as np
-import torch
 from onnx import onnx_pb
 
 from amct_pytorch.classic.graph_based.amct_pytorch.graph.graph import Graph
@@ -124,42 +119,25 @@ class TestInsertQuantPass(unittest.TestCase):
         pass
 
     def test_match_pattern_success(self):
-        records = {CONV1: {
-                'data_scale': 1,
-                'data_offset': 0
-            }
-        }
+        records = {CONV1: {'data_scale': 1, 'data_offset': 0}}
         test_model = deepcopy(self.model_proto)
         conv_node = Graph(test_model).get_node_by_name(CONV1)
         self.assertTrue(InsertQuantPass(records).match_pattern(conv_node))
 
     def test_match_pattern_not_in_quantizable_types(self):
-        records = {CONV1: {
-                'data_scale': 1,
-                'data_offset': 0
-            }
-        }
+        records = {CONV1: {'data_scale': 1, 'data_offset': 0}}
         test_model = deepcopy(self.model_proto)
         relu_node = Graph(test_model).get_node_by_name(RELU1)
         self.assertFalse(InsertQuantPass(records).match_pattern(relu_node))
 
     def test_match_pattern_not_in_records(self):
-        records = {'conv2': {
-                'data_scale': 1,
-                'data_offset': 0
-            }
-        }
+        records = {'conv2': {'data_scale': 1, 'data_offset': 0}}
         test_model = deepcopy(self.model_proto)
         conv_node = Graph(test_model).get_node_by_name(CONV1)
         self.assertFalse(InsertQuantPass(records).match_pattern(conv_node))
 
     def test_do_pass_success(self):
-        records = {CONV1: {
-                'data_scale': 1,
-                'data_offset': 0,
-                'act_type': 'INT8'
-            }
-        }
+        records = {CONV1: {'data_scale': 1, 'data_offset': 0, 'act_type': 'INT8'}}
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         conv_node = graph.get_node_by_name(CONV1)
@@ -169,12 +147,7 @@ class TestInsertQuantPass(unittest.TestCase):
         self.assertEqual(after_nodes_num - before_nodes_num, 1)
 
     def test_do_pass_of_avgpool_success(self):
-        records = {'avg_pool1': {
-                'data_scale': 1,
-                'data_offset': 0,
-                'act_type': 'INT8'
-            }
-        }
+        records = {'avg_pool1': {'data_scale': 1, 'data_offset': 0, 'act_type': 'INT8'}}
         test_model = deepcopy(self.model_proto)
         graph = Graph(test_model)
         avg_pool1_node = graph.get_node_by_name('avg_pool1')
@@ -182,4 +155,3 @@ class TestInsertQuantPass(unittest.TestCase):
         InsertQuantPass(records).do_pass(graph, avg_pool1_node)
         after_nodes_num = len(graph.nodes)
         self.assertEqual(after_nodes_num - before_nodes_num, 1)
-

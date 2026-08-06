@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -39,20 +39,30 @@ def log_check_deco(func):
         logger.setLevel(old_level)
 
         log_check(log_info, func_name)
+
     return wrapper
 
 
 def log_check(log_info, func_name):
     if '  ' in log_info:
         raise RuntimeError(
-            'Testcase {}\'s log have more than 2 space. Please check your log'.format(func_name))
+            'Testcase {}\'s log have more than 2 space. Please check your log'.format(
+                func_name
+            )
+        )
 
     if '\n\n' in log_info:
         raise RuntimeError(
-            'Testcase {}\'s log have more than 2 newline character. Please check your log'.format(func_name))
+            'Testcase {}\'s log have more than 2 newline character. Please check your log'.format(
+                func_name
+            )
+        )
 
     log_info_list = log_info.split('\n')
     overlong_info = list(filter(lambda x: len(x) >= 1024, log_info_list))
     if overlong_info:
         raise RuntimeError(
-            'Testcase {}\'s log have lines more than 1024 character. Please check your log'.format(func_name))
+            'Testcase {}\'s log have lines more than 1024 character. Please check your log'.format(
+                func_name
+            )
+        )

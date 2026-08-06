@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,8 +21,7 @@ from enum import Enum, unique
 
 from ..utils.util import find_repeated_items
 from ..utils.util import check_no_repeated
-from ...utils.log import LOGGER # pylint: disable=relative-beyond-top-level
-from ..utils.vars_util import WINOGRAD_NUM_BITS
+from ...utils.log import LOGGER  # pylint: disable=relative-beyond-top-level
 
 # default parameters for quant config
 # global parameters
@@ -70,19 +69,22 @@ FAKEQUANT_PRECISION_MODE = ['DEFAULT', 'FORCE_FP16_QUANT']
 
 def _check_type(name, variable, typeinfo):
     if not isinstance(variable, typeinfo):
-        raise TypeError("Type of %s should be %s, but is %s" \
-                        % (name, typeinfo, type(variable)))
+        raise TypeError(
+            "Type of %s should be %s, but is %s" % (name, typeinfo, type(variable))
+        )
 
 
 @unique
 class FakequantPrecisionMode(Enum):
     '''enumeration of scale precision'''
+
     DEFAULT = 'DEFAULT'
     FORCE_FP16_QUANT = 'FORCE_FP16_QUANT'
 
 
-class ParamPool():
+class ParamPool:
     '''store parameters used by fields'''
+
     def __init__(self):
         self._quant_layers = None
         self._supported_layers = None
@@ -162,21 +164,22 @@ class ParamPool():
 PARAM_POOL = ParamPool()
 
 
-class Field():
+class Field:
     '''base class for field'''
+
     def __init__(self, capacity):
         self.capacity = capacity
         self.parent = None
 
-    def has_default(self): # pylint: disable=no-self-use
+    def has_default(self):  # pylint: disable=no-self-use
         '''indicate whether this field has default value'''
         return True
 
-    def is_leaf(self): # pylint: disable=no-self-use
+    def is_leaf(self):  # pylint: disable=no-self-use
         '''indicate whether it is a leaf field'''
         raise RuntimeError('Unimplemented function.')
 
-    def check(self, name, value): # pylint: disable=no-self-use
+    def check(self, name, value):  # pylint: disable=no-self-use
         '''check the value of this field'''
         raise RuntimeError('Unimplemented function.')
 
@@ -187,16 +190,18 @@ class Field():
 
 class LeafField(Field):
     """leaf node have no child"""
+
     def is_leaf(self):
         return True
 
-    def default_value(self): # pylint: disable=no-self-use
+    def default_value(self):  # pylint: disable=no-self-use
         '''the default value of this field if it has default value'''
         raise RuntimeError('Unimplemented function.')
 
 
 class ContainerField(LeafField):
     """container node can have (container/leaf) child node"""
+
     def __init__(self, capacity):
         super(ContainerField, self).__init__(capacity)
         self.child = OrderedDict()
@@ -240,8 +245,9 @@ class ContainerField(LeafField):
             if child.has_default():
                 if child.is_leaf():
                     config[item] = child.default_value()
-                    LOGGER.logd('fill default value {} for field {}'.format(
-                        config[item], item))
+                    LOGGER.logd(
+                        'fill default value {} for field {}'.format(config[item], item)
+                    )
                 else:
                     if config.get(item) is None:
                         config[item] = child.init_container()
@@ -249,10 +255,9 @@ class ContainerField(LeafField):
         for item in self.child_placeholder:
             item.fill_default(config)
 
-    def check_not_found_msg(self, name, item): # pylint: disable=no-self-use
+    def check_not_found_msg(self, name, item):  # pylint: disable=no-self-use
         '''raise an error if this node is not found'''
-        raise ValueError(
-            "{} is an invalid layer name or parameter.".format(item))
+        raise ValueError("{} is an invalid layer name or parameter.".format(item))
 
     def check(self, name, value):
         '''recursive check all children'''
@@ -296,13 +301,15 @@ class ContainerField(LeafField):
 
 class PlaceholderField(ContainerField):
     '''a specifial container node'''
-    def match(self, name): # pylint: disable=no-self-use
+
+    def match(self, name):  # pylint: disable=no-self-use
         '''indicate whether input name match this placeholder'''
         raise RuntimeError('Unimplemented function.')
 
 
 class VersionField(LeafField):
     '''an object for version field'''
+
     def default_value(self):
         return VERSION
 
@@ -314,6 +321,7 @@ class VersionField(LeafField):
 
 class BatchNumField(LeafField):
     '''an object for batch_num field'''
+
     def default_value(self):
         return BATCH_NUM
 
@@ -325,6 +333,7 @@ class BatchNumField(LeafField):
 
 class ActOffsetField(LeafField):
     '''an object for activation_offset field'''
+
     def default_value(self):
         return ACTIVATION_OFFSET
 
@@ -334,6 +343,7 @@ class ActOffsetField(LeafField):
 
 class LayerActOffsetField(LeafField):
     '''an object for single_layer_activation_offset field'''
+
     def has_default(self):
         return False
 
@@ -343,6 +353,7 @@ class LayerActOffsetField(LeafField):
 
 class JointQuantField(LeafField):
     '''an object for join_quant field'''
+
     def default_value(self):
         return JOINT_QUANT
 
@@ -352,6 +363,7 @@ class JointQuantField(LeafField):
 
 class WtsOffsetField(LeafField):
     '''an object for weight_offset field'''
+
     def default_value(self):
         return WEIGHT_OFFSET
 
@@ -361,6 +373,7 @@ class WtsOffsetField(LeafField):
 
 class DoFusionField(LeafField):
     '''an object for do_fusion field'''
+
     def default_value(self):
         return DO_FUSION
 
@@ -370,39 +383,51 @@ class DoFusionField(LeafField):
 
 class ActNumBitsField(LeafField):
     '''an object for act num bits field'''
+
     def default_value(self):
         return DEFAULT_NUM_BITS
 
     def check(self, name, value):
         _check_type(name, value, int)
         if value not in ACT_SUPPORT_NUM_BITS:
-            raise ValueError("activation num_bits is not in {}".format(ACT_SUPPORT_NUM_BITS))
+            raise ValueError(
+                "activation num_bits is not in {}".format(ACT_SUPPORT_NUM_BITS)
+            )
 
 
 class FakequantPrecisionModeField(LeafField):
     '''an object for fakequant_precision_mode field'''
+
     def default_value(self):
         return FakequantPrecisionMode.DEFAULT.value
 
     def check(self, name, value):
         _check_type(name, value, str)
         if value not in FAKEQUANT_PRECISION_MODE:
-            raise ValueError("Type of {} should be {}, but is {}".format(name, FAKEQUANT_PRECISION_MODE, value))
+            raise ValueError(
+                "Type of {} should be {}, but is {}".format(
+                    name, FAKEQUANT_PRECISION_MODE, value
+                )
+            )
 
 
 class WtsNumBitsField(LeafField):
     '''an object for wts num bits field'''
+
     def default_value(self):
         return DEFAULT_NUM_BITS
 
     def check(self, name, value):
         _check_type(name, value, int)
         if value not in WTS_SUPPORT_NUM_BITS:
-            raise ValueError("weight num_bits is not in {}".format(WTS_SUPPORT_NUM_BITS))
+            raise ValueError(
+                "weight num_bits is not in {}".format(WTS_SUPPORT_NUM_BITS)
+            )
 
 
 class SkipFusionLayersField(LeafField):
     '''an object for skip_fusion_layers field'''
+
     def default_value(self):
         return SKIP_FUSION_LAYERS
 
@@ -419,15 +444,21 @@ class SkipFusionLayersField(LeafField):
         layer_type = PARAM_POOL.get_layer_type()
         for layer in value:
             if layer not in layer_type:
-                raise ValueError('Layer "{}" in skip_fusion_layers does not '
-                                 'exist in the graph.'.format(layer))
+                raise ValueError(
+                    'Layer "{}" in skip_fusion_layers does not '
+                    'exist in the graph.'.format(layer)
+                )
             if layer_type[layer] not in fuse_types:
-                raise ValueError('Skip fusion layer "{}"\'s type not in '
-                                 'supported list {}'.format(layer, fuse_types))
+                raise ValueError(
+                    'Skip fusion layer "{}"\'s type not in supported list {}'.format(
+                        layer, fuse_types
+                    )
+                )
 
 
 class LayerPlhField(PlaceholderField):
     '''a container field for layer params'''
+
     def match(self, name):
         if name in PARAM_POOL.get_layer_type():
             return True
@@ -439,8 +470,10 @@ class LayerPlhField(PlaceholderField):
 
     def check(self, name, value):
         config = value
-        if name not in PARAM_POOL.get_skip_layers() and \
-                name not in PARAM_POOL.get_supported_layers():
+        if (
+            name not in PARAM_POOL.get_skip_layers()
+            and name not in PARAM_POOL.get_supported_layers()
+        ):
             raise ValueError("layer {} does not support quant.".format(name))
         PARAM_POOL.set_layer_name(name)
         try:
@@ -463,6 +496,7 @@ class LayerPlhField(PlaceholderField):
 
 class QuantEnableField(LeafField):
     '''an object for quant_enable field'''
+
     def default_value(self):
         layer_name = PARAM_POOL.get_layer_name()
         quant_layers = PARAM_POOL.get_quant_layers()
@@ -474,24 +508,34 @@ class QuantEnableField(LeafField):
 
 class DMQBalancerParamField(LeafField):
     '''an object for dmq_balancer_param field'''
+
     def has_default(self):
         return False
 
     def check(self, name, value):
         _check_type(name, value, float)
         if value < DMQ_BALANCER_RANGE_START or value > DMQ_BALANCER_RANGE_END:
-            raise ValueError("The {} must be in range [{}, {}]".format(
-                name, DMQ_BALANCER_RANGE_START, DMQ_BALANCER_RANGE_END))
+            raise ValueError(
+                "The {} must be in range [{}, {}]".format(
+                    name, DMQ_BALANCER_RANGE_START, DMQ_BALANCER_RANGE_END
+                )
+            )
 
 
 class ActQuantParamsField(ContainerField):
     '''an object for activation_quant_params field'''
+
     @staticmethod
     def _check_params(config):
         ifmr_params = []
         hfmg_params = []
         for item in config:
-            if item in ['search_step', SEARCH_RANGE, 'min_percentile', 'max_percentile']:
+            if item in [
+                'search_step',
+                SEARCH_RANGE,
+                'min_percentile',
+                'max_percentile',
+            ]:
                 ifmr_params.append(item)
             if item in ['num_of_bins']:
                 hfmg_params.append(item)
@@ -501,8 +545,9 @@ class ActQuantParamsField(ContainerField):
             hfmg_params.append(ACT_ALGO)
 
         if ifmr_params and hfmg_params:
-            raise ValueError('{} and {} can not appear at same time'.format(
-                ifmr_params, hfmg_params))
+            raise ValueError(
+                '{} and {} can not appear at same time'.format(ifmr_params, hfmg_params)
+            )
         if hfmg_params:
             PARAM_POOL.set_act_algo('hfmg')
         else:
@@ -526,15 +571,17 @@ class ActQuantParamsField(ContainerField):
             else:
                 search_range = self.get_child(SEARCH_RANGE).default_value()
             search_step = Decimal(str(config.get('search_step')))
-            search_len = Decimal(str(search_range[1])) - \
-                         Decimal(str(search_range[0]))
+            search_len = Decimal(str(search_range[1])) - Decimal(str(search_range[0]))
             if search_step > search_len:
-                raise ValueError('The search_step must be less than or equal'
-                                 ' to (search_range[1] - search_range[0])')
+                raise ValueError(
+                    'The search_step must be less than or equal'
+                    ' to (search_range[1] - search_range[0])'
+                )
 
 
 class AdaAlgField(LeafField):
     '''a base object for ada field'''
+
     def has_default(self):
         if PARAM_POOL.get_wts_algo() == 'arq_quantize':
             return False
@@ -543,6 +590,7 @@ class AdaAlgField(LeafField):
 
 class BetaRangeField(AdaAlgField):
     '''an object for beta_range field'''
+
     def default_value(self):
         return [BETA_RANGE_START, BETA_RANGE_END]
 
@@ -551,7 +599,9 @@ class BetaRangeField(AdaAlgField):
         if len(value) != 2:
             raise ValueError('The {} must have two floating-point number'.format(name))
         if value[0] <= value[1]:
-            raise ValueError('{} beta_range_start must large than beta_range_end'.format(name))
+            raise ValueError(
+                '{} beta_range_start must large than beta_range_end'.format(name)
+            )
         if value[1] <= 0:
             raise ValueError('{} beta_range_end must large than 0'.format(name))
 
@@ -564,14 +614,15 @@ class WarmStartField(AdaAlgField):
 
     def check(self, name, value):
         if value >= 1 or value <= 0:
-            raise ValueError('{} must be less than 1 and larger than 0' .format(name))
+            raise ValueError('{} must be less than 1 and larger than 0'.format(name))
 
 
 class NumIterationField(AdaAlgField):
     '''an object for num_iteration field'''
+
     def default_value(self):
         return NUM_ITERATION
-    
+
     def check(self, name, value):
         if value < 0:
             raise ValueError('{} must be larger or equal to 0'.format(name))
@@ -579,6 +630,7 @@ class NumIterationField(AdaAlgField):
 
 class RegParamField(AdaAlgField):
     '''an object for reg_param field'''
+
     def default_value(self):
         return REG_PARAM
 
@@ -589,6 +641,7 @@ class RegParamField(AdaAlgField):
 
 class MaxPercentileField(LeafField):
     '''an object for max_percentile field'''
+
     def has_default(self):
         if PARAM_POOL.get_act_algo() == 'hfmg':
             return False
@@ -600,12 +653,14 @@ class MaxPercentileField(LeafField):
     def check(self, name, value):
         value = float(value)
         if value <= 0.5 or value > 1.0:
-            raise ValueError("The %s must be greater than 0.5 "\
-                "and less than or equal to 1.0" % (name))
+            raise ValueError(
+                "The %s must be greater than 0.5 and less than or equal to 1.0" % (name)
+            )
 
 
 class MinPercentileField(MaxPercentileField):
     '''an object for min_percentile field'''
+
     def has_default(self):
         if PARAM_POOL.get_act_algo() == 'hfmg':
             return False
@@ -617,6 +672,7 @@ class MinPercentileField(MaxPercentileField):
 
 class SearchRangeField(LeafField):
     '''an object for search_range field'''
+
     def has_default(self):
         if PARAM_POOL.get_act_algo() == 'hfmg':
             return False
@@ -628,8 +684,7 @@ class SearchRangeField(LeafField):
     def check(self, name, value):
         _check_type(name, value, list)
         if len(value) != 2:
-            raise ValueError("The %s must have two floating-point number"\
-                             % (name))
+            raise ValueError("The %s must have two floating-point number" % (name))
 
         search_start = value[0]
         search_end = value[1]
@@ -641,6 +696,7 @@ class SearchRangeField(LeafField):
 
 class SearchStepField(LeafField):
     '''an object for search_step field'''
+
     def has_default(self):
         if PARAM_POOL.get_act_algo() == 'hfmg':
             return False
@@ -654,20 +710,30 @@ class SearchStepField(LeafField):
         if value <= 0:
             raise ValueError("The %s must be greater than zero" % (name))
 
- 
+
 class WgtQuantParamsField(ContainerField):
     '''an object for weight_quant_params field'''
+
     @staticmethod
     def _check_params(config):
-        param_map = {"arq_quantize": ['channel_wise'], 
-                     "ada_quantize": ['num_iteration', 'reg_param', 'warm_start', 'beta_range', 'channel_wise']}
+        param_map = {
+            "arq_quantize": ['channel_wise'],
+            "ada_quantize": [
+                'num_iteration',
+                'reg_param',
+                'warm_start',
+                'beta_range',
+                'channel_wise',
+            ],
+        }
         wts_algo = config.get(WTS_ALGO, 'arq_quantize')
         for item in config:
             if item in ['wts_algo', 'num_bits']:
                 continue
             if item not in param_map.get(wts_algo):
-                raise ValueError('{} is not valid param of quantize {}'.format(
-                item, wts_algo))
+                raise ValueError(
+                    '{} is not valid param of quantize {}'.format(item, wts_algo)
+                )
 
         PARAM_POOL.set_wts_algo(wts_algo)
 
@@ -686,6 +752,7 @@ class WgtQuantParamsField(ContainerField):
 
 class ChannelWiseField(LeafField):
     '''an object for channel_wise field'''
+
     def has_default(self):
         return True
 
@@ -701,12 +768,16 @@ class ChannelWiseField(LeafField):
         layer_type = PARAM_POOL.get_layer_type()
         channel_wise_types = self.capacity.get_value('CHANNEL_WISE_TYPES')
         if layer_type[layer_name] not in channel_wise_types and value:
-            raise ValueError('The {} must be False for layer type {}'.format(
-                name, layer_type[layer_name]))
+            raise ValueError(
+                'The {} must be False for layer type {}'.format(
+                    name, layer_type[layer_name]
+                )
+            )
 
 
 class WtsAlgoField(LeafField):
     '''an object for wts_algo field'''
+
     def default_value(self):
         return PARAM_POOL.get_wts_algo()
 
@@ -717,6 +788,7 @@ class WtsAlgoField(LeafField):
 
 class ActAlgoField(LeafField):
     '''an object for act_algo field'''
+
     def default_value(self):
         return PARAM_POOL.get_act_algo()
 
@@ -727,6 +799,7 @@ class ActAlgoField(LeafField):
 
 class ApproximateAlgoField(LeafField):
     '''an object for approximate_algo field'''
+
     def default_value(self):
         return "FastSoftmax"
 
@@ -737,6 +810,7 @@ class ApproximateAlgoField(LeafField):
 
 class HfmgField(LeafField):
     '''a base object for hfmg field'''
+
     def has_default(self):
         if PARAM_POOL.get_act_algo() == 'ifmr':
             return False
@@ -745,18 +819,21 @@ class HfmgField(LeafField):
 
 class NumOfBinsField(HfmgField):
     '''an object for num_of_iteration field'''
+
     def default_value(self):
         return NUM_OF_BINS
 
     def check(self, name, value):
         _check_type(name, value, int)
         if value not in NUM_OF_BINS_RANGE:
-            raise ValueError("num_of_bins {} must be in {}".format(
-                value, NUM_OF_BINS_RANGE))
+            raise ValueError(
+                "num_of_bins {} must be in {}".format(value, NUM_OF_BINS_RANGE)
+            )
 
 
 class TensorQuantizeField(ContainerField):
     '''container field for tensor quantization'''
+
     @staticmethod
     def init_container():
         '''Initialise containers in config'''
@@ -785,6 +862,7 @@ class TensorQuantizeField(ContainerField):
 
 class LayerNameField(LeafField):
     '''leaf field for op's name'''
+
     def has_default(self):
         return False
 
@@ -795,6 +873,7 @@ class LayerNameField(LeafField):
 
 class InputIndexField(LeafField):
     '''leaf field for op's input index'''
+
     def has_default(self):
         return False
 

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,18 +18,16 @@
 
 from abc import ABC, abstractmethod
 import numpy as np
-from google.protobuf import text_format
-from ..utils.log_base import LOG_FILE_DIR
 from ...utils.log import LOGGER
 
-from ...proto import scale_offset_record_pb2
 from ..utils.prune_record_attr_util import AttrProtoHelper
 
 from .auto_channel_prune_search_base import AutoChannelPruneSearchBase
 
 
 class SearchChannelBase(ABC):
-    """ search algorithm implementation for auto_channel_prune_search """
+    """search algorithm implementation for auto_channel_prune_search"""
+
     @abstractmethod
     def channel_prune_search(self, graph_info, search_records, prune_config):
         pass
@@ -41,14 +39,14 @@ class SearchChannelBase(ABC):
                 if graph_info.get(op_name):
                     cout_ori = graph_info[op_name]['cout']
                     cout_new = cout_ori - prune_num
-                    graph_info[op_name]['bitops'] *= (cout_new / cout_ori)
+                    graph_info[op_name]['bitops'] *= cout_new / cout_ori
                     graph_info[op_name]['cout'] = cout_new
             for consumer in search_records[record_idx].consumer:
                 op_name = consumer.name
                 if graph_info.get(op_name):
                     cin_ori = graph_info[op_name]['cin']
                     cin_new = cin_ori - prune_num
-                    graph_info[op_name]['bitops'] *= (cin_new / cin_ori)
+                    graph_info[op_name]['bitops'] *= cin_new / cin_ori
                     graph_info[op_name]['cin'] = cin_new
 
         AutoChannelPruneSearchBase.cal_channel_bitops(graph_info, search_records)
@@ -81,18 +79,22 @@ class GreedySearch(SearchChannelBase):
         prune_channel_num = {}
         prune_channel_amount = 0
         while compress_ratio < target_compress_ratio:
-            min_record, min_record_idx, min_record_prune_step = \
-                self._find_min_record(ascend_optimized, search_records, max_prune_ratio)
+            min_record, min_record_idx, min_record_prune_step = self._find_min_record(
+                ascend_optimized, search_records, max_prune_ratio
+            )
 
             if min_record is None:
                 new_bit = self._sum_bit(graph_info)
                 compress_ratio = ori_bit / new_bit
                 if compress_ratio < target_compress_ratio:
-                    LOGGER.logw("No more channels to prune, maybe your acceleration target is too high.")
+                    LOGGER.logw(
+                        "No more channels to prune, maybe your acceleration target is too high."
+                    )
                 break
 
-            prune_num, prune_channel = \
-                self._get_prune_record(graph_info, min_record, min_record_prune_step, prune_channel)
+            prune_num, prune_channel = self._get_prune_record(
+                graph_info, min_record, min_record_prune_step, prune_channel
+            )
             if min_record_idx in prune_channel_num:
                 prune_channel_num[min_record_idx] += prune_num
             else:
@@ -127,8 +129,12 @@ class GreedySearch(SearchChannelBase):
                 cout = end - begin
                 attr_helper.set_attr_value("cout", 'INT', cout)
                 record_sensitivity_idx = [i + begin for i in record_sensitivity_idx]
-                attr_helper.set_attr_value("record_sensitivity_idx", 'INTS', record_sensitivity_idx)
-                attr_helper.set_attr_value("record_sensitivity", 'FLOATS', record_sensitivity)
+                attr_helper.set_attr_value(
+                    "record_sensitivity_idx", 'INTS', record_sensitivity_idx
+                )
+                attr_helper.set_attr_value(
+                    "record_sensitivity", 'FLOATS', record_sensitivity
+                )
 
     def _sum_bit(self, graph_info):
         """
@@ -167,8 +173,10 @@ class GreedySearch(SearchChannelBase):
                 prune_step = channel_group_size
 
             cout = attr_helper.get_attr_value('cout')
-            if len(record_sensitivity) - prune_step >= cout * (1 - max_prune_ratio) and \
-                len(record_sensitivity) - prune_step > 0:
+            if (
+                len(record_sensitivity) - prune_step >= cout * (1 - max_prune_ratio)
+                and len(record_sensitivity) - prune_step > 0
+            ):
                 value_density = [(sens / bitops) for sens in record_sensitivity]
                 value = sum(value_density[-prune_step:])
                 if value < min_value:
@@ -192,17 +200,22 @@ class GreedySearch(SearchChannelBase):
             attr_helper = AttrProtoHelper(producer)
             prune_layer_name = producer.name
             record_sensitivity = attr_helper.get_attr_value('record_sensitivity')
-            record_sensitivity_idx = attr_helper.get_attr_value('record_sensitivity_idx')
+            record_sensitivity_idx = attr_helper.get_attr_value(
+                'record_sensitivity_idx'
+            )
 
             prune_idx = record_sensitivity_idx[-prune_step:]
             record_sensitivity = record_sensitivity[:-prune_step]
             record_sensitivity_idx = record_sensitivity_idx[:-prune_step]
 
-            attr_helper.set_attr_value("record_sensitivity", 'FLOATS', record_sensitivity)
-            attr_helper.set_attr_value("record_sensitivity_idx", 'INTS', record_sensitivity_idx)
+            attr_helper.set_attr_value(
+                "record_sensitivity", 'FLOATS', record_sensitivity
+            )
+            attr_helper.set_attr_value(
+                "record_sensitivity_idx", 'INTS', record_sensitivity_idx
+            )
 
             for i in prune_idx:
                 prune_channel[prune_layer_name][i] = 0
         prune_num += prune_step
         return prune_num, prune_channel
-

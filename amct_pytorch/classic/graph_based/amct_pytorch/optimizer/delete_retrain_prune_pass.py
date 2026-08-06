@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,8 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import torch
-from ...amct_pytorch.optimizer.base_module_fusion_pass \
-    import BaseModuleFusionPass
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 
 from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.utils.log import LOGGER
@@ -30,6 +29,7 @@ class DeleteRetrainPrunePass(BaseModuleFusionPass):
     Function: Delete some module about retrain prune
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -49,8 +49,7 @@ class DeleteRetrainPrunePass(BaseModuleFusionPass):
         Return: True: matched
                 False: mismatch
         """
-        if hasattr(module, 'replaced_module') and \
-            COMP_ALG_PRUNE in module.comp_algs:
+        if hasattr(module, 'replaced_module') and COMP_ALG_PRUNE in module.comp_algs:
             return True
 
         return False
@@ -70,13 +69,17 @@ class DeleteRetrainPrunePass(BaseModuleFusionPass):
         parent_node = model_helper.get_parent_module(object_name)
 
         # Step2: prune wts set to zero
-        object_module.replaced_module.weight = \
-            torch.nn.Parameter(object_module.replaced_module.weight.mul(object_module.wts_mask))
+        object_module.replaced_module.weight = torch.nn.Parameter(
+            object_module.replaced_module.weight.mul(object_module.wts_mask)
+        )
 
         # Step3: replace new model if only prune
         if COMP_ALG_QUANT not in object_module.comp_algs:
-            setattr(parent_node, object_name.split('.')[-1],
-                    object_module.replaced_module)
+            setattr(
+                parent_node, object_name.split('.')[-1], object_module.replaced_module
+            )
 
-        LOGGER.logd("Retrain pruned weights "
-            "of '{}' success!".format(object_name), 'DeleteRetrainPrunePass')
+        LOGGER.logd(
+            "Retrain pruned weights of '{}' success!".format(object_name),
+            'DeleteRetrainPrunePass',
+        )

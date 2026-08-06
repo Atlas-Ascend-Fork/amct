@@ -24,6 +24,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import torch
+
 from loguru import logger
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
@@ -33,8 +34,12 @@ from tqdm import tqdm
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
-from amct_pytorch.common.models.llm.common.deploy_export import export_block_deploy, generate_quant_config
-from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict, quant_payload
+from amct_pytorch.common.models.llm.common.deploy_export import (
+    export_block_deploy,
+    generate_quant_config,
+    convert_state_dict,
+    quant_payload,
+)
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
@@ -56,7 +61,9 @@ class LlmDeployWorkflow:
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
-        return path.name == "model.safetensors.index.json" or path.suffix == ".safetensors"
+        return (
+            path.name == "model.safetensors.index.json" or path.suffix == ".safetensors"
+        )
 
     @staticmethod
     def _register_components():
@@ -154,17 +161,32 @@ class LlmDeployWorkflow:
         with open(config_file, "r") as f:
             config = json.load(f)
         if self.quant_dtype is not None:
-            cache_scheme = self.pipeline.cache_scheme()
+            cache_scheme_fn = getattr(self.pipeline, "cache_scheme", None)
+            cache_scheme = cache_scheme_fn() if callable(cache_scheme_fn) else None
             bits_scheme_fn = getattr(self.pipeline, "bits_scheme", None)
             bits_scheme = bits_scheme_fn() if callable(bits_scheme_fn) else None
             quantization_config = generate_quant_config(
-                cache_scheme, quant_ignore_layers, is_mx=self.is_mx, bits_scheme=bits_scheme)
+                cache_scheme,
+                quant_ignore_layers,
+                is_mx=self.is_mx,
+                bits_scheme=bits_scheme,
+            )
             config['quantization_config'] = quantization_config
         else:
             config.pop('quantization_config', None)
 
         new_config_file = os.path.join(self.output_dir, "config.json")
         with open(new_config_file, "w") as f:
+            json.dump(config, f, indent=2)
+
+    def _refresh_config_tensor(self):
+        config_file = os.path.join(self.output_dir, 'config.json')
+        with open(config_file, "r") as f:
+            config = json.load(f)
+        if self.quant_dtype == "bf16":
+            config["torch_dtype"] = "bfloat16"
+            config.pop('quantization_config', None)
+        with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
     def _refresh_weight_index(self, original_index, updated_weight_map):
@@ -190,7 +212,9 @@ class LlmDeployWorkflow:
         original_weight_map = dict(original_index.get("weight_map", {}))
         updated_weight_map = {}
         replaced_original_weights = set()
-        for layer_idx in tqdm(range(self.pipeline.num_layers), desc="Block Processing..."):
+        for layer_idx in tqdm(
+            range(self.pipeline.num_layers), desc="Block Processing..."
+        ):
             layer_tensors, tensor_routes = export_block_deploy(
                 self.pipeline,
                 layer_idx,
@@ -247,8 +271,15 @@ class LlmDeployWorkflow:
                     continue
                 # FP8 -> bf16
                 block_size = self.pipeline.block_size(weight)
-                weight = convert_state_dict(weight, weight_name, scale_inv_name, original_weight_map,
-                                            model_dir, loaded_files, block_size)
+                weight = convert_state_dict(
+                    weight,
+                    weight_name,
+                    scale_inv_name,
+                    original_weight_map,
+                    model_dir,
+                    loaded_files,
+                    block_size,
+                )
                 new_state_dict[weight_name] = weight
                 if self.quant_dtype in ["int", "mxfp"]:
                     quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
@@ -286,7 +317,7 @@ class LlmDeployWorkflow:
                 continue
             remaining_by_file[file_name].append(weight_name)
 
-        max_shard_size = 8 * 1024 ** 3
+        max_shard_size = 8 * 1024**3
         rest_idx = 0
         current_tensors = {}
         current_size = 0

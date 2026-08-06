@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,20 +22,24 @@ __all__ = [
     'FakeQuantizedConvTranspose',
     'FakeQuantizedLinear',
     'FakeQuantizedAvgPool2d',
-    ]
+]
 
 from ....amct_pytorch.custom_op.fake_quant.fake_dequant import FakeDeQuant
 from ....amct_pytorch.custom_op.fake_quant.fake_quant import FakeQuant
 from ....amct_pytorch.custom_op.fake_quant.fake_quantized_conv import FakeQuantizedConv
-from ....amct_pytorch.custom_op.fake_quant.fake_quantized_convtranspose import FakeQuantizedConvTranspose
-from ....amct_pytorch.custom_op.fake_quant.fake_quantized_linear import FakeQuantizedLinear
-from ....amct_pytorch.custom_op.fake_quant.fake_quantized_avgpool2d import FakeQuantizedAvgPool2d
+from ....amct_pytorch.custom_op.fake_quant.fake_quantized_convtranspose import (
+    FakeQuantizedConvTranspose,
+)
+from ....amct_pytorch.custom_op.fake_quant.fake_quantized_linear import (
+    FakeQuantizedLinear,
+)
+from ....amct_pytorch.custom_op.fake_quant.fake_quantized_avgpool2d import (
+    FakeQuantizedAvgPool2d,
+)
 
 
 FAKE_CONV_TRANSPOSE = "FakeQuantizedConvTranspose"
 FAKE_LINEAR = "FakeQuantizedLinear"
 FAKE_CONV = "FakeQuantizedConv"
 
-FAKE_MODULES = [FAKE_CONV_TRANSPOSE,
-                FAKE_LINEAR,
-                FAKE_CONV]
+FAKE_MODULES = [FAKE_CONV_TRANSPOSE, FAKE_LINEAR, FAKE_CONV]

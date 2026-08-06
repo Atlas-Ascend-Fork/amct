@@ -73,7 +73,9 @@ def test_relevant_bits_empty_when_no_quant_target():
 
 @pytest.mark.parametrize("target", ["mlp", "moe", "attn-linear"])
 def test_relevant_bits_for_linear_targets_uses_bit_policy(target):
-    wf = _make_workflow(quant_target=[target], bit_policy=_make_bit_policy(w_bits=8, a_bits=4))
+    wf = _make_workflow(
+        quant_target=[target], bit_policy=_make_bit_policy(w_bits=8, a_bits=4)
+    )
     assert wf._has_relevant_quant() is True
 
 
@@ -89,7 +91,8 @@ def test_relevant_bits_combines_linear_and_cache_targets():
     wf = _make_workflow(
         quant_target=["mlp", "attn-cache"],
         bit_policy=_make_bit_policy(
-            w_bits=4, a_bits=8,
+            w_bits=4,
+            a_bits=8,
             **{"attn-cache": {"q": 16, "k": 16, "p": 16, "v": 16}},
         ),
     )
@@ -116,7 +119,8 @@ def test_resolve_eval_states_quant_with_no_targets_disables_quant_but_rebuilds()
 
 def test_resolve_eval_states_quant_with_all_bits_16_skips_real_quant():
     wf = _make_workflow(
-        eval_mode="quant", quant_target=["mlp"],
+        eval_mode="quant",
+        quant_target=["mlp"],
         bit_policy=_make_bit_policy(w_bits=16, a_bits=16),
     )
     use_quant_block, enable_quant, _ = wf._resolve_eval_states()
@@ -126,7 +130,8 @@ def test_resolve_eval_states_quant_with_all_bits_16_skips_real_quant():
 
 def test_resolve_eval_states_quant_enables_when_any_relevant_bit_lt_16():
     wf = _make_workflow(
-        eval_mode="quant", quant_target=["mlp"],
+        eval_mode="quant",
+        quant_target=["mlp"],
         bit_policy=_make_bit_policy(w_bits=8, a_bits=16),
     )
     use_quant_block, enable_quant, msg = wf._resolve_eval_states()
@@ -141,7 +146,8 @@ def test_resolve_eval_states_ignores_irrelevant_low_bits_for_target():
         eval_mode="quant",
         quant_target=["mlp"],
         bit_policy=_make_bit_policy(
-            w_bits=16, a_bits=16,
+            w_bits=16,
+            a_bits=16,
             **{"attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4}},
         ),
     )
@@ -153,7 +159,9 @@ def test_resolve_eval_states_attn_cache_low_bit_triggers_enable():
     wf = _make_workflow(
         eval_mode="quant",
         quant_target=["attn-cache"],
-        bit_policy=_make_bit_policy(**{"attn-cache": {"q": 8, "k": 16, "p": 16, "v": 16}}),
+        bit_policy=_make_bit_policy(
+            **{"attn-cache": {"q": 8, "k": 16, "p": 16, "v": 16}}
+        ),
     )
     _, enable_quant, _ = wf._resolve_eval_states()
     assert enable_quant is True
@@ -161,7 +169,8 @@ def test_resolve_eval_states_attn_cache_low_bit_triggers_enable():
 
 def test_resolve_eval_states_unknown_mode_falls_back_to_quant():
     wf = _make_workflow(
-        eval_mode="unknown", quant_target=["mlp"],
+        eval_mode="unknown",
+        quant_target=["mlp"],
         bit_policy=_make_bit_policy(w_bits=8, a_bits=8),
     )
     use_quant, enable, msg = wf._resolve_eval_states()
@@ -171,13 +180,15 @@ def test_resolve_eval_states_unknown_mode_falls_back_to_quant():
 
 def test_llm_eval_run_blockwise(monkeypatch):
     wf = _make_workflow(
-        eval_mode="quant", quant_target=["mlp"],
+        eval_mode="quant",
+        quant_target=["mlp"],
         bit_policy=_make_bit_policy(w_bits=8, a_bits=8),
     )
     wf.granularity = "block"
 
     def setup():
         return "sink"
+
     wf.setup = setup
 
     called = {}
@@ -185,11 +196,14 @@ def test_llm_eval_run_blockwise(monkeypatch):
     def _run_blockwise():
         called.update({"blockwise": 10.5})
         return 10.5
+
     wf._run_blockwise = _run_blockwise
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.logger",
         importlib.import_module("types").SimpleNamespace(
-            info=lambda m: None, remove=lambda h: None))
+            info=lambda m: None, remove=lambda h: None
+        ),
+    )
     wf.run()
     assert called.get("blockwise") == 10.5
 
@@ -200,10 +214,12 @@ def test_llm_eval_run_unknown_granularity(monkeypatch):
 
     def setup():
         return "sink"
+
     wf.setup = setup
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.logger",
-        importlib.import_module("types").SimpleNamespace(remove=lambda h: None))
+        importlib.import_module("types").SimpleNamespace(remove=lambda h: None),
+    )
     with pytest.raises(ValueError, match="Unsupported .*granularity"):
         wf.run()
 
@@ -214,9 +230,15 @@ def test_llm_eval_run_unknown_granularity(monkeypatch):
 def _make_eval_workflow(**overrides):
     bit_policy = overrides.pop("bit_policy", _make_bit_policy(w_bits=8, a_bits=8))
     defaults = dict(
-        model="/tmp/fake", model_name="qwen3", quant_target=["mlp"],
-        device="cpu", granularity="block", eval_mode="bf16",
-        seq_len=2048, output_dir="/tmp/fake", quant_dtype="int",
+        model="/tmp/fake",
+        model_name="qwen3",
+        quant_target=["mlp"],
+        device="cpu",
+        granularity="block",
+        eval_mode="bf16",
+        seq_len=2048,
+        output_dir="/tmp/fake",
+        quant_dtype="int",
     )
     defaults.update(overrides)
     args = SimpleNamespace(bit_policy=bit_policy, **defaults)
@@ -231,19 +253,25 @@ def _make_eval_workflow(**overrides):
 
 
 def test_eval_get_relevant_quant_bits_mlp():
-    wf = _make_eval_workflow(quant_target=["mlp"], bit_policy=_make_bit_policy(w_bits=4, a_bits=8))
+    wf = _make_eval_workflow(
+        quant_target=["mlp"], bit_policy=_make_bit_policy(w_bits=4, a_bits=8)
+    )
     assert wf._has_relevant_quant() is True
 
 
 def test_eval_get_relevant_quant_bits_attn_cache():
     wf = _make_eval_workflow(
         quant_target=["attn-cache"],
-        bit_policy=_make_bit_policy(**{"attn-cache": {"q": 4, "k": 4, "p": 8, "v": 8}}))
+        bit_policy=_make_bit_policy(**{"attn-cache": {"q": 4, "k": 4, "p": 8, "v": 8}}),
+    )
     assert wf._has_relevant_quant() is True
 
 
 def test_eval_get_relevant_quant_bits_both_targets():
-    wf = _make_eval_workflow(quant_target=["mlp", "attn-cache"], bit_policy=_make_bit_policy(w_bits=8, a_bits=8))
+    wf = _make_eval_workflow(
+        quant_target=["mlp", "attn-cache"],
+        bit_policy=_make_bit_policy(w_bits=8, a_bits=8),
+    )
     assert wf._has_relevant_quant() is True
 
 
@@ -259,7 +287,9 @@ def test_eval_resolve_eval_states_bf16():
 
 
 def test_eval_resolve_eval_states_quant_all_16bit():
-    wf = _make_eval_workflow(eval_mode="quant", bit_policy=_make_bit_policy(w_bits=16, a_bits=16))
+    wf = _make_eval_workflow(
+        eval_mode="quant", bit_policy=_make_bit_policy(w_bits=16, a_bits=16)
+    )
     use_quant, enable_quant, msg = wf._resolve_eval_states()
     assert use_quant is True
     assert enable_quant is False
@@ -267,7 +297,9 @@ def test_eval_resolve_eval_states_quant_all_16bit():
 
 
 def test_eval_resolve_eval_states_quant_below_16():
-    wf = _make_eval_workflow(eval_mode="quant", bit_policy=_make_bit_policy(w_bits=8, a_bits=4))
+    wf = _make_eval_workflow(
+        eval_mode="quant", bit_policy=_make_bit_policy(w_bits=8, a_bits=4)
+    )
     use_quant, enable_quant, msg = wf._resolve_eval_states()
     assert use_quant is True
     assert enable_quant is True
@@ -279,14 +311,17 @@ def test_eval_resolve_eval_states_quant_below_16():
 
 def test_eval_setup_returns_sink_id(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None)
+        "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None
+    )
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.register_dtype", lambda: None)
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_dtype", lambda: None)
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None)
+        "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None
+    )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.MODEL_REGISTRY",
-        SimpleNamespace(get=lambda k: type("FakeModel", (), {"__init__": lambda s, a: None})),
+        SimpleNamespace(
+            get=lambda k: type("FakeModel", (), {"__init__": lambda s, a: None})
+        ),
     )
     wf = _make_eval_workflow(output_dir=str(tmp_path))
     sink_id = wf.setup()
@@ -307,7 +342,8 @@ def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
         lambda preds, samples, seq_len: 12.34,
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.logger", MagicMock(),
+        "amct_pytorch.workflows.llm_eval.logger",
+        MagicMock(),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
@@ -340,7 +376,8 @@ def test_eval_run_modelwise_mocked_pipeline(monkeypatch):
         lambda preds, samples, seq_len: 12.34,
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.logger", MagicMock(),
+        "amct_pytorch.workflows.llm_eval.logger",
+        MagicMock(),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
@@ -365,9 +402,15 @@ def test_eval_run_modelwise_mocked_pipeline(monkeypatch):
 def test_eval_init_sets_all_attributes_from_args():
     bp = _make_bit_policy(w_bits=8, a_bits=8)
     args = SimpleNamespace(
-        model="/tmp/fake", model_name="qwen3", quant_target=["mlp", "attn-cache"],
-        device="cuda:0", granularity="block", eval_mode="quant",
-        seq_len=1024, output_dir="/tmp/out", quant_dtype="int4",
+        model="/tmp/fake",
+        model_name="qwen3",
+        quant_target=["mlp", "attn-cache"],
+        device="cuda:0",
+        granularity="block",
+        eval_mode="quant",
+        seq_len=1024,
+        output_dir="/tmp/out",
+        quant_dtype="int4",
         bit_policy=bp,
     )
     wf = LlmEvalWorkflow(args)
@@ -397,35 +440,49 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
         lambda preds, samples, seq_len: 12.34,
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.logger", MagicMock(),
+        "amct_pytorch.workflows.llm_eval.logger",
+        MagicMock(),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
         lambda iterable, desc="": iterable,
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None)
+        "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None
+    )
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.register_dtype", lambda: None)
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_dtype", lambda: None)
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None)
+        "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None
+    )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.MODEL_REGISTRY",
-        SimpleNamespace(get=lambda k: type("FakeModel", (), {"__init__": lambda s, a: None})),
+        SimpleNamespace(
+            get=lambda k: type("FakeModel", (), {"__init__": lambda s, a: None})
+        ),
     )
 
-    wf = _make_eval_workflow(eval_mode="bf16", granularity="model", output_dir=str(tmp_path))
+    wf = _make_eval_workflow(
+        eval_mode="bf16", granularity="model", output_dir=str(tmp_path)
+    )
     wf.pipeline = MagicMock()
     wf.pipeline.tokenizer = MagicMock()
     call_result = SimpleNamespace(logits=torch.randn(2, 3, 100))
     forward_fn = MagicMock(return_value=call_result)
-    monkeypatch.setattr(wf.pipeline, "float_model",
-                        MagicMock(return_value=MagicMock(
-                            eval=MagicMock(return_value=MagicMock(
-                                to=MagicMock(return_value=forward_fn))))))
+    monkeypatch.setattr(
+        wf.pipeline,
+        "float_model",
+        MagicMock(
+            return_value=MagicMock(
+                eval=MagicMock(
+                    return_value=MagicMock(to=MagicMock(return_value=forward_fn))
+                )
+            )
+        ),
+    )
 
     def setup():
         return "sink"
+
     wf.setup = setup
     wf.run()
 
@@ -435,11 +492,12 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
 
 def test_eval_setup_enables_sharded_block(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None)
+        "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None
+    )
+    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.register_dtype", lambda: None)
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_dtype", lambda: None)
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None)
+        "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None
+    )
 
     class FakePipeline:
         sharded_block = False
@@ -472,20 +530,30 @@ def test_eval_save_inter_result(tmp_path):
 
 def test_has_relevant_quant_with_cache_target():
     bp = _make_bit_policy(**{"attn-cache": {"q": 8, "k": 8, "p": 8, "v": 8}})
-    workflow = _make_workflow(eval_mode="quant", quant_target=("attn-cache",), bit_policy=bp)
+    workflow = _make_workflow(
+        eval_mode="quant", quant_target=("attn-cache",), bit_policy=bp
+    )
     assert workflow._has_relevant_quant() is True
 
 
 def test_get_relevant_quant_bits_with_cache():
-    bp = _make_bit_policy(w_bits=16, a_bits=16, **{"attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4}})
-    workflow = _make_workflow(eval_mode="quant", quant_target=("attn-cache",), bit_policy=bp)
+    bp = _make_bit_policy(
+        w_bits=16, a_bits=16, **{"attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4}}
+    )
+    workflow = _make_workflow(
+        eval_mode="quant", quant_target=("attn-cache",), bit_policy=bp
+    )
     bits = workflow._get_relevant_quant_bits()
     assert 4 in bits
 
 
 def test_get_relevant_quant_bits_with_mlp_and_cache():
-    bp = _make_bit_policy(w_bits=8, a_bits=8, **{"attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4}})
-    workflow = _make_workflow(eval_mode="quant", quant_target=("mlp", "attn-cache"), bit_policy=bp)
+    bp = _make_bit_policy(
+        w_bits=8, a_bits=8, **{"attn-cache": {"q": 4, "k": 4, "p": 4, "v": 4}}
+    )
+    workflow = _make_workflow(
+        eval_mode="quant", quant_target=("mlp", "attn-cache"), bit_policy=bp
+    )
     bits = workflow._get_relevant_quant_bits()
     assert 8 in bits
     assert 4 in bits

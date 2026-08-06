@@ -32,26 +32,32 @@ from amct_pytorch.quantization.dtypes import register_dtype
 register_dtype()
 
 
-_MLP_BP = BitPolicy({
-    "mlp": {
-        "gate_proj": {"w_bits": 8, "a_bits": 8},
-        "up_proj": {"w_bits": 8, "a_bits": 8},
-        "down_proj": {"w_bits": 8, "a_bits": 8},
-    },
-    "moe": {
-        "routed": {
+_MLP_BP = BitPolicy(
+    {
+        "mlp": {
             "gate_proj": {"w_bits": 8, "a_bits": 8},
             "up_proj": {"w_bits": 8, "a_bits": 8},
             "down_proj": {"w_bits": 8, "a_bits": 8},
         },
-    },
-})
+        "moe": {
+            "routed": {
+                "gate_proj": {"w_bits": 8, "a_bits": 8},
+                "up_proj": {"w_bits": 8, "a_bits": 8},
+                "down_proj": {"w_bits": 8, "a_bits": 8},
+            },
+        },
+    }
+)
 
 
 def _make_args(quant_target=("moe",)):
     return SimpleNamespace(
-        algos=[], quant_dtype="int", w_bits=8, a_bits=8,
-        quant_target=list(quant_target), bit_policy=_MLP_BP,
+        algos=[],
+        quant_dtype="int",
+        w_bits=8,
+        a_bits=8,
+        quant_target=list(quant_target),
+        bit_policy=_MLP_BP,
     )
 
 
@@ -88,9 +94,15 @@ def test_is_packed_experts_false_when_only_one_attr_present():
 def _expert_weights(num_experts=2, hidden=4, intermediate=3):
     sd = {}
     for idx in range(num_experts):
-        sd[f"mlp.experts.{idx}.gate_proj.weight"] = torch.full((intermediate, hidden), float(idx) + 0.1)
-        sd[f"mlp.experts.{idx}.up_proj.weight"] = torch.full((intermediate, hidden), float(idx) + 0.2)
-        sd[f"mlp.experts.{idx}.down_proj.weight"] = torch.full((hidden, intermediate), float(idx) + 0.3)
+        sd[f"mlp.experts.{idx}.gate_proj.weight"] = torch.full(
+            (intermediate, hidden), float(idx) + 0.1
+        )
+        sd[f"mlp.experts.{idx}.up_proj.weight"] = torch.full(
+            (intermediate, hidden), float(idx) + 0.2
+        )
+        sd[f"mlp.experts.{idx}.down_proj.weight"] = torch.full(
+            (hidden, intermediate), float(idx) + 0.3
+        )
     return sd
 
 
@@ -103,8 +115,8 @@ def test_pack_gated_expert_weights_combines_gate_up_into_single_tensor():
     # Stacked tensors expose the expected shape.
     gu = packed["mlp.experts.gate_up_proj"]
     dp = packed["mlp.experts.down_proj"]
-    assert gu.shape == (2, 6, 4)        # (num_experts, 2*intermediate, hidden)
-    assert dp.shape == (2, 4, 3)        # (num_experts, hidden, intermediate)
+    assert gu.shape == (2, 6, 4)  # (num_experts, 2*intermediate, hidden)
+    assert dp.shape == (2, 4, 3)  # (num_experts, hidden, intermediate)
 
 
 def test_pack_gated_expert_weights_preserves_unrelated_keys():
@@ -156,10 +168,18 @@ def test_pack_gated_expert_weights_raises_on_inconsistent_experts():
 
 class _FakeExpertModule(nn.Module):
     """A stand-in GatedExpertView compatible with QuantGatedMLP."""
-    def __init__(self, experts_module, expert_idx=0, hidden_attr="hidden_dim",
-                 intermediate_attr="intermediate_dim", act_attr="act_fn",
-                 gate_up_name="gate_up_proj", down_name="down_proj",
-                 materialize=False):
+
+    def __init__(
+        self,
+        experts_module,
+        expert_idx=0,
+        hidden_attr="hidden_dim",
+        intermediate_attr="intermediate_dim",
+        act_attr="act_fn",
+        gate_up_name="gate_up_proj",
+        down_name="down_proj",
+        materialize=False,
+    ):
         super().__init__()
         self.hidden_size = 4
         self.intermediate_size = 8
@@ -171,6 +191,7 @@ class _FakeExpertModule(nn.Module):
 
 class _FakePackedExperts:
     """Minimal packed-expert module with num_experts attr."""
+
     def __init__(self, num_experts=2, **kwargs):
         self.num_experts = num_experts
 

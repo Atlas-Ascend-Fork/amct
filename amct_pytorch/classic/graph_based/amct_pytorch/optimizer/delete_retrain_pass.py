@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,8 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from ...amct_pytorch.optimizer.base_module_fusion_pass \
-    import BaseModuleFusionPass
+from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 
 from ...amct_pytorch.utils.model_util import ModuleHelper
 from ...amct_pytorch.utils.log import LOGGER
@@ -27,6 +26,7 @@ class DeleteRetrainPass(BaseModuleFusionPass):
     Function: Delete some module about retrain quantization
     APIs: match_pattern, do_pass
     """
+
     def __init__(self):
         """
         Function: init object
@@ -66,14 +66,25 @@ class DeleteRetrainPass(BaseModuleFusionPass):
         parent_node = model_helper.get_parent_module(object_name)
 
         # Step2: replace new model
-        setattr(parent_node, object_name.split('.')[-1],
-                object_module.quant_module.replaced_module)
-        bn_module_name = object_module.bn_module_name if hasattr(object_module, 'bn_module_name') else None
+        setattr(
+            parent_node,
+            object_name.split('.')[-1],
+            object_module.quant_module.replaced_module,
+        )
+        bn_module_name = (
+            object_module.bn_module_name
+            if hasattr(object_module, 'bn_module_name')
+            else None
+        )
         if bn_module_name:
             bn_parent_module = model_helper.get_parent_module(bn_module_name)
-            setattr(bn_parent_module, bn_module_name.split('.')[-1],
-                    object_module.bn_module)
+            setattr(
+                bn_parent_module, bn_module_name.split('.')[-1], object_module.bn_module
+            )
 
         LOGGER.logd(
-            "Delete ActivationQAT and WeightQAT module "
-            "of '{}' success!".format(object_name), 'DeleteRetrainPass')
+            "Delete ActivationQAT and WeightQAT module of '{}' success!".format(
+                object_name
+            ),
+            'DeleteRetrainPass',
+        )

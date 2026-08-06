@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -49,8 +49,12 @@ def test_get_alg_name_from_invalid():
 
 
 def test_match_fuzzy_exact():
-    assert match_fuzzy_pattern(MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, MODEL_LAYERS_0_SELF_ATTN_Q_PROJ)
-    assert not match_fuzzy_pattern(MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, "model.layers.1.self_attn.q_proj")
+    assert match_fuzzy_pattern(
+        MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, MODEL_LAYERS_0_SELF_ATTN_Q_PROJ
+    )
+    assert not match_fuzzy_pattern(
+        MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, "model.layers.1.self_attn.q_proj"
+    )
 
 
 def test_match_fuzzy_wildcard():
@@ -60,7 +64,12 @@ def test_match_fuzzy_wildcard():
 
 
 def test_match_fuzzy_with_suffix():
-    assert match_fuzzy_pattern(MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, "*self_attn.q_proj.weights")
-    assert match_fuzzy_pattern("model.layers.1.self_attn.q_proj", "*self_attn.q_proj.inputs")
-    assert not match_fuzzy_pattern("model.layers.0.mlp.gate_proj", "*self_attn.q_proj.weights")
-
+    assert match_fuzzy_pattern(
+        MODEL_LAYERS_0_SELF_ATTN_Q_PROJ, "*self_attn.q_proj.weights"
+    )
+    assert match_fuzzy_pattern(
+        "model.layers.1.self_attn.q_proj", "*self_attn.q_proj.inputs"
+    )
+    assert not match_fuzzy_pattern(
+        "model.layers.0.mlp.gate_proj", "*self_attn.q_proj.weights"
+    )

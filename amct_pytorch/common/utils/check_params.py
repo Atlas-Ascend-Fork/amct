@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,16 +22,16 @@ from functools import wraps
 
 
 def check_params(*type_args, **type_kwargs):
-    '''decorator util for check function params type '''
+    '''decorator util for check function params type'''
+
     def decorate(func):
-        ''' decorate function. '''
+        '''decorate function.'''
         func_sig = signature(func)
-        need_param_types = func_sig.bind_partial(*type_args,
-                                                 **type_kwargs).arguments
+        need_param_types = func_sig.bind_partial(*type_args, **type_kwargs).arguments
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            ''' decorate wrapper. '''
+            '''decorate wrapper.'''
             func_param_types = func_sig.bind(*args, **kwargs)
             for name, value in func_param_types.arguments.items():
                 if name in need_param_types:
@@ -47,20 +47,24 @@ def check_param_types(name, value, need_param_types, func):
     '''check the params based on whether they are instance'''
     if isinstance(value, type):
         if not issubclass(value, need_param_types[name]):
-            raise TypeError('Func {} argument {} must be {}'. \
-                format(func.__name__, name,
-                    need_param_types[name]))
+            raise TypeError(
+                'Func {} argument {} must be {}'.format(
+                    func.__name__, name, need_param_types[name]
+                )
+            )
     else:
         if not isinstance(value, need_param_types[name]):
-            raise TypeError('Func {} argument {} must be {}'. \
-                format(func.__name__, name,
-                    need_param_types[name]))
+            raise TypeError(
+                'Func {} argument {} must be {}'.format(
+                    func.__name__, name, need_param_types[name]
+                )
+            )
 
 
 def check_parameters_in_schema(func, *param_names):
     '''
     检查指定参数是否存在于函数的第一个schema中
-    
+
     args:
         func: 要检查的函数，必须包含非空的_schemas属性
         *param_names: 参数名称，可传入多个字符串或一个list/tuple
@@ -74,5 +78,5 @@ def check_parameters_in_schema(func, *param_names):
     for param_name in param_names:
         if param_name not in schema_param_names:
             return False
-        
+
     return True

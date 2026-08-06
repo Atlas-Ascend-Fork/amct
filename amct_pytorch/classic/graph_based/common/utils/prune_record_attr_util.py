@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -19,8 +19,9 @@
 from ...proto.basic_info_pb2 import AttrProto
 
 
-class AttrProtoHelper():
+class AttrProtoHelper:
     """docstring for AttrProtoHelper"""
+
     attr = AttrProto.AttrType
     attr_map = {
         # type_string ,type_proto_value, location
@@ -30,7 +31,7 @@ class AttrProtoHelper():
         'STRING': [attr.STRING, 's'],
         'FLOATS': [attr.FLOATS, 'floats'],
         'INTS': [attr.INTS, 'ints'],
-        'STRINGS': [attr.STRINGS, 'strings']
+        'STRINGS': [attr.STRINGS, 'strings'],
     }
     proto_value_id = 0
     value_location_id = 1
@@ -86,17 +87,14 @@ class AttrProtoHelper():
         for attr in self.node_proto.attr:
             if attr.name != attr_name:
                 continue
-            attr_value = getattr(attr,
-                                 self.map_value_location(attr.type))
+            attr_value = getattr(attr, self.map_value_location(attr.type))
             if attr.type == AttrProto.AttrType.STRINGS:
-                attr_value = [byte_string.decode('utf-8') \
-                    for byte_string in attr_value]
+                attr_value = [byte_string.decode('utf-8') for byte_string in attr_value]
             elif attr.type == AttrProto.AttrType.STRING:
                 attr_value = attr_value.decode('utf-8')
 
             return attr_value
-        raise RuntimeError("node %s has no attr %s" %
-                           (self.node_proto.name, attr_name))
+        raise RuntimeError("node %s has no attr %s" % (self.node_proto.name, attr_name))
 
     def set_attr_value(self, attr_name, type_string, value):
         """

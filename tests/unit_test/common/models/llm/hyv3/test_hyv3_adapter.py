@@ -16,6 +16,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Unit tests for the HyV3 adapter (key remap, deploy bindings, PTQ units)."""
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -120,7 +121,9 @@ class TestHyV3Adapter:
     @staticmethod
     def test_get_scale_name_returns_scale_inv_suffix():
         obj = _stub()
-        scale_prefix, scale_inv_name = obj.get_scale_name("mlp.experts.0.gate_proj.weight")
+        scale_prefix, scale_inv_name = obj.get_scale_name(
+            "mlp.experts.0.gate_proj.weight"
+        )
         assert scale_prefix == "_scale"
         assert scale_inv_name == "mlp.experts.0.gate_proj.weight_scale"
 
@@ -142,6 +145,7 @@ class TestHyV3Adapter:
         def _mock_pack(sd, expert_prefix):
             captured_prefix["ep"] = expert_prefix
             return sd
+
         monkeypatch.setattr(
             "amct_pytorch.common.models.llm.hyv3.hyv3.pack_gated_expert_weights",
             _mock_pack,
@@ -226,6 +230,7 @@ class TestHyV3Adapter:
             lambda args, block, cls: captured.update({"cls": cls}),
         )
         from amct_pytorch.common.models.llm.hyv3.quant_module import QuantHYV3Attn
+
         obj.build_quant_block(0)
         assert captured.get("cls") is QuantHYV3Attn
 
@@ -311,7 +316,11 @@ def _mock_hf_loading_chain(monkeypatch, cfg):
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoTokenizer",
-        type("FakeAT", (), {_FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)})(),
+        type(
+            "FakeAT",
+            (),
+            {_FROM_PRETRAINED: staticmethod(lambda *a, **kw: fake_tokenizer)},
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.init_empty_weights",
@@ -323,10 +332,14 @@ def _mock_hf_loading_chain(monkeypatch, cfg):
         )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.AutoModelForCausalLM",
-        type("FakeAMFCLM", (), {
-            _FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
-            "from_config": staticmethod(lambda *a, **kw: empty_model),
-        })(),
+        type(
+            "FakeAMFCLM",
+            (),
+            {
+                _FROM_PRETRAINED: staticmethod(lambda *a, **kw: empty_model),
+                "from_config": staticmethod(lambda *a, **kw: empty_model),
+            },
+        )(),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.get_weight_mappings",

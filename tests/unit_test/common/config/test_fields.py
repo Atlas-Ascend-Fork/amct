@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -71,11 +71,17 @@ def test_batch_num_non_int_raises():
 
 def test_weights_cfg_valid():
     f = WeightsCfgField({"type": INT8, "symmetric": True, "strategy": "channel"})
-    assert f.get_value() == {"quant_type": INT8, "symmetric": True, "strategy": "channel"}
+    assert f.get_value() == {
+        "quant_type": INT8,
+        "symmetric": True,
+        "strategy": "channel",
+    }
 
 
 def test_weights_cfg_with_group_size():
-    f = WeightsCfgField({"type": "int4", "symmetric": True, "strategy": "group", "group_size": 128})
+    f = WeightsCfgField(
+        {"type": "int4", "symmetric": True, "strategy": "group", "group_size": 128}
+    )
     v = f.get_value()
     assert v["group_size"] == 128
 
@@ -97,7 +103,9 @@ def test_weights_cfg_invalid_symmetric():
 
 def test_weights_cfg_asymmetric_non_int():
     with pytest.raises(ValueError, match="symmetric only support to be True"):
-        WeightsCfgField({"type": "float8_e4m3fn", "symmetric": False, "strategy": "channel"})
+        WeightsCfgField(
+            {"type": "float8_e4m3fn", "symmetric": False, "strategy": "channel"}
+        )
 
 
 def test_weights_cfg_invalid_strategy():
@@ -107,7 +115,9 @@ def test_weights_cfg_invalid_strategy():
 
 def test_weights_cfg_group_size_without_group_strategy():
     with pytest.raises(ValueError, match="group_size only support strategy group"):
-        WeightsCfgField({"type": "int4", "symmetric": True, "strategy": "channel", "group_size": 64})
+        WeightsCfgField(
+            {"type": "int4", "symmetric": True, "strategy": "channel", "group_size": 64}
+        )
 
 
 def test_weights_cfg_group_strategy_without_group_size():
@@ -117,22 +127,40 @@ def test_weights_cfg_group_strategy_without_group_size():
 
 def test_weights_cfg_group_size_negative():
     with pytest.raises(ValueError, match=POSITIVE_INT):
-        WeightsCfgField({"type": "int4", "symmetric": True, "strategy": "group", "group_size": -5})
+        WeightsCfgField(
+            {"type": "int4", "symmetric": True, "strategy": "group", "group_size": -5}
+        )
 
 
 def test_weights_cfg_group_size_not_int():
     with pytest.raises(ValueError, match=POSITIVE_INT):
-        WeightsCfgField({"type": "int4", "symmetric": True, "strategy": "group", "group_size": "32"})
+        WeightsCfgField(
+            {"type": "int4", "symmetric": True, "strategy": "group", "group_size": "32"}
+        )
 
 
 def test_weights_cfg_mxfp8_group_size_32_valid():
-    f = WeightsCfgField({"type": "mxfp8_e4m3fn", "symmetric": True, "strategy": "group", "group_size": 32})
+    f = WeightsCfgField(
+        {
+            "type": "mxfp8_e4m3fn",
+            "symmetric": True,
+            "strategy": "group",
+            "group_size": 32,
+        }
+    )
     assert f.get_value()["group_size"] == 32
 
 
 def test_weights_cfg_mxfp8_group_size_64_invalid():
     with pytest.raises(ValueError, match="only support group_size value"):
-        WeightsCfgField({"type": "mxfp8_e4m3fn", "symmetric": True, "strategy": "group", "group_size": 64})
+        WeightsCfgField(
+            {
+                "type": "mxfp8_e4m3fn",
+                "symmetric": True,
+                "strategy": "group",
+                "group_size": 64,
+            }
+        )
 
 
 # ---- InputsCfgField --------------------------------------------------------
@@ -140,7 +168,12 @@ def test_weights_cfg_mxfp8_group_size_64_invalid():
 
 def test_inputs_cfg_valid():
     f = InputsCfgField({"type": INT8, "symmetric": True, "strategy": "tensor"})
-    assert f.get_value() == {"quant_type": INT8, "symmetric": True, "strategy": "tensor", "dynamic": None}
+    assert f.get_value() == {
+        "quant_type": INT8,
+        "symmetric": True,
+        "strategy": "tensor",
+        "dynamic": None,
+    }
 
 
 def test_inputs_cfg_disabled():
@@ -170,7 +203,9 @@ def test_inputs_cfg_token_with_asymmetric_raises():
 
 def test_inputs_cfg_dynamic_without_token_strategy():
     with pytest.raises(ValueError, match="dynamic only support strategy"):
-        InputsCfgField({"type": INT8, "symmetric": True, "strategy": "tensor", "dynamic": True})
+        InputsCfgField(
+            {"type": INT8, "symmetric": True, "strategy": "tensor", "dynamic": True}
+        )
 
 
 def test_inputs_cfg_mxfp8_strategy_group():
@@ -182,8 +217,10 @@ def test_inputs_cfg_mxfp8_strategy_group():
 
 
 def test_quant_cfg_with_weights_and_inputs():
-    cfg = {"weights": {"type": INT8, "symmetric": True, "strategy": "channel"},
-           "inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"}}
+    cfg = {
+        "weights": {"type": INT8, "symmetric": True, "strategy": "channel"},
+        "inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"},
+    }
     f = QuantCfgField(cfg)
     v = f.get_value()
     assert v["weights_cfg"]["quant_type"] == INT8
@@ -191,8 +228,18 @@ def test_quant_cfg_with_weights_and_inputs():
 
 
 def test_quant_cfg_with_fuzzy_patterns():
-    cfg = {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"},
-           "*self_attn.q_proj.inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"}}
+    cfg = {
+        "*self_attn.q_proj.weights": {
+            "type": "int4",
+            "symmetric": True,
+            "strategy": "channel",
+        },
+        "*self_attn.q_proj.inputs": {
+            "type": INT8,
+            "symmetric": True,
+            "strategy": "tensor",
+        },
+    }
     f = QuantCfgField(cfg)
     assert len(f.fuzzy_configs["weights"]) == 1
     assert len(f.fuzzy_configs["inputs"]) == 1
@@ -201,19 +248,33 @@ def test_quant_cfg_with_fuzzy_patterns():
 
 
 def test_quant_cfg_inputs_only_with_default_kvcache():
-    cfg = QuantCfgField({"inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"}})
+    cfg = QuantCfgField(
+        {"inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"}}
+    )
     assert cfg.kvcache_cfg.get_value() == {"enable_quant": False}
 
 
 def test_quant_cfg_get_fuzzy_config_matches():
-    cfg = {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}}
+    cfg = {
+        "*self_attn.q_proj.weights": {
+            "type": "int4",
+            "symmetric": True,
+            "strategy": "channel",
+        }
+    }
     f = QuantCfgField(cfg)
     result = f.get_fuzzy_config("model.layers.0.self_attn.q_proj", "weights")
     assert result == {"type": "int4", "symmetric": True, "strategy": "channel"}
 
 
 def test_quant_cfg_get_fuzzy_config_no_match():
-    cfg = {"*self_attn.q_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}}
+    cfg = {
+        "*self_attn.q_proj.weights": {
+            "type": "int4",
+            "symmetric": True,
+            "strategy": "channel",
+        }
+    }
     f = QuantCfgField(cfg)
     assert f.get_fuzzy_config("model.layers.0.mlp.gate_proj", "weights") is None
 
@@ -326,7 +387,9 @@ def test_algorithm_field_single_minmax():
 def test_algorithm_field_multiple_algos(monkeypatch):
     fake_algo_a = type("AlgoA", (), {"keys": lambda self: ["Linear"]})()
     fake_algo_b = type("AlgoB", (), {"keys": lambda self: ["Conv2d"]})()
-    fake_reg = type("FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}})()
+    fake_reg = type(
+        "FakeReg", (), {"algo": {ALGO_A: fake_algo_a, ALGO_B: fake_algo_b}}
+    )()
     monkeypatch.setattr(
         "amct_pytorch.common.config.fields.AlgorithmRegistry",
         fake_reg,
@@ -376,18 +439,26 @@ def test_skip_layers_non_str_raises():
 
 
 def test_quant_config_basic():
-    cfg = {"batch_num": 2,
-           "quant_cfg": {"weights": {"type": INT8, "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"minmax": {}},
-           "skip_layers": ["lm_head"]}
+    cfg = {
+        "batch_num": 2,
+        "quant_cfg": {
+            "weights": {"type": INT8, "symmetric": True, "strategy": "channel"}
+        },
+        "algorithm": {"minmax": {}},
+        "skip_layers": ["lm_head"],
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     assert qc.batch_num.get_value() == {"batch_num": 2}
 
 
 def test_quant_config_get_layer_config_exact():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {"weights": {"type": INT8, "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"minmax": {}}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "weights": {"type": INT8, "symmetric": True, "strategy": "channel"}
+        },
+        "algorithm": {"minmax": {}},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     layer_cfg = qc.get_layer_config("layer.0")
     assert layer_cfg is not None
@@ -395,20 +466,39 @@ def test_quant_config_get_layer_config_exact():
 
 
 def test_quant_config_get_layer_config_fuzzy():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {"*down_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"minmax": {}}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "*down_proj.weights": {
+                "type": "int4",
+                "symmetric": True,
+                "strategy": "channel",
+            }
+        },
+        "algorithm": {"minmax": {}},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     layer_cfg = qc.get_layer_config("model.layers.0.mlp.down_proj")
     assert layer_cfg["weights_cfg"]["quant_type"] == "int4"
 
 
 def test_quant_config_get_layer_config_fuzzy_weights_override_inputs():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {
-               "*down_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"},
-               "*down_proj.inputs": {"type": INT8, "symmetric": True, "strategy": "tensor"}},
-           "algorithm": {"minmax": {}}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "*down_proj.weights": {
+                "type": "int4",
+                "symmetric": True,
+                "strategy": "channel",
+            },
+            "*down_proj.inputs": {
+                "type": INT8,
+                "symmetric": True,
+                "strategy": "tensor",
+            },
+        },
+        "algorithm": {"minmax": {}},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     layer_cfg = qc.get_layer_config("model.layers.0.mlp.down_proj")
     assert layer_cfg["weights_cfg"]["quant_type"] == "int4"
@@ -416,17 +506,29 @@ def test_quant_config_get_layer_config_fuzzy_weights_override_inputs():
 
 
 def test_quant_config_get_layer_config_no_match_returns_none():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {"*down_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"minmax": {}}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "*down_proj.weights": {
+                "type": "int4",
+                "symmetric": True,
+                "strategy": "channel",
+            }
+        },
+        "algorithm": {"minmax": {}},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     assert qc.get_layer_config("model.layers.0.mlp.gate_proj") is None
 
 
 def test_quant_config_get_layer_config_caching():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {"weights": {"type": INT8, "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"minmax": {}}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "weights": {"type": INT8, "symmetric": True, "strategy": "channel"}
+        },
+        "algorithm": {"minmax": {}},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     first = qc.get_layer_config("layer.0")
     second = qc.get_layer_config("layer.0")
@@ -434,18 +536,30 @@ def test_quant_config_get_layer_config_caching():
 
 
 def test_quant_config_get_layer_config_fuzzy_inputs_fallback():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {"*down_proj.weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"minmax": {}}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "*down_proj.weights": {
+                "type": "int4",
+                "symmetric": True,
+                "strategy": "channel",
+            }
+        },
+        "algorithm": {"minmax": {}},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     layer_cfg = qc.get_layer_config("model.layers.0.mlp.down_proj")
     assert layer_cfg["inputs_cfg"]["enable_quant"] is False
 
 
 def test_quant_config_with_gptq():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {"weights": {"type": "int4", "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"gptq"}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "weights": {"type": "int4", "symmetric": True, "strategy": "channel"}
+        },
+        "algorithm": {"gptq"},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     assert qc.algorithm.names == ["gptq"]
 
@@ -503,10 +617,13 @@ def test_algorithm_field_check_invalid_input():
 
 
 def test_quant_config_get_layer_config_inputs_fallback_enable_false():
-    cfg = {"batch_num": 1,
-           "quant_cfg": {"weights": {"type": INT8, "symmetric": True, "strategy": "channel"}},
-           "algorithm": {"minmax": {}}}
+    cfg = {
+        "batch_num": 1,
+        "quant_cfg": {
+            "weights": {"type": INT8, "symmetric": True, "strategy": "channel"}
+        },
+        "algorithm": {"minmax": {}},
+    }
     qc = QuantConfig(cfg, AlgorithmRegistry)
     layer_cfg = qc.get_layer_config("some_layer")
     assert layer_cfg["inputs_cfg"] == {"enable_quant": False}
-

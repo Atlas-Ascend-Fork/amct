@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -38,10 +38,7 @@ class RnnQuantOpBase:
     ''' name in record, (attr_name, attr_type) '''
     quant_attrs = dict()
 
-    quant_dtype_map = {
-        INT8: DT_INT8,
-        INT16: DT_INT16
-    }
+    quant_dtype_map = {INT8: DT_INT8, INT16: DT_INT16}
 
     @classmethod
     def construct_node_proto(cls, ori_proto, records):
@@ -73,7 +70,8 @@ class RnnQuantOpBase:
         default_attrs = set(cls.attrs.keys()) - added_attrs
         for attr_name in default_attrs:
             attr_helper.set_attr_value(
-                attr_name, cls.attrs[attr_name][0], cls.attrs[attr_name][1])
+                attr_name, cls.attrs[attr_name][0], cls.attrs[attr_name][1]
+            )
 
         record = records.get(ori_proto.name)
 
@@ -88,6 +86,9 @@ class RnnQuantOpBase:
             else:
                 quant_value = record.get(quant_factor)
             attr_helper.set_attr_value(
-                cls.quant_attrs[quant_factor][0], cls.quant_attrs[quant_factor][1], quant_value)
+                cls.quant_attrs[quant_factor][0],
+                cls.quant_attrs[quant_factor][1],
+                quant_value,
+            )
 
         return node_proto

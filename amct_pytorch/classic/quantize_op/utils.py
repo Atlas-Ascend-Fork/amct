@@ -5,7 +5,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -20,12 +20,18 @@ import torch
 
 from amct_pytorch.common.utils.quant_util import quant_dequant_tensor, quant_tensor
 from amct_pytorch.common.utils.quant_util import convert_to_per_group_shape
-from amct_pytorch.common.utils.vars import FLOAT8_E4M3FN, FLOAT4_E2M1, HIFLOAT8, QUANTILE_EMA_ALPHA, QUANTILE_EMA_BETA
+from amct_pytorch.common.utils.vars import (
+    FLOAT8_E4M3FN,
+    FLOAT4_E2M1,
+    HIFLOAT8,
+    QUANTILE_EMA_ALPHA,
+    QUANTILE_EMA_BETA,
+)
 
 FLT_EPSILON = 1.192092896e-7
 QUANT_SCOPE = {
     FLOAT4_E2M1: 6.0,
-    FLOAT8_E4M3FN: 448.0, # 256 * 1.75
+    FLOAT8_E4M3FN: 448.0,  # 256 * 1.75
     HIFLOAT8: 16.0,
 }
 
@@ -45,15 +51,17 @@ def process_scale(scale, offset, symmetric, numbit=8):
     base_bit = 2.0
     if symmetric:
         scale = torch.where(
-            scale < FLT_EPSILON,
-            torch.tensor(1.0, device=scale.device), scale)
+            scale < FLT_EPSILON, torch.tensor(1.0, device=scale.device), scale
+        )
     else:
         offset = torch.where(
             scale < FLT_EPSILON,
-            torch.tensor(-pow(base_bit, numbit - 1), device=offset.device), offset)
+            torch.tensor(-pow(base_bit, numbit - 1), device=offset.device),
+            offset,
+        )
         scale = torch.where(
-            scale < FLT_EPSILON,
-            torch.tensor(1.0, device=scale.device), scale)
+            scale < FLT_EPSILON, torch.tensor(1.0, device=scale.device), scale
+        )
     check_scale_offset(scale, offset)
     return scale, offset
 
@@ -71,12 +79,10 @@ def check_scale_offset(scale, offset):
     if not torch.all(torch.isfinite(1 / scale)):
         valid = False
     if not valid:
-        raise RuntimeError(
-            "Param scale has invalid value inf, nan or zeros!")
+        raise RuntimeError("Param scale has invalid value inf, nan or zeros!")
 
     if offset is not None and not torch.all(torch.isfinite(offset)):
-        raise RuntimeError(
-            "Param offset has invalid value inf or nan!")
+        raise RuntimeError("Param offset has invalid value inf or nan!")
 
 
 def calculate_scale_offset(data_max, data_min, symmetric, data_type):
@@ -97,7 +103,9 @@ def calculate_scale_offset(data_max, data_min, symmetric, data_type):
         else:
             abs_max_is_negative = data_max.abs() < data_min.abs()
             quant_scope = get_int_quant_scope(data_type, symmetric, abs_max_is_negative)
-        boundary = torch.where(abs(data_max) > abs(data_min), abs(data_max), abs(data_min))
+        boundary = torch.where(
+            abs(data_max) > abs(data_min), abs(data_max), abs(data_min)
+        )
         scale = boundary / quant_scope
         offset = None
     else:
@@ -108,9 +116,15 @@ def calculate_scale_offset(data_max, data_min, symmetric, data_type):
         quant_scope = get_int_quant_scope(data_type, symmetric)
 
         scale = (data_max - data_min) / quant_scope
-        offset = torch.where(data_max != data_min,
+        offset = torch.where(
+            data_max != data_min,
             -math.ceil(quant_scope / 2) - data_min / scale,
-            torch.tensor(-math.ceil(quant_scope / 2), dtype=data_max.dtype, device=data_max.device))
+            torch.tensor(
+                -math.ceil(quant_scope / 2),
+                dtype=data_max.dtype,
+                device=data_max.device,
+            ),
+        )
     int_quant_bits = int(data_type.replace('int', '')) if 'int' in data_type else None
     scale, offset = process_scale(scale, offset, symmetric, int_quant_bits)
     scale = scale.to(torch.float32)
@@ -140,9 +154,13 @@ def get_weight_min_max_by_granularity(weight_data, quant_config):
         # weight: [n, k] -> [cout, cin//group_size, group_size]
         group_size = quant_config.get('weights_cfg').get("group_size")
         weight_all = convert_to_per_group_shape(weight_data, group_size)
-        weight_max = weight_all.max(dim=-1, keepdim=True).values  # [cout, cin//group_size, 1]
-        weight_min = weight_all.min(dim=-1, keepdim=True).values  # [cout, cin//group_size, 1]
- 
+        weight_max = weight_all.max(
+            dim=-1, keepdim=True
+        ).values  # [cout, cin//group_size, 1]
+        weight_min = weight_all.min(
+            dim=-1, keepdim=True
+        ).values  # [cout, cin//group_size, 1]
+
     return weight_min, weight_max
 
 
@@ -166,7 +184,9 @@ def calculate_hifloat8_weight_scale(weight_data, strategy):
         weight_max = weight_data.max(dim=1, keepdim=True).values
     scale_w = (weight_max / QUANT_SCOPE[HIFLOAT8]).to(torch.float32)
     scale_w, _ = process_scale(scale_w, None, symmetric=True)
-    scale_w = scale_w.repeat(weight_data.shape[0], 1) if scale_w.shape[0] == 1 else scale_w
+    scale_w = (
+        scale_w.repeat(weight_data.shape[0], 1) if scale_w.shape[0] == 1 else scale_w
+    )
     return scale_w.reshape(-1)
 
 
@@ -184,8 +204,9 @@ def convert_to_dst_shape(input_tensor, dst_shape):
     if input_tensor.shape == dst_shape:
         return input_tensor
 
-    out_tensor = input_tensor.reshape(input_tensor.shape[0], \
-        input_tensor.shape[1] * input_tensor.shape[2])[:dst_shape[0], :dst_shape[1]]
+    out_tensor = input_tensor.reshape(
+        input_tensor.shape[0], input_tensor.shape[1] * input_tensor.shape[2]
+    )[: dst_shape[0], : dst_shape[1]]
     return out_tensor
 
 
@@ -206,7 +227,7 @@ def get_int_quant_scope(data_type, symmetric, abs_max_is_negative=False):
         return pow(2, quant_bits) - 1
 
     # Symmetric quantization, asymmetric quantization range (-128, 127), use 127 for positive values and
-    # 128 for negative values when the absolute value of the original data is the maximum. 
+    # 128 for negative values when the absolute value of the original data is the maximum.
     return abs_max_is_negative + pow(2, quant_bits - 1) - 1
 
 
@@ -226,19 +247,26 @@ def get_float_quant_scope(data_type):
 def calculate_progressive_weights_scale_factor(weight, group_size=32):
     """
     Function: calculate two level weights's quant factor and do fakequant
-    Parameters: 
+    Parameters:
     quant_config: configuration of quantization
     group_size: scale w2 per group size
     """
     # weight per-channel to fp8_e4m3fn, per-group to fp4_e2m1
-    scale_w1, _ = calculate_scale_offset(weight.max(dim=-1).values, weight.min(dim=-1).values,
-                                            True, FLOAT8_E4M3FN)
+    scale_w1, _ = calculate_scale_offset(
+        weight.max(dim=-1).values, weight.min(dim=-1).values, True, FLOAT8_E4M3FN
+    )
     weight = weight.transpose(-1, -2)
     weight_fp8e4m3fn, _ = quant_tensor(weight, FLOAT8_E4M3FN, scale_w1)
-    weight_fp8e4m3fn = weight_fp8e4m3fn.transpose(-1, -2).reshape(-1, group_size).to(weight.dtype)
+    weight_fp8e4m3fn = (
+        weight_fp8e4m3fn.transpose(-1, -2).reshape(-1, group_size).to(weight.dtype)
+    )
 
-    scale_w2, _ = calculate_scale_offset(weight_fp8e4m3fn.max(dim=-1).values, 
-                                            weight_fp8e4m3fn.min(dim=-1).values, True, FLOAT4_E2M1)
+    scale_w2, _ = calculate_scale_offset(
+        weight_fp8e4m3fn.max(dim=-1).values,
+        weight_fp8e4m3fn.min(dim=-1).values,
+        True,
+        FLOAT4_E2M1,
+    )
     # scale_w1 [g] -> [g,1]
     scale_w2 = scale_w2.unsqueeze(1)
 
@@ -247,29 +275,44 @@ def calculate_progressive_weights_scale_factor(weight, group_size=32):
 
 def apply_progressive_quant(weight, scale_w1, scale_w2, group_size=32):
     if list(scale_w1.shape) != [weight.shape[0]]:
-        raise RuntimeError("scale_w1.shape should be [{}] current shape is {}"
-                        .format(weight.shape[0], list(scale_w1.shape)))
+        raise RuntimeError(
+            "scale_w1.shape should be [{}] current shape is {}".format(
+                weight.shape[0], list(scale_w1.shape)
+            )
+        )
     group = int(weight.shape[0] * weight.shape[1] / group_size)
     if list(scale_w2.shape) != [group, 1]:
-        raise RuntimeError("scale_w2.shape should be [{}, 1] current shape is {}".format(group, list(scale_w2.shape)))
-    
+        raise RuntimeError(
+            "scale_w2.shape should be [{}, 1] current shape is {}".format(
+                group, list(scale_w2.shape)
+            )
+        )
+
     # weight -> n, k
     # quantized_weight_fp8 -> k, n
-    quantized_weight_fp8, _ = \
-        quant_tensor(weight.transpose(-1, -2), FLOAT8_E4M3FN, scale_w1)
+    quantized_weight_fp8, _ = quant_tensor(
+        weight.transpose(-1, -2), FLOAT8_E4M3FN, scale_w1
+    )
     # quantized_weight_fp4 -> n*k/g, g
-    quantized_weight_fp4, _ = \
-        quant_tensor(quantized_weight_fp8.transpose(-1, -2).reshape(-1, group_size).to(weight.dtype),
-        FLOAT4_E2M1, scale_w2)
+    quantized_weight_fp4, _ = quant_tensor(
+        quantized_weight_fp8.transpose(-1, -2).reshape(-1, group_size).to(weight.dtype),
+        FLOAT4_E2M1,
+        scale_w2,
+    )
     import torch_npu
+
     # quantized_weight_fp4 -> n, k/2
-    quantized_weight = torch_npu.npu_dtype_cast(quantized_weight_fp4.reshape(weight.shape).npu(),
-        dtype=torch_npu.float4_e2m1fn_x2)
+    quantized_weight = torch_npu.npu_dtype_cast(
+        quantized_weight_fp4.reshape(weight.shape).npu(),
+        dtype=torch_npu.float4_e2m1fn_x2,
+    )
     # npu_op need quantized_weight.t for fp8*fp4
     return quantized_weight.transpose(-1, -2)
 
 
-def calculate_quantile_ema_scale(previous_scale, current_scale, alpha=QUANTILE_EMA_ALPHA, beta=QUANTILE_EMA_BETA):
+def calculate_quantile_ema_scale(
+    previous_scale, current_scale, alpha=QUANTILE_EMA_ALPHA, beta=QUANTILE_EMA_BETA
+):
     """
     Function: calculate exponential moving average scale for quantile quantization
     Args:
@@ -285,11 +328,18 @@ def calculate_quantile_ema_scale(previous_scale, current_scale, alpha=QUANTILE_E
 
 def apply_progressive_quant_dequant(weight, scale_w1, scale_w2, group_size=32):
     if list(scale_w1.shape) != [weight.shape[0]]:
-        raise RuntimeError("scale_w1.shape should be [{}] current shape is {}"
-                        .format(weight.shape[0], list(scale_w1.shape)))
+        raise RuntimeError(
+            "scale_w1.shape should be [{}] current shape is {}".format(
+                weight.shape[0], list(scale_w1.shape)
+            )
+        )
     group = int(weight.shape[0] * weight.shape[1] / group_size)
     if list(scale_w2.shape) != [group, 1]:
-        raise RuntimeError("scale_w2.shape should be [{}, 1] current shape is {}".format(group, list(scale_w2.shape)))
+        raise RuntimeError(
+            "scale_w2.shape should be [{}, 1] current shape is {}".format(
+                group, list(scale_w2.shape)
+            )
+        )
 
     # scale_w2 is fitted in fp8-quantized space, so fp4 stage must consume fp8
     # quantized values (cast to float), not dequantized weights.
@@ -300,6 +350,7 @@ def apply_progressive_quant_dequant(weight, scale_w1, scale_w2, group_size=32):
     dq_w_fp4 = quant_dequant_tensor(q_w_grouped, FLOAT4_E2M1, scale_w2)
     dq_w_fp4 = dq_w_fp4.reshape(weight.shape).to(weight.dtype)
 
-    dq_w = (dq_w_fp4.transpose(-1, -2) * scale_w1.to(dq_w_fp4.device, dq_w_fp4.dtype)
-            ).transpose(-1, -2)
+    dq_w = (
+        dq_w_fp4.transpose(-1, -2) * scale_w1.to(dq_w_fp4.device, dq_w_fp4.dtype)
+    ).transpose(-1, -2)
     return dq_w.to(weight.dtype)

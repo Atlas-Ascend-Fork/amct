@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -40,7 +40,9 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
         if not os.path.isdir(cls.temp_folder):
             os.makedirs(cls.temp_folder)
         # recorder
-        cls.record_file = os.path.join(cls.temp_folder, 'test_insert_kv_cache_quant_pass.txt')
+        cls.record_file = os.path.join(
+            cls.temp_folder, 'test_insert_kv_cache_quant_pass.txt'
+        )
         cls.record_module = Recorder(cls.record_file)
 
         cls.model = models.Conv2dLinear().to(torch.device("cpu"))
@@ -69,7 +71,9 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
             'get_kv_cache_quant_layers',
             return_value=['linear1'],
         ):
-            ret = self.insert_kv_cache_quant_pass.match_pattern(module, 'not_quant_layer')
+            ret = self.insert_kv_cache_quant_pass.match_pattern(
+                module, 'not_quant_layer'
+            )
             self.assertFalse(ret)
 
     def test_match_pattern_success(self):
@@ -95,7 +99,7 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
                 'search_range_start': 0.7,
                 'search_range_end': 1.3,
                 'search_step': 0.01,
-                'quant_granularity': 1
+                'quant_granularity': 1,
             }
         }
         with patch(
@@ -103,7 +107,9 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
             'get_quant_layer_config',
             return_value=config,
         ):
-            self.insert_kv_cache_quant_pass.do_pass(self.model, self.model.layer3, 'layer3')
+            self.insert_kv_cache_quant_pass.do_pass(
+                self.model, self.model.layer3, 'layer3'
+            )
 
     def test_do_pass_hfmg(self):
         config = {
@@ -113,7 +119,7 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
                 'batch_num': 1,
                 'with_offset': False,
                 'num_of_bins': 4096,
-                'quant_granularity': 1
+                'quant_granularity': 1,
             }
         }
         with patch(
@@ -121,4 +127,6 @@ class TestInsertKVCacheQuantPass(unittest.TestCase):
             'get_quant_layer_config',
             return_value=config,
         ):
-            self.insert_kv_cache_quant_pass.do_pass(self.model, self.model.layer3, 'layer3')
+            self.insert_kv_cache_quant_pass.do_pass(
+                self.model, self.model.layer3, 'layer3'
+            )

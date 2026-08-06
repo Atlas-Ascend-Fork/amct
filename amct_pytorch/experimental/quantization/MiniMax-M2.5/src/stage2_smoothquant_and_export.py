@@ -83,8 +83,7 @@ def _load_one_scale(record_dir: str, key: str) -> torch.Tensor:
 
 def load_act_scales(record_dir: str, num_layers: int) -> dict[str, torch.Tensor]:
     return {
-        key: _load_one_scale(record_dir, key)
-        for key in _iter_scale_keys(num_layers)
+        key: _load_one_scale(record_dir, key) for key in _iter_scale_keys(num_layers)
     }
 
 
@@ -106,9 +105,7 @@ def _smooth_attn_input(
     q_w, k_w, v_w = q_proj.weight, k_proj.weight, v_proj.weight
 
     act_scale = (
-        act_scales[f"layers.{layer_idx}.self_attn.q_proj"]
-        .to(q_w.device)
-        .to(q_w.dtype)
+        act_scales[f"layers.{layer_idx}.self_attn.q_proj"].to(q_w.device).to(q_w.dtype)
     )
     weight_scale = (
         torch.cat(
@@ -167,9 +164,7 @@ def _smooth_v_to_o(
     best_scale = _compute_smooth_scale(act_scale, weight_scale, alpha)
 
     num_head_repeats = NUM_ATTENTION_HEADS // NUM_KEY_VALUE_HEADS
-    is_gqa = (
-        v_proj.weight.shape[0] != best_scale.numel() and num_head_repeats != 1
-    )
+    is_gqa = v_proj.weight.shape[0] != best_scale.numel() and num_head_repeats != 1
     if is_gqa:
         _apply_gqa_aware_v_o(v_proj, o_proj, best_scale)
     else:

@@ -35,6 +35,7 @@
 ```
 amct_ops/
 ├── hifloat8_cast/          # HiFloat8 conversion operator source code (kernel + binding + Python interface)
+├── svd_quant/              # SVD quantization operator with mixed Mxfp4/Bf16
 ├── ops_build.sh            # Unified build entry
 ├── setup.py                # wheel packaging configuration
 └── ops_init.py             # Copied as __init__.py during packaging, providing package interface and documentation
