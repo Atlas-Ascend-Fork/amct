@@ -267,8 +267,24 @@ amct.accuracy_based_auto_calibration(model, ev, quant_cfg, ...)
 |----|------|------|
 | dense | 是 | 三 Linear `gate/up/down_proj`、融合 `gate_up_proj`（Phi-3/GLM-4）、相邻两 Linear/Conv1D（含 Bloom 风格）。Llama/Qwen2/Mistral/Qwen3 无需手动 `skip_layers` 即可剪枝。 |
 | cnn | 是 | `variance_channel`（启发式切片）；`reconstruct`（im2col 最小二乘）。同层检测无法识别 ResNet 风格的独立块。 |
-| moe | 是 | 传统 `nn.ModuleList` + `nn.Linear` 门控、融合批处理专家（`MixtralExperts`/`Qwen3MoeExperts` + `*TopKRouter`）、分组路由器（DeepseekV3 风格）、兄弟双张量融合专家（GraniteMoE）、嵌套路由器 bias（Ernie4.5）。 |
+| moe | 是 | 传统 `nn.ModuleList` + `nn.Linear` 门控、融合批处理专家（`MixtralExperts`/`Qwen3MoeExperts` + `*TopKRouter`）、分组路由器（`n_group`/`topk_group`）、共享专家 + sigmoid 路由（noaux_tc）、兄弟双张量融合专家（GraniteMoE）、嵌套路由器 bias（Ernie4.5）。 |
 
-机械可剪枝性在多种常见架构家族（Llama/Qwen/Mixtral/GLM/Phi/GPT/DeepseekV3/GraniteMoE/Ernie4.5 等）
+机械可剪枝性在多种常见架构家族（Llama/Qwen/Mixtral/GLM/Phi/GPT/GraniteMoE/Ernie4.5 等）
 的 2 层微模型上有覆盖测试，见 `tests/amct_pytorch/test_pruning_real_hf_models.py` 与
 `tests/amct_pytorch/test_pruning_auto_prune.py`。
+
+### 剪枝后的 config 同步
+
+剪枝结束后会把新尺寸写回 `model.config`，使 `save_pretrained` 保存的配置与权重一致：
+
+- 稠密 FFN 中间维 -> `intermediate_size` / `ffn_hidden_size` / `n_inner`
+- 专家数 -> `num_local_experts` / `num_experts` / `n_routed_experts` / `n_experts`
+- 每 token 专家数 -> `num_experts_per_tok` / `moe_top_k` / `top_k` / `num_selected_experts`
+  会被**下调**到不超过剩余专家数（否则路由器会选到已删除的专家，首次前向即报错）
+
+**各层专家数不一致时**：单个标量无法描述非均匀剪枝，因此 `num_experts` 一类的计数字段
+**不会被写入**，只打印告警——写入任一层的数值都会与其余层不符。此时 `top_k` 仍会被下调到
+**最薄一层**的专家数，保证所有层都能前向。这类模型直接 `save_pretrained` 后无法用原
+`from_pretrained` 还原，需要自行保存每层尺寸并在加载时重建结构。若要避免该情况，
+请让各层使用同一剪枝率（`prune_ratio`），不要使用会产生非均匀结果的敏感度分配
+（`SENSITIVITY_ALLOC`）。稠密 FFN 各层宽度不一致时同理。

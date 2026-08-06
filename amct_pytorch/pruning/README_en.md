@@ -287,9 +287,29 @@ Only dimensions whose producer<->consumer interface can be verified are pruned; 
 |----|------|------|
 | dense | yes | Three-Linear `gate/up/down_proj`, fused `gate_up_proj` (Phi-3/GLM-4), adjacent two Linear/Conv1D (incl. Bloom-style). Llama/Qwen2/Mistral/Qwen3 prune without manual `skip_layers`. |
 | cnn | yes | `variance_channel` (heuristic slicing); `reconstruct` (im2col least squares). ResNet-style independent blocks not recognized by same-level detection. |
-| moe | yes | Legacy `nn.ModuleList` + `nn.Linear` gate, fused batched experts (`MixtralExperts`/`Qwen3MoeExperts` + `*TopKRouter`), grouped routers (DeepseekV3-style), sibling two-tensor fused experts (GraniteMoE), nested router-bias (Ernie4.5). |
+| moe | yes | Legacy `nn.ModuleList` + `nn.Linear` gate, fused batched experts (`MixtralExperts`/`Qwen3MoeExperts` + `*TopKRouter`), grouped routers (`n_group`/`topk_group`), shared experts + sigmoid routing (noaux_tc), sibling two-tensor fused experts (GraniteMoE), nested router-bias (Ernie4.5). |
 
 Mechanical prunability is covered on 2-layer micro models across common architecture families
-(Llama/Qwen/Mixtral/GLM/Phi/GPT/DeepseekV3/GraniteMoE/Ernie4.5, etc.); see
+(Llama/Qwen/Mixtral/GLM/Phi/GPT/GraniteMoE/Ernie4.5, etc.); see
 `tests/amct_pytorch/test_pruning_real_hf_models.py` and
 `tests/amct_pytorch/test_pruning_auto_prune.py`.
+
+### Config sync after pruning
+
+Post-prune sizes are written back to `model.config` so that a `save_pretrained` config
+matches the pruned weights:
+
+- dense FFN intermediate dim -> `intermediate_size` / `ffn_hidden_size` / `n_inner`
+- expert count -> `num_local_experts` / `num_experts` / `n_routed_experts` / `n_experts`
+- experts per token -> `num_experts_per_tok` / `moe_top_k` / `top_k` /
+  `num_selected_experts`, **lowered** to at most the surviving expert count (otherwise the
+  router selects experts that no longer exist and the first forward fails)
+
+**When expert counts differ across layers**: a single scalar cannot describe non-uniform
+pruning, so the count fields are **left unwritten** and only a warning is logged — writing
+any one layer's value would contradict the others. `top_k` is still lowered to the count of
+the **thinnest** layer so every layer can run. Such a model cannot be restored by plain
+`from_pretrained` after `save_pretrained`; save the per-layer sizes yourself and rebuild the
+structure at load time. To avoid this, prune every layer at the same `prune_ratio` rather
+than using sensitivity allocation (`SENSITIVITY_ALLOC`), which produces non-uniform results.
+The same applies to non-uniform dense FFN widths.

@@ -188,7 +188,7 @@ None。剪枝为原地操作。剪枝统计通过调用方提供的 `report=Prun
 </tr>
 <tr id="row102001010010"><td class="cellrowborder" valign="top" width="13%" headers="mcps1.2.4.1.1 "><p id="p102001010010"><a name="p102001010010"></a><a name="p102001010010"></a>moe</p>
 </td>
-<td class="cellrowborder" valign="top" width="42%" headers="mcps1.2.4.1.2 "><p id="p102001010011"><a name="p102001010011"></a><a name="p102001010011"></a>nn.ModuleList experts + nn.Linear gate；融合批量 experts（MixtralExperts/Qwen3MoeExperts + *TopKRouter）；grouped router（DeepseekV3 风格）；同级两 tensor 融合 experts（GraniteMoE）；嵌套 router-bias（Ernie4.5）。</p>
+<td class="cellrowborder" valign="top" width="42%" headers="mcps1.2.4.1.2 "><p id="p102001010011"><a name="p102001010011"></a><a name="p102001010011"></a>nn.ModuleList experts + nn.Linear gate；融合批量 experts（MixtralExperts/Qwen3MoeExperts + *TopKRouter）；grouped router（n_group/topk_group）；共享专家 + sigmoid 路由（noaux_tc）；同级两 tensor 融合 experts（GraniteMoE）；嵌套 router-bias（Ernie4.5）。</p>
 </td>
 <td class="cellrowborder" valign="top" width="45%" headers="mcps1.2.4.1.3 "><p id="p102001010012"><a name="p102001010012"></a><a name="p102001010012"></a>整体移除路由专家，hidden in/out 不变；shared（常驻）专家自动排除。</p>
 </td>
