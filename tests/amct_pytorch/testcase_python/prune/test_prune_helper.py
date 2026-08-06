@@ -17,12 +17,19 @@
 # ----------------------------------------------------------------------------
 import os
 import unittest
+from unittest import mock
 
 import torch
 
+from amct_pytorch.classic.graph_based.amct_pytorch.prune.find_prune_index import (
+    PuneIndexHelper,
+)
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.prune.pruner_helper import (
     PruneHelper,
+)
+from amct_pytorch.classic.graph_based.amct_pytorch.prune.regular_prune_model import (
+    RegularModelPruner,
 )
 
 from .utils import models
@@ -30,6 +37,48 @@ from .utils import models
 DEVICE = 'cpu'
 
 CUR_DIR = os.path.split(os.path.realpath(__file__))[0]
+
+
+class TestPruneMissingModuleLog(unittest.TestCase):
+    def test_pune_index_helper_logs_missing_module_before_param_access(self):
+        model_helper = mock.Mock()
+        model_helper.get_module.side_effect = RuntimeError('missing')
+        record_helper = mock.Mock()
+        record_helper.get_prune_group.return_value = 1
+        record_helper.get_range.return_value = (0, 1)
+        prune_record = mock.Mock()
+        producer = mock.Mock()
+        producer.name = 'missing_layer'
+        prune_record.producer = [producer]
+
+        index_helper = object.__new__(PuneIndexHelper)
+        index_helper.param = {}
+        index_helper.model_helper = model_helper
+        index_helper.record = prune_record
+        index_helper.record_helper = record_helper
+        index_helper.global_prune_ratio = None
+        index_helper.global_prune_group = None
+        index_helper.global_ascend_optimized = False
+        index_helper.conf = mock.Mock()
+        index_helper.conf.get_layer_prune_config.return_value = {}
+
+        with mock.patch(
+            'amct_pytorch.classic.graph_based.amct_pytorch.prune.'
+            'find_prune_index.LOGGER.logd'
+        ) as logd_mock:
+            with self.assertRaises(AttributeError):
+                index_helper.prepare_param()
+
+        logd_mock.assert_called_once_with(
+            'Cannot find "missing_layer" in model, cannot do prune '
+        )
+
+    def test_regular_model_pruner_get_module_returns_none_for_missing_module(self):
+        pruner = object.__new__(RegularModelPruner)
+        pruner.model_helper = mock.Mock()
+        pruner.model_helper.get_module.side_effect = RuntimeError('missing')
+
+        self.assertIsNone(pruner.get_module('missing_layer'))
 
 
 class TestFilterPruneHelper(unittest.TestCase):

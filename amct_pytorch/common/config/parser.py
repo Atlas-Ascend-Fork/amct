@@ -304,7 +304,7 @@ def _build_layer_types_and_quant_type(quant_config, registed_alg):
         for src_op in src_ops:
             layer_types[src_op] = algo
         if algo not in BUILT_IN_ALGORITHM:
-            LOGGER.logd("Customized Algorithm {} is used fot quant".format(algo))
+            LOGGER.logd("Customized Algorithm {} is used for quant".format(algo))
         else:
             act_type = (
                 quant_config.quant_cfg.inputs_cfg.quant_type
