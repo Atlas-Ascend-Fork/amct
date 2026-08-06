@@ -237,3 +237,95 @@ token 效率必须使用“本轮增量 token”口径，不能把 warm session 
 5. 下一轮验收除路由、事实、计划、过程、token 五项外，增加“达到停止条件后的额外读取”计数。无新证据需求却继续读取完整目录或完整测试文件，直接判过程不通过。
 
 本轮只记录回归分析，没有修改运行时代码、skill 或 repo-map；上述收敛项留待后续独立实施与复测。
+
+## 12. 有无 `amct-coder` 的复杂任务对照评估
+
+在第二轮回归之后，进一步对以下两组记录做成对比较：
+
+- 有 `amct-coder`：`complex-test-skill.md`。
+- 无 `amct-coder`：`complext-test-noskill.md`。
+
+本实验的唯一目标变量是 `amct-coder` 是否存在。无 skill 组并非完全没有 skill，`amct-ops-dev`、`deploy-export`、`model-adapter`、`quant-workflow`、`quant-run` 等专项 skill 仍然可用，只移除了 `amct-coder`。因此，本节评估的是 `amct-coder` 在现有专项 skill 体系之上的增量价值，而不是“有全部 skill”和“完全无 skill”的差异。
+
+实际执行有 skill 组时，投喂文本没有包含“请使用 amct-coder”这类显式触发语。当前 `complex-test-skill.md` 保存的 Prompt 带有该表述，与真实投喂文本不完全一致；本次归因以实际执行条件为准，不把结果解释为显式名称诱导。这个差异也说明后续测试记录必须保存真实执行 Prompt，不能用事后整理文本替代。
+
+### 12.1 评分口径
+
+对每个用例按相同的 100 分 rubric 人工评分：
+
+| 维度 | 分值 | 判断重点 |
+| --- | ---: | --- |
+| 职责路由与分层边界 | 25 | 是否选择正确主 skill/子能力，是否拒绝错误落点和越层方案 |
+| 源码事实与调用链准确性 | 25 | 是否区分源码存在、活跃调用链、注册入口和实际编排点 |
+| 待确认契约与事实门禁 | 20 | 是否避免在 schema、dtype、layout、来源等未冻结时臆造确定方案 |
+| 条件式计划与验证闭环 | 20 | 是否覆盖依赖顺序、注册/公开面、测试和证据等级 |
+| 上下文与 token 效率 | 10 | 是否达到停止条件后及时停止，避免无关资料和实现细节扩张 |
+
+该评分用于同一组复杂用例的内部横向比较，不是客观精度指标。token 数来自测试文件中的近似记录，按万 token 汇总，适合判断数量级和相对变化，不适合解释小幅差异。
+
+### 12.2 逐例结果
+
+| 用例 | 核心能力 | 有 skill | 无 skill | 质量差值 | Token 对比 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| A | NPU 算子与上层 quantizer 混合职责拆分 | 94 | 80 | +14 | 65k vs 70k，下降约 7% |
+| B | deploy metadata/config 契约与活跃链 | 95 | 84 | +11 | 20k vs 30k，下降约 33% |
+| C | 新 dtype 的数值、注册、CLI、deploy 闭环 | 95 | 85 | +10 | 25k vs 25k，基本持平 |
+| D | classic graph 与 LLM new-path 注册体系隔离 | 97 | 79 | +18 | 10k vs 30k，下降约 67% |
+| E | eval 执行、方案选择与结果判读编排 | 82 | 91 | -9 | 6k vs 20k，下降约 70% |
+| **平均/合计** |  | **92.6** | **83.8** | **+8.8** | **126k vs 175k，下降约 28%** |
+
+按这套 rubric，五例中四例质量提升，一例退化。若把 `100 - 得分` 作为问题量，有 skill 组从无 skill 组的 16.2 降至 7.4，问题量约减少 54%。用平均质量除以总 token 构造仅供内部比较的相对效率指数，有 skill 组约提升 54%。后两个比例依赖人工评分上限，只能用于说明“提升质量的同时减少了上下文消耗”，不能作为稳定的统计精度结论。
+
+### 12.3 有效性来源
+
+用例 A～D 是 `amct-coder` 的主要成功区，改进不是简单增加信息量，而是提高判断纪律：
+
+- 用例 A：有 skill 时明确拆成 `amct-ops-dev` 和 `ops-boundary` 两个职责域，并把 `int_impl.py` 等消费点保持为待确认候选；无 skill 组虽然技术细节丰富，但更早锁定 kernel、tiling 和 Python 接入文件。主要收益是防止未冻结契约演变为伪确定计划。
+- 用例 B：有 skill 时正确保留在代码侧 `deploy-export-code`，并识别 `_refresh_config_tensor()`、`_convert_tensor()` 没有活跃运行时调用方；无 skill 组使用了偏交付执行的 `deploy-export`，最终计划可用，但职责识别和伪活跃路径门禁较弱。
+- 用例 C：有 skill 时先检查现有 new-path `mxfp`、classic 和 experimental FP4 实现，要求新 dtype 说明与既有格式的差异；无 skill 组能覆盖主要接入面，但缺少同等级的防重复和跨代码体系隔离门禁。
+- 用例 D：有 skill 时直接命中 BLOCKER，并区分 classic eager `AlgorithmRegistry`、graph_based 显式 pass 编排和 LLM `ALGO_REGISTRY` 三套机制；无 skill 组最终也否决了方案，但加载了不相关的 `model-adapter`，经历额外上下文扩张，并且对三套机制的表述不够精确。
+
+这些结果说明 `amct-coder` 最有效的部分是“编码总入口”的核心职责：按动作选主能力、声明仓库边界、冻结契约、检查活跃调用链，以及拦截不同代码体系之间的错误复用。由于无 skill 组仍然拥有其它专项 skill，这些提升可以视为 `amct-coder` 自身提供的增量效果。
+
+### 12.4 反例与当前缺口
+
+用例 E 是本轮重要反例。无 skill 组形成了较完整的：
+
+```text
+quant-workflow
+  -> scheme-recommendation
+  -> quant-run
+  -> direct-quant-eval
+```
+
+并结合 casebook 区分 Qwen3 Dense/MoE、已有 W4A8 先验和初始方案确认门禁。有 skill 组虽然正确识别 `quant-run` 与 `direct-quant-eval` 的职责，且 token 明显更低，但存在三点不足：
+
+1. `quant_target`、`quant_dtype` 尚未确认时，没有强制先进入 `scheme-recommendation`，却在示例命令中提前采用 `int` 等候选值。
+2. “运行两组 PPL 并比较”是执行与 reviewer 的组合动作，当前规则没有稳定形成多外部 skill 的顺序编排。
+3. 纯外部量化流程路由后仍保留“amct-coder 统一编排”的残余职责，没有完全退出不属于编码 skill 的流程。
+
+因此，`amct-coder` 当前不能解释为 AMCT 所有复杂请求的统一生命周期编排器。它对编码和 review 任务有效，但对方案推荐、实际跑数和结果判读等纯外部职责，应更快、更完整地切换到 `quant-workflow` 或对应叶子 skill。
+
+### 12.5 综合结论
+
+本轮将 `amct-coder` 的综合有效程度评为 **8/10：明确有效，但外部流程编排仍需修正**。
+
+可复核的观测结论是：
+
+- 复杂编码规划平均质量得分提高约 8.8 分。
+- 五个用例中四个提升，核心编码/review 用例 A～D 均提升。
+- 总 token 从约 175k 降到约 126k，下降约 28%。
+- 最大收益出现在 classic/new-path 越层识别，最大缺口出现在量化执行与判读的组合编排。
+- 在没有显式点名 `amct-coder` 的条件下仍产生上述差异，说明自然语言触发与内部主子能力路由基本有效。
+
+考虑样本只有五例、评分为人工 rubric、token 为近似值，且部分记录可能存在 warm session 资料复用，不能声称稳定提升恰好为 8.8 分。当前更稳妥的效果区间是：复杂编码规划质量提升约 **7～10 分**，token 降低约 **20%～30%**。
+
+### 12.6 下一轮修改与实验要求
+
+1. 为“运行 + 比较”“执行 + 判读”等组合动作增加明确路由模板，强制拆分 implementer 与 reviewer。
+2. `quant_target`、`quant_dtype`、算法等方案输入缺失时，先进入 `scheme-recommendation`；不得在命令模板中把候选值写成已确认选择。
+3. 命中 `quant-workflow`、`quant-run`、`direct-quant-eval` 等纯外部流程后，删除 amct-coder 的残余编排职责，只保留必要的跨职责契约汇总。
+4. 为契约未冻结的 Ops 只读规划增加快速早停路径。只输出职责拆分、契约清单、候选锚点和阶段依赖，不读取 kernel 模板全目录，不展开 tiling、UB、stream 等实现细节。
+5. 后续采用相同模型、相同工具环境、全新会话和完全一致的真实 Prompt；每个用例至少重复 3 次，盲评后再汇总均值和方差。
+6. 增加 2x2 对照：skill 存在/不存在 × Prompt 显式点名/不点名，以分别测量 skill 内容收益和显式触发收益。
+7. 测试记录必须保存真实投喂文本、cold/warm 状态、实际加载的 skill/reference 和增量 token；整理版 Prompt 与真实 Prompt 不一致时单独标注，不得混用。
