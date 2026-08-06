@@ -259,6 +259,38 @@ class TensorProtoHelper:
             else:
                 getattr(self.tensor, data_location).MergeFrom(data)
 
+    def set_packed_int4_data(self, data, dims):
+        """
+        Write already packed INT4 bytes using AMCT deploy tensor semantics.
+
+        Unlike set_data(data, 'INT4'), this method does not nibble-pack data
+        again. ``dims`` describes the packed physical shape.
+        """
+        int4_entry = self.data_type_maps.get('INT4')
+        if int4_entry is None:
+            raise ImportError('current onnx does not support TensorProto.INT4')
+
+        packed = np.asarray(data)
+        if not np.issubdtype(packed.dtype, np.integer):
+            raise TypeError('packed INT4 data must use an integer dtype')
+        packed_dims = list(dims)
+        if packed.size != int(np.prod(packed_dims)):
+            raise ValueError(
+                'packed INT4 data size {} does not match dims {}'.format(
+                    packed.size, packed_dims
+                )
+            )
+
+        self.tensor.data_type = int4_entry[self.proto_value_id]
+        self.tensor.ClearField('dims')
+        self.tensor.dims.extend(packed_dims)
+        self.tensor.ClearField(RAW_DATA)
+        setattr(
+            self.tensor,
+            RAW_DATA,
+            np.asarray(packed, dtype=np.uint8).reshape(-1).tobytes(),
+        )
+
     def get_external_data(self):
         '''
         Function: get data from external file. Return a numpy.array If

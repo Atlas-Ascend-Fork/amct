@@ -35,6 +35,45 @@ class TestInt4Pack(unittest.TestCase):
 
 class TestNativeInt4(unittest.TestCase):
     @unittest.skipUnless(hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4')
+    def test_set_packed_int4_data_keeps_bytes_and_physical_dims(self):
+        tensor = TensorProto()
+        packed = np.array([0x21, 0x87], dtype=np.uint8)
+
+        TensorProtoHelper(tensor).set_packed_int4_data(packed, dims=[1, 2])
+
+        self.assertEqual(tensor.data_type, TensorProto.INT4)
+        self.assertEqual(list(tensor.dims), [1, 2])
+        self.assertEqual(tensor.raw_data, packed.tobytes())
+
+    def test_set_packed_int4_data_rejects_size_mismatch(self):
+        with self.assertRaises(ValueError):
+            TensorProtoHelper(TensorProto()).set_packed_int4_data(
+                np.array([1], dtype=np.uint8), dims=[1, 2]
+            )
+
+    def test_set_packed_int4_data_rejects_float(self):
+        with self.assertRaises(TypeError):
+            TensorProtoHelper(TensorProto()).set_packed_int4_data(
+                np.array([1.0], dtype=np.float32), dims=[1]
+            )
+
+    @unittest.skipUnless(hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4')
+    def test_save_packed_int4_external_data_keeps_bytes(self):
+        tensor = TensorProto()
+        packed = np.array([0x21, 0x87], dtype=np.uint8)
+        helper = TensorProtoHelper(tensor)
+        helper.set_packed_int4_data(packed, dims=[1, 2])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            external_file = os.path.join(tmp, 'packed_int4.bin')
+            helper.save_external_data(external_file)
+            saved = np.fromfile(external_file, dtype=np.uint8)
+
+        np.testing.assert_array_equal(saved, packed)
+        meta = {item.key: item.value for item in tensor.external_data}
+        self.assertEqual(meta['length'], str(packed.nbytes))
+
+    @unittest.skipUnless(hasattr(TensorProto, 'INT4'), 'onnx 版本过旧，不支持原生 INT4')
     def test_set_get_native_int4(self):
         t = TensorProto()
         helper = TensorProtoHelper(t)

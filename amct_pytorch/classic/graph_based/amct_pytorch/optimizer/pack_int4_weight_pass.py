@@ -58,12 +58,12 @@ def pack_int4_weight_node(weight_node, cin_axis):
     helper = TensorProtoHelper(weight_node.proto, weight_node.model_path)
     int4_vals = np.asarray(helper.get_data())
     orig_dims = list(helper.tensor.dims)
-    # 沿 Cin 维 nibble-pack：该轴每两个 INT4 合成一个 INT8，其余轴不变
-    # （Cin -> Cin/2）。deploy 为 AMCT 专有格式，实际字节由 op_data_type
-    # 标记为 INT4-packed。Cin 奇数已在配置阶段拦截，不会走到这里。
+    # 沿 Cin 维 nibble-pack：该轴每两个 INT4 合成一个物理字节，其余轴不变
+    # （Cin -> Cin/2）。deploy 为 AMCT 专有格式：TensorProto 类型为 INT4，
+    # dims 为 pack 后的物理形状。Cin 奇数已在配置阶段拦截，不会走到这里。
     packed, new_dims = pack_along_axis(int4_vals, orig_dims, cin_axis)
     helper.clear_data()
-    helper.set_data(packed, 'INT8', dims=new_dims)
+    helper.set_packed_int4_data(packed, new_dims)
 
 
 class PackInt4WeightPass(BaseFusionPass):

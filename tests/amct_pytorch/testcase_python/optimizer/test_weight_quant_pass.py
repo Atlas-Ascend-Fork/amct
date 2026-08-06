@@ -22,6 +22,7 @@ from unittest.mock import patch
 
 import numpy as np
 import torch
+from onnx.onnx_pb import TensorProto
 
 from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.graph_optimizer import (
     GraphOptimizer,
@@ -324,7 +325,7 @@ class TestWeightQuantPass(unittest.TestCase):
         self.assertEqual(new_dims, expected, 'Cin axis must become ceil(axis/2)')
 
         weight_helper.clear_data()
-        weight_helper.set_data(packed, 'INT8', dims=new_dims)
+        weight_helper.set_packed_int4_data(packed, new_dims)
 
         # only the quant axis halves; other axes stay identical
         self.assertEqual(
@@ -334,7 +335,12 @@ class TestWeightQuantPass(unittest.TestCase):
         )
         # self-consistent: prod(new_dims) == raw_data byte length
         self.assertEqual(
+            weight_node.proto.data_type,
+            TensorProto.INT4,
+            'packed deploy weight must be marked as INT4',
+        )
+        self.assertEqual(
             int(np.prod(new_dims)),
             len(weight_node.proto.raw_data),
-            'packed INT8 tensor must satisfy prod(dims) == raw_data bytes',
+            'packed INT4 tensor must satisfy prod(dims) == raw_data bytes',
         )
