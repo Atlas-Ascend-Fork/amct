@@ -49,7 +49,7 @@ def save_flat_matrices(model, matrices_path):
             ]
             flat_matrices[i] = get_paras_dict_by_name(layer, required_names=paras_name)
     torch.save(flat_matrices, matrices_path)
-    logging.info("saved paramaters at {}".format(matrices_path))
+    logging.info("saved parameters at {}".format(matrices_path))
 
 
 def load_flat_matrices(model, matrix_path):

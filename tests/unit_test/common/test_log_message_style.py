@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 FORBIDDEN_FAILURE_WORDS = re.compile(
     r"\b(fail(?:ed|ure|s|ing)?|error(?:s)?|exception(?:s)?|abnormal)\b", re.I
 )
-KNOWN_LOG_TYPOS = re.compile(r"\b(fot|fuison|pune)\b")
+KNOWN_LOG_TYPOS = re.compile(r"\b(fot|fuison|pune|paramaters|otputs|reesult|unknow)\b")
 
 
 def _tracked_python_files():
@@ -103,7 +103,7 @@ def test_log_messages_have_no_known_typos():
         is_logger = (
             isinstance(func, ast.Attribute)
             and isinstance(func.value, ast.Name)
-            and func.value.id == "LOGGER"
+            and func.value.id in {"LOGGER", "logger", "logging"}
         )
         is_runtime_error = isinstance(func, ast.Name) and func.id == "RuntimeError"
         if not (is_logger or is_runtime_error) or not node.args:
