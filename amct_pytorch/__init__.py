@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
-# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,6 +47,18 @@ from amct_pytorch.common.config import (
     HIFP8_SMOOTHQUANT_CFG,
 )
 
+_PRUNING_EXPORTS = (
+    'prune',
+    'CNN_RECONSTRUCT_PRUNE_CFG',
+    'CNN_VARIANCE_PRUNE_CFG',
+    'DENSE_LOWVAR_PRUNE_CFG',
+    'FULL_STRUCTURED_PRUNE_CFG',
+    'MOE_MASSVAR_PRUNE_CFG',
+    'MOE_OUTPUT_MERGE_PRUNE_CFG',
+    'SENSITIVITY_ALLOC_PRUNE_CFG',
+)
+__all__ += list(_PRUNING_EXPORTS)
+
 
 # Classic graph-based interfaces (create_quant_config et al.) live in the
 # graph_based subpackage, which pulls in onnx + compiled protobufs. Resolve them
@@ -54,6 +66,10 @@ from amct_pytorch.common.config import (
 # can `import amct_pytorch` without those deps; a missing dependency then
 # surfaces loudly at the point of use instead of being swallowed at import.
 def __getattr__(name):
+    if name in _PRUNING_EXPORTS:
+        import amct_pytorch.pruning as _pruning
+
+        return getattr(_pruning, name)
     if name.startswith("__"):
         raise AttributeError(name)
     import importlib
@@ -69,3 +85,7 @@ def __getattr__(name):
     # it directly and never re-trigger __getattr__ (PEP 562 caches nothing).
     globals()[name] = value
     return value
+
+
+def __dir__():
+    return sorted(set(globals()) | set(_PRUNING_EXPORTS))

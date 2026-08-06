@@ -13,6 +13,7 @@ This project provides calling samples for different scenarios. After setting up 
 | Quantize model using OFMR algorithm | [OFMR](algorithms/ofmr/README_en.md) | Output feature Min-Max quantization |
 | Quantize model using MXQuant algorithm | [MXQuant](algorithms/mxquant/README_en.md) | Micro-scaling floating-point quantization (MXFP8/MXFP4) |
 | Quantize model using FlatQuant algorithm (Experimental) | [FlatQuant](algorithms/flatquant/README_en.md) | Quantization that flattens distribution through affine transformation |
+| Compress model using structured pruning | [Pruning](algorithms/pruning/README_en.md) | Structured pruning of dense FFN / CNN channels / MoE experts |
 
 > **Note**: Samples marked as "Experimental" depend on content under `amct_pytorch/experimental/`.
 > Build the package with `bash build.sh --torch --experimental` (or `--pkg --experimental`) before use.
