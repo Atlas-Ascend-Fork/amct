@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,8 +16,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
-from torch import Tensor # pylint: disable=E0401
-from torch.nn.parameter import Parameter # pylint: disable=E0401
+from torch import Tensor  # pylint: disable=E0401
+from torch.nn.parameter import Parameter  # pylint: disable=E0401
 
 from ...amct_pytorch.optimizer.base_module_fusion_pass import BaseModuleFusionPass
 from ...amct_pytorch.custom_op.fake_quant import FAKE_MODULES
@@ -30,6 +30,7 @@ class BiasFakequantModulePass(BaseModuleFusionPass):
     Function: Fakequant bias from int32 to float32
     APIs: match_pattern, do_pass
     """
+
     def __init__(self, records, num_bits):
         """
         Function: init object
@@ -52,8 +53,7 @@ class BiasFakequantModulePass(BaseModuleFusionPass):
         if name not in self.records:
             return False
 
-        if type(module).__name__ in FAKE_MODULES and \
-                module.sub_module.bias is not None:
+        if type(module).__name__ in FAKE_MODULES and module.sub_module.bias is not None:
             return True
 
         return False
@@ -74,9 +74,15 @@ class BiasFakequantModulePass(BaseModuleFusionPass):
             bias_np.reshape([-1]),
             self.records.get(object_name).get('weight_scale'),
             self.records.get(object_name).get('data_scale'),
-            object_name)
+            object_name,
+        )
         float32_bias = int32_bias.reshape(bias_shape).astype(np.float32)
         object_module.sub_module.bias = Parameter(
-            Tensor(float32_bias).to(device=object_module.sub_module.bias.device))
-        LOGGER.logd("FakeQuant bias from float32 to int32 for module '{}' " \
-            "success!".format(object_name), 'BiasFakequantModulePass')
+            Tensor(float32_bias).to(device=object_module.sub_module.bias.device)
+        )
+        LOGGER.logd(
+            "FakeQuant bias from float32 to int32 for module '{}' success!".format(
+                object_name
+            ),
+            'BiasFakequantModulePass',
+        )

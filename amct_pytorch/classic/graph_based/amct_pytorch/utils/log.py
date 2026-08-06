@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -35,6 +35,7 @@ class Logger(LoggerBase):
     Function：Record debug，info，warning，error level log
     API：logd, logi, logw, loge
     """
+
     def __init__(self, log_dir, log_name):
         """
         Function: Create logger, console handler and file handler
@@ -61,4 +62,7 @@ class Logger(LoggerBase):
         self.set_debug_level(console_level_pytorch, file_level_pytorch)
 
 
-LOGGER = Logger(os.path.join(os.getcwd(), LOG_FILE_DIR), 'amct_pytorch.classic.graph_based.amct_pytorch.log')
+LOGGER = Logger(
+    os.path.join(os.getcwd(), LOG_FILE_DIR),
+    'amct_pytorch.classic.graph_based.amct_pytorch.log',
+)

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -16,7 +16,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
-import os
 
 import pytest
 
@@ -64,6 +63,7 @@ def test_log_split_deco_shorter_than_length_returns_single_element():
 
 def test_logger_base_is_file_debug_level_true_when_file_handler_at_debug():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         lb.file_handler.setLevel(logging.DEBUG)
@@ -72,6 +72,7 @@ def test_logger_base_is_file_debug_level_true_when_file_handler_at_debug():
 
 def test_logger_base_is_file_debug_level_false_when_file_handler_at_info():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         lb.file_handler.setLevel(logging.INFO)
@@ -80,6 +81,7 @@ def test_logger_base_is_file_debug_level_false_when_file_handler_at_info():
 
 def test_logger_set_debug_level_valid():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         lb.set_debug_level("warning", "error")
@@ -89,6 +91,7 @@ def test_logger_set_debug_level_valid():
 
 def test_logger_set_debug_level_rejects_bad_print_level():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         with pytest.raises(ValueError, match="is invalid"):
@@ -97,6 +100,7 @@ def test_logger_set_debug_level_rejects_bad_print_level():
 
 def test_logger_set_debug_level_rejects_bad_save_level():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         with pytest.raises(ValueError, match="is invalid"):
@@ -105,6 +109,7 @@ def test_logger_set_debug_level_rejects_bad_save_level():
 
 def test_logger_logi_writes_info_message():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         lb.logi("hello info")
@@ -112,6 +117,7 @@ def test_logger_logi_writes_info_message():
 
 def test_logger_loge_writes_error_message():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         lb.loge("fatal error")
@@ -119,16 +125,18 @@ def test_logger_loge_writes_error_message():
 
 def test_logger_init_uses_env_print_level(monkeypatch):
     import tempfile
+
     monkeypatch.setenv(LOG_SET_ENV, "DEBUG")
     monkeypatch.setenv(LOG_FILE_SET_ENV, "ERROR")
     with tempfile.TemporaryDirectory() as tmpdir:
-        l = Logger(tmpdir, "test_env.log")
-        assert l.console_handler.level == logging.DEBUG
-        assert l.file_handler.level == logging.ERROR
+        log = Logger(tmpdir, "test_env.log")
+        assert log.console_handler.level == logging.DEBUG
+        assert log.file_handler.level == logging.ERROR
 
 
 def test_logger_init_rejects_bad_env_print_level(monkeypatch):
     import tempfile
+
     monkeypatch.setenv(LOG_SET_ENV, "GARBAGE")
     with tempfile.TemporaryDirectory() as tmpdir:
         with pytest.raises(ValueError, match="is invalid"):
@@ -137,6 +145,7 @@ def test_logger_init_rejects_bad_env_print_level(monkeypatch):
 
 def test_logger_init_rejects_bad_env_file_level(monkeypatch):
     import tempfile
+
     monkeypatch.setenv(LOG_SET_ENV, "INFO")
     monkeypatch.setenv(LOG_FILE_SET_ENV, "GARBAGE")
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -146,16 +155,18 @@ def test_logger_init_rejects_bad_env_file_level(monkeypatch):
 
 def test_logger_init_defaults_when_no_env(monkeypatch):
     import tempfile
+
     monkeypatch.delenv(LOG_SET_ENV, raising=False)
     monkeypatch.delenv(LOG_FILE_SET_ENV, raising=False)
     with tempfile.TemporaryDirectory() as tmpdir:
-        l = Logger(tmpdir, "test_no_env.log")
-        assert l.console_handler.level == logging.INFO
-        assert l.file_handler.level == logging.INFO
+        log = Logger(tmpdir, "test_no_env.log")
+        assert log.console_handler.level == logging.INFO
+        assert log.file_handler.level == logging.INFO
 
 
 def test_logger_logw_writes_warning_message():
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmpdir:
         lb = LoggerBase(tmpdir, "test.log")
         lb.logw("this is a warning")

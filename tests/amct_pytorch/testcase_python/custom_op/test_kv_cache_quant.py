@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -40,7 +40,7 @@ class TestKVCacheQuant(unittest.TestCase):
         # linear
         cls.linear = torch.nn.Linear(4, 8)
         cls.args_shape = (16, 4)
-        cls.input_data = (torch.randn(cls.args_shape))
+        cls.input_data = torch.randn(cls.args_shape)
         # cali_module
         cls.ifmr_args = {
             'layers_name': ['linear1'],
@@ -52,11 +52,13 @@ class TestKVCacheQuant(unittest.TestCase):
             'search_start': 0.7,
             'search_end': 1.3,
             'search_step': 0.01,
-            'quant_granularity': 1
+            'quant_granularity': 1,
         }
         cls.cali_module = IFMR(**cls.ifmr_args)
         # recorder
-        cls.record_file = os.path.join(cls.temp_folder, 'test_kv_cache_quant_record.txt')
+        cls.record_file = os.path.join(
+            cls.temp_folder, 'test_kv_cache_quant_record.txt'
+        )
         if not os.path.exists(cls.record_file):
             with open(cls.record_file, 'w') as f:
                 f.write('')
@@ -74,10 +76,12 @@ class TestKVCacheQuant(unittest.TestCase):
 
     def test_kv_cache_quant_forward_success(self):
         self.record_module.record_quant_layer(['linear1'])
-        kv_cache_quant_module = KVCacheQuant(self.linear,
-                                             self.cali_module,
-                                             self.record_module,
-                                             ['linear1'],
-                                             self.ifmr_args)
+        kv_cache_quant_module = KVCacheQuant(
+            self.linear,
+            self.cali_module,
+            self.record_module,
+            ['linear1'],
+            self.ifmr_args,
+        )
         kv_cache_quant_module.forward(self.input_data)
         self.assertTrue(os.path.exists(self.record_file))

@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -21,7 +21,6 @@ import torch
 from ...amct_pytorch.utils.vars import FLT_EPSILON
 from ...amct_pytorch.utils.weight_quant_api import adjust_deconv_weight_shape
 from ...amct_pytorch.utils.data_utils import convert_precision, pad_zero_by_group
-from ...amct_pytorch.parser.module_based_record_parser import get_layer_quant_params
 
 
 def check_quant_data(data, data_type):
@@ -33,12 +32,13 @@ def check_quant_data(data, data_type):
     """
     if data.dtype not in [torch.float32, torch.float16]:
         raise TypeError(
-            "Only {} with dtype 'torch.float32' and 'torch.float16' is supported to be " \
-            "quantized, but got {}.".format(data_type, data.dtype))
+            "Only {} with dtype 'torch.float32' and 'torch.float16' is supported to be "
+            "quantized, but got {}.".format(data_type, data.dtype)
+        )
     if not torch.all(torch.isfinite(data)):
         raise RuntimeError(
-            "The {} to be quantized has invalid value inf or nan!"
-            .format(data_type))
+            "The {} to be quantized has invalid value inf or nan!".format(data_type)
+        )
 
 
 def check_scale_offset(scale, offset):
@@ -54,12 +54,10 @@ def check_scale_offset(scale, offset):
     if not torch.all(torch.isfinite(1 / scale)):
         valid = False
     if not valid:
-        raise RuntimeError(
-            "Param scale has invalid value inf, nan or zeros!")
+        raise RuntimeError("Param scale has invalid value inf, nan or zeros!")
 
     if not torch.all(torch.isfinite(offset)):
-        raise RuntimeError(
-            "Param offset has invalid value inf or nan!")
+        raise RuntimeError("Param offset has invalid value inf or nan!")
 
 
 def check_tensor_balance_factor(tensor_balance_factor):
@@ -76,7 +74,8 @@ def check_tensor_balance_factor(tensor_balance_factor):
 
     if not valid:
         raise RuntimeError(
-            "The tensor balance factor is less than FLT_EPSILON or larger than 1/FLT_EPSILON!")
+            "The tensor balance factor is less than FLT_EPSILON or larger than 1/FLT_EPSILON!"
+        )
 
 
 def copy_tensor(target, source):
@@ -107,10 +106,10 @@ def tensor(value, dtype=torch.float, requires_grad=False, device=None):
         return value.clone().detach().requires_grad_(requires_grad)
     else:
         if device is not None:
-            return torch.tensor(value, dtype=dtype,
-                                requires_grad=requires_grad, device=device)
-        return torch.tensor(value, dtype=dtype,
-                            requires_grad=requires_grad)
+            return torch.tensor(
+                value, dtype=dtype, requires_grad=requires_grad, device=device
+            )
+        return torch.tensor(value, dtype=dtype, requires_grad=requires_grad)
 
 
 def process_scale(scale, offset, with_offset=True, numbit=8):
@@ -129,14 +128,16 @@ def process_scale(scale, offset, with_offset=True, numbit=8):
     if with_offset:
         offset = torch.where(
             scale < FLT_EPSILON,
-            tensor(-pow(base_bit, numbit - 1), device=offset.device), offset)
+            tensor(-pow(base_bit, numbit - 1), device=offset.device),
+            offset,
+        )
         scale = torch.where(
-            scale < FLT_EPSILON,
-            tensor(1.0, device=scale.device), scale)
+            scale < FLT_EPSILON, tensor(1.0, device=scale.device), scale
+        )
     else:
         scale = torch.where(
-            scale < FLT_EPSILON,
-            tensor(1.0, device=scale.device), scale)
+            scale < FLT_EPSILON, tensor(1.0, device=scale.device), scale
+        )
     check_scale_offset(scale, offset)
     return scale, offset
 
@@ -184,32 +185,36 @@ def check_group_param(inputs, channel_wise_flag, group, axis):
     if channel_wise_flag:
         if group != 1 or axis != 0:
             raise RuntimeError(
-                "channel wise quant do not support group and axis setting")
+                "channel wise quant do not support group and axis setting"
+            )
         return False
 
     if group > 1:
         if inputs.dim() <= axis:
             raise RuntimeError(
-                "group wise quant do not support axis setting larger than weight dim")
+                "group wise quant do not support axis setting larger than weight dim"
+            )
         return True
     return False
 
 
 def convert_to_per_group_shape(input_tensor, group_size):
     """
-    Converts the input 2D tensor into a shape grouped by the specified group size. 
+    Converts the input 2D tensor into a shape grouped by the specified group size.
     If the total number of elements isn't divisible by the group size, zero-padding is applied.
- 
+
     Parameters:
         input_tensor (Tensor): Input 2D tensor to be processed
         group_size (int): Target size for each group
- 
+
     Returns:
         Tensor: Reshaped tensor with grouped dimensions
     """
     input_tensor_pad = pad_zero_by_group(input_tensor, group_size)
 
-    return input_tensor_pad.reshape(input_tensor_pad.shape[0], input_tensor_pad.shape[1] // group_size, group_size)
+    return input_tensor_pad.reshape(
+        input_tensor_pad.shape[0], input_tensor_pad.shape[1] // group_size, group_size
+    )
 
 
 def get_int_quant_scope(data_type, asymmetric, abs_max_is_negative=False):
@@ -229,7 +234,7 @@ def get_int_quant_scope(data_type, asymmetric, abs_max_is_negative=False):
         return pow(2, quant_bits) - 1
 
     # Symmetric quantization, asymmetric quantization range (-128, 127), use 127 for positive values and
-    # 128 for negative values when the absolute value of the original data is the maximum. 
+    # 128 for negative values when the absolute value of the original data is the maximum.
     return abs_max_is_negative + pow(2, quant_bits - 1) - 1
 
 
@@ -254,14 +259,22 @@ def calculate_scale_offset(data_max, data_min, asymmetric, data_type):
         quant_scope = get_int_quant_scope(data_type, asymmetric)
 
         scale = (data_max - data_min) / quant_scope
-        offset = torch.where(data_max != data_min,
+        offset = torch.where(
+            data_max != data_min,
             -math.ceil(quant_scope / 2) - data_min / scale,
-            torch.tensor(-math.ceil(quant_scope / 2), dtype=data_max.dtype, device=data_max.device))
+            torch.tensor(
+                -math.ceil(quant_scope / 2),
+                dtype=data_max.dtype,
+                device=data_max.device,
+            ),
+        )
     # symmetric quant
     else:
         abs_max_is_negative = data_max.abs() < data_min.abs()
         quant_scope = get_int_quant_scope(data_type, asymmetric, abs_max_is_negative)
-        boundary = torch.where(abs(data_max) > abs(data_min), abs(data_max), abs(data_min))
+        boundary = torch.where(
+            abs(data_max) > abs(data_min), abs(data_max), abs(data_min)
+        )
         scale = boundary / quant_scope
         offset = torch.zeros_like(scale)
     int_quant_bits = int(data_type.replace('INT', '')) if 'INT' in data_type else None
@@ -274,7 +287,7 @@ def calculate_scale_offset(data_max, data_min, asymmetric, data_type):
 def apply_fake_quantize(data, scale, offset, data_type):
     """
     Do fake quantize
- 
+
     Parameters:
     data: The input tensor
     scale: scale in quant factors
@@ -287,9 +300,11 @@ def apply_fake_quantize(data, scale, offset, data_type):
     # do scale offset broadcast
     if scale.dim() >= 1 and len(scale) > 1:
         ori_shape = data.shape
-        shape = [1, ] * len(data.shape)
+        shape = [
+            1,
+        ] * len(data.shape)
         shape[0] = ori_shape[0]
-        
+
         scale = scale.reshape(shape)
         offset = offset.reshape(shape)
     # do fake quantize
@@ -339,7 +354,9 @@ def apply_true_quantize(data, scale, offset, data_type):
 
 
 @torch.no_grad()
-def calculate_scale_by_group_size(input_tensor, wts_type, group_size, is_padded=False, asymmetric=False):
+def calculate_scale_by_group_size(
+    input_tensor, wts_type, group_size, is_padded=False, asymmetric=False
+):
     """
     Calculates and returns the scale factor for each group based on the input tensor, weight type, and group size.
 

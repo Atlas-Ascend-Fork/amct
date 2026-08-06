@@ -13,7 +13,7 @@ def get_qmin_qmax(bits, sym):
         q_max = torch.tensor(2 ** (bits - 1) - 1)
         q_min = -q_max - 1
     else:
-        q_max, q_min = torch.tensor(2 ** bits - 1), 0
+        q_max, q_min = torch.tensor(2**bits - 1), 0
     return q_max, q_min
 
 
@@ -48,15 +48,16 @@ def asym_quant_dequant(x, scale, zero, maxq):
 
 class ActivationQuantizer(torch.nn.Module):
     '''
-        A class for quantizing the activations. We only support (both sym. and asym.) per-token quantization
-        for the activations.
+    A class for quantizing the activations. We only support (both sym. and asym.) per-token quantization
+    for the activations.
     '''
+
     def __init__(self, bits, sym=False, lac=False):
         super(ActivationQuantizer, self).__init__()
         self.bits = bits
         self.q_max, self.q_min = get_qmin_qmax(bits, sym)
         self.sym = sym
-        self.clip_factor_a = torch.nn.Parameter(torch.ones((1, )), requires_grad=True)
+        self.clip_factor_a = torch.nn.Parameter(torch.ones((1,)), requires_grad=True)
         self.lac = lac
         self.enable = True
 
@@ -72,7 +73,9 @@ class ActivationQuantizer(torch.nn.Module):
         if self.sym:
             return sym_quant_dequant(x, scale, self.q_max.to(x)).to(x_dtype)
         else:
-            return asym_quant_dequant(x, scale, zero, self.q_max.to(x)).to(x_dtype)  # TODO
+            return asym_quant_dequant(x, scale, zero, self.q_max.to(x)).to(
+                x_dtype
+            )  # TODO
 
     def get_scale_zero(self, x):
         q_max = self.q_max.to(x)
@@ -88,7 +91,7 @@ class ActivationQuantizer(torch.nn.Module):
         if self.sym:
             xmax = torch.maximum(torch.abs(xmin), xmax)
             tmp = xmax == 0
-            scale = (xmax / q_max)
+            scale = xmax / q_max
             scale[tmp] = 1
             scale = scale.repeat(1, reshaped_x.shape[-1]).reshape(init_shape)
             zero = torch.zeros_like(scale)
@@ -118,8 +121,13 @@ class WeightQuantizer(torch.nn.Module):
 
     def configure(
         self,
-        bits, perchannel=False, sym=True,
-        mse=False, norm=2.4, grid=100, maxshrink=.8
+        bits,
+        perchannel=False,
+        sym=True,
+        mse=False,
+        norm=2.4,
+        grid=100,
+        maxshrink=0.8,
     ):
         self.bits = bits
         self.perchannel = perchannel
@@ -129,7 +137,7 @@ class WeightQuantizer(torch.nn.Module):
         self.grid = grid
         self.maxshrink = maxshrink
         if sym:
-            self.maxq = torch.tensor(2**(bits - 1) - 1)
+            self.maxq = torch.tensor(2 ** (bits - 1) - 1)
         else:
             self.maxq = torch.tensor(2**bits - 1)
 
@@ -172,10 +180,11 @@ class WeightQuantizer(torch.nn.Module):
                     zero1 = torch.zeros_like(scale1)
                     q = sym_quant_dequant(x, scale1.unsqueeze(1), self.maxq)
                 else:
-
                     scale1 = (xmax1 - xmin1) / self.maxq
                     zero1 = torch.round(-xmin1 / scale1)
-                    q = asym_quant_dequant(x, scale1.unsqueeze(1), zero1.unsqueeze(1), self.maxq)
+                    q = asym_quant_dequant(
+                        x, scale1.unsqueeze(1), zero1.unsqueeze(1), self.maxq
+                    )
 
                 q -= x
                 q.abs_()
@@ -206,7 +215,7 @@ class WeightQuantizer(torch.nn.Module):
                     return sym_quant_dequant(x, self.scale, self.maxq).to(x_dtype)
             return asym_quant_dequant(x, self.scale, self.zero, self.maxq).to(x_dtype)
         return x
-    
+
     def forward(self, x):
         return self.quantize(x)
 
@@ -236,4 +245,3 @@ def set_act_quantizer_state(model, enable=True):
         if isinstance(m, ActivationQuantizer):
             m.enable = enable
     return model
-

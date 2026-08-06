@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -22,23 +22,25 @@ from functools import wraps
 
 
 def check_params(*type_args, **type_kwargs):
-    '''decorator util for check function params type '''
+    '''decorator util for check function params type'''
+
     def decorate(func):
-        ''' decorate function. '''
+        '''decorate function.'''
         func_sig = signature(func)
-        need_param_types = func_sig.bind_partial(*type_args,
-                                                 **type_kwargs).arguments
+        need_param_types = func_sig.bind_partial(*type_args, **type_kwargs).arguments
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            ''' decorate wrapper. '''
+            '''decorate wrapper.'''
             func_param_types = func_sig.bind(*args, **kwargs)
             for name, value in func_param_types.arguments.items():
                 if name in need_param_types:
                     if not isinstance(value, need_param_types[name]):
-                        raise TypeError('Func {} argument {} must be {}'. \
-                            format(func.__name__, name,
-                                   need_param_types[name]))
+                        raise TypeError(
+                            'Func {} argument {} must be {}'.format(
+                                func.__name__, name, need_param_types[name]
+                            )
+                        )
             return func(*args, **kwargs)
 
         return wrapper

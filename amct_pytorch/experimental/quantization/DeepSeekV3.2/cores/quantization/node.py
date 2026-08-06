@@ -32,7 +32,7 @@ def get_qmin_qmax(bits, sym):
         q_max = torch.tensor(2 ** (bits - 1) - 1)
         q_min = -q_max - 1
     else:
-        q_max, q_min = torch.tensor(2 ** bits - 1), 0
+        q_max, q_min = torch.tensor(2**bits - 1), 0
     return q_max, q_min
 
 
@@ -93,26 +93,41 @@ class ActivationQuantizer(torch.nn.Module):
     for the activations.
     '''
 
-    def __init__(self, bits, sym=False, lac=False, groupsize=-1, clip_ratio=None, per_tensor=False, head_num=-1):
+    def __init__(
+        self,
+        bits,
+        sym=False,
+        lac=False,
+        groupsize=-1,
+        clip_ratio=None,
+        per_tensor=False,
+        head_num=-1,
+    ):
         super(ActivationQuantizer, self).__init__()
         self.bits = bits
         self.q_max, self.q_min = get_qmin_qmax(bits, sym)
         self.sym = sym
         self.groupsize = groupsize
         if self.groupsize > 0:
-            raise NotImplementedError("Not support per-group quantization for activation yet.")
+            raise NotImplementedError(
+                "Not support per-group quantization for activation yet."
+            )
         self.lac = lac
         self._clip_ratio = clip_ratio
         if self.lac:
-            init_value = 4.
+            init_value = 4.0
             self.sigmoid = torch.nn.Sigmoid()
-            self.clip_factor_a_max = torch.nn.Parameter(torch.ones((1,)) * init_value, requires_grad=True)
-            self.clip_factor_a_min = torch.nn.Parameter(torch.ones((1,)) * init_value, requires_grad=True)
+            self.clip_factor_a_max = torch.nn.Parameter(
+                torch.ones((1,)) * init_value, requires_grad=True
+            )
+            self.clip_factor_a_min = torch.nn.Parameter(
+                torch.ones((1,)) * init_value, requires_grad=True
+            )
         self.enable = True
-        self.register_buffer(f'maxval', torch.zeros((1)))
-        self.register_buffer(f'minval', torch.zeros((1)))
-        self.register_buffer(f'scale', torch.ones((1)))
-        self.register_buffer(f'zero', torch.zeros((1)))
+        self.register_buffer('maxval', torch.zeros((1)))
+        self.register_buffer('minval', torch.zeros((1)))
+        self.register_buffer('scale', torch.ones((1)))
+        self.register_buffer('zero', torch.zeros((1)))
         self.is_observe = False
         self.is_deploy = False
         self.is_per_tensor = per_tensor
@@ -156,8 +171,9 @@ class ActivationQuantizer(torch.nn.Module):
         else:
             return asym_quant_dequant(x, scale, zero, self.q_max.to(x)).to(x_dtype)
 
-    def get_scale_zero_pertensor(self, ):
-
+    def get_scale_zero_pertensor(
+        self,
+    ):
         q_max = self.q_max.to(self.maxval.device)
         xmax = self.maxval.clone()
         xmin = self.minval.clone()
@@ -169,7 +185,7 @@ class ActivationQuantizer(torch.nn.Module):
             xmin = xmin * self._clip_ratio
         if self.sym:
             xmax = torch.maximum(torch.abs(xmin), xmax)
-            scale = (xmax / q_max)
+            scale = xmax / q_max
 
             zero = torch.zeros_like(scale)
         else:
@@ -198,7 +214,7 @@ class ActivationQuantizer(torch.nn.Module):
             xmin = xmin * self._clip_ratio
         if self.sym:
             tmp = xmax == 0
-            scale = (xmax / q_max)
+            scale = xmax / q_max
             scale[tmp] = 1
             scale = scale.repeat(1, reshaped_x.shape[-1]).reshape(init_shape)
             zero = torch.zeros_like(scale)
@@ -227,9 +243,14 @@ class WeightQuantizer(torch.nn.Module):
         self.enable = True
 
     def configure(
-            self,
-            bits, perchannel=False, sym=True,
-            mse=False, norm=2.4, grid=100, maxshrink=.8
+        self,
+        bits,
+        perchannel=False,
+        sym=True,
+        mse=False,
+        norm=2.4,
+        grid=100,
+        maxshrink=0.8,
     ):
         self.bits = bits
         self.perchannel = perchannel
@@ -241,7 +262,7 @@ class WeightQuantizer(torch.nn.Module):
         if sym:
             self.maxq = torch.tensor(2 ** (bits - 1) - 1)
         else:
-            self.maxq = torch.tensor(2 ** bits - 1)
+            self.maxq = torch.tensor(2**bits - 1)
 
     def find_params(self, x):
         if self.bits == 16 or (not self.enable):
@@ -282,10 +303,11 @@ class WeightQuantizer(torch.nn.Module):
                     zero1 = torch.zeros_like(scale1)
                     q = sym_quant_dequant(x, scale1.unsqueeze(1), self.maxq)
                 else:
-
                     scale1 = (xmax1 - xmin1) / self.maxq
                     zero1 = torch.round(-xmin1 / scale1)
-                    q = asym_quant_dequant(x, scale1.unsqueeze(1), zero1.unsqueeze(1), self.maxq)
+                    q = asym_quant_dequant(
+                        x, scale1.unsqueeze(1), zero1.unsqueeze(1), self.maxq
+                    )
 
                 q -= x
                 q.abs_()

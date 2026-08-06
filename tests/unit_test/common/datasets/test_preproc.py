@@ -84,6 +84,7 @@ def test_pileval_awq_skips_empty_encoded_samples():
             if text == "skip me":
                 return []
             return [ord(c) for c in text.split()]
+
     ds = _texts_to_dataset(["skip me", "a a a a a a a a", "b b b b b b b b"])
     samples = preproc.pileval_awq(ds, _SelectiveTokenizer(), n_samples=1, seq_len=8)
     assert len(samples) == 1

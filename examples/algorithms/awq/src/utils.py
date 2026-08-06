@@ -4,7 +4,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -23,19 +23,21 @@ from transformers import AutoTokenizer, LlamaForCausalLM, AutoModelForCausalLM
 
 def build_enc(model_path):
     enc = AutoTokenizer.from_pretrained(
-            model_path, use_fast=False, trust_remote_code=True
-        )
+        model_path, use_fast=False, trust_remote_code=True
+    )
     return enc
 
 
 def get_llama2(model_path, seqlen=2048):
     print(f'Getting official pretrained {model_path}')
 
-    model = LlamaForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, offload_folder="offload/")
+    model = LlamaForCausalLM.from_pretrained(
+        model_path, torch_dtype=torch.float16, offload_folder="offload/"
+    )
 
     model.seqlen = seqlen
     enc = AutoTokenizer.from_pretrained(
-            model_path, use_fast=False, trust_remote_code=True
+        model_path, use_fast=False, trust_remote_code=True
     )
     return model, enc
 
@@ -43,11 +45,13 @@ def get_llama2(model_path, seqlen=2048):
 def get_qwen(model_path, seqlen=2048):
     print(f'Getting official pretrained {model_path}')
 
-    model = AutoModelForCausalLM.from_pretrained(model_path, device_map="auto", torch_dtype=torch.float16)
-    
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, device_map="auto", torch_dtype=torch.float16
+    )
+
     model.seqlen = seqlen
     enc = AutoTokenizer.from_pretrained(
-            model_path, use_fast=False, trust_remote_code=True
+        model_path, use_fast=False, trust_remote_code=True
     )
     return model, enc
 
@@ -56,7 +60,7 @@ def get_test_dataset(enc, seqlen):
     print('Loading dataset: Wikitext2')
     testenc = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
     testenc = enc("\n\n".join(testenc["text"]), return_tensors="pt")
-    
+
     return testenc
 
 
@@ -92,7 +96,7 @@ def get_calib_dataset(tokenizer=None, n_samples=512, block_size=512):
 def infer_model(model, testenc):
     test_start_time = time.time()
     with torch.no_grad():
-        model(testenc[:, :model.seqlen].to(next(model.parameters()).device))
+        model(testenc[:, : model.seqlen].to(next(model.parameters()).device))
     test_end_time = time.time()
     total_time = test_end_time - test_start_time
     print('Calibration time taken: ', total_time // 60, 'min ', total_time % 60, 's')

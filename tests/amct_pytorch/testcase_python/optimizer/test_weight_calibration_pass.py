@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -15,15 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import json
 import os
-import sys
 import unittest
 from io import BytesIO
-from unittest import mock
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
-import numpy as np
 import torch
 from google.protobuf import text_format
 
@@ -39,9 +35,6 @@ from amct_pytorch.classic.graph_based.amct_pytorch.optimizer.weight_calibration 
 from amct_pytorch.classic.graph_based.amct_pytorch.parser.parser import Parser
 from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pb2,
-)
-from amct_pytorch.classic.graph_based.amct_pytorch.utils.onnx_initializer_util import (
-    TensorProtoHelper,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.vars import (
     QUANTIZABLE_TYPES,
@@ -95,7 +88,7 @@ class TestWeightsCalibrationPass(unittest.TestCase):
         pass
 
     def test_weight_cali(self):
-        ''' test: conv(+ bias), Gemm, Matmul'''
+        """test: conv(+ bias), Gemm, Matmul"""
         optimizer = ModelOptimizer()
         optimizer.add_pass(WeightsCalibrationPass())
         optimizer.do_optimizer(self.model_001, self.graph)
@@ -108,7 +101,7 @@ class TestWeightsCalibrationPass(unittest.TestCase):
         self.assertEqual(8, len(records.record))
 
     def test_weight_cali_trans(self):
-        ''' test: conv(+ bias), Gemm, Matmul'''
+        """test: conv(+ bias), Gemm, Matmul"""
         matmul_node = self.graph.get_node_by_name('fc.2')
         matmul_node.set_attr('with_weights_trans', True)
 
@@ -128,16 +121,22 @@ class TestWeightsCalibrationPass(unittest.TestCase):
         class ConvTransposeNet(torch.nn.Module):
             def __init__(self):
                 super(ConvTransposeNet, self).__init__()
-                self.conv_transpose = torch.nn.ConvTranspose2d(3, 3, 8, stride=32, bias=False)
+                self.conv_transpose = torch.nn.ConvTranspose2d(
+                    3, 3, 8, stride=32, bias=False
+                )
 
             def forward(self, x):
                 return self.conv_transpose(x)
 
         model = ConvTransposeNet()
-        mock_get_layer_config.return_value = {'weight_quant_params': {'wts_algo': 'arq_quantize',
-                                                                      'num_bits': 8,
-                                                                      'channel_wise': False,
-                                                                      'with_offset': False}}
+        mock_get_layer_config.return_value = {
+            "weight_quant_params": {
+                "wts_algo": "arq_quantize",
+                "num_bits": 8,
+                "channel_wise": False,
+                "with_offset": False,
+            }
+        }
 
         tmp_onnx = BytesIO()
         Parser.export_onnx(model, torch.randn((1, 3, 224, 224)), tmp_onnx)
@@ -150,23 +149,31 @@ class TestWeightsCalibrationPass(unittest.TestCase):
             named_module_dict[name] = mod
             if name == deconv_name:
                 deconv_module = mod
-        self.assertIsNone(WeightsCalibrationPass().do_pass(model, deconv_module, deconv_name, graph))
+        self.assertIsNone(
+            WeightsCalibrationPass().do_pass(model, deconv_module, deconv_name, graph)
+        )
 
     @patch.object(Configuration, 'get_layer_config')
     def test_conv_transpose_1d_weights_calibration(self, mock_get_layer_config):
         class ConvTransposeNet(torch.nn.Module):
             def __init__(self):
                 super(ConvTransposeNet, self).__init__()
-                self.conv_transpose = torch.nn.ConvTranspose1d(3, 3, 8, stride=32, bias=False)
+                self.conv_transpose = torch.nn.ConvTranspose1d(
+                    3, 3, 8, stride=32, bias=False
+                )
 
             def forward(self, x):
                 return self.conv_transpose(x)
 
         model = ConvTransposeNet()
-        mock_get_layer_config.return_value = {'weight_quant_params': {'wts_algo': 'arq_quantize',
-                                                                      'num_bits': 8,
-                                                                      'channel_wise': False,
-                                                                      'with_offset': False}}
+        mock_get_layer_config.return_value = {
+            "weight_quant_params": {
+                "wts_algo": "arq_quantize",
+                "num_bits": 8,
+                "channel_wise": False,
+                "with_offset": False,
+            }
+        }
 
         tmp_onnx = BytesIO()
         Parser.export_onnx(model, torch.randn((1, 3, 224)), tmp_onnx)
@@ -179,8 +186,9 @@ class TestWeightsCalibrationPass(unittest.TestCase):
             named_module_dict[name] = mod
             if name == deconv_name:
                 deconv_module = mod
-        self.assertIsNone(WeightsCalibrationPass().do_pass(model, deconv_module, deconv_name, graph))
-
+        self.assertIsNone(
+            WeightsCalibrationPass().do_pass(model, deconv_module, deconv_name, graph)
+        )
 
     def test_broad_cast_tensor_balance_factor(self):
         class Conv1dModule(torch.nn.Module):
@@ -190,17 +198,18 @@ class TestWeightsCalibrationPass(unittest.TestCase):
 
             def forward(self, x):
                 return self.conv1d(x)
+
         conv1d_module = Conv1dModule()
         tmp_onnx = BytesIO()
         Parser.export_onnx(conv1d_module, torch.randn(3, 3, 3), tmp_onnx)
         graph = Parser.parse_net_to_graph(tmp_onnx)
-        node = graph.get_node_by_name(CONV1D)
+        graph.get_node_by_name(CONV1D)
         for name, mod in conv1d_module.named_modules():
             if name == CONV1D:
                 conv1d_mod = mod
                 break
 
         modified_weight = WeightsCalibrationPass.apply_balance_scale_to_weight(
-            conv1d_mod, CONV1D, [3, 3, 3], torch.ones(3, 3, 3))
+            conv1d_mod, CONV1D, [3, 3, 3], torch.ones(3, 3, 3)
+        )
         self.assertTrue((modified_weight == torch.ones(3, 3, 3) * 3).all())
-

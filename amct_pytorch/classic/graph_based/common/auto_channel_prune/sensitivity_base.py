@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -18,11 +18,14 @@
 
 
 class SensitivityBase:
-    """ base class of sensitivity"""
+    """base class of sensitivity"""
+
     def __init__(self, loss_func=None):
         self.loss_func = loss_func
 
-    def setup_initialization(self, graph_tuple, input_data, test_iteration, output_nodes=None):
+    def setup_initialization(
+        self, graph_tuple, input_data, test_iteration, output_nodes=None
+    ):
         """
         Function: setup initialization
         Param: graph_tuple (graph, graph_info)

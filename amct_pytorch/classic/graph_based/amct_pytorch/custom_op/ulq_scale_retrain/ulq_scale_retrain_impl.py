@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -17,8 +17,12 @@
 # ----------------------------------------------------------------------------
 import torch
 
-from ....amct_pytorch.custom_op.utils import calculate_scale_offset, calculate_scale_by_group_size, \
-    convert_to_per_group_shape, apply_fake_quantize_and_anti_quantize
+from ....amct_pytorch.custom_op.utils import (
+    calculate_scale_offset,
+    calculate_scale_by_group_size,
+    convert_to_per_group_shape,
+    apply_fake_quantize_and_anti_quantize,
+)
 
 
 def fake_quant_functor(data, dims, data_type, scale, offset, channel_wise, group):
@@ -45,8 +49,9 @@ def fake_quant_functor(data, dims, data_type, scale, offset, channel_wise, group
     return data.reshape(dims)
 
 
-def ulq_scale_retrain_forward_pytorch(input_tensor, scale, offset, num_bits, channel_wise, \
-                                      arq_init, s_rec_flag, group):
+def ulq_scale_retrain_forward_pytorch(
+    input_tensor, scale, offset, num_bits, channel_wise, arq_init, s_rec_flag, group
+):
     """
     Function: Perform forward pass for ULQ scale retraining
     Inputs:
@@ -78,26 +83,31 @@ def ulq_scale_retrain_forward_pytorch(input_tensor, scale, offset, num_bits, cha
             data_min = torch.min(input_tensor, dim=1).values
             scale, offset = calculate_scale_offset(data_max, data_min, False, data_type)
         else:
-            scale, _ = calculate_scale_by_group_size(input_tensor, data_type, group_size)
+            scale, _ = calculate_scale_by_group_size(
+                input_tensor, data_type, group_size
+            )
             scale = scale.squeeze(1).squeeze(1)
             offset = torch.zeros_like(scale)
         scale = scale.reciprocal() if s_rec_flag else scale
 
     scale = scale.reciprocal() if s_rec_flag else scale
-    output_tensor = fake_quant_functor(input_tensor, sizes, data_type, scale, offset, channel_wise, group)
-    
+    output_tensor = fake_quant_functor(
+        input_tensor, sizes, data_type, scale, offset, channel_wise, group
+    )
+
     if not arq_init:
         scale = scale.unsqueeze(1)
         offset = offset.unsqueeze(1)
-    
+
     scale = scale.reciprocal() if s_rec_flag else scale
     scale.requires_grad = True
     output_tensor = output_tensor.reshape(sizes)
     return output_tensor, scale, offset
-    
-    
-    
-def ulq_scale_retrain_backward_pytorch(input_tensor, grad_outputs, scale, num_bits, srec_flag, group, axis):
+
+
+def ulq_scale_retrain_backward_pytorch(
+    input_tensor, grad_outputs, scale, num_bits, srec_flag, group, axis
+):
     """
     Function: Perform backward pass for ULQ scale retraining
     Inputs:
@@ -114,36 +124,38 @@ def ulq_scale_retrain_backward_pytorch(input_tensor, grad_outputs, scale, num_bi
     """
     if input_tensor.size(0) % group != 0:
         raise ValueError("Input tensor size must be divisible by the number of groups")
-    
+
     sizes = list(input_tensor.size())
-    
+
     if len(sizes) == 4:
         input_tensor = input_tensor.view(sizes[0], -1)
         grad_outputs = grad_outputs.view(sizes[0], -1)
-    
+
     if scale.numel() > 1:
         input_tensor = input_tensor.view(sizes[axis], -1)
         grad_outputs = grad_outputs.view(sizes[axis], -1)
-    
+
     if group > 1:
         scale_process = scale.repeat_interleave(input_tensor.size(axis) // group)
     else:
         scale_process = scale
-    
-    if srec_flag:
-        scale_process = 1 / scale_process
-    
-    grad_scales = calc_scale_gradient(input_tensor, scale_process, grad_outputs, num_bits, srec_flag)
 
     if srec_flag:
         scale_process = 1 / scale_process
-    
+
+    grad_scales = calc_scale_gradient(
+        input_tensor, scale_process, grad_outputs, num_bits, srec_flag
+    )
+
+    if srec_flag:
+        scale_process = 1 / scale_process
+
     if group > 1:
         grad_scales = grad_scales.view(group, -1).mean(dim=1)
-    
+
     if len(sizes) == 4:
         grad_outputs = grad_outputs.view(sizes[0], sizes[1], sizes[2], sizes[3])
-    
+
     return grad_outputs, grad_scales
 
 
@@ -160,25 +172,30 @@ def calc_scale_gradient(input_tensor, scale_process, grad_outputs, num_bits, sre
         grad_scales: torch.Tensor - Gradient of the loss with respect to the scale
     """
     half_stage = 2 ** (num_bits - 1)
-    
+
     upper_mask = (input_tensor > scale_process.unsqueeze(1) * (half_stage - 1)).float()
     lower_mask = (input_tensor < -scale_process.unsqueeze(1) * half_stage).float()
     inner_mask = 1 - (upper_mask + lower_mask)
-    
+
     not_round_tensor = input_tensor / scale_process.unsqueeze(1)
     round_tensor = not_round_tensor.round()
-    grad_scales = (round_tensor - not_round_tensor) * inner_mask + \
-        (-half_stage * lower_mask) + ((half_stage - 1) * upper_mask)
-    
+    grad_scales = (
+        (round_tensor - not_round_tensor) * inner_mask
+        + (-half_stage * lower_mask)
+        + ((half_stage - 1) * upper_mask)
+    )
+
     if srec_flag:
-        grad_scales = -grad_scales * (scale_process ** 2).unsqueeze(1)
-    
-    grad_scales = grad_scales * (torch.sqrt(torch.tensor(input_tensor.size(1) * (half_stage - 1))).reciprocal())
-    
+        grad_scales = -grad_scales * (scale_process**2).unsqueeze(1)
+
+    grad_scales = grad_scales * (
+        torch.sqrt(torch.tensor(input_tensor.size(1) * (half_stage - 1))).reciprocal()
+    )
+
     if scale_process.size(0) > 1:
         grad_scales = (grad_scales * grad_outputs).sum(1)
     else:
         grad_scales = (grad_scales * grad_outputs).sum()
         grad_scales = grad_scales.unsqueeze(0)
-    
+
     return grad_scales

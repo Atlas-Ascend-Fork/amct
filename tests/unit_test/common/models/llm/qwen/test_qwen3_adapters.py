@@ -204,7 +204,9 @@ def test_qwen3_build_quant_block_applies_attn():
     decoder_layer = MagicMock()
     decoder_layer.self_attn = MagicMock()
     with patch.object(obj, 'block', return_value=decoder_layer):
-        with patch('amct_pytorch.common.models.llm.qwen.qwen3.qwen3.apply_quant_to_attn') as mock_apply:
+        with patch(
+            'amct_pytorch.common.models.llm.qwen.qwen3.qwen3.apply_quant_to_attn'
+        ) as mock_apply:
             result = obj.build_quant_block(0)
             mock_apply.assert_called_once()
             assert result is decoder_layer
@@ -264,7 +266,10 @@ def test_qwen3_5_moe_iter_deploy_bindings_keeps_non_expert_path():
     bindings = list(obj.iter_deploy_bindings(layer_idx=1, block=block))
 
     assert len(bindings) == 1
-    assert bindings[0][0] == "model.language_model.layers.1.mlp.shared_expert.down_proj.weight"
+    assert (
+        bindings[0][0]
+        == "model.language_model.layers.1.mlp.shared_expert.down_proj.weight"
+    )
 
 
 def test_qwen3_5_moe_iter_deploy_bindings_raises_on_malformed_expert_name():

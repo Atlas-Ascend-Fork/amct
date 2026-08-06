@@ -6,7 +6,7 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
 
 # Unless required by applicable law or agreed to in writing, software
@@ -29,10 +29,11 @@ WEIGHT_PARAM_NAME = 'weight'
 
 
 class ModuleInfo:
-    """ help to find some features for module from torch"""
+    """help to find some features for module from torch"""
+
     @staticmethod
     def get_wts_cout_cin(module):
-        """ get weight's cout axis and cin axis"""
+        """get weight's cout axis and cin axis"""
         info_map = {
             'Conv2d': [0, 1],
             'Conv3d': [0, 1],
@@ -45,7 +46,9 @@ class ModuleInfo:
         support_type = info_map.keys()
         mod_type = type(module).__name__
         if mod_type not in support_type:
-            raise TypeError('Invalid module type {}, only support {}'.format(mod_type, support_type))
+            raise TypeError(
+                'Invalid module type {}, only support {}'.format(mod_type, support_type)
+            )
 
         cout_axis, cin_axis = info_map.get(mod_type)
 
@@ -53,7 +56,7 @@ class ModuleInfo:
 
     @staticmethod
     def get_param_tensor(module, param_name):
-        """ get param' tensor, param's name is param_name"""
+        """get param' tensor, param's name is param_name"""
         param_obj = getattr(module, param_name)
         if param_obj is None:
             return None
@@ -63,11 +66,13 @@ class ModuleInfo:
         if isinstance(param_obj, torch.Tensor):
             return param_obj
 
-        raise RuntimeError('Unexpected type {} to get {}'.format(type(param_obj), param_name))
+        raise RuntimeError(
+            'Unexpected type {} to get {}'.format(type(param_obj), param_name)
+        )
 
     @staticmethod
     def set_param_tensor(module, param_name, data_tensor):
-        """ set param' tensor as data_tensor, param's name is param_name"""
+        """set param' tensor as data_tensor, param's name is param_name"""
         param_obj = getattr(module, param_name)
         if isinstance(param_obj, torch.nn.parameter.Parameter):
             param_obj.data = data_tensor
@@ -76,11 +81,13 @@ class ModuleInfo:
             setattr(module, param_name, data_tensor)
             return
 
-        raise RuntimeError('Unexpected type {} to set {}'.format(type(param_obj), param_name))
+        raise RuntimeError(
+            'Unexpected type {} to set {}'.format(type(param_obj), param_name)
+        )
 
 
 def create_prune_helper(module):
-    """ create helper to prune a module """
+    """create helper to prune a module"""
     if Conv2dModulePruneHelper.match_pattern(module):
         return Conv2dModulePruneHelper(module)
 
@@ -97,12 +104,13 @@ def create_prune_helper(module):
 
 
 class ModulePruneHelper:
-    """helper to prune a module """
+    """helper to prune a module"""
+
     param_cout_cin = {}
     support_type = []
 
     def __init__(self, module):
-        """ init function"""
+        """init function"""
         self.module = module
         self.backup = {}
         self.cin_prune_list = None
@@ -118,12 +126,14 @@ class ModulePruneHelper:
         """
         for name, value in backup.items():
             if not hasattr(module, name):
-                raise RuntimeError("module {} doesn't have {}".format(module_name, name))
+                raise RuntimeError(
+                    "module {} doesn't have {}".format(module_name, name)
+                )
             if isinstance(value, torch.Tensor):
                 ModuleInfo.set_param_tensor(module, name, value)
             else:
                 setattr(module, name, value)
-    
+
     @classmethod
     def match_pattern(cls, module):
         """
@@ -137,7 +147,7 @@ class ModulePruneHelper:
         return True
 
     def do_prune(self, cin_prune_list, cout_prune_list):
-        """do prune """
+        """do prune"""
         self.cin_prune_list = cin_prune_list
         self.cout_prune_list = cout_prune_list
         self.modify_param()
@@ -158,10 +168,14 @@ class ModulePruneHelper:
             self.backup[param_name] = data_tensor
             cout_axis, cin_axis = param_cout_cin[param_name]
             if cin_axis is not None and cin_prune_list:
-                data_tensor = prune_tensor_channel(data_tensor, cin_axis, cin_prune_list)
+                data_tensor = prune_tensor_channel(
+                    data_tensor, cin_axis, cin_prune_list
+                )
                 ModuleInfo.set_param_tensor(object_module, param_name, data_tensor)
             if cout_axis is not None and cout_prune_list:
-                data_tensor = prune_tensor_channel(data_tensor, cout_axis, cout_prune_list)
+                data_tensor = prune_tensor_channel(
+                    data_tensor, cout_axis, cout_prune_list
+                )
                 ModuleInfo.set_param_tensor(object_module, param_name, data_tensor)
 
     def modify_attr(self):
@@ -170,11 +184,12 @@ class ModulePruneHelper:
 
 
 class Conv2dModulePruneHelper(ModulePruneHelper):
-    """helper to prune a conv module """
-    support_type = ['Conv2d', ]
-    param_cout_cin = {
-        'weight': [0, 1],
-        'bias': [0, None]}
+    """helper to prune a conv module"""
+
+    support_type = [
+        'Conv2d',
+    ]
+    param_cout_cin = {'weight': [0, 1], 'bias': [0, None]}
 
     def is_depthwise(self):
         """whether module is depthwise or not"""
@@ -256,11 +271,12 @@ class Conv2dModulePruneHelper(ModulePruneHelper):
 
 
 class ConvTransposeModulePruneHelper(ModulePruneHelper):
-    """helper to prune a deconv module """
-    support_type = ['ConvTranspose2d', ]
-    param_cout_cin = {
-        'weight': [1, 0],
-        'bias': [0, None]}
+    """helper to prune a deconv module"""
+
+    support_type = [
+        'ConvTranspose2d',
+    ]
+    param_cout_cin = {'weight': [1, 0], 'bias': [0, None]}
 
     def is_depthwise(self):
         """whether module is depthwise or not"""
@@ -294,14 +310,18 @@ class ConvTransposeModulePruneHelper(ModulePruneHelper):
             self.backup[param_name] = data_tensor
             cout_axis, cin_axis = param_cout_cin[param_name]
             if cin_axis is not None and cin_prune_list:
-                data_tensor = prune_tensor_channel(data_tensor, cin_axis, cin_prune_list)
+                data_tensor = prune_tensor_channel(
+                    data_tensor, cin_axis, cin_prune_list
+                )
                 ModuleInfo.set_param_tensor(object_module, param_name, data_tensor)
             if cout_axis is not None and cout_prune_list:
                 if self.is_depthwise() and param_name == WEIGHT_PARAM_NAME:
                     continue
                 if self.is_group_conv() and param_name == WEIGHT_PARAM_NAME:
                     data_tensor = trans_shape(data_tensor, object_module.groups)
-                data_tensor = prune_tensor_channel(data_tensor, cout_axis, cout_prune_list)
+                data_tensor = prune_tensor_channel(
+                    data_tensor, cout_axis, cout_prune_list
+                )
                 if self.is_group_conv() and param_name == WEIGHT_PARAM_NAME:
                     data_tensor = restore_shape(data_tensor, object_module.groups)
                 ModuleInfo.set_param_tensor(object_module, param_name, data_tensor)
@@ -318,11 +338,12 @@ class ConvTransposeModulePruneHelper(ModulePruneHelper):
 
 
 class LinearModulePruneHelper(ModulePruneHelper):
-    """helper to prune a Linear module """
-    support_type = ['Linear', ]
-    param_cout_cin = {
-        'weight': [0, 1],
-        'bias': [0, None]}
+    """helper to prune a Linear module"""
+
+    support_type = [
+        'Linear',
+    ]
+    param_cout_cin = {'weight': [0, 1], 'bias': [0, None]}
 
     def modify_attr(self):
         """modify module's attr"""
@@ -333,13 +354,15 @@ class LinearModulePruneHelper(ModulePruneHelper):
 
 
 class BnModulePruneHelper(ModulePruneHelper):
-    """helper to prune a bn module """
+    """helper to prune a bn module"""
+
     support_type = ['BatchNorm1d', 'BatchNorm2d']
     param_cout_cin = {
         'weight': [0, 0],
         'bias': [0, 0],
         'running_mean': [0, 0],
-        'running_var': [0, 0]}
+        'running_var': [0, 0],
+    }
 
     def modify_attr(self):
         """modify module's attr"""
@@ -351,15 +374,19 @@ def prune_tensor_channel(tensor, axis, prune_channel):
     """prune tensor in axis according prune_channel"""
     pre_shape = tensor.shape
     remain_channel = [idx for idx in range(pre_shape[axis]) if idx not in prune_channel]
-    new_tensor = torch.index_select(tensor, dim=axis, index=torch.LongTensor(remain_channel).to(tensor.device))
-    LOGGER.logd(
-        'After Prune(axis: {}, prune_channel: len is {} and val is {}), tensor shape has been changed from {} to {}'
-        .format(axis, len(prune_channel), prune_channel, pre_shape, new_tensor.shape), 'PruneModelPass')
+    new_tensor = torch.index_select(
+        tensor, dim=axis, index=torch.LongTensor(remain_channel).to(tensor.device)
+    )
+    msg = (
+        'After Prune(axis: {}, prune_channel: len is {} and val is {}), '
+        'tensor shape has been changed from {} to {}'
+    ).format(axis, len(prune_channel), prune_channel, pre_shape, new_tensor.shape)
+    LOGGER.logd(msg, 'PruneModelPass')
     return new_tensor
 
 
 def trans_shape(wts_tensor, group):
-    """ trans tensor's shape to ignore group"""
+    """trans tensor's shape to ignore group"""
     ori_shape = np.array(wts_tensor.shape).tolist()
     ori_shape.insert(0, group)
     ori_shape[1] = ori_shape[1] // group
@@ -375,7 +402,7 @@ def trans_shape(wts_tensor, group):
 
 
 def restore_shape(wts_tensor, group):
-    """ restore tensor's shape to considerate group"""
+    """restore tensor's shape to considerate group"""
     # cin/g, cout, h, w
     ori_shape = np.array(wts_tensor.shape).tolist()
     ori_shape.insert(1, group)

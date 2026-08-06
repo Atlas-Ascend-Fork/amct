@@ -28,7 +28,9 @@ def archive_progress(progress_path: str) -> None:
         content = f.read()
 
     if SEPARATOR_END not in content:
-        logger.error("未找到常驻区结束标记，跳过归档。请确保 progress.md 含：%s", SEPARATOR_END)
+        logger.error(
+            "未找到常驻区结束标记，跳过归档。请确保 progress.md 含：%s", SEPARATOR_END
+        )
         sys.exit(1)
 
     parts = content.split(SEPARATOR_END, 1)
