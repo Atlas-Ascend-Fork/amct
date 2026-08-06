@@ -26,12 +26,12 @@
 #undef __aicore__
 #define __aicore__
 #include "stub_fun.h"
-#endif 
+#endif
 
 
 using namespace AscendC;
 
-#define gmfloat __gm__ float* 
+#define gmfloat __gm__ float*
 #define gmhalf __gm__ half*
 #define gmu8 __gm__ uint8_t*
 #define gmbf __gm__ bfloat16_t*
@@ -99,7 +99,7 @@ aifunc T1 shiftAddr(T1 base, uint64_t size, T2 &offset){
 }
 
 
-/* ------------- Tensor ------------- */ 
+/* ------------- Tensor ------------- */
 
 template <typename T, pos_t pos>
 class Tensor{};
@@ -293,10 +293,10 @@ private:
     __ubuf__ T* m_ptr;
 };
 
-/* ------------- Tensor ------------- */ 
+/* ------------- Tensor ------------- */
 
 
-/* ------------- Double Buffer ------------- */ 
+/* ------------- Double Buffer ------------- */
 
 template <typename T, pos_t pos>
 class DBuff{
@@ -462,12 +462,12 @@ private:
     Tensor<T, PUB> tsr1, tsr2;
 };
 
-/* ------------- Double Buffer ------------- */ 
+/* ------------- Double Buffer ------------- */
 
 
 
 
-/* ------------- Triple Buffer ------------- */ 
+/* ------------- Triple Buffer ------------- */
 
 template <typename T, pos_t pos>
 class TBuff{
@@ -499,21 +499,21 @@ private:
     Tensor<T, PUB> tsr1, tsr2, tsr3;
 };
 
-/* ------------- Triple Buffer ------------- */ 
+/* ------------- Triple Buffer ------------- */
 
 
-/* ------------- Events ------------- */ 
+/* ------------- Events ------------- */
 
 template <pipe_t p1, pipe_t p2>
 class SEvent{
 public:
     aifunc SEvent(){}
     aifunc SEvent(int e_id1, int e_id2){
-        id1 = (event_t)e_id1; 
+        id1 = (event_t)e_id1;
         id2 = (event_t)e_id2;
     }
     aifunc SEvent(event_t e_id1, event_t e_id2){
-        id1 = e_id1; 
+        id1 = e_id1;
         id2 = e_id2;
     }
     aifunc void wait(){
@@ -540,11 +540,11 @@ class DEvent{
 public:
     aifunc DEvent(){}
     aifunc DEvent(int e_id1, int e_id2){
-        id1 = (event_t)e_id1; 
+        id1 = (event_t)e_id1;
         id2 = (event_t)e_id2;
     }
     aifunc DEvent(event_t e_id1, event_t e_id2){
-        id1 = e_id1; 
+        id1 = e_id1;
         id2 = e_id2;
     }
     aifunc void wait(){
@@ -585,11 +585,11 @@ class DEventP{
 public:
     aifunc DEventP(){}
     aifunc DEventP(const int e_id1, const int e_id2): id1((event_t)e_id1), id2((event_t)e_id2){
-        // id1 = (event_t)e_id1; 
+        // id1 = (event_t)e_id1;
         // id2 = (event_t)e_id2;
     }
     aifunc DEventP(const event_t e_id1, const event_t e_id2): id1(e_id1), id2(e_id2){
-        // id1 = e_id1; 
+        // id1 = e_id1;
         // id2 = e_id2;
     }
     aifunc void wait(int &wait_cnt){
@@ -646,12 +646,12 @@ class TEvent{
 public:
     aifunc TEvent(){}
     aifunc TEvent(int e_id1, int e_id2, int e_id3){
-        id1 = (event_t)e_id1; 
+        id1 = (event_t)e_id1;
         id2 = (event_t)e_id2;
         id3 = (event_t)e_id3;
     }
     aifunc TEvent(event_t e_id1, event_t e_id2, event_t e_id3){
-        id1 = e_id1; 
+        id1 = e_id1;
         id2 = e_id2;
         id3 = e_id3;
     }
@@ -696,4 +696,4 @@ private:
     int set_cnt = 0;
 };
 
-/* ------------- Events ------------- */ 
+/* ------------- Events ------------- */
