@@ -165,10 +165,11 @@ public:
         set_vector_mask((uint64_t)-1, (uint64_t)-1);
 
         if (n_tail>0){
-            // if tail, mask out the unused numbers
+            // Tail masking: the host guarantees N is a multiple of BATCH (512) by
+            // zero-padding, so this path is dead code in normal operation.  Kept as a
+            // safety net in case the kernel is called directly with non-aligned N.
             for (int tail=n_tail; tail>0; tail-=64){
                 if (tail<64){
-                    // uint64_t mask = 0x8000000000000000;
                     uint64_t mask = 1;
                     for (int i=1;i<tail;++i){
                         mask |= (mask << 1);
@@ -189,6 +190,16 @@ public:
         pipe_barrier(PIPE_V);
         vor((__ubuf__ uint16_t*)signbuf.ptr(), (__ubuf__ uint16_t*)signbuf.ptr(), signmaskbuf1.ptr(), BATCH/64, 1, 1, 0, 8, 8, 0);
 
+        // Mask non-finite (NaN/Inf) to 0 for the block max.
+        // abs <= FLT_MAX  →  finite;  abs > FLT_MAX  →  NaN or Inf.
+        vcmpvs_le((__ubuf__ uint8_t*)exp1maskbuf.ptr(), absbuf.ptr(), 3.4028234663852886e+38f,
+                  BATCH/64, 1, 1, 8, 8);
+        pipe_barrier(PIPE_V);
+        set_cmpmask(onesbuf.vptr());
+        pipe_barrier(PIPE_V);
+        vsel(absbuf.ptr(), 0.0f, exp1maskbuf.vptr(), BATCH/64, 1, 1, 1, 8, 0, 1, 1);
+        pipe_barrier(PIPE_V);
+
         // get max value and find scale factor
         vcmax(exp0buf.ptr(), absbuf.ptr(), BATCH/64, 1, 1, 8, ONLY_VALUE);
         pipe_barrier(PIPE_V);
@@ -202,6 +213,19 @@ public:
         vconv_f322bf16r(bf16_general_buf.ptr(), exp0buf.ptr(), BATCH/64, 1, 1, 4, 8);
         pipe_barrier(PIPE_V);
         vconv_bf162f32(exp0buf.ptr(), bf16_general_buf.ptr(), BATCH/64, 1, 1, 8, 4);
+        pipe_barrier(PIPE_V);
+        // NaN block poison: if the finite block max was effectively 0 (all elements were
+        // NaN/Inf or truly zero), the bf16-rounded scale < 0.5.  Replace it with NaN
+        // (0x7FC00000) so the whole block dequantizes to NaN (byte 0 = 0xFF).
+        vcmpvs_lt((__ubuf__ uint8_t*)exp1maskbuf.ptr(), exp0buf.ptr(), 0.5f,
+                  BATCH/64, 1, 1, 8, 8);
+        pipe_barrier(PIPE_V);
+        set_cmpmask(onesbuf.vptr());
+        pipe_barrier(PIPE_V);
+        uint32_t hifx_nan_int = 0x7FC00000;
+        float hifx_nan = *(float*) &hifx_nan_int;
+        vsel(exp0buf.ptr(), hifx_nan, exp1maskbuf.vptr(),
+             BATCH/64, 1, 1, 1, 8, 0, 1, 1);
         pipe_barrier(PIPE_V);
         vmins(exp0buf.ptr(), exp0buf.ptr(), 49152.0f, BATCH/64, 1, 1, 8, 8);
         pipe_barrier(PIPE_V);
@@ -313,6 +337,11 @@ public:
         vdiv(mantbuf.ptr(), mantbuf.ptr(), exp1buf.ptr(), BATCH/64, 1, 1, 1, 8, 8, 8);
         pipe_barrier(PIPE_V);
         vmul(mantbuf.ptr(), mantbuf.ptr(), exp0recbuf.ptr(), BATCH/64, 1, 1, 1, 8, 8, 8);
+        pipe_barrier(PIPE_V);
+        // round the in-group mantissa quotient to bf16 before the S1P2 round.
+        vconv_f322bf16r(bf16_general_buf.ptr(), mantbuf.ptr(), BATCH/64, 1, 1, 4, 8);
+        pipe_barrier(PIPE_V);
+        vconv_bf162f32(mantbuf.ptr(), bf16_general_buf.ptr(), BATCH/64, 1, 1, 8, 4);
         pipe_barrier(PIPE_V);
 
         vmuls(mantbuf.ptr(), mantbuf.ptr(), (float)(1<<(shape.MB-1)), BATCH/64, 1, 1, 8, 8);
