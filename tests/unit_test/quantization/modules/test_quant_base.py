@@ -57,6 +57,41 @@ def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=(), w_size=(4, 8))
     )
 
 
+class _ObserveActivationAlgo(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.is_observe = False
+        self.call_count = 0
+        self.received = None
+
+    def forward(self, x):
+        self.call_count += 1
+        self.received = x
+        return x
+
+
+class _RegularActivationAlgo(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.call_count = 0
+
+    def forward(self, x):
+        self.call_count += 1
+        return x + 1
+
+
+class _FakeQuantSpy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.call_count = 0
+        self.received = None
+
+    def forward(self, x):
+        self.call_count += 1
+        self.received = x
+        return x - 3
+
+
 # ---- get_algo_names_by_target / build_algorithms_by_target ---------------
 
 
@@ -160,41 +195,151 @@ def _model_with_quantizers():
 def test_set_quantizer_state_toggles_both_kinds(flag):
     m = _model_with_quantizers()
     set_quantizer_state(m, enable=flag)
-    assert m.act.enable is flag
-    assert m.weight.enable is flag
+    assert m.act.is_observe is (not flag)
+    assert m.weight.is_observe is (not flag)
 
 
 def test_set_weight_quantizer_state_only_touches_weight():
     m = _model_with_quantizers()
     set_weight_quantizer_state(m, enable=True)
-    assert m.weight.enable is True
-    assert m.act.enable is False
+    assert m.weight.is_observe is False
+    assert m.act.is_observe is False
 
 
 def test_set_act_quantizer_state_only_touches_activation():
     m = _model_with_quantizers()
     set_act_quantizer_state(m, enable=True)
-    assert m.act.enable is True
-    assert m.weight.enable is False
+    assert m.act.is_observe is False
+    assert m.weight.is_observe is False
 
 
 # ---- ActivationQuantizer behavior ---------------------------------------
 
 
-def test_activation_quantizer_forward_passthrough_when_disabled():
+def test_activation_quantizer_observe_returns_without_fake_quant():
     aq = ActivationQuantizer(_args(), bits=8)
+    aq.is_observe = True
     x = torch.randn(2, 32)
     assert torch.equal(aq(x), x)
 
 
-def test_activation_quantizer_forward_quantizes_when_enabled():
+def test_activation_quantizer_forward_quantizes_when_not_observing():
     aq = ActivationQuantizer(_args(), bits=8)
-    aq.enable = True
     x = torch.randn(2, 32, dtype=torch.float32)
     out = aq(x)
     # Same shape and dtype (int dtype quantizer is fake-quant).
     assert out.shape == x.shape
     assert out.dtype == x.dtype
+
+
+def test_activation_quantizer_observe_state_reaches_inner_algorithm():
+    name = "_ut_act_observe_state"
+
+    @ALGO_REGISTRY.register(name=name, targets=("activation",))
+    class _ObserveAlgo(nn.Module):
+        def __init__(self, args):
+            super().__init__()
+            self.is_observe = False
+            self.called_in_observe = False
+
+        def forward(self, x):
+            self.called_in_observe = self.is_observe
+            return x
+
+    try:
+        aq = ActivationQuantizer(_args(algos=[name]), bits=8)
+        aq.is_observe = True
+        x = torch.randn(2, 8)
+        assert torch.equal(aq(x), x)
+        assert aq.algorithms[name].called_in_observe is True
+    finally:
+        ALGO_REGISTRY._items.pop(name, None)
+
+
+def test_activation_quantizer_observe_runs_only_observe_algorithms():
+    observe_name = "_ut_act_observe_only"
+    regular_name = "_ut_act_regular"
+    ALGO_REGISTRY.register(name=observe_name, targets=("activation",))(
+        _ObserveActivationAlgo
+    )
+    ALGO_REGISTRY.register(name=regular_name, targets=("activation",))(
+        _RegularActivationAlgo
+    )
+
+    try:
+        aq = ActivationQuantizer(_args(algos=[observe_name, regular_name]), bits=8)
+        aq.quant_obj = _FakeQuantSpy()
+        aq.set_observe(True)
+        x = torch.randn(2, 8)
+        snapshot = x.clone()
+
+        out = aq(x)
+
+        observe_algo = aq.algorithms[observe_name]
+        regular_algo = aq.algorithms[regular_name]
+        assert observe_algo.call_count == 1
+        assert observe_algo.is_observe is True
+        assert observe_algo.received is x
+        assert regular_algo.call_count == 0
+        assert aq.quant_obj.call_count == 0
+        assert out is x
+        assert torch.equal(x, snapshot)
+    finally:
+        ALGO_REGISTRY._items.pop(observe_name, None)
+        ALGO_REGISTRY._items.pop(regular_name, None)
+
+
+def test_activation_quantizer_non_observe_runs_all_algorithms_and_fake_quant():
+    observe_name = "_ut_act_non_observe_aware"
+    regular_name = "_ut_act_non_observe_regular"
+    ALGO_REGISTRY.register(name=observe_name, targets=("activation",))(
+        _ObserveActivationAlgo
+    )
+    ALGO_REGISTRY.register(name=regular_name, targets=("activation",))(
+        _RegularActivationAlgo
+    )
+
+    try:
+        aq = ActivationQuantizer(_args(algos=[observe_name, regular_name]), bits=8)
+        aq.quant_obj = _FakeQuantSpy()
+        aq.set_observe(False)
+        x = torch.tensor([1.0, 2.0])
+
+        out = aq(x)
+
+        observe_algo = aq.algorithms[observe_name]
+        regular_algo = aq.algorithms[regular_name]
+        expected_algo_out = x + 1
+        assert observe_algo.call_count == 1
+        assert observe_algo.is_observe is False
+        assert regular_algo.call_count == 1
+        assert aq.quant_obj.call_count == 1
+        assert torch.equal(aq.quant_obj.received, expected_algo_out)
+        assert torch.equal(out, expected_algo_out - 3)
+    finally:
+        ALGO_REGISTRY._items.pop(observe_name, None)
+        ALGO_REGISTRY._items.pop(regular_name, None)
+
+
+@pytest.mark.parametrize(
+    ("quantizer_state", "algorithm_state"), [(True, False), (False, True)]
+)
+def test_activation_quantizer_forward_repairs_algorithm_observe_state(
+    quantizer_state, algorithm_state
+):
+    name = "_ut_act_observe_state_repair"
+    ALGO_REGISTRY.register(name=name, targets=("activation",))(_ObserveActivationAlgo)
+
+    try:
+        aq = ActivationQuantizer(_args(algos=[name]), bits=8)
+        aq.is_observe = quantizer_state
+        aq.algorithms[name].is_observe = algorithm_state
+
+        aq(torch.randn(2, 8))
+
+        assert aq.algorithms[name].is_observe is quantizer_state
+    finally:
+        ALGO_REGISTRY._items.pop(name, None)
 
 
 def test_activation_quantizer_trainable_params_collects_from_algorithms(
@@ -214,15 +359,26 @@ def test_activation_quantizer_deploy_hooks_are_no_ops():
 # ---- WeightQuantizer behavior --------------------------------------------
 
 
-def test_weight_quantizer_forward_passthrough_when_disabled():
-    wq = WeightQuantizer(_args(w_bits=8), w_bits=8)
-    w = torch.randn(4, 8)
-    assert torch.equal(wq(w), w)
+def test_weight_quantizer_observe_returns_original_weight_without_algos():
+    @ALGO_REGISTRY.register(name=UT_DOUBLE_ALGO, targets=("weight",))
+    class _Double(nn.Module):
+        def __init__(self, args, *_):
+            super().__init__()
+
+        def forward(self, x):
+            return x * 2
+
+    try:
+        wq = WeightQuantizer(_args(algos=[UT_DOUBLE_ALGO], w_bits=8), w_bits=8)
+        wq.is_observe = True
+        w = torch.randn(4, 8)
+        assert torch.equal(wq(w), w)
+    finally:
+        ALGO_REGISTRY._items.pop(UT_DOUBLE_ALGO, None)
 
 
-def test_weight_quantizer_forward_quantizes_when_enabled():
+def test_weight_quantizer_forward_quantizes_when_not_observing():
     wq = WeightQuantizer(_args(w_bits=8), w_bits=8)
-    wq.enable = True
     w = torch.randn(4, 8, dtype=torch.float32)
     out = wq(w)
     assert out.shape == w.shape
@@ -401,7 +557,6 @@ def test_activation_quantizer_forward_applies_algo_when_enabled():
 
     try:
         aq = ActivationQuantizer(_args(algos=[name]), bits=8)
-        aq.enable = True
         x = torch.tensor([1.0, 2.0, 3.0])
         out = aq(x)
         assert out.dtype == x.dtype
@@ -446,7 +601,6 @@ def test_weight_quantizer_forward_uses_quantize_algo_when_enabled():
 
     try:
         wq = WeightQuantizer(_args(algos=[name], w_bits=8), w_bits=8)
-        wq.enable = True
         x = torch.tensor([1.0, 2.0])
         out = wq(x)
         assert torch.equal(out, x * 100)
