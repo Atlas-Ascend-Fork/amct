@@ -60,3 +60,5 @@
 - [Qwen3-moe](qwen3-moe.md) — `Qwen3Moe`：Qwen3-30B-A3B + Qwen3-235B-A22B
 - [Qwen3.5-3.6](qwen3.5-3.6.md) — `Qwen3_5Moe`：Qwen3.5-35B-A3B + Qwen3.6-35B（`Qwen3_6Moe(Qwen3_5Moe): pass`，零 delta）
 - [Qwen3-Next-80B-A3B-Instruct](qwen3-next-80b-a3b-instruct.md) — `Qwen3Next`：MoE + 混合 attention
+- [Qwen3.6-27B A4W4 MXFP4 Attn-Linear](qwen3.6-27b-attn-linear.md) — `qwen3_5` Dense 复用，64 层 `attn-linear` 实践
+- [Qwen3.6-27B A4W4 MXFP4 MLP](qwen3.6-27b-mlp.md) — `qwen3_5` Dense 复用，64 层 MLP 实践
