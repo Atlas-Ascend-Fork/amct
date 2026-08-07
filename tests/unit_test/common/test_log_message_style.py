@@ -25,7 +25,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 FORBIDDEN_FAILURE_WORDS = re.compile(
     r"\b(fail(?:ed|ure|s|ing)?|error(?:s)?|exception(?:s)?|abnormal)\b", re.I
 )
-KNOWN_LOG_TYPOS = re.compile(r"\b(fot|fuison|pune|paramaters|otputs|reesult|unknow)\b")
+KNOWN_LOG_TYPOS = re.compile(
+    r"\b(fot|fuison|pune|paramaters|otputs|reesult|unknow)\b"
+    r"|\bnot find self_attn\.rotary_emb\.inv_freq\b"
+    r"|\bhas not clip_factor_[aw]_max\b"
+    r"|`use_cache=False`transformers\b"
+)
 
 
 def _tracked_python_files():
