@@ -332,10 +332,12 @@ def test_eval_setup_returns_sink_id(monkeypatch, tmp_path):
 # ---- _run_blockwise (mocked pipeline) ------------------------------------
 
 
-def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
+@pytest.mark.parametrize("data_dir", [None, "/tmp/local-data"])
+def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path, data_dir):
+    get_wiki_inputs = MagicMock(return_value=[torch.randint(0, 100, (2, 4))])
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
-        lambda tokenizer, seq_len: [torch.randint(0, 100, (2, 4))],
+        get_wiki_inputs,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
@@ -350,7 +352,12 @@ def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
         lambda iterable, desc="": iterable,
     )
 
-    wf = _make_eval_workflow(eval_mode="bf16", output_dir=str(tmp_path))
+    workflow_args = {} if data_dir is None else {"data_dir": data_dir}
+    wf = _make_eval_workflow(
+        eval_mode="bf16",
+        output_dir=str(tmp_path),
+        **workflow_args,
+    )
     wf.pipeline = MagicMock()
     wf.pipeline.tokenizer = MagicMock()
     wf.pipeline.num_layers = 2
@@ -359,6 +366,14 @@ def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
     wf.pipeline.do_head_forward = MagicMock(return_value=[torch.randn(2, 3, 100)])
 
     result = wf._run_blockwise()
+    if data_dir is None:
+        get_wiki_inputs.assert_called_once_with(wf.pipeline.tokenizer, wf.seq_len)
+    else:
+        get_wiki_inputs.assert_called_once_with(
+            wf.pipeline.tokenizer,
+            wf.seq_len,
+            data_dir=data_dir,
+        )
     assert result == pytest.approx(12.34)
     assert wf.pipeline.do_head_forward.call_count == 1
 
@@ -366,10 +381,12 @@ def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
 # ---- _run_modelwise (mocked pipeline) ------------------------------------
 
 
-def test_eval_run_modelwise_mocked_pipeline(monkeypatch):
+@pytest.mark.parametrize("data_dir", [None, "/tmp/local-data"])
+def test_eval_run_modelwise_mocked_pipeline(monkeypatch, data_dir):
+    get_wiki_inputs = MagicMock(return_value=[torch.randint(0, 100, (2, 4))])
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
-        lambda tokenizer, seq_len: [torch.randint(0, 100, (2, 4))],
+        get_wiki_inputs,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
@@ -384,7 +401,12 @@ def test_eval_run_modelwise_mocked_pipeline(monkeypatch):
         lambda iterable, desc="": iterable,
     )
 
-    wf = _make_eval_workflow(eval_mode="bf16", granularity="model")
+    workflow_args = {} if data_dir is None else {"data_dir": data_dir}
+    wf = _make_eval_workflow(
+        eval_mode="bf16",
+        granularity="model",
+        **workflow_args,
+    )
     wf.pipeline = MagicMock()
     wf.pipeline.tokenizer = MagicMock()
 
@@ -393,6 +415,14 @@ def test_eval_run_modelwise_mocked_pipeline(monkeypatch):
     wf.pipeline.float_model.return_value.eval.return_value.to.return_value = forward_fn
 
     result = wf._run_modelwise()
+    if data_dir is None:
+        get_wiki_inputs.assert_called_once_with(wf.pipeline.tokenizer, wf.seq_len)
+    else:
+        get_wiki_inputs.assert_called_once_with(
+            wf.pipeline.tokenizer,
+            wf.seq_len,
+            data_dir=data_dir,
+        )
     assert result == 12.34
 
 
