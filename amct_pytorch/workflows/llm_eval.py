@@ -131,7 +131,11 @@ class LlmEvalWorkflow:
         self,
     ):
         tokenizer = self.pipeline.tokenizer
-        samples = get_wiki_inputs(tokenizer, self.seq_len, self.args.data_dir)
+        data_dir = getattr(self.args, "data_dir", None)
+        if data_dir is None:
+            samples = get_wiki_inputs(tokenizer, self.seq_len)
+        else:
+            samples = get_wiki_inputs(tokenizer, self.seq_len, data_dir=data_dir)
         logger.info("Loaded {} eval samples for blockwise eval.", len(samples))
         inter_io = self.pipeline.do_embedding_forward(samples, self.args.output_dir)
         use_quant_block, enable_quant, eval_message = self._resolve_eval_states()
@@ -155,7 +159,11 @@ class LlmEvalWorkflow:
     ):
         model = self.pipeline.float_model().eval().to(self.device)
         tokenizer = self.pipeline.tokenizer
-        samples = get_wiki_inputs(tokenizer, self.seq_len, self.args.data_dir)
+        data_dir = getattr(self.args, "data_dir", None)
+        if data_dir is None:
+            samples = get_wiki_inputs(tokenizer, self.seq_len)
+        else:
+            samples = get_wiki_inputs(tokenizer, self.seq_len, data_dir=data_dir)
         logger.info("Loaded {} eval samples for modelwise eval.", len(samples))
         preds = []
         with torch.no_grad():

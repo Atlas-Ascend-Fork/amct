@@ -110,7 +110,10 @@ def get_wikitext2(tokenizer, data_dir=None):
 
 
 def get_wiki_inputs(tokenizer, seq_len=4096, data_dir=None):
-    testenc = get_wikitext2(tokenizer, data_dir=data_dir).input_ids
+    if data_dir is None:
+        testenc = get_wikitext2(tokenizer).input_ids
+    else:
+        testenc = get_wikitext2(tokenizer, data_dir=data_dir).input_ids
     wiki_inputs = []
     nsamples = testenc.numel() // seq_len
     bs = 1

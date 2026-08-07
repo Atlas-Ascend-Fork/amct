@@ -79,9 +79,13 @@ class LlmExtractPtqDataWorkflow:
             if self.quant_target in ("attn", "attn-linear", "attn-cache")
             else ffn_hook_name
         )
-        samples = get_pileval(
-            tokenizer, self.nsamples, seq_len=self.seq_len, data_dir=self.args.data_dir
-        )
+        data_dir = getattr(self.args, "data_dir", None)
+        if data_dir is None:
+            samples = get_pileval(tokenizer, self.nsamples, seq_len=self.seq_len)
+        else:
+            samples = get_pileval(
+                tokenizer, self.nsamples, seq_len=self.seq_len, data_dir=data_dir
+            )
         logger.info(
             "Loaded {} calibration samples for extract_ptq_data.",
             len(samples),
