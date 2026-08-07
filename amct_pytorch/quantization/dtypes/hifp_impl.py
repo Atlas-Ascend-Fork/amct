@@ -158,12 +158,17 @@ def _pow2(e):
 
 
 def _to_bf16(x):
+
     """Round to bf16 with round-half-to-even, bit-exact via int32 manipulation."""
     x32 = x.to(torch.float32)
     shifted = x32.view(torch.int32) + 0x8000
     rounded = shifted & ~0xFFFF
     rounded = torch.where((x32.view(torch.int32) & 0x10000) != 0, rounded - 0x10000, rounded)
     return rounded.view(torch.float32)
+
+    """Round to bf16 and back to fp32, aligned with round_to_bf16_fp32 in _exact.py."""
+    return x.to(torch.bfloat16).to(torch.float32)
+
 
 
 class Hif4Encoded(NamedTuple):
@@ -325,30 +330,68 @@ def _load_amct_ops_hif4_cast():
 
 @torch.no_grad()
 def hifloat4_fake_quant(fp_tensor, qdim=-1):
-    """HiF4 fake-quant: NPU kernel when available, else pure-torch fallback."""
-    if fp_tensor.device.type == "npu" and fp_tensor.dtype in (torch.float16, torch.bfloat16):
-        _npu_fq = _load_amct_ops_hif4_cast()
-        if _npu_fq is not None:
-            return _npu_fq(fp_tensor, qdim=qdim)
-
-    # Pure-torch fallback: pad → encode → decode → unpad
+    """HiF4 fake-quant: aligned with HiFloat4-private quant_hifx reference, bit-exact."""
     dtype_ori = fp_tensor.dtype
     x = fp_tensor.to(torch.float32)
 
     if qdim >= 0:
         qdim = qdim - len(x.shape)
+
+    # Pad to multiple of 64 along qdim
     C = x.shape[qdim]
     padC = (64 - C % 64) % 64
     if padC > 0:
         x = F.pad(x, [0] * (-qdim * 2 - 1) + [padC], value=0.0)
 
-    xb = x.unflatten(qdim, (-1, 8, 2, 4))
-    enc = hif4_encode(xb, ng=NG, qdim=qdim)
-    out = hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=NG,
-                      block_nan=enc.block_nan, qdim=qdim).flatten(qdim - 3, qdim)
+    # Match quant_hifx algorithm exactly (HiFloat4-private QFuncs/hifx.py)
+    xg = x.unflatten(qdim, (-1, 8, 2, 4))
+    special_mask = ~torch.isfinite(xg)
+    x_finite = torch.where(special_mask, torch.zeros_like(xg), xg)
+    x_unsigned = torch.abs(x_finite)
+    sign = torch.sign(x_finite)
+
+    max_lv3 = torch.amax(x_unsigned, dim=qdim, keepdim=True)
+    max_lv2 = torch.amax(max_lv3, dim=qdim - 1, keepdim=True)
+    max_lv1 = torch.amax(max_lv2, dim=qdim - 2, keepdim=True)
+    zero_group = max_lv1 == 0
+
+    div7 = _to_bf16(torch.ones_like(max_lv1) / 7.0)
+    scale_factor = max_lv1 * div7
+    safe_scale = torch.where(scale_factor > 0, scale_factor, torch.ones_like(scale_factor))
+    e_sf = _floor_log2_fp32(safe_scale)
+    mant_sf = _ldexp_fp32(safe_scale, -e_sf + 7.0)
+    scale_factor = _ldexp_fp32(torch.round(mant_sf), e_sf - 7.0)
+    scale_factor = scale_factor.clamp(min=2.0 ** (-48), max=49152.0)
+
+    e_sf = _floor_log2_fp32(scale_factor)
+    scale_factor = _ldexp_fp32(torch.round(_ldexp_fp32(scale_factor, 2.0 - e_sf)), e_sf - 2.0)
+    scale_factor = torch.where(zero_group, torch.full_like(scale_factor, 2.0 ** (-48)), scale_factor)
+
+    rec_sf = (1.0 / scale_factor).to(torch.bfloat16).to(x.dtype)
+
+    scale_lv2_exp = torch.floor((max_lv2 * rec_sf).clamp(0, 4) * 0.25)
+    scale_lv2 = _pow2(scale_lv2_exp)
+    scale_lv3_input = _ldexp_fp32(max_lv3 * rec_sf, -scale_lv2_exp)
+    scale_lv3_exp = torch.floor(scale_lv3_input.clamp(0, 2) * 0.5)
+    scale_lv3 = _pow2(scale_lv3_exp)
+
+    mant = _ldexp_fp32(x_unsigned * rec_sf, -scale_lv2_exp - scale_lv3_exp)
+    mant = _to_bf16(mant)
+    mant = _ldexp_fp32(torch.floor(_ldexp_fp32(mant, torch.full_like(mant, NG)) + 0.5),
+                       torch.full_like(mant, -float(NG)))
+    mant = mant.clamp(min=-2.0 + 2.0 ** (-NG), max=2.0 - 2.0 ** (-NG))
+
+    out = sign * mant * scale_lv2 * scale_lv3 * scale_factor
+
+    group_nan = special_mask.any(dim=qdim, keepdim=True)
+    group_nan = group_nan.any(dim=qdim - 1, keepdim=True)
+    group_nan = group_nan.any(dim=qdim - 2, keepdim=True)
+    out = torch.where(torch.broadcast_to(group_nan, out.shape),
+                      torch.full_like(out, torch.nan), out)
+
+    out = out.flatten(qdim - 3, qdim)
 
     if padC > 0:
-        slices = [slice(0, out.shape[i]) for i in range(len(fp_tensor.shape) + qdim)] + [slice(0, C)]
-        out = out[tuple(slices)]
+        out = out.narrow(qdim, 0, C)
 
     return out.to(dtype_ori)
