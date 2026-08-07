@@ -29,11 +29,9 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
         line = data['text']
         line = line.strip()
         line_encoded = tokenizer.encode(line)
-        if len(line_encoded) > seq_len:
+        if len(line_encoded) == 0 or len(line_encoded) > seq_len:
             continue
         sample = torch.tensor([line_encoded])
-        if sample.numel() == 0:
-            continue
         samples.append(sample)
         total_tokens += sample.shape[1]
         if total_tokens >= target_tokens:
