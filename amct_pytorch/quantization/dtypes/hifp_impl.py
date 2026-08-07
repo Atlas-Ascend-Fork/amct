@@ -120,15 +120,50 @@ E6M2_MBITS = 2
 N_FMT = 4
 NG = N_FMT - 2      # S1PNg, Ng=2 -> in-group code 3 bits
 
+# Bit-exact primitives (aligned with HiFloat4-private _exact.py)
+FP32_ABS_MASK = 0x7FFFFFFF
+FP32_EXP_MASK = 0x7F800000
+FP32_MANTISSA_MASK = 0x007FFFFF
+
+
+def _floor_log2_fp32(x):
+    """Exact floor(log2(abs(x))) for fp32, via IEEE-754 bit extraction."""
+    if x.dtype != torch.float32:
+        raise TypeError("_floor_log2_fp32 expects torch.float32")
+    bits = x.contiguous().view(torch.int32) & FP32_ABS_MASK
+    exp_field = (bits & FP32_EXP_MASK) >> 23
+    mantissa = bits & FP32_MANTISSA_MASK
+    mantissa_msb = torch.zeros_like(mantissa)
+    for bit in range(1, 23):
+        mantissa_msb = torch.where(
+            mantissa >= (1 << bit),
+            torch.full_like(mantissa_msb, bit),
+            mantissa_msb,
+        )
+    normal_exp = exp_field - 127
+    subnormal_exp = mantissa_msb - 149
+    exponent = torch.where(exp_field == 0, subnormal_exp, normal_exp).to(torch.float32)
+    exponent = torch.where(bits == 0, torch.full_like(exponent, -torch.inf), exponent)
+    return torch.where(torch.isfinite(x), exponent, x)
+
+
+def _ldexp_fp32(x, exp):
+    """Exact x * 2**exp via ldexp (bit-exact on NPU)."""
+    return torch.ldexp(x, exp.to(torch.int32))
+
 
 def _pow2(e):
     """Exact 2**e via ldexp (bit-exact on NPU)."""
-    return torch.ldexp(torch.ones_like(e, dtype=torch.float32), e.to(torch.int32))
+    return _ldexp_fp32(torch.ones_like(e, dtype=torch.float32), e)
 
 
 def _to_bf16(x):
-    """Round to bf16 and back to fp32 (round-half-to-even)."""
-    return x.bfloat16().float()
+    """Round to bf16 with round-half-to-even, bit-exact via int32 manipulation."""
+    x32 = x.to(torch.float32)
+    shifted = x32.view(torch.int32) + 0x8000
+    rounded = shifted & ~0xFFFF
+    rounded = torch.where((x32.view(torch.int32) & 0x10000) != 0, rounded - 0x10000, rounded)
+    return rounded.view(torch.float32)
 
 
 class Hif4Encoded(NamedTuple):
@@ -159,7 +194,7 @@ def hif4_encode(xg, ng=2, qdim=-1):
     const_rec = _to_bf16(torch.tensor(1.0 / 7.0, dtype=torch.float32, device=xg.device))
     sf = _to_bf16(vmax * const_rec)
     sf_c = sf.clamp(2.0 ** -E6_OFFSET, 2.0 ** 15 * 1.5)
-    e_e6 = torch.floor(torch.log2(sf_c))
+    e_e6 = _floor_log2_fp32(sf_c)
     q = torch.round(sf_c * _pow2(2.0 - e_e6))
     e6m2_val = q * _pow2(e_e6 - 2.0)
     rec = _to_bf16(1.0 / e6m2_val)
