@@ -332,14 +332,33 @@ def test_eval_setup_returns_sink_id(monkeypatch, tmp_path):
 # ---- _run_blockwise (mocked pipeline) ------------------------------------
 
 
-def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
+def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
+    monkeypatch, tmp_path
+):
+    samples = [torch.randint(0, 100, (2, 4))]
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
-        lambda tokenizer, seq_len: [torch.randint(0, 100, (2, 4))],
+        lambda tokenizer, seq_len: samples,
+    )
+    observed = {}
+
+    def fake_streaming(logits_iter, actual_samples, device, seq_len):
+        observed.update(
+            logits=list(logits_iter),
+            samples=actual_samples,
+            device=device,
+            seq_len=seq_len,
+        )
+        return 12.34
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
+        fake_streaming,
+        raising=False,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
-        lambda preds, samples, seq_len: 12.34,
+        lambda *args, **kwargs: pytest.fail("blockwise must not use legacy PPL"),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.logger",
@@ -356,11 +375,18 @@ def test_eval_run_blockwise_mocked_pipeline(monkeypatch, tmp_path):
     wf.pipeline.num_layers = 2
     wf.pipeline.do_embedding_forward = MagicMock(return_value=[torch.randn(2, 4, 8)])
     wf.pipeline.do_block_forward = MagicMock(return_value=[torch.randn(2, 4, 8)])
-    wf.pipeline.do_head_forward = MagicMock(return_value=[torch.randn(2, 3, 100)])
+    streamed = [torch.randn(2, 3, 100)]
+    wf.pipeline.iter_head_logits.return_value = iter(streamed)
 
     result = wf._run_blockwise()
+
     assert result == pytest.approx(12.34)
-    assert wf.pipeline.do_head_forward.call_count == 1
+    assert len(observed["logits"]) == 1
+    assert torch.equal(observed["logits"][0], streamed[0])
+    assert observed["samples"] is samples
+    assert observed["device"] == "cpu"
+    assert observed["seq_len"] == wf.seq_len
+    wf.pipeline.do_head_forward.assert_not_called()
 
 
 # ---- _run_modelwise (mocked pipeline) ------------------------------------
@@ -374,6 +400,11 @@ def test_eval_run_modelwise_mocked_pipeline(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
         lambda preds, samples, seq_len: 12.34,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
+        lambda *args, **kwargs: pytest.fail("modelwise must not stream PPL"),
+        raising=False,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.logger",
