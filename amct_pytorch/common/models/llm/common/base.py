@@ -214,19 +214,17 @@ class BaseModel(metaclass=ABCMeta):
         layers[0] = layers[0].module
         return outs
 
-    def do_head_forward(self, inps):
+    def iter_head_logits(self, inps):
         self.model.model.norm.to(self.args.device)
         self.model.lm_head.to(self.args.device)
-        preds = []
         with torch.no_grad():
-            for idx, inp in tqdm(
-                enumerate(inps), total=len(inps), desc='Head Processing...'
-            ):
+            for inp in tqdm(inps, total=len(inps), desc="Head Processing..."):
                 inp = inp.to(self.args.device)
                 out = self.model.model.norm(inp)
-                out = self.model.lm_head(out)[:, :-1, :].contiguous()
-                preds.append(out.to('cpu'))
-        return preds
+                yield self.model.lm_head(out)[:, :-1, :].contiguous()
+
+    def do_head_forward(self, inps):
+        return [logits.to("cpu") for logits in self.iter_head_logits(inps)]
 
     def build_quant_block(self, layer_idx):
         return self.block(layer_idx)

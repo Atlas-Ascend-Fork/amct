@@ -18,12 +18,16 @@
 from __future__ import annotations
 
 import os
+import time
 from tqdm import tqdm
 import torch
 from loguru import logger
 
 from amct_pytorch.common.datasets.preproc import get_wiki_inputs
-from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
+from amct_pytorch.common.evaluate.eval_ppl import (
+    wikitext2_ppl,
+    wikitext2_ppl_streaming,
+)
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -145,9 +149,25 @@ class LlmEvalWorkflow:
                 use_quant_block=use_quant_block,
                 enable_quant=enable_quant,
             )
-            if layer_idx == self.pipeline.num_layers - 1:
-                preds = self.pipeline.do_head_forward(inter_io)
-        ppl = wikitext2_ppl(preds, samples, seq_len=self.seq_len)
+
+        streaming_start = time.perf_counter()
+        logger.info(
+            "[EvalEvidence] stage=streaming_ppl_start samples={} device={}",
+            len(samples),
+            self.device,
+        )
+        ppl = wikitext2_ppl_streaming(
+            self.pipeline.iter_head_logits(inter_io),
+            samples,
+            device=self.device,
+            seq_len=self.seq_len,
+        )
+        logger.info(
+            "[EvalEvidence] stage=streaming_ppl_workflow_complete "
+            "total_s={:.6f} ppl={:.6f}",
+            time.perf_counter() - streaming_start,
+            ppl,
+        )
         return ppl
 
     def _run_modelwise(

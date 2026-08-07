@@ -186,7 +186,7 @@ class DeepseekV4(BaseModel):
         self.input_ids = list(samples)
         return outs
 
-    def do_head_forward(self, inps):
+    def iter_head_logits(self, inps):
         device = self.args.device
         head = self.model.head.to(device)
         norm = self.model.norm.to(device)
@@ -195,11 +195,10 @@ class DeepseekV4(BaseModel):
             if param.is_meta:
                 raise RuntimeError(
                     f"v4 top-level param '{name}' is still on meta; "
-                    "load_embed_state_dict must run before do_head_forward."
+                    "load_embed_state_dict must run before iter_head_logits."
                 )
             setattr(self.model, name, nn.Parameter(param.to(device)))
 
-        preds = []
         with torch.no_grad():
             for inp in tqdm(inps, total=len(inps), desc="Head Processing..."):
                 inp = inp.to(device)  # [b, s, hc_mult, d]
@@ -211,8 +210,7 @@ class DeepseekV4(BaseModel):
                 )  # [b, s, d]
                 x = norm(x)
                 logits = F.linear(x.float(), head.weight)  # [b, s, vocab]
-                preds.append(logits[:, :-1, :].contiguous().to("cpu"))
-        return preds
+                yield logits[:, :-1, :].contiguous()
 
     def empty_weights_model(self):
         with init_empty_weights(include_buffers=True):
