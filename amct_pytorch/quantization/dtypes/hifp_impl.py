@@ -330,7 +330,13 @@ def _load_amct_ops_hif4_cast():
 
 @torch.no_grad()
 def hifloat4_fake_quant(fp_tensor, qdim=-1):
-    """HiF4 fake-quant: aligned with HiFloat4-private quant_hifx reference, bit-exact."""
+    """HiF4 fake-quant: NPU kernel when available, else pure-torch reference."""
+    if fp_tensor.device.type == "npu" and fp_tensor.dtype in (torch.float16, torch.bfloat16):
+        _npu_fq = _load_amct_ops_hif4_cast()
+        if _npu_fq is not None:
+            return _npu_fq(fp_tensor, qdim=qdim)
+
+    # Pure-torch reference (aligned with HiFloat4-private quant_hifx)
     dtype_ori = fp_tensor.dtype
     x = fp_tensor.to(torch.float32)
 
