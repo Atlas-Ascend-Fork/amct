@@ -23,6 +23,8 @@
 #ifndef TD_LOG_H
 #define TD_LOG_H
 
+#include <cstdio>
+
 namespace TensorDecompose {
 enum class TdError {
     TD_SUCCESS = static_cast<int>(0x00000000),
@@ -38,6 +40,11 @@ enum class TdError {
     TD_IDX_OUT_OF_BOUNDS_ERR = static_cast<int>(0xFFF00009),
     TD_NULL_DATA_ERR = static_cast<int>(0xFFF0000A),
 };
+
+#define TD_LOG_WARNING(format, ...)                                                                        \
+    do {                                                                                                   \
+        (void)std::printf("[WARNING][%s][%d] Warning: " format "\n", __FUNCTION__, __LINE__, __VA_ARGS__); \
+    } while (0)
 
 #define TD_FUNC_CHECK(func)               \
     do {                                  \

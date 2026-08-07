@@ -21,7 +21,6 @@
  */
 
 #include "tensor_decomposition.h"
-#include <cstdio>
 #include <algorithm>
 #include "vector.h"
 #include "td_log.h"
@@ -393,8 +392,7 @@ TdError TensorDecomposition::EstimateRanks(
     unsigned int rank;
     TD_FUNC_CHECK(EVBMF(rank, sizeL, sizeM, vecS));
     if (rank == 0) { // rank 0
-        (void)printf("[WARNING][%s][%d] Warning: estimate rank is %u, please check if pretrained weight is correct.\n",
-            __FUNCTION__, __LINE__, rank);
+        TD_LOG_WARNING("estimate rank is %u, please check if pretrained weight is correct.", rank);
     }
     if ((divisor == 0) || ((divisor + 1) == 0)) {
         return TdError::TD_BAD_PARAMETERS_ERR;
