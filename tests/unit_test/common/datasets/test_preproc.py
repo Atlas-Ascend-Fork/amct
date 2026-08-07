@@ -16,9 +16,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from unittest.mock import MagicMock
+
 import pytest
 import torch
-from unittest.mock import MagicMock
 
 from amct_pytorch.common.datasets import preproc
 

@@ -109,8 +109,10 @@ def test_run_blockwise_passes_data_dir(monkeypatch, tmp_path):
     args = _make_args(["mlp"])
     args.data_dir = str(tmp_path)
     wf = LlmExtractPtqDataWorkflow(args)
+    wf.setup = MagicMock(return_value="sink")
     samples = ["sample"]
     get_pileval = MagicMock(return_value=samples)
+    logger = MagicMock()
     pipeline = SimpleNamespace(
         tokenizer="tokenizer",
         num_layers=0,
@@ -121,9 +123,14 @@ def test_run_blockwise_passes_data_dir(monkeypatch, tmp_path):
         "amct_pytorch.workflows.llm_extract_ptq_data.get_pileval",
         get_pileval,
     )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_extract_ptq_data.logger",
+        logger,
+    )
 
-    wf._run_blockwise()
+    result = wf.run()
 
+    wf.setup.assert_called_once_with()
     get_pileval.assert_called_once_with(
         "tokenizer",
         8,
@@ -134,6 +141,8 @@ def test_run_blockwise_passes_data_dir(monkeypatch, tmp_path):
         samples,
         hook_name=POST_ATTENTION_LAYERNORM,
     )
+    logger.remove.assert_called_once_with("sink")
+    assert result is None
 
 
 def _make_extract_workflow(**overrides):
