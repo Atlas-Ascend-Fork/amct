@@ -21,6 +21,7 @@
 import torch
 import torch.nn as nn
 
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 
 
@@ -102,7 +103,7 @@ class _InvFlatDecomposeTransform(nn.Module):
     description="Learnable affine structure transform inspired by FlatQuant",
     targets=("structure",),
 )
-class FlatQuant(nn.Module):
+class FlatQuant(QuantAlgorithmBase):
     """
     Minimal FlatQuant core for the current framework:
     learn a structure-level affine transform on activations and apply its
@@ -140,18 +141,6 @@ class FlatQuant(nn.Module):
     def forward(
         self, x: torch.Tensor, inv_t: bool = False, name: str = None
     ) -> torch.Tensor:
+        if self.is_observe:
+            return self.calib_forward(x, inv_t=inv_t, name=name)
         return self.transform(x, inv_t=inv_t)
-
-    def trainable_params(self):
-        return list(self.parameters())
-
-    def export_ptq_params(self):
-        return {name: param.detach().cpu() for name, param in self.named_parameters()}
-
-    def load_ptq_params(self, params):
-        named_params = dict(self.named_parameters())
-        for name, value in params.items():
-            if name not in named_params:
-                continue
-            param = named_params[name]
-            param.data.copy_(value.to(device=param.device, dtype=param.dtype))

@@ -24,7 +24,6 @@ from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
-    WeightQuantizer,
     build_algorithms_by_target,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
@@ -45,21 +44,8 @@ class PlainLinear(nn.Module):
         return self.linear(x)
 
 
-def set_model_act_quant_state(model, flag):
-    for name, mod in model.named_modules():
-        if isinstance(mod, ActivationQuantizer):
-            mod.enable = flag
-            mod.is_observe = not flag
-
-
-def set_model_weight_quant_state(model, flag):
-    for name, mod in model.named_modules():
-        if isinstance(mod, WeightQuantizer):
-            mod.enable = flag
-
-
 def set_model_to_observe(model, flag):
-    for name, mod in model.named_modules():
+    for mod in model.modules():
         if hasattr(mod, "is_observe"):
             mod.is_observe = flag
 

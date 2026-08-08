@@ -18,9 +18,12 @@
 __all__ = [
     'register_algorithms',
     'AlgoBuildContext',
+    'QuantAlgorithmBase',
 ]
 
 from dataclasses import dataclass
+
+from .base import QuantAlgorithmBase
 
 
 _REGISTERED = False
