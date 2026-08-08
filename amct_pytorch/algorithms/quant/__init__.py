@@ -23,7 +23,7 @@ __all__ = [
 
 from dataclasses import dataclass
 
-from .algorithm_base import QuantAlgorithmBase
+from .base import QuantAlgorithmBase
 
 
 _REGISTERED = False

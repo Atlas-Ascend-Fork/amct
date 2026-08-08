@@ -15,7 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from amct_pytorch.algorithms.quant.algorithm_base import QuantAlgorithmBase
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.common.utils.registry_factory import Registry
 
 

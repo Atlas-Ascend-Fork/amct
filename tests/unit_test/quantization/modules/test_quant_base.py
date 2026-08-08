@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-from amct_pytorch.algorithms.quant.algorithm_base import QuantAlgorithmBase
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.quant.auto_round import AutoRound  # noqa: F401
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_base import (

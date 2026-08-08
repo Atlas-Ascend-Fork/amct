@@ -53,18 +53,14 @@ def _make_registered_algorithm(name):
 
 def test_quant_package_exports_algorithm_base():
     quant_module = importlib.import_module("amct_pytorch.algorithms.quant")
-    base_module = importlib.import_module(
-        "amct_pytorch.algorithms.quant.algorithm_base"
-    )
+    base_module = importlib.import_module("amct_pytorch.algorithms.quant.base")
 
     assert quant_module.QuantAlgorithmBase is base_module.QuantAlgorithmBase
     assert "QuantAlgorithmBase" in quant_module.__all__
 
 
 def _make_test_algorithm(dtype=torch.float32):
-    base_module = importlib.import_module(
-        "amct_pytorch.algorithms.quant.algorithm_base"
-    )
+    base_module = importlib.import_module("amct_pytorch.algorithms.quant.base")
 
     class _TestAlgorithm(base_module.QuantAlgorithmBase):
         def __init__(self):
@@ -108,9 +104,7 @@ def test_base_common_parameter_interfaces_round_trip():
 
 
 def test_base_requires_subclass_to_implement_forward():
-    base_module = importlib.import_module(
-        "amct_pytorch.algorithms.quant.algorithm_base"
-    )
+    base_module = importlib.import_module("amct_pytorch.algorithms.quant.base")
 
     class _IncompleteAlgorithm(base_module.QuantAlgorithmBase):
         pass
