@@ -30,6 +30,7 @@ class QuantDequantHifp(torch.nn.Module):
         super(QuantDequantHifp, self).__init__()
         self.bits = bits
         self.is_act = is_act
+        self.is_observe = False
         self._deploy_mod = False
 
     def fake_quant(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
@@ -40,7 +41,7 @@ class QuantDequantHifp(torch.nn.Module):
             raise ValueError("HiFloat 4-bit are not implemented yet.")
 
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
-        if self.bits == 16:
+        if self.is_observe or self.bits == 16:
             return x
         elif self.bits == 8:
             return self.fake_quant(x, v=v)
