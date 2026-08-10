@@ -6,7 +6,7 @@
 
 ## 触发与体系边界
 
-classic `quantize()`/`convert()`/`algorithm_register()`、旧路径 AWQ/GPTQ/SmoothQuant/MinMax/OFMR/Cast/Quantile、graph_based ONNX pass、QAT/retrain、校准、剪枝、蒸馏、auto calibration 或 tensor decomposition 时使用。
+修改 classic `quantize()`/`convert()`/`algorithm_register()`、旧路径 AWQ/GPTQ/SmoothQuant/MinMax/OFMR/Cast/Quantile、graph_based ONNX pass，以及 classic/graph_based 调用链内的 QAT/retrain、quant calibration、剪枝、蒸馏、auto calibration 或 tensor decomposition 时使用。
 
 本子能力覆盖两个彼此独立、但共享 classic/public 包空间的体系：
 
@@ -16,6 +16,8 @@ classic `quantize()`/`convert()`/`algorithm_register()`、旧路径 AWQ/GPTQ/Smo
 | classic graph_based | `classic/graph_based/amct_pytorch/` 各 interface | 无统一 pass 注册表；在具体流程中显式 `GraphOptimizer.add_pass()` 或 `ModelOptimizer.add_pass()` |
 
 两者都不使用 LLM new-path `ALGO_REGISTRY`、`--algos`、`PtqUnit` 或 safetensors deploy payload。LLM new-path 任务转相应 LLM 子能力。
+
+“校准”不是本手册的独占关键词。只出现“校准”时先确认活跃入口和被修改契约：LLM 校准样本、离线输入、kwargs 和 GT 属于 `llm-data-workflow`；LLM 算法消费的统计属于 `llm-algorithm`；通用 observe/min-max/scale 语义属于 `dtype-quant-module`。只有确认进入上述 classic eager 或 graph_based 调用链后，才使用本手册。
 
 ## 按任务选择源码锚点
 

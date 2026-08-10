@@ -4,7 +4,7 @@
 
 所有编码任务结束前必须说明：
 
-- 命中的子能力。
+- 命中的场景操作手册；未分类时说明源码探查结果。
 - 实际改动文件。
 - 是否触及敏感层：workflow、solver、quant module、public API、ops build。
 - 已跑验证。
@@ -41,7 +41,7 @@
 
 ## 场景测试索引
 
-| 子能力 | 推荐最小测试 |
+| 场景操作手册 | 推荐最小测试 |
 | --- | --- |
 | `dtype-quant-module` | `pytest tests/unit_test/quantization/test_dtypes.py tests/unit_test/quantization/modules/test_quant_base.py` |
 | `llm-algorithm` | `pytest tests/unit_test/algorithms tests/unit_test/quantization/modules/test_quant_base.py` |

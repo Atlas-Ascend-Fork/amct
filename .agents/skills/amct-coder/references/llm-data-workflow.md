@@ -2,7 +2,9 @@
 
 ## 触发
 
-用户提到 `eval`、`extract_ptq_data`、PTQ workflow、PPL、Wikitext、Pileval、离线输入、GT、hook、dataloader、逐层 forward、`attention_mask`/`position_embeddings` 保存加载时使用。
+修改 LLM new-path 的 `eval`、`extract_ptq_data`、PTQ workflow、PPL、Wikitext、Pileval 校准样本、离线输入、GT、hook、dataloader、逐层 forward、`attention_mask`/`position_embeddings` 保存加载时使用。
+
+“校准”本身不足以决定使用本手册：classic eager/graph_based 调用链内的校准使用 `classic-graph`；LLM 算法内部统计使用 `llm-algorithm`；通用 observe/min-max/scale 语义使用 `dtype-quant-module`。
 
 ## 源码锚点（按需选择）
 
