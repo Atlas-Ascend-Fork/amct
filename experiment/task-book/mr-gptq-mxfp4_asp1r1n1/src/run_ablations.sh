@@ -13,6 +13,7 @@ set -u
 cd "$(dirname "$0")" || exit 1
 
 M=/mnt/workspace/models/Qwen3-8B
+M35=/mnt/workspace/models/Qwen3.6-35B-A3B
 LOG=logs
 mkdir -p $LOG
 
@@ -30,6 +31,18 @@ run () {
   echo ">>> [$(date +%H:%M:%S)] $tag"
   echo "    python3 -u run_eval.py $BASE $*"
   python3 -u run_eval.py $BASE "$@" 2>&1 | tee "$f"
+  echo ">>> [$(date +%H:%M:%S)] $tag done"
+}
+
+# 35B 专用（双卡 device_map；单次约 35min，比 8B 便宜一半）
+run35 () {
+  local tag=$1; shift
+  local f="$LOG/$tag.log"
+  if [ -f "$f" ] && grep -q '\[RESULT\]' "$f"; then
+    echo ">>> skip $tag（已完成）"; return
+  fi
+  echo ">>> [$(date +%H:%M:%S)] $tag"
+  ASCEND_RT_VISIBLE_DEVICES=0,1 python3 -u run_eval.py       --model_path $M35 --mode mr_gptq --seq_len 4096 --device_map auto       --calib_chunk 32 "$@" 2>&1 | tee "$f"
   echo ">>> [$(date +%H:%M:%S)] $tag done"
 }
 
@@ -71,15 +84,30 @@ if [[ " $SEL " == *" b2 "* ]]; then
   done
 fi
 
+# ── C1：35B W4A4（评审要求）× 3 seed（冒烟实测真 4-bit 层 200/250=80%）──────
+if [[ " $SEL " == *" c1 "* ]]; then
+  for S in 42 7 2024; do
+    run35 "w4a4_35b_seed${S}_72" $ROT $PROT $INC --perc_damp 0.4 --calib_seed $S
+  done
+fi
+
+# ── C2：8B W4A16 主线 × 2 seed —— 主线余量 0.127，需确认不在噪声内 ──────
+if [[ " $SEL " == *" c2 "* ]]; then
+  for S in 7 2024; do
+    run "w4a16_8b_seed${S}_73" --increments hadamard scale_fitting --calib_seed $S
+  done
+fi
+
 # ── 汇总 ────────────────────────────────────────────────────────────────
 echo
-echo "================ 汇总（bf16 基准 8.9893，门槛 delta ≤ 0.40）================"
+echo "================ 汇总（基准：8B 8.9893 / 35B 6.311；门槛 delta ≤ 0.40）================"
 printf "%-32s %-12s %-10s %s\n" "配置" "PPL" "delta" "判定"
-for f in $LOG/w4a4_*_73.log; do
+for f in $LOG/w4a4_*_73.log $LOG/w4a4_35b_*_72.log $LOG/w4a16_8b_*_73.log; do
   [ -f "$f" ] || continue
   p=$(grep -oP 'Score: \K[0-9.]+' "$f" | tail -1)
   [ -z "$p" ] && { printf "%-32s %-12s\n" "$(basename $f .log)" "(未完成)"; continue; }
-  d=$(python3 -c "print(f'{$p-8.9893:.4f}')")
-  ok=$(python3 -c "print('PASS' if $p-8.9893<=0.40 else 'FAIL')")
+  base=8.9893; case "$f" in *_35b_*) base=6.311;; esac   # 35B 的 bf16 基准不同
+  d=$(python3 -c "print(f'{$p-$base:.4f}')")
+  ok=$(python3 -c "print('PASS' if $p-$base<=0.40 else 'FAIL')")
   printf "%-32s %-12.4f %-10s %s\n" "$(basename $f .log)" "$p" "$d" "$ok"
 done
