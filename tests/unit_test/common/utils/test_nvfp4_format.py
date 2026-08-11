@@ -20,7 +20,6 @@ import torch
 
 from amct_pytorch.common.utils.nvfp4_format import (
     NVFP4_BLOCK_SIZE,
-    is_nvfp4_scale_key,
     is_nvfp4_weight,
     nvfp4_scale_names,
     nvfp4_weight_dequant,
@@ -194,14 +193,13 @@ def test_dequant_round_trips_a_modelopt_style_quantization():
     assert (out - weight.float()).abs().max().item() < tolerance
 
 
-# ---- is_nvfp4_weight / is_nvfp4_scale_key ---------------------------------
+# ---- is_nvfp4_weight -----------------------------------------------------
 
 
 _NVFP4_MAP = {
     "layer.weight": "shard.safetensors",
     "layer.weight_scale": "shard.safetensors",
     "layer.weight_scale_2": "shard.safetensors",
-    "layer.input_scale": "shard.safetensors",
 }
 
 
@@ -223,33 +221,3 @@ def test_is_nvfp4_weight_needs_packed_bytes_and_both_scales(dtype):
 def test_is_nvfp4_weight_rejects_fp8_weights():
     weight = torch.zeros(2, 8, dtype=torch.float8_e4m3fn)
     assert is_nvfp4_weight(weight, "layer.weight", _NVFP4_MAP) is False
-
-
-@pytest.mark.parametrize(
-    "name,expected",
-    [
-        ("layer.weight_scale", True),
-        ("layer.weight_scale_2", True),
-        ("layer.input_scale", True),
-        ("layer.inv_input_scale", True),
-        ("layer.alpha", True),
-        ("layer.weight", False),
-        ("layer.weight_scale_inv", False),
-        # Folded into the stored weight, so it must survive the dequantization.
-        ("layer.pre_quant_scale", False),
-    ],
-)
-def test_is_nvfp4_scale_key(name, expected):
-    assert is_nvfp4_scale_key(name, _NVFP4_MAP) is expected
-
-
-def test_is_nvfp4_scale_key_keeps_scales_of_other_formats():
-    """Without a sibling weight_scale_2 the checkpoint is not NVFP4, so nothing is dropped."""
-    weight_map = {"layer.weight": "shard", "layer.weight_scale": "shard"}
-    assert is_nvfp4_scale_key("layer.weight_scale", weight_map) is False
-
-
-@pytest.mark.parametrize("name", ["module.alpha", "module.input_scale"])
-def test_is_nvfp4_scale_key_keeps_unrelated_params_of_unquantized_modules(name):
-    """A module without its own weight_scale_2 keeps parameters that merely share a name."""
-    assert is_nvfp4_scale_key(name, _NVFP4_MAP) is False

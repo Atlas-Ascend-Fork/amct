@@ -666,9 +666,7 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
     assert saved_index["weight_map"] == {
         MODEL_LAYERS_0_MLP_UP_PROJ_WEIGHT: KEY_SHARD1_SAFETENSORS,
     }
-    # Dequantize-only export: the result is a plain bf16 model, not a quantized one.
-    assert refreshed["torch_dtype"] == "bfloat16"
-    assert QUANTIZATION_CONFIG not in refreshed
+    assert refreshed[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
 
 
 # ---- Task 14: _convert_tensor / _refresh_config_tensor --------------------
@@ -768,80 +766,6 @@ def test_run_tensorwise_int_quant_path(monkeypatch, tmp_path):
     assert result["num_output_files"] == 1
     # quant_payload produces qweight + weight_scale + weight_bias
     assert "layer.weight" in refreshed_index["weight_map"]
-
-
-def test_run_tensorwise_dequantizes_nvfp4_to_bf16(monkeypatch, tmp_path):
-    """An NVFP4 shard is decoded to bf16 and loses every quantization artifact."""
-    from safetensors.torch import load_file
-
-    from amct_pytorch.common.utils.nvfp4_format import unpack_nvfloat4_to_fp32
-
-    src = tmp_path / "src"
-    dst = tmp_path / "dst"
-    src.mkdir()
-    dst.mkdir()
-
-    (src / CONFIG_JSON).write_text(
-        json.dumps(
-            {"torch_dtype": "bfloat16", QUANTIZATION_CONFIG: {"quant_algo": "NVFP4"}}
-        )
-    )
-    (src / "hf_quant_config.json").write_text(json.dumps({"quant_algo": "NVFP4"}))
-
-    rows, cols = 2, 32
-    packed = torch.randint(0, 256, (rows, cols // 2), dtype=torch.uint8)
-    tensors = {
-        LAYER_WEIGHT: packed,
-        "layer.weight_scale": torch.full((rows, cols // 16), 2.0).to(
-            torch.float8_e4m3fn
-        ),
-        "layer.weight_scale_2": torch.tensor([0.5]),
-        "layer.input_scale": torch.tensor([0.125]),
-    }
-    save_file(tensors, str(src / KEY_SHARD1_SAFETENSORS))
-    (src / SAFETENSORS_INDEX_JSON).write_text(
-        json.dumps(
-            {
-                "metadata": {},
-                "weight_map": {name: KEY_SHARD1_SAFETENSORS for name in tensors},
-            }
-        )
-    )
-
-    monkeypatch.setattr("amct_pytorch.workflows.llm_deploy.logger", MagicMock())
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_deploy.tqdm",
-        lambda iterable, desc="": iterable,
-    )
-
-    wf = _make_workflow(model_path=str(src), output_dir=str(dst), quant_dtype="bf16")
-    wf.granularity = "tensor"
-    wf.pipeline = MagicMock()
-    # The adapter only knows FP8 scale naming; NVFP4 has to be detected regardless.
-    wf.pipeline.get_scale_name = MagicMock(
-        side_effect=lambda name: ("_scale_inv", f"{name}_scale_inv")
-    )
-    wf.pipeline.generate_tensorwise_quant_layers = MagicMock(return_value={})
-    wf.pipeline.generate_tensorwise_ignore_layers = MagicMock(return_value=[])
-    wf.pipeline.block_size = MagicMock(return_value=32)
-    wf.setup = MagicMock(return_value="sink")
-
-    wf.run()
-
-    converted = load_file(str(dst / KEY_SHARD1_SAFETENSORS))
-    assert list(converted) == [LAYER_WEIGHT]
-    assert converted[LAYER_WEIGHT].dtype == torch.bfloat16
-    assert tuple(converted[LAYER_WEIGHT].shape) == (rows, cols)
-    expected = (unpack_nvfloat4_to_fp32(packed) * 2.0 * 0.5).to(torch.bfloat16)
-    assert torch.equal(converted[LAYER_WEIGHT], expected)
-
-    refreshed = json.loads((dst / CONFIG_JSON).read_text())
-    assert refreshed["torch_dtype"] == "bfloat16"
-    assert QUANTIZATION_CONFIG not in refreshed
-    assert not (dst / "hf_quant_config.json").exists()
-    assert json.loads((dst / SAFETENSORS_INDEX_JSON).read_text())["weight_map"] == {
-        LAYER_WEIGHT: KEY_SHARD1_SAFETENSORS
-    }
 
 
 def test_load_weight_index_single_shard_synthesizes(tmp_path):

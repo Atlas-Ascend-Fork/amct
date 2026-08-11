@@ -14,13 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""NVFP4 unpack / dequant helpers.
+"""NVFP4 unpack / dequant helpers for convert_state_dict.
 
-NVFP4 packs two 4-bit E2M1 codes per byte, exactly like MXFP4, so the nibble codec is
-shared with ``mxfp_impl``. The formats differ in the scale: NVFP4 pairs a per-16-element
-E4M3 block scale (``weight_scale``) with one FP32 per-tensor scale (``weight_scale_2``),
-while MXFP4 uses a single E8M0 per-32-element scale. That second scale is also what lets
-``convert_state_dict`` tell the two apart, since both arrive as 1-byte packed tensors.
+NVFP4 packs two 4-bit E2M1 codes per byte (same packing as MXFP4). It is identified by
+the companion scales ``weight_scale`` (E4M3, per 16 elements) and ``weight_scale_2``
+(per-tensor FP32). TRT-LLM may store ``weight_scale`` as a 1-D buffer over a padded tile
+``pad(rows, 128) * pad(cols, 4)`` before cropping.
 """
 
 import torch
@@ -28,24 +27,7 @@ import torch
 from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
 
 NVFP4_BLOCK_SIZE = 16
-# Parameters stored next to an NVFP4 weight: the E4M3 block scale, the per-tensor scale
-# and, when activations are quantized too, the activation scale plus the reciprocal and
-# fused-GEMM forms TRT-LLM derives from it. All of them are either consumed by the
-# dequantization or meaningless once the weight is a float tensor. `pre_quant_scale` is
-# deliberately not listed: it is folded into the stored weight, so dropping it without
-# compensating the weight would silently change the model.
-NVFP4_PARAM_SUFFIXES = (
-    ".weight_scale",
-    ".weight_scale_2",
-    ".input_scale",
-    ".inv_input_scale",
-    ".alpha",
-)
-# `weight_scale_2` is what makes a checkpoint recognisable as NVFP4.
-NVFP4_MARKER_SUFFIX = ".weight_scale_2"
-# Packed 4-bit weights arrive as raw bytes, unlike FP8 weights which keep a float dtype.
 _PACKED_DTYPES = (torch.uint8, torch.int8)
-# TRT-LLM stores a flattened weight_scale over this padded tile before cropping.
 _SF_ROW_ALIGN = 128
 _SF_COL_ALIGN = 4
 
@@ -56,12 +38,7 @@ def nvfp4_scale_names(weight_name: str):
 
 
 def is_nvfp4_weight(weight: torch.Tensor, weight_name: str, weight_map) -> bool:
-    """Whether `weight_name` is an NVFP4 weight rather than an FP8 or MXFP4 one.
-
-    NVFP4 packs two elements per byte just like MXFP4, so the dtype alone cannot tell
-    them apart. The discriminator is the per-tensor `weight_scale_2`, which only NVFP4
-    carries next to the E4M3 block scale.
-    """
+    """Whether `weight_name` is an NVFP4 weight rather than FP8 or MXFP4."""
     block_scale_name, global_scale_name = nvfp4_scale_names(weight_name)
     return (
         weight.dtype in _PACKED_DTYPES
@@ -70,26 +47,8 @@ def is_nvfp4_weight(weight: torch.Tensor, weight_name: str, weight_map) -> bool:
     )
 
 
-def is_nvfp4_scale_key(weight_name: str, weight_map) -> bool:
-    """Whether `weight_name` is a quantization parameter of an NVFP4 weight.
-
-    Requiring a sibling `weight_scale_2` keeps identically named parameters of other
-    formats, which have to survive the conversion, out of the match.
-    """
-    for suffix in NVFP4_PARAM_SUFFIXES:
-        if weight_name.endswith(suffix):
-            base_name = weight_name[: -len(suffix)]
-            return f"{base_name}{NVFP4_MARKER_SUFFIX}" in weight_map
-    return False
-
-
 def unpack_nvfloat4_to_fp32(packed_tensor: torch.Tensor) -> torch.Tensor:
-    """Decode a packed NVFP4 tensor: every byte holds two 4-bit E2M1 codes.
-
-    The last dimension doubles, so a [M, N // 2] packed weight becomes [M, N]. The bytes
-    are viewed as uint8 first because the codes are unsigned; reading them out of a signed
-    int8 tensor would sign-extend the high nibble.
-    """
+    """Decode packed NVFP4: every byte holds two 4-bit E2M1 codes; last dim doubles."""
     if packed_tensor.element_size() != 1:
         raise ValueError(
             f"NVFP4 weights are packed one byte per two elements, "
@@ -103,11 +62,7 @@ def unpack_nvfloat4_to_fp32(packed_tensor: torch.Tensor) -> torch.Tensor:
 def _expand_block_scale(
     weight_scale: torch.Tensor, rows: int, cols: int
 ) -> torch.Tensor:
-    """Decode the E4M3 block scale to FP32 and lay it out as [rows, cols].
-
-    TRT-LLM checkpoints may store the scale as a 1-D buffer of length
-    ``pad(rows, 128) * pad(cols, 4)``; the padded tile is reshaped then cropped.
-    """
+    """Decode E4M3 block scale to FP32 laid out as [rows, cols]."""
     if weight_scale.dtype in _PACKED_DTYPES:
         weight_scale = weight_scale.view(torch.float8_e4m3fn)
     scale = weight_scale.to(torch.float32)
@@ -143,20 +98,7 @@ def nvfp4_weight_dequant(
     weight_scale_2: torch.Tensor,
     block_size: int = NVFP4_BLOCK_SIZE,
 ) -> torch.Tensor:
-    """Dequantize an NVFP4 packed weight into a float tensor.
-
-    Each element is reconstructed as `e2m1_code * e4m3_block_scale * fp32_global_scale`,
-    where the block scale covers `block_size` consecutive elements of a row.
-
-    Args:
-        weight (torch.Tensor): Packed E2M1 weight of shape (M, N // 2).
-        weight_scale (torch.Tensor): E4M3 block scale, (M, N // block_size) or flattened.
-        weight_scale_2 (torch.Tensor): FP32 per-tensor scale.
-        block_size (int, optional): Elements sharing one block scale. Defaults to 16.
-
-    Returns:
-        torch.Tensor: The dequantized weight of shape (M, N), in the default dtype.
-    """
+    """Dequantize packed NVFP4 weight: e2m1 * e4m3_block_scale * fp32_global_scale."""
     unpacked = unpack_nvfloat4_to_fp32(weight)
     if unpacked.dim() != 2:
         raise ValueError(

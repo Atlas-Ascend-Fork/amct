@@ -89,9 +89,8 @@ def parser_gen(command=None):
         "--quant_dtype",
         type=str,
         default="",
-        choices=['int', 'mxfp', 'hifp', 'bf16'],
-        help='Quantization data type. bf16 only dequantizes the source checkpoint '
-        '(FP8 / MXFP4 / NVFP4 -> BF16) and is used with granularity=tensor.',
+        choices=['int', 'mxfp', 'hifp'],
+        help='Quantization data type.',
     )
 
     parser.add_argument(
