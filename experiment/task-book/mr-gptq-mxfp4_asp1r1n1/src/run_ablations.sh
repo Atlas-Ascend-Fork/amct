@@ -33,24 +33,24 @@ run () {
   echo ">>> [$(date +%H:%M:%S)] $tag done"
 }
 
-GROUPS=${*:-"s1 a2 b1 b2"}
+SEL=${*:-"s1 a2 b1 b2"}
 
 # ── S1：阻尼延伸 ────────────────────────────────────────────────────────
-if [[ " $GROUPS " == *" s1 "* ]]; then
+if [[ " $SEL " == *" s1 "* ]]; then
   for D in 0.3 0.4 0.6; do
     run "w4a4_damp${D}_73"  $ROT $PROT $INC --perc_damp $D
   done
 fi
 
 # ── A2：校准集敏感性（评测本身确定性，随机性只来自校准语料抽样）────────
-if [[ " $GROUPS " == *" a2 "* ]]; then
+if [[ " $SEL " == *" a2 "* ]]; then
   for S in 7 2024; do
     run "w4a4_seed${S}_73"  $ROT $PROT $INC --perc_damp 0.2 --calib_seed $S
   done
 fi
 
 # ── B1：留一法（基线 = 最终配置 delta 0.3897）──────────────────────────
-if [[ " $GROUPS " == *" b1 "* ]]; then
+if [[ " $SEL " == *" b1 "* ]]; then
   # ① 去 act_scale_fit
   run "w4a4_loo_noscalefit_73" $ROT $PROT --perc_damp 0.2 \
       --increments hadamard scale_fitting act_quant joint_comp
@@ -64,7 +64,7 @@ if [[ " $GROUPS " == *" b1 "* ]]; then
 fi
 
 # ── B2：大校准集 × 阻尼 ─────────────────────────────────────────────────
-if [[ " $GROUPS " == *" b2 "* ]]; then
+if [[ " $SEL " == *" b2 "* ]]; then
   for D in 0.1 0.2 0.4; do
     run "w4a4_calib256_damp${D}_73" $ROT $PROT $INC \
         --perc_damp $D --n_calib 256 --calib_chunk 32
