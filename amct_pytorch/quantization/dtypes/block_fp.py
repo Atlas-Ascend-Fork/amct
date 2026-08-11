@@ -57,7 +57,7 @@ class QuantDequantFP(torch.nn.Module):
 
     def fake_quant(self, x: Tensor, qdim: int = -1, v: Tensor = 0.0):
         scale, ex_mx = self.quant(x, qdim, v=v)
-        dx = unquantize_fp(ex_mx, scale, self.block_size, self.min_exp, self.max_norm)
+        dx = unquantize_fp(ex_mx, scale, self.min_exp, self.max_norm, self.block_size)
         dx = dx.flatten(qdim - 1, qdim)
         return dx
 
