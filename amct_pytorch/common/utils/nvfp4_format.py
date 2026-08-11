@@ -28,19 +28,47 @@ import torch
 from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
 
 NVFP4_BLOCK_SIZE = 16
-NVFP4_SCALE_SUFFIXES = (".weight_scale", ".weight_scale_2")
+# Parameters stored next to an NVFP4 weight: the E4M3 block scale, the per-tensor scale
+# and, when activations are quantized too, the activation scale. All of them are either
+# consumed by the dequantization or meaningless once the weight is a float tensor.
+NVFP4_PARAM_SUFFIXES = (".weight_scale", ".weight_scale_2", ".input_scale")
+# `weight_scale_2` is what makes a checkpoint recognisable as NVFP4.
+NVFP4_MARKER_SUFFIX = ".weight_scale_2"
+# Packed 4-bit weights arrive as raw bytes, unlike FP8 weights which keep a float dtype.
+_PACKED_DTYPES = (torch.uint8, torch.int8)
 
-# The block-scale tensor is stored over a padded row/column tiling when it is flattened.
-_SF_ROW_ALIGN = 128
-_SF_COL_ALIGN = 4
+
+def nvfp4_scale_names(weight_name: str):
+    """Checkpoint keys of the block scale and the per-tensor scale of `weight_name`."""
+    return f"{weight_name}_scale", f"{weight_name}_scale_2"
 
 
-def is_nvfp4_scale_key(weight_name: str) -> bool:
-    """Whether `weight_name` is an NVFP4 scale tensor.
+def is_nvfp4_weight(weight: torch.Tensor, weight_name: str, weight_map) -> bool:
+    """Whether `weight_name` is an NVFP4 weight rather than an FP8 or MXFP4 one.
 
-    Scales are consumed by the dequantization and must not reach the decoded checkpoint.
+    NVFP4 packs two elements per byte just like MXFP4, so the dtype alone cannot tell
+    them apart. The discriminator is the per-tensor `weight_scale_2`, which only NVFP4
+    carries next to the E4M3 block scale.
     """
-    return weight_name.endswith(NVFP4_SCALE_SUFFIXES)
+    block_scale_name, global_scale_name = nvfp4_scale_names(weight_name)
+    return (
+        weight.dtype in _PACKED_DTYPES
+        and block_scale_name in weight_map
+        and global_scale_name in weight_map
+    )
+
+
+def is_nvfp4_scale_key(weight_name: str, weight_map) -> bool:
+    """Whether `weight_name` is a quantization parameter of an NVFP4 weight.
+
+    Requiring a sibling `weight_scale_2` keeps identically named parameters of other
+    formats, which have to survive the conversion, out of the match.
+    """
+    for suffix in NVFP4_PARAM_SUFFIXES:
+        if weight_name.endswith(suffix):
+            base_name = weight_name[: -len(suffix)]
+            return f"{base_name}{NVFP4_MARKER_SUFFIX}" in weight_map
+    return False
 
 
 def unpack_nvfloat4_to_fp32(packed_tensor: torch.Tensor) -> torch.Tensor:
@@ -50,25 +78,34 @@ def unpack_nvfloat4_to_fp32(packed_tensor: torch.Tensor) -> torch.Tensor:
     are viewed as uint8 first because the codes are unsigned; reading them out of a signed
     int8 tensor would sign-extend the high nibble.
     """
+    if packed_tensor.element_size() != 1:
+        raise ValueError(
+            f"NVFP4 weights are packed one byte per two elements, "
+            f"got dtype {packed_tensor.dtype}."
+        )
     if packed_tensor.dtype != torch.uint8:
         packed_tensor = packed_tensor.view(torch.uint8)
     return unpack_mxfloat4_to_fp32(packed_tensor)
 
 
-def _expand_block_scale(weight_scale: torch.Tensor, rows: int, cols: int) -> torch.Tensor:
+def _expand_block_scale(
+    weight_scale: torch.Tensor, rows: int, cols: int
+) -> torch.Tensor:
     """Decode the E4M3 block scale to FP32 and lay it out as [rows, cols]."""
-    if weight_scale.dtype == torch.uint8:
+    if weight_scale.dtype in _PACKED_DTYPES:
         weight_scale = weight_scale.view(torch.float8_e4m3fn)
     scale = weight_scale.to(torch.float32)
-    if scale.dim() == 1:
-        padded_rows = -(-rows // _SF_ROW_ALIGN) * _SF_ROW_ALIGN
-        padded_cols = -(-cols // _SF_COL_ALIGN) * _SF_COL_ALIGN
-        scale = scale.view(padded_rows, padded_cols)
-    elif scale.dim() != 2:
+    if scale.dim() == 1 and scale.numel() == rows * cols:
+        scale = scale.view(rows, cols)
+    if scale.dim() == 2:
+        # Checkpoints may pad the block-scale rows/columns up to a tile size.
+        scale = scale[:rows, :cols]
+    if tuple(scale.shape) != (rows, cols):
         raise ValueError(
-            f"NVFP4 weight_scale must be 1-D or 2-D, got {scale.dim()} dimensions."
+            f"NVFP4 weight_scale must hold ({rows}, {cols}) block scales for this "
+            f"weight, got shape {tuple(weight_scale.shape)}."
         )
-    return scale[:rows, :cols]
+    return scale
 
 
 def nvfp4_weight_dequant(
@@ -92,9 +129,24 @@ def nvfp4_weight_dequant(
         torch.Tensor: The dequantized weight of shape (M, N), in the default dtype.
     """
     unpacked = unpack_nvfloat4_to_fp32(weight)
+    if unpacked.dim() != 2:
+        raise ValueError(
+            f"NVFP4 dequantization expects a 2-D weight, got shape {tuple(weight.shape)}."
+        )
     rows, cols = unpacked.shape
+    if cols % block_size != 0:
+        raise ValueError(
+            f"NVFP4 weight has {cols} columns, which is not a multiple of the "
+            f"{block_size}-element block size."
+        )
     scale = _expand_block_scale(weight_scale, rows, cols // block_size)
-    scale_expanded = scale.repeat_interleave(block_size, dim=1)[:rows, :cols]
+    scale_expanded = scale.repeat_interleave(block_size, dim=1)
+    global_scale = weight_scale_2.to(torch.float32)
+    if global_scale.numel() != 1:
+        raise ValueError(
+            f"NVFP4 weight_scale_2 must be a per-tensor scalar, "
+            f"got shape {tuple(weight_scale_2.shape)}."
+        )
 
-    dequantized_weight = unpacked * scale_expanded * weight_scale_2.to(torch.float32)
+    dequantized_weight = unpacked * scale_expanded * global_scale.reshape(())
     return dequantized_weight.to(torch.get_default_dtype())
