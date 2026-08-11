@@ -633,6 +633,40 @@ def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_00
     return n_mod, quant_param
 
 
+def report_act_coverage(model):
+    """统计**真 4-bit 激活层占比**——W4A4 的验收口径（按层数，评审确认）。
+
+    分母 = 被量化的 MRGPTQuant 模块数；分子 = 其中 `_do_act_quant()` 为真的。
+    两类会掉出分子：
+      ① `_ACT_PROTECT` 命中的（混合精度，主动保高精度激活）；
+      ② in_features 不被 hadamard k 整除、拿不到旋转的（W4A4 需旋转压离群值，见 _do_act_quant）。
+    8B 上手数为 180/252 = 71.4%；35B 维度较杂，②会命中，必须由本函数统计。
+    对 W4A16（未开 act_quant）返回 (0, n, 0.0)。
+    """
+    on, off_prot, off_rot = [], [], []
+    total = 0
+    for name, mod in model.named_modules():
+        if not isinstance(mod, MRGPTQuant):
+            continue
+        total += 1
+        if not mod.increments.get("act_quant"):
+            continue
+        if any(p in mod.layer_name for p in _ACT_PROTECT):
+            off_prot.append(mod.layer_name)
+        elif mod.increments["hadamard"] and not mod._do_hadamard():
+            off_rot.append(mod.layer_name)
+        else:
+            on.append(mod.layer_name)
+    pct = 100.0 * len(on) / max(total, 1)
+    print(f"[act-coverage] 真 4-bit 激活层 = {len(on)}/{total} = {pct:.1f}%  (要求≥70%)")
+    if off_prot:
+        print(f"[act-coverage]   ↳ 混合精度保护跳过 {len(off_prot)} 层（--act_protect {_ACT_PROTECT}）")
+    if off_rot:
+        print(f"[act-coverage]   ↳ 无法旋转而跳过 {len(off_rot)} 层（in_features 不整除 k）："
+              f"{sorted(set(n.split('.')[-1] for n in off_rot))}")
+    return len(on), total, pct
+
+
 # ---- 运行时注册 'mr_gptq'（零改 amct 源码） --------------------------------
 def register():
     import amct_pytorch.algorithms as _algos

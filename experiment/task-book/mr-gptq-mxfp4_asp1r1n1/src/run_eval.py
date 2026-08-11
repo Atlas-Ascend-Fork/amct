@@ -177,6 +177,8 @@ def main():
         report_actual_coverage(model)  # 校准后真实统计（MoE 冷 expert 会掉出来）
         # MoE 融合路由专家（amct 覆盖不到的大头）：手动 MXFP4，否则显存降不达标
         if args.mode == "mr_gptq":
+            if mr_gptq_module._INCREMENTS["act_quant"]:
+                mr_gptq_module.report_act_coverage(model)  # W4A4 验收口径：真 4-bit 激活层占比
             sf = mr_gptq_module._INCREMENTS["scale_fitting"]
             mr_gptq_module.quantize_fused_experts(model, scale_fitting=sf)
         report_memory_full(model)  # 全参数口径的真实显存降低（验收用）
