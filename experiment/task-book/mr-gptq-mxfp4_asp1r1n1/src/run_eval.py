@@ -72,6 +72,9 @@ def build_args():
     ap.add_argument("--max_line_tokens", type=int, default=512,
                     help="校准语料单条 token 上限，超长整条丢弃。要真正的长上下文校准"
                          "（与 seq_len=4096 评测对齐）需同时调大本参数与 --calib_block")
+    ap.add_argument("--calib_seed", type=int, default=42,
+                    help="校准语料的抽样种子。换种子=换一批 pile-val 样本→Hessian 变→结果会漂。"
+                         "用于量化「结果对校准集选取的敏感性」（评测本身确定性，无随机性）")
     ap.add_argument("--dtype", default="float16", choices=["float16", "bfloat16"])
     ap.add_argument("--device", default="npu:0")
     ap.add_argument("--device_map", default=None,
@@ -164,7 +167,10 @@ def main():
         print(f"[cfg] skip_layers = {sorted(cfg['skip_layers'])}")
         calib = get_calib_dataset(tokenizer, n_samples=args.n_calib,
                                   block_size=args.calib_block,
-                                  max_line_tokens=args.max_line_tokens)
+                                  max_line_tokens=args.max_line_tokens,
+                                  seed=args.calib_seed)
+        if args.calib_seed != 42:
+            print(f"[calib] seed = {args.calib_seed}（非默认；用于校准集敏感性测试）")
         report_coverage_memory(model, skip_layers=cfg["skip_layers"])  # 量化前理论统计
         amct.quantize(model, cfg)
         calibrate(model, calib)

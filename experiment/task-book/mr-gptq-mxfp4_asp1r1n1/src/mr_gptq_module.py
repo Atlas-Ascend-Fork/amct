@@ -578,8 +578,16 @@ def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_00
     量化 nn.Linear → 碰不到它们 → 不处理则「显存降低≥50%」必然不达标。
 
     做法：沿最后一维(in，收缩维)每 32 元素一组做标准 MXFP4（reshape [E*out, in] 后
-    复用逐块量化）。weight-only RTN + 可选 scale fitting；**不做 Hadamard**（专家输入的
-    旋转需与 router/shared_expert 同步，代价大；且 scale fitting 对 RTN 本就是加分项）。
+    复用逐块量化）。weight-only RTN + 可选 scale fitting；**不做 Hadamard、不做 GPTQ 补偿**。
+
+    不做 Hadamard 的原因：旋转要求推理时对专家输入施加 `x·R`，而本函数走**纯权重改写**
+    通路（只重写 `W.data`，不接管 forward），没有挂载输入旋转的位置；要做需自行接管
+    `Qwen3_5MoeExperts.forward`。（router 读的是**未旋转**的 hidden state，与旋转无耦合，
+    不存在"需与 router 同步"的障碍。）scale fitting 对 RTN 本就是加分项（论文 Table 11）。
+
+    ⚠️口径：本函数覆盖的 ~32B 参数拿到的是 **MXFP4 数据类型**，不是完整 MR-GPTQ 算法。
+    报告中的「全参数量化占比 97%」为数据类型覆盖率；完整 MR-GPTQ 只作用于 250 个
+    nn.Linear（1.41B，占全参数 4.1%）。
 
     ⚠️显存：device_map 会把卡塞得很满(card 0 常仅剩 ~1GB)，故计算全程放 **CPU**
     （fp32 临时量 2GB+ 放卡上必 OOM）；回写时先把 CPU 结果赋给 W.data 释放卡上旧张量、

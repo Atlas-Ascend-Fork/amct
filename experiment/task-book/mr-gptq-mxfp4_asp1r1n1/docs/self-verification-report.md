@@ -62,6 +62,22 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq --seq_len 4096     --
 >
 > 三者只是分母不同、并不矛盾。**验收以最保守的 `[memory-full]` 全模型口径为准**
 > （8B 62.3%、35B 71.2%），均远高于 50% 门槛。
+>
+> ⚠️ **该指标是解析推算，非运行时实测**（`eval_utils.py:129 report_memory_full`）：
+> 按「量化参数 × 4.25 bit + 未量化参数 × 16 bit」除以「全部参数 × 16 bit」计算，
+> 即 **MXFP4 打包存储下的权重压缩率**。本项目为 **fake quantization**——权重数值已落到
+> MXFP4 的 16 个格点上（**精度损失是真实发生的、PPL 为实测**），但张量仍以 fp16 承载，
+> 故运行时 `torch` 显存不变。要兑现该压缩率需打包存储格式与配套反量化算子，属 AMCT
+> `deploy` 环节，不在本任务范围。此为量化算法工作的通行口径（GPTQ / AWQ / QuaRot
+> 等均以位宽比报告压缩比）。
+>
+> 校验：35B 量化占比 97.0% → 1 − (0.97×4.25 + 0.03×16)/16 = **71.2%**；
+> 8B 占比 84.8% → **62.3%**。全量化上限为 1 − 4.25/16 = **73.4%**。
+> 35B 更接近上限的原因是 embedding/lm_head 在更大模型中占比更低（8B 中约 15%，35B 中约 3%），
+> **与 MoE 量化质量无关**。
+>
+> ⚠️ 另注：开启 scale fitting 后 scale 不再是 E8M0，而是 `2^(α·q+β)`（q 仍 8 bit），
+> **位宽 4.25 不变**，但反量化由纯移位变为乘加取幂——代价体现在算子而非存储。
 
 ### 4.1 Qwen3-8B（seq_len=4096）—— ✅ 达标
 
@@ -104,7 +120,8 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq --seq_len 4096     --
 - 日志：`src/logs/mrgptq_full_35b_4096.log`、`src/logs/e0_bf16_35b_4096.log`
 - 覆盖率口径说明：全模型 351 个 nn.Linear，跳 `lm_head`，目标 350 个；amct 实际量化 **250 个**
   （其余 ~100 个为 in/out 维不整除 32、无法做 block-32 MXFP4 的层——部分 `linear_attn` 投影、
-  `shared_expert_gate`（out=1），参数量极小、保 fp16）。故 nn.Linear 覆盖 = 250/350 = 71.4%。
+  `shared_expert_gate`（out=1），保 fp16）。故 nn.Linear 覆盖 = 250/350 = 71.4%。
+  这 ~100 层与 embedding/lm_head/router/norm 合计 1.04B（3.0%），**未逐项拆分统计**。
   **但 35B 参数大头是 32B 融合路由专家**（非 nn.Linear），单看 nn.Linear 不足以反映量化程度，
   以「全参数量化占比 97.0% / 显存降低 71.2%」为准。
 - MR-GPTQ 运行结果（`[coverage]`/`[actual-coverage]` 覆盖率）：
@@ -119,10 +136,28 @@ python3 -u run_eval.py --model_path <model> --mode mr_gptq --seq_len 4096     --
 
   ![35B bf16 基准](img/35B_bf16.png)
 
-- 量化策略：nn.Linear（attn / 线性注意力投影 / 共享专家，共 250 个）走**完整 MR-GPTQ**
-  （Hadamard + scale fitting + GPTQ 补偿）；融合路由专家（32B）走 **scale-fitting MXFP4 RTN**
-  （不做 Hadamard——专家输入旋转需与 router/shared_expert 同步、代价大；scale fitting 对 RTN
-  是加分项，论文 Table 11）。router（`Qwen3_5MoeTopKRouter`，非 Linear）保 fp16。
+- 量化策略与**算法覆盖的口径披露**（重要，勿与参数覆盖率混淆）：
+
+  | 部分 | 参数量 | 占全模型 | 所用算法 |
+  |------|--------|----------|----------|
+  | nn.Linear（attn / 线性注意力投影 / 共享专家，250 个） | **1.41B** | **4.1%** | **完整 MR-GPTQ**（Hadamard + scale fitting + GPTQ 补偿） |
+  | 融合路由专家（40 层 × `gate_up_proj`/`down_proj`） | **32.21B** | **92.9%** | **scale-fitting MXFP4 RTN**（无旋转、无误差补偿） |
+  | 小计（量化） | **33.62B** | **97.0%** | |
+  | embedding / lm_head / router / norm / 不整除 32 的 ~100 个 Linear | 1.04B | 3.0% | fp16 |
+
+  数据来源：`[fused-experts] 共 40 个 Experts 模块，量化 32.21B 参数` 与
+  `[memory-full] 全模型量化参数占比 = 97.0% (33.62B / 34.66B)`；1.41B 由二者相减得到。
+
+  即：**「全参数量化占比 97.0%」是 MXFP4 数据类型的覆盖率，不是 MR-GPTQ 算法的覆盖率**——
+  后者为 **4.1%**。35B 的 delta 0.067 主要说明「MXFP4 本身在该 MoE 上损失极小」，
+  MR-GPTQ 三项增量的精度贡献在此模型上无法从该数字中分离。
+
+  融合专家**不做 Hadamard 的真实原因**：旋转要求推理时对专家输入施加 `x·R`，而
+  `quantize_fused_experts` 走的是**纯权重改写**通路（只重写 `W.data`，不接管 forward），
+  没有挂载输入旋转的位置；要做需自行接管 `Qwen3_5MoeExperts.forward`，属另一工作量。
+  （router 读的是**未旋转**的 hidden state，与旋转无耦合，不存在"需与 router 同步"的障碍。）
+  scale fitting 对 RTN 本就是加分项（论文 Table 11），故保留。
+  router（`Qwen3_5MoeTopKRouter`，非 Linear）保 fp16。
 - 工程：双卡 device_map（35B fp16≈70GB 单卡放不下），融合专家量化在 CPU 完成规避多卡 OOM。
 
 ### 4.3 W4A4 精度评估（激活也量化 —— 按评审意见补充）—— ✅ 已达标
@@ -304,7 +339,7 @@ scale，本工作 MXFP4 block-32 = 每行 128 个 scale，属**格式代差**而
 | 35B PPL 评测耗时（72 samples @4096，双卡）  | **5min 46.7s**                                              |
 | 8B 校准+补偿耗时（W4A4 达标配置，seq_len=4096） | **1849.5s**（252 层逐层 CPU 补偿 + 全宽 Hadamard 旋转）     |
 | 8B PPL 评测耗时（73 samples @4096，单卡）   | **31min 32.0s**（25.9 s/块；W4A4 每次前向都要旋转 + 量化激活）|
-| 相对 stock GPTQ 提速                        | ~15×（CPU 卸载 + shared exponent 预计算 + 标准量化）        |
+| 相对 stock GPTQ 提速                        | ~10×（CPU 卸载 + shared exponent 预计算 + 标准量化）        |
 
 - 性能数据（35B 校准/补偿/评测耗时）：
 
@@ -321,13 +356,17 @@ scale，本工作 MXFP4 block-32 = 每行 128 个 scale，属**格式代差**而
 
 - Qwen3-8B（dense）：MXFP4 weight-only 下 MR-GPTQ 三项硬指标（delta 0.273 / 覆盖 99.6% / 显存 67.4%）全部达标 ✅。
 - Qwen3.6-35B-A3B（qwen3_5_moe 混合 MoE）：delta 0.067 / nn.Linear 覆盖 71.4% / 全参数 97.0% / 显存 71.2%，全部达标 ✅。
-  额外解决 amct 覆盖不到融合路由专家（占 32B）的问题，自实现融合专家 MXFP4 量化。
+  额外解决 amct 覆盖不到融合路由专家（占 32B）的问题，自实现融合专家 MXFP4 量化
+  （RTN + scale fitting，无旋转/无补偿）。**口径提醒**：97.0% 是 MXFP4 数据类型的参数覆盖率；
+  完整 MR-GPTQ 实际作用于 4.1% 的参数（250 个 nn.Linear，1.41B），故 35B 的 delta 0.067
+  主要反映 MXFP4 本身在该 MoE 上的低损失，不足以单独证明三项增量的收益（口径详见 §4.2）。
 - 算法实现自包含、**零改 amct 源码**、运行时注册。消融链验证了所采用各增量的贡献（§5）；
   论文第三项增量经分析后未采用，理由见 §5。
 - **W4A4（按评审意见补充）：Qwen3-8B 已达标 ✅**——delta **0.3897 ≤ 0.40**、真 4-bit 激活层
   **71.4% ≥ 70%**（按层数口径）、权重量化层 99.6%、显存降低 62.3%。W4A4 delta 由初始实现的
-  **0.763 降至 0.3897（降低 49%）**。关键为两项此前未覆盖的改动：全宽旋转（补 `down_proj`
-  的 12288 维旋转缺口，−0.0305）与 GPTQ 阻尼系数调优（−0.0261）。详见 §4.3。
+  **0.763 降至 0.3897（降低 49%）**。主体增益（−0.317）来自旋转加强 k=4096、两类层混合精度
+  保护、激活 scale-fitting 与联合补偿四项（打包运行，未单独归因）；**最后跨过门限的两步**是
+  全宽旋转（补 `down_proj` 的 12288 维旋转缺口，−0.0305）与 GPTQ 阻尼调优（−0.0261）。详见 §4.3。
 - 报告同时记录 **5 项经实测排除的手段**（§4.3 ④），其中两条给出与量化粒度相关的一般性结论：
   大激活承担 attention sink 故不可裁剪；randomized Hadamard 在 block-32 粒度下有害
   （集中优于摊匀），与其在 per-channel 粒度下的效果相反。

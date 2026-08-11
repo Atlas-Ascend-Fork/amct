@@ -45,7 +45,7 @@ MR-GPTQ = GPTQ 骨架 + ① **block-wise Hadamard 微旋转**（正态化权重�
 
 W4A4 在此基础上另加：**全宽旋转**（补 `down_proj` 的 12288 维旋转缺口，走 `12288 = 12×1024` 的 Paley H₁₂ ⊗ Sylvester H₁₀₂₄）与 **GPTQ 阻尼系数调优**——两项合计贡献 −0.057，是达标的关键。报告 §4.3 另记录 5 项经实测排除的手段。
 
-工程要点：MXFP4 是纯 torch fake-quant（无需 NPU 算子）；GPTQ 补偿移到 CPU 消除 per-column kernel 启动开销（~15× 提速）；MoE 融合路由专家（非 nn.Linear、amct 覆盖不到）额外实现 MXFP4 量化以达显存指标。详见 [design.md](docs/design.md)。
+工程要点：MXFP4 是纯 torch fake-quant（无需 NPU 算子）；GPTQ 补偿移到 CPU 消除 per-column kernel 启动开销（~10× 提速）；MoE 融合路由专家（非 nn.Linear、amct 覆盖不到）额外实现 MXFP4 量化以达显存指标（RTN + scale fitting，无旋转/无补偿——完整 MR-GPTQ 仍只作用于 250 个 nn.Linear，口径见报告 §4.2）。详见 [design.md](docs/design.md)。
 
 ## 运行方式
 
