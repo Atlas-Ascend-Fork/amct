@@ -633,38 +633,51 @@ def quantize_fused_experts(model, scale_fitting=True, min_experts_numel=1_000_00
     return n_mod, quant_param
 
 
-def report_act_coverage(model):
-    """统计**真 4-bit 激活层占比**——W4A4 的验收口径（按层数，评审确认）。
+def report_act_coverage(model, skip_layers=("lm_head",)):
+    """统计**真 4-bit 激活层占比**——W4A4 的验收口径（按层数）。
 
-    分母 = 被量化的 MRGPTQuant 模块数；分子 = 其中 `_do_act_quant()` 为真的。
-    两类会掉出分子：
-      ① `_ACT_PROTECT` 命中的（混合精度，主动保高精度激活）；
-      ② in_features 不被 hadamard k 整除、拿不到旋转的（W4A4 需旋转压离群值，见 _do_act_quant）。
-    8B 上手数为 180/252 = 71.4%；35B 维度较杂，②会命中，必须由本函数统计。
-    对 W4A16（未开 act_quant）返回 (0, n, 0.0)。
+    ⚠️ **两个分母都打，别只看宽的那个**：
+      · 分母A = 已量化模块数（MRGPTQuant 实例）——回答「能量化的层里有多少跑了真 4-bit」；
+      · 分母B = 全部 nn.Linear（含 amct 量化不了的，跳 skip_layers）——**任务书原文口径**
+        （「量化层（torch.nn.Linear）占比不低于 70%」），验收以此为准。
+    8B 上两者几乎重合（252 vs 253），差别可忽略；**35B 上是 250 vs 350，相差 100 层，
+    足以决定达标与否**（保护 down_proj/o_proj 时 200/250=80% 但 200/350=57.1%）。
+
+    分子掉出的两类：
+      ① `_ACT_PROTECT` 命中（混合精度，主动保高精度激活）；
+      ② in_features 不被 hadamard k 整除、拿不到旋转（W4A4 需旋转压离群值，见 _do_act_quant）。
+    未量化的 nn.Linear（in/out 不整除 32，做不了 block-32 MXFP4）只进分母 B。
     """
     on, off_prot, off_rot = [], [], []
-    total = 0
+    n_quant = n_unquant = 0
     for name, mod in model.named_modules():
-        if not isinstance(mod, MRGPTQuant):
-            continue
-        total += 1
-        if not mod.increments.get("act_quant"):
-            continue
-        if any(p in mod.layer_name for p in _ACT_PROTECT):
-            off_prot.append(mod.layer_name)
-        elif mod.increments["hadamard"] and not mod._do_hadamard():
-            off_rot.append(mod.layer_name)
-        else:
-            on.append(mod.layer_name)
-    pct = 100.0 * len(on) / max(total, 1)
-    print(f"[act-coverage] 真 4-bit 激活层 = {len(on)}/{total} = {pct:.1f}%  (要求≥70%)")
+        if isinstance(mod, MRGPTQuant):
+            n_quant += 1
+            if not mod.increments.get("act_quant"):
+                continue
+            if any(p in mod.layer_name for p in _ACT_PROTECT):
+                off_prot.append(mod.layer_name)
+            elif mod.increments["hadamard"] and not mod._do_hadamard():
+                off_rot.append(mod.layer_name)
+            else:
+                on.append(mod.layer_name)
+        elif isinstance(mod, torch.nn.Linear) and not any(s in name for s in skip_layers):
+            n_unquant += 1  # amct 量化不了的层（维度不整除 32），只进分母 B
+    total_all = n_quant + n_unquant
+    pa = 100.0 * len(on) / max(n_quant, 1)
+    pb = 100.0 * len(on) / max(total_all, 1)
+    print(f"[act-coverage] 真 4-bit 激活层 / 已量化模块 = {len(on)}/{n_quant} = {pa:.1f}%")
+    print(f"[act-coverage] 真 4-bit 激活层 / 全部 nn.Linear = {len(on)}/{total_all} = {pb:.1f}%"
+          f"  ← **任务书口径，要求≥70%** [{'PASS' if pb >= 70 else 'FAIL'}]")
+    if n_unquant:
+        print(f"[act-coverage]   ↳ 两分母差 {n_unquant} 层：amct 量化不了"
+              f"（in/out 不整除 32，无法 block-32 MXFP4），永远进不了分子")
     if off_prot:
         print(f"[act-coverage]   ↳ 混合精度保护跳过 {len(off_prot)} 层（--act_protect {_ACT_PROTECT}）")
     if off_rot:
         print(f"[act-coverage]   ↳ 无法旋转而跳过 {len(off_rot)} 层（in_features 不整除 k）："
               f"{sorted(set(n.split('.')[-1] for n in off_rot))}")
-    return len(on), total, pct
+    return len(on), n_quant, total_all, pb
 
 
 # ---- 运行时注册 'mr_gptq'（零改 amct 源码） --------------------------------
