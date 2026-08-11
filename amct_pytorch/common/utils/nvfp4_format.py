@@ -29,13 +29,25 @@ from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
 
 NVFP4_BLOCK_SIZE = 16
 # Parameters stored next to an NVFP4 weight: the E4M3 block scale, the per-tensor scale
-# and, when activations are quantized too, the activation scale. All of them are either
-# consumed by the dequantization or meaningless once the weight is a float tensor.
-NVFP4_PARAM_SUFFIXES = (".weight_scale", ".weight_scale_2", ".input_scale")
+# and, when activations are quantized too, the activation scale plus the reciprocal and
+# fused-GEMM forms TRT-LLM derives from it. All of them are either consumed by the
+# dequantization or meaningless once the weight is a float tensor. `pre_quant_scale` is
+# deliberately not listed: it is folded into the stored weight, so dropping it without
+# compensating the weight would silently change the model.
+NVFP4_PARAM_SUFFIXES = (
+    ".weight_scale",
+    ".weight_scale_2",
+    ".input_scale",
+    ".inv_input_scale",
+    ".alpha",
+)
 # `weight_scale_2` is what makes a checkpoint recognisable as NVFP4.
 NVFP4_MARKER_SUFFIX = ".weight_scale_2"
 # Packed 4-bit weights arrive as raw bytes, unlike FP8 weights which keep a float dtype.
 _PACKED_DTYPES = (torch.uint8, torch.int8)
+# TRT-LLM stores a flattened weight_scale over this padded tile before cropping.
+_SF_ROW_ALIGN = 128
+_SF_COL_ALIGN = 4
 
 
 def nvfp4_scale_names(weight_name: str):
@@ -91,15 +103,32 @@ def unpack_nvfloat4_to_fp32(packed_tensor: torch.Tensor) -> torch.Tensor:
 def _expand_block_scale(
     weight_scale: torch.Tensor, rows: int, cols: int
 ) -> torch.Tensor:
-    """Decode the E4M3 block scale to FP32 and lay it out as [rows, cols]."""
+    """Decode the E4M3 block scale to FP32 and lay it out as [rows, cols].
+
+    TRT-LLM checkpoints may store the scale as a 1-D buffer of length
+    ``pad(rows, 128) * pad(cols, 4)``; the padded tile is reshaped then cropped.
+    """
     if weight_scale.dtype in _PACKED_DTYPES:
         weight_scale = weight_scale.view(torch.float8_e4m3fn)
     scale = weight_scale.to(torch.float32)
-    if scale.dim() == 1 and scale.numel() == rows * cols:
-        scale = scale.view(rows, cols)
-    if scale.dim() == 2:
-        # Checkpoints may pad the block-scale rows/columns up to a tile size.
-        scale = scale[:rows, :cols]
+    if scale.dim() == 1:
+        padded_rows = -(-rows // _SF_ROW_ALIGN) * _SF_ROW_ALIGN
+        padded_cols = -(-cols // _SF_COL_ALIGN) * _SF_COL_ALIGN
+        if scale.numel() == rows * cols:
+            scale = scale.view(rows, cols)
+        elif scale.numel() == padded_rows * padded_cols:
+            scale = scale.view(padded_rows, padded_cols)
+        else:
+            raise ValueError(
+                f"NVFP4 weight_scale length {scale.numel()} does not match "
+                f"({rows}, {cols}) or the TRT-LLM padded tile "
+                f"({padded_rows}, {padded_cols})."
+            )
+    elif scale.dim() != 2:
+        raise ValueError(
+            f"NVFP4 weight_scale must be 1-D or 2-D, got {scale.dim()} dimensions."
+        )
+    scale = scale[:rows, :cols]
     if tuple(scale.shape) != (rows, cols):
         raise ValueError(
             f"NVFP4 weight_scale must hold ({rows}, {cols}) block scales for this "
