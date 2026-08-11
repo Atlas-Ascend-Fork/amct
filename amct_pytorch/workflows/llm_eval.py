@@ -24,10 +24,7 @@ import torch
 from loguru import logger
 
 from amct_pytorch.common.datasets.preproc import get_wiki_inputs
-from amct_pytorch.common.evaluate.eval_ppl import (
-    wikitext2_ppl,
-    wikitext2_ppl_streaming,
-)
+from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl_streaming
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -170,6 +167,16 @@ class LlmEvalWorkflow:
         )
         return ppl
 
+    def _iter_model_logits(self, model, samples):
+        """Yield shifted full-model logits on the workflow device."""
+        with torch.no_grad():
+            for sample in tqdm(samples, total=len(samples), desc="Evaluating"):
+                lm_logits = model(sample.to(self.device)).logits
+                shift_logits = lm_logits[:, :-1, :].contiguous()
+                del lm_logits
+                yield shift_logits
+                del shift_logits
+
     def _run_modelwise(
         self,
     ):
@@ -177,13 +184,25 @@ class LlmEvalWorkflow:
         tokenizer = self.pipeline.tokenizer
         samples = get_wiki_inputs(tokenizer, self.seq_len)
         logger.info("Loaded {} eval samples for modelwise eval.", len(samples))
-        preds = []
-        with torch.no_grad():
-            for i, sample in tqdm(enumerate(samples), desc="Evaluating"):
-                lm_logits = model(sample.to(self.device)).logits
-                shift_logits = lm_logits[:, :-1, :].contiguous()
-                preds.append(shift_logits.to("cpu"))
-        ppl = wikitext2_ppl(preds, samples, seq_len=self.seq_len)
+
+        streaming_start = time.perf_counter()
+        logger.info(
+            "[EvalEvidence] stage=modelwise_streaming_ppl_start samples={} device={}",
+            len(samples),
+            self.device,
+        )
+        ppl = wikitext2_ppl_streaming(
+            self._iter_model_logits(model, samples),
+            samples,
+            device=self.device,
+            seq_len=self.seq_len,
+        )
+        logger.info(
+            "[EvalEvidence] stage=modelwise_streaming_ppl_workflow_complete "
+            "total_s={:.6f} ppl={:.6f}",
+            time.perf_counter() - streaming_start,
+            ppl,
+        )
         return ppl
 
     def _save_inter_result(self, result, name):
