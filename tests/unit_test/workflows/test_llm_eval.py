@@ -22,9 +22,11 @@ NPU device, so we cover only the pure decision logic here:
 ``_resolve_eval_states`` and ``_has_relevant_quant``.
 """
 
+import gc
 import importlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+import weakref
 
 import pytest
 import torch
@@ -357,10 +359,6 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
         raising=False,
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
-        lambda *args, **kwargs: pytest.fail("blockwise must not use legacy PPL"),
-    )
-    monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.logger",
         MagicMock(),
     )
@@ -389,42 +387,142 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
     wf.pipeline.do_head_forward.assert_not_called()
 
 
+# ---- _iter_model_logits --------------------------------------------------
+
+
+def test_iter_model_logits_yields_shifted_logits_in_order_without_grad(monkeypatch):
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.tqdm",
+        lambda iterable, total=None, desc="": iterable,
+    )
+    wf = _make_eval_workflow(eval_mode="bf16", granularity="model")
+    wf.device = "cpu"
+    samples = [
+        torch.tensor([[0, 1, 2, 3]]),
+        torch.tensor([[4, 5, 6, 7]]),
+    ]
+    raw_logits = [
+        torch.arange(32, dtype=torch.float32).reshape(1, 4, 8),
+        torch.arange(32, 64, dtype=torch.float32).reshape(1, 4, 8),
+    ]
+    observed = []
+
+    class FakeModel:
+        def __call__(self, sample):
+            index = len(observed)
+            observed.append((sample.clone(), torch.is_grad_enabled()))
+            return SimpleNamespace(logits=raw_logits[index])
+
+    actual = list(wf._iter_model_logits(FakeModel(), samples))
+
+    expected = [logits[:, :-1, :].contiguous() for logits in raw_logits]
+    assert len(actual) == len(expected)
+    assert all(torch.equal(got, want) for got, want in zip(actual, expected))
+    assert all(torch.equal(item[0], sample) for item, sample in zip(observed, samples))
+    assert [item[1] for item in observed] == [False, False]
+
+
+def test_iter_model_logits_releases_previous_tensors_before_next_forward(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.tqdm",
+        lambda iterable, total=None, desc="": iterable,
+    )
+    wf = _make_eval_workflow(eval_mode="bf16", granularity="model")
+    wf.device = "cpu"
+    samples = [
+        torch.zeros(2, 4, dtype=torch.long),
+        torch.ones(2, 4, dtype=torch.long),
+    ]
+    refs = {"full": [], "previous_shift": None}
+
+    class FakeModel:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, sample):
+            if self.calls == 1:
+                gc.collect()
+                assert refs["previous_shift"]() is None
+            logits = torch.arange(64, dtype=torch.float32).reshape(2, 4, 8)
+            logits = logits + self.calls
+            refs["full"].append(weakref.ref(logits))
+            self.calls += 1
+            return SimpleNamespace(logits=logits)
+
+    model = FakeModel()
+    iterator = wf._iter_model_logits(model, samples)
+    first = next(iterator)
+    gc.collect()
+    assert refs["full"][0]() is None
+    refs["previous_shift"] = weakref.ref(first)
+    del first
+
+    second = next(iterator)
+    assert model.calls == 2
+    del second
+    iterator.close()
+
+
 # ---- _run_modelwise (mocked pipeline) ------------------------------------
 
 
-def test_eval_run_modelwise_mocked_pipeline(monkeypatch):
+def test_eval_run_modelwise_streams_logits_on_workflow_device(monkeypatch):
+    samples = [torch.tensor([[0, 1, 2, 3]])]
+    raw_logits = torch.zeros(1, 4, 8)
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
-        lambda tokenizer, seq_len: [torch.randint(0, 100, (2, 4))],
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
-        lambda preds, samples, seq_len: 12.34,
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
-        lambda *args, **kwargs: pytest.fail("modelwise must not stream PPL"),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.logger",
-        MagicMock(),
+        lambda tokenizer, seq_len: samples,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
-        lambda iterable, desc="": iterable,
+        lambda iterable, total=None, desc="": iterable,
+    )
+    observed = {}
+
+    def fake_streaming(logits_iter, actual_samples, device, seq_len):
+        observed.update(
+            logits=list(logits_iter),
+            samples=actual_samples,
+            device=device,
+            seq_len=seq_len,
+        )
+        return 12.34
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
+        fake_streaming,
+    )
+    fake_logger = MagicMock()
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.logger",
+        fake_logger,
     )
 
     wf = _make_eval_workflow(eval_mode="bf16", granularity="model")
+    wf.device = "cpu"
+    wf.seq_len = 4
     wf.pipeline = MagicMock()
     wf.pipeline.tokenizer = MagicMock()
-
-    call_result = SimpleNamespace(logits=torch.randn(2, 3, 100))
-    forward_fn = MagicMock(return_value=call_result)
+    forward_fn = MagicMock(return_value=SimpleNamespace(logits=raw_logits))
     wf.pipeline.float_model.return_value.eval.return_value.to.return_value = forward_fn
 
     result = wf._run_modelwise()
-    assert result == 12.34
+
+    assert result == pytest.approx(12.34)
+    assert observed["samples"] is samples
+    assert observed["device"] == "cpu"
+    assert observed["seq_len"] == 4
+    assert len(observed["logits"]) == 1
+    assert torch.equal(observed["logits"][0], raw_logits[:, :-1, :])
+    forward_fn.assert_called_once()
+    assert torch.equal(forward_fn.call_args.args[0], samples[0])
+    messages = [call.args[0] for call in fake_logger.info.call_args_list]
+    assert any("stage=modelwise_streaming_ppl_start" in msg for msg in messages)
+    assert any(
+        "stage=modelwise_streaming_ppl_workflow_complete" in msg for msg in messages
+    )
 
 
 # ---- __init__ -------------------------------------------------------------
@@ -467,16 +565,23 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
         lambda tokenizer, seq_len: [torch.randint(0, 100, (2, 4))],
     )
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
-        lambda preds, samples, seq_len: 12.34,
-    )
-    monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.logger",
         MagicMock(),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
-        lambda iterable, desc="": iterable,
+        lambda iterable, total=None, desc="": iterable,
+    )
+    observed = {"calls": 0}
+
+    def fake_streaming(logits_iter, samples, device, seq_len):
+        observed["calls"] += 1
+        assert len(list(logits_iter)) == len(samples)
+        return 12.34
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
+        fake_streaming,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None
@@ -516,6 +621,7 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
 
     wf.setup = setup
     wf.run()
+    assert observed["calls"] == 1
 
 
 # ---- setup with sharded_block ---------------------------------------------
