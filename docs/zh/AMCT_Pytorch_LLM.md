@@ -215,7 +215,7 @@ python -m amct_pytorch.ptq \
 
 **约束**：
 
-- 模块粒度：量化权重导出当前仅支持以block 为粒度的处理（`granularity=block`）；`granularity=tensor` 仅用于反量化导出，见[2.4.2](#242-反量化导出-bf16-权重)。
+- 模块粒度：当前仅支持以block 为粒度的处理（`granularity=block`） 。
 - 自定义 hook 限制：若使用了自定义的 `quantize()` hook（用于权重量化算法），则当前版本不支持通过 `export_deploy()` 功能进行部署。
 
 `ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../../examples/ptq_single_npu.sh)
@@ -238,29 +238,6 @@ python -m amct_pytorch.deploy \
 ```
 
 参数详细解释请参见[参数说明](#3-参数说明)。
-
-#### 2.4.2 反量化导出 BF16 权重
-
-`granularity=tensor` 配合 `quant_dtype=bf16` 时，`deploy` 不做量化，而是逐个 safetensors 分片把已量化的权重反量化成 BF16。权重的量化格式由权重的数据类型和其伴随的 scale 张量自动识别：
-
-| 输入格式 | 识别依据 | 反量化方式 |
-|------|------|------|
-| FP8 | 权重为 1 字节浮点类型 | 按适配器 `get_scale_name()` 给出的 scale 名读取 scale |
-| MXFP4 | 权重为打包的 1 字节整型，只有一个 per-block scale | 每 32 个元素共享一个 E8M0 scale |
-| NVFP4 | 权重为打包的 1 字节整型，且同时存在 `weight_scale` 与 `weight_scale_2` | 每 16 个元素共享一个 E4M3 scale，再乘以 per-tensor 的 `weight_scale_2` |
-
-NVFP4 的 `weight_scale`、`weight_scale_2`、`input_scale` 会在导出时丢弃，`config.json` 中的 `quantization_config` 与 `hf_quant_config.json` 也会被清除，导出结果是纯 BF16 模型。
-
-```bash
-python -m amct_pytorch.deploy \
-  --model /path/to/nvfp4_model \
-  --model_name qwen3 \
-  --granularity tensor \
-  --quant_dtype bf16 \
-  --output_dir ./outputs/qwen3_bf16
-```
-
-**约束**：反量化导出必须显式传入 `--quant_dtype bf16`，否则权重会以 FP32 落盘，且 `config.json` 仍会按量化模型刷新。
 
 ## 3. 参数说明
 
@@ -300,7 +277,7 @@ python -m amct_pytorch.deploy \
 
 | 参数 | 默认值 | 含义 |
 |------|------|------|
-| `--quant_dtype` | 空  |量化后数据的类型，当前适配包括mxfp、int。`eval_mode=quant`时，为必要参数。`deploy` 另支持 `bf16`，表示只把已量化的权重反量化成 BF16（配合 `granularity=tensor`）|
+| `--quant_dtype` | 空  |量化后数据的类型，当前适配包括mxfp、int。`eval_mode=quant`时，为必要参数|
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
 | `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
 | `--is_per_tensor` | `False` | 对于LAC（Learned Activation Clipping，学习式激活裁剪）算法，是否使用 per-tensor统计信息来确定裁剪范围。 |
