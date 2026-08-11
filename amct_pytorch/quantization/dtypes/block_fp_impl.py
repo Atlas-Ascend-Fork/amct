@@ -214,7 +214,7 @@ def quantize_fp(x, fp8_min=-448.0, fp8_max=448.0, block_size=128):
     scale = torch.clamp(scale, min=1e-8)
 
     W_scaled = W_blocks / scale
-    W_scaled = torch.clamp(W_scale, -fp8_max, fp8_max)
+    W_scaled = torch.clamp(W_scaled, -fp8_max, fp8_max)
 
     W_scaled = W_scaled.permute(0, 2, 1, 3).reshape(pad_shape)[:M, :N]
     W_fp8 = W_scaled.reshape(ori_shape)
@@ -232,6 +232,8 @@ def unquantize_fp(x, scale, fp8_min=-448.0, fp8_max=448.0, block_size=128):
 
     pad_m = (block_m - M % block_m) % block_m
     pad_n = (block_n - N % block_n) % block_n
+
+    W_pad = F.pad(x, (0, pad_n, 0, pad_m))
 
     Mp, Np = W_pad.shape
     W_blocks = W_pad.reshape(Mp // 128, 128, Np // 128, 128).permute(0, 2, 1, 3)
