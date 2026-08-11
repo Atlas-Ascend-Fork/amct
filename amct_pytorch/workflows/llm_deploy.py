@@ -181,12 +181,17 @@ class LlmDeployWorkflow:
             json.dump(config, f, indent=2)
 
     def _refresh_config_tensor(self):
+        """Mark the export as a plain BF16 checkpoint (tensorwise dequant path only)."""
         config_file = os.path.join(self.output_dir, 'config.json')
         with open(config_file, "r") as f:
             config = json.load(f)
-        if self.quant_dtype == "bf16":
-            config["torch_dtype"] = "bfloat16"
-            config.pop('quantization_config', None)
+        config["torch_dtype"] = "bfloat16"
+        config.pop('quantization_config', None)
+        # Some checkpoints (e.g. NVFP4 ones) declare their quantization contract in a
+        # side file as well, which inference engines read in preference to config.json.
+        side_config = os.path.join(self.output_dir, "hf_quant_config.json")
+        if os.path.exists(side_config):
+            os.remove(side_config)
         with open(config_file, "w") as f:
             json.dump(config, f, indent=2)
 
@@ -268,7 +273,9 @@ class LlmDeployWorkflow:
             new_state_dict = {}
             for weight_name, weight in current_state_dict.items():
                 scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
-                if weight_name.endswith(scale_prefix) or is_nvfp4_scale_key(weight_name):
+                if weight_name.endswith(scale_prefix) or is_nvfp4_scale_key(
+                    weight_name, original_weight_map
+                ):
                     continue
                 # FP8 / NVFP4 -> bf16
                 block_size = self.pipeline.block_size(weight)
@@ -295,7 +302,10 @@ class LlmDeployWorkflow:
             for weight_name in new_state_dict:
                 updated_weight_map[weight_name] = source_file
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
-        self._refresh_config(quant_ignore_layers)
+        if self.quant_dtype == "bf16":
+            self._refresh_config_tensor()
+        else:
+            self._refresh_config(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {
