@@ -22,6 +22,7 @@
 
 import torch
 from torch import Tensor
+import torch.nn.functional as F
 from torchao.prototype.custom_fp_utils import (
     _f32_to_floatx_unpacked,
     _floatx_unpacked_to_f32,
