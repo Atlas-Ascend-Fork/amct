@@ -66,6 +66,7 @@ def parser_gen(command=None):
         help='Only support [mlp, moe, attn-linear, attn-cache]',
     )
     parser.add_argument("--seq_len", type=int, default=4096)
+    parser.add_argument("--block_size", type=int, default=128)
 
     parser.add_argument('--data_dir', default="")
 
@@ -89,7 +90,7 @@ def parser_gen(command=None):
         "--quant_dtype",
         type=str,
         default="",
-        choices=['int', 'mxfp', 'hifp'],
+        choices=['int', 'mxfp', 'hifp', 'fp'],
         help='Quantization data type.',
     )
 
