@@ -18,13 +18,12 @@
 from __future__ import annotations
 
 import os
-import time
 from tqdm import tqdm
 import torch
 from loguru import logger
 
 from amct_pytorch.common.datasets.preproc import get_wiki_inputs
-from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl_streaming
+from amct_pytorch.common.evaluate.eval_ppl import wikitext2_ppl
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
@@ -147,30 +146,18 @@ class LlmEvalWorkflow:
                 enable_quant=enable_quant,
             )
 
-        streaming_start = time.perf_counter()
-        logger.info(
-            "[EvalEvidence] stage=streaming_ppl_start samples={} device={}",
-            len(samples),
-            self.device,
-        )
-        ppl = wikitext2_ppl_streaming(
-            self.pipeline.iter_head_logits(inter_io),
+        ppl = wikitext2_ppl(
+            self.pipeline.do_head_forward(inter_io),
             samples,
             device=self.device,
             seq_len=self.seq_len,
-        )
-        logger.info(
-            "[EvalEvidence] stage=streaming_ppl_workflow_complete "
-            "total_s={:.6f} ppl={:.6f}",
-            time.perf_counter() - streaming_start,
-            ppl,
         )
         return ppl
 
     def _iter_model_logits(self, model, samples):
         """Yield shifted full-model logits on the workflow device."""
         with torch.no_grad():
-            for sample in tqdm(samples, total=len(samples), desc="Evaluating"):
+            for sample in samples:
                 lm_logits = model(sample.to(self.device)).logits
                 shift_logits = lm_logits[:, :-1, :].contiguous()
                 del lm_logits
@@ -185,23 +172,11 @@ class LlmEvalWorkflow:
         samples = get_wiki_inputs(tokenizer, self.seq_len)
         logger.info("Loaded {} eval samples for modelwise eval.", len(samples))
 
-        streaming_start = time.perf_counter()
-        logger.info(
-            "[EvalEvidence] stage=modelwise_streaming_ppl_start samples={} device={}",
-            len(samples),
-            self.device,
-        )
-        ppl = wikitext2_ppl_streaming(
+        ppl = wikitext2_ppl(
             self._iter_model_logits(model, samples),
             samples,
             device=self.device,
             seq_len=self.seq_len,
-        )
-        logger.info(
-            "[EvalEvidence] stage=modelwise_streaming_ppl_workflow_complete "
-            "total_s={:.6f} ppl={:.6f}",
-            time.perf_counter() - streaming_start,
-            ppl,
         )
         return ppl
 

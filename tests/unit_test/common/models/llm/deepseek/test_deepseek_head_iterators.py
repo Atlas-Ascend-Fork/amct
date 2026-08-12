@@ -23,7 +23,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from amct_pytorch.common.models.llm.common.base import BaseModel
 from amct_pytorch.common.models.llm.deepseek.deepseek_v3_2.deepseekv3_2 import (
     DeepseekV32,
 )
@@ -42,21 +41,30 @@ def _new_v32():
     return adapter
 
 
-def test_v32_iterator_and_inherited_cpu_wrapper():
+def test_v32_do_head_forward_generator():
     adapter = _new_v32()
-    inps = [torch.randn(1, 4, 4)]
+    outputs = adapter.do_head_forward([torch.randn(1, 4, 4)])
 
-    logits = list(adapter.iter_head_logits(inps))
-    preds = adapter.do_head_forward(inps)
+    assert iter(outputs) is outputs
+    logits = list(outputs)
 
     assert logits[0].shape == (1, 3, 8)
     assert logits[0].device.type == "cpu"
-    assert torch.allclose(preds[0], logits[0])
 
 
-def test_glm_head_iterator_inheritance():
-    assert GLM5.iter_head_logits is DeepseekV32.iter_head_logits
-    assert GLM5_2.iter_head_logits is BaseModel.iter_head_logits
+def test_glm_head_generator_inheritance():
+    assert GLM5.do_head_forward is DeepseekV32.do_head_forward
+
+    adapter = GLM5_2.__new__(GLM5_2)
+    adapter.args = SimpleNamespace(device="cpu")
+    adapter.model = SimpleNamespace(
+        model=SimpleNamespace(norm=nn.LayerNorm(4)),
+        lm_head=nn.Linear(4, 8, bias=False),
+    )
+    outputs = adapter.do_head_forward([torch.randn(1, 4, 4)])
+
+    assert iter(outputs) is outputs
+    assert list(outputs)[0].shape == (1, 3, 8)
 
 
 class _FakeV4Head(nn.Module):
@@ -82,12 +90,13 @@ def _new_v4(meta=False):
     return adapter
 
 
-def test_v4_iterator_preserves_hc_head_math():
+def test_v4_do_head_forward_preserves_hc_head_math():
     adapter = _new_v4()
     inp = torch.randn(1, 4, 2, 4)
 
-    logits = list(adapter.iter_head_logits([inp]))
-    preds = adapter.do_head_forward([inp])
+    outputs = adapter.do_head_forward([inp])
+    assert iter(outputs) is outputs
+    logits = list(outputs)
 
     x = adapter.model.head.hc_head(
         inp,
@@ -97,11 +106,10 @@ def test_v4_iterator_preserves_hc_head_math():
     )
     expected = F.linear(adapter.model.norm(x).float(), adapter.model.head.weight)
     assert torch.allclose(logits[0], expected[:, :-1, :].contiguous())
-    assert preds[0].device.type == "cpu"
-    assert torch.allclose(preds[0], logits[0])
+    assert logits[0].device.type == "cpu"
 
 
-def test_v4_iterator_rejects_meta_top_level_param():
+def test_v4_do_head_forward_rejects_meta_top_level_param():
     adapter = _new_v4(meta=True)
     with pytest.raises(RuntimeError, match="still on meta"):
-        next(adapter.iter_head_logits([torch.randn(1, 4, 2, 4)]))
+        next(adapter.do_head_forward([torch.randn(1, 4, 2, 4)]))
