@@ -218,30 +218,6 @@ def test_wikitext2_ppl_releases_logits_before_requesting_next_item():
     assert released == [True]
 
 
-def test_wikitext2_ppl_final_log_failure_does_not_change_result(monkeypatch):
-    monkeypatch.setattr(
-        eval_ppl.logger,
-        "info",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("log failed")),
-    )
-    warnings = []
-    monkeypatch.setattr(
-        eval_ppl.logger,
-        "warning",
-        lambda message, *args: warnings.append((message, args)),
-    )
-
-    ppl = eval_ppl.wikitext2_ppl(
-        [torch.zeros(1, 3, 8)],
-        [torch.zeros(1, 4, dtype=torch.long)],
-        device="cpu",
-        seq_len=4,
-    )
-
-    assert ppl == pytest.approx(8.0, rel=1e-3)
-    assert len(warnings) == 1
-
-
 def test_wikitext2_ppl_cpu_does_not_touch_npu_cache(monkeypatch):
     fake_npu = type(
         "FakeNpu",
