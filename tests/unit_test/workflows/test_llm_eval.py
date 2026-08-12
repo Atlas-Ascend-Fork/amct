@@ -344,7 +344,7 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
     )
     observed = {}
 
-    def fake_streaming(logits_iter, actual_samples, device, seq_len):
+    def fake_ppl(logits_iter, actual_samples, device, seq_len):
         observed.update(
             logits=list(logits_iter),
             samples=actual_samples,
@@ -354,13 +354,14 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
         return 12.34
 
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
-        fake_streaming,
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
+        fake_ppl,
         raising=False,
     )
+    fake_logger = MagicMock()
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.logger",
-        MagicMock(),
+        fake_logger,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
@@ -374,7 +375,7 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
     wf.pipeline.do_embedding_forward = MagicMock(return_value=[torch.randn(2, 4, 8)])
     wf.pipeline.do_block_forward = MagicMock(return_value=[torch.randn(2, 4, 8)])
     streamed = [torch.randn(2, 3, 100)]
-    wf.pipeline.iter_head_logits.return_value = iter(streamed)
+    wf.pipeline.do_head_forward.return_value = iter(streamed)
 
     result = wf._run_blockwise()
 
@@ -384,7 +385,12 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
     assert observed["samples"] is samples
     assert observed["device"] == "cpu"
     assert observed["seq_len"] == wf.seq_len
-    wf.pipeline.do_head_forward.assert_not_called()
+    wf.pipeline.do_head_forward.assert_called_once()
+    messages = [call.args[0] for call in fake_logger.info.call_args_list]
+    assert messages == [
+        "Loaded {} eval samples for blockwise eval.",
+        "Eval mode=bf16: use original BF16 blocks.",
+    ]
 
 
 # ---- _iter_model_logits --------------------------------------------------
@@ -393,7 +399,9 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
 def test_iter_model_logits_yields_shifted_logits_in_order_without_grad(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
-        lambda iterable, total=None, desc="": iterable,
+        lambda *args, **kwargs: pytest.fail(
+            "_iter_model_logits must not own the PPL progress bar"
+        ),
     )
     wf = _make_eval_workflow(eval_mode="bf16", granularity="model")
     wf.device = "cpu"
@@ -427,7 +435,9 @@ def test_iter_model_logits_releases_previous_tensors_before_next_forward(
 ):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
-        lambda iterable, total=None, desc="": iterable,
+        lambda *args, **kwargs: pytest.fail(
+            "_iter_model_logits must not own the PPL progress bar"
+        ),
     )
     wf = _make_eval_workflow(eval_mode="bf16", granularity="model")
     wf.device = "cpu"
@@ -477,11 +487,13 @@ def test_eval_run_modelwise_streams_logits_on_workflow_device(monkeypatch):
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
-        lambda iterable, total=None, desc="": iterable,
+        lambda *args, **kwargs: pytest.fail(
+            "_iter_model_logits must not own the PPL progress bar"
+        ),
     )
     observed = {}
 
-    def fake_streaming(logits_iter, actual_samples, device, seq_len):
+    def fake_ppl(logits_iter, actual_samples, device, seq_len):
         observed.update(
             logits=list(logits_iter),
             samples=actual_samples,
@@ -491,8 +503,9 @@ def test_eval_run_modelwise_streams_logits_on_workflow_device(monkeypatch):
         return 12.34
 
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
-        fake_streaming,
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
+        fake_ppl,
+        raising=False,
     )
     fake_logger = MagicMock()
     monkeypatch.setattr(
@@ -519,10 +532,7 @@ def test_eval_run_modelwise_streams_logits_on_workflow_device(monkeypatch):
     forward_fn.assert_called_once()
     assert torch.equal(forward_fn.call_args.args[0], samples[0])
     messages = [call.args[0] for call in fake_logger.info.call_args_list]
-    assert any("stage=modelwise_streaming_ppl_start" in msg for msg in messages)
-    assert any(
-        "stage=modelwise_streaming_ppl_workflow_complete" in msg for msg in messages
-    )
+    assert messages == ["Loaded {} eval samples for modelwise eval."]
 
 
 # ---- __init__ -------------------------------------------------------------
@@ -570,18 +580,21 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.tqdm",
-        lambda iterable, total=None, desc="": iterable,
+        lambda *args, **kwargs: pytest.fail(
+            "_iter_model_logits must not own the PPL progress bar"
+        ),
     )
     observed = {"calls": 0}
 
-    def fake_streaming(logits_iter, samples, device, seq_len):
+    def fake_ppl(logits_iter, samples, device, seq_len):
         observed["calls"] += 1
         assert len(list(logits_iter)) == len(samples)
         return 12.34
 
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.wikitext2_ppl_streaming",
-        fake_streaming,
+        "amct_pytorch.workflows.llm_eval.wikitext2_ppl",
+        fake_ppl,
+        raising=False,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None

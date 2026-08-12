@@ -124,11 +124,11 @@ class DeepseekV32(BaseModel):
             enable_quant=enable_quant,
         )
 
-    def iter_head_logits(self, inps):
+    def do_head_forward(self, inps):
         self.model.norm.to(self.args.device)
         self.model.head.to(self.args.device)
         with torch.no_grad():
-            for inp in tqdm(inps, total=len(inps), desc="Head Processing..."):
+            for inp in inps:
                 inp = inp.to(self.args.device)
                 out = self.model.norm(inp)
                 yield self.model.head(out)[:, :-1, :].contiguous()

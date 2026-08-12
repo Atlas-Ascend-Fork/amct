@@ -186,7 +186,7 @@ class DeepseekV4(BaseModel):
         self.input_ids = list(samples)
         return outs
 
-    def iter_head_logits(self, inps):
+    def do_head_forward(self, inps):
         device = self.args.device
         head = self.model.head.to(device)
         norm = self.model.norm.to(device)
@@ -195,12 +195,12 @@ class DeepseekV4(BaseModel):
             if param.is_meta:
                 raise RuntimeError(
                     f"v4 top-level param '{name}' is still on meta; "
-                    "load_embed_state_dict must run before iter_head_logits."
+                    "load_embed_state_dict must run before do_head_forward."
                 )
             setattr(self.model, name, nn.Parameter(param.to(device)))
 
         with torch.no_grad():
-            for inp in tqdm(inps, total=len(inps), desc="Head Processing..."):
+            for inp in inps:
                 inp = inp.to(device)  # [b, s, hc_mult, d]
                 x = head.hc_head(
                     inp,
