@@ -31,11 +31,6 @@
   adapter；模型名称应以实际加载的 Qwen3.6-27B 权重为准。
 - 量化目标固定为 `attn-linear`，Eval 和 Deploy 使用
   `--attn_linear_param_dir` 读取对应 PTQ 参数。
-- 本轮补充了可选 `data_dir`：显式提供时，从本地 `pileval.txt` 提取校准
-  样本、从本地 `wikitext2_test.txt` 构造评测样本；未提供时保留原有数据
-  加载路径。
-- 本地 PileVal 文本需至少提供一个 `seq_len` 的 token；本地采样使用固定
-  随机种子，便于不同算法复用同一校准口径。
 
 ## 3. 量化与精度结论
 

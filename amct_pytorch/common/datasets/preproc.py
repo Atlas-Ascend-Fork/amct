@@ -29,9 +29,11 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
         line = data['text']
         line = line.strip()
         line_encoded = tokenizer.encode(line)
-        if len(line_encoded) == 0 or len(line_encoded) > seq_len:
+        if len(line_encoded) > seq_len:
             continue
         sample = torch.tensor([line_encoded])
+        if sample.numel() == 0:
+            continue
         samples.append(sample)
         total_tokens += sample.shape[1]
         if total_tokens >= target_tokens:
@@ -49,40 +51,7 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
     return samples
 
 
-def get_pileval(tokenizer, n_samples, seq_len=512, data_dir=None):
-    # AMCT_LOCAL_PILEVAL_SUPPORT
-    if data_dir:
-        from pathlib import Path
-        import random
-
-        data_path = Path(data_dir)
-        if data_path.is_dir():
-            data_path = data_path / "pileval.txt"
-
-        if not data_path.is_file():
-            raise FileNotFoundError(f"Local calibration text not found: {data_path}")
-
-        dataset_text = data_path.read_text(encoding="utf-8")
-        encoded = tokenizer(dataset_text, return_tensors="pt").input_ids
-
-        token_count = encoded.shape[1]
-        if token_count < seq_len:
-            raise ValueError(
-                f"Local calibration data has {token_count} tokens, "
-                f"but seq_len={seq_len}"
-            )
-
-        rng = random.Random(0)
-        max_start = token_count - seq_len
-        samples = []
-
-        for _ in range(n_samples):
-            start = rng.randint(0, max_start) if max_start > 0 else 0
-            end = start + seq_len
-            samples.append(encoded[:, start:end].cpu())
-
-        return samples
-
+def get_pileval(tokenizer, n_samples, seq_len=512):
     testdata = load_dataset('mit-han-lab/pile-val-backup', split='validation')
 
     samples = pileval_awq(testdata, tokenizer, n_samples, seq_len)
@@ -90,28 +59,15 @@ def get_pileval(tokenizer, n_samples, seq_len=512, data_dir=None):
     return samples
 
 
-def get_wikitext2(tokenizer, data_dir=None):
-    if data_dir:
-        from pathlib import Path
+def get_wikitext2(tokenizer):
+    testdata = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
 
-        data_path = Path(data_dir)
-        if data_path.is_dir():
-            data_path = data_path / "wikitext2_test.txt"
-        if not data_path.is_file():
-            raise FileNotFoundError(f"Local evaluation text not found: {data_path}")
-        dataset_text = data_path.read_text(encoding="utf-8")
-    else:
-        testdata = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
-        dataset_text = "\n\n".join(testdata["text"])
-
-    return tokenizer(dataset_text, return_tensors="pt")
+    testenc = tokenizer('\n\n'.join(testdata['text']), return_tensors='pt')
+    return testenc
 
 
-def get_wiki_inputs(tokenizer, seq_len=4096, data_dir=None):
-    if data_dir is None:
-        testenc = get_wikitext2(tokenizer).input_ids
-    else:
-        testenc = get_wikitext2(tokenizer, data_dir=data_dir).input_ids
+def get_wiki_inputs(tokenizer, seq_len=4096):
+    testenc = get_wikitext2(tokenizer).input_ids
     wiki_inputs = []
     nsamples = testenc.numel() // seq_len
     bs = 1
