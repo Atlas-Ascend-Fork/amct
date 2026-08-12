@@ -46,68 +46,72 @@ def _empty_npu_cache(device):
         )
 
 
+def _cleanup_ppl_resources(iterator, device):
+    try:
+        close = getattr(iterator, "close", None)
+        if close is not None:
+            close()
+    except Exception as error:
+        _warn_without_raising(
+            "Failed to close PPL logits iterator: {}",
+            error,
+        )
+    try:
+        _empty_npu_cache(device)
+    except Exception as error:
+        _warn_without_raising(
+            "Failed to empty NPU cache after PPL evaluation: {}",
+            error,
+        )
+
+
+def _compute_nll_sum(iterator, samples, device, seq_len):
+    nsamples = len(samples)
+    nll_sum = None
+    consumed = 0
+    loss_fct = nn.CrossEntropyLoss()
+    with tqdm(
+        total=nsamples,
+        desc="PPL Evaluating...",
+    ) as progress:
+        for shift_logits in iterator:
+            if consumed >= nsamples:
+                raise ValueError("logits count exceeds samples count")
+            if not _same_device(shift_logits.device, device):
+                raise ValueError(
+                    f"logits are on {shift_logits.device}; expected device {device}"
+                )
+            shift_labels = samples[consumed][:, 1:].to(
+                device=shift_logits.device,
+                dtype=torch.long,
+            )
+            loss = loss_fct(
+                shift_logits.reshape(-1, shift_logits.size(-1)),
+                shift_labels.reshape(-1),
+            )
+            nll = loss.float() * seq_len
+            nll_sum = nll if nll_sum is None else nll_sum + nll
+            consumed += 1
+            del shift_logits, shift_labels, loss, nll
+            progress.update(1)
+
+    if consumed != nsamples:
+        raise ValueError(
+            f"logits count {consumed} does not match samples count {nsamples}"
+        )
+    return nll_sum
+
+
 def wikitext2_ppl(logits_iter, samples, device, seq_len=4096):
     nsamples = len(samples)
     if nsamples == 0:
         raise ValueError("samples must not be empty")
 
     iterator = iter(logits_iter)
-    nll_sum = None
-    consumed = 0
     try:
-        loss_fct = nn.CrossEntropyLoss()
-        with tqdm(
-            total=nsamples,
-            desc="PPL Evaluating...",
-        ) as progress:
-            for shift_logits in iterator:
-                if consumed >= nsamples:
-                    raise ValueError("logits count exceeds samples count")
-                if not _same_device(shift_logits.device, device):
-                    raise ValueError(
-                        f"logits are on {shift_logits.device}; expected device {device}"
-                    )
-                shift_labels = samples[consumed][:, 1:].to(
-                    device=shift_logits.device,
-                    dtype=torch.long,
-                )
-                loss = loss_fct(
-                    shift_logits.reshape(-1, shift_logits.size(-1)),
-                    shift_labels.reshape(-1),
-                )
-                nll = loss.float() * seq_len
-                nll_sum = nll if nll_sum is None else nll_sum + nll
-                consumed += 1
-                del shift_logits, shift_labels, loss, nll
-                progress.update(1)
-
-        if consumed != nsamples:
-            raise ValueError(
-                f"logits count {consumed} does not match samples count {nsamples}"
-            )
+        nll_sum = _compute_nll_sum(iterator, samples, device, seq_len)
         ppl_value = torch.exp(nll_sum / (nsamples * seq_len)).item()
-        try:
-            logger.info("PPL evaluation completed: {:.6f}", ppl_value)
-        except Exception as error:
-            _warn_without_raising(
-                "Failed to emit final PPL result: {}",
-                error,
-            )
+        logger.info("PPL evaluation completed: {:.6f}", ppl_value)
         return ppl_value
     finally:
-        try:
-            close = getattr(iterator, "close", None)
-            if close is not None:
-                close()
-        except Exception as error:
-            _warn_without_raising(
-                "Failed to close PPL logits iterator: {}",
-                error,
-            )
-        try:
-            _empty_npu_cache(device)
-        except Exception as error:
-            _warn_without_raising(
-                "Failed to empty NPU cache after PPL evaluation: {}",
-                error,
-            )
+        _cleanup_ppl_resources(iterator, device)
