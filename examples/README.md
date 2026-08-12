@@ -7,6 +7,7 @@
 | 使用MIN-MAX算法量化模型 | [Min-Max](algorithms/minmax/README.md) | 基于极值的简单量化，入门首选 |
 | 使用AWQ算法量化模型 | [AWQ](algorithms/awq/README.md) | 激活感知的权重量化，适合大模型 PTQ |
 | 使用GPTQ算法量化模型 | [GPTQ](algorithms/gptq/README.md) | 基于二阶信息的权重量化，逐层优化 |
+| 使用HiGPTQ算法量化模型（CLI 工作流） | [HiGPTQ](algorithms/higptq/README.md) | 面向 HiFloat4 的 GPTQ 变体，逐 64 元素分组量化 |
 | 使用SmoothQuant算法量化模型 | [SmoothQuant](algorithms/smoothquant/README.md) | 平滑激活分布的 W8A8 量化 |
 |使用Cast直转算法量化模型 | [Cast](algorithms/cast/README.md) | HiFloat8 数据直转 |
 | 使用Quantile算法量化模型 | [Quantile](algorithms/quantile/README.md) | HiFloat8 分位量化 |
