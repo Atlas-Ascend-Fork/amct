@@ -136,19 +136,14 @@ class TensorProtoHelper:
         raise ValueError(f'The data_type{proto_value} is UNEXPECTED')
 
     @classmethod
-    def resolve_np_dtype(cls, np_type):
-        """Resolve a numpy dtype string to its type."""
-        return getattr(np, np_type)
-
-    @classmethod
     def cast_ori_data(cls, value, tensor_np_type):
         '''cast ori-data to numpy type'''
         if tensor_np_type == 'float16':
             value = np.array(value).astype(np.uint16).tobytes()
-            np_value = np.frombuffer(value, cls.resolve_np_dtype(tensor_np_type))
+            np_value = np.frombuffer(value, np.dtype(tensor_np_type))
             np_value = np.array(np_value)
         else:
-            np_value = np.array(value, cls.resolve_np_dtype(tensor_np_type))
+            np_value = np.array(value, np.dtype(tensor_np_type))
         return np_value
 
     def check_external_data(self):
@@ -178,7 +173,7 @@ class TensorProtoHelper:
                 count = int(np.prod(self.tensor.dims))
                 np_value = unpack_int8_to_int4(packed, count)
             else:
-                np_dtype = self.resolve_np_dtype(np_type)
+                np_dtype = np.dtype(np_type)
                 np_value = np.frombuffer(byte_value, np_dtype)
             # to modify np_value.flags['WRITEABLE'] as True
             np_value = np.array(np_value)
@@ -309,7 +304,7 @@ class TensorProtoHelper:
         data_location = self.map_data_location(tensor_dtype)
         # INT4 以 packed 字节存储，按 uint8 搬运字节流；其余类型按自身 dtype
         store_np_type = (
-            np.uint8 if np_type == 'int4' else self.resolve_np_dtype(np_type)
+            np.uint8 if np_type == 'int4' else np.dtype(np_type)
         )
         byte_size = np.dtype(store_np_type).itemsize
         # the list is index of TensorProto.Datetype
