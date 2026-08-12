@@ -28,11 +28,36 @@
 ## 执行步骤
 
 1. 先判断改动是否用户可见：新 API、新 CLI 参数、新 dtype/算法可选项、新 build 行为、新 ops 用户入口或 docs/examples 行为变化。
-2. 用户可见 API 要同步源模块 `__all__`、顶层 re-export 或 `__getattr__` 懒加载。
-3. CLI 改动要同步 choices、help、module entrypoint 和解析测试。
+2. 用户可见 API 先区分下节五种导入/导出契约，再决定同步源模块 `__all__`、顶层 re-export 或 `__getattr__` 懒加载。
+3. CLI 改动先确认复用 helper 的真实符号和稳定 I/O，再同步 choices、help、module entrypoint 和解析测试。
 4. packaging 改动要检查 `setup.py`、`pyproject.toml`、`build.sh`、package_data 和实验特性开关。
 5. docs/examples 只在用户使用方式变化时更新，并保持命令与当前 build/install 规则一致。
 6. 补 public API、packaging、CLI entrypoint 或 docs/example smoke 的最小测试。
+
+## 五种导入与导出契约
+
+以下行为相互关联但不等价，review 和测试必须逐项说明实际承诺了哪一种：
+
+| 契约 | 核对重点 |
+| --- | --- |
+| 普通 import | `import amct_pytorch` 是否保持成功、启动开销和可选依赖边界；不能用随后访问属性的测试代替 |
+| 顶层属性访问 | `amct_pytorch.<name>` 是显式绑定还是由 `__getattr__` 延迟解析；首次访问失败和缓存行为是什么 |
+| wildcard import | `from amct_pytorch import *` 会遍历顶层 `__all__` 并解析其中的名字；加入懒加载名可能在此时触发 graph/可选依赖 |
+| 源模块 `__all__` | 名字是否由定义它的模块正式导出；不能只从顶层可达性反推 |
+| 顶层 `__all__` | 是否承诺 wildcard export；名字必须有显式绑定或可验证的懒解析路径，并评估兼容性变化 |
+
+graph_based 名字通过 `__getattr__` 可达，不表示它已经进入顶层 `__all__`，也不表示普通 import、属性访问和 wildcard import 具有相同依赖行为。若要把懒加载名加入顶层 `__all__`，必须明确接受、规避或测试 wildcard import 触发 graph 依赖的结果。
+
+阅读现有测试时先确认断言集合的来源。参数化测试遍历固定的 `NON_GRAPH_INTERFACES`，不等于验证所有顶层 `__all__` 成员；只有测试直接从 AST/模块读取完整 `__all__` 时，才能声称是全量守卫。
+
+## 未知 helper 门禁
+
+“复用现有内部 helper”但未给出符号、模块或稳定输入输出时：
+
+1. 先搜索候选定义和活跃调用方，区分“名称相似的 helper”与“题目所指 helper”。
+2. 找到多个候选时列出候选及其差异；helper 身份会改变 CLI、输出或依赖边界时，停在契约确认或条件式计划，不替用户选择。
+3. helper 未确认前，不把某个候选的参数、默认值、输出格式、异常和依赖写成新命令的确定契约。
+4. helper 确认后，才决定复用通用 parser、建立专用 parser，或是否承诺对应 Python public API。
 
 ## public API 规则
 
@@ -77,8 +102,10 @@
 ## BLOCKER
 
 - `__all__` 中声明了名字但没有绑定。
+- 把顶层属性可达误写成已进入顶层 `__all__`，或忽略 wildcard import 对懒加载/可选依赖的影响。
 - 源模块新增 public API 但顶层不可达。
 - CLI 参数帮助、choices 与实际 registry 不一致。
+- helper 身份或稳定 I/O 未确认，却据候选 helper 固定 CLI 参数、输出格式或退出码。
 - 构建产物或 generated staging 被提交。
 - 测试只覆盖 import，不覆盖注册/行为。
 
@@ -86,4 +113,5 @@
 
 - `pytest tests/unit_test/test_public_api.py tests/unit_test/test_packaging.py`
 - CLI 改动：`pytest tests/unit_test/cli/test_llm_module_entrypoints.py`
+- 涉及懒加载或顶层 `__all__`：分别覆盖普通 import 不加载可选依赖、属性访问解析、wildcard import 行为、源模块与顶层 `__all__` 声明。
 - 构建脚本改动：至少 `bash build.sh --help`，必要时 `bash build.sh --torch`。

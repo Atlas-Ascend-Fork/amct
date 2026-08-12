@@ -480,3 +480,188 @@ quant-workflow
 5. 加入“用户不知道答案”的测试，验证 Agent 会请求目标文件/入口命令、继续只读定位或输出条件式方案，而不是反复要求用户选择内部能力。
 
 该机制设计得当会提高边界判断的可靠性；若简单实现为“Agent 不确定就问”，则会增加交互成本、降低自主性，并掩盖检索和源码理解能力不足的问题。
+
+## 15. 待重构子能力初次 forward-test 评估
+
+本轮使用用例 F～O 初次覆盖尚未定向重构的五个场景操作手册：`llm-algorithm`、`llm-data-workflow`、`llm-model-unit`、`ptq-solver-params` 和 `public-api-tests`。本节只记录初次测评暴露的问题、需要进入各子能力的修改方向和复测要求，不与第 12 节 A～E 的有无 skill 对照实验混算。
+
+### 15.1 样本有效性
+
+当前记录可以作为发现规则缺口的辅助证据，但不能形成正式 cold forward-test 通过率或 token 效率结论：
+
+1. 用例 F 的 Agent 明确说明全局搜索命中了 `amct-coder-reference-forward-test-prompts.md`。该文件属于执行隔离要求中的禁区，因此 F 应标记为 `CONTAMINATED`，不计入通过率和 token 效率。
+2. F、G、H 后附的会话摘要同时把三项任务列为同一 Goal，说明三例至少存在连续会话复用。G、H 只能作为 warm regression，不能替代独立 cold 结果。
+3. 用例 I 的 NovaMoE 输出被记录在用例 J 的 Prompt 之后；J 的 kwargs 数据格式扩展没有对应结果。I/J 的结果映射需要修正，J 必须重跑。
+4. K～O 的记录没有保存可复核的物理隔离工作区信息，不能仅根据 Prompt 中的禁读声明推断为有效 cold 样本。
+5. token 记录混用了 `5k`、`2w`、`5w`、Thought 时间和可能的会话累计值，缺少统一的开始值、结束值和本轮增量，无法评分“上下文与 token 效率”。
+6. prompt 文件声明“只保存无答案投喂语”，实际同时保存了工具轨迹、答案和会话摘要。后续必须把无答案 Prompt 与结果/评分材料分开，且让被测 Agent 在物理上无法访问后者。
+
+因此，本轮不输出 100 分制正式均值。以下“强、可用、需修”只评价答案内容，用于确定 reference 的修改优先级，不代表测试通过状态。
+
+### 15.2 逐例内容结论
+
+| 用例 | 覆盖子能力 | 内容初评 | 暴露的问题 |
+| --- | --- | --- | --- |
+| F | `llm-algorithm` | 可用，但样本污染 | 注册、训练、保存、回载和 deploy 链核对较完整；但在 offset shape、约束、参数格式和 payload 均未冻结时，仍计划先注册带空 `trainable_params()` / 导出 hook 的可选算法，违反事实门禁，也可能让 `--algos` 暴露不可用实现 |
+| G | `llm-algorithm` | 强，warm | 正确否决 solver 按算法名实例化、workflow 保存整层 `state_dict`、deploy 按算法名恢复三处越层方案；说明现有 registry、target、参数 hook 和 deploy hook 边界基本清晰 |
+| H | `llm-data-workflow` | 强，warm | 正确核对 Qwen3 当前保存/加载前缀静态一致，并要求先比对磁盘产物与两次命令；但“源码静态一致”只能排除当前代码中的直接命名错位，不能写成真实 extract/PTQ 已经正确 |
+| I | `llm-model-unit` | 可用，记录错位 | 正确识别新增模型和 wrapper 应转 `model-adapter`，也否决通用层模型分支；但没有可复核证据表明实际加载并遵循了外部 skill，完成标准遗漏 BF16 baseline、最小 PTQ smoke 和文档写回判断 |
+| J | `llm-data-workflow` | 缺失 | 尚未验证 kwargs 字段、格式版本、按层/全局存储和 tensor-only 兼容策略，不能据此判断该子能力已覆盖离线数据格式演进 |
+| K | `llm-data-workflow` | 强 | 正确区分 LLM 数据流与其它“校准”体系，拒绝 `model_name` 分支和缺输入 silent skip；对 DeepSeek mask/position 的结论仍应限制为已核对的静态捕获链，而不是运行时正确性证明 |
+| L | `ptq-solver-params` | 需修 | 正确发现 `global` 未接主链和默认 `model` 死路径；但“逐 unit 独立训练、同层共享 optimizer、最小侵入只动 solver”互相矛盾，尚未冻结 solver 持有的 module、multi-unit batch/GT、finalize 责任和 workflow 调度契约 |
+| M | `ptq-solver-params` | 强 | 正确定位训练自动生成 param dir、eval/deploy 未传目录时静默直转的高概率断点，并否决整模型 `state_dict`；但题目未指定具体算法，不应把诊断值固定为 AutoRound 的 `value/min_scale/max_scale` |
+| N | `public-api-tests` | 需修 | 正确拒绝顶层 eager import graph_based；但误称现有 `test_non_graph_interface_*` 会检查所有顶层 `__all__` 名，实际只覆盖固定的 `NON_GRAPH_INTERFACES`；建议把懒加载名加入 `__all__` 时，也没有完整处理 `import *` 会触发 graph 依赖的兼容性变化 |
+| O | `public-api-tests` | 需修 | entrypoint 和 packaging 锚点核对有效；但目标 helper 未指定时直接锁定 `BitPolicy.summary()`、`--bit_config`、默认 16 和 YAML 输出，违反事实门禁，后续条件式计划建立在未经确认的候选 helper 上 |
+
+### 15.3 子能力修改计划
+
+| 优先级 | 子能力 | 需要固化的修改 | 对应复测目标 |
+| --- | --- | --- | --- |
+| P0 | `llm-model-unit` | 强化“实际委派”门禁：确认结构实现属于外部职责后，必须加载并遵循 `model-adapter`，不能只写“转 model-adapter”；完成标准从外部 skill 当前规则取得，不在本 reference 复制不完整清单；review 汇总至少核对 BF16 baseline 或阻塞原因、关量化等价、最小 PTQ smoke、参数回载和文档写回判断 | I 能同时完成越层 review、真实 skill 切换和完整完成标准汇总，不替虚构模型写 wrapper |
+| P0 | `ptq-solver-params` | 为新 granularity 增加语义冻结表：unit 边界、solver 持有的 module、batch/GT 组织、optimizer/scheduler 生命周期、finalize/文件写入责任、断点续跑和跨模式兼容；这些契约未冻结前，不得先确定 `LayerSolver` 构造签名或宣称“只动 solver”；参数回载诊断先读取实际算法的导出 key，不默认套 AutoRound 字段 | L 不再产生“独立训练却共享 optimizer”的矛盾方案；M 保持目录断点判断，但算法状态检查使用通用步骤和条件分支 |
+| P0 | `public-api-tests` | 明确区分普通 `import amct_pytorch`、属性访问触发 `__getattr__`、`from amct_pytorch import *`、源模块 `__all__` 和顶层 `__all__` 五种契约；测试结论必须说明断言遍历的是固定集合还是完整 `__all__`；用户未给 helper 符号时，只能列候选和查证方法，不能据候选发明 CLI、输出和退出码契约 | N 准确说明懒加载名进入 `__all__` 的 wildcard import 代价并设计独立测试；O 在 helper 未确认时停在契约清单和候选锚点，不锁定 `BitPolicy` |
+| P1 | `llm-algorithm` | 增加“不可注册空实现”规则：算法核心数值语义、trainable 状态和保存/回载格式未冻结时，只输出契约、候选锚点和阶段依赖；不得先把 no-op 类导入 `register_algorithms()` 并暴露给 `--algos`。只有最小可用语义与失败行为明确后才进入注册闭环 | F 在未冻结 offset 契约时早停，不再提出带空 hook 的阶段 0；G 的零 solver/workflow/deploy 分支结论保持不回退 |
+| P2 | `llm-data-workflow` | 增加证据等级措辞：保存端与加载端静态命名一致，只能证明当前源码契约对齐，真实目录、命令参数和运行产物仍需单独核验；缺文件保持显式失败。离线 kwargs 格式扩展是否还需新增版本/兼容规则，等待 J 的有效 cold 结果后再定 | H/K 不把静态链路写成真实运行验证；J 覆盖字段集合、必填性、shape、层级、版本和旧 tensor-only 目录的兼容矩阵 |
+
+`llm-data-workflow` 当前不做大幅重写。H、K 已证明其模型分支和 silent skip 门禁有效，现阶段只补证据等级；J 缺失前，不根据 Prompt 预设答案反向修改 reference。
+
+### 15.4 实施顺序与验收
+
+建议按以下顺序进入下一轮修改：
+
+1. 先修改 `llm-model-unit` 的实际委派与完成标准来源，避免 amct-coder 继续复制外部 skill 的过期规则。
+2. 再修改 `ptq-solver-params` 的 granularity 语义冻结表和算法无关的回载诊断步骤。
+3. 修改 `public-api-tests` 的五类导入/导出契约与未知 helper 门禁。
+4. 为 `llm-algorithm` 增加禁止注册 no-op 算法的早停规则。
+5. 为 `llm-data-workflow` 补静态/运行证据分级；完成 J 的独立 cold 测试后，再决定是否增加数据格式版本化规则。
+
+修改后的复测至少满足：
+
+- 每个用例使用全新会话和物理隔离工作区；工作区不包含分析目录、prompt 文件、旧答案和 Git 历史替代入口。
+- prompt-only 文件不写答案；结果保存到被测 Agent 不可见的位置。
+- 每例记录真实 Prompt 哈希、代码版本、客户端/模型、实际加载的 skill/reference、cold/warm 状态、开始 token、结束 token 和增量 token。
+- F～O 逐例重跑；F、G、H 不复用同一会话，I/J 分开记录，J 必须有独立输出。
+- 正式评分仍使用第 12.1 节 rubric，但把样本有效性作为评分前置门禁；`CONTAMINATED`、warm 或结果缺失样本不进入均值。
+
+当前 staged 的主 `SKILL.md` / `validation.md` 项目规范门禁修改不属于 F～O 的覆盖目标。本轮结果不能证明 Ruff、版权头、pre-commit 或 Issue/PR 路由规则有效，后续需要单独增加对应 forward-test，不能借用本轮五个 reference 的结果完成验收。
+
+### 15.5 初次测评结论
+
+初次内容结果表明，五个子能力对分层边界、活跃调用链和错误落点的识别整体有效，G、H、K、M 已能给出较强的只读 review。主要缺口已经从“找不到主链”收敛到三类更具体的问题：
+
+1. 外部职责只做口头委派，没有实际加载并继承完整完成标准。
+2. 新 granularity 等跨契约设计在语义未冻结前过早确定类、构造签名和共享 optimizer 方案。
+3. public API/CLI 规划没有区分多种 import 契约，并会把未确认 helper 候选写成确定实现。
+
+下一轮不整体重写五份 reference，而按 P0～P2 定向修改并独立复测。只有隔离、结果映射和增量 token 记录同时合格后，才能判断这些修改是否提高正式 cold forward-test 质量与效率。
+
+### 15.6 子能力修改实施结果
+
+第 15.3 节列出的五项定向修改已经完成，改动只落在 `amct-coder/references/`，没有修改运行时代码、repo-map、frontmatter 或 UI metadata：
+
+| 子能力 | 已实施修改 | 对应初测问题 |
+| --- | --- | --- |
+| `llm-model-unit` | 明确“转 `model-adapter`”必须实际加载并遵循外部 skill；本 reference 只保留跨层 review，不再用本地六项摘要替代外部完成标准；汇总时核对 BF16 baseline/阻塞、关量化等价、最小 PTQ smoke、参数回载和文档写回 | 修正 I 的口头委派和完成标准不完整 |
+| `ptq-solver-params` | 新增 granularity 七项语义门禁，冻结 unit、module、batch/GT、optimizer、finalize、续跑和兼容关系后才能确定类与接口；新增算法无关的参数回载诊断顺序 | 修正 L 的共享 optimizer 自相矛盾方案和 M 的 AutoRound 字段预设 |
+| `public-api-tests` | 新增普通 import、顶层属性、wildcard import、源模块 `__all__`、顶层 `__all__` 五类契约；明确固定测试集合不等于完整 `__all__`；新增未知 helper 身份和稳定 I/O 门禁 | 修正 N 的测试范围误判与 wildcard import 漏项，以及 O 的候选 helper 过早锁定 |
+| `llm-algorithm` | 把核心数值/状态契约冻结前置到注册之前；新增“契约未冻结时只做只读规划”和“不得注册可被 `--algos` 选择的 no-op 半成品”规则 | 修正 F 的空 hook 阶段 0，同时保留 G 已验证的 registry/target/hook 边界 |
+| `llm-data-workflow` | 新增源码契约、磁盘产物、命令口径、集成闭环四级证据；明确静态前缀一致不能证明真实 extract/PTQ 已正确 | 收敛 H/K 的证据表述；J 的数据格式版本化规则仍等待有效 cold 结果 |
+
+本轮遵循 `skill-creator` 的渐进披露原则：详细场景规则继续保存在按需读取的 reference 中，没有把五类细节上移到主 `SKILL.md`。由于 name、description 和触发边界未变化，未生成或修改 `agents/openai.yaml`。
+
+验证结果：
+
+- `git diff --check` 通过。
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- 未运行 AMCT 源码单测；本轮只修改 skill/reference 与设计 Markdown，不涉及 Python/C++ 运行行为。
+- 未执行正式 forward-test；当前工作区已包含初测答案和设计结论，不满足 cold 隔离要求。F～O 应按第 15.4 节在物理隔离的新会话中复测。
+- repo-map 不需要更新；本轮没有改变仓库分层、注册集合或核心运行流程。
+
+### 15.7 第二次复测评估与追加收敛
+
+`amct-coder-reference-forward-test-prompts.md` 已追加第二次输出，但当前记录仍不能形成正式 cold 通过率：
+
+1. Prompt、旧答案和第二次答案仍保存在同一文件，且没有物理隔离工作区、Prompt 哈希、代码版本或会话 ID。答案中的“隔离自查”只能作为声明，不能替代可复核的隔离证据。
+2. F～K 有第二次输出；L 的第二次输出误贴在 O 之后，并在“L4 回载核验”处截断；M、N、O 没有完整第二次输出。
+3. G 明确写入上一题的 `adaptive_round_scale`、`沿用上一轮 C1-C9` 和具体文件名，而 G 的题面只说“一个新算法”。这证明任务局部事实发生串扰，G 只能作为失败的 warm regression，不能计为独立 cold 样本。
+4. token 记录仍混用 `92.4k`、`15k`、`20k`、`50k` 等未知口径；F 的数值尤其像累计上下文。没有开始值、结束值和增量值前，不评价 token 改善比例。
+
+第二次输出的内容结论如下：
+
+| 用例 | 内容结论 | 仍存在的问题 |
+| --- | --- | --- |
+| F | 早停规则生效：先冻结数值/状态契约，明确禁止注册 no-op，再进入注册和消费链 | 调用链展开到 deploy/dtype/store 多层，记录为 `92.4k`，读取与输出明显过宽；效率结论无有效统计口径 |
+| G | 三处错误落点仍能准确否决 | 把 F 的算法身份和 C1～C9 带入当前未命名算法，违反事实门禁和连续任务复用规则 |
+| H | 四级证据表述生效：结论严格停在“当前源码静态契约一致”，磁盘产物、命令口径和集成闭环继续待证 | 内容可用，但仍缺独立 cold 与增量 token 证据 |
+| I | 能识别模型结构实现属于 `model-adapter`，并拒绝通用层模型分支 | 仍只写“切换到 model-adapter”，没有实际加载记录，却自行给出适配完成标准；P0 问题未修复 |
+| J | 首次覆盖离线 kwargs 格式演进，能列出字段、shape/切批、必填性、作用域、版本和旧目录行为 | 在这些契约未冻结后，又把“任意 kwargs dict + 版本标记”写成后续确定实现，条件分支仍不彻底 |
+| K | 正确区分 LLM 数据流，保持缺主输入 fail-fast，并把静态/产物/命令/集成证据分开 | 条件分支自行命名 `--skip-missing-units`；若要改变缺失策略，必须先冻结用户可见接口和 eval/deploy 结果语义 |
+| L | 七项 granularity 门禁和 registry-first 死路径已识别，回载按 per-unit 格式可保持不感知训练粒度 | 仍从 `layer` 名称直接断言“本质是联合求解”并推荐方案 A；结果错位且截断，只能作为问题证据 |
+| M/N/O | 无完整第二次输出 | 不能评价定向修改是否生效 |
+
+基于以上结果，本轮只做五项追加收敛：
+
+1. 主 `SKILL.md` 增加任务局部事实隔离：连续任务只复用稳定源码事实，不复用上一题对象的名称、状态、CLI、文件名、payload 或决策。
+2. `llm-algorithm` 要求未命名算法保持占位表达，禁止把前序算法写成当前确定落点。
+3. `llm-model-unit` 增加完成前硬检查：草稿出现“转 `model-adapter`”但无实际加载记录时，必须先切换 skill，禁止用本地归纳替代外部完成标准。
+4. `llm-data-workflow` 新增离线格式演进门禁，覆盖字段所有权、基数、切批、必填性、容器/版本和旧目录行为；契约未冻结前不发明 schema、文件名或 CLI 参数。
+5. `ptq-solver-params` 明确 `layer` 名称和“按层保存”不推出联合训练或共享 optimizer；同时把 CLI 闭环表述从不存在的既有 `choices` 修正为接受值、帮助和默认值的兼容性决策。
+
+`public-api-tests` 本轮不追加修改，因为 N/O 没有第二次结果，不能用初次答案重复证明已有修订有效。下一轮应先修正结果文件结构，并独立重跑 I、G、L、M、N、O；J/K 可作为新规则的回归题，但答案必须存放在被测 Agent 物理不可见的位置。
+
+本轮验证结果：
+
+- 对本轮修改的 `SKILL.md`、四份 reference 和本设计记录执行 `git diff HEAD --check -- <files>`，通过。
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- 全工作区 `git diff --cached --check` 仍会报告 `amct-coder-reference-forward-test-prompts.md` 中测试工具轨迹的行尾空格；这些来自本轮输入的已暂存测试记录，未在本轮改写。
+- 未运行 AMCT Python/C++ 单测；本轮只修改 skill 与分析 Markdown，不涉及运行时代码。
+- 未把现有第二次输出当作修改后正式 forward-test；追加规则仍需在物理隔离的新会话中复测。
+
+### 15.8 需求不明确时的处理形态收敛
+
+本轮针对一个此前未成文的问题：用户需求不明确时，skill 应该用什么方式确定需求，以及是否由 Agent 直接与用户交互。
+
+评审当前 skill 的结论是判据已有、形态缺失：
+
+1. `SKILL.md` 全局 BLOCKER 与 `delegation.md`「继续执行与询问」是同一条规则的两处表述，且相互一致——只有关键契约缺失且不同答案会改变实现方案时才询问用户。判据方向正确。
+2. 最终说明已要求列出「已确认事实与待确认项」，待确认项有汇报出口，不会静默丢失。
+3. 但「条件式方案」在事实门禁、候选锚点、最终说明三处被提及，全文没有一处定义它的输出形态。Agent 知道要区分三类信息，不知道区分完如何交付。
+4. 事实门禁各条只写禁止动作（不发明类名/CLI/schema、只能列候选锚点），没有接续动作，容易停在“待确认”即交付。
+5. 缺少“先推进不依赖该答案的部分”，一个待确认契约可能挂住整个任务；原 BLOCKER 一节针对的是错误方案，不覆盖信息缺失。
+6. 「不自行发明」若被从宽理解，变量名、日志措辞、默认值等不影响交付物的局部选择也会被推回用户。
+
+#### 三档处理原则
+
+用一句话说明这套规则解决什么：用户没说清算法叫什么、参数存成什么格式、CLI 怎么暴露时，Agent 交付物应该长什么样。此前 skill 只写了「什么时候该问用户」的判据，没写「不问时交付什么」，所以实测里往两头跑偏——一头是自己编类名和 CLI 参数当成既定事实（F、J、K、O），一头是列一串「待确认」就交差。
+
+按顺序分三档，不许跳档：
+
+1. **源码能回答的自己查。** 函数签名、注册集合、活跃调用方、测试断言属于可查事实，不推回用户。越层落点、错误复用和 BLOCKER 查到证据后直接否决，不需要用户确认。
+2. **查不到但不影响交付物的自己定。** 变量名、日志措辞、默认值、等价实现取舍，定完在最终说明点明，不为此提问。
+3. **查不到且不同答案导出不同的活，按交付物分流。** 只读规划输出条件分支；实际编码直接询问用户。
+
+第 3 档按交付物拆分，与第 14.3 节保持一致：只读规划里条件分支本身就是交付物，写分支成本低；实际编码中不同分支产出不兼容实现时，按错误假设写出完整版本的返工成本高于提问，且假设容易被后续轮次当成既定事实继承。任何一档都先完成不依赖该答案的部分，不让单个待确认项挂住整个任务。
+
+#### 本轮修改
+
+只改 `SKILL.md` 与 `delegation.md`，未新增 reference：
+
+| 位置 | 修改 | 对应问题 |
+| --- | --- | --- |
+| `SKILL.md` 事实门禁 | 开头新增消歧顺序：先查源码/测试/调用方，查到即判定或否决错误方案，查不到才进入处理形态 | 修正问题 4 的“只有刹车没有下一步” |
+| `SKILL.md` 事实门禁 | “不自行发明类名/CLI/schema”一条接续消歧动作；新增局部选择自行决定的划界条目 | 修正问题 4、6 |
+| `SKILL.md` 新增「契约缺失时的处理形态」 | 定义查不到时的交付形态：先做完不依赖该答案的部分；只读规划出条件分支，实际编码停下询问，不写投机实现。提问形态四条：封闭选项带推荐项与影响面、一次问完、单项不阻塞整个任务、无答复时只读规划按推荐项续做并标注未确认而编码停在契约确认前 | 修正问题 3、5 |
+| `SKILL.md` 全局 BLOCKER | 补充“信息缺失不等于 BLOCKER”，并指向新小节 | 修正问题 5 |
+| `delegation.md`「继续执行与询问」 | 同源规则引用新小节，要求询问前先确认该问题不能由源码、注册入口或测试消歧 | 防止两处同源规则各自演化 |
+
+新小节放在主 `SKILL.md` 而非 reference：这些是入口级判断规则，需要每次生效，下沉到按需读取的 reference 会导致不被加载。最终说明未新增字段，条件分支的前提沿用既有「待确认项」出口。
+
+本节初稿曾把“声明假设并按假设实现完整可用版本”作为编码与规划的统一默认。该写法拆掉了第 14.3 节对实际编码的刹车，并会放大实测中已出现的编造契约问题，已按上述交付物分流修正。
+
+本轮验证结果：
+
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- `git diff HEAD --check -- .agents/skills/amct-coder/SKILL.md .agents/skills/amct-coder/references/delegation.md` 通过。
+- 未运行 AMCT Python/C++ 单测；本轮只改 Markdown，不涉及运行时行为。
+- 未执行 forward-test。当前工作区包含历次答案与设计结论，不满足 cold 隔离要求。待验证的是两类偏差是否消失：该自查却询问用户、该询问却硬猜契约；应复用 forward-test 中契约不完整的题目（J、K、L、O）在物理隔离新会话中复测。
+- repo-map 不需要更新；未改变仓库分层、注册集合或核心运行流程。

@@ -24,6 +24,15 @@ amct-coder 在模型层只保留三件事：
 
 委派时先简短说明原因，例如：“这是新增模型 adapter 和 wrapper，属模型层实现，应使用 `model-adapter`。”其余委派场景见 [delegation.md](delegation.md)。
 
+“转 `model-adapter`”必须是实际流程切换，不是回复中的职责标签：
+
+1. 确认当前会话发现的 `model-adapter` skill 后，按其要求完整加载并继续任务。
+2. 即使用户只要求 review、明确禁止编写 wrapper，只要输出包含正确实现计划或模型适配完成标准，也必须先实际加载 `model-adapter`，再以其当前规则形成模型层结论。
+3. 本 reference 只保留跨层契约核对，不复制一份可能过期的模型适配流程或完成标准。
+4. 最终统一汇总 amct-coder 的越层 review 与 `model-adapter` 的模型层结论；不能只写“后续应使用 model-adapter”后结束。
+
+完成前做硬检查：若草稿中出现“转/切换 `model-adapter`”，但本轮没有实际加载记录，停止输出并先完成 skill 切换。源码中归纳出的适配清单不能替代外部 skill 的流程和完成标准。
+
 ## 源码锚点（按需选择）
 
 以下路径不是全文必读清单。做契约对齐或 review 时，按主 skill 的读取预算选择与当前模型和契约直接相关的锚点：
@@ -90,6 +99,7 @@ wrapper 是否新增由“结构或导出语义是否真实不同”决定，不
 ## BLOCKER
 
 - 在本 skill 内新增 adapter、新增 wrapper 类或改模型结构，而不是转 `model-adapter`。
+- 只口头声明“转 `model-adapter`”，却没有实际加载并遵循该 skill。
 - 在 workflow 中写某个模型的 attention、MLP、mask、weight key 特例。
 - 在 quant module 中判断模型名。
 - `PtqUnit.kind` 与 `load_ptq_inps(data_dir, kind, layer_idx)` 文件名不一致。
@@ -99,6 +109,8 @@ wrapper 是否新增由“结构或导出语义是否真实不同”决定，不
 
 ## 自验
 
-完成标准见 [validation.md](validation.md) §LLM adapter / wrapper 完成标准（注册、float block、quant block、PtqUnit、关量化等价、参数导出闭环六项）。review `model-adapter` 产出时用同一套标准。
+本 reference 的跨层证据等级和通用验证入口见 [validation.md](validation.md)。模型适配实现是否完成，必须读取当前 `model-adapter` skill 的完成标准和验证清单，不能用本文件或 `validation.md` 中的摘要替代外部 skill。
+
+review 汇总至少确认外部流程是否报告：BF16 baseline 或阻塞原因、关量化等价、最小 PTQ smoke、参数保存与回载、文档写回判断。具体项目和口径以本次实际加载的 `model-adapter` 为准。
 
 契约对齐或局部修复的额外要求：extract 产出的文件名能被该 unit 加载；单测优先放 `tests/unit_test/common/models/llm/...`，必要时补 workflow mocked 测试。

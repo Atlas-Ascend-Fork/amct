@@ -26,8 +26,10 @@
 ## 最小静态验证
 
 - Python 语法：`python -m py_compile <files>`。
+- Python 风格：遵循 PEP8，使用 Ruff 检查和格式化。准备提交且环境未就绪时，先执行 `python -m pip install pre-commit` 和 `pre-commit install`。
 - ruff/pre-commit：`pre-commit run --files <changed files>`。**不要用 `--all-files`**——全仓存量问题会盖掉本次改动的信号，判不出是不是自己引入的。
 - C/C++：遵循 `.clang-format`，行宽 120，4 空格缩进。
+- 版权：新增源码文件包含仓库既有的 Apache 2.0 版权声明；现有文件的版权头未被删除或破坏。
 - public API：跑静态 API 测试。
 
 ## 越界自查
