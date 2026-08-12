@@ -1343,14 +1343,16 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
     mock_hook.remove.assert_called_once()
 
 
-def test_iter_head_logits_yields_shifted_logits_in_order():
+def test_do_head_forward_yields_shifted_logits_in_order():
     model = _StubModel(args=SimpleNamespace(device="cpu"))
     model.model = _build_fake_hf_model().bfloat16()
     first = torch.arange(16, dtype=torch.bfloat16).reshape(1, 4, 4)
     second = torch.flip(first, dims=(1,))
     inps = [first, second]
 
-    logits = list(model.iter_head_logits(inps))
+    outputs = model.do_head_forward(inps)
+    assert iter(outputs) is outputs
+    logits = list(outputs)
 
     expected = [
         model.model.lm_head(model.model.model.norm(inp))[:, :-1, :].contiguous()
@@ -1360,25 +1362,6 @@ def test_iter_head_logits_yields_shifted_logits_in_order():
     assert all(item.device.type == "cpu" for item in logits)
     assert all(item.dtype == torch.bfloat16 for item in logits)
     assert all(torch.equal(actual, want) for actual, want in zip(logits, expected))
-
-
-def test_do_head_forward_consumes_iterator_once(monkeypatch):
-    model = _StubModel(args=SimpleNamespace(device="cpu"))
-    produced = [torch.randn(1, 3, 8), torch.randn(1, 3, 8)]
-    calls = []
-
-    def fake_iter(inps):
-        calls.append(inps)
-        yield from produced
-
-    monkeypatch.setattr(model, "iter_head_logits", fake_iter)
-    inps = [object(), object()]
-
-    preds = model.do_head_forward(inps)
-
-    assert calls == [inps]
-    assert [pred.device.type for pred in preds] == ["cpu", "cpu"]
-    assert all(torch.equal(actual, want) for actual, want in zip(preds, produced))
 
 
 def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
@@ -1418,7 +1401,7 @@ def test_do_head_forward_runs_norm_and_lm_head(monkeypatch):
     samples = [torch.randn(batch, seq_len, hidden_size, dtype=torch.bfloat16)]
     inter_outs = model.do_block_forward(0, samples, hook_name=None)
 
-    preds = model.do_head_forward(inter_outs)
+    preds = list(model.do_head_forward(inter_outs))
 
     assert len(preds) == 1
     assert preds[0].shape == (batch, seq_len - 1, config.vocab_size)
