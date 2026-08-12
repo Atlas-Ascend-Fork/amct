@@ -15,8 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-
 import torch
 from tqdm import tqdm
 from datasets import load_dataset
@@ -54,17 +52,7 @@ def pileval_awq(calib_dataset, tokenizer, n_samples, seq_len):
 
 
 def get_pileval(tokenizer, n_samples, seq_len=512):
-    # testdata = load_dataset(
-    #     'mit-han-lab/pile-val-backup', split='validation'
-    # )
-    # Local `hf download mit-han-lab/pile-val-backup --local-dir <path>` snapshot,
-    # a sibling of WIKITEXT2_LOCAL_PATH's directory. Override via PILEVAL_LOCAL_PATH.
-    local_path = os.environ.get("PILEVAL_LOCAL_PATH", "./data/pile-val-backup")
-    testdata = load_dataset(
-        "json",
-        data_files={"validation": os.path.join(local_path, "val.jsonl.zst")},
-        split="validation",
-    )
+    testdata = load_dataset('mit-han-lab/pile-val-backup', split='validation')
 
     samples = pileval_awq(testdata, tokenizer, n_samples, seq_len)
 
@@ -72,20 +60,7 @@ def get_pileval(tokenizer, n_samples, seq_len=512):
 
 
 def get_wikitext2(tokenizer):
-    # testdata = load_dataset(
-    #     'wikitext', 'wikitext-2-raw-v1', split='test'
-    # )
-    # Local path to a `hf download <repo>/wikitext --local-dir <path>` snapshot
-    # (i.e. the repo's own directory layout, not an `HF_DATASETS_CACHE`/`save_to_disk` dir).
-    # Override via the WIKITEXT2_LOCAL_PATH env var.
-    local_path = os.environ.get("WIKITEXT2_LOCAL_PATH", "./data/wikitext")
-    testdata = load_dataset(
-        "parquet",
-        data_files={
-            "test": os.path.join(local_path, "wikitext-2-raw-v1", "test-00000-of-00001.parquet")
-        },
-        split="test",
-    )
+    testdata = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
 
     testenc = tokenizer('\n\n'.join(testdata['text']), return_tensors='pt')
     return testenc
