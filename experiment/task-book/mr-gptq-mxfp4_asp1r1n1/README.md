@@ -2,7 +2,7 @@
 
 - **任务**：AMCT 低比特量化算法开发（量化算法方向，进阶项"未适配新算法"）
 - **算法**：MR-GPTQ（Micro-Rotated GPTQ，arXiv:2509.23202），子类化 AMCT `GPTQuant` 实现，运行时注册、**零改 amct 源码**
-- **数据类型**：MXFP4（block=32，E2M1 元素 + E8M0 共享指数）。主线 **W4A16**（weight-only）；按评审意见补充 **W4A4**（权重+激活均 4-bit），8B 亦达标
+- **数据类型**：MXFP4（block=32，E2M1 元素 + E8M0 共享指数）。主线 **W4A16**（weight-only）；按两轮评审意见补充 **W4A4**（权重+激活均 4-bit），**8B 与 35B 均达标**
 - **测试模型**：Qwen3-8B（dense）、Qwen3.6-35B-A3B（`qwen3_5_moe` 混合 MoE）　|　**数据集**：WikiText2　|　**指标**：PPL（seq_len=4096）
 - **精度目标**：`delta = ppl_quant − ppl_bf16 ≤ 0.4`；量化层（nn.Linear）占比 ≥ 70%；显存降低 ≥ 50%
 - **提交者**：程逸雷 / gitcode `asp1r1n1`
@@ -41,7 +41,7 @@
 mr-gptq-mxfp4_asp1r1n1/
 ├── README.md
 ├── docs/
-│   ├── design.md                    # 设计文档（评审对象，v0.6）
+│   ├── design.md                    # 设计文档（评审对象，v0.8）
 │   ├── task-book.md                 # 任务书原文存档
 │   ├── experiment-log.md            # 实验流水与踩坑
 │   ├── self-verification-report.md  # 自验证报告（数据+截图）
@@ -51,6 +51,8 @@ mr-gptq-mxfp4_asp1r1n1/
     ├── mr_gptq_module.py   # ★ MR-GPTQ 实现（核心交付）
     ├── eval_utils.py       # 加载 / 校准 / PPL / 覆盖率与显存统计
     ├── data.py             # WikiText2 / pile 数据集加载
+    ├── run_ablations.sh    # 消融批跑（分组 / 断点续跑 / 自动汇总）
+    ├── run_night.sh        # 夜间队列（测量分辨率复测与 35B W4A4）
     └── logs/               # 运行日志
 ```
 
@@ -58,7 +60,16 @@ mr-gptq-mxfp4_asp1r1n1/
 
 MR-GPTQ = GPTQ 骨架 + ① **block-wise Hadamard 微旋转**（正态化权重分布、摊平离群值）② **MXFP scale fitting**（附录 H，E8M0 scale 网格重映射为次幂次）。论文的第三项增量「静态激活重排」**有意未采用**——本实现已对每层施加全宽旋转，旋转后各通道近似可交换、按幅度分组已无物可分（报告 §5）。以仓内 GPTQ-MXFP4 为 baseline 对照证明精度提升。
 
-W4A4 在此基础上另加：**全宽旋转**（补 `down_proj` 的 12288 维旋转缺口，走 `12288 = 12×1024` 的 Paley H₁₂ ⊗ Sylvester H₁₀₂₄）与 **GPTQ 阻尼系数调优**——两项合计贡献 −0.057，是达标的关键。报告 §4.3 另记录 5 项经实测排除的手段。
+W4A4 在此基础上另加激活量化与四项优化。经三 seed **配对复测**，其中两项确证、一项证伪：
+
+| 手段 | 效应量 | 判定 |
+|---|---|---|
+| **混合精度保护**（`o_proj`/`down_proj` 保高精度激活） | **0.224** | ✅ 8B 不可省；**35B 必须弃用**（覆盖率口径，见报告 §4.4） |
+| **旋转强度**（k=128 → 全宽；`down_proj` 的 12288 走 Paley H₁₂ ⊗ Sylvester H₁₀₂₄） | **0.147** | ✅ k=128 达 0.4993、**不达标** |
+| ~~GPTQ 阻尼调优~~ | +0.0146 | ❌ **证伪**（2/3 seed 变差、方向随数据变号） |
+
+⚠️ 达标依赖全宽旋转，而其在线开销在朴素矩阵乘下约 **+104%**（`k=128` 仅 1.6% 但不达标）——
+**可部署性取决于是否实现 FWHT**（O(k log k)，开销 < 1%），本项目未实现。报告 §4.3 ④ 另记录 5 项未采纳的手段。
 
 工程要点：MXFP4 是纯 torch fake-quant（无需 NPU 算子）；GPTQ 补偿移到 CPU 消除 per-column kernel 启动开销（~10× 提速）；MoE 融合路由专家（非 nn.Linear、amct 覆盖不到）额外实现 MXFP4 量化以达显存指标（RTN + scale fitting，无旋转/无补偿——完整 MR-GPTQ 仍只作用于 250 个 nn.Linear，口径见报告 §4.2）。详见 [design.md](docs/design.md)。
 

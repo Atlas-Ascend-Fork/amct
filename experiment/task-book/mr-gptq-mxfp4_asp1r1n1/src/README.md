@@ -11,6 +11,8 @@ MR-GPTQ（MXFP4）的完整实现与 WikiText2 PPL 评测。数据加载已封�
 | `run_eval.py` | 入口：`--mode {bf16, gptq_mxfp4, mr_gptq}`，增量与 W4A4 开关均在此 |
 | `eval_utils.py` | 模型加载（单卡 / 多卡 device_map）、校准前向、PPL 评测、覆盖率与显存统计 |
 | `data.py` | WikiText2 / pile-val 加载（fastparquet、jsonl.zst、HF 镜像、禁 Xet 已内置） |
+| `run_ablations.sh` | 消融批跑：分组（`s1`/`a2`/`b1`/`b2`/`c1`/`c2`）、断点续跑、自动汇总 delta |
+| `run_night.sh` | 夜间队列：测量分辨率复测与 35B W4A4（8 个 run，约 7h） |
 | `logs/` | 全部实验原始日志（自验证报告的证据） |
 
 ## 依赖（首次）
@@ -59,20 +61,25 @@ python3 run_eval.py --model_path <35B> --mode mr_gptq --seq_len 4096 \
 |------|------|
 | `--seq_len` | PPL 分块长度。**交付数据一律用 4096**（任务要求）；2048 仅用于与公开工作同协议对照 |
 | `--increments` | MR-GPTQ 增量开关。`hadamard` / `scale_fitting` 为主线；`act_quant` 起 W4A4，`act_scale_fit` / `joint_comp` 为其优化项 |
-| `--hadamard_k` | 旋转块大小。论文默认 128 是**在线算子开销**的权衡；本项目为 fake-quant 精度评估、旋转不计推理成本，实测 4096 更优 |
-| `--hadamard_full` | 每层旋转块取满 `in_features`。8B 上唯一受影响的是 `down_proj`(in=12288)——**W4A4 达标的关键之一** |
-| `--perc_damp` | GPTQ Hessian 阻尼。最大层样本/维度比仅约 1.1:1、Hessian 近奇异，默认值偏小，**另一个达标关键** |
-| `--act_protect` | W4A4 混合精度：层名含指定子串的层保激活高精度（子串匹配，注意勿误伤） |
+| `--hadamard_k` | 旋转块大小。论文默认 128 是**在线算子开销**的权衡；本项目为 fake-quant 精度评估，实测 **k=128 不达标（0.4993）、须全宽**。⚠️ 代价：全宽旋转在朴素矩阵乘下约 +104% 在线算力，可部署性取决于是否实现 FWHT（见报告 §4.3 ③(a)） |
+| `--hadamard_full` | 每层旋转块取满 `in_features`。8B 上唯一受影响的是 `down_proj`(in=12288)。「k=128 → 全宽」整步**效应量 0.147，已确证** |
+| `--perc_damp` | GPTQ Hessian 阻尼。⚠️ **经三 seed 配对复测已证伪**（2/3 变差、均值变差、方向随数据变号），交付配置固化取值但**不作为精度手段**，见报告 §4.3 ③(c) |
+| `--act_protect` | W4A4 混合精度：层名含指定子串的层保激活高精度（子串匹配，注意勿误伤）。**8B 上不可省（效应量 0.224）；35B 上必须弃用**（会把任务书口径的占比压到 57.1%） |
+| `--calib_seed` | 校准语料抽样种子（默认 42，交付数据以此为准）。⚠️ 换种子会改变结果——8B W4A4 三 seed 极差 **0.111**，W4A16 仅 0.0350，见报告 §4.3 ⑤ |
 | `--n_calib` | 校准语料**条数**（不是块数！）。总 token ≈ 条数 × 平均条长；只调大 `--calib_block` 反而会减少总量 |
 | `--calib_chunk` | 校准前向分块，仅降峰值显存（与整块数学等价）。放大 `--n_calib` 时配合使用 |
 | `--max_eval_samples` | 只评前 N 块。⚠️**不要用于定量结论**——实测该子集偏移随配置摆动达 0.053，见报告 §4.3 ⑤ |
 
-`act_clip` / `weight_clip` / `act_fit_rowwise` / `--hadamard_random` 为**实测负结果**，
-默认关闭、代码保留作消融记录，逐项分析见报告 §4.3 ④。
+`act_clip` / `weight_clip` / `act_fit_rowwise` / `--hadamard_random` 为**未采纳的手段**，
+默认关闭、代码保留作消融记录。⚠️ 其中多数的实测效应量低于本实验分辨率（0.06），
+只能表述为「未观察到收益」；经复测仍站得住的只有 `--hadamard_random` 有害（0.138）。
+逐项判定见报告 §4.3 ④。
 
 ## 说明
 
-- 运行即打印：量化层覆盖率（`[coverage]` / `[actual-coverage]`）、显存降低（`[memory]` / `[memory-full]`）、
+- 运行即打印：量化层覆盖率（`[coverage]` / `[actual-coverage]`）、W4A4 下的真 4-bit 激活层占比
+  （`[act-coverage]`，**同时给两个分母，任务书口径为"/ 全部 nn.Linear"**）、
+  融合专家量化（`[fused-experts]`）、显存降低（`[memory]` / `[memory-full]`）、
   逐层补偿进度、校准耗时、WikiText2 PPL（`Score:`）。
 - `HF_ENDPOINT` / `HF_HUB_DISABLE_XET` 已在 `data.py` 内设默认值，无需手动 export。
 - 日志统一 `tee` 到 `logs/`（进 git，作为自验证报告的原始记录）。
