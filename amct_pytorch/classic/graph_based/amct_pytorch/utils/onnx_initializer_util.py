@@ -18,10 +18,6 @@
 import os
 import numpy as np
 
-try:
-    import ml_dtypes
-except ImportError:
-    ml_dtypes = None  # 仅原生 INT4 映射需要，缺失时在用到 int4 处再报错
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto  # pylint: disable=E0401
 
@@ -107,7 +103,7 @@ class TensorProtoHelper:
     }
     # 旧版 onnx 无 INT4 枚举，动态注册避免 import 时报错
     if hasattr(data_type, 'INT4'):
-        data_type_maps['INT4'] = [data_type.INT4, RAW_DATA, 'int4']  # ml_dtypes.int4
+        data_type_maps['INT4'] = [data_type.INT4, RAW_DATA, 'int4']
     proto_value_id = 0
     data_location_id = 1
     np_type_id = 2
@@ -141,14 +137,7 @@ class TensorProtoHelper:
 
     @classmethod
     def resolve_np_dtype(cls, np_type):
-        """
-        Resolve a np dtype string to a numpy/ml_dtypes type.
-        'int4' has no numpy attribute, so map it to ml_dtypes.int4.
-        """
-        if np_type == 'int4':
-            if ml_dtypes is None:
-                raise ImportError('ml_dtypes is required for native INT4 tensors')
-            return ml_dtypes.int4
+        """Resolve a numpy dtype string to its type."""
         return getattr(np, np_type)
 
     @classmethod

@@ -140,21 +140,6 @@ class TestInt4BranchesViaMock(unittest.TestCase):
         'onnx_initializer_util.TensorProtoHelper.data_type_maps'
     )
 
-    def test_resolve_np_dtype_int4(self):
-        # 'int4' -> ml_dtypes.int4（ml_dtypes 为独立包，不依赖 onnx）
-        import ml_dtypes
-
-        self.assertIs(TensorProtoHelper.resolve_np_dtype('int4'), ml_dtypes.int4)
-
-    def test_resolve_np_dtype_int4_without_ml_dtypes(self):
-        mod = (
-            'amct_pytorch.classic.graph_based.amct_pytorch.utils.'
-            'onnx_initializer_util.ml_dtypes'
-        )
-        with mock.patch(mod, None):
-            with self.assertRaises(ImportError):
-                TensorProtoHelper.resolve_np_dtype('int4')
-
     def test_get_external_quantized_int4(self):
         # 经公有入口 get_external_data 覆盖 quantized raw_data 的 int4 分支
         data = np.array([1, -2, 7, -8], dtype=np.int8)
