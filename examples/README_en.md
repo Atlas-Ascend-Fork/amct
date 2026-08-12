@@ -7,6 +7,7 @@ This project provides calling samples for different scenarios. After setting up 
 | Quantize model using MIN-MAX algorithm | [Min-Max](algorithms/minmax/README_en.md) | Simple quantization based on extrema, best for beginners |
 | Quantize model using AWQ algorithm | [AWQ](algorithms/awq/README_en.md) | Activation-aware weight quantization, suitable for large model PTQ |
 | Quantize model using GPTQ algorithm | [GPTQ](algorithms/gptq/README_en.md) | Weight quantization based on second-order information, layer-by-layer optimization |
+| Quantize model using HiGPTQ algorithm (CLI workflow) | [HiGPTQ](algorithms/higptq/README_en.md) | GPTQ variant for HiFloat4, per-64-element group quantization |
 | Quantize model using SmoothQuant algorithm | [SmoothQuant](algorithms/smoothquant/README_en.md) | W8A8 quantization that smooths activation distribution |
 | Quantize model using Cast direct conversion algorithm | [Cast](algorithms/cast/README_en.md) | HiFloat8 data direct conversion |
 | Quantize model using Quantile algorithm | [Quantile](algorithms/quantile/README_en.md) | HiFloat8 quantile quantization |
