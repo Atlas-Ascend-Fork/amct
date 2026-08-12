@@ -30,11 +30,7 @@ from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.optimization import register_solvers
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.quantization.dtypes import register_dtype
-from amct_pytorch.common.models.llm.common.quant_apply import (
-    set_model_act_quant_state,
-    set_model_weight_quant_state,
-    set_model_to_observe,
-)
+from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_observe
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import setup_run_logging
@@ -166,14 +162,10 @@ class LlmPtqWorkflow:
         unit.module = unit.module.float().to(self.device)
         inps = self._move_to_device(inps)
         kwargs = self._move_to_device(kwargs)
-        set_model_act_quant_state(unit.module, False)
-        set_model_weight_quant_state(unit.module, False)
         set_model_to_observe(unit.module, True)
         try:
             gts = self.data_provider.materialize_gt(inps, unit.module, kwargs=kwargs)
         finally:
-            set_model_act_quant_state(unit.module, True)
-            set_model_weight_quant_state(unit.module, True)
             set_model_to_observe(unit.module, False)
         return self.data_provider.build_unit_batch(unit, inps, kwargs, gts)
 

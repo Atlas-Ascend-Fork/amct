@@ -2,6 +2,7 @@ import logging
 
 import torch
 
+from amct_pytorch.common.utils.log import LOGGER
 from amct_pytorch.common.utils.safe_load import safe_torch_load
 
 from .function_utils import get_paras_dict_by_name
@@ -49,7 +50,7 @@ def save_flat_matrices(model, matrices_path):
             ]
             flat_matrices[i] = get_paras_dict_by_name(layer, required_names=paras_name)
     torch.save(flat_matrices, matrices_path)
-    logging.info("saved paramaters at {}".format(matrices_path))
+    logging.info("saved parameters at {}".format(matrices_path))
 
 
 def load_flat_matrices(model, matrix_path):
@@ -67,5 +68,5 @@ def load_flat_matrices(model, matrix_path):
             layers[i].mlp.rep_matrix_only()
             layers[i].load_state_dict(flat_param, strict=False)
         else:
-            print(f'not flatquant layer {i}')
+            LOGGER.logi(f"not flatquant layer {i}")
     return model

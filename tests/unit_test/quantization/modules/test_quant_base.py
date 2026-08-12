@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.quant.auto_round import AutoRound  # noqa: F401
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_base import (
@@ -29,9 +30,6 @@ from amct_pytorch.quantization.modules.quant_base import (
     WeightQuantizer,
     build_algorithms_by_target,
     get_algo_names_by_target,
-    set_act_quantizer_state,
-    set_quantizer_state,
-    set_weight_quantizer_state,
 )
 
 # DTYPE_REGISTRY entries are registered lazily — pull them in once at import.
@@ -57,6 +55,54 @@ def _args(algos=(), quant_dtype="int", w_bits=8, quant_target=(), w_size=(4, 8))
     )
 
 
+class _ObserveActivationAlgo(QuantAlgorithmBase):
+    def __init__(self, args):
+        super().__init__()
+        self.calib_call_count = 0
+        self.quant_call_count = 0
+        self.received = None
+
+    def forward(self, x):
+        self.quant_call_count += 1
+        self.received = x
+        return x
+
+    def calib_forward(self, x, *args, **kwargs):
+        self.calib_call_count += 1
+        self.received = x
+        return x
+
+
+class _RegularActivationAlgo(QuantAlgorithmBase):
+    def __init__(self, args):
+        super().__init__()
+        self.call_count = 0
+
+    def forward(self, x):
+        self.call_count += 1
+        return x + 1
+
+
+class _FakeQuantSpy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.call_count = 0
+        self.received = None
+
+    def forward(self, x):
+        self.call_count += 1
+        self.received = x
+        return x - 3
+
+
+class _PassthroughAlgorithm(QuantAlgorithmBase):
+    def __init__(self, args=None, *ctor_args):
+        super().__init__()
+
+    def forward(self, x):
+        return x
+
+
 # ---- get_algo_names_by_target / build_algorithms_by_target ---------------
 
 
@@ -66,7 +112,7 @@ def _ephemeral_algo():
     name = "_ut_lwc_like"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight", "activation"))
-    class _Algo(nn.Module):
+    class _Algo(QuantAlgorithmBase):
         def __init__(self, args):
             super().__init__()
             self.args = args
@@ -90,7 +136,7 @@ def test_get_algo_names_filters_by_target(_ephemeral_algo):
 
 def test_get_algo_names_raises_on_algo_without_targets():
     name = "_ut_no_targets"
-    ALGO_REGISTRY.register(name=name)(type("T", (), {}))
+    ALGO_REGISTRY.register(name=name)(_PassthroughAlgorithm)
     try:
         with pytest.raises(ValueError, match="missing registry metadata 'targets'"):
             get_algo_names_by_target(_args(algos=[name]), "weight")
@@ -113,9 +159,12 @@ def test_build_algorithms_structure_returns_single_algorithm():
     name = "_ut_struct_one"
 
     @ALGO_REGISTRY.register(name=name, targets=("structure",))
-    class _Algo(nn.Module):
+    class _Algo(QuantAlgorithmBase):
         def __init__(self, args, ctx):
             super().__init__()
+
+        def forward(self, x):
+            return x
 
     try:
         out = build_algorithms_by_target(
@@ -131,9 +180,12 @@ def test_build_algorithms_structure_raises_on_multiple_matches():
     for n in (n1, n2):
 
         @ALGO_REGISTRY.register(name=n, targets=("structure",))
-        class _Algo(nn.Module):
+        class _Algo(QuantAlgorithmBase):
             def __init__(self, args, ctx):
                 super().__init__()
+
+            def forward(self, x):
+                return x
 
     try:
         with pytest.raises(ValueError, match="Only one 'structure' algorithm"):
@@ -145,56 +197,80 @@ def test_build_algorithms_structure_raises_on_multiple_matches():
         ALGO_REGISTRY._items.pop(n2, None)
 
 
-# ---- ActivationQuantizer / WeightQuantizer state toggles -----------------
-
-
-def _model_with_quantizers():
-    m = nn.Module()
-    m.act = ActivationQuantizer(_args(), bits=8)
-    m.weight = WeightQuantizer(_args(), w_bits=8)
-    m.linear = nn.Linear(4, 4)
-    return m
-
-
-@pytest.mark.parametrize("flag", [True, False])
-def test_set_quantizer_state_toggles_both_kinds(flag):
-    m = _model_with_quantizers()
-    set_quantizer_state(m, enable=flag)
-    assert m.act.enable is flag
-    assert m.weight.enable is flag
-
-
-def test_set_weight_quantizer_state_only_touches_weight():
-    m = _model_with_quantizers()
-    set_weight_quantizer_state(m, enable=True)
-    assert m.weight.enable is True
-    assert m.act.enable is False
-
-
-def test_set_act_quantizer_state_only_touches_activation():
-    m = _model_with_quantizers()
-    set_act_quantizer_state(m, enable=True)
-    assert m.act.enable is True
-    assert m.weight.enable is False
-
-
 # ---- ActivationQuantizer behavior ---------------------------------------
 
 
-def test_activation_quantizer_forward_passthrough_when_disabled():
+def test_activation_quantizer_observe_returns_without_fake_quant():
     aq = ActivationQuantizer(_args(), bits=8)
+    aq.is_observe = True
     x = torch.randn(2, 32)
-    assert torch.equal(aq(x), x)
+    assert aq(x) is x
 
 
-def test_activation_quantizer_forward_quantizes_when_enabled():
+def test_activation_quantizer_forward_quantizes_when_not_observing():
     aq = ActivationQuantizer(_args(), bits=8)
-    aq.enable = True
     x = torch.randn(2, 32, dtype=torch.float32)
     out = aq(x)
     # Same shape and dtype (int dtype quantizer is fake-quant).
     assert out.shape == x.shape
     assert out.dtype == x.dtype
+
+
+def test_activation_quantizer_observe_dispatches_only_calib_forward():
+    name = "_ut_act_calib_dispatch"
+    ALGO_REGISTRY.register(name=name, targets=("activation",))(_ObserveActivationAlgo)
+
+    try:
+        aq = ActivationQuantizer(_args(algos=[name]), bits=8)
+        aq.quant_obj = _FakeQuantSpy()
+        aq.is_observe = True
+        x = torch.randn(2, 8)
+        snapshot = x.clone()
+
+        out = aq(x)
+
+        algo = aq.algorithms[name]
+        assert algo.calib_call_count == 1
+        assert algo.quant_call_count == 0
+        assert algo.received is x
+        assert aq.quant_obj.call_count == 0
+        assert out is x
+        assert torch.equal(x, snapshot)
+    finally:
+        ALGO_REGISTRY._items.pop(name, None)
+
+
+def test_activation_quantizer_non_observe_runs_all_algorithms_and_fake_quant():
+    observe_name = "_ut_act_non_observe_aware"
+    regular_name = "_ut_act_non_observe_regular"
+    ALGO_REGISTRY.register(name=observe_name, targets=("activation",))(
+        _ObserveActivationAlgo
+    )
+    ALGO_REGISTRY.register(name=regular_name, targets=("activation",))(
+        _RegularActivationAlgo
+    )
+
+    try:
+        aq = ActivationQuantizer(_args(algos=[observe_name, regular_name]), bits=8)
+        aq.quant_obj = _FakeQuantSpy()
+        aq.is_observe = False
+        x = torch.tensor([1.0, 2.0])
+
+        out = aq(x)
+
+        observe_algo = aq.algorithms[observe_name]
+        regular_algo = aq.algorithms[regular_name]
+        expected_algo_out = x + 1
+        assert observe_algo.quant_call_count == 1
+        assert observe_algo.calib_call_count == 0
+        assert observe_algo.is_observe is False
+        assert regular_algo.call_count == 1
+        assert aq.quant_obj.call_count == 1
+        assert torch.equal(aq.quant_obj.received, expected_algo_out)
+        assert torch.equal(out, expected_algo_out - 3)
+    finally:
+        ALGO_REGISTRY._items.pop(observe_name, None)
+        ALGO_REGISTRY._items.pop(regular_name, None)
 
 
 def test_activation_quantizer_trainable_params_collects_from_algorithms(
@@ -214,30 +290,99 @@ def test_activation_quantizer_deploy_hooks_are_no_ops():
 # ---- WeightQuantizer behavior --------------------------------------------
 
 
-def test_weight_quantizer_forward_passthrough_when_disabled():
-    wq = WeightQuantizer(_args(w_bits=8), w_bits=8)
-    w = torch.randn(4, 8)
-    assert torch.equal(wq(w), w)
+def test_weight_quantizer_observe_dispatches_calib_and_skips_quantize_hook():
+    normal_name = "_ut_weight_calib_dispatch"
+    hook_name = "_ut_weight_calib_hook"
+    ALGO_REGISTRY.register(name=normal_name, targets=("weight",))(
+        _ObserveActivationAlgo
+    )
+
+    @ALGO_REGISTRY.register(name=hook_name, targets=("weight",))
+    class _QuantizeHook(QuantAlgorithmBase):
+        def __init__(self, args, *_):
+            super().__init__()
+            self.calib_call_count = 0
+            self.forward_call_count = 0
+            self.quantize_call_count = 0
+
+        def forward(self, x):
+            self.forward_call_count += 1
+            return x
+
+        def calib_forward(self, x, *args, **kwargs):
+            self.calib_call_count += 1
+            return x
+
+        def quantize(self, x, quant_obj):
+            self.quantize_call_count += 1
+            return x * 0
+
+    try:
+        wq = WeightQuantizer(_args(algos=[normal_name, hook_name], w_bits=8), w_bits=8)
+        wq.quant_obj = _FakeQuantSpy()
+        wq.is_observe = True
+        w = torch.randn(4, 8)
+        snapshot = w.clone()
+
+        out = wq(w)
+
+        normal_algo = wq.algorithms[normal_name]
+        hook_algo = wq.algorithms[hook_name]
+        assert normal_algo.calib_call_count == 1
+        assert normal_algo.quant_call_count == 0
+        assert hook_algo.calib_call_count == 1
+        assert hook_algo.forward_call_count == 0
+        assert hook_algo.quantize_call_count == 0
+        assert wq.quant_obj.call_count == 0
+        assert out is w
+        assert torch.equal(out, snapshot)
+    finally:
+        ALGO_REGISTRY._items.pop(normal_name, None)
+        ALGO_REGISTRY._items.pop(hook_name, None)
 
 
-def test_weight_quantizer_forward_quantizes_when_enabled():
+def test_weight_quantizer_forward_quantizes_when_not_observing():
     wq = WeightQuantizer(_args(w_bits=8), w_bits=8)
-    wq.enable = True
     w = torch.randn(4, 8, dtype=torch.float32)
     out = wq(w)
     assert out.shape == w.shape
+
+
+def test_weight_quantizer_non_observe_uses_forward_and_fake_quant():
+    name = "_ut_weight_quant_dispatch"
+    ALGO_REGISTRY.register(name=name, targets=("weight",))(_ObserveActivationAlgo)
+
+    try:
+        wq = WeightQuantizer(_args(algos=[name], w_bits=8), w_bits=8)
+        wq.quant_obj = _FakeQuantSpy()
+        wq.is_observe = False
+        w = torch.tensor([1.0, 2.0])
+
+        out = wq(w)
+
+        algo = wq.algorithms[name]
+        assert algo.quant_call_count == 1
+        assert algo.calib_call_count == 0
+        assert wq.quant_obj.call_count == 1
+        assert wq.quant_obj.received is w
+        assert torch.equal(out, w - 3)
+    finally:
+        ALGO_REGISTRY._items.pop(name, None)
 
 
 def test_weight_quantizer_observe_input_dispatches_to_algorithms_with_hook():
     seen = []
 
     @ALGO_REGISTRY.register(name=UT_OBSERVE_ALGO, targets=("weight",))
-    class _Obs(nn.Module):
+    class _Obs(QuantAlgorithmBase):
         def __init__(self, args, *_):
             super().__init__()
 
         def observe_input(self, x, weight):
             seen.append((x, weight))
+
+        def forward(self, x):
+            return x
 
     try:
         wq = WeightQuantizer(_args(algos=[UT_OBSERVE_ALGO], w_bits=8), w_bits=8)
@@ -252,7 +397,7 @@ def test_weight_quantizer_observe_input_dispatches_to_algorithms_with_hook():
 
 def test_weight_quantizer_algo_forward_chains_non_quantize_algos():
     @ALGO_REGISTRY.register(name=UT_DOUBLE_ALGO, targets=("weight",))
-    class _Double(nn.Module):
+    class _Double(QuantAlgorithmBase):
         def __init__(self, args, *_):
             super().__init__()
 
@@ -270,12 +415,15 @@ def test_weight_quantizer_algo_forward_chains_non_quantize_algos():
 
 def test_weight_quantizer_algo_forward_picks_quantize_hook_separately():
     @ALGO_REGISTRY.register(name=UT_QUANT_HOOK_ALGO, targets=("weight",))
-    class _Q(nn.Module):
+    class _Q(QuantAlgorithmBase):
         def __init__(self, args, *_):
             super().__init__()
 
         def quantize(self, x, quant_obj):
             return x * 0
+
+        def forward(self, x):
+            return x
 
     try:
         wq = WeightQuantizer(_args(algos=[UT_QUANT_HOOK_ALGO], w_bits=8), w_bits=8)
@@ -291,11 +439,14 @@ def test_weight_quantizer_algo_forward_rejects_multiple_quantize_hooks():
     for n in (UT_QH_A_ALGO, UT_QH_B):
 
         @ALGO_REGISTRY.register(name=n, targets=("weight",))
-        class _Q(nn.Module):
+        class _Q(QuantAlgorithmBase):
             def __init__(self, args, *_):
                 super().__init__()
 
             def quantize(self, x, q):
+                return x
+
+            def forward(self, x):
                 return x
 
     try:
@@ -316,11 +467,14 @@ def test_weight_quantizer_export_deploy_uses_quant_obj_export():
 
 def test_weight_quantizer_export_deploy_rejects_quantize_hook_path():
     @ALGO_REGISTRY.register(name=UT_QH_EXPORT_ALGO, targets=("weight",))
-    class _Q(nn.Module):
+    class _Q(QuantAlgorithmBase):
         def __init__(self, args, *_):
             super().__init__()
 
         def quantize(self, x, q):
+            return x
+
+        def forward(self, x):
             return x
 
     try:
@@ -353,9 +507,12 @@ def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
     name = "_ut_struct_mis"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
-    class _Algo(nn.Module):
+    class _Algo(QuantAlgorithmBase):
         def __init__(self, args, ctx=None):
             super().__init__()
+
+        def forward(self, x):
+            return x
 
     try:
         out = build_algorithms_by_target(_args(algos=[name]), "activation")
@@ -369,7 +526,7 @@ def test_activation_quantizer_trainable_params_returns_params_from_algo():
     name = "_ut_act_tp"
 
     @ALGO_REGISTRY.register(name=name, targets=("activation",))
-    class _AlgoWithParams(nn.Module):
+    class _AlgoWithParams(QuantAlgorithmBase):
         def __init__(self, args):
             super().__init__()
             self.p = nn.Parameter(torch.tensor(1.0))
@@ -392,7 +549,7 @@ def test_activation_quantizer_forward_applies_algo_when_enabled():
     name = "_ut_act_fwd"
 
     @ALGO_REGISTRY.register(name=name, targets=("activation",))
-    class _DoubleAlgo(nn.Module):
+    class _DoubleAlgo(QuantAlgorithmBase):
         def __init__(self, args):
             super().__init__()
 
@@ -401,7 +558,6 @@ def test_activation_quantizer_forward_applies_algo_when_enabled():
 
     try:
         aq = ActivationQuantizer(_args(algos=[name]), bits=8)
-        aq.enable = True
         x = torch.tensor([1.0, 2.0, 3.0])
         out = aq(x)
         assert out.dtype == x.dtype
@@ -414,7 +570,7 @@ def test_weight_quantizer_trainable_params_returns_params_from_algo():
     name = "_ut_wt_tp"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
-    class _WtAlgoWithParams(nn.Module):
+    class _WtAlgoWithParams(QuantAlgorithmBase):
         def __init__(self, args, *_):
             super().__init__()
             self.p = nn.Parameter(torch.tensor(2.0))
@@ -437,16 +593,18 @@ def test_weight_quantizer_forward_uses_quantize_algo_when_enabled():
     name = "_ut_wt_qalgo"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
-    class _QAlgo(nn.Module):
+    class _QAlgo(QuantAlgorithmBase):
         def __init__(self, args, *_):
             super().__init__()
 
         def quantize(self, x, quant_obj):
             return x * 100
 
+        def forward(self, x):
+            return x
+
     try:
         wq = WeightQuantizer(_args(algos=[name], w_bits=8), w_bits=8)
-        wq.enable = True
         x = torch.tensor([1.0, 2.0])
         out = wq(x)
         assert torch.equal(out, x * 100)
@@ -463,7 +621,7 @@ def test_weight_quantizer_export_deploy_rejects_unsupported_dtype(monkeypatch):
 
 def test_build_algorithms_raises_with_missing_targets():
     name = "_ut_missing_targets"
-    ALGO_REGISTRY.register(name=name)(type("T", (), {}))
+    ALGO_REGISTRY.register(name=name)(_PassthroughAlgorithm)
     try:
         with pytest.raises(ValueError, match="missing registry metadata"):
             build_algorithms_by_target(_args(algos=[name]), "weight")
@@ -475,9 +633,12 @@ def test_build_algorithms_raises_when_target_not_in_algo_targets():
     name = "_ut_struct_nonmatch"
 
     @ALGO_REGISTRY.register(name=name, targets=("weight",))
-    class _Algo(nn.Module):
+    class _Algo(QuantAlgorithmBase):
         def __init__(self, args, ctx=None):
             super().__init__()
+
+        def forward(self, x):
+            return x
 
     try:
         out = build_algorithms_by_target(_args(algos=[name]), "activation")

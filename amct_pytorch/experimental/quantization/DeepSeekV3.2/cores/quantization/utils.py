@@ -34,12 +34,12 @@ def load_quant_params(layer, quant_params):
                     mod.clip_factor_a_max = quant_params[f"{name}.clip_factor_a_max"]
                     mod.clip_factor_a_min = quant_params[f"{name}.clip_factor_a_min"]
             else:
-                logger.info(f" {name} has not clip_factor_a_max and clip_factor_a_min")
+                logger.info(f"{name} has no clip_factor_a_max and clip_factor_a_min")
         if isinstance(mod, QuantLinear):
             if hasattr(mod, "clip_factor_w_max"):
                 if f"{name}.clip_factor_w_max" in quant_params:
                     mod.clip_factor_w_max = quant_params[f"{name}.clip_factor_w_max"]
                     mod.clip_factor_w_min = quant_params[f"{name}.clip_factor_w_min"]
             else:
-                logger.info(f" {name} has not clip_factor_w_max and clip_factor_w_min")
+                logger.info(f"{name} has no clip_factor_w_max and clip_factor_w_min")
     return quant_params

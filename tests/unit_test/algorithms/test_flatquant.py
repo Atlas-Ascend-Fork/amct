@@ -125,6 +125,23 @@ def test_forward_inv_t_divides_by_diag_scale_for_decomposed_weight_transform():
     assert torch.allclose(out, torch.tensor([[1.0, 0.5, 0.25, 0.125]]))
 
 
+def test_observe_forward_returns_activation_and_weight_inputs_unchanged():
+    flat = _make(dim_size=4, matrix_size=2)
+    flat.is_observe = True
+    activation = torch.randn(2, 4)
+    weight = torch.randn(3, 4)
+    activation_snapshot = activation.clone()
+    weight_snapshot = weight.clone()
+
+    activation_out = flat(activation, inv_t=False)
+    weight_out = flat(weight, inv_t=True, name="q_proj")
+
+    assert activation_out is activation
+    assert weight_out is weight
+    assert torch.equal(activation_out, activation_snapshot)
+    assert torch.equal(weight_out, weight_snapshot)
+
+
 def test_flatquant_transform_keeps_linear_result_equivalent():
     flat = _make(dim_size=4, matrix_size=2)
     with torch.no_grad():

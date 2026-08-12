@@ -68,8 +68,10 @@ def test_forward_with_log_scale_2_divides_input_by_e2():
 def test_observe_mode_updates_log_scale_with_running_max():
     om = _make(dim_size=2)
     om.is_observe = True
-    out = om(torch.tensor([[3.0, 5.0]]))
-    assert torch.equal(out, torch.tensor([[3.0, 5.0]]))  # passthrough in observe mode
+    x = torch.tensor([[3.0, 5.0]])
+    out = om(x)
+    assert out is x
+    assert torch.equal(out, torch.tensor([[3.0, 5.0]]))
     # log_scale ≈ log(max(|x|)) = log([3, 5])
     assert torch.allclose(
         om.log_scale.data, torch.log(torch.tensor([[3.0, 5.0]])), atol=1e-4
@@ -78,6 +80,34 @@ def test_observe_mode_updates_log_scale_with_running_max():
     om(torch.tensor([[1.0, 6.0]]))
     expected = torch.log(torch.tensor([[3.0, 6.0]]))
     assert torch.allclose(om.log_scale.data, expected, atol=1e-4)
+
+
+def test_calib_forward_records_activation_and_returns_input():
+    om = _make(dim_size=2)
+    activation = torch.tensor([[3.0, 5.0]])
+    snapshot = activation.clone()
+    before = om.log_scale.detach().clone()
+
+    out = om.calib_forward(activation, inv_t=False)
+
+    assert out is activation
+    assert torch.equal(out, snapshot)
+    assert not torch.equal(om.log_scale, before)
+
+
+def test_calib_forward_skips_weight_recording_and_returns_input():
+    om = _make(dim_size=2)
+    with torch.no_grad():
+        om.log_scale.copy_(torch.tensor([[0.2, 0.4]]))
+    weight = torch.tensor([[3.0, 5.0]])
+    snapshot = weight.clone()
+    before = om.log_scale.detach().clone()
+
+    out = om.calib_forward(weight, inv_t=True, name="q_proj")
+
+    assert out is weight
+    assert torch.equal(out, snapshot)
+    assert torch.equal(om.log_scale, before)
 
 
 def test_get_scale_clamps_to_finite_range():

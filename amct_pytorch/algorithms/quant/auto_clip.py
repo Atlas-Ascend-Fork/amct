@@ -17,6 +17,7 @@
 
 import torch
 
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 
 
@@ -25,7 +26,7 @@ from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
     description="Learnable weight clipping",
     targets=("weight",),
 )
-class LWC(torch.nn.Module):
+class LWC(QuantAlgorithmBase):
     def __init__(self, args, w_bits=None):
         super().__init__()
         self.args = args
@@ -39,27 +40,6 @@ class LWC(torch.nn.Module):
         )
         self.clip_factor_min = torch.nn.Parameter(
             torch.ones((self.clip_dim, 1)) * self.init_value, requires_grad=True
-        )
-
-    def trainable_params(self):
-        return [self.clip_factor_min, self.clip_factor_max]
-
-    def export_ptq_params(self):
-        return {
-            "clip_factor_min": self.clip_factor_min.detach().cpu(),
-            "clip_factor_max": self.clip_factor_max.detach().cpu(),
-        }
-
-    def load_ptq_params(self, params):
-        self.clip_factor_min.data.copy_(
-            params["clip_factor_min"].to(
-                device=self.clip_factor_min.device, dtype=self.clip_factor_min.dtype
-            )
-        )
-        self.clip_factor_max.data.copy_(
-            params["clip_factor_max"].to(
-                device=self.clip_factor_max.device, dtype=self.clip_factor_max.dtype
-            )
         )
 
     def apply_clip(self, x):
@@ -87,11 +67,10 @@ class LWC(torch.nn.Module):
     description="Learnable activation clipping",
     targets=("activation",),
 )
-class LAC(torch.nn.Module):
+class LAC(QuantAlgorithmBase):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.is_observe = False
         self.is_per_tensor = args.is_per_tensor
         self.init_value = 4.0
         self.sigmoid = torch.nn.Sigmoid()
@@ -103,9 +82,6 @@ class LAC(torch.nn.Module):
         )
         self.register_buffer('maxval', torch.zeros((1)))
         self.register_buffer('minval', torch.zeros((1)))
-
-    def trainable_params(self):
-        return [self.clip_factor_min, self.clip_factor_max]
 
     def export_ptq_params(self):
         return {
@@ -151,10 +127,11 @@ class LAC(torch.nn.Module):
         return x
 
     def forward(self, x):
-        if self.is_observe:
-            if x.max() > self.maxval.to(x.device):
-                self.maxval.data = x.max()
-            if x.min() < self.minval.to(x.device):
-                self.minval.data = x.min()
-            return x
         return self.apply_clip(x)
+
+    def calib_forward(self, x, *args, **kwargs):
+        if x.max() > self.maxval.to(x.device):
+            self.maxval.data = x.max()
+        if x.min() < self.minval.to(x.device):
+            self.minval.data = x.min()
+        return x
