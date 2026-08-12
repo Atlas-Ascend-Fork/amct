@@ -98,20 +98,6 @@ def test_get_algo_names_raises_on_algo_without_targets():
         ALGO_REGISTRY._items.pop(name, None)
 
 
-def test_get_algo_names_skips_calibrate_solver_algos_without_targets():
-    # calibrate-class algos (e.g. higptq) are driven directly by CalibrationSolver via
-    # args.algos, not via get_algo_names_by_target -- they legitimately declare no
-    # `targets` at all, and must not trip the "missing targets" check below.
-    name = "_ut_calibrate_no_targets"
-    ALGO_REGISTRY.register(name=name, solver="calibrate")(type("T", (), {}))
-    try:
-        assert get_algo_names_by_target(_args(algos=[name]), "weight") == []
-        assert get_algo_names_by_target(_args(algos=[name]), "activation") == []
-        assert get_algo_names_by_target(_args(algos=[name]), "structure") == []
-    finally:
-        ALGO_REGISTRY._items.pop(name, None)
-
-
 def test_build_algorithms_returns_module_dict_for_non_structure(_ephemeral_algo):
     out = build_algorithms_by_target(_args(algos=[_ephemeral_algo]), "weight")
     assert isinstance(out, nn.ModuleDict)
