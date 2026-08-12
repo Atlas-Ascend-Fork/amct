@@ -303,9 +303,7 @@ class TensorProtoHelper:
         np_type = self.map_np_type(tensor_dtype)
         data_location = self.map_data_location(tensor_dtype)
         # INT4 以 packed 字节存储，按 uint8 搬运字节流；其余类型按自身 dtype
-        store_np_type = (
-            np.uint8 if np_type == 'int4' else np.dtype(np_type)
-        )
+        store_np_type = np.uint8 if np_type == 'int4' else np.dtype(np_type)
         byte_size = np.dtype(store_np_type).itemsize
         # the list is index of TensorProto.Datetype
         if (
