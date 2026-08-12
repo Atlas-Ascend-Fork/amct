@@ -26,9 +26,6 @@ markers = [
     "slow: tests that take more than a few seconds",
 ]
 addopts = "-ra"
-env = [
-    "TORCH_DEVICE_BACKEND_AUTOLOAD=0",
-]
 
 [tool.coverage.run]
 source = ["amct_pytorch"]
