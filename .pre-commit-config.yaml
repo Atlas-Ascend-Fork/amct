@@ -1,4 +1,5 @@
 # See https://pre-commit.com for hook docs.
+# SPDX-License-Identifier: Apache-2.0
 default_language_version:
   python: python3
 
