@@ -55,11 +55,11 @@ class QuantDequantHifp(torch.nn.Module):
         if self.bits == 4:
             value, scale = self.deploy(x)
             return {"qweight": value, "scale": scale}
-        raise NotImplementedError(f"HiFloat-{self.bits} export_deploy not supported.")
+        raise NotImplementedError(f"HiFloat-{self.bits} export_deploy is not supported yet.")
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
         if self.bits == 4:
             mat = x.reshape(-1, x.shape[-1]).to(torch.float32)
             scale, value = hif4_pack(mat)
             return value.contiguous().cpu(), scale.contiguous().cpu()
-        raise NotImplementedError(f"HiFloat-{self.bits} deploy not supported.")
+        raise NotImplementedError(f"HiFloat-{self.bits} deploy is not supported yet.")
