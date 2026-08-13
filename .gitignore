@@ -36,3 +36,7 @@ tmp/
 **/.claude/scheduled_tasks.lock
 
 coverage.xml
+
+oat_reports/
+
+log/
