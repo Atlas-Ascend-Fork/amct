@@ -245,13 +245,9 @@ class BaseModel(metaclass=ABCMeta):
             layer_idx, use_quant_block=use_quant_block
         )
         if use_quant_block:
-            from amct_pytorch.common.models.llm.common.quant_apply import (
-                set_model_act_quant_state,
-                set_model_weight_quant_state,
-            )
+            import amct_pytorch.common.models.llm.common.quant_apply as quant_apply
 
-            set_model_weight_quant_state(block, enable_quant)
-            set_model_act_quant_state(block, enable_quant)
+            quant_apply.set_model_to_observe(block, not enable_quant)
 
         block = self._dispatch_block(block).eval()
         if use_quant_block and hook_name is None:

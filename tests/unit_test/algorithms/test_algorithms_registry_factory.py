@@ -16,6 +16,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+import pytest
+import torch.nn as nn
+
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.utils.registry_factory import Registry
 
@@ -23,3 +26,12 @@ from amct_pytorch.common.utils.registry_factory import Registry
 def test_algo_registry_is_named_registry_instance():
     assert isinstance(ALGO_REGISTRY, Registry)
     assert ALGO_REGISTRY.name == "algo"
+
+
+def test_algo_registry_rejects_non_quant_algorithm():
+    name = "_invalid_algo"
+    try:
+        with pytest.raises(TypeError, match="QuantAlgorithmBase"):
+            ALGO_REGISTRY.register(name=name)(nn.Linear)
+    finally:
+        ALGO_REGISTRY._items.pop(name, None)

@@ -1164,7 +1164,7 @@ def test_do_embedding_forward_saves_kwargs_when_hook_name_set(tmp_path, monkeypa
 
 
 def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
-    """do_block_forward calls set_model_weight/act_quant_state when use_quant_block=True (lines 194-196)."""
+    """do_block_forward switches the block through the centralized state API."""
     from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
@@ -1174,15 +1174,12 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
         lambda path: weight_map,
     )
 
-    weight_state = {}
-    act_state = {}
+    observe_state = {}
     monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.quant_apply.set_model_weight_quant_state",
-        lambda mod, flag: weight_state.update({CALLED: True, FLAG: flag}),
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.quant_apply.set_model_act_quant_state",
-        lambda mod, flag: act_state.update({CALLED: True, FLAG: flag}),
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_to_observe",
+        lambda mod, flag: observe_state.update(
+            {CALLED: True, FLAG: flag, "module": mod}
+        ),
     )
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.save_ptq_inps",
@@ -1219,10 +1216,9 @@ def test_do_block_forward_with_quant_block_sets_quant_state(monkeypatch):
 
     model.do_block_forward(0, samples, use_quant_block=True, hook_name="some_hook")
 
-    assert weight_state.get(CALLED) is True
-    assert not weight_state.get(FLAG)
-    assert act_state.get(CALLED) is True
-    assert not act_state.get(FLAG)
+    assert observe_state.get(CALLED) is True
+    assert observe_state.get(FLAG) is True
+    assert observe_state.get("module") is fake_block
 
 
 def test_do_block_forward_quant_eval_mode(monkeypatch):
@@ -1236,11 +1232,7 @@ def test_do_block_forward_quant_eval_mode(monkeypatch):
         lambda path: weight_map,
     )
     monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.quant_apply.set_model_weight_quant_state",
-        lambda mod, flag: None,
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.quant_apply.set_model_act_quant_state",
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_to_observe",
         lambda mod, flag: None,
     )
 
@@ -1300,11 +1292,7 @@ def test_do_block_forward_with_hook_removal(monkeypatch):
         lambda path: weight_map,
     )
     monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.quant_apply.set_model_weight_quant_state",
-        lambda mod, flag: None,
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.common.models.llm.common.quant_apply.set_model_act_quant_state",
+        "amct_pytorch.common.models.llm.common.quant_apply.set_model_to_observe",
         lambda mod, flag: None,
     )
 

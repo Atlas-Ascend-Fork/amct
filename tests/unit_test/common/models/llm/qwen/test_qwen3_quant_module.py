@@ -27,7 +27,9 @@ from transformers.models.qwen3.modeling_qwen3 import (
     Qwen3MLP,
 )
 
+from amct_pytorch.common.models.llm.common.deploy_export import generate_quant_config
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.models.llm.qwen.qwen3.qwen3 import Qwen3
 from amct_pytorch.common.models.llm.qwen.qwen3.quant_module import (
     QuantQwen3Attn,
     QuantQwen3MLP,
@@ -43,6 +45,40 @@ A_BITS = 'a_bits'
 ATTN_CACHE = 'attn-cache'
 ATTN_LINEAR = 'attn-linear'
 MLP = 'mlp'
+
+
+@pytest.mark.parametrize('w_bits, a_bits', [(4, 8), (8, 8)])
+def test_qwen3_bits_scheme_uses_global_dense_linear_policy(w_bits, a_bits):
+    adapter = Qwen3.__new__(Qwen3)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy({W_BITS: w_bits, A_BITS: a_bits}),
+    )
+
+    assert adapter.bits_scheme() == [
+        {"targets": ["Linear"], W_BITS: w_bits, A_BITS: a_bits},
+    ]
+
+
+@pytest.mark.parametrize('w_bits, a_bits', [(4, 8), (8, 8)])
+def test_qwen3_deploy_config_declares_bit_policy_widths(w_bits, a_bits):
+    """The deploy metadata must match the BitPolicy, not the W8A8 fallback."""
+    adapter = Qwen3.__new__(Qwen3)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy({W_BITS: w_bits, A_BITS: a_bits}),
+    )
+
+    config = generate_quant_config(
+        cache_scheme={},
+        ignores=[],
+        bits_scheme=adapter.bits_scheme(),
+    )
+
+    # Qwen3 is dense: only a Linear group, no MoEGMM group.
+    assert set(config["config_groups"]) == {"group_0"}
+    group = config["config_groups"]["group_0"]
+    assert group["targets"] == ["Linear"]
+    assert group["weights"]["num_bits"] == w_bits
+    assert group["input_activations"]["num_bits"] == a_bits
 
 
 def _tiny_qwen3_config():
