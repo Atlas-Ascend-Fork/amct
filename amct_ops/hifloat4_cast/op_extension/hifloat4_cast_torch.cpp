@@ -34,78 +34,94 @@ constexpr uint32_t HIF4_BLOCK_DIM = 40;
 
 namespace AscendKernel {
 
-// The kernel quantizes along the last dim (blocks of 64, tail handled in-kernel). For qdim != -1
-// we permute that dim to the last axis, run, then permute back. dtype/device are validated at the
-// dispatcher entry (register.cpp).
+namespace {
+
+// Move the quant dim to the last axis so the kernel can always reduce along dim -1.
+at::Tensor PermuteToLast(const at::Tensor &input, int64_t qd, std::vector<int64_t> &perm) {
+    int64_t nd = input.dim();
+    if (qd == nd - 1) {
+        return input.contiguous();
+    }
+    perm.reserve(nd);
+    for (int64_t i = 0; i < nd; i++) {
+        if (i != qd) {
+            perm.push_back(i);
+        }
+    }
+    perm.push_back(qd);
+    return input.permute(perm).contiguous();
+}
+
+// Pad N to a multiple of BATCH (512) so the kernel never sees a partial tail. The
+// kernel requires 64-aligned input, so all tail handling lives here on the host.
+at::Tensor PadLastDim(const at::Tensor &xp, int64_t &n, bool &need_slice) {
+    constexpr int64_t BATCH = 512;
+    int64_t n_pad = ((n + BATCH - 1) / BATCH) * BATCH;
+    need_slice = (n_pad != n);
+    if (need_slice) {
+        return at::constant_pad_nd(xp, {0, n_pad - n}, 0.0);
+    }
+    return xp;
+}
+
+at::Tensor Unpermute(const at::Tensor &output, const std::vector<int64_t> &perm) {
+    int64_t nd = output.dim();
+    std::vector<int64_t> inv(nd);
+    for (int64_t new_pos = 0; new_pos < nd; new_pos++) {
+        inv[perm[new_pos]] = new_pos;
+    }
+    return output.permute(inv).contiguous();
+}
+
+} // namespace
+
+// The kernel quantizes along the last dim (blocks of 64). dtype/device are validated
+// at the dispatcher entry (register.cpp).
 at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim) {
     int64_t nd = input.dim();
     TORCH_CHECK(nd > 0, "hifloat4_fake_quant: input must have at least one dimension");
     int64_t qd = qdim >= 0 ? qdim : qdim + nd;
     TORCH_CHECK(qd >= 0 && qd < nd, "hifloat4_fake_quant: qdim ", qdim, " out of range for ", nd, "-D input");
 
-    bool needPermute = (qd != nd - 1);
     std::vector<int64_t> perm;
-    at::Tensor xp;
-    if (needPermute) {
-        perm.reserve(nd);
-        for (int64_t i = 0; i < nd; i++) {
-            if (i != qd) {
-                perm.push_back(i);
-            }
-        }
-        perm.push_back(qd);
-        xp = input.permute(perm).contiguous();
-    } else {
-        xp = input.contiguous();
-    }
+    at::Tensor xp = PermuteToLast(input, qd, perm);
 
     int64_t n = xp.size(-1);
-    int64_t m_raw = xp.numel() / n;
+    TORCH_CHECK(n > 0, "hifloat4_fake_quant: input must have a non-empty last dim");
+    bool need_slice = false;
+    at::Tensor xin = PadLastDim(xp, n, need_slice);
+    int64_t m = xin.numel() / xin.size(-1);
 
-    // Pad N to a multiple of BATCH (512) so the kernel never sees a partial tail --
-    // the kernel requires aligned input (groups of 64).
-    // The kernel's tail-masking path becomes dead code; all tail handling is done here.
-    constexpr int64_t BATCH = 512;
-    int64_t n_pad = ((n + BATCH - 1) / BATCH) * BATCH;
-    bool needSlice = (n_pad != n);
-
-    auto inDtype = input.scalar_type();
-    bool cvtFp32 = (inDtype == at::kHalf);
-    at::Tensor xin = cvtFp32 ? xp.to(at::kFloat) : xp;
-    if (needSlice) {
-        xin = at::constant_pad_nd(xin, {0, n_pad - n}, 0.0);
+    auto in_dtype = input.scalar_type();
+    bool cvt_fp32 = (in_dtype == at::kHalf);
+    if (cvt_fp32) {
+        xin = xin.to(at::kFloat);
     }
-    int64_t n_kernel = n_pad;
-    int64_t m = xin.numel() / n_kernel;
     at::Tensor output = at::empty_like(xin);
 
     auto stream = c10_npu::getCurrentNPUStream(input.device().index());
-    void *aclStream = stream.stream();
+    void *acl_stream = stream.stream();
     auto *xptr = reinterpret_cast<uint8_t *>(xin.data_ptr());
     auto *optr = reinterpret_cast<uint8_t *>(output.data_ptr());
-    if (inDtype == at::kBFloat16) {
+    if (in_dtype == at::kBFloat16) {
         run_hifx_kernel_bf16(
-            HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel), HIF4_MANT_BIT);
+            HIF4_BLOCK_DIM, acl_stream, xptr, optr, static_cast<int>(m), static_cast<int>(xin.size(-1)), HIF4_MANT_BIT);
     } else {
         run_hifx_kernel(
-            HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel), HIF4_MANT_BIT);
+            HIF4_BLOCK_DIM, acl_stream, xptr, optr, static_cast<int>(m), static_cast<int>(xin.size(-1)), HIF4_MANT_BIT);
     }
 
     // Slice off the pad, restoring the original N.
-    if (needSlice) {
+    if (need_slice) {
         output = output.slice(-1, 0, n);
     }
 
-    if (cvtFp32) {
-        output = output.to(inDtype); // FP32 result -> original FP16
+    if (cvt_fp32) {
+        output = output.to(in_dtype); // FP32 result -> original FP16
     }
 
-    if (needPermute) {
-        std::vector<int64_t> inv(nd);
-        for (int64_t newPos = 0; newPos < nd; newPos++) {
-            inv[perm[newPos]] = newPos;
-        }
-        output = output.permute(inv).contiguous();
+    if (!perm.empty()) {
+        output = Unpermute(output, perm);
     }
     return output;
 }

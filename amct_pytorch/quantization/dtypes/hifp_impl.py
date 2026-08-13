@@ -203,7 +203,8 @@ def hif4_encode(xg, ng=2, qdim=-1):
 
     e1_8 = v8 * rec >= 4.0
     pl = e1_8.ndim + qdim - 1
-    e1_8x2 = e1_8.expand(*e1_8.shape[:pl], 2, *e1_8.shape[pl + 1 :])
+    upper_start = pl + 1
+    e1_8x2 = e1_8.expand(*e1_8.shape[:pl], 2, *e1_8.shape[upper_start:])
     e1_16 = v16 * rec * _pow2(-e1_8x2.to(torch.float32)) >= 2.0
 
     de = e1_16.to(torch.float32) + e1_8x2.to(torch.float32)
@@ -258,17 +259,17 @@ def hif4_decode(sign_bit, e6m2, de, code, ng=2, block_nan=None, qdim=-1):
 
 @torch.no_grad()
 def hif4_pack(x):
-    """Pack [M, N] tensor to HiF4 bytes (scale, value)."""
+    """Pack [n_rows, n_cols] tensor to HiF4 bytes (scale, value)."""
     x = x.detach().to(torch.float32)
-    assert x.dim() == 2, "input must be [M, N]"
-    M, N = x.shape
-    assert N % 64 == 0, "N must be a multiple of 64"
-    gn = N // 64
+    assert x.dim() == 2, "input must be [n_rows, n_cols]"
+    n_rows, n_cols = x.shape
+    assert n_cols % 64 == 0, "n_cols must be a multiple of 64"
+    gn = n_cols // 64
 
-    xg = x.reshape(M, gn, 8, 2, 4)
+    xg = x.reshape(n_rows, gn, 8, 2, 4)
     enc = hif4_encode(xg, ng=NG)
 
-    nibble = (enc.sign_bit * 8 + enc.code).reshape(M, N // 2, 2)
+    nibble = (enc.sign_bit * 8 + enc.code).reshape(n_rows, n_cols // 2, 2)
     value = (nibble[..., 0] + nibble[..., 1] * 16).to(torch.uint8)
 
     byte_e6m2 = (enc.e_e6 + E6_OFFSET).to(torch.int32) * (2**E6M2_MBITS) + (
@@ -280,7 +281,7 @@ def hif4_pack(x):
         torch.int32
     )
     byte_l1 = (enc.e1_8.to(torch.int32) * pw8).sum(dim=-1)
-    e1_16f = enc.e1_16.reshape(M, gn, 16).to(torch.int32)
+    e1_16f = enc.e1_16.reshape(n_rows, gn, 16).to(torch.int32)
     byte_l2_hi = (e1_16f[..., 0:8] * pw8).sum(dim=-1)
     byte_l2_lo = (e1_16f[..., 8:16] * pw8).sum(dim=-1)
 
@@ -291,15 +292,15 @@ def hif4_pack(x):
 
 
 def hif4_unpack(scale, value):
-    """Reconstruct fp32 [M, N] from packed HiF4 (scale, value) bytes."""
+    """Reconstruct fp32 [n_rows, n_cols] from packed HiF4 (scale, value) bytes."""
     if isinstance(scale, torch.Tensor):
         scale = scale.cpu().numpy()
     if isinstance(value, torch.Tensor):
         value = value.cpu().numpy()
     scale = np.asarray(scale, dtype=np.int64)
     value = np.asarray(value, dtype=np.int64)
-    M, gn, _ = scale.shape
-    N = gn * 64
+    n_rows, gn, _ = scale.shape
+    n_cols = gn * 64
 
     b_e6m2 = scale[..., 0]
     b_l1 = scale[..., 1]
@@ -314,18 +315,18 @@ def hif4_unpack(scale, value):
     e1_8 = torch.from_numpy(((b_l1[..., None] >> (7 - a_idx)) & 1).astype(np.float32))
     hi = torch.from_numpy(((b_l2_hi[..., None] >> (7 - a_idx)) & 1).astype(np.float32))
     lo = torch.from_numpy(((b_l2_lo[..., None] >> (7 - a_idx)) & 1).astype(np.float32))
-    de = torch.cat([hi, lo], dim=-1).reshape(M, gn, 8, 2) + e1_8.unsqueeze(-1)
+    de = torch.cat([hi, lo], dim=-1).reshape(n_rows, gn, 8, 2) + e1_8.unsqueeze(-1)
 
     # Unpack nibbles: even element in low nibble
     lo = value & 0xF
     hi = (value >> 4) & 0xF
-    nib = np.stack([lo, hi], axis=-1).reshape(M, gn, 8, 2, 4)
+    nib = np.stack([lo, hi], axis=-1).reshape(n_rows, gn, 8, 2, 4)
     sign_bit = torch.from_numpy(((nib >> 3) & 1).astype(np.int32))
     code = torch.from_numpy((nib & 0x7).astype(np.int32))
     block_nan = torch.from_numpy((b_e6m2 == 0xFF))
 
     out = hif4_decode(sign_bit, e6m2, de, code, ng=NG, block_nan=block_nan)
-    return out.reshape(M, N).numpy().astype(np.float32)
+    return out.reshape(n_rows, n_cols).numpy().astype(np.float32)
 
 
 def _load_amct_ops_hif4_cast():
@@ -348,7 +349,12 @@ def hifloat4_fake_quant(fp_tensor, qdim=-1):
         if _npu_fq is not None:
             return _npu_fq(fp_tensor, qdim=qdim)
 
-    # Pure-torch reference (aligned with HiFloat4-private quant_hifx)
+    return _hif4_fake_quant_reference(fp_tensor, qdim)
+
+
+@torch.no_grad()
+def _hif4_fake_quant_reference(fp_tensor, qdim=-1):
+    """Pure-torch HiF4 fake-quant, aligned with HiFloat4-private quant_hifx."""
     dtype_ori = fp_tensor.dtype
     x = fp_tensor.to(torch.float32)
 
@@ -356,10 +362,10 @@ def hifloat4_fake_quant(fp_tensor, qdim=-1):
         qdim = qdim - len(x.shape)
 
     # Pad to multiple of 64 along qdim
-    C = x.shape[qdim]
-    padC = (64 - C % 64) % 64
-    if padC > 0:
-        x = F.pad(x, [0] * (-qdim * 2 - 1) + [padC], value=0.0)
+    dim_len = x.shape[qdim]
+    pad_len = (64 - dim_len % 64) % 64
+    if pad_len > 0:
+        x = F.pad(x, [0] * (-qdim * 2 - 1) + [pad_len], value=0.0)
 
     # Match quant_hifx algorithm exactly (HiFloat4-private QFuncs/hifx.py)
     xg = x.unflatten(qdim, (-1, 8, 2, 4))
@@ -418,7 +424,7 @@ def hifloat4_fake_quant(fp_tensor, qdim=-1):
 
     out = out.flatten(qdim - 3, qdim)
 
-    if padC > 0:
-        out = out.narrow(qdim, 0, C)
+    if pad_len > 0:
+        out = out.narrow(qdim, 0, dim_len)
 
     return out.to(dtype_ori)
