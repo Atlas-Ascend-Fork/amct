@@ -69,7 +69,7 @@ __aicore__ inline void SetVectorMaskByCount(int count) {
 template <TPosition pos, typename T>
 __aicore__ inline LocalTensor<T> AllocateLocalTensor(int len) {
     TBuf<pos> tbuf;
-    TPipe* pipe_ptr = GetTPipePtr();
+    TPipe *pipe_ptr = GetTPipePtr();
     pipe_ptr->InitBuffer(tbuf, len * sizeof(T));
     return tbuf.template Get<T>();
 }
@@ -80,16 +80,14 @@ public:
     __aicore__ inline DBuff() {}
 
     __aicore__ inline void Init(int len) {
-        TPipe* pipe_ptr = GetTPipePtr();
+        TPipe *pipe_ptr = GetTPipePtr();
         pipe_ptr->InitBuffer(buf1, len * sizeof(T));
         pipe_ptr->InitBuffer(buf2, len * sizeof(T));
         tsr1 = buf1.template Get<T>();
         tsr2 = buf2.template Get<T>();
     }
 
-    __aicore__ inline LocalTensor<T> get(int i) {
-        return (i % 2 == 0) ? tsr1 : tsr2;
-    }
+    __aicore__ inline LocalTensor<T> get(int i) { return (i % 2 == 0) ? tsr1 : tsr2; }
 
 private:
     TBuf<pos> buf1;
@@ -102,7 +100,7 @@ template <pipe_t p1, pipe_t p2, bool preset>
 class SEvent {
 public:
     __aicore__ inline SEvent() {
-        TPipe* pipe_ptr = GetTPipePtr();
+        TPipe *pipe_ptr = GetTPipePtr();
         id1 = (event_t)pipe_ptr->AllocEventID<GetHardEventByPipe(p1, p2)>();
         if constexpr (preset) {
             setall();
@@ -115,21 +113,13 @@ public:
         }
     }
 
-    __aicore__ inline void wait() {
-        wait_flag(p1, p2, id1);
-    }
+    __aicore__ inline void wait() { wait_flag(p1, p2, id1); }
 
-    __aicore__ inline void set() {
-        set_flag(p1, p2, id1);
-    }
+    __aicore__ inline void set() { set_flag(p1, p2, id1); }
 
-    __aicore__ inline void setall() {
-        set();
-    }
+    __aicore__ inline void setall() { set(); }
 
-    __aicore__ inline void release() {
-        wait();
-    }
+    __aicore__ inline void release() { wait(); }
 
 private:
     event_t id1;
@@ -139,7 +129,7 @@ template <pipe_t p1, pipe_t p2, bool preset>
 class DEvent {
 public:
     __aicore__ inline DEvent() {
-        TPipe* pipe_ptr = GetTPipePtr();
+        TPipe *pipe_ptr = GetTPipePtr();
         id1 = (event_t)pipe_ptr->AllocEventID<GetHardEventByPipe(p1, p2)>();
         id2 = (event_t)pipe_ptr->AllocEventID<GetHardEventByPipe(p1, p2)>();
         if constexpr (preset) {
@@ -190,7 +180,8 @@ private:
 };
 
 template <typename T>
-__aicore__ inline void GM2UBPAD(LocalTensor<T> dst, GlobalTensor<T> src, int n_burst, int burst_len_byte, int src_stride_byte, int dst_stride) {
+__aicore__ inline void GM2UBPAD(
+    LocalTensor<T> dst, GlobalTensor<T> src, int n_burst, int burst_len_byte, int src_stride_byte, int dst_stride) {
     DataCopyExtParams param;
     param.blockCount = n_burst;
     param.blockLen = burst_len_byte;
@@ -205,7 +196,8 @@ __aicore__ inline void GM2UBPAD(LocalTensor<T> dst, GlobalTensor<T> src, int n_b
 }
 
 template <typename T>
-__aicore__ inline void UB2GMPAD(GlobalTensor<T> dst, LocalTensor<T> src, int n_burst, int burst_len_byte, int src_stride, int dst_stride_byte) {
+__aicore__ inline void UB2GMPAD(
+    GlobalTensor<T> dst, LocalTensor<T> src, int n_burst, int burst_len_byte, int src_stride, int dst_stride_byte) {
     DataCopyExtParams param;
     param.blockCount = n_burst;
     param.blockLen = burst_len_byte;
@@ -215,7 +207,8 @@ __aicore__ inline void UB2GMPAD(GlobalTensor<T> dst, LocalTensor<T> src, int n_b
 }
 
 template <typename T>
-__aicore__ inline void UB2UB(LocalTensor<T> dst, LocalTensor<T> src, int n_burst, int burst_len, int src_stride, int dst_stride) {
+__aicore__ inline void UB2UB(
+    LocalTensor<T> dst, LocalTensor<T> src, int n_burst, int burst_len, int src_stride, int dst_stride) {
     DataCopyParams param;
     param.blockCount = n_burst;
     param.blockLen = burst_len;
@@ -223,4 +216,4 @@ __aicore__ inline void UB2UB(LocalTensor<T> dst, LocalTensor<T> src, int n_burst
     param.dstStride = dst_stride;
     DataCopy(dst, src, param);
 }
-}  // namespace hifloat4_asc_utils
+} // namespace hifloat4_asc_utils

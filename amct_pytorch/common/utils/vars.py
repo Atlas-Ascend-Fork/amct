@@ -98,18 +98,47 @@ ALLOWED_WEIGHT_DTYPES = {
     'NOT_QUANTIZE float4_e2m1': [torch.bfloat16, torch.float16],
 }
 
-WTS_PER_TENSOR_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'hifloat4 hifloat4', 'float8_e4m3fn float8_e4m3fn',
-                                'int8 int8', 'int8 int4', 'NOT_QUANTIZE int8', 'NOT_QUANTIZE int4',
-                                'NOT_QUANTIZE hifloat8', 'NOT_QUANTIZE hifloat4', 'NOT_QUANTIZE float8_e4m3fn']
-WTS_PER_CHANNEL_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'hifloat4 hifloat4', 'float8_e4m3fn float8_e4m3fn',
-                                'int8 int8', 'int8 int4', 'NOT_QUANTIZE int8', 'NOT_QUANTIZE int4',
-                                'NOT_QUANTIZE hifloat8', 'NOT_QUANTIZE hifloat4', 'NOT_QUANTIZE float8_e4m3fn']
-WTS_PER_GROUP_SUPPORT_COMBINATION = ['mxfp8_e4m3fn mxfp8_e4m3fn', 'float8_e4m3fn float4_e2m1',
-                                'NOT_QUANTIZE int4', 'NOT_QUANTIZE int8',
-                                'NOT_QUANTIZE mxfp4_e2m1', 'NOT_QUANTIZE float4_e2m1']
+WTS_PER_TENSOR_SUPPORT_COMBINATION = [
+    'hifloat8 hifloat8',
+    'hifloat4 hifloat4',
+    'float8_e4m3fn float8_e4m3fn',
+    'int8 int8',
+    'int8 int4',
+    'NOT_QUANTIZE int8',
+    'NOT_QUANTIZE int4',
+    'NOT_QUANTIZE hifloat8',
+    'NOT_QUANTIZE hifloat4',
+    'NOT_QUANTIZE float8_e4m3fn',
+]
+WTS_PER_CHANNEL_SUPPORT_COMBINATION = [
+    'hifloat8 hifloat8',
+    'hifloat4 hifloat4',
+    'float8_e4m3fn float8_e4m3fn',
+    'int8 int8',
+    'int8 int4',
+    'NOT_QUANTIZE int8',
+    'NOT_QUANTIZE int4',
+    'NOT_QUANTIZE hifloat8',
+    'NOT_QUANTIZE hifloat4',
+    'NOT_QUANTIZE float8_e4m3fn',
+]
+WTS_PER_GROUP_SUPPORT_COMBINATION = [
+    'mxfp8_e4m3fn mxfp8_e4m3fn',
+    'float8_e4m3fn float4_e2m1',
+    'NOT_QUANTIZE int4',
+    'NOT_QUANTIZE int8',
+    'NOT_QUANTIZE mxfp4_e2m1',
+    'NOT_QUANTIZE float4_e2m1',
+]
 
-ACT_PER_TENSOR_SUPPORT_COMBINATION = ['hifloat8 hifloat8', 'hifloat4 hifloat4', 'float8_e4m3fn float8_e4m3fn',
-                                'int8 int8', 'int8 int4', 'float8_e4m3fn float4_e2m1']
+ACT_PER_TENSOR_SUPPORT_COMBINATION = [
+    'hifloat8 hifloat8',
+    'hifloat4 hifloat4',
+    'float8_e4m3fn float8_e4m3fn',
+    'int8 int8',
+    'int8 int4',
+    'float8_e4m3fn float4_e2m1',
+]
 ACT_PER_TOKEN_SUPPORT_COMBINATION = ['int8 int8', 'hifloat8 hifloat8']
 
 # Quantization bit width combinations supported by different quantization granularities

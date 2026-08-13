@@ -20,6 +20,7 @@ Compares the AscendC kernel against the pure-torch hif4_cast dequant reference
 to ~0 error (< 1e-6), including zero-input blocks. Requires an Ascend NPU; skipped
 otherwise. Also includes CPU-only shape regression tests for hif4_cast pack/dequant.
 """
+
 import unittest
 
 import torch
@@ -30,6 +31,7 @@ from amct_pytorch.quantization.dtypes.hifp_impl import hif4_pack, hifloat4_fake_
 def _npu_available():
     try:
         import torch_npu  # noqa: F401
+
         return torch.npu.is_available()
     except Exception:
         return False
@@ -50,6 +52,7 @@ class TestHiFloat4Kernel(unittest.TestCase):
 
     def _assert_kernel_matches_reference(self, x):
         from amct_ops.hifloat4_cast import hifloat4_fake_quant
+
         y_ref = _oracle(x.cpu()).float()
         y_npu = hifloat4_fake_quant(x.npu()).cpu().float()
         self.assertEqual(y_ref.shape, y_npu.shape)
@@ -73,6 +76,7 @@ class TestHiFloat4Kernel(unittest.TestCase):
 
     def test_kernel_zero_is_nan_free(self):
         from amct_ops.hifloat4_cast import hifloat4_fake_quant
+
         z = torch.zeros(2, 64, dtype=torch.bfloat16).npu()
         out = hifloat4_fake_quant(z)
         self.assertFalse(torch.isnan(out).any())

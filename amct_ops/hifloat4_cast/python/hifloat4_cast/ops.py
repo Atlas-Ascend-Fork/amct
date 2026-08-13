@@ -15,6 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Thin python wrapper for the HiFloat4 cast NPU operator."""
+
 import torch
 
 

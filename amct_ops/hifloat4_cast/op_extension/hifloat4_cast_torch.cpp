@@ -24,23 +24,20 @@
 // generated ccec header hifx_quant_op.h (compiled with the ASC compiler; the launchers
 // there use plain C++ linkage, so declare them the same way). They quantize a contiguous
 // [M, N] buffer along N, with 64-element blocks.
-void run_hifx_kernel(
-    uint32_t blockDim, void *stream, uint8_t *xmtx, uint8_t *out, int M, int N, int mant_bit);
-void run_hifx_kernel_bf16(
-    uint32_t blockDim, void *stream, uint8_t *xmtx, uint8_t *out, int M, int N, int mant_bit);
+void run_hifx_kernel(uint32_t blockDim, void *stream, uint8_t *xmtx, uint8_t *out, int M, int N, int mant_bit);
+void run_hifx_kernel_bf16(uint32_t blockDim, void *stream, uint8_t *xmtx, uint8_t *out, int M, int N, int mant_bit);
 
 namespace {
-constexpr int HIF4_MANT_BIT = 3;   // hifx4: S1P2 element format, man_bits = 3
+constexpr int HIF4_MANT_BIT = 3; // hifx4: S1P2 element format, man_bits = 3
 constexpr uint32_t HIF4_BLOCK_DIM = 40;
-}  // namespace
+} // namespace
 
 namespace AscendKernel {
 
 // The kernel quantizes along the last dim (blocks of 64, tail handled in-kernel). For qdim != -1
 // we permute that dim to the last axis, run, then permute back. dtype/device are validated at the
 // dispatcher entry (register.cpp).
-at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
-{
+at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim) {
     int64_t nd = input.dim();
     TORCH_CHECK(nd > 0, "hifloat4_fake_quant: input must have at least one dimension");
     int64_t qd = qdim >= 0 ? qdim : qdim + nd;
@@ -87,11 +84,11 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
     auto *xptr = reinterpret_cast<uint8_t *>(xin.data_ptr());
     auto *optr = reinterpret_cast<uint8_t *>(output.data_ptr());
     if (inDtype == at::kBFloat16) {
-        run_hifx_kernel_bf16(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel),
-            HIF4_MANT_BIT);
+        run_hifx_kernel_bf16(
+            HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel), HIF4_MANT_BIT);
     } else {
-        run_hifx_kernel(HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel),
-            HIF4_MANT_BIT);
+        run_hifx_kernel(
+            HIF4_BLOCK_DIM, aclStream, xptr, optr, static_cast<int>(m), static_cast<int>(n_kernel), HIF4_MANT_BIT);
     }
 
     // Slice off the pad, restoring the original N.
@@ -100,7 +97,7 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
     }
 
     if (cvtFp32) {
-        output = output.to(inDtype);   // FP32 result -> original FP16
+        output = output.to(inDtype); // FP32 result -> original FP16
     }
 
     if (needPermute) {
@@ -113,4 +110,4 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim)
     return output;
 }
 
-}  // namespace AscendKernel
+} // namespace AscendKernel

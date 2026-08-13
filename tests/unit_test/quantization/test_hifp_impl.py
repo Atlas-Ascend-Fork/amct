@@ -386,6 +386,7 @@ def test_both_backend_execution_failures_raise_backend_requirement():
 # HiF4 section
 # ---------------------------------------------------------------------------
 
+
 class _FakeNpuTensor:
     """Wraps a CPU tensor but reports device.type == 'npu' (CI-safe NPU dispatch)."""
 
@@ -400,12 +401,17 @@ class _FakeNpuTensor:
 
 # ---- bit-exact primitives ----
 
+
 def test_floor_log2_fp32_returns_exact_exponents():
-    x = torch.tensor([1.0, 2.0, 0.5, 2.0 ** -48, 2.0 ** -126, 2.0 ** -149, 0.0,
-                      -4.0, 3.0], dtype=torch.float32)
+    x = torch.tensor(
+        [1.0, 2.0, 0.5, 2.0**-48, 2.0**-126, 2.0**-149, 0.0, -4.0, 3.0],
+        dtype=torch.float32,
+    )
     got = hifp_impl._floor_log2_fp32(x)
-    expected = torch.tensor([0.0, 1.0, -1.0, -48.0, -126.0, -149.0,
-                             float("-inf"), 2.0, 1.0], dtype=torch.float32)
+    expected = torch.tensor(
+        [0.0, 1.0, -1.0, -48.0, -126.0, -149.0, float("-inf"), 2.0, 1.0],
+        dtype=torch.float32,
+    )
     assert torch.equal(got, expected)
 
 
@@ -422,10 +428,13 @@ def test_floor_log2_fp32_rejects_non_fp32():
 
 def test_pow2_and_ldexp_are_exact():
     e = torch.tensor([0.0, 3.0, -5.0], dtype=torch.float32)
-    assert torch.equal(hifp_impl._pow2(e),
-                       torch.tensor([1.0, 8.0, 0.03125], dtype=torch.float32))
-    got = hifp_impl._ldexp_fp32(torch.tensor([1.5, -2.0], dtype=torch.float32),
-                                torch.tensor([2.0, -1.0], dtype=torch.float32))
+    assert torch.equal(
+        hifp_impl._pow2(e), torch.tensor([1.0, 8.0, 0.03125], dtype=torch.float32)
+    )
+    got = hifp_impl._ldexp_fp32(
+        torch.tensor([1.5, -2.0], dtype=torch.float32),
+        torch.tensor([2.0, -1.0], dtype=torch.float32),
+    )
     assert torch.equal(got, torch.tensor([6.0, -1.0], dtype=torch.float32))
 
 
@@ -433,8 +442,9 @@ def test_to_bf16_rounds_half_to_even_on_ties():
     # 1.01171875 = 1 + 1.5*2^-7: tie between 1.0078125 (odd) and 1.015625 (even) -> up
     # 1.00390625 = 1 + 0.5*2^-7: tie between 1.0 (even) and 1.0078125 (odd) -> down
     x = torch.tensor([1.01171875, 1.00390625], dtype=torch.float32)
-    assert torch.equal(hifp_impl._to_bf16(x),
-                       torch.tensor([1.015625, 1.0], dtype=torch.float32))
+    assert torch.equal(
+        hifp_impl._to_bf16(x), torch.tensor([1.015625, 1.0], dtype=torch.float32)
+    )
 
 
 def test_to_bf16_regular_rounding_and_negatives():
@@ -448,6 +458,7 @@ def test_to_bf16_regular_rounding_and_negatives():
 
 # ---- hif4_encode / hif4_decode ----
 
+
 def test_hif4_encode_structure_and_roundtrip():
     xg = torch.zeros(1, 1, 8, 2, 4, dtype=torch.float32)
     xg[..., :4] = 1.0
@@ -460,8 +471,9 @@ def test_hif4_encode_structure_and_roundtrip():
     assert (enc.q >= 4).all() and (enc.q <= 7).all()
     assert (enc.e_e6 >= -48).all() and (enc.e_e6 <= 15).all()
     assert (enc.de >= 0).all() and (enc.de <= 3).all()
-    out = hifp_impl.hif4_decode(enc.sign_bit, enc.e6m2, enc.de, enc.code,
-                                ng=2, block_nan=enc.block_nan)
+    out = hifp_impl.hif4_decode(
+        enc.sign_bit, enc.e6m2, enc.de, enc.code, ng=2, block_nan=enc.block_nan
+    )
     assert out.shape == xg.shape
     assert out.abs().max().item() <= 7.0
 
@@ -499,13 +511,13 @@ def test_hif4_decode_block_nan_poisons_whole_block():
     de = torch.zeros(1, 2, 8, 2)
     code = torch.full((1, 2, 8, 2, 4), 4, dtype=torch.int32)
     block_nan = torch.tensor([[True, False]])
-    out = hifp_impl.hif4_decode(sign, e6m2, de, code, ng=2,
-                                block_nan=block_nan)
+    out = hifp_impl.hif4_decode(sign, e6m2, de, code, ng=2, block_nan=block_nan)
     assert torch.isnan(out[0, 0]).all()
     assert torch.equal(out[0, 1], torch.full((8, 2, 4), 0.5))
 
 
 # ---- hif4_pack / hif4_unpack ----
+
 
 def test_hif4_pack_unpack_roundtrip_matches_fake_quant():
     torch.manual_seed(7)
@@ -519,12 +531,13 @@ def test_hif4_pack_unpack_roundtrip_matches_fake_quant():
 
 
 def test_hif4_pack_element0_in_low_nibble():
-    x = torch.tile(torch.where(torch.arange(64) % 2 == 0,
-                               torch.tensor(1.0), torch.tensor(-1.0)),
-                   (4, 1)).to(torch.bfloat16)
+    x = torch.tile(
+        torch.where(torch.arange(64) % 2 == 0, torch.tensor(1.0), torch.tensor(-1.0)),
+        (4, 1),
+    ).to(torch.bfloat16)
     _, value = hifp_impl.hif4_pack(x)
-    assert ((value & 0x8) == 0).all()    # even (positive) elements in low nibble
-    assert ((value & 0x80) != 0).all()   # odd (negative) elements in high nibble
+    assert ((value & 0x8) == 0).all()  # even (positive) elements in low nibble
+    assert ((value & 0x80) != 0).all()  # odd (negative) elements in high nibble
 
 
 def test_hif4_pack_nan_block_writes_ff_and_unpacks_to_nan():
@@ -553,6 +566,7 @@ def test_hif4_unpack_accepts_numpy_and_tensor_inputs():
 
 # ---- amct_ops loader for HiF4 ----
 
+
 def test_hif4_loader_returns_none_when_module_is_missing():
     package = ModuleType("amct_ops")
     package.__path__ = []
@@ -574,6 +588,7 @@ def test_hif4_loader_returns_npu_fake_quant():
 
 # ---- hifloat4_fake_quant: CPU reference path ----
 
+
 @pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16, torch.float32])
 def test_hifloat4_fake_quant_cpu_preserves_dtype_and_shape(dtype):
     torch.manual_seed(17)
@@ -586,11 +601,12 @@ def test_hifloat4_fake_quant_cpu_preserves_dtype_and_shape(dtype):
 def test_hifloat4_fake_quant_pads_n_to_multiple_of_64():
     torch.manual_seed(19)
     x = torch.randn(2, 100, dtype=torch.bfloat16)
-    out = hifp_impl.hifloat4_fake_quant(x)          # 100 -> pad 28
+    out = hifp_impl.hifloat4_fake_quant(x)  # 100 -> pad 28
     assert out.shape == x.shape
     assert torch.isfinite(out).all()
-    ref = hifp_impl.hifloat4_fake_quant(
-        torch.nn.functional.pad(x, (0, 28))).narrow(1, 0, 100)
+    ref = hifp_impl.hifloat4_fake_quant(torch.nn.functional.pad(x, (0, 28))).narrow(
+        1, 0, 100
+    )
     assert torch.equal(out, ref)
 
 
@@ -639,6 +655,7 @@ def test_hifloat4_fake_quant_hand_computed_golden():
 
 # ---- hifloat4_fake_quant: NPU dispatch ----
 
+
 def test_hifloat4_dispatch_uses_npu_kernel_for_bf16_on_npu():
     inner = torch.randn(2, 64, dtype=torch.bfloat16)
     x = _FakeNpuTensor(inner)
@@ -666,7 +683,10 @@ def test_hifloat4_dispatch_falls_back_to_reference_when_kernel_missing():
 def test_hifloat4_dispatch_skips_kernel_for_fp32_on_npu():
     inner = torch.randn(2, 64, dtype=torch.float32)
     x = _FakeNpuTensor(inner)
-    with patch.object(hifp_impl, "_load_amct_ops_hif4_cast",
-                      side_effect=AssertionError("kernel must not be loaded")):
+    with patch.object(
+        hifp_impl,
+        "_load_amct_ops_hif4_cast",
+        side_effect=AssertionError("kernel must not be loaded"),
+    ):
         out = hifp_impl.hifloat4_fake_quant(x)
     assert torch.equal(out, hifp_impl.hifloat4_fake_quant(inner))

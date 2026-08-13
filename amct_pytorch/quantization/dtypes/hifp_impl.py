@@ -118,7 +118,7 @@ def hifloat8_fake_quant(fp_tensor):
 E6_OFFSET = 48
 E6M2_MBITS = 2
 N_FMT = 4
-NG = N_FMT - 2      # S1PNg, Ng=2 -> in-group code 3 bits
+NG = N_FMT - 2  # S1PNg, Ng=2 -> in-group code 3 bits
 
 # Bit-exact primitives (aligned with HiFloat4-private _exact.py)
 FP32_ABS_MASK = 0x7FFFFFFF
@@ -168,7 +168,6 @@ def _to_bf16(x):
     return x.to(torch.float32).to(torch.bfloat16).to(torch.float32)
 
 
-
 class Hif4Encoded(NamedTuple):
     sign_bit: torch.Tensor
     e6m2: torch.Tensor
@@ -196,20 +195,20 @@ def hif4_encode(xg, ng=2, qdim=-1):
 
     const_rec = _to_bf16(torch.tensor(1.0 / 7.0, dtype=torch.float32, device=xg.device))
     sf = _to_bf16(vmax * const_rec)
-    sf_c = sf.clamp(2.0 ** -E6_OFFSET, 2.0 ** 15 * 1.5)
+    sf_c = sf.clamp(2.0**-E6_OFFSET, 2.0**15 * 1.5)
     e_e6 = _floor_log2_fp32(sf_c)
     q = torch.round(sf_c * _pow2(2.0 - e_e6))
     e6m2_val = q * _pow2(e_e6 - 2.0)
     rec = _to_bf16(1.0 / e6m2_val)
 
-    e1_8 = (v8 * rec >= 4.0)
+    e1_8 = v8 * rec >= 4.0
     pl = e1_8.ndim + qdim - 1
-    e1_8x2 = e1_8.expand(*e1_8.shape[:pl], 2, *e1_8.shape[pl + 1:])
-    e1_16 = (v16 * rec * _pow2(-e1_8x2.to(torch.float32)) >= 2.0)
+    e1_8x2 = e1_8.expand(*e1_8.shape[:pl], 2, *e1_8.shape[pl + 1 :])
+    e1_16 = v16 * rec * _pow2(-e1_8x2.to(torch.float32)) >= 2.0
 
     de = e1_16.to(torch.float32) + e1_8x2.to(torch.float32)
     in_grp = tmp * rec * _pow2(-de.to(tmp.dtype))
-    in_grp = _to_bf16(in_grp) * (2 ** ng)
+    in_grp = _to_bf16(in_grp) * (2**ng)
     code = torch.floor(in_grp + 0.5).clamp(0, (1 << (ng + 1)) - 1).to(torch.int32)
 
     e1_8_sq = e1_8.squeeze(qdim).squeeze(qdim)
@@ -217,8 +216,15 @@ def hif4_encode(xg, ng=2, qdim=-1):
     e_e6_sq = e_e6.squeeze(qdim).squeeze(qdim).squeeze(qdim)
     q_sq = q.squeeze(qdim).squeeze(qdim).squeeze(qdim)
     return Hif4Encoded(
-        sign_bit, e6m2_sq, de.squeeze(qdim), code,
-        e1_8_sq, e1_16.squeeze(qdim), e_e6_sq, q_sq, block_nan,
+        sign_bit,
+        e6m2_sq,
+        de.squeeze(qdim),
+        code,
+        e1_8_sq,
+        e1_16.squeeze(qdim),
+        e_e6_sq,
+        q_sq,
+        block_nan,
     )
 
 
@@ -236,11 +242,13 @@ def hif4_decode(sign_bit, e6m2, de, code, ng=2, block_nan=None, qdim=-1):
     for pos in sorted([nd_target + qdim - 2, nd_target + qdim - 1, nd_target + qdim]):
         e6m2_exp = e6m2_exp.unsqueeze(pos)
 
-    out = sign * e6m2_exp * _pow2(de64) * (code.to(torch.float32) / (2 ** ng))
+    out = sign * e6m2_exp * _pow2(de64) * (code.to(torch.float32) / (2**ng))
 
     if block_nan is not None:
         bn_exp = block_nan
-        for pos in sorted([nd_target + qdim - 2, nd_target + qdim - 1, nd_target + qdim]):
+        for pos in sorted(
+            [nd_target + qdim - 2, nd_target + qdim - 1, nd_target + qdim]
+        ):
             bn_exp = bn_exp.unsqueeze(pos)
         while bn_exp.ndim < nd_target:
             bn_exp = bn_exp.unsqueeze(-1)
@@ -263,19 +271,22 @@ def hif4_pack(x):
     nibble = (enc.sign_bit * 8 + enc.code).reshape(M, N // 2, 2)
     value = (nibble[..., 0] + nibble[..., 1] * 16).to(torch.uint8)
 
-    byte_e6m2 = ((enc.e_e6 + E6_OFFSET).to(torch.int32) * (2 ** E6M2_MBITS)
-                 + (enc.q.to(torch.int32) - 4))
-    byte_e6m2 = torch.where(enc.block_nan,
-                            torch.full_like(byte_e6m2, 0xFF), byte_e6m2)
+    byte_e6m2 = (enc.e_e6 + E6_OFFSET).to(torch.int32) * (2**E6M2_MBITS) + (
+        enc.q.to(torch.int32) - 4
+    )
+    byte_e6m2 = torch.where(enc.block_nan, torch.full_like(byte_e6m2, 0xFF), byte_e6m2)
 
-    pw8 = _pow2(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(torch.int32)
+    pw8 = _pow2(torch.arange(7, -1, -1, device=x.device, dtype=torch.float32)).to(
+        torch.int32
+    )
     byte_l1 = (enc.e1_8.to(torch.int32) * pw8).sum(dim=-1)
     e1_16f = enc.e1_16.reshape(M, gn, 16).to(torch.int32)
     byte_l2_hi = (e1_16f[..., 0:8] * pw8).sum(dim=-1)
     byte_l2_lo = (e1_16f[..., 8:16] * pw8).sum(dim=-1)
 
-    scale = torch.stack([byte_e6m2.to(torch.int32), byte_l1,
-                         byte_l2_hi, byte_l2_lo], dim=-1).to(torch.uint8)
+    scale = torch.stack(
+        [byte_e6m2.to(torch.int32), byte_l1, byte_l2_hi, byte_l2_lo], dim=-1
+    ).to(torch.uint8)
     return scale, value
 
 
@@ -297,7 +308,7 @@ def hif4_unpack(scale, value):
 
     e = (b_e6m2 >> E6M2_MBITS) - E6_OFFSET
     mant = b_e6m2 & ((1 << E6M2_MBITS) - 1)
-    e6m2 = torch.from_numpy(2.0 ** e * (1.0 + mant / (2 ** E6M2_MBITS))).float()
+    e6m2 = torch.from_numpy(2.0**e * (1.0 + mant / (2**E6M2_MBITS))).float()
 
     a_idx = np.arange(8)
     e1_8 = torch.from_numpy(((b_l1[..., None] >> (7 - a_idx)) & 1).astype(np.float32))
@@ -329,7 +340,10 @@ def _load_amct_ops_hif4_cast():
 @torch.no_grad()
 def hifloat4_fake_quant(fp_tensor, qdim=-1):
     """HiF4 fake-quant: NPU kernel when available, else pure-torch reference."""
-    if fp_tensor.device.type == "npu" and fp_tensor.dtype in (torch.float16, torch.bfloat16):
+    if fp_tensor.device.type == "npu" and fp_tensor.dtype in (
+        torch.float16,
+        torch.bfloat16,
+    ):
         _npu_fq = _load_amct_ops_hif4_cast()
         if _npu_fq is not None:
             return _npu_fq(fp_tensor, qdim=qdim)
@@ -361,15 +375,21 @@ def hifloat4_fake_quant(fp_tensor, qdim=-1):
 
     div7 = _to_bf16(torch.ones_like(max_lv1) / 7.0)
     scale_factor = max_lv1 * div7
-    safe_scale = torch.where(scale_factor > 0, scale_factor, torch.ones_like(scale_factor))
+    safe_scale = torch.where(
+        scale_factor > 0, scale_factor, torch.ones_like(scale_factor)
+    )
     e_sf = _floor_log2_fp32(safe_scale)
     mant_sf = _ldexp_fp32(safe_scale, -e_sf + 7.0)
     scale_factor = _ldexp_fp32(torch.round(mant_sf), e_sf - 7.0)
     scale_factor = scale_factor.clamp(min=2.0 ** (-48), max=49152.0)
 
     e_sf = _floor_log2_fp32(scale_factor)
-    scale_factor = _ldexp_fp32(torch.round(_ldexp_fp32(scale_factor, 2.0 - e_sf)), e_sf - 2.0)
-    scale_factor = torch.where(zero_group, torch.full_like(scale_factor, 2.0 ** (-48)), scale_factor)
+    scale_factor = _ldexp_fp32(
+        torch.round(_ldexp_fp32(scale_factor, 2.0 - e_sf)), e_sf - 2.0
+    )
+    scale_factor = torch.where(
+        zero_group, torch.full_like(scale_factor, 2.0 ** (-48)), scale_factor
+    )
 
     rec_sf = (1.0 / scale_factor).to(torch.bfloat16).to(x.dtype)
 
@@ -381,8 +401,10 @@ def hifloat4_fake_quant(fp_tensor, qdim=-1):
 
     mant = _ldexp_fp32(x_unsigned * rec_sf, -scale_lv2_exp - scale_lv3_exp)
     mant = _to_bf16(mant)
-    mant = _ldexp_fp32(torch.floor(_ldexp_fp32(mant, torch.full_like(mant, NG)) + 0.5),
-                       torch.full_like(mant, -float(NG)))
+    mant = _ldexp_fp32(
+        torch.floor(_ldexp_fp32(mant, torch.full_like(mant, NG)) + 0.5),
+        torch.full_like(mant, -float(NG)),
+    )
     mant = mant.clamp(min=-2.0 + 2.0 ** (-NG), max=2.0 - 2.0 ** (-NG))
 
     out = sign * mant * scale_lv2 * scale_lv3 * scale_factor
@@ -390,8 +412,9 @@ def hifloat4_fake_quant(fp_tensor, qdim=-1):
     group_nan = special_mask.any(dim=qdim, keepdim=True)
     group_nan = group_nan.any(dim=qdim - 1, keepdim=True)
     group_nan = group_nan.any(dim=qdim - 2, keepdim=True)
-    out = torch.where(torch.broadcast_to(group_nan, out.shape),
-                      torch.full_like(out, torch.nan), out)
+    out = torch.where(
+        torch.broadcast_to(group_nan, out.shape), torch.full_like(out, torch.nan), out
+    )
 
     out = out.flatten(qdim - 3, qdim)
 

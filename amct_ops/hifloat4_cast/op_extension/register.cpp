@@ -56,4 +56,4 @@ TORCH_LIBRARY_IMPL(amct, Meta, m) {
     m.impl("hifloat4_fake_quant", &Hifloat4FakeQuantMeta);
 }
 
-}  // namespace
+} // namespace

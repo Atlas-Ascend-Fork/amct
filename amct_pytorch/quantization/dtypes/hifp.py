@@ -21,8 +21,11 @@ import torch
 from torch import Tensor
 
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
-from amct_pytorch.quantization.dtypes.hifp_impl import (hifloat8_fake_quant,
-                                                        hifloat4_fake_quant, hif4_pack)
+from amct_pytorch.quantization.dtypes.hifp_impl import (
+    hifloat8_fake_quant,
+    hifloat4_fake_quant,
+    hif4_pack,
+)
 
 
 @DTYPE_REGISTRY.register(name="hifp", description="quant dequant for hifloat")
@@ -55,7 +58,9 @@ class QuantDequantHifp(torch.nn.Module):
         if self.bits == 4:
             value, scale = self.deploy(x)
             return {"qweight": value, "scale": scale}
-        raise NotImplementedError(f"HiFloat-{self.bits} export_deploy is not supported yet.")
+        raise NotImplementedError(
+            f"HiFloat-{self.bits} export_deploy is not supported yet."
+        )
 
     def deploy(self, x: Tensor, qdim: int = -1, v: Tensor | float = 0.0):
         if self.bits == 4:
