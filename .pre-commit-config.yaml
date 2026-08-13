@@ -4,7 +4,7 @@ default_language_version:
 
 repos:
   # 基础文本/安全检查
-  - repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://gitcode.com/gh_mirrors/pr/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
@@ -20,14 +20,14 @@ repos:
       - id: detect-private-key
 
   # C/C++ 格式化（遵循仓库根目录 .clang-format，style=file）
-  - repo: https://github.com/pre-commit/mirrors-clang-format
+  - repo: https://gitcode.com/pre-commit-clang/mirrors-clang-format
     rev: v18.1.8
     hooks:
       - id: clang-format
         types_or: [c++, c]
 
   # Python 检查与格式化
-  - repo: https://github.com/astral-sh/ruff-pre-commit
+  - repo: https://gitcode.com/gh_mirrors/ru/ruff-pre-commit
     rev: v0.14.14
     hooks:
       - id: ruff-check
@@ -37,7 +37,7 @@ repos:
         types: [python]
 
   # 拼写检查（CANN 专用词典白名单见 .codespellrc）
-  - repo: https://github.com/codespell-project/codespell
+  - repo: https://gitcode.com/gh_mirrors/co/codespell
     rev: v2.4.1
     hooks:
       - id: codespell
