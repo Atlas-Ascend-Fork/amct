@@ -33,9 +33,10 @@ import os
 import torch_npu  # noqa: F401 — registers PrivateUse1 backend
 import torch
 
+from .ops import hifloat4_fake_quant  # noqa: F401
+
+# The C++ extension must be loaded before the first call so torch.ops.amct resolves.
 _lib_path = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "libhifloat4_cast_ops.so"
 )
 torch.ops.load_library(_lib_path)
-
-from .ops import hifloat4_fake_quant  # noqa: E402, F401
