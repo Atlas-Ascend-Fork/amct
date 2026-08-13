@@ -14,11 +14,12 @@
 namespace {
 using namespace at_npu::native;
 
+static constexpr int64_t MIN_SHAPE_SIZE = 2;
 at::Tensor svd_quant_npu(const at::Tensor &activation, const at::Tensor &weights, const at::Tensor &scales,
     const at::Tensor &down, const at::Tensor &up) {
     auto aShape = activation.sizes();
     int64_t nd = aShape.size();
-    TORCH_CHECK(nd >= 2, "svd_quant: expected activation with shape (*, m, n), got ndim=", nd);
+    TORCH_CHECK(nd >= MIN_SHAPE_SIZE, "svd_quant: expected activation with shape (*, m, n), got ndim=", nd);
 
     // construct the output tensor
     at::SmallVector<int64_t, SIZE> oShape(aShape.begin(), aShape.end());
