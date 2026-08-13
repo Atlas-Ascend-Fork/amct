@@ -50,14 +50,6 @@ class TestHiFloat4Kernel(unittest.TestCase):
     def setUpClass(cls):
         torch.npu.set_device(0)
 
-    def _assert_kernel_matches_reference(self, x):
-        from amct_ops.hifloat4_cast import hifloat4_fake_quant
-
-        y_ref = _oracle(x.cpu()).float()
-        y_npu = hifloat4_fake_quant(x.npu()).cpu().float()
-        self.assertEqual(y_ref.shape, y_npu.shape)
-        self.assertLess((y_ref - y_npu).abs().max().item(), self.TOL)
-
     def test_kernel_bf16(self):
         torch.manual_seed(3)
         self._assert_kernel_matches_reference(torch.randn(4, 512, dtype=torch.bfloat16))
@@ -75,12 +67,20 @@ class TestHiFloat4Kernel(unittest.TestCase):
         self._assert_kernel_matches_reference(x_padded)
 
     def test_kernel_zero_is_nan_free(self):
-        from amct_ops.hifloat4_cast import hifloat4_fake_quant
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
 
         z = torch.zeros(2, 64, dtype=torch.bfloat16).npu()
-        out = hifloat4_fake_quant(z)
+        out = npu_fake_quant(z)
         self.assertFalse(torch.isnan(out).any())
         self.assertEqual(out.abs().max().item(), 0.0)
+
+    def _assert_kernel_matches_reference(self, x):
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
+        y_ref = _oracle(x.cpu()).float()
+        y_npu = npu_fake_quant(x.npu()).cpu().float()
+        self.assertEqual(y_ref.shape, y_npu.shape)
+        self.assertLess((y_ref - y_npu).abs().max().item(), self.TOL)
 
 
 class TestHiFloat4CastShapes(unittest.TestCase):

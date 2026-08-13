@@ -23,6 +23,16 @@ import pytest
 import torch
 
 from amct_pytorch.quantization.dtypes import hifp_impl
+from amct_pytorch.quantization.dtypes.hifp_impl import (
+    _amct_ops_hifloat8_fake_quant as amct_ops_hifloat8_fake_quant,
+    _floor_log2_fp32 as floor_log2_fp32,
+    _ldexp_fp32 as ldexp_fp32,
+    _load_amct_ops_cast as load_amct_ops_cast,
+    _load_amct_ops_hif4_cast as load_amct_ops_hif4_cast,
+    _native_hifloat8_fake_quant as native_hifloat8_fake_quant,
+    _pow2 as pow2_exact,
+    _to_bf16 as to_bf16_exact,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -95,7 +105,7 @@ def test_native_wrapper_uses_expected_cast_arguments():
     x = torch.randn(2, 8, dtype=torch.bfloat16)
 
     with patch.dict(sys.modules, {"torch_npu": module}):
-        out = hifp_impl._native_hifloat8_fake_quant(x)
+        out = native_hifloat8_fake_quant(x)
 
     assert out is x
     assert len(calls) == 2
@@ -110,7 +120,7 @@ def test_amct_ops_loader_returns_none_when_module_is_missing():
     package.__path__ = []
     modules = {"amct_ops": package, "amct_ops.hifloat8_cast": None}
     with patch.dict(sys.modules, modules):
-        assert hifp_impl._load_amct_ops_cast() is None
+        assert load_amct_ops_cast() is None
 
 
 def test_amct_ops_loader_returns_encode_and_decode():
@@ -121,7 +131,7 @@ def test_amct_ops_loader_returns_encode_and_decode():
     module.decode_from_hifloat8 = lambda tensor, dtype: tensor.to(dtype)
     modules = {"amct_ops": package, "amct_ops.hifloat8_cast": module}
     with patch.dict(sys.modules, modules):
-        encode, decode = hifp_impl._load_amct_ops_cast()
+        encode, decode = load_amct_ops_cast()
 
     assert encode is module.encode_to_hifloat8
     assert decode is module.decode_from_hifloat8
@@ -140,7 +150,7 @@ def test_amct_ops_wrapper_preserves_supported_dtype(dtype):
 
     x = torch.randn(2, 8, dtype=dtype)
     with patch.object(torch.Tensor, "npu", lambda self: self, create=True):
-        out = hifp_impl._amct_ops_hifloat8_fake_quant(x, encode, decode)
+        out = amct_ops_hifloat8_fake_quant(x, encode, decode)
 
     assert encoded_dtypes == [dtype]
     assert out.shape == x.shape
@@ -160,7 +170,7 @@ def test_amct_ops_wrapper_uses_bfloat16_for_float32():
 
     x = torch.randn(2, 8, dtype=torch.float32)
     with patch.object(torch.Tensor, "npu", lambda self: self, create=True):
-        out = hifp_impl._amct_ops_hifloat8_fake_quant(x, encode, decode)
+        out = amct_ops_hifloat8_fake_quant(x, encode, decode)
 
     assert encoded_dtypes == [torch.bfloat16]
     assert out.shape == x.shape
@@ -407,7 +417,7 @@ def test_floor_log2_fp32_returns_exact_exponents():
         [1.0, 2.0, 0.5, 2.0**-48, 2.0**-126, 2.0**-149, 0.0, -4.0, 3.0],
         dtype=torch.float32,
     )
-    got = hifp_impl._floor_log2_fp32(x)
+    got = floor_log2_fp32(x)
     expected = torch.tensor(
         [0.0, 1.0, -1.0, -48.0, -126.0, -149.0, float("-inf"), 2.0, 1.0],
         dtype=torch.float32,
@@ -417,21 +427,21 @@ def test_floor_log2_fp32_returns_exact_exponents():
 
 def test_floor_log2_fp32_propagates_non_finite():
     x = torch.tensor([float("inf"), float("nan")], dtype=torch.float32)
-    got = hifp_impl._floor_log2_fp32(x)
+    got = floor_log2_fp32(x)
     assert torch.isinf(got[0]) and torch.isnan(got[1])
 
 
 def test_floor_log2_fp32_rejects_non_fp32():
     with pytest.raises(TypeError, match="float32"):
-        hifp_impl._floor_log2_fp32(torch.tensor([1.0], dtype=torch.bfloat16))
+        floor_log2_fp32(torch.tensor([1.0], dtype=torch.bfloat16))
 
 
 def test_pow2_and_ldexp_are_exact():
     e = torch.tensor([0.0, 3.0, -5.0], dtype=torch.float32)
     assert torch.equal(
-        hifp_impl._pow2(e), torch.tensor([1.0, 8.0, 0.03125], dtype=torch.float32)
+        pow2_exact(e), torch.tensor([1.0, 8.0, 0.03125], dtype=torch.float32)
     )
-    got = hifp_impl._ldexp_fp32(
+    got = ldexp_fp32(
         torch.tensor([1.5, -2.0], dtype=torch.float32),
         torch.tensor([2.0, -1.0], dtype=torch.float32),
     )
@@ -443,13 +453,13 @@ def test_to_bf16_rounds_half_to_even_on_ties():
     # 1.00390625 = 1 + 0.5*2^-7: tie between 1.0 (even) and 1.0078125 (odd) -> down
     x = torch.tensor([1.01171875, 1.00390625], dtype=torch.float32)
     assert torch.equal(
-        hifp_impl._to_bf16(x), torch.tensor([1.015625, 1.0], dtype=torch.float32)
+        to_bf16_exact(x), torch.tensor([1.015625, 1.0], dtype=torch.float32)
     )
 
 
 def test_to_bf16_regular_rounding_and_negatives():
     x = torch.tensor([1.0049, -1.0049, 1.006, 0.0], dtype=torch.float32)
-    got = hifp_impl._to_bf16(x)
+    got = to_bf16_exact(x)
     assert got[0].item() == 1.0078125
     assert got[1].item() == -1.0078125
     assert got[2].item() == 1.0078125
@@ -572,7 +582,7 @@ def test_hif4_loader_returns_none_when_module_is_missing():
     package.__path__ = []
     modules = {"amct_ops": package, "amct_ops.hifloat4_cast": None}
     with patch.dict(sys.modules, modules):
-        assert hifp_impl._load_amct_ops_hif4_cast() is None
+        assert load_amct_ops_hif4_cast() is None
 
 
 def test_hif4_loader_returns_npu_fake_quant():
@@ -583,7 +593,7 @@ def test_hif4_loader_returns_npu_fake_quant():
     module.hifloat4_fake_quant = fq
     modules = {"amct_ops": package, "amct_ops.hifloat4_cast": module}
     with patch.dict(sys.modules, modules):
-        assert hifp_impl._load_amct_ops_hif4_cast() is fq
+        assert load_amct_ops_hif4_cast() is fq
 
 
 # ---- hifloat4_fake_quant: CPU reference path ----

@@ -98,6 +98,10 @@ public:
         nfmaxbuf = Tensor<float, PUB>(0, BATCH, offset);
         zerobuf = Tensor<float, PUB>(0, 64, offset);
         nanbuf = Tensor<float, PUB>(0, 64, offset);
+        InitConstants();
+    }
+
+    aifunc void InitConstants() {
         for (int i = 0; i < 64; ++i) {
             *signmaskbuf1[i * 2 + 1].ptr() = 0x3f80;
             *signmaskbuf1[i * 2].ptr() = 0;

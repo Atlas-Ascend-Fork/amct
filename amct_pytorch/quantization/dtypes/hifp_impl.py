@@ -367,6 +367,17 @@ def _hif4_fake_quant_reference(fp_tensor, qdim=-1):
     if pad_len > 0:
         x = F.pad(x, [0] * (-qdim * 2 - 1) + [pad_len], value=0.0)
 
+    out = _hif4_reference_quantize(x, qdim)
+
+    if pad_len > 0:
+        out = out.narrow(qdim, 0, dim_len)
+
+    return out.to(dtype_ori)
+
+
+@torch.no_grad()
+def _hif4_reference_quantize(x, qdim):
+    """quant_hifx three-level block quantization on the padded fp32 tensor."""
     # Match quant_hifx algorithm exactly (HiFloat4-private QFuncs/hifx.py)
     xg = x.unflatten(qdim, (-1, 8, 2, 4))
     special_mask = ~torch.isfinite(xg)
@@ -422,9 +433,4 @@ def _hif4_fake_quant_reference(fp_tensor, qdim=-1):
         torch.broadcast_to(group_nan, out.shape), torch.full_like(out, torch.nan), out
     )
 
-    out = out.flatten(qdim - 3, qdim)
-
-    if pad_len > 0:
-        out = out.narrow(qdim, 0, dim_len)
-
-    return out.to(dtype_ori)
+    return out.flatten(qdim - 3, qdim)
