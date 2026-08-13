@@ -131,7 +131,7 @@ svd_quant/            # SVDQuant components
 ```bash
 source $ASCEND_HOME_PATH/set_env.sh
 path="amct"
-cd $path$/amct_ops
+cd "$path/amct_ops"
 bash ops_build.sh --soc ascend950 svd_quant
 ./output/CANN-custom_ops--linux.aarch64.run --install-path=$ASCEND_HOME_PATH/opp
 source $ASCEND_HOME_PATH/opp/vendors/customize/bin/set_env.bash
@@ -140,7 +140,7 @@ source $ASCEND_HOME_PATH/opp/vendors/customize/bin/set_env.bash
 ### 2. PyTorch Operator Installation
 
 ```bash
-cd $path$/amct_ops
+cd "$path/amct_ops"
 pip install ./dist/amct-*.whl --force-reinstall --no-deps
 ```
 
@@ -205,14 +205,14 @@ Accuracy verification is performed through the following conditions:
 ## Test Method
 
 ```bash
-cd $path$/tests/amct_ops
+cd "$path/tests/amct_ops"
 pytest test_svd_quant.py
 ```
 
 Can also install wheel first then run tests:
 
 ```bash
-cd $path$/amct_ops
+cd "$path/amct_ops"
 pip install dist/amct-1.0-*.whl
 pytest test_svd_quant.py
 ```

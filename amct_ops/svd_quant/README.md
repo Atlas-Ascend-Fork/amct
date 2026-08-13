@@ -131,7 +131,7 @@ svd_quant/            # SVDQuant components
 ```bash
 source $ASCEND_HOME_PATH/set_env.sh
 path="amct"
-cd $path$/amct_ops
+cd "$path/amct_ops"
 bash ops_build.sh --soc ascend950 svd_quant
 ./output/CANN-custom_ops--linux.aarch64.run --install-path=$ASCEND_HOME_PATH/opp
 source $ASCEND_HOME_PATH/opp/vendors/customize/bin/set_env.bash
@@ -140,7 +140,7 @@ source $ASCEND_HOME_PATH/opp/vendors/customize/bin/set_env.bash
 ### 2. PyTorch算子安装指南
 
 ```bash
-cd $path$/amct_ops
+cd "$path/amct_ops"
 pip install ./dist/amct-*.whl --force-reinstall --no-deps
 ```
 
@@ -205,14 +205,14 @@ svd_quant_out = torch.ops.amct.svd_quant(x, w_quant, scale,  dp, up)
 ## 测试方法
 
 ```bash
-cd $path$/tests/amct_ops
+cd "$path/tests/amct_ops"
 pytest test_svd_quant.py
 ```
 
 也可以先安装 wheel 后再执行测试：
 
 ```bash
-cd $path$/amct_ops
+cd "$path/amct_ops"
 pip install dist/amct-1.0-*.whl
 pytest test_svd_quant.py
 ```
