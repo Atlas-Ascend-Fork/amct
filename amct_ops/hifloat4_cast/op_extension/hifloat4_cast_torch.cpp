@@ -20,11 +20,13 @@
 #include "ops.h"
 #include "torch_npu/csrc/core/npu/NPUStream.h"
 
-// Host launchers defined in op_kernel/hifloat4_cast_kernel.cpp (compiled with the ASC
-// compiler). They quantize a contiguous [M, N] buffer along N, with 64-element blocks.
-extern "C" void run_hifx_kernel(
+// Host launchers emitted by op_kernel/hifloat4_cast_kernel.cpp, which includes the
+// generated ccec header hifx_quant_op.h (compiled with the ASC compiler; the launchers
+// there use plain C++ linkage, so declare them the same way). They quantize a contiguous
+// [M, N] buffer along N, with 64-element blocks.
+void run_hifx_kernel(
     uint32_t blockDim, void *stream, uint8_t *xmtx, uint8_t *out, int M, int N, int mant_bit);
-extern "C" void run_hifx_kernel_bf16(
+void run_hifx_kernel_bf16(
     uint32_t blockDim, void *stream, uint8_t *xmtx, uint8_t *out, int M, int N, int mant_bit);
 
 namespace {

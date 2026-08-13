@@ -158,16 +158,14 @@ def _pow2(e):
 
 
 def _to_bf16(x):
+    """Round to bf16 (round-half-to-even) and widen back to fp32.
 
-    """Round to bf16 with round-half-to-even, bit-exact via int32 manipulation."""
-    x32 = x.to(torch.float32)
-    shifted = x32.view(torch.int32) + 0x8000
-    rounded = shifted & ~0xFFFF
-    rounded = torch.where((x32.view(torch.int32) & 0x10000) != 0, rounded - 0x10000, rounded)
-    return rounded.view(torch.float32)
-
-    """Round to bf16 and back to fp32, aligned with round_to_bf16_fp32 in _exact.py."""
-    return x.to(torch.bfloat16).to(torch.float32)
+    Aligned with round_to_bf16_fp32 in the HiFloat4 reference (_exact.py): the
+    bf16 cast is RNE on CPU and bit-exact RNE on Ascend NPU. A hand-rolled int32
+    bit trick is not used here because it mis-rounds values whose low 16 bits
+    exceed half-ULP while the bf16 mantissa LSB is set.
+    """
+    return x.to(torch.float32).to(torch.bfloat16).to(torch.float32)
 
 
 
