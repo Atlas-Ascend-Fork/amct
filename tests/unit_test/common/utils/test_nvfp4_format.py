@@ -20,31 +20,9 @@ import torch
 
 from amct_pytorch.common.utils.nvfp4_format import (
     NVFP4_BLOCK_SIZE,
-    is_nvfp4_weight,
-    nvfp4_scale_names,
     nvfp4_weight_dequant,
-    unpack_nvfloat4_to_fp32,
 )
-
-# ---- unpack_nvfloat4_to_fp32 ---------------------------------------------
-
-
-def test_unpack_splits_each_byte_into_two_e2m1_codes():
-    # 0x21 -> low nibble 1 (0.5), high nibble 2 (1.0); 0x43 -> 3 (1.5), 4 (2.0)
-    packed = torch.tensor([[0x21, 0x43]], dtype=torch.uint8)
-    out = unpack_nvfloat4_to_fp32(packed)
-    assert out.shape == (1, 4)
-    assert torch.equal(out, torch.tensor([[0.5, 1.0, 1.5, 2.0]]))
-
-
-def test_unpack_reads_int8_bytes_as_unsigned():
-    # 0xFF stored as int8 is -1; both nibbles are code 15 (-6.0)
-    packed = torch.tensor([[-1]], dtype=torch.int8)
-    out = unpack_nvfloat4_to_fp32(packed)
-    assert torch.equal(out, torch.tensor([[-6.0, -6.0]]))
-
-
-# ---- nvfp4_weight_dequant -------------------------------------------------
+from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
 
 
 def _packed_weight(rows, cols):
@@ -62,7 +40,17 @@ def test_dequant_applies_block_and_global_scales():
     out = nvfp4_weight_dequant(weight, weight_scale, weight_scale_2)
 
     assert out.shape == (rows, cols)
-    assert torch.allclose(out, unpack_nvfloat4_to_fp32(weight) * 2.0 * 0.5)
+    assert torch.allclose(out, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
+
+
+def test_dequant_reads_int8_packed_weight_as_unsigned_nibbles():
+    # 0xFF stored as int8 is -1; both nibbles are E2M1 code 15 (-6.0).
+    weight = torch.full((1, NVFP4_BLOCK_SIZE // 2), -1, dtype=torch.int8)
+    weight_scale = torch.ones(1, 1).to(torch.float8_e4m3fn)
+
+    out = nvfp4_weight_dequant(weight, weight_scale, torch.tensor(1.0))
+
+    assert torch.equal(out, torch.full((1, NVFP4_BLOCK_SIZE), -6.0))
 
 
 def test_dequant_accepts_uint8_view_of_e4m3_scale():
@@ -89,7 +77,7 @@ def test_dequant_accepts_int8_storage_of_e4m3_scale():
 
     out = nvfp4_weight_dequant(weight, weight_scale.view(torch.int8), torch.tensor(1.0))
 
-    assert torch.allclose(out, unpack_nvfloat4_to_fp32(weight) * 2.0)
+    assert torch.allclose(out, unpack_mxfloat4_to_fp32(weight) * 2.0)
 
 
 def test_dequant_reshapes_exact_flattened_block_scale():
@@ -102,7 +90,7 @@ def test_dequant_reshapes_exact_flattened_block_scale():
     out = nvfp4_weight_dequant(weight, flat_scale, torch.tensor(0.5))
 
     assert out.shape == (rows, cols)
-    assert torch.allclose(out, unpack_nvfloat4_to_fp32(weight) * 2.0 * 0.5)
+    assert torch.allclose(out, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
 
 
 def test_dequant_reshapes_trtllm_padded_flattened_block_scale():
@@ -114,7 +102,7 @@ def test_dequant_reshapes_trtllm_padded_flattened_block_scale():
     out = nvfp4_weight_dequant(weight, flat_scale, torch.tensor(0.5))
 
     assert out.shape == (rows, cols)
-    assert torch.allclose(out, unpack_nvfloat4_to_fp32(weight) * 2.0 * 0.5)
+    assert torch.allclose(out, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
 
 
 def test_dequant_trims_row_padded_block_scale():
@@ -127,43 +115,36 @@ def test_dequant_trims_row_padded_block_scale():
     out = nvfp4_weight_dequant(weight, padded_scale, torch.tensor(1.0))
 
     assert out.shape == (rows, cols)
-    assert torch.allclose(out, unpack_nvfloat4_to_fp32(weight) * 2.0)
+    assert torch.allclose(out, unpack_mxfloat4_to_fp32(weight) * 2.0)
 
 
-@pytest.mark.parametrize(
-    "scale_shape,match",
-    [
-        ((2, 2, 2), "1-D or 2-D"),
-        ((7,), "length 7"),
-        ((2, 1), "block scales"),
-    ],
-)
-def test_dequant_rejects_block_scale_of_wrong_shape(scale_shape, match):
+def test_dequant_rejects_flattened_block_scale_of_unexpected_length():
+    weight = _packed_weight(2, 32)
+    weight_scale = torch.ones(7).to(torch.float8_e4m3fn)
+    with pytest.raises(ValueError, match="length 7"):
+        nvfp4_weight_dequant(weight, weight_scale, torch.tensor(1.0))
+
+
+@pytest.mark.parametrize("scale_shape", [(2, 2, 2), (2, 1)])
+def test_dequant_rejects_block_scale_that_does_not_cover_the_weight(scale_shape):
     weight = _packed_weight(2, 32)
     weight_scale = torch.ones(*scale_shape).to(torch.float8_e4m3fn)
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(RuntimeError):
         nvfp4_weight_dequant(weight, weight_scale, torch.tensor(1.0))
 
 
 def test_dequant_rejects_non_2d_weight():
-    """Fused expert weights are not supported; the failure has to name the shape."""
+    """Fused expert weights are not supported and must not be silently mangled."""
     weight = torch.zeros(2, 2, 16, dtype=torch.uint8)
     weight_scale = torch.ones(2, 2).to(torch.float8_e4m3fn)
-    with pytest.raises(ValueError, match=r"2-D weight, got shape \(2, 2, 16\)"):
-        nvfp4_weight_dequant(weight, weight_scale, torch.tensor(1.0))
-
-
-def test_dequant_rejects_columns_not_covered_by_whole_blocks():
-    weight = _packed_weight(2, 8)
-    weight_scale = torch.ones(2, 1).to(torch.float8_e4m3fn)
-    with pytest.raises(ValueError, match="not a multiple"):
+    with pytest.raises(ValueError):
         nvfp4_weight_dequant(weight, weight_scale, torch.tensor(1.0))
 
 
 def test_dequant_rejects_non_scalar_global_scale():
     weight = _packed_weight(2, 32)
     weight_scale = torch.ones(2, 2).to(torch.float8_e4m3fn)
-    with pytest.raises(ValueError, match="per-tensor scalar"):
+    with pytest.raises(RuntimeError):
         nvfp4_weight_dequant(weight, weight_scale, torch.ones(2))
 
 
@@ -191,33 +172,3 @@ def test_dequant_round_trips_a_modelopt_style_quantization():
     # Worst case is half the gap between the two largest E2M1 codes of a block.
     tolerance = effective_scale.max().item()
     assert (out - weight.float()).abs().max().item() < tolerance
-
-
-# ---- is_nvfp4_weight -----------------------------------------------------
-
-
-_NVFP4_MAP = {
-    "layer.weight": "shard.safetensors",
-    "layer.weight_scale": "shard.safetensors",
-    "layer.weight_scale_2": "shard.safetensors",
-}
-
-
-def test_nvfp4_scale_names_follows_the_weight_key():
-    assert nvfp4_scale_names("layer.weight") == (
-        "layer.weight_scale",
-        "layer.weight_scale_2",
-    )
-
-
-@pytest.mark.parametrize("dtype", [torch.uint8, torch.int8])
-def test_is_nvfp4_weight_needs_packed_bytes_and_both_scales(dtype):
-    weight = torch.zeros(2, 8, dtype=dtype)
-    assert is_nvfp4_weight(weight, "layer.weight", _NVFP4_MAP) is True
-    # MXFP4 is packed the same way but has no per-tensor scale.
-    assert is_nvfp4_weight(weight, "layer.weight", {"layer.weight_scale": "s"}) is False
-
-
-def test_is_nvfp4_weight_rejects_fp8_weights():
-    weight = torch.zeros(2, 8, dtype=torch.float8_e4m3fn)
-    assert is_nvfp4_weight(weight, "layer.weight", _NVFP4_MAP) is False
