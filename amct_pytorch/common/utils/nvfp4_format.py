@@ -32,19 +32,41 @@ _SF_ROW_ALIGN = 128
 _SF_COL_ALIGN = 4
 
 
-def nvfp4_scale_names(weight_name: str):
-    """Checkpoint keys of the block scale and the per-tensor scale of `weight_name`."""
-    return f"{weight_name}_scale", f"{weight_name}_scale_2"
+def _nvfp4_scale_name_candidates(weight_name: str):
+    """Possible NVFP4 scale key pairs; naming is not unified across checkpoints."""
+    return (
+        # ``xxx.weight`` -> ``xxx.weight_scale`` / ``xxx.weight_scale_2``
+        (f"{weight_name}_scale", f"{weight_name}_scale_2"),
+        # ``xxx.weight`` -> ``xxx.scale`` / ``xxx.scale_2``
+        (
+            weight_name.replace(".weight", ".scale"),
+            weight_name.replace(".weight", ".scale_2"),
+        ),
+    )
+
+
+def nvfp4_scale_names(weight_name: str, weight_map=None):
+    """Resolve block / global scale keys for `weight_name`.
+
+    If ``weight_map`` is given, return the first candidate pair that exists in it.
+    Otherwise default to the ``_scale`` / ``_scale_2`` layout.
+    """
+    candidates = _nvfp4_scale_name_candidates(weight_name)
+    if weight_map is not None:
+        for block_name, global_name in candidates:
+            if block_name in weight_map and global_name in weight_map:
+                return block_name, global_name
+    return candidates[0]
 
 
 def is_nvfp4_weight(weight: torch.Tensor, weight_name: str, weight_map) -> bool:
     """Whether `weight_name` is an NVFP4 weight rather than FP8 or MXFP4."""
-    block_scale_name, global_scale_name = nvfp4_scale_names(weight_name)
-    return (
-        weight.dtype in _PACKED_DTYPES
-        and block_scale_name in weight_map
-        and global_scale_name in weight_map
-    )
+    if weight.dtype not in _PACKED_DTYPES:
+        return False
+    for block_name, global_name in _nvfp4_scale_name_candidates(weight_name):
+        if block_name in weight_map and global_name in weight_map:
+            return True
+    return False
 
 
 def unpack_nvfloat4_to_fp32(packed_tensor: torch.Tensor) -> torch.Tensor:
