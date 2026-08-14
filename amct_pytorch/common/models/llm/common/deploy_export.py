@@ -22,10 +22,7 @@ from safetensors.torch import load_file
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
-from amct_pytorch.common.utils.nvfp4_format import (
-    NVFP4_PACKED_DTYPES,
-    nvfp4_weight_dequant,
-)
+from amct_pytorch.common.utils.nvfp4_format import is_nvfp4_scale, nvfp4_weight_dequant
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -165,18 +162,6 @@ def _load_scale(scale_name, original_weight_map, model_dir, loaded_files):
     return loaded_files[file_name][scale_name]
 
 
-def _is_nvfp4_weight(weight, nvfp4_scale_name, original_weight_map):
-    """Whether this 1-byte weight is NVFP4 rather than FP8 or MXFP4.
-
-    NVFP4 packs two elements per byte just like MXFP4, so the dtype alone cannot tell
-    them apart; the per-tensor scale next to the block scale is unique to NVFP4. FP8
-    weights keep a float dtype and are rejected by the dtype check.
-    """
-    if not nvfp4_scale_name or weight.dtype not in NVFP4_PACKED_DTYPES:
-        return False
-    return all(scale_name in original_weight_map for scale_name in nvfp4_scale_name)
-
-
 def convert_state_dict(
     weight,
     weight_name,
@@ -185,28 +170,34 @@ def convert_state_dict(
     model_dir,
     loaded_files,
     block_size,
-    nvfp4_scale_name=None,
 ):
     if weight.element_size() == 1:
         try:
-            if _is_nvfp4_weight(weight, nvfp4_scale_name, original_weight_map):
-                # NVFP4 weight
-                block_scale_name, global_scale_name = nvfp4_scale_name
-                weight_scale = _load_scale(
-                    block_scale_name, original_weight_map, model_dir, loaded_files
+            weight_scale_name = f"{weight_name}_scale"
+            weight_scale_2_name = f"{weight_name}_scale_2"
+            # NVFP4: weight dtype=uint8/int8, shape=[M, N//2];
+            #        scale dtype=e4m3/uint8, shape=[M, N//16]
+            if (
+                weight_scale_name in original_weight_map
+                and weight_scale_2_name in original_weight_map
+            ):
+                scale_inv = _load_scale(
+                    weight_scale_name, original_weight_map, model_dir, loaded_files
                 )
-                weight_scale_2 = _load_scale(
-                    global_scale_name, original_weight_map, model_dir, loaded_files
-                )
-                return nvfp4_weight_dequant(weight, weight_scale, weight_scale_2)
-            # FP8 weight
+                if is_nvfp4_scale(weight, scale_inv):
+                    weight_scale_2 = _load_scale(
+                        weight_scale_2_name, original_weight_map, model_dir, loaded_files
+                    )
+                    return nvfp4_weight_dequant(weight, scale_inv, weight_scale_2)
             scale_inv = _load_scale(
                 scale_inv_name, original_weight_map, model_dir, loaded_files
             )
+            # MXFP4: weight dtype=int8, shape=[M, N//2]; scale dtype=float32
             if weight.dtype == torch.int8:
                 weight = weight_dequant(
                     weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
                 )
+            # FP8 / MXFP8: weight dtype=float8_e4m3fn, shape=[M, N]
             else:
                 weight = weight_dequant(weight, scale_inv, block_size=block_size)
         except KeyError:
