@@ -245,13 +245,6 @@ class DeepseekV4(BaseModel):
         scale_inv_name = weight_name.replace('.weight', '.scale')
         return scale_prefix, scale_inv_name
 
-    def get_nvfp4_scale_name(self, weight_name):
-        """Return (block_scale_name, global_scale_name) of an NVFP4 weight."""
-        return (
-            weight_name.replace('.weight', '.scale'),
-            weight_name.replace('.weight', '.scale_2'),
-        )
-
     def iter_deploy_bindings(self, layer_idx, block):
         yield from super().iter_deploy_bindings(layer_idx, block)
 
