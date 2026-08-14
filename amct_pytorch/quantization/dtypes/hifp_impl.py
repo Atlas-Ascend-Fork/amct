@@ -299,7 +299,7 @@ def hif4_pack(x):
 
 
 def hif4_unpack(scale, value):
-    """Reconstruct fp32 [n_rows, n_cols] from packed HiF4 (scale, value) bytes."""
+    """Reconstruct [n_rows, n_cols] from packed HiF4 (scale, value) bytes."""
     if isinstance(scale, torch.Tensor):
         scale = scale.cpu().numpy()
     if isinstance(value, torch.Tensor):
@@ -333,7 +333,7 @@ def hif4_unpack(scale, value):
     block_nan = torch.from_numpy((b_e6m2 == 0xFF))
 
     out = hif4_decode(sign_bit, e6m2, de, code, ng=NG, block_nan=block_nan)
-    return out.reshape(n_rows, n_cols).numpy().astype(np.float32)
+    return out.reshape(n_rows, n_cols).to(torch.get_default_dtype())
 
 
 def _load_amct_ops_hif4_cast():

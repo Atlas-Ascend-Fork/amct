@@ -537,7 +537,7 @@ def test_hif4_pack_unpack_roundtrip_matches_fake_quant():
     assert value.shape == (3, 128) and value.dtype == torch.uint8
     decoded = hifp_impl.hif4_unpack(scale, value)
     ref = hifp_impl.hifloat4_fake_quant(x).float()
-    assert torch.equal(torch.from_numpy(decoded), ref)
+    assert torch.equal(decoded, ref)
 
 
 def test_hif4_pack_element0_in_low_nibble():
@@ -560,9 +560,9 @@ def test_hif4_pack_nan_block_writes_ff_and_unpacks_to_nan():
     assert scale[1, 1, 0].item() == 0xFF
     assert (scale[0, 1:, 0] != 0xFF).all()
     decoded = hifp_impl.hif4_unpack(scale, value)
-    assert torch.isnan(torch.from_numpy(decoded[0, :64])).all()
-    assert torch.isnan(torch.from_numpy(decoded[1, 64:128])).all()
-    assert torch.isfinite(torch.from_numpy(decoded[0, 64:128])).all()
+    assert torch.isnan(decoded[0, :64]).all()
+    assert torch.isnan(decoded[1, 64:128]).all()
+    assert torch.isfinite(decoded[0, 64:128]).all()
 
 
 def test_hif4_unpack_accepts_numpy_and_tensor_inputs():
@@ -571,7 +571,7 @@ def test_hif4_unpack_accepts_numpy_and_tensor_inputs():
     scale, value = hifp_impl.hif4_pack(x)
     out_np = hifp_impl.hif4_unpack(scale.numpy(), value.numpy())
     out_ts = hifp_impl.hif4_unpack(scale, value)
-    assert (out_np == out_ts).all()
+    assert torch.equal(out_np, out_ts)
 
 
 # ---- amct_ops loader for HiF4 ----

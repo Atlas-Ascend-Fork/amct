@@ -180,9 +180,7 @@ def convert_state_dict(
             ):
                 from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
 
-                weight = torch.from_numpy(hif4_unpack(scale_inv, weight)).to(
-                    torch.float32
-                )
+                weight = hif4_unpack(scale_inv, weight)
             # MXFP4: weight dtype=int8,   shape=[M, N//2];  scale dtype=float32, shape=[M//bs, N//bs]
             elif weight.dtype == torch.int8:
                 weight = weight_dequant(
