@@ -25,9 +25,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-# Importing gptq triggers its ALGO_REGISTRY.register(name="gptq"/"higptq", ...) decorators
-# regardless of whether the lazy register_algorithms() has run.
-from amct_pytorch.algorithms.quant.gptq import build_gptq  # noqa: F401
+# Importing gptq triggers GPTQuant's ALGO_REGISTRY.register(name="gptq"/"higptq", ...)
+# class decorators regardless of whether the lazy register_algorithms() has run.
+from amct_pytorch.algorithms.quant.gptq import GPTQuant  # noqa: F401
 from amct_pytorch.common.optimization.calibration_solver import CalibrationSolver
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
@@ -120,10 +120,10 @@ def test_solve_raises_when_no_calibration_algo_in_args():
 
 def test_gptq_and_higptq_alias_resolve_to_the_same_dispatcher():
     # "gptq" is the canonical registered name; "higptq" is kept as a backward-compat alias
-    # pointing at the exact same build_gptq target (amct_pytorch/algorithms/quant/gptq.py),
+    # pointing at the exact same GPTQuant target (amct_pytorch/algorithms/quant/gptq.py),
     # not a second, distinct algorithm.
-    assert ALGO_REGISTRY.get("gptq") is build_gptq
-    assert ALGO_REGISTRY.get("higptq") is build_gptq
+    assert ALGO_REGISTRY.get("gptq") is GPTQuant
+    assert ALGO_REGISTRY.get("higptq") is GPTQuant
 
 
 def test_solve_raises_when_multiple_calibration_algos_matched():

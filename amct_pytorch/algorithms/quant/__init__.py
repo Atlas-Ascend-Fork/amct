@@ -36,7 +36,7 @@ def register_algorithms():
     from .auto_round import AutoRound  # noqa: F401
     from .omniquant import OmniQuant  # noqa: F401
     from .flatquant import FlatQuant  # noqa: F401
-    from .gptq import build_gptq  # noqa: F401
+    from .gptq import GPTQuant  # noqa: F401
 
     _REGISTERED = True
 

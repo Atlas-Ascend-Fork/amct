@@ -26,34 +26,27 @@ import torch.nn as nn
 sys.modules["torch_npu"] = MagicMock()
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-from amct_pytorch.algorithms.quant.gptq import (
-    GPTQuant, HiGPTQuant, _build_gptq_weights_cfg, build_gptq)
+from amct_pytorch.algorithms.quant.gptq import GPTQuant, _build_gptq_weights_cfg
 from amct_pytorch.common.optimization import CalibrateBuildContext
 from amct_pytorch.quantization.dtypes.hifp_impl import hifloat4_fake_quant
 
 
 class _FakeQuantLinear:
-    """Minimal duck-typed stand-in for QuantLinear -- build_gptq only ever reads .linear and
-    .w_bits, and a real QuantLinear needs a lot of unrelated setup (WeightQuantizer,
-    DTYPE_REGISTRY, build_algorithms_by_target)."""
+    """Minimal duck-typed stand-in for QuantLinear -- GPTQuant.__init__ only ever reads
+    .linear and .w_bits, and a real QuantLinear needs a lot of unrelated setup
+    (WeightQuantizer, DTYPE_REGISTRY, build_algorithms_by_target)."""
 
     def __init__(self, linear, w_bits):
         self.linear = linear
         self.w_bits = w_bits
 
-# Mirrors CalibrationSolver._HIFLOAT4_WEIGHTS_CFG -- the only quant_config higptq is ever
-# constructed with in production (amct_pytorch/common/optimization/calibration_solver.py).
-_WEIGHTS_CFG = {"quant_type": "hifloat4", "symmetric": True, "strategy": "channel"}
-
 
 def _make(in_features=16, out_features=4, batch_num=1):
     linear = nn.Linear(in_features, out_features)
-    quant_config = {
-        "batch_num": batch_num,
-        "weights_cfg": dict(_WEIGHTS_CFG),
-        "inputs_cfg": {"enable_quant": False},
-    }
-    return HiGPTQuant(linear, "layer", quant_config), linear
+    # w_bits=4 -> hifloat4 (see _build_gptq_weights_cfg); these tests are all hifloat4-specific.
+    quant_linear = _FakeQuantLinear(linear, w_bits=4)
+    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="hifp"), num_batches=batch_num)
+    return GPTQuant(quant_linear, "layer", ctx), linear
 
 
 def _single_group_expected(higptq, weight):
@@ -75,26 +68,26 @@ def _single_group_expected(higptq, weight):
 
 
 def test_gptq_and_higptq_alias_the_same_dispatcher():
-    assert ALGO_REGISTRY.get("gptq") is build_gptq
-    assert ALGO_REGISTRY.get("higptq") is build_gptq
+    assert ALGO_REGISTRY.get("gptq") is GPTQuant
+    assert ALGO_REGISTRY.get("higptq") is GPTQuant
     assert ALGO_REGISTRY.get_item("gptq").metadata["solver"] == "calibrate"
     assert ALGO_REGISTRY.get_item("higptq").metadata["solver"] == "calibrate"
 
 
-def test_build_gptq_dispatches_hif_dtype_to_higptquant():
-    quant_linear = _FakeQuantLinear(nn.Linear(16, 4), w_bits=4)
-    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="hifp"), num_batches=1)
-    result = build_gptq(quant_linear, "layer", ctx)
-    assert isinstance(result, HiGPTQuant)
-
-
-def test_build_gptq_dispatches_int_and_mxfp_dtype_to_plain_gptquant():
-    for quant_dtype, w_bits in (("int", 4), ("int", 8), ("mxfp", 4), ("mxfp", 8)):
+def test_gptq_resolves_wts_type_and_is_hif4_per_dtype():
+    for quant_dtype, w_bits, expected_quant_type, expected_is_hif4 in (
+        ("hifp", 4, "hifloat4", True),
+        ("hifp", 8, "hifloat8", False),  # hifloat8 is a plain per-column dtype, not hif4
+        ("int", 4, "int4", False),
+        ("int", 8, "int8", False),
+        ("mxfp", 4, "mxfp4_e2m1", False),
+        ("mxfp", 8, "mxfp8_e4m3fn", False),
+    ):
         quant_linear = _FakeQuantLinear(nn.Linear(16, 4), w_bits=w_bits)
         ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype=quant_dtype), num_batches=1)
-        result = build_gptq(quant_linear, "layer", ctx)
-        assert isinstance(result, GPTQuant)
-        assert not isinstance(result, HiGPTQuant)
+        result = GPTQuant(quant_linear, "layer", ctx)
+        assert result.wts_type == expected_quant_type
+        assert result.is_hif4 == expected_is_hif4
 
 
 # ---- _build_gptq_weights_cfg (per-layer dtype/bit-width -> weights_cfg) -----
@@ -111,6 +104,8 @@ def test_build_gptq_weights_cfg_selects_quant_type_by_dtype_and_bits():
         "quant_type": "mxfp8_e4m3fn", "symmetric": True, "strategy": "group", "group_size": 32}
     assert _build_gptq_weights_cfg("hifp", 4) == {
         "quant_type": "hifloat4", "symmetric": True, "strategy": "channel"}
+    assert _build_gptq_weights_cfg("hifp", 8) == {
+        "quant_type": "hifloat8", "symmetric": True, "strategy": "channel"}
 
 
 def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
@@ -118,6 +113,8 @@ def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
         _build_gptq_weights_cfg("int", 16)
     with pytest.raises(ValueError, match="unsupported mxfp w_bits"):
         _build_gptq_weights_cfg("mxfp", 16)
+    with pytest.raises(ValueError, match="unsupported hif w_bits"):
+        _build_gptq_weights_cfg("hifp", 16)
 
 
 # ---- plain GPTQuant sanity (int path, exercised end-to-end through the state machine) ----
@@ -126,12 +123,9 @@ def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
 def test_plain_gptquant_forward_optimizes_weight_for_int8():
     torch.manual_seed(0)
     linear = nn.Linear(32, 4)
-    quant_config = {
-        "batch_num": 2,
-        "weights_cfg": {"quant_type": "int8", "symmetric": True, "strategy": "channel"},
-        "inputs_cfg": {"enable_quant": False},
-    }
-    gptq = GPTQuant(linear, "layer", quant_config)
+    quant_linear = _FakeQuantLinear(linear, w_bits=8)
+    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="int"), num_batches=2)
+    gptq = GPTQuant(quant_linear, "layer", ctx)
     original_weight = linear.weight.detach().clone()
 
     gptq.forward(torch.randn(3, 32))
@@ -144,7 +138,7 @@ def test_plain_gptquant_forward_optimizes_weight_for_int8():
     assert out.shape == (5, 4)
 
 
-# ---- overridden pieces (HiGPTQuant) ---------------------------------------------
+# ---- hif branch (get_opt_weight_and_quant_factor, fake_quant_forward) ---------
 
 
 def test_cal_scale_offset_static_has_no_external_quant_factors():
@@ -166,8 +160,8 @@ def test_cal_quant_weight_group_delegates_to_hifloat4_fake_quant():
 
 def test_single_group_optimization_matches_direct_hifloat4_quant():
     torch.manual_seed(0)
-    higptq, _ = _make(in_features=HiGPTQuant.HIFX4_GROUP_SIZE, out_features=6)
-    higptq.update_hessian(torch.randn(200, HiGPTQuant.HIFX4_GROUP_SIZE))
+    higptq, _ = _make(in_features=GPTQuant.HIFX4_GROUP_SIZE, out_features=6)
+    higptq.update_hessian(torch.randn(200, GPTQuant.HIFX4_GROUP_SIZE))
 
     hessian_before = higptq.hessian.clone()
     weight_before = higptq.weight.detach().clone()
@@ -183,8 +177,8 @@ def test_single_group_optimization_matches_direct_hifloat4_quant():
 
 def test_dead_hessian_column_is_zeroed_before_quantization():
     torch.manual_seed(0)
-    higptq, _ = _make(in_features=HiGPTQuant.HIFX4_GROUP_SIZE, out_features=6)
-    inputs = torch.randn(200, HiGPTQuant.HIFX4_GROUP_SIZE)
+    higptq, _ = _make(in_features=GPTQuant.HIFX4_GROUP_SIZE, out_features=6)
+    inputs = torch.randn(200, GPTQuant.HIFX4_GROUP_SIZE)
     inputs[:, 5] = 0  # zero-variance column -> its Hessian diagonal entry is 0 ("dead")
     higptq.update_hessian(inputs)
 
@@ -233,7 +227,7 @@ def test_fake_quant_forward_quantizes_once_and_reuses_cache():
     assert out2.shape == (3, 4)
 
 
-# ---- forward() end-to-end (inherited state machine, higptq's own quant math) ----
+# ---- forward() end-to-end (hif branch state machine) ---------------------------
 
 
 def test_forward_updates_weight_after_batch_num_then_switches_to_fake_quant():

@@ -30,22 +30,10 @@ from .base_solver import BaseSolver
 
 @SOLVER_REGISTRY.register(name="calibration", description="Single-pass (no-gradient) calibration solver")
 class CalibrationSolver(BaseSolver):
-    """Orchestrates no-gradient, single-pass-over-calibration-data PTQ algorithms.
-
-    Unlike BlockwiseSolver (which drives ALGO_REGISTRY "weight"/"activation"/"structure"
-    plugins composed inline into QuantLinear/ActivationQuantizer's forward), algorithms in
-    this category (solver="calibrate", e.g. gptq -- see ALGO_REGISTRY metadata) declare no
-    `targets` at all and are looked up directly from args.algos. LlmPtqWorkflow's solver
-    routing already guarantees every algo in args.algos shares one solver kind by the time
-    this runs, so args.algos itself is the calibration algo list here.
-
-    Any solver="calibrate" algorithm is driven the same generic way, with no per-algorithm
-    knowledge in this class: its registered ALGO_REGISTRY target must be a callable
-    build(quant_linear, layer_name, ctx) -> algo (ctx: CalibrateBuildContext), where `algo`
-    exposes .forward(inputs), called once per calibration batch with that layer's captured
-    float activations. See amct_pytorch/algorithms/quant/gptq.py::build_gptq for the
-    reference implementation. Adding a new calibration-only algorithm requires no change
-    here -- just register a conforming target with solver="calibrate".
+    """Orchestrates no-gradient, single-pass-over-calibration-data PTQ algorithms
+    (solver="calibrate" in ALGO_REGISTRY, e.g. gptq) -- unlike BlockwiseSolver, these
+    declare no `targets` and aren't composed into QuantLinear's forward; they're looked
+    up directly from args.algos and driven externally via hook-captured activations.
     """
 
     granularity = "block"
@@ -80,7 +68,7 @@ class CalibrationSolver(BaseSolver):
         return None
 
     def _run(self, algo_name, quant_linears, data_loader, kwargs, num_batches):
-        build = ALGO_REGISTRY.get(algo_name)  # e.g. build_gptq
+        build = ALGO_REGISTRY.get(algo_name)  # e.g. GPTQuant
         ctx = CalibrateBuildContext(args=self.args, num_batches=num_batches)
         wrapped = {
             name: build(module, name, ctx)
@@ -99,10 +87,6 @@ class CalibrationSolver(BaseSolver):
             for name, module in quant_linears.items()
         ]
 
-        # Hessians must be accumulated against genuine float activations (matching
-        # classic GPTQ), not against whatever this unit's own weight quantizer would
-        # currently produce -- mirrors _prepare_unit_batch's materialize_gt disabling
-        # the same two states for the same reason.
         set_model_weight_quant_state(self.model, False)
         set_model_act_quant_state(self.model, False)
         try:
@@ -119,8 +103,8 @@ class CalibrationSolver(BaseSolver):
                         )
                     # Drives the algorithm's own calibrate/optimize state machine via
                     # forward() -- CalibrationSolver has no knowledge of what happens inside
-                    # (e.g. GPTQuant/HiGPTQuant accumulate a Hessian on every call and run
-                    # their Cholesky/OBS weight update on the batch_num-th call).
+                    # (e.g. GPTQuant accumulates a Hessian on every call and runs its
+                    # Cholesky/OBS weight update on the batch_num-th call).
                     algo.forward(captured[name].to(self.args.device))
         finally:
             for handle in handles:
