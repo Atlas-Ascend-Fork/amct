@@ -162,6 +162,27 @@ def _load_scale(scale_name, original_weight_map, model_dir, loaded_files):
     return loaded_files[file_name][scale_name]
 
 
+def _nvfp4_dequant_or_none(
+    weight, weight_name, original_weight_map, model_dir, loaded_files
+):
+    """Dequantize as NVFP4, or return None when the weight is not NVFP4.
+
+    NVFP4: weight dtype=uint8/int8, shape=[M, N//2];
+           scale dtype=e4m3/uint8, shape=[M, N//16], plus a per-tensor scale_2.
+    """
+    scale_name = f"{weight_name}_scale"
+    scale_2_name = f"{weight_name}_scale_2"
+    if scale_name not in original_weight_map:
+        return None
+    if scale_2_name not in original_weight_map:
+        return None
+    scale = _load_scale(scale_name, original_weight_map, model_dir, loaded_files)
+    if not is_nvfp4_scale(weight, scale):
+        return None
+    scale_2 = _load_scale(scale_2_name, original_weight_map, model_dir, loaded_files)
+    return nvfp4_weight_dequant(weight, scale, scale_2)
+
+
 def convert_state_dict(
     weight,
     weight_name,
@@ -173,25 +194,11 @@ def convert_state_dict(
 ):
     if weight.element_size() == 1:
         try:
-            weight_scale_name = f"{weight_name}_scale"
-            weight_scale_2_name = f"{weight_name}_scale_2"
-            # NVFP4: weight dtype=uint8/int8, shape=[M, N//2];
-            #        scale dtype=e4m3/uint8, shape=[M, N//16]
-            if (
-                weight_scale_name in original_weight_map
-                and weight_scale_2_name in original_weight_map
-            ):
-                scale_inv = _load_scale(
-                    weight_scale_name, original_weight_map, model_dir, loaded_files
-                )
-                if is_nvfp4_scale(weight, scale_inv):
-                    weight_scale_2 = _load_scale(
-                        weight_scale_2_name,
-                        original_weight_map,
-                        model_dir,
-                        loaded_files,
-                    )
-                    return nvfp4_weight_dequant(weight, scale_inv, weight_scale_2)
+            nvfp4_weight = _nvfp4_dequant_or_none(
+                weight, weight_name, original_weight_map, model_dir, loaded_files
+            )
+            if nvfp4_weight is not None:
+                return nvfp4_weight
             scale_inv = _load_scale(
                 scale_inv_name, original_weight_map, model_dir, loaded_files
             )
