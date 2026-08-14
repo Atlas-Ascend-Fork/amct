@@ -19,6 +19,7 @@ import torch
 import torch.nn.functional as F
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
+from amct_pytorch.common.optimization import CalibrateBuildContext
 from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.classic.quantize_op.utils import (
@@ -401,23 +402,61 @@ class HiGPTQuant(GPTQuant):
         return F.linear(inputs, self.cached_dq_w, self.bias)
 
 
-def build_gptq(ori_module, layer_name, quant_config):
+# Dtype/bit-width -> weights_cfg mapping, moved here from CalibrationSolver so the solver
+# doesn't need to know GPTQ's config shape (weights_cfg: quant_type/symmetric/strategy/
+# group_size) -- see CalibrateBuildContext (amct_pytorch/common/optimization/__init__.py)
+# for the generic build contract this module conforms to.
+_INT_QUANT_TYPE_BY_BITS = {4: 'int4', 8: 'int8'}
+_MXFP_QUANT_TYPE_BY_BITS = {4: 'mxfp4_e2m1', 8: 'mxfp8_e4m3fn'}
+_MXFP_GROUP_SIZE = 32  # vars.py::GROUP_SIZE_SUPPORTED_MAP[MXFP4_E2M1 / MXFP8_E4M3FN] == [32]
+
+
+def _build_gptq_weights_cfg(quant_dtype, w_bits):
+    """Build the per-layer weights_cfg passed into GPTQuant/HiGPTQuant. Mirrors the dtype
+    string conventions in amct_pytorch/common/utils/vars.py and the group_size precedent in
+    AutoRound._get_group_size (amct_pytorch/algorithms/quant/auto_round.py)."""
+    if quant_dtype == 'int':
+        quant_type = _INT_QUANT_TYPE_BY_BITS.get(w_bits)
+        if quant_type is None:
+            raise ValueError(f"gptq: unsupported int w_bits={w_bits!r} (expected 4 or 8)")
+        return {'quant_type': quant_type, 'symmetric': True, 'strategy': 'channel'}
+    if quant_dtype == 'mxfp':
+        quant_type = _MXFP_QUANT_TYPE_BY_BITS.get(w_bits)
+        if quant_type is None:
+            raise ValueError(f"gptq: unsupported mxfp w_bits={w_bits!r} (expected 4 or 8)")
+        return {
+            'quant_type': quant_type, 'symmetric': True,
+            'strategy': 'group', 'group_size': _MXFP_GROUP_SIZE,
+        }
+    # hif family ("hifp", or any future "hif*" quant_dtype): hifloat4 is the only supported
+    # width today regardless of w_bits; HiGPTQuant.cal_scale_offset_static ignores group_size.
+    return {'quant_type': 'hifloat4', 'symmetric': True, 'strategy': 'channel'}
+
+
+def build_gptq(quant_linear, layer_name, ctx: CalibrateBuildContext):
     """
     Function: dtype-dispatching factory registered under ALGO_REGISTRY["gptq"]
-    (and its backward-compat alias ALGO_REGISTRY["higptq"]).
+    (and its backward-compat alias ALGO_REGISTRY["higptq"]), conforming to
+    CalibrationSolver's generic calibrate-algorithm build contract:
+    build(quant_linear, layer_name, ctx) -> object exposing .forward(inputs).
     Args:
-    ori_module: torch module. Linear.
-    layer_name: ori_module's name.
-    quant_config: dict with 'weights_cfg' containing 'quant_type'.
+    quant_linear: QuantLinear -- the wrapped nn.Linear (.linear) plus its already-resolved
+        weight bit width (.w_bits).
+    layer_name: quant_linear's name.
+    ctx: CalibrateBuildContext(args, num_batches).
     Returns:
-    HiGPTQuant instance if weights_cfg['quant_type'] is a hif-family dtype (e.g. "hifloat4",
-    matched by a "hif" prefix), else a plain GPTQuant instance (int8/int4/mxfp4_e2m1/
-    mxfp8_e4m3fn/float4_e2m1/hifloat8/float8_e4m3fn).
+    HiGPTQuant instance if the resolved quant_type is a hif-family dtype (e.g. "hifloat4",
+    matched by a "hif" prefix), else a plain GPTQuant instance (int4/int8/mxfp4_e2m1/
+    mxfp8_e4m3fn).
     """
-    wts_type = quant_config.get('weights_cfg', {}).get('quant_type', '')
-    if wts_type.startswith('hif'):
-        return HiGPTQuant(ori_module, layer_name, quant_config)
-    return GPTQuant(ori_module, layer_name, quant_config)
+    weights_cfg = _build_gptq_weights_cfg(ctx.args.quant_dtype, quant_linear.w_bits)
+    quant_config = {
+        'batch_num': ctx.num_batches,
+        'weights_cfg': weights_cfg,
+        'inputs_cfg': {'enable_quant': False},
+    }
+    cls = HiGPTQuant if weights_cfg['quant_type'].startswith('hif') else GPTQuant
+    return cls(quant_linear.linear, layer_name, quant_config)
 
 
 ALGO_REGISTRY.register(

@@ -15,7 +15,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-__all__ = ["register_solvers", "SOLVER_REGISTRY"]
+__all__ = ["register_solvers", "SOLVER_REGISTRY", "CalibrateBuildContext"]
+
+from dataclasses import dataclass
+from typing import Any
 
 from amct_pytorch.common.utils.registry_factory import Registry
 
@@ -33,3 +36,14 @@ def register_solvers():
     from .calibration_solver import CalibrationSolver  # noqa: F401
 
     _REGISTERED = True
+
+
+@dataclass
+class CalibrateBuildContext:
+    """Build contract for any ALGO_REGISTRY entry with solver="calibrate": the registered
+    target is called as target(quant_linear, layer_name, ctx) -> algo, where algo exposes
+    .forward(inputs). Mirrors AlgoBuildContext (amct_pytorch/algorithms/quant/__init__.py),
+    the analogous build-context dataclass for solver="gradient" algorithms."""
+
+    args: Any
+    num_batches: int

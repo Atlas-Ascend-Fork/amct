@@ -28,8 +28,7 @@ from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 # Importing gptq triggers its ALGO_REGISTRY.register(name="gptq"/"higptq", ...) decorators
 # regardless of whether the lazy register_algorithms() has run.
 from amct_pytorch.algorithms.quant.gptq import build_gptq  # noqa: F401
-from amct_pytorch.common.optimization.calibration_solver import (
-    CalibrationSolver, _build_gptq_weights_cfg)
+from amct_pytorch.common.optimization.calibration_solver import CalibrationSolver
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -72,16 +71,37 @@ def _build_loader(n=8, dim=16, batch_size=4):
     return DataLoader(TensorDataset(torch.randn(n, dim)), batch_size=batch_size)
 
 
+class _FakeCalibrateAlgo:
+    """Minimal but real conformer to CalibrationSolver's build contract:
+    build(quant_linear, layer_name, ctx) -> algo, where algo exposes .forward(inputs).
+    Used to prove CalibrationSolver drives a brand-new algorithm name with zero
+    solver-side changes -- the actual point of the gptq/higptq decoupling."""
+
+    instances = []
+
+    def __init__(self, quant_linear, layer_name, ctx):
+        self.quant_linear = quant_linear
+        self.layer_name = layer_name
+        self.ctx = ctx
+        self.calls = 0
+        type(self).instances.append(self)
+
+    def forward(self, inputs):
+        self.calls += 1
+        return inputs
+
+
 class _registered_calibration_algo:
-    """Temporarily registers a dummy solver="calibrate" entry in ALGO_REGISTRY (no targets,
-    matching gptq's real registration -- calibrate-class algos are looked up from
-    args.algos directly, not via get_algo_names_by_target)."""
+    """Temporarily registers _FakeCalibrateAlgo as a solver="calibrate" entry in
+    ALGO_REGISTRY (no targets, matching gptq's real registration -- calibrate-class algos
+    are looked up from args.algos directly, not via get_algo_names_by_target)."""
 
     def __init__(self, name):
         self.name = name
 
     def __enter__(self):
-        ALGO_REGISTRY.register(name=self.name, solver="calibrate")(type(self.name, (), {}))
+        _FakeCalibrateAlgo.instances.clear()
+        ALGO_REGISTRY.register(_FakeCalibrateAlgo, name=self.name, solver="calibrate")
         return self.name
 
     def __exit__(self, *exc_info):
@@ -106,29 +126,6 @@ def test_gptq_and_higptq_alias_resolve_to_the_same_dispatcher():
     assert ALGO_REGISTRY.get("higptq") is build_gptq
 
 
-# ---- _build_gptq_weights_cfg (per-layer dtype/bit-width -> weights_cfg) -----
-
-
-def test_build_gptq_weights_cfg_selects_quant_type_by_dtype_and_bits():
-    assert _build_gptq_weights_cfg("int", 4) == {
-        "quant_type": "int4", "symmetric": True, "strategy": "channel"}
-    assert _build_gptq_weights_cfg("int", 8) == {
-        "quant_type": "int8", "symmetric": True, "strategy": "channel"}
-    assert _build_gptq_weights_cfg("mxfp", 4) == {
-        "quant_type": "mxfp4_e2m1", "symmetric": True, "strategy": "group", "group_size": 32}
-    assert _build_gptq_weights_cfg("mxfp", 8) == {
-        "quant_type": "mxfp8_e4m3fn", "symmetric": True, "strategy": "group", "group_size": 32}
-    assert _build_gptq_weights_cfg("hifp", 4) == {
-        "quant_type": "hifloat4", "symmetric": True, "strategy": "channel"}
-
-
-def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
-    with pytest.raises(ValueError, match="unsupported int w_bits"):
-        _build_gptq_weights_cfg("int", 16)
-    with pytest.raises(ValueError, match="unsupported mxfp w_bits"):
-        _build_gptq_weights_cfg("mxfp", 16)
-
-
 def test_solve_raises_when_multiple_calibration_algos_matched():
     with _registered_calibration_algo("dummy_calib"):
         args, _, block = _build_block(algos=("gptq", "dummy_calib"))
@@ -137,12 +134,22 @@ def test_solve_raises_when_multiple_calibration_algos_matched():
             solver.solve(_build_loader())
 
 
-def test_solve_raises_for_calibration_algo_with_no_dispatch_branch():
-    with _registered_calibration_algo("not_dispatched"):
-        args, _, block = _build_block(algos=("not_dispatched",))
+def test_solve_drives_any_registered_calibrate_algo_without_special_casing():
+    # CalibrationSolver has no per-algorithm-name branches: any solver="calibrate" target
+    # conforming to build(quant_linear, layer_name, ctx) -> algo (algo.forward(inputs)) is
+    # driven the same way "gptq" is. This is the core guarantee of the gptq/higptq decoupling.
+    with _registered_calibration_algo("fake_calib"):
+        args, _, block = _build_block(algos=("fake_calib",))
         solver = CalibrationSolver(args, layer_idx=0, model=block)
-        with pytest.raises(ValueError, match="no dispatch branch for algo 'not_dispatched'"):
-            solver.solve(_build_loader())
+        loader = _build_loader()
+        num_batches = len(loader)
+
+        assert solver.solve(loader) is None
+
+        assert len(_FakeCalibrateAlgo.instances) == 1
+        algo = _FakeCalibrateAlgo.instances[0]
+        assert algo.layer_name == "proj"
+        assert algo.calls == num_batches
 
 
 # ---- early-return guards ----------------------------------------------------

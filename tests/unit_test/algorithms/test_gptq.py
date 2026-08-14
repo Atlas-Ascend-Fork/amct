@@ -16,16 +16,30 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
 import torch
 import torch.nn as nn
 
 sys.modules["torch_npu"] = MagicMock()
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-from amct_pytorch.algorithms.quant.gptq import GPTQuant, HiGPTQuant, build_gptq
+from amct_pytorch.algorithms.quant.gptq import (
+    GPTQuant, HiGPTQuant, _build_gptq_weights_cfg, build_gptq)
+from amct_pytorch.common.optimization import CalibrateBuildContext
 from amct_pytorch.quantization.dtypes.hifp_impl import hifloat4_fake_quant
+
+
+class _FakeQuantLinear:
+    """Minimal duck-typed stand-in for QuantLinear -- build_gptq only ever reads .linear and
+    .w_bits, and a real QuantLinear needs a lot of unrelated setup (WeightQuantizer,
+    DTYPE_REGISTRY, build_algorithms_by_target)."""
+
+    def __init__(self, linear, w_bits):
+        self.linear = linear
+        self.w_bits = w_bits
 
 # Mirrors CalibrationSolver._HIFLOAT4_WEIGHTS_CFG -- the only quant_config higptq is ever
 # constructed with in production (amct_pytorch/common/optimization/calibration_solver.py).
@@ -68,27 +82,42 @@ def test_gptq_and_higptq_alias_the_same_dispatcher():
 
 
 def test_build_gptq_dispatches_hif_dtype_to_higptquant():
-    linear = nn.Linear(16, 4)
-    quant_config = {
-        "batch_num": 1,
-        "weights_cfg": {"quant_type": "hifloat4", "symmetric": True, "strategy": "channel"},
-        "inputs_cfg": {"enable_quant": False},
-    }
-    result = build_gptq(linear, "layer", quant_config)
+    quant_linear = _FakeQuantLinear(nn.Linear(16, 4), w_bits=4)
+    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="hifp"), num_batches=1)
+    result = build_gptq(quant_linear, "layer", ctx)
     assert isinstance(result, HiGPTQuant)
 
 
 def test_build_gptq_dispatches_int_and_mxfp_dtype_to_plain_gptquant():
-    linear = nn.Linear(16, 4)
-    for quant_type in ("int8", "int4", "mxfp4_e2m1", "mxfp8_e4m3fn"):
-        quant_config = {
-            "batch_num": 1,
-            "weights_cfg": {"quant_type": quant_type, "symmetric": True, "strategy": "channel"},
-            "inputs_cfg": {"enable_quant": False},
-        }
-        result = build_gptq(linear, "layer", quant_config)
+    for quant_dtype, w_bits in (("int", 4), ("int", 8), ("mxfp", 4), ("mxfp", 8)):
+        quant_linear = _FakeQuantLinear(nn.Linear(16, 4), w_bits=w_bits)
+        ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype=quant_dtype), num_batches=1)
+        result = build_gptq(quant_linear, "layer", ctx)
         assert isinstance(result, GPTQuant)
         assert not isinstance(result, HiGPTQuant)
+
+
+# ---- _build_gptq_weights_cfg (per-layer dtype/bit-width -> weights_cfg) -----
+
+
+def test_build_gptq_weights_cfg_selects_quant_type_by_dtype_and_bits():
+    assert _build_gptq_weights_cfg("int", 4) == {
+        "quant_type": "int4", "symmetric": True, "strategy": "channel"}
+    assert _build_gptq_weights_cfg("int", 8) == {
+        "quant_type": "int8", "symmetric": True, "strategy": "channel"}
+    assert _build_gptq_weights_cfg("mxfp", 4) == {
+        "quant_type": "mxfp4_e2m1", "symmetric": True, "strategy": "group", "group_size": 32}
+    assert _build_gptq_weights_cfg("mxfp", 8) == {
+        "quant_type": "mxfp8_e4m3fn", "symmetric": True, "strategy": "group", "group_size": 32}
+    assert _build_gptq_weights_cfg("hifp", 4) == {
+        "quant_type": "hifloat4", "symmetric": True, "strategy": "channel"}
+
+
+def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
+    with pytest.raises(ValueError, match="unsupported int w_bits"):
+        _build_gptq_weights_cfg("int", 16)
+    with pytest.raises(ValueError, match="unsupported mxfp w_bits"):
+        _build_gptq_weights_cfg("mxfp", 16)
 
 
 # ---- plain GPTQuant sanity (int path, exercised end-to-end through the state machine) ----
