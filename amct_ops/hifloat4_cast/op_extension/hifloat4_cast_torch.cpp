@@ -90,10 +90,7 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim) {
 
     int64_t n = xp.size(-1);
     TORCH_CHECK(n > 0, "hifloat4_fake_quant: input must have a non-empty last dim");
-    TORCH_CHECK(
-        n % 64 == 0,
-        "hifloat4_fake_quant: quant dim length must be a multiple of 64, got ",
-        n);
+    TORCH_CHECK(n % 64 == 0, "hifloat4_fake_quant: quant dim length must be a multiple of 64, got ", n);
     bool need_slice = false;
     at::Tensor xin = PadLastDim(xp, n, need_slice);
     int64_t m = xin.numel() / xin.size(-1);

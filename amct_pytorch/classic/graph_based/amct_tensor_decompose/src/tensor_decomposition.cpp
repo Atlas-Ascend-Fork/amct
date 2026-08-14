@@ -125,7 +125,7 @@ TdError TensorDecomposition::Sigma2(
     Vector vecA4, vecB4, vecC4;
     TD_FUNC_CHECK(tauZ1.Mul(vecA4, 1.0 / alpha)); // calculate tau 1.0
 
-    TD_FUNC_CHECK(vecA4.Add(vecB4, 1));           // calculate vector 1
+    TD_FUNC_CHECK(vecA4.Add(vecB4, 1)); // calculate vector 1
 
     TD_FUNC_CHECK(vecB4.Log(vecC4));
 

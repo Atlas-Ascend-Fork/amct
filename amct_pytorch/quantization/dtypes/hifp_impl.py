@@ -262,9 +262,7 @@ def hif4_pack(x):
     x = x.detach().to(torch.float32)
     if x.dim() != 2:
         raise RuntimeError(
-            "hif4_pack: input must be 2-D [n_rows, n_cols], got {} dims".format(
-                x.dim()
-            )
+            "hif4_pack: input must be 2-D [n_rows, n_cols], got {} dims".format(x.dim())
         )
     n_rows, n_cols = x.shape
     if n_cols % 64 != 0:
