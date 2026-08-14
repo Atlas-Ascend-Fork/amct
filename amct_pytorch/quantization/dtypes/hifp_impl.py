@@ -20,7 +20,6 @@ from typing import NamedTuple
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 
 _HIFLOAT8_BACKEND_ERRORS = (RuntimeError, OSError)
@@ -261,9 +260,17 @@ def hif4_decode(sign_bit, e6m2, de, code, ng=2, block_nan=None, qdim=-1):
 def hif4_pack(x):
     """Pack [n_rows, n_cols] tensor to HiF4 bytes (scale, value)."""
     x = x.detach().to(torch.float32)
-    assert x.dim() == 2, "input must be [n_rows, n_cols]"
+    if x.dim() != 2:
+        raise RuntimeError(
+            "hif4_pack: input must be 2-D [n_rows, n_cols], got {} dims".format(
+                x.dim()
+            )
+        )
     n_rows, n_cols = x.shape
-    assert n_cols % 64 == 0, "n_cols must be a multiple of 64"
+    if n_cols % 64 != 0:
+        raise RuntimeError(
+            "hif4_pack: n_cols must be a multiple of 64, got {}".format(n_cols)
+        )
     gn = n_cols // 64
 
     xg = x.reshape(n_rows, gn, 8, 2, 4)
@@ -361,16 +368,16 @@ def _hif4_fake_quant_reference(fp_tensor, qdim=-1):
     if qdim >= 0:
         qdim = qdim - len(x.shape)
 
-    # Pad to multiple of 64 along qdim
+    # The quant dim must be a multiple of 64, consistent with hif4_pack and the
+    # NPU kernel: non-aligned input raises instead of being padded.
     dim_len = x.shape[qdim]
-    pad_len = (64 - dim_len % 64) % 64
-    if pad_len > 0:
-        x = F.pad(x, [0] * (-qdim * 2 - 1) + [pad_len], value=0.0)
+    if dim_len % 64 != 0:
+        raise RuntimeError(
+            "hifloat4_fake_quant: quant dim length must be a multiple of 64, "
+            "got {}".format(dim_len)
+        )
 
     out = _hif4_reference_quantize(x, qdim)
-
-    if pad_len > 0:
-        out = out.narrow(qdim, 0, dim_len)
 
     return out.to(dtype_ori)
 

@@ -58,13 +58,13 @@ class TestHiFloat4Kernel(unittest.TestCase):
         torch.manual_seed(4)
         self._assert_kernel_matches_reference(torch.randn(8, 256, dtype=torch.float16))
 
-    def test_kernel_padded(self):
+    def test_kernel_unaligned_raises(self):
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
         torch.manual_seed(5)
-        # pad to multiple of 64
         x = torch.randn(3, 100, dtype=torch.bfloat16)
-        pad = (0, 28)
-        x_padded = torch.nn.functional.pad(x, pad)
-        self._assert_kernel_matches_reference(x_padded)
+        with self.assertRaises(RuntimeError):
+            npu_fake_quant(x.npu())
 
     def test_kernel_zero_is_nan_free(self):
         from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
@@ -121,6 +121,11 @@ class TestHiFloat4CastShapes(unittest.TestCase):
         scale, value = hif4_pack(x)
         self.assertEqual(scale.shape, (1, 1, 4))
         self.assertEqual(value.shape, (1, 32))
+
+    def test_fake_quant_unaligned_raises(self):
+        x = torch.randn(3, 100, dtype=torch.bfloat16)
+        with self.assertRaises(RuntimeError):
+            hifloat4_fake_quant(x)
 
 
 if __name__ == '__main__':

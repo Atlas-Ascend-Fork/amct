@@ -30,6 +30,7 @@ Returns:
 
 Exceptions:
 - `RuntimeError`: dtype is not float16 / bfloat16, or input tensor is not on an NPU device
+- `RuntimeError`: the `qdim` length is not a multiple of 64
 
 Example:
 ```python
@@ -39,7 +40,7 @@ y = hifloat4_fake_quant(w, qdim=1)              # Linear weight [out, in] along 
 y = torch.ops.amct.hifloat4_fake_quant(x, -1)   # equivalent torch.ops call
 ```
 
-The host moves `qdim` to the last axis, zero-pads to a multiple of 512 (zeros don't affect the block max), calls the kernel, then slices back to the original length and restores the dimension order.
+The host moves `qdim` to the last axis; its length must be a multiple of 64 (otherwise the op raises). It then zero-pads to a multiple of 512 (zeros don't affect the block max), calls the kernel, and slices back to the original length, restoring the dimension order.
 
 ## Directory Structure
 
@@ -161,7 +162,7 @@ Accuracy verification methods are as follows, see `tests/amct_ops/test_hifloat4_
 | Test Scenario | Result |
 | --- | --- |
 | Random BF16/FP16 fake-quant round-trip simulation | ✓ Element-wise match with the CPU reference implementation (max abs diff < 1e-6) |
-| Non-64-aligned dims (padding) | ✓ Matches the CPU reference implementation |
+| Non-64-aligned dims | ✓ Raises RuntimeError (fake-quant and pack behave the same) |
 | Zero input | ✓ No NaN, output all zeros |
 
 ## Test Method

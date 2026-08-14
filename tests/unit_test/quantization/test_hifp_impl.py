@@ -608,21 +608,22 @@ def test_hifloat4_fake_quant_cpu_preserves_dtype_and_shape(dtype):
     assert out.dtype == dtype
 
 
-def test_hifloat4_fake_quant_pads_n_to_multiple_of_64():
+def test_hifloat4_fake_quant_raises_on_non_multiple_of_64():
     torch.manual_seed(19)
     x = torch.randn(2, 100, dtype=torch.bfloat16)
-    out = hifp_impl.hifloat4_fake_quant(x)  # 100 -> pad 28
-    assert out.shape == x.shape
-    assert torch.isfinite(out).all()
-    ref = hifp_impl.hifloat4_fake_quant(torch.nn.functional.pad(x, (0, 28))).narrow(
-        1, 0, 100
-    )
-    assert torch.equal(out, ref)
+    with pytest.raises(RuntimeError):
+        hifp_impl.hifloat4_fake_quant(x)
+
+
+def test_hif4_pack_raises_on_non_multiple_of_64():
+    x = torch.randn(2, 100, dtype=torch.bfloat16)
+    with pytest.raises(RuntimeError):
+        hifp_impl.hif4_pack(x)
 
 
 def test_hifloat4_fake_quant_qdim_first_axis():
     torch.manual_seed(23)
-    x = torch.randn(100, 64, dtype=torch.bfloat16)
+    x = torch.randn(128, 64, dtype=torch.bfloat16)
     out = hifp_impl.hifloat4_fake_quant(x, qdim=0)
     assert out.shape == x.shape
     assert torch.isfinite(out).all()

@@ -53,8 +53,9 @@ at::Tensor PermuteToLast(const at::Tensor &input, int64_t qd, std::vector<int64_
     return input.permute(perm).contiguous();
 }
 
-// Pad N to a multiple of BATCH (512) so the kernel never sees a partial tail. The
-// kernel requires 64-aligned input, so all tail handling lives here on the host.
+// Pad N to a multiple of BATCH (512) so the kernel never sees a partial tile.
+// The caller validates that N is a multiple of 64; the pad here only covers the
+// kernel's 512-element tile granularity and is sliced off afterwards.
 at::Tensor PadLastDim(const at::Tensor &xp, int64_t &n, bool &need_slice) {
     constexpr int64_t BATCH = 512;
     int64_t n_pad = ((n + BATCH - 1) / BATCH) * BATCH;
@@ -89,6 +90,10 @@ at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim) {
 
     int64_t n = xp.size(-1);
     TORCH_CHECK(n > 0, "hifloat4_fake_quant: input must have a non-empty last dim");
+    TORCH_CHECK(
+        n % 64 == 0,
+        "hifloat4_fake_quant: quant dim length must be a multiple of 64, got ",
+        n);
     bool need_slice = false;
     at::Tensor xin = PadLastDim(xp, n, need_slice);
     int64_t m = xin.numel() / xin.size(-1);

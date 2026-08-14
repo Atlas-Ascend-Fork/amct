@@ -33,6 +33,7 @@ HiFloat4（HiF4）是一种 4-bit 块缩放浮点格式：每个元素采用 S1P
 异常：
 
 * `RuntimeError`：输入 dtype 不是 float16 / bfloat16，或输入张量不在 NPU 设备上
+* `RuntimeError`：`qdim` 维度长度不是 64 的倍数
 
 示例：
 
@@ -44,7 +45,7 @@ y = hifloat4_fake_quant(w, qdim=1)              # Linear 权重 [out, in] 沿 in
 y = torch.ops.amct.hifloat4_fake_quant(x, -1)   # torch.ops 等价调用
 ```
 
-Host 侧会先将 `qdim` 移至最后一维，并补零至 512 的整数倍（补零不会影响块内 max），随后调用 kernel。计算完成后，再截取原始长度并恢复原有维度顺序。
+Host 侧会先将 `qdim` 移至最后一维；该维长度必须是 64 的倍数（否则报错）。随后补零至 512 的整数倍（补零不会影响块内 max）并调用 kernel，计算完成后截回原始长度并恢复原有维度顺序。
 
 ## 目录结构
 
@@ -166,7 +167,7 @@ y = torch.ops.amct.hifloat4_fake_quant(x, -1)
 | 测试场景                         | 结果                                     |
 | ---------------------------- | -------------------------------------- |
 | 随机 BF16/FP16 fake-quant 往返仿真 | ✓ 与 CPU 参考实现逐元素一致（max abs diff < 1e-6） |
-| 非 64 对齐维度（padding）           | ✓ 与 CPU 参考实现一致                         |
+| 非 64 对齐维度                    | ✓ 抛 RuntimeError（fake-quant 与 pack 行为一致）      |
 | 零输入                          | ✓ 无 NaN，输出全 0                          |
 
 ## 测试方法
