@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""NVFP4 unpack / dequant helpers for convert_state_dict.
+"""NVFP4 unpack / dequant helpers used by convert_state_dict.
 
 NVFP4 packs two 4-bit E2M1 codes per byte (same packing as MXFP4). It is identified by
 the companion scales ``weight_scale`` (E4M3, per 16 elements) and ``weight_scale_2``
