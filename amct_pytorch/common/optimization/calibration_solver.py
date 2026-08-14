@@ -38,8 +38,8 @@ class CalibrationSolver(BaseSolver):
 
     granularity = "block"
 
-    def __init__(self, args, layer_idx, model, max_iters=100):
-        super().__init__(args, layer_idx, model, None, None, max_iters)
+    def __init__(self, args, layer_idx, model):
+        super().__init__(args, layer_idx, model, None, None)
 
     @torch.no_grad()
     def solve(self, data_loader, forward_kwargs=None):
