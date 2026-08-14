@@ -179,7 +179,9 @@ def convert_state_dict(
         try:
             if is_nvfp4_weight(weight, weight_name, original_weight_map):
                 # NVFP4 weight
-                block_scale_name, global_scale_name = nvfp4_scale_names(weight_name)
+                block_scale_name, global_scale_name = nvfp4_scale_names(
+                    weight_name, original_weight_map
+                )
                 weight_scale = _load_scale(
                     block_scale_name, original_weight_map, model_dir, loaded_files
                 )
