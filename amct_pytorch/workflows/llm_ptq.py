@@ -44,10 +44,10 @@ from amct_pytorch.common.utils.run_logging import setup_run_logging
 class LlmPtqWorkflow:
 
     # Maps each algorithm's ALGO_REGISTRY "solver" metadata (see e.g.
-    # amct_pytorch/algorithms/quant/higptq.py and auto_clip.py) to the SOLVER_REGISTRY key
+    # amct_pytorch/algorithms/quant/gptq.py and auto_clip.py) to the SOLVER_REGISTRY key
     # that should drive it. "gradient" algos (lwc/lac/autoround/omniquant/flatquant) are
     # composed inline into QuantLinear/ActivationQuantizer and trained via BlockwiseSolver's
-    # backprop + optimizer loop; "calibrate" algos (e.g. higptq) are single-pass, no-gradient
+    # backprop + optimizer loop; "calibrate" algos (e.g. gptq) are single-pass, no-gradient
     # closed-form solves driven by CalibrationSolver. Every algo in ALGO_REGISTRY must declare
     # a "solver" so this mapping never has to be hand-maintained per algo name.
     _ALGO_SOLVER_TO_SOLVER_KEY = {"gradient": "block", "calibrate": "calibration"}

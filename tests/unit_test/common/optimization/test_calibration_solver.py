@@ -25,10 +25,11 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-# Importing higptq triggers its ALGO_REGISTRY.register(name="higptq", ...) decorator
+# Importing gptq triggers its ALGO_REGISTRY.register(name="gptq"/"higptq", ...) decorators
 # regardless of whether the lazy register_algorithms() has run.
-from amct_pytorch.algorithms.quant.higptq import HiGPTQuant  # noqa: F401
-from amct_pytorch.common.optimization.calibration_solver import CalibrationSolver
+from amct_pytorch.algorithms.quant.gptq import build_gptq  # noqa: F401
+from amct_pytorch.common.optimization.calibration_solver import (
+    CalibrationSolver, _build_gptq_weights_cfg)
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -37,11 +38,11 @@ sys.modules["torch_npu"] = MagicMock()
 register_dtype()
 
 
-def _args(algos):
+def _args(algos, quant_dtype="int", w_bits=8):
     return SimpleNamespace(
         algos=list(algos),
-        quant_dtype="int",
-        w_bits=8,
+        quant_dtype=quant_dtype,
+        w_bits=w_bits,
         quant_target=[],
         device=torch.device("cpu"),
     )
@@ -60,10 +61,10 @@ class _Block(nn.Module):
         return self.proj(x)
 
 
-def _build_block(in_features=16, out_features=16, algos=("higptq",)):
+def _build_block(in_features=16, out_features=16, algos=("gptq",), quant_dtype="int", w_bits=8):
     linear = nn.Linear(in_features, out_features)
-    args = _args(algos)
-    ql = QuantLinear(args, linear, w_bits=8, name="proj")
+    args = _args(algos, quant_dtype=quant_dtype, w_bits=w_bits)
+    ql = QuantLinear(args, linear, w_bits=w_bits, name="proj")
     return args, linear, _Block(ql)
 
 
@@ -73,7 +74,7 @@ def _build_loader(n=8, dim=16, batch_size=4):
 
 class _registered_calibration_algo:
     """Temporarily registers a dummy solver="calibrate" entry in ALGO_REGISTRY (no targets,
-    matching higptq's real registration -- calibrate-class algos are looked up from
+    matching gptq's real registration -- calibrate-class algos are looked up from
     args.algos directly, not via get_algo_names_by_target)."""
 
     def __init__(self, name):
@@ -97,20 +98,40 @@ def test_solve_raises_when_no_calibration_algo_in_args():
         solver.solve(_build_loader())
 
 
-def test_plain_gptq_name_is_not_registered_since_only_higptq_is_wired_up():
-    # "gptq" (plain int/mxfp/hifloat8 GPTQuant) and "higptq" (HiGPTQuant, HiFloat4-only)
-    # are two distinct algorithms; only "higptq" is registered in ALGO_REGISTRY today, so
-    # passing "gptq" must fail loudly instead of silently being treated as an alias. Any
-    # unregistered name in args.algos is rejected as soon as get_algo_names_by_target runs
-    # for ANY target -- here that's WeightQuantizer's own lookup inside QuantLinear's
-    # constructor, before CalibrationSolver.solve() is ever reached.
-    with pytest.raises(KeyError, match="'gptq' is not registered"):
-        _build_block(algos=("gptq",))
+def test_gptq_and_higptq_alias_resolve_to_the_same_dispatcher():
+    # "gptq" is the canonical registered name; "higptq" is kept as a backward-compat alias
+    # pointing at the exact same build_gptq target (amct_pytorch/algorithms/quant/gptq.py),
+    # not a second, distinct algorithm.
+    assert ALGO_REGISTRY.get("gptq") is build_gptq
+    assert ALGO_REGISTRY.get("higptq") is build_gptq
+
+
+# ---- _build_gptq_weights_cfg (per-layer dtype/bit-width -> weights_cfg) -----
+
+
+def test_build_gptq_weights_cfg_selects_quant_type_by_dtype_and_bits():
+    assert _build_gptq_weights_cfg("int", 4) == {
+        "quant_type": "int4", "symmetric": True, "strategy": "channel"}
+    assert _build_gptq_weights_cfg("int", 8) == {
+        "quant_type": "int8", "symmetric": True, "strategy": "channel"}
+    assert _build_gptq_weights_cfg("mxfp", 4) == {
+        "quant_type": "mxfp4_e2m1", "symmetric": True, "strategy": "group", "group_size": 32}
+    assert _build_gptq_weights_cfg("mxfp", 8) == {
+        "quant_type": "mxfp8_e4m3fn", "symmetric": True, "strategy": "group", "group_size": 32}
+    assert _build_gptq_weights_cfg("hifp", 4) == {
+        "quant_type": "hifloat4", "symmetric": True, "strategy": "channel"}
+
+
+def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
+    with pytest.raises(ValueError, match="unsupported int w_bits"):
+        _build_gptq_weights_cfg("int", 16)
+    with pytest.raises(ValueError, match="unsupported mxfp w_bits"):
+        _build_gptq_weights_cfg("mxfp", 16)
 
 
 def test_solve_raises_when_multiple_calibration_algos_matched():
     with _registered_calibration_algo("dummy_calib"):
-        args, _, block = _build_block(algos=("higptq", "dummy_calib"))
+        args, _, block = _build_block(algos=("gptq", "dummy_calib"))
         solver = CalibrationSolver(args, layer_idx=0, model=block)
         with pytest.raises(ValueError, match="supports exactly one calibration algo"):
             solver.solve(_build_loader())
@@ -128,7 +149,7 @@ def test_solve_raises_for_calibration_algo_with_no_dispatch_branch():
 
 
 def test_solve_returns_none_when_no_quant_linear_in_model():
-    args = _args(("higptq",))
+    args = _args(("gptq",))
     solver = CalibrationSolver(args, layer_idx=0, model=nn.Linear(4, 4))
     assert solver.solve(_build_loader()) is None
 
@@ -140,11 +161,43 @@ def test_solve_returns_none_when_data_loader_empty():
     assert solver.solve(empty_loader) is None
 
 
-# ---- end-to-end higptq dispatch ----------------------------------------------
+# ---- end-to-end gptq dispatch ----------------------------------------------
 
 
-def test_solve_runs_higptq_and_mutates_weight_in_place():
+def test_solve_runs_gptq_and_mutates_weight_in_place():
     args, linear, block = _build_block()
+    original_weight = linear.weight.detach().clone()
+
+    solver = CalibrationSolver(args, layer_idx=0, model=block)
+    assert solver.solve(_build_loader()) is None
+
+    assert not torch.allclose(linear.weight.detach(), original_weight)
+
+
+def test_solve_runs_via_higptq_alias_and_mutates_weight_in_place():
+    # quant_dtype must be set to "hifp" explicitly here: dispatch is now dtype-driven (see
+    # _build_gptq_weights_cfg), so without this the alias would just retest the int8 path.
+    args, linear, block = _build_block(algos=("higptq",), quant_dtype="hifp", w_bits=4)
+    original_weight = linear.weight.detach().clone()
+
+    solver = CalibrationSolver(args, layer_idx=0, model=block)
+    assert solver.solve(_build_loader()) is None
+
+    assert not torch.allclose(linear.weight.detach(), original_weight)
+
+
+def test_solve_runs_gptq_with_int4_and_mutates_weight_in_place():
+    args, linear, block = _build_block(quant_dtype="int", w_bits=4)
+    original_weight = linear.weight.detach().clone()
+
+    solver = CalibrationSolver(args, layer_idx=0, model=block)
+    assert solver.solve(_build_loader()) is None
+
+    assert not torch.allclose(linear.weight.detach(), original_weight)
+
+
+def test_solve_runs_gptq_with_mxfp_and_mutates_weight_in_place():
+    args, linear, block = _build_block(quant_dtype="mxfp", w_bits=4)
     original_weight = linear.weight.detach().clone()
 
     solver = CalibrationSolver(args, layer_idx=0, model=block)

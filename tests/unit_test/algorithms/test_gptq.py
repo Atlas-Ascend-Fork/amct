@@ -24,7 +24,7 @@ import torch.nn as nn
 sys.modules["torch_npu"] = MagicMock()
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-from amct_pytorch.algorithms.quant.higptq import HiGPTQuant
+from amct_pytorch.algorithms.quant.gptq import GPTQuant, HiGPTQuant, build_gptq
 from amct_pytorch.quantization.dtypes.hifp_impl import hifloat4_fake_quant
 
 # Mirrors CalibrationSolver._HIFLOAT4_WEIGHTS_CFG -- the only quant_config higptq is ever
@@ -57,16 +57,65 @@ def _single_group_expected(higptq, weight):
     return hifloat4_fake_quant(w[:, perm], qdim=-1)[:, invperm].to(weight.dtype)
 
 
-# ---- registration ------------------------------------------------------------
+# ---- registration / dispatch ---------------------------------------------------
 
 
-def test_higptq_is_registered_as_a_calibrate_solver_algo():
-    item = ALGO_REGISTRY.get_item("higptq")
-    assert item.target is HiGPTQuant
-    assert item.metadata["solver"] == "calibrate"
+def test_gptq_and_higptq_alias_the_same_dispatcher():
+    assert ALGO_REGISTRY.get("gptq") is build_gptq
+    assert ALGO_REGISTRY.get("higptq") is build_gptq
+    assert ALGO_REGISTRY.get_item("gptq").metadata["solver"] == "calibrate"
+    assert ALGO_REGISTRY.get_item("higptq").metadata["solver"] == "calibrate"
 
 
-# ---- overridden pieces ---------------------------------------------------------
+def test_build_gptq_dispatches_hif_dtype_to_higptquant():
+    linear = nn.Linear(16, 4)
+    quant_config = {
+        "batch_num": 1,
+        "weights_cfg": {"quant_type": "hifloat4", "symmetric": True, "strategy": "channel"},
+        "inputs_cfg": {"enable_quant": False},
+    }
+    result = build_gptq(linear, "layer", quant_config)
+    assert isinstance(result, HiGPTQuant)
+
+
+def test_build_gptq_dispatches_int_and_mxfp_dtype_to_plain_gptquant():
+    linear = nn.Linear(16, 4)
+    for quant_type in ("int8", "int4", "mxfp4_e2m1", "mxfp8_e4m3fn"):
+        quant_config = {
+            "batch_num": 1,
+            "weights_cfg": {"quant_type": quant_type, "symmetric": True, "strategy": "channel"},
+            "inputs_cfg": {"enable_quant": False},
+        }
+        result = build_gptq(linear, "layer", quant_config)
+        assert isinstance(result, GPTQuant)
+        assert not isinstance(result, HiGPTQuant)
+
+
+# ---- plain GPTQuant sanity (int path, exercised end-to-end through the state machine) ----
+
+
+def test_plain_gptquant_forward_optimizes_weight_for_int8():
+    torch.manual_seed(0)
+    linear = nn.Linear(32, 4)
+    quant_config = {
+        "batch_num": 2,
+        "weights_cfg": {"quant_type": "int8", "symmetric": True, "strategy": "channel"},
+        "inputs_cfg": {"enable_quant": False},
+    }
+    gptq = GPTQuant(linear, "layer", quant_config)
+    original_weight = linear.weight.detach().clone()
+
+    gptq.forward(torch.randn(3, 32))
+    assert torch.equal(linear.weight.detach(), original_weight)  # still calibrating
+
+    gptq.forward(torch.randn(3, 32))
+    assert not torch.equal(linear.weight.detach(), original_weight)  # optimized in place
+
+    out = gptq.forward(torch.randn(5, 32))  # now on the fake_quant_forward path
+    assert out.shape == (5, 4)
+
+
+# ---- overridden pieces (HiGPTQuant) ---------------------------------------------
 
 
 def test_cal_scale_offset_static_has_no_external_quant_factors():
@@ -144,7 +193,7 @@ def test_optimization_handles_column_counts_not_aligned_to_group_or_block_size()
 def test_fake_quant_forward_quantizes_once_and_reuses_cache():
     higptq, _ = _make(in_features=16, out_features=4)
     with patch(
-        "amct_pytorch.algorithms.quant.higptq.hifloat4_fake_quant", wraps=hifloat4_fake_quant
+        "amct_pytorch.algorithms.quant.gptq.hifloat4_fake_quant", wraps=hifloat4_fake_quant
     ) as mock_fq:
         out1 = higptq.fake_quant_forward(torch.randn(2, 16))
         out2 = higptq.fake_quant_forward(torch.randn(3, 16))

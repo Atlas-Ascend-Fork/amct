@@ -36,10 +36,11 @@ def _validate_eval_mode(args):
 
 
 def _warn_if_higptq_ignores_bit_config(args):
-    if "higptq" in args.algos:
+    if "gptq" in args.algos or "higptq" in args.algos:
         logger.warning(
-            "'higptq' only quantizes weights into hifloat4 format; any activation bit "
-            "configuration in --bit_config is ignored for this run."
+            "'gptq'/'higptq' only quantize weights (weight bit width is honored via "
+            "--bit_config); any activation bit configuration in --bit_config is ignored "
+            "for this run."
         )
 
 
@@ -128,8 +129,8 @@ def parser_gen(command=None):
         nargs="*",
         default=[],
         help='Enabled quantization algorithms. The framework routes them by registry targets. '
-        "'gptq'/'higptq' are special-cased to select the HiGPTQ solver instead of a "
-        'WeightQuantizer plugin.',
+        "'gptq' (and its alias 'higptq') is special-cased to select the GPTQ calibration "
+        'solver instead of a WeightQuantizer plugin.',
     )
     parser.add_argument(
         '--is_per_tensor',
