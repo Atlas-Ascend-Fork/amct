@@ -186,7 +186,10 @@ def convert_state_dict(
                 )
                 if is_nvfp4_scale(weight, scale_inv):
                     weight_scale_2 = _load_scale(
-                        weight_scale_2_name, original_weight_map, model_dir, loaded_files
+                        weight_scale_2_name,
+                        original_weight_map,
+                        model_dir,
+                        loaded_files,
                     )
                     return nvfp4_weight_dequant(weight, scale_inv, weight_scale_2)
             scale_inv = _load_scale(
