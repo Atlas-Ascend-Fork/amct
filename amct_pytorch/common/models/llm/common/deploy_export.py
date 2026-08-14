@@ -23,7 +23,8 @@ from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 from amct_pytorch.common.utils.nvfp4_format import (
-    NVFP4_PACKED_DTYPES,
+    is_nvfp4_weight,
+    nvfp4_scale_names,
     nvfp4_weight_dequant,
 )
 
@@ -165,18 +166,6 @@ def _load_scale(scale_name, original_weight_map, model_dir, loaded_files):
     return loaded_files[file_name][scale_name]
 
 
-def _is_nvfp4_weight(weight, nvfp4_scale_name, original_weight_map):
-    """Whether this 1-byte weight is NVFP4 rather than FP8 or MXFP4.
-
-    NVFP4 packs two elements per byte just like MXFP4, so the dtype alone cannot tell
-    them apart; the per-tensor scale next to the block scale is unique to NVFP4. FP8
-    weights keep a float dtype and are rejected by the dtype check.
-    """
-    if not nvfp4_scale_name or weight.dtype not in NVFP4_PACKED_DTYPES:
-        return False
-    return all(scale_name in original_weight_map for scale_name in nvfp4_scale_name)
-
-
 def convert_state_dict(
     weight,
     weight_name,
@@ -185,13 +174,14 @@ def convert_state_dict(
     model_dir,
     loaded_files,
     block_size,
-    nvfp4_scale_name=None,
 ):
     if weight.element_size() == 1:
         try:
-            if _is_nvfp4_weight(weight, nvfp4_scale_name, original_weight_map):
+            if is_nvfp4_weight(weight, weight_name, original_weight_map):
                 # NVFP4 weight
-                block_scale_name, global_scale_name = nvfp4_scale_name
+                block_scale_name, global_scale_name = nvfp4_scale_names(
+                    weight_name, original_weight_map
+                )
                 weight_scale = _load_scale(
                     block_scale_name, original_weight_map, model_dir, loaded_files
                 )
