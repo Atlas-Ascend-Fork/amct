@@ -269,7 +269,7 @@ class LlmDeployWorkflow:
                 scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
                 if weight_name.endswith(scale_prefix):
                     continue
-                # FP8 -> bf16
+                # FP8 / NVFP4 -> bf16
                 block_size = self.pipeline.block_size(weight)
                 weight = convert_state_dict(
                     weight,
@@ -279,6 +279,7 @@ class LlmDeployWorkflow:
                     model_dir,
                     loaded_files,
                     block_size,
+                    self.pipeline.get_nvfp4_scale_name(weight_name),
                 )
                 new_state_dict[weight_name] = weight
                 if self.quant_dtype in ["int", "mxfp"]:
