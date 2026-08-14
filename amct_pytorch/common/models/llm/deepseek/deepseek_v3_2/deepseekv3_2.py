@@ -175,3 +175,7 @@ class DeepseekV32(BaseModel):
         scale_prefix = "_scale_inv"
         scale_inv_name = f"{weight_name}_scale_inv"
         return scale_prefix, scale_inv_name
+
+    def get_nvfp4_scale_name(self, weight_name):
+        """Return (block_scale_name, global_scale_name) of an NVFP4 weight."""
+        return f"{weight_name}_scale", f"{weight_name}_scale_2"
