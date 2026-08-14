@@ -70,10 +70,12 @@ ALGORITHM_SUPPORTED_QUANT_TYPE_COMB = {
     'NOT_QUANTIZE int8': ['minmax', 'awq', 'gptq'],
     'NOT_QUANTIZE int4': ['minmax', 'awq', 'gptq'],
     'hifloat8 hifloat8': ['ofmr', 'cast', 'quantile', 'smoothquant'],
+    'hifloat4 hifloat4': ['cast'],
     'float8_e4m3fn float8_e4m3fn': ['ofmr'],
     'mxfp8_e4m3fn mxfp8_e4m3fn': ['mxquant'],
     'float8_e4m3fn float4_e2m1': ['minmax', 'smoothquant'],
     'NOT_QUANTIZE hifloat8': ['ofmr', 'gptq', 'cast', 'quantile'],
+    'NOT_QUANTIZE hifloat4': ['cast'],
     'NOT_QUANTIZE float8_e4m3fn': ['ofmr', 'gptq'],
     'NOT_QUANTIZE mxfp4_e2m1': ['awq', 'gptq', 'mxquant'],
     'NOT_QUANTIZE float4_e2m1': ['minmax', 'awq', 'gptq'],
@@ -85,10 +87,12 @@ ALLOWED_WEIGHT_DTYPES = {
     'int8 int8': [torch.bfloat16, torch.float16],
     'int8 int4': [torch.float16],
     'hifloat8 hifloat8': [torch.float32, torch.float16, torch.bfloat16],
+    'hifloat4 hifloat4': [torch.float32, torch.float16, torch.bfloat16],
     'float8_e4m3fn float8_e4m3fn': [torch.float32, torch.float16, torch.bfloat16],
     'mxfp8_e4m3fn mxfp8_e4m3fn': [torch.bfloat16],
     'float8_e4m3fn float4_e2m1': [torch.bfloat16],
     'NOT_QUANTIZE hifloat8': [torch.bfloat16, torch.float16],
+    'NOT_QUANTIZE hifloat4': [torch.float32, torch.bfloat16, torch.float16],
     'NOT_QUANTIZE float8_e4m3fn': [torch.bfloat16, torch.float16],
     'NOT_QUANTIZE mxfp4_e2m1': [torch.bfloat16, torch.float16],
     'NOT_QUANTIZE float4_e2m1': [torch.bfloat16, torch.float16],
@@ -96,22 +100,26 @@ ALLOWED_WEIGHT_DTYPES = {
 
 WTS_PER_TENSOR_SUPPORT_COMBINATION = [
     'hifloat8 hifloat8',
+    'hifloat4 hifloat4',
     'float8_e4m3fn float8_e4m3fn',
     'int8 int8',
     'int8 int4',
     'NOT_QUANTIZE int8',
     'NOT_QUANTIZE int4',
     'NOT_QUANTIZE hifloat8',
+    'NOT_QUANTIZE hifloat4',
     'NOT_QUANTIZE float8_e4m3fn',
 ]
 WTS_PER_CHANNEL_SUPPORT_COMBINATION = [
     'hifloat8 hifloat8',
+    'hifloat4 hifloat4',
     'float8_e4m3fn float8_e4m3fn',
     'int8 int8',
     'int8 int4',
     'NOT_QUANTIZE int8',
     'NOT_QUANTIZE int4',
     'NOT_QUANTIZE hifloat8',
+    'NOT_QUANTIZE hifloat4',
     'NOT_QUANTIZE float8_e4m3fn',
 ]
 WTS_PER_GROUP_SUPPORT_COMBINATION = [
@@ -125,6 +133,7 @@ WTS_PER_GROUP_SUPPORT_COMBINATION = [
 
 ACT_PER_TENSOR_SUPPORT_COMBINATION = [
     'hifloat8 hifloat8',
+    'hifloat4 hifloat4',
     'float8_e4m3fn float8_e4m3fn',
     'int8 int8',
     'int8 int4',
