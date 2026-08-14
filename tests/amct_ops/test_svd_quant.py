@@ -8,10 +8,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
+import unittest
 import torch
 import torch_npu
 import numpy as np
-import unittest
 
 from amct_ops import svd_quant
 from .quantize_ref import py_quantize_mx4, py_dequantize_mx4
@@ -125,6 +125,13 @@ class GoldenSubGraph(torch.nn.Module):
 
 
 class TestSvdQuant(unittest.TestCase):
+    
+    def test_svd_quant(self):
+        for shape in SVD_QUANT_TEST_CASES:
+            test_name = f"{shape}"
+            with self.subTest(msg=test_name, shape=shape):
+                self.__run_svd_quant(shape)
+    
     def __run_svd_quant(self, shape):
         bs, seq_len, n, k, rank = shape
         a_shape = (bs, seq_len, k)
@@ -154,12 +161,6 @@ class TestSvdQuant(unittest.TestCase):
         np_svd_out = svd_quant_out.cpu().float().detach().numpy()
         result = np.allclose(np_svd_out, np_golden_out, atol=1e-2, rtol=1e-02)
         self.assertTrue(result)
-    
-    def test_svd_quant(self):
-        for shape in SVD_QUANT_TEST_CASES:
-            test_name = f"{shape}"
-            with self.subTest(msg=test_name, shape=shape):
-                self.__run_svd_quant(shape)
 
 if __name__ == '__main__':
     unittest.main()
