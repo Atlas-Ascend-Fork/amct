@@ -628,7 +628,8 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         original_weight_map,
         model_dir,
         loaded_files,
-        block_size: weight,
+        block_size,
+        nvfp4_scale_name=None: weight,
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",
