@@ -316,7 +316,7 @@ def test_convert_state_dict_reuses_loaded_file(tmp_path):
 
 
 def test_convert_state_dict_nvfp4_uses_paired_scales(tmp_path):
-    """A packed weight with both weight_scale and weight_scale_2 is dequantized as NVFP4."""
+    """Packed weight with weight_scale / weight_scale_2 and an E4M3 layout is NVFP4."""
     from safetensors.torch import save_file as sf_save
     from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
     from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
@@ -341,52 +341,14 @@ def test_convert_state_dict_nvfp4_uses_paired_scales(tmp_path):
     result = convert_state_dict(
         weight,
         "layer.weight",
-        "layer.scale",
+        "layer.weight_scale",
         weight_map,
         tmp_path,
         {},
         block_size=32,
-        nvfp4_scale_name=("layer.weight_scale", "layer.weight_scale_2"),
     )
 
-    # Unpacking doubles the column count; both scales are applied.
     assert result.shape == (rows, cols)
-    assert torch.allclose(result, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
-
-
-def test_convert_state_dict_nvfp4_follows_the_names_given_by_the_model(tmp_path):
-    """Adapters own the scale naming, so a `.scale` / `.scale_2` checkpoint works too."""
-    from safetensors.torch import save_file as sf_save
-    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
-    from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
-
-    rows, cols = 2, 32
-    weight = torch.randint(0, 256, (rows, cols // 2), dtype=torch.uint8)
-    weight_scale = torch.full((rows, cols // 16), 2.0).to(torch.float8_e4m3fn)
-    sf_save(
-        {
-            "layer.scale": weight_scale.view(torch.uint8),
-            "layer.scale_2": torch.tensor([0.5]),
-        },
-        str(tmp_path / "shard.safetensors"),
-    )
-    weight_map = {
-        "layer.weight": "shard.safetensors",
-        "layer.scale": "shard.safetensors",
-        "layer.scale_2": "shard.safetensors",
-    }
-
-    result = convert_state_dict(
-        weight,
-        "layer.weight",
-        "layer.scale",
-        weight_map,
-        tmp_path,
-        {},
-        block_size=32,
-        nvfp4_scale_name=("layer.scale", "layer.scale_2"),
-    )
-
     assert torch.allclose(result, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
 
 
@@ -409,7 +371,37 @@ def test_convert_state_dict_without_weight_scale_2_stays_on_mx_path(tmp_path):
         tmp_path,
         {},
         block_size=32,
-        nvfp4_scale_name=("layer.weight_scale", "layer.weight_scale_2"),
+    )
+    assert result.shape == (2, 32)
+
+
+def test_convert_state_dict_rejects_nvfp4_names_when_scale_layout_is_wrong(tmp_path):
+    """Both NVFP4 names are not enough if scale_inv is not an E4M3 block scale."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale = torch.ones(2, 1, dtype=torch.float32)
+    sf_save(
+        {
+            "layer.weight_scale": scale,
+            "layer.weight_scale_2": torch.tensor(0.5),
+        },
+        str(tmp_path / "shard.safetensors"),
+    )
+    weight = torch.ones(2, 16, dtype=torch.int8)
+    weight_map = {
+        "layer.weight_scale": "shard.safetensors",
+        "layer.weight_scale_2": "shard.safetensors",
+    }
+
+    result = convert_state_dict(
+        weight,
+        "layer.weight",
+        "layer.weight_scale",
+        weight_map,
+        tmp_path,
+        {},
+        block_size=32,
     )
     assert result.shape == (2, 32)
 
@@ -449,7 +441,6 @@ def test_convert_state_dict_nvfp4_loads_scales_from_other_shard(tmp_path):
         tmp_path,
         loaded_files,
         block_size=32,
-        nvfp4_scale_name=("layer.weight_scale", "layer.weight_scale_2"),
     )
 
     assert "scales.safetensors" in loaded_files
@@ -485,9 +476,7 @@ def test_convert_state_dict_fp8_not_hijacked_by_weight_scale_2(tmp_path):
         tmp_path,
         {},
         block_size=1,
-        nvfp4_scale_name=("layer.weight_scale", "layer.weight_scale_2"),
     )
-    # FP8 path: weight * scale_inv elementwise with block_size=1.
     assert torch.allclose(result.float(), torch.ones(2, 4))
 
 

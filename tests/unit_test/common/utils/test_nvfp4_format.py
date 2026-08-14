@@ -20,6 +20,7 @@ import torch
 
 from amct_pytorch.common.utils.nvfp4_format import (
     NVFP4_BLOCK_SIZE,
+    is_nvfp4_scale,
     nvfp4_weight_dequant,
 )
 from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
@@ -146,6 +147,21 @@ def test_dequant_rejects_non_scalar_global_scale():
     weight_scale = torch.ones(2, 2).to(torch.float8_e4m3fn)
     with pytest.raises(RuntimeError):
         nvfp4_weight_dequant(weight, weight_scale, torch.ones(2))
+
+
+def test_is_nvfp4_scale_accepts_e4m3_block_layout():
+    weight = _packed_weight(2, 32)
+    scale = torch.ones(2, 2).to(torch.float8_e4m3fn)
+    assert is_nvfp4_scale(weight, scale) is True
+    assert is_nvfp4_scale(weight, scale.view(torch.uint8).reshape(-1)) is True
+
+
+def test_is_nvfp4_scale_rejects_float32_and_hif4_like_layouts():
+    weight = _packed_weight(2, 32)
+    assert is_nvfp4_scale(weight, torch.ones(2, 2, dtype=torch.float32)) is False
+    assert is_nvfp4_scale(weight, torch.ones(2, 2, 4, dtype=torch.uint8)) is False
+    fp8_weight = torch.ones(2, 4, dtype=torch.float32).to(torch.float8_e4m3fn)
+    assert is_nvfp4_scale(fp8_weight, torch.ones(2, 2).to(torch.float8_e4m3fn)) is False
 
 
 def test_dequant_round_trips_a_modelopt_style_quantization():
