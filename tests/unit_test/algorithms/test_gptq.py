@@ -15,47 +15,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import sys
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
-import torch.nn as nn
 
-sys.modules["torch_npu"] = MagicMock()
-
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
+from amct_pytorch.algorithms.quant.gptq import GPTQ, _build_gptq_weights_cfg
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
-from amct_pytorch.algorithms.quant.gptq import GPTQuant, _build_gptq_weights_cfg
-from amct_pytorch.common.optimization import CalibrateBuildContext
 from amct_pytorch.quantization.dtypes.hifp_impl import hifloat4_fake_quant
 
 
-class _FakeQuantLinear:
-    """Minimal duck-typed stand-in for QuantLinear -- GPTQuant.__init__ only ever reads
-    .linear and .w_bits, and a real QuantLinear needs a lot of unrelated setup
-    (WeightQuantizer, DTYPE_REGISTRY, build_algorithms_by_target)."""
-
-    def __init__(self, linear, w_bits):
-        self.linear = linear
-        self.w_bits = w_bits
+def _args(quant_dtype="int", w_size=(4, 64)):
+    return SimpleNamespace(quant_dtype=quant_dtype, w_size=w_size)
 
 
-def _make(in_features=64, out_features=4, batch_num=1):
-    linear = nn.Linear(in_features, out_features)
-    # w_bits=4 -> hifloat4 (see _build_gptq_weights_cfg); these tests are all hifloat4-specific.
-    quant_linear = _FakeQuantLinear(linear, w_bits=4)
-    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="hifp"), num_batches=batch_num)
-    return GPTQuant(quant_linear, "layer", ctx), linear
+def _make(quant_dtype="int", w_bits=8, in_features=64, out_features=4):
+    args = _args(quant_dtype=quant_dtype, w_size=(out_features, in_features))
+    return GPTQ(args, w_bits)
 
 
-def _single_group_expected(higptq, weight):
-    """Closed-form expected output of get_opt_weight_and_quant_factor when
-    columns == HIFX4_GROUP_SIZE: with exactly one block and one group, both the
-    intra-block and inter-block error-propagation steps are no-ops (their target
-    slices are empty), so the result reduces to a direct quantize of the
-    dead-zeroed, Hessian-permuted weight."""
-    diag = torch.diag(higptq.hessian)
+def _observe(gptq, inputs):
+    gptq.is_observe = True
+    gptq.observe_input(inputs)
+
+
+def _single_group_expected(gptq, weight):
+    """Closed-form expected output of _get_opt_weight when columns == HIFX4_GROUP_SIZE: with
+    exactly one block and one group, both the intra-block and inter-block error-propagation
+    steps are no-ops (their target slices are empty), so the result reduces to a direct
+    quantize of the dead-zeroed, Hessian-permuted weight."""
+    diag = torch.diag(gptq.H)
     dead = diag == 0
     w = weight.clone()
     w[:, dead] = 0
@@ -68,10 +58,18 @@ def _single_group_expected(higptq, weight):
 
 
 def test_gptq_and_higptq_alias_the_same_dispatcher():
-    assert ALGO_REGISTRY.get("gptq") is GPTQuant
-    assert ALGO_REGISTRY.get("higptq") is GPTQuant
-    assert ALGO_REGISTRY.get_item("gptq").metadata["solver"] == "calibrate"
-    assert ALGO_REGISTRY.get_item("higptq").metadata["solver"] == "calibrate"
+    assert ALGO_REGISTRY.get("gptq") is GPTQ
+    assert ALGO_REGISTRY.get("higptq") is GPTQ
+    for name in ("gptq", "higptq"):
+        item = ALGO_REGISTRY.get_item(name)
+        assert item.metadata["solver"] == "gradient"
+        assert item.metadata["targets"] == ("weight",)
+
+
+def test_gptq_is_a_quant_algorithm_base_with_no_trainable_params():
+    gptq = _make()
+    assert isinstance(gptq, QuantAlgorithmBase)
+    assert gptq.trainable_params() == []
 
 
 def test_gptq_resolves_wts_type_and_is_hif4_per_dtype():
@@ -84,18 +82,20 @@ def test_gptq_resolves_wts_type_and_is_hif4_per_dtype():
         ("mxfp", 8, "mxfp8_e4m3fn", False),
     ):
         # 64 columns: valid for every dtype above, required for the hifp/hif4 case.
-        quant_linear = _FakeQuantLinear(nn.Linear(64, 4), w_bits=w_bits)
-        ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype=quant_dtype), num_batches=1)
-        result = GPTQuant(quant_linear, "layer", ctx)
-        assert result.wts_type == expected_quant_type
-        assert result.is_hif4 == expected_is_hif4
+        gptq = _make(quant_dtype=quant_dtype, w_bits=w_bits, in_features=64, out_features=4)
+        assert gptq.wts_type == expected_quant_type
+        assert gptq.is_hif4 == expected_is_hif4
 
 
 def test_init_raises_when_hif4_column_count_not_multiple_of_64():
-    quant_linear = _FakeQuantLinear(nn.Linear(100, 4), w_bits=4)
-    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="hifp"), num_batches=1)
     with pytest.raises(ValueError, match="multiple of 64"):
-        GPTQuant(quant_linear, "layer", ctx)
+        _make(quant_dtype="hifp", w_bits=4, in_features=100, out_features=4)
+
+
+def test_init_raises_on_non_2d_weight_shape():
+    args = _args(w_size=(4,))
+    with pytest.raises(ValueError, match="2D weight tensors"):
+        GPTQ(args, 8)
 
 
 # ---- _build_gptq_weights_cfg (per-layer dtype/bit-width -> weights_cfg) -----
@@ -125,78 +125,95 @@ def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
         _build_gptq_weights_cfg("hifp", 16)
 
 
-# ---- plain GPTQuant sanity (int path, exercised end-to-end through the state machine) ----
+# ---- observe_input: gated on self.is_observe, not the call site ----------------
 
 
-def test_plain_gptquant_forward_optimizes_weight_for_int8():
+def test_observe_input_is_a_noop_when_not_observing():
+    gptq = _make(in_features=8, out_features=2)
+    gptq.is_observe = False
+    gptq.observe_input(torch.randn(3, 8))
+    assert int(gptq.nsamples.item()) == 0
+    assert torch.equal(gptq.H, torch.zeros_like(gptq.H))
+
+
+def test_observe_input_accumulates_hessian_when_observing():
+    # 3D (batch, seq, cin) input: nsamples counts the batch dimension (standard GPTQ
+    # semantics -- number of calibration sequences, not number of token-rows). A bare 2D
+    # (N, cin) input is instead treated as a *single* sequence of N tokens (nsamples += 1),
+    # see test_observe_input_treats_2d_input_as_one_sequence below.
     torch.manual_seed(0)
-    linear = nn.Linear(32, 4)
-    quant_linear = _FakeQuantLinear(linear, w_bits=8)
-    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="int"), num_batches=2)
-    gptq = GPTQuant(quant_linear, "layer", ctx)
-    original_weight = linear.weight.detach().clone()
+    gptq = _make(in_features=8, out_features=2)
+    _observe(gptq, torch.randn(5, 1, 8))
+    assert int(gptq.nsamples.item()) == 5
+    assert torch.isfinite(gptq.H).all()
+    assert not torch.equal(gptq.H, torch.zeros_like(gptq.H))
 
-    gptq.forward(torch.randn(3, 32))
-    assert torch.equal(linear.weight.detach(), original_weight)  # still calibrating
-
-    gptq.forward(torch.randn(3, 32))
-    assert not torch.equal(linear.weight.detach(), original_weight)  # optimized in place
-
-    out = gptq.forward(torch.randn(5, 32))  # now on the fake_quant_forward path
-    assert out.shape == (5, 4)
+    h_after_first = gptq.H.clone()
+    _observe(gptq, torch.randn(5, 1, 8))
+    assert int(gptq.nsamples.item()) == 10
+    assert not torch.equal(gptq.H, h_after_first)
 
 
-# ---- hif branch (get_opt_weight_and_quant_factor, fake_quant_forward) ---------
+def test_observe_input_treats_2d_input_as_one_sequence():
+    torch.manual_seed(0)
+    gptq = _make(in_features=8, out_features=2)
+    _observe(gptq, torch.randn(5, 8))
+    assert int(gptq.nsamples.item()) == 1
+    assert torch.isfinite(gptq.H).all()
+    assert not torch.equal(gptq.H, torch.zeros_like(gptq.H))
 
 
-def test_cal_scale_offset_static_has_no_external_quant_factors():
-    higptq, _ = _make()
-    scale_w, offset_w = higptq.cal_scale_offset_static(higptq.weight)
-    assert scale_w is None
-    assert offset_w is None
+def test_observe_input_toggled_off_stops_accumulating():
+    torch.manual_seed(0)
+    gptq = _make(in_features=8, out_features=2)
+    _observe(gptq, torch.randn(5, 1, 8))
+    nsamples_after_observe = int(gptq.nsamples.item())
+
+    gptq.is_observe = False
+    gptq.observe_input(torch.randn(5, 1, 8))
+    assert int(gptq.nsamples.item()) == nsamples_after_observe
 
 
-def test_cal_quant_weight_group_delegates_to_hifloat4_fake_quant():
-    # GPTQuant.__init__ requires hif4 column counts to be a multiple of 64, so every group
-    # get_opt_weight_and_quant_factor ever passes here is a full HIFX4_GROUP_SIZE group.
-    higptq, _ = _make()
-    w = torch.randn(higptq.weight.shape[0], GPTQuant.HIFX4_GROUP_SIZE)
-    assert torch.equal(higptq.cal_quant_weight_group(w), hifloat4_fake_quant(w, qdim=-1))
+# ---- quantize(): fallback vs closed-form solve ----------------------------------
 
 
-# ---- get_opt_weight_and_quant_factor -------------------------------------------
+def test_quantize_falls_back_to_quant_obj_when_no_hessian_built():
+    gptq = _make(in_features=8, out_features=2)
+    weight = torch.randn(2, 8)
+    calls = []
+
+    def quant_obj(w):
+        calls.append(w)
+        return w * 0
+
+    out = gptq.quantize(weight, quant_obj)
+    assert calls == [weight]
+    assert torch.equal(out, weight * 0)
 
 
 def test_single_group_optimization_matches_direct_hifloat4_quant():
     torch.manual_seed(0)
-    higptq, _ = _make(in_features=GPTQuant.HIFX4_GROUP_SIZE, out_features=6)
-    higptq.update_hessian(torch.randn(200, GPTQuant.HIFX4_GROUP_SIZE))
+    gptq = _make(quant_dtype="hifp", w_bits=4, in_features=GPTQ.HIFX4_GROUP_SIZE, out_features=6)
+    weight = torch.randn(6, GPTQ.HIFX4_GROUP_SIZE)
+    _observe(gptq, torch.randn(200, GPTQ.HIFX4_GROUP_SIZE))
 
-    hessian_before = higptq.hessian.clone()
-    weight_before = higptq.weight.detach().clone()
-    optimized, scale_w, offset_w = higptq.get_opt_weight_and_quant_factor()
+    optimized = gptq.quantize(weight, quant_obj=None)
+    expected = _single_group_expected(gptq, weight)
 
-    higptq.hessian = hessian_before  # get_opt_weight_and_quant_factor deletes self.hessian
-    expected = _single_group_expected(higptq, weight_before)
-
-    assert scale_w is None and offset_w is None
     assert torch.equal(optimized, expected)
-    assert not torch.equal(optimized, weight_before)
+    assert not torch.equal(optimized, weight)
 
 
 def test_dead_hessian_column_is_zeroed_before_quantization():
     torch.manual_seed(0)
-    higptq, _ = _make(in_features=GPTQuant.HIFX4_GROUP_SIZE, out_features=6)
-    inputs = torch.randn(200, GPTQuant.HIFX4_GROUP_SIZE)
+    gptq = _make(quant_dtype="hifp", w_bits=4, in_features=GPTQ.HIFX4_GROUP_SIZE, out_features=6)
+    weight = torch.randn(6, GPTQ.HIFX4_GROUP_SIZE)
+    inputs = torch.randn(200, GPTQ.HIFX4_GROUP_SIZE)
     inputs[:, 5] = 0  # zero-variance column -> its Hessian diagonal entry is 0 ("dead")
-    higptq.update_hessian(inputs)
+    _observe(gptq, inputs)
 
-    hessian_before = higptq.hessian.clone()
-    weight_before = higptq.weight.detach().clone()
-    optimized, _, _ = higptq.get_opt_weight_and_quant_factor()
-
-    higptq.hessian = hessian_before
-    expected = _single_group_expected(higptq, weight_before)
+    optimized = gptq.quantize(weight, quant_obj=None)
+    expected = _single_group_expected(gptq, weight)
 
     assert torch.equal(optimized, expected)
     assert torch.equal(optimized[:, 5], torch.zeros(6))
@@ -207,52 +224,65 @@ def test_optimization_handles_multiple_blocks():
     # 192 columns: two blocks (128 + 64), the second block is a single HIFX4 group.
     # 256 columns: two full 128-column blocks (two HIFX4 groups each).
     for columns in (192, 256):
-        higptq, _ = _make(in_features=columns, out_features=4)
-        higptq.update_hessian(torch.randn(300, columns))
-        weight_before = higptq.weight.detach().clone()
+        gptq = _make(quant_dtype="hifp", w_bits=4, in_features=columns, out_features=4)
+        weight = torch.randn(4, columns)
+        _observe(gptq, torch.randn(300, columns))
 
-        optimized, scale_w, offset_w = higptq.get_opt_weight_and_quant_factor()
+        optimized = gptq.quantize(weight, quant_obj=None)
 
-        assert optimized.shape == weight_before.shape
-        assert scale_w is None and offset_w is None
+        assert optimized.shape == weight.shape
         assert torch.isfinite(optimized).all()
-        assert not torch.equal(optimized, weight_before)
+        assert not torch.equal(optimized, weight)
 
 
-# ---- fake_quant_forward caching -------------------------------------------------
+def test_quantize_optimizes_weight_for_int8():
+    torch.manual_seed(0)
+    gptq = _make(quant_dtype="int", w_bits=8, in_features=32, out_features=4)
+    weight = torch.randn(4, 32)
+    _observe(gptq, torch.randn(50, 32))
+
+    optimized = gptq.quantize(weight, quant_obj=None)
+    assert optimized.shape == weight.shape
+    assert not torch.equal(optimized, weight)
 
 
-def test_fake_quant_forward_quantizes_once_and_reuses_cache():
-    higptq, _ = _make(in_features=64, out_features=4)
-    with patch(
-        "amct_pytorch.algorithms.quant.gptq.hifloat4_fake_quant", wraps=hifloat4_fake_quant
-    ) as mock_fq:
-        out1 = higptq.fake_quant_forward(torch.randn(2, 64))
-        out2 = higptq.fake_quant_forward(torch.randn(3, 64))
+def test_quantize_optimizes_weight_for_mxfp():
+    torch.manual_seed(0)
+    gptq = _make(quant_dtype="mxfp", w_bits=4, in_features=64, out_features=4)
+    weight = torch.randn(4, 64)
+    _observe(gptq, torch.randn(50, 64))
 
-    assert mock_fq.call_count == 1
-    assert higptq.fake_quant_cache_ready is True
-    assert out1.shape == (2, 4)
-    assert out2.shape == (3, 4)
+    optimized = gptq.quantize(weight, quant_obj=None)
+    assert optimized.shape == weight.shape
+    assert torch.isfinite(optimized).all()
+    assert not torch.equal(optimized, weight)
 
 
-# ---- forward() end-to-end (hif branch state machine) ---------------------------
+# ---- export_ptq_params / load_ptq_params ----------------------------------------
 
 
-def test_forward_updates_weight_after_batch_num_then_switches_to_fake_quant():
-    higptq, linear = _make(in_features=64, out_features=4, batch_num=2)
-    original_weight = linear.weight.detach().clone()
+def test_export_ptq_params_empty_when_no_samples_observed():
+    gptq = _make(in_features=8, out_features=2)
+    assert gptq.export_ptq_params() == {}
 
-    out1 = higptq.forward(torch.randn(3, 64))
-    assert higptq.cur_batch == 1
-    assert torch.equal(linear.weight.detach(), original_weight)  # still calibrating
 
-    out2 = higptq.forward(torch.randn(3, 64))
-    assert higptq.cur_batch == 3
-    assert not torch.equal(linear.weight.detach(), original_weight)  # optimized in place
-    assert higptq.scale_w is None and higptq.offset_w is None
+def test_export_then_load_ptq_params_round_trips_hessian():
+    torch.manual_seed(0)
+    source = _make(in_features=8, out_features=2)
+    _observe(source, torch.randn(6, 1, 8))
 
-    out3 = higptq.forward(torch.randn(5, 64))  # now on the fake_quant_forward path
-    assert out1.shape == (3, 4)
-    assert out2.shape == (3, 4)
-    assert out3.shape == (5, 4)
+    params = source.export_ptq_params()
+    assert set(params) == {"H", "nsamples"}
+    assert params["nsamples"] == 6
+
+    target = _make(in_features=8, out_features=2)
+    target.load_ptq_params(params)
+
+    assert int(target.nsamples.item()) == 6
+    assert torch.equal(target.H, source.H)
+
+
+def test_load_ptq_params_is_a_noop_without_h_key():
+    gptq = _make(in_features=8, out_features=2)
+    gptq.load_ptq_params({"nsamples": 5})
+    assert int(gptq.nsamples.item()) == 0

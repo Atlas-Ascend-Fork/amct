@@ -29,12 +29,6 @@ def get_algo_names_by_target(args, target):
     selected = []
     for algo_name in args.algos:
         algo_item = ALGO_REGISTRY.get_item(algo_name)
-        if algo_item.metadata.get("solver") == "calibrate":
-            # calibrate-class algos (e.g. gptq) are single-pass, no-gradient algorithms
-            # driven directly by CalibrationSolver (by name, via args.algos) -- they never
-            # plug into the weight/activation/structure quantizer slots this function
-            # serves, so they don't declare `targets` at all.
-            continue
         targets = tuple(algo_item.metadata.get("targets", ()))
         if not targets:
             raise ValueError(
@@ -152,6 +146,20 @@ class WeightQuantizer(torch.nn.Module):
             x = algo(x)
         return x, quantize_algo
 
+    def _get_quantize_algo(self):
+        """Find the (at most one) algorithm exposing a custom quantize() hook, without
+        running algo_forward's loop (which has side effects -- calib_forward/__call__ on
+        every *other* algo -- that export/load must not trigger)."""
+        quantize_algo = None
+        for algo in self.algorithms.values():
+            if callable(getattr(algo, "quantize", None)):
+                if quantize_algo is not None:
+                    raise ValueError(
+                        "Only one weight algorithm with a custom quantize() hook is supported."
+                    )
+                quantize_algo = algo
+        return quantize_algo
+
     def export_deploy(self, x):
         x, quantize_algo = self.algo_forward(x)
         if quantize_algo is not None:
@@ -184,6 +192,25 @@ class WeightQuantizer(torch.nn.Module):
             observe_input = getattr(algo, "observe_input", None)
             if callable(observe_input):
                 observe_input(x, weight)
+
+    def export_ptq_params(self):
+        quantize_algo = self._get_quantize_algo()
+        if quantize_algo is None:
+            return None
+        export_fn = getattr(quantize_algo, "export_ptq_params", None)
+        if not callable(export_fn):
+            return None
+        return export_fn()
+
+    def load_ptq_params(self, params):
+        quantize_algo = self._get_quantize_algo()
+        if quantize_algo is None:
+            return False
+        load_fn = getattr(quantize_algo, "load_ptq_params", None)
+        if not callable(load_fn):
+            return False
+        load_fn(params)
+        return True
 
     def trainable_params(self):
         params = []

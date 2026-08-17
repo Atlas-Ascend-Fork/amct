@@ -73,8 +73,13 @@ class QuantLinear(nn.Module):
         return payload
 
     def export_ptq_params(self):
+        algo_params = self.weight_quantizer.export_ptq_params()
+        if algo_params:
+            return algo_params
         return {"weight": self.linear.weight.detach().cpu()}
 
     def load_ptq_params(self, params):
+        if self.weight_quantizer.load_ptq_params(params):
+            return
         weight = self.linear.weight
         weight.data.copy_(params["weight"].to(device=weight.device, dtype=weight.dtype))

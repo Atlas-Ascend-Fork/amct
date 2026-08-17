@@ -39,14 +39,14 @@ from amct_pytorch.common.utils.run_logging import setup_run_logging
 
 class LlmPtqWorkflow:
 
-    # Maps each algorithm's ALGO_REGISTRY "solver" metadata (see e.g.
-    # amct_pytorch/algorithms/quant/gptq.py and auto_clip.py) to the SOLVER_REGISTRY key
-    # that should drive it. "gradient" algos (lwc/lac/autoround/omniquant/flatquant) are
-    # composed inline into QuantLinear/ActivationQuantizer and trained via BlockwiseSolver's
-    # backprop + optimizer loop; "calibrate" algos (e.g. gptq) are single-pass, no-gradient
-    # closed-form solves driven by CalibrationSolver. Every algo in ALGO_REGISTRY must declare
-    # a "solver" so this mapping never has to be hand-maintained per algo name.
-    _ALGO_SOLVER_TO_SOLVER_KEY = {"gradient": "block", "calibrate": "calibration"}
+    # Maps each algorithm's ALGO_REGISTRY "solver" metadata (see e.g. auto_clip.py) to the
+    # SOLVER_REGISTRY key that should drive it. All algos (lwc/lac/autoround/omniquant/
+    # flatquant/gptq/higptq) are composed inline into QuantLinear/ActivationQuantizer and
+    # driven by BlockwiseSolver's forward loop -- gptq's own quantize() is a closed-form
+    # solve with no trainable parameters, but is still triggered the same way, via
+    # WeightQuantizer.forward's quantize_algo dispatch. Every algo in ALGO_REGISTRY must
+    # declare a "solver" so this mapping never has to be hand-maintained per algo name.
+    _ALGO_SOLVER_TO_SOLVER_KEY = {"gradient": "block"}
 
     def __init__(self, args):
         self.args = args
@@ -119,9 +119,9 @@ class LlmPtqWorkflow:
         sink_id = self.setup()
 
         # granularity picks which run loop executes (_run_blockwise vs _run_modelwise);
-        # solver_key independently picks which Solver class that loop uses. They used to
-        # be conflated (solver looked up by granularity), which meant there was no way to
-        # plug in a non-gradient solver like CalibrationSolver without also changing the loop.
+        # solver_key independently picks which Solver class that loop uses -- kept separate
+        # so a future non-"block" SOLVER_REGISTRY entry could be plugged in without touching
+        # the run loop.
         solver_cls = SOLVER_REGISTRY.get(self.solver_key)
         if self.granularity == "block":
             results = self._run_blockwise(solver_cls)

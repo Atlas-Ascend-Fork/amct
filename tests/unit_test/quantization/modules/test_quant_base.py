@@ -24,6 +24,7 @@ import torch.nn as nn
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.quant.auto_round import AutoRound  # noqa: F401
+from amct_pytorch.algorithms.quant.gptq import GPTQ  # noqa: F401
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
@@ -501,6 +502,34 @@ def test_weight_quantizer_export_deploy_supports_autoround_hook_for_mxfp():
 
     assert "qweight" in out
     assert "weight_scale" in out
+
+
+def test_weight_quantizer_export_ptq_params_none_without_quantize_hook():
+    wq = WeightQuantizer(_args(w_bits=8), w_bits=8)
+    assert wq.export_ptq_params() is None
+
+
+def test_weight_quantizer_load_ptq_params_false_without_quantize_hook():
+    wq = WeightQuantizer(_args(w_bits=8), w_bits=8)
+    assert wq.load_ptq_params({"weight": torch.zeros(4, 8)}) is False
+
+
+def test_weight_quantizer_export_and_load_ptq_params_delegate_to_gptq_hook():
+    wq = WeightQuantizer(_args(algos=["gptq"], w_bits=8, w_size=(4, 8)), w_bits=8)
+    assert wq.export_ptq_params() == {}  # no observe pass yet -> nothing to export
+
+    gptq = wq.algorithms["gptq"]
+    gptq.is_observe = True
+    gptq.observe_input(torch.randn(3, 1, 8))  # 3D (batch, seq, cin) -> nsamples == batch
+
+    params = wq.export_ptq_params()
+    assert set(params) == {"H", "nsamples"}
+    assert params["nsamples"] == 3
+
+    wq2 = WeightQuantizer(_args(algos=["gptq"], w_bits=8, w_size=(4, 8)), w_bits=8)
+    assert wq2.load_ptq_params(params) is True
+    assert int(wq2.algorithms["gptq"].nsamples.item()) == 3
+    assert torch.equal(wq2.algorithms["gptq"].H, gptq.H)
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():

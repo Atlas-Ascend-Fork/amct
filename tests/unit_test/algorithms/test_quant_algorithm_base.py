@@ -115,10 +115,9 @@ def test_base_requires_subclass_to_implement_forward():
 
 # solver="gradient" algorithms are composed into weight/activation/structure quantizer
 # slots via the (args)/(args, w_bits)/(args, ctx: AlgoBuildContext) build contract this test
-# exercises. solver="calibrate" algorithms (e.g. gptq/higptq) deliberately declare no
-# `targets` and use an unrelated build contract driven by CalibrationSolver instead (see
-# amct_pytorch/quantization/modules/quant_base.py::get_algo_names_by_target, which excludes
-# them the same way) -- covered by their own tests, not this one.
+# exercises. Every ALGO_REGISTRY entry currently declares solver="gradient" and is driven by
+# BlockwiseSolver -- gptq/higptq are closed-form (no trainable params) but still composed
+# in and dispatched the same way as the gradient-trained ones.
 _GRADIENT_ALGORITHMS = sorted(
     name for name in ALGO_REGISTRY.list_all()
     if ALGO_REGISTRY.get_item(name).metadata.get("solver") == "gradient"
@@ -127,7 +126,7 @@ _GRADIENT_ALGORITHMS = sorted(
 
 @pytest.mark.parametrize("name", _GRADIENT_ALGORITHMS)
 def test_registered_algorithm_satisfies_calibration_contract(name):
-    expected_algorithms = {"autoround", "flatquant", "lac", "lwc", "omniquant"}
+    expected_algorithms = {"autoround", "flatquant", "gptq", "higptq", "lac", "lwc", "omniquant"}
     assert set(_GRADIENT_ALGORITHMS) == expected_algorithms
 
     item = ALGO_REGISTRY.get_item(name)

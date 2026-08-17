@@ -278,21 +278,20 @@ def test_build_block_solver_supports_block_kwarg_alias():
 # ---- __init__ ------------------------------------------------------------
 
 
-def test_init_sets_solver_key_to_calibration_when_gptq_in_algos():
+def test_init_sets_solver_key_to_block_when_gptq_in_algos():
     args = SimpleNamespace(
         quant_target=[QUANT_TARGET_MLP], granularity="block",
         output_dir="/tmp/ptq", model_name="qwen3",
         device="cpu", algos=["higptq"],
     )
     wf = LlmPtqWorkflow(args)
-    assert wf.solver_key == "calibration"
+    # gptq/higptq are solver="gradient" like every other targets=("weight",) algorithm --
+    # composed into WeightQuantizer and driven by BlockwiseSolver, not a dedicated solver.
+    assert wf.solver_key == "block"
     assert wf.quant_target == QUANT_TARGET_MLP
     assert wf.model_name == "qwen3"
     assert wf.pipeline is None
     assert wf.data_provider is None
-    # get_algo_names_by_target skips "higptq" in weight/activation/structure lookups via
-    # its solver="calibrate" metadata (it declares no `targets` at all), so __init__ no
-    # longer needs to strip it out.
     assert wf.args.algos == ["higptq"]
 
 
@@ -328,13 +327,14 @@ def test_init_raises_when_algo_missing_solver_metadata():
 
 
 def test_init_raises_when_algos_mix_solver_kinds():
-    args = SimpleNamespace(
-        quant_target=[QUANT_TARGET_MLP], granularity="block",
-        output_dir="/tmp/ptq", model_name="qwen3",
-        device="cpu", algos=["higptq", "lwc"],
-    )
-    with pytest.raises(ValueError, match="mixes incompatible solver kinds"):
-        LlmPtqWorkflow(args)
+    with _registered_algo("other_kind_algo", targets=("weight",), solver="other"):
+        args = SimpleNamespace(
+            quant_target=[QUANT_TARGET_MLP], granularity="block",
+            output_dir="/tmp/ptq", model_name="qwen3",
+            device="cpu", algos=["lwc", "other_kind_algo"],
+        )
+        with pytest.raises(ValueError, match="mixes incompatible solver kinds"):
+            LlmPtqWorkflow(args)
 
 
 # ---- run with model granularity (calls _run_modelwise) -------------------
