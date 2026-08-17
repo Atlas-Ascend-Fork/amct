@@ -94,6 +94,18 @@ def test_dequant_reshapes_exact_flattened_block_scale():
     assert torch.allclose(out, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
 
 
+def _to_blocked(input_matrix: torch.Tensor) -> torch.Tensor:
+    """Match torchAO ``to_blocked``, viewed as (32 * n_row_blocks, 16 * n_col_blocks)."""
+    rows, cols = input_matrix.shape
+    n_row_blocks = (rows + 127) // 128
+    n_col_blocks = (cols + 3) // 4
+    padded = torch.zeros(n_row_blocks * 128, n_col_blocks * 4, dtype=input_matrix.dtype)
+    padded[:rows, :cols] = input_matrix
+    blocks = padded.view(n_row_blocks, 128, n_col_blocks, 4).permute(0, 2, 1, 3)
+    rearranged = blocks.reshape(-1, 4, 32, 4).transpose(1, 2).reshape(-1, 32, 16)
+    return rearranged.reshape(n_row_blocks * 32, n_col_blocks * 16)
+
+
 def test_dequant_reshapes_trtllm_padded_flattened_block_scale():
     # TRT-LLM flattens SF over pad(rows, 128) x pad(cols/16, 4).
     rows, cols = 2, 32
@@ -104,6 +116,22 @@ def test_dequant_reshapes_trtllm_padded_flattened_block_scale():
 
     assert out.shape == (rows, cols)
     assert torch.allclose(out, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
+
+
+def test_dequant_unswizzles_torchao_blocked_scale():
+    rows, cols = 2, 128
+    weight = _packed_weight(rows, cols)
+    logical = torch.arange(1, rows * cols // NVFP4_BLOCK_SIZE + 1, dtype=torch.float32)
+    logical = logical.reshape(rows, cols // NVFP4_BLOCK_SIZE)
+    swizzled = _to_blocked(logical).to(torch.float8_e4m3fn)
+
+    assert is_nvfp4_scale(weight, swizzled)
+    assert torch.allclose(
+        nvfp4_weight_dequant(weight, swizzled, torch.tensor(1.0)),
+        nvfp4_weight_dequant(
+            weight, logical.to(torch.float8_e4m3fn), torch.tensor(1.0)
+        ),
+    )
 
 
 def test_dequant_trims_row_padded_block_scale():
