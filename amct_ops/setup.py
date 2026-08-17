@@ -25,6 +25,7 @@
 
 已包含算子：
   hifloat8_cast  →  python 包名: amct_ops.hifloat8_cast
+  hifloat4_cast  →  python 包名: amct_ops.hifloat4_cast
 """
 
 import os

@@ -324,7 +324,7 @@ def cvt_float16_to_hifuint8(x, round_mode="round", over_mode=True):
             fraction_int, fraction_hif8_bits, exponent
         )
     else:
-        logger.info("unknow round type")
+        logger.info("unknown round type")
         return 0
     if carry_exp_status:
         exponent += 1
@@ -435,7 +435,7 @@ def cvt_float32_to_hifuint8(x, round_mode="round", over_mode=True):
             fraction_int, fraction_hif8_bits, exponent
         )
     else:
-        logger.info("unknow round type")
+        logger.info("unknown round type")
         return 0
     if carry_exp_status:
         exponent += 1

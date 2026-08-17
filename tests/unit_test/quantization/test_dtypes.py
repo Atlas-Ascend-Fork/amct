@@ -70,6 +70,33 @@ def _has_hifloat8_backend():
         return False
 
 
+@pytest.mark.parametrize(
+    "dtype_cls, use_rounding_offset",
+    [
+        pytest.param(QuantDequantInt, True, id="int"),
+        pytest.param(QuantDequantMx, True, id="mxfp"),
+        pytest.param(QuantDequantHifp, False, id="hifp"),
+    ],
+)
+def test_dtype_observe_returns_input_object_unchanged(dtype_cls, use_rounding_offset):
+    quant_obj = dtype_cls(bits=8)
+    quant_obj.is_observe = True
+    x = torch.linspace(-1.0, 1.0, steps=64).reshape(2, 32)
+    snapshot = x.clone()
+
+    if dtype_cls is QuantDequantHifp:
+        with patch.object(
+            hifp_dtype, "hifloat8_fake_quant", return_value=torch.zeros_like(x)
+        ):
+            out = quant_obj(x)
+    else:
+        v = torch.full_like(x, 0.75) if use_rounding_offset else 0.0
+        out = quant_obj(x, v=v)
+
+    assert out is x
+    assert torch.equal(out, snapshot)
+
+
 @pytest.mark.parametrize("bits", [4, 8])
 def test_mxfp_forward_shape_and_dtype_preserved(bits):
     qdq = QuantDequantMx(bits=bits)

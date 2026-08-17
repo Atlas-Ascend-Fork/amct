@@ -49,16 +49,16 @@ def test_quant_linear_init_records_weight_size_in_args():
     assert q._cached_transform_key is None
 
 
-def test_quant_linear_train_forward_disabled_quantizer_matches_plain_linear():
+def test_quant_linear_train_forward_observe_quantizer_matches_plain_linear():
     linear, q = _make_linear_and_quant(4, 8)
+    q.weight_quantizer.is_observe = True
     x = torch.randn(2, 4)
     expected = linear(x)
     assert torch.allclose(q(x), expected, atol=1e-6)
 
 
-def test_quant_linear_train_forward_enabled_quantizer_changes_output():
+def test_quant_linear_train_forward_quantized_weight_changes_output():
     linear, q = _make_linear_and_quant(4, 8)
-    q.weight_quantizer.enable = True
     # Make weights large so int8 quantization is visible.
     with torch.no_grad():
         linear.weight.copy_(
@@ -76,7 +76,6 @@ def test_quant_linear_train_forward_enabled_quantizer_changes_output():
 
 def test_quant_linear_eval_mode_caches_quantized_weight():
     linear, q = _make_linear_and_quant(4, 8)
-    q.weight_quantizer.enable = True
     q.eval_mode = True
     x = torch.randn(2, 4)
     out_first = q(x)
@@ -91,7 +90,6 @@ def test_quant_linear_eval_mode_caches_quantized_weight():
 
 def test_quant_linear_eval_mode_invalidates_cache_when_transform_changes():
     linear, q = _make_linear_and_quant(4, 8)
-    q.weight_quantizer.enable = True
     q.eval_mode = True
 
     def transform(weight, inv_t=False, name=None):

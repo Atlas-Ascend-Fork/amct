@@ -14,7 +14,7 @@ datasets
 accelerate
 compressed_tensors==0.15.0.1
 scipy
-torchao
+torchao==0.12.0
 einops
 sentencepiece
 datasets==4.8.4
