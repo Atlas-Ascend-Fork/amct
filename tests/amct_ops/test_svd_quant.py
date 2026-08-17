@@ -8,11 +8,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-import amct_ops # noqa: F401 — Lazy loading of SvdQuant extension
 import unittest
 import torch
 import torch_npu
 import numpy as np
+import amct_ops  # noqa: F401 — Lazy loading of SvdQuant extension
 
 from .quantize_ref import py_quantize_mx4, py_dequantize_mx4
 
