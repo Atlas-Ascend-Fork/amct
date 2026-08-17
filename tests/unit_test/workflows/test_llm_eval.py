@@ -377,7 +377,7 @@ def test_eval_run_blockwise_streams_head_logits_on_workflow_device(
     streamed = [torch.randn(2, 3, 100)]
     wf.pipeline.do_head_forward.return_value = iter(streamed)
 
-    result = wf._run_blockwise()
+    result = wf._run_blockwise()  # pylint: disable=protected-access
 
     assert result == pytest.approx(12.34)
     assert len(observed["logits"]) == 1
@@ -416,12 +416,15 @@ def test_iter_model_logits_yields_shifted_logits_in_order_without_grad(monkeypat
     observed = []
 
     class FakeModel:
-        def __call__(self, sample):
+        @staticmethod
+        def __call__(sample):
             index = len(observed)
             observed.append((sample.clone(), torch.is_grad_enabled()))
             return SimpleNamespace(logits=raw_logits[index])
 
-    actual = list(wf._iter_model_logits(FakeModel(), samples))
+    actual = list(
+        wf._iter_model_logits(FakeModel(), samples)  # pylint: disable=protected-access
+    )
 
     expected = [logits[:, :-1, :].contiguous() for logits in raw_logits]
     assert len(actual) == len(expected)
@@ -462,7 +465,9 @@ def test_iter_model_logits_releases_previous_tensors_before_next_forward(
             return SimpleNamespace(logits=logits)
 
     model = FakeModel()
-    iterator = wf._iter_model_logits(model, samples)
+    iterator = wf._iter_model_logits(  # pylint: disable=protected-access
+        model, samples
+    )
     first = next(iterator)
     gc.collect()
     assert refs["full"][0]() is None
@@ -521,7 +526,7 @@ def test_eval_run_modelwise_streams_logits_on_workflow_device(monkeypatch):
     forward_fn = MagicMock(return_value=SimpleNamespace(logits=raw_logits))
     wf.pipeline.float_model.return_value.eval.return_value.to.return_value = forward_fn
 
-    result = wf._run_modelwise()
+    result = wf._run_modelwise()  # pylint: disable=protected-access
 
     assert result == pytest.approx(12.34)
     assert observed["samples"] is samples
@@ -569,7 +574,7 @@ def test_eval_init_sets_all_attributes_from_args():
 # ---- run with model granularity -------------------------------------------
 
 
-def test_eval_run_modelwise(monkeypatch, tmp_path):
+def test_eval_run_modelwise(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_eval.get_wiki_inputs",
         lambda tokenizer, seq_len: [torch.randint(0, 100, (2, 4))],
@@ -596,23 +601,7 @@ def test_eval_run_modelwise(monkeypatch, tmp_path):
         fake_ppl,
         raising=False,
     )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_llm_models", lambda: None
-    )
-    monkeypatch.setattr("amct_pytorch.workflows.llm_eval.register_dtype", lambda: None)
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.register_algorithms", lambda: None
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_eval.MODEL_REGISTRY",
-        SimpleNamespace(
-            get=lambda k: type("FakeModel", (), {"__init__": lambda s, a: None})
-        ),
-    )
-
-    wf = _make_eval_workflow(
-        eval_mode="bf16", granularity="model", output_dir=str(tmp_path)
-    )
+    wf = _make_eval_workflow(eval_mode="bf16", granularity="model")
     wf.pipeline = MagicMock()
     wf.pipeline.tokenizer = MagicMock()
     call_result = SimpleNamespace(logits=torch.randn(2, 3, 100))
