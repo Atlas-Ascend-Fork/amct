@@ -262,6 +262,27 @@ def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monke
     assert result is weight
 
 
+def test_convert_state_dict_nvfp4_missing_shard_tensor_raises(tmp_path):
+    """NVFP4 keys in the map but absent from the shard raise, not a scale_inv warning."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    sf_save({"other": torch.ones(1)}, str(tmp_path / "shard.safetensors"))
+    with pytest.raises(KeyError, match="layer.weight_scale"):
+        convert_state_dict(
+            torch.ones(2, 16, dtype=torch.uint8),
+            "layer.weight",
+            "layer.weight_scale_inv",
+            {
+                "layer.weight_scale": "shard.safetensors",
+                "layer.weight_scale_2": "shard.safetensors",
+            },
+            tmp_path,
+            {},
+            32,
+        )
+
+
 def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
     """FP8 weight with non-int8 dtype uses non-packed dequant (block_size=1)."""
     from safetensors.torch import save_file as sf_save

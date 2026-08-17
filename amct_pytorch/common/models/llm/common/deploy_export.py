@@ -192,29 +192,28 @@ def convert_state_dict(
     loaded_files,
     block_size,
 ):
-    if weight.element_size() == 1:
-        try:
-            nvfp4_weight = _nvfp4_dequant_or_none(
-                weight, weight_name, original_weight_map, model_dir, loaded_files
-            )
-            if nvfp4_weight is not None:
-                return nvfp4_weight
-            scale_inv = _load_scale(
-                scale_inv_name, original_weight_map, model_dir, loaded_files
-            )
-            # MXFP4: weight dtype=int8, shape=[M, N//2]; scale dtype=float32
-            if weight.dtype == torch.int8:
-                weight = weight_dequant(
-                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
-                )
-            # FP8 / MXFP8: weight dtype=float8_e4m3fn, shape=[M, N]
-            else:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size)
-        except KeyError:
-            logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
-            )
-    return weight
+    if weight.element_size() != 1:
+        return weight
+    nvfp4_weight = _nvfp4_dequant_or_none(
+        weight, weight_name, original_weight_map, model_dir, loaded_files
+    )
+    if nvfp4_weight is not None:
+        return nvfp4_weight
+    if scale_inv_name not in original_weight_map:
+        logger.warning(
+            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+        )
+        return weight
+    scale_inv = _load_scale(
+        scale_inv_name, original_weight_map, model_dir, loaded_files
+    )
+    # MXFP4: weight dtype=int8, shape=[M, N//2]; scale dtype=float32
+    if weight.dtype == torch.int8:
+        return weight_dequant(
+            weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+        )
+    # FP8 / MXFP8: weight dtype=float8_e4m3fn, shape=[M, N]
+    return weight_dequant(weight, scale_inv, block_size=block_size)
 
 
 def quant_payload(quant_cls, weight_name, weight, bit):
