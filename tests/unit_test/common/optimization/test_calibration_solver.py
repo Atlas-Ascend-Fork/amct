@@ -24,6 +24,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 # Importing gptq triggers GPTQuant's ALGO_REGISTRY.register(name="gptq"/"higptq", ...)
 # class decorators regardless of whether the lazy register_algorithms() has run.
@@ -71,15 +72,17 @@ def _build_loader(n=8, dim=16, batch_size=4):
     return DataLoader(TensorDataset(torch.randn(n, dim)), batch_size=batch_size)
 
 
-class _FakeCalibrateAlgo:
+class _FakeCalibrateAlgo(QuantAlgorithmBase):
     """Minimal but real conformer to CalibrationSolver's build contract:
     build(quant_linear, layer_name, ctx) -> algo, where algo exposes .forward(inputs).
     Used to prove CalibrationSolver drives a brand-new algorithm name with zero
-    solver-side changes -- the actual point of the gptq/higptq decoupling."""
+    solver-side changes -- the actual point of the gptq/higptq decoupling. Also must
+    inherit QuantAlgorithmBase like every other ALGO_REGISTRY entry."""
 
     instances = []
 
     def __init__(self, quant_linear, layer_name, ctx):
+        super().__init__()
         self.quant_linear = quant_linear
         self.layer_name = layer_name
         self.ctx = ctx
@@ -184,11 +187,13 @@ def test_solve_runs_gptq_and_mutates_weight_in_place():
 def test_solve_runs_via_higptq_alias_and_mutates_weight_in_place():
     # quant_dtype must be set to "hifp" explicitly here: dispatch is now dtype-driven (see
     # _build_gptq_weights_cfg), so without this the alias would just retest the int8 path.
-    args, linear, block = _build_block(algos=("higptq",), quant_dtype="hifp", w_bits=4)
+    # in_features=64: GPTQuant requires hif4 column counts to be a multiple of 64.
+    args, linear, block = _build_block(
+        in_features=64, out_features=16, algos=("higptq",), quant_dtype="hifp", w_bits=4)
     original_weight = linear.weight.detach().clone()
 
     solver = CalibrationSolver(args, layer_idx=0, model=block)
-    assert solver.solve(_build_loader()) is None
+    assert solver.solve(_build_loader(dim=64)) is None
 
     assert not torch.allclose(linear.weight.detach(), original_weight)
 

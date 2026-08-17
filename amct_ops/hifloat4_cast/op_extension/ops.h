@@ -27,4 +27,4 @@ namespace AscendKernel {
 // shape/dtype as `input`.
 at::Tensor Hifloat4CastTorch(const at::Tensor &input, int64_t qdim);
 
-}  // namespace AscendKernel
+} // namespace AscendKernel

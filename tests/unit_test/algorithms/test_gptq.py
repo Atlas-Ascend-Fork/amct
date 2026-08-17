@@ -41,7 +41,7 @@ class _FakeQuantLinear:
         self.w_bits = w_bits
 
 
-def _make(in_features=16, out_features=4, batch_num=1):
+def _make(in_features=64, out_features=4, batch_num=1):
     linear = nn.Linear(in_features, out_features)
     # w_bits=4 -> hifloat4 (see _build_gptq_weights_cfg); these tests are all hifloat4-specific.
     quant_linear = _FakeQuantLinear(linear, w_bits=4)
@@ -83,11 +83,19 @@ def test_gptq_resolves_wts_type_and_is_hif4_per_dtype():
         ("mxfp", 4, "mxfp4_e2m1", False),
         ("mxfp", 8, "mxfp8_e4m3fn", False),
     ):
-        quant_linear = _FakeQuantLinear(nn.Linear(16, 4), w_bits=w_bits)
+        # 64 columns: valid for every dtype above, required for the hifp/hif4 case.
+        quant_linear = _FakeQuantLinear(nn.Linear(64, 4), w_bits=w_bits)
         ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype=quant_dtype), num_batches=1)
         result = GPTQuant(quant_linear, "layer", ctx)
         assert result.wts_type == expected_quant_type
         assert result.is_hif4 == expected_is_hif4
+
+
+def test_init_raises_when_hif4_column_count_not_multiple_of_64():
+    quant_linear = _FakeQuantLinear(nn.Linear(100, 4), w_bits=4)
+    ctx = CalibrateBuildContext(args=SimpleNamespace(quant_dtype="hifp"), num_batches=1)
+    with pytest.raises(ValueError, match="multiple of 64"):
+        GPTQuant(quant_linear, "layer", ctx)
 
 
 # ---- _build_gptq_weights_cfg (per-layer dtype/bit-width -> weights_cfg) -----
@@ -149,10 +157,11 @@ def test_cal_scale_offset_static_has_no_external_quant_factors():
 
 
 def test_cal_quant_weight_group_delegates_to_hifloat4_fake_quant():
+    # GPTQuant.__init__ requires hif4 column counts to be a multiple of 64, so every group
+    # get_opt_weight_and_quant_factor ever passes here is a full HIFX4_GROUP_SIZE group.
     higptq, _ = _make()
-    for width in (17, 64):  # a partial group and a full HIFX4_GROUP_SIZE group
-        w = torch.randn(higptq.weight.shape[0], width)
-        assert torch.equal(higptq.cal_quant_weight_group(w), hifloat4_fake_quant(w, qdim=-1))
+    w = torch.randn(higptq.weight.shape[0], GPTQuant.HIFX4_GROUP_SIZE)
+    assert torch.equal(higptq.cal_quant_weight_group(w), hifloat4_fake_quant(w, qdim=-1))
 
 
 # ---- get_opt_weight_and_quant_factor -------------------------------------------
@@ -193,11 +202,11 @@ def test_dead_hessian_column_is_zeroed_before_quantization():
     assert torch.equal(optimized[:, 5], torch.zeros(6))
 
 
-def test_optimization_handles_column_counts_not_aligned_to_group_or_block_size():
+def test_optimization_handles_multiple_blocks():
     torch.manual_seed(0)
-    # 100 columns: one block (block_size=128), two HIFX4 groups (64 + 36).
-    # 200 columns: two blocks (128 + 72), with the second block itself split into two groups.
-    for columns in (100, 200):
+    # 192 columns: two blocks (128 + 64), the second block is a single HIFX4 group.
+    # 256 columns: two full 128-column blocks (two HIFX4 groups each).
+    for columns in (192, 256):
         higptq, _ = _make(in_features=columns, out_features=4)
         higptq.update_hessian(torch.randn(300, columns))
         weight_before = higptq.weight.detach().clone()
@@ -214,12 +223,12 @@ def test_optimization_handles_column_counts_not_aligned_to_group_or_block_size()
 
 
 def test_fake_quant_forward_quantizes_once_and_reuses_cache():
-    higptq, _ = _make(in_features=16, out_features=4)
+    higptq, _ = _make(in_features=64, out_features=4)
     with patch(
         "amct_pytorch.algorithms.quant.gptq.hifloat4_fake_quant", wraps=hifloat4_fake_quant
     ) as mock_fq:
-        out1 = higptq.fake_quant_forward(torch.randn(2, 16))
-        out2 = higptq.fake_quant_forward(torch.randn(3, 16))
+        out1 = higptq.fake_quant_forward(torch.randn(2, 64))
+        out2 = higptq.fake_quant_forward(torch.randn(3, 64))
 
     assert mock_fq.call_count == 1
     assert higptq.fake_quant_cache_ready is True
@@ -231,19 +240,19 @@ def test_fake_quant_forward_quantizes_once_and_reuses_cache():
 
 
 def test_forward_updates_weight_after_batch_num_then_switches_to_fake_quant():
-    higptq, linear = _make(in_features=32, out_features=4, batch_num=2)
+    higptq, linear = _make(in_features=64, out_features=4, batch_num=2)
     original_weight = linear.weight.detach().clone()
 
-    out1 = higptq.forward(torch.randn(3, 32))
+    out1 = higptq.forward(torch.randn(3, 64))
     assert higptq.cur_batch == 1
     assert torch.equal(linear.weight.detach(), original_weight)  # still calibrating
 
-    out2 = higptq.forward(torch.randn(3, 32))
+    out2 = higptq.forward(torch.randn(3, 64))
     assert higptq.cur_batch == 3
     assert not torch.equal(linear.weight.detach(), original_weight)  # optimized in place
     assert higptq.scale_w is None and higptq.offset_w is None
 
-    out3 = higptq.forward(torch.randn(5, 32))  # now on the fake_quant_forward path
+    out3 = higptq.forward(torch.randn(5, 64))  # now on the fake_quant_forward path
     assert out1.shape == (3, 4)
     assert out2.shape == (3, 4)
     assert out3.shape == (5, 4)

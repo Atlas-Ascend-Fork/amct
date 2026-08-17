@@ -171,10 +171,16 @@ def convert_state_dict(
                 file_path = model_dir / file_name
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
-            # HiF4:  weight dtype=uint8, shape=[M, N//2];  scale dtype=uint8, shape=[M, N//64, 4]
-            if scale_inv.dtype == torch.uint8:
+            # HiF4: weight uint8 [M, N/2]; scale uint8 [M, N/64, 4] (3-D, last dim 4)
+            if (
+                weight.dtype == torch.uint8
+                and scale_inv.dtype == torch.uint8
+                and scale_inv.ndim == 3
+                and scale_inv.shape[-1] == 4
+            ):
                 from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
-                weight = torch.from_numpy(hif4_unpack(scale_inv, weight)).to(torch.float32)
+
+                weight = hif4_unpack(scale_inv, weight)
             # MXFP4: weight dtype=int8,   shape=[M, N//2];  scale dtype=float32, shape=[M//bs, N//bs]
             elif weight.dtype == torch.int8:
                 weight = weight_dequant(

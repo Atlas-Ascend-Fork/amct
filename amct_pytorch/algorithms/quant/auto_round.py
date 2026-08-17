@@ -20,6 +20,7 @@ import math
 import torch
 import torch.nn as nn
 
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 
 
@@ -69,7 +70,7 @@ def _get_scale_shape(weight_shape, group_size: int):
     targets=("weight",),
     solver="gradient",
 )
-class AutoRound(nn.Module):
+class AutoRound(QuantAlgorithmBase):
     def __init__(self, args, w_bits):
         super().__init__()
         self.args = args
@@ -105,32 +106,6 @@ class AutoRound(nn.Module):
             group_size = 64
             raise ValueError("Not supported hifx for now")
         return group_size
-
-    def trainable_params(self):
-        params = [self.value, self.min_scale, self.max_scale]
-        return params
-
-    def export_ptq_params(self):
-        return {
-            "value": self.value.detach().cpu(),
-            "min_scale": self.min_scale.detach().cpu(),
-            "max_scale": self.max_scale.detach().cpu(),
-        }
-
-    def load_ptq_params(self, params):
-        self.value.data.copy_(
-            params["value"].to(device=self.value.device, dtype=self.value.dtype)
-        )
-        self.min_scale.data.copy_(
-            params["min_scale"].to(
-                device=self.min_scale.device, dtype=self.min_scale.dtype
-            )
-        )
-        self.max_scale.data.copy_(
-            params["max_scale"].to(
-                device=self.max_scale.device, dtype=self.max_scale.dtype
-            )
-        )
 
     def prepare_deploy_weight(self, weight: torch.Tensor):
         grouped_weight, orig_shape, pad_len = _reshape_pad_tensor_by_group_size(

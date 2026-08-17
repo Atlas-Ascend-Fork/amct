@@ -158,7 +158,7 @@ def load_layer(
     try:
         state_dict.pop('self_attn.rotary_emb.inv_freq')
     except KeyError:
-        logger.info("not find self_attn.rotary_emb.inv_freq in state_dict")
+        logger.info("self_attn.rotary_emb.inv_freq not found in state_dict")
 
     decoder_layer.load_state_dict(state_dict)
     state_dict = None  # or it will be still in GPU mem

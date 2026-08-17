@@ -62,8 +62,8 @@ def test_forward_can_skip_right_transpose_for_value_matmul():
 
 def test_forward_quantizes_when_attn_cache_enabled_and_quantizers_active():
     qm = QuantizedMatmul(_args(quant_target=["attn-cache"]))
-    qm.l_node.enable = True
-    qm.r_node.enable = True
+    qm.l_node.is_observe = False
+    qm.r_node.is_observe = False
     left = torch.randn(1, 2, 4)
     right = torch.randn(1, 3, 4)
     out = qm(left, right)

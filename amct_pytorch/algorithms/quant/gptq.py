@@ -18,9 +18,9 @@ import math
 import torch
 import torch.nn.functional as F
 
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.optimization import CalibrateBuildContext
-from amct_pytorch.quantize_op.base_quant_module import BaseQuantizeModule
 from amct_pytorch.common.utils.data_utils import check_linear_input_dim
 from amct_pytorch.classic.quantize_op.utils import (
     calculate_scale_offset,
@@ -79,7 +79,7 @@ def _build_gptq_weights_cfg(quant_dtype, w_bits):
     description="Deprecated alias for 'gptq'.",
     solver="calibrate",
 )
-class GPTQuant(BaseQuantizeModule):
+class GPTQuant(QuantAlgorithmBase):
     """
     GPTQ engine for both standard per-column dtypes (int8/int4/mxfp4_e2m1/mxfp8_e4m3fn/
     hifloat8/float8_e4m3fn) and HiFloat4, branching on self.is_hif4 wherever they diverge.
@@ -111,7 +111,7 @@ class GPTQuant(BaseQuantizeModule):
         }
         ori_module = quant_linear.linear
 
-        super().__init__(ori_module, layer_name, quant_config)
+        super().__init__()
         self.ori_module_type = type(ori_module).__name__
         self.weight = ori_module.weight
         if not torch.isfinite(self.weight.data).all():
@@ -131,6 +131,13 @@ class GPTQuant(BaseQuantizeModule):
         self.group_size = weights_cfg.get('group_size')
         self.wts_type = weights_cfg.get('quant_type')
         self.is_hif4 = self.wts_type == 'hifloat4'
+        if self.is_hif4 and self.weight.shape[1] % self.HIFX4_GROUP_SIZE != 0:
+            raise ValueError(
+                "{}: HiFloat4 GPTQ requires the weight's column count to be a multiple "
+                "of {}, got {}.".format(
+                    layer_name, self.HIFX4_GROUP_SIZE, self.weight.shape[1]
+                )
+            )
         enable_quant = quant_config.get('inputs_cfg').get('enable_quant')
         if enable_quant is None or enable_quant:
             self.act_granularity = quant_config.get('inputs_cfg').get('strategy')

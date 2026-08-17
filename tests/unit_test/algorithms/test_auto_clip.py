@@ -100,15 +100,20 @@ def _lac_args(is_per_tensor=False):
     return SimpleNamespace(is_per_tensor=is_per_tensor)
 
 
-def test_lac_observe_mode_updates_min_max_buffers():
+def test_lac_calib_forward_updates_min_max_buffers_and_returns_input():
     lac = LAC(_lac_args())
-    lac.is_observe = True
     x1 = torch.tensor([[-3.0, 5.0]])
     x2 = torch.tensor([[-1.0, 7.0]])
-    out1 = lac(x1)
-    out2 = lac(x2)
+    snapshot1 = x1.clone()
+    snapshot2 = x2.clone()
+    out1 = lac.calib_forward(x1)
+    out2 = lac.calib_forward(x2)
+    assert out1 is x1
+    assert out2 is x2
     assert torch.equal(out1, x1)
     assert torch.equal(out2, x2)
+    assert torch.equal(x1, snapshot1)
+    assert torch.equal(x2, snapshot2)
     assert lac.maxval.item() == 7.0
     assert lac.minval.item() == -3.0
 

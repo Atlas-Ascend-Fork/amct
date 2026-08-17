@@ -18,9 +18,13 @@
 __all__ = [
     'register_algorithms',
     'AlgoBuildContext',
+    'QuantAlgorithmBase',
 ]
 
 from dataclasses import dataclass
+from typing import Optional
+
+from .base import QuantAlgorithmBase
 
 
 _REGISTERED = False
@@ -43,5 +47,5 @@ def register_algorithms():
 
 @dataclass
 class AlgoBuildContext:
-    matrix_size: int | None = None
-    dim_size: int | None = None
+    matrix_size: Optional[int] = None
+    dim_size: Optional[int] = None

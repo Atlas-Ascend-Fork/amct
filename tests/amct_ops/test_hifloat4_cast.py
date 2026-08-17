@@ -20,6 +20,7 @@ Compares the AscendC kernel against the pure-torch hif4_cast dequant reference
 to ~0 error (< 1e-6), including zero-input blocks. Requires an Ascend NPU; skipped
 otherwise. Also includes CPU-only shape regression tests for hif4_cast pack/dequant.
 """
+
 import unittest
 
 import torch
@@ -30,6 +31,7 @@ from amct_pytorch.quantization.dtypes.hifp_impl import hif4_pack, hifloat4_fake_
 def _npu_available():
     try:
         import torch_npu  # noqa: F401
+
         return torch.npu.is_available()
     except Exception:
         return False
@@ -48,13 +50,6 @@ class TestHiFloat4Kernel(unittest.TestCase):
     def setUpClass(cls):
         torch.npu.set_device(0)
 
-    def _assert_kernel_matches_reference(self, x):
-        from amct_ops.hifloat4_cast import hifloat4_fake_quant
-        y_ref = _oracle(x.cpu()).float()
-        y_npu = hifloat4_fake_quant(x.npu()).cpu().float()
-        self.assertEqual(y_ref.shape, y_npu.shape)
-        self.assertLess((y_ref - y_npu).abs().max().item(), self.TOL)
-
     def test_kernel_bf16(self):
         torch.manual_seed(3)
         self._assert_kernel_matches_reference(torch.randn(4, 512, dtype=torch.bfloat16))
@@ -63,20 +58,29 @@ class TestHiFloat4Kernel(unittest.TestCase):
         torch.manual_seed(4)
         self._assert_kernel_matches_reference(torch.randn(8, 256, dtype=torch.float16))
 
-    def test_kernel_padded(self):
+    def test_kernel_unaligned_raises(self):
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
         torch.manual_seed(5)
-        # pad to multiple of 64
         x = torch.randn(3, 100, dtype=torch.bfloat16)
-        pad = (0, 28)
-        x_padded = torch.nn.functional.pad(x, pad)
-        self._assert_kernel_matches_reference(x_padded)
+        with self.assertRaises(RuntimeError):
+            npu_fake_quant(x.npu())
 
     def test_kernel_zero_is_nan_free(self):
-        from amct_ops.hifloat4_cast import hifloat4_fake_quant
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
         z = torch.zeros(2, 64, dtype=torch.bfloat16).npu()
-        out = hifloat4_fake_quant(z)
+        out = npu_fake_quant(z)
         self.assertFalse(torch.isnan(out).any())
         self.assertEqual(out.abs().max().item(), 0.0)
+
+    def _assert_kernel_matches_reference(self, x):
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
+        y_ref = _oracle(x.cpu()).float()
+        y_npu = npu_fake_quant(x.npu()).cpu().float()
+        self.assertEqual(y_ref.shape, y_npu.shape)
+        self.assertLess((y_ref - y_npu).abs().max().item(), self.TOL)
 
 
 class TestHiFloat4CastShapes(unittest.TestCase):
@@ -117,6 +121,11 @@ class TestHiFloat4CastShapes(unittest.TestCase):
         scale, value = hif4_pack(x)
         self.assertEqual(scale.shape, (1, 1, 4))
         self.assertEqual(value.shape, (1, 32))
+
+    def test_fake_quant_unaligned_raises(self):
+        x = torch.randn(3, 100, dtype=torch.bfloat16)
+        with self.assertRaises(RuntimeError):
+            hifloat4_fake_quant(x)
 
 
 if __name__ == '__main__':

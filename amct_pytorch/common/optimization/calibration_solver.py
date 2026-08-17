@@ -20,8 +20,7 @@ from loguru import logger
 
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
-from amct_pytorch.common.models.llm.common.quant_apply import (
-    set_model_act_quant_state, set_model_weight_quant_state)
+from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_observe
 from amct_pytorch.common.optimization import CalibrateBuildContext, SOLVER_REGISTRY
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -87,8 +86,7 @@ class CalibrationSolver(BaseSolver):
             for name, module in quant_linears.items()
         ]
 
-        set_model_weight_quant_state(self.model, False)
-        set_model_act_quant_state(self.model, False)
+        set_model_to_observe(self.model, True)
         try:
             for data_batch in data_loader:
                 unit_inp = data_batch[0] if isinstance(data_batch, (tuple, list)) else data_batch
@@ -109,8 +107,7 @@ class CalibrationSolver(BaseSolver):
         finally:
             for handle in handles:
                 handle.remove()
-            set_model_weight_quant_state(self.model, True)
-            set_model_act_quant_state(self.model, True)
+            set_model_to_observe(self.model, False)
 
         logger.info("Layer {}: {} finished for {} linear(s).", self.layer_idx, algo_name, len(wrapped))
 
