@@ -262,6 +262,27 @@ def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monke
     assert result is weight
 
 
+def test_convert_state_dict_nvfp4_missing_shard_tensor_raises(tmp_path):
+    """NVFP4 keys in the map but absent from the shard raise, not a scale_inv warning."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    sf_save({"other": torch.ones(1)}, str(tmp_path / "shard.safetensors"))
+    with pytest.raises(KeyError, match="layer.weight_scale"):
+        convert_state_dict(
+            torch.ones(2, 16, dtype=torch.uint8),
+            "layer.weight",
+            "layer.weight_scale_inv",
+            {
+                "layer.weight_scale": "shard.safetensors",
+                "layer.weight_scale_2": "shard.safetensors",
+            },
+            tmp_path,
+            {},
+            32,
+        )
+
+
 def test_convert_state_dict_fp8_non_int8_dtype(tmp_path):
     """FP8 weight with non-int8 dtype uses non-packed dequant (block_size=1)."""
     from safetensors.torch import save_file as sf_save
@@ -313,6 +334,171 @@ def test_convert_state_dict_reuses_loaded_file(tmp_path):
         block_size=32,
     )
     assert result.dtype != torch.int8
+
+
+def test_convert_state_dict_nvfp4_uses_paired_scales(tmp_path):
+    """Packed weight with weight_scale / weight_scale_2 and an E4M3 layout is NVFP4."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
+
+    rows, cols = 2, 32
+    weight = torch.randint(0, 256, (rows, cols // 2), dtype=torch.uint8)
+    weight_scale = torch.full((rows, cols // 16), 2.0).to(torch.float8_e4m3fn)
+    weight_scale_2 = torch.tensor([0.5])
+    sf_save(
+        {
+            "layer.weight_scale": weight_scale.view(torch.uint8),
+            "layer.weight_scale_2": weight_scale_2,
+        },
+        str(tmp_path / "shard.safetensors"),
+    )
+    weight_map = {
+        "layer.weight": "shard.safetensors",
+        "layer.weight_scale": "shard.safetensors",
+        "layer.weight_scale_2": "shard.safetensors",
+    }
+
+    result = convert_state_dict(
+        weight,
+        "layer.weight",
+        "layer.weight_scale",
+        weight_map,
+        tmp_path,
+        {},
+        block_size=32,
+    )
+
+    assert result.shape == (rows, cols)
+    assert torch.allclose(result, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
+
+
+def test_convert_state_dict_without_weight_scale_2_stays_on_mx_path(tmp_path):
+    """MXFP4 has no weight_scale_2, so it keeps using the packed int8 dequant."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale = torch.ones(2, 1, dtype=torch.float32)
+    sf_save({"layer.weight_scale": scale}, str(tmp_path / "shard.safetensors"))
+
+    weight = torch.ones(2, 16, dtype=torch.int8)
+    weight_map = {"layer.weight_scale": "shard.safetensors"}
+
+    result = convert_state_dict(
+        weight,
+        "layer.weight",
+        "layer.weight_scale",
+        weight_map,
+        tmp_path,
+        {},
+        block_size=32,
+    )
+    assert result.shape == (2, 32)
+
+
+def test_convert_state_dict_rejects_nvfp4_names_when_scale_layout_is_wrong(tmp_path):
+    """Both NVFP4 names are not enough if scale_inv is not an E4M3 block scale."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale = torch.ones(2, 1, dtype=torch.float32)
+    sf_save(
+        {
+            "layer.weight_scale": scale,
+            "layer.weight_scale_2": torch.tensor(0.5),
+        },
+        str(tmp_path / "shard.safetensors"),
+    )
+    weight = torch.ones(2, 16, dtype=torch.int8)
+    weight_map = {
+        "layer.weight_scale": "shard.safetensors",
+        "layer.weight_scale_2": "shard.safetensors",
+    }
+
+    result = convert_state_dict(
+        weight,
+        "layer.weight",
+        "layer.weight_scale",
+        weight_map,
+        tmp_path,
+        {},
+        block_size=32,
+    )
+    assert result.shape == (2, 32)
+
+
+def test_convert_state_dict_nvfp4_loads_scales_from_other_shard(tmp_path):
+    """NVFP4 scales may live in a different safetensors shard than the weight."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+    from amct_pytorch.quantization.dtypes.mxfp_impl import unpack_mxfloat4_to_fp32
+
+    rows, cols = 2, 32
+    weight = torch.randint(0, 256, (rows, cols // 2), dtype=torch.uint8)
+    weight_scale = torch.full((rows, cols // 16), 2.0).to(torch.float8_e4m3fn)
+    weight_scale_2 = torch.tensor(0.5)
+    sf_save({"layer.weight": weight}, str(tmp_path / "weights.safetensors"))
+    sf_save(
+        {
+            "layer.weight_scale": weight_scale.view(torch.uint8),
+            "layer.weight_scale_2": weight_scale_2,
+        },
+        str(tmp_path / "scales.safetensors"),
+    )
+    weight_map = {
+        "layer.weight": "weights.safetensors",
+        "layer.weight_scale": "scales.safetensors",
+        "layer.weight_scale_2": "scales.safetensors",
+    }
+    loaded_files = {
+        "weights.safetensors": {"layer.weight": weight},
+    }
+
+    result = convert_state_dict(
+        weight,
+        "layer.weight",
+        "layer.scale_inv",
+        weight_map,
+        tmp_path,
+        loaded_files,
+        block_size=32,
+    )
+
+    assert "scales.safetensors" in loaded_files
+    assert torch.allclose(result, unpack_mxfloat4_to_fp32(weight) * 2.0 * 0.5)
+
+
+def test_convert_state_dict_fp8_not_hijacked_by_weight_scale_2(tmp_path):
+    """An FP8 float8 weight keeps the FP8 path even if weight_scale_2 keys exist."""
+    from safetensors.torch import save_file as sf_save
+    from amct_pytorch.common.models.llm.common.deploy_export import convert_state_dict
+
+    scale_inv = torch.ones(2, 4, dtype=torch.float32)
+    sf_save(
+        {
+            "layer.weight_scale_inv": scale_inv,
+            "layer.weight_scale": torch.ones(1),
+            "layer.weight_scale_2": torch.tensor(0.5),
+        },
+        str(tmp_path / "shard.safetensors"),
+    )
+    weight = torch.ones(2, 4, dtype=torch.float32).to(torch.float8_e4m3fn)
+    weight_map = {
+        "layer.weight_scale_inv": "shard.safetensors",
+        "layer.weight_scale": "shard.safetensors",
+        "layer.weight_scale_2": "shard.safetensors",
+    }
+
+    result = convert_state_dict(
+        weight,
+        "layer.weight",
+        "layer.weight_scale_inv",
+        weight_map,
+        tmp_path,
+        {},
+        block_size=1,
+    )
+    assert torch.allclose(result.float(), torch.ones(2, 4))
 
 
 # ---- quant_payload (new in diff) -----------------------------------------
