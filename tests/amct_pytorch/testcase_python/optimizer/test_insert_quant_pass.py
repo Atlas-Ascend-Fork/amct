@@ -95,7 +95,7 @@ class TestAutoCaliFakeQuantPass(unittest.TestCase):
             model, self.args_shape, self.temp_folder
         )
         run_inference_model_auto_cali(fakequant_model, iterations=test_iter)
-        logger.info('%s reesult %s', '=' * 50, '=' * 50)
+        logger.info('%s result %s', '=' * 50, '=' * 50)
         self.assertTrue(os.path.exists(fakequant_file))
 
 

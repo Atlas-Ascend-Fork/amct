@@ -149,7 +149,7 @@ def run_inference_onnx(onnx_file, iterations=None):
     input_names = [input_onnx.name for input_onnx in ort_session.get_inputs()]
     output_names = [output_onnx.name for output_onnx in ort_session.get_outputs()]
     logger.info('inputs: %s', input_names)
-    logger.info('otputs: %s', output_names)
+    logger.info('outputs: %s', output_names)
 
     def to_numpy(tensor):
         data_numpy = (

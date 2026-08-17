@@ -18,10 +18,6 @@
 import os
 import numpy as np
 
-try:
-    import ml_dtypes
-except ImportError:
-    ml_dtypes = None  # 仅原生 INT4 映射需要，缺失时在用到 int4 处再报错
 from google.protobuf.internal import api_implementation
 from onnx.onnx_pb import TensorProto  # pylint: disable=E0401
 
@@ -107,7 +103,7 @@ class TensorProtoHelper:
     }
     # 旧版 onnx 无 INT4 枚举，动态注册避免 import 时报错
     if hasattr(data_type, 'INT4'):
-        data_type_maps['INT4'] = [data_type.INT4, RAW_DATA, 'int4']  # ml_dtypes.int4
+        data_type_maps['INT4'] = [data_type.INT4, RAW_DATA, 'int4']
     proto_value_id = 0
     data_location_id = 1
     np_type_id = 2
@@ -140,26 +136,14 @@ class TensorProtoHelper:
         raise ValueError(f'The data_type{proto_value} is UNEXPECTED')
 
     @classmethod
-    def resolve_np_dtype(cls, np_type):
-        """
-        Resolve a np dtype string to a numpy/ml_dtypes type.
-        'int4' has no numpy attribute, so map it to ml_dtypes.int4.
-        """
-        if np_type == 'int4':
-            if ml_dtypes is None:
-                raise ImportError('ml_dtypes is required for native INT4 tensors')
-            return ml_dtypes.int4
-        return getattr(np, np_type)
-
-    @classmethod
     def cast_ori_data(cls, value, tensor_np_type):
         '''cast ori-data to numpy type'''
         if tensor_np_type == 'float16':
             value = np.array(value).astype(np.uint16).tobytes()
-            np_value = np.frombuffer(value, cls.resolve_np_dtype(tensor_np_type))
+            np_value = np.frombuffer(value, np.dtype(tensor_np_type))
             np_value = np.array(np_value)
         else:
-            np_value = np.array(value, cls.resolve_np_dtype(tensor_np_type))
+            np_value = np.array(value, np.dtype(tensor_np_type))
         return np_value
 
     def check_external_data(self):
@@ -189,7 +173,7 @@ class TensorProtoHelper:
                 count = int(np.prod(self.tensor.dims))
                 np_value = unpack_int8_to_int4(packed, count)
             else:
-                np_dtype = self.resolve_np_dtype(np_type)
+                np_dtype = np.dtype(np_type)
                 np_value = np.frombuffer(byte_value, np_dtype)
             # to modify np_value.flags['WRITEABLE'] as True
             np_value = np.array(np_value)
@@ -319,9 +303,7 @@ class TensorProtoHelper:
         np_type = self.map_np_type(tensor_dtype)
         data_location = self.map_data_location(tensor_dtype)
         # INT4 以 packed 字节存储，按 uint8 搬运字节流；其余类型按自身 dtype
-        store_np_type = (
-            np.uint8 if np_type == 'int4' else self.resolve_np_dtype(np_type)
-        )
+        store_np_type = np.uint8 if np_type == 'int4' else np.dtype(np_type)
         byte_size = np.dtype(store_np_type).itemsize
         # the list is index of TensorProto.Datetype
         if (

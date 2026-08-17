@@ -34,6 +34,7 @@ class QuantDequantMx(torch.nn.Module):
         super(QuantDequantMx, self).__init__()
         self.bits = bits
         self.is_act = is_act
+        self.is_observe = False
         self._get_format_params()
         self.block_size = 32
 
@@ -62,7 +63,7 @@ class QuantDequantMx(torch.nn.Module):
         return dx
 
     def forward(self, x: Tensor, v: Tensor = 0.0) -> Tensor:
-        if self.bits == 16:
+        if self.is_observe or self.bits == 16:
             return x
         return self.fake_quant(x, v=v)
 

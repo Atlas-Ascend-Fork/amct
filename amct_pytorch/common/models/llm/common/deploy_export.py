@@ -207,6 +207,16 @@ def convert_state_dict(
     scale_inv = _load_scale(
         scale_inv_name, original_weight_map, model_dir, loaded_files
     )
+    # HiF4: weight uint8 [M, N/2]; scale uint8 [M, N/64, 4]
+    if (
+        weight.dtype == torch.uint8
+        and scale_inv.dtype == torch.uint8
+        and scale_inv.ndim == 3
+        and scale_inv.shape[-1] == 4
+    ):
+        from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+
+        return hif4_unpack(scale_inv, weight)
     # MXFP4: weight dtype=int8, shape=[M, N//2]; scale dtype=float32
     if weight.dtype == torch.int8:
         return weight_dequant(
