@@ -43,6 +43,19 @@ def _nvfp4_scale_shape(weight: torch.Tensor, block_size: int):
     return rows, scale_cols, padded_rows, padded_cols
 
 
+def _from_blocked(blocked: torch.Tensor, rows: int, cols: int) -> torch.Tensor:
+    """Undo torchAO ``to_blocked`` (cuBLAS 128x4 D-block scale layout)."""
+    n_row, n_col = -(-rows // _SF_ROW_ALIGN), -(-cols // _SF_COL_ALIGN)
+    padded = (
+        blocked.reshape(n_row * n_col, 32, 4, 4)
+        .transpose(1, 2)
+        .reshape(n_row, n_col, _SF_ROW_ALIGN, _SF_COL_ALIGN)
+        .permute(0, 2, 1, 3)
+        .reshape(n_row * _SF_ROW_ALIGN, n_col * _SF_COL_ALIGN)
+    )
+    return padded[:rows, :cols]
+
+
 def is_nvfp4_scale(
     weight: torch.Tensor,
     scale: torch.Tensor,
@@ -50,8 +63,9 @@ def is_nvfp4_scale(
 ) -> bool:
     """Whether `scale` is an NVFP4 E4M3 block scale for this packed weight.
 
-    NVFP4: weight dtype=uint8/int8, shape=[M, N//2];
-           scale dtype=e4m3/uint8, shape=[M, N//16] or a 1-D buffer of that
+    NVFP4: weight dtype=uint8/int8, shape=[M, N//2] (2-D Linear only);
+           scale dtype=e4m3/uint8, shape=[M, N//16], torchAO swizzled
+           (32*ceil(M/128), 16*ceil((N//16)/4)), or a 1-D buffer of that
            length / the padded tile pad(M, 128) * pad(N//16, 4).
     """
     if weight.dtype not in NVFP4_PACKED_DTYPES or weight.dim() != 2:
@@ -63,9 +77,10 @@ def is_nvfp4_scale(
         return False
     rows, scale_cols, padded_rows, padded_cols = _nvfp4_scale_shape(weight, block_size)
     if scale.dim() == 2:
-        return tuple(scale.shape) == (rows, scale_cols) or (
-            scale.shape[0] >= rows and scale.shape[1] == scale_cols
-        )
+        return tuple(scale.shape) in (
+            (rows, scale_cols),
+            (padded_rows // 4, padded_cols * 4),
+        ) or (scale.shape[0] >= rows and scale.shape[1] == scale_cols)
     if scale.dim() == 1:
         return scale.numel() in (rows * scale_cols, padded_rows * padded_cols)
     return False
@@ -81,10 +96,8 @@ def nvfp4_weight_dequant(
     if weight_scale.dtype in NVFP4_PACKED_DTYPES:
         weight_scale = weight_scale.view(torch.float8_e4m3fn)
     scale = weight_scale.to(torch.float32)
+    rows, scale_cols, padded_rows, padded_cols = _nvfp4_scale_shape(weight, block_size)
     if scale.dim() == 1:
-        rows, scale_cols, padded_rows, padded_cols = _nvfp4_scale_shape(
-            weight, block_size
-        )
         if scale.numel() == rows * scale_cols:
             scale = scale.view(rows, scale_cols)
         elif scale.numel() == padded_rows * padded_cols:
@@ -95,6 +108,8 @@ def nvfp4_weight_dequant(
                 f"({rows}, {scale_cols}) or the padded tile "
                 f"({padded_rows}, {padded_cols})."
             )
+    elif tuple(scale.shape) == (padded_rows // 4, padded_cols * 4):
+        scale = _from_blocked(scale, rows, scale_cols)
     return weight_dequant(
         weight,
         scale * weight_scale_2.to(torch.float32).reshape(()),
