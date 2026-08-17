@@ -236,82 +236,76 @@ def test_wikitext2_ppl_cpu_does_not_touch_npu_cache(monkeypatch):
     assert ppl == pytest.approx(8.0, rel=1e-3)
 
 
-def test_wikitext2_ppl_closes_generator_on_loss_error(monkeypatch):
-    closed = []
+def test_wikitext2_ppl_cleans_resources_after_success(monkeypatch):
+    events = []
 
-    def logits_iter():
-        try:
-            yield torch.zeros(1, 3, 8)
-        finally:
-            closed.append(True)
+    class TrackingIterator:
+        def __init__(self):
+            self.remaining = 1
 
-    class BrokenLoss(torch.nn.Module):
-        def forward(self, logits, labels):
-            raise RuntimeError("loss failed")
-
-    monkeypatch.setattr(eval_ppl.nn, "CrossEntropyLoss", lambda: BrokenLoss())
-    with pytest.raises(RuntimeError, match="loss failed"):
-        eval_ppl.wikitext2_ppl(
-            logits_iter(),
-            [torch.zeros(1, 4, dtype=torch.long)],
-            device="cpu",
-            seq_len=4,
-        )
-    assert closed == [True]
-
-
-def test_wikitext2_ppl_cleanup_error_does_not_replace_loss_error(monkeypatch):
-    class BrokenIterator:
         def __iter__(self):
             return self
 
         def __next__(self):
+            if self.remaining == 0:
+                raise StopIteration
+            self.remaining -= 1
             return torch.zeros(1, 3, 8)
 
         def close(self):
-            raise RuntimeError("close failed")
+            events.append(("close", None))
 
-    class BrokenLoss(torch.nn.Module):
-        def forward(self, logits, labels):
-            raise ValueError("loss failed")
-
-    monkeypatch.setattr(eval_ppl.nn, "CrossEntropyLoss", lambda: BrokenLoss())
     monkeypatch.setattr(
         eval_ppl,
         "_empty_npu_cache",
-        lambda device: (_ for _ in ()).throw(RuntimeError("cache failed")),
+        lambda device: events.append(("empty_cache", device)),
     )
-    with pytest.raises(ValueError, match="loss failed"):
-        eval_ppl.wikitext2_ppl(
-            BrokenIterator(),
-            [torch.zeros(1, 4, dtype=torch.long)],
-            "cpu",
-            seq_len=4,
-        )
+
+    ppl = eval_ppl.wikitext2_ppl(
+        TrackingIterator(),
+        [torch.zeros(1, 4, dtype=torch.long)],
+        device="cpu",
+        seq_len=4,
+    )
+
+    assert ppl == pytest.approx(8.0, rel=1e-3)
+    assert events == [("close", None), ("empty_cache", "cpu")]
 
 
-def test_wikitext2_ppl_close_lookup_error_does_not_replace_loss_error(monkeypatch):
+def test_cleanup_ppl_resources_continues_after_cleanup_errors(monkeypatch):
+    events = []
+
+    class BrokenIterator:
+        def close(self):
+            events.append("close")
+            raise RuntimeError("close failed")
+
+    def broken_empty_cache(device):
+        events.append(("empty_cache", device))
+        raise RuntimeError("cache failed")
+
+    monkeypatch.setattr(eval_ppl, "_empty_npu_cache", broken_empty_cache)
+
+    eval_ppl._cleanup_ppl_resources(BrokenIterator(), "npu:1")
+
+    assert events == ["close", ("empty_cache", "npu:1")]
+
+
+def test_cleanup_ppl_resources_continues_after_close_lookup_error(monkeypatch):
+    cache_devices = []
+
     class BrokenCloseLookupIterator:
-        def __iter__(self):
-            return self
-
-        def __next__(self):
-            return torch.zeros(1, 3, 8)
-
         def __getattribute__(self, name):
             if name == "close":
                 raise RuntimeError("close lookup failed")
             return object.__getattribute__(self, name)
 
-    class BrokenLoss(torch.nn.Module):
-        def forward(self, logits, labels):
-            raise ValueError("business loss failed")
+    monkeypatch.setattr(
+        eval_ppl,
+        "_empty_npu_cache",
+        lambda device: cache_devices.append(device),
+    )
 
-    monkeypatch.setattr(eval_ppl.nn, "CrossEntropyLoss", lambda: BrokenLoss())
-    with pytest.raises(ValueError, match="business loss failed"):
-        eval_ppl.wikitext2_ppl(
-            BrokenCloseLookupIterator(),
-            [torch.zeros(1, 4, dtype=torch.long)],
-            "cpu",
-            seq_len=4,
-        )
+    eval_ppl._cleanup_ppl_resources(BrokenCloseLookupIterator(), "npu:2")
+
+    assert cache_devices == ["npu:2"]

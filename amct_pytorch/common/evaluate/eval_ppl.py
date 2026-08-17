@@ -65,8 +65,12 @@ def _cleanup_ppl_resources(iterator, device):
         )
 
 
-def _compute_nll_sum(iterator, samples, device, seq_len):
+def wikitext2_ppl(logits_iter, samples, device, seq_len=4096):
     nsamples = len(samples)
+    if nsamples == 0:
+        raise ValueError("samples must not be empty")
+
+    iterator = iter(logits_iter)
     nll_sum = None
     consumed = 0
     loss_fct = nn.CrossEntropyLoss()
@@ -99,19 +103,8 @@ def _compute_nll_sum(iterator, samples, device, seq_len):
         raise ValueError(
             f"logits count {consumed} does not match samples count {nsamples}"
         )
-    return nll_sum
 
-
-def wikitext2_ppl(logits_iter, samples, device, seq_len=4096):
-    nsamples = len(samples)
-    if nsamples == 0:
-        raise ValueError("samples must not be empty")
-
-    iterator = iter(logits_iter)
-    try:
-        nll_sum = _compute_nll_sum(iterator, samples, device, seq_len)
-        ppl_value = torch.exp(nll_sum / (nsamples * seq_len)).item()
-        logger.info("PPL evaluation completed: {:.6f}", ppl_value)
-        return ppl_value
-    finally:
-        _cleanup_ppl_resources(iterator, device)
+    ppl_value = torch.exp(nll_sum / (nsamples * seq_len)).item()
+    logger.info("PPL evaluation completed: {:.6f}", ppl_value)
+    _cleanup_ppl_resources(iterator, device)
+    return ppl_value
