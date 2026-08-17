@@ -520,7 +520,9 @@ def test_weight_quantizer_export_and_load_ptq_params_delegate_to_gptq_hook():
 
     gptq = wq.algorithms["gptq"]
     gptq.is_observe = True
-    gptq.observe_input(torch.randn(3, 1, 8))  # 3D (batch, seq, cin) -> nsamples == batch
+    gptq.observe_input(
+        torch.randn(3, 1, 8)
+    )  # 3D (batch, seq, cin) -> nsamples == batch
 
     params = wq.export_ptq_params()
     assert set(params) == {"H", "nsamples"}

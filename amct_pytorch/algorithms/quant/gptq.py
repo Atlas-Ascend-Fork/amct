@@ -52,7 +52,9 @@ class GPTQ(QuantAlgorithmBase):
         if args.quant_dtype == 'int':
             quant_type = _INT_QUANT_TYPE_BY_BITS.get(w_bits)
             if quant_type is None:
-                raise ValueError(f"gptq: unsupported int w_bits={w_bits!r} (expected 4 or 8)")
+                raise ValueError(
+                    f"gptq: unsupported int w_bits={w_bits!r} (expected 4 or 8)"
+                )
         elif args.quant_dtype == 'hifp':
             if w_bits != 4:
                 raise ValueError(
@@ -67,7 +69,9 @@ class GPTQ(QuantAlgorithmBase):
             )
         weight_shape = tuple(args.w_size)
         if len(weight_shape) != 2:
-            raise ValueError(f"GPTQ currently expects 2D weight tensors, got shape {weight_shape}")
+            raise ValueError(
+                f"GPTQ currently expects 2D weight tensors, got shape {weight_shape}"
+            )
         self.rows, self.columns = weight_shape
 
         self.perc_damp = 0.01
@@ -80,7 +84,9 @@ class GPTQ(QuantAlgorithmBase):
                 "of {}, got {}.".format(self.HIFX4_GROUP_SIZE, self.columns)
             )
 
-        self.register_buffer("hessian", torch.zeros((self.columns, self.columns), dtype=torch.float32))
+        self.register_buffer(
+            "hessian", torch.zeros((self.columns, self.columns), dtype=torch.float32)
+        )
         self.register_buffer("nsamples", torch.tensor(0, dtype=torch.long))
 
     def forward(self, x):
@@ -132,7 +138,9 @@ class GPTQ(QuantAlgorithmBase):
     def load_ptq_params(self, params):
         if "H" not in params:
             return
-        self.hessian.copy_(params["H"].to(device=self.hessian.device, dtype=self.hessian.dtype))
+        self.hessian.copy_(
+            params["H"].to(device=self.hessian.device, dtype=self.hessian.dtype)
+        )
         self.nsamples.fill_(int(params.get("nsamples", 0)))
 
     @torch.no_grad()
@@ -197,7 +205,9 @@ class GPTQ(QuantAlgorithmBase):
                     )
                     err_block[:, i] = err
 
-            weight_column_sorted[:, i2:] -= err_block.matmul(hessian_inverse[i1:i2, i2:])
+            weight_column_sorted[:, i2:] -= err_block.matmul(
+                hessian_inverse[i1:i2, i2:]
+            )
 
         return weight_column_sorted[:, invperm].to(weight.dtype)
 
@@ -216,7 +226,7 @@ class GPTQ(QuantAlgorithmBase):
         diag = torch.arange(columns, device=hessian_sorted.device)
         hessian_sorted[diag, diag] += damp
         device = hessian_sorted.device
-        # npu unsupport torch.linalg
+        # npu unsupported torch.linalg
         hessian_sorted = hessian_sorted.cpu()
         hessian_sorted = torch.linalg.cholesky(hessian_sorted)
         hessian_sorted = torch.cholesky_inverse(hessian_sorted)

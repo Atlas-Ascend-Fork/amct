@@ -76,7 +76,9 @@ def test_gptq_resolves_wts_type_and_is_hif4_per_dtype():
         ("int", 8, "int8", False),
     ):
         # 64 columns: valid for every dtype above, required for the hifp/hif4 case.
-        gptq = _make(quant_dtype=quant_dtype, w_bits=w_bits, in_features=64, out_features=4)
+        gptq = _make(
+            quant_dtype=quant_dtype, w_bits=w_bits, in_features=64, out_features=4
+        )
         assert gptq.wts_type == expected_quant_type
         assert gptq.is_hif4 == expected_is_hif4
 
@@ -174,7 +176,9 @@ def test_quantize_falls_back_to_quant_obj_when_no_hessian_built():
 
 def test_single_group_optimization_matches_direct_hifloat4_quant():
     torch.manual_seed(0)
-    gptq = _make(quant_dtype="hifp", w_bits=4, in_features=GPTQ.HIFX4_GROUP_SIZE, out_features=6)
+    gptq = _make(
+        quant_dtype="hifp", w_bits=4, in_features=GPTQ.HIFX4_GROUP_SIZE, out_features=6
+    )
     weight = torch.randn(6, GPTQ.HIFX4_GROUP_SIZE)
     _observe(gptq, torch.randn(200, GPTQ.HIFX4_GROUP_SIZE))
 
@@ -187,7 +191,9 @@ def test_single_group_optimization_matches_direct_hifloat4_quant():
 
 def test_dead_hessian_column_is_zeroed_before_quantization():
     torch.manual_seed(0)
-    gptq = _make(quant_dtype="hifp", w_bits=4, in_features=GPTQ.HIFX4_GROUP_SIZE, out_features=6)
+    gptq = _make(
+        quant_dtype="hifp", w_bits=4, in_features=GPTQ.HIFX4_GROUP_SIZE, out_features=6
+    )
     weight = torch.randn(6, GPTQ.HIFX4_GROUP_SIZE)
     inputs = torch.randn(200, GPTQ.HIFX4_GROUP_SIZE)
     inputs[:, 5] = 0  # zero-variance column -> its Hessian diagonal entry is 0 ("dead")
