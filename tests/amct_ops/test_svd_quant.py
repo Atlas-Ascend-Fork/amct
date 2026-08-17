@@ -8,7 +8,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------
 
-import amct_ops
+import amct_ops # noqa: F401 — Lazy loading of SvdQuant extension
 import unittest
 import torch
 import torch_npu
