@@ -26,85 +26,45 @@ from amct_pytorch.classic.quantize_op.utils import (
     get_weight_min_max_by_granularity,
 )
 from amct_pytorch.common.utils.quant_util import quant_dequant_tensor
-from amct_pytorch.common.utils.vars import MXFP4_E2M1, FLOAT8_E4M3FN, HIFLOAT8
 from amct_pytorch.quantization.dtypes.hifp_impl import hifloat4_fake_quant
 
 
-# Dtype/bit-width -> weights_cfg mapping, defined ahead of GPTQ since __init__ uses it.
+# int (4/8-bit) and HiFloat4 are supported for now
 _INT_QUANT_TYPE_BY_BITS = {4: 'int4', 8: 'int8'}
-_MXFP_QUANT_TYPE_BY_BITS = {4: 'mxfp4_e2m1', 8: 'mxfp8_e4m3fn'}
-_HIF_QUANT_TYPE_BY_BITS = {4: 'hifloat4', 8: 'hifloat8'}
-_MXFP_GROUP_SIZE = 32  # vars.py::GROUP_SIZE_SUPPORTED_MAP[MXFP4_E2M1 / MXFP8_E4M3FN] == [32]
-
-
-def _build_gptq_weights_cfg(quant_dtype, w_bits):
-    """Build the per-layer weights_cfg GPTQ uses for its own scale/offset computation.
-    Mirrors the dtype string conventions in amct_pytorch/common/utils/vars.py and the
-    group_size precedent in AutoRound._get_group_size (amct_pytorch/algorithms/quant/
-    auto_round.py)."""
-    if quant_dtype == 'int':
-        quant_type = _INT_QUANT_TYPE_BY_BITS.get(w_bits)
-        if quant_type is None:
-            raise ValueError(f"gptq: unsupported int w_bits={w_bits!r} (expected 4 or 8)")
-        return {'quant_type': quant_type, 'symmetric': True, 'strategy': 'channel'}
-    if quant_dtype == 'mxfp':
-        quant_type = _MXFP_QUANT_TYPE_BY_BITS.get(w_bits)
-        if quant_type is None:
-            raise ValueError(f"gptq: unsupported mxfp w_bits={w_bits!r} (expected 4 or 8)")
-        return {
-            'quant_type': quant_type, 'symmetric': True,
-            'strategy': 'group', 'group_size': _MXFP_GROUP_SIZE,
-        }
-    # hif family: bit width picks hifloat4 (joint-64-column path, see is_hif4) or hifloat8
-    # (a plain per-column dtype like float8_e4m3fn). Neither uses group_size.
-    quant_type = _HIF_QUANT_TYPE_BY_BITS.get(w_bits)
-    if quant_type is None:
-        raise ValueError(f"gptq: unsupported hif w_bits={w_bits!r} (expected 4 or 8)")
-    return {'quant_type': quant_type, 'symmetric': True, 'strategy': 'channel'}
 
 
 @ALGO_REGISTRY.register(
     name="gptq",
-    description="GPTQ Hessian-based single-pass weight quantizer; handles both the standard "
-    "per-column int/mxfp dtypes and the HiFloat4 (hifloat4/hif4/hifp) block format in one "
-    "class. Composed into WeightQuantizer like any other targets=(\"weight\",) algorithm and "
-    "driven by BlockwiseSolver.",
+    description="GPTQ Hessian-based single-pass weight quantizer; supports int4/int8 and "
+    "HiFloat4 (mxfp/hifloat8 not yet supported). Composed into WeightQuantizer like any "
+    "other targets=(\"weight\",) algorithm and driven by BlockwiseSolver.",
     targets=("weight",),
-    solver="gradient",
-)
-@ALGO_REGISTRY.register(
-    name="higptq",
-    description="Deprecated alias for 'gptq'.",
-    targets=("weight",),
-    solver="gradient",
 )
 class GPTQ(QuantAlgorithmBase):
     """
-    GPTQ engine for both standard per-column dtypes (int8/int4/mxfp4_e2m1/mxfp8_e4m3fn/
-    hifloat8/float8_e4m3fn) and HiFloat4, branching on self.is_hif4 wherever they diverge.
-    HiFloat4 can't be quantized one column at a time -- its 3-level block scale is only
-    meaningful over a real contiguous 64-element run -- so _get_opt_weight's inner loop
-    processes HIFX4_GROUP_SIZE-wide groups jointly via hifloat4_fake_quant instead.
-
-    Unlike WeightQuantizer's generic quant_obj (a single per-layer callable built from
-    DTYPE_REGISTRY), GPTQ derives its own scale/offset from weights_cfg up front and reuses
-    it across the per-column loop: calling the generic quant_obj once per column is not
-    equivalent (int's scale is recomputed per call and degenerates to a no-op on a lone
-    column; mxfp/hifloat4 need fixed-width groups a single column can't provide). quantize()'s
-    quant_obj argument is therefore only used as a fallback when no Hessian has been built yet.
-
-    No trainable parameters -- this is a closed-form (Cholesky/OBS) solve, not a
-    gradient-trained transform, even though it is driven by BlockwiseSolver like the
-    gradient-trained weight algorithms (AutoRound/LWC).
+    GPTQ: Hessian-based closed-form weight quantizer (int4/int8, HiFloat4)
     """
 
     HIFX4_GROUP_SIZE = 64
 
     def __init__(self, args, w_bits):
         super().__init__()
-        weights_cfg = _build_gptq_weights_cfg(args.quant_dtype, w_bits)
-        self.quant_config = {'weights_cfg': weights_cfg}
-
+        if args.quant_dtype == 'int':
+            quant_type = _INT_QUANT_TYPE_BY_BITS.get(w_bits)
+            if quant_type is None:
+                raise ValueError(f"gptq: unsupported int w_bits={w_bits!r} (expected 4 or 8)")
+        elif args.quant_dtype == 'hifp':
+            if w_bits != 4:
+                raise ValueError(
+                    f"gptq: only HiFloat4 (w_bits=4) is currently supported for "
+                    f"quant_dtype='hifp', got w_bits={w_bits!r}"
+                )
+            quant_type = 'hifloat4'
+        else:
+            raise ValueError(
+                f"gptq: unsupported quant_dtype={args.quant_dtype!r} (only 'int' and 'hifp' "
+                "(HiFloat4) are currently supported)"
+            )
         weight_shape = tuple(args.w_size)
         if len(weight_shape) != 2:
             raise ValueError(f"GPTQ currently expects 2D weight tensors, got shape {weight_shape}")
@@ -112,8 +72,7 @@ class GPTQ(QuantAlgorithmBase):
 
         self.perc_damp = 0.01
         self.block_size = 128
-        self.group_size = weights_cfg.get('group_size')
-        self.wts_type = weights_cfg.get('quant_type')
+        self.wts_type = quant_type
         self.is_hif4 = self.wts_type == 'hifloat4'
         if self.is_hif4 and self.columns % self.HIFX4_GROUP_SIZE != 0:
             raise ValueError(
@@ -125,8 +84,8 @@ class GPTQ(QuantAlgorithmBase):
         self.register_buffer("nsamples", torch.tensor(0, dtype=torch.long))
 
     def forward(self, x):
-        # Never actually reached: WeightQuantizer.algo_forward always routes an algo
-        # exposing .quantize to the quantize_algo branch instead of calling forward().
+        # Required by QuantAlgorithmBase (abstract); not actually used since GPTQ is
+        # dispatched via its quantize() hook instead.
         return x
 
     def trainable_params(self):
@@ -179,22 +138,17 @@ class GPTQ(QuantAlgorithmBase):
     @torch.no_grad()
     def quantize(self, weight: torch.Tensor, quant_obj):
         """
-        Function: run the GPTQ closed-form solve using the Hessian accumulated via
-        observe_input. Falls back to a single whole-tensor quant_obj(weight) call (matching
+        Function: run the GPTQ closed-form solve (column-by-column, or HIFX4_GROUP_SIZE-group-
+        by-group for hif4, with second-order error compensation) using the Hessian accumulated
+        via observe_input. Falls back to a single whole-tensor quant_obj(weight) call (matching
         AutoRound's usage of quant_obj, amct_pytorch/algorithms/quant/auto_round.py) when no
-        calibration data has been observed yet -- this is safe for int/mxfp/hif4/hif8 since
-        it's a single call over the full (already 64-column-validated for hif4) tensor, unlike
-        an incremental per-column call.
+        calibration data has been observed yet -- this is safe for int/hif4 since it's a
+        single call over the full (already 64-column-validated for hif4) tensor, unlike an
+        incremental per-column call.
         """
         if int(self.nsamples.item()) == 0:
             return quant_obj(weight)
-        return self._get_opt_weight(weight)
 
-    def _get_opt_weight(self, weight):
-        """
-        Function: quantize weights column-by-column (or HIFX4_GROUP_SIZE-group-by-group for
-        hif4) with second-order error compensation, following the GPTQ algorithm.
-        """
         columns = self.columns
         weight = weight.clone().float()
         hessian = self.H.to(weight.device).clone()
@@ -236,8 +190,7 @@ class GPTQ(QuantAlgorithmBase):
                 for i in range(count):
                     w = weight_block[:, i]
                     d = hessian_inverse_block[i, i]
-                    column_index = perm[i1 + i]
-                    w_q = self._cal_quant_weight(w, column_index, scale_w, offset_w)
+                    w_q = self._cal_quant_weight(w, scale_w, offset_w)
                     err = (w - w_q) / d
                     weight_block[:, i:] -= err.unsqueeze(1).matmul(
                         hessian_inverse_block[i, i:].unsqueeze(0)
@@ -248,36 +201,10 @@ class GPTQ(QuantAlgorithmBase):
 
         return weight_column_sorted[:, invperm].to(weight.dtype)
 
-    def _cal_quant_weight(self, w, column_index, scale_w, offset_w):
-        if self.group_size:
-            scale = (
-                None
-                if scale_w is None
-                else scale_w[:, column_index // self.group_size].unsqueeze(-1)
-            )
-            offset = (
-                None
-                if offset_w is None
-                else offset_w[:, column_index // self.group_size].unsqueeze(-1)
-            )
-            w_q = quant_dequant_tensor(
-                w.unsqueeze(-1).repeat(1, 2),
-                self.wts_type,
-                scale,
-                offset,
-                self.group_size,
-            )[:, 0]
-        else:
-            if self.wts_type in (FLOAT8_E4M3FN, HIFLOAT8):
-                w_q = quant_dequant_tensor(
-                    w.reshape(1, -1), self.wts_type, scale_w.reshape(-1), offset_w
-                ).reshape(-1)
-            else:
-                w_q = quant_dequant_tensor(
-                    w.reshape(-1, 1), self.wts_type, scale_w, offset_w
-                ).reshape(-1)
-
-        return w_q
+    def _cal_quant_weight(self, w, scale_w, offset_w):
+        return quant_dequant_tensor(
+            w.reshape(-1, 1), self.wts_type, scale_w, offset_w
+        ).reshape(-1)
 
     def _cal_quant_weight_group(self, w_group):
         """Quantize-dequantize a contiguous <=HIFX4_GROUP_SIZE-column group as one HiFloat4
@@ -297,18 +224,21 @@ class GPTQ(QuantAlgorithmBase):
         return hessian_inverse.to(device)
 
     def _cal_scale_offset_static(self, weight):
-        # HiFloat4 and MXFP4 self-scale internally; no external scale/offset needed.
-        if self.is_hif4 or self.wts_type in (MXFP4_E2M1,):
+        # HiFloat4 self-scales internally; no external scale/offset needed.
+        if self.is_hif4:
             return None, None
 
+        # get_weight_min_max_by_granularity/calculate_scale_offset only read strategy and
+        # symmetric off this dict -- both are fixed (int is always symmetric/per-channel here),
+        # so build it inline rather than storing it as an instance attribute.
         weight_min, weight_max = get_weight_min_max_by_granularity(
-            weight, self.quant_config
+            weight, {'weights_cfg': {'strategy': 'channel'}}
         )
 
         scale_w, offset_w = calculate_scale_offset(
             weight_max,
             weight_min,
-            self.quant_config.get('weights_cfg').get('symmetric'),
+            True,
             self.wts_type,
         )
         return scale_w, offset_w

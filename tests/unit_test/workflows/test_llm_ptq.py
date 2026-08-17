@@ -30,35 +30,10 @@ import pytest
 import torch
 import torch.nn as nn
 
-from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
-from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
 QUANT_TARGET_MLP = "mlp"
-
-
-class _DummyAlgo(QuantAlgorithmBase):
-    """Minimal ALGO_REGISTRY entry stub -- must inherit QuantAlgorithmBase like every
-    real algorithm."""
-
-    def forward(self, x, *args, **kwargs):
-        return x
-
-
-class _registered_algo:
-    """Temporarily registers a dummy ALGO_REGISTRY entry with the given metadata."""
-
-    def __init__(self, name, **metadata):
-        self.name = name
-        self.metadata = metadata
-
-    def __enter__(self):
-        ALGO_REGISTRY.register(name=self.name, **self.metadata)(_DummyAlgo)
-        return self.name
-
-    def __exit__(self, *exc_info):
-        ALGO_REGISTRY._items.pop(self.name, None)
 
 
 def _make_workflow(
@@ -278,63 +253,33 @@ def test_build_block_solver_supports_block_kwarg_alias():
 # ---- __init__ ------------------------------------------------------------
 
 
-def test_init_sets_solver_key_to_block_when_gptq_in_algos():
+def test_init_sets_solver_key_default_and_custom():
     args = SimpleNamespace(
-        quant_target=[QUANT_TARGET_MLP], granularity="block",
-        output_dir="/tmp/ptq", model_name="qwen3",
-        device="cpu", algos=["higptq"],
+        quant_target=[QUANT_TARGET_MLP],
+        granularity="block",
+        output_dir="/tmp/ptq",
+        model_name="qwen3",
+        device="cpu",
+        solver="modelwise",
     )
     wf = LlmPtqWorkflow(args)
-    # gptq/higptq are solver="gradient" like every other targets=("weight",) algorithm --
-    # composed into WeightQuantizer and driven by BlockwiseSolver, not a dedicated solver.
-    assert wf.solver_key == "block"
+    assert wf.solver_key == "modelwise"
     assert wf.quant_target == QUANT_TARGET_MLP
     assert wf.model_name == "qwen3"
     assert wf.pipeline is None
     assert wf.data_provider is None
-    assert wf.args.algos == ["higptq"]
 
 
-def test_init_solver_key_defaults_to_block():
+def test_init_solver_key_defaults_to_blockwise():
     args = SimpleNamespace(
-        quant_target=["attn-linear"], granularity="block",
-        output_dir="/tmp", model_name="qwen3",
-        device="cpu", algos=[],
+        quant_target=["attn-linear"],
+        granularity="block",
+        output_dir="/tmp",
+        model_name="qwen3",
+        device="cpu",
     )
     wf = LlmPtqWorkflow(args)
-    assert wf.solver_key == "block"
-
-
-def test_init_sets_solver_key_to_block_for_gradient_algo():
-    args = SimpleNamespace(
-        quant_target=[QUANT_TARGET_MLP], granularity="block",
-        output_dir="/tmp/ptq", model_name="qwen3",
-        device="cpu", algos=["lwc"],
-    )
-    wf = LlmPtqWorkflow(args)
-    assert wf.solver_key == "block"
-
-
-def test_init_raises_when_algo_missing_solver_metadata():
-    with _registered_algo("no_solver_algo", targets=("weight",)):
-        args = SimpleNamespace(
-            quant_target=[QUANT_TARGET_MLP], granularity="block",
-            output_dir="/tmp/ptq", model_name="qwen3",
-            device="cpu", algos=["no_solver_algo"],
-        )
-        with pytest.raises(ValueError, match="missing registry metadata 'solver'"):
-            LlmPtqWorkflow(args)
-
-
-def test_init_raises_when_algos_mix_solver_kinds():
-    with _registered_algo("other_kind_algo", targets=("weight",), solver="other"):
-        args = SimpleNamespace(
-            quant_target=[QUANT_TARGET_MLP], granularity="block",
-            output_dir="/tmp/ptq", model_name="qwen3",
-            device="cpu", algos=["lwc", "other_kind_algo"],
-        )
-        with pytest.raises(ValueError, match="mixes incompatible solver kinds"):
-            LlmPtqWorkflow(args)
+    assert wf.solver_key == "blockwise"
 
 
 # ---- run with model granularity (calls _run_modelwise) -------------------

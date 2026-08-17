@@ -113,21 +113,10 @@ def test_base_requires_subclass_to_implement_forward():
         _IncompleteAlgorithm()
 
 
-# solver="gradient" algorithms are composed into weight/activation/structure quantizer
-# slots via the (args)/(args, w_bits)/(args, ctx: AlgoBuildContext) build contract this test
-# exercises. Every ALGO_REGISTRY entry currently declares solver="gradient" and is driven by
-# BlockwiseSolver -- gptq/higptq are closed-form (no trainable params) but still composed
-# in and dispatched the same way as the gradient-trained ones.
-_GRADIENT_ALGORITHMS = sorted(
-    name for name in ALGO_REGISTRY.list_all()
-    if ALGO_REGISTRY.get_item(name).metadata.get("solver") == "gradient"
-)
-
-
-@pytest.mark.parametrize("name", _GRADIENT_ALGORITHMS)
+@pytest.mark.parametrize("name", ALGO_REGISTRY.list_all())
 def test_registered_algorithm_satisfies_calibration_contract(name):
-    expected_algorithms = {"autoround", "flatquant", "gptq", "higptq", "lac", "lwc", "omniquant"}
-    assert set(_GRADIENT_ALGORITHMS) == expected_algorithms
+    expected_algorithms = {"autoround", "flatquant", "gptq", "lac", "lwc", "omniquant"}
+    assert set(ALGO_REGISTRY.list_all()) == expected_algorithms
 
     item = ALGO_REGISTRY.get_item(name)
     assert issubclass(item.target, QuantAlgorithmBase)

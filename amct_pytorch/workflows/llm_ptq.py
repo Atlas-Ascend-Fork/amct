@@ -24,7 +24,6 @@ from typing import Any
 import torch
 from loguru import logger
 
-from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.datasets.ptq_provider import LlmPtqDataProvider
 from amct_pytorch.common.models.llm.common.base import PtqUnit
 from amct_pytorch.common.models.llm import register_llm_models
@@ -38,54 +37,17 @@ from amct_pytorch.common.utils.run_logging import setup_run_logging
 
 
 class LlmPtqWorkflow:
-
-    # Maps each algorithm's ALGO_REGISTRY "solver" metadata (see e.g. auto_clip.py) to the
-    # SOLVER_REGISTRY key that should drive it. All algos (lwc/lac/autoround/omniquant/
-    # flatquant/gptq/higptq) are composed inline into QuantLinear/ActivationQuantizer and
-    # driven by BlockwiseSolver's forward loop -- gptq's own quantize() is a closed-form
-    # solve with no trainable parameters, but is still triggered the same way, via
-    # WeightQuantizer.forward's quantize_algo dispatch. Every algo in ALGO_REGISTRY must
-    # declare a "solver" so this mapping never has to be hand-maintained per algo name.
-    _ALGO_SOLVER_TO_SOLVER_KEY = {"gradient": "block"}
-
     def __init__(self, args):
         self.args = args
-        register_algorithms()  # populate ALGO_REGISTRY before reading its metadata below
-
         if len(args.quant_target) != 1:
             raise ValueError("ptq only supports a single quant_target.")
         self.quant_target = args.quant_target[0]
         self.device = args.device
         self.granularity = args.granularity
-
-        self.solver_key = self._resolve_solver_key(args.algos)
-
         self.pipeline = None
         self.data_provider = None
         self.model_name = self.args.model_name
-
-    @staticmethod
-    def _resolve_solver_key(algos):
-        solver_kinds = set()
-        for algo_name in algos:
-            algo_item = ALGO_REGISTRY.get_item(algo_name)
-            solver_kind = algo_item.metadata.get("solver")
-            if solver_kind is None:
-                raise ValueError(f"Algorithm '{algo_name}' is missing registry metadata 'solver'.")
-            solver_kinds.add(solver_kind)
-
-        if len(solver_kinds) > 1:
-            raise ValueError(
-                f"--algos mixes incompatible solver kinds {sorted(solver_kinds)} across {list(algos)}; "
-                "a single PTQ run must use algorithms that share one solver."
-            )
-        if not solver_kinds:
-            return "block"
-
-        (solver_kind,) = solver_kinds
-        solver_key = LlmPtqWorkflow._ALGO_SOLVER_TO_SOLVER_KEY[solver_kind]
-        logger.info("Resolved --algos {} to solver '{}' (solver kind '{}').", list(algos), solver_key, solver_kind)
-        return solver_key
+        self.solver_key = getattr(args, "solver", "blockwise")
 
     @staticmethod
     def _register_components():
@@ -118,11 +80,7 @@ class LlmPtqWorkflow:
     def run(self):
         sink_id = self.setup()
 
-        # granularity picks which run loop executes (_run_blockwise vs _run_modelwise);
-        # solver_key independently picks which Solver class that loop uses -- kept separate
-        # so a future non-"block" SOLVER_REGISTRY entry could be plugged in without touching
-        # the run loop.
-        solver_cls = SOLVER_REGISTRY.get(self.solver_key)
+        solver_cls = SOLVER_REGISTRY.get(self.granularity)
         if self.granularity == "block":
             results = self._run_blockwise(solver_cls)
         elif self.granularity == "model":

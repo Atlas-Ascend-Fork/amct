@@ -21,7 +21,7 @@ import pytest
 import torch
 
 from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
-from amct_pytorch.algorithms.quant.gptq import GPTQ, _build_gptq_weights_cfg
+from amct_pytorch.algorithms.quant.gptq import GPTQ
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.quantization.dtypes.hifp_impl import hifloat4_fake_quant
 
@@ -41,7 +41,7 @@ def _observe(gptq, inputs):
 
 
 def _single_group_expected(gptq, weight):
-    """Closed-form expected output of _get_opt_weight when columns == HIFX4_GROUP_SIZE: with
+    """Closed-form expected output of quantize() when columns == HIFX4_GROUP_SIZE: with
     exactly one block and one group, both the intra-block and inter-block error-propagation
     steps are no-ops (their target slices are empty), so the result reduces to a direct
     quantize of the dead-zeroed, Hessian-permuted weight."""
@@ -57,13 +57,10 @@ def _single_group_expected(gptq, weight):
 # ---- registration / dispatch ---------------------------------------------------
 
 
-def test_gptq_and_higptq_alias_the_same_dispatcher():
+def test_gptq_is_registered():
     assert ALGO_REGISTRY.get("gptq") is GPTQ
-    assert ALGO_REGISTRY.get("higptq") is GPTQ
-    for name in ("gptq", "higptq"):
-        item = ALGO_REGISTRY.get_item(name)
-        assert item.metadata["solver"] == "gradient"
-        assert item.metadata["targets"] == ("weight",)
+    item = ALGO_REGISTRY.get_item("gptq")
+    assert item.metadata["targets"] == ("weight",)
 
 
 def test_gptq_is_a_quant_algorithm_base_with_no_trainable_params():
@@ -75,11 +72,8 @@ def test_gptq_is_a_quant_algorithm_base_with_no_trainable_params():
 def test_gptq_resolves_wts_type_and_is_hif4_per_dtype():
     for quant_dtype, w_bits, expected_quant_type, expected_is_hif4 in (
         ("hifp", 4, "hifloat4", True),
-        ("hifp", 8, "hifloat8", False),  # hifloat8 is a plain per-column dtype, not hif4
         ("int", 4, "int4", False),
         ("int", 8, "int8", False),
-        ("mxfp", 4, "mxfp4_e2m1", False),
-        ("mxfp", 8, "mxfp8_e4m3fn", False),
     ):
         # 64 columns: valid for every dtype above, required for the hifp/hif4 case.
         gptq = _make(quant_dtype=quant_dtype, w_bits=w_bits, in_features=64, out_features=4)
@@ -98,31 +92,18 @@ def test_init_raises_on_non_2d_weight_shape():
         GPTQ(args, 8)
 
 
-# ---- _build_gptq_weights_cfg (per-layer dtype/bit-width -> weights_cfg) -----
+def test_init_raises_for_unsupported_dtypes():
+    # mxfp and hifloat8 (hifp w_bits=8) are not implemented yet -- deliberately deferred to
+    # keep the first cut to int + HiFloat4.
+    with pytest.raises(ValueError, match="unsupported quant_dtype"):
+        _make(quant_dtype="mxfp", w_bits=4, in_features=64, out_features=4)
+    with pytest.raises(ValueError, match="only HiFloat4"):
+        _make(quant_dtype="hifp", w_bits=8, in_features=64, out_features=4)
 
 
-def test_build_gptq_weights_cfg_selects_quant_type_by_dtype_and_bits():
-    assert _build_gptq_weights_cfg("int", 4) == {
-        "quant_type": "int4", "symmetric": True, "strategy": "channel"}
-    assert _build_gptq_weights_cfg("int", 8) == {
-        "quant_type": "int8", "symmetric": True, "strategy": "channel"}
-    assert _build_gptq_weights_cfg("mxfp", 4) == {
-        "quant_type": "mxfp4_e2m1", "symmetric": True, "strategy": "group", "group_size": 32}
-    assert _build_gptq_weights_cfg("mxfp", 8) == {
-        "quant_type": "mxfp8_e4m3fn", "symmetric": True, "strategy": "group", "group_size": 32}
-    assert _build_gptq_weights_cfg("hifp", 4) == {
-        "quant_type": "hifloat4", "symmetric": True, "strategy": "channel"}
-    assert _build_gptq_weights_cfg("hifp", 8) == {
-        "quant_type": "hifloat8", "symmetric": True, "strategy": "channel"}
-
-
-def test_build_gptq_weights_cfg_rejects_unsupported_bit_width():
+def test_init_raises_for_unsupported_int_bit_width():
     with pytest.raises(ValueError, match="unsupported int w_bits"):
-        _build_gptq_weights_cfg("int", 16)
-    with pytest.raises(ValueError, match="unsupported mxfp w_bits"):
-        _build_gptq_weights_cfg("mxfp", 16)
-    with pytest.raises(ValueError, match="unsupported hif w_bits"):
-        _build_gptq_weights_cfg("hifp", 16)
+        _make(quant_dtype="int", w_bits=16, in_features=64, out_features=4)
 
 
 # ---- observe_input: gated on self.is_observe, not the call site ----------------
@@ -243,18 +224,6 @@ def test_quantize_optimizes_weight_for_int8():
 
     optimized = gptq.quantize(weight, quant_obj=None)
     assert optimized.shape == weight.shape
-    assert not torch.equal(optimized, weight)
-
-
-def test_quantize_optimizes_weight_for_mxfp():
-    torch.manual_seed(0)
-    gptq = _make(quant_dtype="mxfp", w_bits=4, in_features=64, out_features=4)
-    weight = torch.randn(4, 64)
-    _observe(gptq, torch.randn(50, 64))
-
-    optimized = gptq.quantize(weight, quant_obj=None)
-    assert optimized.shape == weight.shape
-    assert torch.isfinite(optimized).all()
     assert not torch.equal(optimized, weight)
 
 

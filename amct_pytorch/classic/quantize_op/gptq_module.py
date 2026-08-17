@@ -95,7 +95,7 @@ class GPTQuant(BaseQuantizeModule):
                 "Calculate gptq quant params of layer '{}' success!".format(
                     self.layer_name
                 ),
-                type(self).__name__,
+                'GPTQuant',
             )
         if self.cur_batch > self.quant_config.get('batch_num'):
             return self.fake_quant_forward(inputs)
