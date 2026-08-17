@@ -169,11 +169,13 @@ def test_wikitext2_ppl_owns_single_progress_bar_and_logs_final_ppl(monkeypatch):
             observed["entered"] += 1
             return self
 
-        def update(self, amount=1):
-            observed["updates"] += amount
-
-        def __exit__(self, exc_type, exc, traceback):
+        @staticmethod
+        def __exit__(exc_type, exc, traceback):
             observed["exited"] += 1
+
+        @staticmethod
+        def update(amount=1):
+            observed["updates"] += amount
 
     monkeypatch.setattr(eval_ppl, "tqdm", FakeProgress)
     info = []
@@ -252,7 +254,8 @@ def test_wikitext2_ppl_cleans_resources_after_success(monkeypatch):
             self.remaining -= 1
             return torch.zeros(1, 3, 8)
 
-        def close(self):
+        @staticmethod
+        def close():
             events.append(("close", None))
 
     monkeypatch.setattr(
@@ -276,7 +279,8 @@ def test_cleanup_ppl_resources_continues_after_cleanup_errors(monkeypatch):
     events = []
 
     class BrokenIterator:
-        def close(self):
+        @staticmethod
+        def close():
             events.append("close")
             raise RuntimeError("close failed")
 
@@ -286,7 +290,9 @@ def test_cleanup_ppl_resources_continues_after_cleanup_errors(monkeypatch):
 
     monkeypatch.setattr(eval_ppl, "_empty_npu_cache", broken_empty_cache)
 
-    eval_ppl._cleanup_ppl_resources(BrokenIterator(), "npu:1")
+    eval_ppl._cleanup_ppl_resources(  # pylint: disable=protected-access
+        BrokenIterator(), "npu:1"
+    )
 
     assert events == ["close", ("empty_cache", "npu:1")]
 
@@ -306,6 +312,8 @@ def test_cleanup_ppl_resources_continues_after_close_lookup_error(monkeypatch):
         lambda device: cache_devices.append(device),
     )
 
-    eval_ppl._cleanup_ppl_resources(BrokenCloseLookupIterator(), "npu:2")
+    eval_ppl._cleanup_ppl_resources(  # pylint: disable=protected-access
+        BrokenCloseLookupIterator(), "npu:2"
+    )
 
     assert cache_devices == ["npu:2"]
