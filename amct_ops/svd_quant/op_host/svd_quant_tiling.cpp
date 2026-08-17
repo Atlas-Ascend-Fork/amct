@@ -29,8 +29,8 @@ using namespace ge;
         std::cout << MESSAGE << std::endl; \
         return ge::GRAPH_FAILED;           \
     }
-#define ALIGN_UP(x, y) (((x) + (y)-1) / (y) * (y))
-#define CEIL_DIV(x, y) (((x) + (y)-1) / (y))
+#define ALIGN_UP(x, y) (((x) + (y) - 1) / (y) * (y))
+#define CEIL_DIV(x, y) (((x) + (y) - 1) / (y))
 
 namespace svd_quant {
 constexpr uint64_t INPUT_A_IDX = 0;
