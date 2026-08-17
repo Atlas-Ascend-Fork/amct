@@ -80,7 +80,7 @@ class GPTQ(QuantAlgorithmBase):
                 "of {}, got {}.".format(self.HIFX4_GROUP_SIZE, self.columns)
             )
 
-        self.register_buffer("H", torch.zeros((self.columns, self.columns), dtype=torch.float32))
+        self.register_buffer("hessian", torch.zeros((self.columns, self.columns), dtype=torch.float32))
         self.register_buffer("nsamples", torch.tensor(0, dtype=torch.long))
 
     def forward(self, x):
@@ -106,33 +106,33 @@ class GPTQ(QuantAlgorithmBase):
         batch_size = inp.shape[0]
         inp = inp.reshape(-1, inp.shape[-1]).t()
 
-        self.H = self.H.to(inp.device)
+        self.hessian = self.hessian.to(inp.device)
         current_nsamples = int(self.nsamples.item())
         total_nsamples = current_nsamples + batch_size
         if total_nsamples <= 0:
             return
         if current_nsamples > 0:
-            self.H.mul_(current_nsamples / total_nsamples)
+            self.hessian.mul_(current_nsamples / total_nsamples)
         self.nsamples.fill_(total_nsamples)
 
         inp = math.sqrt(2.0 / total_nsamples) * inp.float()
-        self.H.add_(inp.matmul(inp.t()))
+        self.hessian.add_(inp.matmul(inp.t()))
 
-        if not torch.isfinite(self.H).all():
+        if not torch.isfinite(self.hessian).all():
             raise RuntimeError("GPTQ's Hessian matrix has invalid value, inf or nan.")
 
     def export_ptq_params(self):
         if int(self.nsamples.item()) == 0:
             return {}
         return {
-            "H": self.H.detach().cpu(),
+            "H": self.hessian.detach().cpu(),
             "nsamples": int(self.nsamples.item()),
         }
 
     def load_ptq_params(self, params):
         if "H" not in params:
             return
-        self.H.copy_(params["H"].to(device=self.H.device, dtype=self.H.dtype))
+        self.hessian.copy_(params["H"].to(device=self.hessian.device, dtype=self.hessian.dtype))
         self.nsamples.fill_(int(params.get("nsamples", 0)))
 
     @torch.no_grad()
@@ -151,7 +151,7 @@ class GPTQ(QuantAlgorithmBase):
 
         columns = self.columns
         weight = weight.clone().float()
-        hessian = self.H.to(weight.device).clone()
+        hessian = self.hessian.to(weight.device).clone()
 
         dead = torch.diag(hessian) == 0
         hessian[dead, dead] = 1

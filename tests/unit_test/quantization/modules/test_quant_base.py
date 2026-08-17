@@ -529,7 +529,7 @@ def test_weight_quantizer_export_and_load_ptq_params_delegate_to_gptq_hook():
     wq2 = WeightQuantizer(_args(algos=["gptq"], w_bits=8, w_size=(4, 8)), w_bits=8)
     assert wq2.load_ptq_params(params) is True
     assert int(wq2.algorithms["gptq"].nsamples.item()) == 3
-    assert torch.equal(wq2.algorithms["gptq"].H, gptq.H)
+    assert torch.equal(wq2.algorithms["gptq"].hessian, gptq.hessian)
 
 
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():

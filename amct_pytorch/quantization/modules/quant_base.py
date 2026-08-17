@@ -146,20 +146,6 @@ class WeightQuantizer(torch.nn.Module):
             x = algo(x)
         return x, quantize_algo
 
-    def _get_quantize_algo(self):
-        """Find the (at most one) algorithm exposing a custom quantize() hook, without
-        running algo_forward's loop (which has side effects -- calib_forward/__call__ on
-        every *other* algo -- that export/load must not trigger)."""
-        quantize_algo = None
-        for algo in self.algorithms.values():
-            if callable(getattr(algo, "quantize", None)):
-                if quantize_algo is not None:
-                    raise ValueError(
-                        "Only one weight algorithm with a custom quantize() hook is supported."
-                    )
-                quantize_algo = algo
-        return quantize_algo
-
     def export_deploy(self, x):
         x, quantize_algo = self.algo_forward(x)
         if quantize_algo is not None:
@@ -194,7 +180,17 @@ class WeightQuantizer(torch.nn.Module):
                 observe_input(x, weight)
 
     def export_ptq_params(self):
-        quantize_algo = self._get_quantize_algo()
+        # Scan for the quantize() hook directly (not via algo_forward) -- algo_forward would
+        # also call calib_forward/__call__ on every *other* algo, side effects export must
+        # not trigger.
+        quantize_algo = None
+        for algo in self.algorithms.values():
+            if callable(getattr(algo, "quantize", None)):
+                if quantize_algo is not None:
+                    raise ValueError(
+                        "Only one weight algorithm with a custom quantize() hook is supported."
+                    )
+                quantize_algo = algo
         if quantize_algo is None:
             return None
         export_fn = getattr(quantize_algo, "export_ptq_params", None)
@@ -203,7 +199,14 @@ class WeightQuantizer(torch.nn.Module):
         return export_fn()
 
     def load_ptq_params(self, params):
-        quantize_algo = self._get_quantize_algo()
+        quantize_algo = None
+        for algo in self.algorithms.values():
+            if callable(getattr(algo, "quantize", None)):
+                if quantize_algo is not None:
+                    raise ValueError(
+                        "Only one weight algorithm with a custom quantize() hook is supported."
+                    )
+                quantize_algo = algo
         if quantize_algo is None:
             return False
         load_fn = getattr(quantize_algo, "load_ptq_params", None)

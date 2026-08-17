@@ -173,4 +173,4 @@ def test_quant_linear_export_and_load_ptq_params_delegate_to_gptq():
     q2.load_ptq_params(params)
     loaded_gptq = q2.weight_quantizer.algorithms["gptq"]
     assert int(loaded_gptq.nsamples.item()) == params["nsamples"]
-    assert torch.equal(loaded_gptq.H, params["H"])
+    assert torch.equal(loaded_gptq.hessian, params["H"])

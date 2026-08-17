@@ -45,7 +45,7 @@ def _single_group_expected(gptq, weight):
     exactly one block and one group, both the intra-block and inter-block error-propagation
     steps are no-ops (their target slices are empty), so the result reduces to a direct
     quantize of the dead-zeroed, Hessian-permuted weight."""
-    diag = torch.diag(gptq.H)
+    diag = torch.diag(gptq.hessian)
     dead = diag == 0
     w = weight.clone()
     w[:, dead] = 0
@@ -114,7 +114,7 @@ def test_observe_input_is_a_noop_when_not_observing():
     gptq.is_observe = False
     gptq.observe_input(torch.randn(3, 8))
     assert int(gptq.nsamples.item()) == 0
-    assert torch.equal(gptq.H, torch.zeros_like(gptq.H))
+    assert torch.equal(gptq.hessian, torch.zeros_like(gptq.hessian))
 
 
 def test_observe_input_accumulates_hessian_when_observing():
@@ -126,13 +126,13 @@ def test_observe_input_accumulates_hessian_when_observing():
     gptq = _make(in_features=8, out_features=2)
     _observe(gptq, torch.randn(5, 1, 8))
     assert int(gptq.nsamples.item()) == 5
-    assert torch.isfinite(gptq.H).all()
-    assert not torch.equal(gptq.H, torch.zeros_like(gptq.H))
+    assert torch.isfinite(gptq.hessian).all()
+    assert not torch.equal(gptq.hessian, torch.zeros_like(gptq.hessian))
 
-    h_after_first = gptq.H.clone()
+    h_after_first = gptq.hessian.clone()
     _observe(gptq, torch.randn(5, 1, 8))
     assert int(gptq.nsamples.item()) == 10
-    assert not torch.equal(gptq.H, h_after_first)
+    assert not torch.equal(gptq.hessian, h_after_first)
 
 
 def test_observe_input_treats_2d_input_as_one_sequence():
@@ -140,8 +140,8 @@ def test_observe_input_treats_2d_input_as_one_sequence():
     gptq = _make(in_features=8, out_features=2)
     _observe(gptq, torch.randn(5, 8))
     assert int(gptq.nsamples.item()) == 1
-    assert torch.isfinite(gptq.H).all()
-    assert not torch.equal(gptq.H, torch.zeros_like(gptq.H))
+    assert torch.isfinite(gptq.hessian).all()
+    assert not torch.equal(gptq.hessian, torch.zeros_like(gptq.hessian))
 
 
 def test_observe_input_toggled_off_stops_accumulating():
@@ -248,7 +248,7 @@ def test_export_then_load_ptq_params_round_trips_hessian():
     target.load_ptq_params(params)
 
     assert int(target.nsamples.item()) == 6
-    assert torch.equal(target.H, source.H)
+    assert torch.equal(target.hessian, source.hessian)
 
 
 def test_load_ptq_params_is_a_noop_without_h_key():
