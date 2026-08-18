@@ -104,6 +104,23 @@ def test_export_module_ignores_modules_without_export_ptq_params():
     assert set(out) == {"flagged"}
 
 
+def test_export_module_finds_deeply_nested_export_ptq_params_once():
+    # Mirrors QuantLinear -> WeightQuantizer -> algorithms["gptq"]: only the leaf defines
+    # export_ptq_params, the intermediate wrapper layers don't. named_modules() must walk
+    # down to wherever the method actually lives, under its full dotted path, without also
+    # (incorrectly) matching any of the intermediate layers along the way.
+    parent = nn.Module()
+    parent.proj = nn.Module()
+    parent.proj.wrapper = nn.Module()
+    parent.proj.wrapper.algo = _Exportable({"H": torch.zeros(2, 2), "nsamples": 3})
+
+    out = PtqParamHandler.export_module(parent)
+    assert set(out) == {"proj.wrapper.algo"}
+    sub = out["proj.wrapper.algo"]
+    assert torch.equal(sub["H"], torch.zeros(2, 2))
+    assert sub["nsamples"] == 3
+
+
 # ---- PtqParamHandler.load_trainable_module / load_module ----------------
 
 
@@ -151,6 +168,19 @@ def test_load_module_raises_when_submodule_has_no_load_ptq_params():
     parent.linear = nn.Linear(4, 4)  # no load_ptq_params method
     with pytest.raises(KeyError, match="does not implement load_ptq_params"):
         PtqParamHandler.load_module(parent, {"linear": {}})
+
+
+def test_load_module_restores_deeply_nested_load_ptq_params():
+    # Symmetric counterpart to test_export_module_finds_deeply_nested_export_ptq_params_once:
+    # the dotted key produced by export_module's deep walk must resolve back to the same
+    # nested leaf via named_modules() on load.
+    parent = nn.Module()
+    parent.proj = nn.Module()
+    parent.proj.wrapper = nn.Module()
+    parent.proj.wrapper.algo = _Loadable()
+
+    PtqParamHandler.load_module(parent, {"proj.wrapper.algo": {"H": torch.zeros(2, 2)}})
+    assert torch.equal(parent.proj.wrapper.algo.received["H"], torch.zeros(2, 2))
 
 
 # ---- PtqParamHandler.export_unit / load_unit ----------------------------

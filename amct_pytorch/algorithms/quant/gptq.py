@@ -50,11 +50,7 @@ class GPTQ(QuantAlgorithmBase):
     def __init__(self, args, w_bits):
         super().__init__()
         if args.quant_dtype == 'int':
-            quant_type = _INT_QUANT_TYPE_BY_BITS.get(w_bits)
-            if quant_type is None:
-                raise ValueError(
-                    f"gptq: unsupported int w_bits={w_bits!r} (expected 4 or 8)"
-                )
+            quant_type = _INT_QUANT_TYPE_BY_BITS[w_bits]
         elif args.quant_dtype == 'hifp':
             if w_bits != 4:
                 raise ValueError(

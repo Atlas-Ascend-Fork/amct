@@ -179,42 +179,6 @@ class WeightQuantizer(torch.nn.Module):
             if callable(observe_input):
                 observe_input(x, weight)
 
-    def export_ptq_params(self):
-        # Scan for the quantize() hook directly (not via algo_forward) -- algo_forward would
-        # also call calib_forward/__call__ on every *other* algo, side effects export must
-        # not trigger.
-        quantize_algo = None
-        for algo in self.algorithms.values():
-            if callable(getattr(algo, "quantize", None)):
-                if quantize_algo is not None:
-                    raise ValueError(
-                        "Only one weight algorithm with a custom quantize() hook is supported."
-                    )
-                quantize_algo = algo
-        if quantize_algo is None:
-            return None
-        export_fn = getattr(quantize_algo, "export_ptq_params", None)
-        if not callable(export_fn):
-            return None
-        return export_fn()
-
-    def load_ptq_params(self, params):
-        quantize_algo = None
-        for algo in self.algorithms.values():
-            if callable(getattr(algo, "quantize", None)):
-                if quantize_algo is not None:
-                    raise ValueError(
-                        "Only one weight algorithm with a custom quantize() hook is supported."
-                    )
-                quantize_algo = algo
-        if quantize_algo is None:
-            return False
-        load_fn = getattr(quantize_algo, "load_ptq_params", None)
-        if not callable(load_fn):
-            return False
-        load_fn(params)
-        return True
-
     def trainable_params(self):
         params = []
         for algo in self.algorithms.values():

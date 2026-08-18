@@ -104,7 +104,10 @@ def test_init_raises_for_unsupported_dtypes():
 
 
 def test_init_raises_for_unsupported_int_bit_width():
-    with pytest.raises(ValueError, match="unsupported int w_bits"):
+    # No longer a GPTQ-level check -- bit_policy.py's yaml schema validation (_ALLOWED_BITS)
+    # already rejects anything outside (4, 8, 16) upstream; 16 is schema-valid but unsupported
+    # here, so this now surfaces as a plain KeyError from the dict lookup.
+    with pytest.raises(KeyError):
         _make(quant_dtype="int", w_bits=16, in_features=64, out_features=4)
 
 

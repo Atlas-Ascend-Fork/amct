@@ -20,8 +20,6 @@ from types import SimpleNamespace
 import torch
 import torch.nn as nn
 
-from amct_pytorch.algorithms.quant.gptq import GPTQ  # noqa: F401
-from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_observe
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -142,35 +140,3 @@ def test_quant_linear_export_deploy_applies_structure_transform():
     assert seen == {"inv_t": True, "name": "proj"}
 
 
-def test_quant_linear_export_and_load_ptq_params_default_to_weight():
-    linear, q = _make_linear_and_quant(4, 8)
-    params = q.export_ptq_params()
-    assert torch.equal(params["weight"], linear.weight.detach().cpu())
-
-    q2 = QuantLinear(_args(), nn.Linear(4, 8), w_bits=8, name="proj")
-    q2.load_ptq_params(params)
-    assert torch.equal(q2.linear.weight.detach(), linear.weight.detach())
-
-
-def _make_gptq_quant_linear(in_features=4, out_features=8):
-    linear = nn.Linear(in_features, out_features)
-    args = _args(algos=["gptq"])
-    return linear, QuantLinear(args, linear, w_bits=8, name="proj")
-
-
-def test_quant_linear_export_and_load_ptq_params_delegate_to_gptq():
-    _, q = _make_gptq_quant_linear(4, 8)
-
-    set_model_to_observe(q, True)
-    q(torch.randn(2, 4))
-    set_model_to_observe(q, False)
-
-    params = q.export_ptq_params()
-    assert set(params) == {"H", "nsamples"}
-    assert "weight" not in params
-
-    _, q2 = _make_gptq_quant_linear(4, 8)
-    q2.load_ptq_params(params)
-    loaded_gptq = q2.weight_quantizer.algorithms["gptq"]
-    assert int(loaded_gptq.nsamples.item()) == params["nsamples"]
-    assert torch.equal(loaded_gptq.hessian, params["H"])
