@@ -29,6 +29,7 @@ from ..common.utils.log import LOGGER
 from .config import MethodSpec, PruneConfig, _normalize_method_spec
 from .context import BatchAdapter
 from .pruner import AutoPruner
+from . import simulate
 from .report import PruneReport
 from .utils import count_parameters
 
@@ -410,6 +411,31 @@ def _prepare_search_inputs(
     return grid, base_cfg, count_parameters(model), eval_batches
 
 
+def _maskable(base_cfg: dict) -> bool:
+    """Whether every method in play can be measured by masking rather than by copying.
+
+    A method that rewrites weights (reconstruct's least squares) cannot be expressed as a
+    mask, so those searches keep using a copy.
+    """
+    from .registry import create_default_registry, get_binding
+
+    registry = create_default_registry()
+    try:
+        methods = PruneConfig(**copy.deepcopy(base_cfg)).resolved_methods()
+    except (TypeError, ValueError):
+        return False
+    for domain_name, spec in methods.items():
+        if spec.kwargs.get("prune_ratio") == 0.0:
+            continue
+        try:
+            binding = get_binding(registry, domain_name, spec.name)
+        except (KeyError, ValueError):
+            return False
+        if not getattr(binding.method, "supports_masked_trial", False):
+            return False
+    return True
+
+
 def _make_trial_fn(
     model,
     base_cfg,
@@ -426,18 +452,34 @@ def _make_trial_fn(
 ):
     """Build the per-ratio trial function (shared by tolerance and size-budget modes)."""
 
+    def _copy_trial(cfg) -> Tuple[float, int]:
+        cfg.copy_model = True
+        pruner = AutoPruner(cfg)
+        pruned = pruner(model, data=data, batch_adapter=batch_adapter)
+        pa = count_parameters(pruned)
+        if finetune_fn is not None:
+            finetune_fn(pruned)
+        if quant_fn is not None:
+            quant_fn(pruned)
+        return float(quality_fn(pruned)), pa
+
+    def _masked_trial(cfg) -> Tuple[float, int]:
+        """Same measurement without the copy: the cut is masked in, then rolled back."""
+        cfg.copy_model = False
+        with simulate.SimulationSession(model) as session:
+            pruner = AutoPruner(cfg)
+            pruner(model, data=data, batch_adapter=batch_adapter)
+            return float(quality_fn(model)), params_before - session.removed_params
+
+    # A masked trial measures the model in place, so it is off whenever something would
+    # modify it: the recovery/quant callbacks, or a method that rewrites its consumer.
+    masked = finetune_fn is None and quant_fn is None and _maskable(base_cfg)
+
     def trial(ratio: float) -> TrialResult:
         cfg = PruneConfig(**_with_ratio(base_cfg, ratio))
-        cfg.copy_model = True
+        run = _masked_trial if masked else _copy_trial
         try:
-            pruner = AutoPruner(cfg)
-            pruned = pruner(model, data=data, batch_adapter=batch_adapter)
-            pa = count_parameters(pruned)
-            if finetune_fn is not None:
-                finetune_fn(pruned)
-            if quant_fn is not None:
-                quant_fn(pruned)
-            q = float(quality_fn(pruned))
+            q, pa = run(cfg)
         except (
             RuntimeError,
             ValueError,
