@@ -1,8 +1,10 @@
 # AMCT Coder 验证规则
 
+实际编码在修改后读取本文件并执行匹配的最小验证；实现规划、行为诊断和各类 review 只在判断验证方案或既有验证证据时读取相关部分。
+
 ## 通用
 
-所有编码任务结束前必须说明：
+实际编码任务结束前必须说明：
 
 - 命中的场景操作手册；未分类时说明源码探查结果。
 - 实际改动文件。
@@ -26,11 +28,13 @@
 ## 最小静态验证
 
 - Python 语法：`python -m py_compile <files>`。
-- Python 风格：遵循 PEP8，使用 Ruff 检查和格式化。准备提交且环境未就绪时，先执行 `python -m pip install pre-commit` 和 `pre-commit install`。
-- ruff/pre-commit：`pre-commit run --files <changed files>`。**不要用 `--all-files`**——全仓存量问题会盖掉本次改动的信号，判不出是不是自己引入的。
-- C/C++：遵循 `.clang-format`，行宽 120，4 空格缩进。
-- 版权：新增源码文件包含仓库既有的 Apache 2.0 版权声明；现有文件的版权头未被删除或破坏。
+- Python 风格：对本次改动文件运行仓库 Ruff 配置对应的检查和格式化。
+- pre-commit：准备提交且环境未就绪时，先运行 `python -m pip install pre-commit` 和 `pre-commit install`；再运行 `pre-commit run --files <changed files>`。**不要用 `--all-files`**，避免全仓存量问题掩盖本次改动信号。
+- C/C++：用仓库 `.clang-format` 检查或格式化本次改动文件。
+- 版权：检查新增代码包含仓库既有的 Apache 2.0 版权声明，现有版权头未被删除或破坏。
 - public API：跑静态 API 测试。
+
+本节只定义修改后的检查动作。代码风格、版权和贡献要求必须已在修改前按 [project-rules.md](project-rules.md) 建立约束，不能等运行本节时才首次得知。
 
 ## 越界自查
 

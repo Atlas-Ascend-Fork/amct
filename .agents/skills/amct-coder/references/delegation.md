@@ -2,7 +2,7 @@
 
 ## 使用原则
 
-`amct-coder` 只承接 AMCT 源码编码、调试和 review。开始任务时以当前会话已发现 skill 的 `name + description` 为外部职责事实源；本文件不复制完整 skill 清单，只说明最容易与编码任务混淆的稳定交界。
+`amct-coder` 只承接 AMCT 源码编码、实现规划、调试和 review。开始任务时以当前会话已发现 skill 的 `name + description` 为外部职责事实源；本文件不复制完整 skill 清单，只说明最容易与编码任务混淆的稳定交界。
 
 先区分用户要的是实现代码、评审拟议落点，还是实际执行操作：
 

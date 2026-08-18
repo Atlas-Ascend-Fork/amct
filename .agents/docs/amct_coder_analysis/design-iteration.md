@@ -665,3 +665,326 @@ quant-workflow
 - 未运行 AMCT Python/C++ 单测；本轮只改 Markdown，不涉及运行时行为。
 - 未执行 forward-test。当前工作区包含历次答案与设计结论，不满足 cold 隔离要求。待验证的是两类偏差是否消失：该自查却询问用户、该询问却硬猜契约；应复用 forward-test 中契约不完整的题目（J、K、L、O）在物理隔离新会话中复测。
 - repo-map 不需要更新；未改变仓库分层、注册集合或核心运行流程。
+
+### 16. 路由粒度、Reference 可发现性与项目规范前置
+
+本轮根据评审意见重新检查主 `SKILL.md` 的职责。问题不在于现有场景枚举是否足够准确，而在于主入口承担了过多细粒度分类：表格试图用算法名、参数类型、数据对象和文件形态描述每个子能力，却仍不可能覆盖未来全部需求；具体场景同时已在各 reference 中维护，形成重复和双处更新成本。
+
+评审同时指出两个相关问题：
+
+1. 主表只列 9 个场景 playbook，`repo-scenarios.md`、`stage-impact.md`、`layer-rules.md`、`attention-rules.md`、`wrapper-rules.md`、`validation.md` 等辅助 reference 分散在后文，Agent 不能先看到完整资料地图。
+2. AMCT 项目规范中的代码风格、pre-commit、版权和贡献要求被混入修改后才读取的 `validation.md` 或按需读取的贡献流程，约束时机晚于编码。
+
+#### 16.1 设计裁决
+
+主 `SKILL.md` 只承担流程编排和文档导航，不在路由层枚举完整触发场景：
+
+- 场景 playbook 的用途压缩为宽泛能力说明，例如 `llm-algorithm.md` 只写“LLM 量化算法相关开发与 review”；算法名、`targets`、训练/统计参数等细节留在该 reference。
+- 未命中现有场景时继续按源码入口、注册点、调用方和直接测试探查，不通过补充更多关键词追求穷举覆盖。
+- 主入口建立一张完整 Reference 索引，列出 `references/` 下每份文档的用途和加载时机。完整列出只解决可发现性，不表示所有文档是平级子能力，也不表示一次性全部读取。
+- Reference 按主场景、定位/边界辅助、模型规则、编码前规范、编码后验证和贡献操作区分；每个任务仍只加载当前需要的资料。
+
+路由、索引和加载的职责分别是：路由提供粗粒度方向，索引保证资料可发现，reference 承载具体规则，源码与测试确认当前事实。
+
+#### 16.2 AMCT 项目规范
+
+新增独立的 `project-rules.md`。`amct-coder` 先判断职责归属；确认由自身承接且需要实际修改 AMCT 文件时，在形成具体修改方案或编辑文件前读取。已经路由到外部专门 skill 的任务遵循目标 skill 自己的前置流程。这里的“项目规范”特指以下 AMCT 仓规则，不以“适用的 `AGENTS.md`”代称：
+
+- Python 遵循 PEP8，使用 Ruff 检查和格式化。
+- C/C++ 遵循 Google 代码规范，使用 `.clang-format`，4 空格缩进、120 字符行宽。
+- 提交前安装并运行 pre-commit。
+- 新增代码保留仓库既有的 Apache 2.0 版权声明。
+- 简单 bug 修复可直接提 PR；新功能或接口变更先通过 Issue 讨论。
+- PR 关联对应 Issue，并包含代码以及受影响的优化文档和 README 更新。
+- 创建 PR 使用 `.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md`；创建 Issue 时从 `.gitcode/ISSUE_TEMPLATE/` 按类型选择模板。
+- 涉及 GitCode Issue 或 PR 时使用 `gitcode-issue`、`gitcode-pr` skill；缺失时按 `default-skills` 安装。
+
+`project-rules.md` 负责编码前约束；`validation.md` 只负责修改后的语法、Ruff/pre-commit、测试、构建和证据等级。读取规范不等于任务开始时安装工具或创建 Issue/PR：安装 pre-commit 发生在准备提交且环境未就绪时，GitCode skill 只在实际进行对应操作时加载。
+
+#### 16.3 修改范围
+
+本轮按以下范围实施：
+
+1. 收缩 `SKILL.md` 的场景描述，删除算法名、参数名和数据对象的细粒度枚举。
+2. 在 `SKILL.md` 中列出全部 reference，并标注类型、用途和加载时机。
+3. 新增 `project-rules.md`，把 AMCT 项目规范放到编码前固定流程。
+4. 从 `validation.md` 删除规范定义，只保留对应的修改后检查动作；收缩 `contribution-flow.md` 为实际 Issue/PR 操作补充。
+5. 更新相关引用，验证所有 reference 均可从主 `SKILL.md` 直接发现。
+
+repo-map 不需要更新：本轮只调整 Agent 文档的导航和读取时机，没有改变 AMCT 源码分层、注册集合或核心运行流程。frontmatter 的触发范围不变，`agents/openai.yaml` 当前不存在，无需生成 UI metadata。
+
+#### 16.4 实施结果与验证
+
+本轮已按第 16.3 节完成修改：
+
+| 文件 | 实施结果 |
+| --- | --- |
+| `SKILL.md` | 固定流程先判断职责归属，确认由 amct-coder 承接实际改动后再读 AMCT 项目规范；原细粒度场景表改为粗粒度用途导航；直接列出全部 reference；保留按需读取预算 |
+| `references/project-rules.md` | 新增编码前规范，集中维护 Python/C/C++ 风格、pre-commit、版权、Issue/PR 门槛、模板和 GitCode skill 路由 |
+| `references/validation.md` | 只保留修改后的语法、Ruff/pre-commit、格式化、测试、构建和证据检查，并反向引用编码前规范 |
+| `references/contribution-flow.md` | 删除门槛和模板副本，只保留获得授权后的实际 Issue/PR 操作衔接 |
+| `references/repo-scenarios.md` | 将失效的“子能力路由”章节引用更新为 `SKILL.md` 的 Reference 导航 |
+
+实现保持以下边界：完整 Reference 索引只建立可发现性，不触发全量读取；主场景用途不复制算法名、参数、数据对象和源码锚点；具体触发和执行规则继续留在对应 reference。项目规范只在确认由 amct-coder 承接实际改动后前置读取；repo-map、场景手册和辅助 reference 仍按承接职责与风险加载。
+
+验证结果：
+
+- `git diff --check` 通过。
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- `SKILL.md` 直接链接的 reference 集合与 `references/*.md` 实际文件集合一致，共 18 份，无遗漏或多余项。
+- `SKILL.md` 正文规模低于 `skill-creator` 建议的 500 行上限；不记录易随正常编辑漂移的精确行数。
+- 仓库中 PR 模板和四类 Issue 模板路径均已核对存在。
+- 未运行 AMCT Python/C++ 单测；本轮只修改 Agent Markdown，不涉及运行时代码。
+- 未执行 forward-test；本轮先完成结构和静态有效性验证，后续需要用无设计答案泄露的新会话检验 Agent 是否做到“粗粒度路由、按需读取、编码前遵守项目规范”。
+- repo-map 不需要更新；AMCT 源码分层和核心流程未变化。
+
+## 17. 第八轮审视：多场景裁决、Review 规范分流与设计版本更新
+
+第 16 节完成粗粒度 Reference 导航后，自审发现三个尚未闭环的问题。本轮只修入口级决策和设计文档事实源，不根据未经隔离的旧测试继续扩写领域 reference。
+
+### 17.1 发现的问题
+
+1. **多个主场景同时匹配时缺少裁决。** 主入口要求选择一个主手册，也处理了完全未命中的情况，但没有说明 `llm-algorithm`、`llm-data-workflow`、`public-api-tests` 等粗粒度用途同时可能匹配时如何选择。Agent 可能因题面同时出现算法、CLI、测试或文档而读取多个主手册，削弱渐进披露。
+2. **“纯 review 不加载项目规范”范围过宽。** 架构落点 review 不需要代码风格和贡献门槛，但代码或 PR 的规范合规 review 需要检查 Ruff、版权、Issue/PR 门槛和模板。把所有 review 统一跳过会漏掉该类检查。
+3. **`design-v1.md` 与运行时规则发生漂移。** v1 仍保留详细外部 Skill 路由表、细粒度子能力表和旧加载顺序，并声明冲突时优先按设计文档修改 `SKILL.md`。这会让后续维护者用旧设计覆盖已经迭代的运行规则。设计记录中维护精确行数也会产生无价值漂移。
+
+### 17.2 设计裁决
+
+#### 多主场景裁决
+
+保持主入口的粗粒度导航，不恢复算法名、参数名或文件枚举。多个主场景同时可能命中时，按以下顺序裁决：
+
+1. 先看用户动作、目标入口、被修改契约和活跃调用方，确定真正拥有修改语义的主手册。
+2. 仍无法定位代码体系时读取 `repo-scenarios.md`，不通过预读所有候选手册解决歧义。
+3. 只有源码已经证明同时改变另一契约时，才把第二个主场景作为辅助加载。
+4. 主手册选择仍依赖未冻结的关键契约时，进入既有「契约缺失时的处理形态」，不增加新的询问体系。
+
+#### Review 规范分流
+
+`project-rules.md` 的加载由 review 目标决定，而不是由 `review` 这个动作词决定：
+
+| 任务形态 | 是否读取项目规范 | 原因 |
+| --- | --- | --- |
+| 实际修改 AMCT 文件 | 是 | 代码风格、版权和贡献门槛必须在修改前建立约束 |
+| 代码或 PR 的规范合规 review | 是 | 需要检查 Ruff、版权、Issue/PR 门槛和模板 |
+| 架构落点、分层或越层 review | 否 | 由 repo-map、场景手册和源码事实提供判断依据 |
+| 纯只读规划、普通问题分析和故障诊断 | 否 | 不产生需要项目规范约束的修改或合规结论 |
+
+#### 设计文档事实源
+
+`design-v1.md` 保留 v1 原始设计，作为设计演进基线；在文件末尾按 v1 的结构追加当前设计，不重写原始正文。文档优先级调整为：
+
+1. `SKILL.md` 与 `references/*.md` 是 Agent 实际执行的运行时事实源。
+2. `design-v1.md` 文末最新的“当前设计”记录结构设计快照；与原始 v1 冲突时，文末更新优先。
+3. `design-iteration.md` 记录问题、裁决、修改过程和验证证据，不承担运行时规则。
+4. 发现设计记录与运行时文件冲突时，以运行时文件确认当前行为，再同步设计记录；不能用旧设计静默回退已验证的规则。
+
+### 17.3 实施范围
+
+| 文件 | 修改内容 |
+| --- | --- |
+| `SKILL.md` | 增加多主场景裁决；细分项目规范对实际修改、规范合规 review 和架构 review 的加载条件 |
+| `references/project-rules.md` | 同步 Review 加载边界，避免与主入口出现第二种口径 |
+| `design-v1.md` | 补充版本与事实源说明，并在原 v1 末尾按相同结构记录当前设计 |
+| `design-iteration.md` | 记录本轮问题、设计裁决、实施范围和验证结果；删除易漂移的精确行数 |
+
+本轮不修改九份主场景 reference，不改变 frontmatter、repo-map、casebook 或 AMCT 运行时代码。Reference 的领域规则只有在后续隔离 forward-test 出现可复现失败时再调整。
+
+### 17.4 实施结果与验证
+
+第 17.3 节范围已经完成，验证结果如下：
+
+- `git diff --check` 与 `git diff HEAD --check` 均通过，工作区新增差异和相对 HEAD 的组合差异不存在空白错误。
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- 主入口直接链接的 Reference 集合与 `references/*.md` 实际文件集合一致，共 18 份。
+- `SKILL.md` 与 `project-rules.md` 均使用“实际修改或规范合规 review 时读取；架构落点 review、纯规划、普通分析和诊断不读取”的同一口径。
+- `design-v1.md` 保留原 v1 正文，并在末尾按“设计目标、文档分工、主流程、阶段数据流、冲突裁决、目标形态、维护清单”记录当前设计；文件开头已明确版本和运行时事实源优先级。
+- `SKILL.md` 正文仍低于 `skill-creator` 建议的 500 行上限。
+- 不运行 AMCT Python/C++ 单测；本轮只修改 Agent Markdown，不涉及运行时代码。
+- 不把本轮静态检查视为 forward-test；多场景裁决和 Review 分流仍需在物理隔离的新会话中验证行为。
+
+## 18. 第九轮审视：按交付物路径统一加载与汇总
+
+第 17 节按 review 类型修正项目规范加载后，再次审查主 `SKILL.md` 正文发现，问题已经从单条规则错误转为多处规则各自维护：固定流程、职责判断、Reference 导航、渐进披露、规范 Reference、验证 Reference 和最终说明都在描述任务类型，但没有共同的执行路径事实源。
+
+### 18.1 发现的问题
+
+1. **加载口径分散。** `project-rules.md`、repo-map、主场景手册和 `validation.md` 的读取条件散落在多个章节；增加实现规划或细分 review 后，需要同时修改多处，容易再次漂移。
+2. **实现规划没有成为一等交付物。** 正文实际承接只读实现规划，但 frontmatter、固定流程和最终说明仍主要围绕编码与 review，Agent 可能遗漏规划所需的 repo-map、主手册和验证方案证据。
+3. **局部选择边界过宽。** “默认值”与变量名、日志措辞并列为 Agent 可自行决定的局部选择，但默认值经常影响 CLI、兼容性和用户可见行为，不能天然视为等价实现。
+4. **提问和最终汇总会制造无依据内容。** 询问规则要求每次都给推荐项，即使源码、兼容性和成本没有提供偏向；统一的最终说明又要求所有任务报告主场景、改动层和修改后验证，纯规范合规 review 或外部 Skill 路径只能虚构这些字段。
+
+### 18.2 设计裁决
+
+主 `SKILL.md` 增加唯一的“按交付物选择执行路径”矩阵：
+
+| 执行路径 | `project-rules.md` | repo-map + 主场景手册 | `validation.md` |
+| --- | --- | --- | --- |
+| 实际编码 | 修改前读取 | 读取 | 修改后读取并执行匹配的最小验证 |
+| 实现规划、行为诊断、架构或代码行为 review | 不读取 | 读取 | 判断既有或建议的验证证据时按需读取相关部分 |
+| 纯规范合规 review | 读取 | 默认不读；发现行为、分层或调用链问题后切换路径 | 检查验证完整性时按需读取相关部分 |
+| 已路由到外部专门 Skill | 由目标 Skill 决定 | amct-coder 不预读 | 由目标 Skill 决定 |
+
+这张表是加载时机的运行时唯一事实源。固定流程只要求选择路径；Reference 导航只说明资料用途并引用路径；渐进披露只规定预算和扩张顺序；`project-rules.md` 与 `validation.md` 不再维护各自的任务类型清单。
+
+同时作出三项行为收敛：
+
+1. frontmatter 和定位明确包含“实现规划”。
+2. 从局部等价选择中删除默认值；需要用户决策时，只有源码惯例、兼容性或实现成本存在证据才给推荐项，没有依据就明确无默认推荐。
+3. 最终汇总按四条执行路径区分。纯规范合规 review 不虚构主场景和 repo-map 结论，外部 Skill 路径不声称加载过 amct-coder 手册，无修改的规划、诊断和 review 不声称执行过修改后验证。
+
+### 18.3 实施范围
+
+| 文件 | 修改内容 |
+| --- | --- |
+| `SKILL.md` | 更新 frontmatter、定位和固定流程；新增执行路径矩阵；收敛边界读取、Reference、渐进披露、提问规则和按路径最终汇总 |
+| `references/delegation.md` | 同步入口职责定位，补入实现规划，避免外部职责辅助文档收窄主入口范围 |
+| `references/project-rules.md` | 删除独立任务类型枚举，引用主入口执行路径矩阵 |
+| `references/validation.md` | 引用主入口执行路径矩阵，并允许规划、诊断和 review 按需核对验证证据 |
+| `design-v1.md` | 在文末当前设计中同步设计目标、主流程、路径矩阵、事实门禁、渐进预算、最终汇总、目标形态和维护清单 |
+| `design-iteration.md` | 记录本轮问题、裁决、实施范围、验证结果和测试限制 |
+
+本轮不修改主场景 playbook、repo-map、casebook 或 AMCT 运行时代码。加载规则的正文只在主 `SKILL.md` 路径矩阵中维护；设计文档中的矩阵是结构快照，不参与运行时执行。
+
+### 18.4 实施结果与验证
+
+第 18.3 节范围已经完成，验证结果如下：
+
+- `git diff --check` 与 `git diff HEAD --check` 均通过，工作区新增差异和相对 HEAD 的组合差异不存在空白错误。
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- 主入口直接链接的 Reference 去重集合与 `references/*.md` 实际文件集合一致，共 18 份。
+- 运行时加载条件只在 `SKILL.md` 的执行路径矩阵中定义；`project-rules.md` 和 `validation.md` 均引用该矩阵，Reference 导航和渐进披露不再维护第二份任务类型清单。
+- `design-v1.md` 文末当前设计已同步执行路径、事实门禁、渐进预算和按路径最终汇总；`delegation.md` 的入口定位也已包含实现规划。
+- `SKILL.md` 正文规模低于 `skill-creator` 建议的 500 行上限。
+- 未运行 AMCT Python/C++ 单测；本轮只修改 Skill 与分析 Markdown，不涉及 AMCT 运行时代码。
+- 未执行 forward-test；当前工作区含历次设计和旧测试答案，不满足 cold 隔离条件，静态检查不能证明 Agent 已按新路径稳定行动。
+- repo-map、casebook、docs/examples 不需要更新；本轮没有改变 AMCT 源码分层、模型经验或用户功能。
+
+## 19. 第十轮审视：触发面、规则副本与跨文件一致性
+
+第 18 节统一执行路径矩阵后，对主 `SKILL.md` 及本轮改动过的 reference 做了一次静态自查，覆盖：主入口全文、`project-rules.md`、`validation.md`、`delegation.md`、`repo-scenarios.md`、`contribution-flow.md`，并交叉核对 `repo-map.md`、`casebook/README.md`、`layer-rules.md`、`stage-impact.md` 与外部 skill 的 frontmatter。
+
+本节只记录问题与拟定解法，不含实施结果。
+
+### 19.1 静态核对结论
+
+以下项目全部核对通过，不构成问题：
+
+- 主入口 Reference 导航列出的 18 份文档与 `references/` 实际文件集合一致，无失效链接。
+- `project-rules.md` 引用的 `.gitcode/PULL_REQUEST_TEMPLATE.zh-CN.md` 和四份 Issue 模板均存在，文件名（含 `feature_requeset.yaml`、`documentaion.yaml` 的既有拼写）与仓库一致。
+- `validation.md` §场景测试索引的 9 条测试路径在仓库中全部存在。
+- 主入口引用的 repo-map §分层边界、§更新规则和 casebook 的 L1/L2/L3 结构均存在。
+- 全局 BLOCKER 中的 `ALGO_REGISTRY`、`AlgorithmRegistry`、`MODEL_REGISTRY`、`PtqUnit`、`export_deploy()`、`iter_ptq_units()` 和 `--algos` 都能在 `amct_pytorch` 中定位。
+- `repo-scenarios.md` §入口文件列出的非通配路径全部存在。
+
+即当前问题不在引用失效，而在触发面缺口、规则重复和跨文件口径分歧。
+
+### 19.2 发现的问题
+
+1. **description 缺负向边界，且与 `model-adapter` 直接冲突。** 主入口 frontmatter 只有正向枚举，没有其它 7 个仓内 skill 都具备的「不适用：→ `$xxx`」。选 skill 时只有 description 参与判断，正文 §1 的职责归属规则和 §全局 BLOCKER 的模型层拦截条都读不到。更具体的冲突是：`model-adapter` 的 description 把「补模型专属 attention·MLP wrapper」写成肯定项，amct-coder 只在正文把它写成 BLOCKER，排除项不在触发面上。`design_v0.md` §重构记录已诊断过这种不对称，第 18 轮改写 description 时排除项被整体移出，问题回归。
+
+2. **主文件已从可执行手册退化为元规则文档。** 主入口约 8.5K 字符中出现 83 处「不」（含 18 处「不要」），`amct_pytorch/` 具体路径出现 0 次。§1「先判任务职责归属」占正文约三分之一，其中「事实门禁」和「契约缺失时的处理形态」讲的是如何推理、何时提问、如何表述不确定性，与 harness 自身的系统提示大面积重叠；§5「渐进披露与读取预算」进一步规定首轮锚点个数和辅助 reference 份数。导航性内容（Reference 表 + 执行路径表）约 15 行，约束性内容约 70 行，比例与「主入口负责路由、reference 负责领域规则」的既定分工相反。
+
+3. **同一规则存在多份副本。** 至少四组：BLOCKER 只停错误方案 / 替代明确即继续 / 提问按契约缺失处理（正文 §定位、§契约缺失时的处理形态、§全局 BLOCKER 与 `delegation.md` §继续执行与询问，共四处）；「不要预读 repo-map 或场景手册」（§1 开头、§区分实现与错误落点 review、执行路径矩阵、§2 开头，共四处）；「实际加载外部 skill，不能口头声称委派」（§定位与 `delegation.md` 末段）；读取预算（执行路径矩阵、§5 第 1 条、§5 末段）。第 18 轮把加载时机收敛到唯一矩阵，但继续执行语义和预读禁令没有做同样的收敛。
+
+4. **`layer-rules.md` §必读顺序与主入口的条件读取冲突。** 主入口规定 casebook 只在模型结构、checkpoint/config 或模型相关精度异常时按 L1→L2→L3 读取，而 `layer-rules.md` §必读顺序无条件要求第 3 步读 L1 casebook。`layer-rules.md` 的加载条件是「落点或上下游边界仍不明确时」，因此一个纯 dtype 落点问题会被它拉去读 `cross-model-pitfalls.md`，直接抵消主入口的条件读取。
+
+5. **repo-map 写回清单已开始漂移。** 主入口明确声明「写回判据以 repo-map §更新规则为准，本文件不复制该清单」，但 `layer-rules.md` §repo-map 写回规则复制了整份清单，且两份已经不一致：repo-map 写「改变了实际**注册的模型集合**」，`layer-rules.md` 写「改变实际**注册链的含义**」。这是第 18 轮「加载规则只在一处维护」原则在写回规则上的同类缺口。
+
+6. **固定流程 5 步与正文章节编号错位。** step 1 与 step 2 都落在 §1 内，step 3 散在 §2/§3/§5，step 4 与 step 5 没有对应章节；而 §4「按需检查阶段影响」在流程图里没有位置。§4 正文仅数行且全是加载条件，与 Reference 导航表「用途与加载时机」列的职能重复。
+
+7. **次要项。**
+   - `validation.md` §最小静态验证只写「对本次改动文件运行仓库 Ruff 配置对应的检查和格式化」，未给命令。`pyproject.toml` 只有 `[tool.ruff.format]`（`quote-style = "preserve"`），没有 lint 段，Agent 需要自行推断；而 `.pre-commit-config.yaml` 已明确 `ruff-check`（带 `--fix`）与 `ruff-format` 两个 hook，可以直接写出等价命令。
+   - 主入口 §全局 BLOCKER 与 `delegation.md` §高歧义交界硬编码 `model-adapter`，同时 `delegation.md` 声明「新增或删除外部 skill 不要求同步修改本文件」，两者对漂移风险的处理不一致。
+   - `delegation.md` 在主入口有两个入口（§契约缺失时的处理形态末段的正文链接 + Reference 导航表），而导航表已声明覆盖全部 reference。
+
+### 19.3 拟定裁决
+
+1. **恢复 description 的负向边界，并与 `model-adapter` 对齐口径。** 在 frontmatter 正向枚举后追加「不适用」子句，明确三类外部职责：新增或结构性修改模型 adapter/wrapper/attention/MLP/MoE（→ `$model-adapter`）、Ascend C kernel 与 C++ extension（→ `$amct-ops-dev`）、运行量化命令与生成交付产物（→ `$quant-run` / `$deploy-export`）。排除项的措辞必须与 `model-adapter` description 的肯定项可对照，避免同一个词在两侧含义相反。范围待确认，见 19.4。
+
+2. **把推理型元规则压回 reference，主入口只保留路由与硬边界。** 「事实门禁」与「契约缺失时的处理形态」中与 harness 通用行为重叠的部分（如何表述不确定性、不用强结论、不为可自查问题提问）删除；保留 AMCT 特有的三条：区分「函数存在」与「活跃调用链已接通」、上游契约不清回到提供契约的层确认、不发明 CLI 参数/schema/文件名/payload 字段。提问形态整体移入 `delegation.md`，主入口只留一句指针。目标是把约束与导航的比例倒回来，并让主入口能承载具体锚点。
+
+3. **按第 18 轮的同一原则收敛剩余规则副本。** 继续执行语义只在 §全局 BLOCKER 定义一次，§定位与 `delegation.md` 改为引用；预读禁令只在执行路径矩阵的「已路由到外部专门 skill」行定义一次，其余三处删除；读取预算只在 §5 末段保留一处。
+
+4. **改写 `layer-rules.md` §必读顺序为条件读取。** 第 3～5 步加上与主入口一致的触发条件（模型结构、checkpoint/config、模型契约或模型相关精度异常），或直接删除 casebook 步骤、改为指向主入口 §渐进披露的 L1→L2→L3 规则。取后者可少维护一份触发条件。
+
+5. **删除 `layer-rules.md` §repo-map 写回规则的清单副本**，改为指向 repo-map §更新规则。以 repo-map 的「注册的模型集合」为准。
+
+6. **重排固定流程与章节。** 固定流程改为与实际章节一一对应（判职责 → 选路径 → 声明边界 → 选主手册并读锚点 → 实现或分析 → 按路径验证与汇总）；§4「按需检查阶段影响」并入 Reference 导航表中 `stage-impact.md` 行的加载时机，正文不单独设节。
+
+7. **次要项处理。**
+   - `validation.md` 补出等价命令：`ruff check --fix <changed files>` 与 `ruff format <changed files>`，并注明配置来源是 `.pre-commit-config.yaml` 与 `pyproject.toml` `[tool.ruff.format]`，仓库当前无独立 lint 段。
+   - 硬编码 skill 名保留（触发面必须写出具体名字才有路由效果），但把 `delegation.md` 的「新增或删除外部 skill 不要求同步修改本文件」限定为「不要求同步非高歧义交界的 skill」，与 §高歧义交界表的硬编码自洽。
+   - 删除 §契约缺失时的处理形态末段的 `delegation.md` 正文链接，只保留 Reference 导航表入口。
+
+### 19.4 待确认项
+
+- **description 排除项范围。** 三个候选：只写模型层与 NPU 算子两类（最短，覆盖两个最高频误触发）；三类全写（含运行命令与交付产物）；三类全写并额外点出「review 已有落点是否合理仍属 amct-coder」。第三种能压掉「review 模型层文件」被误路由到 `model-adapter` 的情况，但 description 会变长。需要确认后再改，因为改 description 会直接改变触发行为。
+
+### 19.5 实施范围
+
+尚未实施。本次仅完成静态自查并记录问题与拟定解法。预期涉及文件：
+
+| 文件 | 预期修改 |
+| --- | --- |
+| `SKILL.md` | frontmatter 补排除项；压缩事实门禁与提问规则；收敛继续执行语义、预读禁令和读取预算的副本；重排固定流程；§4 并入 Reference 导航表 |
+| `references/delegation.md` | 承接提问形态；限定「不要求同步」的适用范围 |
+| `references/layer-rules.md` | §必读顺序改条件读取或指向主入口；删除 repo-map 写回清单副本 |
+| `references/validation.md` | 补 Ruff 等价命令与配置来源 |
+| `design-v1.md` | 文末当前设计同步 description 边界、主入口职能划分和条件读取口径 |
+| `design-iteration.md` | 补记本轮实施结果与验证 |
+
+实施时的验证要求沿用第 18 轮：`git diff --check`、`quick_validate.py`、Reference 集合一致性核对，并在物理隔离的新会话中对「模型层 review 不被误路由」和「纯 dtype 任务不读 casebook」两条做 forward-test；静态检查不作为行为证据。
+
+本节第 2、3 条（压回推理型元规则、收敛规则副本）与第 20 节属同一方向，其中「收敛继续执行语义和预读禁令副本」已在第 20 节实施；第 1 条 description 排除项、第 4、5 条 `layer-rules.md` 修正和第 7 条 Ruff 命令仍未实施。
+
+## 20. 第十一轮审视：撤销执行路径矩阵，加载时机就近声明
+
+第 18 节引入「按交付物选择执行路径」矩阵，目的是把 `project-rules.md`、repo-map、主场景手册和 `validation.md` 的加载时机收敛到唯一事实源。本轮复核确认该目的已经落空，同时按用户判断压缩了外部 skill 的提及面。
+
+### 20.1 发现的问题
+
+1. **矩阵没有真正减少重复，只增加了一层间接引用。** 四格规则在别处都有可独立执行的正文：「不为外部职责预读 repo-map/主手册」在 §1 开头和 §区分实现与错误落点 review；「纯规范合规 review 跳过 repo-map」在 §2 开头，且该处已把四行结论原样复述一遍，读者不需要回查表；`project-rules.md:3` 和 `validation.md:3` 本来就在描述自己的加载条件，只是措辞改成了反向引用主入口那张表。矩阵剩下的作用是一个「唯一事实源」标签，让 4 处引用它，而每处引用又都要重述结论才能读懂。
+
+2. **外部 skill 提及面过大。** 全文 13 处提及，其中「不要预读 repo-map」重复 4 次、「实际加载而非口头声称委派」2 次，§交付与验证 还要求汇总外部 skill 的交付结果——那属于目标 skill 自己的职责。路由之后的加载和交付不该由 amct-coder 规定。
+
+3. **`contribution-flow.md` 曾被从导航表删除，但文件仍在且仍被引用。** `references/` 实际 18 份，表格列 17 份，而表头写「全部 reference」，声明为假。该文件 18 行中门槛、模板、GitCode 路由三项自述「以 `project-rules.md` 为准，不维护第二份副本」，独有内容只有授权边界、按实际模板填写、先查已有 Issue/PR 三条，且 `project-rules.md:38` 已在实际操作前引出它。
+
+4. **上一轮手工编辑引入的缺陷。** `[repo-map.md] (path)` 中间有空格导致链接失效；「实际编码」条目与「询问遵循以下形态：」之间缺空行导致后续四条被吞进列表项；执行路径矩阵引导句句末为半角句号；frontmatter 去掉「调试与 review」但正文 review 路径仍在（矩阵两行、§1 整节、导航表 12 处、§交付与验证两条），且「等」不是有效触发词；「区分实现与错误落点 review」两条判据从互斥（新增或结构性实现 / 评审明确文件或方案）改为可同时命中（属于专门 skill 职责 / 提出编码任务），标题与内容脱节，落点 review 的出口也被删除。
+
+5. **五条规则正文被删但概念仍被引用。** 「区分函数存在与活跃调用链已接通」（frontmatter、§5 停止条件、§契约缺失时的处理形态 三处仍引用「活跃调用链」）；「不发明类名/CLI 参数/schema/文件名/payload」被抽象成「不要可自行编造条件」，丢失可逐项自查的清单；「候选锚点」条目的前置条件「上述契约未冻结时」被删，规则变为无条件，与 §定位「修改代码前说明主落点层」冲突；「不做开放式提问」被删，而同轮又在两处新增了询问用户；读取预算末句「用于防止预读，不用于阻止完成任务」被删，2～4 个锚点从软目标变成硬上限。其中前两条在 §19.3 第 2 条的保留名单内。
+
+### 20.2 设计裁决
+
+1. **删除执行路径矩阵，加载时机就近声明。** 矩阵四行中只有两条是别处没有的信息，回收进 §Reference 导航表对应行的「用途与加载时机」列（`project-rules.md` 写「修改代码前，或做规范合规 review 时读取」；`validation.md` 写「实际编码在修改后…只做规划或 review 时按需读取相关部分」）。「纯规范合规 review」的定义随 repo-map 条件移入 §2 开头。`project-rules.md` 与 `validation.md` 开头改为直接声明自己的加载条件，不再反向引用主入口。固定流程从 5 步收敛为 4 步，与正文章节对应。
+
+2. **外部 skill 提及压到 4 处**：§定位一句（实际加载而非口头委派）、§1 判归属（补「后续加载和交付由它决定」）、§全局 BLOCKER 中 `model-adapter` 与 `amct-ops-dev` 两道自我围栏、`delegation.md` 入口。删除 3 处重复的预读禁令和 §交付与验证 中要求汇总外部 skill 交付结果的条目。围栏保留的理由是它约束 amct-coder 自己不越界，不是管辖已路由出去的流程。
+
+3. **`contribution-flow.md` 不加回导航表**，改表头为「从本入口直接进入的 reference」并注明贡献流程由 `project-rules.md` 引出。这样假声明消除，文件也不失联。
+
+4. **恢复 20.1 第 4、5 项列出的缺陷和规则正文**，包括 frontmatter 补回「行为诊断与代码 review」、「区分实现与落点 review」恢复互斥判据和外部职责出口。§3 末段「未命中现有手册」保留本轮新增的落点确认，但去掉重复的「并询问用户」，只在实际编码前确认落点和改动范围，只读规划直接交付规划；两处 `rg` 改为「搜索工具」（本机未安装 ripgrep，实际走 harness 内置 Grep）。
+
+5. **「占位对象不得继承上一题名称」不在主入口恢复**：`llm-algorithm.md:55` 已有该规则的完整正文，属于算法场景的领域规则。
+
+### 20.3 实施范围
+
+| 文件 | 修改内容 |
+| --- | --- |
+| `SKILL.md` | 删除执行路径矩阵并回收 2 条加载时机；压缩外部 skill 提及；恢复 5 条规则正文和 4 项编辑缺陷；固定流程改 4 步；导航表表头改「从本入口直接进入」；最终汇总按实际执行动作组织 |
+| `references/project-rules.md` | 开头改为直接声明加载条件 |
+| `references/validation.md` | 开头改为直接声明加载条件 |
+| `design-v1.md` | 文末当前设计同步：设计目标第 2、3 条、核心原则、文档分工两行、主流程 6 步、§1 补路由后不再规定、§2 改「加载时机就近声明」、§3 补 17 份与 `contribution-flow.md` 说明、§4 占位规则改指 playbook、§5 预算补软目标、§6 改按实际动作汇总、目标形态 9 条、维护检查清单第 2、3、4、9、10、11 条 |
+| `design-iteration.md` | 本节；并在 §19.5 标注哪些拟定项已由本节实施 |
+
+未修改：9 份主场景 playbook、`repo-map.md`、`casebook/`、AMCT 运行时代码。§19 记录的 description 排除项、`layer-rules.md` 两项修正和 Ruff 命令仍待实施。
+
+### 20.4 实施结果与验证
+
+- `git diff --check` 通过，无空白错误。
+- `quick_validate.py .agents/skills/amct-coder` 输出 `Skill is valid!`。
+- 主入口 17 个 `references/*.md` 链接全部可解析；`repo-map.md`、`casebook/README.md` 存在。`references/` 实际 18 份，未列入的 `contribution-flow.md` 由 `project-rules.md:38` 引出，表头已说明。
+- `.agents/skills/` 下已搜不到「执行路径」；「交付物」仅剩 §契约缺失时的处理形态 两处，指按只读规划与实际编码分流，与已删除的矩阵无关。
+- `SKILL.md` 162 行 / 7.7K 字符，低于 `skill-creator` 建议的 500 行上限。
+- 未运行 AMCT Python/C++ 单测：本轮只修改 Agent Markdown 与设计文档。
+- 未执行 forward-test：当前工作区含历次设计和旧测试答案，不满足 cold 隔离条件。待验证行为包括纯规范合规 review 不读 repo-map、未命中手册的任务先确认落点、review 类请求仍能触发本 skill。
+- repo-map 不需要写回：未改变 AMCT 源码分层或核心流程，不满足其§更新规则任一条件。

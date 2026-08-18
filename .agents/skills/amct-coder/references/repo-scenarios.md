@@ -89,7 +89,7 @@ ops / packaging / API：
 
 ## 场景落点
 
-各场景的默认落点见 `SKILL.md` §全局边界与 §子能力路由，本文件不复制。不该改的位置见 [layer-rules.md](layer-rules.md) §BLOCKER 检查。
+各场景的操作手册见 `SKILL.md` §Reference 导航，本文件不复制。不该改的位置见 [layer-rules.md](layer-rules.md) §BLOCKER 检查。
 
 ## repo-map 与 casebook
 
