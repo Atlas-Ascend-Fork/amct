@@ -238,6 +238,27 @@ def test_convert_state_dict_fp8_with_scale_inv_loaded(tmp_path):
     assert result.shape[0] == weight.shape[0]
 
 
+def test_load_scales_rejects_shard_outside_model_directory(tmp_path):
+    """A weight-map shard must not escape model_dir before load_file reads it."""
+    from safetensors.torch import save_file as sf_save
+
+    from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
+
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    outside_path = tmp_path / "outside.safetensors"
+    scale_name = "layer.weight_scale_inv"
+    sf_save({scale_name: torch.ones(1)}, str(outside_path))
+
+    with pytest.raises(ValueError, match="plain file name"):
+        deploy_export_mod._load_scales(
+            (scale_name,),
+            {scale_name: "../outside.safetensors"},
+            model_dir,
+            {},
+        )
+
+
 def test_convert_state_dict_fp8_missing_scale_inv_prints_warning(tmp_path, monkeypatch):
     """Missing scale_inv logs warning and returns original weight."""
     from amct_pytorch.common.models.llm.common import deploy_export as deploy_export_mod
