@@ -268,7 +268,11 @@ class LlmDeployWorkflow:
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             updated_weight_map.update(
                 self._convert_tensorwise_shard(
-                    source_file, model_dir, original_weight_map, quant_layers, loaded_files
+                    source_file,
+                    model_dir,
+                    original_weight_map,
+                    quant_layers,
+                    loaded_files,
                 )
             )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)

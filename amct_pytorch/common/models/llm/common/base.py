@@ -43,7 +43,9 @@ from amct_pytorch.common.models.llm.common.ptq_units import (
     iter_indexed_units,
     make_ptq_unit,
 )
-from amct_pytorch.common.models.llm.common.weight_path_validation import resolve_safetensors_path
+from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    resolve_safetensors_path,
+)
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 

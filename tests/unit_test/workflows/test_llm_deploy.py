@@ -174,9 +174,7 @@ def test_load_weight_index_reads_json(tmp_path):
         "weight_map": {"a.weight": KEY_SHARD1_SAFETENSORS},
         METADATA_KEY: {"total_size": 999},
     }
-    save_file(
-        {"a.weight": torch.ones(1)}, str(tmp_path / KEY_SHARD1_SAFETENSORS)
-    )
+    save_file({"a.weight": torch.ones(1)}, str(tmp_path / KEY_SHARD1_SAFETENSORS))
     (tmp_path / SAFETENSORS_INDEX_JSON).write_text(json.dumps(index))
     wf = _make_workflow(model_path=str(tmp_path))
     assert wf._load_weight_index() == index
@@ -335,9 +333,7 @@ def test_write_remaining_weights_rejects_shard_outside_model_directory(tmp_path)
 
     wf = _make_workflow(model_path=str(model_dir), output_dir=str(output_dir))
     with pytest.raises(ValueError, match="plain file name"):
-        wf._write_remaining_original_weights(
-            {"a": "../outside.safetensors"}, set()
-        )
+        wf._write_remaining_original_weights({"a": "../outside.safetensors"}, set())
 
 
 def test_convert_tensorwise_shard_rejects_source_outside_model_directory(tmp_path):
