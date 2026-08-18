@@ -19,8 +19,6 @@
 import os
 import argparse
 
-from loguru import logger
-
 from amct_pytorch.quantization.bit_policy import BitPolicy
 
 
@@ -32,15 +30,6 @@ def _validate_eval_mode(args):
         raise ValueError(
             "eval_mode=bf16 requires a bit_config with no <16-bit entries.\n"
             f"{policy.summary()}"
-        )
-
-
-def _warn_if_gptq_ignores_bit_config(args):
-    if "gptq" in args.algos:
-        logger.warning(
-            "'gptq' only quantizes weights (weight bit width is honored via "
-            "--bit_config); any activation bit configuration in --bit_config is ignored "
-            "for this run."
         )
 
 
@@ -162,8 +151,6 @@ def parser_gen(command=None):
         args.bit_policy = BitPolicy.from_yaml(args.bit_config)
     else:
         args.bit_policy = BitPolicy()
-
-    _warn_if_gptq_ignores_bit_config(args)
 
     if command == "eval":
         _validate_eval_mode(args)
