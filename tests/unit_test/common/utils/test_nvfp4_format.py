@@ -158,7 +158,7 @@ def test_dequant_rejects_flattened_block_scale_of_unexpected_length():
 def test_dequant_rejects_block_scale_that_does_not_cover_the_weight(scale_shape):
     weight = _packed_weight(2, 32)
     weight_scale = torch.ones(*scale_shape).to(torch.float8_e4m3fn)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError):
         nvfp4_weight_dequant(weight, weight_scale, torch.tensor(1.0))
 
 

@@ -93,6 +93,11 @@ def nvfp4_weight_dequant(
     block_size: int = NVFP4_BLOCK_SIZE,
 ) -> torch.Tensor:
     """Dequantize a packed NVFP4 weight of shape (M, N // 2) into a float tensor (M, N)."""
+    if not is_nvfp4_scale(weight, weight_scale, block_size):
+        raise ValueError(
+            f"NVFP4 weight_scale length {weight_scale.numel()} does not match "
+            f"weight {tuple(weight.shape)}"
+        )
     if weight_scale.dtype in NVFP4_PACKED_DTYPES:
         weight_scale = weight_scale.view(torch.float8_e4m3fn)
     scale = weight_scale.to(torch.float32)
@@ -100,14 +105,8 @@ def nvfp4_weight_dequant(
     if scale.dim() == 1:
         if scale.numel() == rows * scale_cols:
             scale = scale.view(rows, scale_cols)
-        elif scale.numel() == padded_rows * padded_cols:
-            scale = scale.view(padded_rows, padded_cols)
         else:
-            raise ValueError(
-                f"NVFP4 weight_scale length {scale.numel()} does not match "
-                f"({rows}, {scale_cols}) or the padded tile "
-                f"({padded_rows}, {padded_cols})."
-            )
+            scale = scale.view(padded_rows, padded_cols)
     elif tuple(scale.shape) == (padded_rows // 4, padded_cols * 4):
         scale = _from_blocked(scale, rows, scale_cols)
     return weight_dequant(
