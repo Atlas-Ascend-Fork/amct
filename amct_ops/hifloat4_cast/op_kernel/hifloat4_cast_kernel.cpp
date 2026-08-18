@@ -165,8 +165,8 @@ public:
     aifunc void LoadInput() {
         input_empty.wait();
         if (n_ * BATCH + BATCH <= shape.N) {
-            copy_gm_to_ubuf(
-                xbuf.get(mn_).vptr(), xmtx[m_ * shape.N + n_ * BATCH].vptr(), 0, 1, BATCH * sizeof(T) / COPY_UNIT_BYTES, 0, 0);
+            copy_gm_to_ubuf(xbuf.get(mn_).vptr(), xmtx[m_ * shape.N + n_ * BATCH].vptr(), 0, 1,
+                BATCH * sizeof(T) / COPY_UNIT_BYTES, 0, 0);
         } else {
             if constexpr (sizeof(T) == 2) {
                 copy_gm_to_ubuf_align_b16(xbuf.get(mn_).vptr(), xmtx[m_ * shape.N + n_ * BATCH].vptr(), 0, 1,
@@ -218,11 +218,11 @@ public:
         // element-wise abs + sign (sign = +/-1.0 via the 16-bit fp16 pattern trick)
         pipe_barrier(PIPE_V);
         vabs(absbuf.ptr(), inp_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, 8, 8);
-        vand((__ubuf__ uint16_t *)signbuf.ptr(), (__ubuf__ uint16_t *)inp_tsr_.ptr(), signmaskbuf2.ptr(), BATCH / SEG_ELEMS, 1,
-            1, 0, 8, 8, 0);
+        vand((__ubuf__ uint16_t *)signbuf.ptr(), (__ubuf__ uint16_t *)inp_tsr_.ptr(), signmaskbuf2.ptr(),
+            BATCH / SEG_ELEMS, 1, 1, 0, 8, 8, 0);
         pipe_barrier(PIPE_V);
-        vor((__ubuf__ uint16_t *)signbuf.ptr(), (__ubuf__ uint16_t *)signbuf.ptr(), signmaskbuf1.ptr(), BATCH / SEG_ELEMS, 1,
-            1, 0, 8, 8, 0);
+        vor((__ubuf__ uint16_t *)signbuf.ptr(), (__ubuf__ uint16_t *)signbuf.ptr(), signmaskbuf1.ptr(),
+            BATCH / SEG_ELEMS, 1, 1, 0, 8, 8, 0);
     }
 
     // ---- non-finite handling (aligned with the HiFloat4 golden) ----
@@ -230,14 +230,16 @@ public:
     // (the register is loaded with set_cmpmask before each select).
     aifunc void HandleNonFinite() {
         // nf marker: 1 where |x| is non-finite (NaN/Inf), 0 elsewhere.
-        vcmpvs_le((__ubuf__ uint8_t *)exp1maskbuf.ptr(), absbuf.ptr(), 3.4028234663852886e+38f, BATCH / SEG_ELEMS, 1, 1, 8, 8);
+        vcmpvs_le((__ubuf__ uint8_t *)exp1maskbuf.ptr(), absbuf.ptr(), 3.4028234663852886e+38f, BATCH / SEG_ELEMS, 1, 1,
+            8, 8);
         pipe_barrier(PIPE_V);
         set_cmpmask(onesbuf.vptr()); // fallback = 1.0 (non-finite side)
         pipe_barrier(PIPE_V);
         vsel(nfbuf.ptr(), zerobuf.ptr(), exp1maskbuf.vptr(), BATCH / SEG_ELEMS, 1, 1, 1, 8, 0, 1, 1);
         pipe_barrier(PIPE_V);
         // zero the non-finite magnitudes (re-compare: the first select may consume the mask)
-        vcmpvs_le((__ubuf__ uint8_t *)exp2maskbuf.ptr(), absbuf.ptr(), 3.4028234663852886e+38f, BATCH / SEG_ELEMS, 1, 1, 8, 8);
+        vcmpvs_le((__ubuf__ uint8_t *)exp2maskbuf.ptr(), absbuf.ptr(), 3.4028234663852886e+38f, BATCH / SEG_ELEMS, 1, 1,
+            8, 8);
         pipe_barrier(PIPE_V);
         set_cmpmask(zerobuf.vptr()); // fallback = 0.0 (non-finite side)
         pipe_barrier(PIPE_V);
@@ -440,8 +442,8 @@ public:
             copy_ubuf_to_gm(out[m_ * shape.N + n_ * BATCH].vptr(), outbuf.get(mn_).vptr(), 0, 1,
                 sizeof(T) * (BATCH - n_tail_), 0, 0, BM_ENABLE);
         } else {
-            copy_ubuf_to_gm(
-                out[m_ * shape.N + n_ * BATCH].vptr(), outbuf.get(mn_).vptr(), 0, 1, BATCH * sizeof(T) / COPY_UNIT_BYTES, 0, 0);
+            copy_ubuf_to_gm(out[m_ * shape.N + n_ * BATCH].vptr(), outbuf.get(mn_).vptr(), 0, 1,
+                BATCH * sizeof(T) / COPY_UNIT_BYTES, 0, 0);
         }
         output_empty.set();
     }
