@@ -48,6 +48,30 @@ search prunes less.
 > roughly twice the model; the same holds for `size_budget`, menu selection and sensitivity allocation.
 > The fixed prune ratio does not copy. Budget for this when pruning a large model on CPU.
 
+Pass `low_memory_search=True` to skip that copy: each candidate ratio is masked into the
+original model, measured, and rolled back, so only one model is ever on the device. The mask
+sits on the consumer's input, which is exactly equivalent to removing the channel; for MoE the
+dropped experts' router logits go to `-inf` so top-k never selects them.
+
+Measured on Qwen3.6-35B-A3B (64.56 GiB in BF16, sharded over four Atlas 910B3 cards,
+`ratio_grid=(0.1, 0.2)`):
+
+| search | device peak | vs model | time |
+| --- | --- | --- | --- |
+| copy (default) | 194.03 GiB | 3.00x | 78 s |
+| `low_memory_search=True` | 70.97 GiB | 1.10x | 63 s |
+
+Both pick the same ratio and the same parameter count (34,660,610,688 -> 28,239,147,648).
+
+```python
+amct.prune(model, cfg, data=calib, tolerance=0.02, evaluator=ev, low_memory_search=True)
+```
+
+> `finetune_fn` / `quant_fn` modify the model they are given, which a masked measurement cannot
+> allow, so passing them together with `low_memory_search=True` raises. Use the default
+> copy-based search when you need those callbacks.
+
+
 ```python
 import amct_pytorch as amct
 

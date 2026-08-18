@@ -21,7 +21,8 @@
 ```python
 prune(model, config=None, data=None, batch_adapter=None, tolerance=None,
       evaluator=None, eval_iterations=1, eval_data=None, ratio_grid=None,
-      size_budget=None, finetune_fn=None, quant_fn=None, report=None)
+      size_budget=None, finetune_fn=None, quant_fn=None,
+      low_memory_search=False, report=None)
 ```
 
 ## 参数说明<a name="zh-cn_topic_0000002600000201_section102000010005"></a>
@@ -140,6 +141,14 @@ prune(model, config=None, data=None, batch_adapter=None, tolerance=None,
 <td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000201_p102000010060"><a name="zh-cn_topic_0000002600000201_p102000010060"></a><a name="zh-cn_topic_0000002600000201_p102000010060"></a>含义：容差搜索过程中对模型做量化的回调（量化感知搜索）。</p>
 <p id="zh-cn_topic_0000002600000201_p102000010061"><a name="zh-cn_topic_0000002600000201_p102000010061"></a><a name="zh-cn_topic_0000002600000201_p102000010061"></a>默认值：None。</p>
 <p id="zh-cn_topic_0000002600000201_p102000010062"><a name="zh-cn_topic_0000002600000201_p102000010062"></a><a name="zh-cn_topic_0000002600000201_p102000010062"></a>数据类型：Callable[[nn.Module], Any] / None。</p>
+</td>
+</tr><tr id="zh-cn_topic_0000002600000201_row102000010013_lowmem"><td class="cellrowborder" valign="top" width="13.78%" headers="mcps1.1.4.1.1 "><p id="zh-cn_topic_0000002600000201_p102000010058_lowmem"><a name="zh-cn_topic_0000002600000201_p102000010058_lowmem"></a><a name="zh-cn_topic_0000002600000201_p102000010058_lowmem"></a>low_memory_search</p>
+</td>
+<td class="cellrowborder" valign="top" width="8.01%" headers="mcps1.1.4.1.2 "><p id="zh-cn_topic_0000002600000201_p102000010059_lowmem"><a name="zh-cn_topic_0000002600000201_p102000010059_lowmem"></a><a name="zh-cn_topic_0000002600000201_p102000010059_lowmem"></a>输入</p>
+</td>
+<td class="cellrowborder" valign="top" width="78.21%" headers="mcps1.1.4.1.3 "><p id="zh-cn_topic_0000002600000201_p102000010060_lowmem"><a name="zh-cn_topic_0000002600000201_p102000010060_lowmem"></a>为True时，搜索阶段不复制模型：候选剪枝率以掩码形式作用于原模型上量测，量测后原样还原，设备上始终只有一份模型；与真实裁剪等价。默认为False。不能与finetune_fn、quant_fn同时使用。</p>
+<p id="zh-cn_topic_0000002600000201_p102000010061_lowmem"><a name="zh-cn_topic_0000002600000201_p102000010061_lowmem"></a><a name="zh-cn_topic_0000002600000201_p102000010061_lowmem"></a>默认值：None。</p>
+<p id="zh-cn_topic_0000002600000201_p102000010062_lowmem"><a name="zh-cn_topic_0000002600000201_p102000010062_lowmem"></a><a name="zh-cn_topic_0000002600000201_p102000010062_lowmem"></a>数据类型：Callable[[nn.Module], Any] / None。</p>
 </td>
 </tr>
 <tr id="zh-cn_topic_0000002600000201_row102000010014"><td class="cellrowborder" valign="top" width="13.78%" headers="mcps1.1.4.1.1 "><p id="zh-cn_topic_0000002600000201_p102000010063"><a name="zh-cn_topic_0000002600000201_p102000010063"></a><a name="zh-cn_topic_0000002600000201_p102000010063"></a>report</p>

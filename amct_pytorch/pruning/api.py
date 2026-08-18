@@ -54,6 +54,7 @@ def _run_tolerance_mode(
     batch_adapter,
     finetune_fn,
     quant_fn,
+    low_memory_search,
 ):
     """Accuracy-driven search. Returns the report."""
     from .accuracy_based_auto_prune import (
@@ -74,6 +75,7 @@ def _run_tolerance_mode(
         finetune_fn=finetune_fn,
         quant_fn=quant_fn,
         apply=True,
+        low_memory_search=low_memory_search,
     )
     return result.report
 
@@ -91,6 +93,7 @@ def _run_size_budget_mode(
     batch_adapter,
     finetune_fn,
     quant_fn,
+    low_memory_search,
 ):
     """Prune to a target keep-ratio. Returns the report."""
     from .accuracy_based_auto_prune import DEFAULT_RATIO_GRID, _size_budget_prune
@@ -108,6 +111,7 @@ def _run_size_budget_mode(
         finetune_fn=finetune_fn,
         quant_fn=quant_fn,
         apply=True,
+        low_memory_search=low_memory_search,
     )
     return result.report
 
@@ -199,12 +203,15 @@ def prune(
     size_budget: Optional[float] = None,
     finetune_fn: Optional[Callable[[nn.Module], Any]] = None,
     quant_fn: Optional[Callable[[nn.Module], Any]] = None,
+    low_memory_search: bool = False,
     report: Optional[PruneReport] = None,
 ) -> None:
     """
     Structured pruning of a torch model in-place. Modes: fixed ratio (default), accuracy-driven
     (tolerance=), or size-budget (size_budget=); tolerance and size_budget are mutually exclusive.
     A config carrying a method ``menu`` runs the guarded menu search instead of the fixed ratio.
+    ``low_memory_search=True`` measures each candidate by masking the cut into the model
+    instead of pruning a copy, so a search costs about one model instead of two.
     """
     if tolerance is not None and size_budget is not None:
         raise ValueError(
@@ -216,6 +223,7 @@ def prune(
             tolerance=tolerance, size_budget=size_budget, ratio_grid=ratio_grid
         )
     search_args = {
+        "low_memory_search": low_memory_search,
         "data": data,
         "evaluator": evaluator,
         "eval_iterations": eval_iterations,
@@ -233,9 +241,11 @@ def prune(
             model, config, size_budget=size_budget, ratio_grid=ratio_grid, **search_args
         )
     elif menu_cfg is not None:
-        out = _run_menu_mode(model, menu_cfg, **search_args)
+        menu_args = {k: v for k, v in search_args.items() if k != "low_memory_search"}
+        out = _run_menu_mode(model, menu_cfg, **menu_args)
     else:
         _reject_search_args(
+            low_memory_search=low_memory_search or None,
             evaluator=evaluator,
             eval_data=eval_data,
             ratio_grid=ratio_grid,

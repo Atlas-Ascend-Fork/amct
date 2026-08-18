@@ -24,6 +24,7 @@ import torch.nn as nn
 
 from ...common.utils.log import LOGGER
 
+from .. import simulate
 from ..config import PruneConfig
 from ..utils import (
     get_submodule,
@@ -340,10 +341,37 @@ class MoEPruningDomain(BasePruningDomain):
             router, torch.as_tensor(keep_idx, dtype=torch.long), orig_n
         )
 
+    def _simulate_prune_experts(
+        self, session, model: nn.Module, target: MoETarget, keep_idx: List[int]
+    ) -> None:
+        """Measure this cut instead of making it: route the dropped experts away, count the params."""
+        total = self.num_experts(model, target)
+        experts = get_submodule(model, target.experts_path)
+        keep_set = set(keep_idx)
+        if target.fused:
+            # One stacked tensor per projection: experts live on dim 0.
+            for module in experts.modules():
+                if any(
+                    p.dim() >= 2 and p.shape[0] == total
+                    for p in module.parameters(recurse=False)
+                ):
+                    session.cut(module, "out", len(keep_idx), total)
+        elif isinstance(experts, nn.ModuleList):
+            session.drop_modules(
+                [experts[i] for i in range(total) if i not in keep_set]
+            )
+        session.record_moe(
+            model, target.router_path, target.experts_path, total, keep_idx
+        )
+
     def prune_experts(
         self, model: nn.Module, target: MoETarget, keep_idx: List[int], top_k: int
     ) -> None:
         """Land the prune: actually trim experts by keep_idx (ModuleList rebuild / fused tensor slice)."""
+        session = simulate.active()
+        if session is not None:
+            self._simulate_prune_experts(session, model, target, keep_idx)
+            return
         if target.fused:
             self._prune_fused(model, target, keep_idx)
         else:

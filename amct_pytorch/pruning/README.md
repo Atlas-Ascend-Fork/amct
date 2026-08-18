@@ -38,6 +38,26 @@
 > ⚠️ 每个候选剪枝率都在**整模型副本**上试剪，因此搜索期间峰值内存约为模型的两倍；`size_budget`、
 > 菜单择优、敏感度分配同理。固定剪枝率模式不复制。在 CPU 上剪大模型时需据此预留内存。
 
+传入 `low_memory_search=True` 可避免这份副本：候选剪枝率以掩码形式作用于原模型上量测，量测完成后
+原样还原，因此搜索期间设备上始终只有一份模型。掩码作用在 consumer 的输入端，与真实裁剪等价；
+MoE 则把被裁专家的 router logit 置为 `-inf`，使其不再被 top-k 选中。
+
+实测（Qwen3.6-35B-A3B，BF16 64.56 GiB，4 张 Atlas 910B3 分片，`ratio_grid=(0.1, 0.2)`）：
+
+| 方式 | 设备峰值 | 相对模型 | 搜索耗时 |
+| --- | --- | --- | --- |
+| 副本（默认） | 194.03 GiB | 3.00 倍 | 78 s |
+| `low_memory_search=True` | 70.97 GiB | 1.10 倍 | 63 s |
+
+两者选出的剪枝率与参数量完全一致（34,660,610,688 → 28,239,147,648）。
+
+```python
+amct.prune(model, cfg, data=calib, tolerance=0.02, evaluator=ev, low_memory_search=True)
+```
+
+> `finetune_fn` / `quant_fn` 会修改传入的模型，与掩码量测冲突，因此同时传入会报错；需要这两个回调时
+> 请使用默认的副本方式。
+
 ```python
 import amct_pytorch as amct
 

@@ -23,6 +23,7 @@ import torch.nn as nn
 
 from ...common.utils.log import LOGGER
 
+from .. import simulate
 from ..config import MethodSpec, PruneConfig
 from ..context import PruneContext
 from ..domains.base import BasePruningDomain
@@ -128,6 +129,39 @@ def _prepare_recovery(
 
 
 @torch.no_grad()
+def _land_recovery(new_cons, keep, recovery, w_new, delta_bias) -> None:
+    """Write the compensation the chosen recovery produced onto the consumer.
+
+    Under a simulation session nothing was resized, so the least-squares result lands on
+    the kept columns of the full-size consumer; the removed ones are masked out anyway.
+    """
+    session = simulate.active()
+    if recovery == "ls":
+        weight = w_new.t() if isinstance(new_cons, nn.Linear) else w_new
+        if session is not None:
+            # Nothing was resized, so land the reconstruction on the kept columns only;
+            # the removed ones are masked out of the forward anyway.
+            session.write_kept_columns(new_cons, keep.tolist(), weight, dim=1)
+        else:
+            new_cons.weight.data = weight.to(new_cons.weight.dtype)
+    elif recovery == "bias":
+        if session is not None:
+            if _consumer_bias(new_cons) is not None:
+                session.journal(new_cons.bias)
+            else:
+                session.note_bias_creation(new_cons)
+        if _consumer_bias(new_cons) is None:
+            new_cons.bias = nn.Parameter(
+                torch.zeros(
+                    delta_bias.shape[0],
+                    dtype=new_cons.weight.dtype,
+                    device=new_cons.weight.device,
+                )
+            )
+        new_cons.bias.data = new_cons.bias.data + delta_bias.to(new_cons.bias.dtype)
+
+
+@torch.no_grad()
 def _reconstruct_one_target(
     model,
     domain,
@@ -170,21 +204,7 @@ def _reconstruct_one_target(
     domain.apply_keep_indices(model, target, keep.tolist())
     new_cons = get_submodule(model, cp)
 
-    if recovery == "ls":
-        if isinstance(new_cons, nn.Linear):
-            new_cons.weight.data = w_new.t().to(new_cons.weight.dtype)
-        else:
-            new_cons.weight.data = w_new.to(new_cons.weight.dtype)
-    elif recovery == "bias":
-        if _consumer_bias(new_cons) is None:
-            new_cons.bias = nn.Parameter(
-                torch.zeros(
-                    delta_bias.shape[0],
-                    dtype=new_cons.weight.dtype,
-                    device=new_cons.weight.device,
-                )
-            )
-        new_cons.bias.data = new_cons.bias.data + delta_bias.to(new_cons.bias.dtype)
+    _land_recovery(new_cons, keep, recovery, w_new, delta_bias)
 
     report.add(
         domain.name,

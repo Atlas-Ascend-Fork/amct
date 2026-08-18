@@ -21,6 +21,7 @@ from typing import List, Optional, Tuple
 
 import torch.nn as nn
 
+from .. import simulate
 from ..config import PruneConfig
 from ..utils import (
     expand_flatten_channel_indices,
@@ -195,9 +196,40 @@ class CNNPruningDomain(BasePruningDomain):
                     targets.append(target)
         return targets
 
+    def _simulate_keep_indices(
+        self, session, model: nn.Module, target: CNNChannelTarget, keep_idx: List[int]
+    ) -> None:
+        """Measure this cut instead of making it: mask the consumer's input, count the params."""
+        producer = get_submodule(model, target.producer_path)
+        consumer = get_submodule(model, target.consumer_path)
+        total = int(producer.out_channels)
+        producers = [producer]
+        if target.bn_path is not None:
+            bn_module = get_submodule(model, target.bn_path)
+            if getattr(bn_module, "affine", False):
+                producers.append(bn_module)
+        in_total = (
+            consumer.in_features
+            if isinstance(consumer, nn.Linear)
+            else consumer.in_channels
+        )
+        session.record_channel_cut(
+            model,
+            "cnn",
+            target.consumer_path,
+            total,
+            keep_idx,
+            producers=producers,
+            consumer_axis_total=in_total,
+        )
+
     def apply_keep_indices(
         self, model: nn.Module, target: CNNChannelTarget, keep_idx: List[int]
     ) -> None:
+        session = simulate.active()
+        if session is not None:
+            self._simulate_keep_indices(session, model, target, keep_idx)
+            return
         producer = get_submodule(model, target.producer_path)
         consumer = get_submodule(model, target.consumer_path)
         if not isinstance(producer, nn.Conv2d):

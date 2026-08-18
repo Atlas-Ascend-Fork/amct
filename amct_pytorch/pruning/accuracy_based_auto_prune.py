@@ -29,6 +29,7 @@ from ..common.utils.log import LOGGER
 from .config import MethodSpec, PruneConfig, _normalize_method_spec
 from .context import BatchAdapter
 from .pruner import AutoPruner
+from . import simulate
 from .report import PruneReport
 from .utils import count_parameters
 
@@ -410,6 +411,24 @@ def _prepare_search_inputs(
     return grid, base_cfg, count_parameters(model), eval_batches
 
 
+def _resolve_masked(low_memory_search, finetune_fn, quant_fn) -> bool:
+    """Masked trials measure on the model itself, so a callback that mutates it is refused."""
+    if not low_memory_search:
+        return False
+    blocked = [
+        name
+        for name, fn in (("finetune_fn", finetune_fn), ("quant_fn", quant_fn))
+        if fn is not None
+    ]
+    if blocked:
+        raise ValueError(
+            f"low_memory_search=True cannot be combined with {', '.join(blocked)}: a masked "
+            f"trial measures the original model in place, and those callbacks would modify it. "
+            f"Drop the callback or leave low_memory_search off (the copy-based search)."
+        )
+    return True
+
+
 def _make_trial_fn(
     model,
     base_cfg,
@@ -423,21 +442,34 @@ def _make_trial_fn(
     baseline_quality,
     accept_fn,
     warn_tag,
+    masked=False,
 ):
     """Build the per-ratio trial function (shared by tolerance and size-budget modes)."""
 
+    def _copy_trial(cfg) -> Tuple[float, int]:
+        cfg.copy_model = True
+        pruner = AutoPruner(cfg)
+        pruned = pruner(model, data=data, batch_adapter=batch_adapter)
+        pa = count_parameters(pruned)
+        if finetune_fn is not None:
+            finetune_fn(pruned)
+        if quant_fn is not None:
+            quant_fn(pruned)
+        return float(quality_fn(pruned)), pa
+
+    def _masked_trial(cfg) -> Tuple[float, int]:
+        """Same measurement without the copy: the cut is masked in, then rolled back."""
+        cfg.copy_model = False
+        with simulate.SimulationSession(model) as session:
+            pruner = AutoPruner(cfg)
+            pruner(model, data=data, batch_adapter=batch_adapter)
+            return float(quality_fn(model)), params_before - session.removed_params
+
     def trial(ratio: float) -> TrialResult:
         cfg = PruneConfig(**_with_ratio(base_cfg, ratio))
-        cfg.copy_model = True
+        run = _masked_trial if masked else _copy_trial
         try:
-            pruner = AutoPruner(cfg)
-            pruned = pruner(model, data=data, batch_adapter=batch_adapter)
-            pa = count_parameters(pruned)
-            if finetune_fn is not None:
-                finetune_fn(pruned)
-            if quant_fn is not None:
-                quant_fn(pruned)
-            q = float(quality_fn(pruned))
+            q, pa = run(cfg)
         except (
             RuntimeError,
             ValueError,
@@ -1007,6 +1039,7 @@ def _tolerance_search(
     finetune_fn,
     quant_fn,
     apply,
+    masked,
 ) -> AutoTuneResult:
     """Grid search for the largest prune ratio whose quality drop stays within tolerance."""
     grid, base_cfg, params_before, eval_batches = _prepare_search_inputs(
@@ -1027,6 +1060,7 @@ def _tolerance_search(
         baseline_quality=baseline_quality,
         accept_fn=lambda drop, pa: drop <= tolerance,
         warn_tag="auto-prune",
+        masked=masked,
     )
     best_idx, ordered_trials, trials = _search_max_ratio(grid, trial, tolerance)
     return _finalize_autotune(
@@ -1060,6 +1094,7 @@ def _accuracy_based_auto_prune(
     finetune_fn: Optional[Callable[[nn.Module], Any]] = None,
     quant_fn: Optional[Callable[[nn.Module], Any]] = None,
     apply: bool = True,
+    low_memory_search: bool = False,
 ) -> AutoTuneResult:
     """
     Function: search the grid for the largest prune ratio within tolerance and apply it in place
@@ -1116,6 +1151,7 @@ def _accuracy_based_auto_prune(
         finetune_fn=finetune_fn,
         quant_fn=quant_fn,
         apply=apply,
+        masked=_resolve_masked(low_memory_search, finetune_fn, quant_fn),
     )
 
 
@@ -1214,6 +1250,7 @@ def _size_budget_prune(
     quant_fn: Optional[Callable[[nn.Module], Any]] = None,
     apply: bool = True,
     budget_scope: str = "total",
+    low_memory_search: bool = False,
 ) -> AutoTuneResult:
     """
     Function: binary-search the smallest ratio whose params fit the target; report that point's (size, accuracy)
@@ -1246,6 +1283,7 @@ def _size_budget_prune(
         target_params,
         budget_scope,
     )
+    masked = _resolve_masked(low_memory_search, finetune_fn, quant_fn)
     quality_fn, baseline_quality = _resolve_quality(
         model, evaluator, eval_iterations, setup.eval_batches, batch_adapter
     )
@@ -1261,6 +1299,7 @@ def _size_budget_prune(
         baseline_quality=baseline_quality,
         accept_fn=lambda drop, pa: pa <= setup.target_params,
         warn_tag="size-budget",
+        masked=masked,
     )
     best_idx, ordered_trials, trials = _search_min_ratio(
         setup.grid, trial, setup.target_params

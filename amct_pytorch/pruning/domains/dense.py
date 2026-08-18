@@ -22,6 +22,7 @@ from typing import List, Optional
 import torch
 import torch.nn as nn
 
+from .. import simulate
 from ..config import PruneConfig
 from ..utils import (
     get_submodule,
@@ -273,46 +274,70 @@ class DensePruningDomain(BasePruningDomain):
             targets.extend(_find_two_layer_patterns(parent_name, parent, config))
         return targets
 
-    def apply_keep_indices(
+    def _simulate_keep_indices(
         self,
+        session,
         model: nn.Module,
         target: TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget,
         keep_idx: List[int],
     ) -> None:
+        """Measure this cut instead of making it: mask the consumer's input, count the params."""
+        hidden = self.hidden_size(model, target)
         if isinstance(target, TwoLayerDenseTarget):
-            producer = get_submodule(model, target.producer_path)
-            consumer = get_submodule(model, target.consumer_path)
-            if not is_linear_like(producer) or not is_linear_like(consumer):
-                raise TypeError("Dense target modules must both be Linear/Conv1D.")
-            replace_submodule(
+            session.record_channel_cut(
                 model,
-                target.producer_path,
-                prune_linear_like_out_features(producer, keep_idx),
-            )
-            replace_submodule(
-                model,
+                "dense",
                 target.consumer_path,
-                prune_linear_like_in_features(consumer, keep_idx),
+                hidden,
+                keep_idx,
+                producers=[get_submodule(model, target.producer_path)],
             )
             return
-
         if isinstance(target, FusedGatedDenseTarget):
             gate_up = get_submodule(model, target.gate_up_path)
-            down = get_submodule(model, target.down_path)
-            if not isinstance(gate_up, nn.Linear) or not isinstance(down, nn.Linear):
-                raise TypeError("Fused gated dense target must be Linear layers.")
-            inter = down.in_features
-            fused_keep = list(keep_idx) + [inter + i for i in keep_idx]
-            replace_submodule(
-                model,
-                target.gate_up_path,
-                prune_linear_out_features(gate_up, fused_keep),
-            )
-            replace_submodule(
-                model, target.down_path, prune_linear_in_features(down, keep_idx)
-            )
-            return
+            # gate and up are stacked on dim 0, so the fused producer keeps twice as many rows.
+            session.cut(gate_up, "out", 2 * len(keep_idx), 2 * hidden)
+            producers = []
+        else:
+            producers = [
+                get_submodule(model, target.gate_path),
+                get_submodule(model, target.up_path),
+            ]
+        session.record_channel_cut(
+            model, "dense", target.down_path, hidden, keep_idx, producers=producers
+        )
 
+    def _apply_two_layer(self, model, target, keep_idx: List[int]) -> None:
+        producer = get_submodule(model, target.producer_path)
+        consumer = get_submodule(model, target.consumer_path)
+        if not is_linear_like(producer) or not is_linear_like(consumer):
+            raise TypeError("Dense target modules must both be Linear/Conv1D.")
+        replace_submodule(
+            model,
+            target.producer_path,
+            prune_linear_like_out_features(producer, keep_idx),
+        )
+        replace_submodule(
+            model,
+            target.consumer_path,
+            prune_linear_like_in_features(consumer, keep_idx),
+        )
+
+    def _apply_fused_gated(self, model, target, keep_idx: List[int]) -> None:
+        gate_up = get_submodule(model, target.gate_up_path)
+        down = get_submodule(model, target.down_path)
+        if not isinstance(gate_up, nn.Linear) or not isinstance(down, nn.Linear):
+            raise TypeError("Fused gated dense target must be Linear layers.")
+        inter = down.in_features
+        fused_keep = list(keep_idx) + [inter + i for i in keep_idx]
+        replace_submodule(
+            model, target.gate_up_path, prune_linear_out_features(gate_up, fused_keep)
+        )
+        replace_submodule(
+            model, target.down_path, prune_linear_in_features(down, keep_idx)
+        )
+
+    def _apply_gated(self, model, target, keep_idx: List[int]) -> None:
         gate = get_submodule(model, target.gate_path)
         up = get_submodule(model, target.up_path)
         down = get_submodule(model, target.down_path)
@@ -331,6 +356,22 @@ class DensePruningDomain(BasePruningDomain):
         replace_submodule(
             model, target.down_path, prune_linear_in_features(down, keep_idx)
         )
+
+    def apply_keep_indices(
+        self,
+        model: nn.Module,
+        target: TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget,
+        keep_idx: List[int],
+    ) -> None:
+        session = simulate.active()
+        if session is not None:
+            self._simulate_keep_indices(session, model, target, keep_idx)
+        elif isinstance(target, TwoLayerDenseTarget):
+            self._apply_two_layer(model, target, keep_idx)
+        elif isinstance(target, FusedGatedDenseTarget):
+            self._apply_fused_gated(model, target, keep_idx)
+        else:
+            self._apply_gated(model, target, keep_idx)
 
     def hidden_size(
         self,

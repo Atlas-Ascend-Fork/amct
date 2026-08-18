@@ -24,6 +24,7 @@ import torch.nn.functional as F
 
 from ...common.utils.log import LOGGER
 
+from .. import simulate
 from ..config import MethodSpec, PruneConfig
 from ..context import PruneContext
 from ..domains.base import BasePruningDomain
@@ -180,10 +181,21 @@ def _prune_and_reconstruct(
     if recovery == "ls" and isinstance(new_consumer, nn.Conv2d):
         x_keep = x_full[:, torch.as_tensor(keep)]
         new_w = _reconstruct_conv_consumer(new_consumer, x_keep, y, ridge)
-        if new_w is not None and tuple(new_w.shape) == tuple(new_consumer.weight.shape):
+        session = simulate.active()
+        if session is not None and new_w is not None:
+            done = session.write_kept_columns(new_consumer, keep, new_w, dim=1)
+        elif new_w is not None and tuple(new_w.shape) == tuple(
+            new_consumer.weight.shape
+        ):
             new_consumer.weight.data = new_w.to(new_consumer.weight.dtype)
             done = True
     elif recovery == "bias" and delta_bias is not None:
+        session = simulate.active()
+        if session is not None:
+            if getattr(new_consumer, "bias", None) is not None:
+                session.journal(new_consumer.bias)
+            else:
+                session.note_bias_creation(new_consumer)
         _add_bias_delta(new_consumer, delta_bias)
         done = True
     _finalize_report(done, recovery, target, domain, method_name, total, keep, report)
