@@ -194,6 +194,10 @@ def prune_batchnorm2d(
             new.running_mean.copy_(module.running_mean.index_select(0, keep))
             new.running_var.copy_(module.running_var.index_select(0, keep))
             new.num_batches_tracked.copy_(module.num_batches_tracked)
+    # A fresh BatchNorm2d starts in training mode. Without this an eval model comes back
+    # from pruning normalising by batch statistics, which changes its outputs and quietly
+    # overwrites the running stats we just copied.
+    new.train(module.training)
     return new
 
 
