@@ -48,6 +48,25 @@ search prunes less.
 > roughly twice the model; the same holds for `size_budget`, menu selection and sensitivity allocation.
 > The fixed prune ratio does not copy. Budget for this when pruning a large model on CPU.
 
+That copy is only needed by methods that **rewrite weights** (reconstruct's least squares,
+expert merging). Methods that only select what to keep (`low_variance`, `variance_channel`,
+`activation_count`, `mass_variance`) are measured by masking instead: the candidate cut is
+masked into the model, measured, and rolled back, so only one model is ever resident. The
+mask sits on the consumer's input -- `out = Σ W[:, i]·x_i`, so `x_i = 0` is exactly the
+channel being gone, whatever BatchNorm or activation lies between -- and for MoE the dropped
+experts' router logits go to `-inf` so top-k never selects them. Passing `finetune_fn` /
+`quant_fn` keeps the copy, since those callbacks modify the model.
+
+Measured on Qwen3.6-35B-A3B (64.56 GiB in BF16, sharded over four Atlas 910B3 cards,
+`ratio_grid=(0.1, 0.2)`):
+
+| search | device peak | vs model | time |
+| --- | --- | --- | --- |
+| copy | 194.03 GiB | 3.00x | 78 s |
+| masked | 70.97 GiB | 1.10x | 63 s |
+
+Both pick the same ratio and the same parameter count (34,660,610,688 -> 28,239,147,648).
+
 ```python
 import amct_pytorch as amct
 

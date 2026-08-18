@@ -21,6 +21,7 @@ from typing import List, Optional, Tuple
 
 import torch.nn as nn
 
+from .. import simulate
 from ..config import PruneConfig
 from ..utils import (
     expand_flatten_channel_indices,
@@ -198,6 +199,10 @@ class CNNPruningDomain(BasePruningDomain):
     def apply_keep_indices(
         self, model: nn.Module, target: CNNChannelTarget, keep_idx: List[int]
     ) -> None:
+        session = simulate.active()
+        if session is not None:
+            session.record_cnn(model, target, keep_idx)
+            return
         producer = get_submodule(model, target.producer_path)
         consumer = get_submodule(model, target.consumer_path)
         if not isinstance(producer, nn.Conv2d):
