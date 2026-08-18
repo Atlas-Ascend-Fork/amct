@@ -44,9 +44,14 @@ off to a smaller `r`. The **largest ratio that satisfies the tolerance** is appl
 failure while probing a ratio is treated as unacceptable (no exception), so under non-monotonicity the
 search prunes less.
 
-> ⚠️ Every candidate ratio is tried on a **full copy of the model**, so peak memory during the search is
-> roughly twice the model; the same holds for `size_budget`, menu selection and sensitivity allocation.
-> The fixed prune ratio does not copy. Budget for this when pruning a large model on CPU.
+> ⚠️ Whether a search needs extra memory depends on the method. Methods that only select
+> what to keep (`low_variance`, `variance_channel`, `activation_count`, `mass_variance`)
+> measure each candidate ratio by **masking**: the cut is masked into the model, measured,
+> and rolled back, so only one model is ever resident. Methods that **rewrite weights**
+> (reconstruct's least squares, `output_merge`'s expert merging) have no mask equivalent
+> and still try each candidate on a full copy, so peak memory is upwards of twice the
+> model; the same holds when `finetune_fn` / `quant_fn` are passed, since those callbacks
+> modify the model. The fixed-ratio mode never copies.
 
 ```python
 import amct_pytorch as amct
@@ -237,9 +242,11 @@ cfg["methods"]["dense"]["kwargs"]["quant_cfg"] = {
 amct.prune(model, cfg, data=calib, size_budget=0.7)
 ```
 
-The search modes copy the whole model (see the tolerance section above). When the device cannot hold
-two copies, keep the pristine weights in host memory and loop over fixed prune ratios yourself — the
-fixed ratio does not copy, so the device only ever holds one working model:
+Searching with `reconstruct` / `output_merge`, or passing `finetune_fn` / `quant_fn`, still
+copies the whole model (see the tolerance section above; other methods are measured by
+masking and do not need the pattern below). If the device cannot hold two, keep the clean
+weights in host memory and loop over fixed ratios yourself -- a fixed ratio never copies,
+so only one working model is ever on the device:
 
 ```python
 import copy

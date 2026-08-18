@@ -121,20 +121,45 @@ def is_norm_like(module: nn.Module) -> bool:
     return isinstance(module, norm_types)
 
 
+def _built_without_rng(factory, device, dtype) -> nn.Module:
+    """Construct a module whose init never touches an RNG.
+
+    Every constructor here immediately overwrites its weights with slices of the old
+    module, but a plain construction still runs the default init, which draws from the
+    global generator -- so pruning perturbed the caller's random stream by an amount
+    that depended on layer sizes. Building on the meta device skips init entirely.
+    """
+    with torch.device("meta"):
+        module = factory()
+    if any(True for _ in module.buffers()):
+        # to_empty would leave every buffer as uninitialized garbage and the callers
+        # only copy weight/bias. Rebuild for real, shielding the caller's RNG stream
+        # from the constructor's init draws instead.
+        with torch.random.fork_rng(devices=[]):
+            module = factory()
+        return module.to(device=device, dtype=dtype)
+    module = module.to_empty(device=device)
+    if dtype is not None:
+        module = module.to(dtype)
+    return module
+
+
 def prune_conv2d_out_channels(module: nn.Conv2d, keep_idx: Sequence[int]) -> nn.Conv2d:
     keep = torch.tensor(list(keep_idx), dtype=torch.long, device=module.weight.device)
-    new = nn.Conv2d(
-        in_channels=module.in_channels,
-        out_channels=len(keep_idx),
-        kernel_size=module.kernel_size,
-        stride=module.stride,
-        padding=module.padding,
-        dilation=module.dilation,
-        groups=module.groups,
-        bias=module.bias is not None,
-        padding_mode=module.padding_mode,
-        device=module.weight.device,
-        dtype=module.weight.dtype,
+    new = _built_without_rng(
+        lambda: nn.Conv2d(
+            in_channels=module.in_channels,
+            out_channels=len(keep_idx),
+            kernel_size=module.kernel_size,
+            stride=module.stride,
+            padding=module.padding,
+            dilation=module.dilation,
+            groups=module.groups,
+            bias=module.bias is not None,
+            padding_mode=module.padding_mode,
+        ),
+        module.weight.device,
+        module.weight.dtype,
     )
     with torch.no_grad():
         new.weight.copy_(module.weight.index_select(0, keep))
@@ -149,18 +174,20 @@ def prune_conv2d_in_channels(module: nn.Conv2d, keep_idx: Sequence[int]) -> nn.C
             "Grouped/depthwise convolution input pruning is not supported in this baseline."
         )
     keep = torch.tensor(list(keep_idx), dtype=torch.long, device=module.weight.device)
-    new = nn.Conv2d(
-        in_channels=len(keep_idx),
-        out_channels=module.out_channels,
-        kernel_size=module.kernel_size,
-        stride=module.stride,
-        padding=module.padding,
-        dilation=module.dilation,
-        groups=module.groups,
-        bias=module.bias is not None,
-        padding_mode=module.padding_mode,
-        device=module.weight.device,
-        dtype=module.weight.dtype,
+    new = _built_without_rng(
+        lambda: nn.Conv2d(
+            in_channels=len(keep_idx),
+            out_channels=module.out_channels,
+            kernel_size=module.kernel_size,
+            stride=module.stride,
+            padding=module.padding,
+            dilation=module.dilation,
+            groups=module.groups,
+            bias=module.bias is not None,
+            padding_mode=module.padding_mode,
+        ),
+        module.weight.device,
+        module.weight.dtype,
     )
     with torch.no_grad():
         new.weight.copy_(module.weight.index_select(1, keep))
@@ -194,17 +221,23 @@ def prune_batchnorm2d(
             new.running_mean.copy_(module.running_mean.index_select(0, keep))
             new.running_var.copy_(module.running_var.index_select(0, keep))
             new.num_batches_tracked.copy_(module.num_batches_tracked)
+    # A fresh BatchNorm2d starts in training mode. Without this an eval model comes back
+    # from pruning normalising by batch statistics, which changes its outputs and quietly
+    # overwrites the running stats we just copied.
+    new.train(module.training)
     return new
 
 
 def prune_linear_out_features(module: nn.Linear, keep_idx: Sequence[int]) -> nn.Linear:
     keep = torch.tensor(list(keep_idx), dtype=torch.long, device=module.weight.device)
-    new = nn.Linear(
-        in_features=module.in_features,
-        out_features=len(keep_idx),
-        bias=module.bias is not None,
-        device=module.weight.device,
-        dtype=module.weight.dtype,
+    new = _built_without_rng(
+        lambda: nn.Linear(
+            in_features=module.in_features,
+            out_features=len(keep_idx),
+            bias=module.bias is not None,
+        ),
+        module.weight.device,
+        module.weight.dtype,
     )
     with torch.no_grad():
         new.weight.copy_(module.weight.index_select(0, keep))
@@ -215,12 +248,14 @@ def prune_linear_out_features(module: nn.Linear, keep_idx: Sequence[int]) -> nn.
 
 def prune_linear_in_features(module: nn.Linear, keep_idx: Sequence[int]) -> nn.Linear:
     keep = torch.tensor(list(keep_idx), dtype=torch.long, device=module.weight.device)
-    new = nn.Linear(
-        in_features=len(keep_idx),
-        out_features=module.out_features,
-        bias=module.bias is not None,
-        device=module.weight.device,
-        dtype=module.weight.dtype,
+    new = _built_without_rng(
+        lambda: nn.Linear(
+            in_features=len(keep_idx),
+            out_features=module.out_features,
+            bias=module.bias is not None,
+        ),
+        module.weight.device,
+        module.weight.dtype,
     )
     with torch.no_grad():
         new.weight.copy_(module.weight.index_select(1, keep))
@@ -262,8 +297,11 @@ def linear_like_weight_oi(module: nn.Module):
 
 def prune_conv1d_out_features(module: nn.Module, keep_idx: Sequence[int]) -> nn.Module:
     keep = torch.tensor(list(keep_idx), dtype=torch.long, device=module.weight.device)
-    new = type(module)(len(keep_idx), int(module.weight.shape[0]))
-    new = new.to(module.weight.device, module.weight.dtype)
+    new = _built_without_rng(
+        lambda: type(module)(len(keep_idx), int(module.weight.shape[0])),
+        module.weight.device,
+        module.weight.dtype,
+    )
     with torch.no_grad():
         new.weight.copy_(module.weight.index_select(1, keep))
         new.bias.copy_(module.bias.index_select(0, keep))
@@ -272,8 +310,11 @@ def prune_conv1d_out_features(module: nn.Module, keep_idx: Sequence[int]) -> nn.
 
 def prune_conv1d_in_features(module: nn.Module, keep_idx: Sequence[int]) -> nn.Module:
     keep = torch.tensor(list(keep_idx), dtype=torch.long, device=module.weight.device)
-    new = type(module)(int(module.nf), len(keep_idx))
-    new = new.to(module.weight.device, module.weight.dtype)
+    new = _built_without_rng(
+        lambda: type(module)(int(module.nf), len(keep_idx)),
+        module.weight.device,
+        module.weight.dtype,
+    )
     with torch.no_grad():
         new.weight.copy_(module.weight.index_select(0, keep))
         new.bias.copy_(module.bias)
