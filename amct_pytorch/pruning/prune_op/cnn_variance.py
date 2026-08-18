@@ -105,6 +105,7 @@ class VarianceChannelPruningMethod(BasePruningMethod):
     domain = "cnn"
     name = "variance_channel"
     accepted_kwargs = frozenset({"prune_ratio"})
+    supports_masked_trial = True
     requires_data = True
 
     def apply(

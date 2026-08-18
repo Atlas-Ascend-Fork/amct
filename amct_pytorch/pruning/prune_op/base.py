@@ -36,6 +36,11 @@ class BasePruningMethod(ABC):
     # default the caller never asked for. None means undeclared (e.g. a method from a
     # caller-supplied registry), and the kwargs of such a method are left unchecked.
     accepted_kwargs: Optional[FrozenSet[str]] = None
+    # Whether an accuracy-search trial of this method can be measured by masking the cut
+    # into the model instead of pruning a copy. Only true for methods that just select
+    # what to keep: one that rewrites weights (least-squares reconstruction, expert
+    # merging) has no mask equivalent, so its trials keep copying.
+    supports_masked_trial: bool = False
 
     @abstractmethod
     def apply(
