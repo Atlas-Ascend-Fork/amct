@@ -24,20 +24,25 @@ def resolve_safetensors_path(model_path, file_name):
         raise ValueError("Safetensors file name must be a non-empty string")
     if "\x00" in file_name:
         raise ValueError("Safetensors file name must not contain NUL")
-    windows_path = PureWindowsPath(file_name)
-    if (
-        PurePosixPath(file_name).is_absolute()
-        or windows_path.is_absolute()
-        or windows_path.drive
-    ):
-        raise ValueError("Safetensors file name must be relative")
-    if file_name in {".", ".."} or "/" in file_name or "\\" in file_name:
-        raise ValueError("Safetensors file name must be a plain file name")
-    if Path(file_name).suffix != ".safetensors":
-        raise ValueError("Weight file must use the .safetensors suffix")
 
     model_root = Path(model_path).resolve()
-    weight_path = (model_root / file_name).resolve()
+    input_path = Path(file_name)
+    if input_path.is_absolute():
+        weight_path = input_path.resolve()
+    else:
+        windows_path = PureWindowsPath(file_name)
+        if (
+            PurePosixPath(file_name).is_absolute()
+            or windows_path.is_absolute()
+            or windows_path.drive
+        ):
+            raise ValueError("Safetensors path uses a non-native absolute path")
+        if file_name in {".", ".."} or "/" in file_name or "\\" in file_name:
+            raise ValueError("Safetensors file name must be a plain file name")
+        weight_path = (model_root / input_path).resolve()
+
+    if weight_path.suffix != ".safetensors":
+        raise ValueError("Weight file must use the .safetensors suffix")
     if weight_path.parent != model_root:
         raise ValueError("Safetensors file must stay inside the model directory")
     if not weight_path.is_file():

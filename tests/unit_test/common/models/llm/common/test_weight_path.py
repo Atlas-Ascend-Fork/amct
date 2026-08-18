@@ -76,6 +76,33 @@ class TestResolveSafetensorsPath(unittest.TestCase):
 
             self.assertEqual(resolved, weight_path.resolve())
 
+    def test_accepts_absolute_safetensors_path_in_model_directory(self):
+        module = _load_weight_path_module()
+
+        with tempfile.TemporaryDirectory() as model_dir:
+            weight_path = Path(model_dir) / "model-00001.safetensors"
+            weight_path.touch()
+
+            resolved = module.resolve_safetensors_path(
+                model_dir, str(weight_path.resolve())
+            )
+
+            self.assertEqual(resolved, weight_path.resolve())
+
+    def test_rejects_absolute_safetensors_path_outside_model_directory(self):
+        module = _load_weight_path_module()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir) / "model"
+            model_dir.mkdir()
+            outside_path = Path(temp_dir) / "outside.safetensors"
+            outside_path.touch()
+
+            with self.assertRaises(ValueError):
+                module.resolve_safetensors_path(
+                    model_dir, str(outside_path.resolve())
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
