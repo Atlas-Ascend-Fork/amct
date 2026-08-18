@@ -74,6 +74,39 @@ class TestHiFloat4Kernel(unittest.TestCase):
         self.assertFalse(torch.isnan(out).any())
         self.assertEqual(out.abs().max().item(), 0.0)
 
+    def test_kernel_nan_block_poison_keeps_device_healthy(self):
+        """回归测试：NaN/Inf 块整块毒化为 NaN，且跑完后设备必须仍可正常 launch。
+
+        曾经的手写 kernel 把 NaN 注入 scale，NaN 流经 vdiv/vconv 触发 AI Core
+        异常（507057），跑过一次含 NaN 的输入后设备后续 launch 全部失败。
+        """
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
+        torch.manual_seed(6)
+        x = torch.randn(4, 512, dtype=torch.bfloat16)
+        x[:, :64] = float("nan")
+        x[:, 64:128] = float("inf")
+
+        out = npu_fake_quant(x.npu()).cpu()
+
+        # 毒化契约：含非有限元素的块整块为 NaN，干净块不含 NaN
+        self.assertTrue(torch.isnan(out[:, :128]).all())
+        self.assertFalse(torch.isnan(out[:, 128:]).any())
+        # 干净块与 CPU 参考逐位一致（NaN 块 payload 位允许差异）
+        ref = _oracle(x)
+        self.assertTrue(
+            torch.equal(
+                out[:, 128:].float().view(torch.uint32),
+                ref[:, 128:].view(torch.uint32),
+            )
+        )
+
+        # 设备健康回归：再跑一次有限输入必须正常
+        x2 = torch.randn(2, 128, dtype=torch.bfloat16).npu()
+        out2 = npu_fake_quant(x2)
+        torch.npu.synchronize()
+        self.assertFalse(torch.isnan(out2.cpu()).any())
+
     def _assert_kernel_matches_reference(self, x):
         from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
 
