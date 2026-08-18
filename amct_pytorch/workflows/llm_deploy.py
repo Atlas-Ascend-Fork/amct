@@ -40,6 +40,10 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     convert_state_dict,
     quant_payload,
 )
+from amct_pytorch.common.models.llm.common.weight_path import (
+    resolve_safetensors_path,
+    validate_weight_map,
+)
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
@@ -140,7 +144,11 @@ class LlmDeployWorkflow:
         index_path = Path(self.model_path) / SAFE_WEIGHTS_INDEX_NAME
         if index_path.exists():
             with open(index_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                index = json.load(f)
+            if not isinstance(index, dict):
+                raise ValueError("Safetensors index must be a dictionary")
+            validate_weight_map(self.model_path, index.get("weight_map"))
+            return index
         single_path = Path(self.model_path) / SAFE_WEIGHTS_NAME
         if not single_path.exists():
             raise FileNotFoundError(
@@ -260,7 +268,7 @@ class LlmDeployWorkflow:
         model_dir = Path(self.model_path)
         loaded_files = {}
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
-            source_path = model_dir / source_file
+            source_path = resolve_safetensors_path(model_dir, source_file)
             current_state_dict = load_file(source_path, device="cpu")
             loaded_files[source_file] = current_state_dict
 
@@ -337,7 +345,7 @@ class LlmDeployWorkflow:
 
         model_dir = Path(self.model_path)
         for source_file in sorted(remaining_by_file):
-            source_path = model_dir / source_file
+            source_path = resolve_safetensors_path(model_dir, source_file)
             with safe_open(str(source_path), framework="pt", device="cpu") as f:
                 for weight_name in remaining_by_file[source_file]:
                     tensor = f.get_tensor(weight_name)

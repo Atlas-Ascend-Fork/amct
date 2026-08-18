@@ -22,6 +22,7 @@ from safetensors.torch import load_file
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.models.llm.common.weight_path import resolve_safetensors_path
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -168,7 +169,7 @@ def convert_state_dict(
             # Get scale_inv from the correct file
             file_name = original_weight_map[scale_inv_name]
             if file_name not in loaded_files:
-                file_path = model_dir / file_name
+                file_path = resolve_safetensors_path(model_dir, file_name)
                 loaded_files[file_name] = load_file(file_path, device="cpu")
             scale_inv = loaded_files[file_name][scale_inv_name]
             # HiF4: weight uint8 [M, N/2]; scale uint8 [M, N/64, 4] (3-D, last dim 4)

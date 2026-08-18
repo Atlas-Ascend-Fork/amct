@@ -174,6 +174,7 @@ def test_load_weight_index_reads_json(tmp_path):
         "weight_map": {"a.weight": KEY_SHARD1_SAFETENSORS},
         METADATA_KEY: {"total_size": 999},
     }
+    (tmp_path / KEY_SHARD1_SAFETENSORS).touch()
     (tmp_path / SAFETENSORS_INDEX_JSON).write_text(json.dumps(index))
     wf = _make_workflow(model_path=str(tmp_path))
     assert wf._load_weight_index() == index
@@ -781,6 +782,20 @@ def test_load_weight_index_single_shard_synthesizes(tmp_path):
         "b.weight": MODEL_SAFETENSORS,
     }
     assert idx[METADATA_KEY]["total_size"] > 0
+
+
+def test_load_weight_index_rejects_parent_directory_shard(tmp_path):
+    index = {
+        "metadata": {"total_size": 0},
+        "weight_map": {"a.weight": "../outside.safetensors"},
+    }
+    (tmp_path / SAFETENSORS_INDEX_JSON).write_text(
+        json.dumps(index), encoding="utf-8"
+    )
+    wf = _make_workflow(model_path=str(tmp_path))
+
+    with pytest.raises(ValueError):
+        wf._load_weight_index()  # pylint: disable=protected-access
 
 
 def test_load_weight_index_missing_raises(tmp_path):
