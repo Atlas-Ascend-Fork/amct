@@ -153,6 +153,17 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
+def _load_scales(names, original_weight_map, model_dir, loaded_files):
+    """Load scale tensors by name, loading their shards on demand."""
+    scales = []
+    for name in names:
+        file_name = original_weight_map[name]
+        if file_name not in loaded_files:
+            loaded_files[file_name] = load_file(model_dir / file_name, device="cpu")
+        scales.append(loaded_files[file_name][name])
+    return scales
+
+
 def convert_state_dict(
     weight,
     weight_name,
@@ -162,61 +173,46 @@ def convert_state_dict(
     loaded_files,
     block_size,
 ):
-    if weight.element_size() == 1:
-        try:
-            # NVFP4
-            if isinstance(scale_inv_name, tuple):
-                from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
+    if weight.element_size() != 1:
+        return weight
+    try:
+        # NVFP4
+        if isinstance(scale_inv_name, tuple):
+            from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
 
-                scale_name, scale_2_name = scale_inv_name
-                for name in scale_inv_name:
-                    file_name = original_weight_map[name]
-                    if file_name not in loaded_files:
-                        loaded_files[file_name] = load_file(
-                            model_dir / file_name, device="cpu"
-                        )
-                scale = loaded_files[original_weight_map[scale_name]][scale_name]
-                scale_2 = loaded_files[original_weight_map[scale_2_name]][scale_2_name]
-                return nvfp4_weight_dequant(weight, scale, scale_2)
-
-            file_name = original_weight_map[scale_inv_name]
-            if file_name not in loaded_files:
-                loaded_files[file_name] = load_file(model_dir / file_name, device="cpu")
-            scale_inv = loaded_files[file_name][scale_inv_name]
-
-            # HiF4
-            if (
-                weight.dtype == torch.uint8
-                and scale_inv.dtype == torch.uint8
-                and scale_inv.ndim == 3
-                and scale_inv.shape[-1] == 4
-            ):
-                from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
-
-                weight = hif4_unpack(scale_inv, weight)
-
-            # MXFP4
-            elif weight.dtype == torch.int8:
-                weight = weight_dequant(
-                    weight,
-                    scale_inv,
-                    block_size=block_size,
-                    is_mx=True,
-                    is_packed=True,
-                )
-
-            # FP8 / MXFP8
-            else:
-                weight = weight_dequant(
-                    weight,
-                    scale_inv,
-                    block_size=block_size,
-                )
-
-        except KeyError:
-            logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+            scale, scale_2 = _load_scales(
+                scale_inv_name, original_weight_map, model_dir, loaded_files
             )
+            return nvfp4_weight_dequant(weight, scale, scale_2)
+        scale_inv = _load_scales(
+            (scale_inv_name,), original_weight_map, model_dir, loaded_files
+        )[0]
+
+        # HiF4
+        if (
+            weight.dtype == torch.uint8
+            and scale_inv.dtype == torch.uint8
+            and scale_inv.ndim == 3
+            and scale_inv.shape[-1] == 4
+        ):
+            from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+
+            weight = hif4_unpack(scale_inv, weight)
+
+        # MXFP4
+        elif weight.dtype == torch.int8:
+            weight = weight_dequant(
+                weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+            )
+
+        # FP8 / MXFP8
+        else:
+            weight = weight_dequant(weight, scale_inv, block_size=block_size)
+
+    except KeyError:
+        logger.warning(
+            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+        )
 
     return weight
 
