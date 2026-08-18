@@ -149,17 +149,17 @@ python -m amct_pytorch.ptq \
 完成PTQ后，在直转量化精度评估中加入量化算法，与基准测试、无量化算法的直转量化精度比对，验证量化算法的效果：
   ```shell
 python -m amct_pytorch.eval \
-  --model /data/models/Qwen3.6-35B-A3B \
-  --model_name qwen3_6_moe \
-  --seq_len 4096 \
-  --granularity block \
-  --device npu:0 \
-  --eval_mode quant \
-  --quant_target attn-linear \
-  --bit_config amct_pytorch/configs/w4a8.yaml \
-  --quant_dtype int \
-  --algos autoround \
-  --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear
+    --model /data/models/Qwen3.6-35B-A3B \
+    --model_name qwen3_6_moe \
+    --seq_len 4096 \
+    --granularity block \
+    --device npu:0 \
+    --eval_mode quant \
+    --quant_target attn-linear \
+    --bit_config amct_pytorch/configs/w4a8.yaml \
+    --quant_dtype int \
+    --algos autoround \
+    --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear
   ```
 必要传参解释：
 - attn_linear_param_dir：`quant_target`为`attn-linear`时，量化算法系数保存路径
@@ -168,15 +168,15 @@ python -m amct_pytorch.eval \
 完成上述所有步骤后，导出量化权重用于加载，权重对应的weight_map和huggingface官方对齐
   ```shell
 python -m amct_pytorch.deploy \
-  --model /data/models/Qwen3.6-35B-A3B \
-  --model_name qwen3_6_moe \
-  --granularity block \
-  --quant_target attn-linear \
-  --bit_config amct_pytorch/configs/w4a8.yaml \
-  --quant_dtype int \
-  --algos autoround \
-  --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear \
-  --output_dir ./output/Qwen3.6-35B-A8W4-INT
+    --model /data/models/Qwen3.6-35B-A3B \
+    --model_name qwen3_6_moe \
+    --granularity block \
+    --quant_target attn-linear \
+    --bit_config amct_pytorch/configs/w4a8.yaml \
+    --quant_dtype int \
+    --algos autoround \
+    --attn_linear_param_dir ptq_result/ptq_params/qwen3_6_moe/attn-linear \
+    --output_dir ./output/Qwen3.6-35B-A8W4-INT
   ```
 必要传参解释：
 - output_dir：导出权重保存路径
