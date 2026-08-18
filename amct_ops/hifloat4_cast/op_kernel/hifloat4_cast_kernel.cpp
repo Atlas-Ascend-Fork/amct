@@ -275,14 +275,11 @@ public:
     }
 
     aifunc void PoisonBlock() {
-        // NaN block poison: blocks with any non-finite element get NaN scale, which
-        // dequantizes the whole 64-block to NaN (aligned with the HiFloat4 golden).
-        // clean (mask=1) -> keep exp0buf; poisoned -> fallback NaN.
+        // NaN block poison: blocks with any non-finite element dequantize to NaN as
+        // a whole (aligned with the HiFloat4 golden). 这里只计算 clean mask
+        // (1=干净块)；NaN 替换延后到 Reconstruct 的输出端，避免 NaN scale 流入
+        // 中间向量算术（vdiv/vconv 对 NaN 操作数会触发 AI Core 异常）。
         vcmpvs_lt((__ubuf__ uint8_t *)exp1maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, 8, 8);
-        pipe_barrier(PIPE_V);
-        set_cmpmask(nanbuf.vptr()); // fallback = quiet NaN
-        pipe_barrier(PIPE_V);
-        vsel(exp0buf.ptr(), exp0buf.ptr(), exp1maskbuf.vptr(), BATCH / SEG_ELEMS, 1, 1, 1, 8, 8, 1, 1);
         pipe_barrier(PIPE_V);
     }
 
@@ -417,6 +414,13 @@ public:
         vmul(out_tsr_.ptr(), exp0buf.ptr(), out_tsr_.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, 8, 8, 8);
         pipe_barrier(PIPE_V);
         vmul(out_tsr_.ptr(), out_tsr_.ptr(), signbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, 8, 8, 8);
+        pipe_barrier(PIPE_V);
+        // 毒化块整体替换为 NaN（clean mask=1 保留计算结果；nfmaxbuf 仍保存每块标记）
+        vcmpvs_lt((__ubuf__ uint8_t *)exp2maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, 8, 8);
+        pipe_barrier(PIPE_V);
+        set_cmpmask(nanbuf.vptr()); // fallback = quiet NaN (poisoned side)
+        pipe_barrier(PIPE_V);
+        vsel(out_tsr_.ptr(), out_tsr_.ptr(), exp2maskbuf.vptr(), BATCH / SEG_ELEMS, 1, 1, 1, 8, 8, 1, 1);
         pipe_barrier(PIPE_V);
     }
 
