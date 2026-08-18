@@ -29,6 +29,7 @@ from ..common.utils.log import LOGGER
 from .config import MethodSpec, PruneConfig, _normalize_method_spec
 from .context import BatchAdapter
 from .pruner import AutoPruner
+from . import simulate
 from .report import PruneReport
 from .utils import count_parameters
 
@@ -410,6 +411,58 @@ def _prepare_search_inputs(
     return grid, base_cfg, count_parameters(model), eval_batches
 
 
+def _maskable(base_cfg: dict) -> bool:
+    """Whether every method in play can be measured by masking rather than by copying.
+
+    A method that rewrites weights (reconstruct's least squares) cannot be expressed as a
+    mask, so those searches keep using a copy.
+    """
+    from .registry import create_default_registry, get_binding
+
+    registry = create_default_registry()
+    try:
+        cfg = PruneConfig(**copy.deepcopy(base_cfg))
+        methods = cfg.resolved_methods()
+    except (TypeError, ValueError):
+        return False
+    if cfg.stage_error_policy == "warn_skip":
+        # warn_skip promises per-stage rollback by deep-copying the model per stage. Under
+        # a masked trial that copy would receive the hooks while quality reads the original
+        # -- every candidate measures unpruned and the search picks the most aggressive
+        # ratio. A masked session cannot honour per-stage rollback, so it stands aside.
+        return False
+    for domain_name, spec in methods.items():
+        if spec.kwargs.get("prune_ratio") == 0.0:
+            continue
+        try:
+            binding = get_binding(registry, domain_name, spec.name)
+        except (KeyError, ValueError):
+            return False
+        if not getattr(binding.method, "supports_masked_trial", False):
+            return False
+    return True
+
+
+_TRIAL_ERRORS = (
+    RuntimeError,
+    ValueError,
+    TypeError,
+    AttributeError,
+    KeyError,
+    IndexError,
+)
+
+
+def _failed_trial(ratio, params_before, warn_tag, exc) -> TrialResult:
+    """A trial that died on an exception counts as rejected, loudly."""
+    LOGGER.logw(
+        f"[{warn_tag}] ratio={ratio} trial did not complete (not a normal rejection): "
+        f"{type(exc).__name__}: {exc}",
+        "amct_prune",
+    )
+    return TrialResult(ratio, float("-inf"), float("inf"), params_before, 0.0, False)
+
+
 def _make_trial_fn(
     model,
     base_cfg,
@@ -426,34 +479,48 @@ def _make_trial_fn(
 ):
     """Build the per-ratio trial function (shared by tolerance and size-budget modes)."""
 
+    # A masked trial measures the model in place, so it is off whenever something would
+    # modify it: the recovery/quant callbacks, or a method that rewrites its consumer.
+    # Mutable on purpose: a router may only reveal mid-trial that its dispatch cannot be
+    # rebuilt (MaskUnsupported), and from then on every trial copies.
+    state = {"masked": finetune_fn is None and quant_fn is None and _maskable(base_cfg)}
+
+    def _copy_trial(cfg) -> Tuple[float, int]:
+        cfg.copy_model = True
+        pruned = AutoPruner(cfg)(model, data=data, batch_adapter=batch_adapter)
+        pa = count_parameters(pruned)
+        if finetune_fn is not None:
+            finetune_fn(pruned)
+        if quant_fn is not None:
+            quant_fn(pruned)
+        return float(quality_fn(pruned)), pa
+
+    def _masked_trial(cfg) -> Tuple[float, int]:
+        """Same measurement without the copy: the cut is masked in, then rolled back."""
+        cfg.copy_model = False
+        with simulate.SimulationSession(model) as session:
+            AutoPruner(cfg)(model, data=data, batch_adapter=batch_adapter)
+            return float(quality_fn(model)), params_before - session.removed_params
+
+    def _run_one(cfg):
+        if state["masked"]:
+            try:
+                return _masked_trial(cfg)
+            except simulate.MaskUnsupported as exc:
+                LOGGER.logw(
+                    f"[{warn_tag}] masked trials are not possible for this model "
+                    f"({exc}); falling back to copy-based trials.",
+                    "amct_prune",
+                )
+                state["masked"] = False
+        return _copy_trial(cfg)
+
     def trial(ratio: float) -> TrialResult:
         cfg = PruneConfig(**_with_ratio(base_cfg, ratio))
-        cfg.copy_model = True
         try:
-            pruner = AutoPruner(cfg)
-            pruned = pruner(model, data=data, batch_adapter=batch_adapter)
-            pa = count_parameters(pruned)
-            if finetune_fn is not None:
-                finetune_fn(pruned)
-            if quant_fn is not None:
-                quant_fn(pruned)
-            q = float(quality_fn(pruned))
-        except (
-            RuntimeError,
-            ValueError,
-            TypeError,
-            AttributeError,
-            KeyError,
-            IndexError,
-        ) as exc:
-            LOGGER.logw(
-                f"[{warn_tag}] ratio={ratio} trial did not complete (not a normal rejection): "
-                f"{type(exc).__name__}: {exc}",
-                "amct_prune",
-            )
-            return TrialResult(
-                ratio, float("-inf"), float("inf"), params_before, 0.0, False
-            )
+            q, pa = _run_one(cfg)
+        except _TRIAL_ERRORS as exc:
+            return _failed_trial(ratio, params_before, warn_tag, exc)
         drop = baseline_quality - q
         return TrialResult(
             prune_ratio=ratio,

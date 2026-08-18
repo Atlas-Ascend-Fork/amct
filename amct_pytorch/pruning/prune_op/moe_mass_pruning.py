@@ -141,6 +141,7 @@ class MassMoEPruningMethod(BasePruningMethod):
     domain = "moe"
     name = "activation_count"
     accepted_kwargs = frozenset({"prune_ratio", "top_k"})
+    supports_masked_trial = True
     requires_data = True
 
     def apply(
