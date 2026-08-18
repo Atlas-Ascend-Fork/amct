@@ -155,16 +155,6 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
         output = self.out_proj(core_attn_out, structure_transform=self.out_transform)
         return output
 
-    def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(
-            self.quant_args, "structure", ctx
-        )
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(
-            self.quant_args, "structure", ctx
-        )
-
     # Mirrors QuantGatedMLP.export_ptq_params/load_ptq_params (quant_apply.py) -- without
     # this override, BaseSolver.finalize()'s hasattr(..., "export_ptq_params") check fails
     # for this class.
@@ -183,6 +173,16 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
             PtqParamHandler.load_module(self, params)
             return
         PtqParamHandler.load_trainable_module(self, params)
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
 
 
 class QuantQwen35Attn(Qwen3_5Attention):
@@ -300,16 +300,6 @@ class QuantQwen35Attn(Qwen3_5Attention):
         attn_output = self.o_proj(attn_output, structure_transform=self.out_transform)
         return attn_output, None
 
-    def _init_structure_transforms(self):
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
-        self.input_transform = build_algorithms_by_target(
-            self.quant_args, "structure", ctx
-        )
-        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
-        self.out_transform = build_algorithms_by_target(
-            self.quant_args, "structure", ctx
-        )
-
     # Mirrors QuantGatedMLP.export_ptq_params/load_ptq_params (quant_apply.py) -- without
     # this override, BaseSolver.finalize()'s hasattr(..., "export_ptq_params") check fails
     # for this class, and it falls back to filtering named_parameters() by requires_grad,
@@ -330,3 +320,13 @@ class QuantQwen35Attn(Qwen3_5Attention):
             PtqParamHandler.load_module(self, params)
             return
         PtqParamHandler.load_trainable_module(self, params)
+
+    def _init_structure_transforms(self):
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
+        self.input_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
+        ctx = AlgoBuildContext(matrix_size=128, dim_size=self.value_dim)
+        self.out_transform = build_algorithms_by_target(
+            self.quant_args, "structure", ctx
+        )
