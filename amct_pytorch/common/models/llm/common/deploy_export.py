@@ -153,6 +153,17 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
+def _load_scales(names, original_weight_map, model_dir, loaded_files):
+    """Load scale tensors by name, loading their shards on demand."""
+    scales = []
+    for name in names:
+        file_name = original_weight_map[name]
+        if file_name not in loaded_files:
+            loaded_files[file_name] = load_file(model_dir / file_name, device="cpu")
+        scales.append(loaded_files[file_name][name])
+    return scales
+
+
 def convert_state_dict(
     weight,
     weight_name,
@@ -162,37 +173,47 @@ def convert_state_dict(
     loaded_files,
     block_size,
 ):
-    if weight.element_size() == 1:
-        # FP8 / HiF4 weight
-        try:
-            # Get scale_inv from the correct file
-            file_name = original_weight_map[scale_inv_name]
-            if file_name not in loaded_files:
-                file_path = model_dir / file_name
-                loaded_files[file_name] = load_file(file_path, device="cpu")
-            scale_inv = loaded_files[file_name][scale_inv_name]
-            # HiF4: weight uint8 [M, N/2]; scale uint8 [M, N/64, 4] (3-D, last dim 4)
-            if (
-                weight.dtype == torch.uint8
-                and scale_inv.dtype == torch.uint8
-                and scale_inv.ndim == 3
-                and scale_inv.shape[-1] == 4
-            ):
-                from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+    if weight.element_size() != 1:
+        return weight
+    try:
+        # NVFP4
+        if isinstance(scale_inv_name, tuple):
+            from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
 
-                weight = hif4_unpack(scale_inv, weight)
-            # MXFP4: weight dtype=int8,   shape=[M, N//2];  scale dtype=float32, shape=[M//bs, N//bs]
-            elif weight.dtype == torch.int8:
-                weight = weight_dequant(
-                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
-                )
-            # FP8 / MXFP8: weight dtype=float8_e4m3fn, shape=[M, N];  scale dtype=float32, shape=[M//bs, N//bs]
-            else:
-                weight = weight_dequant(weight, scale_inv, block_size=block_size)
-        except KeyError:
-            logger.warning(
-                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+            scale, scale_2 = _load_scales(
+                scale_inv_name, original_weight_map, model_dir, loaded_files
             )
+            return nvfp4_weight_dequant(weight, scale, scale_2)
+        scale_inv = _load_scales(
+            (scale_inv_name,), original_weight_map, model_dir, loaded_files
+        )[0]
+
+        # HiF4
+        if (
+            weight.dtype == torch.uint8
+            and scale_inv.dtype == torch.uint8
+            and scale_inv.ndim == 3
+            and scale_inv.shape[-1] == 4
+        ):
+            from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+
+            weight = hif4_unpack(scale_inv, weight)
+
+        # MXFP4
+        elif weight.dtype == torch.int8:
+            weight = weight_dequant(
+                weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+            )
+
+        # FP8 / MXFP8
+        else:
+            weight = weight_dequant(weight, scale_inv, block_size=block_size)
+
+    except KeyError:
+        logger.warning(
+            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+        )
+
     return weight
 
 

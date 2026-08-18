@@ -42,3 +42,6 @@
 | KV Cache量化接口           | [create\_quant\_cali\_config](create_quant_cali_config.md)   | KV-cache量化接口，根据用户传入模型、量化层信息与量化配置信息，生成每个层的详细量化配置。 |
 |                            | [create\_quant\_cali\_model](create_quant_cali_model.md)     | KV-cache量化接口，根据模型和量化详细配置，对用户模型进行改图，将待量化Linear算子替换为输出后进行IFMR/HFMG量化的量化算子，后续用户拿到模型后进行在线校准，校准后生成量化因子保存在record_file中。 |
 |                            | [QuantCalibrationOp](QuantCalibrationOp.md)                  | KV Cache量化接口，用于用户构图，在前向传播时，根据用户的量化算法配置调用IFMR/HFMG量化算法对输出做校准，校准后，将量化因子依据对应格式输出到record_file文件指定层名中。 |
+| 结构化剪枝接口             | [prune](prune.md)                                            | 结构化剪枝主入口：对已实例化的 torch.nn.Module 原地剪枝（dense FFN 中间维 / CNN 通道 / MoE 专家）；传入 tolerance 时自动搜索满足精度容差的最大剪枝率。 |
+|                            | [prune\_finetune](prune_finetune.md)                         | 剪枝后轻量微调恢复（供精度搜索的 finetune_fn 使用）；从 `amct_pytorch.pruning` 导入（非顶层 `amct.*`）。 |
+|                            | [prune\_diagnose](prune_diagnose.md)                         | 剪枝可行性诊断（可剪目标 / 固定率 dry-run / acc 搜索 dry-run）；从 `amct_pytorch.pruning` 导入（非顶层 `amct.*`）。 |
