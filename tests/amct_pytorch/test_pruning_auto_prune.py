@@ -63,6 +63,25 @@ def _calib(n=6):
     return [torch.randint(0, 1000, (4, 20)) for _ in range(n)]
 
 
+def _output_quality(model, probe):
+    """Quality read from the model's outputs: how close a pruned model stays to the original.
+
+    Parameter counts make a tempting stand-in for quality in a test, but they measure the
+    model's structure rather than its behaviour, and a search is free to measure a
+    candidate without physically resizing anything. Size targets belong to ``size_budget``.
+    """
+    with torch.no_grad():
+        ref = model(probe).detach().clone()
+    scale = ref.abs().mean().clamp_min(1e-12)
+
+    def quality(m):
+        with torch.no_grad():
+            out = m(probe)
+        return -float((out - ref).abs().mean() / scale)
+
+    return quality
+
+
 DENSE_CFG = {
     "methods": {"dense": {"name": "low_variance"}},
     "missing_data_policy": "warn_skip",
@@ -112,19 +131,17 @@ class TestToleranceSelection(unittest.TestCase):
         chosen = {}
         reductions = {}
 
-        def quality_by_params(p0):
-            return lambda m: sum(p.numel() for p in m.parameters()) / p0
+        probe = calib[0]
 
         for tol in (0.05, 0.15, 0.40):
             model, _ = create_mini_mlp()
             model.eval()
-            p0 = sum(p.numel() for p in model.parameters())
             res = accuracy_based_auto_prune(
                 model,
                 DENSE_CFG,
                 data=calib,
                 tolerance=tol,
-                evaluator=quality_by_params(p0),
+                evaluator=_output_quality(model, probe),
             )
             chosen[tol] = res.chosen_ratio if res.chosen_ratio is not None else 0.0
             reductions[tol] = res.weight_reduction
@@ -174,17 +191,17 @@ class TestToleranceSelection(unittest.TestCase):
         calib = _calib()
         model, _ = create_mini_mlp()
         model.eval()
-        p0 = sum(p.numel() for p in model.parameters())
-
-        def quality(m):
-            return sum(p.numel() for p in m.parameters()) / p0
 
         res = accuracy_based_auto_prune(
-            model, DENSE_CFG, data=calib, tolerance=0.2, evaluator=quality
+            model,
+            DENSE_CFG,
+            data=calib,
+            tolerance=0.2,
+            evaluator=_output_quality(model, calib[0]),
         )
         self.assertIsNotNone(res.chosen_ratio)
         self.assertLessEqual(res.quality_drop, 0.2 + 1e-9)
-        self.assertLessEqual(res.weight_reduction, 0.2 + 1e-9)
+        self.assertGreater(res.weight_reduction, 0.0)
 
 
 class TestPruneToleranceMode(unittest.TestCase):
@@ -194,11 +211,11 @@ class TestPruneToleranceMode(unittest.TestCase):
         model.eval()
         p_before = sum(p.numel() for p in model.parameters())
 
-        def quality(m):
-            return sum(p.numel() for p in m.parameters()) / p_before
-
         res = accuracy_based_auto_prune(
-            model, data=calib, tolerance=0.30, evaluator=quality
+            model,
+            data=calib,
+            tolerance=0.30,
+            evaluator=_output_quality(model, calib[0]),
         )
 
         self.assertIsNotNone(res)
@@ -206,7 +223,7 @@ class TestPruneToleranceMode(unittest.TestCase):
         p_after = sum(p.numel() for p in model.parameters())
         self.assertLess(p_after, p_before)
         self.assertLessEqual(res.quality_drop, 0.30 + 1e-9)
-        self.assertLessEqual(res.weight_reduction, 0.30 + 1e-9)
+        self.assertGreater(res.weight_reduction, 0.0)
         with torch.no_grad():
             out = model(torch.randint(0, 1000, (2, 20)))
         self.assertTrue(torch.isfinite(out).all())
@@ -288,13 +305,12 @@ class TestFinetuneInSearch(unittest.TestCase):
     def test_finetune_fn_changes_chosen_ratio(self):
         model, _ = create_mini_mlp()
         model.eval()
-        p0 = sum(p.numel() for p in model.parameters())
+
+        base = _output_quality(model, _calib()[0])
 
         def quality(m):
-            if getattr(m, "recovered_by_test", False):
-                return 1.0
-            cur = sum(p.numel() for p in m.parameters())
-            return 1.0 if cur >= p0 else 0.0
+            # The callback stands in for a recovery that restores the lost accuracy.
+            return base(m) + (1.0 if getattr(m, "recovered_by_test", False) else 0.0)
 
         def recover(m):
             m.recovered_by_test = True

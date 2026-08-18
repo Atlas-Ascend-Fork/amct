@@ -22,6 +22,7 @@ from typing import List, Optional
 import torch
 import torch.nn as nn
 
+from .. import simulate
 from ..config import PruneConfig
 from ..utils import (
     get_submodule,
@@ -274,6 +275,20 @@ class DensePruningDomain(BasePruningDomain):
         return targets
 
     def apply_keep_indices(
+        self,
+        model: nn.Module,
+        target: TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget,
+        keep_idx: List[int],
+    ) -> None:
+        session = simulate.active()
+        if session is None:
+            self._apply_keep_indices(model, target, keep_idx)
+        else:
+            session.record_dense(
+                model, target, self.hidden_size(model, target), keep_idx
+            )
+
+    def _apply_keep_indices(
         self,
         model: nn.Module,
         target: TwoLayerDenseTarget | GatedDenseTarget | FusedGatedDenseTarget,
