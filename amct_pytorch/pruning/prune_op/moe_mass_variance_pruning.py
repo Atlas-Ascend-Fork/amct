@@ -203,6 +203,7 @@ class MassVarianceMoEPruningMethod(BasePruningMethod):
     domain = "moe"
     name = "mass_variance"
     accepted_kwargs = frozenset({"prune_ratio", "top_k", "boundary", "variance_score"})
+    supports_masked_trial = True
     requires_data = True
 
     def apply(

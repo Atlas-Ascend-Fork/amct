@@ -176,6 +176,7 @@ class LowVarianceDensePruningMethod(BasePruningMethod):
     domain = "dense"
     name = "low_variance"
     accepted_kwargs = frozenset({"prune_ratio"})
+    supports_masked_trial = True
     requires_data = True
 
     def apply(
