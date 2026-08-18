@@ -29,6 +29,7 @@ from ..common.utils.log import LOGGER
 from .config import MethodSpec, PruneConfig, _normalize_method_spec
 from .context import BatchAdapter
 from .pruner import AutoPruner
+from . import simulate
 from .report import PruneReport
 from .utils import count_parameters
 
@@ -410,6 +411,85 @@ def _prepare_search_inputs(
     return grid, base_cfg, count_parameters(model), eval_batches
 
 
+def _maskable(base_cfg: dict) -> bool:
+    """Whether every method in play can be measured by masking rather than by copying.
+
+    A method that rewrites weights (reconstruct's least squares) cannot be expressed as a
+    mask, so those searches keep using a copy.
+    """
+    from .registry import create_default_registry, get_binding
+
+    registry = create_default_registry()
+    try:
+        cfg = PruneConfig(**copy.deepcopy(base_cfg))
+        methods = cfg.resolved_methods()
+    except (TypeError, ValueError):
+        return False
+    if cfg.stage_error_policy == "warn_skip":
+        # warn_skip promises per-stage rollback by deep-copying the model per stage. Under
+        # a masked trial that copy would receive the hooks while quality reads the original
+        # -- every candidate measures unpruned and the search picks the most aggressive
+        # ratio. A masked session cannot honour per-stage rollback, so it stands aside.
+        return False
+    for domain_name, spec in methods.items():
+        if spec.kwargs.get("prune_ratio") == 0.0:
+            continue
+        try:
+            binding = get_binding(registry, domain_name, spec.name)
+        except (KeyError, ValueError):
+            return False
+        if not getattr(binding.method, "supports_masked_trial", False):
+            return False
+    return True
+
+
+_TRIAL_ERRORS = (
+    RuntimeError,
+    ValueError,
+    TypeError,
+    AttributeError,
+    KeyError,
+    IndexError,
+)
+
+
+def _failed_trial(ratio, params_before, warn_tag, exc) -> TrialResult:
+    """A trial that died on an exception counts as rejected, loudly."""
+    LOGGER.logw(
+        f"[{warn_tag}] ratio={ratio} trial did not complete (not a normal rejection): "
+        f"{type(exc).__name__}: {exc}",
+        "amct_prune",
+    )
+    return TrialResult(ratio, float("-inf"), float("inf"), params_before, 0.0, False)
+
+
+class _preserve_training_mode:
+    """Restore every submodule's train/eval flag after a search.
+
+    Quality measurement flips the model to eval() -- the baseline pass does it to the
+    caller's model, a masked trial does it again per candidate. A user searching from
+    train() mode (mid-training pruning, the recovery walkthrough) would otherwise get
+    dropout and BatchNorm silently switched off for the rest of their training loop.
+
+    Recorded by module *name*, not object: the final apply replaces submodules, and a
+    replacement (a rebuilt BatchNorm, say) must inherit the mode of the module it
+    replaced -- restoring flags on the old, detached objects would leave the new ones
+    frozen at whatever mode the quality function last set.
+    """
+
+    def __init__(self, model: nn.Module) -> None:
+        self.model = model
+
+    def __enter__(self):
+        self.modes = {name: m.training for name, m in self.model.named_modules()}
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        root = self.modes.get("", False)
+        for name, module in self.model.named_modules():
+            module.training = self.modes.get(name, root)
+
+
 def _make_trial_fn(
     model,
     base_cfg,
@@ -426,34 +506,60 @@ def _make_trial_fn(
 ):
     """Build the per-ratio trial function (shared by tolerance and size-budget modes)."""
 
+    # A masked trial measures the model in place, so it is off whenever something would
+    # modify it: the recovery/quant callbacks, or a method that rewrites its consumer.
+    # Mutable on purpose: a router may only reveal mid-trial that its dispatch cannot be
+    # rebuilt (MaskUnsupported), and from then on every trial copies.
+    state = {"masked": finetune_fn is None and quant_fn is None and _maskable(base_cfg)}
+
+    def _copy_trial(cfg) -> Tuple[float, int]:
+        cfg.copy_model = True
+        pruned = AutoPruner(cfg)(model, data=data, batch_adapter=batch_adapter)
+        pa = count_parameters(pruned)
+        if finetune_fn is not None:
+            finetune_fn(pruned)
+        if quant_fn is not None:
+            quant_fn(pruned)
+        return float(quality_fn(pruned)), pa
+
+    def _masked_trial(cfg) -> Tuple[float, int]:
+        """Same measurement without the copy: the cut is masked in, then rolled back."""
+        cfg.copy_model = False
+        with simulate.SimulationSession(model) as session:
+            AutoPruner(cfg)(model, data=data, batch_adapter=batch_adapter)
+            return float(quality_fn(model)), params_before - session.removed_params
+
+    def _fall_back_to_copy(reason: str) -> None:
+        note = f"[{warn_tag}] {reason}; falling back to copy-based trials."
+        LOGGER.logw(note, "amct_prune")
+        state["masked"] = False
+
+    def _run_one(cfg):
+        if state["masked"]:
+            # Either branch flips masked off, so the fallback is logged exactly once
+            # and every later trial goes straight to the copy path.
+            try:
+                return _masked_trial(cfg)
+            except simulate.MaskUnsupported as exc:
+                _fall_back_to_copy(
+                    f"masked trials are not possible for this model ({exc})"
+                )
+            except _TRIAL_ERRORS as exc:
+                # A failure of the masked machinery itself is not a verdict on the
+                # ratio: rejecting it would score a simulation bug as "this ratio
+                # loses too much accuracy". Rerun the same cfg on a real copy; only
+                # copy-path exceptions may reach trial() and reject the ratio.
+                _fall_back_to_copy(
+                    f"the masked trial itself failed ({type(exc).__name__}: {exc})"
+                )
+        return _copy_trial(cfg)
+
     def trial(ratio: float) -> TrialResult:
         cfg = PruneConfig(**_with_ratio(base_cfg, ratio))
-        cfg.copy_model = True
         try:
-            pruner = AutoPruner(cfg)
-            pruned = pruner(model, data=data, batch_adapter=batch_adapter)
-            pa = count_parameters(pruned)
-            if finetune_fn is not None:
-                finetune_fn(pruned)
-            if quant_fn is not None:
-                quant_fn(pruned)
-            q = float(quality_fn(pruned))
-        except (
-            RuntimeError,
-            ValueError,
-            TypeError,
-            AttributeError,
-            KeyError,
-            IndexError,
-        ) as exc:
-            LOGGER.logw(
-                f"[{warn_tag}] ratio={ratio} trial did not complete (not a normal rejection): "
-                f"{type(exc).__name__}: {exc}",
-                "amct_prune",
-            )
-            return TrialResult(
-                ratio, float("-inf"), float("inf"), params_before, 0.0, False
-            )
+            q, pa = _run_one(cfg)
+        except _TRIAL_ERRORS as exc:
+            return _failed_trial(ratio, params_before, warn_tag, exc)
         drop = baseline_quality - q
         return TrialResult(
             prune_ratio=ratio,
@@ -944,22 +1050,23 @@ def _run_menu_mode(
     domain, menu, prune_ratio, common_kwargs, fallback_name = _menu_setup(base_cfg)
 
     params_before = count_parameters(model)
-    baseline_quality, quality, pa_by_name = _menu_measure(
-        model,
-        base_cfg,
-        domain,
-        menu,
-        prune_ratio,
-        common_kwargs,
-        params_before,
-        data=data,
-        evaluator=evaluator,
-        eval_iterations=eval_iterations,
-        eval_batches=eval_batches,
-        batch_adapter=batch_adapter,
-        finetune_fn=finetune_fn,
-        quant_fn=quant_fn,
-    )
+    with _preserve_training_mode(model):
+        baseline_quality, quality, pa_by_name = _menu_measure(
+            model,
+            base_cfg,
+            domain,
+            menu,
+            prune_ratio,
+            common_kwargs,
+            params_before,
+            data=data,
+            evaluator=evaluator,
+            eval_iterations=eval_iterations,
+            eval_batches=eval_batches,
+            batch_adapter=batch_adapter,
+            finetune_fn=finetune_fn,
+            quant_fn=quant_fn,
+        )
     chosen, _fb_q, _gain = _menu_select(quality, fallback_name)
     report, params_after = _menu_apply(
         model,
@@ -1012,6 +1119,40 @@ def _tolerance_search(
     grid, base_cfg, params_before, eval_batches = _prepare_search_inputs(
         model, config, safe_skip_attention, ratio_grid, data, eval_data
     )
+    with _preserve_training_mode(model):
+        return _tolerance_search_body(
+            model,
+            base_cfg,
+            grid,
+            params_before,
+            eval_batches,
+            tolerance,
+            data=data,
+            evaluator=evaluator,
+            eval_iterations=eval_iterations,
+            batch_adapter=batch_adapter,
+            finetune_fn=finetune_fn,
+            quant_fn=quant_fn,
+            apply=apply,
+        )
+
+
+def _tolerance_search_body(
+    model,
+    base_cfg,
+    grid,
+    params_before,
+    eval_batches,
+    tolerance,
+    *,
+    data,
+    evaluator,
+    eval_iterations,
+    batch_adapter,
+    finetune_fn,
+    quant_fn,
+    apply,
+):
     quality_fn, baseline_quality = _resolve_quality(
         model, evaluator, eval_iterations, eval_batches, batch_adapter
     )
@@ -1246,6 +1387,32 @@ def _size_budget_prune(
         target_params,
         budget_scope,
     )
+    with _preserve_training_mode(model):
+        return _size_budget_body(
+            model,
+            setup,
+            data=data,
+            evaluator=evaluator,
+            eval_iterations=eval_iterations,
+            batch_adapter=batch_adapter,
+            finetune_fn=finetune_fn,
+            quant_fn=quant_fn,
+            apply=apply,
+        )
+
+
+def _size_budget_body(
+    model,
+    setup,
+    *,
+    data,
+    evaluator,
+    eval_iterations,
+    batch_adapter,
+    finetune_fn,
+    quant_fn,
+    apply,
+):
     quality_fn, baseline_quality = _resolve_quality(
         model, evaluator, eval_iterations, setup.eval_batches, batch_adapter
     )

@@ -24,6 +24,7 @@ import torch.nn as nn
 
 from ...common.utils.log import LOGGER
 
+from .. import simulate
 from ..config import PruneConfig
 from ..utils import (
     get_submodule,
@@ -344,6 +345,10 @@ class MoEPruningDomain(BasePruningDomain):
         self, model: nn.Module, target: MoETarget, keep_idx: List[int], top_k: int
     ) -> None:
         """Land the prune: actually trim experts by keep_idx (ModuleList rebuild / fused tensor slice)."""
+        session = simulate.active()
+        if session is not None:
+            session.record_moe(model, target, self.num_experts(model, target), keep_idx)
+            return
         if target.fused:
             self._prune_fused(model, target, keep_idx)
         else:
