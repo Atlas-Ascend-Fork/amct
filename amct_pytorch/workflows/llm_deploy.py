@@ -269,6 +269,10 @@ class LlmDeployWorkflow:
                 scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
                 if weight_name.endswith(scale_prefix):
                     continue
+                # NVFP4: scale_inv_name 为 (scale_name, scale_2_name) 元组，
+                # `<name>_scale_2` 不满足 endswith("_scale")，需单独跳过。
+                if isinstance(scale_inv_name, tuple) and weight_name in scale_inv_name:
+                    continue
                 # FP8 -> bf16
                 block_size = self.pipeline.block_size(weight)
                 weight = convert_state_dict(

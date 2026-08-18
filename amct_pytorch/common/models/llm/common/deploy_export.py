@@ -22,7 +22,6 @@ from safetensors.torch import load_file
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
-from amct_pytorch.common.utils.nvfp4_format import is_nvfp4_scale, nvfp4_weight_dequant
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -154,35 +153,6 @@ def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
     return deploy_tensors, tensor_routes
 
 
-def _load_scale(scale_name, original_weight_map, model_dir, loaded_files):
-    file_name = original_weight_map[scale_name]
-    if file_name not in loaded_files:
-        file_path = model_dir / file_name
-        loaded_files[file_name] = load_file(file_path, device="cpu")
-    return loaded_files[file_name][scale_name]
-
-
-def _nvfp4_dequant_or_none(
-    weight, weight_name, original_weight_map, model_dir, loaded_files
-):
-    """Dequantize as NVFP4, or return None when the weight is not NVFP4.
-
-    NVFP4: weight dtype=uint8/int8, shape=[M, N//2];
-           scale dtype=e4m3/uint8, shape=[M, N//16], plus a per-tensor scale_2.
-    """
-    scale_name = f"{weight_name}_scale"
-    scale_2_name = f"{weight_name}_scale_2"
-    if scale_name not in original_weight_map:
-        return None
-    if scale_2_name not in original_weight_map:
-        return None
-    scale = _load_scale(scale_name, original_weight_map, model_dir, loaded_files)
-    if not is_nvfp4_scale(weight, scale):
-        return None
-    scale_2 = _load_scale(scale_2_name, original_weight_map, model_dir, loaded_files)
-    return nvfp4_weight_dequant(weight, scale, scale_2)
-
-
 def convert_state_dict(
     weight,
     weight_name,
@@ -192,38 +162,63 @@ def convert_state_dict(
     loaded_files,
     block_size,
 ):
-    if weight.element_size() != 1:
-        return weight
-    nvfp4_weight = _nvfp4_dequant_or_none(
-        weight, weight_name, original_weight_map, model_dir, loaded_files
-    )
-    if nvfp4_weight is not None:
-        return nvfp4_weight
-    if scale_inv_name not in original_weight_map:
-        logger.warning(
-            f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
-        )
-        return weight
-    scale_inv = _load_scale(
-        scale_inv_name, original_weight_map, model_dir, loaded_files
-    )
-    # HiF4: weight uint8 [M, N/2]; scale uint8 [M, N/64, 4]
-    if (
-        weight.dtype == torch.uint8
-        and scale_inv.dtype == torch.uint8
-        and scale_inv.ndim == 3
-        and scale_inv.shape[-1] == 4
-    ):
-        from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+    if weight.element_size() == 1:
+        try:
+            # NVFP4
+            if isinstance(scale_inv_name, tuple):
+                from amct_pytorch.common.utils.nvfp4_format import nvfp4_weight_dequant
 
-        return hif4_unpack(scale_inv, weight)
-    # MXFP4: weight dtype=int8, shape=[M, N//2]; scale dtype=float32
-    if weight.dtype == torch.int8:
-        return weight_dequant(
-            weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
-        )
-    # FP8 / MXFP8: weight dtype=float8_e4m3fn, shape=[M, N]
-    return weight_dequant(weight, scale_inv, block_size=block_size)
+                scale_name, scale_2_name = scale_inv_name
+                for name in scale_inv_name:
+                    file_name = original_weight_map[name]
+                    if file_name not in loaded_files:
+                        loaded_files[file_name] = load_file(
+                            model_dir / file_name, device="cpu"
+                        )
+                scale = loaded_files[original_weight_map[scale_name]][scale_name]
+                scale_2 = loaded_files[original_weight_map[scale_2_name]][scale_2_name]
+                return nvfp4_weight_dequant(weight, scale, scale_2)
+
+            file_name = original_weight_map[scale_inv_name]
+            if file_name not in loaded_files:
+                loaded_files[file_name] = load_file(model_dir / file_name, device="cpu")
+            scale_inv = loaded_files[file_name][scale_inv_name]
+
+            # HiF4
+            if (
+                weight.dtype == torch.uint8
+                and scale_inv.dtype == torch.uint8
+                and scale_inv.ndim == 3
+                and scale_inv.shape[-1] == 4
+            ):
+                from amct_pytorch.quantization.dtypes.hifp_impl import hif4_unpack
+
+                weight = hif4_unpack(scale_inv, weight)
+
+            # MXFP4
+            elif weight.dtype == torch.int8:
+                weight = weight_dequant(
+                    weight,
+                    scale_inv,
+                    block_size=block_size,
+                    is_mx=True,
+                    is_packed=True,
+                )
+
+            # FP8 / MXFP8
+            else:
+                weight = weight_dequant(
+                    weight,
+                    scale_inv,
+                    block_size=block_size,
+                )
+
+        except KeyError:
+            logger.warning(
+                f"Warning: Missing scale_inv tensor for {weight_name}, skipping conversion"
+            )
+
+    return weight
 
 
 def quant_payload(quant_cls, weight_name, weight, bit):
