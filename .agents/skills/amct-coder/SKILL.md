@@ -1,7 +1,7 @@
 ---
 name: amct-coder
 description: |
-  AMCT 仓源代码编码、实现规划、行为诊断与代码 review 等辅助编码的入口：用于定位 workflow/CLI、solver、dtype、通用 quant module、LLM PTQ 算法、deploy 实现、classic graph、public API、tests、docs 和 examples 的修改落点，检查分层、越层、活跃调用链和上下游契约，并完成相应实现与最小验证。
+  AMCT 仓源代码编码、实现规划、行为诊断与代码 review 等辅助编码的入口：用于定位 workflow/CLI、solver、dtype、通用 quant module、LLM PTQ 算法、deploy 实现、classic graph、public API、tests、docs 和 examples 的修改落点，检查分层、越层、活跃调用链和上下游契约，并完成相应实现与最小验证。不适用于新增或结构性修改模型 adapter/wrapper/attention/MLP/MoE（转 $model-adapter）、Ascend C kernel/PyTorch C++ extension/schema/Meta/CMake（转 $amct-ops-dev）、实际运行量化或评测及生成 deploy 交付产物（转 $quant-workflow / $quant-run / $deploy-export）；评审已有文件或拟议落点是否越层仍使用本 skill。
 ---
 
 # AMCT Coder

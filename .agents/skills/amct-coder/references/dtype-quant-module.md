@@ -26,6 +26,10 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 8. deploy config 的 qtype/format/block size、blockwise/tensorwise 支持范围和下游消费者。
 9. 是否需要 NPU kernel；需要时保留 Python 语义基线并转 `amct-ops-dev` 实现硬件算子。
 
+### 既有语义复用门
+
+冻结新名字前，先用数值格式、block/group 粒度、packing layout、scale 语义和 weight/activation 适用范围，与现有 INT、MXFP、experimental dtype 逐项比较。若目标数值语义已被现有实现覆盖，优先选择零改动、公开别名或复用现有 registry/消费分支；只有至少一项真实语义或用户契约不同，才新增 dtype 类和 deploy format。名称不同、产品称谓不同或题目说“基于 INT4 扩展”都不能单独证明需要新 dtype。
+
 ## 按动作选择源码锚点
 
 | 当前动作 | 首轮锚点 | 契约成立后再读 |
@@ -62,6 +66,24 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 8. 若模型侧显式依赖 dtype 选择 cache/layout，先做兼容性 review；需要模型专属结构实现时转 `model-adapter`。
 9. 若需要 NPU 加速，Python 路径继续作为语义参考或 fallback，上层软依赖由 `ops-boundary` 处理。
 
+## 消费面强制收口
+
+新 dtype 的计划、实现 review 和最终说明必须逐项填写下表。状态只能是 `supported`、`rejected` 或 `not applicable`，每项给出源码调用方或直接测试；不得用“已注册”代替下游消费证据。
+
+| 消费面 | 需要证明的内容 |
+| --- | --- |
+| registry/import | 注册名、导入链、重复注册和未知名称行为 |
+| CLI | `--quant_dtype` choices/help 与 registry 一致，命令能选择该值 |
+| bit policy/config | weight、activation、cache 各 role 的合法 bit/粒度组合及拒绝行为 |
+| weight quantizer | fake/real quant、algorithm hook、16-bit 直通和 payload |
+| activation quantizer | dynamic/static 语义、shape/粒度、16-bit 直通；不支持时入口显式拒绝 |
+| blockwise deploy | dtype payload、tensor 命名、index 和 `quantization_config` 的消费者 |
+| tensorwise deploy | 精确 dtype 分支、packing/layout、scale/bias shape 的消费者 |
+| algorithm compatibility | 每个显式 dtype 分支支持、拒绝或 fallback，不按搜索命中盲改 |
+| model-specific branches | 精确名称判断是否需要扩展；无影响时标记 `not applicable` |
+
+若任一 `supported` 项只有定义文件而找不到活跃调用方，降级为未接通并继续定位；若一个消费面按产品契约不支持新 dtype，应在最上游稳定入口拒绝并补测试，不能依赖下游偶然报错。
+
 ## 测试矩阵
 
 | 层 | 最小断言 |
@@ -79,9 +101,11 @@ PRODUCE：`DTYPE_REGISTRY` 条目、quantizer 实例化接口、`export_deploy()
 ## BLOCKER
 
 - 数值格式或适用范围未冻结，却按名称臆造实现语义或最终落点。
+- 未比较现有 INT/MXFP/experimental 数值语义，仅因新名称重复创建等价 dtype。
 - 新 dtype 未进入 `register_dtype()`，或 CLI/bit policy 允许框架实际不支持的组合。
 - activation 误走 weight real-quant/packing 逻辑，或 `bits == 16` 不再直通。
 - `export_deploy()` 字段、packing/layout 与 deploy 写入、index/config 或下游反量化不一致。
+- 消费面状态写为 `supported`，但只有类/函数存在证据，没有实际 registry、CLI、quantizer 或 deploy caller。
 - 仅因 `rg quant_dtype` 命中就修改所有 algorithm/adapter，或在通用 dtype/module 中写模型名分支。
 - NPU kernel 没有 Python 语义基线/软依赖边界，或把 kernel/C++ 实现留在本子能力。
 

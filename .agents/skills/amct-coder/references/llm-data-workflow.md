@@ -70,6 +70,24 @@
 
 “兼容旧 tensor-only 目录”不等于为新必填字段静默填空。允许的兼容结果必须明确是继续读取、带可见降级读取，还是报错并提示重新 extract。unit 主输入缺失默认 fail-fast；若产品确需跳过，这会改变输出模型语义，必须先冻结显式 opt-in、结果缺失标记、eval/deploy 回载行为和用户可见接口，不能在规划中自行发明参数名。
 
+## 复合 unit / 联合校准门禁
+
+让 attention、MLP 或其它多个目标进入同一个校准 forward，不是简单放宽 `quant_target` 数量，也不能从“完整 block 可 forward”推导数据通路已经成立。形成确定实现前，必须提交以下 producer/consumer 对照：
+
+| 契约 | 生产者 | 消费者 | 必须核对 |
+| --- | --- | --- | --- |
+| CLI target | parser/配置 | extract、PTQ、eval、deploy | choices、组合/互斥规则、参数目录映射一致 |
+| wrapper 注入 | model adapter | quant block / unit | 所有联合目标都真实命中，不能只新增一个字符串 |
+| `PtqUnit` | adapter `iter_ptq_units()` | provider、solver、param store | `kind/name/layer_idx/module/save_name` 完整且命名可回载 |
+| unit inputs | extract hook | provider / unit forward | 捕获点在 norm 前还是 norm 后；完整 block 不得重复执行已消费的 norm |
+| kwargs | adapter 捕获 + I/O | provider / forward | attention mask、position 等逐 sample 与 batch 同步切分 |
+| GT | `materialize_gt()` | reconstruction loss | 关闭量化、observe 副作用、输出边界与联合 module 一致 |
+| result | solver/finalize | param store、eval、deploy | 单文件还是拆分文件；重建相同 wrapper 与 algorithm 结构 |
+
+当前 extract/PTQ 只支持单个 `quant_target`。新增类似 `joint` 的单个字符串仍需核对 CLI choices、adapter 分派和目录消费者；删除 `len(...) != 1` 检查本身不能建立联合语义。若捕获的是目标 norm 输出，把它直接作为完整 decoder block 输入会再次执行 norm，必须改用 block 原始输入或定义不会 double norm 的复合 module。
+
+联合与分开校准的精度对照必须保持最终量化集合、dtype/bit policy、样本、block 范围、`seq_len` 和 eval 参数一致。“只量化 attention”与“只量化 MLP”只能做消融，不能替代“分别校准后两者均量化”的公平基线。实验执行和结论分别转对应 workflow skill；本手册只检查实现与计划中的口径。
+
 ## 数据流
 
 extract:
@@ -113,6 +131,9 @@ eval:
 - kwargs 格式契约未冻结，却先确定通用 dict、版本标记、文件布局或 CLI 名称。
 - per-sample kwargs 没有与输入同步切 batch，而是整份回放到每个 batch。
 - `materialize_gt()` 未关闭量化或 observe 状态不对。
+- 复合 unit 只增加 target 名或放宽长度检查，没有同时闭环 wrapper 注入、输入捕获、kwargs、GT、保存和回载。
+- norm 输出被当作完整 block 原始输入，导致 forward 重复执行 norm。
+- 联合与分开方案的最终量化模块集合不同，却直接比较并归因于联合校准。
 - eval 和 PTQ 使用不同 `seq_len` 却直接比较结论。
 - workflow 中加入模型专属 hook 名或结构分支。
 
@@ -120,5 +141,6 @@ eval:
 
 - workflow 逻辑：`pytest tests/unit_test/workflows/test_llm_eval.py tests/unit_test/workflows/test_llm_extract_ptq_data.py tests/unit_test/workflows/test_llm_ptq.py`。
 - 数据 I/O：`pytest tests/unit_test/common/datasets/test_ptq_io.py tests/unit_test/common/datasets/test_ptq_provider.py`。
+- 复合 unit：覆盖 parser/target 分派、block 原始输入、per-sample kwargs 切批、GT observe 状态、保存回载和公平对照配置。
 - PPL：`pytest tests/unit_test/common/evaluate/test_eval_ppl.py`。
 - 真实模型路径受环境限制时，最终回复明确未跑原因。

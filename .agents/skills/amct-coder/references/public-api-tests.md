@@ -34,6 +34,20 @@
 5. docs/examples 只在用户使用方式变化时更新，并保持命令与当前 build/install 规则一致。
 6. 补 public API、packaging、CLI entrypoint 或 docs/example smoke 的最小测试。
 
+## 用户目标到 CLI/config 的口径门
+
+用户用自然语言描述精度、位宽或量化范围时，不能直接映射到名称相近的现有命令。计划、review 和 docs/example 必须展开并核对：
+
+| 用户口径 | 必须证明的配置事实 |
+| --- | --- |
+| FP16 / BF16 baseline | CLI 是否精确支持该计算 dtype；只支持 `eval_mode=bf16` 时不能把结果称为 FP16，必须显式报告差异 |
+| weight-only | bit policy 中所有 activation/cache role 保持 16 bit 或未量化，只有目标 weight role 低于 16 bit |
+| W4A4 | weight 与 activation role 都是 4 bit，不能描述成 INT4 weight-only |
+| INT4 / MXFP4 等 dtype | `quant_dtype`、bit policy、algorithm 和 deploy route 的组合全部受支持，而不是只匹配位宽 |
+| baseline vs quant | 模型、数据集、`seq_len`、block 范围和除量化配置外的 eval 参数一致 |
+
+当前 LLM CLI 的 baseline 入口是否只有 BF16、位宽是否只由 `--bit_config` 表达、target/dtype choices 是否接受拟议值，都以本轮 `args.py` 和 parser 测试为准。CLI 无法精确表达用户要求时，只读规划明确列出支持口径与请求口径的差异；实际编码若要新增用户可见选择，先冻结兼容性和默认行为。不要用不存在的 `--w_bits` / `--a_bits` 或名称相近的参数拼出示例命令。
+
 ## 五种导入与导出契约
 
 以下行为相互关联但不等价，review 和测试必须逐项说明实际承诺了哪一种：
@@ -105,6 +119,8 @@ graph_based 名字通过 `__getattr__` 可达，不表示它已经进入顶层 `
 - 把顶层属性可达误写成已进入顶层 `__all__`，或忽略 wildcard import 对懒加载/可选依赖的影响。
 - 源模块新增 public API 但顶层不可达。
 - CLI 参数帮助、choices 与实际 registry 不一致。
+- FP16/BF16、weight-only/W4A4 或 dtype/bit policy 口径不一致，却在命令、文档或精度比较中当作同一配置。
+- 示例命令使用当前 parser 不存在的参数，或未证明 bit policy 中每个 role 与用户目标一致。
 - helper 身份或稳定 I/O 未确认，却据候选 helper 固定 CLI 参数、输出格式或退出码。
 - 构建产物或 generated staging 被提交。
 - 测试只覆盖 import，不覆盖注册/行为。
@@ -113,5 +129,6 @@ graph_based 名字通过 `__getattr__` 可达，不表示它已经进入顶层 `
 
 - `pytest tests/unit_test/test_public_api.py tests/unit_test/test_packaging.py`
 - CLI 改动：`pytest tests/unit_test/cli/test_llm_module_entrypoints.py`
+- 精度/位宽口径：增加 parser + `BitPolicy` 断言，逐 role 证明 baseline、weight-only 或 W4A4 的实际配置。
 - 涉及懒加载或顶层 `__all__`：分别覆盖普通 import 不加载可选依赖、属性访问解析、wildcard import 行为、源模块与顶层 `__all__` 声明。
 - 构建脚本改动：至少 `bash build.sh --help`，必要时 `bash build.sh --torch`。

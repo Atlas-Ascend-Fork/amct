@@ -352,7 +352,7 @@ CLI args
 
 `amct-coder` 当前定位为 AMCT 仓源代码编码、实现规划、行为诊断与代码 review 等辅助编码的入口，负责把通用 Agent 能力约束到仓库真实边界和活跃调用链。它要解决的是：
 
-1. 先根据用户动作和当前已发现 Skill 的职责判断任务归属，不与模型适配、NPU 算子、量化执行、结果判读或 deploy 交付等专门流程竞争。
+1. 先根据用户动作和当前已发现 Skill 的职责判断任务归属；frontmatter 同时写正向范围和高歧义负向边界，不与模型适配、NPU 算子、量化执行、结果判读或 deploy 交付等专门流程竞争。
 2. 每份 Reference 在主 `SKILL.md` 的 Reference 导航表中就近声明自己的加载时机，不设中间层的任务类型矩阵；`project-rules.md` 与 `validation.md` 在各自文件开头也直接写出加载条件。
 3. 除只检查风格、版权、贡献门槛和模板的纯规范合规 review 外，都先读取 repo-map 最小边界切片并抽查源码锚点，区分稳定架构契约与当前行为事实。
 4. 从完整 Reference 索引中选择一个粗粒度主场景；多个场景冲突时按动作、入口、被修改契约和活跃调用方裁决。
@@ -395,7 +395,7 @@ CLI args
 
 修改 eval/deploy 等实现代码仍可由 `amct-coder` 承接；运行命令、判读结果或生成交付产物属于对应操作流程。混合任务按职责拆分，完成后统一核对上下游契约并汇总。
 
-外部 Skill 在主入口只保留四处：§定位一句「实际加载而非口头委派」、§1 判归属、§全局 BLOCKER 中 `model-adapter` 与 `amct-ops-dev` 两道自我围栏、`delegation.md` 的入口。围栏约束的是 `amct-coder` 自己不越界，不是管辖已经路由出去的流程。
+外部 Skill 名只保留在首次路由真正需要的位置：frontmatter 的高歧义负向边界、正文职责判断和全局自我围栏、`delegation.md` 的交界说明。frontmatter 必须与专门 Skill 的肯定触发项对称；围栏约束的是 `amct-coder` 自己不越界，不是管辖已经路由出去的流程。
 
 BLOCKER 只阻止错误落点或错误方案。正确替代路径明确、仍在用户目标和授权范围内时继续执行；只有缺少会改变实现方案的关键契约或授权时才询问用户。该语义只在 `SKILL.md` §全局 BLOCKER 定义一次。
 
@@ -408,7 +408,6 @@ BLOCKER 只阻止错误落点或错误方案。正确替代路径明确、仍在
 | `project-rules.md` | 修改代码前，或做规范合规 review 时读取；只做规划、诊断或代码行为 review 时不读 |
 | `validation.md` | 实际编码在修改后读取并执行匹配的最小验证；只做规划或 review 时按需读取相关部分 |
 | repo-map + 主场景手册 | 由 `SKILL.md` §2 规定：除纯规范合规 review 外都要先声明边界 |
-| `contribution-flow.md` | 不在主入口导航表中，由 `project-rules.md` 在实际操作 Issue/PR 前引出 |
 
 “纯规范合规 review”只检查代码风格、版权、贡献门槛和模板等规则，定义写在 `SKILL.md` §2 开头。结论一旦涉及实现行为、架构落点、调用链或上下游契约，就不再是纯合规检查，必须回到 §2 补齐资料。
 
@@ -416,7 +415,7 @@ repo-map 是稳定架构契约，源码和测试是当前行为事实。两者�
 
 #### 3. Reference 导航与多场景裁决
 
-主 `SKILL.md` 列出从本入口直接进入的 Reference（当前 17 份），并标注类型、用途和加载时机；`contribution-flow.md` 由 `project-rules.md` 引出，不占导航位。索引只保证可发现性，不表示所有文档是平级子能力，也不表示一次性全部读取。主场景只保留 dtype/quant module、LLM 算法、模型层、数据/workflow、solver/参数、deploy 实现、classic、ops Python 边界和 public API 等粗粒度用途；具体触发、源码锚点、执行步骤和 BLOCKER 留在各自 Reference。
+主 `SKILL.md` 列出从本入口直接进入的 Reference（当前 17 份），并标注类型、用途和加载时机。当前不存在额外的 `contribution-flow.md`；GitCode 操作规则由 `project-rules.md`、仓库模板和对应专门 Skill 共同闭环。索引只保证可发现性，不表示所有文档是平级子能力，也不表示一次性全部读取。主场景只保留 dtype/quant module、LLM 算法、模型层、数据/workflow、solver/参数、deploy 实现、classic、ops Python 边界和 public API 等粗粒度用途；具体触发、源码锚点、执行步骤和 BLOCKER 留在各自 Reference。
 
 多个主场景同时可能命中时：
 
@@ -443,7 +442,7 @@ repo-map 是稳定架构契约，源码和测试是当前行为事实。两者�
 
 #### 5. 阶段影响与渐进加载
 
-阶段只描述 LLM 数据流影响，不决定代码职责归属。classic、ops 和纯 public API/packaging 标记为“不适用”；dtype、quant module 和算法等横向能力可以同时影响多个阶段，不强行选择单阶段。
+阶段只描述 LLM 数据流影响，不决定代码职责归属。classic、ops 和纯 public API/packaging 标记为“不适用”；dtype、quant module 和算法等横向能力可以同时影响多个阶段，不强行选择单阶段。命中阶段检查时，eval、extract、ptq、deploy 均须标记 `affected` 或 `not applicable`；受影响阶段必须列出活跃入口、输入、状态/产物、消费者、兼容行为和证据等级。
 
 默认上下文预算为：repo-map 最小切片 + 1 个主 playbook + 首轮 2～4 个源码/测试锚点；实际编码再加项目规范。辅助 Reference 默认最多 1 份，项目规范和验证规则不计入主场景资料预算。纯规范合规 review 和已路由到外部专门 Skill 的任务不套用这份行为分析预算。真实跨契约任务按数据流分批加载，每批重新判断是否已经满足停止条件。预算用于防止预读，不用于阻止完成任务；必须超出时说明触发扩张的冲突或缺失证据。
 
@@ -488,7 +487,7 @@ repo-map 是稳定架构契约，源码和测试是当前行为事实。两者�
 
 当前 `SKILL.md` 保持为短入口，主体结构为：
 
-1. 正向 frontmatter：描述 AMCT 源码编码、实现规划、行为诊断和代码 review 的触发范围。
+1. 正负向 frontmatter：描述 AMCT 辅助编码的触发范围，并在首次选择阶段排除模型结构实现、NPU 算子实现和实验/交付操作；已有落点 review 保留在本 skill。
 2. 定位与固定流程：职责归属 -> 声明边界并选主手册 -> 源码证据 -> 交付与验证，共 4 步，与正文章节对应。
 3. 职责判断：实现与操作流程分离，命中专门 Skill 时实际切换并继续；路由之后不再规定其加载和交付。
 4. 事实门禁与契约缺失处理：规定什么时候自查、什么时候给条件分支、什么时候询问，以及有证据时才推荐。
@@ -513,6 +512,6 @@ repo-map 是稳定架构契约，源码和测试是当前行为事实。两者�
 7. 是否区分函数存在、单测覆盖、集成闭环和真实环境验证。
 8. 是否只在 LLM workflow、阶段产物和跨阶段契约变化时加载阶段影响规则。
 9. 是否应用读取预算和停止条件，避免为了穷举目录而扩张上下文；预算是否仍被表述为软目标而非硬上限。
-10. 外部 Skill 职责是否来自当前 metadata，没有在 amct-coder 内复制完整动态清单；主入口提及外部 Skill 的位置是否仍限于判归属、自我围栏和 `delegation.md` 入口，没有管辖已路由出去的流程。
+10. 外部 Skill 职责是否来自当前 metadata，没有在 amct-coder 内复制完整动态清单；frontmatter 负向边界是否与高歧义专门 Skill 的肯定触发项对称，且没有管辖已路由出去的流程。
 11. `SKILL.md`、Reference、当前设计和迭代记录是否各自承担唯一职责，同一条加载条件是否只有一份正文。
 12. forward-test 是否使用物理隔离的新会话，Prompt、答案和评分材料是否对被测 Agent 隔离。

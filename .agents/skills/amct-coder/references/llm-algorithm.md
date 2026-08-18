@@ -38,6 +38,41 @@
 7. 若 eval/deploy 需要复现训练态，检查 `--algos`、参数文件和回载路径是否能构建出相同模块结构。
 8. 补 registry、算法本体、quantizer 分流、solver 或 deploy 的最小测试。
 
+## 算法执行形态与阶段状态机
+
+新算法在确定 workflow 或 solver 改动前，先按真实执行语义归入一种形态；算法名称不能替代该判断：
+
+| 执行形态 | 数据驱动 | 状态变化 | 完成动作 |
+| --- | --- | --- | --- |
+| trainable | solver 遍历 batch 并执行 forward/backward | optimizer 更新 `trainable_params()` | 训练结束后导出参数 |
+| observe-only | 已明确的 workflow/module forward 遍历样本 | 只更新统计 buffer，不修改待量化权重 | 统计状态直接供后续量化或导出 |
+| observe-then-finalize | 已明确的观察阶段遍历样本 | 先更新统计状态，再一次性修改权重或生成优化状态 | 显式 finalize/post-calibration hook |
+
+对 observe-only 或 observe-then-finalize，规划和实现必须给出下表，不能只写“增加 calibration pass”或“solver 自动触发”：
+
+| 阶段 | 必须核对的事实 |
+| --- | --- |
+| GT 生成 | quant/observe 开关的真实状态；是否允许更新统计；是否会修改权重或污染浮点 GT |
+| 样本遍历 | 由 workflow、solver 还是 module forward 驱动；遍历次数、开始/停止条件和重复进入语义 |
+| 一次性优化 | 精确 caller、触发时机、输入状态、幂等性和失败行为 |
+| fake/real quant | 统计前后调用哪个权重；优化权重是否再次被普通 fake quant 覆盖 |
+| 保存 | 活跃 caller 最终取得哪些 buffer/权重/scale/offset；不能只引用未接通 helper |
+| eval/deploy | 用什么 `--algos` 和参数重建结构；回载后哪个 hook 消费状态 |
+
+当前源码需要特别复核三点：`QuantLinear.forward()` 的非 eval 分支会调用 `WeightQuantizer.observe_input()`；`LlmPtqWorkflow._prepare_unit_batch()` 生成 GT 时关闭量化但开启 observe；`BlockwiseSolver.solve()` 在没有 trainable 参数时于遍历 dataloader 前返回。因此，一次性统计算法若没有额外已接通的驱动和 finalize 调用，不能声称现有 PTQ 流程能够完成统计优化。
+
+## 统计与决策型能力
+
+敏感度评分、自动跳层或其它“统计后决策”能力不能只定义一个 score。形成 workflow 接口前必须冻结：
+
+1. score 的原始输入；activation error 必须说明浮点/量化成对输出如何取得，Hessian/Fisher 必须说明统计或梯度来源。
+2. 一个 unit 内多个 algorithm、transform 或 linear 的聚合规则，以及 layer/model 范围内阈值、排序或预算的作用域。
+3. 决策结果的数据结构、确定性、分布式一致性和保存/回载格式。
+4. 决策的执行者；algorithm 产生统计或决策状态，solver 不按模型结构自行猜测 unit，workflow 只有在通用 skip 契约冻结后才执行。
+5. “跳过”的数值语义：保持浮点、回退 direct quant、跳过 PTQ 优化但仍量化，三者不能混写。
+
+skip/partial result 的文件、续跑、strict load、eval 和 deploy 行为按 `ptq-solver-params` 检查。在这些契约冻结前，只给条件式计划，不发明通用阈值参数或把“跳过 `solver.solve()`”表述为跳过量化。
+
 ## 契约未冻结时的早停
 
 新算法的名称和业务目标不等于实现契约。下列任一项尚未确定且会改变实现时，只做只读规划：
@@ -85,8 +120,11 @@ classic path 只认 `AlgorithmRegistry`，规则见 [classic-graph.md](classic-g
 - 未命名的新算法继承了前序任务的具体名称、状态或 payload 契约。
 - `register_algorithms()` 没导入，导致运行时不可选。
 - 有 trainable 参数但 `trainable_params()` 返回空。
+- observe-only / observe-then-finalize 算法没有明确的数据驱动者、observe 开关或完成 hook，却假设现有 solver 会遍历数据并触发优化。
+- GT 生成阶段会更新统计或权重，但没有证明该副作用不会污染目标或重复计数。
 - 保存了 PTQ 参数但没有 `load_ptq_params()`。
 - 统计 buffer 没进入 `export_ptq_params()`，eval/deploy 无法复现训练态。
+- 敏感度 score 没有输入与聚合契约，或把跳过 solver 等同于保持浮点。
 
 ## 自验
 
@@ -94,4 +132,6 @@ classic path 只认 `AlgorithmRegistry`，规则见 [classic-graph.md](classic-g
 - 算法自身：新增/更新 `tests/unit_test/algorithms/test_<algo>.py`。
 - 分流与 quantizer：`pytest tests/unit_test/quantization/modules/test_quant_base.py`。
 - 涉及 solver 训练：`pytest tests/unit_test/common/optimization/test_blockwise_solver.py`。
+- 涉及统计/一次性优化：覆盖 GT 阶段不污染、observe 次数、无 trainable 参数的数据遍历、finalize 幂等和保存回载。
+- 涉及敏感层/跳层：覆盖 score 聚合、决策持久化、续跑、strict load、eval/deploy 的一致语义。
 - 涉及 deploy hook：`pytest tests/unit_test/workflows/test_llm_deploy.py`。

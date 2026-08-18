@@ -28,13 +28,25 @@
 ## 最小静态验证
 
 - Python 语法：`python -m py_compile <files>`。
-- Python 风格：对本次改动文件运行仓库 Ruff 配置对应的检查和格式化。
+- Python 风格：按 `.pre-commit-config.yaml` 的 `ruff-check --fix` 与 `ruff-format` hook，对本次改动文件运行 `ruff check --fix <changed files>` 和 `ruff format <changed files>`；格式选项来自 `pyproject.toml` 的 `[tool.ruff.format]`。
 - pre-commit：准备提交且环境未就绪时，先运行 `python -m pip install pre-commit` 和 `pre-commit install`；再运行 `pre-commit run --files <changed files>`。**不要用 `--all-files`**，避免全仓存量问题掩盖本次改动信号。
 - C/C++：用仓库 `.clang-format` 检查或格式化本次改动文件。
 - 版权：检查新增代码包含仓库既有的 Apache 2.0 版权声明，现有版权头未被删除或破坏。
 - public API：跑静态 API 测试。
 
 本节只定义修改后的检查动作。代码风格、版权和贡献要求必须已在修改前按 [project-rules.md](project-rules.md) 建立约束，不能等运行本节时才首次得知。
+
+## Skill / Reference 自验
+
+修改 `.agents/skills/amct-coder/` 时，除 Markdown 静态检查外执行：
+
+1. 使用当前客户端 `skill-creator` 的 `scripts/quick_validate.py .agents/skills/amct-coder` 校验 frontmatter、名称和基本结构。
+2. 解析 `SKILL.md` 与 reference 内部 Markdown 链接，确认目标存在；核对导航表中的直接 reference 与实际设计一致。
+3. 为命中的单 reference 保留正常题、边界路由题、未知契约题和伪活跃调用链题；跨 reference 至少覆盖 dtype+deploy、algorithm+solver、data+adapter、model+external skill 中受本次修改影响的组合。
+4. cold 与 warm forward-test 分开。cold 测试使用物理隔离的新会话，只投喂原始用户题目和可发现 skill，不泄露预期答案、诊断或 reviewer 材料。
+5. 原始 prompt、Agent 输出和 reviewer 评分分文件保存，记录源码 commit、实际读取资料、测试模式和 rubric；不要把审查结论追加进被测 Agent 可读取的答案文件。
+
+`quick_validate.py`、链接检查和 `git diff --check` 只证明结构静态有效，不能替代 forward-test。当前工作区含测试答案或预期结论时，明确标记 cold 测试未执行，不用同会话重跑冒充独立行为证据。
 
 ## 越界自查
 

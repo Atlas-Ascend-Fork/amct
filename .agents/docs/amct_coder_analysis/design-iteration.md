@@ -988,3 +988,164 @@ repo-map 不需要更新：本轮只调整 Agent 文档的导航和读取时机�
 - 未运行 AMCT Python/C++ 单测：本轮只修改 Agent Markdown 与设计文档。
 - 未执行 forward-test：当前工作区含历次设计和旧测试答案，不满足 cold 隔离条件。待验证行为包括纯规范合规 review 不读 repo-map、未命中手册的任务先确认落点、review 类请求仍能触发本 skill。
 - repo-map 不需要写回：未改变 AMCT 源码分层或核心流程，不满足其§更新规则任一条件。
+
+## 21. 第十二轮审视：有 Skill 测试暴露的子能力闭环缺口
+
+本轮对 `.agents/docs/test-skill.md` 的六题回答做静态审查，并与 `test-noskill.md`、`amct-coder/SKILL.md`、现存 17 份 reference 及当前源码锚点交叉核对。评估参赛回答时只取 `test-skill.md` 第 1～486 行；第 487 行之后是后附审查结论，不作为 Agent 原始回答的一部分。
+
+有 Skill 版本已经改善分层、registry、职责边界和验证矩阵意识，但仍不足以判通过。问题不在所有子能力都缺少内容：`dtype-quant-module`、`llm-algorithm`、`llm-data-workflow`、`ptq-solver-params` 已有较好的局部骨架；主要缺口是这些规则没有形成跨 algorithm、data、solver、save/load、eval/deploy 的强制收口，Agent 因而能引用正确局部概念，同时给出不成立的端到端方案。
+
+本节只记录发现、源码证据和拟定改法，不含实施结果。
+
+### 21.1 P0：算法状态生命周期没有闭环
+
+`llm-algorithm.md` 当前要求训练型算法提供 `trainable_params()`，统计型算法使用 buffer 并实现导出/加载，但没有定义一次性统计优化算法的完整状态机：
+
+1. observe 由谁在何时开始和停止。
+2. GT 生成阶段是否允许 observe，如何避免统计或权重变化污染浮点目标。
+3. 统计完成后由谁触发一次性权重优化，以及该动作是否幂等。
+4. 无 trainable params 时由谁驱动 dataloader；不能假设现有 solver 会自然遍历数据。
+5. fake quant、real quant、统计状态和优化后权重之间的先后关系。
+6. 优化后的权重、scale/offset 或其它状态如何保存、回载并被 eval/deploy 消费。
+
+当前源码事实直接反证测试 4 的 GPTQ 数据流：
+
+- `QuantLinear.forward()` 在非 eval 分支已经调用 `weight_quantizer.observe_input(hidden_states, weight)`。
+- `LlmPtqWorkflow._prepare_unit_batch()` 生成 GT 时关闭 weight/activation quant，同时显式开启 observe。
+- `BlockwiseSolver.solve()` 在没有 trainable 参数时于遍历 dataloader 前直接返回。
+
+因此不能只增加 calibration pre-pass，再假设 solver 会触发一次性优化。拟在 `llm-algorithm.md` 增加“算法执行形态与阶段状态机”，要求对 trainable、observe-only、observe-then-finalize 三类形态逐阶段填写状态、触发者、副作用、持久化和失败行为；在 `ptq-solver-params.md` 对应增加无 trainable 参数时的执行归属门禁。
+
+### 21.2 P0：helper 存在与活跃保存链被混淆
+
+`ptq-solver-params.md` 当前描述 `PtqParamHandler.export_unit()` 的递归导出语义，但没有同时指出训练工作流的活跃保存链。当前 `LlmPtqWorkflow._run_blockwise()` 实际执行：
+
+```text
+solver.solve(unit_batch.data_loader)
+  -> solver.finalize()
+  -> _save_unit_result(unit, unit_result)
+```
+
+`BaseSolver.finalize()` 只调用当前 unit module 自身的 `export_ptq_params()`，否则导出 `requires_grad` 参数；`_save_unit_result()` 直接 `torch.save(result)`。`PtqParamHandler.export_unit()` 虽然存在并支持递归子模块，但没有被这条训练保存链调用。
+
+这导致测试 1、5 把“存在递归 helper”误写成“训练保存已递归闭环”。拟在 `ptq-solver-params.md` 显式列出训练保存、eval/deploy 回载两条活跃链，要求每次保存方案回答 caller、结果对象、文件命名、回载消费者和严格性；未找到 caller 的 helper 必须标记为未接通，不得作为行为证据。
+
+### 21.3 P0：缺少 composite unit / joint calibration 门禁
+
+现有 `llm-data-workflow.md` 只记录 extract/PTQ 当前为单 `quant_target`，`ptq-solver-params.md` 的 granularity 表也主要面向新 solver/granularity，尚不能约束 Attention+MLP 复合 unit。联合校准计划至少必须逐项闭环：
+
+- CLI `quant_target` choices 与 PTQ 参数目录映射。
+- adapter 是否同时注入 attention 和 MLP wrapper。
+- `PtqUnit` 的 `kind`、`name`、`layer_idx`、`module`、`save_name` 语义。
+- capture 是 decoder block 原始输入还是 norm 输出，避免把 norm 输出再次送入完整 block。
+- inputs、per-sample kwargs、GT 与 batch 的对齐方式。
+- 是否真的需要新 solver，还是现有 solver 已能消费复合 module。
+- finalize 如何拆分或聚合保存，eval/deploy 如何用一致结构回载。
+- 公平对照必须比较“分开校准后 attention 与 MLP 均量化”和“联合校准后两者均量化”，不能拿单独只量化一侧的结果代替。
+
+拟在 `llm-data-workflow.md` 增加复合 unit 的 producer/consumer 契约，在 `ptq-solver-params.md` 增加 joint solve/save/reload 门禁，并把以上任一未冻结项列为条件式规划而非确定实现。
+
+### 21.4 P1：已有规则缺少强制消费面证据
+
+`dtype-quant-module.md` 已覆盖 registry、CLI、bit policy、quantizer、deploy 和 algorithm compatibility，但测试 2 仍只规划 dtype 文件和注册导入，遗漏 CLI 与 tensorwise deploy。这说明当前内容是建议性步骤，没有要求最终交付逐项出示结论。
+
+拟增加固定消费面状态表。每个新 dtype 必须对下列项目逐项标记 `supported`、`rejected` 或 `not applicable`，并给出源码或测试证据：
+
+```text
+registry / CLI / bit policy / weight quantizer / activation quantizer /
+blockwise deploy / tensorwise deploy / quantization_config /
+algorithm compatibility / model-specific exact branches
+```
+
+同时增加既有语义复用门：若目标格式已被现有 MXFP4 或其它 dtype 覆盖，优先零改动、别名或复用现有分支，不能仅因名称不同重复创建 dtype。
+
+### 21.5 P1：敏感层与自动跳层语义没有归属
+
+测试 3 暴露的未定义项包括：浮点/量化成对输出如何取得；Hessian/Fisher 的梯度或统计来源；多个 transform/linear 的 score 如何聚合到 unit/layer；阈值或排序作用域；跳过 `solver.solve()` 后 quant block 是否仍保持量化；跳层如何写入 PTQ 参数、strict load、eval 和 deploy；跳层是保持浮点还是回退 direct quant。
+
+拟由 `llm-algorithm.md` 定义“统计与决策型能力”的输入、聚合和决策输出，由 `ptq-solver-params.md` 定义 skip/partial result 的保存、回载和续跑生命周期。暂不新增独立 reference，避免把同一状态机再拆散。
+
+### 21.6 P1：skill 路由触发面仍有缺口
+
+`amct-coder` frontmatter 只有辅助编码范围的正向描述；客户端选择 skill 时正文尚未加载，因此正文中的模型 adapter、NPU kernel 和实验流程围栏无法参与首次路由。`model-adapter` 的 description 已明确把新增模型、`PtqUnit` 和模型专属 attention/MLP wrapper 列为肯定触发项，两者在触发面不对称。
+
+拟在 `amct-coder` description 直接补三类负向边界，并保留“评审已有落点是否合理”仍属于 `amct-coder` 的例外：
+
+- 新增或结构性修改模型 adapter/wrapper/attention/MLP/MoE -> `model-adapter`。
+- Ascend C kernel、PyTorch C++ extension、schema/Meta/CMake -> `amct-ops-dev`。
+- 实际运行量化/评测或生成 deploy 交付产物 -> `quant-workflow`、`quant-run`、`deploy-export`。
+
+### 21.7 P1：自然语言目标到 CLI/config 缺少一致性门
+
+测试 6 把用户要求的 FP16 baseline 实际写成 `eval_mode=bf16`，又把“INT4 权重量化”配置成 W4A4。现有 reference 没有要求把自然语言目标展开成 CLI 可执行语义并逐 role 核验。
+
+拟在 `public-api-tests.md` 增加用户目标到配置的口径门：FP16 与 BF16 不得静默互换；weight-only 必须证明所有 activation role 为 16 bit；W4A4 不得描述为 INT4 weight-only；CLI 不支持用户要求的精度或组合时必须显式报告差异，按只读规划保留条件分支或在实际编码前确认契约。
+
+### 21.8 P1/P2：reference 测试体系与静态一致性不足
+
+六题属于跨契约压力测试，不能证明全部 reference 自身可靠。`classic-graph`、`ops-boundary`、`public-api-tests` 等未被六题充分覆盖，当前只能标记为未验证。后续测试应分层：
+
+1. 每个 reference 至少覆盖正常题、边界路由题、未知契约题、伪活跃调用链题。
+2. 跨 reference 覆盖 dtype+deploy、algorithm+solver、data+adapter、model+external skill。
+3. cold 与 warm 分开，保存真实投喂 prompt，避免把预期答案泄露给被测 Agent。
+4. 记录源码 commit、实际读取资料、token、rubric 和证据等级。
+5. 原始测试回答与 reviewer 审查分文件，避免 `test-skill.md` 当前的混写。
+
+静态一致性还存在以下问题：
+
+- `project-rules.md` 引用当前不存在的 `contribution-flow.md`；第 19、20 节关于其存在性和 reference 数量的历史结论已经漂移。
+- `layer-rules.md` 无条件要求读取 L1 casebook，与主入口只在模型相关任务读取的规则冲突。
+- `layer-rules.md` 复制 repo-map 更新条件，且措辞已经分叉。
+- `validation.md` 只写 Ruff 原则，没有给仓库对应的可执行命令。
+- `stage-impact.md` 只有阶段摘要，未强制记录每阶段入口、写入产物、消费者、保存/回载和验证证据。
+
+拟修复失效链接、条件读取冲突和规则副本；补 Ruff 等价命令；扩展 `stage-impact.md` 为跨阶段证据表。历史章节保留原文作为迭代记录，不回写伪装成当时已经正确，只在本节和实施结果中说明当前事实。
+
+### 21.9 实施顺序与验证边界
+
+按风险排序实施：
+
+1. `llm-algorithm.md` + `ptq-solver-params.md`：统计生命周期、活跃保存链、skip/partial result。
+2. `llm-data-workflow.md`：composite unit / joint calibration 门禁。
+3. `dtype-quant-module.md`：强制消费面状态表和既有语义复用门。
+4. `SKILL.md`：frontmatter 负向路由边界。
+5. `public-api-tests.md`：precision、weight-only 和 bit-policy 口径一致性。
+6. `project-rules.md`、`layer-rules.md`、`validation.md`、`stage-impact.md`：静态一致性修复。
+7. 完成链接解析、Reference 集合、`git diff --check` 和 `quick_validate.py` 静态验证。
+
+本轮修改 Skill 文档，不改变 AMCT 运行时代码，因此不运行 Python/C++ 单测。当前会话和工作区已包含测试答案及本节诊断，不具备 cold forward-test 的隔离条件；静态验证只能证明文档结构和引用成立，不能证明新 Agent 已稳定遵循这些门禁。
+
+### 21.10 设计记录写入时状态
+
+尚未实施。下一步按 §21.9 修改现有 Skill/reference，并在本节后追加实际变更与验证结果。
+
+### 21.11 实施结果
+
+已按 §21.9 完成现有文件内的修订，没有新增 reference：
+
+| 文件 | 实际修改 |
+| --- | --- |
+| `SKILL.md` | frontmatter 增加模型结构、NPU 算子、量化/评测与 deploy 交付的负向路由，并保留已有落点 review 例外 |
+| `references/llm-algorithm.md` | 增加 trainable、observe-only、observe-then-finalize 三类执行形态；GT/observe/finalize/save/eval-deploy 状态表；统计决策与敏感层门禁 |
+| `references/ptq-solver-params.md` | 写明当前训练保存活跃链及 `PtqParamHandler.export_unit()` 未接入事实；增加无 trainable 参数、复合 unit、skip/partial result 生命周期 |
+| `references/llm-data-workflow.md` | 增加 composite unit / joint calibration 的 CLI、adapter、输入、kwargs、GT、result producer/consumer 表和公平对照规则 |
+| `references/dtype-quant-module.md` | 增加既有数值语义复用门和 registry/CLI/bit policy/quantizer/deploy/algorithm/model 分支强制状态表 |
+| `references/public-api-tests.md` | 增加 FP16/BF16、weight-only/W4A4、dtype/bit policy 和 baseline 对比的用户口径门 |
+| `references/stage-impact.md` | 从阶段摘要扩展为入口、输入、状态/产物、消费者和证据等级的强制阶段表 |
+| `references/project-rules.md` | 删除不存在的 `contribution-flow.md` 链接，把授权、模板和已有 Issue/PR 检查收回本文件 |
+| `references/layer-rules.md` | casebook 改为模型相关条件读取；repo-map 写回规则改指唯一事实源，不再复制清单 |
+| `references/validation.md` | 补 Ruff 命令；增加 Skill/reference 链接、导航集合、cold/warm forward-test 和测试材料隔离要求 |
+| `design-v1.md` | 同步当前 frontmatter、阶段证据、17 份 reference 及不存在额外 contribution reference 的设计事实 |
+
+### 21.12 验证结果与边界
+
+- `git diff --check` 通过，无空白错误。
+- 运行当前 `skill-creator` 的 `quick_validate.py .agents/skills/amct-coder`，输出 `Skill is valid!`。
+- `SKILL.md` 导航中的 reference 去重集合与 `references/*.md` 实际集合一致，共 17 份，无遗漏或额外项。
+- 解析 `.agents/skills/amct-coder/` 下全部 Markdown 相对链接，目标均存在；失效的 `contribution-flow.md` 引用已消除。
+- 重新核对 `QuantLinear.observe_input()`、GT 阶段 observe 开关、solver 无 trainable 参数提前返回、`BaseSolver.finalize()`、`PtqParamHandler.export_unit()`、`_save_unit_result()` 及 CLI choices，新增规则与当前源码事实一致。
+- `SKILL.md` 仍为 162 行，低于 `skill-creator` 建议的 500 行上限；该目录不存在 `agents/openai.yaml`，无需同步 UI metadata。
+- 未运行 AMCT Python/C++ 单测：本轮只修改 Skill/reference 与设计 Markdown，不改变运行时代码。
+- 未执行 cold forward-test：当前会话和工作区已经包含原始测试答案、审查结论与本节预期，无法满足隔离要求。同会话静态复核不作为 Agent 行为证据。
+- 未更新 repo-map/casebook/docs/examples：本轮没有改变 AMCT 分层、模型经验或用户功能。
+- 工作区原有 `test.md`、`test-noskill.md`、`test-skill.md` 及测试 prompt 相关未提交状态均未改动或清理。

@@ -34,5 +34,6 @@
 - 涉及创建或操作 GitCode PR、推送代码时，加载并遵循仓内 `gitcode-pr` skill。
 - 对应 skill 缺失时，加载 `default-skills`，按其流程补装缺失项；已有版本不因缺失检查而覆盖。
 - 不绕过上述 skill 直接拼接 GitCode URL 或自行调用 API。
+- 实际操作前先检查是否已有对应 Issue/PR，使用仓库当前模板，并把读取、推送、创建或评论限制在用户授权范围内。
 
-只做本地代码修改时不加载 GitCode skill。实际进入 Issue/PR 操作前，再读取 [contribution-flow.md](contribution-flow.md) 并遵守用户授权范围。
+只做本地代码修改时不加载 GitCode skill。当前不存在额外的本地贡献流程 reference；实际进入 Issue/PR 操作后，以对应 GitCode skill、仓库模板和本节授权边界为准。

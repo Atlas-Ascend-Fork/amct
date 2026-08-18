@@ -30,7 +30,7 @@
 1. 先确认改动是优化循环、solver factory、参数 store，还是算法状态导出回载；新增 solver/granularity 时先冻结下节语义契约。
 2. 检查 unit 输入和 GT 来自 provider，不在 solver 内直接读文件或重放模型。
 3. 收集参数时只依赖 module/algorithm 的 `trainable_params()` 或导出 hook。
-4. 训练型算法要验证参数真实进入 optimizer；统计型算法要验证 buffer 进入保存和回载。
+4. 训练型算法要验证参数真实进入 optimizer；统计型算法先证明谁驱动样本遍历和 finalize，再验证 buffer 进入保存和回载。
 5. 保存文件名保持 `layer_<idx>_<unit.save_name>.pt`，并确认 target 目录不会混用。
 6. eval/deploy 回载失败时区分“确实可选”和“本应存在却缺失”，避免 `strict=False` 吞错。
 7. 补 solver factory、blockwise solver、参数 store、workflow 或新增 granularity 的最小测试。
@@ -57,6 +57,48 @@
 
 `global_solver.py` 文件存在且有注册装饰器，但当前 `register_solvers()` 只导入 `BlockwiseSolver`，主流程接通的是 `block`。`llm_ptq.run()` 当前在 granularity 分支前先查 registry，因此未注册的默认 `model` 会先失败，`_run_modelwise()` 不可达。文件、分支或装饰器存在都不等于 workflow 可选；分析时仍以本轮源码复核为准。
 
+### 当前训练保存活跃链
+
+当前 blockwise PTQ 训练侧必须按以下 caller 链判断，不要用回载侧 helper 替代：
+
+```text
+LlmPtqWorkflow._run_blockwise()
+  -> solver.solve(unit_batch.data_loader)
+  -> solver.finalize()
+  -> LlmPtqWorkflow._save_unit_result()
+  -> torch.save(result, layer_<idx>_<unit.save_name>.pt)
+```
+
+`BaseSolver.finalize()` 只在 unit module 自身提供 `export_ptq_params()` 时调用该方法，否则 fallback 到 unit module 的 `requires_grad` 参数。`PtqParamHandler.export_unit()` 提供 module 导出、递归子模块导出和 trainable fallback，但当前训练保存链没有调用它；它的存在不能证明任意子 wrapper 会被递归保存。
+
+任何保存/回载方案必须逐项给出：活跃 caller、传入的 module/unit、result 的真实 key/shape、文件名与 target 目录、加载 caller、strict 行为以及 eval/deploy 的最终消费者。找不到调用方的 helper 标记为“源码存在但未接通”，不能作为集成闭环证据。
+
+### 无 trainable 参数的执行门禁
+
+当前 `BlockwiseSolver.solve()` 收集不到 trainable 参数时，在遍历 dataloader 前直接返回。统计型或一次性优化算法不能依赖该方法自然完成 observe。新增路径前必须在 `llm-algorithm` 的执行形态基础上确定：
+
+- 样本遍历由既有 GT forward、独立 calibration、solver 的统计分支还是其它已定义 caller 驱动。
+- GT forward 的 observe 副作用是否可复用；若不可复用，如何隔离或清空统计。
+- finalize 是 algorithm、module、solver 还是 workflow 的稳定契约，以及重复调用行为。
+- 统计完成但没有 trainable 参数时，solver 返回值和保存结果如何区分“成功统计”与“什么都没做”。
+
+这些语义未冻结时，不新增空 optimizer、伪 trainable 参数或无 caller 的 post-calibration hook 来绕过提前返回。
+
+## 复合 unit 与联合求解门禁
+
+一个 `PtqUnit` 同时承载 attention、MLP 或其它多个子模块时，不等同于新增 granularity，也不自动需要新 solver。形成类名或 workflow 分支前，除“新 granularity 语义门禁”外还要回答：
+
+| 契约 | 必须回答的问题 |
+| --- | --- |
+| 构造 | `PtqUnit.kind/name/layer_idx/module/save_name` 如何生成；adapter 是否同时注入全部目标 wrapper |
+| forward | module 是完整 block 还是复合容器；输入是在 norm 前还是 norm 后；kwargs 能否完整重放 |
+| 参数集合 | 现有递归 `trainable_params()` 是否已覆盖全部目标；为何需要或不需要新 solver |
+| GT/loss | 联合输出的比较边界和 loss；分开校准的公平对照是否最终量化同一组模块 |
+| finalize | 单一结果还是按子 unit 拆分；当前 `BaseSolver.finalize()` 能否真实导出全部状态 |
+| 回载 | 文件名、target 目录、unit 枚举、strict load 和 deploy binding 如何重建相同结构 |
+
+任一项未冻结时，只能把完整 block 或新 solver 列为候选，不能声称通过复用递归 helper 已完成保存闭环。
+
 ## solver 规则
 
 - solver 不写模型名分支。
@@ -71,9 +113,21 @@
 ## 参数规则
 
 - unit 参数文件名：`layer_<idx>_<unit.save_name>.pt`。
-- `PtqParamHandler.export_unit()` 优先 module 自己的 `export_ptq_params()`，再递归子模块，最后 fallback 到 requires_grad 参数。
+- `PtqParamHandler.export_unit()` 优先 module 自己的 `export_ptq_params()`，再递归子模块，最后 fallback 到 requires_grad 参数；先确认当前 caller 是否实际使用该 helper。
 - `load_unit()` 优先 module 自己的 `load_ptq_params()`，再递归子模块，最后按 trainable 参数加载。
 - eval/deploy 加载 PTQ 参数时，必须用训练时一致的 `--algos` 构建出相同子模块结构。
+
+## skip / partial result 生命周期
+
+跳过一个 unit、layer 或部分算法前，必须冻结并测试：
+
+1. 跳过的是优化、统计、fake quant、real quant 还是整个量化；“不调用 solve”不等于保持浮点。
+2. 结果文件是缺失、显式 skip marker、direct-quant 状态还是浮点状态；参数 store 如何区分“尚未运行”和“有意跳过”。
+3. 断点续跑看到部分产物时继续、重跑或报错的确定语义。
+4. eval/deploy 用什么结构和 bit policy 重现该决定，`strict=True/False` 各自允许哪些缺失。
+5. 决策改变模型数值语义时对应的用户可见配置、日志和比较基线。
+
+在统一契约建立前，solver 不根据 loss、层名或其它 unit 自行静默跳过；算法侧的 score 或 decision 也不能仅靠不保存参数来表达跳层。
 
 ## 参数回载诊断
 
@@ -94,6 +148,9 @@
 - 新 granularity 只加 solver 文件，没接 CLI/workflow/register。
 - 新 granularity 的 module、batch/GT、optimizer、保存和续跑语义未冻结，却已确定类名、构造签名或共享 optimizer 方案。
 - 仅凭 `layer` 名称就断言或推荐整层联合训练，并发明 block 级数据文件或完成标记。
+- 复合 unit 没有闭环 adapter 构造、原始输入/kwargs、finalize 拆分和回载结构，却声称现有 solver/helper 可直接复用。
+- 无 trainable 参数时未定义样本驱动与 finalize，却声称统计算法已由 solver 执行。
+- 用结果文件缺失表达主动跳过，导致续跑、strict load、eval 或 deploy 无法区分未执行与已决策。
 - solver 自己读离线输入文件，绕过 data provider。
 
 ## 自验
@@ -103,3 +160,5 @@
 - 涉及 PTQ workflow：`pytest tests/unit_test/workflows/test_llm_ptq.py`。
 - 涉及参数 store：补针对 `PtqParamHandler/Store` 的 unit 测试或模型 adapter mocked 测试。
 - 涉及新 granularity：覆盖 registry/CLI/workflow 分派、module 与 batch/GT 所有权、optimizer 参数集合、逐 unit 保存回载和部分产物续跑语义。
+- 涉及复合 unit：覆盖 block 原始输入与 kwargs、全部目标参数收集、finalize 内容、公平分开基线和 eval/deploy 回载。
+- 涉及 skip/partial result：覆盖主动跳过与未执行的区分、断点续跑、strict load 和最终量化开关。

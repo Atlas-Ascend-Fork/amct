@@ -1,22 +1,20 @@
 # 分层边界与越界检查
 
-## 来源
+## 源码与资料锚点
 
 - `.agents/docs/repo-map.md`
-- `.agents/docs/casebook/cross-model-pitfalls.md`
-- `.agents/docs/casebook/structure-family-pitfalls.md`
 - `amct_pytorch/workflows/llm_ptq.py`
 - `amct_pytorch/common/models/llm/common/base.py`
 - `amct_pytorch/common/models/llm/common/quant_apply.py`
 - `amct_pytorch/quantization/modules/quant_base.py`
 
+模型结构、checkpoint/config、模型契约或模型相关精度异常时，再按主入口的 L1 -> L2 -> L3 规则读取 `.agents/docs/casebook/`；纯 dtype、solver、workflow 或 public API 落点判断不因加载本文件而读取 casebook。
+
 ## 必读顺序
 
 1. 先读 `.agents/docs/repo-map.md`。
 2. 抽查任务相关锚点文件，确认 repo-map 的关键结论仍成立。
-3. 再读 L1 casebook：`.agents/docs/casebook/cross-model-pitfalls.md`。
-4. 命中结构家族时读 L2 casebook：`.agents/docs/casebook/structure-family-pitfalls.md`。
-5. 命中已记录模型族时读 L3 个案。
+3. 只有命中上述模型相关条件时，才回到 [主入口](../SKILL.md) §渐进披露与读取预算，按 L1 -> L2 -> L3 加载 casebook。
 
 repo-map 是稳定架构说明，不是实时注册清单。若锚点文件显示注册模型或局部实现已经变化，以代码为准；只有框架边界或核心流程变化时才更新 repo-map。
 
@@ -79,17 +77,4 @@ LLM new-path 算法以 `amct_pytorch/algorithms/registry_factory.py` 的 `ALGO_R
 
 ## repo-map 写回规则
 
-只有以下变化触发更新 `.agents/docs/repo-map.md`：
-
-- `llm_ptq.py` 改变主流程编排语义。
-- `common/models/llm/__init__.py` 改变实际注册链的含义。
-- `BaseModel` 改变 block / unit / 导出加载语义。
-- `quant_base.py` 改变算法分流方式。
-- `blockwise_solver.py` 改变优化职责边界。
-
-这些情况默认不更新 repo-map：
-
-- 新增尚未接入主注册链的模型目录。
-- 新增一个算法文件但不改变分流机制。
-- 修局部 wrapper bug。
-- 改不影响复用边界的模型专属实现细节。
+写回条件只以 [repo-map.md](../../../docs/repo-map.md) §更新规则为准，本文件不复制清单。先区分局部实现变化与分层/核心流程变化，再按该唯一事实源判断是否更新。
