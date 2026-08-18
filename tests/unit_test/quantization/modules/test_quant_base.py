@@ -503,7 +503,6 @@ def test_weight_quantizer_export_deploy_supports_autoround_hook_for_mxfp():
     assert "weight_scale" in out
 
 
-
 def test_build_algorithms_raises_when_algo_declares_targets_but_mismatches():
     name = "_ut_struct_mis"
 

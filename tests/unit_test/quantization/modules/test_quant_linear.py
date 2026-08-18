@@ -138,5 +138,3 @@ def test_quant_linear_export_deploy_applies_structure_transform():
 
     q.export_deploy(structure_transform=transform)
     assert seen == {"inv_t": True, "name": "proj"}
-
-
