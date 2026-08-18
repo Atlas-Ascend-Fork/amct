@@ -385,7 +385,7 @@ inline void UnInitCacheThreadLocal() {
 }
 
 template <typename... Args>
-inline void ExecNpuCmd(const char* aclnn_api_name, const char* aclnn_get_workspace_name, Args &...args) {
+inline void ExecNpuCmd(const char *aclnn_api_name, const char *aclnn_get_workspace_name, Args &...args) {
     static const auto getWorkspaceSizeFuncAddr = GetOpApiFuncAddr(aclnn_get_workspace_name);
     static const auto opApiFuncAddr = GetOpApiFuncAddr(aclnn_api_name);
     static const auto initMemAddr = GetOpApiFuncAddr("InitHugeMemThreadLocal");
@@ -393,8 +393,8 @@ inline void ExecNpuCmd(const char* aclnn_api_name, const char* aclnn_get_workspa
     static const auto releaseMemAddr = GetOpApiFuncAddr("ReleaseHugeMem");
     static const auto initPTACacheThreadLocalAddr = GetOpApiFuncAddr("InitPTACacheThreadLocal");
     static const auto setPTAHashKeyAddr = GetOpApiFuncAddr("SetPTAHashKey");
-    TORCH_CHECK(getWorkspaceSizeFuncAddr != nullptr && opApiFuncAddr != nullptr, aclnn_api_name, " or ",
-        aclnn_api_name, "GetWorkspaceSize", " not in ", GetOpApiLibName(), ", or ", GetOpApiLibName(), "not found.");
+    TORCH_CHECK(getWorkspaceSizeFuncAddr != nullptr && opApiFuncAddr != nullptr, aclnn_api_name, " or ", aclnn_api_name,
+        "GetWorkspaceSize", " not in ", GetOpApiLibName(), ", or ", GetOpApiLibName(), "not found.");
     auto acl_stream = c10_npu::getCurrentNPUStream().stream(false);
     uint64_t workspace_size = 0;
     uint64_t *workspace_size_addr = &workspace_size;

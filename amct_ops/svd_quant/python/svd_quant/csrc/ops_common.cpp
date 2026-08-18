@@ -15,17 +15,23 @@ const std::vector<std::string> g_default_custom_lib_path = get_default_custom_li
 
 void *GetOpApiFuncAddrFromFeatureLib(const char *api_name) {
     auto ops_infer_handler_func_addr = GetOpApiFuncFromFeatureLib("libaclnn_ops_infer.so", api_name);
-    if IS_VALID_FUNC_ADDR(ops_infer_handler_func_addr) return ops_infer_handler_func_addr;
+    if IS_VALID_FUNC_ADDR(ops_infer_handler_func_addr)
+        return ops_infer_handler_func_addr;
     auto ops_train_handler_func_addr = GetOpApiFuncFromFeatureLib("libaclnn_ops_train.so", api_name);
-    if IS_VALID_FUNC_ADDR(ops_train_handler_func_addr) return ops_train_handler_func_addr;
+    if IS_VALID_FUNC_ADDR(ops_train_handler_func_addr)
+        return ops_train_handler_func_addr;
     auto math_handler_func_addr = GetOpApiFuncFromFeatureLib("libaclnn_math.so", api_name);
-    if IS_VALID_FUNC_ADDR(math_handler_func_addr) return math_handler_func_addr;
+    if IS_VALID_FUNC_ADDR(math_handler_func_addr)
+        return math_handler_func_addr;
     auto sparse_handler_func_addr = GetOpApiFuncFromFeatureLib("libaclnn_sparse.so", api_name);
-    if IS_VALID_FUNC_ADDR(sparse_handler_func_addr) return sparse_handler_func_addr;
+    if IS_VALID_FUNC_ADDR(sparse_handler_func_addr)
+        return sparse_handler_func_addr;
     auto fft_handler_func_addr = GetOpApiFuncFromFeatureLib("libaclnn_fft.so", api_name);
-    if IS_VALID_FUNC_ADDR(fft_handler_func_addr) return fft_handler_func_addr;
+    if IS_VALID_FUNC_ADDR(fft_handler_func_addr)
+        return fft_handler_func_addr;
     auto rand_handler_func_addr = GetOpApiFuncFromFeatureLib("libaclnn_rand.so", api_name);
-    if IS_VALID_FUNC_ADDR(rand_handler_func_addr) return rand_handler_func_addr;
+    if IS_VALID_FUNC_ADDR(rand_handler_func_addr)
+        return rand_handler_func_addr;
     return nullptr;
 }
 
