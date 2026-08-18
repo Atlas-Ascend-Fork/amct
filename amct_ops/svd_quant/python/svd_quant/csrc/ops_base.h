@@ -187,7 +187,7 @@ inline std::string real_path(const std::string &path) {
 }
 
 inline std::vector<std::string> get_custom_lib_path() {
-    char *ascend_custom_opppath = std::getenv("ASCEND_CUSTOM_OPP_PATH");
+    char *ascend_custom_opppath = std::getenv("ASCEND_CUSTOM_OPP_PATH");  // NOLINT
     std::vector<std::string> custom_lib_path_list;
 
     if (ascend_custom_opppath == nullptr) {
@@ -209,7 +209,7 @@ inline std::vector<std::string> get_custom_lib_path() {
 }
 
 inline std::vector<std::string> get_default_custom_lib_path() {
-    char *ascend_opp_path = std::getenv("ASCEND_OPP_PATH");
+    char *ascend_opp_path = std::getenv("ASCEND_OPP_PATH");  // NOLINT
     std::vector<std::string> default_vendors_list;
 
     if (ascend_opp_path == nullptr) {
@@ -281,16 +281,17 @@ inline void *GetOpApiLibHandler(const char *libName) {
 }
 
 // get aclnn api from loaded so
-#define GET_OP_API_FUNC_FROM_FEATURE_LIB(lib_handler, lib_name, api_name)           \
-    do {                                                                            \
-        static auto lib_handler = GetOpApiLibHandler(lib_name);                     \
-        if ((lib_handler) != nullptr) {                                             \
-            auto funcAddr = GetOpApiFuncAddrInLib(lib_handler, lib_name, api_name); \
-            if (funcAddr != nullptr) {                                              \
-                return funcAddr;                                                    \
-            }                                                                       \
-        }                                                                           \
-    } while (0);
+inline void *GetOpApiFuncFromFeatureLib(const char *lib_name, const char* api_name) {
+    static auto lib_handler = GetOpApiLibHandler(lib_name);
+    if ((lib_handler) != nullptr) {
+            auto funcAddr = GetOpApiFuncAddrInLib(lib_handler, lib_name, api_name);
+            return funcAddr;
+    } else {
+        return nullptr;
+    }
+}
+
+#define IS_VALID_FUNC_ADDR(funcAddr) (funcAddr != nullptr)
 
 #define GET_OP_API_FUNC(apiName) reinterpret_cast<_##apiName>(GetOpApiFuncAddr(#apiName))
 
@@ -331,11 +332,16 @@ inline void *GetOpApiFuncAddr(const char *apiName) {
         ASCEND_LOGI("%s is not in default custom lib.", apiName);
     }
 
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiMathHandler, "libopapi_math.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiNnHandler, "libopapi_nn.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiCvHandler, "libopapi_cv.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiTransformerHandler, "libopapi_transformer.so", apiName);
-    GET_OP_API_FUNC_FROM_FEATURE_LIB(opapiLegacyHandler, "libopapi_legacy.so", apiName);
+    auto mathHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_math.so", apiName);
+    if IS_VALID_FUNC_ADDR(mathHandlerFuncAddr) return mathHandlerFuncAddr;
+    auto nnHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_nn.so", apiName);
+    if IS_VALID_FUNC_ADDR(nnHandlerFuncAddr) return nnHandlerFuncAddr;
+    auto cvHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_cv.so", apiName);
+    if IS_VALID_FUNC_ADDR(cvHandlerFuncAddr) return cvHandlerFuncAddr;
+    auto transformerHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_transformer.so", apiName);
+    if IS_VALID_FUNC_ADDR(transformerHandlerFuncAddr) return transformerHandlerFuncAddr;
+    auto legacyHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_legacy.so", apiName);
+    if IS_VALID_FUNC_ADDR(legacyHandlerFuncAddr) return legacyHandlerFuncAddr;
 
     static auto opApiHandler = GetOpApiLibHandler(GetOpApiLibName());
     if (opApiHandler != nullptr) {
