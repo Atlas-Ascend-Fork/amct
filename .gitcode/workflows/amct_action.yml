@@ -20,7 +20,7 @@ on:
 
 env:
   org_name: ${{ vars.ORG_NAME }}
-  repo_name: ${{ atomgit.event.repository.name}}
+  repo_name: ${{ atomgit.event.repository.name }}
   MERGE_ID: ${{ atomgit.event.pull_request.number }}
   TARGET_BRANCH: ${{ atomgit.base_ref }}
   SOURCE_BRANCH: ${{ atomgit.head_ref }}
