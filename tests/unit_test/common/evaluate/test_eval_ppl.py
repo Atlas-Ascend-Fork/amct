@@ -276,7 +276,7 @@ def test_eval_ppl_does_not_expose_empty_npu_cache_helper():
     assert not hasattr(eval_ppl, "_empty_npu_cache")
 
 
-def test_cleanup_ppl_resources_warns_and_continues_after_cleanup_errors(monkeypatch):
+def test_cleanup_ppl_resources_warns_and_empties_cache_after_close_error(monkeypatch):
     events = []
     warnings = []
 
@@ -286,14 +286,10 @@ def test_cleanup_ppl_resources_warns_and_continues_after_cleanup_errors(monkeypa
             events.append("close")
             raise RuntimeError("close failed")
 
-    def broken_empty_cache():
-        events.append("empty_cache")
-        raise RuntimeError("cache failed")
-
     fake_npu = type(
         "FakeNpu",
         (),
-        {"empty_cache": staticmethod(broken_empty_cache)},
+        {"empty_cache": staticmethod(lambda: events.append("empty_cache"))},
     )()
     monkeypatch.setattr(torch, "npu", fake_npu, raising=False)
     monkeypatch.setattr(
@@ -307,9 +303,8 @@ def test_cleanup_ppl_resources_warns_and_continues_after_cleanup_errors(monkeypa
     )
 
     assert events == ["close", "empty_cache"]
-    assert len(warnings) == 2
+    assert len(warnings) == 1
     assert isinstance(warnings[0][1][0], RuntimeError)
-    assert isinstance(warnings[1][1][0], RuntimeError)
 
 
 def test_cleanup_ppl_resources_continues_after_close_lookup_error(monkeypatch):

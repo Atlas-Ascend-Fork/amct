@@ -44,13 +44,7 @@ def _cleanup_ppl_resources(iterator, device):
             error,
         )
     if _is_npu_device(device):
-        try:
-            torch.npu.empty_cache()
-        except Exception as error:
-            logger.warning(
-                "Failed to empty NPU cache after PPL evaluation: {}",
-                error,
-            )
+        torch.npu.empty_cache()
 
 
 def wikitext2_ppl(logits_iter, samples, device, seq_len=4096):
