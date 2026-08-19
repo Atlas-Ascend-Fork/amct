@@ -199,13 +199,23 @@ def convert_state_dict(
 
             weight = hif4_unpack(scale_inv, weight)
 
-        # MXFP4
+        # MXFP4 (E2M1 packed into int8, E8M0 block scale)
         elif weight.dtype == torch.int8:
             weight = weight_dequant(
                 weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
             )
 
-        # FP8 / MXFP8
+        # MXFP8 (FP8 weight, E8M0 block scale). An integer scale marks MX; the last-dim
+        # group size is derived from the scale so weight_dequant broadcasts it correctly.
+        elif not torch.is_floating_point(scale_inv):
+            mx_block = (
+                weight.shape[-1] // scale_inv.shape[-1]
+                if scale_inv.dim() == weight.dim() and scale_inv.shape[-1] > 0
+                else block_size
+            )
+            weight = weight_dequant(weight, scale_inv, block_size=mx_block, is_mx=True)
+
+        # FP8 (float block scale)
         else:
             weight = weight_dequant(weight, scale_inv, block_size=block_size)
 
