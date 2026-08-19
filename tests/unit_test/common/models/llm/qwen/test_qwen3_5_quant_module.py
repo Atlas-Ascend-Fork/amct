@@ -18,6 +18,7 @@
 """Tests for QuantQwen35Attn / QuantQwen35MLP / QuantQwen35LinearAttn using tiny configs."""
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 import torch
@@ -27,9 +28,12 @@ from transformers.models.qwen3_5.modeling_qwen3_5 import (
     Qwen3_5GatedDeltaNet,
     Qwen3_5MLP,
     Qwen3_5TextConfig,
+    eager_attention_forward,
 )
 
+from amct_pytorch.common.models.llm.common.deploy_export import generate_quant_config
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
 from amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module import (
     QuantQwen35Attn,
     QuantQwen35LinearAttn,
@@ -45,6 +49,228 @@ register_dtype()
 W_BITS = 'w_bits'
 
 A_BITS = 'a_bits'
+
+
+@pytest.mark.parametrize('w_bits, a_bits', [(8, 8), (4, 8)])
+def test_qwen35_bits_scheme_uses_global_dense_linear_policy(w_bits, a_bits):
+    adapter = Qwen3_5.__new__(Qwen3_5)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy({W_BITS: w_bits, A_BITS: a_bits}),
+    )
+
+    assert adapter.bits_scheme() == [
+        {"targets": ["Linear"], W_BITS: w_bits, A_BITS: a_bits},
+    ]
+
+
+def test_qwen35_bits_scheme_describes_mixed_w4a8_without_overlap():
+    from compressed_tensors.utils.match import match_name
+
+    adapter = Qwen3_5.__new__(Qwen3_5)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy(
+            {
+                W_BITS: 4,
+                A_BITS: 8,
+                "attn-linear": {
+                    W_BITS: 8,
+                    A_BITS: 8,
+                    "in_proj_z": {W_BITS: 4, A_BITS: 8},
+                    "in_proj_b": {W_BITS: 4, A_BITS: 8},
+                    "in_proj_a": {W_BITS: 4, A_BITS: 8},
+                },
+            }
+        )
+    )
+
+    scheme = adapter.bits_scheme()
+    samples = {
+        "model.language_model.layers.0.mlp.gate_proj": 4,
+        "model.language_model.layers.0.mlp.up_proj": 4,
+        "model.language_model.layers.0.mlp.down_proj": 4,
+        "model.language_model.layers.0.linear_attn.in_proj_z": 4,
+        "model.language_model.layers.0.linear_attn.in_proj_qkv": 8,
+        "model.language_model.layers.0.linear_attn.out_proj": 8,
+        "model.language_model.layers.3.self_attn.q_proj": 8,
+        "model.language_model.layers.3.self_attn.o_proj": 8,
+    }
+    for name, expected_bits in samples.items():
+        matches = [
+            group
+            for group in scheme
+            if any(match_name(name, target) for target in group["targets"])
+        ]
+        assert len(matches) == 1
+        assert matches[0][W_BITS] == expected_bits
+        assert matches[0][A_BITS] == 8
+
+
+def test_qwen35_deploy_scheme_reconciles_fused_qkvz_to_w8_runtime():
+    from compressed_tensors.utils.match import match_name
+
+    adapter = Qwen3_5.__new__(Qwen3_5)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy(
+            {
+                W_BITS: 4,
+                A_BITS: 8,
+                "attn-linear": {
+                    W_BITS: 8,
+                    A_BITS: 8,
+                    "in_proj_z": {W_BITS: 4, A_BITS: 8},
+                    "in_proj_b": {W_BITS: 4, A_BITS: 8},
+                    "in_proj_a": {W_BITS: 4, A_BITS: 8},
+                },
+            }
+        )
+    )
+
+    scheme = adapter.deploy_bits_scheme()
+    samples = {
+        "model.language_model.layers.0.linear_attn.in_proj_qkv": 8,
+        "model.language_model.layers.0.linear_attn.in_proj_z": 8,
+        "model.language_model.layers.0.linear_attn.in_proj_b": 4,
+        "model.language_model.layers.0.linear_attn.in_proj_a": 4,
+    }
+    for name, expected_bits in samples.items():
+        matches = [
+            group
+            for group in scheme
+            if any(match_name(name, target) for target in group["targets"])
+        ]
+        assert len(matches) == 1
+        assert matches[0][W_BITS] == expected_bits
+
+    assert adapter.deploy_runtime_fallbacks() == {
+        "in_proj_z": {
+            "source_w_bits": 4,
+            "runtime_w_bits": 8,
+            "reason": "vLLM fuses this projection into in_proj_qkvz",
+        }
+    }
+
+
+def test_qwen35_deploy_fallback_removes_only_w4_group_parameters():
+    adapter = Qwen3_5.__new__(Qwen3_5)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy(
+            {
+                W_BITS: 4,
+                A_BITS: 8,
+                "attn-linear": {
+                    W_BITS: 8,
+                    A_BITS: 8,
+                    "in_proj_z": {W_BITS: 4, A_BITS: 8},
+                },
+            }
+        )
+    )
+    qweight = torch.randint(-7, 8, (4, 8), dtype=torch.int8)
+    payload = {
+        "qweight": qweight,
+        "weight_scale": torch.ones(4, 1),
+        "weight_offset": torch.zeros(4, 1),
+        "weight_scale_second": torch.ones(4, 1),
+        "weight_offset_second": torch.zeros(4, 1),
+    }
+
+    prepared = adapter.prepare_deploy_payload(
+        "model.language_model.layers.0.linear_attn.in_proj_z.weight",
+        SimpleNamespace(w_bits=4),
+        payload,
+    )
+
+    assert set(prepared) == {"qweight", "weight_scale", "weight_offset"}
+    assert prepared["qweight"] is qweight
+    assert prepared["weight_scale"] is payload["weight_scale"]
+    assert prepared["weight_offset"] is payload["weight_offset"]
+    assert set(payload) == {
+        "qweight",
+        "weight_scale",
+        "weight_offset",
+        "weight_scale_second",
+        "weight_offset_second",
+    }
+
+
+def test_qwen35_deploy_fallback_rejects_non_int4_values():
+    adapter = Qwen3_5.__new__(Qwen3_5)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy(
+            {
+                W_BITS: 4,
+                A_BITS: 8,
+                "attn-linear": {
+                    W_BITS: 8,
+                    A_BITS: 8,
+                    "in_proj_z": {W_BITS: 4, A_BITS: 8},
+                },
+            }
+        )
+    )
+
+    with pytest.raises(ValueError, match="outside INT4 range"):
+        adapter.prepare_deploy_payload(
+            "model.language_model.layers.0.linear_attn.in_proj_z.weight",
+            SimpleNamespace(w_bits=4),
+            {"qweight": torch.tensor([[8]], dtype=torch.int8)},
+        )
+
+
+def test_qwen35_bits_scheme_preserves_individual_output_projection_overrides():
+    from compressed_tensors.utils.match import match_name
+
+    adapter = Qwen3_5.__new__(Qwen3_5)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy(
+            {
+                W_BITS: 4,
+                A_BITS: 8,
+                "attn-linear": {
+                    W_BITS: 8,
+                    A_BITS: 8,
+                    "out_proj": {W_BITS: 4, A_BITS: 8},
+                    "o_proj": {W_BITS: 4, A_BITS: 8},
+                },
+            }
+        )
+    )
+
+    scheme = adapter.bits_scheme()
+    samples = {
+        "model.language_model.layers.0.linear_attn.in_proj_qkv": 8,
+        "model.language_model.layers.0.linear_attn.out_proj": 4,
+        "model.language_model.layers.3.self_attn.q_proj": 8,
+        "model.language_model.layers.3.self_attn.o_proj": 4,
+    }
+    for name, expected_bits in samples.items():
+        matches = [
+            group
+            for group in scheme
+            if any(match_name(name, target) for target in group["targets"])
+        ]
+        assert len(matches) == 1
+        assert matches[0][W_BITS] == expected_bits
+
+
+@pytest.mark.parametrize('w_bits, a_bits', [(8, 8), (4, 8)])
+def test_qwen35_deploy_config_declares_bit_policy_widths(w_bits, a_bits):
+    adapter = Qwen3_5.__new__(Qwen3_5)
+    adapter.args = SimpleNamespace(
+        bit_policy=BitPolicy({W_BITS: w_bits, A_BITS: a_bits}),
+    )
+
+    config = generate_quant_config(
+        cache_scheme={},
+        ignores=[],
+        bits_scheme=adapter.bits_scheme(),
+    )
+
+    assert set(config["config_groups"]) == {"group_0"}
+    group = config["config_groups"]["group_0"]
+    assert group["targets"] == ["Linear"]
+    assert group["weights"]["num_bits"] == w_bits
+    assert group["input_activations"]["num_bits"] == a_bits
 
 
 def _tiny_config():
@@ -216,6 +442,53 @@ def test_quant_qwen35_attn_batch_forward():
     sin = torch.randn(bs, seq, cfg.head_dim)
     out, weights = qattn(h, position_embeddings=(cos, sin))
     assert out.shape == (bs, seq, cfg.hidden_size)
+    assert weights is None
+
+
+def test_quant_qwen35_attn_linear_uses_official_attention_interface(monkeypatch):
+    cfg = _tiny_config()
+    attn = Qwen3_5Attention(cfg, layer_idx=0)
+    qattn = QuantQwen35Attn(_quant_args(quant_target=["attn-linear"]), attn)
+    qattn.eval()
+    hidden = torch.randn(1, 4, cfg.hidden_size)
+    cos = torch.randn(1, 4, cfg.head_dim)
+    sin = torch.randn(1, 4, cfg.head_dim)
+    mask = torch.ones(1, 1, 4, 4, dtype=torch.bool).tril()
+    captured = {}
+
+    def fake_attention_interface(module, query, key, value, attention_mask, **kwargs):
+        captured["attention_mask"] = attention_mask
+        captured["dropout"] = kwargs["dropout"]
+        captured["scaling"] = kwargs["scaling"]
+        output = torch.zeros(
+            query.shape[0],
+            query.shape[2],
+            query.shape[1],
+            value.shape[-1],
+            dtype=query.dtype,
+        )
+        return output, None
+
+    get_interface = MagicMock(return_value=fake_attention_interface)
+    monkeypatch.setattr(
+        "amct_pytorch.common.models.llm.qwen.qwen3_5.quant_module."
+        "ALL_ATTENTION_FUNCTIONS.get_interface",
+        get_interface,
+    )
+
+    output, weights = qattn(
+        hidden,
+        position_embeddings=(cos, sin),
+        attention_mask=mask,
+    )
+
+    get_interface.assert_called_once_with(
+        cfg._attn_implementation, eager_attention_forward
+    )
+    assert captured["attention_mask"] is mask
+    assert captured["dropout"] == 0.0
+    assert captured["scaling"] == qattn.scaling
+    assert output.shape == hidden.shape
     assert weights is None
 
 

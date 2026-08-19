@@ -41,6 +41,7 @@ class QuantLinear(nn.Module):
         hidden_states,
         structure_transform=None,
     ):
+        linear_input = self.weight_quantizer.transform_input(hidden_states)
         if self.eval_mode:
             transform_key = (
                 None if structure_transform is None else id(structure_transform)
@@ -62,12 +63,15 @@ class QuantLinear(nn.Module):
             self.weight_quantizer.observe_input(hidden_states, weight)
             weight = self.weight_quantizer(weight)
         bias = self.linear.bias
-        output = F.linear(hidden_states, weight, bias)
+        output = F.linear(linear_input, weight, bias)
         return output
 
     def export_deploy(self, structure_transform=None):
         weight = self.linear.weight
         if structure_transform is not None:
             weight = structure_transform(weight, inv_t=True, name=self.name)
-        payload = self.weight_quantizer.export_deploy(weight)
+        if self.args.quant_dtype == "int" and self.w_bits == 4:
+            payload = self.weight_quantizer.export_dense_linear_deploy(weight)
+        else:
+            payload = self.weight_quantizer.export_deploy(weight)
         return payload

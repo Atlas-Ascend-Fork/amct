@@ -72,6 +72,7 @@ class BaseModel(metaclass=ABCMeta):
         self.ptq_param_store = PtqParamStore(
             self.ptq_param_handler, self.iter_ptq_units
         )
+        self.quant_result_set = None
 
     @staticmethod
     def block_size(weight):
@@ -323,6 +324,19 @@ class BaseModel(metaclass=ABCMeta):
                 continue
             yield f"{weight_prefix}{name}.weight", module
 
+    def prepare_deploy_payload(self, weight_key, module, payload):
+        """Adapt one quantized Linear payload to the downstream runtime ABI."""
+        return payload
+
+    def deploy_bits_scheme(self):
+        """Return runtime-facing bit metadata, if the adapter defines it."""
+        bits_scheme = getattr(self, "bits_scheme", None)
+        return bits_scheme() if callable(bits_scheme) else None
+
+    def deploy_runtime_fallbacks(self):
+        """Describe numerical policies that require a different runtime ABI."""
+        return {}
+
     def load_layer_ptq_params(
         self, layer_idx: int, block, param_dir: str, strict: bool = False
     ):
@@ -392,6 +406,9 @@ class BaseModel(metaclass=ABCMeta):
     def _build_block_for_forward(self, layer_idx, use_quant_block=False):
         if use_quant_block:
             block = self.build_quant_block(layer_idx)
+            quant_result_set = getattr(self, "quant_result_set", None)
+            if quant_result_set is not None:
+                return quant_result_set.load_block(self, layer_idx, block)
             self.load_selected_layer_ptq_params(layer_idx, block, strict=False)
             return block
         return self.block(layer_idx)

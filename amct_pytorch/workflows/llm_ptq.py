@@ -28,9 +28,18 @@ from amct_pytorch.common.datasets.ptq_provider import LlmPtqDataProvider
 from amct_pytorch.common.models.llm.common.base import PtqUnit
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.optimization import register_solvers
+from amct_pytorch.common.optimization.factory import set_require_grad_all
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_observe
+from amct_pytorch.common.models.llm.common.quant_result import (
+    LLM_ARTIFACT_KIND_DIRECT_CONFIG,
+    LlmQuantResultWriter,
+    compute_checkpoint_fingerprint,
+    discover_llm_ptq_units,
+    normalize_quant_result_dirs,
+    validate_quant_result_dir,
+)
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
 from amct_pytorch.common.utils.run_logging import setup_run_logging
@@ -48,6 +57,16 @@ class LlmPtqWorkflow:
         self.data_provider = None
         self.model_name = self.args.model_name
         self.solver_key = getattr(args, "solver", "blockwise")
+        result_dirs = normalize_quant_result_dirs(
+            getattr(args, "quant_result_dir", None)
+        )
+        if len(result_dirs) > 1:
+            raise ValueError("LLM PTQ accepts exactly one quant_result_dir per run.")
+        self.quant_result_dir = result_dirs[0] if result_dirs else None
+        self.quant_result_writer = None
+
+    def _is_direct_config_export(self):
+        return self.quant_result_dir is not None and not getattr(self.args, "algos", [])
 
     @staticmethod
     def _register_components():
@@ -68,9 +87,44 @@ class LlmPtqWorkflow:
 
     def setup(self):
         self._register_components()
+        quant_result_dir = getattr(self, "quant_result_dir", None)
+        if quant_result_dir is not None:
+            validate_quant_result_dir(quant_result_dir)
         self._prepare_experiment_dirs()
         self.pipeline = self._build_pipeline()
-        self.data_provider = self._build_data_provider()
+        if self._is_direct_config_export():
+            self.data_provider = None
+        else:
+            self.data_provider = self._build_data_provider()
+        if quant_result_dir is not None:
+            end_block_idx = min(self.args.end_block_idx, self.pipeline.num_layers)
+            if (
+                self.args.start_block_idx != 0
+                or end_block_idx != self.pipeline.num_layers
+            ):
+                raise ValueError(
+                    "LLM quant-result export requires the full model layer range: "
+                    f"start_block_idx=0 and end_block_idx>={self.pipeline.num_layers}; "
+                    f"got start={self.args.start_block_idx}, "
+                    f"end={self.args.end_block_idx}."
+                )
+            source_model = compute_checkpoint_fingerprint(self.args.model)
+            specs = discover_llm_ptq_units(
+                self.pipeline, self.args.start_block_idx, end_block_idx
+            )
+            self.quant_result_writer = LlmQuantResultWriter.create(
+                quant_result_dir,
+                specs,
+                source_model,
+                self.args,
+                self.quant_target,
+            )
+            if (
+                self._is_direct_config_export()
+                and self.quant_result_writer.artifact_kind
+                != LLM_ARTIFACT_KIND_DIRECT_CONFIG
+            ):
+                raise RuntimeError("direct quant-result export kind was not preserved.")
         log_name = "ptq"
         if self.granularity == "block":
             log_name = f"ptq_{self.args.start_block_idx}_{self.args.end_block_idx}"
@@ -79,7 +133,6 @@ class LlmPtqWorkflow:
 
     def run(self):
         sink_id = self.setup()
-
         solver_cls = SOLVER_REGISTRY.get(self.granularity)
         if self.granularity == "block":
             results = self._run_blockwise(solver_cls)
@@ -87,17 +140,21 @@ class LlmPtqWorkflow:
             results = self._run_modelwise(solver_cls)
         else:
             raise ValueError(f"Unsupported solver granularity '{self.granularity}'.")
+        if getattr(self, "quant_result_writer", None) is not None:
+            self.quant_result_writer.publish()
         logger.remove(sink_id)
         return results
 
     def _prepare_experiment_dirs(self):
         self.args.log_dir = os.path.join(self.args.output_dir, "logs")
-        self.args.quant_param_dir = self._resolve_quant_param_dir()
+        paths = [self.args.log_dir]
+        if self._is_direct_config_export():
+            self.args.quant_param_dir = ""
+        else:
+            self.args.quant_param_dir = self._resolve_quant_param_dir()
+            paths.append(self.args.quant_param_dir)
 
-        for path in (
-            self.args.log_dir,
-            self.args.quant_param_dir,
-        ):
+        for path in paths:
             os.makedirs(path, exist_ok=True)
 
     def _resolve_quant_param_dir(self):
@@ -188,13 +245,28 @@ class LlmPtqWorkflow:
 
             layer_results = {}
             for unit in units:
-                if self._unit_result_path(unit) and os.path.exists(
-                    self._unit_result_path(unit)
+                if (
+                    getattr(self, "quant_result_writer", None) is None
+                    and self._unit_result_path(unit)
+                    and os.path.exists(self._unit_result_path(unit))
                 ):
                     logger.info(
                         f"Skip PTQ unit '{unit.name}' in layer {layer_idx}: "
                         f"params already exist at {self._unit_result_path(unit)}"
                     )
+                    continue
+                if self._is_direct_config_export():
+                    set_require_grad_all(unit.module, False)
+                    unit_result = self.pipeline.ptq_param_handler.export_unit(unit)
+                    if unit_result:
+                        raise ValueError(
+                            "direct_config export found calibrated parameters for "
+                            f"unit '{unit.name}'; specify the matching --algos instead."
+                        )
+                    layer_results[unit.name] = unit_result
+                    self.quant_result_writer.write_unit(unit, unit_result)
+                    unit.module.to("cpu")
+                    del unit_result
                     continue
                 unit_batch = self._prepare_unit_batch(unit)
                 solver = self._build_block_solver(solver_cls, layer_idx, unit.module)
@@ -203,9 +275,16 @@ class LlmPtqWorkflow:
                 )
                 solver.solve(unit_batch.data_loader, forward_kwargs=unit_batch.kwargs)
 
-                unit_result = solver.finalize()
+                # Export through the pipeline handler so buffer-backed statistical
+                # algorithms and parameter-backed optimization algorithms share one
+                # artifact contract.  Solver.finalize() only sees trainable
+                # parameters and would silently drop MinMax/AWQ/GPTQ state from
+                # attention wrappers that do not define export_ptq_params().
+                unit_result = self.pipeline.ptq_param_handler.export_unit(unit)
                 layer_results[unit.name] = unit_result
                 self._save_unit_result(unit, unit_result)
+                if getattr(self, "quant_result_writer", None) is not None:
+                    self.quant_result_writer.write_unit(unit, unit_result)
 
                 unit.module.to("cpu")
                 del unit_batch, solver, unit_result

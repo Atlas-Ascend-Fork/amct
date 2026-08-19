@@ -162,6 +162,24 @@ class WeightQuantizer(torch.nn.Module):
             )
         return export_fn(x)
 
+    def export_dense_linear_deploy(self, x):
+        x, quantize_algo = self.algo_forward(x)
+        if quantize_algo is not None:
+            export_fn = getattr(quantize_algo, "export_dense_linear_deploy", None)
+            if not callable(export_fn):
+                raise NotImplementedError(
+                    f"{type(quantize_algo).__name__} cannot export its input "
+                    "transformation to the dense deployment runtime."
+                )
+            return export_fn(x, self.quant_obj)
+        export_fn = getattr(self.quant_obj, "export_dense_linear_deploy", None)
+        if not callable(export_fn):
+            raise NotImplementedError(
+                f"Quant dtype '{self.args.quant_dtype}' does not implement dense "
+                "Linear deploy export."
+            )
+        return export_fn(x)
+
     def fake_quant(self, x):
         if self.is_observe:
             return x
@@ -178,6 +196,15 @@ class WeightQuantizer(torch.nn.Module):
             observe_input = getattr(algo, "observe_input", None)
             if callable(observe_input):
                 observe_input(x, weight)
+
+    def transform_input(self, x):
+        if self.is_observe:
+            return x
+        for algo in self.algorithms.values():
+            transform_input = getattr(algo, "transform_input", None)
+            if callable(transform_input):
+                x = transform_input(x)
+        return x
 
     def trainable_params(self):
         params = []

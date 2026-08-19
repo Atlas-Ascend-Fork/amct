@@ -41,6 +41,7 @@ def register_algorithms():
     from .omniquant import OmniQuant  # noqa: F401
     from .flatquant import FlatQuant  # noqa: F401
     from .gptq import GPTQ  # noqa: F401
+    from .classic_llm import LlmAwq, LlmDiagonalGptq, LlmMinMax  # noqa: F401
 
     _REGISTERED = True
 

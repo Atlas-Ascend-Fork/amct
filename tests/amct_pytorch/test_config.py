@@ -59,7 +59,11 @@ SMOOTH_QUANT = 'smoothquant'
 SMOOTH_STRENGTH = 'smooth_strength'
 
 
-class CustomQuant(BaseQuantizeModule):
+# Named distinctly from test_customized_algo.CustomQuant on purpose: the
+# algorithm registry is process-wide and indexes quantize modules by class name,
+# so two different classes sharing a name collide when both files run in one
+# session.
+class ConfigCustomQuant(BaseQuantizeModule):
     def __init__(self, ori_module, layer_name, quant_config):
         super().__init__(ori_module, layer_name, quant_config)
 
@@ -67,7 +71,7 @@ class CustomQuant(BaseQuantizeModule):
         return inputs
 
 
-class CustomDeployQuant(nn.Module):
+class ConfigCustomDeployQuant(nn.Module):
     def __init__(self, ori_module):
         super().__init__()
 
@@ -710,7 +714,7 @@ class TestConfigParse(unittest.TestCase):
         try:
             parse_config(model, cfg, AlgorithmRegistry)
         except Exception as e:
-            self.assertIn('Not support algorithm AA, pls regiter it first', str(e))
+            self.assertIn('Not support algorithm AA', str(e))
 
     def test_customize_algo_cfg(self):
         cfg = {
@@ -732,7 +736,7 @@ class TestConfigParse(unittest.TestCase):
         }
         model = self.test_model.to(torch.bfloat16)
         AlgorithmRegistry.register(
-            ALGO_NAME_A, 'Linear', CustomQuant, CustomDeployQuant
+            ALGO_NAME_A, 'Linear', ConfigCustomQuant, ConfigCustomDeployQuant
         )
         detail_config = parse_config(model, cfg, AlgorithmRegistry)
         self.assertEqual(len(detail_config.keys()), 3)

@@ -28,6 +28,10 @@ from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.quantization.dtypes import register_dtype
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
+from amct_pytorch.common.models.llm.common.quant_result import (
+    LlmQuantResultSet,
+    normalize_quant_result_dirs,
+)
 from amct_pytorch.common.utils.run_logging import setup_run_logging
 from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 
@@ -47,6 +51,10 @@ class LlmEvalWorkflow:
         self.quant_target = args.quant_target
         self.quant_dtype = args.quant_dtype
         self.bit_policy = ensure_bit_policy(args)
+        self.quant_result_dirs = normalize_quant_result_dirs(
+            getattr(args, "quant_result_dir", None)
+        )
+        self.quant_result_set = None
 
     @staticmethod
     def _register_components():
@@ -56,7 +64,19 @@ class LlmEvalWorkflow:
 
     def setup(self):
         self._register_components()
+        if self.quant_result_dirs:
+            self.quant_result_set = LlmQuantResultSet.from_directories(
+                self.quant_result_dirs, self.args.model
+            )
+            self.quant_result_set.apply_to_args(self.args)
+            self.model_name = self.args.model_name
+            self.quant_target = self.args.quant_target
+            self.quant_dtype = self.args.quant_dtype
+            self.bit_policy = ensure_bit_policy(self.args)
         self.pipeline = self._build_pipeline()
+        if self.quant_result_set is not None:
+            self.quant_result_set.validate_for_pipeline(self.pipeline)
+            self.pipeline.quant_result_set = self.quant_result_set
         if hasattr(self.pipeline, "sharded_block"):
             self.pipeline.sharded_block = True
         sink_id, _ = setup_run_logging(
@@ -78,6 +98,7 @@ class LlmEvalWorkflow:
             f"PPL: {ppl}\n{self.bit_policy.summary()}"
         )
         logger.remove(sink_id)
+        return ppl
 
     def _build_pipeline(self):
         model_cls = MODEL_REGISTRY.get(self.model_name)
