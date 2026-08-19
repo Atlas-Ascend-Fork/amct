@@ -281,8 +281,7 @@ inline void *GetOpApiLibHandler(const char *libName) {
 }
 
 // get aclnn api from loaded so
-inline void *GetOpApiFuncFromFeatureLib(const char *lib_name, const char *api_name) {
-    static auto lib_handler = GetOpApiLibHandler(lib_name);
+inline void *GetOpApiFuncFromFeatureLib(void *lib_handler, const char *lib_name, const char *api_name) {
     if ((lib_handler) != nullptr) {
         auto funcAddr = GetOpApiFuncAddrInLib(lib_handler, lib_name, api_name);
         return funcAddr;
@@ -331,20 +330,28 @@ inline void *GetOpApiFuncAddr(const char *apiName) {
         }
         ASCEND_LOGI("%s is not in default custom lib.", apiName);
     }
-
-    auto mathHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_math.so", apiName);
+    static auto opapiMathHandler = GetOpApiLibHandler("libopapi_math.so");
+    auto mathHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiMathHandler, "libopapi_math.so", apiName);
     if IS_VALID_FUNC_ADDR (mathHandlerFuncAddr)
         return mathHandlerFuncAddr;
-    auto nnHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_nn.so", apiName);
+
+    static auto opapiNnHandler = GetOpApiLibHandler("libopapi_nn.so");
+    auto nnHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiNnHandler, "libopapi_nn.so", apiName);
     if IS_VALID_FUNC_ADDR (nnHandlerFuncAddr)
         return nnHandlerFuncAddr;
-    auto cvHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_cv.so", apiName);
+
+    static auto opapiCvHandler = GetOpApiLibHandler("libopapi_cv.so");
+    auto cvHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiCvHandler, "libopapi_cv.so", apiName);
     if IS_VALID_FUNC_ADDR (cvHandlerFuncAddr)
         return cvHandlerFuncAddr;
-    auto transformerHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_transformer.so", apiName);
+
+    static auto opapiTransformerHandler = GetOpApiLibHandler("libopapi_transformer.so");
+    auto transformerHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiTransformerHandler, "libopapi_transformer.so", apiName);
     if IS_VALID_FUNC_ADDR (transformerHandlerFuncAddr)
         return transformerHandlerFuncAddr;
-    auto legacyHandlerFuncAddr = GetOpApiFuncFromFeatureLib("libopapi_legacy.so", apiName);
+
+    static auto opapiLegacyHandler = GetOpApiLibHandler("libopapi_legacy.so");
+    auto legacyHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiLegacyHandler, "libopapi_legacy.so", apiName);
     if IS_VALID_FUNC_ADDR (legacyHandlerFuncAddr)
         return legacyHandlerFuncAddr;
 
