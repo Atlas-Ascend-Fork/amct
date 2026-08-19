@@ -206,14 +206,18 @@ def convert_state_dict(
             )
 
         # MXFP8 (FP8 weight, E8M0 block scale). An integer scale marks MX; the last-dim
-        # group size is derived from the scale so weight_dequant broadcasts it correctly.
+        # group size is derived from the scale and must tile the weight's last dim exactly.
         elif not torch.is_floating_point(scale_inv):
-            mx_block = (
-                weight.shape[-1] // scale_inv.shape[-1]
-                if scale_inv.dim() == weight.dim() and scale_inv.shape[-1] > 0
-                else block_size
-            )
-            weight = weight_dequant(weight, scale_inv, block_size=mx_block, is_mx=True)
+            n = weight.shape[-1]
+            scale_cols = scale_inv.shape[-1] if scale_inv.dim() == weight.dim() else 0
+            if scale_cols <= 0 or n % scale_cols != 0:
+                raise ValueError(
+                    f"MXFP8 weight '{weight_name}': E8M0 scale shape "
+                    f"{tuple(scale_inv.shape)} does not tile weight last dim {n} "
+                    f"(need a 2-D scale whose last dim divides {n}, e.g. OCP MX group "
+                    f"size 32)."
+                )
+            weight = weight_dequant(weight, scale_inv, block_size=n // scale_cols, is_mx=True)
 
         # FP8 (float block scale)
         else:
