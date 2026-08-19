@@ -30,6 +30,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.common.models.llm.common.ptq_units import make_ptq_unit
 from amct_pytorch.workflows.llm_ptq import LlmPtqWorkflow
 
@@ -67,6 +68,8 @@ def _make_workflow(
     workflow.pipeline = None
     workflow.data_provider = None
     workflow.solver_key = "blockwise"
+    workflow.quant_result_dir = extra.get("quant_result_dir")
+    workflow.quant_result_writer = None
     return workflow
 
 
@@ -438,6 +441,103 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
     assert result == {0: {}}
 
 
+def test_artifact_mode_does_not_skip_existing_legacy_params(monkeypatch, tmp_path):
+    param_dir = tmp_path / "params"
+    param_dir.mkdir()
+    torch.save({"old": torch.tensor(1.0)}, param_dir / "layer_0_mlp.pt")
+
+    wf = _make_workflow(output_dir=str(tmp_path), algos=["lwc"])
+    wf.args.quant_param_dir = str(param_dir)
+    module = nn.Linear(4, 4)
+    unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, 0, module)
+    wf.pipeline = SimpleNamespace(
+        num_layers=1,
+        ptq_param_handler=MagicMock(
+            export_unit=MagicMock(return_value={"value": torch.tensor([2.0])})
+        ),
+        build_quant_block=MagicMock(return_value=module),
+        iter_ptq_units=MagicMock(return_value=iter([unit])),
+    )
+    wf.quant_result_writer = MagicMock()
+    wf._prepare_unit_batch = MagicMock(
+        return_value=SimpleNamespace(data_loader=[], kwargs={})
+    )
+    solver = MagicMock()
+    wf._build_block_solver = MagicMock(return_value=solver)
+    wf._save_unit_result = MagicMock()
+    monkeypatch.setattr("torch.npu.empty_cache", lambda: None)
+
+    result = wf._run_blockwise(object)
+
+    solver.solve.assert_called_once()
+    wf._save_unit_result.assert_called_once()
+    wf.quant_result_writer.write_unit.assert_called_once_with(
+        unit, result[0][QUANT_TARGET_MLP]
+    )
+
+
+def test_direct_config_export_skips_calibration_solver_and_legacy_params(
+    monkeypatch, tmp_path
+):
+    wf = _make_workflow(
+        output_dir=str(tmp_path),
+        quant_result_dir=str(tmp_path / "artifact"),
+        algos=[],
+    )
+    module = nn.Linear(4, 4)
+    unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, 0, module)
+    handler = PtqParamHandler()
+    wf.pipeline = SimpleNamespace(
+        num_layers=1,
+        ptq_param_handler=handler,
+        build_quant_block=MagicMock(return_value=module),
+        iter_ptq_units=MagicMock(return_value=iter([unit])),
+    )
+    wf.args.start_block_idx = 0
+    wf.args.end_block_idx = 1
+    wf.args.quant_param_dir = str(tmp_path / "params")
+    wf.quant_result_writer = MagicMock()
+    wf._prepare_unit_batch = MagicMock(side_effect=AssertionError("calibration used"))
+    wf._build_block_solver = MagicMock(side_effect=AssertionError("solver used"))
+    wf._save_unit_result = MagicMock(
+        side_effect=AssertionError("legacy params written")
+    )
+
+    result = wf._run_blockwise(object())
+
+    assert result == {0: {QUANT_TARGET_MLP: {}}}
+    assert all(not parameter.requires_grad for parameter in module.parameters())
+    wf.quant_result_writer.write_unit.assert_called_once_with(unit, {})
+    wf._prepare_unit_batch.assert_not_called()
+    wf._build_block_solver.assert_not_called()
+    wf._save_unit_result.assert_not_called()
+
+
+def test_direct_config_export_rejects_hidden_calibrated_payload(tmp_path):
+    wf = _make_workflow(
+        output_dir=str(tmp_path),
+        quant_result_dir=str(tmp_path / "artifact"),
+        algos=[],
+    )
+    module = nn.Linear(4, 4)
+    unit = make_ptq_unit(QUANT_TARGET_MLP, QUANT_TARGET_MLP, 0, module)
+    handler = MagicMock()
+    handler.export_unit.return_value = {"unexpected": torch.ones(1)}
+    wf.pipeline = SimpleNamespace(
+        num_layers=1,
+        ptq_param_handler=handler,
+        build_quant_block=MagicMock(return_value=module),
+        iter_ptq_units=MagicMock(return_value=iter([unit])),
+    )
+    wf.args.start_block_idx = 0
+    wf.args.end_block_idx = 1
+    wf.args.quant_param_dir = str(tmp_path / "params")
+    wf.quant_result_writer = MagicMock()
+
+    with pytest.raises(ValueError, match="found calibrated parameters"):
+        wf._run_blockwise(object())
+
+
 # ---- _prepare_experiment_dirs --------------------------------------------
 
 
@@ -447,6 +547,23 @@ def test_prepare_experiment_dirs_creates_log_dir_and_quant_param_dir(tmp_path):
     assert os.path.isdir(wf.args.log_dir)
     assert os.path.isdir(wf.args.quant_param_dir)
     assert wf.args.log_dir.endswith("logs")
+
+
+def test_prepare_experiment_dirs_direct_config_does_not_create_param_dir(tmp_path):
+    wf = _make_workflow(
+        output_dir=str(tmp_path),
+        quant_result_dir=str(tmp_path / "artifact"),
+        algos=[],
+    )
+    wf._resolve_quant_param_dir = MagicMock(
+        side_effect=AssertionError("legacy param directory resolved")
+    )
+
+    wf._prepare_experiment_dirs()
+
+    assert os.path.isdir(wf.args.log_dir)
+    assert wf.args.quant_param_dir == ""
+    wf._resolve_quant_param_dir.assert_not_called()
 
 
 def test_llm_ptq_run_blockwise(monkeypatch):
@@ -476,6 +593,42 @@ def test_llm_ptq_run_blockwise(monkeypatch):
     )
     wf.run()
     assert called.get("run") is True
+
+
+def test_llm_ptq_run_publishes_artifact_after_blockwise_success(monkeypatch):
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], granularity="block")
+    wf.setup = lambda: "sink"
+    wf.quant_result_writer = MagicMock()
+    wf._run_blockwise = MagicMock(return_value={0: {"mlp": {}}})
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY.get", lambda key: object()
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.logger", SimpleNamespace(remove=lambda _: None)
+    )
+
+    result = wf.run()
+
+    assert result == {0: {"mlp": {}}}
+    wf.quant_result_writer.publish.assert_called_once_with()
+
+
+def test_llm_ptq_run_never_publishes_after_unit_failure(monkeypatch):
+    wf = _make_workflow(quant_target=[QUANT_TARGET_MLP], granularity="block")
+    wf.setup = lambda: "sink"
+    wf.quant_result_writer = MagicMock()
+    wf._run_blockwise = MagicMock(side_effect=RuntimeError("unit failed"))
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.SOLVER_REGISTRY.get", lambda key: object()
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.logger", SimpleNamespace(remove=lambda _: None)
+    )
+
+    with pytest.raises(RuntimeError, match="unit failed"):
+        wf.run()
+
+    wf.quant_result_writer.publish.assert_not_called()
 
 
 def test_llm_ptq_run_unknown_granularity(monkeypatch):
@@ -653,3 +806,29 @@ def test_build_pipeline_uses_registry(monkeypatch):
     workflow = _make_workflow()
     pipeline = workflow._build_pipeline()
     assert pipeline is not None
+
+
+def test_artifact_setup_rejects_partial_layer_range_before_fingerprinting(
+    monkeypatch, tmp_path
+):
+    workflow = _make_workflow(
+        quant_target=[QUANT_TARGET_MLP],
+        quant_result_dir=str(tmp_path / "artifact"),
+        start_block_idx=0,
+        end_block_idx=1,
+    )
+    workflow.args.model = str(tmp_path / "model")
+    workflow._register_components = MagicMock()
+    workflow._prepare_experiment_dirs = MagicMock()
+    workflow._build_pipeline = MagicMock(return_value=SimpleNamespace(num_layers=2))
+    workflow._build_data_provider = MagicMock(return_value=MagicMock())
+    fingerprint = MagicMock()
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.compute_checkpoint_fingerprint", fingerprint
+    )
+
+    with pytest.raises(ValueError, match="full model layer range"):
+        workflow.setup()
+
+    fingerprint.assert_not_called()
+    assert not (tmp_path / "artifact").exists()

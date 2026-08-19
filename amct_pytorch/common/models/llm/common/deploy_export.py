@@ -21,20 +21,31 @@ from safetensors.torch import load_file
 
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.dtypes.int_impl import DENSE_W4A8_GROUP_SIZE
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
     observer = "minmax" if qtype == "float" else "memoryless"
     act_strategy = "group" if qtype == "float" else "token"
-    w_strategy = "group" if qtype == "float" else "channel"
-    group_size = 32 if qtype == "float" else None
+    if qtype == "float":
+        w_strategy = "group"
+        act_group_size = 32
+        weight_group_size = 32
+    elif w_bits == 4:
+        w_strategy = "group"
+        act_group_size = None
+        weight_group_size = DENSE_W4A8_GROUP_SIZE
+    else:
+        w_strategy = "channel"
+        act_group_size = None
+        weight_group_size = None
     quant_group = {
         "input_activations": {
             "actorder": None,
             "block_structure": None,
             "dynamic": True,
-            "group_size": group_size,
+            "group_size": act_group_size,
             "num_bits": a_bits,
             "observer": observer,
             "observer_kwargs": {},
@@ -48,7 +59,7 @@ def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=
             "actorder": None,
             "block_structure": None,
             "dynamic": False,
-            "group_size": group_size,
+            "group_size": weight_group_size,
             "num_bits": w_bits,
             "observer": observer,
             "observer_kwargs": {},
@@ -133,15 +144,25 @@ def get_quant_ignore_linear_names(block, weight_prefix):
     return names
 
 
-def export_block_deploy(pipeline, layer_idx: int, quant_ignore_layers: list):
-    block = pipeline.build_quant_block(layer_idx).to(pipeline.args.device).eval()
-    pipeline.load_selected_layer_ptq_params(layer_idx, block, strict=False)
+def export_block_deploy(
+    pipeline, layer_idx: int, quant_ignore_layers: list, param_loader=None
+):
+    if param_loader is None:
+        block = pipeline.build_quant_block(layer_idx).to(pipeline.args.device).eval()
+        pipeline.load_selected_layer_ptq_params(layer_idx, block, strict=False)
+    else:
+        block = pipeline.build_quant_block(layer_idx)
+        block = param_loader(pipeline, layer_idx, block)
+        block = block.to(pipeline.args.device).eval()
     deploy_tensors = {}
     tensor_routes = {}
     weight_prefix = pipeline.get_layer_weight_prefix(layer_idx)
     quant_ignore_layers.extend(get_quant_ignore_linear_names(block, weight_prefix))
     for weight_key, module in pipeline.iter_deploy_bindings(layer_idx, block):
         payload = module.export_deploy()
+        prepare_payload = getattr(pipeline, "prepare_deploy_payload", None)
+        if callable(prepare_payload):
+            payload = prepare_payload(weight_key, module, payload)
         deploy_tensors[weight_key] = payload["qweight"]
         tensor_routes[weight_key] = weight_key
         for extra_name, extra_tensor in payload.items():

@@ -40,6 +40,10 @@ from amct_pytorch.common.models.llm.common.deploy_export import (
     convert_state_dict,
     quant_payload,
 )
+from amct_pytorch.common.models.llm.common.quant_result import (
+    LlmQuantResultSet,
+    normalize_quant_result_dirs,
+)
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
 
@@ -58,6 +62,10 @@ class LlmDeployWorkflow:
         self.is_mx = self.quant_dtype.startswith("mx")
         self.is_int = self.quant_dtype.startswith("int")
         self.is_hif = self.quant_dtype.startswith("hif")
+        self.quant_result_dirs = normalize_quant_result_dirs(
+            getattr(args, "quant_result_dir", None)
+        )
+        self.quant_result_set = None
 
     @staticmethod
     def _is_weight_file(path: Path) -> bool:
@@ -84,6 +92,22 @@ class LlmDeployWorkflow:
                 replaced.add(base_weight_name)
         return replaced
 
+    @staticmethod
+    def _collect_unreplaced_weight_modules(
+        original_weight_map: dict[str, str],
+        replaced_original_weights: set[str],
+    ) -> list[str]:
+        """Return stable module paths for source weights kept in float form."""
+        suffix = ".weight"
+        return sorted(
+            {
+                weight_name[: -len(suffix)]
+                for weight_name in original_weight_map
+                if weight_name.endswith(suffix)
+                and weight_name not in replaced_original_weights
+            }
+        )
+
     def run(self):
         sink_id = self.setup()
         if self.granularity == "block":
@@ -98,10 +122,31 @@ class LlmDeployWorkflow:
         return results
 
     def setup(self):
+        quant_result_dirs = getattr(self, "quant_result_dirs", ())
+        if not quant_result_dirs:
+            os.makedirs(self.output_dir, exist_ok=True)
+            ensure_log_dir(self.args)
+            self._register_components()
+            self.pipeline = self._build_pipeline()
+            sink_id, _ = setup_run_logging(self.args, "deploy")
+            return sink_id
+
+        self._register_components()
+        if quant_result_dirs:
+            self.quant_result_set = LlmQuantResultSet.from_directories(
+                quant_result_dirs, self.model_path
+            )
+            self.quant_result_set.apply_to_args(self.args)
+            self.model_name = self.args.model_name
+            self.quant_dtype = self.args.quant_dtype
+            self.is_mx = self.quant_dtype.startswith("mx")
+            self.is_int = self.quant_dtype.startswith("int")
+            self.is_hif = self.quant_dtype.startswith("hif")
+        self.pipeline = self._build_pipeline()
+        if self.quant_result_set is not None:
+            self.quant_result_set.validate_for_pipeline(self.pipeline)
         os.makedirs(self.output_dir, exist_ok=True)
         ensure_log_dir(self.args)
-        self._register_components()
-        self.pipeline = self._build_pipeline()
         sink_id, _ = setup_run_logging(self.args, "deploy")
         return sink_id
 
@@ -163,7 +208,9 @@ class LlmDeployWorkflow:
         if self.quant_dtype is not None:
             cache_scheme_fn = getattr(self.pipeline, "cache_scheme", None)
             cache_scheme = cache_scheme_fn() if callable(cache_scheme_fn) else None
-            bits_scheme_fn = getattr(self.pipeline, "bits_scheme", None)
+            bits_scheme_fn = getattr(self.pipeline, "deploy_bits_scheme", None)
+            if not callable(bits_scheme_fn):
+                bits_scheme_fn = getattr(self.pipeline, "bits_scheme", None)
             bits_scheme = bits_scheme_fn() if callable(bits_scheme_fn) else None
             quantization_config = generate_quant_config(
                 cache_scheme,
@@ -215,10 +262,11 @@ class LlmDeployWorkflow:
         for layer_idx in tqdm(
             range(self.pipeline.num_layers), desc="Block Processing..."
         ):
+            param_loader = None
+            if getattr(self, "quant_result_set", None) is not None:
+                param_loader = self.quant_result_set.load_block
             layer_tensors, tensor_routes = export_block_deploy(
-                self.pipeline,
-                layer_idx,
-                quant_ignore_layers,
+                self.pipeline, layer_idx, quant_ignore_layers, param_loader=param_loader
             )
             if not layer_tensors:
                 continue
@@ -237,13 +285,27 @@ class LlmDeployWorkflow:
                 replaced_original_weights,
             )
         )
+        quant_ignore_layers = sorted(
+            set(quant_ignore_layers)
+            | set(
+                self._collect_unreplaced_weight_modules(
+                    original_weight_map,
+                    replaced_original_weights,
+                )
+            )
+        )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
         self._refresh_config(quant_ignore_layers)
+        fallback_fn = getattr(self.pipeline, "deploy_runtime_fallbacks", None)
+        runtime_fallbacks = fallback_fn() if callable(fallback_fn) else {}
+        if runtime_fallbacks:
+            logger.info("Applied deploy runtime ABI fallbacks: {}", runtime_fallbacks)
         logger.info("Exported deploy model to {}", self.output_dir)
         logger.info("Refreshed weight index at {}", index_path)
         return {
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
+            "runtime_fallbacks": runtime_fallbacks,
         }
 
     def _run_tensorwise(self):
@@ -262,7 +324,11 @@ class LlmDeployWorkflow:
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             updated_weight_map.update(
                 self._convert_tensorwise_shard(
-                    source_file, model_dir, original_weight_map, quant_layers, loaded_files
+                    source_file,
+                    model_dir,
+                    original_weight_map,
+                    quant_layers,
+                    loaded_files,
                 )
             )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)

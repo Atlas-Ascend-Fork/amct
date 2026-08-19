@@ -21,6 +21,7 @@ import torch
 from torch import Tensor
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY
 from amct_pytorch.quantization.dtypes.int_impl import (
+    dense_linear_w4a8_quant,
     weight_quant,
     dynamic_per_token_quant,
 )
@@ -54,3 +55,8 @@ class QuantDequantInt(torch.nn.Module):
             "weight_scale": scale.detach().cpu(),
             "weight_bias": bias.detach().cpu() if bias is not None else None,
         }
+
+    def export_dense_linear_deploy(self, x: Tensor):
+        if self.bits != 4:
+            return self.export_deploy(x)
+        return dense_linear_w4a8_quant(x)

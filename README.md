@@ -115,6 +115,7 @@ python3 -c "import amct_pytorch as amct; print(f'successfully installed AMCT ')"
 
 | 实践                                                                           | 简介                                                                                             |
 |------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| [Qwen3.8-27B](./examples/models/qwen3.8/Qwen3.8-27B.md)                      | 在 Ascend 910C 上完成 Qwen3.8-27B 的 W8A8、mixed W4A8、PTQ 量化结果落盘、独立进程恢复、PPL 评估和 vLLM-Ascend 部署验证。 |
 | [Qwen3.6-MoE](./examples/models/qwen3.6/Qwen3.6-Moe.md)                      | 在 Atlas A3 环境中完成 Qwen3.6-MoE 模型的量化、数据提取以及 PTQ，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。 |
 | [DeepSeek-V4](examples/models/deepseekv4/DeepSeekV4-Flash-Walkthrough.md) | 在 Atlas A3 环境中完成 DeepSeek-V4 Flash 模型的单卡推理，针对一站式平台场景提供标准启动流程和相关配置，帮助用户快速上手完成一次端到端 NPU 推理体验。    |
 | [Qwen3.6-MoE 结构化剪枝](./examples/models/qwen3.6/Qwen3.6-Moe-Pruning.md) | 在 Atlas A3 环境中对 Qwen3.6-MoE 做 MoE 专家结构化剪枝，把单卡装不下的模型压到单卡以内，剪枝后可继续量化。 |

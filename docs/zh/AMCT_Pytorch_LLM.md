@@ -16,6 +16,7 @@
 | 量化算法 | `amct_pytorch/algorithms/quant/` | 提供 LWC、LAC、OmniQuant、Learnable Hadamard、AutoRound 等算法组件。 |
 | 量化数据类型 | `amct_pytorch/quantization/dtypes/` | 提供 `mxfp`、`int` 等量化/反量化实现。 |
 | 量化配置 | `amct_pytorch/configs/` | 提供 BF16、W8A8、W4A4、W4A8 示例配置。 |
+| 量化结果 artifact | `amct_pytorch/common/models/llm/common/quant_result.py` | 将逐层 PTQ 结果写为可校验 artifact，并在评估和部署进程中恢复。 |
 
 支持的典型能力：
 
@@ -25,6 +26,7 @@
 - **模型导出**：输出适配部署环境的 `safetensors` 权重文件及对应的量化配置信息。
 - **灵活配置**：通过 `bit_config` 灵活设定全局或分组的权重/激活（W/A）量化比特数。
 - **算法选择**：通过 `algos` 参数自由组合并选择可训练的量化算法策略。
+- **结果持久化**：通过 `quant_result_dir` 保存量化构造配置和逐 unit PTQ 参数，支持跨进程评估与部署。
 
 ### 1.2 环境准备
 
@@ -36,7 +38,7 @@
 |[`deepseek_v4`](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main) | DeepSeek V4 |
 |[`qwen3`](https://huggingface.co/Qwen/Qwen3-4B/tree/main) | Qwen3 Dense |
 |[`qwen3_moe`](https://huggingface.co/Qwen/Qwen3-235B-A22B/tree/main) | Qwen3 MoE |
-|[`qwen3_5`](https://huggingface.co/Qwen/Qwen3.5-4B/tree/main) | Qwen3.5 Dense |
+|[`qwen3_5`](https://huggingface.co/Qwen/Qwen3.5-4B/tree/main) | Qwen3.5 Dense；Qwen3.8-27B 的配置类型同样使用该适配器 |
 |[`qwen3_5_moe`](https://huggingface.co/Qwen/Qwen3.5-35B-A3B/tree/main) | Qwen3.5 MoE |
 |[`qwen3_6_moe`](https://huggingface.co/Qwen/Qwen3.6-35B-A3B/tree/main) | Qwen3.6 MoE |
 |[`qwen3_next`](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct/tree/main) | Qwen3 Next |
@@ -115,6 +117,24 @@ python -m amct_pytorch.eval \
 
 参数详细解释请参见[参数说明](#3-参数说明)。
 
+#### 2.1.4 从 quant-result artifact 恢复后测量 PPL
+
+`quant_result_dir` 可以接收一到多个 target-specific artifact。workflow 会先校验 artifact 和源 checkpoint，再从 artifact 恢复 `model_name`、`quant_target`、`quant_dtype`、`bit_config`、`algos` 及逐 unit 参数：
+
+```bash
+python -m amct_pytorch.eval \
+  --model /path/to/model \
+  --model_name qwen3_5 \
+  --device npu:0 \
+  --granularity block \
+  --eval_mode quant \
+  --quant_result_dir \
+    ./outputs/artifacts/attn-linear \
+    ./outputs/artifacts/mlp
+```
+
+该路径不读取旧的 `*_param_dir`，也不会重新运行 PTQ。多份 artifact 必须绑定同一个源 checkpoint，并且除 `quant_target` 外的构造配置必须一致。
+
 `eval`相关启动指令也可参考[eval.sh](../../examples/eval.sh)
 
 ### 2.2 `extract_ptq_data`
@@ -166,13 +186,14 @@ python -m amct_pytorch.extract_ptq_data \
 3. 损失最小化：以原始未量化模型的输出作为真值GT（GroundTruth），通过最小化量化模块输出与真值之间的均方误差（MSE）来优化量化参数。
 4. 参数导出：优化完成后，自动导出各单元的 PTQ 参数。
 
-**输出**：PTQ 参数目录下的 `layer_*.pt` 文件。
+**输出**：默认输出 PTQ 参数目录下的 `layer_*.pt` 文件；指定 `--quant_result_dir` 时，同时输出带完整性校验的 quant-result artifact。
 
 **约束**：
 
 - `quant_target` 参数必须且仅能指定一个量化目标单元。
 - 当前仅支持 `granularity=block`， `model` 粒度的 PTQ 逻辑目前为预留接口。
 - `granularity` 必须和 extract_ptq_data 中保持一致。
+- 生成 quant-result artifact 时必须覆盖完整模型，即 `start_block_idx=0`，`end_block_idx` 不小于模型层数；每次 PTQ 仍只能写一个 `quant_target` 的 artifact。
 
 #### 2.3.1 训练 PTQ 参数
 
@@ -199,6 +220,27 @@ python -m amct_pytorch.ptq \
 
 参数详细解释请参见[参数说明](#3-参数说明)。
 
+#### 2.3.2 保存可恢复的 PTQ artifact
+
+```bash
+python -m amct_pytorch.ptq \
+  --model /path/to/model \
+  --model_name qwen3_5 \
+  --device npu:0 \
+  --granularity block \
+  --quant_target attn-linear \
+  --quant_dtype int \
+  --algos gptq_diag \
+  --bit_config /path/to/bit_config.yaml \
+  --data_dir ./outputs/ptq_data/attn-linear \
+  --start_block_idx 0 \
+  --end_block_idx 64 \
+  --quant_result_dir ./outputs/artifacts/attn-linear \
+  --output_dir ./outputs/ptq/attn-linear
+```
+
+artifact 目录在全部 unit 成功写出并回读校验后才发布 `quant_manifest.json`。有 unit 文件但没有 manifest 的目录属于中断结果，不能用于恢复。格式和完整性协议参见[量化结果 artifact](quant_result_artifact.md)。
+
 ### 2.4 `deploy`
 
 **入口**：`amct_pytorch/cli/llm/deploy.py`
@@ -216,7 +258,7 @@ python -m amct_pytorch.ptq \
 **约束**：
 
 - 模块粒度：当前仅支持以block 为粒度的处理（`granularity=block`） 。
-- 自定义 hook 限制：若使用了自定义的 `quantize()` hook（用于权重量化算法），则当前版本不支持通过 `export_deploy()` 功能进行部署。
+- 算法部署约束：带自定义权重量化 hook 的算法必须实现对应的 deploy export 契约。未实现时会明确报错；例如当前 `gptq_diag` 和 MinMax 支持 INT 权重导出，AWQ 的输入通道变换无法由 dense compressed-tensors 字段表示，因此仅支持 artifact reload PPL。
 
 `ptq`单卡相关启动指令也可参考[ptq_single_npu.sh](../../examples/ptq_single_npu.sh)
 `ptq`多卡相关启动指令也可参考[ptq_multi_npu.sh](../../examples/ptq_multi_npu.sh)
@@ -239,6 +281,21 @@ python -m amct_pytorch.deploy \
 
 参数详细解释请参见[参数说明](#3-参数说明)。
 
+#### 2.4.2 从 quant-result artifact 导出部署权重
+
+```bash
+python -m amct_pytorch.deploy \
+  --model /path/to/model \
+  --model_name qwen3_5 \
+  --granularity block \
+  --quant_result_dir \
+    ./outputs/artifacts/attn-linear \
+    ./outputs/artifacts/mlp \
+  --output_dir ./outputs/deploy
+```
+
+部署 workflow 先完整校验所有 artifact，再逐层从原始 checkpoint 重建量化 block、加载 PTQ 状态并导出权重。artifact 保存的是量化结果，不是完整模型，因此 `--model` 必须指向生成 artifact 时绑定的原始 checkpoint。
+
 ## 3. 参数说明
 
 ### 3.1 通用参数
@@ -254,6 +311,7 @@ python -m amct_pytorch.deploy \
 | `--seq_len` | `4096` | 校准和评估时使用的输入序列长度。用于确定模型在处理多长文本时的表现（尤其在量化校准阶段很重要）。 可选值：`1024`、`2048`、`4096`|
 | `--data_dir` | 空字符串 | PTQ 中间数据保存/读取目录。 |
 | `--output_dir` | `./outputs` | 输出目录，存放日志文件、PTQ 参数配置、最终部署模型等所有生成内容。 |
+| `--quant_result_dir` | `None` | 量化结果 artifact 路径。`ptq` 一次接收一个目录并写入当前 target；`eval`、`deploy` 可接收多个 target 目录并在校验后读取。未指定时保持原有参数目录/直接配置流程。 |
 
 ### 3.2 PPL 评估参数
 
@@ -279,7 +337,7 @@ python -m amct_pytorch.deploy \
 |------|------|------|
 | `--quant_dtype` | 空  |量化后数据的类型，当前适配包括mxfp、int。`eval_mode=quant`时，为必要参数|
 | `--bit_config` | `None` | YAML 格式的配置文件路径，该文件定义了具体的位宽策略。如果不提供此参数，则使用默认的 `W16A16` 配置。 |
-| `--algos` | `[]` | 启用的量化算法列表，算法会根据其注册的 `target` 自动应用到模型的权重（weight）、激活值（activation）或结构（structure）上。 |
+| `--algos` | `[]` | 启用的量化算法列表，算法会根据注册的 `target` 自动应用。除可训练算法外，LLM blockwise 路径还支持 `minmax`、`awq` 和 `gptq_diag` 统计类算法；`gptq_diag` 是对角 Hessian 近似，与完整 Hessian `gptq` 不同。 |
 | `--is_per_tensor` | `False` | 对于LAC（Learned Activation Clipping，学习式激活裁剪）算法，是否使用 per-tensor统计信息来确定裁剪范围。 |
 | `--k_size` | `128` | 可学习的 Hadamard 类结构变换矩阵的尺寸。 |
 
@@ -289,7 +347,7 @@ python -m amct_pytorch.deploy \
 |------|------|
 | [bf16.yaml](../../amct_pytorch/configs/bf16.yaml) | 全部保持 16 bit。 |
 | [w8a8.yaml](../../amct_pytorch/configs/w8a8.yaml) | 全局 W8A8（权重激活都为8bit）。 |
-| [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重8bit，激活4bit）。 |
+| [w4a8.yaml](../../amct_pytorch/configs/w4a8.yaml) | 全局 W4A8（权重4bit，激活8bit）。 |
 | [w4a4.yaml](../../amct_pytorch/configs/w4a4.yaml) | 全局 W4A4（权重激活都为4bit）。 |
 | [example_w4a8.yaml](../../amct_pytorch/configs/example_w4a8.yaml) | 自定义量化方案示例。 |
 
@@ -334,10 +392,15 @@ layer_{layer_idx}_{unit_name}.pt
 - `extract_ptq_data` 和 `ptq` 的 `quant_target` 必须保持一致。
 - `ptq`、`extract_ptq_data` 当前一次只处理一个 `quant_target`，需要多目标量化时建议分目标依次执行。
 - `deploy` 读取 PTQ 参数目录时，应确保对应 `quant_target` 的参数已训练完成。
+- `eval`、`deploy` 读取多个 artifact 时，每个 `quant_target` 只能出现一次，且所有 artifact 必须绑定同一个源 checkpoint 和相同的共享量化配置。
+- `quant_result_dir` 不能指向已存在的目录；失败或中断时不会发布 manifest，调用方应更换空的新路径重跑。
 - `--granularity block` 是当前 LLM Agent 的主要可用路径；`ptq` 的 model 粒度仍为预留实现。
 - `--model_name` 是内部适配器名称，不一定等同于 HuggingFace 模型路径。
 - `bit_config`、`model`请配置本地路径，`bit_config`对应的yaml文件可以参考仓上amct_pytorch/configs内的文件
 
 ## 5. 一站式样例
 
-本章节提供一站式样例，帮助开发者更好熟悉本特性的流程，以`qwen3.6moe`模型为例，可参考[Qwen-3.6-MoE一站式样例](../../examples/models/qwen3.6/Qwen3.6-Moe.md)。
+本章节提供一站式样例，帮助开发者熟悉完整流程：
+
+- [Qwen3.8-27B 量化结果落盘与部署](../../examples/models/qwen3.8/Qwen3.8-27B.md)：W8A8、mixed W4A8、artifact reload、PPL 和真实 910C deploy。
+- [Qwen3.6-MoE 一站式样例](../../examples/models/qwen3.6/Qwen3.6-Moe.md)：Qwen3.6-MoE 量化、数据提取和 PTQ。

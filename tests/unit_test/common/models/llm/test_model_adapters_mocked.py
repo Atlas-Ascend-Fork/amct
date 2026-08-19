@@ -331,7 +331,127 @@ class TestQwen35Mocked:
         )
         _mock_base_deps_wrapper(monkeypatch, cfg)
         model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
-        assert model.get_block_attention_mask(nn.Module()) is None
+        linear_mask = torch.ones(1, 4, dtype=torch.bool)
+        full_mask = torch.ones(1, 1, 4, 4, dtype=torch.bool).tril()
+        model.linear_attention_mask = linear_mask
+        model.full_attention_mask = full_mask
+
+        linear_block = nn.Module()
+        linear_block.layer_type = "linear_attention"
+        full_block = nn.Module()
+        full_block.layer_type = "full_attention"
+
+        assert model.get_block_attention_mask(linear_block) is linear_mask
+        assert model.get_block_attention_mask(full_block) is full_mask
+
+    def test_qwen3_5_embedding_builds_and_saves_full_attention_mask(self, monkeypatch):
+        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Config
+        from transformers.masking_utils import causal_mask_function
+
+        from amct_pytorch.common.models.llm.common.base import BaseModel
+        from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
+
+        cfg = Qwen3_5Config(
+            text_config={
+                "num_hidden_layers": 2,
+                "hidden_size": 64,
+                "intermediate_size": 128,
+                "num_attention_heads": 4,
+                "num_key_value_heads": 2,
+                "head_dim": 16,
+                "rms_norm_eps": 1e-6,
+                "vocab_size": 100,
+                "max_position_embeddings": 512,
+                "rope_theta": 10000.0,
+                "tie_word_embeddings": False,
+            }
+        )
+        _mock_base_deps_wrapper(monkeypatch, cfg)
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
+        hidden = torch.zeros(1, 4, 64)
+        linear_mask = torch.ones(1, 4, dtype=torch.bool)
+        full_mask = torch.ones(1, 1, 4, 4, dtype=torch.bool).tril()
+        position_ids = torch.arange(4).unsqueeze(0)
+        position_embeddings = (torch.zeros(1, 4, 16), torch.zeros(1, 4, 16))
+
+        def fake_embedding_forward(self, samples, dtype=torch.bfloat16, hook_name=None):
+            self.attention_mask = linear_mask
+            self.position_ids = position_ids
+            self.position_embeddings = position_embeddings
+            return [hidden]
+
+        create_mask = MagicMock(return_value=full_mask)
+        save_kwargs = MagicMock()
+        monkeypatch.setattr(BaseModel, "do_embedding_forward", fake_embedding_forward)
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5.create_causal_mask",
+            create_mask,
+        )
+        monkeypatch.setattr(
+            "amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5.save_ptq_kwargs",
+            save_kwargs,
+        )
+
+        assert model.do_embedding_forward([torch.ones(1, 4)], hook_name="norm") == [
+            hidden
+        ]
+        assert model.linear_attention_mask is linear_mask
+        assert model.full_attention_mask is full_mask
+        assert create_mask.call_args.kwargs == {
+            "config": model.config,
+            "inputs_embeds": hidden,
+            "attention_mask": linear_mask,
+            "past_key_values": None,
+            "position_ids": position_ids,
+            "and_mask_function": causal_mask_function,
+        }
+        save_kwargs.assert_called_once_with(
+            position_ids,
+            position_embeddings,
+            full_mask,
+            model.args.data_dir,
+        )
+
+    def test_qwen3_5_block_forward_selects_mask_and_restores_state(self, monkeypatch):
+        from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Config
+
+        from amct_pytorch.common.models.llm.common.base import BaseModel
+        from amct_pytorch.common.models.llm.qwen.qwen3_5.qwen3_5 import Qwen3_5
+
+        cfg = Qwen3_5Config(
+            text_config={
+                "num_hidden_layers": 2,
+                "hidden_size": 64,
+                "intermediate_size": 128,
+                "num_attention_heads": 4,
+                "num_key_value_heads": 2,
+                "head_dim": 16,
+                "rms_norm_eps": 1e-6,
+                "vocab_size": 100,
+                "max_position_embeddings": 512,
+                "rope_theta": 10000.0,
+                "tie_word_embeddings": False,
+            }
+        )
+        _mock_base_deps_wrapper(monkeypatch, cfg)
+        model = Qwen3_5(_make_mock_args(quant_target=[QUANT_TARGET_MLP]))
+        model.config.layer_types = ["linear_attention", "full_attention"]
+        original_mask = object()
+        linear_mask = object()
+        full_mask = object()
+        model.attention_mask = original_mask
+        model.linear_attention_mask = linear_mask
+        model.full_attention_mask = full_mask
+
+        def fake_block_forward(self, layer_idx, samples, **kwargs):
+            return self.attention_mask
+
+        monkeypatch.setattr(BaseModel, "do_block_forward", fake_block_forward)
+
+        assert model.do_block_forward(0, []) is linear_mask
+        assert model.attention_mask is original_mask
+        assert model.do_block_forward(1, []) is full_mask
+        assert model.attention_mask is original_mask
 
     def test_qwen3_5_build_quant_block_mlp(self, monkeypatch):
         from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Config

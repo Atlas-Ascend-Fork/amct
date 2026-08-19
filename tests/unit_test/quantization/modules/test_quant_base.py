@@ -395,6 +395,30 @@ def test_weight_quantizer_observe_input_dispatches_to_algorithms_with_hook():
         ALGO_REGISTRY._items.pop(UT_OBSERVE_ALGO, None)
 
 
+def test_weight_quantizer_transform_input_is_skipped_while_observing():
+    name = "_ut_weight_input_transform"
+
+    @ALGO_REGISTRY.register(name=name, targets=("weight",))
+    class _Transform(QuantAlgorithmBase):
+        def __init__(self, args, *_):
+            super().__init__()
+
+        def transform_input(self, x):
+            return x * 3
+
+        def forward(self, x):
+            return x
+
+    try:
+        wq = WeightQuantizer(_args(algos=[name], w_bits=8), w_bits=8)
+        x = torch.ones(2, 4)
+        assert torch.equal(wq.transform_input(x), x * 3)
+        wq.is_observe = True
+        assert wq.transform_input(x) is x
+    finally:
+        ALGO_REGISTRY._items.pop(name, None)
+
+
 def test_weight_quantizer_algo_forward_chains_non_quantize_algos():
     @ALGO_REGISTRY.register(name=UT_DOUBLE_ALGO, targets=("weight",))
     class _Double(QuantAlgorithmBase):

@@ -17,6 +17,10 @@
 
 import numpy as np
 import torch
+from typing import Optional
+
+
+DENSE_W4A8_GROUP_SIZE = 256
 
 
 def round_ste(x: torch.Tensor) -> torch.Tensor:
@@ -91,6 +95,63 @@ def weight_quant(tensor: torch.Tensor, bits=8, real_quant=False, v: torch.Tensor
             return quantized.to(torch.int8), scale.to(torch.float32), None
     else:
         return quantized * scale
+
+
+def dense_linear_w4a8_quant(
+    tensor: torch.Tensor,
+    scale: Optional[torch.Tensor] = None,
+    group_size: int = DENSE_W4A8_GROUP_SIZE,
+):
+    """Export dense W4A8 weights in the vLLM-Ascend legacy layout.
+
+    The runtime accepts one logical INT4 value in each INT8 element and packs
+    it for the NPU during model loading.  AMCT quantizes weights per output
+    channel, so the same channel scale is represented as the first-level scale
+    and the second-level group scale is one for every input group.
+    """
+    if tensor.dim() != 2:
+        raise ValueError(f"dense W4A8 weight must be 2-D, got {tensor.dim()}-D.")
+    if type(group_size) is not int or group_size <= 0:
+        raise ValueError("dense W4A8 group_size must be a positive int.")
+    rows, columns = tensor.shape
+    if columns % group_size != 0:
+        raise ValueError(
+            f"dense W4A8 input width {columns} must be divisible by "
+            f"group_size {group_size}."
+        )
+
+    if scale is None:
+        scale = (
+            tensor.detach()
+            .float()
+            .abs()
+            .amax(dim=1, keepdim=True)
+            .div(7)
+            .clamp_min(1e-9)
+        )
+    if not isinstance(scale, torch.Tensor) or tuple(scale.shape) != (rows, 1):
+        shape = tuple(scale.shape) if isinstance(scale, torch.Tensor) else None
+        raise ValueError(f"dense W4A8 scale must have shape {(rows, 1)}, got {shape}.")
+    if not torch.isfinite(scale).all() or not torch.all(scale > 0):
+        raise ValueError("dense W4A8 scale values must be finite and positive.")
+
+    device_scale = scale.to(device=tensor.device, dtype=tensor.dtype)
+    qweight = torch.round(tensor / device_scale).clamp(-7, 7).to(torch.int8)
+    params_dtype = tensor.dtype if tensor.is_floating_point() else torch.float32
+    group_count = columns // group_size
+    return {
+        "qweight": qweight.detach().cpu(),
+        "weight_scale": device_scale.to(params_dtype).detach().cpu(),
+        "weight_offset": torch.zeros(
+            (rows, 1), dtype=params_dtype, device=tensor.device
+        ).cpu(),
+        "weight_scale_second": torch.ones(
+            (rows, group_count), dtype=params_dtype, device=tensor.device
+        ).cpu(),
+        "weight_offset_second": torch.zeros(
+            (rows, group_count), dtype=params_dtype, device=tensor.device
+        ).cpu(),
+    }
 
 
 def int4_assistance_bias(weight, weight_scale):
