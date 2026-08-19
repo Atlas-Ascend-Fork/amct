@@ -1,0 +1,40 @@
+# ----------------------------------------------------------------------------
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
+# Qwen3.8-27B mixed W4A8 policy validated with gptq_diag.
+# MLP defaults to W4A8. Attention keeps its main QKV projections at W8A8 and
+# lowers the auxiliary/input-output projections listed below to W4A8.
+w_bits: 4
+a_bits: 8
+
+attn-linear:
+  w_bits: 8
+  a_bits: 8
+  in_proj_z:
+    w_bits: 4
+    a_bits: 8
+  in_proj_b:
+    w_bits: 4
+    a_bits: 8
+  in_proj_a:
+    w_bits: 4
+    a_bits: 8
+  out_proj:
+    w_bits: 4
+    a_bits: 8
+  o_proj:
+    w_bits: 4
+    a_bits: 8

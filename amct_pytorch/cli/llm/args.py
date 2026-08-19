@@ -143,6 +143,13 @@ def parser_gen(command=None):
     parser.add_argument('--attn_linear_param_dir', default="")
     parser.add_argument('--attn_cache_param_dir', default="")
     parser.add_argument('--moe_mlp_param_dir', default="")
+    parser.add_argument(
+        '--quant_result_dir',
+        nargs='+',
+        default=None,
+        help='V2 quant-result directory. Direct-config/PTQ export writes one '
+        'target-specific directory; deploy accepts one directory per quant target.',
+    )
     parser.add_argument('--wikitext_final_out', default="")
 
     args = parser.parse_args()

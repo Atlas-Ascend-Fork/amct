@@ -305,6 +305,22 @@ def test_build_block_for_forward_quant_branch(monkeypatch):
     assert result is block
 
 
+def test_build_block_for_forward_uses_artifact_instead_of_legacy_params():
+    stub = _StubModel()
+    original = nn.Linear(4, 4)
+    staged = nn.Linear(4, 4)
+    stub.build_quant_block = MagicMock(return_value=original)
+    stub.load_selected_layer_ptq_params = MagicMock()
+    stub.quant_result_set = MagicMock()
+    stub.quant_result_set.load_block.return_value = staged
+
+    result = stub._build_block_for_forward(3, use_quant_block=True)
+
+    assert result is staged
+    stub.quant_result_set.load_block.assert_called_once_with(stub, 3, original)
+    stub.load_selected_layer_ptq_params.assert_not_called()
+
+
 def test_build_block_for_forward_plain_branch(monkeypatch):
     stub = _StubModel()
     block = nn.Module()

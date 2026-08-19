@@ -24,6 +24,8 @@ import torch
 from amct_pytorch.cli.llm.args import parser_gen
 from amct_pytorch.quantization.dtypes.int import QuantDequantInt
 from amct_pytorch.quantization.dtypes.int_impl import (
+    DENSE_W4A8_GROUP_SIZE,
+    dense_linear_w4a8_quant,
     dynamic_per_token_quant,
     int4_assistance_bias,
     pack_4bit,
@@ -248,6 +250,27 @@ class TestIntImpl:
         assert qw.dtype == torch.int8
         assert qw.shape[1] == 32
         assert bias.shape == (8,)
+
+    def test_dense_linear_w4a8_quant_matches_fake_quant_contract(self):
+        torch.manual_seed(7)
+        weight = torch.randn(16, DENSE_W4A8_GROUP_SIZE * 2, dtype=torch.bfloat16)
+        payload = dense_linear_w4a8_quant(weight)
+
+        assert payload["qweight"].shape == weight.shape
+        assert payload["qweight"].dtype == torch.int8
+        assert payload["weight_scale"].shape == (16, 1)
+        assert payload["weight_scale_second"].shape == (16, 2)
+        assert torch.all(payload["weight_offset"] == 0)
+        assert torch.all(payload["weight_offset_second"] == 0)
+        reconstructed = payload["qweight"].to(weight) * payload["weight_scale"].to(
+            weight
+        )
+        assert torch.equal(reconstructed, QuantDequantInt(bits=4)(weight))
+
+    @pytest.mark.parametrize("columns", [255, 257])
+    def test_dense_linear_w4a8_quant_rejects_incompatible_width(self, columns):
+        with pytest.raises(ValueError, match="must be divisible"):
+            dense_linear_w4a8_quant(torch.randn(8, columns))
 
     def test_int4_assistance_bias_shape(self):
         weight = torch.randint(-8, 7, (4, 32), dtype=torch.int8)
