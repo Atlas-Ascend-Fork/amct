@@ -27,42 +27,30 @@ def _is_npu_device(device):
     return str(device).split(":", maxsplit=1)[0] == "npu"
 
 
-def _warn_without_raising(message, error):
-    try:
-        logger.warning(message, error)
-    except Exception:
-        pass
-
-
-def _empty_npu_cache(device):
-    if not _is_npu_device(device):
-        return
-    try:
-        torch.npu.empty_cache()
-    except Exception as error:
-        _warn_without_raising(
-            "Failed to empty NPU cache after PPL evaluation: {}",
-            error,
-        )
-
-
 def _cleanup_ppl_resources(iterator, device):
+    """Release the logits iterator and cached NPU memory after PPL evaluation.
+
+    Args:
+        iterator: Iterator that provides logits during PPL evaluation.
+        device: Device used for PPL evaluation.
+    """
     try:
         close = getattr(iterator, "close", None)
         if close is not None:
             close()
     except Exception as error:
-        _warn_without_raising(
+        logger.warning(
             "Failed to close PPL logits iterator: {}",
             error,
         )
-    try:
-        _empty_npu_cache(device)
-    except Exception as error:
-        _warn_without_raising(
-            "Failed to empty NPU cache after PPL evaluation: {}",
-            error,
-        )
+    if _is_npu_device(device):
+        try:
+            torch.npu.empty_cache()
+        except Exception as error:
+            logger.warning(
+                "Failed to empty NPU cache after PPL evaluation: {}",
+                error,
+            )
 
 
 def wikitext2_ppl(logits_iter, samples, device, seq_len=4096):

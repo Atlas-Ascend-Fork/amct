@@ -238,7 +238,7 @@ def test_wikitext2_ppl_cpu_does_not_touch_npu_cache(monkeypatch):
     assert ppl == pytest.approx(8.0, rel=1e-3)
 
 
-def test_wikitext2_ppl_cleans_resources_after_success(monkeypatch):
+def test_cleanup_ppl_resources_closes_iterator_before_emptying_cache(monkeypatch):
     events = []
 
     class TrackingIterator:
@@ -258,25 +258,27 @@ def test_wikitext2_ppl_cleans_resources_after_success(monkeypatch):
         def close():
             events.append(("close", None))
 
-    monkeypatch.setattr(
-        eval_ppl,
-        "_empty_npu_cache",
-        lambda device: events.append(("empty_cache", device)),
+    fake_npu = type(
+        "FakeNpu",
+        (),
+        {"empty_cache": staticmethod(lambda: events.append("empty_cache"))},
+    )()
+    monkeypatch.setattr(torch, "npu", fake_npu, raising=False)
+
+    eval_ppl._cleanup_ppl_resources(  # pylint: disable=protected-access
+        TrackingIterator(), "npu:1"
     )
 
-    ppl = eval_ppl.wikitext2_ppl(
-        TrackingIterator(),
-        [torch.zeros(1, 4, dtype=torch.long)],
-        device="cpu",
-        seq_len=4,
-    )
-
-    assert ppl == pytest.approx(8.0, rel=1e-3)
-    assert events == [("close", None), ("empty_cache", "cpu")]
+    assert events == [("close", None), "empty_cache"]
 
 
-def test_cleanup_ppl_resources_continues_after_cleanup_errors(monkeypatch):
+def test_eval_ppl_does_not_expose_empty_npu_cache_helper():
+    assert not hasattr(eval_ppl, "_empty_npu_cache")
+
+
+def test_cleanup_ppl_resources_warns_and_continues_after_cleanup_errors(monkeypatch):
     events = []
+    warnings = []
 
     class BrokenIterator:
         @staticmethod
@@ -284,17 +286,30 @@ def test_cleanup_ppl_resources_continues_after_cleanup_errors(monkeypatch):
             events.append("close")
             raise RuntimeError("close failed")
 
-    def broken_empty_cache(device):
-        events.append(("empty_cache", device))
+    def broken_empty_cache():
+        events.append("empty_cache")
         raise RuntimeError("cache failed")
 
-    monkeypatch.setattr(eval_ppl, "_empty_npu_cache", broken_empty_cache)
+    fake_npu = type(
+        "FakeNpu",
+        (),
+        {"empty_cache": staticmethod(broken_empty_cache)},
+    )()
+    monkeypatch.setattr(torch, "npu", fake_npu, raising=False)
+    monkeypatch.setattr(
+        eval_ppl.logger,
+        "warning",
+        lambda message, *args: warnings.append((message, args)),
+    )
 
     eval_ppl._cleanup_ppl_resources(  # pylint: disable=protected-access
         BrokenIterator(), "npu:1"
     )
 
-    assert events == ["close", ("empty_cache", "npu:1")]
+    assert events == ["close", "empty_cache"]
+    assert len(warnings) == 2
+    assert isinstance(warnings[0][1][0], RuntimeError)
+    assert isinstance(warnings[1][1][0], RuntimeError)
 
 
 def test_cleanup_ppl_resources_continues_after_close_lookup_error(monkeypatch):
@@ -306,11 +321,12 @@ def test_cleanup_ppl_resources_continues_after_close_lookup_error(monkeypatch):
                 raise RuntimeError("close lookup failed")
             return object.__getattribute__(self, name)
 
-    monkeypatch.setattr(
-        eval_ppl,
-        "_empty_npu_cache",
-        lambda device: cache_devices.append(device),
-    )
+    fake_npu = type(
+        "FakeNpu",
+        (),
+        {"empty_cache": staticmethod(lambda: cache_devices.append("npu:2"))},
+    )()
+    monkeypatch.setattr(torch, "npu", fake_npu, raising=False)
 
     eval_ppl._cleanup_ppl_resources(  # pylint: disable=protected-access
         BrokenCloseLookupIterator(), "npu:2"
