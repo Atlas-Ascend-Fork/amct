@@ -346,7 +346,8 @@ inline void *GetOpApiFuncAddr(const char *apiName) {
         return cvHandlerFuncAddr;
 
     static auto opapiTransformerHandler = GetOpApiLibHandler("libopapi_transformer.so");
-    auto transformerHandlerFuncAddr = GetOpApiFuncFromFeatureLib(opapiTransformerHandler, "libopapi_transformer.so", apiName);
+    auto transformerHandlerFuncAddr =
+        GetOpApiFuncFromFeatureLib(opapiTransformerHandler, "libopapi_transformer.so", apiName);
     if IS_VALID_FUNC_ADDR (transformerHandlerFuncAddr)
         return transformerHandlerFuncAddr;
 
