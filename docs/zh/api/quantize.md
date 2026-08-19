@@ -10,12 +10,12 @@
 
 ## 功能说明
 
-基于torch module的训练后量化接口，高精度模型转换为校准模型，得到量化校准模型，推理后计算得到量化参数。
+基于torch module的训练后量化接口，高精度模型转换为校准模型，得到量化校准模型，推理后计算得到量化参数。可选将量化结果保存为可校验、可恢复的 artifact。
 
 ## 函数原型
 
 ```python
-quantize(model, config)
+quantize(model, config, quant_result_dir=None)
 ```
 
 ## 参数说明
@@ -44,6 +44,14 @@ quantize(model, config)
 </td>
 <td class="cellrowborder" valign="top" width="81.19%" headers="mcps1.1.4.1.3 "><p id="p129452810402"><a name="p129452810402"></a><a name="p129452810402"></a><span>含义：量化配置。</span></p>
 <p id="p334514515403"><a name="p334514515403"></a><a name="p334514515403"></a><span>数据类型：自定义dict，其中包含weight/input/algorithm/skip_layers的配置，详细配置参数请参见</span><a href="#section1536112219183" target="_blank" rel="noopener noreferrer">config详细配置</a><span>。</span></p>
+</td>
+</tr>
+<tr><td class="cellrowborder" valign="top"><p>quant_result_dir</p>
+</td>
+<td class="cellrowborder" valign="top"><p>输入</p>
+</td>
+<td class="cellrowborder" valign="top"><p>含义：可选的 quant-result artifact 输出目录。目录必须尚不存在；量化参数定稿后写入 safetensors unit，并在全部 unit 校验通过后最后发布 quant_manifest.json。默认值为None，此时不写文件并保持原有内存流程。</p>
+<p>数据类型：str或None。当前Classic artifact支持MinMax、AWQ和GPTQ量化模块。</p>
 </td>
 </tr>
 </tbody>
@@ -209,9 +217,20 @@ cfg = {
         },
         'algorithm': {'minmax'},
         }
-# 调用量化接口生成量化校准模型
+# 旧流程：量化参数只保存在当前model对象中
 quantize(model, cfg)
 ```
+
+保存 artifact 时，应从尚未量化的模型开始：
+
+```python
+artifact_model = build_model()
+quantize(artifact_model, cfg, quant_result_dir="./quant_result")
+for inputs in calibration_loader:
+    artifact_model(inputs)
+```
+
+`quant_result_dir=None` 时，接口仍只原地修改当前模型，量化参数保存在内存中，后续调用 `convert(model)`。artifact 的目录协议、原子发布和恢复方式参见[量化结果 artifact](../quant_result_artifact.md)。
 
 ## config详细配置<a name="section1536112219183"></a>
 

@@ -236,6 +236,27 @@ def test_collect_replaced_original_weights_returns_empty_when_unrelated():
     )
 
 
+def test_collect_unreplaced_weight_modules_covers_full_source_index():
+    original = {
+        "model.language_model.layers.0.self_attn.q_proj.weight": "text.safetensors",
+        "model.language_model.layers.0.input_layernorm.weight": "text.safetensors",
+        "model.visual.blocks.0.attn.qkv.weight": "vision.safetensors",
+        "mtp.proj.weight": "mtp.safetensors",
+        "lm_head.weight": "head.safetensors",
+        "lm_head.bias": "head.safetensors",
+    }
+    replaced = {
+        "model.language_model.layers.0.self_attn.q_proj.weight",
+    }
+
+    assert LlmDeployWorkflow._collect_unreplaced_weight_modules(original, replaced) == [
+        "lm_head",
+        "model.language_model.layers.0.input_layernorm",
+        "model.visual.blocks.0.attn.qkv",
+        "mtp.proj",
+    ]
+
+
 def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
     # Create two shard files so total_size sums them.
@@ -259,7 +280,11 @@ def test_refresh_weight_index_writes_metadata_and_total_size(tmp_path):
 
 def test_refresh_config_attaches_quantization_block(tmp_path):
     wf = _make_workflow(output_dir=str(tmp_path))
-    wf.pipeline = SimpleNamespace(cache_scheme=lambda: {}, bits_scheme=lambda: None)
+    wf.pipeline = SimpleNamespace(
+        cache_scheme=lambda: {},
+        bits_scheme=MagicMock(side_effect=AssertionError("source scheme must not run")),
+        deploy_bits_scheme=lambda: [{"targets": ["Linear"], "w_bits": 4, "a_bits": 8}],
+    )
     # Original config that the workflow reads in.
     (tmp_path / CONFIG_JSON).write_text(json.dumps({"hidden_size": 4096}))
 
@@ -270,6 +295,8 @@ def test_refresh_config_attaches_quantization_block(tmp_path):
     assert refreshed[QUANTIZATION_CONFIG]["ignore"] == ["lm_head"]
     # int dtype path -> int-quantized format.
     assert refreshed[QUANTIZATION_CONFIG]["format"] == "int-quantized"
+    group = refreshed[QUANTIZATION_CONFIG]["config_groups"]["group_0"]
+    assert group["weights"]["num_bits"] == 4
 
 
 def test_refresh_config_uses_float_format_for_mx_dtype(tmp_path):
@@ -442,7 +469,9 @@ def test_deploy_run_unsupported_granularity():
 
 
 def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
-    def _mock_export_block_deploy(pipeline, layer_idx, quant_ignore_layers):
+    def _mock_export_block_deploy(
+        pipeline, layer_idx, quant_ignore_layers, param_loader=None
+    ):
         return (
             {LAYER_WEIGHT: torch.zeros(2, 3)},
             {LAYER_WEIGHT: LAYER_WEIGHT},
@@ -489,7 +518,59 @@ def test_deploy_run_blockwise_mocked_loop(monkeypatch, tmp_path):
     assert "index_path" in result
     assert "num_output_files" in result
     assert wf._write_block_file.call_count == 2
-    wf._refresh_config.assert_called_once()
+    wf._refresh_config.assert_called_once_with([])
+
+
+def test_deploy_run_blockwise_merges_full_model_ignores(monkeypatch, tmp_path):
+    def _mock_export_block_deploy(
+        pipeline, layer_idx, quant_ignore_layers, param_loader=None
+    ):
+        quant_ignore_layers.extend(["existing.ignore", "lm_head"])
+        return (
+            {LAYER_WEIGHT: torch.zeros(2, 3)},
+            {LAYER_WEIGHT: LAYER_WEIGHT},
+        )
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.export_block_deploy",
+        _mock_export_block_deploy,
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.logger",
+        MagicMock(),
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_deploy.tqdm",
+        lambda iterable, desc="": iterable,
+    )
+
+    wf = _make_workflow(output_dir=str(tmp_path))
+    wf.pipeline = _make_pipeline_mock(num_layers=1)
+    wf._copy_support_files = MagicMock()
+    wf._load_weight_index = MagicMock(
+        return_value={
+            "weight_map": {
+                LAYER_WEIGHT: KEY_SHARD1_SAFETENSORS,
+                "lm_head.weight": KEY_SHARD1_SAFETENSORS,
+                "model.visual.proj.weight": KEY_SHARD1_SAFETENSORS,
+                "mtp.proj.weight": KEY_SHARD1_SAFETENSORS,
+            }
+        }
+    )
+    wf._write_block_file = MagicMock(
+        return_value={LAYER_WEIGHT: "layer_000.safetensors"}
+    )
+    wf._write_remaining_original_weights = MagicMock(return_value={})
+    wf._refresh_weight_index = MagicMock(
+        return_value=str(tmp_path / SAFETENSORS_INDEX_JSON)
+    )
+    wf._refresh_config = MagicMock()
+
+    wf._run_blockwise()
+
+    wf._refresh_config.assert_called_once_with(
+        ["existing.ignore", "lm_head", "model.visual.proj", "mtp.proj"]
+    )
 
 
 # ---- __init__ via actual constructor -------------------------------------
@@ -580,7 +661,7 @@ def test_write_remaining_weights_empty_input_returns_empty():
 def test_deploy_run_blockwise_empty_layer_tensors(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.export_block_deploy",
-        lambda pipeline, layer_idx, quant_ignore_layers: ({}, {}),
+        lambda pipeline, layer_idx, quant_ignore_layers, param_loader=None: ({}, {}),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.logger",
@@ -628,7 +709,7 @@ def test_run_tensorwise_copies_and_rewrites_weight_index(monkeypatch, tmp_path):
         original_weight_map,
         model_dir,
         loaded_files,
-        block_size: weight,
+        block_size: (weight),
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_deploy.tqdm",

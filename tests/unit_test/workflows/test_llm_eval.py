@@ -63,6 +63,8 @@ def _make_workflow(eval_mode="bf16", quant_target=(), bit_policy=None):
     workflow.seq_len = getattr(args, "seq_len", 2048)
     workflow.pipeline = None
     workflow.data_provider = None
+    workflow.quant_result_dirs = ()
+    workflow.quant_result_set = None
     return workflow
 
 
@@ -206,7 +208,7 @@ def test_llm_eval_run_blockwise(monkeypatch):
             info=lambda m: None, remove=lambda h: None
         ),
     )
-    wf.run()
+    assert wf.run() == 10.5
     assert called.get("blockwise") == 10.5
 
 
@@ -248,6 +250,8 @@ def _make_eval_workflow(**overrides):
     for k, v in vars(args).items():
         setattr(wf, k, v)
     wf.args = args
+    wf.quant_result_dirs = ()
+    wf.quant_result_set = None
     return wf
 
 
@@ -652,6 +656,39 @@ def test_eval_setup_enables_sharded_block(monkeypatch, tmp_path):
     wf = _make_eval_workflow(output_dir=str(tmp_path))
     wf.setup()
     assert wf.pipeline.sharded_block is True
+
+
+def test_eval_setup_applies_and_attaches_validated_quant_result(monkeypatch, tmp_path):
+    artifact_set = MagicMock()
+    artifact_set.apply_to_args.side_effect = lambda args: setattr(
+        args, "quant_target", ["mlp", "attn-linear"]
+    )
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.LlmQuantResultSet.from_directories",
+        MagicMock(return_value=artifact_set),
+    )
+
+    class FakePipeline:
+        sharded_block = False
+
+        def __init__(self, args):
+            self.quant_result_set = None
+
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_eval.MODEL_REGISTRY",
+        SimpleNamespace(get=lambda _: FakePipeline),
+    )
+    monkeypatch.setattr(LlmEvalWorkflow, "_register_components", lambda self: None)
+    wf = _make_eval_workflow(output_dir=str(tmp_path))
+    wf.quant_result_dirs = ("/tmp/artifact-a", "/tmp/artifact-b")
+    wf.quant_result_set = None
+
+    wf.setup()
+
+    artifact_set.apply_to_args.assert_called_once_with(wf.args)
+    artifact_set.validate_for_pipeline.assert_called_once_with(wf.pipeline)
+    assert wf.pipeline.quant_result_set is artifact_set
+    assert wf.quant_target == ["mlp", "attn-linear"]
 
 
 # ---- _save_inter_result ---------------------------------------------------

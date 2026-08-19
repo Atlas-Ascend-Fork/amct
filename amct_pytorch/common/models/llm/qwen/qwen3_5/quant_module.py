@@ -21,7 +21,9 @@ from transformers.models.qwen3_5.modeling_qwen3_5 import (
     Qwen3_5GatedDeltaNet,
     Qwen3_5Attention,
     apply_rotary_pos_emb,
+    eager_attention_forward,
 )
+from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
 from amct_pytorch.algorithms.quant import AlgoBuildContext
 from amct_pytorch.quantization.modules.quant_base import (
     ActivationQuantizer,
@@ -191,6 +193,7 @@ class QuantQwen35Attn(Qwen3_5Attention):
         self.quant_args = quant_args
         ensure_bit_policy(quant_args)
         self.enable_attn_linear = "attn-linear" in self.quant_args.quant_target
+        self.enable_attn_cache = "attn-cache" in self.quant_args.quant_target
         self.hidden_size = attn_module.config.hidden_size
         self.value_dim = attn_module.config.num_attention_heads * self.head_dim
         bits = quant_args.bit_policy["attn-linear"]
@@ -280,16 +283,31 @@ class QuantQwen35Attn(Qwen3_5Attention):
             query_states, key_states, cos, sin
         )
 
-        attn_output = scaled_dot_product_attention(
-            self,
-            query_states,
-            key_states,
-            value_states,
-            attn_mask=None,
-            is_causal=True,
-            dropout_p=0.0,
-            scale=self.scaling,
-        )
+        if self.enable_attn_cache:
+            attn_output = scaled_dot_product_attention(
+                self,
+                query_states,
+                key_states,
+                value_states,
+                attn_mask=attention_mask,
+                is_causal=attention_mask is None,
+                dropout_p=0.0,
+                scale=self.scaling,
+            )
+        else:
+            attention_interface = ALL_ATTENTION_FUNCTIONS.get_interface(
+                self.config._attn_implementation, eager_attention_forward
+            )
+            attn_output, _ = attention_interface(
+                self,
+                query_states,
+                key_states,
+                value_states,
+                attention_mask,
+                dropout=0.0 if not self.training else self.attention_dropout,
+                scaling=self.scaling,
+                **kwargs,
+            )
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = attn_output * torch.sigmoid(gate)

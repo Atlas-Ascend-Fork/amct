@@ -23,6 +23,7 @@ and the full pipeline; they are deferred to the tiny-config integration batch.
 """
 
 import importlib
+from unittest.mock import MagicMock
 
 import pytest
 import torch
@@ -74,6 +75,15 @@ def test_generate_quant_group_custom_bits_and_qtype():
     assert group[INPUT_ACTIVATIONS]["type"] == INT
     assert group[WEIGHTS]["type"] == INT
     assert group["activation_use_clip"] is True
+
+
+def test_generate_quant_group_dense_int4_uses_runtime_group_layout():
+    group = generate_quant_group(a_bits=8, w_bits=4, qtype=INT)
+
+    assert group[INPUT_ACTIVATIONS]["strategy"] == "token"
+    assert group[INPUT_ACTIVATIONS]["group_size"] is None
+    assert group[WEIGHTS]["strategy"] == "group"
+    assert group[WEIGHTS]["group_size"] == 256
 
 
 # ---- generate_quant_config -----------------------------------------------
@@ -189,6 +199,62 @@ def test_export_block_deploy_skips_none_extra_tensor():
     )
     deploy_tensors, _ = export_block_deploy(pipeline, 0, [])
     assert "k.extra" not in deploy_tensors
+
+
+def test_export_block_deploy_applies_pipeline_payload_adapter():
+    class FakeQuantLinear:
+        def export_deploy(self):
+            return {
+                "qweight": "qw",
+                "weight_scale": "scale",
+                "weight_scale_second": "second",
+            }
+
+    prepare_payload = MagicMock(
+        side_effect=lambda weight_key, module, payload: {
+            key: value for key, value in payload.items() if key != "weight_scale_second"
+        }
+    )
+    module = FakeQuantLinear()
+    pipeline = importlib.import_module("types").SimpleNamespace(
+        args=importlib.import_module("types").SimpleNamespace(device="cpu"),
+        build_quant_block=lambda idx: nn.Linear(4, 4),
+        load_selected_layer_ptq_params=lambda idx, block, strict: None,
+        get_layer_weight_prefix=lambda idx: "",
+        iter_deploy_bindings=lambda idx, block: [("k.weight", module)],
+        prepare_deploy_payload=prepare_payload,
+    )
+
+    deploy_tensors, _ = export_block_deploy(pipeline, 0, [])
+
+    prepare_payload.assert_called_once()
+    assert deploy_tensors == {"k.weight": "qw", "k.weight_scale": "scale"}
+
+
+def test_export_block_deploy_uses_artifact_loader_instead_of_legacy_loader():
+    class FakeQuantLinear:
+        def export_deploy(self):
+            return {"qweight": "from_staged"}
+
+    original = nn.Linear(4, 4)
+    staged = nn.Linear(4, 4)
+    legacy_loader = MagicMock()
+    artifact_loader = MagicMock(return_value=staged)
+    pipeline = importlib.import_module("types").SimpleNamespace(
+        args=importlib.import_module("types").SimpleNamespace(device="cpu"),
+        build_quant_block=lambda idx: original,
+        load_selected_layer_ptq_params=legacy_loader,
+        get_layer_weight_prefix=lambda idx: "",
+        iter_deploy_bindings=lambda idx, block: (
+            [("k.weight", FakeQuantLinear())] if block is staged else []
+        ),
+    )
+
+    tensors, _ = export_block_deploy(pipeline, 0, [], param_loader=artifact_loader)
+
+    artifact_loader.assert_called_once_with(pipeline, 0, original)
+    legacy_loader.assert_not_called()
+    assert tensors == {"k.weight": "from_staged"}
 
 
 # ---- convert_state_dict (new in diff) ------------------------------------

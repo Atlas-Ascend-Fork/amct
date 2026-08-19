@@ -127,6 +127,18 @@ def test_quant_linear_export_deploy_returns_quant_dtype_payload():
     assert "weight_scale" in out
 
 
+def test_quant_linear_w4_export_uses_dense_runtime_payload():
+    linear = nn.Linear(256, 8, dtype=torch.bfloat16)
+    q = QuantLinear(_args(w_bits=4), linear, w_bits=4, name="proj")
+
+    out = q.export_deploy()
+
+    assert out["qweight"].shape == linear.weight.shape
+    assert out["weight_scale_second"].shape == (8, 1)
+    assert out["weight_offset_second"].shape == (8, 1)
+    assert "weight_bias" not in out
+
+
 def test_quant_linear_export_deploy_applies_structure_transform():
     linear, q = _make_linear_and_quant(4, 8)
     seen = {}
