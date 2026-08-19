@@ -13,7 +13,7 @@ import torch
 import torch_npu
 import numpy as np
 
-from amct_ops import svd_quant # noqa: F401 — Lazy loading of SvdQuant extension
+from amct_ops import svd_quant  # noqa: F401 — Lazy loading of SvdQuant extension
 from .quantize_ref import py_quantize_mx4, py_dequantize_mx4
 
 DEVICE_ID = 0

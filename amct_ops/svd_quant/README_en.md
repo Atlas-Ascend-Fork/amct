@@ -2,7 +2,7 @@
 
 SVDQuant method uses a low-rank branch to absorb outliers
 
-1. Activation outliers transfered to weights
+1. Activation outliers transferred to weights
 2. Weight decomposed into `L1 & L2 + R`. High-precision low-rank branch (L1 & L2) is used to process weight outliers
 3. The operator is implemented as X @ L1 @ L2 + Q(X) @ Q(R)
 
