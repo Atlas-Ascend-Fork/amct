@@ -24,6 +24,7 @@ Usage:
     y = hifloat4_fake_quant(x)                       # FP16/BF16 -> HiF4 -> FP16/BF16
     y = torch.ops.amct.hifloat4_fake_quant(x, -1)    # equivalent
 """
+
 __all__ = [
     'hifloat4_fake_quant',
 ]
@@ -32,7 +33,10 @@ import os
 import torch_npu  # noqa: F401 — registers PrivateUse1 backend
 import torch
 
-_lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libhifloat4_cast_ops.so")
-torch.ops.load_library(_lib_path)
+from .ops import hifloat4_fake_quant  # noqa: F401
 
-from .ops import hifloat4_fake_quant  # noqa: E402, F401
+# The C++ extension must be loaded before the first call so torch.ops.amct resolves.
+_lib_path = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "libhifloat4_cast_ops.so"
+)
+torch.ops.load_library(_lib_path)

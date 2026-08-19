@@ -1,4 +1,3 @@
-from __future__ import annotations
 # -*- coding: UTF-8 -*-
 # ----------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
@@ -19,10 +18,13 @@ from __future__ import annotations
 __all__ = [
     'register_algorithms',
     'AlgoBuildContext',
+    'QuantAlgorithmBase',
 ]
 
 from dataclasses import dataclass
 from typing import Optional
+
+from .base import QuantAlgorithmBase
 
 
 _REGISTERED = False
@@ -38,6 +40,7 @@ def register_algorithms():
     from .auto_round import AutoRound  # noqa: F401
     from .omniquant import OmniQuant  # noqa: F401
     from .flatquant import FlatQuant  # noqa: F401
+    from .gptq import GPTQ  # noqa: F401
 
     _REGISTERED = True
 

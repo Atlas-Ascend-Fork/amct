@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import inspect
-import json
 import os
 from typing import Any
 
@@ -31,26 +30,13 @@ from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.optimization import register_solvers
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.quantization.dtypes import register_dtype
-from amct_pytorch.common.models.llm.common.quant_apply import (
-    set_model_act_quant_state,
-    set_model_weight_quant_state,
-    set_model_to_observe,
-)
+from amct_pytorch.common.models.llm.common.quant_apply import set_model_to_observe
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.optimization import SOLVER_REGISTRY
-from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
-from amct_pytorch.common.utils.checkpoint_io import export_blockwise
-from amct_pytorch.common.utils.decode.detect import detect_and_decode
-from amct_pytorch.common.models.llm.common.block_export import export_block_fakequant
+from amct_pytorch.common.utils.run_logging import setup_run_logging
 
 
 class LlmPtqWorkflow:
-    """Post-training quantization in one class, two modes:
-
-    * with ``--algos`` (calibration dataset): native calibrated PTQ -> per-layer quant params.
-    * no ``--algos`` (data-free): convert the whole model via HiF4 fake-quant to a plain float
-      checkpoint, reusing ``detect.detect_and_decode`` + ``checkpoint_io.export_blockwise``.
-    """
     def __init__(self, args):
         self.args = args
         if len(args.quant_target) != 1:
@@ -60,12 +46,8 @@ class LlmPtqWorkflow:
         self.granularity = args.granularity
         self.pipeline = None
         self.data_provider = None
-        self.model_name = args.model_name
-        self.model_path = args.model
-        self.output_dir = args.output_dir
-        self.quant_dtype = args.quant_dtype
+        self.model_name = self.args.model_name
         self.solver_key = getattr(args, "solver", "blockwise")
-        self.out_dtype = torch.bfloat16
 
     @staticmethod
     def _register_components():
@@ -96,9 +78,6 @@ class LlmPtqWorkflow:
         return sink_id
 
     def run(self):
-        if self._is_convert_mode():
-            return self._run_convert()
-
         sink_id = self.setup()
 
         solver_cls = SOLVER_REGISTRY.get(self.granularity)
@@ -110,52 +89,6 @@ class LlmPtqWorkflow:
             raise ValueError(f"Unsupported solver granularity '{self.granularity}'.")
         logger.remove(sink_id)
         return results
-
-    # -- convert mode (no calibration): data-free fake-quant -> plain float checkpoint -----------
-    def _is_convert_mode(self):
-        """HiF4 convert (no calibration): quant_dtype ``hifp`` + 4-bit bit_config + empty --algos.
-
-        Only this exact combination converts the whole model to a plain float checkpoint. Anything
-        else -- a real dtype (int/mxfp), a non-empty --algos, or a non-4-bit width -- keeps the
-        native calibrated PTQ path."""
-        if getattr(self.args, "algos", None):
-            return False
-        if self.quant_dtype != "hifp":
-            return False
-        bit_policy = getattr(self.args, "bit_policy", None)
-        w_bits = getattr(bit_policy, "w_bits", 16) if bit_policy is not None else 16
-        return w_bits == 4
-
-    def _run_convert(self):
-        # Data-free HiF4 fake-quant of the whole model to a plain float checkpoint: detect/decode
-        # the source (detect.detect_and_decode) + assemble the output checkpoint block-by-block
-        # (checkpoint_io.export_blockwise), supplying the fake-quant hook + float config.
-        os.makedirs(self.output_dir, exist_ok=True)
-        ensure_log_dir(self.args)
-        self._register_components()
-        fmt, self.model_path = detect_and_decode(self.model_path, self.output_dir)
-        self.args.model = self.model_path
-        self.out_dtype = torch.bfloat16 if fmt == "bf16" else torch.float16
-        self.pipeline = self._build_pipeline()
-        sink_id, _ = setup_run_logging(self.args, "ptq_convert")
-        results = export_blockwise(
-            self.model_path, self.output_dir, self.pipeline.num_layers,
-            self._export_block, self._refresh_config,
-        )
-        logger.remove(sink_id)
-        return results
-
-    def _export_block(self, layer_idx, quant_ignore_layers):
-        return export_block_fakequant(self.pipeline, layer_idx, self.out_dtype)
-
-    def _refresh_config(self, quant_ignore_layers):
-        config_file = os.path.join(self.output_dir, "config.json")
-        with open(config_file, "r") as f:
-            config = json.load(f)
-        config.pop("quantization_config", None)  # plain float model, fake-quant baked in
-        config["torch_dtype"] = "float16" if self.out_dtype == torch.float16 else "bfloat16"
-        with open(config_file, "w") as f:
-            json.dump(config, f, indent=2)
 
     def _prepare_experiment_dirs(self):
         self.args.log_dir = os.path.join(self.args.output_dir, "logs")
@@ -229,14 +162,10 @@ class LlmPtqWorkflow:
         unit.module = unit.module.float().to(self.device)
         inps = self._move_to_device(inps)
         kwargs = self._move_to_device(kwargs)
-        set_model_act_quant_state(unit.module, False)
-        set_model_weight_quant_state(unit.module, False)
         set_model_to_observe(unit.module, True)
         try:
             gts = self.data_provider.materialize_gt(inps, unit.module, kwargs=kwargs)
         finally:
-            set_model_act_quant_state(unit.module, True)
-            set_model_weight_quant_state(unit.module, True)
             set_model_to_observe(unit.module, False)
         return self.data_provider.build_unit_batch(unit, inps, kwargs, gts)
 

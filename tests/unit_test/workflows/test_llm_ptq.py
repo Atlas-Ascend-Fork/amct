@@ -330,18 +330,39 @@ def test_prepare_unit_batch_non_tuple_inputs(monkeypatch):
     wf.data_provider.materialize_gt = MagicMock(return_value=torch.randn(2, 4))
     wf.data_provider.build_unit_batch = MagicMock(return_value=object())
 
+    observe_states = []
     monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_act_quant_state", lambda m, v: None
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_weight_quant_state", lambda m, v: None
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_to_observe", lambda m, v: None
+        "amct_pytorch.workflows.llm_ptq.set_model_to_observe",
+        lambda m, v: observe_states.append(v),
     )
 
     result = wf._prepare_unit_batch(unit)
     assert result is not None
+    assert observe_states == [True, False]
+
+
+def test_prepare_unit_batch_restores_quant_state_when_materialization_fails(
+    monkeypatch,
+):
+    wf = _make_workflow()
+    unit = make_ptq_unit(
+        QUANT_TARGET_MLP, "test_unit", layer_idx=0, module=nn.Linear(4, 4)
+    )
+    wf.data_provider = MagicMock()
+    wf.data_provider.load_unit_inputs = MagicMock(return_value=torch.randn(2, 4))
+    wf.data_provider.materialize_gt = MagicMock(
+        side_effect=RuntimeError("materialization failed")
+    )
+    observe_states = []
+    monkeypatch.setattr(
+        "amct_pytorch.workflows.llm_ptq.set_model_to_observe",
+        lambda m, v: observe_states.append(v),
+    )
+
+    with pytest.raises(RuntimeError, match="materialization failed"):
+        wf._prepare_unit_batch(unit)
+
+    assert observe_states == [True, False]
 
 
 # ---- _run_blockwise: empty units warning ----------------------------------
@@ -359,12 +380,6 @@ def test_run_blockwise_empty_units_warning(monkeypatch):
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.logger",
         MagicMock(warning=lambda msg, *args: warns.append(msg)),
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_act_quant_state", lambda m, v: None
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_weight_quant_state", lambda m, v: None
     )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.set_model_to_observe", lambda m, v: None
@@ -406,12 +421,6 @@ def test_run_blockwise_skip_existing_params(monkeypatch, tmp_path):
         return_value=SimpleNamespace(data_loader=[(torch.randn(2, 4), {})], kwargs={})
     )
 
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_act_quant_state", lambda m, v: None
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_weight_quant_state", lambda m, v: None
-    )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.set_model_to_observe", lambda m, v: None
     )
@@ -591,12 +600,6 @@ def test_ptq_run_blockwise_mocked(monkeypatch):
         return_value=SimpleNamespace(data_loader=[(torch.randn(2, 4), {})], kwargs={})
     )
 
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_act_quant_state", lambda m, v: None
-    )
-    monkeypatch.setattr(
-        "amct_pytorch.workflows.llm_ptq.set_model_weight_quant_state", lambda m, v: None
-    )
     monkeypatch.setattr(
         "amct_pytorch.workflows.llm_ptq.set_model_to_observe", lambda m, v: None
     )

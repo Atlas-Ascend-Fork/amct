@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from amct_pytorch.algorithms.quant.flatquant import (
@@ -28,6 +29,9 @@ from amct_pytorch.algorithms.quant.flatquant import (
     _InvFlatSingleTransform,
     _kronecker_matmul,
     _random_orthogonal,
+)
+from amct_pytorch.experimental.flatquant.flat_quant_module.function_utils import (
+    print_trainable_parameters,
 )
 
 
@@ -121,6 +125,23 @@ def test_forward_inv_t_divides_by_diag_scale_for_decomposed_weight_transform():
     assert torch.allclose(out, torch.tensor([[1.0, 0.5, 0.25, 0.125]]))
 
 
+def test_observe_forward_returns_activation_and_weight_inputs_unchanged():
+    flat = _make(dim_size=4, matrix_size=2)
+    flat.is_observe = True
+    activation = torch.randn(2, 4)
+    weight = torch.randn(3, 4)
+    activation_snapshot = activation.clone()
+    weight_snapshot = weight.clone()
+
+    activation_out = flat(activation, inv_t=False)
+    weight_out = flat(weight, inv_t=True, name="q_proj")
+
+    assert activation_out is activation
+    assert weight_out is weight
+    assert torch.equal(activation_out, activation_snapshot)
+    assert torch.equal(weight_out, weight_snapshot)
+
+
 def test_flatquant_transform_keeps_linear_result_equivalent():
     flat = _make(dim_size=4, matrix_size=2)
     with torch.no_grad():
@@ -159,6 +180,19 @@ def test_trainable_params_returns_all_parameters():
     assert len(trainable_params) == len(parameters)
     assert all(
         actual is expected for actual, expected in zip(trainable_params, parameters)
+    )
+
+
+def test_print_trainable_parameters_reports_ratio(capsys):
+    model = nn.Sequential(nn.Linear(2, 3), nn.Linear(3, 1))
+    model[1].weight.requires_grad = False
+    model[1].bias.requires_grad = False
+
+    print_trainable_parameters(model)
+
+    assert (
+        capsys.readouterr().out.strip()
+        == "trainable params: 9 || all params: 13 || trainable: 69.23%"
     )
 
 

@@ -15,6 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """Thin python wrapper for the HiFloat4 cast NPU operator."""
+
 import torch
 
 
@@ -28,7 +29,8 @@ def hifloat4_fake_quant(x: torch.Tensor, qdim: int = -1) -> torch.Tensor:
     Args:
         x: Input tensor on NPU, dtype float16 or bfloat16 (device/dtype are enforced by the op).
         qdim: Reduction/quant dim along which 64-element blocks are formed (default: last).
-              The op moves it to the last axis and pads to a multiple of 64 internally.
+              Its length must be a multiple of 64, otherwise the op raises RuntimeError.
+              The op moves it to the last axis internally.
 
     Returns:
         Tensor of the same shape and dtype, fake-quantized to HiFloat4.

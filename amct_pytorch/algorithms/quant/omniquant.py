@@ -16,8 +16,8 @@
 # ----------------------------------------------------------------------------
 
 import torch
-import torch.nn as nn
 
+from amct_pytorch.algorithms.quant.base import QuantAlgorithmBase
 from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 
 
@@ -26,7 +26,7 @@ from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
     description="omniquant",
     targets=("structure",),
 )
-class OmniQuant(nn.Module):
+class OmniQuant(QuantAlgorithmBase):
     def __init__(self, args, ctx):
         super().__init__()
         self.args = args
@@ -34,7 +34,6 @@ class OmniQuant(nn.Module):
         self.log_scale = torch.nn.Parameter(
             torch.zeros((1, self.dim)), requires_grad=True
         )
-        self.is_observe = False
 
     def transform(self):
         pass
@@ -42,40 +41,30 @@ class OmniQuant(nn.Module):
     def forward(
         self, x: torch.Tensor, inv_t: bool = False, name: str = None
     ) -> torch.Tensor:
-        dtype = x.dtype
         if self.is_observe:
-            hidden_dim = x.shape[-1]
-            tensor = x.view(-1, hidden_dim).abs().detach()
-            comming_max = torch.max(tensor, dim=0)[0].float().clamp(min=1e-4)
-            self.log_scale.data.copy_(
-                torch.max(
-                    self.log_scale.data, comming_max.log().to(self.log_scale.device)
-                )
-            )
-            return x
+            return self.calib_forward(x, inv_t=inv_t, name=name)
+
+        dtype = x.dtype
+        scale = self._get_scale(dtype=x.dtype, device=x.device)
+        if not inv_t:
+            x = x / scale
         else:
-            scale = self._get_scale(dtype=x.dtype, device=x.device)
-            if not inv_t:
-                x = x / scale
-            else:
-                x = x * scale
+            x = x * scale
         return x.to(dtype)
 
-    def trainable_params(self):
-        return list(self.parameters())
+    def calib_forward(
+        self, x: torch.Tensor, inv_t: bool = False, name: str = None
+    ) -> torch.Tensor:
+        if inv_t:
+            return x
 
-    def export_ptq_params(self):
-        return {
-            "log_scale": self.log_scale.detach().cpu(),
-        }
-
-    def load_ptq_params(self, params):
-        log_scale = params.get("log_scale")
-        if log_scale is None:
-            return
+        hidden_dim = x.shape[-1]
+        tensor = x.view(-1, hidden_dim).abs().detach()
+        comming_max = torch.max(tensor, dim=0)[0].float().clamp(min=1e-4)
         self.log_scale.data.copy_(
-            log_scale.to(device=self.log_scale.device, dtype=self.log_scale.dtype)
+            torch.max(self.log_scale.data, comming_max.log().to(self.log_scale.device))
         )
+        return x
 
     def _get_scale(self, dtype, device):
         scale = torch.exp(self.log_scale)

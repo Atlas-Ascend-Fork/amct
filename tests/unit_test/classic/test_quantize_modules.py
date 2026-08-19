@@ -23,6 +23,7 @@ import torch.nn as nn
 
 from amct_pytorch.classic.quantize_op.ofmr_quant_module import OfmrQuant
 from amct_pytorch.classic.quantize_op.linear_awq_module import LinearAWQuant
+from amct_pytorch.classic.quantize_op.smooth_quant_module import SmoothQuant
 from amct_pytorch.common.utils.vars import INT8
 
 
@@ -74,6 +75,23 @@ class TestOfmrQuantInit(unittest.TestCase):
         cfg = _make_ofmr_config(weight_compress_only=True)
         q = OfmrQuant(mod, "fc", cfg)
         self.assertTrue(q.weight_compress_only)
+
+
+class TestSmoothQuantCalculateSmooth(unittest.TestCase):
+    """Test SmoothQuant smooth factor sanitization."""
+
+    def test_calculate_smooth_replaces_non_finite_factor_with_one(self):
+        quant_module = object.__new__(SmoothQuant)
+        quant_module.weight = torch.zeros((2, 2), dtype=torch.float32)
+        quant_module.quant_config = {
+            "algorithm": {"smoothquant": {"smooth_strength": 0.5}}
+        }
+
+        smooth_factor = quant_module.calculate_smooth(
+            torch.ones((1, 2), dtype=torch.float32)
+        )
+
+        self.assertTrue(torch.equal(smooth_factor, torch.ones_like(smooth_factor)))
 
 
 class TestOfmrQuantForward(unittest.TestCase):

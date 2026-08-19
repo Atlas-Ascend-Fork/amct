@@ -32,6 +32,8 @@ from amct_pytorch.classic.graph_based.amct_pytorch.proto import (
     scale_offset_record_pytorch_pb2,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.prune.filter_prune_helper import (
+    ActivePruneHelper,
+    PassivePruneHelper,
     create_filter_prune_helper,
 )
 from amct_pytorch.classic.graph_based.amct_pytorch.utils.model_util import (
@@ -210,6 +212,16 @@ class TestFilterPruneHelper(unittest.TestCase):
                 helper = create_filter_prune_helper(node)
                 helper.process(record_helper)
         self.assertTrue(not record.ListFields())
+
+    def test_get_prune_axis_unexpected_type(self):
+        node = mock.Mock()
+        node.type = 'Add'
+
+        with self.assertRaisesRegex(RuntimeError, 'unexpected node type Add'):
+            ActivePruneHelper(node).get_prune_axis()
+
+        with self.assertRaisesRegex(RuntimeError, 'unexpected node type Add'):
+            PassivePruneHelper.get_prune_axis(node)
 
 
 class FakeRetrainConfig:

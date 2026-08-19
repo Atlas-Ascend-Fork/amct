@@ -23,14 +23,14 @@ import pytest
 import torch
 import torch.nn as nn
 
+from amct_pytorch.algorithms.quant import AlgoBuildContext, register_algorithms
+from amct_pytorch.algorithms.registry_factory import ALGO_REGISTRY
 from amct_pytorch.common.models.llm.common.quant_apply import (
     PlainLinear,
     QuantGatedMLP,
     apply_quant_to_attn,
     apply_quant_to_moe_mlp,
-    set_model_act_quant_state,
     set_model_to_observe,
-    set_model_weight_quant_state,
 )
 from amct_pytorch.quantization.bit_policy import BitPolicy
 from amct_pytorch.quantization.dtypes import register_dtype
@@ -67,6 +67,7 @@ _MLP_BIT_POLICY = BitPolicy(
     }
 )
 
+register_algorithms()
 register_dtype()
 
 
@@ -88,63 +89,69 @@ def test_plain_linear_ignores_structure_transform_kwarg():
     assert torch.equal(out, inner(x))
 
 
-# ---- set_model_*_quant_state ---------------------------------------------
+# ---- set_model_to_observe ------------------------------------------------
 
 
-_MOCK_QUANT_ARGS = SimpleNamespace(w_bits=8, quant_dtype="int", algos=[])
+_MOCK_QUANT_ARGS = SimpleNamespace(
+    w_bits=8,
+    quant_dtype="int",
+    algos=["lac", "lwc"],
+    w_size=(4, 8),
+    is_per_tensor=True,
+)
 
 
-class _StubActQuantizer(ActivationQuantizer):
+def _model_with_observe_modules():
+    model = nn.Module()
+    model.act_quantizer = ActivationQuantizer(_MOCK_QUANT_ARGS, bits=8)
+    model.weight_quantizer = WeightQuantizer(_MOCK_QUANT_ARGS)
+    model.structure_algorithm = ALGO_REGISTRY.get("omniquant")(
+        _MOCK_QUANT_ARGS, AlgoBuildContext(dim_size=8)
+    )
+    model.linear = nn.Linear(4, 4)
+    return model
+
+
+class _ObserveModuleWithCallback(nn.Module):
     def __init__(self):
-        super().__init__(_MOCK_QUANT_ARGS, bits=8)
-        self.enable = False
-        self.is_observe = True
+        super().__init__()
+        self.is_observe = False
+        self.callback_count = 0
+        setattr(self, "set_" + "observe", self._record_callback)
 
-
-class _StubWeightQuantizer(WeightQuantizer):
-    def __init__(self):
-        super().__init__(_MOCK_QUANT_ARGS)
-        self.enable = False
-
-
-def _model_with_quantizers():
-    m = nn.Module()
-    m.act_a = _StubActQuantizer()
-    m.act_b = _StubActQuantizer()
-    m.wq = _StubWeightQuantizer()
-    m.linear = nn.Linear(4, 4)  # should be ignored
-    return m
+    def _record_callback(self, flag):
+        self.callback_count += 1
 
 
 @pytest.mark.parametrize("flag", [True, False])
-def test_set_model_act_quant_state_toggles_only_activation_modules(flag):
-    m = _model_with_quantizers()
-    set_model_act_quant_state(m, flag)
-    assert m.act_a.enable is flag
-    assert m.act_b.enable is flag
-    assert m.act_a.is_observe is (not flag)
-    assert m.act_b.is_observe is (not flag)
-    # Non-activation modules untouched.
-    assert m.wq.enable is False
+def test_set_model_to_observe_synchronizes_all_state_modules(flag):
+    model = _model_with_observe_modules()
+    state_modules = [
+        module for module in model.modules() if hasattr(module, "is_observe")
+    ]
+    for module in state_modules:
+        module.is_observe = not flag
+
+    set_model_to_observe(model, flag)
+
+    assert state_modules
+    assert all(module.is_observe is flag for module in state_modules)
+    assert model.act_quantizer.is_observe is flag
+    assert model.act_quantizer.algorithms["lac"].is_observe is flag
+    assert model.act_quantizer.quant_obj.is_observe is flag
+    assert model.weight_quantizer.is_observe is flag
+    assert model.weight_quantizer.algorithms["lwc"].is_observe is flag
+    assert model.weight_quantizer.quant_obj.is_observe is flag
+    assert model.structure_algorithm.is_observe is flag
 
 
-@pytest.mark.parametrize("flag", [True, False])
-def test_set_model_weight_quant_state_toggles_only_weight_quantizer(flag):
-    m = _model_with_quantizers()
-    set_model_weight_quant_state(m, flag)
-    assert m.wq.enable is flag
-    # Activation flags should not be touched.
-    assert m.act_a.enable is False
+def test_set_model_to_observe_assigns_state_without_invoking_module_callback():
+    model = _ObserveModuleWithCallback()
 
+    set_model_to_observe(model, True)
 
-@pytest.mark.parametrize("flag", [True, False])
-def test_set_model_to_observe_only_targets_modules_with_attribute(flag):
-    m = _model_with_quantizers()
-    set_model_to_observe(m, flag)
-    assert m.act_a.is_observe is flag
-    assert m.act_b.is_observe is flag
-    # weight quantizer has no `is_observe` attribute and must remain unchanged.
-    assert not hasattr(m.wq, "is_observe")
+    assert model.is_observe is True
+    assert model.callback_count == 0
 
 
 # ---- apply_quant_to_attn / apply_quant_to_moe_mlp -------------------------
@@ -284,8 +291,8 @@ def test_quant_gated_mlp_forward_uses_input_and_hidden_transform(monkeypatch):
         return x
 
     gated.hidden_transform = hidden_transform
-    gated.input_quant.enable = True
-    gated.hidden_quant.enable = True
+    gated.input_quant.is_observe = False
+    gated.hidden_quant.is_observe = False
 
     x = torch.randn(2, 8)
     gated(x)
