@@ -34,15 +34,9 @@ def _cleanup_ppl_resources(iterator, device):
         iterator: Iterator that provides logits during PPL evaluation.
         device: Device used for PPL evaluation.
     """
-    try:
-        close = getattr(iterator, "close", None)
-        if close is not None:
-            close()
-    except Exception as error:
-        logger.warning(
-            "Failed to close PPL logits iterator: {}",
-            error,
-        )
+    close = getattr(iterator, "close", None)
+    if close is not None:
+        close()
     if _is_npu_device(device):
         torch.npu.empty_cache()
 
