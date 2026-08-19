@@ -20,6 +20,7 @@ from abc import ABCMeta
 import gc
 import torch
 from accelerate import init_empty_weights
+from compressed_tensors.utils.safetensors_load import get_weight_mappings
 from loguru import logger
 from safetensors import safe_open
 from tqdm import tqdm
@@ -137,8 +138,6 @@ class BaseModel(metaclass=ABCMeta):
             module.load_state_dict(self.load_layer_weight(prefix), strict=True)
 
     def load_layer_weight(self, prefix):
-        from compressed_tensors.utils.safetensors_load import get_weight_mappings
-
         weight_map = getattr(self, "_weight_map", None)
         if weight_map is None:
             weight_map = get_weight_mappings(self.model_path)
