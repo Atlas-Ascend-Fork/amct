@@ -57,7 +57,7 @@ AMCT 仓已具备接入 MR-GPTQ 所需的大部分积木，本方案是"改造 +
 
 ### 2.1 baseline 代码级验证结论（本地无 NPU，已从代码确认链路）
 
-> 目的：在上 NPU 环境前，先从代码确认 `--algos gptq --quant_dtype mxfp` 这条 baseline 链路真实可跑，避免"有提升"缺对照。以下均为代码实证：
+> 以下为接入所依据的代码事实（一并给出源码位置，便于核对）：
 
 - **CLI 合法**：`cli/llm/args.py` 中 `--quant_dtype` 的 `choices=['int','mxfp']`、`--quant_target` 的 `choices=['mlp','moe','attn-linear','attn-cache']`，与本方案命令行一致 ✅。
 - **GPTQ 原生支持 MXFP4**：`gptq_module.py:26` 导入 `MXFP4_E2M1`；`:192` 对 MXFP4 走特殊分支（`cal_scale_offset_static` 返回 `None,None`，即 scale 由 per-block（group_size=32）动态计算，不走静态 min-max）✅。
@@ -67,7 +67,7 @@ AMCT 仓已具备接入 MR-GPTQ 所需的大部分积木，本方案是"改造 +
   - `AlgorithmRegistry`（`algorithms/__init__.py`）= **算子级权重量化算法**（minmax/awq/**gptq**/mxquant/ofmr/...），签名 `register(name, module_type, quant_module, deploy_module)`。GPTQ 在此：`register('gptq','Linear',GPTQuant,NpuWeightQuantizedLinear)`。
   - `ALGO_REGISTRY`（`algorithms/quant/`）= **可学习结构变换**（flatquant/lwc/lac/omniquant/autoround）。
   - **MR-GPTQ 属前者**（GPTQ 变体），不走 flatquant 那套注册。
-- **本地不可执行确认**：`gptq_module.py:132` 硬 `import torch_npu` → 数值实验必须在昇腾 NPU 环境完成。
+- **依赖 NPU 环境**：`gptq_module.py:132` 硬 `import torch_npu`，数值实验必须在昇腾环境完成。
 
 ---
 
@@ -97,7 +97,7 @@ MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §
   （= 全 hidden 宽），再把 `down_proj` 补到 12288（全宽）。**「k=128 → 全宽」的整步效应量
   为 0.147（已确证）：k=128 下 W4A4 delta 达 0.4993、不达标，全宽下 0.3519、达标。**
   论文取小 k 的真实约束是**在线旋转算子的推理开销**，而非"大旋转破坏微缩块结构"。
-  **这是本项目相对论文的主要发现之一**，数据见自验证报告 §4.3 ③(a)。
+  数据见自验证报告 §4.3 ③(a)。
 
   ⚠️ 该发现的适用条件必须一并说明：本任务只做 fake-quant 精度评估、旋转不计推理成本。
   真部署时开销 = `k / out_features`，**朴素矩阵乘下全宽旋转约 +104% 在线算力**
@@ -131,26 +131,42 @@ MR-GPTQ = GPTQ 骨架 + 三个专为 FP4 微缩格式设计的增量（论文 §
 
 ## 4. AMCT 接入设计
 
-### 4.1 新增/修改文件
+### 4.1 文件与改动范围
 
-| 文件                                                   | 改动                                                   | 说明                                                                                                                                                      |
-| ------------------------------------------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `amct_pytorch/classic/quantize_op/mr_gptq_module.py` | **新增**                                         | `class MRGPTQuant(GPTQuant)`：在 GPTQ 误差补偿前插入 block-Hadamard 旋转，量化目标改为旋转后 + MXFP4 微块 scale 特化。预估 200~400 行（大量复用父类）。 |
-| `amct_pytorch/algorithms/__init__.py`                | 改（+import，+`BUILT_IN_ALGORITHM`，+register 一行） | 见 4.2                                                                                                                                                    |
-| `amct_pytorch/configs/w4a4.yaml`                     | **复用**（无需新建）                             | MXFP4 =`w4a4.yaml`（w_bits/a_bits=4）+ CLI `--quant_dtype mxfp`，已验证                                                                               |
-| `experiment/task-book/mr-gptq-mxfp4_<id>/`           | 新增                                                   | 交付目录：脚本、README、结果、日志                                                                                                                        |
-| （复用，仅读）flatquant 的 Hadamard/Kronecker 工具     | `algorithms/quant/flatquant.py`                      | 拷贝`_kronecker_matmul`，`_random_orthogonal` → 换成确定性 Sylvester-Hadamard 构造                                                                   |
+**对 amct 的改动为零**：算法以运行时注册接入，代码全部位于交付目录内。
 
-### 4.2 注册（经典算子系统，非 flatquant 那套）
+| 文件 | 性质 | 说明 |
+|---|---|---|
+| `src/mr_gptq_module.py` | **新增（核心交付）** | `class MRGPTQuant(GPTQuant)` + `register()`；`import` 即完成注册 |
+| `src/run_eval.py` | 新增 | 评测入口，`--mode {bf16, gptq_mxfp4, mr_gptq}`，增量与 W4A4 开关均为命令行参数 |
+| `src/eval_utils.py` / `src/data.py` | 新增 | 模型加载与校准 / PPL 评测 / 覆盖率与显存统计；数据集加载 |
+| `src/run_ablations.sh` / `run_night.sh` / `bench_compensate.py` | 新增 | 批跑与性能微基准 |
+| `amct_pytorch/**` | **不修改** | 仅 import 四个符号，见下 |
+
+对 amct 的**全部耦合**为四行 import：
 
 ```python
-# amct_pytorch/algorithms/__init__.py
-from amct_pytorch.classic.quantize_op.mr_gptq_module import MRGPTQuant
-BUILT_IN_ALGORITHM = ['minmax', 'awq', 'gptq', 'smoothquant', 'mxquant', 'ofmr', 'cast', 'quantile', 'mr_gptq']
-AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLinear)
-# 部署模块：MXFP4 权重量化沿用 NpuWeightQuantizedLinear（已支持 MXFP4_E2M1）；
-# 若最终走 W4A4 全量化(激活也 mxfp)，改用 NpuMXQuantizationLinear，实施时按导出验证选定。
+from amct_pytorch.classic.quantize_op.gptq_module import GPTQuant       # 父类
+from amct_pytorch.common.utils.quant_util  import cal_shared_exponent   # MX 共享指数
+from amct_pytorch.common.utils.data_utils  import float_to_fp4e2m1      # E2M1 cast
+from amct_pytorch.common.utils.vars        import MXFP4_E2M1
 ```
+
+### 4.2 注册（运行时，零改源码）
+
+MR-GPTQ 是 GPTQ 变体，属 `AlgorithmRegistry`（算子级权重量化算法）而非 `ALGO_REGISTRY`
+（可学习结构变换，flatquant 那套），见 §2.1。注册在 `mr_gptq_module.register()` 内完成，
+`import mr_gptq_module` 时执行：
+
+```python
+def register():
+    AlgorithmRegistry.register('mr_gptq', 'Linear', MRGPTQuant, NpuWeightQuantizedLinear)
+    BUILT_IN_ALGORITHM.add('mr_gptq')                       # 运行时向白名单追加
+    ALGORITHM_SUPPORTED_QUANT_TYPE_COMB['mr_gptq'] = {'NOT_QUANTIZE mxfp4_e2m1'}
+```
+
+三步分别解决：算法查找、白名单校验、算法 × 数据类型的支持表。
+部署模块沿用 `NpuWeightQuantizedLinear`（已支持 `MXFP4_E2M1`）。
 
 ### 4.3 MRGPTQuant 实现要点（复用父类 GPTQuant）
 
@@ -188,7 +204,7 @@ fp32 下做再回原 dtype——k 较大时 fp16 累加会引入可观误差、�
 
 | 方案 | 权重 | 激活 | 满足显存≥50%? | 满足量化层≥70%? | PPL 达标难度 | 定位 |
 |---|---|---|---|---|---|---|
-| **W4A16（weight-only）** | mxfp4 | bf16 | ✅ 权重 16→4bit，整体 >50% | ✅ | **低**（无激活量化+无在线激活旋转） | **首选/保底** |
+| **W4A16（weight-only）** | mxfp4 | bf16 | ✅ 权重 16 → 4.25 bit/参数，整体 >50% | ✅ | **低**（无激活量化+无在线激活旋转） | **首选/保底** |
 | W4A4（全量化） | mxfp4 | mxfp4 | ✅ 更省 | ✅ | 高（激活敏感，需在线旋转） | 进阶/加分 |
 
 任务书硬指标（delta≤0.4 / 量化层≥70% / 显存≥50%）**未限定位宽组合**，W4A16 已全部满足且风险最低 → **8B/35B 主线走 W4A16**（已达标：8B delta 0.273、35B 0.0671）。
@@ -299,16 +315,34 @@ python3 -u run_eval.py --model_path <35B> --mode mr_gptq --seq_len 4096 \
 
 ---
 
-## 5. 量化范围设计（满足 ≥70% 覆盖）
+## 5. 量化范围与覆盖率（实测）
 
-量化层占比 = 被量化 `nn.Linear` 数 / 全网 `nn.Linear` 数。
+覆盖率定义（任务书口径）：**被量化的 `nn.Linear` 数 / 全网 `nn.Linear` 数**（跳 `lm_head`）。
 
-| 模型            | 结构  | quant_target 设计     | 覆盖分析                                                                                                                                     |
-| --------------- | ----- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Qwen3-8B        | dense | `attn-linear + mlp` | attn(q/k/v/o) + mlp(gate/up/down) 覆盖每个 decoder layer 的全部 Linear，占比可 >90% ✅                                                       |
-| Qwen3.6-35B-A3B | MoE   | `attn-linear + moe` | ⚠️**必须含 MoE experts**：experts 的 gate/up/down 占全网 Linear 绝大多数，只量化 attn-linear 远低于 70%。纳入 experts 后占比 >90% ✅ |
+| 模型 | 全网 nn.Linear（跳 lm_head） | 实际量化 | 覆盖率 | 判定 |
+|---|---|---|---|---|
+| Qwen3-8B（dense） | 252 | 252 | **99.6%**（252/253） | ✅ |
+| Qwen3.6-35B-A3B（MoE） | 350 | 250 | **71.4%** | ✅（余量仅 1.4 个百分点） |
 
-**MoE expert 是精度风险点**（casebook qwen3_moe 记录：expert layout / packed 权重坑）。实施时先 attn-linear 打通，再逐步纳入 experts，观察 expert 量化对 PPL 的影响。linear_attention（若有）保持 BF16，不计入量化闭环。
+**两个模型的覆盖率来源完全不同：**
+
+- **8B**：每个 decoder layer 的 7 个 Linear（q/k/v/o、gate/up/down）维度均整除 32，
+  全部可量化，仅跳过 `lm_head`。
+- **35B**：⚠️ **路由专家不是 `nn.Linear`**——它们是 `Qwen3_5MoeExperts` 的融合 3D 张量
+  `gate_up_proj`/`down_proj`（约占 35B 参数中的 32B），**既不在覆盖率的分子里、也不在分母里**，
+  amct 编排层匹配不到。分母中的 350 个 `nn.Linear` 是 attn / 线性注意力投影 / 共享专家；
+  其中 **100 个因 in/out 维不整除 32 而无法做 block-32 MXFP4**（部分 `linear_attn` 投影、
+  `shared_expert_gate`(out=1)），**结构性地永远进不了分子**，故上限即 250/350 = 71.4%。
+
+**融合专家单独走一条通路**（`quantize_fused_experts`，§4.3）：不处理则显存指标必然不达标。
+处理后 MXFP4 的**参数量**覆盖达 97.0%（33.62B/34.66B）、权重压缩率 71.2%。
+
+> ⚠️ **三个口径不可混用**：覆盖率 71.4%（`nn.Linear` **层数**）、参数量覆盖 97.0%
+> （**MXFP4 数据类型**）、MR-GPTQ **算法**覆盖约 4%（仅 250 个 `nn.Linear`，
+> 融合专家走 RTN + scale fitting）。详见自验证报告 §4.2。
+
+**覆盖率余量是 35B 的主要风险**：71.4% 距门槛仅 1.4 个百分点（≈5 层），已无冗余。
+故 35B 上禁用混合精度保护（会压到 200/350 = 57.1%），见 §7 与报告 §4.4。
 
 ---
 
