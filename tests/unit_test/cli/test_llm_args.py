@@ -39,9 +39,7 @@ def test_trust_remote_code_is_required(capsys):
     [("True", True), ("False", False)],
 )
 def test_trust_remote_code_accepts_boolean_values(command_line_value, expected):
-    with patch.object(
-        sys, "argv", ["amct", "--trust_remote_code", command_line_value]
-    ):
+    with patch.object(sys, "argv", ["amct", "--trust_remote_code", command_line_value]):
         if expected:
             args = parser_gen()
         else:
@@ -57,8 +55,7 @@ def test_trust_remote_code_false_warns_user():
         pytest.warns(
             UserWarning,
             match=(
-                "may cause some models to fail to load.*"
-                "recommend setting it to True"
+                "may cause some models to fail to load.*recommend setting it to True"
             ),
         ),
     ):
