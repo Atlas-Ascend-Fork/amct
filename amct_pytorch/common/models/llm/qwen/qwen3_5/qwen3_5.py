@@ -74,16 +74,31 @@ class Qwen3_5(BaseModel):
             return frozenset(f.keys())
 
     def get_scale_name(self, weight_name):
-        """Return (scale_prefix, scale_inv_name) for locating scale tensors during dequantization."""
-        scale_prefix = "_scale"
+        """Return (scale_prefix, scale_inv_name) matching the on-disk packing.
+
+        - NVFP4 (compressed-tensors): ``<w>_scale`` + ``<w>_scale_2`` -> ("_scale", tuple).
+        - HiF4 (AMCT pack): ``export_deploy`` 落盘 scale 为 ``<prefix>.scale``
+          (由 ``weight_key.replace(".weight", ".scale")`` 命名) -> (".scale", name)。
+        - 其它单 scale 回退到 ``<w>_scale``。
+        """
         base_name = weight_name
-        if base_name.endswith("_scale_2"):
-            base_name = base_name[: -len("_scale_2")]
-        elif base_name.endswith("_scale"):
-            base_name = base_name[: -len("_scale")]
+        for suffix in ("_scale_2", "_scale", ".scale"):
+            if base_name.endswith(suffix):
+                base_name = base_name[: -len(suffix)]
+                break
+        # NVFP4: 两级 scale(块 scale + per-tensor 全局 scale)
         if f"{base_name}_scale_2" in self._checkpoint_keys:
-            return scale_prefix, (f"{base_name}_scale", f"{base_name}_scale_2")
-        return scale_prefix, f"{base_name}_scale"
+            return "_scale", (f"{base_name}_scale", f"{base_name}_scale_2")
+        # HiF4: 单个复合 scale,落盘名为 <prefix>.scale(与 export_deploy 一致)
+        hif4_scale = (
+            base_name[: -len(".weight")] + ".scale"
+            if base_name.endswith(".weight")
+            else f"{base_name}.scale"
+        )
+        if hif4_scale in self._checkpoint_keys:
+            return ".scale", hif4_scale
+        # 回退:单 scale 的 <w>_scale 命名
+        return "_scale", f"{base_name}_scale"
 
     def generate_tensorwise_quant_layers(self):
         """Pure dequant (NVFP4->bf16 / HiF4->fp32) re-quantizes nothing."""
