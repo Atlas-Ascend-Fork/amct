@@ -226,10 +226,21 @@ def convert_state_dict(
                     weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
                 )
 
-        # Plain FP8 (e.g. DeepSeek): a full float32 block scale (often weight_scale_inv),
-        # 2-D block, applied as a direct multiplier.
-        else:
+        # Plain FP8 (DeepSeek / Hunyuan): FP8 weight + a full float32 block scale. DeepSeek's
+        # weight_scale_inv already stores the *dequant* multiplier (README_WEIGHTS), so it is
+        # applied directly (no extra inverse).
+        elif torch.is_floating_point(weight) and scale_inv.dtype == torch.float32:
             weight = weight_dequant(weight, scale_inv, block_size=block_size)
+
+        # Fail closed: an unrecognized (weight dtype, scale dtype) combination should raise
+        # rather than be silently mis-decoded as FP8 (e.g. a stray fp16/bf16 scale, an
+        # unexpected fp8 scale, or a malformed NVFP4 that lost its _scale_2).
+        else:
+            raise ValueError(
+                f"Unrecognized quantized weight format for '{weight_name}': "
+                f"weight dtype={weight.dtype}, scale dtype={scale_inv.dtype}, "
+                f"scale shape={tuple(scale_inv.shape)}."
+            )
 
     except KeyError:
         logger.warning(
