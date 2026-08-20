@@ -39,9 +39,10 @@ typedef enum {
 template <typename T, pos_t pos>
 class Tensor {};
 
-// UB 张量必须经 TPipe::InitBuffer 注册才能使用（否则 kernel 元数据里
-// workspace 为 0，launch 时 host 端 std::vector::reserve 抛 length_error）。
-// 与 HiFloat4-private 的 EasyASC 生成代码一致：每张量独立 InitBuffer。
+// UB tensors must be registered via TPipe::InitBuffer before use (otherwise the
+// kernel metadata reports zero workspace and the host-side std::vector::reserve
+// throws length_error at launch). Matches the EasyASC generated code of
+// HiFloat4-private: each tensor gets its own InitBuffer.
 template <TPosition pos, typename T>
 aifunc LocalTensor<T> AllocateLocalTensor(int len) {
     TBuf<pos> tbuf;

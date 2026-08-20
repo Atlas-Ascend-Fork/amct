@@ -278,9 +278,10 @@ public:
 
     aifunc void PoisonBlock() {
         // NaN block poison: blocks with any non-finite element dequantize to NaN as
-        // a whole (aligned with the HiFloat4 golden). 这里只计算 clean mask
-        // (1=干净块)；NaN 替换延后到 Reconstruct 的输出端，避免 NaN scale 流入
-        // 中间向量算术（vdiv/vconv 对 NaN 操作数会触发 AI Core 异常）。
+        // a whole (aligned with the HiFloat4 golden). Only the clean mask is computed
+        // here (1 = clean block); NaN replacement is deferred to the Reconstruct output
+        // stage so NaN scales never enter intermediate vector arithmetic (vdiv/vconv
+        // raise AI Core exceptions on NaN operands).
         vcmpvs_lt((__ubuf__ uint8_t *)exp1maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, 8, 8);
         pipe_barrier(PIPE_V);
     }
@@ -417,7 +418,8 @@ public:
         pipe_barrier(PIPE_V);
         vmul(out_tsr_.ptr(), out_tsr_.ptr(), signbuf.ptr(), BATCH / SEG_ELEMS, 1, 1, 1, 8, 8, 8);
         pipe_barrier(PIPE_V);
-        // 毒化块整体替换为 NaN（clean mask=1 保留计算结果；nfmaxbuf 仍保存每块标记）
+        // Replace poisoned blocks with NaN as a whole (clean mask=1 keeps the computed
+        // result; nfmaxbuf still holds the per-block flags).
         vcmpvs_lt((__ubuf__ uint8_t *)exp2maskbuf.ptr(), nfmaxbuf.ptr(), 0.5f, BATCH / SEG_ELEMS, 1, 1, 8, 8);
         pipe_barrier(PIPE_V);
         set_cmpmask(nanbuf.vptr()); // fallback = quiet NaN (poisoned side)
@@ -470,13 +472,15 @@ private:
     DEvent<PIPE_V, PIPE_MTE3> output_ready{3, 4};
     DEvent<PIPE_MTE3, PIPE_V> output_empty{3, 4};
     static constexpr int BATCH = 512;
-    // 向量指令按 64 元素分段（8x8 重复单元），BATCH / SEG_ELEMS 为每批段数
+    // Vector instructions operate on 64-element segments (8x8 repeat units);
+    // BATCH / SEG_ELEMS is the number of segments per batch.
     static constexpr int SEG_ELEMS = 64;
-    // signmask 双段 uint16 缓冲（每元素高/低 16 位各一个掩码）
+    // Two-segment uint16 buffer for sign masks (one mask for the high and low
+    // 16 bits of each element).
     static constexpr int SIGN_MASK_ELEMS = 2 * SEG_ELEMS;
-    // copy_gm_to_ubuf 的长度单位（字节）
+    // Length unit of copy_gm_to_ubuf (bytes).
     static constexpr int COPY_UNIT_BYTES = 32;
-    // 单段 vector_dup 的重复行列数
+    // Repeat row/col count of a single vector_dup segment.
     static constexpr int VEC_REP_ELEMS = 8;
     static constexpr float eps = 5.421011e-20;
 };
