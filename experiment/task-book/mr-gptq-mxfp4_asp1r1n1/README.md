@@ -91,7 +91,7 @@ W4A4 的达标余量较小，为判断各项优化的"逐项收益"是否可信�
 mr-gptq-mxfp4_asp1r1n1/
 ├── README.md
 ├── docs/
-│   ├── design.md                    # 设计文档（评审对象，**v1.0 最终版**）
+│   ├── design.md                    # 设计文档（评审对象，v1.0 最终版）
 │   ├── task-book.md                 # 任务书原文存档
 │   ├── experiment-log.md            # 实验流水与踩坑
 │   ├── self-verification-report.md  # 自验证报告（数据+截图）
