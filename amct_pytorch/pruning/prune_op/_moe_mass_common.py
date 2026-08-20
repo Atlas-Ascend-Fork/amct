@@ -21,6 +21,7 @@ from typing import Callable, Dict, List, Optional, Tuple, TypeVar
 import torch
 import torch.nn as nn
 
+from .. import simulate
 from ..domains.moe import (
     DEFAULT_TOP_K,
     MoEPruningDomain,
@@ -114,6 +115,12 @@ def prune_one_layer(
     """Land the prune (domain dispatches ModuleList rebuild / fused slice) + patch the router."""
     layer_k = domain.resolve_top_k(model, target, top_k)
     domain.prune_experts(model, target, keep_idx, layer_k)
+    if simulate.active() is not None:
+        # The session's router hook already routes the dropped experts away, and this
+        # patch is exactly what must NOT land on the caller's model during a trial:
+        # it lowers router.top_k, swaps group_limited_topk and reslices expert_bias,
+        # none of which a later trial or the final model could recover from.
+        return
     patch_router_module(model, target, keep_idx, layer_k)
 
 

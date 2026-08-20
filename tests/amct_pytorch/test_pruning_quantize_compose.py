@@ -68,6 +68,20 @@ def _tok(n=6):
     return [torch.randint(0, 1000, (4, 20)) for _ in range(n)]
 
 
+def _output_quality(model, probe):
+    """Quality read from the model's outputs, not from its parameter count."""
+    with torch.no_grad():
+        ref = model(probe).detach().clone()
+    scale = ref.abs().mean().clamp_min(1e-12)
+
+    def quality(m):
+        with torch.no_grad():
+            out = m(probe)
+        return -float((out - ref).abs().mean() / scale)
+
+    return quality
+
+
 def _params(m):
     return sum(p.numel() for p in m.parameters())
 
@@ -167,13 +181,13 @@ class TestPruneThenQuantize(unittest.TestCase):
     def test_tolerance_prune_then_quantize(self):
         x = torch.randint(0, 1000, (4, 20))
         model = self._fresh()
-        p0 = _params(model)
+        calib = _tok()
         res = accuracy_based_auto_prune(
             model,
             DENSE_CFG,
-            data=_tok(),
+            data=calib,
             tolerance=0.3,
-            evaluator=lambda m: _params(m) / p0,
+            evaluator=_output_quality(model, calib[0]),
         )
         self.assertTrue(res.applied)
 
