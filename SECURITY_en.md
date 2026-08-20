@@ -28,7 +28,7 @@ The public network addresses contained in this project code are declared as foll
 | :----:| :------------:| :---------------------------------| :--------------------------------------------------------------------------------------------------------------| :------------------------------------------|
 | Dependency | Not involved　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/protobuf/releases/download/v3.13.0/protobuf-3.13.0.tar.gz　　　　　　| Download protobuf source code from gitcode, serves as compilation dependency　 |
 | Dependency | Not involved　　　 | cmake/third_party/protobuf.cmake | https://gitcode.com/cann-src-third-party/abseil-cpp/releases/download/20230802.1/abseil-cpp-20230802.1.tar.gz | Download abseil source code from gitcode, serves as compilation dependency　　 |
-| Dependency | Not involved　　　 | cmake/fetch_cann_cmake.cmake　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-017.tar.gz　　　　　　　　　　　　　　　 | Download cann cmake source code from gitcode, serves as compilation dependency |
+| Dependency | Not involved　　　 | cmake/fetch_cann_cmake.cmake　　 | https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-049.tar.gz　　　　　　　　　　　　　　　 | Download cann cmake source code from gitcode, serves as compilation dependency |
 ---
 
 ## Vulnerability Mechanism Description
