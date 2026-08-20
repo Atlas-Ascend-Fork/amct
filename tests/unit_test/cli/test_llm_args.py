@@ -73,4 +73,7 @@ def test_trust_remote_code_rejects_non_boolean_value(capsys):
         parser_gen()
 
     assert exc_info.value.code == 2
-    assert "choose from True, False" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "invalid choice: 'yes'" in error
+    assert "True" in error
+    assert "False" in error
