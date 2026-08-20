@@ -1,0 +1,55 @@
+# -*- coding: UTF-8 -*-
+"""Offline data shim for lm-eval-harness on Ascend NPU boxes.
+
+Intercepts datasets.load_dataset for pre-downloaded benchmarks and reads local
+parquet via fastparquet or jsonl via pandas (pyarrow crashes "Index not in
+dictionary bounds"; the HF remote glob times out with FSTimeoutError). Import +
+install() BEFORE lm_eval.
+
+Dataset->local-path mapping comes from datasets.json (shared with prefetch_data.py)
+via config.py, resolved under $BENCH_ASSETS. Add a benchmark = add a datasets.json
+entry, no code change here.
+"""
+import os
+import sys
+import pandas as pd
+import datasets
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from config import local_dataset_map  # noqa: E402
+from utils import read_dataset_file  # noqa: E402
+
+# (repo_id, dataset_name) -> {split: [local paths]}, built from datasets.json + $BENCH_ASSETS
+_LOCAL = local_dataset_map()
+
+_ORIG = datasets.load_dataset
+
+
+def _patched(path, *args, **kwargs):
+    name = args[0] if args and isinstance(args[0], str) else kwargs.get("name")
+    key = (path, name)
+    if key not in _LOCAL:
+        key = (path, None)
+    if key in _LOCAL:
+        splits = {}
+        for split, fps in _LOCAL[key].items():
+            missing = [fp for fp in fps if not os.path.exists(fp)]
+            if missing:
+                raise FileNotFoundError(
+                    f"{path} split '{split}' not prefetched at {missing}; "
+                    f"run prefetch_data.py first")
+            frames = [read_dataset_file(fp) for fp in fps]
+            df = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
+            splits[split] = datasets.Dataset.from_pandas(df, preserve_index=False)
+        return datasets.DatasetDict(splits)
+    return _ORIG(path, *args, **kwargs)
+
+
+def install():
+    datasets.load_dataset = _patched
+    try:
+        import lm_eval.api.task as _t
+        _t.load_dataset = _patched
+    except Exception:
+        pass
+    print(f"[bench_offline] patched load_dataset for {list(_LOCAL)}")
