@@ -74,6 +74,43 @@ class TestHiFloat4Kernel(unittest.TestCase):
         self.assertFalse(torch.isnan(out).any())
         self.assertEqual(out.abs().max().item(), 0.0)
 
+    def test_kernel_nan_block_poison_keeps_device_healthy(self):
+        """Regression test: NaN/Inf blocks are poisoned to NaN as a whole, and the
+        device must still launch normally afterwards.
+
+        The earlier hand-written kernel injected NaN into the scale; NaN flowing
+        through vdiv/vconv triggered an AI Core exception (507057), and after one
+        run with NaN-containing input every subsequent launch failed.
+        """
+        from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
+
+        torch.manual_seed(6)
+        x = torch.randn(4, 512, dtype=torch.bfloat16)
+        x[:, :64] = float("nan")
+        x[:, 64:128] = float("inf")
+
+        out = npu_fake_quant(x.npu()).cpu()
+
+        # Poison contract: blocks containing non-finite elements are NaN as a whole;
+        # clean blocks contain no NaN.
+        self.assertTrue(torch.isnan(out[:, :128]).all())
+        self.assertFalse(torch.isnan(out[:, 128:]).any())
+        # Clean blocks are bit-identical to the CPU reference (NaN block payload bits
+        # may differ).
+        ref = _oracle(x)
+        self.assertTrue(
+            torch.equal(
+                out[:, 128:].float().view(torch.uint32),
+                ref[:, 128:].view(torch.uint32),
+            )
+        )
+
+        # Device-health regression: a subsequent launch with finite input must work.
+        x2 = torch.randn(2, 128, dtype=torch.bfloat16).npu()
+        out2 = npu_fake_quant(x2)
+        torch.npu.synchronize()
+        self.assertFalse(torch.isnan(out2.cpu()).any())
+
     def _assert_kernel_matches_reference(self, x):
         from amct_ops.hifloat4_cast import hifloat4_fake_quant as npu_fake_quant
 
