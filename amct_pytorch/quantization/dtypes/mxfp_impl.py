@@ -95,7 +95,13 @@ def weight_dequant(
     # Get the original dimensions of weight
     M, N = weight.shape
     weight = weight.to(torch.float32)
-    scale = scale.to(torch.float32)
+    # An integer/uint scale is an MX E8M0 block exponent (uint8, bias 127): decode it to the
+    # float power-of-two block factor (2 ** (e - 127)). Float scales are already direct
+    # multipliers (e.g. NVFP4 decodes its E4M3 scale upstream), so they pass through unchanged.
+    if not torch.is_floating_point(scale):
+        scale = torch.exp2(scale.to(torch.float32) - FP32_EXPONENT_BIAS)
+    else:
+        scale = scale.to(torch.float32)
     if block_size != 1:
         if is_mx:
             scale_expanded = scale.repeat_interleave(block_size, dim=1)

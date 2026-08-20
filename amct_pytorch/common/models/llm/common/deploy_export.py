@@ -199,13 +199,35 @@ def convert_state_dict(
 
             weight = hif4_unpack(scale_inv, weight)
 
-        # MXFP4
-        elif weight.dtype == torch.int8:
-            weight = weight_dequant(
-                weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
-            )
+        # MX formats share an integer E8M0 block scale (power-of-two exponent, bias 127,
+        # decoded inside weight_dequant). What splits them is the *weight* element, not the
+        # scale: an FP8 (float) element -> MXFP8; a packed E2M1 element (int8 *or* uint8,
+        # 2 codes/byte) -> MXFP4. Keying MXFP4 on the integer scale instead of only
+        # weight.dtype==int8 also catches uint8-packed MXFP4 that the old chain missed.
+        elif not torch.is_floating_point(scale_inv):
+            if torch.is_floating_point(weight):
+                # MXFP8: FP8 (E4M3/E5M2) weight + E8M0 block scale. Group size is derived
+                # from the scale and must tile the weight's last dim exactly.
+                n = weight.shape[-1]
+                scale_cols = (
+                    scale_inv.shape[-1] if scale_inv.dim() == weight.dim() else 0
+                )
+                if scale_cols <= 0 or n % scale_cols != 0:
+                    raise ValueError(
+                        f"MXFP8 weight '{weight_name}': E8M0 scale shape "
+                        f"{tuple(scale_inv.shape)} does not tile weight last dim {n}."
+                    )
+                weight = weight_dequant(
+                    weight, scale_inv, block_size=n // scale_cols, is_mx=True
+                )
+            else:
+                # MXFP4: E2M1 packed into int8/uint8 (2 codes/byte) + E8M0 block scale.
+                weight = weight_dequant(
+                    weight, scale_inv, block_size=block_size, is_mx=True, is_packed=True
+                )
 
-        # FP8 / MXFP8
+        # Plain FP8 (e.g. DeepSeek): a full float32 block scale (often weight_scale_inv),
+        # 2-D block, applied as a direct multiplier.
         else:
             weight = weight_dequant(weight, scale_inv, block_size=block_size)
 
