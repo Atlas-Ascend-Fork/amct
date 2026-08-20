@@ -283,11 +283,6 @@ class TestReloadRejectsWrongModel:
             reload_quant_params(model, result_dir)
         _assert_unchanged(model, snapshot, children)
 
-    def test_non_module_model_is_rejected(self, art):
-        _, _, out_dir = art
-        with pytest.raises(TypeError):
-            reload_quant_params('not_a_module', out_dir)
-
     def test_different_weights_are_rejected(self, art):
         _, _, out_dir = art
         torch.manual_seed(123)

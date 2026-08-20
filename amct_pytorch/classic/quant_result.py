@@ -1431,15 +1431,10 @@ def reload_quant_params(model, quant_result_dir):
 
     Args:
         model: the original float ``nn.Module`` that was calibrated.
-        quant_result_dir: directory holding a published V2 quant result.
+        quant_result_dir: directory holding the published quant result.
     Returns:
         The same model instance, modified in place.
     """
-    if not isinstance(model, nn.Module):
-        raise TypeError(
-            'model must be a torch.nn.Module, got {}.'.format(type(model).__name__)
-        )
-
     result_dir = os.path.abspath(os.path.expanduser(quant_result_dir))
     # Phase 1: validate the artifact and stage every replacement.
     manifest = load_quant_manifest(result_dir)
