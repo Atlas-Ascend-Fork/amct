@@ -15,7 +15,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path
 
 
 def resolve_safetensors_path(model_path, file_name):
@@ -27,19 +27,14 @@ def resolve_safetensors_path(model_path, file_name):
 
     model_root = Path(model_path).resolve()
     input_path = Path(file_name)
-    if input_path.is_absolute():
-        weight_path = input_path.resolve()
-    else:
-        windows_path = PureWindowsPath(file_name)
-        if (
-            PurePosixPath(file_name).is_absolute()
-            or windows_path.is_absolute()
-            or windows_path.drive
-        ):
-            raise ValueError("Safetensors path uses a non-native absolute path")
-        if file_name in {".", ".."} or "/" in file_name or "\\" in file_name:
-            raise ValueError("Safetensors file name must be a plain file name")
-        weight_path = (model_root / input_path).resolve()
+    if (
+        input_path.is_absolute()
+        or file_name in {".", ".."}
+        or "/" in file_name
+        or "\\" in file_name
+    ):
+        raise ValueError("Safetensors file name must be a plain file name")
+    weight_path = (model_root / input_path).resolve()
 
     if weight_path.suffix != ".safetensors":
         raise ValueError("Weight file must use the .safetensors suffix")
