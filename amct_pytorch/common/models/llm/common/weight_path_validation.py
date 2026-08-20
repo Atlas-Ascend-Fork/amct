@@ -27,14 +27,17 @@ def resolve_safetensors_path(model_path, file_name):
 
     model_root = Path(model_path).resolve()
     input_path = Path(file_name)
-    if (
-        input_path.is_absolute()
-        or file_name in {".", ".."}
+    if not input_path.is_absolute() and (
+        file_name in {".", ".."}
         or "/" in file_name
         or "\\" in file_name
     ):
         raise ValueError("Safetensors file name must be a plain file name")
-    weight_path = (model_root / input_path).resolve()
+    weight_path = (
+        input_path.resolve()
+        if input_path.is_absolute()
+        else (model_root / input_path).resolve()
+    )
 
     if weight_path.suffix != ".safetensors":
         raise ValueError("Weight file must use the .safetensors suffix")

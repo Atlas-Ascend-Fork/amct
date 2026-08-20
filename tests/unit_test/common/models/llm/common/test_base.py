@@ -892,9 +892,13 @@ def test_load_layer_weight_reads_safetensors_from_disk(monkeypatch):
 
     model_dir, config, weight_map = _make_tiny_safetensors_model_dir()
     _mock_hf_for_safetensors_test(monkeypatch, model_dir, config)
+    absolute_weight_map = {
+        weight_name: str(model_dir / file_name)
+        for weight_name, file_name in weight_map.items()
+    }
     monkeypatch.setattr(
         "amct_pytorch.common.models.llm.common.base.get_weight_mappings",
-        lambda path: weight_map,
+        lambda path: absolute_weight_map,
     )
 
     args = SimpleNamespace(
