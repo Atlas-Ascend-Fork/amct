@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from loguru import logger
 import torch
 import torch.nn as nn
+from loguru import logger
 from safetensors.torch import load_file
 
-from amct_pytorch.quantization.modules.quant_linear import QuantLinear
-from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
 from amct_pytorch.common.models.llm.common.quant_apply import PlainLinear
+from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    resolve_safetensors_path,
+)
+from amct_pytorch.quantization.dtypes.mxfp_impl import weight_dequant
+from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
 
 def generate_quant_group(a_bits=8, w_bits=8, qtype="float", activation_use_clip=False):
@@ -159,7 +162,8 @@ def _load_scales(names, original_weight_map, model_dir, loaded_files):
     for name in names:
         file_name = original_weight_map[name]
         if file_name not in loaded_files:
-            loaded_files[file_name] = load_file(model_dir / file_name, device="cpu")
+            file_path = resolve_safetensors_path(model_dir, file_name)
+            loaded_files[file_name] = load_file(str(file_path), device="cpu")
         scales.append(loaded_files[file_name][name])
     return scales
 

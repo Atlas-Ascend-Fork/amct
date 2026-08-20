@@ -15,7 +15,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import os
 from abc import ABCMeta
 import gc
 import torch
@@ -43,6 +42,9 @@ from amct_pytorch.common.models.llm.common.ptq_units import (
     PtqUnit,
     iter_indexed_units,
     make_ptq_unit,
+)
+from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    resolve_safetensors_path,
 )
 from amct_pytorch.quantization.modules.quant_linear import QuantLinear
 
@@ -147,8 +149,8 @@ class BaseModel(metaclass=ABCMeta):
                 file_list.add(file_name)
         state_dict = {}
         for file_path in file_list:
-            full_path = os.path.join(self.model_path, file_path)
-            with safe_open(full_path, framework="pt", device="cpu") as f:
+            full_path = resolve_safetensors_path(self.model_path, file_path)
+            with safe_open(str(full_path), framework="pt", device="cpu") as f:
                 for key in f.keys():
                     if key.startswith(prefix):
                         new_key = key[len(prefix) :]

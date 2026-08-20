@@ -24,21 +24,24 @@ from collections import defaultdict
 from pathlib import Path
 
 import torch
-
 from loguru import logger
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
-from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 from tqdm import tqdm
+from transformers.utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 
 from amct_pytorch.algorithms.quant import register_algorithms
 from amct_pytorch.common.models import MODEL_REGISTRY
 from amct_pytorch.common.models.llm import register_llm_models
 from amct_pytorch.common.models.llm.common.deploy_export import (
+    convert_state_dict,
     export_block_deploy,
     generate_quant_config,
-    convert_state_dict,
     quant_payload,
+)
+from amct_pytorch.common.models.llm.common.weight_path_validation import (
+    resolve_safetensors_path,
+    validate_weight_map,
 )
 from amct_pytorch.common.utils.run_logging import ensure_log_dir, setup_run_logging
 from amct_pytorch.quantization.dtypes import DTYPE_REGISTRY, register_dtype
@@ -140,7 +143,9 @@ class LlmDeployWorkflow:
         index_path = Path(self.model_path) / SAFE_WEIGHTS_INDEX_NAME
         if index_path.exists():
             with open(index_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                index = json.load(f)
+            validate_weight_map(self.model_path, index.get("weight_map"))
+            return index
         single_path = Path(self.model_path) / SAFE_WEIGHTS_NAME
         if not single_path.exists():
             raise FileNotFoundError(
@@ -149,6 +154,7 @@ class LlmDeployWorkflow:
             )
         with safe_open(str(single_path), framework="pt") as f:
             weight_map = {key: SAFE_WEIGHTS_NAME for key in f.keys()}
+        validate_weight_map(self.model_path, weight_map)
         # total_size is a placeholder; _refresh_weight_index() recomputes and
         # overwrites it from the actual output shard sizes.
         return {
@@ -262,7 +268,11 @@ class LlmDeployWorkflow:
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
             updated_weight_map.update(
                 self._convert_tensorwise_shard(
-                    source_file, model_dir, original_weight_map, quant_layers, loaded_files
+                    source_file,
+                    model_dir,
+                    original_weight_map,
+                    quant_layers,
+                    loaded_files,
                 )
             )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
@@ -277,7 +287,8 @@ class LlmDeployWorkflow:
     def _convert_tensorwise_shard(
         self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
     ):
-        current_state_dict = load_file(model_dir / source_file, device="cpu")
+        source_path = resolve_safetensors_path(model_dir, source_file)
+        current_state_dict = load_file(str(source_path), device="cpu")
         loaded_files[source_file] = current_state_dict
 
         new_state_dict = {}
@@ -347,7 +358,7 @@ class LlmDeployWorkflow:
 
         model_dir = Path(self.model_path)
         for source_file in sorted(remaining_by_file):
-            source_path = model_dir / source_file
+            source_path = resolve_safetensors_path(model_dir, source_file)
             with safe_open(str(source_path), framework="pt", device="cpu") as f:
                 for weight_name in remaining_by_file[source_file]:
                     tensor = f.get_tensor(weight_name)
