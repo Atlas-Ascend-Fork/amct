@@ -165,7 +165,30 @@ python3 -u run_eval.py --model_path <35B> --mode mr_gptq --seq_len 4096     --de
   （router 读的是**未旋转**的 hidden state，与旋转无耦合，不存在"需与 router 同步"的障碍。）
   scale fitting 对 RTN 本就是加分项（论文 Table 11），故保留。
   router（`Qwen3_5MoeTopKRouter`，非 Linear）保 fp16。
-- 工程：双卡 device_map（35B fp16≈70GB 单卡放不下），融合专家量化在 CPU 完成规避多卡 OOM。
+- **工程：为何融合专家量化必须放在 CPU**（"双卡装得下模型" ≠ "有工作空间"）
+
+  35B fp16 ≈ 70 GB，双卡 128 GB 确实装得下。但 `device_map="auto"` 是**贪心填充**的——
+  它的目标是把模型放进去，不为后续计算预留空间；实测中 card 0 常仅剩约 **1 GB** 可用。
+  而单个 `Qwen3_5MoeExperts` 的量化需要：40 个模块共 32.21B 参数、平均每模块约 0.8B，
+  其中 `gate_up_proj` 单张量 fp16 约 1 GB、**转 fp32 后约 2 GB**，`float_to_fp4e2m1` 内部
+  还有若干同形状的掩码/中间量，瞬时峰值为其数倍 → 在剩约 1 GB 的卡上必然 OOM。
+
+  故实现上有两处针对性处理（`quantize_fused_experts`）：
+
+  ```python
+  w2 = W.data.reshape(E*O, I).to("cpu").float()   # ① 先搬 CPU 再转 fp32
+  ...
+  W.data = wq          # ② 先赋 CPU 张量 → 卡上旧权重失去引用、可回收
+  _empty_cache()       #    归还给分配器
+  W.data = wq.to(dev)  #    再挪回卡，避免新旧两份同时在卡上
+  ```
+
+  **①的顺序是关键**：若写成 `.float().to("cpu")`，fp32 临时量会先在卡上生成，搬走前就已 OOM。
+  **②解决的是回写瞬间的双份占用**：直接 `W.data = wq.to(dev)` 时赋值发生在 `.to(dev)` 之后，
+  那一瞬间卡上同时存在新旧两份权重、峰值翻倍。三步回写保证设备峰值不超过基线。
+
+  代价方面：该路径每层需 D2H/H2D 各一次。按 §6 实测带宽（D2H 3.9 GB/s、H2D 4.6 GB/s），
+  同类测算在 8B 上约占量化总耗时的 0.85%，且已包含在端到端耗时中。
 
 ### 4.3 W4A4 精度评估（激活也量化 —— 按评审意见补充）—— ✅ 已达标
 
