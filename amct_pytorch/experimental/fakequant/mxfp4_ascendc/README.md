@@ -86,6 +86,8 @@ quant_dequant_mxfp4(
 
 AIV 核数由 host 侧 `PlatformAscendC::GetCoreNumAiv()` 运行时查询，无需手动指定。
 
+需要在训练中使用（带 STE 的可微伪量化）见 `../mxfp4_qat/`，其 `backend="auto"` 会在 NPU 张量上自动调用本算子。
+
 ### 性能
 
 | Shape | torch_npu | Ascend-C | 加速比 |
