@@ -199,9 +199,8 @@ class DeepseekV4(BaseModel):
                 )
             setattr(self.model, name, nn.Parameter(param.to(device)))
 
-        preds = []
         with torch.no_grad():
-            for inp in tqdm(inps, total=len(inps), desc="Head Processing..."):
+            for inp in inps:
                 inp = inp.to(device)  # [b, s, hc_mult, d]
                 x = head.hc_head(
                     inp,
@@ -211,8 +210,7 @@ class DeepseekV4(BaseModel):
                 )  # [b, s, d]
                 x = norm(x)
                 logits = F.linear(x.float(), head.weight)  # [b, s, vocab]
-                preds.append(logits[:, :-1, :].contiguous().to("cpu"))
-        return preds
+                yield logits[:, :-1, :].contiguous()
 
     def empty_weights_model(self):
         with init_empty_weights(include_buffers=True):

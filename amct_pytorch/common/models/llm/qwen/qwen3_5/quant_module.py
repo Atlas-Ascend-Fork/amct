@@ -33,6 +33,7 @@ from amct_pytorch.quantization.bit_policy import ensure_bit_policy
 from amct_pytorch.common.models.llm.common.attention_forward import (
     scaled_dot_product_attention,
 )
+from amct_pytorch.common.models.llm.common.ptq_params import PtqParamHandler
 from amct_pytorch.common.models.llm.common.quant_apply import QuantGatedMLP, PlainLinear
 
 
@@ -153,6 +154,25 @@ class QuantQwen35LinearAttn(Qwen3_5GatedDeltaNet):
 
         output = self.out_proj(core_attn_out, structure_transform=self.out_transform)
         return output
+
+    # Mirrors QuantGatedMLP.export_ptq_params/load_ptq_params (quant_apply.py) -- without
+    # this override, BaseSolver.finalize()'s hasattr(..., "export_ptq_params") check fails
+    # for this class.
+    def export_ptq_params(self):
+        params = PtqParamHandler.export_module(self)
+        if params:
+            return params
+        return PtqParamHandler.export_trainable_module(self)
+
+    def load_ptq_params(self, params):
+        if (
+            isinstance(params, dict)
+            and params
+            and all(isinstance(v, dict) for v in params.values())
+        ):
+            PtqParamHandler.load_module(self, params)
+            return
+        PtqParamHandler.load_trainable_module(self, params)
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)
@@ -279,6 +299,27 @@ class QuantQwen35Attn(Qwen3_5Attention):
 
         attn_output = self.o_proj(attn_output, structure_transform=self.out_transform)
         return attn_output, None
+
+    # Mirrors QuantGatedMLP.export_ptq_params/load_ptq_params (quant_apply.py) -- without
+    # this override, BaseSolver.finalize()'s hasattr(..., "export_ptq_params") check fails
+    # for this class, and it falls back to filtering named_parameters() by requires_grad,
+    # which BlockwiseSolver has already zeroed out everywhere (no trainable params to keep
+    # for a closed-form algorithm like GPTQ) -- so PTQ params silently export as {}.
+    def export_ptq_params(self):
+        params = PtqParamHandler.export_module(self)
+        if params:
+            return params
+        return PtqParamHandler.export_trainable_module(self)
+
+    def load_ptq_params(self, params):
+        if (
+            isinstance(params, dict)
+            and params
+            and all(isinstance(v, dict) for v in params.values())
+        ):
+            PtqParamHandler.load_module(self, params)
+            return
+        PtqParamHandler.load_trainable_module(self, params)
 
     def _init_structure_transforms(self):
         ctx = AlgoBuildContext(matrix_size=128, dim_size=self.hidden_size)

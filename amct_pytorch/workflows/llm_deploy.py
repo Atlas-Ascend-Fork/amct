@@ -260,37 +260,11 @@ class LlmDeployWorkflow:
         model_dir = Path(self.model_path)
         loaded_files = {}
         for source_file in tqdm(sorted(weights_by_file), desc="Tensor convert..."):
-            source_path = model_dir / source_file
-            current_state_dict = load_file(source_path, device="cpu")
-            loaded_files[source_file] = current_state_dict
-
-            new_state_dict = {}
-            for weight_name, weight in current_state_dict.items():
-                scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
-                if weight_name.endswith(scale_prefix):
-                    continue
-                # FP8 -> bf16
-                block_size = self.pipeline.block_size(weight)
-                weight = convert_state_dict(
-                    weight,
-                    weight_name,
-                    scale_inv_name,
-                    original_weight_map,
-                    model_dir,
-                    loaded_files,
-                    block_size,
+            updated_weight_map.update(
+                self._convert_tensorwise_shard(
+                    source_file, model_dir, original_weight_map, quant_layers, loaded_files
                 )
-                new_state_dict[weight_name] = weight
-                if self.quant_dtype in ["int", "mxfp"]:
-                    quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
-                    new_weight_name = weight_name.rsplit(".", 1)[0]
-                    if new_weight_name in quant_layers:
-                        bit = quant_layers[new_weight_name]
-                        state_dict = quant_payload(quant_cls, weight_name, weight, bit)
-                        new_state_dict.update(state_dict)
-            self._write_safetensor_file(source_file, new_state_dict)
-            for weight_name in new_state_dict:
-                updated_weight_map[weight_name] = source_file
+            )
         index_path = self._refresh_weight_index(original_index, updated_weight_map)
         self._refresh_config(quant_ignore_layers)
         logger.info("Exported tensor-converted model to {}", self.output_dir)
@@ -299,6 +273,42 @@ class LlmDeployWorkflow:
             "index_path": index_path,
             "num_output_files": len(set(updated_weight_map.values())),
         }
+
+    def _convert_tensorwise_shard(
+        self, source_file, model_dir, original_weight_map, quant_layers, loaded_files
+    ):
+        current_state_dict = load_file(model_dir / source_file, device="cpu")
+        loaded_files[source_file] = current_state_dict
+
+        new_state_dict = {}
+        for weight_name, weight in current_state_dict.items():
+            scale_prefix, scale_inv_name = self.pipeline.get_scale_name(weight_name)
+            if weight_name.endswith(scale_prefix):
+                continue
+            # NVFP4: scale_inv_name 为 (scale_name, scale_2_name) 元组，
+            # `<name>_scale_2` 不满足 endswith("_scale")，需单独跳过。
+            if isinstance(scale_inv_name, tuple) and weight_name in scale_inv_name:
+                continue
+            block_size = self.pipeline.block_size(weight)
+            weight = convert_state_dict(
+                weight,
+                weight_name,
+                scale_inv_name,
+                original_weight_map,
+                model_dir,
+                loaded_files,
+                block_size,
+            )
+            new_state_dict[weight_name] = weight
+            if self.quant_dtype in ["int", "mxfp"]:
+                quant_cls = DTYPE_REGISTRY.get(self.quant_dtype)
+                new_weight_name = weight_name.rsplit(".", 1)[0]
+                if new_weight_name in quant_layers:
+                    bit = quant_layers[new_weight_name]
+                    state_dict = quant_payload(quant_cls, weight_name, weight, bit)
+                    new_state_dict.update(state_dict)
+        self._write_safetensor_file(source_file, new_state_dict)
+        return {weight_name: source_file for weight_name in new_state_dict}
 
     def _write_block_file(self, layer_idx: int, layer_tensors: dict[str, object]):
         width = max(3, len(str(max(self.pipeline.num_layers - 1, 0))))
