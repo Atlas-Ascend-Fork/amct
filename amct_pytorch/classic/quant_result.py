@@ -614,24 +614,8 @@ class QuantResultWriter:
         return self._result_dir
 
     @property
-    def artifact_id(self):
-        return self._artifact_id
-
-    @property
     def manifest_path(self):
         return os.path.join(self._result_dir, MANIFEST_NAME)
-
-    @property
-    def published(self):
-        return self._published
-
-    @property
-    def expected_units(self):
-        return self._expected_units
-
-    @property
-    def written_units(self):
-        return tuple(sorted(self._entries))
 
     @property
     def pending_units(self):

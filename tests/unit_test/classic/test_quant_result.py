@@ -246,7 +246,6 @@ class TestWriterUnitWrites:
         assert os.path.isfile(os.path.join(writer.result_dir, 'fc1.safetensors'))
         assert not os.path.exists(writer.manifest_path)
         assert writer.pending_units == ('fc2',)
-        assert not writer.published
 
     def test_entry_carries_size_hash_digest_and_schema(self, tmp_path):
         writer = _writer(tmp_path)
@@ -466,7 +465,6 @@ class TestManifestPublish:
         }
         assert manifest['format'] == MANIFEST_FORMAT == 'amct-quant-result-manifest'
         assert manifest['schema_version'] == SCHEMA_VERSION == 1
-        assert manifest['artifact_id'] == writer.artifact_id
         assert set(manifest['producer']) == {'library', 'library_version'}
         assert manifest['producer']['library'] == 'amct_pytorch'
         assert manifest['producer']['library_version']
@@ -495,8 +493,11 @@ class TestManifestPublish:
         import uuid as uuid_module
 
         writer = _writer(tmp_path, units=('fc1',))
+        _write(writer, 'fc1')
+        writer.publish_if_complete()
+        artifact_id = load_quant_manifest(writer.result_dir)['artifact_id']
         # Must parse as a UUID so foreign files can be rejected by identity.
-        assert str(uuid_module.UUID(writer.artifact_id)) == writer.artifact_id
+        assert str(uuid_module.UUID(artifact_id)) == artifact_id
 
     def test_manifest_is_canonical_json(self, tmp_path):
         writer = _writer(tmp_path, units=('fc1',))
@@ -611,13 +612,14 @@ class TestReadBack:
         )
         writer.publish_if_complete()
         path = os.path.join(writer.result_dir, entry['file'])
+        artifact_id = load_quant_manifest(writer.result_dir)['artifact_id']
         with safe_open(path, framework='pt') as handle:
             header = handle.metadata()
         # Exactly the five frozen V2 header fields, all str -> str.
         assert header == {
             'format': PARAM_FORMAT,
             'schema_version': str(SCHEMA_VERSION),
-            'artifact_id': writer.artifact_id,
+            'artifact_id': artifact_id,
             'layer_name': 'fc1',
             'entry_digest': entry['entry_digest'],
         }
